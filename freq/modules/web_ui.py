@@ -19,7 +19,7 @@ APP_HTML = r"""<!DOCTYPE html>
   --purple: #7B2FBE; --purple-light: #9B4FDE; --purple-dark: #5a1f8e;
   --purple-glow: rgba(123,47,190,0.15); --purple-faint: rgba(123,47,190,0.04);
   --bg: #0a0d12; --bg2: #0d1117; --card: #141920; --card-hover: #1a2028;
-  --border: #1e2530; --border-light: #2a3140;
+  --border: #1e2530; --border-light: #2a3140; --input-border: var(--input-border);
   --text: #ffffff; --text-dim: #6e7681; --text-bright: #ffffff;
   --green: #3fb950; --yellow: #d29922; --red: #f85149; --blue: #58a6ff;
   --cyan: #56d4dd; --orange: #f0883e;
@@ -52,14 +52,14 @@ body{font-family:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;backgroun
 
 /* Stats */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px}
-.st{background:var(--card);border:3px solid #384450;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;align-items:center}
-.st .lb{font-size:12px;color:#ffffff;text-transform:uppercase;letter-spacing:1.5px;font-weight:600;background:var(--purple-faint);padding:3px 12px;border-radius:4px;margin-bottom:6px}
+.st{background:var(--card);border:3px solid var(--input-border);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;align-items:center}
+.st .lb{font-size:12px;color:var(--text);text-transform:uppercase;letter-spacing:1.5px;font-weight:600;background:var(--purple-faint);padding:3px 12px;border-radius:4px;margin-bottom:6px}
 .st .vl{font-size:20px;font-weight:700;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st .vl.g{color:var(--green)}.st .vl.r{color:var(--red)}.st .vl.p{color:var(--purple-light)}.st .vl.y{color:var(--yellow)}.st .vl.b{color:var(--blue)}
 
 /* Tables */
-table{width:100%;border-collapse:collapse;background:var(--card);border:2px solid #384450;border-radius:8px;overflow:hidden;margin-bottom:16px}
-th{text-align:left;padding:10px 14px;font-size:11px;color:#ffffff;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #384450;background:rgba(0,0,0,0.3);font-weight:600}
+table{width:100%;border-collapse:collapse;background:var(--card);border:2px solid var(--input-border);border-radius:8px;overflow:hidden;margin-bottom:16px}
+th{text-align:left;padding:10px 14px;font-size:11px;color:var(--text);text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid var(--input-border);background:rgba(0,0,0,0.3);font-weight:600}
 td{padding:9px 14px;font-size:13px;border-bottom:1px solid var(--border)}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--card-hover)}
@@ -74,7 +74,7 @@ tr:hover td{background:var(--card-hover)}
 
 /* Cards */
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-bottom:16px;align-items:start}
-.crd{background:var(--card);border:2px solid #384450;border-radius:8px;padding:12px 14px;transition:border-color 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease}
+.crd{background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:12px 14px;transition:border-color 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease}
 .crd:hover{border-color:var(--purple);box-shadow:0 2px 8px rgba(123,47,190,0.06);transform:translateY(-2px)}
 .no-hover-fx .crd{transition:none}
 .no-hover-fx .crd:hover{box-shadow:none;transform:none}
@@ -84,20 +84,20 @@ tr:hover td{background:var(--card-hover)}
 
 /* Exec */
 .exec-bar{display:flex;gap:8px;margin-bottom:16px}
-.exec-bar select,.exec-bar input{background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:13px;font-family:inherit;transition:border-color 0.25s ease}
+.exec-bar select,.exec-bar input{background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:13px;font-family:inherit;transition:border-color 0.25s ease}
 .exec-bar input{flex:1}
 .exec-bar input:focus,.exec-bar select:focus{outline:none;border-color:var(--purple)}
-.exec-bar button{background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 24px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;transition:border-color 0.25s ease,color 0.25s ease,background 0.25s ease}
+.exec-bar button{background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 24px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;transition:border-color 0.25s ease,color 0.25s ease,background 0.25s ease}
 .exec-bar button:hover{border-color:var(--purple);color:var(--purple-light);background:var(--purple-faint)}
-.exec-out{background:#080b10;border:2px solid #384450;border-radius:8px;padding:18px;font-family:'Fira Code','Cascadia Code','JetBrains Mono',monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;line-height:1.7}
+.exec-out{background:#080b10;border:2px solid var(--input-border);border-radius:8px;padding:18px;font-family:'Fira Code','Cascadia Code','JetBrains Mono',monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;line-height:1.7}
 .exec-line{padding:1px 0}
 
 /* Search */
-.search{background:var(--card);border:2px solid #384450;color:var(--text);padding:12px 16px;border-radius:8px;font-size:13px;width:100%;margin-bottom:16px;font-family:inherit;transition:border-color 0.25s ease}
+.search{background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:12px 16px;border-radius:8px;font-size:13px;width:100%;margin-bottom:16px;font-family:inherit;transition:border-color 0.25s ease}
 .search:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 3px var(--purple-glow)}
 
 /* Risk chain */
-.chain{display:flex;align-items:center;gap:6px;padding:18px;background:var(--card);border-radius:8px;border:2px solid #384450;margin-bottom:16px;flex-wrap:wrap}
+.chain{display:flex;align-items:center;gap:6px;padding:18px;background:var(--card);border-radius:8px;border:2px solid var(--input-border);margin-bottom:16px;flex-wrap:wrap}
 .chain-node{padding:8px 16px;border-radius:8px;font-weight:600;font-size:12px;letter-spacing:0.5px}
 .chain-arr{color:var(--red);font-size:16px}
 
@@ -151,20 +151,20 @@ tr:hover td{background:var(--card-hover)}
 .metric-row{padding:4px 0;border-bottom:1px solid var(--border);font-size:12px}
 .metric-row:last-child{border-bottom:none}
 .metric-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;gap:8px;min-width:0}
-.metric-label{color:#ffffff;font-size:12px;white-space:nowrap;flex-shrink:0}
+.metric-label{color:var(--text);font-size:12px;white-space:nowrap;flex-shrink:0}
 .metric-val{font-weight:600;color:var(--text);font-size:12px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.host-card{background:var(--card);border:2px solid #384450;border-radius:8px;padding:10px 14px;overflow:hidden;transition:border-color 0.25s ease,background 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease}
+.host-card{background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:10px 14px;overflow:hidden;transition:border-color 0.25s ease,background 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease}
 .host-card:hover{border-color:var(--purple);box-shadow:0 2px 8px rgba(123,47,190,0.06);transform:translateY(-2px)}
 .no-hover-fx .host-card{transition:none}
 .no-hover-fx .host-card:hover{border-color:var(--purple);box-shadow:none;transform:none}
 .host-card .host-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
 .host-card .host-head h3{font-size:15px;font-weight:700;margin:0;text-transform:uppercase}
-.host-card .host-head .host-meta{font-size:11px;color:#ffffff;display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.host-card .host-head .host-meta{font-size:11px;color:var(--text);display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end}
 
 /* Fleet tools */
 .fleet-tools{margin-bottom:4px}
 .fleet-tools-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.fleet-btn{background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 20px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;letter-spacing:0.8px;transition:border-color 0.25s ease,color 0.25s ease,background 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease;font-family:inherit}
+.fleet-btn{background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 20px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;letter-spacing:0.8px;transition:border-color 0.25s ease,color 0.25s ease,background 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease;font-family:inherit}
 .fleet-btn:hover{color:var(--purple-light);background:var(--purple-faint);border-color:var(--purple);box-shadow:0 2px 8px rgba(123,47,190,0.06);transform:translateY(-1px)}
 .view-btn.active-view{color:var(--purple-light);border-color:var(--purple);background:var(--purple-faint)}
 .fleet-btn.btn-red{color:var(--red);border-color:var(--red)}
@@ -205,11 +205,11 @@ tr:hover td{background:var(--card-hover)}
 .no-hover-fx .pve-group:hover{box-shadow:none;transform:none}
 
 /* === NEW: Collapsible sections === */
-.section{background:var(--card);border:3px solid #384450;border-radius:10px;margin-bottom:16px;overflow:hidden;transition:border-color 0.25s ease,box-shadow 0.25s ease}
+.section{background:var(--card);border:3px solid var(--input-border);border-radius:10px;margin-bottom:16px;overflow:hidden;transition:border-color 0.25s ease,box-shadow 0.25s ease}
 .section:hover{border-color:#4a5568}
 .section-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;cursor:pointer;user-select:none}
-.section-header h3{font-size:13px;color:#ffffff;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin:0;background:var(--purple-faint);padding:3px 12px;border-radius:4px;display:inline-block}
-.section-header .chev{color:#ffffff;font-size:14px;transition:transform 0.2s}
+.section-header h3{font-size:13px;color:var(--text);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin:0;background:var(--purple-faint);padding:3px 12px;border-radius:4px;display:inline-block}
+.section-header .chev{color:var(--text);font-size:14px;transition:transform 0.2s}
 .section.collapsed .section-body{display:none}
 .section.collapsed .chev{transform:rotate(-90deg)}
 .section-body{padding:0 18px 18px}
@@ -252,7 +252,7 @@ tr:hover td{background:var(--card-hover)}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* === Infra Role Cards === */
-.infra-role-card{background:var(--card);border:2px solid #384450;border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease;position:relative;overflow:hidden}
+.infra-role-card{background:var(--card);border:2px solid var(--input-border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease;position:relative;overflow:hidden}
 .infra-role-card:hover{border-color:var(--purple);box-shadow:0 2px 8px rgba(123,47,190,0.06);transform:translateY(-2px)}
 .no-hover-fx .infra-role-card{transition:none}
 .no-hover-fx .infra-role-card:hover{border-color:var(--purple);box-shadow:none;transform:none}
@@ -280,6 +280,30 @@ tr:hover td{background:var(--card-hover)}
 .mc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .mc-row{display:flex;flex-wrap:wrap;gap:6px;font-size:13px;color:var(--text);margin-top:4px}
 .mc-row .u{font-size:11px;opacity:0.5}
+
+/* === Utility classes (Tier 4B) === */
+.c-dim{color:var(--text-dim)}
+.c-red{color:var(--red)}
+.c-green{color:var(--green)}
+.c-yellow{color:var(--yellow)}
+.c-purple{color:var(--purple-light)}
+.c-purple-active{color:var(--purple-light);border-color:var(--purple)}
+.label-sub{font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px}
+.label-hint{font-size:12px;font-weight:500;opacity:0.7}
+.text-meta{font-size:11px;color:var(--text-dim)}
+.text-sub{font-size:12px;color:var(--text-dim)}
+.desc-line{font-size:12px;color:var(--text-dim);margin-bottom:12px}
+.w-full{width:100%}
+.mt-8{margin-top:8px}
+.mt-12{margin-top:12px}
+.d-none{display:none}
+.input-primary{background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%}
+.input-primary-lg{background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%}
+.form-vertical{display:flex;flex-direction:column;gap:10px;max-width:400px}
+.divider-light{border-top:1px solid var(--border);margin-top:2px;padding-top:6px}
+.btn-row{display:flex;gap:8px;margin-top:8px}
+.flex-1{flex:1}
+.flex-fill{flex:1;min-width:0}
 </style>
 </head>
 <body>
@@ -294,11 +318,11 @@ tr:hover td{background:var(--card-hover)}
  ██║      ╚████╔╝ ███████╗   ██║     ██║  ██║███████╗╚██████╔╝
  ╚═╝       ╚═══╝  ╚══════╝   ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝</pre>
     <div style="font-size:12px;color:var(--text-dim);letter-spacing:2px;margin-bottom:32px">DATACENTER MANAGEMENT</div>
-    <div style="background:var(--card);border:2px solid #384450;border-radius:12px;padding:28px">
+    <div style="background:var(--card);border:2px solid var(--input-border);border-radius:12px;padding:28px">
       <div style="display:flex;flex-direction:column;gap:12px">
-        <input id="login-user" placeholder="Username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()" style="background:var(--bg);border:2px solid #384450;color:var(--text);padding:12px 16px;border-radius:8px;font-size:13px;font-family:inherit;width:100%;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='#384450'">
-        <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="background:var(--bg);border:2px solid #384450;color:var(--text);padding:12px 16px;border-radius:8px;font-size:13px;font-family:inherit;width:100%;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='#384450'">
-        <button onclick="doLogin()" style="background:var(--purple);border:none;color:#ffffff;padding:12px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;letter-spacing:1px;transition:opacity 0.2s" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">LOG IN</button>
+        <input id="login-user" placeholder="Username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:12px 16px;border-radius:8px;font-size:13px;font-family:inherit;width:100%;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'">
+        <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:12px 16px;border-radius:8px;font-size:13px;font-family:inherit;width:100%;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'">
+        <button onclick="doLogin()" style="background:var(--purple);border:none;color:var(--text);padding:12px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;letter-spacing:1px;transition:opacity 0.2s" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">LOG IN</button>
       </div>
       <div id="login-error" style="margin-top:12px;font-size:12px;color:var(--red);display:none"></div>
     </div>
@@ -319,7 +343,7 @@ tr:hover td{background:var(--card-hover)}
     <div><h1 id="page-title" style="font-size:16px">Home</h1><div class="tagline" id="header-tagline" style="font-size:11px"></div></div>
   </div>
   <div style="display:flex;align-items:center;gap:16px">
-    <button id="header-user-btn" onclick="openUserMenu()" style="display:none;background:var(--card);border:2px solid #384450;color:var(--text);padding:6px 14px;border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='#384450'"><span id="header-user-icon" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></span><span id="header-user-name" style="font-weight:600;text-transform:uppercase;letter-spacing:0.5px"></span><span id="header-user-role" style="font-size:10px;color:var(--text-dim)"></span></button>
+    <button id="header-user-btn" onclick="openUserMenu()" style="display:none;background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 14px;border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--input-border)'"><span id="header-user-icon" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></span><span id="header-user-name" style="font-weight:600;text-transform:uppercase;letter-spacing:0.5px"></span><span id="header-user-role" style="font-size:10px;color:var(--text-dim)"></span></button>
     <span style="font-family:'Courier New',monospace;font-size:24px;font-weight:700;color:var(--purple-light);letter-spacing:2px;opacity:0.8" id="header-time"></span>
   </div>
 </div>
@@ -337,14 +361,14 @@ tr:hover td{background:var(--card-hover)}
  ╚═╝       ╚═══╝  ╚══════╝   ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝</pre>
 </div>
 <!-- Toolbar -->
-<div style="background:var(--card);border:3px solid #384450;border-radius:10px;padding:10px 14px;margin-bottom:16px;margin-top:12px">
+<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:10px 14px;margin-bottom:16px;margin-top:12px">
 <div style="display:flex;gap:8px;align-items:center;min-height:36px">
   <button class="fleet-btn view-btn active-view" data-view="home" onclick="switchView('home')">HOME</button>
   <button class="fleet-btn view-btn" data-view="fleet" onclick="switchView('fleet')">FLEET</button>
   <button class="fleet-btn view-btn" data-view="docker" onclick="switchView('docker')">DOCKER</button>
   <button class="fleet-btn view-btn" data-view="security" onclick="switchView('security')">SECURITY</button>
   <button class="fleet-btn view-btn" data-view="lab" onclick="switchView('lab')">LAB TOOLS</button>
-  <div style="flex:1"></div>
+  <div class="flex-1"></div>
   <button class="fleet-btn" onclick="openNewTool()" id="btn-new-tool" style="opacity:0.7;display:none">+ NEW TOOL</button>
   <button class="fleet-btn" onclick="nav('system')" style="opacity:0.7">&#9881; SETTINGS</button>
   <button class="fleet-btn" onclick="openLayoutConfig()" id="layout-btn" style="opacity:0.7">&#9776; LAYOUT</button>
@@ -357,9 +381,9 @@ tr:hover td{background:var(--card-hover)}
 <!-- Empty state -->
 <div id="home-empty" style="text-align:center;padding:40px 0;display:none">
   <div style="font-size:36px;opacity:0.15;margin-bottom:16px">&#9776;</div>
-  <div style="font-size:16px;color:#ffffff;margin-bottom:8px">Your Dashboard is Empty</div>
+  <div style="font-size:16px;color:var(--text);margin-bottom:8px">Your Dashboard is Empty</div>
   <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.6">Click LAYOUT to add widgets from Fleet, Docker, Security, and Lab Tools. Or hit Quick Start for a ready-made dashboard.</div>
-  <button class="fleet-btn" onclick="openLayoutConfig()" style="color:var(--purple-light);border-color:var(--purple)">&#9776; CONFIGURE DASHBOARD</button>
+  <button class="fleet-btn" onclick="openLayoutConfig()" class="c-purple-active">&#9776; CONFIGURE DASHBOARD</button>
 </div>
 <!-- Footer -->
 <div style="text-align:center;padding:32px 0 16px;border-top:1px solid var(--border);margin-top:24px">
@@ -369,7 +393,7 @@ tr:hover td{background:var(--card-hover)}
 </div>
 </div><!-- close home-view -->
 <!-- FLEET VIEW (hidden by default) -->
-<div id="fleet-view" style="display:none">
+<div id="fleet-view" class="d-none">
 <!-- Fleet Stats group -->
 <div class="section layout-section" id="fleet-sec-stats">
   <div class="section-header" onclick="toggleSection(this)"><h3>Fleet Stats</h3><span class="chev">▾</span></div>
@@ -391,7 +415,7 @@ tr:hover td{background:var(--card-hover)}
       <button class="fleet-btn fqc-btn" data-fqc="backup" onclick="fleetTool('backup')">BACKUP & RECOVERY</button>
       <button class="fleet-btn fqc-btn" data-fqc="labctrl" onclick="fleetTool('labctrl')">LAB CONTROL</button>
     </div>
-    <div id="fleet-tool-panel" style="display:none;margin-top:12px;background:var(--bg);border:2px solid #384450;border-radius:8px;padding:16px;position:relative">
+    <div id="fleet-tool-panel" style="display:none;margin-top:12px;background:var(--bg);border:2px solid var(--input-border);border-radius:8px;padding:16px;position:relative">
       <button onclick="document.getElementById('fleet-tool-panel').style.display='none';_activeFleetTool=null;document.querySelectorAll('.fqc-btn').forEach(function(b){b.classList.remove('active-view')})" style="position:absolute;top:10px;right:12px;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px">&#10005;</button>
       <div id="fleet-tool-content"></div>
     </div>
@@ -399,7 +423,7 @@ tr:hover td{background:var(--card-hover)}
 </div>
 <!-- Infrastructure group -->
 <div class="section layout-section" id="fleet-sec-infra">
-  <div class="section-header"><h3 onclick="toggleSection(this.parentNode)" style="cursor:pointer">Infrastructure</h3><div style="flex:1"></div><input id="fleet-filter" placeholder="&#128269; Filter..." oninput="filterFleetCards(this.value)" onclick="event.stopPropagation()" style="background:var(--bg);border:2px solid #384450;color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit;width:180px;outline:none;transition:border-color 0.25s ease" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='#384450'"><span class="chev" onclick="toggleSection(this.parentNode)" style="cursor:pointer;margin-left:8px">▾</span></div>
+  <div class="section-header"><h3 onclick="toggleSection(this.parentNode)" style="cursor:pointer">Infrastructure</h3><div class="flex-1"></div><input id="fleet-filter" placeholder="&#128269; Filter..." oninput="filterFleetCards(this.value)" onclick="event.stopPropagation()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit;width:180px;outline:none;transition:border-color 0.25s ease" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'"><span class="chev" onclick="toggleSection(this.parentNode)" style="cursor:pointer;margin-left:8px">▾</span></div>
   <div class="section-body"><div id="metrics-cards"></div></div>
 </div>
 <!-- Overview -->
@@ -409,16 +433,16 @@ tr:hover td{background:var(--card-hover)}
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
       <div id="overview-physical-cards"><!-- populated dynamically from fleet config --></div>
       <div class="host-card">
-        <div class="host-head"><h3 style="color:var(--purple-light)">PVE NODES</h3><div class="host-meta" id="pve-node-count"><span>NODES</span><span>·</span><span>HYPERVISOR</span></div></div>
-        <div style="border-top:1px solid var(--border);margin-top:2px;padding-top:6px"><div id="home-pve-summary"><div class="skeleton" style="height:60px"></div></div></div>
+        <div class="host-head"><h3 class="c-purple">PVE NODES</h3><div class="host-meta" id="pve-node-count"><span>NODES</span><span>·</span><span>HYPERVISOR</span></div></div>
+        <div class="divider-light"><div id="home-pve-summary"><div class="skeleton" style="height:60px"></div></div></div>
       </div>
       <div class="host-card">
-        <div class="host-head"><h3 style="color:var(--purple-light)">VMs</h3><div class="host-meta"><span>PVE CLUSTER</span><span>·</span><span>PROXMOX</span></div></div>
-        <div style="border-top:1px solid var(--border);margin-top:2px;padding-top:6px"><div id="home-infra"><div class="skeleton" style="height:60px"></div></div></div>
+        <div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PVE CLUSTER</span><span>·</span><span>PROXMOX</span></div></div>
+        <div class="divider-light"><div id="home-infra"><div class="skeleton" style="height:60px"></div></div></div>
       </div>
       <div class="host-card">
-        <div class="host-head"><h3 style="color:var(--green)">MEDIA STACK</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div>
-        <div style="border-top:1px solid var(--border);margin-top:2px;padding-top:6px"><div id="home-media"><div class="skeleton" style="height:60px"></div></div></div>
+        <div class="host-head"><h3 class="c-green">MEDIA STACK</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div>
+        <div class="divider-light"><div id="home-media"><div class="skeleton" style="height:60px"></div></div></div>
       </div>
     </div>
   </div>
@@ -456,7 +480,7 @@ tr:hover td{background:var(--card-hover)}
 </div><!-- close fleet-view -->
 
 <!-- DOCKER VIEW -->
-<div id="docker-view" style="display:none">
+<div id="docker-view" class="d-none">
 <div class="section layout-section" id="docker-sec-containers">
   <div class="section-header" onclick="toggleSection(this)"><h3>Containers</h3><span class="chev">▾</span></div>
   <div class="section-body">
@@ -471,7 +495,7 @@ tr:hover td{background:var(--card-hover)}
       <div id="services-container-cards" class="cards"></div>
     </div>
     <!-- ALL containers sub-view -->
-    <div id="docker-sub-all" style="display:none">
+    <div id="docker-sub-all" class="d-none">
       <div id="container-cards" class="cards"></div>
       <div class="exec-out" id="container-logs" style="margin-top:12px;min-height:100px;display:none">Select a container to view logs...</div>
     </div>
@@ -479,7 +503,7 @@ tr:hover td{background:var(--card-hover)}
       <div id="services-container-cards" class="cards"></div>
     </div>
     <!-- MEDIA sub-view -->
-    <div id="docker-sub-media" style="display:none">
+    <div id="docker-sub-media" class="d-none">
       <div id="media-container-cards" class="cards" style="margin-bottom:16px"></div>
       <div class="section">
         <div class="section-header" onclick="toggleSection(this)"><h3>Downloads</h3><span class="chev">▾</span></div>
@@ -501,7 +525,7 @@ tr:hover td{background:var(--card-hover)}
 </div><!-- close docker-view -->
 
 <!-- SECURITY VIEW -->
-<div id="security-view" style="display:none">
+<div id="security-view" class="d-none">
 <div class="section layout-section" id="sec-users">
   <div class="section-header" onclick="toggleSection(this)"><h3>Users</h3><span class="chev">▾</span></div>
   <div class="section-body">
@@ -524,7 +548,7 @@ tr:hover td{background:var(--card-hover)}
   <div class="section-header" onclick="toggleSection(this)"><h3>Audit</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="fleet-btn" onclick="runAuditCheck('all')" style="color:var(--purple-light);border-color:var(--purple)">FULL AUDIT</button>
+      <button class="fleet-btn" onclick="runAuditCheck('all')" class="c-purple-active">FULL AUDIT</button>
       <button class="fleet-btn" onclick="runAuditCheck('ssh-root')">SSH ROOT LOGIN</button>
       <button class="fleet-btn" onclick="runAuditCheck('ssh-pass')">SSH PASSWORD AUTH</button>
       <button class="fleet-btn" onclick="runAuditCheck('ssh-empty')">EMPTY PASSWORDS</button>
@@ -534,14 +558,14 @@ tr:hover td{background:var(--card-hover)}
       <button class="fleet-btn" onclick="runSweep()">POLICY SWEEP</button>
     </div>
     <div id="audit-c"></div>
-    <div id="sweep-c" style="margin-top:12px"></div>
+    <div id="sweep-c" class="mt-12"></div>
   </div>
 </div>
 <div class="section layout-section" id="sec-harden">
   <div class="section-header" onclick="toggleSection(this)"><h3>Hardening</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="fleet-btn" onclick="runHarden()" style="color:var(--purple-light);border-color:var(--purple)">FULL HARDENING AUDIT</button>
+      <button class="fleet-btn" onclick="runHarden()" class="c-purple-active">FULL HARDENING AUDIT</button>
       <button class="fleet-btn" onclick="hardenAction('disable-root')">DISABLE ROOT SSH</button>
       <button class="fleet-btn" onclick="hardenAction('key-only')">ENFORCE KEY-ONLY AUTH</button>
       <button class="fleet-btn" onclick="hardenAction('disable-empty')">BLOCK EMPTY PASSWORDS</button>
@@ -570,22 +594,22 @@ tr:hover td{background:var(--card-hover)}
     <div id="vault-locked">
       <div style="text-align:center;padding:24px 0">
         <div style="font-size:32px;opacity:0.3;margin-bottom:12px">&#128274;</div>
-        <div style="font-size:14px;color:#ffffff;margin-bottom:4px">Vault is Locked</div>
+        <div style="font-size:14px;color:var(--text);margin-bottom:4px">Vault is Locked</div>
         <div style="font-size:11px;color:var(--text-dim);margin-bottom:16px">Admin credentials required to access sensitive data</div>
         <div style="max-width:300px;margin:0 auto;display:flex;flex-direction:column;gap:8px">
-          <input id="vault-auth-user" placeholder="Admin username" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
-          <input id="vault-auth-pass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')unlockVault()" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
+          <input id="vault-auth-user" placeholder="Admin username" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
+          <input id="vault-auth-pass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')unlockVault()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
           <button class="fleet-btn" onclick="unlockVault()" style="color:var(--red);border-color:var(--red)">UNLOCK VAULT</button>
         </div>
       </div>
     </div>
-    <div id="vault-unlocked" style="display:none">
+    <div id="vault-unlocked" class="d-none">
       <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
         <span style="color:var(--green);font-size:12px;font-weight:600">&#128275; UNLOCKED</span>
         <button class="fleet-btn vault-tab active-view" data-vtab="users" onclick="switchVaultTab('users')">USERS</button>
         <button class="fleet-btn vault-tab" data-vtab="apikeys" onclick="switchVaultTab('apikeys')">API KEYS</button>
         <button class="fleet-btn vault-tab" data-vtab="all" onclick="switchVaultTab('all')">ALL</button>
-        <div style="flex:1"></div>
+        <div class="flex-1"></div>
         <button class="fleet-btn" onclick="lockVault()" style="padding:3px 10px;font-size:12px;color:var(--red)">LOCK</button>
       </div>
       <div id="vault-sensitive-c"></div>
@@ -595,7 +619,7 @@ tr:hover td{background:var(--card-hover)}
 </div><!-- close security-view -->
 
 <!-- LAB TOOLS VIEW -->
-<div id="lab-view" style="display:none">
+<div id="lab-view" class="d-none">
 <div id="lab-tools-container"></div>
 </div><!-- close lab-view -->
 
@@ -604,7 +628,7 @@ tr:hover td{background:var(--card-hover)}
 <!-- ════════ INFRA ════════ -->
 <div id="p-infra" class="page">
 <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;min-height:44px">
-  <button class="fleet-btn" onclick="switchView('home')" style="color:var(--purple-light);border-color:var(--purple)">&#9664; HOME</button>
+  <button class="fleet-btn" onclick="switchView('home')" class="c-purple-active">&#9664; HOME</button>
   <button class="fleet-btn" onclick="loadInfraPage()">REFRESH</button>
 </div>
 <div class="section">
@@ -612,7 +636,7 @@ tr:hover td{background:var(--card-hover)}
   <div class="section-body">
     <div class="stats" id="infra-stats"></div>
     <table><thead><tr><th>Host</th><th>Type</th><th>OS</th><th>CPU</th><th>RAM</th><th>Disk</th><th>Containers</th><th>Services</th><th>Status</th></tr></thead><tbody id="infra-tbl"></tbody></table>
-    <div id="infra-vms" style="margin-top:8px"></div>
+    <div id="infra-vms" class="mt-8"></div>
   </div>
 </div>
 <div class="section collapsed">
@@ -648,7 +672,7 @@ tr:hover td{background:var(--card-hover)}
 <!-- ════════ SYSTEM ════════ -->
 <div id="p-system" class="page">
 <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;min-height:44px">
-  <button class="fleet-btn" onclick="switchView('home')" style="color:var(--purple-light);border-color:var(--purple)">&#9664; HOME</button>
+  <button class="fleet-btn" onclick="switchView('home')" class="c-purple-active">&#9664; HOME</button>
   <button class="fleet-btn" onclick="loadSystemPage()">REFRESH</button>
 </div>
 <!-- Global Settings -->
@@ -659,7 +683,7 @@ tr:hover td{background:var(--card-hover)}
   </div>
 </div>
 <!-- Fleet Admin — admin role only, root tax -->
-<div class="section" id="fleet-admin-section" style="display:none">
+<div class="section" id="fleet-admin-section" class="d-none">
   <div class="section-header" onclick="toggleSection(this)"><h3>Fleet Admin <span style="font-size:11px;font-weight:400;color:var(--yellow);margin-left:8px">ADMIN ONLY</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="fleet-admin-body"><div class="skeleton"></div></div>
@@ -672,9 +696,9 @@ tr:hover td{background:var(--card-hover)}
 <div class="section">
   <div class="section-header" onclick="toggleSection(this)"><h3>Doctor</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="display:flex;gap:8px;margin-bottom:16px"><button class="fleet-btn" onclick="runDoctor()" style="color:var(--purple-light);border-color:var(--purple)">RUN SELF-DIAGNOSTIC</button><button class="fleet-btn" onclick="runBackup()">EXPORT CONFIG BACKUP</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px"><button class="fleet-btn" onclick="runDoctor()" class="c-purple-active">RUN SELF-DIAGNOSTIC</button><button class="fleet-btn" onclick="runBackup()">EXPORT CONFIG BACKUP</button></div>
     <div id="doctor-c"></div>
-    <div id="backup-c" style="margin-top:12px"></div>
+    <div id="backup-c" class="mt-12"></div>
   </div>
 </div>
 <div class="section">
@@ -700,8 +724,8 @@ tr:hover td{background:var(--card-hover)}
   <div class="section-header" onclick="toggleSection(this)"><h3>Notifications</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="notify-status"></div>
-    <button class="fleet-btn" onclick="testNotify()" style="margin-top:12px">SEND TEST</button>
-    <div id="notify-result" style="margin-top:8px"></div>
+    <button class="fleet-btn" onclick="testNotify()" class="mt-12">SEND TEST</button>
+    <div id="notify-result" class="mt-8"></div>
   </div>
 </div>
 <div class="section">
@@ -709,8 +733,8 @@ tr:hover td{background:var(--card-hover)}
   <div class="section-body">
     <div class="crd" style="margin-bottom:24px;border-left:3px solid var(--purple)">
       <h3 style="font-size:16px">About PVE FREQ</h3>
-      <p style="margin-top:8px">FREQ is a zero-dependency Proxmox fleet management tool. Pure Python stdlib. One binary. Every command you need to manage VMs, containers, networking, storage, and monitoring across your entire cluster.</p>
-      <p style="margin-top:8px">Built from scratch — 16,000+ lines of bash rewritten into clean Python. SSH to 6 platform types. Personality system. Knowledge base. Risk analysis. Auto-audit pipeline. Agent platform for AI-driven infrastructure.</p>
+      <p class="mt-8">FREQ is a zero-dependency Proxmox fleet management tool. Pure Python stdlib. One binary. Every command you need to manage VMs, containers, networking, storage, and monitoring across your entire cluster.</p>
+      <p class="mt-8">Built from scratch — 16,000+ lines of bash rewritten into clean Python. SSH to 6 platform types. Personality system. Knowledge base. Risk analysis. Auto-audit pipeline. Agent platform for AI-driven infrastructure.</p>
       <p style="margin-top:12px;color:var(--purple-light)"><em>"freq did not come to play."</em></p>
     </div>
     <h3 style="color:var(--purple-light);font-size:14px;margin-bottom:16px">Capabilities</h3>
@@ -745,13 +769,13 @@ tr:hover td{background:var(--card-hover)}
       <div style="font-size:28px;margin-bottom:12px;opacity:0.6">&#9881;</div>
       <div style="font-size:13px">Loading Host Details...</div>
     </div>
-    <div id="hd-content" style="display:none"></div>
+    <div id="hd-content" class="d-none"></div>
   </div>
 </div>
 
 <!-- ═══ TOAST + MODAL ═══ -->
 <div id="toast-container" class="toast-container"></div>
-<div id="modal-container" class="modal-overlay" style="display:none"></div>
+<div id="modal-container" class="modal-overlay d-none"></div>
 
 <script>
 var HC=['#58a6ff','#3fb950','#d29922','#f778ba','#79c0ff','#d2a8ff','#ff7b72','#ffa657','#7ee787'];
@@ -878,7 +902,7 @@ function _showApp(){
   var login=document.getElementById('login-overlay');
   login.innerHTML='<div style="text-align:center"><pre style="font-family:\'Courier New\',monospace;font-size:10px;line-height:1.1;color:var(--purple-light);display:inline-block;text-align:left;margin-bottom:24px"> \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557   \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557\n \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d   \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\n \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551   \u2588\u2588\u2551\n \u2588\u2588\u2554\u2550\u2550\u2550\u255d \u255a\u2588\u2588\u2557 \u2588\u2588\u2554\u255d\u2588\u2588\u2554\u2550\u2550\u255d     \u2588\u2588\u2554\u2550\u2550\u255d  \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u255d  \u2588\u2588\u2551\u2584\u2584 \u2588\u2588\u2551\n \u2588\u2588\u2551      \u255a\u2588\u2588\u2588\u2588\u2554\u255d \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2551     \u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\n \u255a\u2550\u255d       \u255a\u2550\u2550\u2550\u255d  \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d   \u255a\u2550\u255d     \u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u2550\u255d\u2550\u2550\u255d</pre>'+
     '<div id="load-status" style="color:var(--purple-light);font-size:13px;font-weight:600;letter-spacing:1px;margin-bottom:16px">INITIALIZING</div>'+
-    '<div style="width:200px;height:4px;background:#384450;border-radius:2px;margin:0 auto;overflow:hidden"><div id="load-bar" style="width:0%;height:100%;background:var(--purple);border-radius:2px;transition:width 0.4s ease"></div></div>'+
+    '<div style="width:200px;height:4px;background:var(--input-border);border-radius:2px;margin:0 auto;overflow:hidden"><div id="load-bar" style="width:0%;height:100%;background:var(--purple);border-radius:2px;transition:width 0.4s ease"></div></div>'+
     '<div id="load-detail" style="color:var(--text-dim);font-size:11px;margin-top:12px">Connecting to fleet...</div></div>';
 
   var bar=document.getElementById('load-bar');
@@ -926,8 +950,8 @@ function openUserMenu(){
   ov.innerHTML='<div class="modal" style="max-width:340px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="margin:0">Session</h3><span onclick="closeModal()" style="cursor:pointer;color:var(--text-dim);font-size:18px">&times;</span></div>'+
     '<div style="display:flex;align-items:center;gap:12px;padding:16px;background:var(--bg);border-radius:8px;margin-bottom:16px">'+
-    '<div style="width:40px;height:40px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#ffffff">'+_currentUser.charAt(0).toUpperCase()+'</div>'+
-    '<div><div style="font-size:14px;font-weight:600;color:#ffffff">'+_currentUser.toUpperCase()+'</div><div style="font-size:12px;color:'+(rc[_currentRole]||'var(--text-dim)')+';font-weight:600">'+_currentRole.toUpperCase()+'</div></div></div>'+
+    '<div style="width:40px;height:40px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--text)">'+_currentUser.charAt(0).toUpperCase()+'</div>'+
+    '<div><div style="font-size:14px;font-weight:600;color:var(--text)">'+_currentUser.toUpperCase()+'</div><div style="font-size:12px;color:'+(rc[_currentRole]||'var(--text-dim)')+';font-weight:600">'+_currentRole.toUpperCase()+'</div></div></div>'+
     '<button onclick="closeModal();doLogout()" style="width:100%;background:none;border:2px solid var(--red);color:var(--red);padding:10px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background=\'rgba(248,81,73,0.1)\'" onmouseout="this.style.background=\'none\'">LOG OUT</button>'+
     '</div>';
   ov.style.display='flex';
@@ -966,14 +990,14 @@ var WIDGET_REGISTRY=[
   {id:'w-fleet-overview',page:'FLEET',label:'Overview',loader:function(el){
     /* Summary cards row — cluster-level stats */
     var g='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">';
-    g+='<div class="host-card"><div class="host-head"><h3 style="color:var(--purple-light)">PVE NODES</h3><div class="host-meta"><span>'+(PROD_HOSTS.filter(function(h){return h.type==="pve"}).length||'?')+' NODES</span><span>·</span><span>HYPERVISOR</span></div></div><div style="border-top:1px solid var(--border);margin-top:2px;padding-top:6px"><div id="hw-pve-sum"><div class="skeleton" style="height:60px"></div></div></div></div>';
-    g+='<div class="host-card"><div class="host-head"><h3 style="color:var(--purple-light)">VMs</h3><div class="host-meta"><span>PVE CLUSTER</span><span>·</span><span>PROXMOX</span></div></div><div style="border-top:1px solid var(--border);margin-top:2px;padding-top:6px"><div id="hw-vms"><div class="skeleton" style="height:60px"></div></div></div></div>';
-    g+='<div class="host-card"><div class="host-head"><h3 style="color:var(--green)">MEDIA STACK</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div><div style="border-top:1px solid var(--border);margin-top:2px;padding-top:6px"><div id="hw-media"><div class="skeleton" style="height:60px"></div></div></div></div></div>';
+    g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">PVE NODES</h3><div class="host-meta"><span>'+(PROD_HOSTS.filter(function(h){return h.type==="pve"}).length||'?')+' NODES</span><span>·</span><span>HYPERVISOR</span></div></div><div class="divider-light"><div id="hw-pve-sum"><div class="skeleton" style="height:60px"></div></div></div></div>';
+    g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PVE CLUSTER</span><span>·</span><span>PROXMOX</span></div></div><div class="divider-light"><div id="hw-vms"><div class="skeleton" style="height:60px"></div></div></div></div>';
+    g+='<div class="host-card"><div class="host-head"><h3 class="c-green">MEDIA STACK</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div><div class="divider-light"><div id="hw-media"><div class="skeleton" style="height:60px"></div></div></div></div></div>';
     /* Infrastructure device cards — responsive grid */
     g+='<div id="hw-physical-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px"></div>';
     el.innerHTML=g;
     /* Populate physical device cards as individual grid items */
-    var pc='';PROD_HOSTS.filter(function(h){return h.type!=='pve'}).forEach(function(h){var tc={pfsense:'#ffffff',truenas:'var(--blue)',switch:'var(--cyan)',idrac:'var(--orange)'}; pc+='<div class="host-card"><div class="host-head"><h3 style="color:'+(tc[h.type]||'var(--text)')+'">'+h.label.toUpperCase()+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>·</span><span>'+h.role+'</span></div></div><div style="border-top:1px solid var(--border);margin-top:2px;padding-top:6px"><div id="hw-'+h.label.toLowerCase().replace(/[^a-z0-9]/g,'-')+'"><div class="skeleton" style="height:60px"></div></div></div></div>';});
+    var pc='';PROD_HOSTS.filter(function(h){return h.type!=='pve'}).forEach(function(h){var tc={pfsense:'var(--text)',truenas:'var(--blue)',switch:'var(--cyan)',idrac:'var(--orange)'}; pc+='<div class="host-card"><div class="host-head"><h3 style="color:'+(tc[h.type]||'var(--text)')+'">'+h.label.toUpperCase()+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>·</span><span>'+h.role+'</span></div></div><div class="divider-light"><div id="hw-'+h.label.toLowerCase().replace(/[^a-z0-9]/g,'-')+'"><div class="skeleton" style="height:60px"></div></div></div></div>';});
     var pcd=document.getElementById('hw-physical-cards');if(pcd)pcd.innerHTML=pc;
     _loadWidgetOverview();
   }},
@@ -1034,16 +1058,16 @@ function _loadHomeFleetStats(){
     hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;if(h.type==='pve')pve++;if(h.groups&&h.groups.indexOf('lab')>=0)lab++;});
     var totalAll=hd.hosts.length;
     var totalOff=down;var prodCount=totalAll-lab;var pveCount=PROD_HOSTS.filter(function(h){return h.type==='pve';}).length||pve;
-    var _d=function(l,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+l+'</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'<span style="font-size:12px;font-weight:500;opacity:0.7"> '+l1+'</span></span><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'<span style="font-size:12px;font-weight:500;opacity:0.7"> '+l2+'</span></span></div></div>';};
+    var _d=function(l,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+l+'</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'<span class="label-hint"> '+l1+'</span></span><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'<span class="label-hint"> '+l2+'</span></span></div></div>';};
     var el=document.getElementById('hw-fleet-stats');if(el)el.innerHTML=_d('STATUS',up,'ONLINE','var(--green)',totalOff,'OFFLINE','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'ONLINE','var(--cyan)')+_d('RESPONSE',hd.duration+'s','','var(--blue)','','','var(--text-dim)');
     var el2=document.getElementById('hw-fleet-stats2');
     if(el2){el2.innerHTML=st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
       fetch('/api/vms').then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
-        el2.querySelector('.st:nth-child(1)').innerHTML='<div class="lb">VMs</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+run+'<span style="font-size:12px;font-weight:500;opacity:0.7"> RUN</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+stop+'<span style="font-size:12px;font-weight:500;opacity:0.7"> STOP</span></span></div>';}).catch(function(){});
+        el2.querySelector('.st:nth-child(1)').innerHTML='<div class="lb">VMs</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+run+'<span class="label-hint"> RUN</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+stop+'<span class="label-hint"> STOP</span></span></div>';}).catch(function(){});
       fetch('/api/media/dashboard').then(function(r){return r.json()}).then(function(md){
-        el2.querySelector('.st:nth-child(2)').innerHTML='<div class="lb">CONTAINERS</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+(md.containers_running||0)+'<span style="font-size:12px;font-weight:500;opacity:0.7"> UP</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+(md.containers_down||0)+'<span style="font-size:12px;font-weight:500;opacity:0.7"> DOWN</span></span></div>';}).catch(function(){});
+        el2.querySelector('.st:nth-child(2)').innerHTML='<div class="lb">CONTAINERS</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+(md.containers_running||0)+'<span class="label-hint"> UP</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+(md.containers_down||0)+'<span class="label-hint"> DOWN</span></span></div>';}).catch(function(){});
       Promise.all([fetch('/api/media/downloads').then(function(r){return r.json()}).catch(function(){return{count:0}}),fetch('/api/media/streams').then(function(r){return r.json()}).catch(function(){return{count:0}})]).then(function(res){
-        el2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">ACTIVITY</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--orange)">'+(res[0].count||0)+'<span style="font-size:12px;font-weight:500;opacity:0.7"> DL</span></span><span style="font-size:20px;font-weight:700;color:var(--blue)">'+(res[1].count||0)+'<span style="font-size:12px;font-weight:500;opacity:0.7"> STREAM</span></span></div>';});
+        el2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">ACTIVITY</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--orange)">'+(res[0].count||0)+'<span class="label-hint"> DL</span></span><span style="font-size:20px;font-weight:700;color:var(--blue)">'+(res[1].count||0)+'<span class="label-hint"> STREAM</span></span></div>';});
     }
   });
 }
@@ -1111,17 +1135,17 @@ function openLayoutConfig(){
   if(!sections.length){toast('No configurable sections on this view','info');return;}
   _dragView=view;
   var cfg=_loadViewLayout(view);
-  var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Drag to reorder. Toggle to show/hide.</div>';
+  var h='<div class="desc-line">Drag to reorder. Toggle to show/hide.</div>';
   h+='<div id="layout-drag-list">';
   cfg.order.forEach(function(id){
     var on=cfg.visible[id]!==false;var label=_sectionLabel(id);
     h+='<div class="layout-item" draggable="true" data-id="'+id+'" ondragstart="_dragId=this.getAttribute(\'data-id\');this.style.opacity=\'0.4\'" ondragend="this.style.opacity=\'1\'" ondragover="event.preventDefault();this.style.borderTopColor=\'var(--purple)\'" ondragleave="this.style.borderTopColor=\'var(--border)\'" ondrop="event.preventDefault();this.style.borderTopColor=\'var(--border)\';dropLayoutItem(this.getAttribute(\'data-id\'))" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:2px solid var(--border);cursor:grab;user-select:none;transition:border-color 0.15s">';
     h+='<span style="color:var(--text-dim);font-size:14px;cursor:grab">&#9776;</span>';
-    h+='<span style="flex:1;font-size:13px;color:#ffffff">'+label+'</span>';
+    h+='<span style="flex:1;font-size:13px;color:var(--text)">'+label+'</span>';
     h+='<label style="position:relative;width:40px;height:22px;cursor:pointer;display:block;flex-shrink:0" onclick="event.stopPropagation()">';
-    h+='<input type="checkbox" '+(on?'checked':'')+' onchange="toggleViewSection(\''+view+'\',\''+id+'\',this.checked)" style="display:none">';
-    h+='<span style="position:absolute;inset:0;background:'+(on?'var(--purple)':'#384450')+';border-radius:11px;transition:background 0.2s"></span>';
-    h+='<span style="position:absolute;top:2px;left:'+(on?'20px':'2px')+';width:18px;height:18px;background:#ffffff;border-radius:50%;transition:left 0.2s"></span>';
+    h+='<input type="checkbox" '+(on?'checked':'')+' onchange="toggleViewSection(\''+view+'\',\''+id+'\',this.checked)" class="d-none">';
+    h+='<span style="position:absolute;inset:0;background:'+(on?'var(--purple)':'var(--input-border)')+';border-radius:11px;transition:background 0.2s"></span>';
+    h+='<span style="position:absolute;top:2px;left:'+(on?'20px':'2px')+';width:18px;height:18px;background:var(--text);border-radius:50%;transition:left 0.2s"></span>';
     h+='</label></div>';
   });
   h+='</div>';
@@ -1145,7 +1169,7 @@ Object.keys(VIEW_SECTIONS).forEach(function(v){_applyViewLayout(v);});
 function openHomeWidgetConfig(){
   var cfg=_loadHomeWidgetConfig()||[];
   var pages={};WIDGET_REGISTRY.forEach(function(w){if(!pages[w.page])pages[w.page]=[];pages[w.page].push(w);});
-  var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font-size:12px;color:var(--text-dim)">Toggle widgets for your HOME dashboard</span>';
+  var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span class="text-sub">Toggle widgets for your HOME dashboard</span>';
   h+='<button class="fleet-btn" onclick="quickStartHome()" style="padding:4px 12px;font-size:12px;color:var(--purple-light);border-color:var(--purple)">&#9889; QUICK START</button></div>';
   /* Active widgets — draggable */
   if(cfg.length){
@@ -1155,8 +1179,8 @@ function openHomeWidgetConfig(){
       var w=WIDGET_REGISTRY.find(function(r){return r.id===wid;});if(!w)return;
       h+='<div class="layout-item" draggable="true" data-id="'+wid+'" ondragstart="_dragId=this.getAttribute(\'data-id\');this.style.opacity=\'0.4\'" ondragend="this.style.opacity=\'1\'" ondragover="event.preventDefault();this.style.borderTopColor=\'var(--purple)\'" ondragleave="this.style.borderTopColor=\'var(--border)\'" ondrop="event.preventDefault();this.style.borderTopColor=\'var(--border)\';dropHomeWidget(this.getAttribute(\'data-id\'))" style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-top:2px solid var(--border);cursor:grab;user-select:none">';
       h+='<span style="color:var(--text-dim);font-size:14px">&#9776;</span>';
-      h+='<span style="flex:1;font-size:12px;color:#ffffff">'+w.label+'</span>';
-      h+='<span style="font-size:12px;color:var(--text-dim)">'+w.page+'</span>';
+      h+='<span style="flex:1;font-size:12px;color:var(--text)">'+w.label+'</span>';
+      h+='<span class="text-sub">'+w.page+'</span>';
       h+='<button onclick="removeHomeWidget(\''+wid+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 4px">&times;</button>';
       h+='</div>';
     });
@@ -1169,11 +1193,11 @@ function openHomeWidgetConfig(){
     pages[page].forEach(function(w){
       var active=cfg.indexOf(w.id)>=0;
       h+='<div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid var(--border)">';
-      h+='<span style="flex:1;font-size:12px;color:#ffffff">'+w.label+'</span>';
+      h+='<span style="flex:1;font-size:12px;color:var(--text)">'+w.label+'</span>';
       h+='<label style="position:relative;width:40px;height:22px;cursor:pointer;display:block;flex-shrink:0">';
-      h+='<input type="checkbox" '+(active?'checked':'')+' onchange="toggleHomeWidget(\''+w.id+'\',this.checked)" style="display:none">';
-      h+='<span style="position:absolute;inset:0;background:'+(active?'var(--purple)':'#384450')+';border-radius:11px;transition:background 0.2s"></span>';
-      h+='<span style="position:absolute;top:2px;left:'+(active?'20px':'2px')+';width:18px;height:18px;background:#ffffff;border-radius:50%;transition:left 0.2s"></span>';
+      h+='<input type="checkbox" '+(active?'checked':'')+' onchange="toggleHomeWidget(\''+w.id+'\',this.checked)" class="d-none">';
+      h+='<span style="position:absolute;inset:0;background:'+(active?'var(--purple)':'var(--input-border)')+';border-radius:11px;transition:background 0.2s"></span>';
+      h+='<span style="position:absolute;top:2px;left:'+(active?'20px':'2px')+';width:18px;height:18px;background:var(--text);border-radius:50%;transition:left 0.2s"></span>';
       h+='</label></div>';
     });
   });
@@ -1368,11 +1392,11 @@ function renderGlobalSettings(){
   var _toggle=function(id,label,desc,checked,onchange){
     var on=checked;
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">'+
-      '<div><div style="font-size:13px;font-weight:600;color:#ffffff">'+label+'</div><div style="font-size:11px;color:var(--text-dim)">'+desc+'</div></div>'+
+      '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+label+'</div><div class="text-meta">'+desc+'</div></div>'+
       '<label style="position:relative;width:44px;height:24px;cursor:pointer;display:block;flex-shrink:0">'+
-      '<input type="checkbox" id="'+id+'" '+(on?'checked':'')+' onchange="'+onchange+'" style="display:none">'+
-      '<span style="position:absolute;inset:0;background:'+(on?'var(--purple)':'#384450')+';border-radius:12px;transition:background 0.2s"></span>'+
-      '<span style="position:absolute;top:3px;left:'+(on?'23px':'3px')+';width:18px;height:18px;background:#ffffff;border-radius:50%;transition:left 0.2s"></span>'+
+      '<input type="checkbox" id="'+id+'" '+(on?'checked':'')+' onchange="'+onchange+'" class="d-none">'+
+      '<span style="position:absolute;inset:0;background:'+(on?'var(--purple)':'var(--input-border)')+';border-radius:12px;transition:background 0.2s"></span>'+
+      '<span style="position:absolute;top:3px;left:'+(on?'23px':'3px')+';width:18px;height:18px;background:var(--text);border-radius:50%;transition:left 0.2s"></span>'+
       '</label></div>';
   };
   var showTpl=s.showTemplates===true;
@@ -1511,7 +1535,7 @@ function _renderServicesFromCache(){
   if(!_mediaCache)return;
   var tags=_getMediaTags();var html='';
   _mediaCache.containers.forEach(function(c){if(tags.indexOf(c.name)>=0)return;
-    var tagBtn='<button onclick="toggleMediaTag(\''+c.name+'\')" style="background:none;border:2px solid #384450;border-radius:6px;padding:4px 6px;cursor:pointer;font-size:14px;margin-left:auto;opacity:0.4;transition:opacity 0.2s" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\'0.4\'" title="Tag as media">&#127909;</button>';
+    var tagBtn='<button onclick="toggleMediaTag(\''+c.name+'\')" style="background:none;border:2px solid var(--input-border);border-radius:6px;padding:4px 6px;cursor:pointer;font-size:14px;margin-left:auto;opacity:0.4;transition:opacity 0.2s" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\'0.4\'" title="Tag as media">&#127909;</button>';
     html+=_containerCard(c,tagBtn);});
   document.getElementById('services-container-cards').innerHTML=html||'<div class="empty-state"><div class="es-icon">&#9881;</div><p>All containers are tagged as media.</p></div>';
 }
@@ -1520,7 +1544,7 @@ function _renderAllFromCache(){
   var html='';
   _mediaCache.containers.forEach(function(c){
     var isMedia=_getMediaTags().indexOf(c.name)>=0;
-    var tagBtn='<button onclick="toggleMediaTag(\''+c.name+'\')" style="background:none;border:2px solid '+(isMedia?'var(--purple)':'#384450')+';border-radius:6px;padding:4px 6px;cursor:pointer;font-size:14px;margin-left:auto;opacity:'+(isMedia?'1':'0.4')+';transition:opacity 0.2s" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\''+(isMedia?'1':'0.4')+'\'" title="'+(isMedia?'Remove media tag':'Tag as media')+'">&#127909;</button>';
+    var tagBtn='<button onclick="toggleMediaTag(\''+c.name+'\')" style="background:none;border:2px solid '+(isMedia?'var(--purple)':'var(--input-border)')+';border-radius:6px;padding:4px 6px;cursor:pointer;font-size:14px;margin-left:auto;opacity:'+(isMedia?'1':'0.4')+';transition:opacity 0.2s" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\''+(isMedia?'1':'0.4')+'\'" title="'+(isMedia?'Remove media tag':'Tag as media')+'">&#127909;</button>';
     html+=_containerCard(c,tagBtn);});
   document.getElementById('container-cards').innerHTML=html||'<div class="empty-state"><div class="es-icon">▶</div><p>No containers found.</p></div>';
 }
@@ -1551,7 +1575,7 @@ function _containerCard(c,extra){
   } else {
     h+='<div style="font-size:11px;color:var(--text-dim);margin:4px 0">'+c.vm_label+(c.port&&c.port!=='-'?' · '+c.port:'')+'</div>';
   }
-  if(c.detail)h+='<div style="font-size:12px;color:var(--text-dim)">'+c.detail+'</div>';
+  if(c.detail)h+='<div class="text-sub">'+c.detail+'</div>';
   h+='<div style="margin-top:8px;display:flex;gap:6px;align-items:center"><button class="fleet-btn" onclick="mediaRestart(\''+c.name+'\')" style="padding:4px 10px;font-size:12px">RESTART</button><button class="fleet-btn" onclick="mediaLogs(\''+c.name+'\')" style="padding:4px 10px;font-size:12px">LOGS</button>';
   if(extra)h+=extra;
   h+='</div></div>';
@@ -1597,10 +1621,10 @@ function loadFleetAdmin(){
   if(!body)return;
   body.innerHTML='<div class="skeleton"></div>';
   fetch('/api/admin/fleet-boundaries?token='+_authToken).then(function(r){return r.json()}).then(function(d){
-    if(d.error){body.innerHTML='<p style="color:var(--red)">'+d.error+'</p>';return;}
+    if(d.error){body.innerHTML='<p class="c-red">'+d.error+'</p>';return;}
     _fleetAdminData=d;
     renderFleetAdmin(d);
-  }).catch(function(e){body.innerHTML='<p style="color:var(--red)">Failed to load: '+e+'</p>';});
+  }).catch(function(e){body.innerHTML='<p class="c-red">Failed to load: '+e+'</p>';});
 }
 function renderFleetAdmin(d){
   var body=document.getElementById('fleet-admin-body');
@@ -1609,14 +1633,14 @@ function renderFleetAdmin(d){
   /* ── Host Properties Editor ── */
   h+='<div style="margin-bottom:24px">';
   h+='<h4 style="color:var(--purple-light);font-size:13px;margin-bottom:12px;letter-spacing:1px">HOST PROPERTIES</h4>';
-  h+='<p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Change host type or groups. Updates hosts.conf immediately.</p>';
+  h+='<p class="desc-line">Change host type or groups. Updates hosts.conf immediately.</p>';
   h+='<table><thead><tr><th>Label</th><th>IP</th><th>Type</th><th>Groups</th><th>Actions</th></tr></thead><tbody>';
   var validTypes=['linux','pve','truenas','pfsense','docker','idrac','switch','unknown'];
   (d.hosts||[]).forEach(function(host){
     var typeOpts='';validTypes.forEach(function(t){typeOpts+='<option value="'+t+'"'+(t===host.type?' selected':'')+'>'+t+'</option>';});
     h+='<tr>';
     h+='<td><strong>'+host.label+'</strong></td>';
-    h+='<td style="font-size:12px;color:var(--text-dim)">'+host.ip+'</td>';
+    h+='<td class="text-sub">'+host.ip+'</td>';
     h+='<td><select id="ht-'+host.label+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">'+typeOpts+'</select></td>';
     h+='<td><input id="hg-'+host.label+'" value="'+host.groups+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:160px" placeholder="prod,media"></td>';
     h+='<td><button class="fleet-btn" onclick="saveHostProps(\''+host.label+'\')" style="padding:3px 10px;font-size:11px;color:var(--green)">SAVE</button></td>';
@@ -1626,7 +1650,7 @@ function renderFleetAdmin(d){
   /* ── VM Categories ── */
   h+='<div style="margin-bottom:24px">';
   h+='<h4 style="color:var(--purple-light);font-size:13px;margin-bottom:12px;letter-spacing:1px">VM CATEGORIES & PERMISSIONS</h4>';
-  h+='<p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Assign VMIDs to categories. Controls what actions are allowed per VM.</p>';
+  h+='<p class="desc-line">Assign VMIDs to categories. Controls what actions are allowed per VM.</p>';
   var tierNames=Object.keys(d.tiers||{});
   Object.keys(d.categories||{}).forEach(function(cat){
     var info=d.categories[cat];
@@ -1635,21 +1659,21 @@ function renderFleetAdmin(d){
     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
     h+='<div><h3 style="font-size:14px;text-transform:uppercase">'+cat.replace(/_/g,' ')+'</h3>';
     h+='<p style="font-size:11px;color:var(--text-dim);margin-top:2px">'+info.description+'</p></div>';
-    h+='<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text-dim)">Tier:</span>';
+    h+='<div style="display:flex;align-items:center;gap:8px"><span class="text-meta">Tier:</span>';
     h+='<select onchange="updateCategoryTier(\''+cat+'\',this.value)" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">'+tierOpts+'</select></div>';
     h+='</div>';
     /* VMIDs or range */
     if(info.range_start!==undefined){
       h+='<div style="display:flex;gap:8px;align-items:center;margin-top:8px">';
-      h+='<span style="font-size:12px;color:var(--text-dim)">VMID Range:</span>';
+      h+='<span class="text-sub">VMID Range:</span>';
       h+='<input id="rs-'+cat+'" type="number" value="'+info.range_start+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:80px">';
-      h+='<span style="color:var(--text-dim)">—</span>';
+      h+='<span class="c-dim">—</span>';
       h+='<input id="re-'+cat+'" type="number" value="'+info.range_end+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:80px">';
       h+='<button class="fleet-btn" onclick="updateCategoryRange(\''+cat+'\')" style="padding:3px 10px;font-size:11px;color:var(--green)">SAVE</button>';
       h+='</div>';
     } else {
       var vmids=(info.vmids||[]).join(', ');
-      h+='<div style="margin-top:8px">';
+      h+='<div class="mt-8">';
       h+='<div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">VMIDs: <span style="color:var(--text)">'+vmids+'</span></div>';
       h+='<div style="display:flex;gap:6px;align-items:center;margin-top:4px">';
       h+='<input id="vmid-add-'+cat+'" type="number" placeholder="VMID" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:80px">';
@@ -1672,7 +1696,7 @@ function renderFleetAdmin(d){
   /* ── Permission Tiers ── */
   h+='<div style="margin-bottom:24px">';
   h+='<h4 style="color:var(--purple-light);font-size:13px;margin-bottom:12px;letter-spacing:1px">PERMISSION TIERS</h4>';
-  h+='<p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Define what actions each tier allows. Tiers are assigned to categories above.</p>';
+  h+='<p class="desc-line">Define what actions each tier allows. Tiers are assigned to categories above.</p>';
   Object.keys(d.tiers||{}).forEach(function(tier){
     var actions=d.tiers[tier]||[];
     h+='<div class="crd" style="margin-bottom:8px">';
@@ -1749,14 +1773,14 @@ var _vlanPrefixes={};/* populated alongside _VLAN_MAP by _initFleetData */
 var VLAN_COLORS={};
 /* Assign colors to VLANs dynamically — cycle through a palette.
    Called from _initFleetData() after _VLAN_MAP is populated. */
-var _VLAN_PALETTE=['var(--purple-light)','var(--blue)','var(--green)','var(--red)','var(--cyan)','var(--orange)','#ffffff','var(--yellow)','#f778ba','#58a6ff'];
+var _VLAN_PALETTE=['var(--purple-light)','var(--blue)','var(--green)','var(--red)','var(--cyan)','var(--orange)','var(--text)','var(--yellow)','#f778ba','#58a6ff'];
 function _assignVlanColors(){var vi=0;Object.keys(_VLAN_MAP).forEach(function(id){VLAN_COLORS[_VLAN_MAP[id].name]=_VLAN_PALETTE[vi%_VLAN_PALETTE.length];vi++;});}
 /* Fleet color scheme — node-based, generated from PVE node list.
    Called from _initFleetData() after PROD_HOSTS is populated. */
 var _NODE_PALETTE=['#9B4FDE','#f778ba','#58a6ff','#ffa657','#f0f6fc','#6e7681','#79c0ff','#d2a8ff'];
 var NODE_COLORS={};
 function _assignNodeColors(){var pveHosts=PROD_HOSTS.filter(function(h){return h.type==='pve';});pveHosts.forEach(function(h,i){NODE_COLORS[h.label]=_NODE_PALETTE[i%_NODE_PALETTE.length];});}
-var INFRA_GOLD='#ffffff';
+var INFRA_GOLD='var(--text)';
 function _hostColor(label,htype,node){
   /* Infra devices → gold */
   if(htype==='pfsense'||htype==='truenas'||htype==='switch'||htype==='docker'||htype==='idrac')return INFRA_GOLD;
@@ -1800,7 +1824,7 @@ function _infraRoleCard(ph,healthMap){
   /* Live role-specific metrics — placeholder, filled by /api/infra/quick */
   c+='<div class="role-metrics" id="infra-metrics-'+safeId+'">';
   if(up){
-    c+='<div class="role-metric"><span class="rm-val" style="color:var(--text-dim)">Loading...</span></div>';
+    c+='<div class="role-metric"><span class="rm-val c-dim">Loading...</span></div>';
   } else {
     c+=_roleOfflineMetrics(ph.type,roleInfo);
   }
@@ -1811,9 +1835,9 @@ function _infraRoleCard(ph,healthMap){
 function _roleOfflineMetrics(type,roleInfo){
   var m='';
   if(type==='idrac'||type==='ilo'||type==='ipmi'){
-    m+='<div class="role-metric"><span class="rm-val" style="color:var(--text-dim)">NO RESPONSE</span></div>';
+    m+='<div class="role-metric"><span class="rm-val c-dim">NO RESPONSE</span></div>';
   } else {
-    m+='<div class="role-metric"><span class="rm-val" style="color:var(--text-dim)">UNREACHABLE</span></div>';
+    m+='<div class="role-metric"><span class="rm-val c-dim">UNREACHABLE</span></div>';
   }
   return m;
 }
@@ -1872,7 +1896,7 @@ function _enrichInfraCards(){
           if(m.model)h+=_m(m.model,'MODEL','var(--text-dim)');
         }
       }
-      el.innerHTML=h||'<div class="role-metric"><span class="rm-val" style="color:var(--green)">OK</span></div>';
+      el.innerHTML=h||'<div class="role-metric"><span class="rm-val c-green">OK</span></div>';
     });
   }).catch(function(e){console.error('infra quick error:',e);});
 }
@@ -1904,11 +1928,189 @@ function loadMetricsQuick(){
     _renderFleetData(_fleetCache.fo,_fleetCache.hd,md);
   });
 }
+/* ── Fleet rendering helpers (hoisted from _renderFleetData) ── */
+function _fStat(v,label,color){return '<div style="text-align:center"><div style="font-size:16px;font-weight:700;color:'+color+'">'+v+'</div><div style="font-size:12px;color:var(--text)">'+label+'</div></div>';}
+function _fGrp(title,cols,content){return '<div style="border:1px solid var(--border);border-radius:6px;padding:6px 4px 4px;background:var(--bg)"><div style="font-size:12px;color:var(--text);text-align:center;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;opacity:0.7">'+title+'</div><div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:4px">'+content+'</div></div>';}
+function _fDual(label,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+label+'</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'<span class="label-hint"> '+l1+'</span></span><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'<span class="label-hint"> '+l2+'</span></span></div></div>';}
+function _buildLabHostCards(hosts,infraLabels,labLabels){
+  var labCards='';
+  if(!hosts)return labCards;
+  hosts.forEach(function(h){
+    if(infraLabels[h.label])return;
+    var cl=_hostColor(h.label,h.type);var up=h.status==='healthy';
+    var isLab=labLabels[h.label];
+    var diskPct=parseInt((h.disk||'0').replace('%',''))||0;
+    var ramParts=(h.ram||'0/0MB').match(/(\d+)\/(\d+)/);
+    var ramUsed=ramParts?parseInt(ramParts[1]):0;var ramTotal=ramParts?parseInt(ramParts[2]):1;
+    var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
+    var loadVal=parseFloat(h.load)||0;var cores=parseInt(h.cores)||1;
+    var loadPct=cores>0?Math.round(loadVal/cores*100):0;
+    var c='<div class="host-card" onclick="openHost(\''+h.label+'\')" style="cursor:pointer">';
+    c+='<div class="host-head"><h3 style="color:'+cl+'">'+h.label+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>\u00b7</span><span>'+(h.type||'Linux').toUpperCase()+'</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div>';
+    c+='<div class="divider-light">';
+    if(up){
+      var _isStorage=h.type==='truenas';
+      c+=_mrow('CPU',cores+(cores>1?' Cores':' Core')+' \u00b7 '+loadPct+'%',loadPct,'var(--purple-light)');
+      if(_isStorage){c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM (ARC)</span><span class="metric-val">'+_ramGB(ramUsed)+' / '+_ramGB(ramTotal)+'</span></div><div class="pbar"><div class="pbar-fill" style="width:'+ramPct+'%;background:var(--blue)"></div></div></div>';}
+      else{c+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,'var(--blue)');}
+      c+=_mrow('DISK',(h.disk||'?'),diskPct,'var(--green)');
+      c+='<div class="metric-row" id="ntp-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val" style="color:var(--text-dim);font-size:11px">...</span></div></div>';
+      c+='<div class="metric-row" id="upd-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">UPDATES</span><span class="metric-val" style="color:var(--text-dim);font-size:11px">...</span></div></div>';
+    } else {
+      c+='<p style="color:var(--text-dim);font-size:12px;padding:8px 0">Host unreachable</p>';
+    }
+    c+='</div></div>';
+    if(isLab)labCards+=c;
+  });
+  return labCards;
+}
+function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid){
+  var nodeData={};
+  pveNodes.forEach(function(pn){
+    var nodeName=pn.name;
+    var cl=_hostColor(nodeName,'pve');
+    var live=healthMap[nodeName];
+    var up=live&&live.status==='healthy';
+    var nodeVms=vmsByNode[nodeName]||[];
+    var nVms=nodeVms.length;
+    var nCores=0,nRamMb=0,nOnline=0,nOffline=0;
+    nodeVms.forEach(function(v){
+      nCores+=v.cpu||0;nRamMb+=v.ram_mb||0;
+      if(v.status==='running')nOnline++;else nOffline++;
+    });
+    var dockerCount=0,dockerUp=0,dockerDown=0;
+    nodeVms.forEach(function(v){
+      var ctr=ctrByVmid[String(v.vmid)];
+      if(ctr){dockerCount+=ctr.total;dockerUp+=ctr.up;dockerDown+=ctr.down;}
+    });
+    var nRamGb=Math.round(nRamMb/1024);
+    var detailRam=pn.detail.match(/(\d+)GB/);var nodeRamStr=detailRam?detailRam[1]+'GB':'?';
+    var nodeCard='<div class="host-card" style="cursor:pointer;" onclick="openVmInfo(\''+nodeName+'\',\''+pn.ip+'\',0)">';
+    nodeCard+='<div style="margin-bottom:8px"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
+    nodeCard+='<div class="divider-light">';
+    if(up&&live){
+      var cores=parseInt(live.cores)||1;var loadVal=parseFloat(live.load)||0;
+      var loadPct=cores>0?Math.round(loadVal/cores*100):0;
+      var diskPct=parseInt((live.disk||'0').replace('%',''))||0;
+      var ramParts=(live.ram||'0/0MB').match(/(\d+)\/(\d+)/);
+      var ramUsed=ramParts?parseInt(ramParts[1]):0;var ramTotal=ramParts?parseInt(ramParts[2]):1;
+      var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
+      nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
+      nodeCard+=_fGrp('PVE NODE',2,_fStat(nCores+'<span style="font-size:12px;opacity:0.6">/'+cores+'</span>','CPU ALLOC','var(--purple-light)')+_fStat(nRamGb+'<span style="font-size:12px;opacity:0.6">GB/'+nodeRamStr+'</span>','RAM ALLOC','var(--purple-light)'));
+      nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'ONLINE','var(--green)')+_fStat(nOffline,'OFFLINE','var(--red)'));
+      nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
+      nodeCard+='</div>';
+      nodeCard+='<div style="margin:6px 0">';
+      nodeCard+=_mrow('CPU',cores+(cores>1?' Cores':' Core')+' \u00b7 '+loadPct+'%',loadPct,'var(--purple-light)');
+      nodeCard+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,'var(--blue)');
+      nodeCard+=_mrow('DISK',(live.disk||'?'),diskPct,'var(--green)');
+      nodeCard+='</div>';
+    } else {
+      nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
+      nodeCard+=_fGrp('PVE NODE',2,_fStat(nCores,'CPU ALLOC','var(--purple-light)')+_fStat(nRamGb+'<span style="font-size:12px;opacity:0.6">GB</span>','RAM ALLOC','var(--purple-light)'));
+      nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'ONLINE','var(--green)')+_fStat(nOffline,'OFFLINE','var(--red)'));
+      nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
+      nodeCard+='</div>';
+      nodeCard+='<div id="pve-live-'+nodeName+'" style="margin:6px 0;padding:6px 8px;background:rgba(248,81,73,0.05);border:1px dashed var(--border);border-radius:6px;text-align:center">';
+      nodeCard+='<span style="font-size:12px;color:var(--red);letter-spacing:0.5px">LIVE METRICS: OFFLINE</span>';
+      nodeCard+='<div style="font-size:12px;color:var(--text-dim);margin-top:2px">Deploy to same network for real-time CPU load, RAM usage, storage pools, cluster health</div>';
+      nodeCard+='</div>';
+    }
+    nodeCard+='</div></div>';
+    nodeData[nodeName]={card:nodeCard,vms:''};
+  });
+  return nodeData;
+}
+function _assembleFleetOutput(infraCards,nodeData,pveNodes){
+  var out='';
+  if(infraCards){
+    var ic=(infraCards.match(/infra-role-card/g)||[]).length;
+    var cols=ic<=3?ic:ic<=6?3:4;
+    out+='<div style="margin-bottom:16px;border:3px solid var(--text);border-radius:10px;background:#000000;overflow:hidden">';
+    out+='<div style="padding:12px 16px 0;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text);opacity:0.85">CORE SYSTEMS</span><span id="core-systems-age" style="font-size:10px;font-weight:600;letter-spacing:1px;color:var(--text-dim)"></span></div>';
+    out+='<div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:12px;padding:12px 16px 16px">'+infraCards+'</div>';
+    out+='</div>';
+  }
+  var nodeOrder=pveNodes.map(function(n){return n.name;}).sort();
+  var pveContent='';
+  nodeOrder.forEach(function(nodeName){
+    var nd=nodeData[nodeName];if(!nd||!nd.card)return;
+    var nodeColor=NODE_COLORS[nodeName]||'var(--text)';
+    var vmCount=nd.vms?(nd.vms.match(/host-card/g)||[]).length:0;
+    var cols=Math.max(vmCount,3);if(cols>4)cols=4;
+    pveContent+='<div class="pve-group" style="border-left:4px solid '+nodeColor+';border-radius:6px;background:var(--bg2);overflow:hidden">';
+    pveContent+='<div onclick="togglePveGroup(this)" style="cursor:pointer;padding:8px 12px;display:flex;align-items:center;gap:8px">';
+    pveContent+='<span class="pve-chev" style="color:'+nodeColor+';font-size:14px;font-weight:700">\u25b8</span>';
+    pveContent+='<div class="flex-1">'+nd.card+'</div>';
+    pveContent+='</div>';
+    if(nd.vms){
+      pveContent+='<div class="pve-vms" style="display:none;grid-template-columns:repeat('+cols+',1fr);gap:10px;padding:8px 12px 12px;border-top:1px solid var(--border)">'+nd.vms+'</div>';
+    }
+    pveContent+='</div>';
+  });
+  if(pveContent){
+    out+='<div style="margin-bottom:16px;border:3px solid var(--purple);border-radius:10px;background:#000000;overflow:hidden">';
+    out+='<div style="padding:12px 16px 0;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text);opacity:0.85">PROXMOX NODES</span><span style="font-size:10px;font-weight:600;letter-spacing:1px;color:var(--text-dim)">'+pveNodes.length+' NODES</span></div>';
+    out+='<div style="display:flex;flex-direction:column;gap:8px;padding:12px 16px 16px">'+pveContent+'</div>';
+    out+='</div>';
+  }
+  return out;
+}
+function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDuration,hdDuration,labPveNodes){
+  var labCount=Object.keys(labLabels).length;
+  var prodCount=(hd?hd.hosts.length:0)-labCount;
+  var prodPveNodes=pveNodes.length;
+  var responseDur=Math.max(foDuration,hdDuration);
+  var hdAge=hd&&hd.age!==undefined?Math.round(hd.age):0;
+  var ageLabel=hdAge<5?'LIVE':hdAge<60?hdAge+'s':Math.round(hdAge/60)+'m';
+  var ageColor=hdAge<30?'var(--green)':hdAge<120?'var(--yellow)':'var(--red)';
+  document.getElementById('metrics-summary').innerHTML=
+    _fDual('FLEET SPLIT',summary.prod_count||0,'PROD','var(--purple-light)',summary.lab_count||0,'LAB','var(--cyan)')+
+    _fDual('FLEET',prodCount,'PROD','var(--purple-light)',labCount,'LAB','var(--cyan)')+
+    _fDual('PVE NODES',prodPveNodes,'PROD','var(--purple-light)',labPveNodes,'LAB','var(--cyan)')+
+    _fDual('RESPONSE',responseDur+'s','',ageColor,ageLabel,'',ageColor);
+  var row2=document.getElementById('metrics-row2');
+  var vmRunning=summary.running||0;var vmStopped=summary.stopped||0;
+  row2.innerHTML=
+    _fDual('STATUS',totalUp,'ONLINE','var(--green)',totalDown,'OFFLINE','var(--red)')+
+    _fDual('VMs',vmRunning,'RUN','var(--green)',vmStopped,'STOP','var(--red)')+
+    st('CONTAINERS','...','p')+
+    st('ACTIVITY','...','p');
+  fetch('/api/media/dashboard').then(function(r){return r.json()}).then(function(md){
+    row2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">CONTAINERS</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+(md.containers_running||0)+'<span class="label-hint"> UP</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+(md.containers_down||0)+'<span class="label-hint"> DOWN</span></span></div>';
+  }).catch(function(){});
+  Promise.all([
+    fetch('/api/media/downloads').then(function(r){return r.json()}).catch(function(){return {count:0}}),
+    fetch('/api/media/streams').then(function(r){return r.json()}).catch(function(){return {count:0}})
+  ]).then(function(res){
+    var dl=res[0].count||0;var str=res[1].count||0;
+    row2.querySelector('.st:nth-child(4)').innerHTML='<div class="lb">ACTIVITY</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--orange)">'+dl+'<span class="label-hint"> DL</span></span><span style="font-size:20px;font-weight:700;color:var(--blue)">'+str+'<span class="label-hint"> STREAM</span></span></div>';
+  });
+}
+function _enrichFleetNtpUpdates(){
+  fetch('/api/fleet/ntp').then(function(r){return r.json()}).then(function(nd){
+    nd.hosts.forEach(function(x){
+      var el=document.getElementById('ntp-'+x.label.replace(/[^a-z0-9]/gi,''));
+      if(el){var synced=x.synced;el.innerHTML='<div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val" style="font-size:11px;color:'+(synced?'var(--green)':'var(--red)')+'">'+(synced?'SYNCED':'NOT SYNCED')+' <span style="color:var(--text-dim);font-weight:400">'+x.time+'</span></span></div>';}
+    });
+  }).catch(function(){});
+  fetch('/api/fleet/updates').then(function(r){return r.json()}).then(function(ud){
+    ud.hosts.forEach(function(x){
+      var el=document.getElementById('upd-'+x.label.replace(/[^a-z0-9]/gi,''));
+      if(el){
+        var n=x.updates;var color=n>0?'var(--yellow)':'var(--green)';
+        var txt=n>0?n+' PENDING':'UP TO DATE';
+        var btn=n>0?' <button class="btn" onclick="event.stopPropagation();runHostUpdate(\''+x.label+'\')" style="padding:2px 8px;font-size:12px;margin-left:6px;color:var(--yellow)">UPDATE</button>':'';
+        el.innerHTML='<div class="metric-top"><span class="metric-label">UPDATES</span><span class="metric-val" style="font-size:11px;color:'+color+'">'+txt+btn+'</span></div>';
+      }
+    });
+  }).catch(function(){});
+}
 function _renderFleetData(fo,hd,md){
   try{
-    if(!fo&&!hd){document.getElementById('metrics-cards').innerHTML='<p style="color:var(--red)">Both fleet overview and health APIs failed.</p>';return;}
+    if(!fo&&!hd){document.getElementById('metrics-cards').innerHTML='<p class="c-red">Both fleet overview and health APIs failed.</p>';return;}
     /* Build container counts by VMID from media status data */
-    var ctrByVmid={};/* vmid -> {total, up, down} */
+    var ctrByVmid={};
     if(md&&md.containers){md.containers.forEach(function(c){
       var vid=String(c.vm_id);
       if(!ctrByVmid[vid])ctrByVmid[vid]={total:0,up:0,down:0};
@@ -1916,8 +2118,7 @@ function _renderFleetData(fo,hd,md){
       if(c.status==='up')ctrByVmid[vid].up++;else ctrByVmid[vid].down++;
     });}
     /* Build lookup maps from API data */
-    var healthMap={};/* label -> health host object */
-    var totalUp=0,totalDown=0,labPveNodes=0;
+    var healthMap={};var totalUp=0,totalDown=0,labPveNodes=0;
     var labLabels={};
     if(hd&&hd.hosts){
       hd.hosts.forEach(function(h){
@@ -1928,159 +2129,25 @@ function _renderFleetData(fo,hd,md){
         if(h.type==='pve'&&labLabels[h.label])labPveNodes++;
       });
     }
-    /* Index VMs by node from fleet overview — optionally exclude templates */
-    var vmsByNode={};/* node_name -> [vm, ...] */
-    var _tplS=_loadSettings();
+    /* Index VMs by node — optionally exclude templates */
+    var vmsByNode={};var _tplS=_loadSettings();
     var foVms=fo?fo.vms.filter(function(v){return _tplS.showTemplates||v.category!=='templates';}):[];
-    foVms.forEach(function(v){
-      var n=v.node||'unknown';
-      if(!vmsByNode[n])vmsByNode[n]=[];
-      vmsByNode[n].push(v);
-    });
-    /* Physical devices from fleet overview */
+    foVms.forEach(function(v){var n=v.node||'unknown';if(!vmsByNode[n])vmsByNode[n]=[];vmsByNode[n].push(v);});
     var physicals=fo?fo.physical:[];
-    /* PVE nodes from fleet overview */
     var pveNodes=fo?fo.pve_nodes:[];
-    /* Summary from fleet overview */
     var summary=fo?fo.summary:{};
     var foDuration=fo?fo.duration:0;
     var hdDuration=hd?hd.duration:0;
-    /* ────────────────────────────────────────────────
-       INFRASTRUCTURE ROLE CARDS (non-PVE physical devices)
-       ──────────────────────────────────────────────── */
+    /* Infrastructure role cards */
     var infraCards='';
-    physicals.forEach(function(ph){
-      infraCards+=_infraRoleCard(ph,healthMap);
-    });
-    /* ────────────────────────────────────────────────
-       LIVE HOST CARDS (lab + docker hosts from health)
-       ──────────────────────────────────────────────── */
-    var labCards='';
-    /* Build a set of labels already rendered as infra or PVE node cards */
+    physicals.forEach(function(ph){infraCards+=_infraRoleCard(ph,healthMap);});
+    /* Lab host cards */
     var infraLabels={};physicals.forEach(function(p){infraLabels[p.label]=true;});
     pveNodes.forEach(function(pn){infraLabels[pn.name]=true;});
-    if(hd&&hd.hosts){
-      hd.hosts.forEach(function(h){
-        /* Skip hosts already rendered as infra cards or PVE nodes */
-        if(infraLabels[h.label])return;
-        var cl=_hostColor(h.label,h.type);var up=h.status==='healthy';
-        var isLab=labLabels[h.label];
-        var diskPct=parseInt((h.disk||'0').replace('%',''))||0;
-        var ramParts=(h.ram||'0/0MB').match(/(\d+)\/(\d+)/);
-        var ramUsed=ramParts?parseInt(ramParts[1]):0;var ramTotal=ramParts?parseInt(ramParts[2]):1;
-        var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
-        var loadVal=parseFloat(h.load)||0;var cores=parseInt(h.cores)||1;
-        var loadPct=cores>0?Math.round(loadVal/cores*100):0;
-        var c='<div class="host-card" onclick="openHost(\''+h.label+'\')" style="cursor:pointer">';
-        c+='<div class="host-head"><h3 style="color:'+cl+'">'+h.label+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>\u00b7</span><span>'+(h.type||'Linux').toUpperCase()+'</span><span>\u00b7</span>'+(up?'<span style="color:var(--green)">ONLINE</span>':'<span style="color:var(--red)">OFFLINE</span>')+'</div></div>';
-        c+='<div style="border-top:1px solid var(--border);margin-top:2px;padding-top:6px">';
-        if(up){
-          var _isStorage=h.type==='truenas';
-          c+=_mrow('CPU',cores+(cores>1?' Cores':' Core')+' \u00b7 '+loadPct+'%',loadPct,'var(--purple-light)');
-          if(_isStorage){c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM (ARC)</span><span class="metric-val">'+_ramGB(ramUsed)+' / '+_ramGB(ramTotal)+'</span></div><div class="pbar"><div class="pbar-fill" style="width:'+ramPct+'%;background:var(--blue)"></div></div></div>';}
-          else{c+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,'var(--blue)');}
-          c+=_mrow('DISK',(h.disk||'?'),diskPct,'var(--green)');
-          c+='<div class="metric-row" id="ntp-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val" style="color:var(--text-dim);font-size:11px">...</span></div></div>';
-          c+='<div class="metric-row" id="upd-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">UPDATES</span><span class="metric-val" style="color:var(--text-dim);font-size:11px">...</span></div></div>';
-        } else {
-          c+='<p style="color:var(--text-dim);font-size:12px;padding:8px 0">Host unreachable</p>';
-        }
-        c+='</div></div>';
-        if(isLab)labCards+=c;
-        /* non-lab hosts not covered by infra/PVE sections are skipped — they appear in PVE VM groups */
-      });
-    }
-    /* ────────────────────────────────────────────────
-       PVE NODE SECTIONS (from fleet overview API)
-       ──────────────────────────────────────────────── */
-    var nodeData={};/* keyed by node name: {card:'', vms:''} */
-    var _stat=function(v,label,color){return '<div style="text-align:center"><div style="font-size:16px;font-weight:700;color:'+color+'">'+v+'</div><div style="font-size:12px;color:#ffffff">'+label+'</div></div>';};
-    var _grp=function(title,cols,content){return '<div style="border:1px solid var(--border);border-radius:6px;padding:6px 4px 4px;background:var(--bg)"><div style="font-size:12px;color:#ffffff;text-align:center;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;opacity:0.7">'+title+'</div><div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:4px">'+content+'</div></div>';};
-    pveNodes.forEach(function(pn){
-      var nodeName=pn.name;
-      var cl=_hostColor(nodeName,'pve');
-      var live=healthMap[nodeName];
-      var up=live&&live.status==='healthy';
-      /* Compute per-node VM stats from fleet overview data */
-      var nodeVms=vmsByNode[nodeName]||[];
-      var nVms=nodeVms.length;
-      var nCores=0,nRamMb=0,nContainers=0,nOnline=0,nOffline=0;
-      nodeVms.forEach(function(v){
-        nCores+=v.cpu||0;
-        nRamMb+=v.ram_mb||0;
-        if(v.status==='running')nOnline++;else nOffline++;
-      });
-      /* Container count — from media status data by VMID */
-      var dockerCount=0,dockerUp=0,dockerDown=0;
-      nodeVms.forEach(function(v){
-        var ctr=ctrByVmid[String(v.vmid)];
-        if(ctr){dockerCount+=ctr.total;dockerUp+=ctr.up;dockerDown+=ctr.down;}
-      });
-      var nRamGb=Math.round(nRamMb/1024);
-      /* Parse total node resources from detail string */
-      var detailRam=pn.detail.match(/(\d+)GB/);var nodeRamStr=detailRam?detailRam[1]+'GB':'?';
-      /* Node card */
-      var nodeCard='<div class="host-card" style="cursor:pointer;" onclick="openVmInfo(\''+nodeName+'\',\''+pn.ip+'\',0)">';
-      nodeCard+='<div style="margin-bottom:8px"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span style="color:var(--green)">ONLINE</span>':'<span style="color:var(--red)">OFFLINE</span>')+'</div></div><div style="font-size:12px;color:#ffffff;font-weight:400">'+pn.detail+'</div></div>';
-      nodeCard+='<div style="border-top:1px solid var(--border);margin-top:2px;padding-top:6px">';
-      /* Live metrics if available */
-      if(up&&live){
-        var cores=parseInt(live.cores)||1;var loadVal=parseFloat(live.load)||0;
-        var loadPct=cores>0?Math.round(loadVal/cores*100):0;
-        var diskPct=parseInt((live.disk||'0').replace('%',''))||0;
-        var ramParts=(live.ram||'0/0MB').match(/(\d+)\/(\d+)/);
-        var ramUsed=ramParts?parseInt(ramParts[1]):0;var ramTotal=ramParts?parseInt(ramParts[2]):1;
-        var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
-        nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
-        nodeCard+=_grp('PVE NODE',2,
-          _stat(nCores+'<span style="font-size:12px;opacity:0.6">/'+cores+'</span>','CPU ALLOC','var(--purple-light)')+
-          _stat(nRamGb+'<span style="font-size:12px;opacity:0.6">GB/'+nodeRamStr+'</span>','RAM ALLOC','var(--purple-light)')
-        );
-        nodeCard+=_grp('VMs',3,
-          _stat(nVms,'TOTAL','var(--purple-light)')+
-          _stat(nOnline,'ONLINE','var(--green)')+
-          _stat(nOffline,'OFFLINE','var(--red)')
-        );
-        nodeCard+=_grp('CONTAINERS',3,
-          _stat(dockerCount,'TOTAL','var(--purple-light)')+
-          _stat(dockerUp,'UP','var(--green)')+
-          _stat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)')
-        );
-        nodeCard+='</div>';
-        nodeCard+='<div style="margin:6px 0">';
-        nodeCard+=_mrow('CPU',cores+(cores>1?' Cores':' Core')+' \u00b7 '+loadPct+'%',loadPct,'var(--purple-light)');
-        nodeCard+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,'var(--blue)');
-        nodeCard+=_mrow('DISK',(live.disk||'?'),diskPct,'var(--green)');
-        nodeCard+='</div>';
-      } else {
-        /* Offline — show allocation stats only */
-        nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
-        nodeCard+=_grp('PVE NODE',2,
-          _stat(nCores,'CPU ALLOC','var(--purple-light)')+
-          _stat(nRamGb+'<span style="font-size:12px;opacity:0.6">GB</span>','RAM ALLOC','var(--purple-light)')
-        );
-        nodeCard+=_grp('VMs',3,
-          _stat(nVms,'TOTAL','var(--purple-light)')+
-          _stat(nOnline,'ONLINE','var(--green)')+
-          _stat(nOffline,'OFFLINE','var(--red)')
-        );
-        nodeCard+=_grp('CONTAINERS',3,
-          _stat(dockerCount,'TOTAL','var(--purple-light)')+
-          _stat(dockerUp,'UP','var(--green)')+
-          _stat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)')
-        );
-        nodeCard+='</div>';
-        nodeCard+='<div id="pve-live-'+nodeName+'" style="margin:6px 0;padding:6px 8px;background:rgba(248,81,73,0.05);border:1px dashed var(--border);border-radius:6px;text-align:center">';
-        nodeCard+='<span style="font-size:12px;color:var(--red);letter-spacing:0.5px">LIVE METRICS: OFFLINE</span>';
-        nodeCard+='<div style="font-size:12px;color:var(--text-dim);margin-top:2px">Deploy to same network for real-time CPU load, RAM usage, storage pools, cluster health</div>';
-        nodeCard+='</div>';
-      }
-      nodeCard+='</div></div>';
-      nodeData[nodeName]={card:nodeCard,vms:''};
-    });
-    /* ────────────────────────────────────────────────
-       VM CARDS (grouped under PVE nodes)
-       ──────────────────────────────────────────────── */
+    var labCards=_buildLabHostCards(hd?hd.hosts:null,infraLabels,labLabels);
+    /* PVE node cards */
+    var nodeData=_buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid);
+    /* VM cards grouped under nodes */
     foVms.forEach(function(v){
       var nodeName=v.node||'unknown';
       if(!nodeData[nodeName])nodeData[nodeName]={card:'',vms:''};
@@ -2088,8 +2155,8 @@ function _renderFleetData(fo,hd,md){
       var running=v.status==='running';
       var ramGb=_ramGB(v.ram_mb);
       var c='<div class="host-card" style="cursor:pointer;" onclick="openVmInfo(\''+v.name+'\',\'\','+v.vmid+')">';
-      c+='<div class="host-head"><h3 style="color:'+cl+'">'+v.name+'</h3><div class="host-meta"><span>VM '+v.vmid+'</span><span>\u00b7</span>'+(running?'<span style="color:var(--green)">RUNNING</span>':'<span style="color:var(--red)">'+v.status.toUpperCase()+'</span>')+'</div></div>';
-      c+='<div style="border-top:1px solid var(--border);margin-top:2px;padding-top:6px">';
+      c+='<div class="host-head"><h3 style="color:'+cl+'">'+v.name+'</h3><div class="host-meta"><span>VM '+v.vmid+'</span><span>\u00b7</span>'+(running?'<span class="c-green">RUNNING</span>':'<span class="c-red">'+v.status.toUpperCase()+'</span>')+'</div></div>';
+      c+='<div class="divider-light">';
       c+=_mrow('CPU',(v.cpu||0)+' Cores',0,'var(--purple-light)');
       c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM</span><span class="metric-val">'+ramGb+'</span></div></div>';
       if(v.category&&v.category!=='unknown')c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">CATEGORY</span><span class="metric-val" style="font-size:11px">'+v.category+'</span></div></div>';
@@ -2097,116 +2164,21 @@ function _renderFleetData(fo,hd,md){
       c+='</div></div>';
       nodeData[nodeName].vms+=c;
     });
-    /* ────────────────────────────────────────────────
-       ASSEMBLE OUTPUT
-       ──────────────────────────────────────────────── */
-    var out='';
-    /* CORE SYSTEMS section */
-    if(infraCards){
-      var ic=(infraCards.match(/infra-role-card/g)||[]).length;
-      var cols=ic<=3?ic:ic<=6?3:4;
-      out+='<div style="margin-bottom:16px;border:3px solid #ffffff;border-radius:10px;background:#000000;overflow:hidden">';
-      out+='<div style="padding:12px 16px 0;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ffffff;opacity:0.85">CORE SYSTEMS</span><span id="core-systems-age" style="font-size:10px;font-weight:600;letter-spacing:1px;color:var(--text-dim)"></span></div>';
-      out+='<div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:12px;padding:12px 16px 16px">'+infraCards+'</div>';
-      out+='</div>';
-    }
-    /* PVE node groups — all inside one PROXMOX NODES box */
-    var nodeOrder=pveNodes.map(function(n){return n.name;}).sort();
-    var pveContent='';
-    nodeOrder.forEach(function(nodeName){
-      var nd=nodeData[nodeName];if(!nd||!nd.card)return;
-      var nodeColor=NODE_COLORS[nodeName]||'var(--text)';
-      var vmCount=nd.vms?(nd.vms.match(/host-card/g)||[]).length:0;
-      var cols=Math.max(vmCount,3);if(cols>4)cols=4;
-      pveContent+='<div class="pve-group" style="border-left:4px solid '+nodeColor+';border-radius:6px;background:var(--bg2);overflow:hidden">';
-      pveContent+='<div onclick="togglePveGroup(this)" style="cursor:pointer;padding:8px 12px;display:flex;align-items:center;gap:8px">';
-      pveContent+='<span class="pve-chev" style="color:'+nodeColor+';font-size:14px;font-weight:700">\u25b8</span>';
-      pveContent+='<div style="flex:1">'+nd.card+'</div>';
-      pveContent+='</div>';
-      if(nd.vms){
-        pveContent+='<div class="pve-vms" style="display:none;grid-template-columns:repeat('+cols+',1fr);gap:10px;padding:8px 12px 12px;border-top:1px solid var(--border)">'+nd.vms+'</div>';
-      }
-      pveContent+='</div>';
-    });
-    if(pveContent){
-      out+='<div style="margin-bottom:16px;border:3px solid var(--purple);border-radius:10px;background:#000000;overflow:hidden">';
-      out+='<div style="padding:12px 16px 0;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ffffff;opacity:0.85">PROXMOX NODES</span><span style="font-size:10px;font-weight:600;letter-spacing:1px;color:var(--text-dim)">'+pveNodes.length+' NODES</span></div>';
-      out+='<div style="display:flex;flex-direction:column;gap:8px;padding:12px 16px 16px">'+pveContent+'</div>';
-      out+='</div>';
-    }
-    document.getElementById('metrics-cards').innerHTML=out;
-    /* ────────────────────────────────────────────────
-       ENRICH: NTP + Updates (async, non-blocking)
-       ──────────────────────────────────────────────── */
-    fetch('/api/fleet/ntp').then(function(r){return r.json()}).then(function(nd){
-      nd.hosts.forEach(function(x){
-        var el=document.getElementById('ntp-'+x.label.replace(/[^a-z0-9]/gi,''));
-        if(el){var synced=x.synced;el.innerHTML='<div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val" style="font-size:11px;color:'+(synced?'var(--green)':'var(--red)')+'">'+(synced?'SYNCED':'NOT SYNCED')+' <span style="color:var(--text-dim);font-weight:400">'+x.time+'</span></span></div>';}
-      });
-    }).catch(function(){});
-    fetch('/api/fleet/updates').then(function(r){return r.json()}).then(function(ud){
-      ud.hosts.forEach(function(x){
-        var el=document.getElementById('upd-'+x.label.replace(/[^a-z0-9]/gi,''));
-        if(el){
-          var n=x.updates;var color=n>0?'var(--yellow)':'var(--green)';
-          var txt=n>0?n+' PENDING':'UP TO DATE';
-          var btn=n>0?' <button class="btn" onclick="event.stopPropagation();runHostUpdate(\''+x.label+'\')" style="padding:2px 8px;font-size:12px;margin-left:6px;color:var(--yellow)">UPDATE</button>':'';
-          el.innerHTML='<div class="metric-top"><span class="metric-label">UPDATES</span><span class="metric-val" style="font-size:11px;color:'+color+'">'+txt+btn+'</span></div>';
-        }
-      });
-    }).catch(function(){});
-    /* ────────────────────────────────────────────────
-       LAB HOSTS (collapsed section)
-       ──────────────────────────────────────────────── */
+    /* Assemble and render */
+    document.getElementById('metrics-cards').innerHTML=_assembleFleetOutput(infraCards,nodeData,pveNodes);
+    _enrichFleetNtpUpdates();
+    /* Lab hosts section */
     var labSection=document.getElementById('fleet-lab-section');
     if(labSection){
       var labBody=document.getElementById('fleet-lab-cards');
       if(labCards){labBody.innerHTML=labCards;labSection.style.display='block';}
       else{labSection.style.display='none';}
     }
-    /* ────────────────────────────────────────────────
-       FLEET STATS — Row 1
-       ──────────────────────────────────────────────── */
-    var labCount=Object.keys(labLabels).length;
-    var prodCount=(hd?hd.hosts.length:0)-labCount;
-    var prodPveNodes=pveNodes.length;
-    var responseDur=Math.max(foDuration,hdDuration);
-    var hdAge=hd&&hd.age!==undefined?Math.round(hd.age):0;
-    var ageLabel=hdAge<5?'LIVE':hdAge<60?hdAge+'s':Math.round(hdAge/60)+'m';
-    var ageColor=hdAge<30?'var(--green)':hdAge<120?'var(--yellow)':'var(--red)';
-    var _dual=function(label,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+label+'</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'<span style="font-size:12px;font-weight:500;opacity:0.7"> '+l1+'</span></span><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'<span style="font-size:12px;font-weight:500;opacity:0.7"> '+l2+'</span></span></div></div>';};
-    document.getElementById('metrics-summary').innerHTML=
-      _dual('FLEET SPLIT',summary.prod_count||0,'PROD','var(--purple-light)',summary.lab_count||0,'LAB','var(--cyan)')+
-      _dual('FLEET',prodCount,'PROD','var(--purple-light)',labCount,'LAB','var(--cyan)')+
-      _dual('PVE NODES',prodPveNodes,'PROD','var(--purple-light)',labPveNodes,'LAB','var(--cyan)')+
-      _dual('RESPONSE',responseDur+'s','',ageColor,ageLabel,'',ageColor);
-    /* ────────────────────────────────────────────────
-       FLEET STATS — Row 2 (STATUS + VMs + containers + activity)
-       ──────────────────────────────────────────────── */
-    var row2=document.getElementById('metrics-row2');
-    var vmRunning=summary.running||0;var vmStopped=summary.stopped||0;
-    row2.innerHTML=
-      _dual('STATUS',totalUp,'ONLINE','var(--green)',totalDown,'OFFLINE','var(--red)')+
-      _dual('VMs',vmRunning,'RUN','var(--green)',vmStopped,'STOP','var(--red)')+
-      st('CONTAINERS','...','p')+
-      st('ACTIVITY','...','p');
-    /* Containers from media dashboard */
-    fetch('/api/media/dashboard').then(function(r){return r.json()}).then(function(md){
-      row2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">CONTAINERS</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+(md.containers_running||0)+'<span style="font-size:12px;font-weight:500;opacity:0.7"> UP</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+(md.containers_down||0)+'<span style="font-size:12px;font-weight:500;opacity:0.7"> DOWN</span></span></div>';
-    }).catch(function(){});
-    /* Activity from downloads + streams */
-    Promise.all([
-      fetch('/api/media/downloads').then(function(r){return r.json()}).catch(function(){return {count:0}}),
-      fetch('/api/media/streams').then(function(r){return r.json()}).catch(function(){return {count:0}})
-    ]).then(function(res){
-      var dl=res[0].count||0;var str=res[1].count||0;
-      row2.querySelector('.st:nth-child(4)').innerHTML='<div class="lb">ACTIVITY</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--orange)">'+dl+'<span style="font-size:12px;font-weight:500;opacity:0.7"> DL</span></span><span style="font-size:20px;font-weight:700;color:var(--blue)">'+str+'<span style="font-size:12px;font-weight:500;opacity:0.7"> STREAM</span></span></div>';
-    });
-    /* Populate the Overview section cards — fo is already available, no extra API call */
+    /* Fleet stats */
+    _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDuration,hdDuration,labPveNodes);
     try{if(fo){_renderFleetOverview(fo);_loadFleetOverviewMedia();}}catch(e){console.error('Overview render error:',e);}
-    /* Enrich infra cards with live role-specific data */
     _enrichInfraCards();
-  }catch(e){console.error('_renderFleetData error:',e);document.getElementById('metrics-cards').innerHTML='<p style="color:var(--red)">Render error: '+e.message+'</p>';}
+  }catch(e){console.error('_renderFleetData error:',e);document.getElementById('metrics-cards').innerHTML='<p class="c-red">Render error: '+e.message+'</p>';}
 }
 function loadMetrics(){
   toast('Deep scan starting... 10-20s','info');
@@ -2219,16 +2191,16 @@ function loadMetrics(){
     if(!d.hosts.length){html+='<div class="empty-state"><div class="es-icon">&#9881;</div><p>No hosts returned deep metrics. Deploy agents or check connectivity.</p></div>';}
     d.hosts.forEach(function(m,i){
       var hn=m.hostname||m.system&&m.system.hostname||'unknown';var cpu=m.cpu||{};var mem=m.memory||{};var cl=HC[i%HC.length];
-      html+='<div class="crd" style="margin-bottom:12px"><h3 style="color:'+cl+'">'+hn+' <span style="font-size:11px;color:var(--text-dim)">via '+m.source+'</span></h3>';
+      html+='<div class="crd" style="margin-bottom:12px"><h3 style="color:'+cl+'">'+hn+' <span class="text-meta">via '+m.source+'</span></h3>';
       html+='<div class="stats" style="margin:12px 0">'+st('CPU',((cpu.usage_pct||0)+'%'),'p')+st('Load',cpu.load_1m||'?','b')+st('Cores',cpu.cores||'?','p')+st('RAM',((mem.usage_pct||0)+'%'),'g')+st('Used',_ramGB(mem.used_mb||0),'y')+st('Total',_ramGB(mem.total_mb||0),'b')+'</div>';
-      if(m.disk&&m.disk.mounts){html+='<table style="margin-top:8px"><thead><tr><th>Mount</th><th>Size</th><th>Used</th><th>Avail</th><th>Usage</th></tr></thead><tbody>';
+      if(m.disk&&m.disk.mounts){html+='<table class="mt-8"><thead><tr><th>Mount</th><th>Size</th><th>Used</th><th>Avail</th><th>Usage</th></tr></thead><tbody>';
         m.disk.mounts.forEach(function(dd){html+='<tr><td style="font-family:monospace;font-size:11px">'+dd.mount+'</td><td>'+dd.size+'</td><td>'+dd.used+'</td><td>'+dd.avail+'</td><td>'+dd.usage_pct+'</td></tr>';});
         html+='</tbody></table>';}
       html+='</div>';
     });
     content.innerHTML=html;
     toast('Deep scan complete — '+d.hosts.length+' hosts scanned','success');
-  }).catch(function(e){content.innerHTML='<p style="color:var(--red)">Error: '+e+'</p>';toast('Deep scan failed','error');});
+  }).catch(function(e){content.innerHTML='<p class="c-red">Error: '+e+'</p>';toast('Deep scan failed','error');});
 }
 var _activeFleetTool=null;
 function fleetTool(tool){
@@ -2246,89 +2218,52 @@ function fleetTool(tool){
   var btn=document.querySelector('.fqc-btn[data-fqc="'+tool+'"]');if(btn)btn.classList.add('active-view');
   _fleetToolInner(tool,panel,content);
 }
+function _buildToolTabs(title,tabs,tabClass,switchFn,subtitleId,formId,content){
+  var nav='<div style="display:flex;flex-direction:column;gap:8px;min-width:170px">';
+  tabs.forEach(function(t,i){
+    nav+='<button class="fleet-btn '+tabClass+(i===0?' active-view':'')+'" data-'+tabClass.replace('-tab','tab')+'="'+t.id+'" onclick="'+switchFn+'(\''+t.id+'\')" style="text-align:left;padding:10px 14px;font-size:12px;white-space:nowrap">'+t.label+'</button>';
+  });
+  nav+='</div>';
+  content.innerHTML='<div style="display:flex;gap:20px;align-items:flex-start">'+
+    '<div><h3 style="color:var(--purple-light);font-size:13px;margin:0 0 16px 0">'+title+'</h3>'+nav+'</div>'+
+    '<div class="flex-fill"><h3 id="'+subtitleId+'" style="color:var(--text);font-size:13px;margin:0 0 16px 0"></h3><div id="'+formId+'"></div></div></div>';
+  window[switchFn](tabs[0].id);
+}
 function _fleetToolInner(tool,panel,content){
   panel.style.display='block';
   if(tool==='usermgmt'){
-    var _umTabs=[
-      {id:'newuser',label:'NEW USER'},
-      {id:'passwd',label:'PASSWORD UPDATE'},
-      {id:'sshkey',label:'SSH KEY UPDATE'},
-      {id:'promote',label:'PROMOTE / DEMOTE'}
-    ];
-    var nav='<div style="display:flex;flex-direction:column;gap:8px;min-width:170px">';
-    _umTabs.forEach(function(t,i){
-      nav+='<button class="fleet-btn um-tab'+(i===0?' active-view':'')+'" data-umtab="'+t.id+'" onclick="switchUserMgmt(\''+t.id+'\')" style="text-align:left;padding:10px 14px;font-size:12px;white-space:nowrap">'+t.label+'</button>';
-    });
-    nav+='</div>';
-    content.innerHTML='<div style="display:flex;gap:20px;align-items:flex-start">'+
-      '<div><h3 style="color:var(--purple-light);font-size:13px;margin:0 0 16px 0">USER MANAGEMENT</h3>'+nav+'</div>'+
-      '<div style="flex:1;min-width:0"><h3 id="um-subtitle" style="color:#ffffff;font-size:13px;margin:0 0 16px 0"></h3><div id="um-form"></div></div></div>';
-    switchUserMgmt('newuser');
-    return;
+    _buildToolTabs('USER MANAGEMENT',[{id:'newuser',label:'NEW USER'},{id:'passwd',label:'PASSWORD UPDATE'},{id:'sshkey',label:'SSH KEY UPDATE'},{id:'promote',label:'PROMOTE / DEMOTE'}],'um-tab','switchUserMgmt','um-subtitle','um-form',content);return;
   } else if(tool==='fleetops'){
-    var _foTabs=[
-      {id:'deepscan',label:'DEEP SCAN'},
-      {id:'ntp',label:'NTP SYNC'},
-      {id:'updates',label:'OS UPDATES'},
-      {id:'sshd',label:'RESTART SSHD'},
-      {id:'exec',label:'FLEET EXEC'}
-    ];
-    var fnav='<div style="display:flex;flex-direction:column;gap:8px;min-width:170px">';
-    _foTabs.forEach(function(t,i){
-      fnav+='<button class="fleet-btn fo-tab'+(i===0?' active-view':'')+'" data-fotab="'+t.id+'" onclick="switchFleetOps(\''+t.id+'\')" style="text-align:left;padding:10px 14px;font-size:12px;white-space:nowrap">'+t.label+'</button>';
-    });
-    fnav+='</div>';
-    content.innerHTML='<div style="display:flex;gap:20px;align-items:flex-start">'+
-      '<div><h3 style="color:var(--purple-light);font-size:13px;margin:0 0 16px 0">FLEET OPS</h3>'+fnav+'</div>'+
-      '<div style="flex:1;min-width:0"><h3 id="fo-subtitle" style="color:#ffffff;font-size:13px;margin:0 0 16px 0"></h3><div id="fo-form"></div></div></div>';
-    switchFleetOps('deepscan');
-    return;
+    _buildToolTabs('FLEET OPS',[{id:'deepscan',label:'DEEP SCAN'},{id:'ntp',label:'NTP SYNC'},{id:'updates',label:'OS UPDATES'},{id:'sshd',label:'RESTART SSHD'},{id:'exec',label:'FLEET EXEC'}],'fo-tab','switchFleetOps','fo-subtitle','fo-form',content);return;
   } else if(tool==='vmmgmt'){
-    var _vmTabs=[
-      {id:'vmlist',label:'VM LIST'},
-      {id:'vmcreate',label:'CREATE VM'},
-      {id:'vmclone',label:'CLONE VM'},
-      {id:'vmmigrate',label:'MIGRATE'},
-      {id:'vmsnapshot',label:'SNAPSHOTS'},
-      {id:'vmresize',label:'RESIZE'}
-    ];
-    var vnav='<div style="display:flex;flex-direction:column;gap:8px;min-width:170px">';
-    _vmTabs.forEach(function(t,i){
-      vnav+='<button class="fleet-btn vm-tab'+(i===0?' active-view':'')+'" data-vmtab="'+t.id+'" onclick="switchVmMgmt(\''+t.id+'\')" style="text-align:left;padding:10px 14px;font-size:12px;white-space:nowrap">'+t.label+'</button>';
-    });
-    vnav+='</div>';
-    content.innerHTML='<div style="display:flex;gap:20px;align-items:flex-start">'+
-      '<div><h3 style="color:var(--purple-light);font-size:13px;margin:0 0 16px 0">VM MANAGEMENT</h3>'+vnav+'</div>'+
-      '<div style="flex:1;min-width:0"><h3 id="vm-subtitle" style="color:#ffffff;font-size:13px;margin:0 0 16px 0"></h3><div id="vm-form"></div></div></div>';
-    switchVmMgmt('vmlist');
-    return;
+    _buildToolTabs('VM MANAGEMENT',[{id:'vmlist',label:'VM LIST'},{id:'vmcreate',label:'CREATE VM'},{id:'vmclone',label:'CLONE VM'},{id:'vmmigrate',label:'MIGRATE'},{id:'vmsnapshot',label:'SNAPSHOTS'},{id:'vmresize',label:'RESIZE'}],'vm-tab','switchVmMgmt','vm-subtitle','vm-form',content);return;
   } else if(tool==='newuser'){
     content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">NEW FLEET USER</h3>'+
-      '<div style="display:flex;flex-direction:column;gap:10px;max-width:400px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">USERNAME</label><input id="ft-nu-user" placeholder="e.g. svc-admin" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">PASSWORD</label><input id="ft-nu-pass" type="password" placeholder="Strong password" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">SSH PUBLIC KEY <span style="opacity:0.5">(optional — will generate if empty)</span></label><textarea id="ft-nu-key" placeholder="ssh-ed25519 AAAA... user@host" rows="3" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:11px;font-family:monospace;width:100%;resize:vertical"></textarea></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">ROLE</label><select id="ft-nu-role" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit">'+(_currentRole==='admin'?'<option value="admin">Admin (full sudo)</option>':'')+'<option value="operator" selected>Operator (limited sudo)</option><option value="viewer">Viewer (no sudo)</option></select></div>'+
-      '<div style="display:flex;gap:8px;margin-top:8px"><button class="fleet-btn" onclick="fleetNewUser()" style="color:var(--purple-light);border-color:var(--purple)">CREATE & DEPLOY</button></div>'+
+      '<div class="form-vertical">'+
+      '<div><label class="label-sub">USERNAME</label><input id="ft-nu-user" placeholder="e.g. svc-admin" class="input-primary-lg"></div>'+
+      '<div><label class="label-sub">PASSWORD</label><input id="ft-nu-pass" type="password" placeholder="Strong password" class="input-primary-lg"></div>'+
+      '<div><label class="label-sub">SSH PUBLIC KEY <span style="opacity:0.5">(optional — will generate if empty)</span></label><textarea id="ft-nu-key" placeholder="ssh-ed25519 AAAA... user@host" rows="3" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:11px;font-family:monospace;width:100%;resize:vertical"></textarea></div>'+
+      '<div><label class="label-sub">ROLE</label><select id="ft-nu-role" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit">'+(_currentRole==='admin'?'<option value="admin">Admin (full sudo)</option>':'')+'<option value="operator" selected>Operator (limited sudo)</option><option value="viewer">Viewer (no sudo)</option></select></div>'+
+      '<div class="btn-row"><button class="fleet-btn" onclick="fleetNewUser()" class="c-purple-active">CREATE & DEPLOY</button></div>'+
       '</div>'+
-      '<div id="ft-nu-out" style="margin-top:12px"></div>';
+      '<div id="ft-nu-out" class="mt-12"></div>';
   } else if(tool==='passwd'){
     content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">PASSWORD UPDATE</h3>'+
-      '<div style="display:flex;flex-direction:column;gap:10px;max-width:400px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">USERNAME</label>'+
-      '<div style="position:relative"><input id="ft-pw-user" autocomplete="off" placeholder="Select user..." onfocus="showUserDropdown(\'pw\')" oninput="filterUserDropdown(\'pw\',this.value)" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer">'+
-      '<div id="ft-pw-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid #384450;border-radius:8px;max-height:300px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:#384450 var(--card)"></div></div></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">NEW PASSWORD</label><input id="ft-pw-pass" type="password" placeholder="New password" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">CONFIRM PASSWORD</label><input id="ft-pw-confirm" type="password" placeholder="Confirm new password" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"></div>'+
-      '<div style="display:flex;gap:8px;margin-top:8px"><button class="fleet-btn" onclick="fleetPasswdUpdate()" style="color:var(--purple-light);border-color:var(--purple)">UPDATE & DEPLOY</button></div>'+
+      '<div class="form-vertical">'+
+      '<div><label class="label-sub">USERNAME</label>'+
+      '<div style="position:relative"><input id="ft-pw-user" autocomplete="off" placeholder="Select user..." onfocus="showUserDropdown(\'pw\')" oninput="filterUserDropdown(\'pw\',this.value)" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer">'+
+      '<div id="ft-pw-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;max-height:300px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:var(--input-border) var(--card)"></div></div></div>'+
+      '<div><label class="label-sub">NEW PASSWORD</label><input id="ft-pw-pass" type="password" placeholder="New password" class="input-primary-lg"></div>'+
+      '<div><label class="label-sub">CONFIRM PASSWORD</label><input id="ft-pw-confirm" type="password" placeholder="Confirm new password" class="input-primary-lg"></div>'+
+      '<div class="btn-row"><button class="fleet-btn" onclick="fleetPasswdUpdate()" class="c-purple-active">UPDATE & DEPLOY</button></div>'+
       '</div>'+
-      '<div id="ft-pw-out" style="margin-top:12px"></div>';
+      '<div id="ft-pw-out" class="mt-12"></div>';
     _loadUserDropdown('pw');
   } else if(tool==='promote'){
     content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">PROMOTE / DEMOTE USER</h3><div id="ft-prom-c"><div class="skeleton"></div></div>';
     fetch('/api/users').then(function(r){return r.json()}).then(function(d){
       var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)',protected:'var(--purple-light)'};
-      var h='<table style="width:100%"><thead><tr><th>USER</th><th>CURRENT ROLE</th><th>ACTIONS</th></tr></thead><tbody>';
+      var h='<table class="w-full"><thead><tr><th>USER</th><th>CURRENT ROLE</th><th>ACTIONS</th></tr></thead><tbody>';
       d.users.forEach(function(u,i){
         h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+u.username.toUpperCase()+'</strong></td>';
         h+='<td><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-weight:600">'+u.role.toUpperCase()+'</span></td>';
@@ -2343,23 +2278,23 @@ function _fleetToolInner(tool,panel,content){
   } else if(tool==='sshkey'){
     content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">SSH KEY UPDATE</h3>'+
       '<div style="display:flex;flex-direction:column;gap:10px;max-width:500px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">USERNAME</label>'+
-      '<div style="position:relative"><input id="ft-sk-user" autocomplete="off" placeholder="Select user..." onfocus="showUserDropdown(\'sk\')" oninput="filterUserDropdown(\'sk\',this.value)" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer">'+
-      '<div id="ft-sk-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid #384450;border-radius:8px;max-height:300px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:#384450 var(--card)"></div></div></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">PUBLIC KEY</label><textarea id="ft-sk-key" placeholder="Paste your ssh-ed25519 or ssh-rsa public key here..." rows="4" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:11px;font-family:monospace;width:100%;resize:vertical"></textarea></div>'+
-      '<div style="display:flex;gap:8px;margin-top:8px"><button class="fleet-btn" onclick="fleetSshKeyDeploy()" style="color:var(--purple-light);border-color:var(--purple)">DEPLOY TO FLEET</button></div>'+
+      '<div><label class="label-sub">USERNAME</label>'+
+      '<div style="position:relative"><input id="ft-sk-user" autocomplete="off" placeholder="Select user..." onfocus="showUserDropdown(\'sk\')" oninput="filterUserDropdown(\'sk\',this.value)" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer">'+
+      '<div id="ft-sk-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;max-height:300px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:var(--input-border) var(--card)"></div></div></div>'+
+      '<div><label class="label-sub">PUBLIC KEY</label><textarea id="ft-sk-key" placeholder="Paste your ssh-ed25519 or ssh-rsa public key here..." rows="4" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:11px;font-family:monospace;width:100%;resize:vertical"></textarea></div>'+
+      '<div class="btn-row"><button class="fleet-btn" onclick="fleetSshKeyDeploy()" class="c-purple-active">DEPLOY TO FLEET</button></div>'+
       '</div>'+
-      '<div id="ft-sk-out" style="margin-top:12px"></div>';
+      '<div id="ft-sk-out" class="mt-12"></div>';
     _loadUserDropdown('sk');
   } else if(tool==='sshd'){
     content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">RESTART SSHD</h3><div id="ft-sshd-c"><div class="skeleton"></div></div>';
     fetch('/api/health').then(function(r){return r.json()}).then(function(d){
       var h='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
-      h+='<button class="fleet-btn" onclick="sshdRestartSelected()" style="color:var(--purple-light);border-color:var(--purple)">RESTART SELECTED</button>';
+      h+='<button class="fleet-btn" onclick="sshdRestartSelected()" class="c-purple-active">RESTART SELECTED</button>';
       h+='<button class="fleet-btn" onclick="sshdRestartAll()">RESTART ALL ('+d.hosts.length+')</button>';
       h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" id="ft-sshd-selectall" onchange="document.querySelectorAll(\'.ft-sshd-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
       h+='</div>';
-      h+='<table style="width:100%"><thead><tr><th style="width:30px"></th><th>HOST</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>';
+      h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>';
       d.hosts.forEach(function(x,i){
         var up=x.status==='healthy';
         h+='<tr><td><input type="checkbox" class="ft-sshd-check" data-host="'+x.label+'"></td>';
@@ -2367,18 +2302,18 @@ function _fleetToolInner(tool,panel,content){
         h+='<td>'+badge(up?'ok':'down')+'</td>';
         h+='<td><button class="fleet-btn" onclick="sshdRestartHost(\''+x.label+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">RESTART</button></td></tr>';
       });
-      h+='</tbody></table><div id="ft-sshd-out" style="margin-top:12px"></div>';
+      h+='</tbody></table><div id="ft-sshd-out" class="mt-12"></div>';
       document.getElementById('ft-sshd-c').innerHTML=h;
     });
   } else if(tool==='exec'){
     content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">FLEET EXEC</h3>'+
       '<div style="display:flex;gap:8px;margin-bottom:12px">'+
       '<div style="position:relative;width:220px">'+
-      '<input id="ft-exec-target" value="ALL HOSTS" autocomplete="off" onfocus="this.select();showExecDropdown()" oninput="filterExecDropdown(this.value)" onkeydown="if(event.key===\'Escape\')hideExecDropdown()" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer;transition:border-color 0.25s ease">'+
-      '<div id="ft-exec-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid #384450;border-radius:8px;max-height:390px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:#384450 var(--card)"></div>'+
+      '<input id="ft-exec-target" value="ALL HOSTS" autocomplete="off" onfocus="this.select();showExecDropdown()" oninput="filterExecDropdown(this.value)" onkeydown="if(event.key===\'Escape\')hideExecDropdown()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer;transition:border-color 0.25s ease">'+
+      '<div id="ft-exec-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;max-height:390px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:var(--input-border) var(--card)"></div>'+
       '</div>'+
-      '<input id="ft-exec-cmd" placeholder="Command (e.g. uptime, df -h, hostname, free -m)" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;flex:1" onkeydown="if(event.key===\'Enter\')ftRunExec()">'+
-      '<button class="fleet-btn" onclick="ftRunExec()" style="color:var(--purple-light);border-color:var(--purple)">RUN</button>'+
+      '<input id="ft-exec-cmd" placeholder="Command (e.g. uptime, df -h, hostname, free -m)" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;flex:1" onkeydown="if(event.key===\'Enter\')ftRunExec()">'+
+      '<button class="fleet-btn" onclick="ftRunExec()" class="c-purple-active">RUN</button>'+
       '</div>'+
       '<div class="exec-out" id="ft-exec-out" style="min-height:120px">Pick a target and enter a command.</div>';
     var _execHosts=[];
@@ -2391,18 +2326,18 @@ function _fleetToolInner(tool,panel,content){
       renderExecDropdown(_execHosts);
     });
   } else if(tool==='ntp'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">NTP SYNC STATUS</h3><div id="ft-ntp-c" style="color:var(--text-dim)"><div class="skeleton"></div></div>';
+    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">NTP SYNC STATUS</h3><div id="ft-ntp-c" class="c-dim"><div class="skeleton"></div></div>';
     fetch('/api/fleet/ntp').then(function(r){return r.json()}).then(function(d){
       var unsynced=d.hosts.filter(function(x){return !x.synced;});
       var h='';
       if(unsynced.length>0){
         h+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
-        h+='<button class="fleet-btn" onclick="ntpFixSelected()" style="color:var(--purple-light);border-color:var(--purple)">FIX SELECTED</button>';
+        h+='<button class="fleet-btn" onclick="ntpFixSelected()" class="c-purple-active">FIX SELECTED</button>';
         h+='<button class="fleet-btn" onclick="ntpFixAll()">FIX ALL ('+unsynced.length+')</button>';
         h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" id="ft-ntp-selectall" onchange="document.querySelectorAll(\'.ft-ntp-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
         h+='</div>';
       }
-      h+='<table style="width:100%"><thead><tr><th style="width:30px"></th><th>HOST</th><th>SYNCED</th><th>TIME</th><th>ACTION</th></tr></thead><tbody>';
+      h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>SYNCED</th><th>TIME</th><th>ACTION</th></tr></thead><tbody>';
       d.hosts.forEach(function(x){
         var synced=x.synced;
         h+='<tr><td>'+(!synced?'<input type="checkbox" class="ft-ntp-check" data-host="'+x.label+'">':'')+'</td>';
@@ -2414,18 +2349,18 @@ function _fleetToolInner(tool,panel,content){
       h+='</tbody></table>';document.getElementById('ft-ntp-c').innerHTML=h;
     });
   } else if(tool==='updates'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">OS UPDATE STATUS</h3><div id="ft-updates-c" style="color:var(--text-dim)"><div class="skeleton"></div></div>';
+    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">OS UPDATE STATUS</h3><div id="ft-updates-c" class="c-dim"><div class="skeleton"></div></div>';
     fetch('/api/fleet/updates').then(function(r){return r.json()}).then(function(d){
       var pending=d.hosts.filter(function(x){return x.updates>0;});
       var h='';
       h+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
-      h+='<button class="fleet-btn" onclick="updateSelected()" style="color:var(--purple-light);border-color:var(--purple)">UPDATE SELECTED</button>';
+      h+='<button class="fleet-btn" onclick="updateSelected()" class="c-purple-active">UPDATE SELECTED</button>';
       h+='<button class="fleet-btn" onclick="updateAll()">UPDATE ALL'+(pending.length>0?' ('+pending.length+')':'')+'</button>';
       h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" id="ft-upd-selectall" onchange="toggleUpdateAll(this.checked)"> Select All</label>';
-      h+='<div style="flex:1"></div>';
+      h+='<div class="flex-1"></div>';
       h+='<span style="font-size:11px;color:'+(pending.length>0?'var(--yellow)':'var(--green)')+'">'+pending.length+' pending</span>';
       h+='</div>';
-      h+='<table style="width:100%"><thead><tr><th style="width:30px"></th><th>HOST</th><th>UPDATES</th><th>PKG MGR</th><th>ACTION</th></tr></thead><tbody>';
+      h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>UPDATES</th><th>PKG MGR</th><th>ACTION</th></tr></thead><tbody>';
       d.hosts.forEach(function(x){
         var cls=x.updates>0?'warn':x.updates===0?'up':'down';
         var hasPending=x.updates>0;
@@ -2439,68 +2374,22 @@ function _fleetToolInner(tool,panel,content){
       document.getElementById('ft-updates-c').innerHTML=h;
     });
   } else if(tool==='monitoring'){
-    var _monTabs=[
-      {id:'monhealth',label:'HEALTH CHECK'},
-      {id:'mondoctor',label:'DOCTOR'},
-      {id:'monjournal',label:'JOURNAL'},
-      {id:'monwatch',label:'WATCH'}
-    ];
-    var mnav='<div style="display:flex;flex-direction:column;gap:8px;min-width:170px">';
-    _monTabs.forEach(function(t,i){
-      mnav+='<button class="fleet-btn mon-tab'+(i===0?' active-view':'')+'" data-montab="'+t.id+'" onclick="switchMonitoring(\''+t.id+'\')" style="text-align:left;padding:10px 14px;font-size:12px;white-space:nowrap">'+t.label+'</button>';
-    });
-    mnav+='</div>';
-    content.innerHTML='<div style="display:flex;gap:20px;align-items:flex-start">'+
-      '<div><h3 style="color:var(--purple-light);font-size:13px;margin:0 0 16px 0">MONITORING</h3>'+mnav+'</div>'+
-      '<div style="flex:1;min-width:0"><h3 id="mon-subtitle" style="color:#ffffff;font-size:13px;margin:0 0 16px 0"></h3><div id="mon-form"></div></div></div>';
-    switchMonitoring('monhealth');
-    return;
+    _buildToolTabs('MONITORING',[{id:'monhealth',label:'HEALTH CHECK'},{id:'mondoctor',label:'DOCTOR'},{id:'monjournal',label:'JOURNAL'},{id:'monwatch',label:'WATCH'}],'mon-tab','switchMonitoring','mon-subtitle','mon-form',content);return;
   } else if(tool==='network'){
-    var _netTabs=[
-      {id:'netvlan',label:'VLAN OVERVIEW'},
-      {id:'netdns',label:'DNS CHECK'},
-      {id:'netping',label:'CONNECTIVITY'},
-      {id:'netports',label:'PORT SCAN'}
-    ];
-    var nnav='<div style="display:flex;flex-direction:column;gap:8px;min-width:170px">';
-    _netTabs.forEach(function(t,i){
-      nnav+='<button class="fleet-btn net-tab'+(i===0?' active-view':'')+'" data-nettab="'+t.id+'" onclick="switchNetwork(\''+t.id+'\')" style="text-align:left;padding:10px 14px;font-size:12px;white-space:nowrap">'+t.label+'</button>';
-    });
-    nnav+='</div>';
-    content.innerHTML='<div style="display:flex;gap:20px;align-items:flex-start">'+
-      '<div><h3 style="color:var(--purple-light);font-size:13px;margin:0 0 16px 0">NETWORK</h3>'+nnav+'</div>'+
-      '<div style="flex:1;min-width:0"><h3 id="net-subtitle" style="color:#ffffff;font-size:13px;margin:0 0 16px 0"></h3><div id="net-form"></div></div></div>';
-    switchNetwork('netvlan');
-    return;
+    _buildToolTabs('NETWORK',[{id:'netvlan',label:'VLAN OVERVIEW'},{id:'netdns',label:'DNS CHECK'},{id:'netping',label:'CONNECTIVITY'},{id:'netports',label:'PORT SCAN'}],'net-tab','switchNetwork','net-subtitle','net-form',content);return;
   } else if(tool==='backup'){
-    var _bkTabs=[
-      {id:'bkstatus',label:'BACKUP STATUS'},
-      {id:'bkschedule',label:'SCHEDULES'},
-      {id:'bksnapshot',label:'VM SNAPSHOTS'},
-      {id:'bkexport',label:'EXPORT CONFIG'},
-      {id:'bkrestore',label:'RESTORE'}
-    ];
-    var bnav='<div style="display:flex;flex-direction:column;gap:8px;min-width:170px">';
-    _bkTabs.forEach(function(t,i){
-      bnav+='<button class="fleet-btn bk-tab'+(i===0?' active-view':'')+'" data-bktab="'+t.id+'" onclick="switchBackup(\''+t.id+'\')" style="text-align:left;padding:10px 14px;font-size:12px;white-space:nowrap">'+t.label+'</button>';
-    });
-    bnav+='</div>';
-    content.innerHTML='<div style="display:flex;gap:20px;align-items:flex-start">'+
-      '<div><h3 style="color:var(--purple-light);font-size:13px;margin:0 0 16px 0">BACKUP & RECOVERY</h3>'+bnav+'</div>'+
-      '<div style="flex:1;min-width:0"><h3 id="bk-subtitle" style="color:#ffffff;font-size:13px;margin:0 0 16px 0"></h3><div id="bk-form"></div></div></div>';
-    switchBackup('bkstatus');
-    return;
+    _buildToolTabs('BACKUP & RECOVERY',[{id:'bkstatus',label:'BACKUP STATUS'},{id:'bkschedule',label:'SCHEDULES'},{id:'bksnapshot',label:'VM SNAPSHOTS'},{id:'bkexport',label:'EXPORT CONFIG'},{id:'bkrestore',label:'RESTORE'}],'bk-tab','switchBackup','bk-subtitle','bk-form',content);return;
   } else if(tool==='labctrl'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">LAB CONTROL</h3><div id="ft-lab-c" style="color:var(--text-dim)"><div class="skeleton"></div></div>';
+    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">LAB CONTROL</h3><div id="ft-lab-c" class="c-dim"><div class="skeleton"></div></div>';
     fetch('/api/lab/status').then(function(r){return r.json()}).then(function(d){
       var up=0,dn=0;d.hosts.forEach(function(x){if(x.status==='up')up++;else dn++;});
       var h='<div class="stats" style="margin-bottom:12px">'+st('HOSTS',d.hosts.length,'p')+st('ONLINE',up,'g')+st('OFFLINE',dn,dn>0?'r':'g');
       if(d.docker)h+=st('CONTAINERS',d.docker.length,'b');
       h+='</div>';
-      h+='<table style="width:100%"><thead><tr><th>HOST</th><th>IP</th><th>ROLE</th><th>UPTIME</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
+      h+='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>ROLE</th><th>UPTIME</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
       d.hosts.forEach(function(x){
         var isUp=x.status==='up';
-        h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+x.role.toUpperCase()+'</td><td style="font-size:11px;color:var(--text-dim)">'+(x.uptime||'-')+'</td><td>'+badge(isUp?'ok':'down')+'</td>';
+        h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+x.role.toUpperCase()+'</td><td class="text-meta">'+(x.uptime||'-')+'</td><td>'+badge(isUp?'ok':'down')+'</td>';
         h+='<td style="display:flex;gap:4px">';
         h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'uptime\')" style="padding:3px 8px;font-size:11px">PING</button>';
         h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'sudo reboot\')" style="padding:3px 8px;font-size:11px;color:var(--yellow)">REBOOT</button>';
@@ -2510,7 +2399,7 @@ function _fleetToolInner(tool,panel,content){
       h+='</tbody></table>';
       if(d.docker&&d.docker.length){
         h+='<h3 style="color:var(--purple-light);font-size:13px;margin:16px 0 8px">LAB DOCKER</h3>';
-        h+='<table style="width:100%"><thead><tr><th>CONTAINER</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
+        h+='<table class="w-full"><thead><tr><th>CONTAINER</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
         d.docker.forEach(function(c){
           var isUp=c.status==='up';
           h+='<tr><td><strong>'+c.name.toUpperCase()+'</strong></td><td>'+badge(isUp?'ok':'down')+'</td>';
@@ -2522,7 +2411,7 @@ function _fleetToolInner(tool,panel,content){
         });
         h+='</tbody></table>';
       }
-      h+='<div id="ft-lab-out" style="margin-top:12px"></div>';
+      h+='<div id="ft-lab-out" class="mt-12"></div>';
       document.getElementById('ft-lab-c').innerHTML=h;
     });
   }
@@ -2562,37 +2451,37 @@ function switchVmMgmt(tab){
   var sub=document.getElementById('vm-subtitle');if(sub)sub.textContent=_vmLabels[tab]||'';
   var vmForm=document.getElementById('vm-form');if(!vmForm)return;
   if(tab==='vmlist'){
-    vmForm.innerHTML='<div id="vmt-stats" class="stats"></div><div style="margin-bottom:8px;display:flex;gap:8px"><select id="vmt-node-filter" onchange="vmtLoadList()" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit"><option value="all">All Nodes</option></select><select id="vmt-cat-filter" onchange="vmtLoadList()" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit"><option value="all">All Categories</option><option value="personal">Personal</option><option value="infrastructure">Infrastructure</option><option value="prod_media">Prod Media</option><option value="prod_other">Prod Other</option><option value="sandbox">Sandbox</option><option value="lab">Lab</option><option value="templates">Templates</option></select></div><div id="vmt-list"><div class="skeleton"></div></div>';
+    vmForm.innerHTML='<div id="vmt-stats" class="stats"></div><div style="margin-bottom:8px;display:flex;gap:8px"><select id="vmt-node-filter" onchange="vmtLoadList()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit"><option value="all">All Nodes</option></select><select id="vmt-cat-filter" onchange="vmtLoadList()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit"><option value="all">All Categories</option><option value="personal">Personal</option><option value="infrastructure">Infrastructure</option><option value="prod_media">Prod Media</option><option value="prod_other">Prod Other</option><option value="sandbox">Sandbox</option><option value="lab">Lab</option><option value="templates">Templates</option></select></div><div id="vmt-list"><div class="skeleton"></div></div>';
     vmtLoadList();
   } else if(tab==='vmcreate'){
-    vmForm.innerHTML='<div style="display:flex;flex-direction:column;gap:10px;max-width:400px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">VM NAME</label><input id="vmt-c-name" placeholder="e.g. my-vm" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">CPU CORES</label><select id="vmt-c-cores" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option>1</option><option selected>2</option><option>4</option><option>8</option><option>16</option></select></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">RAM</label><select id="vmt-c-ram" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option value="512">512MB</option><option value="1024">1GB</option><option value="2048" selected>2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">TARGET NODE</label><select id="vmt-c-node" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option value="auto">Auto (least loaded)</option></select></div>'+
-      '<div style="display:flex;gap:8px;margin-top:8px"><button class="fleet-btn" onclick="vmtCreate()" style="color:var(--purple-light);border-color:var(--purple)">CREATE VM</button></div>'+
-      '</div><div id="vmt-c-out" style="margin-top:12px"></div>';
+    vmForm.innerHTML='<div class="form-vertical">'+
+      '<div><label class="label-sub">VM NAME</label><input id="vmt-c-name" placeholder="e.g. my-vm" class="input-primary-lg"></div>'+
+      '<div><label class="label-sub">CPU CORES</label><select id="vmt-c-cores" class="input-primary"><option>1</option><option selected>2</option><option>4</option><option>8</option><option>16</option></select></div>'+
+      '<div><label class="label-sub">RAM</label><select id="vmt-c-ram" class="input-primary"><option value="512">512MB</option><option value="1024">1GB</option><option value="2048" selected>2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
+      '<div><label class="label-sub">TARGET NODE</label><select id="vmt-c-node" class="input-primary"><option value="auto">Auto (least loaded)</option></select></div>'+
+      '<div class="btn-row"><button class="fleet-btn" onclick="vmtCreate()" class="c-purple-active">CREATE VM</button></div>'+
+      '</div><div id="vmt-c-out" class="mt-12"></div>';
     fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
       var nodes={};d.vms.forEach(function(v){nodes[v.node]=true;});
       var sel=document.getElementById('vmt-c-node');if(!sel)return;
       Object.keys(nodes).sort().forEach(function(n){sel.innerHTML+='<option value="'+n+'">'+n+'</option>';});
     }).catch(function(){});
   } else if(tab==='vmclone'){
-    vmForm.innerHTML='<div style="display:flex;flex-direction:column;gap:10px;max-width:400px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">SOURCE VMID</label><select id="vmt-cl-source" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option value="">Loading...</option></select></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">NEW NAME</label><input id="vmt-cl-name" placeholder="e.g. clone-of-myvm" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"></div>'+
-      '<div style="display:flex;gap:8px;margin-top:8px"><button class="fleet-btn" onclick="vmtClone()" style="color:var(--purple-light);border-color:var(--purple)">CLONE VM</button></div>'+
-      '</div><div id="vmt-cl-out" style="margin-top:12px"></div>';
+    vmForm.innerHTML='<div class="form-vertical">'+
+      '<div><label class="label-sub">SOURCE VMID</label><select id="vmt-cl-source" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div><label class="label-sub">NEW NAME</label><input id="vmt-cl-name" placeholder="e.g. clone-of-myvm" class="input-primary-lg"></div>'+
+      '<div class="btn-row"><button class="fleet-btn" onclick="vmtClone()" class="c-purple-active">CLONE VM</button></div>'+
+      '</div><div id="vmt-cl-out" class="mt-12"></div>';
     fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-cl-source');if(!sel)return;sel.innerHTML='';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
     }).catch(function(){});
   } else if(tab==='vmmigrate'){
-    vmForm.innerHTML='<div style="display:flex;flex-direction:column;gap:10px;max-width:400px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">VM TO MIGRATE</label><select id="vmt-m-source" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option value="">Loading...</option></select></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">TARGET NODE</label><select id="vmt-m-target" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option value="">Loading...</option></select></div>'+
-      '<div style="display:flex;gap:8px;margin-top:8px"><button class="fleet-btn" onclick="vmtMigrate()" style="color:var(--purple-light);border-color:var(--purple)">MIGRATE</button></div>'+
-      '</div><div id="vmt-m-out" style="margin-top:12px"></div>';
+    vmForm.innerHTML='<div class="form-vertical">'+
+      '<div><label class="label-sub">VM TO MIGRATE</label><select id="vmt-m-source" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div><label class="label-sub">TARGET NODE</label><select id="vmt-m-target" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div class="btn-row"><button class="fleet-btn" onclick="vmtMigrate()" class="c-purple-active">MIGRATE</button></div>'+
+      '</div><div id="vmt-m-out" class="mt-12"></div>';
     fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-m-source');var tgt=document.getElementById('vmt-m-target');
       if(!sel||!tgt)return;sel.innerHTML='';var nodes={};
@@ -2600,21 +2489,21 @@ function switchVmMgmt(tab){
       tgt.innerHTML='';Object.keys(nodes).sort().forEach(function(n){tgt.innerHTML+='<option value="'+n+'">'+n+'</option>';});
     }).catch(function(){});
   } else if(tab==='vmsnapshot'){
-    vmForm.innerHTML='<div style="display:flex;flex-direction:column;gap:10px;max-width:400px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">VM</label><select id="vmt-s-source" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option value="">Loading...</option></select></div>'+
-      '<div style="display:flex;gap:8px;margin-top:8px"><button class="fleet-btn" onclick="vmtSnapshot()" style="color:var(--purple-light);border-color:var(--purple)">CREATE SNAPSHOT</button></div>'+
-      '</div><div id="vmt-s-out" style="margin-top:12px"></div>';
+    vmForm.innerHTML='<div class="form-vertical">'+
+      '<div><label class="label-sub">VM</label><select id="vmt-s-source" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div class="btn-row"><button class="fleet-btn" onclick="vmtSnapshot()" class="c-purple-active">CREATE SNAPSHOT</button></div>'+
+      '</div><div id="vmt-s-out" class="mt-12"></div>';
     fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-s-source');if(!sel)return;sel.innerHTML='';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
     }).catch(function(){});
   } else if(tab==='vmresize'){
-    vmForm.innerHTML='<div style="display:flex;flex-direction:column;gap:10px;max-width:400px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">VM</label><select id="vmt-r-source" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option value="">Loading...</option></select></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">NEW CPU CORES</label><select id="vmt-r-cores" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option value="">Keep current</option><option>1</option><option>2</option><option>4</option><option>8</option><option>16</option></select></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">NEW RAM</label><select id="vmt-r-ram" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option value="">Keep current</option><option value="512">512MB</option><option value="1024">1GB</option><option value="2048">2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
-      '<div style="display:flex;gap:8px;margin-top:8px"><button class="fleet-btn" onclick="vmtResize()" style="color:var(--purple-light);border-color:var(--purple)">RESIZE VM</button></div>'+
-      '</div><div id="vmt-r-out" style="margin-top:12px"></div>';
+    vmForm.innerHTML='<div class="form-vertical">'+
+      '<div><label class="label-sub">VM</label><select id="vmt-r-source" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div><label class="label-sub">NEW CPU CORES</label><select id="vmt-r-cores" class="input-primary"><option value="">Keep current</option><option>1</option><option>2</option><option>4</option><option>8</option><option>16</option></select></div>'+
+      '<div><label class="label-sub">NEW RAM</label><select id="vmt-r-ram" class="input-primary"><option value="">Keep current</option><option value="512">512MB</option><option value="1024">1GB</option><option value="2048">2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
+      '<div class="btn-row"><button class="fleet-btn" onclick="vmtResize()" class="c-purple-active">RESIZE VM</button></div>'+
+      '</div><div id="vmt-r-out" class="mt-12"></div>';
     fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-r-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.cpu+' cores, '+_ramGB(v.ram_mb)+')</option>';});
@@ -2632,7 +2521,7 @@ function vmtLoadList(){
     if(se)se.innerHTML=st('VMs',d.count,'p')+st('Running',running,'g')+st('Stopped',stopped,stopped>0?'r':'g');
     var nodeFilter=(document.getElementById('vmt-node-filter')||{}).value||'all';
     var catFilter=(document.getElementById('vmt-cat-filter')||{}).value||'all';
-    var h='<table style="width:100%"><thead><tr><th>VMID</th><th>NAME</th><th>CATEGORY</th><th>NODE</th><th>CPU</th><th>RAM</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
+    var h='<table class="w-full"><thead><tr><th>VMID</th><th>NAME</th><th>CATEGORY</th><th>NODE</th><th>CPU</th><th>RAM</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
     var nodes={};
     d.vms.forEach(function(v){
       nodes[v.node]=true;
@@ -2660,10 +2549,10 @@ function vmtCreate(){
   var c=(document.getElementById('vmt-c-cores')||{}).value;
   var r=(document.getElementById('vmt-c-ram')||{}).value;
   if(!n){toast('Enter a VM name','error');return;}
-  var out=document.getElementById('vmt-c-out');if(out)out.innerHTML='<div style="color:var(--yellow)">Creating VM...</div>';
+  var out=document.getElementById('vmt-c-out');if(out)out.innerHTML='<div class="c-yellow">Creating VM...</div>';
   fetch('/api/vm/create?name='+encodeURIComponent(n)+'&cores='+c+'&ram='+r).then(function(r){return r.json()}).then(function(d){
-    if(d.ok){toast('VM '+d.vmid+' "'+d.name+'" created!','success');if(out)out.innerHTML='<div style="color:var(--green)">VM '+d.vmid+' created successfully.</div>';document.getElementById('vmt-c-name').value='';}
-    else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div style="color:var(--red)">'+d.error+'</div>';}
+    if(d.ok){toast('VM '+d.vmid+' "'+d.name+'" created!','success');if(out)out.innerHTML='<div class="c-green">VM '+d.vmid+' created successfully.</div>';document.getElementById('vmt-c-name').value='';}
+    else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
 }
 function vmtClone(){
@@ -2671,31 +2560,31 @@ function vmtClone(){
   var name=(document.getElementById('vmt-cl-name')||{}).value;
   if(!src){toast('Select a source VM','error');return;}
   if(!name){toast('Enter a name for the clone','error');return;}
-  var out=document.getElementById('vmt-cl-out');if(out)out.innerHTML='<div style="color:var(--yellow)">Cloning VM '+src+'...</div>';
+  var out=document.getElementById('vmt-cl-out');if(out)out.innerHTML='<div class="c-yellow">Cloning VM '+src+'...</div>';
   fetch('/api/vm/create?clone='+src+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
-    if(d.ok){toast('Clone created!','success');if(out)out.innerHTML='<div style="color:var(--green)">Clone "'+name+'" created as VM '+d.vmid+'</div>';}
-    else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div style="color:var(--red)">'+d.error+'</div>';}
+    if(d.ok){toast('Clone created!','success');if(out)out.innerHTML='<div class="c-green">Clone "'+name+'" created as VM '+d.vmid+'</div>';}
+    else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
 }
 function vmtMigrate(){
   var src=(document.getElementById('vmt-m-source')||{}).value;
   var tgt=(document.getElementById('vmt-m-target')||{}).value;
   if(!src||!tgt){toast('Select VM and target node','error');return;}
-  var out=document.getElementById('vmt-m-out');if(out)out.innerHTML='<div style="color:var(--yellow)">Migrating VM '+src+' to '+tgt+'...</div>';
+  var out=document.getElementById('vmt-m-out');if(out)out.innerHTML='<div class="c-yellow">Migrating VM '+src+' to '+tgt+'...</div>';
   confirmAction('Migrate VM <strong>'+src+'</strong> to <strong>'+tgt+'</strong>?',function(){
     fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('sudo qm migrate '+src+' '+tgt+' --online')).then(function(r){return r.json()}).then(function(d){
       var txt=d.results?d.results.map(function(r){return r.output;}).join(''):'';
-      if(out)out.innerHTML='<div style="color:var(--green)">'+txt+'</div>';toast('Migration started','success');
-    }).catch(function(e){if(out)out.innerHTML='<div style="color:var(--red)">'+e+'</div>';});
+      if(out)out.innerHTML='<div class="c-green">'+txt+'</div>';toast('Migration started','success');
+    }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
   });
 }
 function vmtSnapshot(){
   var src=(document.getElementById('vmt-s-source')||{}).value;
   if(!src){toast('Select a VM','error');return;}
-  var out=document.getElementById('vmt-s-out');if(out)out.innerHTML='<div style="color:var(--yellow)">Creating snapshot...</div>';
+  var out=document.getElementById('vmt-s-out');if(out)out.innerHTML='<div class="c-yellow">Creating snapshot...</div>';
   fetch('/api/vm/snapshot?vmid='+src).then(function(r){return r.json()}).then(function(d){
-    if(d.ok){toast('Snapshot "'+d.snapshot+'" created','success');if(out)out.innerHTML='<div style="color:var(--green)">Snapshot "'+d.snapshot+'" created for VM '+src+'</div>';}
-    else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div style="color:var(--red)">'+d.error+'</div>';}
+    if(d.ok){toast('Snapshot "'+d.snapshot+'" created','success');if(out)out.innerHTML='<div class="c-green">Snapshot "'+d.snapshot+'" created for VM '+src+'</div>';}
+    else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
 }
 function vmtResize(){
@@ -2704,13 +2593,13 @@ function vmtResize(){
   var ram=(document.getElementById('vmt-r-ram')||{}).value;
   if(!src){toast('Select a VM','error');return;}
   if(!cores&&!ram){toast('Set new cores or RAM','error');return;}
-  var out=document.getElementById('vmt-r-out');if(out)out.innerHTML='<div style="color:var(--yellow)">Resizing VM '+src+'...</div>';
+  var out=document.getElementById('vmt-r-out');if(out)out.innerHTML='<div class="c-yellow">Resizing VM '+src+'...</div>';
   var url='/api/vm/resize?vmid='+src;
   if(cores)url+='&cores='+cores;
   if(ram)url+='&ram='+ram;
   fetch(url).then(function(r){return r.json()}).then(function(d){
-    if(d.ok){toast('VM '+src+' resized','success');if(out)out.innerHTML='<div style="color:var(--green)">VM '+src+' resized successfully.</div>';}
-    else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div style="color:var(--red)">'+d.error+'</div>';}
+    if(d.ok){toast('VM '+src+' resized','success');if(out)out.innerHTML='<div class="c-green">VM '+src+' resized successfully.</div>';}
+    else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
 }
 /* ── MONITORING ─────────────────────────────────────────────────── */
@@ -2725,22 +2614,22 @@ function switchMonitoring(tab){
     fetch('/api/health').then(function(r){return r.json()}).then(function(d){
       var up=0,dn=0;d.hosts.forEach(function(h){if(h.status==='healthy')up++;else dn++;});
       var h='<div class="stats" style="margin-bottom:12px">'+st('HOSTS',d.hosts.length,'p')+st('HEALTHY',up,'g')+st('UNHEALTHY',dn,dn>0?'r':'g')+st('RESPONSE',d.duration+'s','b')+'</div>';
-      h+='<table style="width:100%"><thead><tr><th>HOST</th><th>IP</th><th>TYPE</th><th>STATUS</th><th>UPTIME</th></tr></thead><tbody>';
+      h+='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>TYPE</th><th>STATUS</th><th>UPTIME</th></tr></thead><tbody>';
       d.hosts.forEach(function(x){
-        h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+(x.type||'linux').toUpperCase()+'</td><td>'+badge(x.status==='healthy'?'ok':'down')+'</td><td style="font-size:11px;color:var(--text-dim)">'+(x.uptime||'-')+'</td></tr>';
+        h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+(x.type||'linux').toUpperCase()+'</td><td>'+badge(x.status==='healthy'?'ok':'down')+'</td><td class="text-meta">'+(x.uptime||'-')+'</td></tr>';
       });
       h+='</tbody></table>';
       document.getElementById('mon-h-out').innerHTML=h;
-    }).catch(function(){document.getElementById('mon-h-out').innerHTML='<div style="color:var(--red)">Failed to fetch health data</div>';});
+    }).catch(function(){document.getElementById('mon-h-out').innerHTML='<div class="c-red">Failed to fetch health data</div>';});
   } else if(tab==='mondoctor'){
-    f.innerHTML='<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Run self-diagnostic checks on the FREQ installation.</div>'+
+    f.innerHTML='<div class="desc-line">Run self-diagnostic checks on the FREQ installation.</div>'+
       '<button class="fleet-btn" onclick="monRunDoctor()" style="color:var(--purple-light);border-color:var(--purple);padding:10px 20px;margin-bottom:12px">RUN DOCTOR</button>'+
       '<div id="mon-doc-out" class="exec-out" style="min-height:80px;display:none"></div>';
   } else if(tab==='monjournal'){
     f.innerHTML='<div id="mon-j-out"><div class="skeleton"></div></div>';
     fetch('/api/journal').then(function(r){return r.json()}).then(function(d){
       if(!d.entries||!d.entries.length){document.getElementById('mon-j-out').innerHTML='<div style="color:var(--text-dim);padding:12px 0">No journal entries.</div>';return;}
-      var h='<table style="width:100%"><thead><tr><th>TIME</th><th>TYPE</th><th>MESSAGE</th></tr></thead><tbody>';
+      var h='<table class="w-full"><thead><tr><th>TIME</th><th>TYPE</th><th>MESSAGE</th></tr></thead><tbody>';
       d.entries.slice(-50).reverse().forEach(function(e){
         h+='<tr><td style="font-size:11px;white-space:nowrap;color:var(--text-dim)">'+(e.timestamp||e.time||'-')+'</td><td><span class="badge '+(e.level==='error'?'down':e.level==='warn'?'warn':'up')+'">'+(e.level||e.type||'info').toUpperCase()+'</span></td><td style="font-size:12px">'+(e.message||e.msg||'-')+'</td></tr>';
       });
@@ -2748,7 +2637,7 @@ function switchMonitoring(tab){
       document.getElementById('mon-j-out').innerHTML=h;
     }).catch(function(){document.getElementById('mon-j-out').innerHTML='<div style="color:var(--text-dim);padding:12px 0">No journal entries.</div>';});
   } else if(tab==='monwatch'){
-    f.innerHTML='<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Monitor fleet health continuously. Alerts on host down, high CPU/RAM, disk full.</div>'+
+    f.innerHTML='<div class="desc-line">Monitor fleet health continuously. Alerts on host down, high CPU/RAM, disk full.</div>'+
       '<div style="display:flex;gap:8px;margin-bottom:12px">'+
       '<button class="fleet-btn" onclick="monWatchStart()" style="color:var(--green);border-color:var(--green);padding:10px 20px">START WATCH</button>'+
       '<button class="fleet-btn" onclick="monWatchStop()" style="color:var(--red);border-color:var(--red);padding:10px 20px">STOP WATCH</button>'+
@@ -2789,25 +2678,25 @@ function switchNetwork(tab){
   if(tab==='netvlan'){
     /* Build VLAN table from fleet config */
     var vlans=[];Object.keys(_VLAN_MAP).sort(function(a,b){return parseInt(a)-parseInt(b);}).forEach(function(vid){var v=_VLAN_MAP[vid];vlans.push({id:parseInt(vid),name:v.name,subnet:v.prefix?v.prefix+'.x':'?',gw:v.gw||'-',purpose:''});});
-    var h='<table style="width:100%"><thead><tr><th>VLAN</th><th>NAME</th><th>SUBNET</th><th>GATEWAY</th><th>PURPOSE</th></tr></thead><tbody>';
+    var h='<table class="w-full"><thead><tr><th>VLAN</th><th>NAME</th><th>SUBNET</th><th>GATEWAY</th><th>PURPOSE</th></tr></thead><tbody>';
     vlans.forEach(function(v){
       var c=VLAN_COLORS[v.name]||'var(--text-dim)';
-      h+='<tr><td><strong style="color:'+c+'">'+v.id+'</strong></td><td style="font-weight:600;color:'+c+'">'+v.name+'</td><td>'+v.subnet+'</td><td>'+v.gw+'</td><td style="font-size:11px;color:var(--text-dim)">'+v.purpose+'</td></tr>';
+      h+='<tr><td><strong style="color:'+c+'">'+v.id+'</strong></td><td style="font-weight:600;color:'+c+'">'+v.name+'</td><td>'+v.subnet+'</td><td>'+v.gw+'</td><td class="text-meta">'+v.purpose+'</td></tr>';
     });
     h+='</tbody></table>';f.innerHTML=h;
   } else if(tab==='netdns'){
-    f.innerHTML='<div style="display:flex;flex-direction:column;gap:10px;max-width:400px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">HOSTNAME TO RESOLVE</label><input id="net-dns-host" placeholder="e.g. google.com, hostname, 192.168.1.30" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"></div>'+
+    f.innerHTML='<div class="form-vertical">'+
+      '<div><label class="label-sub">HOSTNAME TO RESOLVE</label><input id="net-dns-host" placeholder="e.g. google.com, hostname, 192.168.1.30" class="input-primary-lg"></div>'+
       '<button class="fleet-btn" onclick="netDnsCheck()" style="color:var(--purple-light);border-color:var(--purple);align-self:flex-start;padding:10px 20px">RESOLVE</button>'+
       '</div><div id="net-dns-out" class="exec-out" style="min-height:60px;margin-top:12px;display:none"></div>';
   } else if(tab==='netping'){
-    f.innerHTML='<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Test connectivity to all fleet hosts.</div>'+
+    f.innerHTML='<div class="desc-line">Test connectivity to all fleet hosts.</div>'+
       '<button class="fleet-btn" onclick="netPingAll()" style="color:var(--purple-light);border-color:var(--purple);padding:10px 20px;margin-bottom:12px">PING ALL HOSTS</button>'+
       '<div id="net-ping-out"><div style="color:var(--text-dim);padding:12px 0">Click to test connectivity.</div></div>';
   } else if(tab==='netports'){
-    f.innerHTML='<div style="display:flex;flex-direction:column;gap:10px;max-width:400px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">TARGET HOST</label><input id="net-port-host" placeholder="e.g. 192.168.1.50" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"></div>'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">PORTS <span style="opacity:0.5">(comma-separated)</span></label><input id="net-port-ports" value="22,80,443,8006,8080,8888" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"></div>'+
+    f.innerHTML='<div class="form-vertical">'+
+      '<div><label class="label-sub">TARGET HOST</label><input id="net-port-host" placeholder="e.g. 192.168.1.50" class="input-primary-lg"></div>'+
+      '<div><label class="label-sub">PORTS <span style="opacity:0.5">(comma-separated)</span></label><input id="net-port-ports" value="22,80,443,8006,8080,8888" class="input-primary-lg"></div>'+
       '<button class="fleet-btn" onclick="netPortScan()" style="color:var(--purple-light);border-color:var(--purple);align-self:flex-start;padding:10px 20px">SCAN PORTS</button>'+
       '</div><div id="net-port-out" class="exec-out" style="min-height:60px;margin-top:12px;display:none"></div>';
   }
@@ -2823,10 +2712,10 @@ function netDnsCheck(){
 function netPingAll(){
   var out=document.getElementById('net-ping-out');if(out)out.innerHTML='<div class="skeleton"></div>';
   fetch('/api/health').then(function(r){return r.json()}).then(function(d){
-    var h='<table style="width:100%"><thead><tr><th>HOST</th><th>IP</th><th>PING</th><th>LATENCY</th></tr></thead><tbody>';
+    var h='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>PING</th><th>LATENCY</th></tr></thead><tbody>';
     d.hosts.forEach(function(x){
       var ok=x.status==='healthy';
-      h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+badge(ok?'ok':'down')+'</td><td style="color:var(--text-dim)">'+( ok?'<1ms':'-')+'</td></tr>';
+      h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+badge(ok?'ok':'down')+'</td><td class="c-dim">'+( ok?'<1ms':'-')+'</td></tr>';
     });
     h+='</tbody></table>';if(out)out.innerHTML=h;
   });
@@ -2853,39 +2742,39 @@ function switchBackup(tab){
   if(tab==='bkstatus'){
     f.innerHTML='<div id="bk-s-out"><div class="skeleton"></div></div>';
     fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
-      var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Snapshot status across all VMs.</div>';
-      h+='<table style="width:100%"><thead><tr><th>VMID</th><th>NAME</th><th>NODE</th><th>STATUS</th><th>QUICK SNAP</th></tr></thead><tbody>';
+      var h='<div class="desc-line">Snapshot status across all VMs.</div>';
+      h+='<table class="w-full"><thead><tr><th>VMID</th><th>NAME</th><th>NODE</th><th>STATUS</th><th>QUICK SNAP</th></tr></thead><tbody>';
       d.vms.forEach(function(v){
         h+='<tr><td><strong>'+v.vmid+'</strong></td><td>'+v.name+'</td><td>'+v.node+'</td><td>'+badge(v.status)+'</td>';
         h+='<td><button class="fleet-btn" onclick="vmSnap('+v.vmid+')" style="padding:3px 8px;font-size:11px">SNAPSHOT</button></td></tr>';
       });
       h+='</tbody></table>';
       document.getElementById('bk-s-out').innerHTML=h;
-    }).catch(function(){document.getElementById('bk-s-out').innerHTML='<div style="color:var(--red)">Failed to load VMs</div>';});
+    }).catch(function(){document.getElementById('bk-s-out').innerHTML='<div class="c-red">Failed to load VMs</div>';});
   } else if(tab==='bkschedule'){
-    f.innerHTML='<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">PVE backup schedules are managed via the Proxmox GUI or <code>pvesh</code> CLI.</div>'+
+    f.innerHTML='<div class="desc-line">PVE backup schedules are managed via the Proxmox GUI or <code>pvesh</code> CLI.</div>'+
       '<button class="fleet-btn" onclick="bkCheckSchedules()" style="color:var(--purple-light);border-color:var(--purple);padding:10px 20px;margin-bottom:12px">CHECK SCHEDULES</button>'+
       '<div id="bk-sched-out" class="exec-out" style="min-height:60px;display:none"></div>';
   } else if(tab==='bksnapshot'){
-    f.innerHTML='<div style="display:flex;flex-direction:column;gap:10px;max-width:400px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">VM</label><select id="bk-snap-vm" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option value="">Loading...</option></select></div>'+
-      '<div style="display:flex;gap:8px;margin-top:8px"><button class="fleet-btn" onclick="bkTakeSnap()" style="color:var(--purple-light);border-color:var(--purple)">CREATE SNAPSHOT</button><button class="fleet-btn" onclick="bkListSnaps()">LIST SNAPSHOTS</button></div>'+
-      '</div><div id="bk-snap-out" style="margin-top:12px"></div>';
+    f.innerHTML='<div class="form-vertical">'+
+      '<div><label class="label-sub">VM</label><select id="bk-snap-vm" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div class="btn-row"><button class="fleet-btn" onclick="bkTakeSnap()" class="c-purple-active">CREATE SNAPSHOT</button><button class="fleet-btn" onclick="bkListSnaps()">LIST SNAPSHOTS</button></div>'+
+      '</div><div id="bk-snap-out" class="mt-12"></div>';
     fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('bk-snap-vm');if(!sel)return;sel.innerHTML='';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+'</option>';});
     }).catch(function(){});
   } else if(tab==='bkexport'){
-    f.innerHTML='<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Export FREQ configuration (hosts, users, vault) for backup.</div>'+
+    f.innerHTML='<div class="desc-line">Export FREQ configuration (hosts, users, vault) for backup.</div>'+
       '<div style="display:flex;gap:8px">'+
       '<button class="fleet-btn" onclick="bkExportConfig()" style="color:var(--purple-light);border-color:var(--purple);padding:10px 20px">EXPORT CONFIG</button>'+
       '</div><div id="bk-exp-out" class="exec-out" style="min-height:60px;margin-top:12px;display:none"></div>';
   } else if(tab==='bkrestore'){
-    f.innerHTML='<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Restore operations. Use with caution.</div>'+
-      '<div style="display:flex;flex-direction:column;gap:10px;max-width:400px">'+
-      '<div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">VM TO RESTORE (from latest snapshot)</label><select id="bk-rest-vm" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%"><option value="">Loading...</option></select></div>'+
+    f.innerHTML='<div class="desc-line">Restore operations. Use with caution.</div>'+
+      '<div class="form-vertical">'+
+      '<div><label class="label-sub">VM TO RESTORE (from latest snapshot)</label><select id="bk-rest-vm" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<button class="fleet-btn" onclick="bkRestore()" style="color:var(--red);border-color:var(--red);align-self:flex-start;padding:10px 20px">RESTORE SNAPSHOT</button>'+
-      '</div><div id="bk-rest-out" style="margin-top:12px"></div>';
+      '</div><div id="bk-rest-out" class="mt-12"></div>';
     fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('bk-rest-vm');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+'</option>';});
@@ -2901,10 +2790,10 @@ function bkCheckSchedules(){
 }
 function bkTakeSnap(){
   var vmid=(document.getElementById('bk-snap-vm')||{}).value;if(!vmid){toast('Select a VM','error');return;}
-  var out=document.getElementById('bk-snap-out');if(out)out.innerHTML='<div style="color:var(--yellow)">Creating snapshot...</div>';
+  var out=document.getElementById('bk-snap-out');if(out)out.innerHTML='<div class="c-yellow">Creating snapshot...</div>';
   fetch('/api/vm/snapshot?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
-    if(d.ok){toast('Snapshot created','success');if(out)out.innerHTML='<div style="color:var(--green)">Snapshot "'+d.snapshot+'" created for VM '+vmid+'</div>';}
-    else{if(out)out.innerHTML='<div style="color:var(--red)">'+d.error+'</div>';}
+    if(d.ok){toast('Snapshot created','success');if(out)out.innerHTML='<div class="c-green">Snapshot "'+d.snapshot+'" created for VM '+vmid+'</div>';}
+    else{if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
 }
 function bkListSnaps(){
@@ -2924,12 +2813,12 @@ function bkExportConfig(){
 function bkRestore(){
   var vmid=(document.getElementById('bk-rest-vm')||{}).value;if(!vmid){toast('Select a VM','error');return;}
   confirmAction('Restore VM <strong>'+vmid+'</strong> from latest snapshot? This will revert the VM to its snapshot state.',function(){
-    var out=document.getElementById('bk-rest-out');if(out)out.innerHTML='<div style="color:var(--yellow)">Restoring VM '+vmid+'...</div>';
+    var out=document.getElementById('bk-rest-out');if(out)out.innerHTML='<div class="c-yellow">Restoring VM '+vmid+'...</div>';
     fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('sudo qm rollback '+vmid+' $(sudo qm listsnapshot '+vmid+' 2>/dev/null | tail -2 | head -1 | awk \"{print \\$2}\") 2>&1')).then(function(r){return r.json()}).then(function(d){
       var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
-      if(out)out.innerHTML='<div style="color:var(--green)">'+(txt||'Restore complete')+'</div>';
+      if(out)out.innerHTML='<div class="c-green">'+(txt||'Restore complete')+'</div>';
       toast('Restore complete','success');
-    }).catch(function(e){if(out)out.innerHTML='<div style="color:var(--red)">'+e+'</div>';});
+    }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
   });
 }
 
@@ -2941,7 +2830,7 @@ function labExec(host,cmd){
 }
 function _labExecRun(host,cmd){
   var out=document.getElementById('ft-lab-out');
-  if(out)out.innerHTML='<div style="color:var(--yellow)">Running on '+host+'...</div>';
+  if(out)out.innerHTML='<div class="c-yellow">Running on '+host+'...</div>';
   fetch('/api/exec?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--text);white-space:pre-wrap;margin:0">'+host.toUpperCase()+': '+(txt||'OK')+'</pre>';
@@ -2954,7 +2843,7 @@ function labDockerAction(name,action){
 }
 function _labDockerRun(name,action){
   var out=document.getElementById('ft-lab-out');
-  if(out)out.innerHTML='<div style="color:var(--yellow)">'+action.toUpperCase()+' '+name+'...</div>';
+  if(out)out.innerHTML='<div class="c-yellow">'+action.toUpperCase()+' '+name+'...</div>';
   fetch('/api/exec?target=docker-dev&cmd='+encodeURIComponent('docker '+action+' '+name)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--green);white-space:pre-wrap;margin:0">'+name+': '+(txt||action+' OK')+'</pre>';
@@ -2977,7 +2866,7 @@ function _renderUserDropdown(prefix,items){
   var h='';
   items.forEach(function(item){
     h+='<div onmousedown="selectUserDropdown(\''+prefix+'\',\''+item.value+'\')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s" onmouseover="this.style.background=\'var(--purple-faint)\'" onmouseout="this.style.background=\'none\'">';
-    h+='<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:600;color:#ffffff">'+item.label+'</span><span style="font-size:12px;color:'+item.color+';font-weight:600">'+item.detail+'</span></div>';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:600;color:var(--text)">'+item.label+'</span><span style="font-size:12px;color:'+item.color+';font-weight:600">'+item.detail+'</span></div>';
     h+='</div>';
   });
   if(!items.length)h='<div style="padding:14px;color:var(--text-dim);font-size:11px;text-align:center">No users found</div>';
@@ -3015,7 +2904,7 @@ function openNewTool(){
       var dotColor=connected?'var(--green)':'var(--text-dim)';var statusText=connected?'CONNECTED':'OFFLINE';
       h+='<div style="display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">';
       h+='<span style="width:10px;height:10px;border-radius:50%;background:'+dotColor+';flex-shrink:0"></span>';
-      h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:#ffffff">'+t.name+'</div><div style="font-size:11px;color:var(--text-dim)">'+t.subtitle+'</div></div>';
+      h+='<div class="flex-1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+t.name+'</div><div class="text-meta">'+t.subtitle+'</div></div>';
       h+='<span style="font-size:11px;color:'+dotColor+';font-weight:600">'+statusText+'</span>';
       h+='</div>';
     });
@@ -3079,7 +2968,7 @@ function _isUserEntry(e){
 }
 function renderVaultTab(){
   var d=_vaultData;
-  if(!d||!d.initialized){document.getElementById('vault-sensitive-c').innerHTML='<p style="color:var(--yellow)">Vault not initialized.</p>';return;}
+  if(!d||!d.initialized){document.getElementById('vault-sensitive-c').innerHTML='<p class="c-yellow">Vault not initialized.</p>';return;}
   var html='';
   if(_vaultTab==='users'){
     /* Users view — show each FREQ user with password + ssh key copy buttons */
@@ -3118,7 +3007,7 @@ function renderVaultTab(){
       entries.forEach(function(e){
         var uid=host.replace(/[^a-z0-9]/gi,'')+'-'+e.key.replace(/[^a-z0-9]/gi,'');
         html+='<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid var(--border);font-size:12px;align-items:center">';
-        html+='<span style="font-weight:600;color:#ffffff;min-width:90px">'+e.key+'</span>';
+        html+='<span style="font-weight:600;color:var(--text);min-width:90px">'+e.key+'</span>';
         html+='<span style="color:var(--text-dim);flex:1;font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="vk-'+uid+'">'+e.masked+'</span>';
         html+='<button class="fleet-btn" onclick="vaultReveal(\''+uid+'\',\''+e.host+'\',\''+e.key+'\')" style="padding:2px 8px;font-size:12px">SHOW</button>';
         html+='<button class="fleet-btn" onclick="vaultCopy(\''+e.host+'\',\''+e.key+'\')" style="padding:2px 8px;font-size:12px;color:var(--purple-light)">COPY</button>';
@@ -3140,7 +3029,7 @@ function renderVaultTab(){
       entries.forEach(function(e){
         var uid=host.replace(/[^a-z0-9]/gi,'')+'-'+e.key.replace(/[^a-z0-9]/gi,'');
         html+='<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid var(--border);font-size:12px;align-items:center">';
-        html+='<span style="font-weight:600;color:#ffffff;min-width:90px">'+e.key+'</span>';
+        html+='<span style="font-weight:600;color:var(--text);min-width:90px">'+e.key+'</span>';
         html+='<span style="color:var(--text-dim);flex:1;font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="vk-'+uid+'">'+e.masked+'</span>';
         html+='<button class="fleet-btn" onclick="vaultReveal(\''+uid+'\',\''+e.host+'\',\''+e.key+'\')" style="padding:2px 8px;font-size:12px">SHOW</button>';
         html+='<button class="fleet-btn" onclick="vaultCopy(\''+e.host+'\',\''+e.key+'\')" style="padding:2px 8px;font-size:12px;color:var(--purple-light)">COPY</button>';
@@ -3210,8 +3099,8 @@ function fleetNewUser(){
     if(key)cmd+='; mkdir -p /home/'+user+'/.ssh; echo "'+key+'" >> /home/'+user+'/.ssh/authorized_keys; chmod 700 /home/'+user+'/.ssh; chmod 600 /home/'+user+'/.ssh/authorized_keys; chown -R '+user+':'+user+' /home/'+user+'/.ssh';
     var out=document.getElementById('ft-nu-out');out.innerHTML='<div class="skeleton"></div>';
     fetch('/api/exec?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
-      var h='<table style="width:100%"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
-      d.results.forEach(function(r,i){h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(r.ok?'<span style="color:var(--green)">DEPLOYED</span>':'<span style="color:var(--red)">'+r.error+'</span>')+'</td></tr>';});
+      var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
+      d.results.forEach(function(r,i){h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(r.ok?'<span class="c-green">DEPLOYED</span>':'<span class="c-red">'+r.error+'</span>')+'</td></tr>';});
       h+='</tbody></table>';out.innerHTML=h;
       toast('User '+user+' deployed to '+d.results.length+' hosts','success');
       /* Also register in FREQ */
@@ -3232,11 +3121,11 @@ function fleetPasswdUpdate(){
     var cmd='echo "'+user+':'+pass+'" | chpasswd && echo OK || echo FAIL';
     var out=document.getElementById('ft-pw-out');out.innerHTML='<div class="skeleton"></div>';
     fetch('/api/exec?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
-      var h='<table style="width:100%"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
+      var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
         var success=r.ok&&r.output.trim()==='OK';if(success)ok++;
-        h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span style="color:var(--green)">UPDATED</span>':'<span style="color:var(--red)">FAILED</span>')+'</td></tr>';
+        h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">UPDATED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       });
       h+='</tbody></table>';out.innerHTML=h;
       toast('Password updated on '+ok+'/'+d.results.length+' hosts','success');
@@ -3254,11 +3143,11 @@ function fleetSshKeyDeploy(){
     var cmd='mkdir -p /home/'+user+'/.ssh; echo "'+key+'" >> /home/'+user+'/.ssh/authorized_keys; chmod 700 /home/'+user+'/.ssh; chmod 600 /home/'+user+'/.ssh/authorized_keys; chown -R '+user+':'+user+' /home/'+user+'/.ssh && echo OK || echo FAIL';
     var out=document.getElementById('ft-sk-out');out.innerHTML='<div class="skeleton"></div>';
     fetch('/api/exec?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
-      var h='<table style="width:100%"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
+      var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
         var success=r.ok&&r.output.trim()==='OK';if(success)ok++;
-        h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span style="color:var(--green)">DEPLOYED</span>':'<span style="color:var(--red)">FAILED</span>')+'</td></tr>';
+        h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">DEPLOYED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       });
       h+='</tbody></table>';out.innerHTML=h;
       toast('SSH key deployed to '+ok+'/'+d.results.length+' hosts','success');
@@ -3272,12 +3161,12 @@ function sshdPanel(targetId){
   fetch('/api/health').then(function(r){return r.json()}).then(function(d){
     var h='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:8px">RESTART SSHD</h3>';
     h+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
-    h+='<button class="fleet-btn" onclick="sshdRestartSelected()" style="color:var(--purple-light);border-color:var(--purple)">RESTART SELECTED</button>';
+    h+='<button class="fleet-btn" onclick="sshdRestartSelected()" class="c-purple-active">RESTART SELECTED</button>';
     h+='<button class="fleet-btn" onclick="sshdRestartAll()">RESTART ALL ('+d.hosts.length+')</button>';
     h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" onchange="document.querySelectorAll(\'.ft-sshd-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
-    h+='<div style="flex:1"></div><button class="fleet-btn" onclick="document.getElementById(\''+targetId+'\').innerHTML=\'\'" style="opacity:0.6">CLOSE</button>';
+    h+='<div class="flex-1"></div><button class="fleet-btn" onclick="document.getElementById(\''+targetId+'\').innerHTML=\'\'" style="opacity:0.6">CLOSE</button>';
     h+='</div>';
-    h+='<table style="width:100%"><thead><tr><th style="width:30px"></th><th>HOST</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>';
+    h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>';
     d.hosts.forEach(function(x,i){
       var up=x.status==='healthy';
       h+='<tr><td><input type="checkbox" class="ft-sshd-check" data-host="'+x.label+'"></td>';
@@ -3285,7 +3174,7 @@ function sshdPanel(targetId){
       h+='<td>'+badge(up?'ok':'down')+'</td>';
       h+='<td><button class="fleet-btn" onclick="sshdRestartHost(\''+x.label+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">RESTART</button></td></tr>';
     });
-    h+='</tbody></table><div id="ft-sshd-out" style="margin-top:12px"></div>';
+    h+='</tbody></table><div id="ft-sshd-out" class="mt-12"></div>';
     out.innerHTML=h;
   });
 }
@@ -3293,11 +3182,11 @@ function sshdPanel(targetId){
 function _sshdRestart(hosts){
   var cmd='systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null && echo OK || echo FAIL';
   var out=document.getElementById('ft-sshd-out');out.innerHTML='<div class="skeleton"></div>';
-  var done=0,total=hosts.length,html='<table style="width:100%"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
+  var done=0,total=hosts.length,html='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
   hosts.forEach(function(h){
     fetch('/api/exec?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var ok=d.results&&d.results[0]&&d.results[0].ok&&d.results[0].output.trim()==='OK';
-      html+='<tr><td><strong>'+h.toUpperCase()+'</strong></td><td>'+(ok?'<span style="color:var(--green)">RESTARTED</span>':'<span style="color:var(--red)">FAILED</span>')+'</td></tr>';
+      html+='<tr><td><strong>'+h.toUpperCase()+'</strong></td><td>'+(ok?'<span class="c-green">RESTARTED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       done++;if(done===total){html+='</tbody></table>';var cb='<button class="fleet-btn" onclick="document.getElementById(\'ft-sshd-out\').innerHTML=\'\'" style="margin:8px 0">CLOSE RESULTS</button>';out.innerHTML=cb+html+cb;toast('SSHD restarted on '+done+' hosts','success');}
     });
   });
@@ -3371,7 +3260,7 @@ function renderExecDropdown(items){
   var h='';
   items.forEach(function(item){
     h+='<div onmousedown="selectExecHost(\''+item.value+'\',\''+item.label+'\')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s" onmouseover="this.style.background=\'var(--purple-faint)\'" onmouseout="this.style.background=\'none\'">';
-    h+='<div style="font-size:12px;font-weight:600;color:#ffffff">'+item.label+'</div>';
+    h+='<div style="font-size:12px;font-weight:600;color:var(--text)">'+item.label+'</div>';
     h+='<div style="font-size:12px;color:var(--text-dim);margin-top:2px">'+item.detail+'</div>';
     h+='</div>';
   });
@@ -3456,7 +3345,7 @@ function loadAgents(){
     if(d.count>0){var h='<table><thead><tr><th>Name</th><th>Template</th><th>VMID</th><th>Status</th><th>Created</th></tr></thead><tbody>';
       d.agents.forEach(function(a){h+='<tr><td><strong>'+a.name+'</strong></td><td>'+a.template+'</td><td>'+a.vmid+'</td><td>'+badge(a.status)+'</td><td>'+(a.created||'')+'</td></tr>';});
       h+='</tbody></table>';document.getElementById('agent-list').innerHTML=h;
-    }else{document.getElementById('agent-list').innerHTML='<div class="empty-state"><div class="es-icon">&#9881;</div><p>No agents registered.<br><code style="color:var(--purple-light)">freq agent create &lt;template&gt;</code></p></div>';}
+    }else{document.getElementById('agent-list').innerHTML='<div class="empty-state"><div class="es-icon">&#9881;</div><p>No agents registered.<br><code class="c-purple">freq agent create &lt;template&gt;</code></p></div>';}
   });
   var tpls=[{n:'Infra-Manager',d:'Infrastructure operator — fleet monitoring, incident response, maintenance'},{n:'Security-Ops',d:'Security specialist — auditing, hardening, compliance'},{n:'Dev',d:'Development specialist — building, testing, shipping code'},{n:'Media-Ops',d:'Media stack operator — Plex, Sonarr, Radarr, downloads'},{n:'Blank',d:'Empty template — start from scratch'}];
   var h='';tpls.forEach(function(t){h+='<div class="crd"><h3>'+t.n+'</h3><p>'+t.d+'</p></div>';});
@@ -3465,7 +3354,7 @@ function loadAgents(){
 function loadSpecialists(){
   fetch('/api/specialists').then(function(r){return r.json()}).then(function(d){
     var h='';d.agents.forEach(function(a){h+='<tr><td><strong>'+a.name+'</strong></td><td>'+a.template+'</td><td>'+(a.vmid||'-')+'</td><td>'+a.status+'</td></tr>';});
-    document.getElementById('specialist-table').innerHTML=h||'<tr><td colspan="4" style="color:var(--text-dim)">No specialists registered.</td></tr>';
+    document.getElementById('specialist-table').innerHTML=h||'<tr><td colspan="4" class="c-dim">No specialists registered.</td></tr>';
   });
 }
 
@@ -3478,7 +3367,7 @@ function loadVMs(){
     if(!d.count){document.getElementById('vms-c').innerHTML='<div class="empty-state"><div class="es-icon">▣</div><p>No VMs found on cluster.</p></div>';document.getElementById('vm-stats').innerHTML='';return;}
     var running=0,stopped=0;d.vms.forEach(function(v){if(v.status==='running')running++;else stopped++;});
     document.getElementById('vm-stats').innerHTML=
-      '<div class="st"><div class="lb">VMs</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--purple-light)">'+d.count+'<span style="font-size:12px;font-weight:500;opacity:0.7"> TOTAL</span></span><span style="font-size:20px;font-weight:700;color:var(--green)">'+running+'<span style="font-size:12px;font-weight:500;opacity:0.7"> RUN</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+stopped+'<span style="font-size:12px;font-weight:500;opacity:0.7"> STOP</span></span></div></div>';
+      '<div class="st"><div class="lb">VMs</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--purple-light)">'+d.count+'<span class="label-hint"> TOTAL</span></span><span style="font-size:20px;font-weight:700;color:var(--green)">'+running+'<span class="label-hint"> RUN</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+stopped+'<span class="label-hint"> STOP</span></span></div></div>';
     var nodeFilter=document.getElementById('vm-node-filter').value;
     var html='<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">';
     var nodes={};
@@ -3494,7 +3383,7 @@ function loadVMs(){
       html+='<div class="host-card" onclick="openVmInfo(\''+v.name+'\',\'\','+v.vmid+')" style="cursor:pointer">';
       html+='<div class="host-head"><h3 style="color:'+cl+'">'+v.name+'</h3><div style="display:flex;align-items:center;gap:6px">'+
         '<span class="cat-badge cat-'+(v.category||'unknown')+'">'+catLabel+'</span>'+badge(displayStatus)+'</div></div>';
-      html+='<div style="border-top:1px solid var(--border);margin-top:2px;padding-top:6px">';
+      html+='<div class="divider-light">';
       html+='<div class="metric-row"><div class="metric-top"><span class="metric-label">VMID</span><span class="metric-val">'+v.vmid+' · '+v.node+'</span></div></div>';
       html+=_mrow('CPU',v.cpu+' Cores',0,'var(--purple-light)');
       html+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM</span><span class="metric-val">'+_ramGB(v.ram_mb)+'</span></div></div>';
@@ -3530,14 +3419,14 @@ function loadDownloads(){
       var sz=dl.size>1073741824?(dl.size/1073741824).toFixed(1)+'GB':(dl.size/1048576).toFixed(0)+'MB';
       var sp=dl.speed>1048576?(dl.speed/1048576).toFixed(1)+'MB/s':(dl.speed/1024).toFixed(0)+'KB/s';
       h+='<tr><td>'+dl.name.substring(0,50)+'</td><td>'+dl.client+'</td><td>'+dl.vm+'</td><td>'+sz+'</td><td>'+dl.progress+'%</td><td>'+sp+'</td></tr>';
-    });document.getElementById('dl-table').innerHTML=h||'<tr><td colspan="6" style="color:var(--text-dim)">No active downloads</td></tr>';
+    });document.getElementById('dl-table').innerHTML=h||'<tr><td colspan="6" class="c-dim">No active downloads</td></tr>';
   });
 }
 function loadStreams(){
   fetch('/api/media/streams').then(function(r){return r.json()}).then(function(d){
     document.getElementById('stream-stats').innerHTML=st('Active Streams',d.count,d.count>0?'g':'p');
     var h='';d.sessions.forEach(function(ss){h+='<tr><td><strong>'+ss.user+'</strong></td><td>'+ss.title+'</td><td>'+ss.type+'</td><td>'+ss.quality+'</td><td>'+ss.state+'</td></tr>';});
-    document.getElementById('stream-table').innerHTML=h||'<tr><td colspan="5" style="color:var(--text-dim)">No active streams</td></tr>';
+    document.getElementById('stream-table').innerHTML=h||'<tr><td colspan="5" class="c-dim">No active streams</td></tr>';
   });
 }
 function mediaRestart(name){
@@ -3579,23 +3468,23 @@ function _infraOut(defaultId){
   var el=document.getElementById(defaultId);if(el)el.style.display='block';return el;
 }
 function _infraPre(title,output){
-  return '<div style="color:var(--green);margin-bottom:8px;font-size:12px;font-weight:600">'+title+'</div><pre style="font-size:11px;color:var(--text);white-space:pre-wrap;font-family:\'Courier New\',monospace;line-height:1.5;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px">'+output.replace(/</g,'&lt;').replace(/===/g,'<span style="color:var(--purple-light)">═══</span>')+'</pre>';
+  return '<div style="color:var(--green);margin-bottom:8px;font-size:12px;font-weight:600">'+title+'</div><pre style="font-size:11px;color:var(--text);white-space:pre-wrap;font-family:\'Courier New\',monospace;line-height:1.5;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px">'+output.replace(/</g,'&lt;').replace(/===/g,'<span class="c-purple">═══</span>')+'</pre>';
 }
 function pfAction(action){
   var o=_infraOut('pf-out');if(!o)return;
-  o.innerHTML='<span style="color:var(--text-dim)">Querying pfSense ('+action+')...</span>';
+  o.innerHTML='<span class="c-dim">Querying pfSense ('+action+')...</span>';
   fetch('/api/infra/pfsense?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable){o.innerHTML=_infraPre('PFSENSE \u2014 '+action.toUpperCase(),d.output);}
-    else{o.innerHTML='<div style="color:var(--red)">Cannot reach pfSense at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';}
-  }).catch(function(e){o.innerHTML='<div style="color:var(--red)">Error: '+e+'</div>';});
+    else{o.innerHTML='<div class="c-red">Cannot reach pfSense at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';}
+  }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
 }
 function tnAction(action){
   var o=_infraOut('tn-out');if(!o)return;
-  o.innerHTML='<span style="color:var(--text-dim)">Querying TrueNAS ('+action+')...</span>';
+  o.innerHTML='<span class="c-dim">Querying TrueNAS ('+action+')...</span>';
   fetch('/api/infra/truenas?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output);}
-    else{o.innerHTML='<div style="color:var(--red)">Cannot reach TrueNAS at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';}
-  }).catch(function(e){o.innerHTML='<div style="color:var(--red)">Error: '+e+'</div>';});
+    else{o.innerHTML='<div class="c-red">Cannot reach TrueNAS at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';}
+  }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
 }
 function idracAction(action){
   var o=_infraOut('idrac-out');if(!o)return;
@@ -3607,14 +3496,14 @@ function idracAction(action){
       else{html+='<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;color:var(--red)">'+t.name.toUpperCase()+' ('+t.ip+') \u2014 UNREACHABLE</div><p style="color:var(--text-dim);font-size:11px">'+(t.error||'')+'</p></div>';}
     });
     o.innerHTML=html;
-  }).catch(function(e){o.innerHTML='<p style="color:var(--red)">Error: '+e+'</p>';});
+  }).catch(function(e){o.innerHTML='<p class="c-red">Error: '+e+'</p>';});
 }
 function swAction(action){
   var o=_infraOut('sw-out');if(!o)return;
-  o.innerHTML='<span style="color:var(--text-dim)">Querying switch ('+action+')...</span>';
+  o.innerHTML='<span class="c-dim">Querying switch ('+action+')...</span>';
   fetch('/api/switch?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable)o.innerHTML=_infraPre('SWITCH \u2014 '+action.toUpperCase(),d.output);
-    else o.innerHTML='<div style="color:var(--red)">Cannot reach switch at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';
+    else o.innerHTML='<div class="c-red">Cannot reach switch at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';
   });
 }
 
@@ -3623,7 +3512,7 @@ function swAction(action){
    ═══════════════════════════════════════════════════════════════════ */
 function loadVault(){
   fetch('/api/vault').then(function(r){return r.json()}).then(function(d){
-    if(!d.initialized){document.getElementById('vault-c').innerHTML='<p style="color:var(--yellow)">Vault not initialized. Store a credential to auto-initialize.</p>';return;}
+    if(!d.initialized){document.getElementById('vault-c').innerHTML='<p class="c-yellow">Vault not initialized. Store a credential to auto-initialize.</p>';return;}
     var groups={};
     d.entries.forEach(function(e){if(!groups[e.host])groups[e.host]=[];groups[e.host].push(e);});
     var html='<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">';
@@ -3633,7 +3522,7 @@ function loadVault(){
       html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn" onclick="vaultDelGroup(\''+host+'\')" style="padding:3px 8px;font-size:12px;color:var(--red)">DELETE ALL</button></div>';
       entries.forEach(function(e){
         html+='<div style="display:flex;gap:12px;padding:4px 0;border-top:1px solid var(--border);font-size:12px">';
-        html+='<span style="font-weight:600;color:#ffffff">'+e.key+'</span><span style="color:var(--text-dim)">'+e.masked+'</span>';
+        html+='<span style="font-weight:600;color:var(--text)">'+e.key+'</span><span class="c-dim">'+e.masked+'</span>';
         html+='</div>';
       });
       html+='</div>';
@@ -3667,12 +3556,12 @@ function loadUsers(){
     html+='<button class="fleet-btn user-filter active-view" data-filter="all" onclick="filterUsers(\'all\',this)">ALL ('+d.users.length+')</button>';
     var counts={admin:0,operator:0,viewer:0};
     d.users.forEach(function(u){if(counts[u.role]!==undefined)counts[u.role]++;});
-    if(_currentRole==='admin')html+='<button class="fleet-btn user-filter" data-filter="admin" onclick="filterUsers(\'admin\',this)" style="color:var(--red)">ADMIN ('+counts.admin+')</button>';
-    html+='<button class="fleet-btn user-filter" data-filter="operator" onclick="filterUsers(\'operator\',this)" style="color:var(--yellow)">OPERATOR ('+counts.operator+')</button>';
-    html+='<button class="fleet-btn user-filter" data-filter="viewer" onclick="filterUsers(\'viewer\',this)" style="color:var(--green)">VIEWER ('+counts.viewer+')</button>';
+    if(_currentRole==='admin')html+='<button class="fleet-btn user-filter" data-filter="admin" onclick="filterUsers(\'admin\',this)" class="c-red">ADMIN ('+counts.admin+')</button>';
+    html+='<button class="fleet-btn user-filter" data-filter="operator" onclick="filterUsers(\'operator\',this)" class="c-yellow">OPERATOR ('+counts.operator+')</button>';
+    html+='<button class="fleet-btn user-filter" data-filter="viewer" onclick="filterUsers(\'viewer\',this)" class="c-green">VIEWER ('+counts.viewer+')</button>';
     html+='</div>';
     /* User table */
-    html+='<table style="width:100%"><thead><tr><th>USERNAME</th><th>ROLE</th><th>PROMOTE / DEMOTE</th></tr></thead><tbody>';
+    html+='<table class="w-full"><thead><tr><th>USERNAME</th><th>ROLE</th><th>PROMOTE / DEMOTE</th></tr></thead><tbody>';
     d.users.forEach(function(u,i){
       html+='<tr class="user-row" data-role="'+u.role+'">';
       html+='<td><strong style="color:'+HC[i%HC.length]+'">'+u.username.toUpperCase()+'</strong></td>';
@@ -3681,10 +3570,10 @@ function loadUsers(){
       if(_currentRole==='admin'){
         if(u.role!=='admin')html+='<button class="fleet-btn" onclick="userPromote(\''+u.username+'\')" style="padding:3px 10px;font-size:12px;color:var(--green)">PROMOTE</button>';
         if(u.role!=='viewer')html+='<button class="fleet-btn" onclick="userDemote(\''+u.username+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">DEMOTE</button>';
-        if(u.role==='admin')html+='<span style="font-size:12px;color:var(--text-dim)">MAX</span>';
-        if(u.role==='viewer')html+='<span style="font-size:12px;color:var(--text-dim)">MIN</span>';
+        if(u.role==='admin')html+='<span class="text-sub">MAX</span>';
+        if(u.role==='viewer')html+='<span class="text-sub">MIN</span>';
       } else {
-        html+='<span style="font-size:12px;color:var(--text-dim)">ADMIN ONLY</span>';
+        html+='<span class="text-sub">ADMIN ONLY</span>';
       }
       html+='</td></tr>';
     });
@@ -3771,7 +3660,7 @@ function hardenAction(action){
       var ok=0;
       d.results.forEach(function(r,i){
         var success=r.ok&&r.output.trim()==='OK';if(success)ok++;
-        html+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span style="color:var(--green)">APPLIED</span>':'<span style="color:var(--red)">FAILED</span>')+'</td></tr>';
+        html+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">APPLIED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       });
       html+='</tbody></table>';
       var closeBtn='<button class="fleet-btn" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" style="margin:8px 0">CLOSE RESULTS</button>';
@@ -3817,13 +3706,13 @@ function loadRisk(){
       if(i<ch.length-1)rc.innerHTML+='<span class="chain-arr">\u2192</span>';
     });
     var t=document.getElementById('risk-tbl');t.innerHTML='';
-    d.targets.forEach(function(r){t.innerHTML+='<tr><td><strong>'+r.name+'</strong><br><span style="font-size:11px;color:var(--text-dim)">'+r.label+'</span></td><td>'+badge(r.risk)+'</td><td style="font-size:12px">'+r.impact+'</td><td style="font-size:11px;color:var(--text-dim)">'+r.recovery.substring(0,60)+'</td></tr>';});
+    d.targets.forEach(function(r){t.innerHTML+='<tr><td><strong>'+r.name+'</strong><br><span class="text-meta">'+r.label+'</span></td><td>'+badge(r.risk)+'</td><td style="font-size:12px">'+r.impact+'</td><td class="text-meta">'+r.recovery.substring(0,60)+'</td></tr>';});
   }).catch(function(){});
 }
 function loadPolicies(){
   fetch('/api/policies').then(function(r){return r.json()}).then(function(d){
     var h='<div class="cards">';
-    d.policies.forEach(function(p){h+='<div class="crd"><h3>'+p.name+'</h3><p>'+p.description+'</p><div style="margin-top:8px">';p.scope.forEach(function(ss){h+='<span class="tag">'+ss+'</span>';});h+='</div></div>';});
+    d.policies.forEach(function(p){h+='<div class="crd"><h3>'+p.name+'</h3><p>'+p.description+'</p><div class="mt-8">';p.scope.forEach(function(ss){h+='<span class="tag">'+ss+'</span>';});h+='</div></div>';});
     h+='</div>';document.getElementById('policies-c').innerHTML=h;
   });
 }
@@ -3834,25 +3723,25 @@ function loadPolicies(){
 function loadConfig(){
   fetch('/api/config').then(function(r){return r.json()}).then(function(d){
     var html='<div class="two"><div class="crd"><h3>Identity</h3><table>';
-    html+='<tr><td style="color:var(--text-dim)">Version</td><td>v'+d.version+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Brand</td><td>'+d.brand+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Build</td><td>'+d.build+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Cluster</td><td>'+d.cluster+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Timezone</td><td>'+d.timezone+'</td></tr>';
+    html+='<tr><td class="c-dim">Version</td><td>v'+d.version+'</td></tr>';
+    html+='<tr><td class="c-dim">Brand</td><td>'+d.brand+'</td></tr>';
+    html+='<tr><td class="c-dim">Build</td><td>'+d.build+'</td></tr>';
+    html+='<tr><td class="c-dim">Cluster</td><td>'+d.cluster+'</td></tr>';
+    html+='<tr><td class="c-dim">Timezone</td><td>'+d.timezone+'</td></tr>';
     html+='</table></div><div class="crd"><h3>SSH & Fleet</h3><table>';
-    html+='<tr><td style="color:var(--text-dim)">Account</td><td>'+d.ssh_account+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Timeout</td><td>'+d.ssh_timeout+'s</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Parallel</td><td>'+d.ssh_parallel+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Hosts</td><td>'+d.hosts_count+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">VLANs</td><td>'+d.vlans_count+'</td></tr>';
+    html+='<tr><td class="c-dim">Account</td><td>'+d.ssh_account+'</td></tr>';
+    html+='<tr><td class="c-dim">Timeout</td><td>'+d.ssh_timeout+'s</td></tr>';
+    html+='<tr><td class="c-dim">Parallel</td><td>'+d.ssh_parallel+'</td></tr>';
+    html+='<tr><td class="c-dim">Hosts</td><td>'+d.hosts_count+'</td></tr>';
+    html+='<tr><td class="c-dim">VLANs</td><td>'+d.vlans_count+'</td></tr>';
     html+='</table></div></div>';
-    html+='<div class="two" style="margin-top:12px"><div class="crd"><h3>Infrastructure</h3><table>';
-    html+='<tr><td style="color:var(--text-dim)">PVE Nodes</td><td>'+d.pve_nodes.join(', ')+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">pfSense</td><td>'+d.pfsense_ip+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">TrueNAS</td><td>'+d.truenas_ip+'</td></tr>';
+    html+='<div class="two mt-12"><div class="crd"><h3>Infrastructure</h3><table>';
+    html+='<tr><td class="c-dim">PVE Nodes</td><td>'+d.pve_nodes.join(', ')+'</td></tr>';
+    html+='<tr><td class="c-dim">pfSense</td><td>'+d.pfsense_ip+'</td></tr>';
+    html+='<tr><td class="c-dim">TrueNAS</td><td>'+d.truenas_ip+'</td></tr>';
     html+='</table></div><div class="crd"><h3>Safety</h3><table>';
-    html+='<tr><td style="color:var(--text-dim)">Protected VMIDs</td><td style="font-size:11px">'+d.protected_vmids.join(', ')+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Install Dir</td><td style="font-size:11px;font-family:monospace">'+d.install_dir+'</td></tr>';
+    html+='<tr><td class="c-dim">Protected VMIDs</td><td style="font-size:11px">'+d.protected_vmids.join(', ')+'</td></tr>';
+    html+='<tr><td class="c-dim">Install Dir</td><td style="font-size:11px;font-family:monospace">'+d.install_dir+'</td></tr>';
     html+='</table></div></div>';
     document.getElementById('config-c').innerHTML=html;
   });
@@ -3861,13 +3750,13 @@ function runDoctor(){
   document.getElementById('doctor-c').innerHTML='<div class="skeleton"></div>';
   fetch('/api/info').then(function(r){return r.json()}).then(function(d){
     var html='<div class="cards"><div class="crd"><h3>Installation</h3><table>';
-    html+='<tr><td style="color:var(--text-dim)">Version</td><td>v'+d.version+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Brand</td><td>'+d.brand+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Build</td><td>'+d.build+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Cluster</td><td>'+d.cluster+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Hosts</td><td>'+d.hosts+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">PVE Nodes</td><td>'+d.pve_nodes+'</td></tr>';
-    html+='<tr><td style="color:var(--text-dim)">Install Dir</td><td style="font-family:monospace;font-size:11px">'+d.install_dir+'</td></tr>';
+    html+='<tr><td class="c-dim">Version</td><td>v'+d.version+'</td></tr>';
+    html+='<tr><td class="c-dim">Brand</td><td>'+d.brand+'</td></tr>';
+    html+='<tr><td class="c-dim">Build</td><td>'+d.build+'</td></tr>';
+    html+='<tr><td class="c-dim">Cluster</td><td>'+d.cluster+'</td></tr>';
+    html+='<tr><td class="c-dim">Hosts</td><td>'+d.hosts+'</td></tr>';
+    html+='<tr><td class="c-dim">PVE Nodes</td><td>'+d.pve_nodes+'</td></tr>';
+    html+='<tr><td class="c-dim">Install Dir</td><td style="font-family:monospace;font-size:11px">'+d.install_dir+'</td></tr>';
     html+='</table></div></div>';
     document.getElementById('doctor-c').innerHTML=html;
     toast('Doctor complete','success');
@@ -3876,7 +3765,7 @@ function runDoctor(){
 function runBackup(){
   fetch('/api/exec?target=all&cmd='+encodeURIComponent('echo ok')).then(function(r){return r.json()}).then(function(d){
     var reachable=d.results.filter(function(r){return r.ok}).length;
-    document.getElementById('backup-c').innerHTML='<div class="crd"><h3>Config Export</h3><p>Fleet snapshot: '+reachable+'/'+d.results.length+' hosts reachable</p><p style="margin-top:8px;color:var(--text-dim)">Run from CLI: <code style="color:var(--purple-light)">freq backup export</code></p></div>';
+    document.getElementById('backup-c').innerHTML='<div class="crd"><h3>Config Export</h3><p>Fleet snapshot: '+reachable+'/'+d.results.length+' hosts reachable</p><p style="margin-top:8px;color:var(--text-dim)">Run from CLI: <code class="c-purple">freq backup export</code></p></div>';
     toast('Backup snapshot complete','success');
   });
 }
@@ -3886,7 +3775,7 @@ function loadJournal(){
     var html='<table><thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Status</th><th>Detail</th></tr></thead><tbody>';
     d.entries.reverse().forEach(function(e){
       var sc={ok:'var(--green)',fail:'var(--red)',warn:'var(--yellow)'}[e.status]||'var(--text-dim)';
-      html+='<tr><td style="font-size:11px;color:var(--text-dim)">'+e.timestamp+'</td><td><strong>'+e.action+'</strong></td><td>'+e.target+'</td><td style="color:'+sc+'">'+e.status+'</td><td style="font-size:11px;color:var(--text-dim)">'+(e.detail||'')+'</td></tr>';
+      html+='<tr><td class="text-meta">'+e.timestamp+'</td><td><strong>'+e.action+'</strong></td><td>'+e.target+'</td><td style="color:'+sc+'">'+e.status+'</td><td class="text-meta">'+(e.detail||'')+'</td></tr>';
     });html+='</tbody></table><p style="color:var(--text-dim);font-size:11px;margin-top:8px">'+d.count+' total entries</p>';
     document.getElementById('journal-c').innerHTML=html;
   });
@@ -3896,11 +3785,11 @@ function searchLearn(){
   fetch('/api/learn?q='+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){
     var h='';
     if(d.lessons&&d.lessons.length){h+='<h3 style="color:var(--purple-light);margin:12px 0">Lessons ('+d.lessons.length+')</h3><div class="cards">';
-      d.lessons.forEach(function(l){h+='<div class="crd"><h3>#'+l.number+' '+l.title+'</h3><p>'+l.description+'</p><div style="margin-top:8px"><span class="sev-'+l.severity+'">'+l.severity.toUpperCase()+'</span> <span class="tag">'+l.platform+'</span>'+(l.commands?' <span class="tag">'+l.commands+'</span>':'')+'</div></div>';});
+      d.lessons.forEach(function(l){h+='<div class="crd"><h3>#'+l.number+' '+l.title+'</h3><p>'+l.description+'</p><div class="mt-8"><span class="sev-'+l.severity+'">'+l.severity.toUpperCase()+'</span> <span class="tag">'+l.platform+'</span>'+(l.commands?' <span class="tag">'+l.commands+'</span>':'')+'</div></div>';});
       h+='</div>';}
     if(d.gotchas&&d.gotchas.length){h+='<h3 style="color:var(--yellow);margin:16px 0 12px">Gotchas ('+d.gotchas.length+')</h3>';
       d.gotchas.forEach(function(g){h+='<div class="gotcha"><p style="font-size:13px"><strong style="color:var(--cyan)">'+g.platform+'</strong>: '+g.description+'</p><p class="fix">Fix: '+g.fix+'</p></div>';});}
-    if(!h)h='<p style="color:var(--text-dim)">No results for "'+q+'"</p>';
+    if(!h)h='<p class="c-dim">No results for "'+q+'"</p>';
     document.getElementById('learn-r').innerHTML=h;
   });
 }
@@ -3921,13 +3810,13 @@ function loadGroups(){
 function loadNotify(){
   document.getElementById('notify-status').innerHTML='<div class="skeleton" style="height:40px"></div>';
   fetch('/api/config').then(function(r){return r.json()}).then(function(d){
-    var html='<table style="margin-top:8px"><tr><td>Discord</td><td>'+(d.discord_webhook?badge('ok')+' Configured':badge('down')+' Not configured')+'</td></tr>';
+    var html='<table class="mt-8"><tr><td>Discord</td><td>'+(d.discord_webhook?badge('ok')+' Configured':badge('down')+' Not configured')+'</td></tr>';
     html+='<tr><td>Slack</td><td>'+(d.slack_webhook?badge('ok')+' Configured':badge('down')+' Not configured')+'</td></tr></table>';
     html+='<p style="margin-top:8px;font-size:11px;color:var(--text-dim)">Configure webhooks in freq.toml under [notifications]</p>';
     document.getElementById('notify-status').innerHTML=html;
   });
 }
-function testNotify(){fetch('/api/notify/test').then(function(r){return r.json()}).then(function(d){document.getElementById('notify-result').innerHTML='<p style="color:var(--text-dim)">'+JSON.stringify(d)+'</p>';toast('Test notification sent','info');});}
+function testNotify(){fetch('/api/notify/test').then(function(r){return r.json()}).then(function(d){document.getElementById('notify-result').innerHTML='<p class="c-dim">'+JSON.stringify(d)+'</p>';toast('Test notification sent','info');});}
 
 /* ═══════════════════════════════════════════════════════════════════
    VM ACTIONS (toast + modal)
@@ -3953,30 +3842,30 @@ function vmPower(vmid,action){
 function _vmRename(vmid){
   var name=(document.getElementById('vm-new-name')||{}).value;
   if(!name){toast('Enter a name','error');return;}
-  var out=document.getElementById('vm-ctrl-out');if(out)out.innerHTML='<span style="color:var(--yellow)">Renaming...</span>';
+  var out=document.getElementById('vm-ctrl-out');if(out)out.innerHTML='<span class="c-yellow">Renaming...</span>';
   confirmAction('Rename VM <strong>'+vmid+'</strong> to <strong>'+name+'</strong>?',function(){
     fetch('/api/vm/rename?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
-      if(d.ok){toast('VM '+vmid+' renamed to '+name,'success');if(out)out.innerHTML='<span style="color:var(--green)">Renamed to '+name+'</span>';document.getElementById('hd-title').textContent=name.toUpperCase();}
-      else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';}
+      if(d.ok){toast('VM '+vmid+' renamed to '+name,'success');if(out)out.innerHTML='<span class="c-green">Renamed to '+name+'</span>';document.getElementById('hd-title').textContent=name.toUpperCase();}
+      else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
   });
 }
 function _vmChangeId(vmid){
   var newid=(document.getElementById('vm-new-id')||{}).value;
   if(!newid){toast('Enter a new VMID','error');return;}
-  var out=document.getElementById('vm-ctrl-out');if(out)out.innerHTML='<span style="color:var(--yellow)">Changing VMID...</span>';
-  confirmAction('Change VMID <strong>'+vmid+'</strong> to <strong>'+newid+'</strong>?<br><span style="color:var(--yellow)">VM must be stopped. This clones to the new ID and destroys the old one.</span>',function(){
+  var out=document.getElementById('vm-ctrl-out');if(out)out.innerHTML='<span class="c-yellow">Changing VMID...</span>';
+  confirmAction('Change VMID <strong>'+vmid+'</strong> to <strong>'+newid+'</strong>?<br><span class="c-yellow">VM must be stopped. This clones to the new ID and destroys the old one.</span>',function(){
     fetch('/api/vm/change-id?vmid='+vmid+'&newid='+newid).then(function(r){return r.json()}).then(function(d){
-      if(d.ok){toast('VMID changed: '+vmid+' \u2192 '+newid,'success');if(out)out.innerHTML='<span style="color:var(--green)">VMID changed to '+newid+'</span>';closeHost();}
-      else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';}
+      if(d.ok){toast('VMID changed: '+vmid+' \u2192 '+newid,'success');if(out)out.innerHTML='<span class="c-green">VMID changed to '+newid+'</span>';closeHost();}
+      else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
   });
 }
 function _vmSnapWarn(vmid,isRunning){
   confirmAction(
-    '<strong style="color:var(--yellow)">SNAPSHOT WARNING</strong><br><br>'+
-    'Creating a snapshot on VM <strong>'+vmid+'</strong> will <strong style="color:var(--red)">disable live migration</strong> for this VM until all snapshots are deleted.<br><br>'+
-    '<span style="color:var(--text-dim)">Live migration requires zero snapshots. If you need to migrate this VM later, you will need to delete all snapshots first.</span><br><br>'+
+    '<strong class="c-yellow">SNAPSHOT WARNING</strong><br><br>'+
+    'Creating a snapshot on VM <strong>'+vmid+'</strong> will <strong class="c-red">disable live migration</strong> for this VM until all snapshots are deleted.<br><br>'+
+    '<span class="c-dim">Live migration requires zero snapshots. If you need to migrate this VM later, you will need to delete all snapshots first.</span><br><br>'+
     'Continue?',
     function(){
       fetch('/api/vm/snapshot?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
@@ -3988,13 +3877,13 @@ function _vmSnapWarn(vmid,isRunning){
 }
 function _vmListSnaps(vmid){
   var out=document.getElementById('vm-ctrl-out');if(!out)return;
-  out.innerHTML='<span style="color:var(--text-dim)">Loading snapshots...</span>';
+  out.innerHTML='<span class="c-dim">Loading snapshots...</span>';
   fetch('/api/vm/snapshots?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
     if(!d.count){
-      out.innerHTML='<div style="margin-top:8px"><span style="color:var(--green);font-size:12px;font-weight:600">NO SNAPSHOTS</span><span style="color:var(--text-dim);font-size:12px;margin-left:8px">\u2014 live migration eligible</span></div>';
+      out.innerHTML='<div class="mt-8"><span style="color:var(--green);font-size:12px;font-weight:600">NO SNAPSHOTS</span><span style="color:var(--text-dim);font-size:12px;margin-left:8px">\u2014 live migration eligible</span></div>';
       return;
     }
-    var h='<div style="margin-top:8px"><div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:6px">'+d.count+' SNAPSHOT'+(d.count>1?'S':'')+' \u2014 LIVE MIGRATION BLOCKED</div>';
+    var h='<div class="mt-8"><div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:6px">'+d.count+' SNAPSHOT'+(d.count>1?'S':'')+' \u2014 LIVE MIGRATION BLOCKED</div>';
     d.snapshots.forEach(function(s){
       h+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="font-size:12px;font-family:monospace;color:var(--text)">'+s+'</span>';
       h+='<button class="fleet-btn btn-red" onclick="_vmDelSnap('+vmid+',\''+s+'\')" style="padding:2px 10px;font-size:11px">DELETE</button></div>';
@@ -4002,7 +3891,7 @@ function _vmListSnaps(vmid){
     h+='<button class="fleet-btn btn-red" onclick="_vmDelAllSnaps('+vmid+')" style="margin-top:8px;padding:6px 14px;font-size:11px">DELETE ALL \u2014 RESTORE LIVE MIGRATION</button>';
     h+='</div>';
     out.innerHTML=h;
-  }).catch(function(){out.innerHTML='<span style="color:var(--red)">Failed to load snapshots</span>';});
+  }).catch(function(){out.innerHTML='<span class="c-red">Failed to load snapshots</span>';});
 }
 function _vmDelSnap(vmid,name){
   confirmAction('Delete snapshot <strong>'+name+'</strong> from VM '+vmid+'?',function(){
@@ -4014,7 +3903,7 @@ function _vmDelSnap(vmid,name){
   });
 }
 function _vmDelAllSnaps(vmid){
-  confirmAction('Delete <strong>ALL</strong> snapshots from VM '+vmid+'?<br><span style="color:var(--green)">This will restore live migration eligibility.</span>',function(){
+  confirmAction('Delete <strong>ALL</strong> snapshots from VM '+vmid+'?<br><span class="c-green">This will restore live migration eligibility.</span>',function(){
     toast('Deleting all snapshots...','info');
     fetch('/api/vm/snapshots?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
       var chain=Promise.resolve();
@@ -4031,9 +3920,9 @@ function _vmToggleResize(vmid){
   out.setAttribute('data-mode','resize');
   out.innerHTML='<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:12px 0">'+
     '<div><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px">CPU CORES</label>'+
-    '<select id="vm-rz-cores" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit"><option value="">Keep</option><option>1</option><option>2</option><option>4</option><option>8</option><option>12</option><option>16</option></select></div>'+
+    '<select id="vm-rz-cores" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit"><option value="">Keep</option><option>1</option><option>2</option><option>4</option><option>8</option><option>12</option><option>16</option></select></div>'+
     '<div><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px">RAM</label>'+
-    '<select id="vm-rz-ram" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit"><option value="">Keep</option><option value="512">512MB</option><option value="1024">1GB</option><option value="2048">2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
+    '<select id="vm-rz-ram" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit"><option value="">Keep</option><option value="512">512MB</option><option value="1024">1GB</option><option value="2048">2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
     '<button class="fleet-btn" onclick="_vmDoResize('+vmid+')" style="padding:8px 16px;font-size:12px">APPLY</button></div>';
 }
 function _vmDoResize(vmid){
@@ -4043,10 +3932,10 @@ function _vmDoResize(vmid){
   var desc=[];if(cores)desc.push(cores+' cores');if(ram)desc.push(ram+'MB RAM');
   var out=document.getElementById('vm-ctrl-out');
   confirmAction('Resize VM <strong>'+vmid+'</strong> to '+desc.join(', ')+'?',function(){
-    if(out)out.innerHTML='<span style="color:var(--yellow)">Resizing...</span>';
+    if(out)out.innerHTML='<span class="c-yellow">Resizing...</span>';
     fetch('/api/vm/resize?vmid='+vmid+(cores?'&cores='+cores:'')+(ram?'&ram='+ram:'')).then(function(r){return r.json()}).then(function(d){
-      if(d.ok){toast('VM '+vmid+' resized','success');if(out)out.innerHTML='<span style="color:var(--green)">Resized \u2014 reboot to apply</span>';}
-      else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';}
+      if(d.ok){toast('VM '+vmid+' resized','success');if(out)out.innerHTML='<span class="c-green">Resized \u2014 reboot to apply</span>';}
+      else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
   });
 }
@@ -4058,19 +3947,19 @@ function _vmToggleMigrate(vmid,currentNode){
   var opts='';nodes.forEach(function(n){if(n.name!==currentNode)opts+='<option value="'+n.name+'">'+n.name+' ('+n.detail.split(' \u00b7 ')[0]+')</option>';});
   out.innerHTML='<div style="display:flex;gap:10px;align-items:flex-end;padding:12px 0">'+
     '<div><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px">TARGET NODE <span style="opacity:0.5">(current: '+currentNode+')</span></label>'+
-    '<select id="vm-mig-target" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit;min-width:200px">'+opts+'</select></div>'+
+    '<select id="vm-mig-target" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit;min-width:200px">'+opts+'</select></div>'+
     '<button class="fleet-btn" onclick="_vmDoMigrate('+vmid+')" style="padding:8px 16px;font-size:12px">MIGRATE</button></div>';
 }
 function _vmDoMigrate(vmid){
   var target=(document.getElementById('vm-mig-target')||{}).value;
   if(!target){toast('Select a target node','error');return;}
   var out=document.getElementById('vm-ctrl-out');
-  confirmAction('Migrate VM <strong>'+vmid+'</strong> to <strong>'+target+'</strong>?<br><span style="color:var(--text-dim)">This may take several minutes.</span>',function(){
-    if(out)out.innerHTML='<span style="color:var(--yellow)">Migrating to '+target+'...</span>';
+  confirmAction('Migrate VM <strong>'+vmid+'</strong> to <strong>'+target+'</strong>?<br><span class="c-dim">This may take several minutes.</span>',function(){
+    if(out)out.innerHTML='<span class="c-yellow">Migrating to '+target+'...</span>';
     fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('sudo qm migrate '+vmid+' '+target+' --online')).then(function(r){return r.json()}).then(function(d){
       var txt=d.results?d.results.map(function(r){return r.output;}).join(''):'';
-      if(out)out.innerHTML='<span style="color:var(--green)">'+txt+'</span>';toast('Migration started','success');
-    }).catch(function(e){if(out)out.innerHTML='<span style="color:var(--red)">'+e+'</span>';});
+      if(out)out.innerHTML='<span class="c-green">'+txt+'</span>';toast('Migration started','success');
+    }).catch(function(e){if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
   });
 }
 /* NIC combo builder — VLAN map for preview + apply */
@@ -4088,7 +3977,7 @@ function _updateNicPreviewCombo(){
   var lines=[];
   ids.forEach(function(vid,i){
     var v=_VLAN_MAP[vid];if(!v)return;
-    lines.push('<span style="color:var(--text-dim)">net'+i+'</span> <span style="color:var(--purple-light);font-weight:600">'+v.name+'</span> '+v.prefix+'.'+octet+'/'+(v.cidr||'24')+(v.gw?' <span style="color:var(--text-dim)">\u2192 gw '+v.gw+'</span>':''));
+    lines.push('<span class="c-dim">net'+i+'</span> <span style="color:var(--purple-light);font-weight:600">'+v.name+'</span> '+v.prefix+'.'+octet+'/'+(v.cidr||'24')+(v.gw?' <span class="c-dim">\u2192 gw '+v.gw+'</span>':''));
   });
   pre.innerHTML=lines.join('<br>');
 }
@@ -4102,28 +3991,28 @@ function _vmCheckAndAddNic(vmid){
   var gw=opt.getAttribute('data-gw')||'';
   var vlan=sel.value;
   var ip=prefix+'.'+octet;
-  if(status)status.innerHTML='<span style="color:var(--yellow)">Checking '+ip+'...</span>';
+  if(status)status.innerHTML='<span class="c-yellow">Checking '+ip+'...</span>';
   fetch('/api/vm/check-ip?ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
     if(d.in_use){
-      if(status)status.innerHTML='<span style="color:var(--red)">'+ip+' is IN USE \u2014 pick another</span>';
+      if(status)status.innerHTML='<span class="c-red">'+ip+' is IN USE \u2014 pick another</span>';
       toast(ip+' is already in use','error');
       return;
     }
-    if(status)status.innerHTML='<span style="color:var(--green)">'+ip+' is AVAILABLE</span>';
+    if(status)status.innerHTML='<span class="c-green">'+ip+' is AVAILABLE</span>';
     var cidr=opt.getAttribute('data-cidr')||'24';
-    confirmAction('Add NIC to VM <strong>'+vmid+'</strong>:<br><span style="font-family:monospace">'+opt.textContent+' \u2192 '+ip+'/'+cidr+'</span>'+(gw?'<br><span style="font-family:monospace;color:var(--text-dim)">gw '+gw+'</span>':'')+'<br><br><span style="color:var(--text-dim)">This adds a new NIC without touching existing ones. Reboot to activate.</span>',function(){
-      if(status)status.innerHTML='<span style="color:var(--yellow)">Adding NIC...</span>';
+    confirmAction('Add NIC to VM <strong>'+vmid+'</strong>:<br><span style="font-family:monospace">'+opt.textContent+' \u2192 '+ip+'/'+cidr+'</span>'+(gw?'<br><span style="font-family:monospace;color:var(--text-dim)">gw '+gw+'</span>':'')+'<br><br><span class="c-dim">This adds a new NIC without touching existing ones. Reboot to activate.</span>',function(){
+      if(status)status.innerHTML='<span class="c-yellow">Adding NIC...</span>';
       fetch('/api/vm/add-nic?vmid='+vmid+'&ip='+encodeURIComponent(ip+'/'+cidr)+'&gw='+encodeURIComponent(gw)+'&vlan='+vlan).then(function(r){return r.json()}).then(function(d2){
         if(d2.ok){
           toast(d2.nic+' added: '+ip,'success');
-          if(status)status.innerHTML='<span style="color:var(--green)">'+d2.nic+' added \u2014 reboot to activate</span>';
+          if(status)status.innerHTML='<span class="c-green">'+d2.nic+' added \u2014 reboot to activate</span>';
         } else {
           toast('Error: '+d2.error,'error');
-          if(status)status.innerHTML='<span style="color:var(--red)">'+d2.error+'</span>';
+          if(status)status.innerHTML='<span class="c-red">'+d2.error+'</span>';
         }
       });
     });
-  }).catch(function(e){if(status)status.innerHTML='<span style="color:var(--red)">Check failed</span>';});
+  }).catch(function(e){if(status)status.innerHTML='<span class="c-red">Check failed</span>';});
 }
 function _vmApplyNicCombo(vmid){
   var ids=_getNicCombo();
@@ -4138,10 +4027,10 @@ function _vmApplyNicCombo(vmid){
   if(!configs.length){toast('No NICs configured','error');return;}
   var desc=configs.map(function(c){var v=_VLAN_MAP[c.vlan];return 'net'+c.nic+': '+v.name+' \u2192 '+c.ip;}).join('<br>');
   var out=document.getElementById('vm-ctrl-out');
-  confirmAction('<strong>Set VM '+vmid+' network ('+configs.length+' NIC'+(configs.length>1?'s':'')+')</strong><br><br><span style="font-family:monospace;line-height:1.8">'+desc+'</span><br><br><span style="color:var(--yellow)">All existing NICs will be CLEARED first.</span><br><span style="color:var(--text-dim)">Reboot required to activate.</span>',function(){
-    if(out)out.innerHTML='<span style="color:var(--yellow)">Clearing existing NICs...</span>';
+  confirmAction('<strong>Set VM '+vmid+' network ('+configs.length+' NIC'+(configs.length>1?'s':'')+')</strong><br><br><span style="font-family:monospace;line-height:1.8">'+desc+'</span><br><br><span class="c-yellow">All existing NICs will be CLEARED first.</span><br><span class="c-dim">Reboot required to activate.</span>',function(){
+    if(out)out.innerHTML='<span class="c-yellow">Clearing existing NICs...</span>';
     fetch('/api/vm/clear-nics?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
-      if(out)out.innerHTML='<span style="color:var(--yellow)">Applying '+configs.length+' NICs...</span>';
+      if(out)out.innerHTML='<span class="c-yellow">Applying '+configs.length+' NICs...</span>';
       var chain=Promise.resolve();
       configs.forEach(function(c){
         chain=chain.then(function(){
@@ -4151,10 +4040,10 @@ function _vmApplyNicCombo(vmid){
       return chain;
     }).then(function(){
       toast('Network applied — '+configs.length+' NICs configured','success');
-      if(out)out.innerHTML='<span style="color:var(--green)">'+configs.length+' NICs set \u2014 reboot VM to apply</span>';
+      if(out)out.innerHTML='<span class="c-green">'+configs.length+' NICs set \u2014 reboot VM to apply</span>';
     }).catch(function(e){
       toast('Error: '+e,'error');
-      if(out)out.innerHTML='<span style="color:var(--red)">'+e+'</span>';
+      if(out)out.innerHTML='<span class="c-red">'+e+'</span>';
     });
   });
 }
@@ -4175,7 +4064,7 @@ function _toolPanelHtml(){
     '</div>';
 }
 function _infraPanelHtml(roleLabel,roleColor,btnsHtml){
-  return '<div style="margin-bottom:16px;background:var(--card);border:2px solid #384450;border-radius:8px;padding:16px">'+
+  return '<div style="margin-bottom:16px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:16px">'+
     '<div style="font-size:11px;color:'+roleColor+';text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:600">'+roleLabel+'</div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">'+btnsHtml+'</div>'+
     '<div class="exec-out" id="hd-infra-out" style="margin-top:12px;min-height:80px;display:none"></div>'+
@@ -4255,7 +4144,7 @@ function renderPveNodeCard(config){
   var vmRun=nodeVms.filter(function(v){return v.status==='running';}).length;
   var vmStop=nodeVms.length-vmRun;
   stats+=st('VMs',vmRun+' RUN / '+vmStop+' STOP','p');
-  var html='<div style="background:var(--card);border:2px solid #384450;border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
+  var html='<div style="background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
   var _pveActs=[
     {l:'CLUSTER STATUS',a:'pvesh get /cluster/status --output-format json-pretty'},
     {l:'STORAGE',a:'pvesh get /storage --output-format json-pretty'},
@@ -4298,7 +4187,7 @@ function renderInfraCard(config){
     if(live.disk)stats+=st('DISK',live.disk,'g');
     if(live.uptime)stats+=st('UPTIME',live.uptime.replace('up ','').split(',').slice(0,2).join(','),'p');
   }
-  var html='<div style="background:var(--card);border:2px solid #384450;border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
+  var html='<div style="background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
   var actions=INFRA_ACTIONS[infraType];
   if(actions){
     var btns='';
@@ -4317,7 +4206,7 @@ function renderInfraCard(config){
 function renderHostCard(config){
   var label=config.label;
   fetch('/api/host/detail?host='+encodeURIComponent(label)).then(function(r){return r.json()}).then(function(d){
-    if(d.error){_cardReady('<p style="color:var(--red)">'+d.error+'</p>');return;}
+    if(d.error){_cardReady('<p class="c-red">'+d.error+'</p>');return;}
     document.getElementById('hd-subtitle').textContent=d.ip+' \u00b7 '+(d.type||'linux')+' \u00b7 '+(d.os||'unknown');
     var kv=_kvRow;
     var ramParts=(d.ram||'').match(/(\d+)\/(\d+)/);var ramPct=ramParts?Math.round(parseInt(ramParts[1])/parseInt(ramParts[2])*100):0;
@@ -4333,13 +4222,13 @@ function renderHostCard(config){
     stats+=st('Uptime',(d.uptime||'?').replace('up ','').split(',').slice(0,2).join(','),'p');
     if(isDocker)stats+=st('Docker',dc+' Containers','b');
     var svcCount=parseInt(d.running_services)||0;if(svcCount>0)stats+=st('Services',svcCount+' Running','y');
-    var html='<div style="background:var(--card);border:2px solid #384450;border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
+    var html='<div style="background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
     /* ── Action buttons ── */
     html+='<div class="ho-actions" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:24px">';
     html+='<button onclick="hdExec(this)">RUN COMMAND</button>';
     html+='<button onclick="hdLogs(this)">VIEW LOGS</button>';
     html+='<button onclick="hdDiagnose(this)">FULL DIAGNOSE</button>';
-    html+='<button onclick="hdRestart()" style="color:var(--yellow)">RESTART SERVICES</button>';
+    html+='<button onclick="hdRestart()" class="c-yellow">RESTART SERVICES</button>';
     html+='</div>';
     html+=_toolPanelHtml();
     /* ── Build reusable data sections ── */
@@ -4411,7 +4300,7 @@ function renderHostCard(config){
       html+='<div class="ho-section" style="margin-top:10px"><h3>SECURITY & STATUS</h3>'+secContent+'</div>';
     }
     _cardReady(html);
-  }).catch(function(e){_cardReady('<p style="color:var(--red)">Error: '+e+'</p>');});
+  }).catch(function(e){_cardReady('<p class="c-red">Error: '+e+'</p>');});
 }
 /* Docker container actions from host detail */
 function hdDockerRestart(name){
@@ -4488,18 +4377,18 @@ function renderVmCard(config){
   } else {
     if(vm){stats+=st('CPU',vm.cpu+' cores','p');stats+=st('RAM',_ramGB(vm.ram_mb),'b');}
   }
-  var html='<div style="background:var(--card);border:2px solid #384450;border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
+  var html='<div style="background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
   /* Configure + VM Controls side by side */
   var ctrl='<div style="display:flex;gap:16px;margin:12px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">';
   if(acts.indexOf('configure')>=0){
     var vlans=(_fleetCache.fo&&_fleetCache.fo.vlans)||[];
-    ctrl+='<div style="flex:1;min-width:0">';
+    ctrl+='<div class="flex-fill">';
     ctrl+='<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;letter-spacing:0.5px">CONFIGURE</div>';
-    ctrl+='<div style="margin-bottom:8px"><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">RENAME</label><div style="display:flex;gap:4px"><input id="vm-new-name" placeholder="new name" value="'+label+'" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:180px"><button class="fleet-btn" onclick="_vmRename('+vmid+')" style="padding:6px 10px;font-size:11px">SET</button></div></div>';
-    ctrl+='<div style="margin-bottom:8px"><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">VMID</label><div style="display:flex;gap:4px"><input id="vm-new-id" placeholder="new ID" type="number" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:100px"><button class="fleet-btn" onclick="_vmChangeId('+vmid+')" style="padding:6px 10px;font-size:11px">SET</button></div></div>';
+    ctrl+='<div style="margin-bottom:8px"><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">RENAME</label><div style="display:flex;gap:4px"><input id="vm-new-name" placeholder="new name" value="'+label+'" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:180px"><button class="fleet-btn" onclick="_vmRename('+vmid+')" style="padding:6px 10px;font-size:11px">SET</button></div></div>';
+    ctrl+='<div style="margin-bottom:8px"><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">VMID</label><div style="display:flex;gap:4px"><input id="vm-new-id" placeholder="new ID" type="number" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:100px"><button class="fleet-btn" onclick="_vmChangeId('+vmid+')" style="padding:6px 10px;font-size:11px">SET</button></div></div>';
     ctrl+='<div><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">NETWORK CONFIG</label>';
     ctrl+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">';
-    ctrl+='<select id="vm-nic-combo" onchange="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit">';
+    ctrl+='<select id="vm-nic-combo" onchange="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit">';
     /* Build NIC combo presets dynamically from configured VLANs */
     var _vids=Object.keys(_VLAN_MAP).sort(function(a,b){return parseInt(a)-parseInt(b);});
     if(_vids.length){
@@ -4512,26 +4401,26 @@ function renderVmCard(config){
     }
     ctrl+='</select>';
     ctrl+='<span style="color:var(--text-dim);font-size:12px;font-weight:600">OCTET:</span>';
-    ctrl+='<input id="vm-nic-octet" type="number" min="1" max="254" placeholder="x" oninput="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:monospace;width:55px">';
+    ctrl+='<input id="vm-nic-octet" type="number" min="1" max="254" placeholder="x" oninput="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:monospace;width:55px">';
     ctrl+='<button class="fleet-btn" onclick="_vmApplyNicCombo('+vmid+')" style="padding:6px 10px;font-size:11px">APPLY</button>';
     ctrl+='</div>';
     ctrl+='<div id="vm-nic-preview" style="font-size:11px;color:var(--text-dim);font-family:monospace;line-height:1.6"></div>';
-    ctrl+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid #384450">';
+    ctrl+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--input-border)">';
     ctrl+='<div style="display:flex;gap:6px;align-items:center">';
     ctrl+='<span style="font-size:10px;color:var(--text-dim);font-weight:600">ADD NIC</span>';
-    ctrl+='<select id="vm-add-nic-vlan" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:5px 8px;border-radius:6px;font-size:11px;font-family:inherit">';
+    ctrl+='<select id="vm-add-nic-vlan" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:11px;font-family:inherit">';
     /* Populate NIC VLAN options from fleet config */
     Object.keys(_VLAN_MAP).forEach(function(vid){var vl=_VLAN_MAP[vid];ctrl+='<option value="'+vid+'" data-prefix="'+vl.prefix+'" data-gw="'+(vl.gw||'')+'" data-cidr="'+(vl.cidr||'24')+'">'+vl.name+'</option>';});
     ctrl+='</select>';
     ctrl+='<span style="color:var(--text-dim);font-size:14px;font-weight:700">.</span>';
-    ctrl+='<input id="vm-add-nic-octet" type="number" min="1" max="254" placeholder="x" style="background:var(--card);border:2px solid #384450;color:var(--text);padding:5px 8px;border-radius:6px;font-size:11px;font-family:monospace;width:50px">';
+    ctrl+='<input id="vm-add-nic-octet" type="number" min="1" max="254" placeholder="x" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:11px;font-family:monospace;width:50px">';
     ctrl+='<button class="fleet-btn" onclick="_vmCheckAndAddNic('+vmid+')" style="padding:5px 10px;font-size:11px">CHECK & ADD</button>';
     ctrl+='<span id="vm-add-nic-status" style="font-size:11px"></span>';
     ctrl+='</div></div></div>';
     ctrl+='</div>';
   }
-  ctrl+='<div style="width:1px;background:#384450"></div>';
-  ctrl+='<div style="flex:1;min-width:0">';
+  ctrl+='<div style="width:1px;background:var(--input-border)"></div>';
+  ctrl+='<div class="flex-fill">';
   ctrl+='<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;letter-spacing:0.5px">VM CONTROLS \u00b7 '+tier.toUpperCase()+'</div>';
   ctrl+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">';
   if(acts.indexOf('start')>=0&&!isRunning)ctrl+='<button class="fleet-btn btn-green" onclick="vmPower('+vmid+',\'start\')" style="padding:8px 0;font-size:11px">START</button>';
@@ -4543,7 +4432,7 @@ function renderVmCard(config){
   if(acts.indexOf('migrate')>=0)ctrl+='<button class="fleet-btn" onclick="_vmToggleMigrate('+vmid+',\''+(vm?vm.node:'')+'\')" style="padding:8px 0;font-size:11px">MIGRATE</button>';
   if(acts.indexOf('destroy')>=0)ctrl+='<button class="fleet-btn btn-red" onclick="vmDestroy('+vmid+')" style="padding:8px 0;font-size:11px">DESTROY</button>';
   if(acts.length<=1)ctrl+='<span style="font-size:12px;color:var(--text-dim);grid-column:1/-1">View only \u2014 no actions for '+catLabel+'</span>';
-  ctrl+='<div style="grid-column:1/-1;border-top:1px solid #384450;margin-top:6px;padding-top:8px;font-size:11px;color:var(--text-dim);letter-spacing:0.5px">HOST TOOLS</div>';
+  ctrl+='<div style="grid-column:1/-1;border-top:1px solid var(--input-border);margin-top:6px;padding-top:8px;font-size:11px;color:var(--text-dim);letter-spacing:0.5px">HOST TOOLS</div>';
   ctrl+='<button class="fleet-btn" onclick="hdExec(this)" style="padding:8px 0;font-size:11px">RUN CMD</button>';
   ctrl+='<button class="fleet-btn" onclick="hdLogs(this)" style="padding:8px 0;font-size:11px">LOGS</button>';
   ctrl+='<button class="fleet-btn" onclick="hdDiagnose(this)" style="padding:8px 0;font-size:11px">DIAGNOSE</button>';
@@ -4570,14 +4459,14 @@ function renderVmCard(config){
     var c=VLAN_COLORS[a.vlan]||'var(--text-dim)';
     var nicGw='?';
     Object.keys(_VLAN_MAP).forEach(function(vid){var v=_VLAN_MAP[vid];if(v.name===a.vlan){if(v.gw)nicGw=v.gw;else if(v.prefix)nicGw=v.prefix+'.1';}});
-    net+='<div style="background:rgba(0,0,0,0.15);border:1px solid #384450;border-radius:6px;padding:8px 10px;margin-bottom:6px">';
+    net+='<div style="background:rgba(0,0,0,0.15);border:1px solid var(--input-border);border-radius:6px;padding:8px 10px;margin-bottom:6px">';
     net+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
     net+='<span style="font-size:11px;color:var(--text-dim);font-family:monospace;font-weight:600">'+a.nic+'</span>';
     net+='<span style="background:rgba(0,0,0,0.3);border:1px solid '+c+';color:'+c+';padding:1px 8px;border-radius:3px;font-size:11px;font-weight:600;letter-spacing:0.3px">'+a.vlan+'</span>';
     net+='</div>';
     net+='<div style="display:flex;gap:16px;font-size:11px;font-family:monospace">';
     net+='<span style="color:var(--blue);font-weight:600">'+a.ip+'</span>';
-    net+='<span style="color:var(--text-dim)">GW '+nicGw+'</span>';
+    net+='<span class="c-dim">GW '+nicGw+'</span>';
     net+='</div>';
     net+='</div>';
   });
@@ -4592,7 +4481,7 @@ function renderVmCard(config){
     html+='<div id="hd-docker-hero" style="margin-bottom:16px">';
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
     html+='<h3 style="font-size:15px;color:var(--purple-light);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin:0">CONTAINERS</h3>';
-    html+='<span id="hd-docker-counts" style="font-size:11px;color:var(--text-dim)">Loading...</span>';
+    html+='<span id="hd-docker-counts" class="text-meta">Loading...</span>';
     html+='</div>';
     html+='<div id="hd-docker-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px"><div class="skeleton" style="height:80px;grid-column:1/-1"></div></div>';
     html+='</div>';
@@ -4656,18 +4545,18 @@ function _runPveNodeCmd(label,ip,cmd){
   _infraOutputTarget='hd-infra-out';
   var o=document.getElementById('hd-infra-out');
   o.style.display='block';
-  o.innerHTML='<span style="color:var(--text-dim)">Querying '+label.toUpperCase()+'...</span>';
+  o.innerHTML='<span class="c-dim">Querying '+label.toUpperCase()+'...</span>';
   fetch('/api/exec?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var out='';
     if(d.results){d.results.forEach(function(r){out+=r.output+'\n';});}
     o.innerHTML=_infraPre(label.toUpperCase(),out||'No output');
-  }).catch(function(e){o.innerHTML='<div style="color:var(--red)">Error: '+e+'</div>';});
+  }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
 }
 function _runInfraAction(type,action){
   _infraOutputTarget='hd-infra-out';
   var fn=_getInfraFn(type);
   if(fn)fn(action);
-  else{var o=document.getElementById('hd-infra-out');o.style.display='block';o.innerHTML='<span style="color:var(--red)">No handler for '+type+'</span>';}
+  else{var o=document.getElementById('hd-infra-out');o.style.display='block';o.innerHTML='<span class="c-red">No handler for '+type+'</span>';}
 }
 
 /* ── Host tool functions ── */
@@ -4731,7 +4620,7 @@ var LAB_TOOLS=[{
   },
   renderContent:function(host,key,pfx){gwipeRefreshBays(host,key,pfx);},
   renderExtra:function(host,key,pfx){gwipeRefreshHistory(host,key,pfx);},
-  offlineHint:'Enter the IP and API key above, or save to vault via CLI:<br><code style="color:var(--purple-light)">freq vault set gwipe gwipe_host &lt;ip&gt;</code><br><code style="color:var(--purple-light)">freq vault set gwipe gwipe_api_key &lt;key&gt;</code>',
+  offlineHint:'Enter the IP and API key above, or save to vault via CLI:<br><code class="c-purple">freq vault set gwipe gwipe_host &lt;ip&gt;</code><br><code class="c-purple">freq vault set gwipe gwipe_api_key &lt;key&gt;</code>',
   confirmActions:{'wipe-all':'WIPE ALL TESTED DRIVES? This is destructive and irreversible.'}
 }];
 /* Auto-register LAB_TOOLS as HOME widgets */
@@ -4753,9 +4642,9 @@ function _ltHostKey(toolId,pfx){
 
 function _ltGenerateHTML(toolId,pfx){
   pfx=pfx||'';var t=_ltGetTool(toolId);if(!t)return '';
-  return '<div style="background:var(--bg2);border:2px solid #384450;border-radius:8px;margin-bottom:16px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center"><div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px;font-weight:800;letter-spacing:2px;background:linear-gradient(135deg,var(--purple-light),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">'+t.name+'</span><span id="'+pfx+'lt-version" style="font-size:11px;color:var(--text-dim)"></span><span id="'+pfx+'lt-live-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)"></span></div><div style="font-size:11px;color:var(--text-dim);margin-top:2px">'+t.subtitle+'</div></div><div style="text-align:right"><div id="'+pfx+'lt-station-label" style="font-size:12px;color:var(--text-dim)"></div></div></div>'+
+  return '<div style="background:var(--bg2);border:2px solid var(--input-border);border-radius:8px;margin-bottom:16px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center"><div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px;font-weight:800;letter-spacing:2px;background:linear-gradient(135deg,var(--purple-light),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">'+t.name+'</span><span id="'+pfx+'lt-version" class="text-meta"></span><span id="'+pfx+'lt-live-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)"></span></div><div style="font-size:11px;color:var(--text-dim);margin-top:2px">'+t.subtitle+'</div></div><div style="text-align:right"><div id="'+pfx+'lt-station-label" class="text-sub"></div></div></div>'+
     '<div class="stats" id="'+pfx+'lt-stats"></div>'+
-    '<div class="exec-bar" id="'+pfx+'lt-connect-bar" style="margin-bottom:0"><input id="'+pfx+'lt-host" placeholder="'+t.name+' station IP" style="max-width:200px" value=""><input id="'+pfx+'lt-key" type="password" placeholder="API key" style="flex:1"><button onclick="ltConnect(\''+toolId+'\',\''+pfx+'\')">CONNECT</button><button onclick="ltSaveConfig(\''+toolId+'\',\''+pfx+'\')" style="background:var(--card);border:2px solid #384450;color:var(--text)">SAVE TO VAULT</button></div>'+
+    '<div class="exec-bar" id="'+pfx+'lt-connect-bar" style="margin-bottom:0"><input id="'+pfx+'lt-host" placeholder="'+t.name+' station IP" style="max-width:200px" value=""><input id="'+pfx+'lt-key" type="password" placeholder="API key" class="flex-1"><button onclick="ltConnect(\''+toolId+'\',\''+pfx+'\')">CONNECT</button><button onclick="ltSaveConfig(\''+toolId+'\',\''+pfx+'\')" style="background:var(--card);border:2px solid var(--input-border);color:var(--text)">SAVE TO VAULT</button></div>'+
     '<div id="'+pfx+'lt-conn-status" style="font-size:11px;color:var(--text-dim);margin:6px 0 16px 2px"></div>'+
     '<div id="'+pfx+'lt-controls" style="display:none;margin-bottom:16px"><div style="display:flex;gap:8px;flex-wrap:wrap">'+(t.renderControls?t.renderControls(pfx):'')+'</div></div>'+
     '<div id="'+pfx+'lt-content"></div>'+
@@ -4776,18 +4665,18 @@ function ltLoad(toolId,pfx){
 function ltConnect(toolId,pfx){
   pfx=pfx||'';var t=_ltGetTool(toolId);if(!t)return;
   var host=(_ltEl(pfx,'lt-host')||{}).value;var key=(_ltEl(pfx,'lt-key')||{}).value;
-  if(!host||!key){var cs=_ltEl(pfx,'lt-conn-status');if(cs)cs.innerHTML='<span style="color:var(--red)">Enter host IP and API key</span>';return;}
+  if(!host||!key){var cs=_ltEl(pfx,'lt-conn-status');if(cs)cs.innerHTML='<span class="c-red">Enter host IP and API key</span>';return;}
   host=host.trim();key=key.trim();
-  var cs=_ltEl(pfx,'lt-conn-status');if(cs)cs.innerHTML='<span style="color:var(--yellow)">Connecting...</span>';
+  var cs=_ltEl(pfx,'lt-conn-status');if(cs)cs.innerHTML='<span class="c-yellow">Connecting...</span>';
   _ltProxy(toolId,'GET',t.connectEndpoint||'status',host,key,function(d){
-    if(d.error){if(cs)cs.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';_ltState[pfx+toolId]=false;
+    if(d.error){if(cs)cs.innerHTML='<span class="c-red">'+d.error+'</span>';_ltState[pfx+toolId]=false;
       var off=_ltEl(pfx,'lt-offline');if(off)off.style.display='block';
       var ctrl=_ltEl(pfx,'lt-controls');if(ctrl)ctrl.style.display='none';
       var dot=_ltEl(pfx,'lt-live-dot');if(dot)dot.style.display='none';
       var ver=_ltEl(pfx,'lt-version');if(ver)ver.textContent='';
       var sl=_ltEl(pfx,'lt-station-label');if(sl)sl.textContent='';return;}
     _ltState[pfx+toolId]=true;
-    if(cs)cs.innerHTML='<span style="color:var(--green)">Connected</span>';
+    if(cs)cs.innerHTML='<span class="c-green">Connected</span>';
     var dot=_ltEl(pfx,'lt-live-dot');if(dot)dot.style.display='inline-block';
     var off=_ltEl(pfx,'lt-offline');if(off)off.style.display='none';
     var ctrl=_ltEl(pfx,'lt-controls');if(ctrl)ctrl.style.display='block';
@@ -4843,7 +4732,7 @@ function loadLabTools(){
     var sec=document.createElement('div');
     sec.className='layout-section';
     sec.id='lab-sec-'+t.id;
-    sec.style.cssText='background:var(--card);border:3px solid #384450;border-radius:10px;padding:20px;margin-bottom:16px';
+    sec.style.cssText='background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:20px;margin-bottom:16px';
     sec.innerHTML=_ltGenerateHTML(t.id,'');
     container.appendChild(sec);
     ltLoad(t.id,'');
@@ -4873,20 +4762,20 @@ function gwipeBayCard(dev,b,idx,pfx){
   else if(displayState==='TESTING')stBg='background:rgba(86,212,221,0.15);color:var(--cyan)';
   else if(displayState==='IDLE')stBg='background:rgba(123,47,190,0.1);color:var(--purple-light)';
   h+='<div style="font-size:12px;font-weight:600;letter-spacing:1px;padding:2px 8px;border-radius:4px;'+stBg+'">'+displayState+'</div></div>';
-  if(!b.present&&state!=='REMOVED'){h+='<div style="color:var(--text-dim);font-size:12px;padding:12px 0;text-align:center">No drive inserted</div><div style="font-size:12px;color:var(--text-dim)">/dev/'+dev+'</div></div>';return h;}
+  if(!b.present&&state!=='REMOVED'){h+='<div style="color:var(--text-dim);font-size:12px;padding:12px 0;text-align:center">No drive inserted</div><div class="text-sub">/dev/'+dev+'</div></div>';return h;}
   h+='<div style="font-size:13px;font-weight:600;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+(b.model||'Unknown')+'">'+(b.model||'Unknown')+'</div>';
   h+='<div style="display:flex;gap:12px;margin-top:4px;font-size:11px;color:var(--text-dim)"><span>'+(b.size||'?')+'</span><span>'+(b.type||'?')+'</span><span>/dev/'+dev+'</span></div>';
-  h+='<div style="margin-top:10px;padding:10px 12px;background:var(--bg);border:2px solid #384450;border-radius:8px">';
+  h+='<div style="margin-top:10px;padding:10px 12px;background:var(--bg);border:2px solid var(--input-border);border-radius:8px">';
   h+='<div style="font-size:12px;color:var(--text-dim);letter-spacing:1px;margin-bottom:6px">DRIVE IDENTITY</div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">';
-  h+='<div>Serial: <strong style="font-size:14px;font-family:monospace;color:#ffffff;letter-spacing:1px">'+(b.serial||'N/A')+'</strong></div>';
+  h+='<div>Serial: <strong style="font-size:14px;font-family:monospace;color:var(--text);letter-spacing:1px">'+(b.serial||'N/A')+'</strong></div>';
   h+='<div>Model: <strong>'+(b.model||'Unknown')+'</strong></div>';
   h+='<div>Size: <strong>'+(b.size||'?')+'</strong></div>';
   h+='<div>Type: <strong>'+(b.type||'?')+'</strong></div>';
   h+='</div></div>';
   if(b.smart){
     var sh=b.smart;var hc=sh.health==='PASSED'?'var(--green)':sh.health?'var(--red)':'var(--text-dim)';
-    h+='<div style="margin-top:8px;padding:10px 12px;background:var(--bg);border:2px solid #384450;border-radius:8px">';
+    h+='<div style="margin-top:8px;padding:10px 12px;background:var(--bg);border:2px solid var(--input-border);border-radius:8px">';
     h+='<div style="font-size:12px;color:var(--cyan);letter-spacing:1px;margin-bottom:6px">SMART TEST RESULTS</div>';
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">';
     if(sh.health)h+='<div>Health: <strong style="color:'+hc+'">'+sh.health+'</strong></div>';
@@ -4895,12 +4784,12 @@ function gwipeBayCard(dev,b,idx,pfx){
     if(b.temp_c&&b.temp_c>0){var tc=b.temp_c;h+='<div>Temp: <strong style="color:'+(tc<=35?'var(--green)':tc<=45?'var(--yellow)':'var(--red)')+'">'+tc+'\u00b0C</strong></div>';}
     h+='</div></div>';
   } else {
-    h+='<div style="margin-top:8px;padding:10px 12px;background:var(--bg);border:2px dashed #384450;border-radius:8px;text-align:center">';
-    h+='<div style="font-size:12px;color:var(--text-dim)">Run SMART TEST to get health, hours, age, temperature</div>';
+    h+='<div style="margin-top:8px;padding:10px 12px;background:var(--bg);border:2px dashed var(--input-border);border-radius:8px;text-align:center">';
+    h+='<div class="text-sub">Run SMART TEST to get health, hours, age, temperature</div>';
     h+='</div>';
   }
   if(state==='WIPING'&&b.wipe){var pct=b.wipe.percent||0;
-    h+='<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="color:var(--yellow)">'+(b.wipe.method||'')+'</span><span style="color:var(--text-bright);font-weight:600">'+pct.toFixed(1)+'%</span></div>';
+    h+='<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span class="c-yellow">'+(b.wipe.method||'')+'</span><span style="color:var(--text-bright);font-weight:600">'+pct.toFixed(1)+'%</span></div>';
     h+='<div style="background:rgba(255,255,255,0.06);border-radius:3px;height:6px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,var(--yellow),var(--orange));border-radius:3px;transition:width 0.5s"></div></div>';
     h+='<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:3px;color:var(--text-dim)"><span>'+(b.wipe.speed||'')+'</span><span>ETA: '+(b.wipe.eta||'')+'</span></div></div>';
   }
@@ -4911,7 +4800,7 @@ function gwipeBayCard(dev,b,idx,pfx){
     h+='<button class="fleet-btn btn-red" onclick="gwipeBayWipe(\''+dev+'\',\''+pfx+'\')" style="padding:4px 10px;font-size:12px">WIPE</button>';
     h+='<button class="fleet-btn btn-orange" onclick="gwipeBayAction(\''+dev+'\',\'pause\',\''+pfx+'\')" style="padding:4px 10px;font-size:12px">PAUSE</button>';
     h+='<button class="fleet-btn btn-green" onclick="gwipeBayAction(\''+dev+'\',\'resume\',\''+pfx+'\')" style="padding:4px 10px;font-size:12px">RESUME</button>';
-    h+='<button class="fleet-btn" onclick="gwipeBayClear(\''+dev+'\',\''+pfx+'\')" style="padding:4px 10px;font-size:12px;color:#ffffff;border-color:#ffffff">CLEAR</button>';
+    h+='<button class="fleet-btn" onclick="gwipeBayClear(\''+dev+'\',\''+pfx+'\')" style="padding:4px 10px;font-size:12px;color:var(--text);border-color:var(--text)">CLEAR</button>';
     h+='</div>';
   }
   h+='</div>';
