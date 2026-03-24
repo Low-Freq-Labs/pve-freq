@@ -1,0 +1,8 @@
+gigecolo#terminal length 0
+gigecolo#show users
+    Line       User       Host(s)              Idle       Location
+*  1 vty 0     svc-admin  idle                 00:00:00 10.25.100.19
+
+  Interface    User               Mode         Idle     Peer Address
+
+gigecolo#exit

@@ -1,0 +1,94 @@
+USER      COMMAND      PID FD PROTO   LOCAL ADDRESS         FOREIGN ADDRESS      
+svc-admin sshd-sessi 65366  9 stream  (not connected)       ??                   
+root      sshd-sessi 64689  9 stream  (not connected)       ??                   
+root      nginx      15088  5 tcp4    *:4443                *:*                  
+root      nginx      15088  6 tcp6    *:4443                *:*                  
+root      nginx      15088  7 tcp4    *:80                  *:*                  
+root      nginx      15088  8 tcp6    *:80                  *:*                  
+root      nginx      14893  5 tcp4    *:4443                *:*                  
+root      nginx      14893  6 tcp6    *:4443                *:*                  
+root      nginx      14893  7 tcp4    *:80                  *:*                  
+root      nginx      14893  8 tcp6    *:80                  *:*                  
+root      nginx      14604  5 tcp4    *:4443                *:*                  
+root      nginx      14604  6 tcp6    *:4443                *:*                  
+root      nginx      14604  7 tcp4    *:80                  *:*                  
+root      nginx      14604  8 tcp6    *:80                  *:*                  
+root      sshd       24135  6 tcp6    *:22                  *:*                  
+root      sshd       24135  7 tcp4    *:22                  *:*                  
+root      kea-dhcp4  19548 12 stream  /var/run/kea/kea4-ctr ??                   
+root      kea-dhcp4  19548 16 udp4    10.25.66.1:67         *:*                  
+unbound   unbound    14968  3 udp6    *:53                  *:*                  
+unbound   unbound    14968  4 tcp6    *:53                  *:*                  
+unbound   unbound    14968  5 udp4    *:53                  *:*                  
+unbound   unbound    14968  6 tcp4    *:53                  *:*                  
+unbound   unbound    14968  7 tcp4    127.0.0.1:953         *:*                  
+root      php-fpm    50073  3 dgram   (not connected)       ??                   
+root      php-fpm    50073  4 udp4    *:*                   *:*                  
+root      php-fpm    50073  5 udp6    *:*                   *:*                  
+root      php-fpm    50073  9 stream  /var/run/php-fpm.sock ??                   
+root      php-fpm    47743  3 dgram   (not connected)       ??                   
+root      php-fpm    47743  4 udp4    *:*                   *:*                  
+root      php-fpm    47743  5 udp6    *:*                   *:*                  
+root      php-fpm    47743  9 stream  /var/run/php-fpm.sock ??                   
+root      php-fpm    98244  3 dgram   (not connected)       ??                   
+root      php-fpm    98244  4 udp4    *:*                   *:*                  
+root      php-fpm    98244  5 udp6    *:*                   *:*                  
+root      php-fpm    98244  9 stream  /var/run/php-fpm.sock ??                   
+root      php-fpm    60415  3 dgram   (not connected)       ??                   
+root      php-fpm    60415  4 udp4    *:*                   *:*                  
+root      php-fpm    60415  5 udp6    *:*                   *:*                  
+root      php-fpm    60415  9 stream  /var/run/php-fpm.sock ??                   
+root      dpinger    34052  6 stream  /var/run/dpinger_WANG ??                   
+root      php-fpm    69743  3 dgram   (not connected)       ??                   
+root      php-fpm    69743  4 udp4    *:*                   *:*                  
+root      php-fpm    69743  5 udp6    *:*                   *:*                  
+root      php-fpm    69743  9 stream  /var/run/php-fpm.sock ??                   
+root      php-fpm    46523  3 dgram   (not connected)       ??                   
+root      php-fpm    46523  4 udp4    *:*                   *:*                  
+root      php-fpm    46523  5 udp6    *:*                   *:*                  
+root      php-fpm    46523  9 stream  /var/run/php-fpm.sock ??                   
+root      php-fpm    30827  3 dgram   (not connected)       ??                   
+root      php-fpm    30827  4 udp4    *:*                   *:*                  
+root      php-fpm    30827  5 udp6    *:*                   *:*                  
+root      php-fpm    30827  9 stream  /var/run/php-fpm.sock ??                   
+root      php_wg     83192  3 dgram   (not connected)       ??                   
+root      php_wg     83192  4 udp4    *:*                   *:*                  
+root      php_wg     83192  5 udp6    *:*                   *:*                  
+root      tail       75984  4 stream  (not connected)       ??                   
+root      syslogd    72637  5 dgram   /var/dhcpd/var/run/lo ??                   
+root      syslogd    72637  9 udp6    *:514                 *:*                  
+root      syslogd    72637 10 udp4    *:514                 *:*                  
+root      syslogd    72637 11 dgram   /var/run/log           <-                  
+root      syslogd    72637 13 dgram   /var/run/logpriv      ??                   
+root      ntpd        1734 20 udp6    *:123                 *:*                  
+root      ntpd        1734 21 udp4    *:123                 *:*                  
+root      ntpd        1734 23 udp6    [fe80::92ec:77ff:fe2e *:*                  
+root      ntpd        1734 24 udp6    [fe80::92ec:77ff:fe2e *:*                  
+root      ntpd        1734 25 udp4    100.101.14.2:123      *:*                  
+root      ntpd        1734 26 udp4    69.65.20.58:123       *:*                  
+root      ntpd        1734 27 udp4    69.65.20.62:123       *:*                  
+root      ntpd        1734 28 udp6    [::1]:123             *:*                  
+root      ntpd        1734 29 udp6    [fe80::1%lo0]:123     *:*                  
+root      ntpd        1734 30 udp4    127.0.0.1:123         *:*                  
+root      ntpd        1734 31 udp4    10.25.100.1:123       *:*                  
+root      ntpd        1734 32 udp6    [fe80::92ec:77ff:fe2e *:*                  
+root      ntpd        1734 33 udp4    10.25.0.1:123         *:*                  
+root      ntpd        1734 34 udp6    [fe80::92ec:77ff:fe2e *:*                  
+root      ntpd        1734 35 udp4    10.25.5.1:123         *:*                  
+root      ntpd        1734 36 udp6    [fe80::92ec:77ff:fe2e *:*                  
+root      ntpd        1734 37 udp4    10.25.10.1:123        *:*                  
+root      ntpd        1734 38 udp6    [fe80::92ec:77ff:fe2e *:*                  
+root      ntpd        1734 39 udp4    10.25.25.1:123        *:*                  
+root      ntpd        1734 40 udp6    [fe80::92ec:77ff:fe2e *:*                  
+root      ntpd        1734 41 udp4    10.25.255.1:123       *:*                  
+root      ntpd        1734 42 udp6    [fe80::92ec:77ff:fe2e *:*                  
+root      ntpd        1734 43 udp4    10.25.66.1:123        *:*                  
+root      devd        1513  4 stream  /var/run/devd.pipe    ??                   
+root      devd        1513  5 seqpack /var/run/devd.seqpack ??                   
+root      check_relo   661  3 stream  /var/run/check_reload ??                   
+root      php-fpm      599  3 dgram   (not connected)       ??                   
+root      php-fpm      599  4 udp4    *:*                   *:*                  
+root      php-fpm      599  5 udp6    *:*                   *:*                  
+root      php-fpm      599 11 stream  /var/run/php-fpm.sock ??                   
+??        ??            ?? ?? udp6    *:51820               *:*                  
+??        ??            ?? ?? udp4    *:51820               *:*                  

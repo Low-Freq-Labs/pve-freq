@@ -1,0 +1,57 @@
+# Profile A: Bare Metal Baby — single node, flat network, nothing fancy
+
+[freq]
+version = "2.0.0"
+brand = "PVE FREQ"
+build = "default"
+ascii = false
+debug = false
+
+[ssh]
+service_account = "admin"
+connect_timeout = 5
+max_parallel = 5
+mode = "sudo"
+
+[pve]
+nodes = ["192.168.1.10"]
+node_names = ["proxmox1"]
+ssh_user = "admin"
+
+[pve.storage.proxmox1]
+pool = "local-lvm"
+type = "SSD"
+
+[vm.defaults]
+cores = 2
+ram = 2048
+disk = 32
+cpu = "kvm64"
+machine = "q35"
+scsihw = "virtio-scsi-single"
+bios = "ovmf"
+domain = "home.lab"
+gateway = "192.168.1.1"
+nameserver = "192.168.1.1"
+ci_user = "admin"
+
+[safety]
+protected_vmids = []
+protected_ranges = [[900, 999]]
+max_failure_percent = 50
+
+[infrastructure]
+cluster_name = "HomeCluster"
+timezone = "UTC"
+
+[templates.profiles]
+minimal = { cores = 1, ram = 1024, disk = 8 }
+standard = { cores = 2, ram = 2048, disk = 32 }
+
+[nic]
+bridge = "vmbr0"
+mtu = 1500
+
+[notifications]
+discord_webhook = ""
+slack_webhook = ""

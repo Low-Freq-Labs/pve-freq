@@ -1,0 +1,201 @@
+# FREQ Knowledge Base — Lessons
+# Operational wisdom from Proxmox/Linux/Docker infrastructure management.
+# Each lesson is a numbered entry with platform, severity, and related commands.
+
+[[lesson]]
+number = 1
+session = "S005"
+platform = "nfs"
+severity = "critical"
+title = "NFS stale handles require remount"
+description = "Stale NFS handles (ESTALE errno 116) survive indefinitely. Only fix is lazy umount then remount. Processes with open FDs must be killed first."
+related_commands = "freq mount"
+
+[[lesson]]
+number = 3
+session = "S012"
+platform = "nfs"
+severity = "critical"
+title = "NFS fstab must have _netdev,nofail"
+description = "Without _netdev, mount tries before network is up. Without nofail, mount failure blocks boot entirely. Add soft,timeo=150,retrans=3,bg for resilience."
+related_commands = "freq mount"
+
+[[lesson]]
+number = 5
+session = "S020"
+platform = "nfs"
+severity = "critical"
+title = "NFS mount ordering vs systemd dependencies"
+description = "systemd auto-generates mount units from fstab. Docker containers starting before NFS is ready get empty bind mounts. Use RequiresMountsFor in service unit."
+related_commands = "freq mount,freq docker"
+
+[[lesson]]
+number = 6
+session = "S031"
+platform = "docker"
+severity = "critical"
+title = "SQLite cannot run on NFS"
+description = "Bazarr/Plex SQLite DBs enter D-state on NFS during network glitches. All service configs MUST be on local disk. NFS only for media."
+related_commands = "freq mount,freq docker"
+
+[[lesson]]
+number = 7
+session = "S033"
+platform = "docker"
+severity = "critical"
+title = "Docker bridge network IP exhaustion"
+description = "Default docker0 bridge uses 172.17.0.0/16. With many containers, subnet exhaustion causes no-IP failures. Define custom bridge networks with smaller subnets."
+related_commands = "freq docker"
+
+[[lesson]]
+number = 9
+session = "S041"
+platform = "docker"
+severity = "critical"
+title = "Gluetun VPN container must own all ports"
+description = "qBit/FlareSolverr ports go on Gluetun container, NOT on the service containers. network_mode: service:gluetun on qBit. All ports on gluetun service definition."
+related_commands = "freq docker"
+
+[[lesson]]
+number = 13
+session = "S017"
+platform = "pve"
+severity = "critical"
+title = "Use vmbr0vXXXX not vmbr0.XXXX on Proxmox"
+description = "Dot notation creates kernel sub-interface that conflicts with bridge. VLAN bridge notation works at bridge level above physical NIC."
+related_commands = "freq configure"
+
+[[lesson]]
+number = 14
+session = "S018"
+platform = "pve"
+severity = "critical"
+title = "PVE cluster quorum requires 3 nodes minimum"
+description = "Two-node PVE cluster loses quorum when one node fails. Always deploy 3+ nodes or configure expected_votes=1 for two-node operation with fencing."
+related_commands = "freq status"
+
+[[lesson]]
+number = 17
+session = "S024"
+platform = "pve"
+severity = "critical"
+title = "PVE yescrypt hashes break SSH authentication"
+description = "PVE uses yescrypt ($y$) by default which breaks SSH key-based auth fallback. Use chpasswd -c SHA512 for $6$ hashes on all provisioned VMs."
+related_commands = "freq provision,freq users"
+
+[[lesson]]
+number = 20
+session = "S032"
+platform = "pfsense"
+severity = "critical"
+title = "pfSense reboot wipes SSH config and sudoers"
+description = "pfSense firmware updates wipe /etc/sshd and sudoers. Backup sshd_config and verify SSH access after every update."
+related_commands = "freq pfsense"
+
+[[lesson]]
+number = 23
+session = "S053"
+platform = "pfsense"
+severity = "tip"
+title = "pfSense tcsh shell breaks stderr redirection in SSH"
+description = "2>/dev/null inside SSH command strings breaks tcsh parsing. Redirect stderr OUTSIDE the SSH string: ssh fw 'command' 2>/dev/null."
+related_commands = "freq pfsense"
+
+[[lesson]]
+number = 30
+session = "S032"
+platform = "network"
+severity = "critical"
+title = "LACP transition errdisables switch ports"
+description = "LACP bond reconfiguration during reboot can errdisable switch ports. Pre-configure switch channel-group before host. Set errdisable recovery interval 30."
+related_commands = "freq switch"
+
+[[lesson]]
+number = 31
+session = "S036"
+platform = "network"
+severity = "important"
+title = "MTU mismatch causes silent packet drops"
+description = "Jumbo frames (9000) on storage VLAN but 1500 on switch causes fragmentation and drops. MTU must match end-to-end: NIC, switch port, VLAN, NFS server."
+related_commands = "freq switch,freq mount"
+
+[[lesson]]
+number = 40
+session = "S055"
+platform = "ssh"
+severity = "critical"
+title = "SSH host key verification fails after VM rebuild"
+description = "Rebuilding a VM keeps the same IP but generates new host keys. Old key in known_hosts causes MITM warning. Use ssh-keygen -R to remove stale entry."
+related_commands = "freq ssh,freq provision"
+
+[[lesson]]
+number = 42
+session = "S060"
+platform = "ssh"
+severity = "important"
+title = "SSH connection multiplexing saves 10x on fleet ops"
+description = "ControlMaster auto with ControlPath and ControlPersist 600 reuses SSH connections. Fleet-wide exec goes from 30s to 3s for 10-host operations."
+related_commands = "freq ssh,freq exec"
+
+[[lesson]]
+number = 50
+session = "S070"
+platform = "truenas"
+severity = "critical"
+title = "TrueNAS REST API deprecated in 25.10"
+description = "REST API deprecated in TrueNAS 25.10, removed in 26.04. Use midclt call via SSH for all automation. Websocket API is the only supported path."
+related_commands = "freq truenas"
+
+[[lesson]]
+number = 51
+session = "S072"
+platform = "truenas"
+severity = "important"
+title = "TrueNAS ZFS scrub should run monthly not weekly"
+description = "Weekly scrubs on large pools cause excessive I/O that impacts NFS serving. Monthly scrubs with email alerts are sufficient for home/lab use."
+related_commands = "freq truenas,freq zfs"
+
+[[lesson]]
+number = 61
+session = "S028"
+platform = "linux"
+severity = "critical"
+title = "apt unattended-upgrades can reboot without warning"
+description = "Default unattended-upgrades config may auto-reboot. Set Unattended-Upgrade::Automatic-Reboot to false in /etc/apt/apt.conf.d/50unattended-upgrades."
+related_commands = "freq harden"
+
+[[lesson]]
+number = 62
+session = "S029"
+platform = "linux"
+severity = "important"
+title = "journald logs consume disk until configured"
+description = "Without SystemMaxUse in /etc/systemd/journald.conf, journal grows unbounded. Set SystemMaxUse=500M and SystemMaxFiles=5 on all VMs."
+related_commands = "freq harden,freq provision"
+
+[[lesson]]
+number = 95
+session = "S066"
+platform = "idrac"
+severity = "important"
+title = "iDRAC 7 vs 8 different SSH ciphers"
+description = "iDRAC 7 requires deprecated ciphers (diffie-hellman-group14-sha1, ssh-rsa). iDRAC 8 uses standard SSH. Both accept same racadm syntax."
+related_commands = "freq idrac"
+
+[[lesson]]
+number = 124
+session = "S073"
+platform = "truenas"
+severity = "critical"
+title = "TrueNAS sudoers: middleware DB only"
+description = "sudoers.d files get wiped on firmware update. Use midclt call user.update to set sudo commands permanently in middleware DB."
+related_commands = "freq truenas"
+
+[[lesson]]
+number = 127
+session = "S075"
+platform = "idrac"
+severity = "important"
+title = "iDRAC rejects Ed25519 SSH keys"
+description = "Only RSA keys accepted. Deploy via racadm sshpkauth. Use RSA-4096 for iDRAC, Ed25519 everywhere else."
+related_commands = "freq idrac,freq keys"

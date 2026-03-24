@@ -1,0 +1,60 @@
+
+gigecolo#terminal length 0
+gigecolo#show mac address-table
+Unicast Entries
+ vlan     mac address     type        protocols               port
+---------+---------------+--------+---------------------+-------------------------
+   1      0cc4.7a91.ec45   dynamic ip,ipx,assigned,other GigabitEthernet1/36        
+   1      1866.da7f.0d8a   dynamic ip,ipx,assigned,other GigabitEthernet1/10        
+   1      4cd9.8f1f.7db4   dynamic ip,ipx,assigned,other GigabitEthernet1/4         
+   1      64f6.9d24.2f3f    static ip,ipx,assigned,other Switch                     
+   1      90ec.772e.0d6e   dynamic ip,ipx,assigned,other Port-channel2              
+   1      bc24.1149.e89c   dynamic ip,ipx,assigned,other GigabitEthernet1/36        
+   1      bc24.117a.fcfe   dynamic ip,ipx,assigned,other GigabitEthernet1/4         
+   1      bc24.11a1.4e2e   dynamic ip,ipx,assigned,other GigabitEthernet1/36        
+   1      d45d.64d3.29b4   dynamic ip,ipx,assigned,other GigabitEthernet1/2         
+   1      d4ae.52b6.91a9   dynamic ip,ipx,assigned,other GigabitEthernet1/1         
+   1      e443.4b4e.f5b8   dynamic ip,ipx,assigned,other GigabitEthernet1/4         
+   5      64f6.9d24.2f3f    static ip,ipx,assigned,other Switch                     
+   5      90ec.772e.0d6e   dynamic ip,ipx,assigned,other Port-channel2              
+   5      bc24.117b.428c   dynamic ip,ipx,assigned,other GigabitEthernet1/1         
+   5      bc24.1180.5359   dynamic ip,ipx,assigned,other GigabitEthernet1/1         
+  10      64f6.9d24.2f3f    static ip,ipx,assigned,other Switch                     
+  10      bc24.1102.4d3d   dynamic ip,ipx,assigned,other GigabitEthernet1/1         
+  10      bc24.11e0.c47b   dynamic ip,ipx,assigned,other GigabitEthernet1/2         
+  25      1866.da7f.0d8b   dynamic ip,ipx,assigned,other Port-channel1              
+  25      64f6.9d24.2f3f    static ip,ipx,assigned,other Switch                     
+  25      90ec.772e.0d6e   dynamic ip,ipx,assigned,other Port-channel2              
+  25      d45d.64d3.29b4   dynamic ip,ipx,assigned,other GigabitEthernet1/2         
+  25      d4ae.52b6.91aa   dynamic ip,ipx,assigned,other GigabitEthernet1/9         
+  66      90ec.772e.0d6e   dynamic ip,ipx,assigned,other Port-channel2              
+  66      bc24.1156.7889   dynamic ip,ipx,assigned,other GigabitEthernet1/1         
+2550      1866.da7f.0d8d   dynamic ip,ipx,assigned,other GigabitEthernet1/7         
+2550      64f6.9d24.2f3f    static ip,ipx,assigned,other Switch                     
+2550      90ec.772e.0d6e   dynamic ip,ipx,assigned,other Port-channel2              
+2550      bc24.1118.cf64   dynamic ip,ipx,assigned,other GigabitEthernet1/1         
+2550      bc24.111b.784c   dynamic ip,ipx,assigned,other GigabitEthernet1/1         
+2550      bc24.1163.7e9c   dynamic ip,ipx,assigned,other GigabitEthernet1/1         
+2550      bc24.119f.a80b   dynamic ip,ipx,assigned,other GigabitEthernet1/2         
+2550      bc24.11ff.f054   dynamic ip,ipx,assigned,other GigabitEthernet1/1         
+2550      d45d.64d3.29b4   dynamic ip,ipx,assigned,other GigabitEthernet1/2         
+2550      d4ae.52b6.91a9   dynamic ip,ipx,assigned,other GigabitEthernet1/1         
+
+Multicast Entries
+ vlan     mac address     type    ports
+---------+---------------+-------+--------------------------------------------
+   1      0100.0ccc.ccce   system Gi1/1,Gi1/2,Gi1/3,Gi1/4,Gi1/9,Gi1/10,Gi1/36
+                                  Po2
+   1      ffff.ffff.ffff   system Gi1/1,Gi1/2,Gi1/3,Gi1/4,Gi1/9,Gi1/10,Gi1/36
+                                  Switch,Po2
+   5      ffff.ffff.ffff   system Gi1/1,Gi1/2,Gi1/3,Gi1/4,Gi1/9,Switch,Po2
+  10      ffff.ffff.ffff   system Gi1/1,Gi1/2,Gi1/3,Gi1/4,Gi1/9,Switch,Po2
+  25      ffff.ffff.ffff   system Gi1/1,Gi1/2,Gi1/3,Gi1/4,Gi1/9,Switch,Po1
+                                  Po2
+  66      ffff.ffff.ffff   system Gi1/1,Gi1/2,Gi1/3,Gi1/4,Gi1/9,Po2
+ 113      ffff.ffff.ffff   system 
+ 715      ffff.ffff.ffff   system 
+2550      ffff.ffff.ffff   system Gi1/1,Gi1/2,Gi1/3,Gi1/4,Gi1/5,Gi1/7,Gi1/9
+                                  Gi1/10,Switch,Po2
+
+gigecolo#exit

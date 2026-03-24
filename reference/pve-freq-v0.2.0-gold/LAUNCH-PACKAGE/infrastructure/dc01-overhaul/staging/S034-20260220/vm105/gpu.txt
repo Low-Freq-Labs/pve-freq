@@ -1,0 +1,12 @@
+=== ls -la /dev/dri/ ===
+total 0
+drwxr-xr-x  3 root root      80 Feb 19 11:06 .
+drwxr-xr-x 19 root root    3240 Feb 19 11:06 ..
+drwxr-xr-x  2 root root      60 Feb 19 11:06 by-path
+crw-rw----  1 root video 226, 0 Feb 19 11:06 card0
+
+=== lspci | grep -i vga ===
+00:01.0 VGA compatible controller: Device 1234:1111 (rev 02)
+
+=== vainfo ===
+bash: line 1: vainfo: command not found

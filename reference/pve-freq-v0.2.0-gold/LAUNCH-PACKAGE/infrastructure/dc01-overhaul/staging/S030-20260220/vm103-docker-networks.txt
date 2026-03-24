@@ -1,0 +1,6 @@
+NETWORK ID     NAME                      DRIVER    SCOPE
+84d8f987364e   bridge                    bridge    local
+b2c56765c3da   downloader-data_default   bridge    local
+eef6c993bea5   downloaders_default       bridge    local
+547ba97d73f9   host                      host      local
+e185227f0226   none                      null      local

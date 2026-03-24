@@ -1,0 +1,26 @@
+{
+    "id": 1,
+    "netbiosname": "truenas",
+    "netbiosalias": [],
+    "workgroup": "WORKGROUP",
+    "description": "TrueNAS Server",
+    "enable_smb1": false,
+    "unixcharset": "UTF-8",
+    "localmaster": true,
+    "syslog": false,
+    "aapl_extensions": false,
+    "admin_group": null,
+    "guest": "nobody",
+    "filemask": "DEFAULT",
+    "dirmask": "DEFAULT",
+    "ntlmv1_auth": false,
+    "multichannel": false,
+    "encryption": "DEFAULT",
+    "bindip": [
+        "10.25.25.25",
+        "10.25.255.25"
+    ],
+    "server_sid": "S-1-5-21-1630442389-1321200967-3660117211",
+    "smb_options": "",
+    "debug": false
+}

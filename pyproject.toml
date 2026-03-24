@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pve-freq"
+version = "2.0.0"
+description = "Datacenter management CLI for homelabbers"
+requires-python = ">=3.7"
+license = {text = "MIT"}
+authors = [{name = "PVE FREQ"}]
+
+[project.scripts]
+freq = "freq.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["freq*"]

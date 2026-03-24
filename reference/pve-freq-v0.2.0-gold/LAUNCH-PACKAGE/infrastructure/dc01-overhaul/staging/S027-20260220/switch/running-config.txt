@@ -1,0 +1,506 @@
+
+Building configuration...
+
+Current configuration : 10272 bytes
+!
+! Last configuration change at 23:35:44 UTC Thu Feb 19 2026 by sonny-aif
+!
+version 15.2
+no service pad
+service timestamps debug datetime msec
+service timestamps log datetime msec
+no service password-encryption
+service compress-config
+!
+hostname gigecolo
+!
+boot-start-marker
+boot-end-marker
+!
+!
+vrf definition mgmtVrf
+ !
+ address-family ipv4
+ exit-address-family
+ !
+ address-family ipv6
+ exit-address-family
+!
+enable secret 5 <REDACTED>
+!
+username admin privilege 15 secret 5 <REDACTED>
+username gigecolo privilege 15 secret 5 <REDACTED>
+username sonny-aif privilege 15 secret 5 <REDACTED>
+username svc-admin privilege 15 secret 5 <REDACTED>
+no aaa new-model
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+ip domain-name gige.local
+!
+!
+vtp mode off
+!
+!
+errdisable recovery cause channel-misconfig
+errdisable recovery interval 30
+power redundancy-mode redundant
+!
+spanning-tree mode rapid-pvst
+spanning-tree extend system-id
+!
+vlan internal allocation policy ascending
+!
+vlan 5
+ name Public
+!
+vlan 10
+ name Compute
+!
+vlan 25
+ name Storage
+!
+vlan 66
+ name DirtyNotOurProblem
+!
+vlan 113,715 
+!
+vlan 2550
+ name Management
+!
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+interface Port-channel1
+ description TrueNAS-Storage-LAGG
+ switchport
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+!
+interface FastEthernet1
+ vrf forwarding mgmtVrf
+ no ip address
+ speed auto
+ duplex auto
+!
+interface GigabitEthernet1/1
+ description Hypervisor-Trunk
+ switchport trunk allowed vlan 1,5,10,25,66,2550
+ switchport mode trunk
+ mtu 9198
+ spanning-tree portfast edge trunk
+!
+interface GigabitEthernet1/2
+ description Hypervisor-Trunk
+ switchport trunk allowed vlan 1,5,10,25,66,2550
+ switchport mode trunk
+ mtu 9198
+ spanning-tree portfast edge trunk
+!
+interface GigabitEthernet1/3
+ description Hypervisor-Trunk
+ switchport trunk allowed vlan 1,5,10,25,66,2550
+ switchport mode trunk
+ mtu 9198
+ spanning-tree portfast edge trunk
+!
+interface GigabitEthernet1/4
+ description Hypervisor-Trunk
+ switchport trunk allowed vlan 1,5,10,25,66,2550
+ switchport mode trunk
+ mtu 9198
+ spanning-tree portfast edge trunk
+!
+interface GigabitEthernet1/5
+ description Management-VLAN2550
+ switchport access vlan 2550
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/6
+ description Management-VLAN2550
+ switchport access vlan 2550
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/7
+ description Management-VLAN2550
+ switchport access vlan 2550
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/8
+ description Storage-VLAN25-LAGG
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ channel-group 1 mode active
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/9
+ description Hypervisor-Trunk
+ switchport access vlan 2550
+ switchport trunk allowed vlan 1,5,10,25,66,2550
+ switchport mode trunk
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/10
+ description TrueNAS-eno1-iDRAC-LOM
+ switchport access vlan 2550
+ switchport trunk allowed vlan 1,2550
+ switchport mode trunk
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/11
+ description Storage-VLAN25-LAGG
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ channel-group 1 mode active
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/12
+ description Storage-VLAN25
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/13
+ description Storage-VLAN25
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/14
+ description Storage-VLAN25
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/15
+ description Storage-VLAN25
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/16
+ description Storage-VLAN25
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/17
+ description Storage-VLAN25
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/18
+ description Storage-VLAN25
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/19
+ description Storage-VLAN25
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/20
+ description Storage-VLAN25
+ switchport access vlan 25
+ switchport trunk allowed vlan 1,5,10,25,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/21
+ description Public-VLAN5
+ switchport access vlan 5
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/22
+ description Public-VLAN5
+ switchport access vlan 5
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/23
+ description Public-VLAN5
+ switchport access vlan 5
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/24
+ description Public-VLAN5
+ switchport access vlan 5
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/25
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport trunk allowed vlan 1,2550
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge trunk
+!
+interface GigabitEthernet1/26
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/27
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/28
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/29
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/30
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/31
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/32
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/33
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/34
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/35
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/36
+ mtu 9198
+!
+interface GigabitEthernet1/37
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/38
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/39
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/40
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/41
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/42
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/43
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/44
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/45
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/46
+ description DIRTY-VLAN66
+ switchport access vlan 66
+ switchport mode access
+ mtu 9198
+ spanning-tree portfast edge
+!
+interface GigabitEthernet1/47
+ description Uplink-to-pfSense-Failover
+ switchport trunk allowed vlan 1,5,10,25,66,2550
+ switchport mode trunk
+ mtu 9198
+!
+interface GigabitEthernet1/48
+ description Uplink-to-pfSense
+ switchport trunk allowed vlan 1,5,10,25,66,2550
+ switchport mode trunk
+ mtu 9198
+!
+interface TenGigabitEthernet1/49
+ mtu 9198
+!
+interface TenGigabitEthernet1/50
+ mtu 9198
+!
+interface TenGigabitEthernet1/51
+ mtu 9198
+!
+interface TenGigabitEthernet1/52
+ mtu 9198
+!
+interface Vlan1
+ ip address 10.25.0.5 255.255.255.0
+!
+interface Vlan5
+ ip address 10.25.5.5 255.255.255.0
+!
+interface Vlan10
+ ip address 10.25.10.5 255.255.255.0
+!
+interface Vlan25
+ ip address 10.25.25.5 255.255.255.0
+!
+interface Vlan2550
+ ip address 10.25.255.5 255.255.255.0
+!
+ip default-gateway 10.25.0.1
+no ip http server
+no ip http secure-server
+ip forward-protocol nd
+!
+ip route 10.25.100.0 255.255.255.0 10.25.255.1
+ip ssh version 2
+!
+!
+!
+!
+!
+line con 0
+ password <REDACTED>
+ login
+ stopbits 1
+line vty 0 4
+ password <REDACTED>
+ login local
+ transport input ssh
+!
+!
+end
+Connection to 10.25.255.5 closed by remote host.

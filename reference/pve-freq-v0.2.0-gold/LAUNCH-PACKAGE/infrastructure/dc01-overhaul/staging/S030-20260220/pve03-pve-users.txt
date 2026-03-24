@@ -1,0 +1,1 @@
+[{"enable":1,"expire":0,"realm-type":"pam","userid":"donmin@pam"},{"email":"sonny.aif@sonnysounds.com","enable":1,"expire":0,"realm-type":"pam","userid":"root@pam"},{"enable":1,"expire":0,"firstname":"Sonny","realm-type":"pam","userid":"sonny-aif@pam"},{"enable":1,"expire":0,"realm-type":"pam","userid":"svc-admin@pam"}]

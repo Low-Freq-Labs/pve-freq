@@ -1,0 +1,26 @@
+[
+    {
+        "destination": "10.25.5.0/24",
+        "gateway": "10.25.0.5",
+        "description": "VLAN 5 (Public) via switch SVI - symmetric NFS routing",
+        "id": 1
+    },
+    {
+        "destination": "10.25.10.0/24",
+        "gateway": "10.25.0.5",
+        "description": "VLAN 10 (Compute) via switch SVI - symmetric NFS routing",
+        "id": 2
+    },
+    {
+        "destination": "10.25.100.0/24",
+        "gateway": "10.25.255.1",
+        "description": "VPN return traffic via management VLAN (S029)",
+        "id": 3
+    },
+    {
+        "destination": "10.25.100.0/24",
+        "gateway": "10.25.255.1",
+        "description": "VPN return traffic via management VLAN (S029)",
+        "id": 4
+    }
+]

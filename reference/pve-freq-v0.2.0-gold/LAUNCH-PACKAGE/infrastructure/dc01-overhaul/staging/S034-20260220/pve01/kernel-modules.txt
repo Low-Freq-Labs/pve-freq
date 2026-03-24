@@ -1,0 +1,57 @@
+--- /etc/modules ---
+# /etc/modules is obsolete and has been replaced by /etc/modules-load.d/.
+# Please see modules-load.d(5) and modprobe.d(5) for details.
+#
+# Updating this file still works, but it is undocumented and unsupported.
+softdog
+--- lsmod (first 50 lines) ---
+Module                  Size  Used by
+xt_tcpudp              16384  4
+tcp_diag               12288  0
+udp_diag               12288  0
+inet_diag              32768  2 tcp_diag,udp_diag
+veth                   40960  0
+rpcsec_gss_krb5        28672  0
+nfsv4                1179648  4
+nfs                   573440  4 nfsv4
+netfs                 585728  1 nfs
+ebtable_filter         12288  0
+ebtables               45056  1 ebtable_filter
+ip_set                 61440  0
+ip6table_raw           12288  0
+iptable_raw            12288  0
+ip6table_filter        12288  0
+ip6_tables             32768  2 ip6table_filter,ip6table_raw
+iptable_filter         12288  1
+sctp                  471040  2
+ip6_udp_tunnel         16384  1 sctp
+udp_tunnel             32768  1 sctp
+nf_tables             360448  0
+8021q                  45056  0
+garp                   20480  1 8021q
+mrp                    20480  1 8021q
+bonding               245760  0
+tls                   147456  1 bonding
+softdog                12288  2
+binfmt_misc            24576  1
+nfnetlink_log          24576  1
+nfsd                  946176  5
+auth_rpcgss           176128  2 nfsd,rpcsec_gss_krb5
+nfs_acl                12288  1 nfsd
+lockd                 147456  2 nfsd,nfs
+grace                  12288  2 nfsd,lockd
+sunrpc                786432  34 nfsd,nfsv4,auth_rpcgss,lockd,rpcsec_gss_krb5,nfs_acl,nfs
+sch_fq_codel           24576  27
+intel_rapl_msr         20480  0
+intel_rapl_common      49152  1 intel_rapl_msr
+sb_edac                32768  0
+x86_pkg_temp_thermal    16384  0
+intel_powerclamp       24576  0
+coretemp               20480  0
+kvm_intel             532480  34
+ipmi_ssif              45056  0
+kvm                  1376256  23 kvm_intel
+irqbypass              16384  1 kvm
+dell_smbios            36864  0
+polyval_clmulni        12288  0
+ghash_clmulni_intel    12288  0

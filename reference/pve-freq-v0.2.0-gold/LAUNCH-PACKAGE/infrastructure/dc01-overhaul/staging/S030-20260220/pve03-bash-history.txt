@@ -1,0 +1,26 @@
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/post-pve-install.sh)"
+passwd
+zpool list
+zpool import
+pvesm status --storage os-drive-ssd
+zpool import -f os-pool-ssd
+pvesm status --storage os-drive-ssd
+useradd sonny-aif
+usermod -aG sudo sonny-aif
+passwd sonny-aif
+# 1) Create the home directory
+mkdir -p /home/sonny-aif
+# 2) Set correct ownership (assuming primary group is also sonny-aif)
+chown -R sonny-aif:sonny-aif /home/sonny-aif
+# 3) (Optional) Copy default skeleton files
+cp -a /etc/skel/. /home/sonny-aif/
+chown -R sonny-aif:sonny-aif /home/sonny-aif
+clear
+pvecm status
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/post-pve-install.sh)"
+clear
+apt get install sudo -y
+apt-get install -y sudo
+echo 'sonny-aif ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/sonny-aif && chmod 440 /etc/sudoers.d/sonny-aif
+su - sonny-aif -c "sudo id"
+clear

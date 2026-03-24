@@ -1,0 +1,18 @@
+		<lagg>
+			<members>igc2,igc3</members>
+			<descr><![CDATA[2GB - LAGG]]></descr>
+			<laggif>lagg0</laggif>
+			<proto>lacp</proto>
+			<lacptimeout>fast</lacptimeout>
+===WEBGUI===
+		<webgui>
+			<protocol>https</protocol>
+			<loginautocomplete></loginautocomplete>
+			<ssl-certref>697be808cbbd3</ssl-certref>
+===SYSTEM===
+	<system>
+		<optimization>normal</optimization>
+		<hostname>fw01</hostname>
+		<domain>infra.internal</domain>
+		<group>
+			<name>all</name>

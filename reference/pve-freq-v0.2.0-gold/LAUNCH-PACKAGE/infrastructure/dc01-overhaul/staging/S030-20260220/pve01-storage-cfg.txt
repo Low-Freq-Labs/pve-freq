@@ -1,0 +1,44 @@
+dir: local
+	path /var/lib/vz
+	content import,backup,iso,vztmpl
+
+lvmthin: local-lvm
+	disable
+	thinpool data
+	vgname pve
+	content images,rootdir
+
+zfspool: os-drive-hdd
+	pool os-pool-hdd
+	content rootdir,images
+	mountpoint /os-pool-hdd
+	nodes pve01
+	sparse 1
+
+zfspool: os-drive-ssd
+	pool os-pool-ssd
+	content rootdir,images
+	mountpoint /os-pool-ssd
+	nodes pve03
+
+dir: iso-storage
+	path /mnt/iso-share
+	content iso
+	nodes pve01,pve03,pve02
+	prune-backups keep-all=1
+	shared 1
+
+nfs: truenas-os-drive
+	export /mnt/mega-pool/ha-proxmox-disk
+	path /mnt/pve/ha-proxmox-disk
+	server 10.25.25.25
+	content rootdir,images
+	nodes pve03,pve01,pve02
+	prune-backups keep-all=1
+
+zfspool: os-pool-ssd
+	pool os-pool-ssd
+	content rootdir,images
+	mountpoint /os-pool-ssd
+	nodes pve02
+	sparse 0

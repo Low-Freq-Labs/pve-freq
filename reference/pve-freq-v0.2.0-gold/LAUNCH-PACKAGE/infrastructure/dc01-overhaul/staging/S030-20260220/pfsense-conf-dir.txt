@@ -1,0 +1,18 @@
+total 265
+drwxr-xr-x  5 root wheel    17 Feb 20 10:55 .
+drwxr-xr-x  3 root wheel     3 Jan 27 13:49 ..
+drwxr-xr-x  2 root wheel    33 Feb 20 10:55 backup
+-rw-r--r--  1 root wheel 66546 Feb 20 10:55 config.xml
+-rw-r--r--  1 root wheel 64862 Feb 19 21:47 config.xml.backup-session21
+-rw-r--r--  1 root wheel 64867 Feb 20 01:40 config.xml.backup-session26
+-rw-r--r--  1 root wheel 65535 Feb 20 10:36 config.xml.backup-session29-webui
+-rw-r--r--  1 root wheel 64899 Feb 19 20:35 config.xml.bak
+-rw-r--r--  1 root wheel    11 Feb 19 20:12 copynotice_version
+-rw-r--r--  1 root wheel  5337 Feb 19 12:04 copyright
+-rw-r--r--  1 root wheel     0 Feb 19 14:19 enableserial_force
+drwxr-xr-x  2 root wheel     3 Jan 28 11:58 kea4_scripts.d
+drwxr-xr-x  2 root wheel     4 Jan 28 11:58 kea6_scripts.d
+-rw-r--r--  1 root wheel 23212 Feb 20 10:51 rules.debug.old
+-rw-r--r--  1 root wheel     0 Jan 29 17:05 syslog_default_uncompressed
+-rw-r--r--  1 root wheel  6342 Feb 19 20:12 upgrade_log.latest.txt
+-rw-r--r--  1 root wheel    69 Feb 20 10:49 upgrade_log.txt

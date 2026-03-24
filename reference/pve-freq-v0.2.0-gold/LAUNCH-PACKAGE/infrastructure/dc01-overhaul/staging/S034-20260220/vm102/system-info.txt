@@ -1,0 +1,38 @@
+arr-stack
+---
+Linux arr-stack 6.12.69+deb13-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.12.69-1 (2026-02-08) x86_64 GNU/Linux
+---
+ 19:31:38 up  4:31,  1 user,  load average: 0.40, 0.22, 0.17
+---
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)"
+NAME="Debian GNU/Linux"
+VERSION_ID="13"
+VERSION="13 (trixie)"
+VERSION_CODENAME=trixie
+DEBIAN_VERSION_FULL=13.3
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+---
+               total        used        free      shared  buff/cache   available
+Mem:           7.8Gi       1.7Gi       4.8Gi       133Mi       1.7Gi       6.1Gi
+Swap:          3.3Gi          0B       3.3Gi
+---
+Filesystem                                 Size  Used Avail Use% Mounted on
+udev                                       3.9G     0  3.9G   0% /dev
+tmpfs                                      795M  1.3M  794M   1% /run
+/dev/sda1                                   60G  6.6G   50G  12% /
+tmpfs                                      3.9G     0  3.9G   0% /dev/shm
+tmpfs                                      1.0M     0  1.0M   0% /run/credentials/systemd-journald.service
+tmpfs                                      5.0M     0  5.0M   0% /run/lock
+tmpfs                                      3.9G     0  3.9G   0% /tmp
+tmpfs                                      1.0M     0  1.0M   0% /run/credentials/getty@tty1.service
+10.25.25.25:/mnt/mega-pool/nfs-mega-share   21T  745G   20T   4% /mnt/truenas/nfs-mega-share
+tmpfs                                      795M  8.0K  795M   1% /run/user/3003
+---
+NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda      8:0    0   64G  0 disk 
+├─sda1   8:1    0 60.7G  0 part /
+├─sda2   8:2    0    1K  0 part 
+└─sda5   8:5    0  3.3G  0 part [SWAP]

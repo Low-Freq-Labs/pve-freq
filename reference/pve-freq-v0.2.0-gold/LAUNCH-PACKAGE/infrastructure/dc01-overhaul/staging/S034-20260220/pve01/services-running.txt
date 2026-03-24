@@ -1,0 +1,65 @@
+  UNIT                              LOAD   ACTIVE SUB     DESCRIPTION
+  proc-sys-fs-binfmt_misc.automount loaded active running Arbitrary Executable File Formats File System Automount Point
+  101.scope                         loaded active running 101.scope
+  102.scope                         loaded active running 102.scope
+  103.scope                         loaded active running 103.scope
+  105.scope                         loaded active running 105.scope
+  802.scope                         loaded active running 802.scope
+  804.scope                         loaded active running 804.scope
+  init.scope                        loaded active running System and Service Manager
+  session-535.scope                 loaded active running Session 535 of User svc-admin
+  auditd.service                    loaded active running Security Audit Logging Service
+  chrony.service                    loaded active running chrony, an NTP client/server
+  corosync.service                  loaded active running Corosync Cluster Engine
+  cron.service                      loaded active running Regular background program processing daemon
+  dbus.service                      loaded active running D-Bus System Message Bus
+  dm-event.service                  loaded active running Device-mapper event daemon
+  fsidd.service                     loaded active running NFS FSID Daemon
+  getty@tty1.service                loaded active running Getty on tty1
+  ksmtuned.service                  loaded active running Kernel Samepage Merging (KSM) Tuning Daemon
+  lxc-monitord.service              loaded active running LXC Container Monitoring Daemon
+  lxcfs.service                     loaded active running FUSE filesystem for LXC
+  nfs-blkmap.service                loaded active running pNFS block layout mapping daemon
+  nfs-idmapd.service                loaded active running NFSv4 ID-name mapping service
+  nfs-mountd.service                loaded active running NFS Mount Daemon
+  nfsdcld.service                   loaded active running NFSv4 Client Tracking Daemon
+  postfix.service                   loaded active running Postfix Mail Transport Agent (main/default instance)
+  proxmox-firewall.service          loaded active running Proxmox nftables firewall
+  pve-cluster.service               loaded active running The Proxmox VE cluster filesystem
+  pve-firewall.service              loaded active running Proxmox VE firewall
+  pve-ha-crm.service                loaded active running PVE Cluster HA Resource Manager Daemon
+  pve-ha-lrm.service                loaded active running PVE Local HA Resource Manager Daemon
+  pve-lxc-syscalld.service          loaded active running Proxmox VE LXC Syscall Daemon
+  pvedaemon.service                 loaded active running PVE API Daemon
+  pvefw-logger.service              loaded active running Proxmox VE firewall logger
+  pveproxy.service                  loaded active running PVE API Proxy Server
+  pvescheduler.service              loaded active running Proxmox VE scheduler
+  pvestatd.service                  loaded active running PVE Status Daemon
+  qmeventd.service                  loaded active running PVE Qemu Event Daemon
+  rpc-statd.service                 loaded active running NFS status monitor for NFSv2/3 locking.
+  rpcbind.service                   loaded active running RPC bind portmap service
+  rrdcached.service                 loaded active running Data caching daemon for rrdtool
+  smartmontools.service             loaded active running Self Monitoring and Reporting Technology (SMART) Daemon
+  spiceproxy.service                loaded active running PVE SPICE Proxy Server
+  ssh.service                       loaded active running OpenBSD Secure Shell server
+  systemd-journald.service          loaded active running Journal Service
+  systemd-logind.service            loaded active running User Login Management
+  systemd-timedated.service         loaded active running Time & Date Service
+  systemd-udevd.service             loaded active running Rule-based Manager for Device Events and Files
+  user@3003.service                 loaded active running User Manager for UID 3003
+  watchdog-mux.service              loaded active running Proxmox VE watchdog multiplexer
+  zfs-zed.service                   loaded active running ZFS Event Daemon (zed)
+  dbus.socket                       loaded active running D-Bus System Message Bus Socket
+  dm-event.socket                   loaded active running Device-mapper event daemon FIFOs
+  rpcbind.socket                    loaded active running RPCbind Server Activation Socket
+  rrdcached.socket                  loaded active running sockets activating rrdcached
+  systemd-journald-dev-log.socket   loaded active running Journal Socket (/dev/log)
+  systemd-journald.socket           loaded active running Journal Sockets
+  systemd-udevd-control.socket      loaded active running udev Control Socket
+  systemd-udevd-kernel.socket       loaded active running udev Kernel Socket
+
+Legend: LOAD   → Reflects whether the unit definition was properly loaded.
+        ACTIVE → The high-level unit activation state, i.e. generalization of SUB.
+        SUB    → The low-level unit activation state, values depend on unit type.
+
+58 loaded units listed.

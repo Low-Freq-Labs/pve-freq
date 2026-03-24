@@ -1,0 +1,1 @@
+No /var/etc/nameserver_* files found. DNS configuration is in resolv.conf (see resolv-conf.txt).

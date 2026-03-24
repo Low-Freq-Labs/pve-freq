@@ -1,0 +1,24 @@
+Switch is in rapid-pvst mode
+Root bridge for: VLAN0001, VLAN0005, VLAN0010, VLAN0025, VLAN0066, VLAN2550
+Extended system ID                      is enabled
+Portfast Default                        is disabled
+Portfast Edge BPDU Guard Default        is disabled
+Portfast Edge BPDU Filter Default       is disabled
+Loopguard Default                       is disabled
+PVST Simulation Default                 is enabled but inactive in rapid-pvst mode
+Bridge Assurance                        is enabled
+EtherChannel misconfig guard            is enabled
+UplinkFast                              is disabled
+BackboneFast                            is disabled
+Configured Pathcost method used is short
+
+Name                   Blocking Listening Learning Forwarding STP Active
+---------------------- -------- --------- -------- ---------- ----------
+VLAN0001                     0         0        0          8          8
+VLAN0005                     0         0        0          6          6
+VLAN0010                     0         0        0          6          6
+VLAN0025                     0         0        0          7          7
+VLAN0066                     0         0        0          6          6
+VLAN2550                     0         0        0          9          9
+---------------------- -------- --------- -------- ---------- ----------
+6 vlans                      0         0        0         42         42Connection to 10.25.255.5 closed by remote host.

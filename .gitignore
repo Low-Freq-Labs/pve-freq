@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Runtime data (vault, logs, cache — not source)
+data/cache/
+data/vault/
+data/log/
+data/jarvis/
+data/keys/
+
+# Agent workspace (not part of PVE FREQ)
+.claude/
+memory/
+journal/
+planning/
+workspace/
+cold-storage/
+emergency/
+archive/
+jarvis-skills/
+simon-scrapes-skills/
+skills/
+resume-state.md
+
+# Personal configs
+.bashrc
+.bash_logout
+.profile
+.tmux.conf
+.gitconfig
+
+# Credentials and sensitive data (never commit)
+*.pem
+*.key
+*.bak
+credentials/
+*credentials*
+*password*
+*SENSITIVE*

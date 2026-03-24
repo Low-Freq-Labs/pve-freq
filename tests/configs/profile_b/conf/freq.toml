@@ -1,0 +1,69 @@
+# Profile B: Big Boy /16 — 3 nodes, /16 subnets, full infrastructure
+
+[freq]
+version = "2.0.0"
+brand = "PVE FREQ"
+build = "default"
+ascii = false
+debug = false
+
+[ssh]
+service_account = "pveadmin"
+connect_timeout = 5
+max_parallel = 10
+mode = "sudo"
+
+[pve]
+nodes = ["10.0.1.1", "10.0.1.2", "10.0.1.3"]
+node_names = ["node1", "node2", "node3"]
+ssh_user = "pveadmin"
+
+[pve.storage.node1]
+pool = "zfs-pool"
+type = "SSD"
+
+[pve.storage.node2]
+pool = "zfs-pool"
+type = "SSD"
+
+[pve.storage.node3]
+pool = "ceph-pool"
+type = "HDD"
+
+[vm.defaults]
+cores = 4
+ram = 4096
+disk = 64
+cpu = "host"
+machine = "q35"
+scsihw = "virtio-scsi-single"
+bios = "ovmf"
+domain = "corp.internal"
+gateway = "10.0.0.1"
+nameserver = "10.0.0.1"
+ci_user = "pveadmin"
+
+[safety]
+protected_vmids = [100, 200, 300]
+protected_ranges = [[900, 999]]
+max_failure_percent = 50
+
+[infrastructure]
+cluster_name = "CorpCluster"
+timezone = "Europe/London"
+truenas_ip = "10.0.1.100"
+pfsense_ip = "10.0.0.1"
+
+[templates.profiles]
+minimal = { cores = 1, ram = 1024, disk = 8 }
+standard = { cores = 2, ram = 2048, disk = 32 }
+dev = { cores = 4, ram = 4096, disk = 64 }
+prod = { cores = 8, ram = 16384, disk = 256 }
+
+[nic]
+bridge = "vmbr0"
+mtu = 9000
+
+[notifications]
+discord_webhook = ""
+slack_webhook = ""

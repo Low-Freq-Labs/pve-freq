@@ -1,0 +1,7 @@
+/sonarr: Mounts=/mnt/truenas/nfs-mega-share/media/tv->/tv /mnt/truenas/nfs-mega-share/media/downloads->/downloads /opt/dc01/configs/sonarr->/config 
+/overseerr: Mounts=/opt/dc01/configs/overseerr->/config 
+/agregarr: Mounts=/opt/dc01/configs/agregarr->/app/config /mnt/truenas/nfs-mega-share/media/movies->/data/movies /mnt/truenas/nfs-mega-share/media/tv->/data/tv 
+/bazarr: Mounts=/opt/dc01/configs/bazarr->/config /mnt/truenas/nfs-mega-share/media/movies->/movies /mnt/truenas/nfs-mega-share/media/tv->/tv 
+/huntarr: Mounts=/opt/dc01/configs/huntarr->/config 
+/radarr: Mounts=/opt/dc01/configs/radarr->/config /mnt/truenas/nfs-mega-share/media/movies->/movies /mnt/truenas/nfs-mega-share/media/downloads->/downloads 
+/prowlarr: Mounts=/opt/dc01/configs/prowlarr->/config 

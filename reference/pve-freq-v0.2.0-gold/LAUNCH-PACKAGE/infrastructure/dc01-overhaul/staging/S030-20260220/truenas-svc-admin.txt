@@ -1,0 +1,2 @@
+uid=3003(svc-admin) gid=3000(svc-admin) groups=3000(svc-admin),544(builtin_administrators),545(builtin_users),950(truenas_admin)
+svc-admin : svc-admin builtin_administrators builtin_users truenas_admin

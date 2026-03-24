@@ -1,0 +1,4 @@
+total 10
+drwxr-xr-x   2 root wheel  3 Feb 20 02:23 .
+drwxr-xr-x  27 root wheel 75 Feb 20 10:49 ..
+-r--r-----   1 root wheel 34 Feb 20 02:23 svc-admin

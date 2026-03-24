@@ -1,0 +1,24 @@
+[
+    {
+        "id": 1,
+        "purpose": "DEFAULT_SHARE",
+        "name": "smb-share",
+        "path": "/mnt/mega-pool/smb-share",
+        "enabled": true,
+        "comment": "file server",
+        "readonly": false,
+        "browsable": true,
+        "access_based_share_enumeration": false,
+        "locked": false,
+        "audit": {
+            "enable": false,
+            "watch_list": [],
+            "ignore_list": []
+        },
+        "options": {
+            "aapl_name_mangling": false,
+            "hostsallow": [],
+            "hostsdeny": []
+        }
+    }
+]

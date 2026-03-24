@@ -1,0 +1,1 @@
+svc-admin ALL=(ALL) NOPASSWD: ALL

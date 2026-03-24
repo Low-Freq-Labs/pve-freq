@@ -1,0 +1,31 @@
+{
+    "id": 1,
+    "hostname": "truenas",
+    "domain": "local",
+    "ipv4gateway": "10.25.0.1",
+    "ipv6gateway": "",
+    "nameserver1": "10.25.0.1",
+    "nameserver2": "",
+    "nameserver3": "",
+    "httpproxy": "",
+    "hosts": [],
+    "domains": [],
+    "service_announcement": {
+        "netbios": true,
+        "mdns": true,
+        "wsd": true
+    },
+    "activity": {
+        "type": "DENY",
+        "activities": []
+    },
+    "hostname_local": "truenas",
+    "state": {
+        "ipv4gateway": "10.25.0.1",
+        "ipv6gateway": "",
+        "nameserver1": "10.25.0.1",
+        "nameserver2": "",
+        "nameserver3": "",
+        "hosts": []
+    }
+}

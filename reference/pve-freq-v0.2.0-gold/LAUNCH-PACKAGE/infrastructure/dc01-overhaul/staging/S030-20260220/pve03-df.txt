@@ -1,0 +1,19 @@
+Filesystem                                  Size  Used Avail Use% Mounted on
+udev                                         16G     0   16G   0% /dev
+tmpfs                                       3.2G  2.6M  3.2G   1% /run
+rpool/ROOT/pve-1                            861G  3.2G  858G   1% /
+tmpfs                                        16G   51M   16G   1% /dev/shm
+efivarfs                                    128K   57K   67K  46% /sys/firmware/efi/efivars
+tmpfs                                       5.0M     0  5.0M   0% /run/lock
+tmpfs                                        16G  8.0K   16G   1% /tmp
+tmpfs                                       1.0M     0  1.0M   0% /run/credentials/systemd-journald.service
+rpool                                       858G  128K  858G   1% /rpool
+os-pool-ssd                                 1.7T  128K  1.7T   1% /os-pool-ssd
+rpool/var-lib-vz                            858G  128K  858G   1% /var/lib/vz
+rpool/data                                  858G  128K  858G   1% /rpool/data
+rpool/ROOT                                  858G  128K  858G   1% /rpool/ROOT
+/dev/fuse                                   128M   36K  128M   1% /etc/pve
+tmpfs                                       1.0M     0  1.0M   0% /run/credentials/getty@tty1.service
+10.25.0.26:/os-pool-hdd/iso-storage         9.0T  126G  8.8T   2% /mnt/iso-share
+10.25.25.25:/mnt/mega-pool/ha-proxmox-disk   20T     0   20T   0% /mnt/pve/ha-proxmox-disk
+tmpfs                                       3.2G  4.0K  3.2G   1% /run/user/3003

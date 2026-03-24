@@ -1,0 +1,347 @@
+=== HOSTNAME ===
+plex
+=== KERNEL ===
+6.12.69+deb13-amd64
+=== UPTIME ===
+ 02:37:31 up 15:31,  1 user,  load average: 0.05, 0.01, 0.00
+=== NETWORK INTERFACES ===
+source /etc/network/interfaces.d/*
+
+auto lo
+iface lo inet loopback
+
+allow-hotplug ens18
+iface ens18 inet static
+    address 10.25.5.30/24
+    gateway 10.25.5.1
+    dns-nameservers 1.1.1.1 8.8.8.8
+    mtu 9000
+    up ip route add 10.25.0.0/24 via 10.25.5.5
+
+allow-hotplug ens19
+iface ens19 inet static
+    address 10.25.255.30/24
+    mtu 9000
+    up ip route add 10.25.100.0/24 via 10.25.255.1
+=== NFS MOUNTS ===
+10.25.0.25:/mnt/mega-pool/nfs-mega-share on /mnt/nfs-mega-share type nfs (rw,relatime,vers=3,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,mountaddr=10.25.0.25,mountvers=3,mountport=43071,mountproto=udp,local_lock=none,addr=10.25.0.25,_netdev)
+=== FSTAB ===
+# /etc/fstab: static file system information.
+#
+# Use 'blkid' to print the universally unique identifier for a
+# device; this may be used with UUID= as a more robust way to name devices
+# that works even if disks are added and removed. See fstab(5).
+#
+# systemd generates mount units based on this file, see systemd.mount(5).
+# Please run 'systemctl daemon-reload' after making changes here.
+#
+# <file system> <mount point>   <type>  <options>       <dump>  <pass>
+# / was on /dev/sda1 during installation
+UUID=a14a9285-bca9-4121-9225-34f9d73b7d5f /               ext4    errors=remount-ro 0       1
+# swap was on /dev/sda5 during installation
+UUID=8aad0d75-9e39-4e93-a15f-46565a0db380 none            swap    sw              0       0
+/dev/sr0        /media/cdrom0   udf,iso9660 user,noauto     0       0
+10.25.0.25:/mnt/mega-pool/nfs-mega-share /mnt/nfs-mega-share nfs nfsvers=3,_netdev,nofail,defaults 0 0
+=== DOCKER PS ===
+plex: lscr.io/linuxserver/plex:1.43.0.10492-121068a07-ls293: Up 4 hours
+=== DOCKER COMPOSE FILES ===
+--- FILE: /mnt/nfs-mega-share/plex/docker-compose.plex.yml ---
+# ============================================================
+# DC01 — Plex Media Server
+# VM: 101 (Plex) — VLAN 5 (Public)
+# Managed by: Jarvis & Sonny
+# ============================================================
+
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:1.43.0.10492-121068a07-ls293
+    container_name: plex
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+      - VERSION=docker
+    volumes:
+      - /mnt/nfs-mega-share/plex/arr-data/plex:/config:rw
+      - /tmp/plex-transcode:/transcode:rw
+      - /mnt/nfs-mega-share/plex/Movies:/movies:ro
+      - /mnt/nfs-mega-share/plex/TV:/tv:ro
+    devices:
+      - /dev/dri:/dev/dri
+--- FILE: /mnt/nfs-mega-share/plex/docker-compose.arr.yml ---
+# ============================================================
+# DC01 — Arr Stack
+# VM: 102 (Arr-Stack) — VLAN 5 (Public)
+# Managed by: Jarvis & Sonny
+# ============================================================
+
+services:
+  agregarr:
+    image: agregarr/agregarr:v2.4.0
+    container_name: agregarr
+    restart: unless-stopped
+    user: "3003:950"
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - /opt/agregarr-config:/app/config
+      - /mnt/nfs-mega-share/plex/Movies:/data/movies
+      - /mnt/nfs-mega-share/plex/TV:/data/tv
+    ports:
+      - "7171:7171"
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:v1.5.5-ls337
+    container_name: bazarr
+    restart: unless-stopped
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+    volumes:
+      - /opt/bazarr-config:/config
+      - /mnt/nfs-mega-share/plex/Movies:/movies
+      - /mnt/nfs-mega-share/plex/TV:/tv
+    ports:
+      - "6767:6767"
+
+  huntarr:
+    image: huntarr/huntarr:9.3.7
+    container_name: huntarr
+    restart: unless-stopped
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+    volumes:
+      - /opt/huntarr-config:/config
+    ports:
+      - "9705:9705"
+
+  overseerr:
+    image: lscr.io/linuxserver/overseerr:v1.34.0-ls157
+    container_name: overseerr
+    restart: unless-stopped
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+    volumes:
+      - /mnt/nfs-mega-share/plex/arr-data/overseerr:/config
+    ports:
+      - "5055:5055"
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:2.3.0.5236-ls137
+    container_name: prowlarr
+    restart: unless-stopped
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+    volumes:
+      - /mnt/nfs-mega-share/plex/arr-data/prowlarr:/config
+    ports:
+      - "9696:9696"
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:6.0.4.10291-ls292
+    container_name: radarr
+    restart: unless-stopped
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+    volumes:
+      - /mnt/nfs-mega-share/plex/arr-data/radarr:/config
+      - /mnt/nfs-mega-share/plex/Movies:/movies
+      - /mnt/nfs-mega-share/plex/Downloads:/downloads
+    ports:
+      - "7878:7878"
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:4.0.16.2944-ls302
+    container_name: sonarr
+    restart: unless-stopped
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+    volumes:
+      - /mnt/nfs-mega-share/plex/arr-data/sonarr:/config
+      - /mnt/nfs-mega-share/plex/TV:/tv
+      - /mnt/nfs-mega-share/plex/Downloads:/downloads
+    ports:
+      - "8989:8989"
+--- FILE: /mnt/nfs-mega-share/plex/docker-compose.tdarr-node.yml ---
+# ============================================================
+# DC01 — Tdarr Node
+# VM: 104 (Tdarr-Node) — VLAN 10 (Compute), pve03
+# Running version: 2.58.02 (no semver tags on ghcr.io)
+# GPU: Radeon RX 580 (VAAPI + ROCm)
+# Managed by: Jarvis & Sonny
+# ============================================================
+
+services:
+  tdarr-node:
+    image: ghcr.io/haveagitgat/tdarr_node:latest
+    container_name: tdarr-node
+    restart: unless-stopped
+    network_mode: bridge
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+      - serverIP=10.25.10.33
+      - serverPort=8266
+      - ffmpegVersion=6
+      - nodeID=Radeon-RX580|6Core
+      - apiKey=tapi_BmuGjjRCb
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
+    group_add:
+      - "video"
+      - "992"
+    volumes:
+      - /mnt/nfs-mega-share/plex/arr-data/tdarr-node/configs:/app/configs
+      - /mnt/nfs-mega-share/plex/arr-data/tdarr-node/logs:/app/logs
+      - /mnt/nfs-mega-share/plex/Movies:/media/Movies
+      - /mnt/nfs-mega-share/plex/TV:/media/TV
+      - /mnt/nfs-mega-share/plex/Audio:/media/Audio
+      - /mnt/nfs-mega-share/plex/Transcode:/tcache
+--- FILE: /mnt/nfs-mega-share/plex/docker-compose.tdarr.yml ---
+# ============================================================
+# DC01 — Tdarr Server
+# VM: 105 (Tdarr-Server) — VLAN 10 (Compute)
+# Running version: 2.58.02 (no semver tags on ghcr.io)
+# Managed by: Jarvis & Sonny
+# ============================================================
+
+services:
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:latest
+    container_name: tdarr
+    restart: unless-stopped
+    network_mode: bridge
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+      - serverPort=8266
+      - webUIPort=8265
+      - internalNode=false
+      - auth=true
+    ports:
+      - "8265:8265"
+      - "8266:8266"
+    volumes:
+      - /mnt/nfs-mega-share/plex/arr-data/tdarr/server:/app/server
+      - /mnt/nfs-mega-share/plex/arr-data/tdarr/configs:/app/configs
+      - /mnt/nfs-mega-share/plex/arr-data/tdarr/logs:/app/logs
+      - /mnt/nfs-mega-share/plex/Movies:/media/Movies
+      - /mnt/nfs-mega-share/plex/TV:/media/TV
+      - /mnt/nfs-mega-share/plex/Audio:/media/Audio
+      - /mnt/nfs-mega-share/plex/Transcode:/tcache
+--- FILE: /mnt/nfs-mega-share/plex/downloader-data/docker-compose.qbit.yml ---
+# ============================================================
+# DC01 — qBittorrent Downloader Stack
+# VM: 103 (qBit-Downloader) — VLAN 66 (Dirty)
+# Managed by: Jarvis & Sonny
+# ============================================================
+
+services:
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.4.6
+    container_name: flaresolverr
+    restart: unless-stopped
+    network_mode: "service:gluetun"
+    environment:
+      - TZ=${TZ}
+      - LOG_LEVEL=info
+
+  gluetun:
+    image: qmcgaw/gluetun:v3.41.1
+    container_name: gluetun
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "8080:8080/tcp"
+      - "6881:6881/tcp"
+      - "6881:6881/udp"
+      - "8191:8191/tcp"
+    environment:
+      - TZ=${TZ}
+      - UPDATER_PERIOD=24h
+      - BLOCK_MALICIOUS=off
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - SERVER_COUNTRIES=${SERVER_COUNTRIES}
+      - SERVER_REGIONS=${SERVER_REGIONS}
+      - VPN_PORT_FORWARDING=on
+      - PORT_FORWARD_ONLY=on
+      - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'wget -qO- --retry-connrefused --post-data "json={\"listen_port\":{{PORTS}}}" http://127.0.0.1:8080/api/v2/app/setPreferences || true'
+    volumes:
+      - ${CONFIG_DIR}/gluetun:/gluetun
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- https://ipinfo.io/ip >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:5.1.4-r2-ls440
+    container_name: qbittorrent
+    restart: unless-stopped
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - WEBUI_PORT=8080
+    volumes:
+      - /mnt/nfs-mega-share/plex/arr-data/qbittorrent:/config
+      - /mnt/nfs-mega-share/plex/Downloads:/downloads
+=== USERS ===
+sonny-aif:x:3000:950:,,,:/home/sonny-aif:/bin/bash
+svc-admin:x:3003:950::/home/svc-admin:/bin/bash
+=== SUDOERS ===
+#
+# The default /etc/sudoers file created on installation of the
+# sudo  package now includes the directive:
+# 
+# 	@includedir /etc/sudoers.d
+# 
+# This will cause sudo to read and parse any files in the /etc/sudoers.d 
+# directory that do not end in '~' or contain a '.' character, if it
+# exists. It is not an error if the directory does not exist.
+# 
+# Note also, that because sudoers contents can vary widely, no attempt is 
+# made to add this directive to existing sudoers files on upgrade.  Feel free
+# to add the above directive to the end of your /etc/sudoers file to enable 
+# this functionality for existing installations if you wish!
+# Sudo versions older than 1.9.1 will only support the old syntax
+# #includedir. That means that the sudo versions in Debian bullseye (11)
+# and later will happily accept both @includedir and #includedir.
+#
+# Finally, please note that using the visudo command is the recommended way
+# to update sudoers content, since it protects against many failure modes.
+# See the man page for visudo and sudoers for more information.
+#
+sonny-aif ALL=(ALL) NOPASSWD: ALL
+svc-admin ALL=(ALL) NOPASSWD: ALL
+=== GROUPS ===
+svc-admin : truenas_admin sudo docker
+=== DISK USAGE ===
+Filesystem                                Size  Used Avail Use% Mounted on
+10.25.0.25:/mnt/mega-pool/nfs-mega-share   21T  744G   20T   4% /mnt/nfs-mega-share

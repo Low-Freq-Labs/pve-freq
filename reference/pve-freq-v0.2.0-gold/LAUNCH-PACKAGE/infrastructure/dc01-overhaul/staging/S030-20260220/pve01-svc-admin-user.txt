@@ -1,0 +1,5 @@
+svc-admin:x:3003:950::/home/svc-admin:/bin/bash
+---
+uid=3003(svc-admin) gid=950(truenas_admin) groups=950(truenas_admin),27(sudo)
+---
+svc-admin : truenas_admin sudo

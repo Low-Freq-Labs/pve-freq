@@ -1,0 +1,67 @@
+gigecolo#terminal length 0
+gigecolo#show logging
+Syslog logging: enabled (0 messages dropped, 4 messages rate-limited, 0 flushes, 0 overruns, xml disabled, filtering disabled)
+
+No Active Message Discriminator.
+
+
+
+No Inactive Message Discriminator.
+
+
+    Console logging: level debugging, 90 messages logged, xml disabled,
+                     filtering disabled
+    Monitor logging: level debugging, 0 messages logged, xml disabled,
+                     filtering disabled
+    Buffer logging:  level debugging, 90 messages logged, xml disabled,
+                    filtering disabled
+    Exception Logging: size (8192 bytes)
+    Count and timestamp logging messages: disabled
+    Persistent logging: disabled
+
+No active filter modules.
+
+    Trap logging: level informational, 94 message lines logged
+        Logging Source-Interface:       VRF Name:
+
+Log Buffer (4096 bytes):
+NDLE: Interface Gi1/47 left the port-channel Po2
+*Feb 19 16:08:33.496: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.0.26)
+*Feb 19 16:08:55.652: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.0.26)
+*Feb 19 16:11:44.355: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.0.26)
+*Feb 19 16:11:52.483: %EC-5-L3DONTBNDL2: Gi1/47 suspended: LACP currently not enabled on the remote port.
+*Feb 19 16:49:50.283: %EC-5-L3DONTBNDL2: Gi1/47 suspended: LACP currently not enabled on the remote port.
+*Feb 19 16:50:09.391: %EC-5-L3DONTBNDL2: Gi1/47 suspended: LACP currently not enabled on the remote port.
+*Feb 19 17:58:59.619: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.100.19)
+*Feb 19 17:59:04.675: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.100.19)
+*Feb 19 17:59:23.087: %EC-5-L3DONTBNDL2: Gi1/47 suspended: LACP currently not enabled on the remote port.
+*Feb 19 18:01:08.575: %EC-5-BUNDLE: Interface Gi1/47 joined port-channel Po2
+*Feb 19 18:01:16.779: %EC-5-UNBUNDLE: Interface Gi1/47 left the port-channel Po2
+*Feb 19 18:01:30.259: %EC-5-BUNDLE: Interface Gi1/47 joined port-channel Po2
+*Feb 19 18:01:39.087: %PM-4-ERR_DISABLE: pagp-flap error detected on Gi1/47, putting Gi1/47 in err-disable state
+*Feb 19 18:01:39.151: %EC-5-UNBUNDLE: Interface Gi1/47 left the port-channel Po2
+*Feb 19 19:02:04.411: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.100.19)
+*Feb 19 19:02:18.679: %EC-5-L3DONTBNDL2: Gi1/47 suspended: LACP currently not enabled on the remote port.
+*Feb 19 19:03:38.411: %EC-5-L3DONTBNDL2: Gi1/47 suspended: LACP currently not enabled on the remote port.
+*Feb 19 19:45:13.087: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.100.19)
+*Feb 19 19:45:30.663: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.100.19)
+*Feb 19 19:45:47.671: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.100.19)
+*Feb 19 19:47:58.283: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.100.19)
+*Feb 19 19:48:30.115: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.100.19)
+*Feb 19 19:51:30.015: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.100.19)
+*Feb 19 19:51:39.515: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.100.19)
+*Feb 19 22:23:32.382: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.0.26)
+*Feb 19 22:23:41.138: %SSH-3-NO_MATCH: No matching kex algorithm found: client mlkem768x25519-sha256,sntrup761x25519-sha512,sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,ext-info-c,kex-strict-c-v00@openssh.com server diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1
+*Feb 19 23:35:44.242: %SYS-5-CONFIG_I: Configured from console by sonny-aif on vty0 (10.25.100.19)
+*Feb 20 14:24:51.618: %SYS-5-CONFIG_I: Configured from console by svc-admin on vty0 (10.25.100.19)
+*Feb 20 14:25:43.162: %SYS-5-CONFIG_I: Configured from console by svc-admin on vty0 (10.25.100.19)
+*Feb 20 14:26:53.926: %EC-5-L3DONTBNDL2: Gi1/48 suspended: LACP currently not enabled on the remote port.
+*Feb 20 14:26:54.074: %EC-5-L3DONTBNDL2: Gi1/47 suspended: LACP currently not enabled on the remote port.
+*Feb 20 14:28:45.722: %SYS-5-CONFIG_I: Configured from console by svc-admin on vty0 (10.25.100.19)
+*Feb 20 14:33:49.738: %EC-5-BUNDLE: Interface Gi1/47 joined port-channel Po2
+*Feb 20 14:33:50.810: %EC-5-BUNDLE: Interface Gi1/48 joined port-channel Po2
+*Feb 20 14:35:10.286: %EC-5-UNBUNDLE: Interface Gi1/47 left the port-channel Po2
+*Feb 20 14:35:10.374: %EC-5-UNBUNDLE: Interface Gi1/48 left the port-channel Po2
+*Feb 20 14:35:19.542: %EC-5-BUNDLE: Interface Gi1/47 joined port-channel Po2
+*Feb 20 14:35:19.802: %EC-5-BUNDLE: Interface Gi1/48 joined port-channel Po2
+gigecolo#exit

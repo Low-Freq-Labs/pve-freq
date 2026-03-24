@@ -1,0 +1,19 @@
+--- id svc-admin ---
+uid=3003(svc-admin) gid=950(truenas_admin) groups=950(truenas_admin),27(sudo)
+
+--- id sonny-aif ---
+uid=1000(sonny-aif) gid=1000(sonny-aif) groups=1000(sonny-aif),27(sudo)
+
+--- grep svc-admin|sonny-aif|root in /etc/passwd ---
+root:x:0:0:root:/root:/bin/bash
+sonny-aif:x:1000:1000::/home/sonny-aif:/bin/bash
+svc-admin:x:3003:950::/home/svc-admin:/bin/bash
+
+--- grep svc-admin|sonny-aif|root in /etc/group ---
+root:x:0:
+sudo:x:27:sonny-aif,svc-admin
+sonny-aif:x:1000:
+svc-admin:x:1001:
+
+--- groups svc-admin ---
+svc-admin : truenas_admin sudo

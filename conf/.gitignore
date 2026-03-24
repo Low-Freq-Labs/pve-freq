@@ -1,0 +1,13 @@
+# Site-specific config files — DO NOT track in git
+# Use the corresponding .example files as templates.
+# freq init will copy .example → live config on first run.
+
+freq.toml
+hosts.conf
+vlans.toml
+fleet-boundaries.toml
+risk.toml
+roles.conf
+users.conf
+containers.toml
+.initialized

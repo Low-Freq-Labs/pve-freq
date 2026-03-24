@@ -1,0 +1,133 @@
+# PVE FREQ — Personality Pack: Default
+# Neutral, professional personality for any cluster.
+# No branding assumptions. No datacenter-specific references.
+
+subtitle = "P V E  F R E Q"
+vibe_enabled = false
+vibe_probability = 47
+dashboard_header = "PVE FREQ Dashboard"
+
+# Celebrations — shown after successful operations (auto-rotate)
+celebrations = [
+    "Done.",
+    "Flawless deployment.",
+    "Clean operation.",
+    "Another VM enters the fleet.",
+    "Deployed and verified.",
+    "Smooth operation. Zero drama.",
+    "Consider it handled.",
+    "Fleet-wide and flawless.",
+    "All hosts aligned. All systems nominal.",
+    "One command. Every server. Zero stress.",
+    "The fleet moves as one.",
+    "Precision engineering at work.",
+    "Parallel execution. Sequential celebration.",
+    "Every host in harmony.",
+    "Zero errors. Clean results.",
+    "Clone complete. Ready to go.",
+    "Resized and revitalized.",
+    "Template saved. Future you says thanks.",
+    "Imported and accounted for.",
+    "Task complete.",
+    "Achievement unlocked: VM Whisperer.",
+    "Fleet operation complete.",
+    "All hosts aligned.",
+    "Config deployed.",
+    "Password changed. Security upgraded.",
+    "User deployed. Fleet expanded.",
+    "Cluster-wide compliance. Clean.",
+    "Migration complete. Not a packet lost.",
+    "Hardened. Configured. Deployed. Done.",
+    "Host onboarded. Welcome to the fleet.",
+    "Key deployed. Access granted.",
+    "Diagnose complete. Knowledge gained.",
+    "Docker containers: accounted for.",
+    "Bootstrap complete. Host is fleet-ready.",
+    "NIC configured. Packets flowing.",
+    "Rescue mode activated.",
+    "Engine returned clean.",
+    "Policy compliant across the fleet.",
+    "Remediation complete.",
+    "Audit: green across the board.",
+    "Every check passed. Every policy met.",
+    "Audit log says you did everything right.",
+]
+
+# Taglines — splash screen rotating taglines
+taglines = [
+    "Full frequency. Full efficiency.",
+    "Making VMs feel like magic.",
+    "Because life's too short for manual provisioning.",
+    "One tool. One command. One frequency.",
+    "Everything you need. Nothing you don't.",
+    "Fleet-wide operations. Fingertip control.",
+    "SSH in. Crush it. Log out.",
+    "Automate everything. Celebrate often.",
+    "Root access. Root confidence.",
+    "Zero errors. Maximum swagger.",
+    "Parallel execution. Sequential celebration.",
+    "Your infrastructure called. It says thanks.",
+    "Configure once. Deploy everywhere.",
+    "Homelab-grade automation. Enterprise-grade attitude.",
+    "Policy engine online. Compliance is automatic.",
+    "Async pipeline. Real-time results.",
+    "Infrastructure at the speed of sound.",
+    "Quiet servers. Loud confidence.",
+    "The signal is clear. The noise is gone.",
+    "Uptime is a love language.",
+    "Built by hand. Runs like clockwork.",
+    "Works on my cluster. And yours too.",
+    "Powered by coffee, Python, and cloud-init.",
+    "Not just a tool. A way of life.",
+    "Real tools. Real infrastructure. Real operator.",
+]
+
+# Quotes — MOTD rotating quotes for splash screen
+quotes = [
+    '"SSH in. Crush it. Log out." -- freq tagline',
+    '"everything is going to be okay. the cluster is healthy." -- freq doctor',
+    '"snapshot before you experiment. snapshot before you experiment." -- freq',
+    '"the goal every single time: clean." -- freq doctor',
+    '"every great homelab started with a single qm create." -- freq origin story',
+    '"backups mean peace of mind." -- freq backup',
+    '"you built this. it works. that means something." -- freq',
+    '"configure once. deploy everywhere." -- freq',
+]
+
+# Vibes are disabled by default in the neutral pack.
+# Enable vibe_enabled above to activate these.
+[vibes]
+common = [
+    "  # tip: freq doctor is free. run it more than you think you need to.",
+    "  # PRO TIP: snapshot before you experiment. always. every time.",
+    "  # your future self is watching. write the comment.",
+    "  # uptime is a vanity metric. backups are what matter.",
+    "  # if you're reading this, the command worked. good.",
+    "  # ssh keys > passwords. always. forever. non-negotiable.",
+    "  # test on lab before prod. that's not a suggestion.",
+    "  # zfs snapshots are free. taking one right now costs you nothing.",
+    "  # freq audit catches what you forget. run it weekly.",
+    "  # one host drifts, the whole fleet feels it. stay consistent.",
+    "  # good naming conventions save hours of debugging. name things well.",
+    "  # the dashboard isn't decoration. read it. trust it.",
+    "  # every manual step is a future automation waiting to be written.",
+    "  # DNS is always the answer. and also always the problem.",
+    "  # lock down the firewall first. open ports second. never the reverse.",
+    "  # VLAN segmentation isn't paranoia. it's professionalism.",
+]
+
+rare = []
+
+legendary = []
+
+# Premier messages — operation-specific celebration lines
+[premier]
+create = "A new VM enters the fleet."
+clone = "Cloned and ready. Two is better than one."
+migrate = "Migrated without a single dropped packet. Surgical."
+bootstrap = "Host bootstrapped. The fleet grows stronger."
+destroy = "Decommissioned with respect. The fleet remembers."
+snapshot = "Moment in time, captured. Your safety net is live."
+audit = "Every host examined. Every policy checked. The fleet is clean."
+harden = "Locked down, buttoned up. Security first."
+fix = "Remediation complete. The engine does the heavy lifting."

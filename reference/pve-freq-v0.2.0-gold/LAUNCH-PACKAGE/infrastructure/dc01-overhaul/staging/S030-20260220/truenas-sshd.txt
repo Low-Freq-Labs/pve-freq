@@ -1,0 +1,34 @@
+Subsystem	sftp	internal-sftp -l ERROR -f AUTH
+Protocol 2
+UseDNS no
+ChallengeResponseAuthentication no
+ClientAliveCountMax 3
+ClientAliveInterval 15
+VersionAddendum none
+Ciphers +aes128-cbc
+Port 22
+PermitRootLogin without-password
+AllowTcpForwarding no
+Compression no
+PasswordAuthentication no
+PubkeyAuthentication yes
+
+# These are forced to be enabled with 2FA
+UsePAM yes
+PrintMotd no
+SetEnv LC_ALL=C.UTF-8
+
+Match User "truenas_admin"
+	PasswordAuthentication yes
+	ChallengeResponseAuthentication yes
+Match User "sonny-aif"
+	PasswordAuthentication yes
+	ChallengeResponseAuthentication yes
+Match User "svc-admin"
+	PasswordAuthentication yes
+	ChallengeResponseAuthentication yes
+# These are aux params that MUST COME LAST
+# in the config. User provided "Match" blocks,
+# for example, need to come AFTER the UsePam
+# line. Otherwise ssh service WILL NOT START.
+

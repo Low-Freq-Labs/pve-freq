@@ -1,0 +1,4 @@
+-rw-rw-r-- 1 svc-admin truenas_admin 2720 Feb 20 09:59 /mnt/truenas/nfs-mega-share/plex/docker-compose.arr.yml
+-rw-rw-r-- 1 svc-admin truenas_admin  753 Feb 20 09:59 /mnt/truenas/nfs-mega-share/plex/docker-compose.plex.yml
+-rw-rw-r-- 1 svc-admin truenas_admin 1214 Feb 20 09:59 /mnt/truenas/nfs-mega-share/plex/docker-compose.tdarr-node.yml
+-rw-rw-r-- 1 svc-admin truenas_admin 1117 Feb 20 09:59 /mnt/truenas/nfs-mega-share/plex/docker-compose.tdarr.yml

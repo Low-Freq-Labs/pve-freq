@@ -1,0 +1,36 @@
+# ============================================================
+# DC01 — Tdarr Node
+# VM: 104 (Tdarr-Node) — VLAN 10 (Compute), pve03
+# Running version: 2.58.02 (no semver tags on ghcr.io)
+# GPU: Radeon RX 580 (VAAPI + ROCm)
+# Managed by: Jarvis & Sonny
+# ============================================================
+
+services:
+  tdarr-node:
+    image: ghcr.io/haveagitgat/tdarr_node:latest
+    container_name: tdarr-node
+    restart: unless-stopped
+    network_mode: bridge
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+      - serverIP=10.25.10.33
+      - serverPort=8266
+      - ffmpegVersion=6
+      - nodeID=Radeon-RX580|6Core
+      - apiKey=tapi_BmuGjjRCb
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
+    group_add:
+      - "video"
+      - "992"
+    volumes:
+      - /opt/dc01/configs/tdarr-node/configs:/app/configs
+      - /opt/dc01/configs/tdarr-node/logs:/app/logs
+      - /mnt/truenas/nfs-mega-share/media/movies:/media/Movies
+      - /mnt/truenas/nfs-mega-share/media/tv:/media/TV
+      - /mnt/truenas/nfs-mega-share/media/audio:/media/Audio
+      - /mnt/truenas/nfs-mega-share/media/transcode:/tcache

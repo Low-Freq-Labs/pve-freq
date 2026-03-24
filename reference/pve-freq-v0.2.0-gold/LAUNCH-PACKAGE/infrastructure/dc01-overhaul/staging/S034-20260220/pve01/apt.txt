@@ -1,0 +1,8 @@
+--- apt list --upgradable ---
+Listing...
+--- /etc/apt/sources.list ---
+--- ls /etc/apt/sources.list.d/ ---
+ceph.sources
+debian.sources
+proxmox.sources
+pve-enterprise.sources

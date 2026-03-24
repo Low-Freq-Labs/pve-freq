@@ -1,0 +1,4 @@
+NAMES          IMAGE                                            STATUS                 PORTS
+flaresolverr   ghcr.io/flaresolverr/flaresolverr:v3.4.6         Up 2 hours             
+qbittorrent    lscr.io/linuxserver/qbittorrent:5.1.4-r2-ls440   Up 2 hours             
+gluetun        qmcgaw/gluetun:v3.41.1                           Up 2 hours (healthy)   0.0.0.0:6881->6881/tcp, [::]:6881->6881/tcp, 0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp, 8000/tcp, 8388/tcp, 0.0.0.0:8191->8191/tcp, 0.0.0.0:6881->6881/udp, [::]:8191->8191/tcp, [::]:6881->6881/udp, 8888/tcp, 8388/udp

@@ -1,0 +1,33 @@
+--- ls -la /etc/cron.d/ ---
+total 31
+drwxr-xr-x  2 root root   6 Feb 17 15:00 .
+drwxr-xr-x 99 root root 195 Feb 20 10:27 ..
+-rw-r--r--  1 root root 188 Jul 30  2025 e2scrub_all
+-rw-r--r--  1 root root 102 Jun 13  2025 .placeholder
+lrwxrwxrwx  1 root root  20 Feb 17 14:45 vzdump -> /etc/pve/vzdump.cron
+-rw-r--r--  1 root root 377 Aug 26 09:38 zfsutils-linux
+
+--- contents of each cron.d file ---
+
+--- /etc/cron.d/e2scrub_all ---
+30 3 * * 0 root test -e /run/systemd/system || SERVICE_MODE=1 /usr/libexec/e2fsprogs/e2scrub_all_cron
+10 3 * * * root test -e /run/systemd/system || SERVICE_MODE=1 /sbin/e2scrub_all -A -r
+
+--- /etc/cron.d/vzdump ---
+# cluster wide vzdump cron schedule
+# Automatically generated file - do not edit
+
+PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+
+
+--- /etc/cron.d/zfsutils-linux ---
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# TRIM the first Sunday of every month.
+24 0 1-7 * * root if [ $(date +\%w) -eq 0 ] && [ -x /usr/lib/zfs-linux/trim ]; then /usr/lib/zfs-linux/trim; fi
+
+# Scrub the second Sunday of every month.
+24 0 8-14 * * root if [ $(date +\%w) -eq 0 ] && [ -x /usr/lib/zfs-linux/scrub ]; then /usr/lib/zfs-linux/scrub; fi
+
+--- crontab -l (svc-admin) ---
+no crontab for svc-admin

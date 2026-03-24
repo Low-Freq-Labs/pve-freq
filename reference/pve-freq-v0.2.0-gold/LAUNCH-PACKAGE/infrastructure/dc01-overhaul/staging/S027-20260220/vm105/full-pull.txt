@@ -1,0 +1,149 @@
+=== HOSTNAME ===
+tdarr
+=== KERNEL ===
+6.12.69+deb13-amd64
+=== UPTIME ===
+ 02:38:12 up 15:31,  1 user,  load average: 0.10, 0.06, 0.05
+=== NETWORK INTERFACES ===
+# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+source /etc/network/interfaces.d/*
+
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# The primary network interface
+allow-hotplug ens18
+iface ens18 inet static
+	address 10.25.10.33/24
+	gateway 10.25.10.5
+	# dns-* options are implemented by the resolvconf package, if installed
+	dns-nameservers 10.25.0.1
+
+# Management NIC - VLAN 2550
+allow-hotplug ens19
+iface ens19 inet static
+    address 10.25.255.33/24
+    mtu 9000
+    up ip route add 10.25.100.0/24 via 10.25.255.1
+=== NFS MOUNTS ===
+10.25.0.25:/mnt/mega-pool/nfs-mega-share on /mnt/nfs-mega-share type nfs (rw,relatime,vers=3,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,mountaddr=10.25.0.25,mountvers=3,mountport=43071,mountproto=udp,local_lock=none,addr=10.25.0.25,_netdev)
+=== FSTAB ===
+# /etc/fstab: static file system information.
+#
+# Use 'blkid' to print the universally unique identifier for a
+# device; this may be used with UUID= as a more robust way to name devices
+# that works even if disks are added and removed. See fstab(5).
+#
+# systemd generates mount units based on this file, see systemd.mount(5).
+# Please run 'systemctl daemon-reload' after making changes here.
+#
+# <file system> <mount point>   <type>  <options>       <dump>  <pass>
+# / was on /dev/sda1 during installation
+UUID=49452677-a6e8-454d-ba3d-77e8a9146797 /               ext4    errors=remount-ro 0       1
+# swap was on /dev/sda5 during installation
+UUID=56f0895c-0745-460b-9b68-78f635e15c48 none            swap    sw              0       0
+/dev/sr0        /media/cdrom0   udf,iso9660 user,noauto     0       0
+10.25.0.25:/mnt/mega-pool/nfs-mega-share /mnt/nfs-mega-share nfs nfsvers=3,_netdev,nofail,defaults 0 0
+=== DOCKER PS ===
+tdarr: ghcr.io/haveagitgat/tdarr:latest: Up 15 hours
+=== DOCKER COMPOSE FILES ===
+--- FILE: /mnt/nfs-mega-share/plex/docker-compose.tdarr.yml.bak-session22 ---
+services:
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:latest
+    container_name: tdarr
+    restart: unless-stopped
+    network_mode: bridge
+    environment:
+      - TZ=America/Chicago
+      - PUID=3003
+      - PGID=950
+      - serverPort=8266
+      - webUIPort=8265
+      - internalNode=false
+      - auth=true
+    ports:
+      - "8265:8265"    # Web UI
+      - "8266:8266"    # Server port
+    volumes:
+      # Tdarr server data
+      - /mnt/nfs-mega-share/plex/arr-data/tdarr/server:/app/server
+      - /mnt/nfs-mega-share/plex/arr-data/tdarr/configs:/app/configs
+      - /mnt/nfs-mega-share/plex/arr-data/tdarr/logs:/app/logs
+
+      # Media libraries (match what Tdarr uses)
+      - /mnt/nfs-mega-share/plex/Movies:/media/Movies
+      - /mnt/nfs-mega-share/plex/TV:/media/TV
+      - /mnt/nfs-mega-share/plex/Audio:/media/Audio
+
+      # Tdarr transcode cache
+      - /mnt/nfs-mega-share/plex/Transcode:/tcache
+--- FILE: /mnt/nfs-mega-share/plex/docker-compose.tdarr.yml ---
+# ============================================================
+# DC01 — Tdarr Server
+# VM: 105 (Tdarr-Server) — VLAN 10 (Compute)
+# Running version: 2.58.02 (no semver tags on ghcr.io)
+# Managed by: Jarvis & Sonny
+# ============================================================
+
+services:
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:latest
+    container_name: tdarr
+    restart: unless-stopped
+    network_mode: bridge
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+      - serverPort=8266
+      - webUIPort=8265
+      - internalNode=false
+      - auth=true
+    ports:
+      - "8265:8265"
+      - "8266:8266"
+    volumes:
+      - /mnt/nfs-mega-share/plex/arr-data/tdarr/server:/app/server
+      - /mnt/nfs-mega-share/plex/arr-data/tdarr/configs:/app/configs
+      - /mnt/nfs-mega-share/plex/arr-data/tdarr/logs:/app/logs
+      - /mnt/nfs-mega-share/plex/Movies:/media/Movies
+      - /mnt/nfs-mega-share/plex/TV:/media/TV
+      - /mnt/nfs-mega-share/plex/Audio:/media/Audio
+      - /mnt/nfs-mega-share/plex/Transcode:/tcache
+=== USERS ===
+sonny-aif:x:3000:950:sonny-aif,,,:/home/sonny-aif:/bin/bash
+svc-admin:x:3003:950::/home/svc-admin:/bin/bash
+=== SUDOERS ===
+#
+# The default /etc/sudoers file created on installation of the
+# sudo  package now includes the directive:
+# 
+# 	@includedir /etc/sudoers.d
+# 
+# This will cause sudo to read and parse any files in the /etc/sudoers.d 
+# directory that do not end in '~' or contain a '.' character, if it
+# exists. It is not an error if the directory does not exist.
+# 
+# Note also, that because sudoers contents can vary widely, no attempt is 
+# made to add this directive to existing sudoers files on upgrade.  Feel free
+# to add the above directive to the end of your /etc/sudoers file to enable 
+# this functionality for existing installations if you wish!
+# Sudo versions older than 1.9.1 will only support the old syntax
+# #includedir. That means that the sudo versions in Debian bullseye (11)
+# and later will happily accept both @includedir and #includedir.
+#
+# Finally, please note that using the visudo command is the recommended way
+# to update sudoers content, since it protects against many failure modes.
+# See the man page for visudo and sudoers for more information.
+#
+sonny-aif ALL=(ALL) NOPASSWD: ALL
+svc-admin ALL=(ALL) NOPASSWD: ALL
+=== GROUPS ===
+svc-admin : truenas_admin sudo docker
+=== DISK USAGE ===
+Filesystem                                Size  Used Avail Use% Mounted on
+10.25.0.25:/mnt/mega-pool/nfs-mega-share   21T  744G   20T   4% /mnt/nfs-mega-share

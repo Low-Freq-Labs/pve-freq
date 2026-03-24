@@ -1,0 +1,13 @@
+=== /etc/cron.d/ ===
+total 20
+drwxr-xr-x  2 root root 4096 Feb 20 15:43 .
+drwxr-xr-x 79 root root 4096 Feb 20 15:32 ..
+-rw-r--r--  1 root root   80 Feb 20 15:43 dc01-backup
+-rw-r--r--  1 root root  188 Jan  2 08:41 e2scrub_all
+-rw-r--r--  1 root root  102 Jun 13  2025 .placeholder
+
+=== /etc/cron.d/dc01-backup ===
+0 3 * * * root /opt/dc01/backups/backup.sh >> /opt/dc01/backups/backup.log 2>&1
+
+=== crontab -l ===
+no crontab for svc-admin

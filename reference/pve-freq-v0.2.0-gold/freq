@@ -1,0 +1,381 @@
+#!/bin/bash
+# =============================================================================
+# PVE FREQ v0.2.0 "The Convergence"
+# The infrastructure management platform for Proxmox VE
+#
+# Architecture:
+#   CORE (9 files) — the product. if any one dies, the tool dies.
+#     freq           this file. the spine.
+#     freq.conf      identity. version, paths, PVE nodes, service account.
+#     core.sh        colors, symbols, RBAC, locks, traps, die(), log().
+#     fmt.sh         every pixel on screen. borders, steps, spinners, tables.
+#     ssh.sh         every remote operation. 6 platform types, one function.
+#     resolve.sh     name → IP. the address book.
+#     validate.sh    input gates. IP, username, VMID, hostname.
+#     personality.sh the soul. pack loader, celebrations, vibes, taglines.
+#     vault.sh       secrets. AES-256-CBC encrypted credentials.
+#
+#   MODULES (36 files) — fully independent. any can be missing, corrupted,
+#     or standing alone. the tool keeps running. the user barely notices.
+#     each module loads only if present, fails only if called.
+#
+#   ENGINE (19 Python files) — optional. remediation brain.
+#     if missing: "Engine not installed." if present: check, fix, diff.
+#
+#   DATA (runtime) — optional. logs, vault data, engine history.
+#     if missing: tool works, just no history.
+#
+# That's it. 9 files are the spine. Everything else is a muscle.
+# =============================================================================
+set -uo pipefail
+
+# ═══════════════════════════════════════════════════════════════════
+# CLEANUP — runs on every exit. no orphans. no leaks. no locks.
+# ═══════════════════════════════════════════════════════════════════
+_freq_global_cleanup() {
+    [ -n "${_SPINNER_PID:-}" ] && kill "$_SPINNER_PID" 2>/dev/null
+    unset FREQ_SSH_PASSWORD 2>/dev/null
+    [ -n "${FREQ_LOCK:-}" ] && [ -f "${FREQ_LOCK:-}" ] && rm -f "$FREQ_LOCK" 2>/dev/null
+}
+trap '_freq_global_cleanup' EXIT
+trap 'echo ""; echo -e "  ${YELLOW:-}Interrupted.${RESET:-}"; _freq_global_cleanup; exit 130' INT TERM
+
+# ═══════════════════════════════════════════════════════════════════
+# ENVIRONMENT — safe defaults that survive anything
+# ═══════════════════════════════════════════════════════════════════
+export HOME="${HOME:-/root}"
+export USER="${USER:-$(id -un 2>/dev/null || echo root)}"
+export TERM="${TERM:-xterm}"
+
+# ═══════════════════════════════════════════════════════════════════
+# SELF-LOCATION — symlink-safe, always finds the real install dir
+# ═══════════════════════════════════════════════════════════════════
+_self="${BASH_SOURCE[0]}"
+while [ -L "$_self" ]; do
+    _dir="$(cd -P "$(dirname "$_self")" && pwd)"
+    _self="$(readlink "$_self")"
+    [[ "$_self" != /* ]] && _self="$_dir/$_self"
+done
+FREQ_INSTALL_DIR="$(cd -P "$(dirname "$_self")" && pwd)"
+
+# ═══════════════════════════════════════════════════════════════════
+# CORE 1 of 9: freq.conf — identity
+# Safe defaults first. Config overwrites what it can.
+# If config is corrupted, the tool runs on defaults.
+# ═══════════════════════════════════════════════════════════════════
+FREQ_VERSION="0.0.0"
+FREQ_BRAND="FREQ"
+FREQ_BUILD="${FREQ_BUILD:-personal}"
+FREQ_ASCII="${FREQ_ASCII:-1}"
+FREQ_DEBUG="${FREQ_DEBUG:-0}"
+FREQ_SERVICE_ACCOUNT="${FREQ_SERVICE_ACCOUNT:-svc-admin}"
+PVE_NODES=()
+PVE_NODE_NAMES=()
+
+if [ -f "$FREQ_INSTALL_DIR/conf/freq.conf" ]; then
+    if ! . "$FREQ_INSTALL_DIR/conf/freq.conf" 2>/dev/null; then
+        echo -e "  \033[1;33mWarning: freq.conf has errors. Running with defaults.\033[0m" >&2
+        echo -e "  \033[2mDiagnose: bash -n $FREQ_INSTALL_DIR/conf/freq.conf\033[0m" >&2
+    fi
+else
+    echo "FATAL: Cannot find $FREQ_INSTALL_DIR/conf/freq.conf" >&2
+    exit 1
+fi
+
+# ═══════════════════════════════════════════════════════════════════
+# PATHS — derived from install dir. config is template, location is truth.
+# ═══════════════════════════════════════════════════════════════════
+FREQ_DIR="$FREQ_INSTALL_DIR"
+FREQ_DATA_DIR="$FREQ_DIR/data"
+FREQ_LOG="$FREQ_DATA_DIR/log/freq.log"
+FREQ_PROTECTED_LOG="$FREQ_DATA_DIR/log/protected.log"
+FREQ_LOCK="$FREQ_DATA_DIR/.freq.lock"
+HOSTS_FILE="$FREQ_DIR/conf/hosts.conf"
+USERS_FILE="$FREQ_DIR/conf/users.conf"
+ROLES_FILE="$FREQ_DIR/conf/roles.conf"
+GROUPS_FILE="$FREQ_DIR/conf/groups.conf"
+VAULT_DIR="$FREQ_DATA_DIR/vault"
+VAULT_FILE="$VAULT_DIR/freq-vault.enc"
+
+# ═══════════════════════════════════════════════════════════════════
+# GLOBAL FLAGS
+# ═══════════════════════════════════════════════════════════════════
+DRY_RUN=false
+JSON_OUTPUT=false
+FREQ_YES=false
+FREQ_DEBUG="${FREQ_DEBUG:-0}"
+
+# ═══════════════════════════════════════════════════════════════════
+# CORE 2-8 of 9: Foundation libraries
+# These 7 files ARE the product. Fatal on missing. Fatal on broken.
+# Order matters: core first (colors, symbols), then the rest.
+# ═══════════════════════════════════════════════════════════════════
+for _lib in core fmt ssh resolve validate personality vault; do
+    if [ -f "$FREQ_DIR/lib/${_lib}.sh" ]; then
+        . "$FREQ_DIR/lib/${_lib}.sh" || {
+            echo "FATAL: lib/${_lib}.sh failed to load" >&2
+            exit 1
+        }
+    else
+        echo "FATAL: Missing core library: lib/${_lib}.sh" >&2
+        exit 1
+    fi
+done
+
+# ═══════════════════════════════════════════════════════════════════
+# MODULES — 36 independent pillars. each one stands alone.
+# If missing: silently skipped. If broken: reported, isolated.
+# No module depends on another module. Only on core.
+# ═══════════════════════════════════════════════════════════════════
+_FREQ_BROKEN_MODULES=()
+for _lib in \
+    hosts init doctor users fleet vm pve \
+    pfsense truenas switch idrac media health audit watch menu \
+    harden provision images templates backup vpn wazuh notify \
+    mounts registry configure serial journal opnsense zfs pdm \
+    checkpoint learn risk creds; do
+    if [ -f "$FREQ_DIR/lib/${_lib}.sh" ]; then
+        if ! . "$FREQ_DIR/lib/${_lib}.sh" 2>/dev/null; then
+            _FREQ_BROKEN_MODULES+=("$_lib")
+        fi
+    fi
+done
+
+if [ ${#_FREQ_BROKEN_MODULES[@]} -gt 0 ]; then
+    echo -e "  ${YELLOW}Warning: ${#_FREQ_BROKEN_MODULES[@]} module(s) failed to load:${RESET}" >&2
+    for _bl in "${_FREQ_BROKEN_MODULES[@]}"; do
+        echo -e "    ${DIM}- ${_bl}.sh${RESET}" >&2
+    done
+    echo -e "  ${DIM}Diagnose: bash -n lib/<module>.sh${RESET}" >&2
+fi
+
+# ═══════════════════════════════════════════════════════════════════
+# IDENTITY — detect SSH key, user, role
+# ═══════════════════════════════════════════════════════════════════
+freq_detect_ssh_key 2>/dev/null
+
+FREQ_USER="${SUDO_USER:-$(id -un 2>/dev/null)}"
+FREQ_ROLE="viewer"
+if [ -f "$ROLES_FILE" ]; then
+    _role_line=$(grep "^${FREQ_USER}:" "$ROLES_FILE" 2>/dev/null | head -1)
+    [ -n "$_role_line" ] && FREQ_ROLE="${_role_line##*:}"
+fi
+[ -z "${SUDO_USER:-}" ] && [ "$(id -u)" -eq 0 ] && FREQ_ROLE="admin"
+[ "$FREQ_USER" = "${FREQ_SERVICE_ACCOUNT:-freq-admin}" ] && FREQ_ROLE="admin"
+
+export FREQ_USER FREQ_ROLE
+
+# ═══════════════════════════════════════════════════════════════════
+# DISPATCH — route commands to modules
+# Core commands (version, help) always work.
+# Module commands work if the module is loaded.
+# Engine commands work if Python + engine/ exist.
+# ═══════════════════════════════════════════════════════════════════
+main() {
+    local cmd="" args=()
+
+    for arg in "$@"; do
+        case "$arg" in
+            --dry-run)  DRY_RUN=true ;;
+            --json)     JSON_OUTPUT=true ;;
+            --yes|-y)   FREQ_YES=true ;;
+            --debug)    FREQ_DEBUG=1; set -x ;;
+            *)          [ -z "$cmd" ] && cmd="$arg" || args+=("$arg") ;;
+        esac
+    done
+
+    # No command = interactive menu (or help if menu module missing)
+    if [ -z "$cmd" ]; then
+        if declare -f _interactive_menu &>/dev/null; then
+            _interactive_menu
+        else
+            cmd_help
+        fi
+        return
+    fi
+
+    [ "$FREQ_DEBUG" = "1" ] && echo "DEBUG: cmd=$cmd args=${args[*]:-} user=$FREQ_USER role=$FREQ_ROLE" >&2
+
+    case "$cmd" in
+        # ── Core (always available) ──
+        version|--version)      cmd_version ;;
+        help|--help|-h)         cmd_help ;;
+        vault)                  cmd_vault "${args[@]}" ;;
+        bump)                   _freq_bump_version "${args[@]}" ;;
+
+        # ── VM Lifecycle ──
+        create)                 _freq_module vm && cmd_create "${args[@]}" ;;
+        clone)                  _freq_module vm && cmd_clone "${args[@]}" ;;
+        resize)                 _freq_module vm && cmd_resize "${args[@]}" ;;
+        destroy|remove|rm)      _freq_module vm && cmd_destroy "${args[@]}" ;;
+        list|ls)                _freq_module vm && cmd_list "${args[@]}" ;;
+        snapshot|snap)          _freq_module vm && cmd_snapshot "${args[@]}" ;;
+        import)                 _freq_module vm && cmd_import "${args[@]}" ;;
+        vm-status)              _freq_module vm && cmd_vm_status "${args[@]}" ;;
+        change-id)              _freq_module vm && cmd_change_id "${args[@]}" ;;
+
+        # ── Fleet ──
+        dashboard)              _freq_module fleet && cmd_dashboard "${args[@]}" ;;
+        status)                 _freq_module fleet && cmd_fleet_status "${args[@]}" ;;
+        exec|run-on)            _freq_module fleet && cmd_exec "${args[@]}" ;;
+        info)                   _freq_module fleet && cmd_info "${args[@]}" ;;
+        diagnose)               _freq_module fleet && cmd_diagnose "${args[@]}" ;;
+        docker)                 _freq_module fleet && cmd_docker "${args[@]}" ;;
+        ssh)                    _freq_module fleet && cmd_fleet_ssh "${args[@]}" ;;
+        log|history)            _freq_module fleet && cmd_log "${args[@]}" ;;
+        migrate-ip)             _freq_module fleet && cmd_migrate_ip "${args[@]}" ;;
+        ssh-mode)               _freq_module fleet && cmd_fleet_ssh_mode "${args[@]}" ;;
+        operator|op)            _freq_module fleet && cmd_operator "${args[@]}" ;;
+
+        # ── Hosts & Users ──
+        hosts)                  _freq_module hosts && cmd_hosts "${args[@]}" ;;
+        discover)               _freq_module hosts && cmd_discover "${args[@]}" ;;
+        groups)                 _freq_module hosts && cmd_groups "${args[@]}" ;;
+        bootstrap|setup)        _freq_module fleet && cmd_bootstrap "${args[@]}" ;;
+        onboard|new-host)       _freq_module fleet && cmd_onboard "${args[@]}" ;;
+        new-user)               _freq_module users && cmd_new_user "${args[@]}" ;;
+        passwd)                 _freq_module users && cmd_passwd "${args[@]}" ;;
+        users)                  _freq_module users && cmd_users "${args[@]}" ;;
+        roles)                  _freq_module users && cmd_roles "${args[@]}" ;;
+        keys)                   _freq_module users && cmd_keys "${args[@]}" ;;
+        promote)                _freq_module users && cmd_promote "${args[@]}" ;;
+        demote)                 _freq_module users && cmd_demote "${args[@]}" ;;
+        install-user)           _freq_module users && cmd_install_user "${args[@]}" ;;
+
+        # ── Proxmox ──
+        vm-overview)            _freq_module pve && cmd_vm_overview "${args[@]}" ;;
+        vmconfig)               _freq_module pve && cmd_vmconfig "${args[@]}" ;;
+        migrate)                _freq_module pve && cmd_migrate "${args[@]}" ;;
+        rescue)                 _freq_module pve && cmd_rescue "${args[@]}" ;;
+
+        # ── Appliances ──
+        pfsense|pf)             _freq_module pfsense && cmd_pfsense "${args[@]}" ;;
+        truenas|tn)             _freq_module truenas && cmd_truenas "${args[@]}" ;;
+        switch|sw)              _freq_module switch && cmd_switch "${args[@]}" ;;
+        idrac)                  _freq_module idrac && cmd_idrac "${args[@]}" ;;
+        opnsense|opn)           _freq_module opnsense && cmd_opnsense "${args[@]}" ;;
+
+        # ── Monitoring & Security ──
+        health)                 _freq_module health && cmd_health "${args[@]}" ;;
+        audit)                  _freq_module audit && cmd_audit "${args[@]}" ;;
+        doctor)                 _freq_module doctor && cmd_doctor "${args[@]}" ;;
+        watch)                  _freq_module watch && cmd_watch "${args[@]}" ;;
+        media)                  _freq_module media && cmd_media "${args[@]}" ;;
+        harden)                 _freq_module harden && cmd_harden "${args[@]}" ;;
+
+        # ── Operations ──
+        provision|deploy)       _freq_module provision && cmd_provision "${args[@]}" ;;
+        images)                 _freq_module images && cmd_images "${args[@]}" ;;
+        templates|template)     _freq_module templates && cmd_templates "${args[@]}" ;;
+        backup)                 _freq_module backup && cmd_backup "${args[@]}" ;;
+        vpn)                    _freq_module vpn && cmd_vpn "${args[@]}" ;;
+        wazuh)                  _freq_module wazuh && cmd_wazuh "${args[@]}" ;;
+        notify)                 _freq_module notify && cmd_notify "${args[@]}" ;;
+        mount|mounts)           _freq_module mounts && cmd_mount "${args[@]}" ;;
+        registry)               _freq_module registry && cmd_registry "${args[@]}" ;;
+        configure)              _freq_module configure && cmd_configure "${args[@]}" ;;
+        serial)                 _freq_module serial && cmd_serial "${args[@]}" ;;
+        journal)                _freq_module journal && cmd_journal "${args[@]}" ;;
+        zfs)                    _freq_module zfs && cmd_zfs "${args[@]}" ;;
+        pdm)                    _freq_module pdm && cmd_pdm "${args[@]}" ;;
+        packages)               _freq_module configure && cmd_packages "${args[@]}" ;;
+        checkpoint)             _freq_module checkpoint && cmd_checkpoint "${args[@]}" ;;
+        learn)                  _freq_module learn && cmd_learn "${args[@]}" ;;
+        risk)                   _freq_module risk && cmd_risk "${args[@]}" ;;
+        creds|credentials)      _freq_module creds && cmd_creds "${args[@]}" ;;
+        init)                   _freq_module init && cmd_init "${args[@]}" ;;
+
+        # ── Engine (Python, optional) ──
+        check)                  _engine_dispatch check "${args[@]}" ;;
+        fix)                    _engine_dispatch fix "${args[@]}" ;;
+        diff)                   _engine_dispatch diff "${args[@]}" ;;
+        policies)               _engine_dispatch policies "${args[@]}" ;;
+        engine)                 _engine_dispatch "${args[@]}" ;;
+
+        # ── Unknown ──
+        *)
+            echo -e "  ${RED}Unknown command:${RESET} $cmd"
+            echo "  Run 'freq help' for available commands."
+            return 1
+            ;;
+    esac
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# MODULE GATE — checks if a module's primary function exists.
+# A module is "available" if it loaded successfully (function exists).
+# This is better than checking file existence because it catches
+# both missing files AND broken syntax.
+# ═══════════════════════════════════════════════════════════════════
+_freq_module() {
+    local mod="$1"
+    # Check if the module's command function OR any function from it exists
+    # The module loader already ran — if it's broken, functions don't exist
+    if [ -f "$FREQ_DIR/lib/${mod}.sh" ]; then
+        # File exists but might have failed to load
+        if [[ " ${_FREQ_BROKEN_MODULES[*]:-} " == *" $mod "* ]]; then
+            echo -e "  ${RED}Module '${mod}' has errors and could not load.${RESET}"
+            echo -e "  ${DIM}Diagnose: bash -n $FREQ_DIR/lib/${mod}.sh${RESET}"
+            return 1
+        fi
+        return 0
+    else
+        echo -e "  ${DIM}Module '${mod}' not installed.${RESET}"
+        return 1
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# ENGINE BRIDGE — Bash calls Python. Python reads FREQ config.
+# If Python missing: clean error. If engine missing: clean error.
+# Password exported only during execution, cleaned on every exit.
+# ═══════════════════════════════════════════════════════════════════
+_engine_dispatch() {
+    local subcmd="$1"; shift
+    local engine_dir="${FREQ_DIR}/engine"
+
+    if ! command -v python3 &>/dev/null; then
+        echo -e "  ${RED:-}Python 3 required for the remediation engine.${RESET:-}"
+        echo "  Install: apt install python3"
+        return 1
+    fi
+
+    if [ ! -f "$engine_dir/__main__.py" ]; then
+        echo -e "  ${YELLOW:-}Engine not installed.${RESET:-}"
+        echo "  The remediation engine enables: freq check, freq fix, freq diff, freq policies"
+        echo "  Install: copy engine/ to $engine_dir/"
+        return 1
+    fi
+
+    if [ "$subcmd" = "fix" ]; then
+        if declare -f require_admin &>/dev/null; then
+            require_admin || return 1
+        fi
+        if declare -f cmd_checkpoint &>/dev/null; then
+            cmd_checkpoint create "engine-fix-${1:-unknown}" 2>/dev/null
+        fi
+    fi
+
+    local engine_args=("$subcmd" "--freq-dir" "$FREQ_DIR" "--hosts-file" "$HOSTS_FILE")
+    [ "$DRY_RUN" = "true" ] && engine_args+=("--dry-run")
+    [ "$JSON_OUTPUT" = "true" ] && engine_args+=("--json")
+
+    if declare -f vault_get_credential &>/dev/null; then
+        local _ssh_pass
+        _ssh_pass=$(vault_get_credential ssh-password 2>/dev/null)
+        [ -n "$_ssh_pass" ] && export FREQ_SSH_PASSWORD="$_ssh_pass"
+    fi
+
+    engine_args+=("$@")
+
+    PYTHONPATH="$FREQ_DIR" python3 -m engine "${engine_args[@]}"
+    local rc=$?
+
+    unset FREQ_SSH_PASSWORD 2>/dev/null
+    return $rc
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# RUN
+# ═══════════════════════════════════════════════════════════════════
+main "$@"

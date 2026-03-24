@@ -1,0 +1,5 @@
+total 40
+drwxrwxr-x+  4 root      truenas_admin    4 Feb 20 00:01 .
+drwxr-xr-x   3 root      root          4096 Feb 20 09:59 ..
+drwxrwxr-x+ 13 svc-admin truenas_admin   14 Feb 20 10:05 DC01_v1.1_base_config
+drwxrwxr-x+ 10 sonny-aif truenas_admin   18 Feb 20 09:59 plex

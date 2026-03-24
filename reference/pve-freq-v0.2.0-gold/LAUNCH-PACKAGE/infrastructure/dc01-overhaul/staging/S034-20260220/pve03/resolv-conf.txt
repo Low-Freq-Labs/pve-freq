@@ -1,0 +1,2 @@
+search infra.sonnysounds.com
+nameserver 10.25.0.1

@@ -1,0 +1,101 @@
+--- hostname ---
+pve01
+--- uname -a ---
+Linux pve01 6.17.9-1-pve #1 SMP PREEMPT_DYNAMIC PMX 6.17.9-1 (2026-01-12T16:25Z) x86_64 GNU/Linux
+--- uptime ---
+ 19:30:34 up 1 day,  8:28,  1 user,  load average: 2.85, 2.81, 2.68
+--- /etc/os-release ---
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)"
+NAME="Debian GNU/Linux"
+VERSION_ID="13"
+VERSION="13 (trixie)"
+VERSION_CODENAME=trixie
+DEBIAN_VERSION_FULL=13.3
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+--- free -h ---
+               total        used        free      shared  buff/cache   available
+Mem:           251Gi        40Gi       179Gi        74Mi        33Gi       210Gi
+Swap:          8.0Gi          0B       8.0Gi
+--- df -h ---
+Filesystem                                  Size  Used Avail Use% Mounted on
+udev                                        126G     0  126G   0% /dev
+tmpfs                                        26G  5.1M   26G   1% /run
+/dev/mapper/pve-root                         94G  8.1G   82G  10% /
+tmpfs                                       126G   66M  126G   1% /dev/shm
+efivarfs                                     64K   33K   27K  56% /sys/firmware/efi/efivars
+tmpfs                                       5.0M     0  5.0M   0% /run/lock
+tmpfs                                       1.0M     0  1.0M   0% /run/credentials/systemd-journald.service
+tmpfs                                       126G  4.0K  126G   1% /tmp
+/dev/sdi2                                  1022M  8.8M 1014M   1% /boot/efi
+os-pool-hdd                                 8.8T  128K  8.8T   1% /os-pool-hdd
+os-pool-hdd/iso-storage                     9.0T  126G  8.8T   2% /mnt/iso-share
+/dev/fuse                                   128M   36K  128M   1% /etc/pve
+tmpfs                                       1.0M     0  1.0M   0% /run/credentials/getty@tty1.service
+10.25.25.25:/mnt/mega-pool/ha-proxmox-disk   20T     0   20T   0% /mnt/pve/ha-proxmox-disk
+tmpfs                                        26G  4.0K   26G   1% /run/user/3003
+--- lsblk ---
+NAME                 MAJ:MIN RM   SIZE RO TYPE MOUNTPOINTS
+sda                    8:0    0   1.8T  0 disk 
+├─sda1                 8:1    0   1.8T  0 part 
+└─sda9                 8:9    0     8M  0 part 
+sdb                    8:16   0   1.8T  0 disk 
+├─sdb1                 8:17   0   1.8T  0 part 
+└─sdb9                 8:25   0     8M  0 part 
+sdc                    8:32   0   1.8T  0 disk 
+├─sdc1                 8:33   0   1.8T  0 part 
+└─sdc9                 8:41   0     8M  0 part 
+sdd                    8:48   0   1.8T  0 disk 
+├─sdd1                 8:49   0   1.8T  0 part 
+└─sdd9                 8:57   0     8M  0 part 
+sde                    8:64   0   1.8T  0 disk 
+├─sde1                 8:65   0   1.8T  0 part 
+└─sde9                 8:73   0     8M  0 part 
+sdf                    8:80   0   3.6T  0 disk 
+├─sdf1                 8:81   0   3.6T  0 part 
+└─sdf9                 8:89   0     8M  0 part 
+sdg                    8:96   0   3.6T  0 disk 
+├─sdg1                 8:97   0   3.6T  0 part 
+└─sdg9                 8:105  0     8M  0 part 
+sdh                    8:112  0   3.6T  0 disk 
+├─sdh1                 8:113  0   3.6T  0 part 
+└─sdh9                 8:121  0     8M  0 part 
+sdi                    8:128  0 894.3G  0 disk 
+├─sdi1                 8:129  0  1007K  0 part 
+├─sdi2                 8:130  0     1G  0 part /boot/efi
+└─sdi3                 8:131  0 893.3G  0 part 
+  ├─pve-swap         252:0    0     8G  0 lvm  [SWAP]
+  ├─pve-root         252:1    0    96G  0 lvm  /
+  ├─pve-data_tmeta   252:2    0   7.7G  0 lvm  
+  │ └─pve-data-tpool 252:4    0 757.8G  0 lvm  
+  │   └─pve-data     252:5    0 757.8G  1 lvm  
+  └─pve-data_tdata   252:3    0 757.8G  0 lvm  
+    └─pve-data-tpool 252:4    0 757.8G  0 lvm  
+      └─pve-data     252:5    0 757.8G  1 lvm  
+sr0                   11:0    1  1024M  0 rom  
+zd0                  230:0    0    64G  0 disk 
+├─zd0p1              230:1    0  60.7G  0 part 
+├─zd0p2              230:2    0     1K  0 part 
+└─zd0p5              230:5    0   3.3G  0 part 
+zd16                 230:16   0    64G  0 disk 
+├─zd16p1             230:17   0  60.7G  0 part 
+├─zd16p2             230:18   0     1K  0 part 
+└─zd16p5             230:21   0   3.3G  0 part 
+zd32                 230:32   0    64G  0 disk 
+├─zd32p1             230:33   0  60.7G  0 part 
+├─zd32p2             230:34   0     1K  0 part 
+└─zd32p5             230:37   0   3.3G  0 part 
+zd48                 230:48   0    64G  0 disk 
+├─zd48p1             230:49   0  60.7G  0 part 
+├─zd48p2             230:50   0     1K  0 part 
+└─zd48p5             230:53   0   3.3G  0 part 
+zd64                 230:64   0    80G  0 disk 
+├─zd64p1             230:65   0     1M  0 part 
+├─zd64p2             230:66   0     2G  0 part 
+└─zd64p3             230:67   0    78G  0 part 
+zd80                 230:80   0    80G  0 disk 
+├─zd80p1             230:81   0  76.1G  0 part 
+├─zd80p2             230:82   0     1K  0 part 
+└─zd80p5             230:85   0   3.9G  0 part 

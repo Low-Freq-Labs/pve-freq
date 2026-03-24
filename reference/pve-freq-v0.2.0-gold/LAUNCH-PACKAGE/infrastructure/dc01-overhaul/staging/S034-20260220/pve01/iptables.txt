@@ -1,0 +1,21 @@
+--- iptables -L -n -v ---
+Chain INPUT (policy ACCEPT 4990K packets, 889M bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+ 8230 2679K ACCEPT     tcp  --  vmbr0v2550 *       0.0.0.0/0            0.0.0.0/0            tcp dpt:8006
+    0     0 ACCEPT     tcp  --  *      *       10.25.0.28           0.0.0.0/0            tcp dpt:8006
+   18  4466 ACCEPT     tcp  --  lo     *       0.0.0.0/0            0.0.0.0/0            tcp dpt:8006
+   42  2280 DROP       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:8006
+
+Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 5278K packets, 986M bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+--- iptables -S ---
+-P INPUT ACCEPT
+-P FORWARD ACCEPT
+-P OUTPUT ACCEPT
+-A INPUT -i vmbr0v2550 -p tcp -m tcp --dport 8006 -j ACCEPT
+-A INPUT -s 10.25.0.28/32 -p tcp -m tcp --dport 8006 -j ACCEPT
+-A INPUT -i lo -p tcp -m tcp --dport 8006 -j ACCEPT
+-A INPUT -p tcp -m tcp --dport 8006 -j DROP

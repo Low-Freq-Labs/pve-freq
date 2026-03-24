@@ -1,0 +1,2 @@
+NAMES     IMAGE                              STATUS       PORTS
+tdarr     ghcr.io/haveagitgat/tdarr:latest   Up 4 hours   0.0.0.0:8265-8266->8265-8266/tcp, [::]:8265-8266->8265-8266/tcp, 8267/tcp

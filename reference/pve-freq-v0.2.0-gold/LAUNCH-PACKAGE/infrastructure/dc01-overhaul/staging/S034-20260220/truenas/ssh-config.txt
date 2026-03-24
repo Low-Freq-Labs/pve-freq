@@ -1,0 +1,74 @@
+--- midclt ssh.config ---
+{
+    "id": 1,
+    "bindiface": [
+        "eno4"
+    ],
+    "tcpport": 22,
+    "password_login_groups": [],
+    "passwordauth": true,
+    "kerberosauth": false,
+    "tcpfwd": false,
+    "compression": false,
+    "sftp_log_level": "",
+    "sftp_log_facility": "",
+    "weak_ciphers": [
+        "AES128-CBC",
+        "NONE"
+    ],
+    "options": "",
+    "privatekey": "",
+    "host_dsa_key": null,
+    "host_dsa_key_pub": null,
+    "host_dsa_key_cert_pub": null,
+    "host_ecdsa_key": "<REDACTED>",
+    "host_ecdsa_key_pub": "ZWNkc2Etc2hhMi1uaXN0cDI1NiBBQUFBRTJWalpITmhMWE5vWVRJdGJtbHpkSEF5TlRZQUFBQUlibWx6ZEhBeU5UWUFBQUJCQlAvNTVYK2NEbUhrSmcrb0tGMXVUcFZMcFZFdGsrYVF0ZWd1N21jQkhXR1B2YVlWd25KRXJ3ZCtwN1F5TmxRRXJmV1hVYUpqWkZGSTUzZUVFRzN0SUxRPSByb290QGxvY2FsaG9zdAo=",
+    "host_ecdsa_key_cert_pub": null,
+    "host_ed25519_key": "<REDACTED>",
+    "host_ed25519_key_pub": "c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSU5oZHN4cmFRTUM3ZjFvRWJKWW1DZVRhR3lvYSt5VUJPZWhITmhka2ZEcFMgcm9vdEBsb2NhbGhvc3QK",
+    "host_ed25519_key_cert_pub": null,
+    "host_key": null,
+    "host_key_pub": null,
+    "host_rsa_key": "<REDACTED>",
+    "host_rsa_key_pub": "c3NoLXJzYSBBQUFBQjNOemFDMXljMkVBQUFBREFRQUJBQUFCZ1FDMVNaenpyME9LZ0RaLzJ2TzErZHdCbklyRzVIbGViQ3BsNTZib3VqVnI3cVNZR2Fib2lHalBtMEsxdHVUZVhZNUVldU1YTENuNkZtYWhKZ21zbWl1cXltMmNsd2wxNE9VWi9SQ3plV2szMzkzNmpSdTR4eTF0V0FNUmxZVHRpQkZ0ZG5mMEYxeGh0aHhQbVRNOU10Qk4veStNZFpycFEvY0l1VVJ3MmkzZVZUUHFEbkpvZ1RDSWhjMjdBMWxVUkR1VWd2d2tIZERUMGV4OW1XTnpFN25kR0VCS2hQc1lEMEorTk9KVk9IeW8rZnhkd29yd3FGV1ZvaUh5VGdVNXVxMmZaYi91WVl1V2Z4OStSZnI5ZWhweSt3aCtqWGJyblV3WkI1WGNlSTFoQm4rZWNRMkY0eWdnbUR4YWh4ZEt2T2hwNlcwR0FYQlljemdrSmVBTXNiQ3VMRmVuK0dzOFhvWS80R2Mwc3JpQ1JFSStZSzdPQ012bU9LZGZDMjUzU0M0Nzc5M2l1dllieGJPeFFrMFZoY2VvckhVSnczUWRUZ2pxRldDblhRb1FMczhraXVremh4RytoZjd5Ky9iRHRVRm5TQVdvNzVmMS9BbEVXclUzd0d1RTRVRFd4bEM0VUgyOGVmL01mTEk4b3ZMSUtodHdML2wyV2F6M25welBsV2s9IHJvb3RAbG9jYWxob3N0Cg==",
+    "host_rsa_key_cert_pub": null
+}
+
+--- /etc/ssh/sshd_config ---
+Subsystem	sftp	internal-sftp -l ERROR -f AUTH
+Protocol 2
+UseDNS no
+ChallengeResponseAuthentication no
+ClientAliveCountMax 3
+ClientAliveInterval 15
+VersionAddendum none
+Ciphers +aes128-cbc
+Port 22
+ListenAddress 127.0.0.1
+ListenAddress 10.25.255.25
+ListenAddress fe80::1a66:daff:fe7f:d8d%eno4
+PermitRootLogin without-password
+AllowTcpForwarding no
+Compression no
+PasswordAuthentication no
+PubkeyAuthentication yes
+
+# These are forced to be enabled with 2FA
+UsePAM yes
+PrintMotd no
+SetEnv LC_ALL=C.UTF-8
+
+Match User "truenas_admin"
+	PasswordAuthentication yes
+	ChallengeResponseAuthentication yes
+Match User "sonny-aif"
+	PasswordAuthentication yes
+	ChallengeResponseAuthentication yes
+Match User "svc-admin"
+	PasswordAuthentication yes
+	ChallengeResponseAuthentication yes
+# These are aux params that MUST COME LAST
+# in the config. User provided "Match" blocks,
+# for example, need to come AFTER the UsePam
+# line. Otherwise ssh service WILL NOT START.
+

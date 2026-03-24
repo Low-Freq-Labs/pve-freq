@@ -1,0 +1,20 @@
+# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+source /etc/network/interfaces.d/*
+
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# Service NIC - VLAN 66 (Dirty)
+allow-hotplug ens18
+iface ens18 inet dhcp
+	mtu 1500
+
+# Management NIC - VLAN 2550 (also carries NFS to TrueNAS)
+allow-hotplug ens19
+iface ens19 inet static
+	address 10.25.255.32/24
+	mtu 9000
+    up ip route add 10.25.100.0/24 via 10.25.255.1

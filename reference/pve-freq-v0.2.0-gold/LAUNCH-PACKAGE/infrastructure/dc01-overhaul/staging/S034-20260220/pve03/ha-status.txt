@@ -1,0 +1,42 @@
+--- ha-manager status ---
+quorum OK
+master pve03 (idle, Tue Feb 17 15:55:02 2026)
+lrm pve01 (idle, Fri Feb 20 19:30:37 2026)
+lrm pve02 (old timestamp - dead?, Thu Feb  5 19:21:30 2026)
+lrm pve03 (idle, Fri Feb 20 19:30:35 2026)
+
+--- systemctl status pve-ha-lrm pve-ha-crm watchdog-mux ---
+● pve-ha-lrm.service - PVE Local HA Resource Manager Daemon
+     Loaded: loaded (/usr/lib/systemd/system/pve-ha-lrm.service; enabled; preset: enabled)
+     Active: active (running) since Fri 2026-02-20 02:17:59 CST; 17h ago
+ Invocation: 7d3ff32707654bba95c1e9355cb70150
+   Main PID: 610228 (pve-ha-lrm)
+      Tasks: 1 (limit: 38219)
+     Memory: 114.7M (peak: 134.8M)
+        CPU: 6.246s
+     CGroup: /system.slice/pve-ha-lrm.service
+             └─610228 pve-ha-lrm
+
+● pve-ha-crm.service - PVE Cluster HA Resource Manager Daemon
+     Loaded: loaded (/usr/lib/systemd/system/pve-ha-crm.service; enabled; preset: enabled)
+     Active: active (running) since Fri 2026-02-20 02:18:01 CST; 17h ago
+ Invocation: 44f7f5b22cd44a93afc8aefa1df2ed38
+   Main PID: 610238 (pve-ha-crm)
+      Tasks: 1 (limit: 38219)
+     Memory: 115.6M (peak: 135.1M)
+        CPU: 3.942s
+     CGroup: /system.slice/pve-ha-crm.service
+             └─610238 pve-ha-crm
+
+● watchdog-mux.service - Proxmox VE watchdog multiplexer
+     Loaded: loaded (/usr/lib/systemd/system/watchdog-mux.service; static)
+     Active: active (running) since Thu 2026-02-19 10:41:47 CST; 1 day 8h ago
+ Invocation: 992be7713e464468b9f70b17ee2edfac
+   Main PID: 370562 (watchdog-mux)
+      Tasks: 1 (limit: 38219)
+     Memory: 188K (peak: 2M)
+        CPU: 3.120s
+     CGroup: /system.slice/watchdog-mux.service
+             └─370562 /usr/sbin/watchdog-mux
+
+Warning: some journal files were not opened due to insufficient permissions.

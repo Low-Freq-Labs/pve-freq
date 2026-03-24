@@ -1,0 +1,19 @@
+total 196
+drwxrwxr-x+ 10 sonny-aif     truenas_admin   18 Feb 20 07:59 .
+drwxrwxr-x+  4 root          truenas_admin    4 Feb 19 22:01 ..
+drwxrwxr-x+  2 svc-admin     truenas_admin    8 Feb 20 07:59 .backup-nfs-migration-S029
+drwxrwxr-x+  2 sonny-aif     truenas_admin    2 Feb 12 18:27 Audio
+drwxrwxr-x+  4 sonny-aif     truenas_admin    5 Feb 12 19:14 Downloads
+drwxrwxr-x+ 11 sonny-aif     truenas_admin   11 Feb 14 11:29 Movies
+drwxrwxr-x+  4 sonny-aif     truenas_admin    4 Feb 14 00:45 TV
+drwxrwxr-x+  2 sonny-aif     truenas_admin    2 Feb 15 09:44 Transcode
+drwxrwxr-x+ 14 sonny-aif     truenas_admin   14 Feb 17 16:38 arr-data
+-rw-rw-r--   1 svc-admin     truenas_admin 2720 Feb 20 07:59 docker-compose.arr.yml
+-rw-rw-r--   1 svc-admin     truenas_admin 1746 Feb 19 20:49 docker-compose.arr.yml.bak-session22
+-rw-rw-r--   1 svc-admin     truenas_admin  753 Feb 20 07:59 docker-compose.plex.yml
+-rw-rw-r--   1 svc-admin     truenas_admin  647 Feb 19 20:59 docker-compose.plex.yml.bak-session22
+-rw-rw-r--   1 svc-admin     truenas_admin 1214 Feb 20 07:59 docker-compose.tdarr-node.yml
+-rw-rw-r--   1 svc-admin     truenas_admin 1139 Feb 19 20:59 docker-compose.tdarr-node.yml.bak-session22
+-rw-rw-r--   1 svc-admin     truenas_admin 1117 Feb 20 07:59 docker-compose.tdarr.yml
+-rw-rw-r--   1 svc-admin     truenas_admin  970 Feb 20 07:59 docker-compose.tdarr.yml.bak-session22
+drwxrwxr-x+  2 truenas_admin truenas_admin    5 Feb 20 07:59 downloader-data

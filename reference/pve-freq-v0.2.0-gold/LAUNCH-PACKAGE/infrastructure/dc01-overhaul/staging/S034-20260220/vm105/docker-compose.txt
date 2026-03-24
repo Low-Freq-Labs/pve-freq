@@ -1,0 +1,32 @@
+# ============================================================
+# DC01 — Tdarr Server
+# VM: 105 (Tdarr-Server) — VLAN 10 (Compute)
+# Running version: 2.58.02 (no semver tags on ghcr.io)
+# Managed by: Jarvis & Sonny
+# ============================================================
+
+services:
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:latest
+    container_name: tdarr
+    restart: unless-stopped
+    network_mode: bridge
+    environment:
+      - PUID=3003
+      - PGID=950
+      - TZ=America/Chicago
+      - serverPort=8266
+      - webUIPort=8265
+      - internalNode=false
+      - auth=true
+    ports:
+      - "8265:8265"
+      - "8266:8266"
+    volumes:
+      - /opt/dc01/configs/tdarr/server:/app/server
+      - /opt/dc01/configs/tdarr/configs:/app/configs
+      - /opt/dc01/configs/tdarr/logs:/app/logs
+      - /mnt/truenas/nfs-mega-share/media/movies:/media/Movies
+      - /mnt/truenas/nfs-mega-share/media/tv:/media/TV
+      - /mnt/truenas/nfs-mega-share/media/audio:/media/Audio
+      - /mnt/truenas/nfs-mega-share/media/transcode:/tcache

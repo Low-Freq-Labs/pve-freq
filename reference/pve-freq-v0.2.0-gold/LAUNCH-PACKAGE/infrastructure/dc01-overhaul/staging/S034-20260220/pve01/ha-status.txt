@@ -1,0 +1,46 @@
+--- ha-manager status ---
+bash: line 114: pvesm: command not found
+quorum OK
+master pve03 (idle, Tue Feb 17 15:55:02 2026)
+lrm pve01 (idle, Fri Feb 20 19:30:32 2026)
+lrm pve02 (old timestamp - dead?, Thu Feb  5 19:21:30 2026)
+lrm pve03 (idle, Fri Feb 20 19:30:35 2026)
+--- systemctl status pve-ha-lrm pve-ha-crm watchdog-mux ---
+● pve-ha-lrm.service - PVE Local HA Resource Manager Daemon
+     Loaded: loaded (/usr/lib/systemd/system/pve-ha-lrm.service; enabled; preset: enabled)
+     Active: active (running) since Thu 2026-02-19 11:03:59 CST; 1 day 8h ago
+ Invocation: bee4a74995f04abdb1b5c5e608f24aa8
+   Main PID: 2814 (pve-ha-lrm)
+      Tasks: 1 (limit: 309090)
+     Memory: 114.7M (peak: 134M)
+        CPU: 38.145s
+     CGroup: /system.slice/pve-ha-lrm.service
+             └─2814 pve-ha-lrm
+
+Warning: some journal files were not opened due to insufficient permissions.
+
+● pve-ha-crm.service - PVE Cluster HA Resource Manager Daemon
+     Loaded: loaded (/usr/lib/systemd/system/pve-ha-crm.service; enabled; preset: enabled)
+     Active: active (running) since Thu 2026-02-19 11:02:36 CST; 1 day 8h ago
+ Invocation: 1a85cb16bb8a4fb8a2c62dba73a275a7
+   Main PID: 2402 (pve-ha-crm)
+      Tasks: 1 (limit: 309090)
+     Memory: 115.5M (peak: 134.8M)
+        CPU: 22.432s
+     CGroup: /system.slice/pve-ha-crm.service
+             └─2402 pve-ha-crm
+
+Warning: some journal files were not opened due to insufficient permissions.
+
+● watchdog-mux.service - Proxmox VE watchdog multiplexer
+     Loaded: loaded (/usr/lib/systemd/system/watchdog-mux.service; static)
+     Active: active (running) since Thu 2026-02-19 11:02:27 CST; 1 day 8h ago
+ Invocation: 43f9df8075744d1ea48aeba6a7b3b3c3
+   Main PID: 1790 (watchdog-mux)
+      Tasks: 1 (limit: 309090)
+     Memory: 248K (peak: 2M)
+        CPU: 6.810s
+     CGroup: /system.slice/watchdog-mux.service
+             └─1790 /usr/sbin/watchdog-mux
+
+Warning: some journal files were not opened due to insufficient permissions.

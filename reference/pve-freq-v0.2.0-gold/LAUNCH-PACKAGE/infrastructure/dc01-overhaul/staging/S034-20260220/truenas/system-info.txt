@@ -1,0 +1,66 @@
+--- hostname ---
+truenas
+
+--- uname -a ---
+Linux truenas 6.12.33-production+truenas #1 SMP PREEMPT_DYNAMIC Wed Dec 17 21:17:21 UTC 2025 x86_64 GNU/Linux
+
+--- uptime ---
+ 17:31:07 up 2 days,  4:06,  2 users,  load average: 0.20, 0.06, 0.02
+
+--- /etc/os-release ---
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
+NAME="Debian GNU/Linux"
+VERSION_ID="12"
+VERSION="12 (bookworm)"
+VERSION_CODENAME=bookworm
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+
+--- free -h ---
+               total        used        free      shared  buff/cache   available
+Mem:            86Gi        62Gi        23Gi        13Mi       597Mi        23Gi
+Swap:             0B          0B          0B
+
+--- df -h ---
+Filesystem                                                  Size  Used Avail Use% Mounted on
+udev                                                         44G     0   44G   0% /dev
+tmpfs                                                       8.7G   10M  8.7G   1% /run
+boot-pool/ROOT/25.10.1                                      108G  105M  108G   1% /
+boot-pool/ROOT/25.10.1/audit                                108G  2.0M  108G   1% /audit
+boot-pool/ROOT/25.10.1/conf                                 108G  7.7M  108G   1% /conf
+boot-pool/ROOT/25.10.1/data                                 108G  384K  108G   1% /data
+boot-pool/ROOT/25.10.1/etc                                  108G  6.5M  108G   1% /etc
+boot-pool/ROOT/25.10.1/home                                 108G  128K  108G   1% /home
+boot-pool/ROOT/25.10.1/mnt                                  108G  128K  108G   1% /mnt
+boot-pool/ROOT/25.10.1/opt                                  108G  4.8M  108G   1% /opt
+boot-pool/ROOT/25.10.1/root                                 108G  256K  108G   1% /root
+boot-pool/ROOT/25.10.1/usr                                  111G  2.9G  108G   3% /usr
+boot-pool/ROOT/25.10.1/var                                  108G  5.0M  108G   1% /var
+boot-pool/ROOT/25.10.1/var/ca-certificates                  108G  128K  108G   1% /var/local/ca-certificates
+boot-pool/ROOT/25.10.1/var/lib                              108G   29M  108G   1% /var/lib
+boot-pool/ROOT/25.10.1/var/lib/incus                        108G  128K  108G   1% /var/lib/incus
+boot-pool/ROOT/25.10.1/var/log                              108G  6.9M  108G   1% /var/log
+boot-pool/ROOT/25.10.1/var/log/journal                      108G  9.9M  108G   1% /var/log/journal
+tmpfs                                                        44G  292K   44G   1% /dev/shm
+tmpfs                                                       100M     0  100M   0% /run/lock
+efivarfs                                                    304K  132K  168K  45% /sys/firmware/efi/efivars
+tmpfs                                                        44G  4.0K   44G   1% /tmp
+boot-pool/grub                                              108G  9.2M  108G   1% /boot/grub
+mega-pool                                                    20T  512K   20T   1% /mnt/mega-pool
+mega-pool/smb-share                                          20T  512K   20T   1% /mnt/mega-pool/smb-share
+mega-pool/smb-share/donny                                    20T  256K   20T   1% /mnt/mega-pool/smb-share/donny
+mega-pool/smb-share/chris                                    20T  256K   20T   1% /mnt/mega-pool/smb-share/chris
+mega-pool/smb-share/public                                   21T  744G   20T   4% /mnt/mega-pool/smb-share/public
+mega-pool/smb-share/sonny                                    20T  519M   20T   1% /mnt/mega-pool/smb-share/sonny
+mega-pool/ha-proxmox-disk                                    20T  384K   20T   1% /mnt/mega-pool/ha-proxmox-disk
+mega-pool/.system                                            20T  384K   20T   1% /var/db/system
+mega-pool/.system/cores                                     1.0G  256K  1.0G   1% /var/db/system/cores
+mega-pool/.system/nfs                                        20T  640K   20T   1% /var/db/system/nfs
+mega-pool/.system/samba4                                     20T  1.2M   20T   1% /var/db/system/samba4
+mega-pool/.system/vm                                         20T  384K   20T   1% /var/db/system/vm
+mega-pool/.system/configs-ae32c386e13840b2bf9c0083275e7941   20T  2.3M   20T   1% /var/db/system/configs-ae32c386e13840b2bf9c0083275e7941
+mega-pool/.system/netdata-ae32c386e13840b2bf9c0083275e7941   20T  245M   20T   1% /var/db/system/netdata
+mega-pool/nfs-mega-share                                     21T  745G   20T   4% /mnt/mega-pool/nfs-mega-share
+tmpfs                                                       8.7G  4.0K  8.7G   1% /run/user/3003

@@ -1,0 +1,48 @@
+=== hostname ===
+tdarr-node
+
+=== uname -a ===
+Linux tdarr-node 6.12.73+deb13-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.12.73-1 (2026-02-17) x86_64 GNU/Linux
+
+=== uptime ===
+ 19:30:54 up 20:53,  2 users,  load average: 1.01, 1.01, 1.00
+
+=== /etc/os-release ===
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)"
+NAME="Debian GNU/Linux"
+VERSION_ID="13"
+VERSION="13 (trixie)"
+VERSION_CODENAME=trixie
+DEBIAN_VERSION_FULL=13.3
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+
+=== free -h ===
+               total        used        free      shared  buff/cache   available
+Mem:            15Gi       587Mi        13Gi       856Ki       1.8Gi        15Gi
+Swap:          3.3Gi          0B       3.3Gi
+
+=== df -h ===
+Filesystem                                 Size  Used Avail Use% Mounted on
+udev                                       7.8G     0  7.8G   0% /dev
+tmpfs                                      1.6G  852K  1.6G   1% /run
+/dev/sda2                                   59G  7.1G   49G  13% /
+tmpfs                                      7.9G     0  7.9G   0% /dev/shm
+efivarfs                                   256K  119K  133K  48% /sys/firmware/efi/efivars
+tmpfs                                      5.0M     0  5.0M   0% /run/lock
+tmpfs                                      1.0M     0  1.0M   0% /run/credentials/systemd-journald.service
+tmpfs                                      7.9G     0  7.9G   0% /tmp
+/dev/sda1                                  975M  8.8M  966M   1% /boot/efi
+tmpfs                                      1.0M     0  1.0M   0% /run/credentials/getty@tty1.service
+tmpfs                                      1.6G  8.0K  1.6G   1% /run/user/3003
+10.25.25.25:/mnt/mega-pool/nfs-mega-share   21T  745G   20T   4% /mnt/truenas/nfs-mega-share
+
+=== lsblk ===
+NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda      8:0    0   64G  0 disk 
+├─sda1   8:1    0  976M  0 part /boot/efi
+├─sda2   8:2    0 59.7G  0 part /
+└─sda3   8:3    0  3.3G  0 part [SWAP]
+sr0     11:0    1  754M  0 rom  

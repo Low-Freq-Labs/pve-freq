@@ -1,0 +1,2 @@
+NAMES        IMAGE                                   STATUS          PORTS
+tdarr-node   ghcr.io/haveagitgat/tdarr_node:latest   Up 28 minutes   8265-8267/tcp

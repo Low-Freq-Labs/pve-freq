@@ -1,0 +1,9 @@
+total 4
+drwxrwxrwt  8 root root  160 Feb 20 11:10 .
+drwxr-xr-x 18 root root 4096 Feb 12 19:07 ..
+drwxrwxrwt  2 root root   40 Feb 19 11:06 .font-unix
+drwxrwxrwt  2 root root   40 Feb 19 11:06 .ICE-unix
+drwxr-xr-x  2 root root   40 Feb 19 11:06 plex-transcode
+drwx------  3 root root   60 Feb 19 11:06 systemd-private-5814a6e2c97048f38f31c2f2f7c55c55-systemd-logind.service-azfAbh
+drwxrwxrwt  2 root root   40 Feb 19 11:06 .X11-unix
+drwxrwxrwt  2 root root   40 Feb 19 11:06 .XIM-unix

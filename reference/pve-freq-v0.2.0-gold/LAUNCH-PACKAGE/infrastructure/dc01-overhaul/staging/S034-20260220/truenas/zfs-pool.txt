@@ -1,0 +1,117 @@
+--- zpool status ---
+  pool: boot-pool
+ state: ONLINE
+  scan: scrub repaired 0B in 00:01:25 with 0 errors on Wed Feb 18 03:46:26 2026
+config:
+
+	NAME        STATE     READ WRITE CKSUM
+	boot-pool   ONLINE       0     0     0
+	  sdi3      ONLINE       0     0     0
+
+errors: No known data errors
+
+  pool: mega-pool
+ state: ONLINE
+  scan: scrub repaired 0B in 00:00:01 with 0 errors on Sun Feb  8 00:00:02 2026
+config:
+
+	NAME                                      STATE     READ WRITE CKSUM
+	mega-pool                                 ONLINE       0     0     0
+	  raidz2-0                                ONLINE       0     0     0
+	    72d59095-466b-4fed-90a9-545a7047bef0  ONLINE       0     0     0
+	    77e0204a-19ec-4ba6-ab5c-a8ad6078ef01  ONLINE       0     0     0
+	    7206e2fb-a619-4a03-9495-f219aea6d430  ONLINE       0     0     0
+	    05b1931f-2e19-4eba-abaf-86b1c0283d7b  ONLINE       0     0     0
+	  raidz2-1                                ONLINE       0     0     0
+	    47190f2d-6fcb-4042-87dd-73d7a979f4f2  ONLINE       0     0     0
+	    cd98b2e5-d43c-42c1-b9dd-dca38d2ae1ab  ONLINE       0     0     0
+	    a7612ca1-bf5c-41a3-a55f-540bfad51aaa  ONLINE       0     0     0
+	    fdcbe59b-49d8-441f-b28a-b81a805c4b43  ONLINE       0     0     0
+
+errors: No known data errors
+
+--- zpool list ---
+NAME        SIZE  ALLOC   FREE  CKPOINT  EXPANDSZ   FRAG    CAP  DEDUP    HEALTH  ALTROOT
+boot-pool   114G  3.07G   111G        -         -     1%     2%  1.00x    ONLINE  -
+mega-pool  43.6T  2.99T  40.6T        -         -     0%     6%  1.00x    ONLINE  /mnt
+
+--- zpool get all mega-pool ---
+NAME       PROPERTY                       VALUE                          SOURCE
+mega-pool  size                           43.6T                          -
+mega-pool  capacity                       6%                             -
+mega-pool  altroot                        /mnt                           local
+mega-pool  health                         ONLINE                         -
+mega-pool  guid                           7404959681532381716            -
+mega-pool  version                        -                              default
+mega-pool  bootfs                         -                              default
+mega-pool  delegation                     on                             default
+mega-pool  autoreplace                    off                            default
+mega-pool  cachefile                      /data/zfs/zpool.cache          local
+mega-pool  failmode                       continue                       local
+mega-pool  listsnapshots                  off                            default
+mega-pool  autoexpand                     on                             local
+mega-pool  dedupratio                     1.00x                          -
+mega-pool  free                           40.6T                          -
+mega-pool  allocated                      2.99T                          -
+mega-pool  readonly                       off                            -
+mega-pool  ashift                         12                             local
+mega-pool  comment                        -                              default
+mega-pool  expandsize                     -                              -
+mega-pool  freeing                        0                              -
+mega-pool  fragmentation                  0%                             -
+mega-pool  leaked                         0                              -
+mega-pool  multihost                      off                            default
+mega-pool  checkpoint                     -                              -
+mega-pool  load_guid                      12438152198604321969           -
+mega-pool  autotrim                       off                            default
+mega-pool  compatibility                  off                            default
+mega-pool  bcloneused                     4.70G                          -
+mega-pool  bclonesaved                    4.71G                          -
+mega-pool  bcloneratio                    2.00x                          -
+mega-pool  dedup_table_size               0                              -
+mega-pool  dedup_table_quota              auto                           default
+mega-pool  last_scrubbed_txg              43288                          -
+mega-pool  feature@async_destroy          enabled                        local
+mega-pool  feature@empty_bpobj            active                         local
+mega-pool  feature@lz4_compress           active                         local
+mega-pool  feature@multi_vdev_crash_dump  enabled                        local
+mega-pool  feature@spacemap_histogram     active                         local
+mega-pool  feature@enabled_txg            active                         local
+mega-pool  feature@hole_birth             active                         local
+mega-pool  feature@extensible_dataset     active                         local
+mega-pool  feature@embedded_data          active                         local
+mega-pool  feature@bookmarks              enabled                        local
+mega-pool  feature@filesystem_limits      enabled                        local
+mega-pool  feature@large_blocks           enabled                        local
+mega-pool  feature@large_dnode            enabled                        local
+mega-pool  feature@sha512                 enabled                        local
+mega-pool  feature@skein                  enabled                        local
+mega-pool  feature@edonr                  enabled                        local
+mega-pool  feature@userobj_accounting     active                         local
+mega-pool  feature@encryption             active                         local
+mega-pool  feature@project_quota          active                         local
+mega-pool  feature@device_removal         enabled                        local
+mega-pool  feature@obsolete_counts        enabled                        local
+mega-pool  feature@zpool_checkpoint       enabled                        local
+mega-pool  feature@spacemap_v2            active                         local
+mega-pool  feature@allocation_classes     enabled                        local
+mega-pool  feature@resilver_defer         enabled                        local
+mega-pool  feature@bookmark_v2            enabled                        local
+mega-pool  feature@redaction_bookmarks    enabled                        local
+mega-pool  feature@redacted_datasets      enabled                        local
+mega-pool  feature@bookmark_written       enabled                        local
+mega-pool  feature@log_spacemap           active                         local
+mega-pool  feature@livelist               enabled                        local
+mega-pool  feature@device_rebuild         enabled                        local
+mega-pool  feature@zstd_compress          enabled                        local
+mega-pool  feature@draid                  enabled                        local
+mega-pool  feature@zilsaxattr             active                         local
+mega-pool  feature@head_errlog            active                         local
+mega-pool  feature@blake3                 enabled                        local
+mega-pool  feature@block_cloning          active                         local
+mega-pool  feature@vdev_zaps_v2           active                         local
+mega-pool  feature@redaction_list_spill   enabled                        local
+mega-pool  feature@raidz_expansion        enabled                        local
+mega-pool  feature@fast_dedup             enabled                        local
+mega-pool  feature@longname               enabled                        local
+mega-pool  feature@large_microzap         enabled                        local

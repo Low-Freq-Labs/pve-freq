@@ -1,0 +1,27 @@
+--- /mnt/mega-pool/nfs-mega-share/media/ ---
+total 158
+drwxrwxr-x+ 11 sonny-aif truenas_admin 16 Feb 20 15:44 .
+drwxrwxr-x+  5 root      truenas_admin  6 Feb 20 14:45 ..
+drwxrwxr-x+  2 svc-admin truenas_admin  8 Feb 20 09:59 .backup-nfs-migration-S029
+lrwxrwxrwx   1 root      root           5 Feb 20 14:45 Audio -> audio
+lrwxrwxrwx   1 root      root           9 Feb 20 14:45 Downloads -> downloads
+lrwxrwxrwx   1 root      root           6 Feb 20 14:45 Movies -> movies
+lrwxrwxrwx   1 root      root           2 Feb 20 14:45 TV -> tv
+lrwxrwxrwx   1 root      root           9 Feb 20 14:45 Transcode -> transcode
+drwxrwxr-x+  2 svc-admin truenas_admin 13 Feb 20 15:44 archived-compose
+drwxrwxr-x+ 14 sonny-aif truenas_admin 14 Feb 17 18:38 arr-data-archived
+drwxrwxr-x+  2 sonny-aif truenas_admin  2 Feb 12 20:27 audio
+drwxrwxr-x+  7 svc-admin truenas_admin  7 Feb 20 15:43 config-backups
+drwxrwxr-x+  4 sonny-aif truenas_admin  5 Feb 12 21:14 downloads
+drwxrwxr-x+ 11 sonny-aif truenas_admin 11 Feb 14 13:29 movies
+drwxrwxr-x+  2 sonny-aif truenas_admin  2 Feb 15 11:44 transcode
+drwxrwxr-x+  4 sonny-aif truenas_admin  4 Feb 14 02:45 tv
+
+--- /mnt/mega-pool/nfs-mega-share/ (root) ---
+total 61
+drwxrwxr-x+  5 root      truenas_admin  6 Feb 20 14:45 .
+drwxr-xr-x   7 root      root           7 Feb 20 01:38 ..
+drwxrwxr-x+ 13 svc-admin truenas_admin 14 Feb 20 10:05 DC01_v1.1_base_config
+drwxrwxr-x+ 14 sonny-aif truenas_admin 14 Feb 17 18:38 arr-data-backup-pre-overhaul-S032
+drwxrwxr-x+ 11 sonny-aif truenas_admin 16 Feb 20 15:44 media
+lrwxrwxrwx   1 root      root           5 Feb 20 14:45 plex -> media

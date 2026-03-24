@@ -1,0 +1,5 @@
+total 12
+drwxr-xr-x  3 root root 4096 Feb 20 09:59 .
+drwxr-xr-x 18 root root 4096 Feb 12 19:07 ..
+lrwxrwxrwx  1 root root   27 Feb 20 09:59 nfs-mega-share -> /mnt/truenas/nfs-mega-share
+drwxr-xr-x  3 root root 4096 Feb 20 09:59 truenas

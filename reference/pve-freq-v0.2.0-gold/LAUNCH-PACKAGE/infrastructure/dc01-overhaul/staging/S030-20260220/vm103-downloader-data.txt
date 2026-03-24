@@ -1,0 +1,6 @@
+total 44
+drwxrwxr-x+  2       950 truenas_admin    5 Feb 20 09:59 .
+drwxrwxr-x+ 10 sonny-aif truenas_admin   18 Feb 20 09:59 ..
+-rw-r--r--   1 svc-admin truenas_admin 2020 Feb 20 09:59 docker-compose.qbit.yml
+-rw-r--r--   1 svc-admin truenas_admin 1841 Feb 19 22:59 docker-compose.qbit.yml.bak-session22
+-rw-r--r--   1 svc-admin truenas_admin  479 Feb 19 12:00 .env

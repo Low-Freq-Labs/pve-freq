@@ -1,0 +1,11 @@
+Filesystem                                 Size  Used Avail Use% Mounted on
+udev                                       1.9G     0  1.9G   0% /dev
+tmpfs                                      393M  796K  392M   1% /run
+/dev/sda1                                   60G  8.0G   49G  15% /
+tmpfs                                      2.0G     0  2.0G   0% /dev/shm
+tmpfs                                      1.0M     0  1.0M   0% /run/credentials/systemd-journald.service
+tmpfs                                      5.0M     0  5.0M   0% /run/lock
+tmpfs                                      2.0G     0  2.0G   0% /tmp
+tmpfs                                      1.0M     0  1.0M   0% /run/credentials/getty@tty1.service
+10.25.25.25:/mnt/mega-pool/nfs-mega-share   21T  744G   20T   4% /mnt/truenas/nfs-mega-share
+tmpfs                                      393M  8.0K  393M   1% /run/user/3003

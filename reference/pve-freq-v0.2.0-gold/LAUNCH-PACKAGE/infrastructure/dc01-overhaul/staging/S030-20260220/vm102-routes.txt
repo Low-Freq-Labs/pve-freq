@@ -1,0 +1,7 @@
+default via 10.25.5.1 dev ens18 onlink 
+10.25.0.0/24 via 10.25.5.5 dev ens18 
+10.25.5.0/24 dev ens18 proto kernel scope link src 10.25.5.31 
+10.25.100.0/24 via 10.25.255.1 dev ens19 
+10.25.255.0/24 dev ens19 proto kernel scope link src 10.25.255.31 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown 
+172.18.0.0/16 dev br-667a4e7aaba4 proto kernel scope link src 172.18.0.1 

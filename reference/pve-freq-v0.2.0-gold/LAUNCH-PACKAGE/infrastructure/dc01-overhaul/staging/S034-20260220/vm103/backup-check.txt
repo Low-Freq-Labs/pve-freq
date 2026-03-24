@@ -1,0 +1,34 @@
+total 12
+drwxr-xr-x 2 svc-admin truenas_admin 4096 Feb 20 15:43 .
+drwxr-xr-x 5 svc-admin truenas_admin 4096 Feb 20 14:48 ..
+-rwxr-xr-x 1 root      root          1053 Feb 20 15:43 backup.sh
+=== BACKUP SCRIPT ===
+#!/bin/bash
+# DC01 Config Backup Script
+# Backs up /opt/dc01/configs/ to NFS, keeps last 7 days
+set -euo pipefail
+
+HOSTNAME_TAG=$(cat /etc/hostname | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+BACKUP_DIR="/opt/dc01/backups"
+NFS_BACKUP="/mnt/truenas/nfs-mega-share/media/config-backups/${HOSTNAME_TAG}"
+DATE=$(date +%Y%m%d-%H%M)
+TARBALL="dc01-configs-${DATE}.tar.gz"
+
+# Create local backup
+tar czf "${BACKUP_DIR}/${TARBALL}" -C /opt/dc01 configs/
+
+# Copy to NFS (soft mount means this fails gracefully if NFS is down)
+if mountpoint -q /mnt/truenas/nfs-mega-share; then
+    mkdir -p "${NFS_BACKUP}"
+    cp "${BACKUP_DIR}/${TARBALL}" "${NFS_BACKUP}/"
+    # Prune NFS backups older than 7 days
+    find "${NFS_BACKUP}" -name "dc01-configs-*.tar.gz" -mtime +7 -delete 2>/dev/null || true
+else
+    echo "WARNING: NFS not mounted, backup saved locally only" >&2
+fi
+
+# Prune local backups older than 3 days (NFS has the longer retention)
+find "${BACKUP_DIR}" -name "dc01-configs-*.tar.gz" -mtime +3 -delete 2>/dev/null || true
+
+echo "Backup complete: ${TARBALL}"
+=== NFS BACKUPS ===

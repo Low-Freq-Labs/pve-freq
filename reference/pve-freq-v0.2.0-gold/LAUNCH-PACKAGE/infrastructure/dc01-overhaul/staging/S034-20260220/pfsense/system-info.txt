@@ -1,0 +1,5 @@
+FreeBSD fw01.infra.internal 16.0-CURRENT FreeBSD 16.0-CURRENT #18 plus-RELENG_26_03-n256522-b07457f8d2e7: Thu Feb 19 20:17:16 UTC 2026     root@pfsense-build-release-amd64-1.eng.atx.netgate.com:/var/jenkins/workspace/pfSense-Plus-snapshots-26_03-main/obj/amd64/TVcqnR7U/var/jenkins/workspace/pfSense-Plus-snapshots-26_03-main/sources/FreeBSD-src-plus-RELENG_26_03/amd64.amd64/sys/pfSense amd64
+---UPTIME---
+ 7:31PM  up 23:18, 2 users, load averages: 0.32, 0.20, 0.17
+---FREEBSD-VERSION---
+16.0-CURRENT

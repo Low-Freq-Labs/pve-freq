@@ -1,0 +1,18 @@
+source /etc/network/interfaces.d/*
+
+auto lo
+iface lo inet loopback
+
+allow-hotplug ens18
+iface ens18 inet static
+    address 10.25.5.30/24
+    gateway 10.25.5.1
+    dns-nameservers 1.1.1.1 8.8.8.8
+    mtu 9000
+    up ip route add 10.25.0.0/24 via 10.25.5.5
+
+allow-hotplug ens19
+iface ens19 inet static
+    address 10.25.255.30/24
+    mtu 9000
+    up ip route add 10.25.100.0/24 via 10.25.255.1

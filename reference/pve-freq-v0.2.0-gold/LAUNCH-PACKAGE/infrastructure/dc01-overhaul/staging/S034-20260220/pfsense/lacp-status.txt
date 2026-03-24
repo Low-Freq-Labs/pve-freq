@@ -1,0 +1,14 @@
+lagg0: flags=1008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,LOWER_UP> metric 0 mtu 9000
+	description: LAN
+	options=4e020bb<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,JUMBO_MTU,VLAN_HWCSUM,WOL_MAGIC,RXCSUM_IPV6,TXCSUM_IPV6,HWSTATS,MEXTPG>
+	ether 90:ec:77:2e:0d:6e
+	hwaddr 00:00:00:00:00:00
+	inet 10.25.0.1 netmask 0xffffff00 broadcast 10.25.0.255
+	inet6 fe80::92ec:77ff:fe2e:d6e%lagg0 prefixlen 64 scopeid 0xe
+	laggproto lacp lagghash l2,l3,l4
+	laggport: igc2 flags=1c<ACTIVE,COLLECTING,DISTRIBUTING>
+	laggport: igc3 flags=1c<ACTIVE,COLLECTING,DISTRIBUTING>
+	groups: lagg
+	media: Ethernet autoselect
+	status: active
+	nd6 options=21<PERFORMNUD,AUTO_LINKLOCAL>

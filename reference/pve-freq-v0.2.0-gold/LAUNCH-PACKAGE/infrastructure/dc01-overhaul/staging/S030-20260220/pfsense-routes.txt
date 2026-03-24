@@ -1,0 +1,47 @@
+Routing tables
+
+Internet:
+Destination        Gateway            Flags         Netif Expire
+default            100.101.14.1       UGS             ix2
+10.25.0.0/24       link#14            U             lagg0
+10.25.0.1          link#10            UHS             lo0
+10.25.5.0/24       link#15            U           lagg0.5
+10.25.5.1          link#10            UHS             lo0
+10.25.10.0/24      link#16            U          lagg0.10
+10.25.10.1         link#10            UHS             lo0
+10.25.25.0/24      link#17            U          lagg0.25
+10.25.25.1         link#10            UHS             lo0
+10.25.66.0/24      link#19            U          lagg0.66
+10.25.66.1         link#10            UHS             lo0
+10.25.100.0/24     link#13            U           tun_wg0
+10.25.100.1        link#10            UHS             lo0
+10.25.255.0/24     link#18            U        lagg0.2550
+10.25.255.1        link#10            UHS             lo0
+69.65.20.56/29     link#10            USB             lo0
+69.65.20.58        link#10            UH              lo0
+69.65.20.62        link#10            UH              lo0
+100.101.14.0/28    link#7             U               ix2
+100.101.14.2       link#10            UHS             lo0
+127.0.0.1          link#10            UH              lo0
+
+Internet6:
+Destination                       Gateway                       Flags         Netif Expire
+::1                               link#10                       UHS             lo0
+fe80::%igc3/64                    link#4                        U              igc3
+fe80::92ec:77ff:fe2e:d6c%lo0      link#10                       UHS             lo0
+fe80::%ix2/64                     link#7                        U               ix2
+fe80::92ec:77ff:fe2e:d6b%lo0      link#10                       UHS             lo0
+fe80::%lo0/64                     link#10                       U               lo0
+fe80::1%lo0                       link#10                       UHS             lo0
+fe80::%lagg0/64                   link#14                       U             lagg0
+fe80::92ec:77ff:fe2e:d6e%lo0      link#10                       UHS             lo0
+fe80::%lagg0.5/64                 link#15                       U           lagg0.5
+fe80::92ec:77ff:fe2e:d6e%lo0      link#10                       UHS             lo0
+fe80::%lagg0.10/64                link#16                       U          lagg0.10
+fe80::92ec:77ff:fe2e:d6e%lo0      link#10                       UHS             lo0
+fe80::%lagg0.25/64                link#17                       U          lagg0.25
+fe80::92ec:77ff:fe2e:d6e%lo0      link#10                       UHS             lo0
+fe80::%lagg0.2550/64              link#18                       U        lagg0.2550
+fe80::92ec:77ff:fe2e:d6e%lo0      link#10                       UHS             lo0
+fe80::%lagg0.66/64                link#19                       U          lagg0.66
+fe80::92ec:77ff:fe2e:d6e%lo0      link#10                       UHS             lo0

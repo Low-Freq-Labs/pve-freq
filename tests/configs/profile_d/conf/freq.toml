@@ -1,0 +1,53 @@
+# Profile D: /23 network — non-standard subnets
+
+[freq]
+version = "2.0.0"
+brand = "PVE FREQ"
+build = "default"
+ascii = false
+debug = false
+
+[ssh]
+service_account = "root"
+connect_timeout = 5
+max_parallel = 5
+mode = "root"
+
+[pve]
+nodes = ["172.16.0.5"]
+node_names = ["pve1"]
+ssh_user = "root"
+
+[pve.storage.pve1]
+pool = "ceph-pool"
+type = "SSD"
+
+[vm.defaults]
+cores = 2
+ram = 2048
+disk = 32
+cpu = "host"
+machine = "q35"
+scsihw = "virtio-scsi-pci"
+bios = "seabios"
+domain = "lab.internal"
+gateway = "172.16.0.1"
+nameserver = "172.16.0.1"
+ci_user = "root"
+
+[safety]
+protected_vmids = []
+protected_ranges = [[900, 999]]
+max_failure_percent = 50
+
+[infrastructure]
+cluster_name = "LabCluster"
+timezone = "America/New_York"
+
+[nic]
+bridge = "vmbr1"
+mtu = 1500
+
+[notifications]
+discord_webhook = ""
+slack_webhook = ""

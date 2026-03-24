@@ -1,0 +1,1 @@
+-rw-r--r-- 1 svc-admin truenas_admin 2020 Feb 20 09:59 /mnt/truenas/nfs-mega-share/plex/downloader-data/docker-compose.qbit.yml

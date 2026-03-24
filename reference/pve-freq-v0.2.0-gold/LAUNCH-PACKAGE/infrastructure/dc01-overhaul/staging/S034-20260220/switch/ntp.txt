@@ -1,0 +1,6 @@
+
+gigecolo#terminal length 0
+gigecolo#show ntp status
+%NTP is not enabled.
+gigecolo#show ntp associations
+gigecolo#exit

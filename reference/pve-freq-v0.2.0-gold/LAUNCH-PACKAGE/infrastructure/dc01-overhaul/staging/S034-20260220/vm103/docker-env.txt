@@ -1,0 +1,22 @@
+#################################################################
+
+# Base config
+TZ=America/Chicago
+
+PUID=3003
+PGID=950
+
+CONFIG_DIR=/opt/dc01/configs
+DOWNLOADS_DIR=/mnt/truenas/nfs-mega-share/media/downloads
+
+# Gluetun config
+VPN_TYPE=wireguard
+SERVER_COUNTRIES=Netherlands
+#SERVER_REGIONS=Illinois
+
+# OpenVPN config
+#OPENVPN_USER=username+pmp
+#OPENVPN_PASSWORD=password
+
+# Wireguard config (example key)
+WIREGUARD_PRIVATE_KEY=<REDACTED>

@@ -1,0 +1,1 @@
+LISTEN 0      4096               *:8006             *:*    users:(("pveproxy worker",pid=244256,fd=6),("pveproxy worker",pid=244255,fd=6),("pveproxy worker",pid=244254,fd=6),("pveproxy",pid=2800,fd=6))

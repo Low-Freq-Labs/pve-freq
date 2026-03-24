@@ -1,0 +1,18 @@
+--- showmount -e localhost ---
+Export list for localhost:
+/mnt/mega-pool/ha-proxmox-disk *
+/mnt/mega-pool/nfs-mega-share  10.25.255.0/24,10.25.5.0/24,10.25.10.0/24,10.25.25.0/24,10.25.0.0/24,10.25.100.0/24,172.28.16.0/20
+
+--- /etc/exports ---
+
+
+"/mnt/mega-pool/nfs-mega-share"\
+	172.28.16.0/20(sec=sys,rw,anonuid=3003,anongid=950,all_squash,no_subtree_check)\
+	10.25.100.0/24(sec=sys,rw,anonuid=3003,anongid=950,all_squash,no_subtree_check)\
+	10.25.0.0/24(sec=sys,rw,anonuid=3003,anongid=950,all_squash,no_subtree_check)\
+	10.25.25.0/24(sec=sys,rw,anonuid=3003,anongid=950,all_squash,no_subtree_check)\
+	10.25.10.0/24(sec=sys,rw,anonuid=3003,anongid=950,all_squash,no_subtree_check)\
+	10.25.5.0/24(sec=sys,rw,anonuid=3003,anongid=950,all_squash,no_subtree_check)\
+	10.25.255.0/24(sec=sys,rw,anonuid=3003,anongid=950,all_squash,no_subtree_check)
+"/mnt/mega-pool/ha-proxmox-disk"\
+	*(sec=sys,rw,no_subtree_check)

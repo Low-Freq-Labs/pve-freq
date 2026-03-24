@@ -1,0 +1,7 @@
+default via 10.25.0.1 dev eno1 proto static 
+10.25.0.0/24 dev eno1 proto kernel scope link src 10.25.0.25 
+10.25.5.0/24 via 10.25.0.5 dev eno1 
+10.25.10.0/24 via 10.25.0.5 dev eno1 proto static 
+10.25.25.0/24 dev bond0 proto kernel scope link src 10.25.25.25 
+10.25.100.0/24 via 10.25.255.1 dev eno4 
+10.25.255.0/24 dev eno4 proto kernel scope link src 10.25.255.25 

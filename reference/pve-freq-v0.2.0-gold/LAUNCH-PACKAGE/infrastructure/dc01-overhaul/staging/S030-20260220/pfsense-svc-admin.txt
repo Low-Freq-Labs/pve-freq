@@ -1,0 +1,2 @@
+svc-admin:*:2002:0:Service Admin - DC01 Universal Admin:/home/svc-admin:/bin/tcsh
+uid=2002(svc-admin) gid=0(wheel) groups=0(wheel),1999(admins)
