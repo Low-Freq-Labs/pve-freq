@@ -16,11 +16,10 @@ import re
 import shlex
 
 from freq.core import fmt
-from freq.core import resolve
 from freq.core import validate
 from freq.core import log as logger
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many
 
 # User management timeouts
 USER_CMD_TIMEOUT = 15

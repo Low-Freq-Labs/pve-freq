@@ -10,7 +10,6 @@ Downloads cloud images, creates templates, provisions VMs with:
 Supports: Debian 12/13, Ubuntu 22.04/24.04, Rocky 9, AlmaLinux 9
 """
 import os
-import time
 
 from freq.core import fmt
 from freq.core import log as logger

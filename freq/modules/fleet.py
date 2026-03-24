@@ -3,13 +3,11 @@
 Commands: status, exec, info, diagnose, docker, keys, dashboard
 The core of fleet management — every command talks to real hosts via SSH.
 """
-import asyncio
 import subprocess
 import time
 
 from freq.core import fmt
 from freq.core import resolve
-from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
 from freq.core.types import Host

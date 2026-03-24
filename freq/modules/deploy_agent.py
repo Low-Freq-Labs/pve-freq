@@ -12,7 +12,7 @@ import urllib.request
 from freq.core import fmt
 from freq.core import resolve
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run as ssh_run
 
 # Deploy timeouts
 DEPLOY_CMD_TIMEOUT = 10

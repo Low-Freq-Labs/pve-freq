@@ -8,7 +8,7 @@ import os
 from freq.core import fmt
 from freq.core import resolve
 from freq.core import log as logger
-from freq.core.config import FreqConfig, load_hosts
+from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
 # Bootstrap timeouts

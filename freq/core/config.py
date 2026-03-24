@@ -5,7 +5,6 @@ Safe defaults are set BEFORE loading any config — if config is broken, FREQ st
 This is Trap #4 from the 5 Traps: config vs code confusion.
 """
 import os
-import re
 from dataclasses import dataclass, field
 
 try:

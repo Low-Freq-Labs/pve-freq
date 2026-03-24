@@ -8,14 +8,13 @@ If a module is missing, the command reports the error and FREQ keeps running.
 This is the "muscles can be missing" principle from the Convergence.
 """
 import argparse
-import sys
 import os
 
 import freq
 from freq.core.config import load_config, FreqConfig
 from freq.core import fmt
 from freq.core import log as logger
-from freq.core.personality import load_pack, celebrate, show_vibe, splash
+from freq.core.personality import load_pack, show_vibe, splash
 
 
 def main(argv: list = None) -> int:

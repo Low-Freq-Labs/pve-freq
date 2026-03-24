@@ -5,9 +5,7 @@ JSON lines to data/log/freq.log. Scrubs sensitive data before writing.
 import json
 import os
 import re
-import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 
 _LOG_FILE: str = ""

@@ -5,10 +5,8 @@ Supports: git pull (dev), tarball download (production), dpkg (packages).
 """
 import os
 import subprocess
-import shutil
 
 from freq.core import fmt
-from freq.core import log as logger
 from freq.core.config import FreqConfig
 import freq
 

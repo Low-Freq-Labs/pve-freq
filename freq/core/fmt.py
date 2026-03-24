@@ -5,7 +5,6 @@ step indicators, tables, badges. The visual identity of the tool.
 
 Adapted from fmt.sh (315 lines) — reimagined in Python with full Unicode support.
 """
-import os
 import re
 import shutil
 

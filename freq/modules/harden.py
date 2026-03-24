@@ -5,7 +5,6 @@ Also provides targeted hardening: SSH, firewall, packages.
 """
 from freq.core import fmt
 from freq.core import resolve
-from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
 

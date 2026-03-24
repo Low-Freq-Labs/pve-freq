@@ -5,7 +5,6 @@ These connect the declarative policy engine to the CLI.
 """
 from freq.core import fmt
 from freq.core import resolve
-from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.engine.policy import PolicyExecutor, PolicyStore
 from freq.engine.runner import run_sync

@@ -22,7 +22,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 
@@ -33,8 +32,8 @@ except ModuleNotFoundError:
 
 from freq.core import fmt
 from freq.core import log as logger
-from freq.core.config import FreqConfig, load_config
-from freq.core.ssh import PLATFORM_SSH, LEGACY_HTYPES
+from freq.core.config import FreqConfig
+from freq.core.ssh import PLATFORM_SSH
 
 
 # Device types that support per-device credentials

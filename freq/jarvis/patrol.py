@@ -11,7 +11,6 @@ Usage:
 import time
 
 from freq.core import fmt
-from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run_many as ssh_run_many
 from freq.engine.policies import ALL_POLICIES

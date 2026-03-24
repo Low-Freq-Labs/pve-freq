@@ -9,7 +9,6 @@ import getpass
 import hashlib
 import os
 import subprocess
-from pathlib import Path
 
 from freq.core import fmt
 from freq.core import log as logger

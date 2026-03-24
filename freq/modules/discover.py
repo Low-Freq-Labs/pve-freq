@@ -9,7 +9,6 @@ import asyncio
 import time
 
 from freq.core import fmt
-from freq.core import validate
 from freq.core.config import FreqConfig
 from freq.core.ssh import async_run
 

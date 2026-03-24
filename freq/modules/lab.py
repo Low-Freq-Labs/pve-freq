@@ -5,14 +5,10 @@ Commands: lab status, lab media deploy, lab resize, lab rebuild
 Manages lab hosts — sandbox VMs, docker-dev, test media stacks, and lab PVE nodes.
 Lab hosts are identified by the 'lab' group in hosts.conf.
 """
-import json
-import time
-
 from freq.core import fmt
-from freq.core import resolve
 from freq.core import log as logger
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run as ssh_run
 
 # Lab timeouts
 LAB_CMD_TIMEOUT = 30

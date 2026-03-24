@@ -7,7 +7,6 @@ Safety gates enforce protected VMID ranges and confirmation prompts.
 """
 import json
 import subprocess
-import time
 
 from freq.core import fmt
 from freq.core import validate

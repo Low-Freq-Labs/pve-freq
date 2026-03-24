@@ -6,7 +6,6 @@ Deploys complete Claude Code workspaces: CLAUDE.md, settings, tmux, dev scripts,
 mailbox structure. Each specialist gets a role-specific configuration.
 """
 import json
-import os
 import time
 
 from freq.core import fmt

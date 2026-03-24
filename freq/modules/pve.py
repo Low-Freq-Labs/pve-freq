@@ -9,7 +9,6 @@ No REST API, no tokens — just SSH keys and native Proxmox tools.
 import json
 
 from freq.core import fmt
-from freq.core import log as logger
 from freq.core import validate
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
