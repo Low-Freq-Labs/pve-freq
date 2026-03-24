@@ -8,9 +8,13 @@ Usage:
   freq serve                  # start on port 8888
   freq serve --port 9090      # custom port
 """
+import concurrent.futures
+import datetime
+import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import time
 import urllib.error
@@ -97,7 +101,6 @@ def _save_disk_cache(name, data):
 
 def _bg_probe_infra():
     """Probe all physical infra devices — runs in background thread."""
-    import concurrent.futures
     try:
         cfg = load_config()
     except Exception as e:
@@ -213,7 +216,6 @@ def _bg_probe_infra():
 
 def _bg_probe_health():
     """Probe all hosts for health — runs in background thread."""
-    import concurrent.futures
     try:
         cfg = load_config()
     except Exception as e:
@@ -899,7 +901,6 @@ class FreqHandler(BaseHTTPRequestHandler):
             return
         # Fallback: no cache yet (first few seconds after cold start)
         cfg = load_config()
-        import concurrent.futures
         start = time.monotonic()
 
         # Platform-specific health commands — all output: hostname|cores|used/totalMB|disk%|load|docker_count
@@ -1268,9 +1269,8 @@ class FreqHandler(BaseHTTPRequestHandler):
 
         cfg = load_config()
         from freq.jarvis.learn import _init_db, _seed_db, _search, _load_knowledge
-        import os as _os
 
-        db_path = _os.path.join(cfg.data_dir, "jarvis", "knowledge.db")
+        db_path = os.path.join(cfg.data_dir, "jarvis", "knowledge.db")
         conn = _init_db(db_path)
         lessons_data, gotchas_data = _load_knowledge(cfg)
         _seed_db(conn, lessons_data, gotchas_data)
@@ -1645,7 +1645,6 @@ class FreqHandler(BaseHTTPRequestHandler):
                 # TrueNAS returns dates as {"$date": epoch_ms} or ISO strings
                 def _fmt_date(val):
                     if isinstance(val, dict) and "$date" in val:
-                        import datetime
                         try:
                             return datetime.datetime.fromtimestamp(val["$date"] / 1000).strftime("%Y-%m-%d %H:%M")
                         except (OSError, ValueError):
@@ -2057,7 +2056,6 @@ class FreqHandler(BaseHTTPRequestHandler):
 
     def _serve_vault(self):
         cfg = load_config()
-        import os
         if not os.path.exists(cfg.vault_file):
             self._json_response({"entries": [], "initialized": False}); return
         entries = vault_list(cfg)
@@ -2074,7 +2072,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         host = params.get("host", ["DEFAULT"])[0]
         if not key or not value:
             self._json_response({"error": "Key and value required"}); return
-        import os
         if not os.path.exists(cfg.vault_file):
             vault_init(cfg)
         ok = vault_set(cfg, host, key, value)
@@ -2161,10 +2158,9 @@ class FreqHandler(BaseHTTPRequestHandler):
 
     def _serve_journal(self):
         cfg = load_config()
-        import os as _os
-        path = _os.path.join(cfg.data_dir, "log", "journal.jsonl")
+        path = os.path.join(cfg.data_dir, "log", "journal.jsonl")
         entries = []
-        if _os.path.exists(path):
+        if os.path.exists(path):
             with open(path) as f:
                 for line in f:
                     try: entries.append(json.loads(line.strip()))
@@ -2234,7 +2230,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         if not valid_label(name):
             self._json_response({"error": "Invalid agent name (alphanumeric + hyphens only)"}); return
         from freq.jarvis.agent import TEMPLATES, _load_agents, _save_agents
-        import os as _os
         agents = _load_agents(cfg)
         if name in agents:
             self._json_response({"error": f"Agent '{name}' already exists"}); return
@@ -2256,9 +2251,9 @@ class FreqHandler(BaseHTTPRequestHandler):
                          "status": "created", "created": time.strftime("%Y-%m-%d %H:%M:%S"),
                          "cores": tmpl["cores"], "ram": tmpl["ram"], "disk": tmpl["disk"]}
         _save_agents(cfg, agents)
-        md_dir = _os.path.join(cfg.data_dir, "jarvis", "agents", name)
-        _os.makedirs(md_dir, exist_ok=True)
-        with open(_os.path.join(md_dir, "CLAUDE.md"), "w") as f:
+        md_dir = os.path.join(cfg.data_dir, "jarvis", "agents", name)
+        os.makedirs(md_dir, exist_ok=True)
+        with open(os.path.join(md_dir, "CLAUDE.md"), "w") as f:
             f.write(tmpl["claude_md"].format(name=name))
         self._json_response({"ok": True, "name": name, "vmid": vmid, "template": template})
 
@@ -2279,9 +2274,8 @@ class FreqHandler(BaseHTTPRequestHandler):
                 _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=120)
         del agents[name]
         _save_agents(cfg, agents)
-        import shutil, os as _os
-        md_dir = _os.path.join(cfg.data_dir, "jarvis", "agents", name)
-        if _os.path.isdir(md_dir): shutil.rmtree(md_dir)
+        md_dir = os.path.join(cfg.data_dir, "jarvis", "agents", name)
+        if os.path.isdir(md_dir): shutil.rmtree(md_dir)
         self._json_response({"ok": True, "name": name, "vmid": vmid})
 
     def _serve_deploy_agent(self):
@@ -2374,8 +2368,7 @@ class FreqHandler(BaseHTTPRequestHandler):
                            command_timeout=10, htype="pve", use_sudo=True)
             if r.returncode == 0 and r.stdout:
                 try:
-                    import json as j
-                    vms = j.loads(r.stdout)
+                    vms = json.loads(r.stdout)
                     for v in vms:
                         pve_info["vms"].append({
                             "vmid": v.get("vmid"), "name": v.get("name", ""),
@@ -3379,7 +3372,6 @@ class FreqHandler(BaseHTTPRequestHandler):
     def _serve_auth_login(self):
         """Authenticate user against FREQ users list + vault password."""
 
-        import hashlib, time as _time
         params = _parse_query(self)
         username = params.get("username", [""])[0].strip()
         password = params.get("password", [""])[0]
@@ -3419,11 +3411,11 @@ class FreqHandler(BaseHTTPRequestHandler):
                 logger.warn(f"vault write failed for auth: {e}")
 
         # Generate session token
-        token = hashlib.sha256(f"{username}{_time.time()}{os.getpid()}".encode()).hexdigest()[:32]
+        token = hashlib.sha256(f"{username}{time.time()}{os.getpid()}".encode()).hexdigest()[:32]
         FreqHandler._auth_tokens[token] = {
             "user": username,
             "role": user["role"],
-            "ts": _time.time(),
+            "ts": time.time(),
         }
         self._json_response({
             "ok": True, "token": token,
@@ -3433,7 +3425,6 @@ class FreqHandler(BaseHTTPRequestHandler):
     def _serve_auth_verify(self):
         """Verify a session token is still valid."""
 
-        import time
         params = _parse_query(self)
         token = params.get("token", [""])[0]
         session = FreqHandler._auth_tokens.get(token)
@@ -3452,7 +3443,6 @@ class FreqHandler(BaseHTTPRequestHandler):
     def _serve_auth_change_password(self):
         """Change password for authenticated user."""
 
-        import hashlib
         params = _parse_query(self)
         token = params.get("token", [""])[0]
         new_password = params.get("password", [""])[0]

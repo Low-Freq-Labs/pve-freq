@@ -8,6 +8,7 @@ These modules are implemented but will show connectivity errors
 until deployed to production or lab equivalents are available.
 """
 import json
+import time
 
 from freq.core import fmt
 from freq.core import log as logger
@@ -275,8 +276,6 @@ def cmd_idrac(cfg: FreqConfig, pack, args) -> int:
 
 def cmd_watch(cfg: FreqConfig, pack, args) -> int:
     """Monitoring daemon — periodic fleet health checks."""
-    import time
-
     fmt.header("Watch")
     fmt.blank()
     fmt.line(f"{fmt.C.BOLD}Fleet monitoring — Ctrl+C to stop{fmt.C.RESET}")

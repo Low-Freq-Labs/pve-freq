@@ -4,6 +4,7 @@ freq deploy-agent <host|all> — copies agent_collector.py, creates systemd serv
 freq agent-status — check which hosts have the agent running.
 """
 import os
+import time
 
 from freq.core import fmt
 from freq.core import resolve
@@ -113,7 +114,6 @@ def cmd_deploy_agent(cfg: FreqConfig, pack, args) -> int:
                 command_timeout=15, htype=h.htype, use_sudo=True)
 
         # Step 6: Verify
-        import time
         time.sleep(1)
         r = ssh_run(host=h.ip, command=f"curl -s http://localhost:{AGENT_PORT}/health 2>/dev/null",
                     key_path=cfg.ssh_key_path, connect_timeout=5,

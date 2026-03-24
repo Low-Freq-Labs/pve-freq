@@ -11,6 +11,8 @@ Comprehensive health check across the fleet:
 
 Color-coded thresholds: green (healthy), yellow (warning), red (critical).
 """
+import time
+
 from freq.core import fmt
 from freq.core.config import FreqConfig
 from freq.core.ssh import run_many as ssh_run_many
@@ -60,7 +62,6 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
     fmt.line(f"{fmt.C.BOLD}Scanning {len(hosts)} hosts...{fmt.C.RESET}")
     fmt.blank()
 
-    import time
     start = time.monotonic()
     results = ssh_run_many(
         hosts=hosts,
