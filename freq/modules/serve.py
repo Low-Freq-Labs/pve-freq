@@ -33,7 +33,11 @@ from freq.core.validate import (
     is_protected_vmid, vlan_id as valid_vlan,
 )
 from freq.modules.pve import _find_reachable_node, _pve_cmd
+from freq.modules.users import _load_users, _save_users, _role_level, ROLE_HIERARCHY
 from freq.modules.vault import vault_get, vault_set, vault_init, vault_list, vault_delete
+from freq.jarvis.agent import TEMPLATES, _load_agents, _save_agents
+from freq.jarvis.notify import notify as jarvis_notify
+from freq.jarvis.risk import _load_risk_map, _load_kill_chain
 import freq
 
 
@@ -1151,7 +1155,6 @@ class FreqHandler(BaseHTTPRequestHandler):
     def _serve_agents(self):
         """Agent registry."""
         cfg = load_config()
-        from freq.jarvis.agent import _load_agents
         agents = _load_agents(cfg)
         agent_list = [
             {
@@ -2088,7 +2091,6 @@ class FreqHandler(BaseHTTPRequestHandler):
 
     def _serve_users(self):
         cfg = load_config()
-        from freq.modules.users import _load_users, ROLE_HIERARCHY
         users = _load_users(cfg)
         self._json_response({"users": users, "count": len(users), "roles": ROLE_HIERARCHY})
 
@@ -2100,7 +2102,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         role = params.get("role", ["operator"])[0]
         if not username:
             self._json_response({"error": "Username required"}); return
-        from freq.modules.users import _load_users, _save_users
         users = _load_users(cfg)
         if any(u["username"] == username for u in users):
             self._json_response({"error": f"User '{username}' already exists"}); return
@@ -2113,7 +2114,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         cfg = load_config()
         params = _parse_query(self)
         username = params.get("username", [""])[0]
-        from freq.modules.users import _load_users, _save_users, _role_level, ROLE_HIERARCHY
         users = _load_users(cfg)
         user = next((u for u in users if u["username"] == username), None)
         if not user:
@@ -2131,7 +2131,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         cfg = load_config()
         params = _parse_query(self)
         username = params.get("username", [""])[0]
-        from freq.modules.users import _load_users, _save_users, _role_level, ROLE_HIERARCHY
         users = _load_users(cfg)
         user = next((u for u in users if u["username"] == username), None)
         if not user:
@@ -2169,7 +2168,6 @@ class FreqHandler(BaseHTTPRequestHandler):
 
     def _serve_config(self):
         cfg = load_config()
-        from freq.jarvis.risk import _load_kill_chain
         self._json_response({
             "version": cfg.version, "brand": cfg.brand, "build": cfg.build,
             "ssh_account": cfg.ssh_service_account, "ssh_timeout": cfg.ssh_connect_timeout,
@@ -2229,7 +2227,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         name = params.get("name", [template])[0]
         if not valid_label(name):
             self._json_response({"error": "Invalid agent name (alphanumeric + hyphens only)"}); return
-        from freq.jarvis.agent import TEMPLATES, _load_agents, _save_agents
         agents = _load_agents(cfg)
         if name in agents:
             self._json_response({"error": f"Agent '{name}' already exists"}); return
@@ -2262,7 +2259,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         cfg = load_config()
         params = _parse_query(self)
         name = params.get("name", [""])[0]
-        from freq.jarvis.agent import _load_agents, _save_agents
         agents = _load_agents(cfg)
         if name not in agents:
             self._json_response({"error": f"Agent not found: {name}"}); return
@@ -2312,8 +2308,7 @@ class FreqHandler(BaseHTTPRequestHandler):
 
     def _serve_notify_test(self):
         cfg = load_config()
-        from freq.jarvis.notify import notify
-        results = notify(cfg, "Test notification from FREQ Web UI", severity="info")
+        results = jarvis_notify(cfg, "Test notification from FREQ Web UI", severity="info")
         self._json_response({"results": {k: v for k, v in results.items()},
                               "discord_configured": bool(cfg.discord_webhook),
                               "slack_configured": bool(cfg.slack_webhook)})
@@ -2397,7 +2392,6 @@ class FreqHandler(BaseHTTPRequestHandler):
     def _serve_risk(self):
         """Risk analysis data via API."""
         cfg = load_config()
-        from freq.jarvis.risk import _load_risk_map, _load_kill_chain
         dependencies = _load_risk_map(cfg)
         chain = _load_kill_chain(cfg)
         targets = []
@@ -3260,7 +3254,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         cfg = load_config()
         agents = []
         try:
-            from freq.jarvis.agent import _load_agents
             for name, a in _load_agents(cfg).items():
                 agents.append({
                     "name": name,
@@ -3382,7 +3375,6 @@ class FreqHandler(BaseHTTPRequestHandler):
 
         # Load FREQ users to verify the user exists and get role
         cfg = load_config()
-        from freq.modules.users import _load_users
         users = _load_users(cfg)
         user = next((u for u in users if u["username"] == username), None)
         if not user:
