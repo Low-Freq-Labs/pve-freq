@@ -13,12 +13,9 @@ Scans fleet hosts for common security issues:
 Each check returns findings with severity (INFO/WARN/CRIT).
 No changes are made — this is read-only.
 """
-import json
-
 from freq.core import fmt
-from freq.core import resolve
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run as ssh_run
 from freq.core.types import Finding, Severity
 
 # Audit timeouts
