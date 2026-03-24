@@ -13,8 +13,16 @@ from freq.core import validate
 from freq.core.config import FreqConfig
 from freq.core.ssh import async_run
 
+# Discovery settings
+PING_TIMEOUT = 1.0
+SCAN_MAX_PARALLEL = 50
+SCAN_HOST_START = 1
+SCAN_HOST_END = 254
+IDENTIFY_CONNECT_TIMEOUT = 3
+IDENTIFY_CMD_TIMEOUT = 5
 
-async def _ping_host(ip: str, timeout: float = 1.0) -> bool:
+
+async def _ping_host(ip: str, timeout: float = PING_TIMEOUT) -> bool:
     """Check if a host responds to ping."""
     proc = await asyncio.create_subprocess_exec(
         "ping", "-c", "1", "-W", str(int(timeout)), ip,
@@ -25,14 +33,14 @@ async def _ping_host(ip: str, timeout: float = 1.0) -> bool:
     return proc.returncode == 0
 
 
-async def _scan_subnet(prefix: str, start: int = 1, end: int = 254, max_parallel: int = 50) -> list:
+async def _scan_subnet(prefix: str, start: int = SCAN_HOST_START, end: int = SCAN_HOST_END, max_parallel: int = SCAN_MAX_PARALLEL) -> list:
     """Ping sweep a subnet, return list of responding IPs."""
     semaphore = asyncio.Semaphore(max_parallel)
     alive = []
 
     async def _check(ip: str):
         async with semaphore:
-            if await _ping_host(ip, timeout=1.0):
+            if await _ping_host(ip, timeout=PING_TIMEOUT):
                 alive.append(ip)
 
     tasks = []
@@ -53,8 +61,8 @@ async def _identify_host(ip: str, key_path: str) -> dict:
         host=ip,
         command="hostname; cat /etc/os-release 2>/dev/null | grep -oP '(?<=^ID=).*' | head -1",
         key_path=key_path,
-        connect_timeout=3,
-        command_timeout=5,
+        connect_timeout=IDENTIFY_CONNECT_TIMEOUT,
+        command_timeout=IDENTIFY_CMD_TIMEOUT,
         htype="linux",
         use_sudo=False,
     )
@@ -74,7 +82,7 @@ async def _identify_host(ip: str, key_path: str) -> dict:
         # Check if it's a PVE node
         r2 = await async_run(
             host=ip, command="which pvesh 2>/dev/null",
-            key_path=key_path, connect_timeout=3, command_timeout=5,
+            key_path=key_path, connect_timeout=IDENTIFY_CONNECT_TIMEOUT, command_timeout=IDENTIFY_CMD_TIMEOUT,
             htype="linux", use_sudo=False,
         )
         if r2.returncode == 0 and r2.stdout.strip():
@@ -83,7 +91,7 @@ async def _identify_host(ip: str, key_path: str) -> dict:
             # Check if Docker is running
             r3 = await async_run(
                 host=ip, command="docker --version 2>/dev/null",
-                key_path=key_path, connect_timeout=3, command_timeout=5,
+                key_path=key_path, connect_timeout=IDENTIFY_CONNECT_TIMEOUT, command_timeout=IDENTIFY_CMD_TIMEOUT,
                 htype="linux", use_sudo=False,
             )
             if r3.returncode == 0 and "Docker" in r3.stdout:

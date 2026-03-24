@@ -21,6 +21,16 @@ from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
 from freq.core.types import Finding, Severity
 
+# Audit timeouts
+AUDIT_CMD_TIMEOUT = 10
+AUDIT_PKG_TIMEOUT = 15
+
+# Audit thresholds
+OPEN_PORTS_WARNING = 10
+FAILED_LOGIN_CRITICAL = 50
+FAILED_LOGIN_WARNING = 10
+UPDATES_WARNING = 20
+
 
 def cmd_audit(cfg: FreqConfig, pack, args) -> int:
     """Run security audit across fleet."""
@@ -130,7 +140,7 @@ def _check_ssh_config(cfg: FreqConfig, host) -> list:
         command="cat /etc/ssh/sshd_config 2>/dev/null | grep -v '^#' | grep -v '^$'",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10,
+        command_timeout=AUDIT_CMD_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
     )
@@ -151,7 +161,7 @@ def _check_password_auth(cfg: FreqConfig, host) -> list:
         command="grep -i '^PasswordAuthentication' /etc/ssh/sshd_config 2>/dev/null || echo 'NOT_SET'",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10,
+        command_timeout=AUDIT_CMD_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
     )
@@ -180,7 +190,7 @@ def _check_root_login(cfg: FreqConfig, host) -> list:
         command="grep -i '^PermitRootLogin' /etc/ssh/sshd_config 2>/dev/null || echo 'NOT_SET'",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10,
+        command_timeout=AUDIT_CMD_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
     )
@@ -203,14 +213,14 @@ def _check_open_ports(cfg: FreqConfig, host) -> list:
         command="ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | sort -u",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10,
+        command_timeout=AUDIT_CMD_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
     )
     if r.returncode == 0 and r.stdout.strip():
         ports = r.stdout.strip().split("\n")
         port_count = len(ports)
-        if port_count > 10:
+        if port_count > OPEN_PORTS_WARNING:
             findings.append(Finding(
                 resource_type="network", key="Listening ports",
                 current=f"{port_count} ports open",
@@ -235,21 +245,21 @@ def _check_failed_logins(cfg: FreqConfig, host) -> list:
         command="journalctl -u sshd --since '24 hours ago' --no-pager 2>/dev/null | grep -c 'Failed password' || echo 0",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10,
+        command_timeout=AUDIT_CMD_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
     )
     if r.returncode == 0:
         try:
             count = int(r.stdout.strip())
-            if count > 50:
+            if count > FAILED_LOGIN_CRITICAL:
                 findings.append(Finding(
                     resource_type="auth", key="Failed SSH logins (24h)",
                     current=f"{count} attempts",
                     desired="< 50",
                     severity=Severity.CRIT,
                 ))
-            elif count > 10:
+            elif count > FAILED_LOGIN_WARNING:
                 findings.append(Finding(
                     resource_type="auth", key="Failed SSH logins (24h)",
                     current=f"{count} attempts",
@@ -271,14 +281,14 @@ def _check_updates(cfg: FreqConfig, host) -> list:
         command="apt list --upgradable 2>/dev/null | grep -c upgradable || echo 0",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=15,
+        command_timeout=AUDIT_PKG_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
     )
     if r.returncode == 0:
         try:
             count = int(r.stdout.strip())
-            if count > 20:
+            if count > UPDATES_WARNING:
                 findings.append(Finding(
                     resource_type="packages", key="Updates available",
                     current=f"{count} packages",
@@ -302,7 +312,7 @@ def _check_updates(cfg: FreqConfig, host) -> list:
         command="dnf check-update --quiet 2>/dev/null | wc -l || echo 0",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=15,
+        command_timeout=AUDIT_PKG_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
     )

@@ -38,6 +38,14 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
 
+# ── CONSTANTS ────────────────────────────────────────────────────────────
+
+BG_CACHE_REFRESH_INTERVAL = 60   # seconds between background cache refreshes
+DASHBOARD_AUTO_REFRESH_MS = 30000  # milliseconds between frontend auto-refreshes
+SESSION_TIMEOUT_HOURS = 8
+SESSION_TIMEOUT_SECONDS = SESSION_TIMEOUT_HOURS * 3600
+DEFAULT_LOG_LINES = 50
+
 # ── BACKGROUND CACHE ENGINE ──────────────────────────────────────────────
 # Probes run in a background thread on a loop. API endpoints always serve
 # from memory cache (instant). On startup, stale data loads from disk so
@@ -321,7 +329,7 @@ def _bg_probe_health():
     _save_disk_cache("health", result)
 
 
-def _bg_refresh_loop(interval=60):
+def _bg_refresh_loop(interval=BG_CACHE_REFRESH_INTERVAL):
     """Continuous background refresh — runs forever as a daemon thread."""
     while True:
         try:
@@ -338,7 +346,7 @@ def _bg_refresh_loop(interval=60):
 def start_background_cache():
     """Load disk cache, then start the background refresh loop."""
     _load_disk_cache()
-    t = threading.Thread(target=_bg_refresh_loop, args=(60,), daemon=True)
+    t = threading.Thread(target=_bg_refresh_loop, args=(BG_CACHE_REFRESH_INTERVAL,), daemon=True)
     t.start()
 
 
@@ -610,7 +618,7 @@ def _check_session_role(handler, min_role="operator"):
     session = FreqHandler._auth_tokens.get(token)
     if not session:
         return None, "Session expired or invalid"
-    if time.time() - session["ts"] > 8 * 3600:
+    if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
         del FreqHandler._auth_tokens[token]
         return None, "Session expired"
     role_order = {"viewer": 0, "operator": 1, "admin": 2, "protected": 3}
@@ -3433,7 +3441,7 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"valid": False})
             return
         # Sessions expire after 8 hours
-        if time.time() - session["ts"] > 8 * 3600:
+        if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
             del FreqHandler._auth_tokens[token]
             self._json_response({"valid": False})
             return

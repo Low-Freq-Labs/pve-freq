@@ -15,6 +15,15 @@ from freq.core import fmt
 from freq.core.config import FreqConfig
 from freq.core.ssh import run_many as ssh_run_many
 
+# Health check thresholds
+HEALTH_CMD_TIMEOUT = 15
+LOAD_RATIO_CRITICAL = 2.0
+LOAD_RATIO_WARNING = 1.0
+RAM_PCT_CRITICAL = 95
+RAM_PCT_WARNING = 80
+DISK_PCT_CRITICAL = 90
+DISK_PCT_WARNING = 75
+
 
 def cmd_health(cfg: FreqConfig, pack, args) -> int:
     """Comprehensive fleet health check."""
@@ -58,7 +67,7 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
         command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=15,
+        command_timeout=HEALTH_CMD_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
     )
@@ -132,11 +141,11 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
 
         # Load: warn if > cores, crit if > 2x cores
         load_ratio = load_1m / cores if cores > 0 else 0
-        if load_ratio > 2.0:
+        if load_ratio > LOAD_RATIO_CRITICAL:
             load_color = fmt.C.RED
             host_health = "critical"
             issues += 1
-        elif load_ratio > 1.0:
+        elif load_ratio > LOAD_RATIO_WARNING:
             load_color = fmt.C.YELLOW
             if host_health != "critical":
                 host_health = "degraded"
@@ -147,11 +156,11 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
 
         # RAM: warn if > 80%, crit if > 95%
         ram_pct = (ram_used * 100 // ram_total) if ram_total > 0 else 0
-        if ram_pct > 95:
+        if ram_pct > RAM_PCT_CRITICAL:
             ram_color = fmt.C.RED
             host_health = "critical"
             issues += 1
-        elif ram_pct > 80:
+        elif ram_pct > RAM_PCT_WARNING:
             ram_color = fmt.C.YELLOW
             if host_health != "critical":
                 host_health = "degraded"
@@ -161,11 +170,11 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
         ram_str = f"{ram_color}{ram_pct}%{fmt.C.RESET} {ram_used}M"
 
         # Disk: warn if > 75%, crit if > 90%
-        if disk_pct > 90:
+        if disk_pct > DISK_PCT_CRITICAL:
             disk_color = fmt.C.RED
             host_health = "critical"
             issues += 1
-        elif disk_pct > 75:
+        elif disk_pct > DISK_PCT_WARNING:
             disk_color = fmt.C.YELLOW
             if host_health != "critical":
                 host_health = "degraded"
