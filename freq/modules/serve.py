@@ -790,7 +790,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         # Pre-fetch fleet data and embed it in HTML for instant load
         cfg = load_config()
         start = time.monotonic()
-        results = ssh_ssh_run_many(
+        results = ssh_run_many(
             hosts=cfg.hosts, command="uptime -p 2>/dev/null || uptime",
             key_path=cfg.ssh_key_path, connect_timeout=3,
             command_timeout=5, max_parallel=10, use_sudo=False,
@@ -852,7 +852,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         hosts = cfg.hosts
         start = time.monotonic()
 
-        results = ssh_ssh_run_many(
+        results = ssh_run_many(
             hosts=hosts,
             command="uptime -p 2>/dev/null || uptime",
             key_path=cfg.ssh_key_path,
@@ -3093,7 +3093,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         """Fleet NTP status."""
         cfg = load_config()
         results_data = []
-        results = ssh_ssh_run_many(
+        results = ssh_run_many(
             hosts=cfg.hosts,
             command="timedatectl show --property=NTPSynchronized --value 2>/dev/null; date '+%H:%M:%S'",
             key_path=cfg.ssh_key_path, connect_timeout=3,
@@ -3116,7 +3116,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         """Fleet update status."""
         cfg = load_config()
         results_data = []
-        results = ssh_ssh_run_many(
+        results = ssh_run_many(
             hosts=cfg.hosts,
             command="if command -v apt >/dev/null 2>&1; then "
                     "  apt list --upgradable 2>/dev/null | grep -c upgradable; echo apt; "

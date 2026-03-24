@@ -333,7 +333,7 @@ tr:hover td{background:var(--card-hover)}
 <div class="mn">
 <div class="mn-header">
   <div style="display:flex;align-items:center;gap:16px">
-    <pre onclick="switchView('home')" style="font-family:'Courier New',monospace;font-size:5px;line-height:1.1;margin:0;color:var(--purple-light);cursor:pointer;opacity:0.9"> ██████╗ ██╗   ██╗███████╗   ███████╗██████╗ ███████╗ ██████╗
+    <pre data-view="home" style="font-family:'Courier New',monospace;font-size:5px;line-height:1.1;margin:0;color:var(--purple-light);cursor:pointer;opacity:0.9"> ██████╗ ██╗   ██╗███████╗   ███████╗██████╗ ███████╗ ██████╗
  ██╔══██╗██║   ██║██╔════╝   ██╔════╝██╔══██╗██╔════╝██╔═══██╗
  ██████╔╝██║   ██║█████╗     █████╗  ██████╔╝█████╗  ██║   ██║
  ██╔═══╝ ╚██╗ ██╔╝██╔══╝     ██╔══╝  ██╔══██╗██╔══╝  ██║▄▄ ██║
@@ -353,7 +353,7 @@ tr:hover td{background:var(--card-hover)}
 <div id="p-home" class="page active">
 <!-- Hero -->
 <div style="text-align:center;padding:8px 0 12px">
-  <pre style="font-family:'Courier New',monospace;font-size:12px;line-height:1.1;margin:0 auto;color:var(--purple-light);opacity:0.9;cursor:pointer;display:inline-block;text-align:left" onclick="switchView('home')"> ██████╗ ██╗   ██╗███████╗   ███████╗██████╗ ███████╗ ██████╗
+  <pre style="font-family:'Courier New',monospace;font-size:12px;line-height:1.1;margin:0 auto;color:var(--purple-light);opacity:0.9;cursor:pointer;display:inline-block;text-align:left" data-view="home"> ██████╗ ██╗   ██╗███████╗   ███████╗██████╗ ███████╗ ██████╗
  ██╔══██╗██║   ██║██╔════╝   ██╔════╝██╔══██╗██╔════╝██╔═══██╗
  ██████╔╝██║   ██║█████╗     █████╗  ██████╔╝█████╗  ██║   ██║
  ██╔═══╝ ╚██╗ ██╔╝██╔══╝     ██╔══╝  ██╔══██╗██╔══╝  ██║▄▄ ██║
@@ -363,11 +363,11 @@ tr:hover td{background:var(--card-hover)}
 <!-- Toolbar -->
 <div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:10px 14px;margin-bottom:16px;margin-top:12px">
 <div style="display:flex;gap:8px;align-items:center;min-height:36px">
-  <button class="fleet-btn view-btn active-view" data-view="home" onclick="switchView('home')">HOME</button>
-  <button class="fleet-btn view-btn" data-view="fleet" onclick="switchView('fleet')">FLEET</button>
-  <button class="fleet-btn view-btn" data-view="docker" onclick="switchView('docker')">DOCKER</button>
-  <button class="fleet-btn view-btn" data-view="security" onclick="switchView('security')">SECURITY</button>
-  <button class="fleet-btn view-btn" data-view="lab" onclick="switchView('lab')">LAB TOOLS</button>
+  <button class="fleet-btn view-btn active-view" data-view="home">HOME</button>
+  <button class="fleet-btn view-btn" data-view="fleet" data-view="fleet">FLEET</button>
+  <button class="fleet-btn view-btn" data-view="docker" data-view="docker">DOCKER</button>
+  <button class="fleet-btn view-btn" data-view="security" data-view="security">SECURITY</button>
+  <button class="fleet-btn view-btn" data-view="lab" data-view="lab">LAB TOOLS</button>
   <div class="flex-1"></div>
   <button class="fleet-btn" onclick="openNewTool()" id="btn-new-tool" style="opacity:0.7;display:none">+ NEW TOOL</button>
   <button class="fleet-btn" onclick="nav('system')" style="opacity:0.7">&#9881; SETTINGS</button>
@@ -396,7 +396,7 @@ tr:hover td{background:var(--card-hover)}
 <div id="fleet-view" class="d-none">
 <!-- Fleet Stats group -->
 <div class="section layout-section" id="fleet-sec-stats">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Fleet Stats</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Fleet Stats</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="stats" id="metrics-summary"></div>
     <div class="stats" id="metrics-row2"></div>
@@ -404,16 +404,16 @@ tr:hover td{background:var(--card-hover)}
 </div>
 <!-- Fleet Quick Controls -->
 <div class="section layout-section" id="fleet-sec-controls">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Fleet Quick Controls</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Fleet Quick Controls</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <button class="fleet-btn fqc-btn" data-fqc="usermgmt" onclick="fleetTool('usermgmt')">USER MANAGEMENT</button>
-      <button class="fleet-btn fqc-btn" data-fqc="fleetops" onclick="fleetTool('fleetops')">FLEET OPS</button>
-      <button class="fleet-btn fqc-btn" data-fqc="vmmgmt" onclick="fleetTool('vmmgmt')">VM MANAGEMENT</button>
-      <button class="fleet-btn fqc-btn" data-fqc="monitoring" onclick="fleetTool('monitoring')">MONITORING</button>
-      <button class="fleet-btn fqc-btn" data-fqc="network" onclick="fleetTool('network')">NETWORK</button>
-      <button class="fleet-btn fqc-btn" data-fqc="backup" onclick="fleetTool('backup')">BACKUP & RECOVERY</button>
-      <button class="fleet-btn fqc-btn" data-fqc="labctrl" onclick="fleetTool('labctrl')">LAB CONTROL</button>
+      <button class="fleet-btn fqc-btn" data-fqc="usermgmt">USER MANAGEMENT</button>
+      <button class="fleet-btn fqc-btn" data-fqc="fleetops">FLEET OPS</button>
+      <button class="fleet-btn fqc-btn" data-fqc="vmmgmt">VM MANAGEMENT</button>
+      <button class="fleet-btn fqc-btn" data-fqc="monitoring">MONITORING</button>
+      <button class="fleet-btn fqc-btn" data-fqc="network">NETWORK</button>
+      <button class="fleet-btn fqc-btn" data-fqc="backup">BACKUP & RECOVERY</button>
+      <button class="fleet-btn fqc-btn" data-fqc="labctrl">LAB CONTROL</button>
     </div>
     <div id="fleet-tool-panel" style="display:none;margin-top:12px;background:var(--bg);border:2px solid var(--input-border);border-radius:8px;padding:16px;position:relative">
       <button onclick="document.getElementById('fleet-tool-panel').style.display='none';_activeFleetTool=null;document.querySelectorAll('.fqc-btn').forEach(function(b){b.classList.remove('active-view')})" style="position:absolute;top:10px;right:12px;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px">&#10005;</button>
@@ -428,7 +428,7 @@ tr:hover td{background:var(--card-hover)}
 </div>
 <!-- Overview -->
 <div class="section layout-section" id="fleet-sec-overview">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Overview</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Overview</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
       <div id="overview-physical-cards"><!-- populated dynamically from fleet config --></div>
@@ -449,14 +449,14 @@ tr:hover td{background:var(--card-hover)}
 </div>
 <!-- Lab Equipment (collapsed) -->
 <div class="section collapsed layout-section" id="fleet-lab-section" style="margin-top:20px;display:none">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Lab Equipment</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Lab Equipment</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="fleet-lab-cards" class="cards" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))"></div>
   </div>
 </div>
 <!-- Agents -->
 <div class="section layout-section" id="fleet-sec-agents" style="margin-top:20px">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Agents</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Agents</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="stats" id="agent-stats"></div>
     <h4 style="color:var(--purple-light);font-size:13px;margin:12px 0 8px">Templates</h4>
@@ -467,7 +467,7 @@ tr:hover td{background:var(--card-hover)}
 </div>
 <!-- Specialists -->
 <div class="section layout-section" id="fleet-sec-specialists">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Specialists</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Specialists</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="cards" style="margin-bottom:12px">
       <div class="crd"><h3>Create Specialist</h3><p><code>freq specialist create &lt;host&gt; --role dev</code></p></div>
@@ -482,7 +482,7 @@ tr:hover td{background:var(--card-hover)}
 <!-- DOCKER VIEW -->
 <div id="docker-view" class="d-none">
 <div class="section layout-section" id="docker-sec-containers">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Containers</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Containers</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
       <button class="fleet-btn view-btn docker-sub active-view" data-view="docker-services" onclick="switchDockerSub('services')">SERVICES</button>
@@ -506,14 +506,14 @@ tr:hover td{background:var(--card-hover)}
     <div id="docker-sub-media" class="d-none">
       <div id="media-container-cards" class="cards" style="margin-bottom:16px"></div>
       <div class="section">
-        <div class="section-header" onclick="toggleSection(this)"><h3>Downloads</h3><span class="chev">▾</span></div>
+        <div class="section-header"><h3>Downloads</h3><span class="chev">▾</span></div>
         <div class="section-body">
           <div class="stats" id="dl-stats"></div>
           <table><thead><tr><th>Name</th><th>Client</th><th>VM</th><th>Size</th><th>Progress</th><th>Speed</th></tr></thead><tbody id="dl-table"></tbody></table>
         </div>
       </div>
       <div class="section">
-        <div class="section-header" onclick="toggleSection(this)"><h3>Streams</h3><span class="chev">▾</span></div>
+        <div class="section-header"><h3>Streams</h3><span class="chev">▾</span></div>
         <div class="section-body">
           <div class="stats" id="stream-stats"></div>
           <table><thead><tr><th>User</th><th>Title</th><th>Type</th><th>Quality</th><th>State</th></tr></thead><tbody id="stream-table"></tbody></table>
@@ -527,34 +527,34 @@ tr:hover td{background:var(--card-hover)}
 <!-- SECURITY VIEW -->
 <div id="security-view" class="d-none">
 <div class="section layout-section" id="sec-users">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Users</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Users</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="exec-bar"><input id="u-name" placeholder="Username"><select id="u-role"><option>viewer</option><option selected>operator</option><option>admin</option></select><button onclick="userCreate()">Create User</button></div>
     <div id="users-c"></div>
   </div>
 </div>
 <div class="section layout-section" id="sec-sshkeys">
-  <div class="section-header" onclick="toggleSection(this)"><h3>SSH Keys</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>SSH Keys</h3><span class="chev">▾</span></div>
   <div class="section-body"><div id="keys-c"><div class="skeleton"></div><div class="skeleton"></div></div></div>
 </div>
 <div class="section layout-section" id="sec-apikeys">
-  <div class="section-header" onclick="toggleSection(this)"><h3>API Keys</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>API Keys</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="exec-bar"><input id="v-key" placeholder="Key name"><input id="v-val" placeholder="Value" type="password"><select id="v-host"><option>DEFAULT</option></select><button onclick="vaultSet()">Store</button></div>
     <div id="vault-c"></div>
   </div>
 </div>
 <div class="section layout-section" id="sec-audit">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Audit</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Audit</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="fleet-btn" onclick="runAuditCheck('all')" class="c-purple-active">FULL AUDIT</button>
-      <button class="fleet-btn" onclick="runAuditCheck('ssh-root')">SSH ROOT LOGIN</button>
-      <button class="fleet-btn" onclick="runAuditCheck('ssh-pass')">SSH PASSWORD AUTH</button>
-      <button class="fleet-btn" onclick="runAuditCheck('ssh-empty')">EMPTY PASSWORDS</button>
-      <button class="fleet-btn" onclick="runAuditCheck('ports')">OPEN PORTS</button>
-      <button class="fleet-btn" onclick="runAuditCheck('failed')">FAILED SERVICES</button>
-      <button class="fleet-btn" onclick="runAuditCheck('firewall')">FIREWALL STATUS</button>
+      <button class="fleet-btn c-purple-active" data-audit="all">FULL AUDIT</button>
+      <button class="fleet-btn" data-audit="ssh-root">SSH ROOT LOGIN</button>
+      <button class="fleet-btn" data-audit="ssh-pass">SSH PASSWORD AUTH</button>
+      <button class="fleet-btn" data-audit="ssh-empty">EMPTY PASSWORDS</button>
+      <button class="fleet-btn" data-audit="ports">OPEN PORTS</button>
+      <button class="fleet-btn" data-audit="failed">FAILED SERVICES</button>
+      <button class="fleet-btn" data-audit="firewall">FIREWALL STATUS</button>
       <button class="fleet-btn" onclick="runSweep()">POLICY SWEEP</button>
     </div>
     <div id="audit-c"></div>
@@ -562,7 +562,7 @@ tr:hover td{background:var(--card-hover)}
   </div>
 </div>
 <div class="section layout-section" id="sec-harden">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Hardening</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Hardening</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
       <button class="fleet-btn" onclick="runHarden()" class="c-purple-active">FULL HARDENING AUDIT</button>
@@ -576,7 +576,7 @@ tr:hover td{background:var(--card-hover)}
   </div>
 </div>
 <div class="section layout-section" id="sec-risk">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Risk Analysis</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Risk Analysis</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="chain" id="risk-chain"></div>
     <p style="color:var(--text-dim);margin-bottom:12px;font-size:12px">Break any link in the kill chain = no remote recovery.</p>
@@ -584,12 +584,12 @@ tr:hover td{background:var(--card-hover)}
   </div>
 </div>
 <div class="section layout-section" id="sec-policies">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Policies</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Policies</h3><span class="chev">▾</span></div>
   <div class="section-body"><div id="policies-c"></div></div>
 </div>
 <!-- Locked Vault -->
 <div class="section layout-section" id="sec-vault" style="border-color:var(--red)">
-  <div class="section-header" onclick="toggleSection(this)"><h3 style="background:rgba(248,81,73,0.15)">&#128274; Vault</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3 style="background:rgba(248,81,73,0.15)">&#128274; Vault</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="vault-locked">
       <div style="text-align:center;padding:24px 0">
@@ -628,11 +628,11 @@ tr:hover td{background:var(--card-hover)}
 <!-- ════════ INFRA ════════ -->
 <div id="p-infra" class="page">
 <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;min-height:44px">
-  <button class="fleet-btn" onclick="switchView('home')" class="c-purple-active">&#9664; HOME</button>
+  <button class="fleet-btn" data-view="home" class="c-purple-active">&#9664; HOME</button>
   <button class="fleet-btn" onclick="loadInfraPage()">REFRESH</button>
 </div>
 <div class="section">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Overview</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Overview</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="stats" id="infra-stats"></div>
     <table><thead><tr><th>Host</th><th>Type</th><th>OS</th><th>CPU</th><th>RAM</th><th>Disk</th><th>Containers</th><th>Services</th><th>Status</th></tr></thead><tbody id="infra-tbl"></tbody></table>
@@ -640,28 +640,28 @@ tr:hover td{background:var(--card-hover)}
   </div>
 </div>
 <div class="section collapsed">
-  <div class="section-header" onclick="toggleSection(this)"><h3>pfSense <span id="pf-meta" style="font-size:12px;opacity:0.6;font-weight:400">FIREWALL</span></h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>pfSense <span id="pf-meta" style="font-size:12px;opacity:0.6;font-weight:400">FIREWALL</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="fleet-btn" onclick="pfAction('status')">STATUS</button><button class="fleet-btn" onclick="pfAction('rules')">RULES</button><button class="fleet-btn" onclick="pfAction('nat')">NAT</button><button class="fleet-btn" onclick="pfAction('states')">STATES</button><button class="fleet-btn" onclick="pfAction('interfaces')">INTERFACES</button></div>
     <div class="exec-out" id="pf-out">Click an action above.</div>
   </div>
 </div>
 <div class="section collapsed">
-  <div class="section-header" onclick="toggleSection(this)"><h3>TrueNAS <span id="tn-meta" style="font-size:12px;opacity:0.6;font-weight:400">NETWORK STORAGE</span></h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>TrueNAS <span id="tn-meta" style="font-size:12px;opacity:0.6;font-weight:400">NETWORK STORAGE</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="fleet-btn" onclick="tnAction('status')">SYSTEM</button><button class="fleet-btn" onclick="tnAction('pools')">POOLS</button><button class="fleet-btn" onclick="tnAction('health')">HEALTH</button><button class="fleet-btn" onclick="tnAction('datasets')">DATASETS</button><button class="fleet-btn" onclick="tnAction('shares')">SHARES</button><button class="fleet-btn" onclick="tnAction('alerts')">ALERTS</button></div>
     <div class="exec-out" id="tn-out">Click an action above.</div>
   </div>
 </div>
 <div class="section collapsed">
-  <div class="section-header" onclick="toggleSection(this)"><h3>iDRAC <span style="font-size:12px;opacity:0.6;font-weight:400">BMC Management</span></h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>iDRAC <span style="font-size:12px;opacity:0.6;font-weight:400">BMC Management</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="fleet-btn" onclick="idracAction('status')">SYSTEM INFO</button><button class="fleet-btn" onclick="idracAction('sensors')">SENSORS</button><button class="fleet-btn" onclick="idracAction('power')">POWER</button><button class="fleet-btn" onclick="idracAction('sel')">EVENT LOG</button></div>
     <div id="idrac-out"></div>
   </div>
 </div>
 <div class="section collapsed">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Switch <span id="sw-meta" style="font-size:12px;opacity:0.6;font-weight:400">L3 SWITCH</span></h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Switch <span id="sw-meta" style="font-size:12px;opacity:0.6;font-weight:400">L3 SWITCH</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="fleet-btn" onclick="swAction('status')">STATUS</button><button class="fleet-btn" onclick="swAction('vlans')">VLANS</button><button class="fleet-btn" onclick="swAction('interfaces')">INTERFACES</button><button class="fleet-btn" onclick="swAction('mac')">MAC TABLE</button></div>
     <div class="exec-out" id="sw-out">Click an action above.</div>
@@ -672,29 +672,29 @@ tr:hover td{background:var(--card-hover)}
 <!-- ════════ SYSTEM ════════ -->
 <div id="p-system" class="page">
 <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;min-height:44px">
-  <button class="fleet-btn" onclick="switchView('home')" class="c-purple-active">&#9664; HOME</button>
+  <button class="fleet-btn" data-view="home" class="c-purple-active">&#9664; HOME</button>
   <button class="fleet-btn" onclick="loadSystemPage()">REFRESH</button>
 </div>
 <!-- Global Settings -->
 <div class="section" id="sys-settings-section">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Global Settings</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Global Settings</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="global-settings-body"></div>
   </div>
 </div>
 <!-- Fleet Admin — admin role only, root tax -->
 <div class="section" id="fleet-admin-section" class="d-none">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Fleet Admin <span style="font-size:11px;font-weight:400;color:var(--yellow);margin-left:8px">ADMIN ONLY</span></h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Fleet Admin <span style="font-size:11px;font-weight:400;color:var(--yellow);margin-left:8px">ADMIN ONLY</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="fleet-admin-body"><div class="skeleton"></div></div>
   </div>
 </div>
 <div class="section">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Configuration</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Configuration</h3><span class="chev">▾</span></div>
   <div class="section-body"><div id="config-c"><div class="skeleton"></div><div class="skeleton"></div></div></div>
 </div>
 <div class="section">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Doctor</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Doctor</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div style="display:flex;gap:8px;margin-bottom:16px"><button class="fleet-btn" onclick="runDoctor()" class="c-purple-active">RUN SELF-DIAGNOSTIC</button><button class="fleet-btn" onclick="runBackup()">EXPORT CONFIG BACKUP</button></div>
     <div id="doctor-c"></div>
@@ -702,26 +702,26 @@ tr:hover td{background:var(--card-hover)}
   </div>
 </div>
 <div class="section">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Journal</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Journal</h3><span class="chev">▾</span></div>
   <div class="section-body"><div id="journal-c"><div class="skeleton"></div></div></div>
 </div>
 <div class="section">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Knowledge Base</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Knowledge Base</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <input class="search" id="learn-q" placeholder="Search knowledge base — try: nfs stale, docker gluetun, pfsense reboot" onkeydown="if(event.key==='Enter')searchLearn()">
     <div id="learn-r"></div>
   </div>
 </div>
 <div class="section">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Distros</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Distros</h3><span class="chev">▾</span></div>
   <div class="section-body"><div id="distro-c"><div class="skeleton"></div></div></div>
 </div>
 <div class="section">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Groups</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Groups</h3><span class="chev">▾</span></div>
   <div class="section-body"><div id="groups-c"><div class="skeleton"></div></div></div>
 </div>
 <div class="section">
-  <div class="section-header" onclick="toggleSection(this)"><h3>Notifications</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Notifications</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="notify-status"></div>
     <button class="fleet-btn" onclick="testNotify()" class="mt-12">SEND TEST</button>
@@ -729,7 +729,7 @@ tr:hover td{background:var(--card-hover)}
   </div>
 </div>
 <div class="section">
-  <div class="section-header" onclick="toggleSection(this)"><h3>About</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>About</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="crd" style="margin-bottom:24px;border-left:3px solid var(--purple)">
       <h3 style="font-size:16px">About PVE FREQ</h3>
@@ -834,6 +834,17 @@ function confirmAction(msg,onConfirm){
 function closeModal(){document.getElementById('modal-container').style.display='none';}
 /* === Section toggle === */
 function toggleSection(el){el.closest('.section').classList.toggle('collapsed');}
+/* Delegated listeners — replaces inline onclick for high-frequency patterns */
+document.addEventListener('click',function(e){
+  var sh=e.target.closest('.section-header');
+  if(sh){toggleSection(sh);return;}
+  var sv=e.target.closest('[data-view]');
+  if(sv){switchView(sv.dataset.view);return;}
+  var ft=e.target.closest('[data-fqc]');
+  if(ft){fleetTool(ft.dataset.fqc);return;}
+  var ac=e.target.closest('[data-audit]');
+  if(ac){runAuditCheck(ac.dataset.audit);return;}
+});
 /* === Global Settings === */
 function _loadSettings(){
   try{var s=JSON.parse(localStorage.getItem(_userKey('settings'))||'{}');return s;}catch(e){return {};}
@@ -875,7 +886,7 @@ function doLogin(){
   if(!user||!pass){if(errEl){errEl.textContent='Enter username and password (got user=['+user+'] pass_len='+pass.length+')';errEl.style.display='block';}return;}
   if(errEl)errEl.style.display='none';
   var btn=document.querySelector('#login-overlay button');if(btn){btn.textContent='LOGGING IN...';btn.disabled=true;}
-  fetch('/api/auth/login?username='+encodeURIComponent(user)+'&password='+encodeURIComponent(pass)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.AUTH_LOGIN+'?username='+encodeURIComponent(user)+'&password='+encodeURIComponent(pass)).then(function(r){return r.json()}).then(function(d){
     if(btn){btn.textContent='LOG IN';btn.disabled=false;}
     if(d.error){if(errEl){errEl.textContent=d.error;errEl.style.display='block';}passEl.value='';return;}
     _authToken=d.token;_currentUser=d.user;_currentRole=d.role;
@@ -895,6 +906,32 @@ function doLogout(){
   document.getElementById('login-user').focus();
 }
 
+/* API endpoint constants — single source of truth for all fetch paths */
+var API={
+  EXEC:'/api/exec',VMS:'/api/vms',HEALTH:'/api/health',STATUS:'/api/status',INFO:'/api/info',
+  FLEET_OVERVIEW:'/api/fleet/overview',FLEET_NTP:'/api/fleet/ntp',FLEET_UPDATES:'/api/fleet/updates',
+  MEDIA_STATUS:'/api/media/status',MEDIA_HEALTH:'/api/media/health',MEDIA_DASHBOARD:'/api/media/dashboard',
+  MEDIA_DOWNLOADS:'/api/media/downloads',MEDIA_STREAMS:'/api/media/streams',MEDIA_RESTART:'/api/media/restart',
+  MEDIA_LOGS:'/api/media/logs',MEDIA_UPDATE:'/api/media/update',
+  USERS:'/api/users',VAULT:'/api/vault',CONFIG:'/api/config',JOURNAL:'/api/journal',
+  AGENTS:'/api/agents',POLICIES:'/api/policies',SPECIALISTS:'/api/specialists',
+  INFRA_QUICK:'/api/infra/quick',INFRA_OVERVIEW:'/api/infra/overview',
+  INFRA_PFSENSE:'/api/infra/pfsense',INFRA_TRUENAS:'/api/infra/truenas',INFRA_IDRAC:'/api/infra/idrac',
+  HOST_DETAIL:'/api/host/detail',LAB_STATUS:'/api/lab/status',
+  AUTH_LOGIN:'/api/auth/login',AUTH_VERIFY:'/api/auth/verify',AUTH_CHANGE_PW:'/api/auth/change-password',
+  VM_POWER:'/api/vm/power',VM_CREATE:'/api/vm/create',VM_DESTROY:'/api/vm/destroy',
+  VM_SNAPSHOT:'/api/vm/snapshot',VM_SNAPSHOTS:'/api/vm/snapshots',VM_DELETE_SNAP:'/api/vm/delete-snapshot',
+  VM_RESIZE:'/api/vm/resize',VM_RENAME:'/api/vm/rename',VM_CHANGE_ID:'/api/vm/change-id',
+  VM_CHECK_IP:'/api/vm/check-ip',VM_ADD_NIC:'/api/vm/add-nic',VM_CLEAR_NICS:'/api/vm/clear-nics',
+  VM_CHANGE_IP:'/api/vm/change-ip',VM_TEMPLATE:'/api/vm/template',
+  ADMIN_BOUNDARIES:'/api/admin/fleet-boundaries',ADMIN_BOUNDARIES_UPDATE:'/api/admin/fleet-boundaries/update',
+  ADMIN_HOSTS_UPDATE:'/api/admin/hosts/update',
+  HARDEN:'/api/harden',GROUPS:'/api/groups',DISTROS:'/api/distros',KEYS:'/api/keys',
+  SWITCH:'/api/switch',NOTIFY_TEST:'/api/notify/test',RISK:'/api/risk',LEARN:'/api/learn',METRICS:'/api/metrics',
+  VAULT_SET:'/api/vault/set',VAULT_DELETE:'/api/vault/delete',
+  USERS_CREATE:'/api/users/create',USERS_PROMOTE:'/api/users/promote',USERS_DEMOTE:'/api/users/demote',
+  LAB_TOOL_CONFIG:'/api/lab-tool/config',LAB_TOOL_PROXY:'/api/lab-tool/proxy',LAB_TOOL_SAVE:'/api/lab-tool/save-config'
+};
 var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switch */
 
 function _showApp(){
@@ -911,19 +948,19 @@ function _showApp(){
   var _p=function(pct,s,d){bar.style.width=pct+'%';status.textContent=s;detail.textContent=d;};
 
   _p(10,'CONNECTING','Fetching fleet data...');
-  var p1=fetch('/api/fleet/overview').then(function(r){return r.json()}).then(function(fo){
+  var p1=fetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
     _fleetCache.fo=fo;_initFleetData(fo);_p(40,'FLEET ONLINE',fo.summary.total_vms+' VMs across '+fo.pve_nodes.length+' nodes');
     return fo;
   }).catch(function(){_p(40,'FLEET','Fleet overview unavailable');return null;});
 
-  var p2=fetch('/api/health').then(function(r){return r.json()}).then(function(hd){
+  var p2=fetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
     _fleetCache.hd=hd;
     var up=0;hd.hosts.forEach(function(h){if(h.status==='healthy')up++;});
     _p(70,'HEALTH CHECK',up+' of '+hd.hosts.length+' hosts online');
     return hd;
   }).catch(function(){_p(70,'HEALTH','Health check unavailable');return null;});
 
-  var p3=fetch('/api/media/dashboard').then(function(r){return r.json()}).then(function(md){
+  var p3=fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
     _p(85,'MEDIA STACK',md.containers_running+' containers running');
     return md;
   }).catch(function(){return null;});
@@ -962,7 +999,7 @@ function _checkSession(){
   var token=localStorage.getItem('freq_auth_token');
   var user=localStorage.getItem('freq_auth_user');
   if(!token||!user){document.getElementById('login-overlay').style.display='flex';document.getElementById('login-user').focus();return;}
-  fetch('/api/auth/verify?token='+encodeURIComponent(token)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.AUTH_VERIFY+'?token='+encodeURIComponent(token)).then(function(r){return r.json()}).then(function(d){
     if(d.valid){_authToken=token;_currentUser=d.user;_currentRole=d.role;_showApp();}
     else{localStorage.removeItem('freq_auth_token');localStorage.removeItem('freq_auth_user');document.getElementById('login-overlay').style.display='flex';document.getElementById('login-user').focus();}
   }).catch(function(){
@@ -1005,10 +1042,10 @@ var WIDGET_REGISTRY=[
   {id:'w-fleet-specialists',page:'FLEET',label:'Specialists',ref:'fleet-sec-specialists',preload:function(){loadSpecialists();}},
   {id:'w-docker-containers',page:'DOCKER',label:'Containers',loader:function(el){
     el.innerHTML='<div class="stats" id="hw-ctr-stats"></div><div id="hw-ctr-cards" class="cards"><div class="skeleton"></div></div>';
-    fetch('/api/media/dashboard').then(function(r){return r.json()}).then(function(d){
+    fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
       var s=document.getElementById('hw-ctr-stats');if(s)s.innerHTML=st('Total',d.containers_total,'p')+st('Online',d.containers_running,'g')+st('Offline',d.containers_down,d.containers_down>0?'r':'g')+st('VMs',d.vm_count,'b');
     });
-    fetch('/api/media/status').then(function(r){return r.json()}).then(function(d){
+    fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
       var h='';d.containers.forEach(function(c){h+=_containerCard(c,'');});
       var el2=document.getElementById('hw-ctr-cards');if(el2)el2.innerHTML=h||'<div class="empty-state"><p>No containers.</p></div>';
     });
@@ -1036,7 +1073,7 @@ function _renderHomeWidgets(){
     var w=WIDGET_REGISTRY.find(function(r){return r.id===wid;});if(!w)return;
     var sec=document.createElement('div');
     sec.className='section';sec.setAttribute('data-widget',wid);
-    sec.innerHTML='<div class="section-header" onclick="toggleSection(this)"><h3>'+w.label+' <span style="font-size:12px;opacity:0.5;font-weight:400">'+w.page+'</span></h3><span class="chev">▾</span></div><div class="section-body"><div id="hw-'+wid+'" class="widget-body"><div class="skeleton"></div></div></div>';
+    sec.innerHTML='<div class="section-header"><h3>'+w.label+' <span style="font-size:12px;opacity:0.5;font-weight:400">'+w.page+'</span></h3><span class="chev">▾</span></div><div class="section-body"><div id="hw-'+wid+'" class="widget-body"><div class="skeleton"></div></div></div>';
     container.appendChild(sec);
     /* Load widget data */
     if(w.loader){w.loader(document.getElementById('hw-'+wid));}
@@ -1053,7 +1090,7 @@ function _renderHomeWidgets(){
   });
 }
 function _loadHomeFleetStats(){
-  fetch('/api/health').then(function(r){return r.json()}).then(function(hd){
+  fetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
     var up=0,down=0,pve=0,lab=0;
     hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;if(h.type==='pve')pve++;if(h.groups&&h.groups.indexOf('lab')>=0)lab++;});
     var totalAll=hd.hosts.length;
@@ -1062,11 +1099,11 @@ function _loadHomeFleetStats(){
     var el=document.getElementById('hw-fleet-stats');if(el)el.innerHTML=_d('STATUS',up,'ONLINE','var(--green)',totalOff,'OFFLINE','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'ONLINE','var(--cyan)')+_d('RESPONSE',hd.duration+'s','','var(--blue)','','','var(--text-dim)');
     var el2=document.getElementById('hw-fleet-stats2');
     if(el2){el2.innerHTML=st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
-      fetch('/api/vms').then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
+      fetch(API.VMS).then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
         el2.querySelector('.st:nth-child(1)').innerHTML='<div class="lb">VMs</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+run+'<span class="label-hint"> RUN</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+stop+'<span class="label-hint"> STOP</span></span></div>';}).catch(function(){});
-      fetch('/api/media/dashboard').then(function(r){return r.json()}).then(function(md){
+      fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
         el2.querySelector('.st:nth-child(2)').innerHTML='<div class="lb">CONTAINERS</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+(md.containers_running||0)+'<span class="label-hint"> UP</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+(md.containers_down||0)+'<span class="label-hint"> DOWN</span></span></div>';}).catch(function(){});
-      Promise.all([fetch('/api/media/downloads').then(function(r){return r.json()}).catch(function(){return{count:0}}),fetch('/api/media/streams').then(function(r){return r.json()}).catch(function(){return{count:0}})]).then(function(res){
+      Promise.all([fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return{count:0}}),fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return{count:0}})]).then(function(res){
         el2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">ACTIVITY</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--orange)">'+(res[0].count||0)+'<span class="label-hint"> DL</span></span><span style="font-size:20px;font-weight:700;color:var(--blue)">'+(res[1].count||0)+'<span class="label-hint"> STREAM</span></span></div>';});
     }
   });
@@ -1088,13 +1125,13 @@ function _loadWidgetOverview(){
   var ps='';ps+=_mrow('TOTAL CPU',tc+' Cores',0,'var(--purple-light)');ps+=_mrow('TOTAL RAM',tr+'GB',0,'var(--blue)');ps+=_mrow('VMs',tv,0,'var(--green)');ps+=_mrow('CONTAINERS',tctr,0,'var(--cyan)');
   var pse=document.getElementById('hw-pve-sum');if(pse)pse.innerHTML=ps;
   /* VMs — exclude templates from counts */
-  fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
+  fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
     var _st=_loadSettings();var run=0,stop=0,total=0;d.vms.forEach(function(v){if(!_st.showTemplates&&v.category==='templates')return;total++;if(v.status==='running')run++;else stop++;});
     var h='';h+=_mrow('TOTAL',total+' VMs',0,'var(--purple-light)');h+=_mrow('RUNNING',run,total>0?Math.round(run/total*100):0,'var(--green)');h+=_mrow('STOPPED',stop,0,stop>0?'var(--red)':'var(--green)');
     var ve=document.getElementById('hw-vms');if(ve)ve.innerHTML=h;
   }).catch(function(){});
   /* Media */
-  fetch('/api/media/dashboard').then(function(r){return r.json()}).then(function(d){
+  fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
     var run=d.containers_running||0,tot=d.containers_total||0,dn=tot-run;
     var h='';h+=_mrow('ONLINE',run+' / '+tot,tot>0?Math.round(run/tot*100):0,'var(--green)');h+=_mrow('OFFLINE',dn,0,dn>0?'var(--red)':'var(--green)');h+=_mrow('VMs',d.vm_count,0,'var(--blue)');
     var me=document.getElementById('hw-media');if(me)me.innerHTML=h;
@@ -1318,7 +1355,7 @@ function startSilentRefresh(){
 function _silentHealthRefresh(){
   if(_healthInFlight)return;/* skip if previous call still running */
   _healthInFlight=true;
-  fetch('/api/health').then(function(r){return r.json()}).then(function(hd){
+  fetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
     _healthInFlight=false;
     _fleetCache.hd=hd;/* keep cache fresh */
     hd.hosts.forEach(function(h){
@@ -1360,7 +1397,7 @@ function _silentHealthRefresh(){
 function _silentFleetRefresh(){
   if(_fleetInFlight)return;
   _fleetInFlight=true;
-  fetch('/api/fleet/overview').then(function(r){return r.json()}).then(function(fo){
+  fetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
     _fleetInFlight=false;
     _fleetCache.fo=fo;/* keep cache fresh */
     if(!fo||!fo.vms)return;
@@ -1416,11 +1453,11 @@ function loadFleetPage(){
   /* Overview cards — wait for cache or fetch independently */
   setTimeout(function(){
     if(_fleetCache.fo){_renderFleetOverview(_fleetCache.fo);_loadFleetOverviewMedia();}
-    else{fetch('/api/fleet/overview').then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(){});}
+    else{fetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(){});}
   },4000);
 }
 function _loadFleetOverviewMedia(){
-  fetch('/api/media/dashboard').then(function(r){return r.json()}).then(function(d){
+  fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
     var h='';
     h+=_mrow('ONLINE',d.containers_running+' / '+d.containers_total,d.containers_total>0?Math.round(d.containers_running/d.containers_total*100):0,'var(--green)');
     h+=_mrow('OFFLINE',(d.containers_total-d.containers_running),0,(d.containers_total-d.containers_running)>0?'var(--red)':'var(--green)');
@@ -1550,13 +1587,13 @@ function _renderAllFromCache(){
 }
 function loadMediaContainers(){
   if(_mediaCache){_renderMediaFromCache();return;}
-  fetch('/api/media/status').then(function(r){return r.json()}).then(function(d){
+  fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
     _mediaCache=d;_renderMediaFromCache();
   });
 }
 function loadServiceContainers(){
   if(_mediaCache){_renderServicesFromCache();return;}
-  fetch('/api/media/status').then(function(r){return r.json()}).then(function(d){
+  fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
     _mediaCache=d;_renderServicesFromCache();
   });
 }
@@ -1620,7 +1657,7 @@ function loadFleetAdmin(){
   var body=document.getElementById('fleet-admin-body');
   if(!body)return;
   body.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/admin/fleet-boundaries?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  fetch(API.ADMIN_BOUNDARIES+'?token='+_authToken).then(function(r){return r.json()}).then(function(d){
     if(d.error){body.innerHTML='<p class="c-red">'+d.error+'</p>';return;}
     _fleetAdminData=d;
     renderFleetAdmin(d);
@@ -1720,7 +1757,7 @@ function saveHostProps(label){
   }).catch(function(e){toast('Failed: '+e,'error');});
 }
 function updateCategoryTier(cat,tier){
-  fetch('/api/admin/fleet-boundaries/update?token='+_authToken+'&action=update_category_tier&category='+encodeURIComponent(cat)+'&tier='+encodeURIComponent(tier)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.ADMIN_BOUNDARIES_UPDATE+'?token='+_authToken+'&action=update_category_tier&category='+encodeURIComponent(cat)+'&tier='+encodeURIComponent(tier)).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast('Error: '+d.error,'error');return;}
     toast(cat+' tier \u2192 '+tier,'success');loadFleetAdmin();
   }).catch(function(e){toast('Failed: '+e,'error');});
@@ -1729,7 +1766,7 @@ function updateCategoryRange(cat){
   var rs=document.getElementById('rs-'+cat);
   var re=document.getElementById('re-'+cat);
   if(!rs||!re)return;
-  fetch('/api/admin/fleet-boundaries/update?token='+_authToken+'&action=update_range&category='+encodeURIComponent(cat)+'&range_start='+rs.value+'&range_end='+re.value).then(function(r){return r.json()}).then(function(d){
+  fetch(API.ADMIN_BOUNDARIES_UPDATE+'?token='+_authToken+'&action=update_range&category='+encodeURIComponent(cat)+'&range_start='+rs.value+'&range_end='+re.value).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast('Error: '+d.error,'error');return;}
     toast(cat+' range updated','success');loadFleetAdmin();
   }).catch(function(e){toast('Failed: '+e,'error');});
@@ -1737,14 +1774,14 @@ function updateCategoryRange(cat){
 function addVmidToCategory(cat){
   var el=document.getElementById('vmid-add-'+cat);
   if(!el||!el.value)return;
-  fetch('/api/admin/fleet-boundaries/update?token='+_authToken+'&action=add_vmid&category='+encodeURIComponent(cat)+'&vmid='+el.value).then(function(r){return r.json()}).then(function(d){
+  fetch(API.ADMIN_BOUNDARIES_UPDATE+'?token='+_authToken+'&action=add_vmid&category='+encodeURIComponent(cat)+'&vmid='+el.value).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast('Error: '+d.error,'error');return;}
     toast('VMID '+el.value+' added to '+cat,'success');loadFleetAdmin();
   }).catch(function(e){toast('Failed: '+e,'error');});
 }
 function removeVmidFromCategory(cat,vmid){
   confirmAction('Remove VMID '+vmid+' from '+cat+'?',function(){
-    fetch('/api/admin/fleet-boundaries/update?token='+_authToken+'&action=remove_vmid&category='+encodeURIComponent(cat)+'&vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+    fetch(API.ADMIN_BOUNDARIES_UPDATE+'?token='+_authToken+'&action=remove_vmid&category='+encodeURIComponent(cat)+'&vmid='+vmid).then(function(r){return r.json()}).then(function(d){
       if(d.error){toast('Error: '+d.error,'error');return;}
       toast('VMID '+vmid+' removed from '+cat,'success');loadFleetAdmin();
     }).catch(function(e){toast('Failed: '+e,'error');});
@@ -1756,7 +1793,7 @@ function removeVmidFromCategory(cat,vmid){
    ═══════════════════════════════════════════════════════════════════ */
 function loadHome(){
   _renderHomeWidgets();
-  fetch('/api/info').then(function(r){return r.json()}).then(function(d){
+  fetch(API.INFO).then(function(r){return r.json()}).then(function(d){
     document.getElementById('nav-ver').textContent='V'+d.version;
     var vf=document.getElementById('home-ver-footer');if(vf)vf.textContent='V'+d.version;
     var st=document.getElementById('home-subtitle');if(st&&d.brand)st.textContent=d.brand;
@@ -1842,7 +1879,7 @@ function _roleOfflineMetrics(type,roleInfo){
   return m;
 }
 function _enrichInfraCards(){
-  fetch('/api/infra/quick').then(function(r){return r.json()}).then(function(d){
+  fetch(API.INFRA_QUICK).then(function(r){return r.json()}).then(function(d){
     if(d.warming){
       /* Cache still warming — retry in 3s */
       setTimeout(_enrichInfraCards,3000);
@@ -1918,9 +1955,9 @@ function loadMetricsQuick(){
   }
   /* Fetch fresh data in background and re-render */
   Promise.all([
-    fetch('/api/fleet/overview').then(function(r){return r.json()}).catch(function(){return null;}),
-    fetch('/api/health').then(function(r){return r.json()}).catch(function(){return null;}),
-    fetch('/api/media/status').then(function(r){return r.json()}).catch(function(){return null;})
+    fetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).catch(function(){return null;}),
+    fetch(API.HEALTH).then(function(r){return r.json()}).catch(function(){return null;}),
+    fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).catch(function(){return null;})
   ]).then(function(results){
     var fo=results[0];var hd=results[1];var md=results[2];
     if(fo)_fleetCache.fo=fo;
@@ -2076,25 +2113,25 @@ function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDur
     _fDual('VMs',vmRunning,'RUN','var(--green)',vmStopped,'STOP','var(--red)')+
     st('CONTAINERS','...','p')+
     st('ACTIVITY','...','p');
-  fetch('/api/media/dashboard').then(function(r){return r.json()}).then(function(md){
+  fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
     row2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">CONTAINERS</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+(md.containers_running||0)+'<span class="label-hint"> UP</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+(md.containers_down||0)+'<span class="label-hint"> DOWN</span></span></div>';
   }).catch(function(){});
   Promise.all([
-    fetch('/api/media/downloads').then(function(r){return r.json()}).catch(function(){return {count:0}}),
-    fetch('/api/media/streams').then(function(r){return r.json()}).catch(function(){return {count:0}})
+    fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return {count:0}}),
+    fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return {count:0}})
   ]).then(function(res){
     var dl=res[0].count||0;var str=res[1].count||0;
     row2.querySelector('.st:nth-child(4)').innerHTML='<div class="lb">ACTIVITY</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--orange)">'+dl+'<span class="label-hint"> DL</span></span><span style="font-size:20px;font-weight:700;color:var(--blue)">'+str+'<span class="label-hint"> STREAM</span></span></div>';
   });
 }
 function _enrichFleetNtpUpdates(){
-  fetch('/api/fleet/ntp').then(function(r){return r.json()}).then(function(nd){
+  fetch(API.FLEET_NTP).then(function(r){return r.json()}).then(function(nd){
     nd.hosts.forEach(function(x){
       var el=document.getElementById('ntp-'+x.label.replace(/[^a-z0-9]/gi,''));
       if(el){var synced=x.synced;el.innerHTML='<div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val" style="font-size:11px;color:'+(synced?'var(--green)':'var(--red)')+'">'+(synced?'SYNCED':'NOT SYNCED')+' <span style="color:var(--text-dim);font-weight:400">'+x.time+'</span></span></div>';}
     });
   }).catch(function(){});
-  fetch('/api/fleet/updates').then(function(r){return r.json()}).then(function(ud){
+  fetch(API.FLEET_UPDATES).then(function(r){return r.json()}).then(function(ud){
     ud.hosts.forEach(function(x){
       var el=document.getElementById('upd-'+x.label.replace(/[^a-z0-9]/gi,''));
       if(el){
@@ -2186,7 +2223,7 @@ function loadMetrics(){
   var content=document.getElementById('fleet-tool-content');
   panel.style.display='block';
   content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">DEEP SCAN</h3><div class="skeleton"></div><div class="skeleton"></div><p style="color:var(--text-dim);font-size:11px;margin-top:8px">Collecting deep metrics from all reachable hosts...</p>';
-  fetch('/api/metrics').then(function(r){return r.json()}).then(function(d){
+  fetch(API.METRICS).then(function(r){return r.json()}).then(function(d){
     var html='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">DEEP SCAN — '+d.hosts.length+' HOSTS</h3>';
     if(!d.hosts.length){html+='<div class="empty-state"><div class="es-icon">&#9881;</div><p>No hosts returned deep metrics. Deploy agents or check connectivity.</p></div>';}
     d.hosts.forEach(function(m,i){
@@ -2229,6 +2266,114 @@ function _buildToolTabs(title,tabs,tabClass,switchFn,subtitleId,formId,content){
     '<div class="flex-fill"><h3 id="'+subtitleId+'" style="color:var(--text);font-size:13px;margin:0 0 16px 0"></h3><div id="'+formId+'"></div></div></div>';
   window[switchFn](tabs[0].id);
 }
+/* ── Extracted tool renderers ── */
+function _toolExec(content){
+  content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">FLEET EXEC</h3>'+
+    '<div style="display:flex;gap:8px;margin-bottom:12px">'+
+    '<div style="position:relative;width:220px">'+
+    '<input id="ft-exec-target" value="ALL HOSTS" autocomplete="off" onfocus="this.select();showExecDropdown()" oninput="filterExecDropdown(this.value)" onkeydown="if(event.key===\'Escape\')hideExecDropdown()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer;transition:border-color 0.25s ease">'+
+    '<div id="ft-exec-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;max-height:390px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:var(--input-border) var(--card)"></div>'+
+    '</div>'+
+    '<input id="ft-exec-cmd" placeholder="Command (e.g. uptime, df -h, hostname, free -m)" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;flex:1" onkeydown="if(event.key===\'Enter\')ftRunExec()">'+
+    '<button class="fleet-btn" onclick="ftRunExec()" class="c-purple-active">RUN</button>'+
+    '</div>'+
+    '<div class="exec-out" id="ft-exec-out" style="min-height:120px">Pick a target and enter a command.</div>';
+  var _execHosts=[];
+  fetch(API.STATUS).then(function(r){return r.json()}).then(function(d){
+    _execHosts=[{value:'all',label:'ALL HOSTS',detail:'Run on every host'}];
+    d.hosts.forEach(function(h){_execHosts.push({value:h.label,label:h.label.toUpperCase(),detail:h.ip+' · '+(h.type||'linux').toUpperCase()+(h.status==='up'?' · ONLINE':' · OFFLINE')});});
+    PROD_HOSTS.forEach(function(h){_execHosts.push({value:h.label,label:h.label.toUpperCase(),detail:h.ip+' · '+h.role});});
+    PROD_VMS.forEach(function(v){_execHosts.push({value:v.label,label:v.label.toUpperCase(),detail:v.ip+' · VM '+v.vmid+' · '+v.node});});
+    window._execHostsList=_execHosts;
+    renderExecDropdown(_execHosts);
+  });
+}
+function _toolNtp(content){
+  content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">NTP SYNC STATUS</h3><div id="ft-ntp-c" class="c-dim"><div class="skeleton"></div></div>';
+  fetch(API.FLEET_NTP).then(function(r){return r.json()}).then(function(d){
+    var unsynced=d.hosts.filter(function(x){return !x.synced;});
+    var h='';
+    if(unsynced.length>0){
+      h+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
+      h+='<button class="fleet-btn" onclick="ntpFixSelected()" class="c-purple-active">FIX SELECTED</button>';
+      h+='<button class="fleet-btn" onclick="ntpFixAll()">FIX ALL ('+unsynced.length+')</button>';
+      h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" id="ft-ntp-selectall" onchange="document.querySelectorAll(\'.ft-ntp-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
+      h+='</div>';
+    }
+    h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>SYNCED</th><th>TIME</th><th>ACTION</th></tr></thead><tbody>';
+    d.hosts.forEach(function(x){
+      var synced=x.synced;
+      h+='<tr><td>'+(!synced?'<input type="checkbox" class="ft-ntp-check" data-host="'+x.label+'">':'')+'</td>';
+      h+='<td><strong>'+x.label.toUpperCase()+'</strong></td>';
+      h+='<td>'+(synced?badge('ok'):badge('down'))+'</td>';
+      h+='<td>'+x.time+'</td>';
+      h+='<td>'+(!synced?'<button class="fleet-btn" onclick="ntpFixHost(\''+x.label+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">FIX</button>':'<span style="color:var(--green);font-size:11px">OK</span>')+'</td></tr>';
+    });
+    h+='</tbody></table>';document.getElementById('ft-ntp-c').innerHTML=h;
+  });
+}
+function _toolUpdates(content){
+  content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">OS UPDATE STATUS</h3><div id="ft-updates-c" class="c-dim"><div class="skeleton"></div></div>';
+  fetch(API.FLEET_UPDATES).then(function(r){return r.json()}).then(function(d){
+    var pending=d.hosts.filter(function(x){return x.updates>0;});
+    var h='';
+    h+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
+    h+='<button class="fleet-btn" onclick="updateSelected()" class="c-purple-active">UPDATE SELECTED</button>';
+    h+='<button class="fleet-btn" onclick="updateAll()">UPDATE ALL'+(pending.length>0?' ('+pending.length+')':'')+'</button>';
+    h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" id="ft-upd-selectall" onchange="toggleUpdateAll(this.checked)"> Select All</label>';
+    h+='<div class="flex-1"></div>';
+    h+='<span style="font-size:11px;color:'+(pending.length>0?'var(--yellow)':'var(--green)')+'">'+pending.length+' pending</span>';
+    h+='</div>';
+    h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>UPDATES</th><th>PKG MGR</th><th>ACTION</th></tr></thead><tbody>';
+    d.hosts.forEach(function(x){
+      var cls=x.updates>0?'warn':x.updates===0?'up':'down';
+      var hasPending=x.updates>0;
+      h+='<tr><td><input type="checkbox" class="ft-upd-check" data-host="'+x.label+'"'+(hasPending?' checked':'')+'></td>';
+      h+='<td><strong>'+x.label.toUpperCase()+'</strong></td>';
+      h+='<td><span class="badge '+cls+'">'+(x.updates>=0?x.updates:'?')+'</span></td>';
+      h+='<td>'+x.pkg_mgr.toUpperCase()+'</td>';
+      h+='<td>'+(hasPending?'<button class="fleet-btn" onclick="runHostUpdate(\''+x.label+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">UPDATE</button>':'<button class="fleet-btn" onclick="runHostUpdate(\''+x.label+'\')" style="padding:3px 10px;font-size:12px">FORCE UPDATE</button>')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    document.getElementById('ft-updates-c').innerHTML=h;
+  });
+}
+function _toolLabCtrl(content){
+  content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">LAB CONTROL</h3><div id="ft-lab-c" class="c-dim"><div class="skeleton"></div></div>';
+  fetch(API.LAB_STATUS).then(function(r){return r.json()}).then(function(d){
+    var up=0,dn=0;d.hosts.forEach(function(x){if(x.status==='up')up++;else dn++;});
+    var h='<div class="stats" style="margin-bottom:12px">'+st('HOSTS',d.hosts.length,'p')+st('ONLINE',up,'g')+st('OFFLINE',dn,dn>0?'r':'g');
+    if(d.docker)h+=st('CONTAINERS',d.docker.length,'b');
+    h+='</div>';
+    h+='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>ROLE</th><th>UPTIME</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
+    d.hosts.forEach(function(x){
+      var isUp=x.status==='up';
+      h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+x.role.toUpperCase()+'</td><td class="text-meta">'+(x.uptime||'-')+'</td><td>'+badge(isUp?'ok':'down')+'</td>';
+      h+='<td style="display:flex;gap:4px">';
+      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'uptime\')" style="padding:3px 8px;font-size:11px">PING</button>';
+      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'sudo reboot\')" style="padding:3px 8px;font-size:11px;color:var(--yellow)">REBOOT</button>';
+      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'sudo systemctl restart sshd\')" style="padding:3px 8px;font-size:11px">SSHD</button>';
+      h+='</td></tr>';
+    });
+    h+='</tbody></table>';
+    if(d.docker&&d.docker.length){
+      h+='<h3 style="color:var(--purple-light);font-size:13px;margin:16px 0 8px">LAB DOCKER</h3>';
+      h+='<table class="w-full"><thead><tr><th>CONTAINER</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
+      d.docker.forEach(function(c){
+        var isUp=c.status==='up';
+        h+='<tr><td><strong>'+c.name.toUpperCase()+'</strong></td><td>'+badge(isUp?'ok':'down')+'</td>';
+        h+='<td style="display:flex;gap:4px">';
+        if(isUp)h+='<button class="fleet-btn" onclick="labDockerAction(\''+c.name+'\',\'restart\')" style="padding:3px 8px;font-size:11px;color:var(--yellow)">RESTART</button>';
+        else h+='<button class="fleet-btn" onclick="labDockerAction(\''+c.name+'\',\'start\')" style="padding:3px 8px;font-size:11px;color:var(--green)">START</button>';
+        if(isUp)h+='<button class="fleet-btn" onclick="labDockerAction(\''+c.name+'\',\'stop\')" style="padding:3px 8px;font-size:11px;color:var(--red)">STOP</button>';
+        h+='</td></tr>';
+      });
+      h+='</tbody></table>';
+    }
+    h+='<div id="ft-lab-out" class="mt-12"></div>';
+    document.getElementById('ft-lab-c').innerHTML=h;
+  });
+}
 function _fleetToolInner(tool,panel,content){
   panel.style.display='block';
   if(tool==='usermgmt'){
@@ -2261,7 +2406,7 @@ function _fleetToolInner(tool,panel,content){
     _loadUserDropdown('pw');
   } else if(tool==='promote'){
     content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">PROMOTE / DEMOTE USER</h3><div id="ft-prom-c"><div class="skeleton"></div></div>';
-    fetch('/api/users').then(function(r){return r.json()}).then(function(d){
+    fetch(API.USERS).then(function(r){return r.json()}).then(function(d){
       var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)',protected:'var(--purple-light)'};
       var h='<table class="w-full"><thead><tr><th>USER</th><th>CURRENT ROLE</th><th>ACTIONS</th></tr></thead><tbody>';
       d.users.forEach(function(u,i){
@@ -2288,7 +2433,7 @@ function _fleetToolInner(tool,panel,content){
     _loadUserDropdown('sk');
   } else if(tool==='sshd'){
     content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">RESTART SSHD</h3><div id="ft-sshd-c"><div class="skeleton"></div></div>';
-    fetch('/api/health').then(function(r){return r.json()}).then(function(d){
+    fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
       var h='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
       h+='<button class="fleet-btn" onclick="sshdRestartSelected()" class="c-purple-active">RESTART SELECTED</button>';
       h+='<button class="fleet-btn" onclick="sshdRestartAll()">RESTART ALL ('+d.hosts.length+')</button>';
@@ -2306,73 +2451,11 @@ function _fleetToolInner(tool,panel,content){
       document.getElementById('ft-sshd-c').innerHTML=h;
     });
   } else if(tool==='exec'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">FLEET EXEC</h3>'+
-      '<div style="display:flex;gap:8px;margin-bottom:12px">'+
-      '<div style="position:relative;width:220px">'+
-      '<input id="ft-exec-target" value="ALL HOSTS" autocomplete="off" onfocus="this.select();showExecDropdown()" oninput="filterExecDropdown(this.value)" onkeydown="if(event.key===\'Escape\')hideExecDropdown()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer;transition:border-color 0.25s ease">'+
-      '<div id="ft-exec-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;max-height:390px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:var(--input-border) var(--card)"></div>'+
-      '</div>'+
-      '<input id="ft-exec-cmd" placeholder="Command (e.g. uptime, df -h, hostname, free -m)" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;flex:1" onkeydown="if(event.key===\'Enter\')ftRunExec()">'+
-      '<button class="fleet-btn" onclick="ftRunExec()" class="c-purple-active">RUN</button>'+
-      '</div>'+
-      '<div class="exec-out" id="ft-exec-out" style="min-height:120px">Pick a target and enter a command.</div>';
-    var _execHosts=[];
-    fetch('/api/status').then(function(r){return r.json()}).then(function(d){
-      _execHosts=[{value:'all',label:'ALL HOSTS',detail:'Run on every host'}];
-      d.hosts.forEach(function(h){_execHosts.push({value:h.label,label:h.label.toUpperCase(),detail:h.ip+' · '+(h.type||'linux').toUpperCase()+(h.status==='up'?' · ONLINE':' · OFFLINE')});});
-      PROD_HOSTS.forEach(function(h){_execHosts.push({value:h.label,label:h.label.toUpperCase(),detail:h.ip+' · '+h.role});});
-      PROD_VMS.forEach(function(v){_execHosts.push({value:v.label,label:v.label.toUpperCase(),detail:v.ip+' · VM '+v.vmid+' · '+v.node});});
-      window._execHostsList=_execHosts;
-      renderExecDropdown(_execHosts);
-    });
+    _toolExec(content);
   } else if(tool==='ntp'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">NTP SYNC STATUS</h3><div id="ft-ntp-c" class="c-dim"><div class="skeleton"></div></div>';
-    fetch('/api/fleet/ntp').then(function(r){return r.json()}).then(function(d){
-      var unsynced=d.hosts.filter(function(x){return !x.synced;});
-      var h='';
-      if(unsynced.length>0){
-        h+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
-        h+='<button class="fleet-btn" onclick="ntpFixSelected()" class="c-purple-active">FIX SELECTED</button>';
-        h+='<button class="fleet-btn" onclick="ntpFixAll()">FIX ALL ('+unsynced.length+')</button>';
-        h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" id="ft-ntp-selectall" onchange="document.querySelectorAll(\'.ft-ntp-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
-        h+='</div>';
-      }
-      h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>SYNCED</th><th>TIME</th><th>ACTION</th></tr></thead><tbody>';
-      d.hosts.forEach(function(x){
-        var synced=x.synced;
-        h+='<tr><td>'+(!synced?'<input type="checkbox" class="ft-ntp-check" data-host="'+x.label+'">':'')+'</td>';
-        h+='<td><strong>'+x.label.toUpperCase()+'</strong></td>';
-        h+='<td>'+(synced?badge('ok'):badge('down'))+'</td>';
-        h+='<td>'+x.time+'</td>';
-        h+='<td>'+(!synced?'<button class="fleet-btn" onclick="ntpFixHost(\''+x.label+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">FIX</button>':'<span style="color:var(--green);font-size:11px">OK</span>')+'</td></tr>';
-      });
-      h+='</tbody></table>';document.getElementById('ft-ntp-c').innerHTML=h;
-    });
+    _toolNtp(content);
   } else if(tool==='updates'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">OS UPDATE STATUS</h3><div id="ft-updates-c" class="c-dim"><div class="skeleton"></div></div>';
-    fetch('/api/fleet/updates').then(function(r){return r.json()}).then(function(d){
-      var pending=d.hosts.filter(function(x){return x.updates>0;});
-      var h='';
-      h+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
-      h+='<button class="fleet-btn" onclick="updateSelected()" class="c-purple-active">UPDATE SELECTED</button>';
-      h+='<button class="fleet-btn" onclick="updateAll()">UPDATE ALL'+(pending.length>0?' ('+pending.length+')':'')+'</button>';
-      h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" id="ft-upd-selectall" onchange="toggleUpdateAll(this.checked)"> Select All</label>';
-      h+='<div class="flex-1"></div>';
-      h+='<span style="font-size:11px;color:'+(pending.length>0?'var(--yellow)':'var(--green)')+'">'+pending.length+' pending</span>';
-      h+='</div>';
-      h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>UPDATES</th><th>PKG MGR</th><th>ACTION</th></tr></thead><tbody>';
-      d.hosts.forEach(function(x){
-        var cls=x.updates>0?'warn':x.updates===0?'up':'down';
-        var hasPending=x.updates>0;
-        h+='<tr><td><input type="checkbox" class="ft-upd-check" data-host="'+x.label+'"'+(hasPending?' checked':'')+'></td>';
-        h+='<td><strong>'+x.label.toUpperCase()+'</strong></td>';
-        h+='<td><span class="badge '+cls+'">'+(x.updates>=0?x.updates:'?')+'</span></td>';
-        h+='<td>'+x.pkg_mgr.toUpperCase()+'</td>';
-        h+='<td>'+(hasPending?'<button class="fleet-btn" onclick="runHostUpdate(\''+x.label+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">UPDATE</button>':'<button class="fleet-btn" onclick="runHostUpdate(\''+x.label+'\')" style="padding:3px 10px;font-size:12px">FORCE UPDATE</button>')+'</td></tr>';
-      });
-      h+='</tbody></table>';
-      document.getElementById('ft-updates-c').innerHTML=h;
-    });
+    _toolUpdates(content);
   } else if(tool==='monitoring'){
     _buildToolTabs('MONITORING',[{id:'monhealth',label:'HEALTH CHECK'},{id:'mondoctor',label:'DOCTOR'},{id:'monjournal',label:'JOURNAL'},{id:'monwatch',label:'WATCH'}],'mon-tab','switchMonitoring','mon-subtitle','mon-form',content);return;
   } else if(tool==='network'){
@@ -2380,40 +2463,7 @@ function _fleetToolInner(tool,panel,content){
   } else if(tool==='backup'){
     _buildToolTabs('BACKUP & RECOVERY',[{id:'bkstatus',label:'BACKUP STATUS'},{id:'bkschedule',label:'SCHEDULES'},{id:'bksnapshot',label:'VM SNAPSHOTS'},{id:'bkexport',label:'EXPORT CONFIG'},{id:'bkrestore',label:'RESTORE'}],'bk-tab','switchBackup','bk-subtitle','bk-form',content);return;
   } else if(tool==='labctrl'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">LAB CONTROL</h3><div id="ft-lab-c" class="c-dim"><div class="skeleton"></div></div>';
-    fetch('/api/lab/status').then(function(r){return r.json()}).then(function(d){
-      var up=0,dn=0;d.hosts.forEach(function(x){if(x.status==='up')up++;else dn++;});
-      var h='<div class="stats" style="margin-bottom:12px">'+st('HOSTS',d.hosts.length,'p')+st('ONLINE',up,'g')+st('OFFLINE',dn,dn>0?'r':'g');
-      if(d.docker)h+=st('CONTAINERS',d.docker.length,'b');
-      h+='</div>';
-      h+='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>ROLE</th><th>UPTIME</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
-      d.hosts.forEach(function(x){
-        var isUp=x.status==='up';
-        h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+x.role.toUpperCase()+'</td><td class="text-meta">'+(x.uptime||'-')+'</td><td>'+badge(isUp?'ok':'down')+'</td>';
-        h+='<td style="display:flex;gap:4px">';
-        h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'uptime\')" style="padding:3px 8px;font-size:11px">PING</button>';
-        h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'sudo reboot\')" style="padding:3px 8px;font-size:11px;color:var(--yellow)">REBOOT</button>';
-        h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'sudo systemctl restart sshd\')" style="padding:3px 8px;font-size:11px">SSHD</button>';
-        h+='</td></tr>';
-      });
-      h+='</tbody></table>';
-      if(d.docker&&d.docker.length){
-        h+='<h3 style="color:var(--purple-light);font-size:13px;margin:16px 0 8px">LAB DOCKER</h3>';
-        h+='<table class="w-full"><thead><tr><th>CONTAINER</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
-        d.docker.forEach(function(c){
-          var isUp=c.status==='up';
-          h+='<tr><td><strong>'+c.name.toUpperCase()+'</strong></td><td>'+badge(isUp?'ok':'down')+'</td>';
-          h+='<td style="display:flex;gap:4px">';
-          if(isUp)h+='<button class="fleet-btn" onclick="labDockerAction(\''+c.name+'\',\'restart\')" style="padding:3px 8px;font-size:11px;color:var(--yellow)">RESTART</button>';
-          else h+='<button class="fleet-btn" onclick="labDockerAction(\''+c.name+'\',\'start\')" style="padding:3px 8px;font-size:11px;color:var(--green)">START</button>';
-          if(isUp)h+='<button class="fleet-btn" onclick="labDockerAction(\''+c.name+'\',\'stop\')" style="padding:3px 8px;font-size:11px;color:var(--red)">STOP</button>';
-          h+='</td></tr>';
-        });
-        h+='</tbody></table>';
-      }
-      h+='<div id="ft-lab-out" class="mt-12"></div>';
-      document.getElementById('ft-lab-c').innerHTML=h;
-    });
+    _toolLabCtrl(content);
   }
 }
 var _umLabels={newuser:'NEW FLEET USER',passwd:'PASSWORD UPDATE',sshkey:'SSH KEY UPDATE',promote:'PROMOTE / DEMOTE'};
@@ -2461,7 +2511,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">TARGET NODE</label><select id="vmt-c-node" class="input-primary"><option value="auto">Auto (least loaded)</option></select></div>'+
       '<div class="btn-row"><button class="fleet-btn" onclick="vmtCreate()" class="c-purple-active">CREATE VM</button></div>'+
       '</div><div id="vmt-c-out" class="mt-12"></div>';
-    fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
+    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var nodes={};d.vms.forEach(function(v){nodes[v.node]=true;});
       var sel=document.getElementById('vmt-c-node');if(!sel)return;
       Object.keys(nodes).sort().forEach(function(n){sel.innerHTML+='<option value="'+n+'">'+n+'</option>';});
@@ -2472,7 +2522,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">NEW NAME</label><input id="vmt-cl-name" placeholder="e.g. clone-of-myvm" class="input-primary-lg"></div>'+
       '<div class="btn-row"><button class="fleet-btn" onclick="vmtClone()" class="c-purple-active">CLONE VM</button></div>'+
       '</div><div id="vmt-cl-out" class="mt-12"></div>';
-    fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
+    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-cl-source');if(!sel)return;sel.innerHTML='';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
     }).catch(function(){});
@@ -2482,7 +2532,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">TARGET NODE</label><select id="vmt-m-target" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div class="btn-row"><button class="fleet-btn" onclick="vmtMigrate()" class="c-purple-active">MIGRATE</button></div>'+
       '</div><div id="vmt-m-out" class="mt-12"></div>';
-    fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
+    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-m-source');var tgt=document.getElementById('vmt-m-target');
       if(!sel||!tgt)return;sel.innerHTML='';var nodes={};
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';nodes[v.node]=true;});
@@ -2493,7 +2543,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">VM</label><select id="vmt-s-source" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div class="btn-row"><button class="fleet-btn" onclick="vmtSnapshot()" class="c-purple-active">CREATE SNAPSHOT</button></div>'+
       '</div><div id="vmt-s-out" class="mt-12"></div>';
-    fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
+    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-s-source');if(!sel)return;sel.innerHTML='';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
     }).catch(function(){});
@@ -2504,7 +2554,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">NEW RAM</label><select id="vmt-r-ram" class="input-primary"><option value="">Keep current</option><option value="512">512MB</option><option value="1024">1GB</option><option value="2048">2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
       '<div class="btn-row"><button class="fleet-btn" onclick="vmtResize()" class="c-purple-active">RESIZE VM</button></div>'+
       '</div><div id="vmt-r-out" class="mt-12"></div>';
-    fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
+    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-r-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.cpu+' cores, '+_ramGB(v.ram_mb)+')</option>';});
     }).catch(function(){});
@@ -2514,7 +2564,7 @@ function switchVmMgmt(tab){
 function vmtLoadList(){
   var el=document.getElementById('vmt-list');if(!el)return;
   el.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
+  fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
     if(!d.count){el.innerHTML='<div style="color:var(--text-dim);padding:12px 0">No VMs found.</div>';document.getElementById('vmt-stats').innerHTML='';return;}
     var running=0,stopped=0;d.vms.forEach(function(v){if(v.status==='running')running++;else stopped++;});
     var se=document.getElementById('vmt-stats');
@@ -2550,7 +2600,7 @@ function vmtCreate(){
   var r=(document.getElementById('vmt-c-ram')||{}).value;
   if(!n){toast('Enter a VM name','error');return;}
   var out=document.getElementById('vmt-c-out');if(out)out.innerHTML='<div class="c-yellow">Creating VM...</div>';
-  fetch('/api/vm/create?name='+encodeURIComponent(n)+'&cores='+c+'&ram='+r).then(function(r){return r.json()}).then(function(d){
+  fetch(API.VM_CREATE+'?name='+encodeURIComponent(n)+'&cores='+c+'&ram='+r).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('VM '+d.vmid+' "'+d.name+'" created!','success');if(out)out.innerHTML='<div class="c-green">VM '+d.vmid+' created successfully.</div>';document.getElementById('vmt-c-name').value='';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
@@ -2561,7 +2611,7 @@ function vmtClone(){
   if(!src){toast('Select a source VM','error');return;}
   if(!name){toast('Enter a name for the clone','error');return;}
   var out=document.getElementById('vmt-cl-out');if(out)out.innerHTML='<div class="c-yellow">Cloning VM '+src+'...</div>';
-  fetch('/api/vm/create?clone='+src+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.VM_CREATE+'?clone='+src+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Clone created!','success');if(out)out.innerHTML='<div class="c-green">Clone "'+name+'" created as VM '+d.vmid+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
@@ -2572,7 +2622,7 @@ function vmtMigrate(){
   if(!src||!tgt){toast('Select VM and target node','error');return;}
   var out=document.getElementById('vmt-m-out');if(out)out.innerHTML='<div class="c-yellow">Migrating VM '+src+' to '+tgt+'...</div>';
   confirmAction('Migrate VM <strong>'+src+'</strong> to <strong>'+tgt+'</strong>?',function(){
-    fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('sudo qm migrate '+src+' '+tgt+' --online')).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm migrate '+src+' '+tgt+' --online')).then(function(r){return r.json()}).then(function(d){
       var txt=d.results?d.results.map(function(r){return r.output;}).join(''):'';
       if(out)out.innerHTML='<div class="c-green">'+txt+'</div>';toast('Migration started','success');
     }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -2582,7 +2632,7 @@ function vmtSnapshot(){
   var src=(document.getElementById('vmt-s-source')||{}).value;
   if(!src){toast('Select a VM','error');return;}
   var out=document.getElementById('vmt-s-out');if(out)out.innerHTML='<div class="c-yellow">Creating snapshot...</div>';
-  fetch('/api/vm/snapshot?vmid='+src).then(function(r){return r.json()}).then(function(d){
+  fetch(API.VM_SNAPSHOT+'?vmid='+src).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Snapshot "'+d.snapshot+'" created','success');if(out)out.innerHTML='<div class="c-green">Snapshot "'+d.snapshot+'" created for VM '+src+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
@@ -2611,7 +2661,7 @@ function switchMonitoring(tab){
   var f=document.getElementById('mon-form');if(!f)return;
   if(tab==='monhealth'){
     f.innerHTML='<div id="mon-h-out"><div class="skeleton"></div></div>';
-    fetch('/api/health').then(function(r){return r.json()}).then(function(d){
+    fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
       var up=0,dn=0;d.hosts.forEach(function(h){if(h.status==='healthy')up++;else dn++;});
       var h='<div class="stats" style="margin-bottom:12px">'+st('HOSTS',d.hosts.length,'p')+st('HEALTHY',up,'g')+st('UNHEALTHY',dn,dn>0?'r':'g')+st('RESPONSE',d.duration+'s','b')+'</div>';
       h+='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>TYPE</th><th>STATUS</th><th>UPTIME</th></tr></thead><tbody>';
@@ -2627,7 +2677,7 @@ function switchMonitoring(tab){
       '<div id="mon-doc-out" class="exec-out" style="min-height:80px;display:none"></div>';
   } else if(tab==='monjournal'){
     f.innerHTML='<div id="mon-j-out"><div class="skeleton"></div></div>';
-    fetch('/api/journal').then(function(r){return r.json()}).then(function(d){
+    fetch(API.JOURNAL).then(function(r){return r.json()}).then(function(d){
       if(!d.entries||!d.entries.length){document.getElementById('mon-j-out').innerHTML='<div style="color:var(--text-dim);padding:12px 0">No journal entries.</div>';return;}
       var h='<table class="w-full"><thead><tr><th>TIME</th><th>TYPE</th><th>MESSAGE</th></tr></thead><tbody>';
       d.entries.slice(-50).reverse().forEach(function(e){
@@ -2648,21 +2698,21 @@ function switchMonitoring(tab){
 function monRunDoctor(){
   var out=document.getElementById('mon-doc-out');if(!out)return;
   out.style.display='block';out.textContent='Running diagnostics...';
-  fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('freq doctor 2>&1 || echo "doctor not available"')).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq doctor 2>&1 || echo "doctor not available"')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     out.textContent=txt||'(no output)';
   }).catch(function(){out.textContent='Failed to run doctor';});
 }
 function monWatchStart(){
   var out=document.getElementById('mon-w-out');if(out)out.textContent='Starting watch daemon...';
-  fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('freq watch start 2>&1 || echo "watch not available"')).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq watch start 2>&1 || echo "watch not available"')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.textContent=txt||'Watch started.';
   });
 }
 function monWatchStop(){
   var out=document.getElementById('mon-w-out');if(out)out.textContent='Stopping watch daemon...';
-  fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('freq watch stop 2>&1 || echo "watch not available"')).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq watch stop 2>&1 || echo "watch not available"')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.textContent=txt||'Watch stopped.';
   });
@@ -2704,14 +2754,14 @@ function switchNetwork(tab){
 function netDnsCheck(){
   var host=(document.getElementById('net-dns-host')||{}).value.trim();if(!host){toast('Enter a hostname','error');return;}
   var out=document.getElementById('net-dns-out');if(out){out.style.display='block';out.textContent='Resolving '+host+'...';}
-  fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('dig +short '+host+' 2>&1 || nslookup '+host+' 2>&1')).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('dig +short '+host+' 2>&1 || nslookup '+host+' 2>&1')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.textContent=txt||'(no results)';
   });
 }
 function netPingAll(){
   var out=document.getElementById('net-ping-out');if(out)out.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/health').then(function(r){return r.json()}).then(function(d){
+  fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
     var h='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>PING</th><th>LATENCY</th></tr></thead><tbody>';
     d.hosts.forEach(function(x){
       var ok=x.status==='healthy';
@@ -2726,7 +2776,7 @@ function netPortScan(){
   if(!host){toast('Enter a target host','error');return;}
   var out=document.getElementById('net-port-out');if(out){out.style.display='block';out.textContent='Scanning '+host+'...';}
   var cmd='for p in '+ports.replace(/,/g,' ')+'; do (echo >/dev/tcp/'+host+'/$p) 2>/dev/null && echo "PORT $p OPEN" || echo "PORT $p CLOSED"; done';
-  fetch('/api/exec?target=localhost&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.textContent=txt||'(no results)';
   });
@@ -2741,7 +2791,7 @@ function switchBackup(tab){
   var f=document.getElementById('bk-form');if(!f)return;
   if(tab==='bkstatus'){
     f.innerHTML='<div id="bk-s-out"><div class="skeleton"></div></div>';
-    fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
+    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var h='<div class="desc-line">Snapshot status across all VMs.</div>';
       h+='<table class="w-full"><thead><tr><th>VMID</th><th>NAME</th><th>NODE</th><th>STATUS</th><th>QUICK SNAP</th></tr></thead><tbody>';
       d.vms.forEach(function(v){
@@ -2760,7 +2810,7 @@ function switchBackup(tab){
       '<div><label class="label-sub">VM</label><select id="bk-snap-vm" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div class="btn-row"><button class="fleet-btn" onclick="bkTakeSnap()" class="c-purple-active">CREATE SNAPSHOT</button><button class="fleet-btn" onclick="bkListSnaps()">LIST SNAPSHOTS</button></div>'+
       '</div><div id="bk-snap-out" class="mt-12"></div>';
-    fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
+    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('bk-snap-vm');if(!sel)return;sel.innerHTML='';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+'</option>';});
     }).catch(function(){});
@@ -2775,7 +2825,7 @@ function switchBackup(tab){
       '<div><label class="label-sub">VM TO RESTORE (from latest snapshot)</label><select id="bk-rest-vm" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<button class="fleet-btn" onclick="bkRestore()" style="color:var(--red);border-color:var(--red);align-self:flex-start;padding:10px 20px">RESTORE SNAPSHOT</button>'+
       '</div><div id="bk-rest-out" class="mt-12"></div>';
-    fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
+    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('bk-rest-vm');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+'</option>';});
     }).catch(function(){});
@@ -2783,7 +2833,7 @@ function switchBackup(tab){
 }
 function bkCheckSchedules(){
   var out=document.getElementById('bk-sched-out');if(out){out.style.display='block';out.textContent='Checking schedules...';}
-  fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('cat /etc/pve/jobs.cfg 2>/dev/null || echo "No backup schedules found"')).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('cat /etc/pve/jobs.cfg 2>/dev/null || echo "No backup schedules found"')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.textContent=txt||'(no schedules)';
   });
@@ -2791,7 +2841,7 @@ function bkCheckSchedules(){
 function bkTakeSnap(){
   var vmid=(document.getElementById('bk-snap-vm')||{}).value;if(!vmid){toast('Select a VM','error');return;}
   var out=document.getElementById('bk-snap-out');if(out)out.innerHTML='<div class="c-yellow">Creating snapshot...</div>';
-  fetch('/api/vm/snapshot?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+  fetch(API.VM_SNAPSHOT+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Snapshot created','success');if(out)out.innerHTML='<div class="c-green">Snapshot "'+d.snapshot+'" created for VM '+vmid+'</div>';}
     else{if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
@@ -2799,14 +2849,14 @@ function bkTakeSnap(){
 function bkListSnaps(){
   var vmid=(document.getElementById('bk-snap-vm')||{}).value;if(!vmid){toast('Select a VM','error');return;}
   var out=document.getElementById('bk-snap-out');if(out)out.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('sudo qm listsnapshot '+vmid+' 2>&1')).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm listsnapshot '+vmid+' 2>&1')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--text);white-space:pre-wrap;margin:0">'+(txt||'No snapshots')+'</pre>';
   });
 }
 function bkExportConfig(){
   var out=document.getElementById('bk-exp-out');if(out){out.style.display='block';out.textContent='Exporting configuration...';}
-  fetch('/api/config').then(function(r){return r.json()}).then(function(d){
+  fetch(API.CONFIG).then(function(r){return r.json()}).then(function(d){
     if(out)out.textContent=JSON.stringify(d,null,2);
   });
 }
@@ -2814,7 +2864,7 @@ function bkRestore(){
   var vmid=(document.getElementById('bk-rest-vm')||{}).value;if(!vmid){toast('Select a VM','error');return;}
   confirmAction('Restore VM <strong>'+vmid+'</strong> from latest snapshot? This will revert the VM to its snapshot state.',function(){
     var out=document.getElementById('bk-rest-out');if(out)out.innerHTML='<div class="c-yellow">Restoring VM '+vmid+'...</div>';
-    fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('sudo qm rollback '+vmid+' $(sudo qm listsnapshot '+vmid+' 2>/dev/null | tail -2 | head -1 | awk \"{print \\$2}\") 2>&1')).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm rollback '+vmid+' $(sudo qm listsnapshot '+vmid+' 2>/dev/null | tail -2 | head -1 | awk \"{print \\$2}\") 2>&1')).then(function(r){return r.json()}).then(function(d){
       var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
       if(out)out.innerHTML='<div class="c-green">'+(txt||'Restore complete')+'</div>';
       toast('Restore complete','success');
@@ -2831,7 +2881,7 @@ function labExec(host,cmd){
 function _labExecRun(host,cmd){
   var out=document.getElementById('ft-lab-out');
   if(out)out.innerHTML='<div class="c-yellow">Running on '+host+'...</div>';
-  fetch('/api/exec?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--text);white-space:pre-wrap;margin:0">'+host.toUpperCase()+': '+(txt||'OK')+'</pre>';
   });
@@ -2844,7 +2894,7 @@ function labDockerAction(name,action){
 function _labDockerRun(name,action){
   var out=document.getElementById('ft-lab-out');
   if(out)out.innerHTML='<div class="c-yellow">'+action.toUpperCase()+' '+name+'...</div>';
-  fetch('/api/exec?target=docker-dev&cmd='+encodeURIComponent('docker '+action+' '+name)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target=docker-dev&cmd='+encodeURIComponent('docker '+action+' '+name)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--green);white-space:pre-wrap;margin:0">'+name+': '+(txt||action+' OK')+'</pre>';
     toast(name+' '+action+' complete','success');
@@ -2854,7 +2904,7 @@ function _labDockerRun(name,action){
 /* User dropdown (reusable for passwd/sshkey) */
 var _userDropdownData={};
 function _loadUserDropdown(prefix){
-  fetch('/api/users').then(function(r){return r.json()}).then(function(d){
+  fetch(API.USERS).then(function(r){return r.json()}).then(function(d){
     var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)'};
     var users=d.users.map(function(u){return {value:u.username,label:u.username.toUpperCase(),detail:u.role.toUpperCase(),color:rc[u.role]||'var(--text-dim)'};});
     _userDropdownData[prefix]=users;
@@ -2923,9 +2973,9 @@ function unlockVault(){
   if(!user||!pass){toast('Enter admin credentials','error');return;}
   /* Verify credentials by attempting SSH auth to localhost */
   toast('Verifying credentials...','info');
-  fetch('/api/exec?target=all&cmd='+encodeURIComponent('whoami')).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent('whoami')).then(function(r){return r.json()}).then(function(d){
     /* Check if the user is an admin in FREQ */
-    fetch('/api/users').then(function(r){return r.json()}).then(function(ud){
+    fetch(API.USERS).then(function(r){return r.json()}).then(function(ud){
       var isAdmin=ud.users.some(function(u){return u.username===user&&u.role==='admin';});
       if(!isAdmin){toast('Access denied — admin role required','error');document.getElementById('vault-auth-pass').value='';return;}
       _vaultUnlocked=true;
@@ -2953,10 +3003,10 @@ function switchVaultTab(tab){
   renderVaultTab();
 }
 function loadSensitiveVault(){
-  fetch('/api/vault').then(function(r){return r.json()}).then(function(d){
+  fetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
     _vaultData=d;
     /* Also load FREQ users for the users tab */
-    fetch('/api/users').then(function(r2){return r2.json()}).then(function(ud){
+    fetch(API.USERS).then(function(r2){return r2.json()}).then(function(ud){
       _vaultData._users=ud.users;
       renderVaultTab();
     }).catch(function(){renderVaultTab();});
@@ -3070,14 +3120,14 @@ function vaultCopy(host,key){
 /* Promote/demote functions */
 function promoteUser(username){
   confirmAction('Promote <strong>'+username.toUpperCase()+'</strong> to the next role level?',function(){
-    fetch('/api/users/promote?username='+username).then(function(r){return r.json()}).then(function(d){
+    fetch(API.USERS_PROMOTE+'?username='+username).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast(username+' promoted','success');fleetTool('promote');}else toast(d.error||'Failed','error');
     });
   });
 }
 function demoteUser(username){
   confirmAction('Demote <strong>'+username.toUpperCase()+'</strong> to a lower role level?',function(){
-    fetch('/api/users/demote?username='+username).then(function(r){return r.json()}).then(function(d){
+    fetch(API.USERS_DEMOTE+'?username='+username).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast(username+' demoted','success');fleetTool('promote');}else toast(d.error||'Failed','error');
     });
   });
@@ -3098,13 +3148,13 @@ function fleetNewUser(){
     if(sudoLine)cmd+='; echo "'+sudoLine+'" > /etc/sudoers.d/'+user+'; chmod 440 /etc/sudoers.d/'+user;
     if(key)cmd+='; mkdir -p /home/'+user+'/.ssh; echo "'+key+'" >> /home/'+user+'/.ssh/authorized_keys; chmod 700 /home/'+user+'/.ssh; chmod 600 /home/'+user+'/.ssh/authorized_keys; chown -R '+user+':'+user+' /home/'+user+'/.ssh';
     var out=document.getElementById('ft-nu-out');out.innerHTML='<div class="skeleton"></div>';
-    fetch('/api/exec?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       d.results.forEach(function(r,i){h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(r.ok?'<span class="c-green">DEPLOYED</span>':'<span class="c-red">'+r.error+'</span>')+'</td></tr>';});
       h+='</tbody></table>';out.innerHTML=h;
       toast('User '+user+' deployed to '+d.results.length+' hosts','success');
       /* Also register in FREQ */
-      fetch('/api/users/create?username='+encodeURIComponent(user)+'&role='+role).catch(function(){});
+      fetch(API.USERS_CREATE+'?username='+encodeURIComponent(user)+'&role='+role).catch(function(){});
     });
   });
 }
@@ -3120,7 +3170,7 @@ function fleetPasswdUpdate(){
     toast('Updating password for '+user+'...','info');
     var cmd='echo "'+user+':'+pass+'" | chpasswd && echo OK || echo FAIL';
     var out=document.getElementById('ft-pw-out');out.innerHTML='<div class="skeleton"></div>';
-    fetch('/api/exec?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
@@ -3142,7 +3192,7 @@ function fleetSshKeyDeploy(){
     toast('Deploying SSH key for '+user+'...','info');
     var cmd='mkdir -p /home/'+user+'/.ssh; echo "'+key+'" >> /home/'+user+'/.ssh/authorized_keys; chmod 700 /home/'+user+'/.ssh; chmod 600 /home/'+user+'/.ssh/authorized_keys; chown -R '+user+':'+user+' /home/'+user+'/.ssh && echo OK || echo FAIL';
     var out=document.getElementById('ft-sk-out');out.innerHTML='<div class="skeleton"></div>';
-    fetch('/api/exec?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
@@ -3158,7 +3208,7 @@ function fleetSshKeyDeploy(){
 function sshdPanel(targetId){
   var out=document.getElementById(targetId);if(!out)return;
   out.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/health').then(function(r){return r.json()}).then(function(d){
+  fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
     var h='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:8px">RESTART SSHD</h3>';
     h+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
     h+='<button class="fleet-btn" onclick="sshdRestartSelected()" class="c-purple-active">RESTART SELECTED</button>';
@@ -3184,7 +3234,7 @@ function _sshdRestart(hosts){
   var out=document.getElementById('ft-sshd-out');out.innerHTML='<div class="skeleton"></div>';
   var done=0,total=hosts.length,html='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
   hosts.forEach(function(h){
-    fetch('/api/exec?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var ok=d.results&&d.results[0]&&d.results[0].ok&&d.results[0].output.trim()==='OK';
       html+='<tr><td><strong>'+h.toUpperCase()+'</strong></td><td>'+(ok?'<span class="c-green">RESTARTED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       done++;if(done===total){html+='</tbody></table>';var cb='<button class="fleet-btn" onclick="document.getElementById(\'ft-sshd-out\').innerHTML=\'\'" style="margin:8px 0">CLOSE RESULTS</button>';out.innerHTML=cb+html+cb;toast('SSHD restarted on '+done+' hosts','success');}
@@ -3215,7 +3265,7 @@ function ntpFixHost(label){
   confirmAction('Fix NTP sync on <strong>'+label.toUpperCase()+'</strong>?',function(){
     toast('Fixing NTP on '+label+'...','info');
     var cmd='timedatectl set-ntp true 2>/dev/null; systemctl restart systemd-timesyncd 2>/dev/null || systemctl restart chronyd 2>/dev/null || ntpd -gq 2>/dev/null; sleep 2; timedatectl status 2>&1 | head -5';
-    fetch('/api/exec?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var ok=d.results&&d.results[0]&&d.results[0].ok;
       toast(label.toUpperCase()+': '+(ok?'NTP sync restored':'Fix failed — check manually'),ok?'success':'error');
       fleetTool('ntp');
@@ -3230,7 +3280,7 @@ function ntpFixSelected(){
     hosts.forEach(function(h){ntpFixHost.__skip_confirm=true;
       toast('Fixing NTP on '+h+'...','info');
       var cmd='timedatectl set-ntp true 2>/dev/null; systemctl restart systemd-timesyncd 2>/dev/null || systemctl restart chronyd 2>/dev/null; sleep 2; timedatectl status 2>&1 | head -3';
-      fetch('/api/exec?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+      fetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
         var ok=d.results&&d.results[0]&&d.results[0].ok;
         toast(h.toUpperCase()+': '+(ok?'NTP fixed':'Failed'),ok?'success':'error');
       });
@@ -3245,7 +3295,7 @@ function ntpFixAll(){
   confirmAction('Fix NTP on ALL <strong>'+hosts.length+'</strong> unsynced hosts?',function(){
     hosts.forEach(function(h){
       var cmd='timedatectl set-ntp true 2>/dev/null; systemctl restart systemd-timesyncd 2>/dev/null || systemctl restart chronyd 2>/dev/null; sleep 2; timedatectl status 2>&1 | head -3';
-      fetch('/api/exec?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+      fetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
         var ok=d.results&&d.results[0]&&d.results[0].ok;
         toast(h.toUpperCase()+': '+(ok?'NTP fixed':'Failed'),ok?'success':'error');
       });
@@ -3304,7 +3354,7 @@ function ftRunExec(){
   hideExecDropdown();
   var cmd=document.getElementById('ft-exec-cmd').value;if(!cmd){toast('Enter a command','error');return;}
   document.getElementById('ft-exec-out').textContent='Running: '+cmd+' ...';
-  fetch('/api/exec?target='+encodeURIComponent(target)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target='+encodeURIComponent(target)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results){d.results.forEach(function(r){txt+=(r.host?r.host.toUpperCase()+': ':'')+r.output+'\n';});}
     document.getElementById('ft-exec-out').textContent=txt||'(No Output)';
   }).catch(function(e){document.getElementById('ft-exec-out').textContent='Error: '+e;});
@@ -3332,7 +3382,7 @@ function runHostUpdate(label){
   confirmAction('Run OS updates on <strong>'+label+'</strong>? This may take several minutes.',function(){
     toast('Updating '+label+'...','info');
     var cmd='apt-get update -qq && apt-get upgrade -y -qq 2>&1 | tail -5 || dnf update -y -q 2>&1 | tail -5 || zypper update -y 2>&1 | tail -5';
-    fetch('/api/exec?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var out=d.results&&d.results[0]?d.results[0].output:'no output';
       toast(label+': '+out.substring(0,80),d.results&&d.results[0]&&d.results[0].ok?'success':'error');
       loadFleetPage();
@@ -3340,7 +3390,7 @@ function runHostUpdate(label){
   });
 }
 function loadAgents(){
-  fetch('/api/agents').then(function(r){return r.json()}).then(function(d){
+  fetch(API.AGENTS).then(function(r){return r.json()}).then(function(d){
     document.getElementById('agent-stats').innerHTML=s('Agents',d.count,'p');
     if(d.count>0){var h='<table><thead><tr><th>Name</th><th>Template</th><th>VMID</th><th>Status</th><th>Created</th></tr></thead><tbody>';
       d.agents.forEach(function(a){h+='<tr><td><strong>'+a.name+'</strong></td><td>'+a.template+'</td><td>'+a.vmid+'</td><td>'+badge(a.status)+'</td><td>'+(a.created||'')+'</td></tr>';});
@@ -3352,7 +3402,7 @@ function loadAgents(){
   document.getElementById('agent-templates').innerHTML=h;
 }
 function loadSpecialists(){
-  fetch('/api/specialists').then(function(r){return r.json()}).then(function(d){
+  fetch(API.SPECIALISTS).then(function(r){return r.json()}).then(function(d){
     var h='';d.agents.forEach(function(a){h+='<tr><td><strong>'+a.name+'</strong></td><td>'+a.template+'</td><td>'+(a.vmid||'-')+'</td><td>'+a.status+'</td></tr>';});
     document.getElementById('specialist-table').innerHTML=h||'<tr><td colspan="4" class="c-dim">No specialists registered.</td></tr>';
   });
@@ -3363,7 +3413,7 @@ function loadSpecialists(){
    ═══════════════════════════════════════════════════════════════════ */
 function loadVMs(){
   document.getElementById('vms-c').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
-  fetch('/api/vms').then(function(r){return r.json()}).then(function(d){
+  fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
     if(!d.count){document.getElementById('vms-c').innerHTML='<div class="empty-state"><div class="es-icon">▣</div><p>No VMs found on cluster.</p></div>';document.getElementById('vm-stats').innerHTML='';return;}
     var running=0,stopped=0;d.vms.forEach(function(v){if(v.status==='running')running++;else stopped++;});
     document.getElementById('vm-stats').innerHTML=
@@ -3405,15 +3455,15 @@ function loadVMs(){
    MEDIA
    ═══════════════════════════════════════════════════════════════════ */
 function loadContainerSection(){
-  fetch('/api/media/dashboard').then(function(r){return r.json()}).then(function(d){
+  fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
     document.getElementById('container-stats').innerHTML=st('Total',d.containers_total,'p')+st('Online',d.containers_running,'g')+st('Offline',d.containers_down,d.containers_down>0?'r':'g')+st('VMs',d.vm_count,'b');
   });
-  fetch('/api/media/status').then(function(r){return r.json()}).then(function(d){
+  fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
     _mediaCache=d;_renderAllFromCache();
   });
 }
 function loadDownloads(){
-  fetch('/api/media/downloads').then(function(r){return r.json()}).then(function(d){
+  fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).then(function(d){
     document.getElementById('dl-stats').innerHTML=st('Active',d.count,d.count>0?'y':'g');
     var h='';d.downloads.forEach(function(dl){
       var sz=dl.size>1073741824?(dl.size/1073741824).toFixed(1)+'GB':(dl.size/1048576).toFixed(0)+'MB';
@@ -3423,7 +3473,7 @@ function loadDownloads(){
   });
 }
 function loadStreams(){
-  fetch('/api/media/streams').then(function(r){return r.json()}).then(function(d){
+  fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).then(function(d){
     document.getElementById('stream-stats').innerHTML=st('Active Streams',d.count,d.count>0?'g':'p');
     var h='';d.sessions.forEach(function(ss){h+='<tr><td><strong>'+ss.user+'</strong></td><td>'+ss.title+'</td><td>'+ss.type+'</td><td>'+ss.quality+'</td><td>'+ss.state+'</td></tr>';});
     document.getElementById('stream-table').innerHTML=h||'<tr><td colspan="5" class="c-dim">No active streams</td></tr>';
@@ -3431,7 +3481,7 @@ function loadStreams(){
 }
 function mediaRestart(name){
   confirmAction('Restart container <strong>'+name+'</strong>?',function(){
-    fetch('/api/media/restart?name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.MEDIA_RESTART+'?name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
       toast(d.ok?name+' restarted':'Restart failed: '+(d.error||'unknown'),d.ok?'success':'error');loadContainerSection();
     });
   });
@@ -3439,14 +3489,14 @@ function mediaRestart(name){
 function mediaLogs(name){
   var el=document.getElementById('container-logs');el.style.display='block';
   el.textContent='Loading logs for '+name+'...';
-  fetch('/api/media/logs?name='+encodeURIComponent(name)+'&lines=50').then(function(r){return r.json()}).then(function(d){el.textContent=d.logs||'No logs available.';});
+  fetch(API.MEDIA_LOGS+'?name='+encodeURIComponent(name)+'&lines=50').then(function(r){return r.json()}).then(function(d){el.textContent=d.logs||'No logs available.';});
 }
 
 /* ═══════════════════════════════════════════════════════════════════
    INFRA
    ═══════════════════════════════════════════════════════════════════ */
 function loadInfra(){
-  fetch('/api/infra/overview').then(function(r){return r.json()}).then(function(d){
+  fetch(API.INFRA_OVERVIEW).then(function(r){return r.json()}).then(function(d){
     var up=d.hosts.filter(function(h){return h.status==='up'}).length;
     document.getElementById('infra-stats').innerHTML=s('Cluster',d.cluster,'p')+s('Hosts',d.hosts.length,'p')+s('Online',up,'g')+s('VMs',d.pve.vms.length,'b')+s('pfSense',d.infra.pfsense.ip||'N/A','y')+s('TrueNAS',d.infra.truenas.ip||'N/A','y');
     var t=document.getElementById('infra-tbl');t.innerHTML='';
@@ -3473,7 +3523,7 @@ function _infraPre(title,output){
 function pfAction(action){
   var o=_infraOut('pf-out');if(!o)return;
   o.innerHTML='<span class="c-dim">Querying pfSense ('+action+')...</span>';
-  fetch('/api/infra/pfsense?action='+action).then(function(r){return r.json()}).then(function(d){
+  fetch(API.INFRA_PFSENSE+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable){o.innerHTML=_infraPre('PFSENSE \u2014 '+action.toUpperCase(),d.output);}
     else{o.innerHTML='<div class="c-red">Cannot reach pfSense at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';}
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
@@ -3481,7 +3531,7 @@ function pfAction(action){
 function tnAction(action){
   var o=_infraOut('tn-out');if(!o)return;
   o.innerHTML='<span class="c-dim">Querying TrueNAS ('+action+')...</span>';
-  fetch('/api/infra/truenas?action='+action).then(function(r){return r.json()}).then(function(d){
+  fetch(API.INFRA_TRUENAS+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output);}
     else{o.innerHTML='<div class="c-red">Cannot reach TrueNAS at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';}
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
@@ -3489,7 +3539,7 @@ function tnAction(action){
 function idracAction(action){
   var o=_infraOut('idrac-out');if(!o)return;
   o.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/infra/idrac?action='+action).then(function(r){return r.json()}).then(function(d){
+  fetch(API.INFRA_IDRAC+'?action='+action).then(function(r){return r.json()}).then(function(d){
     var html='';
     d.targets.forEach(function(t){
       if(t.reachable){html+=_infraPre(t.name.toUpperCase()+' ('+t.ip+') \u2014 '+action.toUpperCase(),t.output);}
@@ -3501,7 +3551,7 @@ function idracAction(action){
 function swAction(action){
   var o=_infraOut('sw-out');if(!o)return;
   o.innerHTML='<span class="c-dim">Querying switch ('+action+')...</span>';
-  fetch('/api/switch?action='+action).then(function(r){return r.json()}).then(function(d){
+  fetch(API.SWITCH+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable)o.innerHTML=_infraPre('SWITCH \u2014 '+action.toUpperCase(),d.output);
     else o.innerHTML='<div class="c-red">Cannot reach switch at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';
   });
@@ -3511,7 +3561,7 @@ function swAction(action){
    SECURITY
    ═══════════════════════════════════════════════════════════════════ */
 function loadVault(){
-  fetch('/api/vault').then(function(r){return r.json()}).then(function(d){
+  fetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
     if(!d.initialized){document.getElementById('vault-c').innerHTML='<p class="c-yellow">Vault not initialized. Store a credential to auto-initialize.</p>';return;}
     var groups={};
     d.entries.forEach(function(e){if(!groups[e.host])groups[e.host]=[];groups[e.host].push(e);});
@@ -3534,22 +3584,22 @@ function loadVault(){
 function vaultSet(){
   var k=document.getElementById('v-key').value;var v=document.getElementById('v-val').value;var h=document.getElementById('v-host').value;
   if(!k||!v){toast('Key and value required','error');return;}
-  fetch('/api/vault/set?key='+encodeURIComponent(k)+'&value='+encodeURIComponent(v)+'&host='+h).then(function(r){return r.json()}).then(function(d){
+  fetch(API.VAULT_SET+'?key='+encodeURIComponent(k)+'&value='+encodeURIComponent(v)+'&host='+h).then(function(r){return r.json()}).then(function(d){
     if(d.ok){document.getElementById('v-key').value='';document.getElementById('v-val').value='';toast('Credential stored','success');loadVault();}else toast(d.error,'error');
   });
 }
 function vaultDelGroup(host){
   confirmAction('Delete ALL credentials for <strong>'+host.toUpperCase()+'</strong>?',function(){
-    fetch('/api/vault').then(function(r){return r.json()}).then(function(d){
+    fetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
       var promises=d.entries.filter(function(e){return e.host===host;}).map(function(e){
-        return fetch('/api/vault/delete?host='+e.host+'&key='+encodeURIComponent(e.key));
+        return fetch(API.VAULT_DELETE+'?host='+e.host+'&key='+encodeURIComponent(e.key));
       });
       Promise.all(promises).then(function(){toast(host.toUpperCase()+' credentials deleted','success');loadVault();});
     });
   });
 }
 function loadUsers(){
-  fetch('/api/users').then(function(r){return r.json()}).then(function(d){
+  fetch(API.USERS).then(function(r){return r.json()}).then(function(d){
     var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)',protected:'var(--purple-light)'};
     /* Filter buttons */
     var html='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
@@ -3591,22 +3641,22 @@ function filterUsers(role,btn){
 function userCreate(){
   var n=document.getElementById('u-name').value;var r=document.getElementById('u-role').value;
   if(!n){toast('Username required','error');return;}
-  fetch('/api/users/create?username='+n+'&role='+r).then(function(r){return r.json()}).then(function(d){
+  fetch(API.USERS_CREATE+'?username='+n+'&role='+r).then(function(r){return r.json()}).then(function(d){
     if(d.ok){document.getElementById('u-name').value='';toast('User created','success');loadUsers();}else toast(d.error,'error');
   });
 }
 function userPromote(u){
   confirmAction('Promote <strong>'+u+'</strong>?',function(){
-    fetch('/api/users/promote?username='+u).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' promoted','success');loadUsers();}else toast(d.error,'error');});
+    fetch(API.USERS_PROMOTE+'?username='+u).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' promoted','success');loadUsers();}else toast(d.error,'error');});
   });
 }
 function userDemote(u){
   confirmAction('Demote <strong>'+u+'</strong>?',function(){
-    fetch('/api/users/demote?username='+u).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' demoted','success');loadUsers();}else toast(d.error,'error');});
+    fetch(API.USERS_DEMOTE+'?username='+u).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' demoted','success');loadUsers();}else toast(d.error,'error');});
   });
 }
 function loadKeys(){
-  fetch('/api/keys').then(function(r){return r.json()}).then(function(d){
+  fetch(API.KEYS).then(function(r){return r.json()}).then(function(d){
     var html='<p style="color:var(--text-dim);margin-bottom:12px;font-size:12px">SSH key: <code>'+d.ssh_key+'</code></p>';
     html+='<table><thead><tr><th>Host</th><th>IP</th><th>Reachable</th><th>Auth Keys</th></tr></thead><tbody>';
     d.hosts.forEach(function(h,i){html+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+h.host+'</strong></td><td style="font-family:monospace;font-size:11px">'+h.ip+'</td><td>'+badge(h.reachable?'ok':'down')+'</td><td>'+h.key_count+'</td></tr>';});
@@ -3628,7 +3678,7 @@ function runAuditCheck(type){
   var html='';var done=0;
   checks.forEach(function(key){
     var chk=AUDIT_CHECKS[key];if(!chk)return;
-    fetch('/api/exec?target=all&cmd='+encodeURIComponent(chk.cmd)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(chk.cmd)).then(function(r){return r.json()}).then(function(d){
       html+='<h3 style="color:var(--purple-light);margin:12px 0 8px">'+chk.name+'</h3><table><thead><tr><th>HOST</th><th>VALUE</th><th>STATUS</th></tr></thead><tbody>';
       d.results.forEach(function(r,i){
         var val=r.ok?r.output.trim():'error';
@@ -3655,7 +3705,7 @@ function hardenAction(action){
   confirmAction('Run <strong>'+c.name+'</strong> on ALL fleet hosts?<br><br>This modifies system configuration.',function(){
     toast('Running '+c.name+'...','info');
     var out=document.getElementById('harden-c');out.innerHTML='<div class="skeleton"></div>';
-    fetch('/api/exec?target=all&cmd='+encodeURIComponent(c.cmd)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(c.cmd)).then(function(r){return r.json()}).then(function(d){
       var html='<h3 style="color:var(--purple-light);margin-bottom:8px">'+c.name+'</h3><table><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
@@ -3674,7 +3724,7 @@ function runSweep(){
   var checks=[{name:'SSH: Password Auth',cmd:"grep -c '^PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null||echo 0"},{name:'SSH: Root Login',cmd:"grep -c '^PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null||echo 0"},{name:'SSH: Empty Passwords',cmd:"grep -c '^PermitEmptyPasswords no' /etc/ssh/sshd_config 2>/dev/null||echo 0"}];
   var html='';var done=0;
   checks.forEach(function(chk){
-    fetch('/api/exec?target=all&cmd='+encodeURIComponent(chk.cmd)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(chk.cmd)).then(function(r){return r.json()}).then(function(d){
       html+='<h3 style="color:var(--purple-light);margin:12px 0 8px">'+chk.name+'</h3><table><thead><tr><th>Host</th><th>Result</th><th>Status</th></tr></thead><tbody>';
       d.results.forEach(function(r,i){
         var val=r.ok?r.output.trim():'error';
@@ -3687,7 +3737,7 @@ function runSweep(){
 }
 function runHarden(){
   document.getElementById('harden-c').innerHTML='<div class="skeleton"></div>';
-  fetch('/api/harden').then(function(r){return r.json()}).then(function(d){
+  fetch(API.HARDEN).then(function(r){return r.json()}).then(function(d){
     var html='<table><thead><tr><th>Host</th><th>Check</th><th>Status</th></tr></thead><tbody>';
     d.results.forEach(function(r,i){html+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+r.host+'</strong></td><td>'+r.check+'</td><td>'+badge(r.ok?'ok':'CRITICAL')+'</td></tr>';});
     html+='</tbody></table>';var cb2='<button class="fleet-btn" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" style="margin:8px 0">CLOSE RESULTS</button>';document.getElementById('harden-c').innerHTML=cb2+html+cb2;
@@ -3696,7 +3746,7 @@ function runHarden(){
 }
 function loadRisk(){
   var rc=document.getElementById('risk-chain');rc.innerHTML='';
-  fetch('/api/risk').then(function(r){return r.json()}).then(function(d){
+  fetch(API.RISK).then(function(r){return r.json()}).then(function(d){
     /* Kill chain from API — no hardcoded nodes */
     var ch=d.chain||['Operator','VPN','Firewall','Switch','VLAN','Target'];
     ch.forEach(function(n,i){
@@ -3710,7 +3760,7 @@ function loadRisk(){
   }).catch(function(){});
 }
 function loadPolicies(){
-  fetch('/api/policies').then(function(r){return r.json()}).then(function(d){
+  fetch(API.POLICIES).then(function(r){return r.json()}).then(function(d){
     var h='<div class="cards">';
     d.policies.forEach(function(p){h+='<div class="crd"><h3>'+p.name+'</h3><p>'+p.description+'</p><div class="mt-8">';p.scope.forEach(function(ss){h+='<span class="tag">'+ss+'</span>';});h+='</div></div>';});
     h+='</div>';document.getElementById('policies-c').innerHTML=h;
@@ -3721,7 +3771,7 @@ function loadPolicies(){
    SYSTEM
    ═══════════════════════════════════════════════════════════════════ */
 function loadConfig(){
-  fetch('/api/config').then(function(r){return r.json()}).then(function(d){
+  fetch(API.CONFIG).then(function(r){return r.json()}).then(function(d){
     var html='<div class="two"><div class="crd"><h3>Identity</h3><table>';
     html+='<tr><td class="c-dim">Version</td><td>v'+d.version+'</td></tr>';
     html+='<tr><td class="c-dim">Brand</td><td>'+d.brand+'</td></tr>';
@@ -3748,7 +3798,7 @@ function loadConfig(){
 }
 function runDoctor(){
   document.getElementById('doctor-c').innerHTML='<div class="skeleton"></div>';
-  fetch('/api/info').then(function(r){return r.json()}).then(function(d){
+  fetch(API.INFO).then(function(r){return r.json()}).then(function(d){
     var html='<div class="cards"><div class="crd"><h3>Installation</h3><table>';
     html+='<tr><td class="c-dim">Version</td><td>v'+d.version+'</td></tr>';
     html+='<tr><td class="c-dim">Brand</td><td>'+d.brand+'</td></tr>';
@@ -3763,14 +3813,14 @@ function runDoctor(){
   });
 }
 function runBackup(){
-  fetch('/api/exec?target=all&cmd='+encodeURIComponent('echo ok')).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent('echo ok')).then(function(r){return r.json()}).then(function(d){
     var reachable=d.results.filter(function(r){return r.ok}).length;
     document.getElementById('backup-c').innerHTML='<div class="crd"><h3>Config Export</h3><p>Fleet snapshot: '+reachable+'/'+d.results.length+' hosts reachable</p><p style="margin-top:8px;color:var(--text-dim)">Run from CLI: <code class="c-purple">freq backup export</code></p></div>';
     toast('Backup snapshot complete','success');
   });
 }
 function loadJournal(){
-  fetch('/api/journal').then(function(r){return r.json()}).then(function(d){
+  fetch(API.JOURNAL).then(function(r){return r.json()}).then(function(d){
     if(!d.entries.length){document.getElementById('journal-c').innerHTML='<div class="empty-state"><div class="es-icon">&#128221;</div><p>No journal entries yet.</p></div>';return;}
     var html='<table><thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Status</th><th>Detail</th></tr></thead><tbody>';
     d.entries.reverse().forEach(function(e){
@@ -3782,7 +3832,7 @@ function loadJournal(){
 }
 function searchLearn(){
   var q=document.getElementById('learn-q').value;if(!q)return;
-  fetch('/api/learn?q='+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.LEARN+'?q='+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){
     var h='';
     if(d.lessons&&d.lessons.length){h+='<h3 style="color:var(--purple-light);margin:12px 0">Lessons ('+d.lessons.length+')</h3><div class="cards">';
       d.lessons.forEach(function(l){h+='<div class="crd"><h3>#'+l.number+' '+l.title+'</h3><p>'+l.description+'</p><div class="mt-8"><span class="sev-'+l.severity+'">'+l.severity.toUpperCase()+'</span> <span class="tag">'+l.platform+'</span>'+(l.commands?' <span class="tag">'+l.commands+'</span>':'')+'</div></div>';});
@@ -3794,14 +3844,14 @@ function searchLearn(){
   });
 }
 function loadDistros(){
-  fetch('/api/distros').then(function(r){return r.json()}).then(function(d){
+  fetch(API.DISTROS).then(function(r){return r.json()}).then(function(d){
     var html='<div class="cards">';
     d.distros.forEach(function(i){html+='<div class="crd"><h3>'+i.name+'</h3><div style="margin-top:4px"><span class="tag">'+i.family+'</span><span class="tag">'+i.tier+'</span></div><p style="margin-top:8px;font-size:13px;color:var(--text);word-break:break-all">'+i.url+'</p></div>';});
     html+='</div>';document.getElementById('distro-c').innerHTML=html;
   });
 }
 function loadGroups(){
-  fetch('/api/groups').then(function(r){return r.json()}).then(function(d){
+  fetch(API.GROUPS).then(function(r){return r.json()}).then(function(d){
     var html='<div class="cards">';
     Object.keys(d.groups).forEach(function(g){html+='<div class="crd"><h3>'+g+'</h3><p>'+d.groups[g].join(', ')+'</p><div style="margin-top:4px"><span class="tag">'+d.groups[g].length+' hosts</span></div></div>';});
     html+='</div>';document.getElementById('groups-c').innerHTML=html;
@@ -3809,32 +3859,32 @@ function loadGroups(){
 }
 function loadNotify(){
   document.getElementById('notify-status').innerHTML='<div class="skeleton" style="height:40px"></div>';
-  fetch('/api/config').then(function(r){return r.json()}).then(function(d){
+  fetch(API.CONFIG).then(function(r){return r.json()}).then(function(d){
     var html='<table class="mt-8"><tr><td>Discord</td><td>'+(d.discord_webhook?badge('ok')+' Configured':badge('down')+' Not configured')+'</td></tr>';
     html+='<tr><td>Slack</td><td>'+(d.slack_webhook?badge('ok')+' Configured':badge('down')+' Not configured')+'</td></tr></table>';
     html+='<p style="margin-top:8px;font-size:11px;color:var(--text-dim)">Configure webhooks in freq.toml under [notifications]</p>';
     document.getElementById('notify-status').innerHTML=html;
   });
 }
-function testNotify(){fetch('/api/notify/test').then(function(r){return r.json()}).then(function(d){document.getElementById('notify-result').innerHTML='<p class="c-dim">'+JSON.stringify(d)+'</p>';toast('Test notification sent','info');});}
+function testNotify(){fetch(API.NOTIFY_TEST).then(function(r){return r.json()}).then(function(d){document.getElementById('notify-result').innerHTML='<p class="c-dim">'+JSON.stringify(d)+'</p>';toast('Test notification sent','info');});}
 
 /* ═══════════════════════════════════════════════════════════════════
    VM ACTIONS (toast + modal)
    ═══════════════════════════════════════════════════════════════════ */
 function vmDestroy(vmid){
   confirmAction('Destroy VM <strong>'+vmid+'</strong>? This cannot be undone.',function(){
-    fetch('/api/vm/destroy?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+    fetch(API.VM_DESTROY+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
       if(d.ok)toast('VM '+vmid+' destroyed','success');else toast('Error: '+d.error,'error');loadVMs();
     });
   });
 }
 function vmSnap(vmid){
-  fetch('/api/vm/snapshot?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+  fetch(API.VM_SNAPSHOT+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast('Snapshot "'+d.snapshot+'" created','success');else toast('Error: '+d.error,'error');
   });
 }
 function vmPower(vmid,action){
-  fetch('/api/vm/power?vmid='+vmid+'&action='+action).then(function(r){return r.json()}).then(function(d){
+  fetch(API.VM_POWER+'?vmid='+vmid+'&action='+action).then(function(r){return r.json()}).then(function(d){
     toast(d.action+': '+(d.ok?d.output:d.error),d.ok?'success':'error');loadVMs();
   });
 }
@@ -3844,7 +3894,7 @@ function _vmRename(vmid){
   if(!name){toast('Enter a name','error');return;}
   var out=document.getElementById('vm-ctrl-out');if(out)out.innerHTML='<span class="c-yellow">Renaming...</span>';
   confirmAction('Rename VM <strong>'+vmid+'</strong> to <strong>'+name+'</strong>?',function(){
-    fetch('/api/vm/rename?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.VM_RENAME+'?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('VM '+vmid+' renamed to '+name,'success');if(out)out.innerHTML='<span class="c-green">Renamed to '+name+'</span>';document.getElementById('hd-title').textContent=name.toUpperCase();}
       else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
@@ -3855,7 +3905,7 @@ function _vmChangeId(vmid){
   if(!newid){toast('Enter a new VMID','error');return;}
   var out=document.getElementById('vm-ctrl-out');if(out)out.innerHTML='<span class="c-yellow">Changing VMID...</span>';
   confirmAction('Change VMID <strong>'+vmid+'</strong> to <strong>'+newid+'</strong>?<br><span class="c-yellow">VM must be stopped. This clones to the new ID and destroys the old one.</span>',function(){
-    fetch('/api/vm/change-id?vmid='+vmid+'&newid='+newid).then(function(r){return r.json()}).then(function(d){
+    fetch(API.VM_CHANGE_ID+'?vmid='+vmid+'&newid='+newid).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('VMID changed: '+vmid+' \u2192 '+newid,'success');if(out)out.innerHTML='<span class="c-green">VMID changed to '+newid+'</span>';closeHost();}
       else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
@@ -3868,7 +3918,7 @@ function _vmSnapWarn(vmid,isRunning){
     '<span class="c-dim">Live migration requires zero snapshots. If you need to migrate this VM later, you will need to delete all snapshots first.</span><br><br>'+
     'Continue?',
     function(){
-      fetch('/api/vm/snapshot?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+      fetch(API.VM_SNAPSHOT+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
         if(d.ok){toast('Snapshot "'+d.snapshot+'" created — live migration DISABLED until deleted','success');}
         else{toast('Error: '+d.error,'error');}
       });
@@ -3878,7 +3928,7 @@ function _vmSnapWarn(vmid,isRunning){
 function _vmListSnaps(vmid){
   var out=document.getElementById('vm-ctrl-out');if(!out)return;
   out.innerHTML='<span class="c-dim">Loading snapshots...</span>';
-  fetch('/api/vm/snapshots?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+  fetch(API.VM_SNAPSHOTS+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
     if(!d.count){
       out.innerHTML='<div class="mt-8"><span style="color:var(--green);font-size:12px;font-weight:600">NO SNAPSHOTS</span><span style="color:var(--text-dim);font-size:12px;margin-left:8px">\u2014 live migration eligible</span></div>';
       return;
@@ -3896,7 +3946,7 @@ function _vmListSnaps(vmid){
 function _vmDelSnap(vmid,name){
   confirmAction('Delete snapshot <strong>'+name+'</strong> from VM '+vmid+'?',function(){
     toast('Deleting snapshot '+name+'...','info');
-    fetch('/api/vm/delete-snapshot?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    fetch(API.VM_DELETE_SNAP+'?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('Snapshot '+name+' deleted','success');_vmListSnaps(vmid);}
       else{toast('Error: '+d.error,'error');}
     });
@@ -3905,10 +3955,10 @@ function _vmDelSnap(vmid,name){
 function _vmDelAllSnaps(vmid){
   confirmAction('Delete <strong>ALL</strong> snapshots from VM '+vmid+'?<br><span class="c-green">This will restore live migration eligibility.</span>',function(){
     toast('Deleting all snapshots...','info');
-    fetch('/api/vm/snapshots?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+    fetch(API.VM_SNAPSHOTS+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
       var chain=Promise.resolve();
       d.snapshots.forEach(function(s){
-        chain=chain.then(function(){return fetch('/api/vm/delete-snapshot?vmid='+vmid+'&name='+encodeURIComponent(s)).then(function(r){return r.json()});});
+        chain=chain.then(function(){return fetch(API.VM_DELETE_SNAP+'?vmid='+vmid+'&name='+encodeURIComponent(s)).then(function(r){return r.json()});});
       });
       chain.then(function(){toast('All snapshots deleted \u2014 live migration restored','success');_vmListSnaps(vmid);});
     });
@@ -3933,7 +3983,7 @@ function _vmDoResize(vmid){
   var out=document.getElementById('vm-ctrl-out');
   confirmAction('Resize VM <strong>'+vmid+'</strong> to '+desc.join(', ')+'?',function(){
     if(out)out.innerHTML='<span class="c-yellow">Resizing...</span>';
-    fetch('/api/vm/resize?vmid='+vmid+(cores?'&cores='+cores:'')+(ram?'&ram='+ram:'')).then(function(r){return r.json()}).then(function(d){
+    fetch(API.VM_RESIZE+'?vmid='+vmid+(cores?'&cores='+cores:'')+(ram?'&ram='+ram:'')).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('VM '+vmid+' resized','success');if(out)out.innerHTML='<span class="c-green">Resized \u2014 reboot to apply</span>';}
       else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
@@ -3956,7 +4006,7 @@ function _vmDoMigrate(vmid){
   var out=document.getElementById('vm-ctrl-out');
   confirmAction('Migrate VM <strong>'+vmid+'</strong> to <strong>'+target+'</strong>?<br><span class="c-dim">This may take several minutes.</span>',function(){
     if(out)out.innerHTML='<span class="c-yellow">Migrating to '+target+'...</span>';
-    fetch('/api/exec?target=localhost&cmd='+encodeURIComponent('sudo qm migrate '+vmid+' '+target+' --online')).then(function(r){return r.json()}).then(function(d){
+    fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm migrate '+vmid+' '+target+' --online')).then(function(r){return r.json()}).then(function(d){
       var txt=d.results?d.results.map(function(r){return r.output;}).join(''):'';
       if(out)out.innerHTML='<span class="c-green">'+txt+'</span>';toast('Migration started','success');
     }).catch(function(e){if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
@@ -3992,7 +4042,7 @@ function _vmCheckAndAddNic(vmid){
   var vlan=sel.value;
   var ip=prefix+'.'+octet;
   if(status)status.innerHTML='<span class="c-yellow">Checking '+ip+'...</span>';
-  fetch('/api/vm/check-ip?ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.VM_CHECK_IP+'?ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
     if(d.in_use){
       if(status)status.innerHTML='<span class="c-red">'+ip+' is IN USE \u2014 pick another</span>';
       toast(ip+' is already in use','error');
@@ -4002,7 +4052,7 @@ function _vmCheckAndAddNic(vmid){
     var cidr=opt.getAttribute('data-cidr')||'24';
     confirmAction('Add NIC to VM <strong>'+vmid+'</strong>:<br><span style="font-family:monospace">'+opt.textContent+' \u2192 '+ip+'/'+cidr+'</span>'+(gw?'<br><span style="font-family:monospace;color:var(--text-dim)">gw '+gw+'</span>':'')+'<br><br><span class="c-dim">This adds a new NIC without touching existing ones. Reboot to activate.</span>',function(){
       if(status)status.innerHTML='<span class="c-yellow">Adding NIC...</span>';
-      fetch('/api/vm/add-nic?vmid='+vmid+'&ip='+encodeURIComponent(ip+'/'+cidr)+'&gw='+encodeURIComponent(gw)+'&vlan='+vlan).then(function(r){return r.json()}).then(function(d2){
+      fetch(API.VM_ADD_NIC+'?vmid='+vmid+'&ip='+encodeURIComponent(ip+'/'+cidr)+'&gw='+encodeURIComponent(gw)+'&vlan='+vlan).then(function(r){return r.json()}).then(function(d2){
         if(d2.ok){
           toast(d2.nic+' added: '+ip,'success');
           if(status)status.innerHTML='<span class="c-green">'+d2.nic+' added \u2014 reboot to activate</span>';
@@ -4029,12 +4079,12 @@ function _vmApplyNicCombo(vmid){
   var out=document.getElementById('vm-ctrl-out');
   confirmAction('<strong>Set VM '+vmid+' network ('+configs.length+' NIC'+(configs.length>1?'s':'')+')</strong><br><br><span style="font-family:monospace;line-height:1.8">'+desc+'</span><br><br><span class="c-yellow">All existing NICs will be CLEARED first.</span><br><span class="c-dim">Reboot required to activate.</span>',function(){
     if(out)out.innerHTML='<span class="c-yellow">Clearing existing NICs...</span>';
-    fetch('/api/vm/clear-nics?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+    fetch(API.VM_CLEAR_NICS+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
       if(out)out.innerHTML='<span class="c-yellow">Applying '+configs.length+' NICs...</span>';
       var chain=Promise.resolve();
       configs.forEach(function(c){
         chain=chain.then(function(){
-          return fetch('/api/vm/change-ip?vmid='+vmid+'&ip='+encodeURIComponent(c.ip)+'&gw='+encodeURIComponent(c.gw)+'&nic='+c.nic+'&vlan='+c.vlan).then(function(r){return r.json();});
+          return fetch(API.VM_CHANGE_IP+'?vmid='+vmid+'&ip='+encodeURIComponent(c.ip)+'&gw='+encodeURIComponent(c.gw)+'&nic='+c.nic+'&vlan='+c.vlan).then(function(r){return r.json();});
         });
       });
       return chain;
@@ -4205,7 +4255,7 @@ function renderInfraCard(config){
 /* ── Renderer: Host (async SSH probe) — adaptive layout ── */
 function renderHostCard(config){
   var label=config.label;
-  fetch('/api/host/detail?host='+encodeURIComponent(label)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.HOST_DETAIL+'?host='+encodeURIComponent(label)).then(function(r){return r.json()}).then(function(d){
     if(d.error){_cardReady('<p class="c-red">'+d.error+'</p>');return;}
     document.getElementById('hd-subtitle').textContent=d.ip+' \u00b7 '+(d.type||'linux')+' \u00b7 '+(d.os||'unknown');
     var kv=_kvRow;
@@ -4306,18 +4356,97 @@ function renderHostCard(config){
 function hdDockerRestart(name){
   if(!confirm('Restart container: '+name+'?'))return;
   var host=_cardState.host;
-  fetch('/api/exec?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent('docker restart '+name))
+  fetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent('docker restart '+name))
     .then(function(r){return r.json()}).then(function(d){var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}toast(txt||'Restarted '+name,'success');}).catch(function(e){toast('Error: '+e,'error');});
 }
 function hdDockerLogs(name){
   var host=_cardState.host;
   var panel=document.getElementById('hd-tool-panel');if(panel)panel.style.display='block';
   var out=document.getElementById('hd-exec-out');if(out)out.textContent='Loading logs for '+name+'...';
-  fetch('/api/exec?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent('docker logs --tail 50 '+name+' 2>&1'))
+  fetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent('docker logs --tail 50 '+name+' 2>&1'))
     .then(function(r){return r.json()}).then(function(d){var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}if(out)out.textContent=txt||'(no output)';}).catch(function(e){if(out)out.textContent='Error: '+e;});
 }
 
-/* ── Renderer: VM Card (most complex) ── */
+/* ── VM Card helpers ── */
+function _vmConfigPanel(vmid,label){
+  var h='<div class="flex-fill">';
+  h+='<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;letter-spacing:0.5px">CONFIGURE</div>';
+  h+='<div style="margin-bottom:8px"><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">RENAME</label><div style="display:flex;gap:4px"><input id="vm-new-name" placeholder="new name" value="'+label+'" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:180px"><button class="fleet-btn" onclick="_vmRename('+vmid+')" style="padding:6px 10px;font-size:11px">SET</button></div></div>';
+  h+='<div style="margin-bottom:8px"><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">VMID</label><div style="display:flex;gap:4px"><input id="vm-new-id" placeholder="new ID" type="number" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:100px"><button class="fleet-btn" onclick="_vmChangeId('+vmid+')" style="padding:6px 10px;font-size:11px">SET</button></div></div>';
+  h+='<div><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">NETWORK CONFIG</label>';
+  h+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">';
+  h+='<select id="vm-nic-combo" onchange="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit">';
+  var _vids=Object.keys(_VLAN_MAP).sort(function(a,b){return parseInt(a)-parseInt(b);});
+  if(_vids.length){
+    _vids.forEach(function(vid){h+='<option value="v'+vid+'" data-nics="'+vid+'">'+_VLAN_MAP[vid].name+'</option>';});
+    if(_vids.length>1){h+='<option value="all" data-nics="'+_vids.join(',')+'" selected>ALL ('+_vids.length+' VLANs)</option>';}
+  } else {
+    h+='<option value="default" data-nics="0">Default</option>';
+  }
+  h+='</select>';
+  h+='<span style="color:var(--text-dim);font-size:12px;font-weight:600">OCTET:</span>';
+  h+='<input id="vm-nic-octet" type="number" min="1" max="254" placeholder="x" oninput="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:monospace;width:55px">';
+  h+='<button class="fleet-btn" onclick="_vmApplyNicCombo('+vmid+')" style="padding:6px 10px;font-size:11px">APPLY</button>';
+  h+='</div>';
+  h+='<div id="vm-nic-preview" style="font-size:11px;color:var(--text-dim);font-family:monospace;line-height:1.6"></div>';
+  h+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--input-border)">';
+  h+='<div style="display:flex;gap:6px;align-items:center">';
+  h+='<span style="font-size:10px;color:var(--text-dim);font-weight:600">ADD NIC</span>';
+  h+='<select id="vm-add-nic-vlan" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:11px;font-family:inherit">';
+  Object.keys(_VLAN_MAP).forEach(function(vid){var vl=_VLAN_MAP[vid];h+='<option value="'+vid+'" data-prefix="'+vl.prefix+'" data-gw="'+(vl.gw||'')+'" data-cidr="'+(vl.cidr||'24')+'">'+vl.name+'</option>';});
+  h+='</select>';
+  h+='<span style="color:var(--text-dim);font-size:14px;font-weight:700">.</span>';
+  h+='<input id="vm-add-nic-octet" type="number" min="1" max="254" placeholder="x" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:11px;font-family:monospace;width:50px">';
+  h+='<button class="fleet-btn" onclick="_vmCheckAndAddNic('+vmid+')" style="padding:5px 10px;font-size:11px">CHECK & ADD</button>';
+  h+='<span id="vm-add-nic-status" style="font-size:11px"></span>';
+  h+='</div></div></div>';
+  h+='</div>';
+  return h;
+}
+function _vmNicCards(allIps){
+  var h='<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;letter-spacing:0.5px">CONNECTED NETWORKS</div>';
+  allIps.forEach(function(a){
+    var c=VLAN_COLORS[a.vlan]||'var(--text-dim)';
+    var nicGw='?';
+    Object.keys(_VLAN_MAP).forEach(function(vid){var v=_VLAN_MAP[vid];if(v.name===a.vlan){if(v.gw)nicGw=v.gw;else if(v.prefix)nicGw=v.prefix+'.1';}});
+    h+='<div style="background:rgba(0,0,0,0.15);border:1px solid var(--input-border);border-radius:6px;padding:8px 10px;margin-bottom:6px">';
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+    h+='<span style="font-size:11px;color:var(--text-dim);font-family:monospace;font-weight:600">'+a.nic+'</span>';
+    h+='<span style="background:rgba(0,0,0,0.3);border:1px solid '+c+';color:'+c+';padding:1px 8px;border-radius:3px;font-size:11px;font-weight:600;letter-spacing:0.3px">'+a.vlan+'</span>';
+    h+='</div>';
+    h+='<div style="display:flex;gap:16px;font-size:11px;font-family:monospace">';
+    h+='<span style="color:var(--blue);font-weight:600">'+a.ip+'</span>';
+    h+='<span class="c-dim">GW '+nicGw+'</span>';
+    h+='</div>';
+    h+='</div>';
+  });
+  return h;
+}
+function _vmDockerFetch(vmid){
+  fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
+    var myContainers=[];
+    d.containers.forEach(function(c){if(c.vm_id==vmid)myContainers.push(c);});
+    if(!myContainers.length)return;
+    var upCount=0;myContainers.forEach(function(c){if(c.status==='up'||c.status==='running')upCount++;});
+    var downCount=myContainers.length-upCount;
+    var countsEl=document.getElementById('hd-docker-counts');
+    if(countsEl){
+      var ct='<span style="color:var(--green);font-weight:600">'+upCount+' UP</span>';
+      if(downCount>0)ct+=' <span style="color:var(--red);font-weight:600;margin-left:8px">'+downCount+' DOWN</span>';
+      countsEl.innerHTML=ct;
+    }
+    var gridEl=document.getElementById('hd-docker-grid');
+    if(gridEl){
+      var cols=myContainers.length>=4?'repeat(2,1fr)':'1fr';
+      gridEl.style.gridTemplateColumns=cols;
+      var gh='';
+      myContainers.forEach(function(c){gh+=_containerCard(c,'');});
+      gridEl.innerHTML=gh;
+    }
+  }).catch(function(){});
+}
+
+/* ── Renderer: VM Card ── */
 function renderVmCard(config){
   var label=config.label,ip=config.ip||'',vmid=config.vmid;
   var vm=null;
@@ -4381,43 +4510,7 @@ function renderVmCard(config){
   /* Configure + VM Controls side by side */
   var ctrl='<div style="display:flex;gap:16px;margin:12px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">';
   if(acts.indexOf('configure')>=0){
-    var vlans=(_fleetCache.fo&&_fleetCache.fo.vlans)||[];
-    ctrl+='<div class="flex-fill">';
-    ctrl+='<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;letter-spacing:0.5px">CONFIGURE</div>';
-    ctrl+='<div style="margin-bottom:8px"><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">RENAME</label><div style="display:flex;gap:4px"><input id="vm-new-name" placeholder="new name" value="'+label+'" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:180px"><button class="fleet-btn" onclick="_vmRename('+vmid+')" style="padding:6px 10px;font-size:11px">SET</button></div></div>';
-    ctrl+='<div style="margin-bottom:8px"><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">VMID</label><div style="display:flex;gap:4px"><input id="vm-new-id" placeholder="new ID" type="number" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:100px"><button class="fleet-btn" onclick="_vmChangeId('+vmid+')" style="padding:6px 10px;font-size:11px">SET</button></div></div>';
-    ctrl+='<div><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">NETWORK CONFIG</label>';
-    ctrl+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">';
-    ctrl+='<select id="vm-nic-combo" onchange="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit">';
-    /* Build NIC combo presets dynamically from configured VLANs */
-    var _vids=Object.keys(_VLAN_MAP).sort(function(a,b){return parseInt(a)-parseInt(b);});
-    if(_vids.length){
-      /* Single-VLAN options */
-      _vids.forEach(function(vid){ctrl+='<option value="v'+vid+'" data-nics="'+vid+'">'+_VLAN_MAP[vid].name+'</option>';});
-      /* Multi-VLAN combos — all VLANs */
-      if(_vids.length>1){ctrl+='<option value="all" data-nics="'+_vids.join(',')+'" selected>ALL ('+_vids.length+' VLANs)</option>';}
-    } else {
-      ctrl+='<option value="default" data-nics="0">Default</option>';
-    }
-    ctrl+='</select>';
-    ctrl+='<span style="color:var(--text-dim);font-size:12px;font-weight:600">OCTET:</span>';
-    ctrl+='<input id="vm-nic-octet" type="number" min="1" max="254" placeholder="x" oninput="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:monospace;width:55px">';
-    ctrl+='<button class="fleet-btn" onclick="_vmApplyNicCombo('+vmid+')" style="padding:6px 10px;font-size:11px">APPLY</button>';
-    ctrl+='</div>';
-    ctrl+='<div id="vm-nic-preview" style="font-size:11px;color:var(--text-dim);font-family:monospace;line-height:1.6"></div>';
-    ctrl+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--input-border)">';
-    ctrl+='<div style="display:flex;gap:6px;align-items:center">';
-    ctrl+='<span style="font-size:10px;color:var(--text-dim);font-weight:600">ADD NIC</span>';
-    ctrl+='<select id="vm-add-nic-vlan" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:11px;font-family:inherit">';
-    /* Populate NIC VLAN options from fleet config */
-    Object.keys(_VLAN_MAP).forEach(function(vid){var vl=_VLAN_MAP[vid];ctrl+='<option value="'+vid+'" data-prefix="'+vl.prefix+'" data-gw="'+(vl.gw||'')+'" data-cidr="'+(vl.cidr||'24')+'">'+vl.name+'</option>';});
-    ctrl+='</select>';
-    ctrl+='<span style="color:var(--text-dim);font-size:14px;font-weight:700">.</span>';
-    ctrl+='<input id="vm-add-nic-octet" type="number" min="1" max="254" placeholder="x" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:11px;font-family:monospace;width:50px">';
-    ctrl+='<button class="fleet-btn" onclick="_vmCheckAndAddNic('+vmid+')" style="padding:5px 10px;font-size:11px">CHECK & ADD</button>';
-    ctrl+='<span id="vm-add-nic-status" style="font-size:11px"></span>';
-    ctrl+='</div></div></div>';
-    ctrl+='</div>';
+    ctrl+=_vmConfigPanel(vmid,label);
   }
   ctrl+='<div style="width:1px;background:var(--input-border)"></div>';
   ctrl+='<div class="flex-fill">';
@@ -4454,22 +4547,7 @@ function renderVmCard(config){
     sys+=kv('HOSTNAME',liveHost.label);
     sys+=kv('LOAD',liveHost.load);
   }
-  var net='<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;letter-spacing:0.5px">CONNECTED NETWORKS</div>';
-  allIps.forEach(function(a){
-    var c=VLAN_COLORS[a.vlan]||'var(--text-dim)';
-    var nicGw='?';
-    Object.keys(_VLAN_MAP).forEach(function(vid){var v=_VLAN_MAP[vid];if(v.name===a.vlan){if(v.gw)nicGw=v.gw;else if(v.prefix)nicGw=v.prefix+'.1';}});
-    net+='<div style="background:rgba(0,0,0,0.15);border:1px solid var(--input-border);border-radius:6px;padding:8px 10px;margin-bottom:6px">';
-    net+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
-    net+='<span style="font-size:11px;color:var(--text-dim);font-family:monospace;font-weight:600">'+a.nic+'</span>';
-    net+='<span style="background:rgba(0,0,0,0.3);border:1px solid '+c+';color:'+c+';padding:1px 8px;border-radius:3px;font-size:11px;font-weight:600;letter-spacing:0.3px">'+a.vlan+'</span>';
-    net+='</div>';
-    net+='<div style="display:flex;gap:16px;font-size:11px;font-family:monospace">';
-    net+='<span style="color:var(--blue);font-weight:600">'+a.ip+'</span>';
-    net+='<span class="c-dim">GW '+nicGw+'</span>';
-    net+='</div>';
-    net+='</div>';
-  });
+  var net=_vmNicCards(allIps);
   var secContent='';
   secContent+=kv('TIER',tier.toUpperCase(),'var(--purple-light)');
   secContent+=kv('CATEGORY',catLabel.toUpperCase());
@@ -4501,30 +4579,7 @@ function renderVmCard(config){
   }
   _cardReady(html);
   if(document.getElementById('vm-nic-combo'))_updateNicPreviewCombo();
-  /* Async docker fetch — fills hero section for Docker VMs */
-  if(hasDocker){
-    fetch('/api/media/status').then(function(r){return r.json()}).then(function(d){
-      var myContainers=[];
-      d.containers.forEach(function(c){if(c.vm_id==vmid)myContainers.push(c);});
-      if(!myContainers.length)return;
-      var upCount=0;myContainers.forEach(function(c){if(c.status==='up'||c.status==='running')upCount++;});
-      var downCount=myContainers.length-upCount;
-      var countsEl=document.getElementById('hd-docker-counts');
-      if(countsEl){
-        var ct='<span style="color:var(--green);font-weight:600">'+upCount+' UP</span>';
-        if(downCount>0)ct+=' <span style="color:var(--red);font-weight:600;margin-left:8px">'+downCount+' DOWN</span>';
-        countsEl.innerHTML=ct;
-      }
-      var gridEl=document.getElementById('hd-docker-grid');
-      if(gridEl){
-        var cols=myContainers.length>=4?'repeat(2,1fr)':'1fr';
-        gridEl.style.gridTemplateColumns=cols;
-        var gh='';
-        myContainers.forEach(function(c){gh+=_containerCard(c,'');});
-        gridEl.innerHTML=gh;
-      }
-    }).catch(function(){});
-  }
+  if(hasDocker)_vmDockerFetch(vmid);
 }
 
 /* ── Infra helpers ── */
@@ -4546,7 +4601,7 @@ function _runPveNodeCmd(label,ip,cmd){
   var o=document.getElementById('hd-infra-out');
   o.style.display='block';
   o.innerHTML='<span class="c-dim">Querying '+label.toUpperCase()+'...</span>';
-  fetch('/api/exec?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var out='';
     if(d.results){d.results.forEach(function(r){out+=r.output+'\n';});}
     o.innerHTML=_infraPre(label.toUpperCase(),out||'No output');
@@ -4565,14 +4620,14 @@ function hdExec(btn){_hdBtn(btn);document.getElementById('hd-tool-panel').style.
 function hdLogs(btn){
   _hdBtn(btn);document.getElementById('hd-tool-panel').style.display='block';
   document.getElementById('hd-exec-out').textContent='Loading logs for '+_cardState.host+'...';
-  fetch('/api/exec?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent('journalctl --no-pager -n 50 --output=short-iso 2>/dev/null || tail -50 /var/log/syslog 2>/dev/null')).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent('journalctl --no-pager -n 50 --output=short-iso 2>/dev/null || tail -50 /var/log/syslog 2>/dev/null')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}document.getElementById('hd-exec-out').textContent=txt||'No logs available.';
   }).catch(function(e){document.getElementById('hd-exec-out').textContent='Error: '+e;});
 }
 function hdDiagnose(btn){
   _hdBtn(btn);document.getElementById('hd-tool-panel').style.display='block';
   document.getElementById('hd-exec-out').textContent='Running full diagnostic on '+_cardState.host+'...';
-  fetch('/api/exec?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent('echo "=== SYSTEM ===" && hostname -f && cat /etc/os-release 2>/dev/null | grep PRETTY && uname -r && echo "=== RESOURCES ===" && nproc && free -h | head -2 && df -h / && cat /proc/loadavg && echo "=== NETWORK ===" && ip -4 addr show | grep inet | grep -v 127 && ip route show default && echo "=== DOCKER ===" && docker ps --format "{{.Names}}: {{.Status}}" 2>/dev/null || echo "not installed" && echo "=== SECURITY ===" && systemctl --failed --no-legend 2>/dev/null | head -5 || echo "ok" && echo "=== LISTENING ===" && ss -tlnp 2>/dev/null | grep LISTEN | head -10')).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent('echo "=== SYSTEM ===" && hostname -f && cat /etc/os-release 2>/dev/null | grep PRETTY && uname -r && echo "=== RESOURCES ===" && nproc && free -h | head -2 && df -h / && cat /proc/loadavg && echo "=== NETWORK ===" && ip -4 addr show | grep inet | grep -v 127 && ip route show default && echo "=== DOCKER ===" && docker ps --format "{{.Names}}: {{.Status}}" 2>/dev/null || echo "not installed" && echo "=== SECURITY ===" && systemctl --failed --no-legend 2>/dev/null | head -5 || echo "ok" && echo "=== LISTENING ===" && ss -tlnp 2>/dev/null | grep LISTEN | head -10')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}document.getElementById('hd-exec-out').textContent=txt||'No output.';
   }).catch(function(e){document.getElementById('hd-exec-out').textContent='Error: '+e;});
 }
@@ -4586,7 +4641,7 @@ function hdRestart(){
 function hdRunCmd(){
   var cmd=document.getElementById('hd-cmd').value;if(!cmd)return;
   document.getElementById('hd-exec-out').textContent='Running: '+cmd+' ...';
-  fetch('/api/exec?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}document.getElementById('hd-exec-out').textContent=txt||'(no output)';
   }).catch(function(e){document.getElementById('hd-exec-out').textContent='Error: '+e;});
 }
@@ -4654,7 +4709,7 @@ function _ltGenerateHTML(toolId,pfx){
 
 function ltLoad(toolId,pfx){
   pfx=pfx||'';
-  fetch('/api/lab-tool/config?tool='+encodeURIComponent(toolId)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.LAB_TOOL_CONFIG+'?tool='+encodeURIComponent(toolId)).then(function(r){return r.json()}).then(function(d){
     var hEl=_ltEl(pfx,'lt-host');var kEl=_ltEl(pfx,'lt-key');
     if(d.host&&hEl)hEl.value=d.host;
     if(d.key&&kEl)kEl.value=d.key;
@@ -4706,13 +4761,13 @@ function ltRefresh(toolId,host,key,pfx){
 }
 
 function _ltProxy(toolId,method,endpoint,host,key,callback){
-  fetch('/api/lab-tool/proxy?tool='+encodeURIComponent(toolId)+'&method='+method+'&endpoint='+encodeURIComponent(endpoint)+'&host='+encodeURIComponent(host)+'&key='+encodeURIComponent(key)).then(function(r){return r.json()}).then(callback).catch(function(e){callback({error:String(e)});});
+  fetch(API.LAB_TOOL_PROXY+'?tool='+encodeURIComponent(toolId)+'&method='+method+'&endpoint='+encodeURIComponent(endpoint)+'&host='+encodeURIComponent(host)+'&key='+encodeURIComponent(key)).then(function(r){return r.json()}).then(callback).catch(function(e){callback({error:String(e)});});
 }
 
 function ltSaveConfig(toolId,pfx){
   pfx=pfx||'';
   var host=((_ltEl(pfx,'lt-host')||{}).value||'').trim();var key=((_ltEl(pfx,'lt-key')||{}).value||'').trim();if(!host||!key)return;
-  fetch('/api/lab-tool/save-config?tool='+encodeURIComponent(toolId)+'&host='+encodeURIComponent(host)+'&key='+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(){toast('Config saved to vault','success');});
+  fetch(API.LAB_TOOL_SAVE+'?tool='+encodeURIComponent(toolId)+'&host='+encodeURIComponent(host)+'&key='+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(){toast('Config saved to vault','success');});
 }
 
 function ltAction(toolId,action,pfx,confirm){
@@ -4842,7 +4897,7 @@ function gwipeBayClear(dev,pfx){
 function gwipeBayWipe(dev,pfx){
   confirmAction('WIPE /dev/'+dev+'? <strong>This destroys all data on the drive.</strong>',function(){
     var c=_ltHostKey('gwipe',pfx);
-    fetch('/api/lab-tool/proxy?tool=gwipe&method=POST&endpoint='+encodeURIComponent('bays/'+dev+'/wipe')+'&host='+encodeURIComponent(c.host)+'&key='+encodeURIComponent(c.key)+'&confirm=YES').then(function(r){return r.json()}).then(function(d){
+    fetch(API.LAB_TOOL_PROXY+'?tool=gwipe&method=POST&endpoint='+encodeURIComponent('bays/'+dev+'/wipe')+'&host='+encodeURIComponent(c.host)+'&key='+encodeURIComponent(c.key)+'&confirm=YES').then(function(r){return r.json()}).then(function(d){
       if(d.message)toast(d.message,'info');if(d.error)toast(d.error,'error');
     });
   });
