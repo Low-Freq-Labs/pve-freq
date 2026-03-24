@@ -13,6 +13,9 @@ from freq.core.types import Host, Phase, FleetResult
 from freq.core.ssh import async_run as ssh_run
 from freq.engine.policy import PolicyExecutor
 
+# Runner timeouts
+RUNNER_PING_TIMEOUT = 10
+
 
 async def _run_host(
     host: Host,
@@ -33,7 +36,7 @@ async def _run_host(
 
         # 1. PING
         r = await ssh_run(host.ip, "echo ok", key_path=ssh_key,
-                          connect_timeout=5, command_timeout=10,
+                          connect_timeout=5, command_timeout=RUNNER_PING_TIMEOUT,
                           htype=host.htype, use_sudo=False)
         if r.returncode != 0:
             host.phase = Phase.FAILED

@@ -6,6 +6,7 @@ Every operation goes through the PVE API via SSH + qm/pvesh commands.
 Safety gates enforce protected VMID ranges and confirmation prompts.
 """
 import json
+import subprocess
 import time
 
 from freq.core import fmt
@@ -14,8 +15,16 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
+# VM operation timeouts
+VM_CMD_TIMEOUT = 60
+VM_QUICK_TIMEOUT = 10
+VM_CONFIG_TIMEOUT = 30
+VM_CREATE_TIMEOUT = 120
+VM_CLONE_TIMEOUT = 300
+VM_MIGRATE_TIMEOUT = 600
 
-def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = 60) -> tuple:
+
+def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = VM_CMD_TIMEOUT) -> tuple:
     """Execute command on PVE node via SSH + sudo."""
     r = ssh_run(
         host=node_ip, command=command,
@@ -32,7 +41,7 @@ def _find_node(cfg: FreqConfig) -> str:
     for ip in cfg.pve_nodes:
         r = ssh_run(
             host=ip, command="sudo pvesh get /version --output-format json",
-            key_path=cfg.ssh_key_path, connect_timeout=3, command_timeout=10,
+            key_path=cfg.ssh_key_path, connect_timeout=3, command_timeout=VM_QUICK_TIMEOUT,
             htype="pve", use_sudo=False,
         )
         if r.returncode == 0:
@@ -170,7 +179,7 @@ def cmd_create(cfg: FreqConfig, pack, args) -> int:
         f"--scsihw {cfg.vm_scsihw}"
     )
 
-    stdout, ok = _pve_cmd(cfg, node_ip, create_cmd, timeout=120)
+    stdout, ok = _pve_cmd(cfg, node_ip, create_cmd, timeout=VM_CREATE_TIMEOUT)
     if ok:
         fmt.step_ok(f"VM {vmid} '{name}' created")
         logger.info(f"VM created: {vmid} {name}", node=node_ip)
@@ -243,7 +252,7 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
     # Step 1: Full clone
     fmt.step_start(f"Cloning VM {src_vmid} to {new_vmid}")
     stdout, ok = _pve_cmd(cfg, node_ip,
-        f"qm clone {src_vmid} {new_vmid} --name {new_name} --full", timeout=300)
+        f"qm clone {src_vmid} {new_vmid} --name {new_name} --full", timeout=VM_CLONE_TIMEOUT)
 
     if not ok:
         fmt.step_fail(f"Clone failed: {stdout}")
@@ -272,7 +281,7 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
                 f"mount {disk_path}-part1 /mnt/vm{new_vmid} 2>/dev/null || "
                 f"mount {disk_path}p1 /mnt/vm{new_vmid} 2>/dev/null"
             )
-            stdout, ok = _pve_cmd(cfg, node_ip, mount_cmds, timeout=30)
+            stdout, ok = _pve_cmd(cfg, node_ip, mount_cmds, timeout=VM_CONFIG_TIMEOUT)
 
             if ok:
                 # Configure hostname
@@ -319,7 +328,7 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
     # Step 3: Start if requested
     if ip_addr or getattr(args, "start", False):
         fmt.step_start(f"Starting VM {new_vmid}")
-        stdout, ok = _pve_cmd(cfg, node_ip, f"qm start {new_vmid}", timeout=60)
+        stdout, ok = _pve_cmd(cfg, node_ip, f"qm start {new_vmid}", timeout=VM_CMD_TIMEOUT)
         if ok:
             fmt.step_ok(f"VM {new_vmid} running")
         else:
@@ -390,12 +399,12 @@ def cmd_destroy(cfg: FreqConfig, pack, args) -> int:
 
     # Stop first if running
     fmt.step_start(f"Stopping VM {vmid}")
-    _pve_cmd(cfg, node_ip, f"qm stop {vmid}", timeout=60)
+    _pve_cmd(cfg, node_ip, f"qm stop {vmid}", timeout=VM_CMD_TIMEOUT)
     fmt.step_ok("Stopped (or already stopped)")
 
     # Destroy
     fmt.step_start(f"Destroying VM {vmid}")
-    stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=120)
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=VM_CREATE_TIMEOUT)
 
     if ok:
         fmt.step_ok(f"VM {vmid} '{vm_name}' destroyed")
@@ -533,7 +542,7 @@ def cmd_template(cfg: FreqConfig, pack, args) -> int:
 
     # Stop VM
     fmt.step_start(f"Stopping VM {vmid}")
-    _pve_cmd(cfg, node_ip, f"qm stop {vmid}", timeout=60)
+    _pve_cmd(cfg, node_ip, f"qm stop {vmid}", timeout=VM_CMD_TIMEOUT)
     fmt.step_ok("Stopped")
 
     # Clean machine-id and SSH host keys for template
@@ -543,12 +552,12 @@ def cmd_template(cfg: FreqConfig, pack, args) -> int:
              f"truncate -s 0 /etc/machine-id; "
              f"rm -f /etc/ssh/ssh_host_*; "
              f"echo CHANGEME > /etc/hostname"
-             f"' 2>/dev/null", timeout=30)
+             f"' 2>/dev/null", timeout=VM_CONFIG_TIMEOUT)
     fmt.step_ok("Cleaned (or VM was off)")
 
     # Convert to template
     fmt.step_start(f"Converting VM {vmid} to template")
-    stdout, ok = _pve_cmd(cfg, node_ip, f"qm template {vmid}", timeout=120)
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm template {vmid}", timeout=VM_CREATE_TIMEOUT)
     if ok:
         fmt.step_ok(f"VM {vmid} is now a template")
         logger.info(f"VM templated: {vmid} {vm_name}")
@@ -849,7 +858,7 @@ def cmd_sandbox(cfg: FreqConfig, pack, args) -> int:
     fmt.step_start(f"Cloning VM {src_vmid} to {new_vmid}")
     stdout, ok = _pve_cmd(cfg, node_ip,
                            f"qm clone {src_vmid} {new_vmid} --name {new_name} --full",
-                           timeout=300)
+                           timeout=VM_CLONE_TIMEOUT)
     if not ok:
         fmt.step_fail(f"Clone failed: {stdout}")
         return 1
@@ -869,7 +878,7 @@ def cmd_sandbox(cfg: FreqConfig, pack, args) -> int:
 
     # Start
     fmt.step_start(f"Starting VM {new_vmid}")
-    stdout, ok = _pve_cmd(cfg, node_ip, f"qm start {new_vmid}", timeout=60)
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm start {new_vmid}", timeout=VM_CMD_TIMEOUT)
     if ok:
         fmt.step_ok(f"VM {new_vmid} '{new_name}' running")
         logger.info(f"Sandbox spawned: {src_vmid} -> {new_vmid} {new_name}")
@@ -903,7 +912,6 @@ def cmd_file_send(cfg: FreqConfig, pack, args) -> int:
         fmt.error(f"Host not found: {host_label}")
         return 1
 
-    import subprocess
     from freq.core.ssh import PLATFORM_SSH
     platform = PLATFORM_SSH.get(host.htype, PLATFORM_SSH["linux"])
     user = platform["user"]
@@ -915,7 +923,7 @@ def cmd_file_send(cfg: FreqConfig, pack, args) -> int:
     scp_cmd.extend([src, f"{user}@{host.ip}:{remote_path}"])
 
     fmt.step_start(f"Sending {src} to {host.label}:{remote_path}")
-    r = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=120)
+    r = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=VM_CREATE_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok("File sent")
     else:
@@ -990,13 +998,13 @@ def cmd_migrate(cfg: FreqConfig, pack, args) -> int:
 
     # Try online first, fall back to offline
     fmt.step_start(f"Migrating VM {vmid} to {target_node}")
-    stdout, ok = _pve_cmd(cfg, node_ip, migrate_cmd + " --online", timeout=600)
+    stdout, ok = _pve_cmd(cfg, node_ip, migrate_cmd + " --online", timeout=VM_MIGRATE_TIMEOUT)
 
     if not ok and "not running" in stdout.lower():
         # VM is stopped — offline migration
         fmt.step_fail("Online migration failed (VM not running), trying offline")
         fmt.step_start(f"Offline migration to {target_node}")
-        stdout, ok = _pve_cmd(cfg, node_ip, migrate_cmd, timeout=600)
+        stdout, ok = _pve_cmd(cfg, node_ip, migrate_cmd, timeout=VM_MIGRATE_TIMEOUT)
 
     if ok:
         fmt.step_ok(f"VM {vmid} migrated to {target_node}")

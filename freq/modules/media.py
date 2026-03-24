@@ -9,7 +9,9 @@ Container registry in conf/containers.toml maps every container to its VM.
 API access via SSH tunnel — SSH to VM, curl localhost. No direct exposure.
 """
 import json
+import os
 import shlex
+import subprocess
 import time
 
 from freq.core import fmt
@@ -17,6 +19,18 @@ from freq.core import resolve
 from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
+
+# Timeout constants (seconds)
+API_TIMEOUT = 10
+API_QUICK_TIMEOUT = 5
+API_SLOW_TIMEOUT = 15
+DOCKER_CMD_TIMEOUT = 30
+DOCKER_ACTION_TIMEOUT = 60
+DOCKER_LONG_TIMEOUT = 120
+DOCKER_BUILD_TIMEOUT = 300
+SCP_TIMEOUT = 30
+SSH_CMD_TIMEOUT = 10
+VPN_CHECK_TIMEOUT = 3
 
 
 # --- Helpers ---
@@ -34,7 +48,7 @@ def _get_vault_credential(cfg, vault_key):
 
 
 def _api_call(cfg, vm, port, endpoint, method="GET", auth_header="",
-              auth_value="", auth_param="", auth_param_value="", timeout=10):
+              auth_value="", auth_param="", auth_param_value="", timeout=API_TIMEOUT):
     """SSH to a VM and curl a local API endpoint. Returns CmdResult."""
     url = f"http://localhost:{port}{endpoint}"
     if auth_param and auth_param_value:
@@ -55,7 +69,7 @@ def _api_call(cfg, vm, port, endpoint, method="GET", auth_header="",
     )
 
 
-def _api_call_authed(cfg, vm, container, endpoint, method="GET", timeout=10):
+def _api_call_authed(cfg, vm, container, endpoint, method="GET", timeout=API_TIMEOUT):
     """API call with automatic auth from container registry + vault."""
     auth_header = ""
     auth_value = ""
@@ -80,7 +94,7 @@ def _api_call_authed(cfg, vm, container, endpoint, method="GET", timeout=10):
     )
 
 
-def _docker_cmd(cfg, vm, command, timeout=30):
+def _docker_cmd(cfg, vm, command, timeout=DOCKER_CMD_TIMEOUT):
     """Run a docker command on a VM via SSH."""
     return ssh_run(
         host=vm.ip, command=command, key_path=cfg.ssh_key_path,
@@ -255,7 +269,7 @@ def _cmd_status(cfg, args) -> int:
 
             if is_up and container.port > 0 and container.api_path:
                 r = _api_call(cfg, vm, container.port,
-                              container.api_path, timeout=5)
+                              container.api_path, timeout=API_QUICK_TIMEOUT)
                 if r.returncode == 0:
                     stdout = r.stdout.strip()
                     # Check for HTTP-like response or valid JSON
@@ -312,7 +326,7 @@ def _cmd_restart(cfg, args) -> int:
     fmt.blank()
     fmt.step_start(f"Restarting {container.name} on {vm.label}")
 
-    r = _docker_cmd(cfg, vm, f"docker restart {container.name}", timeout=60)
+    r = _docker_cmd(cfg, vm, f"docker restart {container.name}", timeout=DOCKER_ACTION_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok(f"{container.name} restarted")
         logger.info(f"media restart: {container.name}", vm=vm.label)
@@ -340,7 +354,7 @@ def _cmd_stop(cfg, args) -> int:
     fmt.blank()
     fmt.step_start(f"Stopping {container.name} on {vm.label}")
 
-    r = _docker_cmd(cfg, vm, f"docker stop {container.name}", timeout=60)
+    r = _docker_cmd(cfg, vm, f"docker stop {container.name}", timeout=DOCKER_ACTION_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok(f"{container.name} stopped")
     else:
@@ -367,7 +381,7 @@ def _cmd_start(cfg, args) -> int:
     fmt.blank()
     fmt.step_start(f"Starting {container.name} on {vm.label}")
 
-    r = _docker_cmd(cfg, vm, f"docker start {container.name}", timeout=60)
+    r = _docker_cmd(cfg, vm, f"docker start {container.name}", timeout=DOCKER_ACTION_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok(f"{container.name} started")
     else:
@@ -402,7 +416,7 @@ def _cmd_logs(cfg, args) -> int:
         docker_args += f" --since {since}"
 
     r = _docker_cmd(cfg, vm, f"docker logs {docker_args} {container.name} 2>&1",
-                     timeout=15)
+                     timeout=API_SLOW_TIMEOUT)
     if r.returncode == 0 and r.stdout:
         for line in r.stdout.split("\n"):
             is_error = "error" in line.lower() or "fail" in line.lower() or "fatal" in line.lower()
@@ -436,7 +450,7 @@ def _cmd_stats(cfg, args) -> int:
         r = _docker_cmd(cfg, vm,
                          "docker stats --no-stream --format "
                          "'{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.NetIO}}' 2>/dev/null",
-                         timeout=15)
+                         timeout=API_SLOW_TIMEOUT)
         if r.returncode != 0 or not r.stdout.strip():
             continue
 
@@ -496,7 +510,7 @@ def _cmd_update(cfg, args) -> int:
     fmt.step_start(f"Pulling latest image for {container.name}")
     r = _docker_cmd(cfg, vm,
                      f"cd {compose_dir} && docker compose pull {container.name}",
-                     timeout=120)
+                     timeout=DOCKER_LONG_TIMEOUT)
     if r.returncode != 0:
         fmt.step_fail(f"Pull failed: {r.stderr}")
         fmt.blank()
@@ -507,7 +521,7 @@ def _cmd_update(cfg, args) -> int:
     fmt.step_start(f"Recreating {container.name}")
     r = _docker_cmd(cfg, vm,
                      f"cd {compose_dir} && docker compose up -d {container.name}",
-                     timeout=60)
+                     timeout=DOCKER_ACTION_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok(f"{container.name} updated and running")
         logger.info(f"media update: {container.name}", vm=vm.label)
@@ -555,7 +569,7 @@ def _update_all(cfg) -> int:
         fmt.step_start(f"Updating {vm.label} ({vm.ip})")
         r = _docker_cmd(cfg, vm,
                          f"cd {compose_dir} && docker compose pull && docker compose up -d",
-                         timeout=300)
+                         timeout=DOCKER_BUILD_TIMEOUT)
         if r.returncode == 0:
             fmt.step_ok(f"{vm.label} updated")
         else:
@@ -573,7 +587,7 @@ def _cmd_prune(cfg, args) -> int:
 
     for vm in _all_vms(cfg):
         fmt.step_start(f"Pruning {vm.label}")
-        r = _docker_cmd(cfg, vm, "docker system prune -f 2>&1", timeout=60)
+        r = _docker_cmd(cfg, vm, "docker system prune -f 2>&1", timeout=DOCKER_ACTION_TIMEOUT)
         if r.returncode == 0:
             # Extract space reclaimed
             for line in r.stdout.split("\n"):
@@ -620,21 +634,21 @@ def _cmd_backup(cfg, args) -> int:
     config_dir = f"{config_base}/{container.name}"
 
     fmt.step_start(f"Stopping {container.name}")
-    _docker_cmd(cfg, vm, f"docker stop {container.name}", timeout=60)
+    _docker_cmd(cfg, vm, f"docker stop {container.name}", timeout=DOCKER_ACTION_TIMEOUT)
     fmt.step_ok("Stopped")
 
     fmt.step_start(f"Creating backup {backup_name}")
     r = _docker_cmd(cfg, vm,
                      f"mkdir -p {backup_dir} && "
                      f"tar czf {backup_dir}/{backup_name} -C {config_dir} . 2>&1",
-                     timeout=120)
+                     timeout=DOCKER_LONG_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok(f"Backup saved: {backup_dir}/{backup_name}")
     else:
         fmt.step_fail(f"Backup failed: {r.stderr}")
 
     fmt.step_start(f"Starting {container.name}")
-    _docker_cmd(cfg, vm, f"docker start {container.name}", timeout=60)
+    _docker_cmd(cfg, vm, f"docker start {container.name}", timeout=DOCKER_ACTION_TIMEOUT)
     fmt.step_ok("Started")
 
     fmt.blank()
@@ -724,19 +738,19 @@ def _cmd_restore(cfg, args) -> int:
     config_dir = f"{config_base}/{container.name}"
 
     fmt.step_start(f"Stopping {container.name}")
-    _docker_cmd(cfg, vm, f"docker stop {container.name}", timeout=60)
+    _docker_cmd(cfg, vm, f"docker stop {container.name}", timeout=DOCKER_ACTION_TIMEOUT)
     fmt.step_ok("Stopped")
 
     fmt.step_start(f"Restoring from {backup_path.split('/')[-1]}")
     r = _docker_cmd(cfg, vm,
-                     f"tar xzf {backup_path} -C {config_dir} 2>&1", timeout=120)
+                     f"tar xzf {backup_path} -C {config_dir} 2>&1", timeout=DOCKER_LONG_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok("Restored")
     else:
         fmt.step_fail(f"Restore failed: {r.stderr}")
 
     fmt.step_start(f"Starting {container.name}")
-    _docker_cmd(cfg, vm, f"docker start {container.name}", timeout=60)
+    _docker_cmd(cfg, vm, f"docker start {container.name}", timeout=DOCKER_ACTION_TIMEOUT)
     fmt.step_ok("Started")
 
     fmt.blank()
@@ -766,7 +780,7 @@ def _cmd_health(cfg, args) -> int:
 
             r = _api_call_authed(cfg, vm, container, container.api_path +
                                   "/system/status" if "/api/" in container.api_path
-                                  else container.api_path, timeout=5)
+                                  else container.api_path, timeout=API_QUICK_TIMEOUT)
 
             if r.returncode == 0 and r.stdout.strip():
                 ok_count += 1
@@ -874,7 +888,7 @@ def _cmd_queue(cfg, args) -> int:
             if "qbittorrent" not in cname.lower():
                 continue
             r = _api_call(cfg, vm, container.port,
-                          "/api/v2/torrents/info?filter=downloading", timeout=10)
+                          "/api/v2/torrents/info?filter=downloading", timeout=API_TIMEOUT)
             if r.returncode == 0:
                 data = _parse_json(r.stdout)
                 if data and isinstance(data, list):
@@ -902,10 +916,10 @@ def _cmd_queue(cfg, args) -> int:
             cred = _get_vault_credential(cfg, container.vault_key)
             if cred:
                 r = _api_call(cfg, vm, container.port,
-                              f"/api?mode=queue&output=json&apikey={cred}", timeout=10)
+                              f"/api?mode=queue&output=json&apikey={cred}", timeout=API_TIMEOUT)
             else:
                 r = _api_call(cfg, vm, container.port,
-                              "/api?mode=queue&output=json", timeout=10)
+                              "/api?mode=queue&output=json", timeout=API_TIMEOUT)
             if r.returncode == 0:
                 data = _parse_json(r.stdout)
                 if data and "queue" in data:
@@ -944,10 +958,10 @@ def _cmd_streams(cfg, args) -> int:
     cred = _get_vault_credential(cfg, container.vault_key)
     if cred:
         r = _api_call(cfg, vm, container.port,
-                      f"/api/v2?apikey={cred}&cmd=get_activity", timeout=10)
+                      f"/api/v2?apikey={cred}&cmd=get_activity", timeout=API_TIMEOUT)
     else:
         r = _api_call(cfg, vm, container.port,
-                      "/api/v2?cmd=get_activity", timeout=10)
+                      "/api/v2?cmd=get_activity", timeout=API_TIMEOUT)
 
     if r.returncode != 0:
         fmt.error("Cannot reach Tautulli API.")
@@ -999,7 +1013,7 @@ def _cmd_vpn(cfg, args) -> int:
             found = True
 
             # VPN status
-            r = _api_call(cfg, vm, 8000, "/v1/openvpn/status", timeout=5)
+            r = _api_call(cfg, vm, 8000, "/v1/openvpn/status", timeout=API_QUICK_TIMEOUT)
             vpn_status = "unknown"
             if r.returncode == 0:
                 data = _parse_json(r.stdout)
@@ -1007,7 +1021,7 @@ def _cmd_vpn(cfg, args) -> int:
                     vpn_status = data.get("status", "unknown")
 
             # Public IP
-            r2 = _api_call(cfg, vm, 8000, "/v1/publicip/ip", timeout=5)
+            r2 = _api_call(cfg, vm, 8000, "/v1/publicip/ip", timeout=API_QUICK_TIMEOUT)
             public_ip = "unknown"
             if r2.returncode == 0:
                 data2 = _parse_json(r2.stdout)
@@ -1180,7 +1194,7 @@ def _cmd_scan(cfg, args) -> int:
                     f"-d '{{\"name\": \"RescanMovie\"}}' 2>/dev/null",
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=10, htype="docker", use_sudo=False,
+            command_timeout=SSH_CMD_TIMEOUT, htype="docker", use_sudo=False,
         )
         if r2.returncode == 0:
             fmt.step_ok(f"{svc_name} scan triggered")
@@ -1320,7 +1334,7 @@ def _indexers_test(cfg, vm, container) -> int:
             continue
         fmt.step_start(f"Testing {name}")
         r2 = _api_call_authed(cfg, vm, container, f"/api/v1/indexer/{idx_id}/test",
-                               method="POST", timeout=15)
+                               method="POST", timeout=API_SLOW_TIMEOUT)
         if r2.returncode == 0 and not r2.stdout.strip().startswith("{\"isWarning"):
             fmt.step_ok(f"{name} passed")
         else:
@@ -1338,7 +1352,7 @@ def _indexers_sync(cfg, vm, container) -> int:
 
     fmt.step_start("Triggering Prowlarr sync")
     r = _api_call_authed(cfg, vm, container, "/api/v1/command",
-                          method="POST", timeout=15)
+                          method="POST", timeout=API_SLOW_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok("Sync triggered")
     else:
@@ -1478,7 +1492,7 @@ def _cmd_transcode(cfg, args) -> int:
                     f"-d '{{\"data\": {{\"collection\": \"Node\", \"mode\": \"update\", "
                     f"\"docID\": \"all\", \"update\": {{\"nodePaused\": true}}}}}}'",
             key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=10, htype="docker", use_sudo=False,
+            command_timeout=SSH_CMD_TIMEOUT, htype="docker", use_sudo=False,
         )
         fmt.step_ok("Workers paused") if r.returncode == 0 else fmt.step_fail("Failed")
         fmt.blank()
@@ -1496,7 +1510,7 @@ def _cmd_transcode(cfg, args) -> int:
                     f"-d '{{\"data\": {{\"collection\": \"Node\", \"mode\": \"update\", "
                     f"\"docID\": \"all\", \"update\": {{\"nodePaused\": false}}}}}}'",
             key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=10, htype="docker", use_sudo=False,
+            command_timeout=SSH_CMD_TIMEOUT, htype="docker", use_sudo=False,
         )
         fmt.step_ok("Workers resumed") if r.returncode == 0 else fmt.step_fail("Failed")
         fmt.blank()
@@ -1510,7 +1524,7 @@ def _cmd_transcode(cfg, args) -> int:
     fmt.header("Tdarr Status")
     fmt.blank()
 
-    r = _api_call(cfg, vm, container.port, "/api/v2/get-nodes", timeout=10)
+    r = _api_call(cfg, vm, container.port, "/api/v2/get-nodes", timeout=API_TIMEOUT)
     data = _parse_json(r.stdout) if r.returncode == 0 else None
     if data:
         for node_id, node in data.items():
@@ -1539,7 +1553,7 @@ def _transcode_stats(cfg, vm, container) -> int:
                 f"-H 'Content-Type: application/json' "
                 f"-d '{{\"data\": {{\"collection\": \"StatisticsJSONDB\", \"mode\": \"getAll\"}}}}'",
         key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10, htype="docker", use_sudo=False,
+        command_timeout=SSH_CMD_TIMEOUT, htype="docker", use_sudo=False,
     )
     data = _parse_json(r.stdout) if r.returncode == 0 else None
     if data:
@@ -1719,7 +1733,7 @@ def _rolling_restart(cfg) -> int:
         if not container:
             continue
         fmt.step_start(f"Restarting {svc_name} on {vm.label}")
-        r = _docker_cmd(cfg, vm, f"docker restart {svc_name}", timeout=60)
+        r = _docker_cmd(cfg, vm, f"docker restart {svc_name}", timeout=DOCKER_ACTION_TIMEOUT)
         if r.returncode == 0:
             fmt.step_ok(f"{svc_name} restarted")
             restarted += 1
@@ -1731,7 +1745,7 @@ def _rolling_restart(cfg) -> int:
         for cname in vm.containers:
             if cname not in order:
                 fmt.step_start(f"Restarting {cname} on {vm.label}")
-                r = _docker_cmd(cfg, vm, f"docker restart {cname}", timeout=60)
+                r = _docker_cmd(cfg, vm, f"docker restart {cname}", timeout=DOCKER_ACTION_TIMEOUT)
                 if r.returncode == 0:
                     fmt.step_ok(f"{cname} restarted")
                     restarted += 1
@@ -1775,7 +1789,7 @@ def _cmd_nuke(cfg, args) -> int:
         fmt.step_start(f"Nuking {vm.label}")
         r = _docker_cmd(cfg, vm,
                          f"cd {compose_dir} && docker compose down && docker compose up -d",
-                         timeout=300)
+                         timeout=DOCKER_BUILD_TIMEOUT)
         if r.returncode == 0:
             fmt.step_ok(f"{vm.label} recreated")
         else:
@@ -1798,7 +1812,7 @@ def _cmd_export(cfg, args) -> int:
             continue
         fmt.step_start(f"Exporting {vm.label}")
         r = _docker_cmd(cfg, vm,
-                         f"cat {vm.compose_path} 2>/dev/null", timeout=10)
+                         f"cat {vm.compose_path} 2>/dev/null", timeout=API_TIMEOUT)
         if r.returncode == 0 and r.stdout:
             # Save locally
             export_dir = os.path.join(cfg.data_dir, "exports", "compose")
@@ -1853,7 +1867,7 @@ def _cmd_dashboard(cfg, args) -> int:
         for cname, container in vm.containers.items():
             if "qbittorrent" in cname.lower():
                 r = _api_call(cfg, vm, container.port,
-                              "/api/v2/torrents/info?filter=downloading", timeout=5)
+                              "/api/v2/torrents/info?filter=downloading", timeout=API_QUICK_TIMEOUT)
                 data = _parse_json(r.stdout) if r.returncode == 0 else None
                 if data and isinstance(data, list):
                     dl_count += len(data)
@@ -1867,7 +1881,7 @@ def _cmd_dashboard(cfg, args) -> int:
         cred = _get_vault_credential(cfg, container.vault_key)
         if cred:
             r = _api_call(cfg, vm, container.port,
-                          f"/api/v2?apikey={cred}&cmd=get_activity", timeout=5)
+                          f"/api/v2?apikey={cred}&cmd=get_activity", timeout=API_QUICK_TIMEOUT)
             data = _parse_json(r.stdout) if r.returncode == 0 else None
             if data and "response" in data:
                 stream_count = data.get("response", {}).get("data", {}).get("stream_count", 0)
@@ -1880,7 +1894,7 @@ def _cmd_dashboard(cfg, args) -> int:
         for cname in vm.containers:
             if "gluetun" in cname.lower():
                 vpn_total += 1
-                r = _api_call(cfg, vm, 8000, "/v1/openvpn/status", timeout=3)
+                r = _api_call(cfg, vm, 8000, "/v1/openvpn/status", timeout=VPN_CHECK_TIMEOUT)
                 data = _parse_json(r.stdout) if r.returncode == 0 else None
                 if data and data.get("status") == "running":
                     vpn_ok += 1
@@ -1930,8 +1944,8 @@ def _cmd_report(cfg, args) -> int:
         with open(report_path, "w") as f:
             f.write(report)
         fmt.info(f"Report saved: {report_path}")
-    except OSError:
-        pass
+    except OSError as e:
+        logger.warn(f"failed to save media report: {e}")
 
     fmt.blank()
     fmt.footer()
@@ -2010,7 +2024,7 @@ def _cmd_mounts(cfg, args) -> int:
             if len(parts) >= 3:
                 mount_point = parts[2]
                 # Test if mount is responsive
-                r2 = _docker_cmd(cfg, vm, f"ls {mount_point} >/dev/null 2>&1", timeout=5)
+                r2 = _docker_cmd(cfg, vm, f"ls {mount_point} >/dev/null 2>&1", timeout=API_QUICK_TIMEOUT)
                 if r2.returncode == 0:
                     ok_count += 1
                     print(f"  {fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET} "
@@ -2148,7 +2162,7 @@ def _media_overview_legacy(cfg, host) -> int:
         command="docker ps --format '{{.Names}}|{{.Status}}' 2>/dev/null",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10, htype=host.htype, use_sudo=False,
+        command_timeout=SSH_CMD_TIMEOUT, htype=host.htype, use_sudo=False,
     )
 
     if r.returncode != 0 or not r.stdout.strip():
@@ -2337,11 +2351,10 @@ def _cmd_import(cfg, args) -> int:
         return 1
 
     # SCP the compose file
-    import subprocess
     r = subprocess.run(
         ["scp", "-i", cfg.ssh_key_path, "-o", "StrictHostKeyChecking=accept-new",
          filepath, f"{cfg.ssh_service_account}@{vm.ip}:{vm.compose_path}"],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, timeout=SCP_TIMEOUT,
     )
 
     if r.returncode == 0:
@@ -2352,7 +2365,7 @@ def _cmd_import(cfg, args) -> int:
         fmt.step_start(f"Recreating stack on {vm.label}")
         r2 = _docker_cmd(cfg, vm,
                           f"cd {compose_dir} && docker compose up -d",
-                          timeout=120)
+                          timeout=DOCKER_LONG_TIMEOUT)
         if r2.returncode == 0:
             fmt.step_ok("Stack recreated")
         else:
@@ -2363,7 +2376,3 @@ def _cmd_import(cfg, args) -> int:
     fmt.blank()
     fmt.footer()
     return 0
-
-
-# Required for export/import commands
-import os

@@ -14,6 +14,9 @@ from freq.core import fmt
 from freq.core import log as logger
 from freq.core.config import FreqConfig
 
+# Vault timeouts
+VAULT_CRYPTO_TIMEOUT = 10
+
 
 def _vault_key() -> str:
     """Derive encryption key from machine-id (SHA256 hex digest).
@@ -37,7 +40,7 @@ def _encrypt(plaintext: str, key: str, vault_path: str) -> bool:
             ["openssl", "enc", "-aes-256-cbc", "-salt", "-pbkdf2",
              "-pass", f"pass:{key}", "-out", vault_path],
             input=plaintext.encode(),
-            capture_output=True, timeout=10,
+            capture_output=True, timeout=VAULT_CRYPTO_TIMEOUT,
         )
         if r.returncode == 0:
             os.chmod(vault_path, 0o600)
@@ -57,7 +60,7 @@ def _decrypt(key: str, vault_path: str) -> str:
         r = subprocess.run(
             ["openssl", "enc", "-aes-256-cbc", "-d", "-salt", "-pbkdf2",
              "-pass", f"pass:{key}", "-in", vault_path],
-            capture_output=True, timeout=10,
+            capture_output=True, timeout=VAULT_CRYPTO_TIMEOUT,
         )
         if r.returncode == 0:
             return r.stdout.decode()

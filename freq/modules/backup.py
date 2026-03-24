@@ -12,6 +12,9 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
+# Backup timeouts
+BACKUP_PRUNE_TIMEOUT = 120
+
 
 def cmd_backup(cfg: FreqConfig, pack, args) -> int:
     """Backup management — VM snapshots + config export."""
@@ -205,7 +208,7 @@ def _backup_prune(cfg: FreqConfig, args) -> int:
     stdout, ok = _pve_cmd(cfg, node_ip,
                           "find /var/lib/vz/dump/ \\( -name '*.vma*' -o -name '*.tar*' \\) "
                           "-mtime +30 -delete 2>&1",
-                          timeout=120)
+                          timeout=BACKUP_PRUNE_TIMEOUT)
     if ok:
         fmt.step_ok(f"Pruned {len(old_files)} old backups")
     else:

@@ -4,6 +4,7 @@ Commands: status, exec, info, diagnose, docker, keys, dashboard
 The core of fleet management — every command talks to real hosts via SSH.
 """
 import asyncio
+import subprocess
 import time
 
 from freq.core import fmt
@@ -12,6 +13,12 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
 from freq.core.types import Host
+
+# Fleet operation timeouts
+FLEET_QUICK_TIMEOUT = 10
+FLEET_CMD_TIMEOUT = 15
+FLEET_SLOW_TIMEOUT = 30
+FLEET_EXEC_TIMEOUT = 600
 
 
 def cmd_status(cfg: FreqConfig, pack, args) -> int:
@@ -36,7 +43,7 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
         command="uptime -p 2>/dev/null || uptime",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10,
+        command_timeout=FLEET_QUICK_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
     )
@@ -121,7 +128,7 @@ def cmd_exec(cfg: FreqConfig, pack, args) -> int:
         command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=30,
+        command_timeout=FLEET_SLOW_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
     )
@@ -271,7 +278,7 @@ def cmd_dashboard(cfg: FreqConfig, pack, args) -> int:
         command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=15,
+        command_timeout=FLEET_CMD_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
     )
@@ -371,7 +378,7 @@ def cmd_docker(cfg: FreqConfig, pack, args) -> int:
         command="docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}' 2>/dev/null",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=15,
+        command_timeout=FLEET_CMD_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
     )
@@ -521,7 +528,7 @@ def cmd_diagnose(cfg: FreqConfig, pack, args) -> int:
                 host=host.ip, command=cmd,
                 key_path=cfg.ssh_key_path,
                 connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=10,
+                command_timeout=FLEET_QUICK_TIMEOUT,
                 htype=host.htype,
                 use_sudo=False,
             )
@@ -569,7 +576,7 @@ def cmd_log(cfg: FreqConfig, pack, args) -> int:
         host=host.ip, command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=15,
+        command_timeout=FLEET_CMD_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
     )
@@ -579,7 +586,7 @@ def cmd_log(cfg: FreqConfig, pack, args) -> int:
             host=host.ip, command=cmd,
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=15,
+            command_timeout=FLEET_CMD_TIMEOUT,
             htype=host.htype,
             use_sudo=True,
         )
@@ -666,7 +673,6 @@ def _keys_list(cfg: FreqConfig) -> int:
         return 1
 
     # Show local key info
-    import subprocess
     r = subprocess.run(
         ["ssh-keygen", "-l", "-f", cfg.ssh_key_path],
         capture_output=True, text=True,
@@ -699,7 +705,7 @@ def _keys_list(cfg: FreqConfig) -> int:
         command="cat ~/.ssh/authorized_keys 2>/dev/null",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10,
+        command_timeout=FLEET_QUICK_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
     )
@@ -753,7 +759,6 @@ def _keys_deploy(cfg: FreqConfig, args) -> int:
         fmt.error("No SSH key found.")
         return 1
 
-    import subprocess
     pub_key_path = cfg.ssh_key_path + ".pub"
     try:
         with open(pub_key_path) as f:
@@ -772,7 +777,7 @@ def _keys_deploy(cfg: FreqConfig, args) -> int:
 
     r = subprocess.run(
         ["ssh-copy-id", "-i", pub_key_path, f"{user}@{host.ip}"],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, timeout=FLEET_SLOW_TIMEOUT,
     )
 
     if r.returncode == 0:
@@ -840,7 +845,7 @@ def cmd_ntp(cfg: FreqConfig, pack, args) -> int:
                 "date '+%Y-%m-%d %H:%M:%S %Z'",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10,
+        command_timeout=FLEET_QUICK_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
     )
@@ -897,7 +902,7 @@ def _ntp_fix(cfg, hosts) -> int:
                 "echo NTP_FIXED",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=15,
+        command_timeout=FLEET_CMD_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
     )
@@ -947,7 +952,7 @@ def cmd_fleet_update(cfg: FreqConfig, pack, args) -> int:
                 "else echo 0; echo unknown; fi",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=30,
+        command_timeout=FLEET_SLOW_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
     )
@@ -1005,7 +1010,7 @@ def _fleet_update_apply(cfg, hosts) -> int:
                 "else echo UPDATE_UNKNOWN; fi",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=600,
+        command_timeout=FLEET_EXEC_TIMEOUT,
         max_parallel=3,  # Don't slam all hosts at once
         use_sudo=False,
     )

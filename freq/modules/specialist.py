@@ -15,6 +15,10 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
+# Specialist timeouts
+SPECIALIST_CMD_TIMEOUT = 30
+SPECIALIST_DEPLOY_TIMEOUT = 10
+
 
 # Role templates — each defines the specialist's workspace configuration
 ROLE_TEMPLATES = {
@@ -83,7 +87,7 @@ def cmd_specialist(cfg: FreqConfig, pack, args) -> int:
     return 1
 
 
-def _ssh_cmd(cfg, ip, command, timeout=30):
+def _ssh_cmd(cfg, ip, command, timeout=SPECIALIST_CMD_TIMEOUT):
     """Run command on a specialist VM."""
     return ssh_run(
         host=ip, command=command, key_path=cfg.ssh_key_path,
@@ -157,7 +161,7 @@ def _cmd_create(cfg, args) -> int:
     workspace = f"{home_dir}/{specialist_name}"
 
     fmt.step_start("Creating workspace directory")
-    r = _ssh_cmd(cfg, ip, f"mkdir -p {workspace}", timeout=10)
+    r = _ssh_cmd(cfg, ip, f"mkdir -p {workspace}", timeout=SPECIALIST_DEPLOY_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok(f"Workspace: {workspace}")
     else:
@@ -169,7 +173,7 @@ def _cmd_create(cfg, args) -> int:
     claude_md = _generate_claude_md(specialist_name, role, tmpl, ip, cfg.ssh_service_account)
     r = _ssh_cmd(cfg, ip,
                   f"cat > {workspace}/CLAUDE.md << 'FREQEOF'\n{claude_md}\nFREQEOF",
-                  timeout=10)
+                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
     fmt.step_ok("CLAUDE.md deployed") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Step 3: Deploy Claude Code settings
@@ -179,7 +183,7 @@ def _cmd_create(cfg, args) -> int:
     r = _ssh_cmd(cfg, ip,
                   f"mkdir -p {settings_dir} && "
                   f"cat > {settings_dir}/settings.json << 'FREQEOF'\n{settings}\nFREQEOF",
-                  timeout=10)
+                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
     fmt.step_ok("Settings deployed") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Step 4: Deploy tmux config
@@ -187,7 +191,7 @@ def _cmd_create(cfg, args) -> int:
     tmux_conf = _generate_tmux_conf(tmpl, specialist_name)
     r = _ssh_cmd(cfg, ip,
                   f"sudo tee /etc/tmux.conf > /dev/null << 'FREQEOF'\n{tmux_conf}\nFREQEOF",
-                  timeout=10)
+                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
     fmt.step_ok("tmux.conf deployed") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Step 5: Deploy dev-start/dev-stop scripts
@@ -198,7 +202,7 @@ def _cmd_create(cfg, args) -> int:
                   f"cat > {home_dir}/dev-start << 'FREQEOF'\n{dev_start}\nFREQEOF\n"
                   f"cat > {home_dir}/dev-stop << 'FREQEOF'\n{dev_stop}\nFREQEOF\n"
                   f"chmod +x {home_dir}/dev-start {home_dir}/dev-stop",
-                  timeout=10)
+                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
     fmt.step_ok("dev-start/dev-stop deployed") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Step 6: Create mailbox structure
@@ -206,7 +210,7 @@ def _cmd_create(cfg, args) -> int:
     r = _ssh_cmd(cfg, ip,
                   f"sudo mkdir -p /opt/jarvis-mailbox/{{inbox,outbox,archive}} && "
                   f"sudo chmod -R 777 /opt/jarvis-mailbox",
-                  timeout=10)
+                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
     fmt.step_ok("Mailbox created") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Step 7: Set permissions
@@ -214,7 +218,7 @@ def _cmd_create(cfg, args) -> int:
     r = _ssh_cmd(cfg, ip,
                   f"chmod -R g+w {workspace} && "
                   f"chmod 700 {settings_dir}",
-                  timeout=10)
+                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
     fmt.step_ok("Permissions set") if r.returncode == 0 else fmt.step_fail("Failed")
 
     fmt.blank()
@@ -253,7 +257,7 @@ def _cmd_health(cfg, args) -> int:
     }
 
     for check_name, cmd in checks.items():
-        r = _ssh_cmd(cfg, ip, cmd, timeout=10)
+        r = _ssh_cmd(cfg, ip, cmd, timeout=SPECIALIST_DEPLOY_TIMEOUT)
         if r.returncode == 0:
             value = r.stdout.strip()
             if value in ("running", "ok") or (value.isdigit() and int(value) >= 0):

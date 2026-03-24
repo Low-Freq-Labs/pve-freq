@@ -25,6 +25,12 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
+# Agent operation timeouts
+AGENT_CMD_TIMEOUT = 5
+AGENT_CREATE_TIMEOUT = 120
+AGENT_STOP_TIMEOUT = 30
+AGENT_DEPLOY_TIMEOUT = 10
+
 
 # --- Agent Templates ---
 
@@ -370,7 +376,7 @@ def _cmd_create(cfg: FreqConfig, args) -> int:
             f"--net0 virtio,bridge={cfg.nic_bridge} "
             f"--scsihw {cfg.vm_scsihw}"
         )
-        stdout, ok = _pve_cmd(cfg, node_ip, create_cmd, timeout=120)
+        stdout, ok = _pve_cmd(cfg, node_ip, create_cmd, timeout=AGENT_CREATE_TIMEOUT)
         if ok:
             fmt.step_ok(f"VM {vmid} created (empty — install OS manually)")
         else:
@@ -493,7 +499,7 @@ def _cmd_start(cfg: FreqConfig, args) -> int:
     import subprocess
     session_name = f"FREQ-{name.upper()}"
     r = subprocess.run(["tmux", "has-session", "-t", session_name],
-                       capture_output=True, timeout=5)
+                       capture_output=True, timeout=AGENT_CMD_TIMEOUT)
 
     if r.returncode == 0:
         fmt.line(f"{fmt.C.YELLOW}Session '{session_name}' already running.{fmt.C.RESET}")
@@ -504,7 +510,7 @@ def _cmd_start(cfg: FreqConfig, args) -> int:
         subprocess.run([
             "tmux", "new-session", "-d", "-s", session_name,
             "-x", "200", "-y", "50",
-        ], capture_output=True, timeout=5)
+        ], capture_output=True, timeout=AGENT_CMD_TIMEOUT)
         fmt.step_ok(f"Session '{session_name}' created")
 
         # Update status
@@ -533,7 +539,7 @@ def _cmd_stop(cfg: FreqConfig, args) -> int:
     session_name = f"FREQ-{name.upper()}"
     import subprocess
     subprocess.run(["tmux", "kill-session", "-t", session_name],
-                   capture_output=True, timeout=5)
+                   capture_output=True, timeout=AGENT_CMD_TIMEOUT)
 
     agents[name]["status"] = "stopped"
     _save_agents(cfg, agents)
@@ -576,7 +582,7 @@ def _cmd_destroy(cfg: FreqConfig, args) -> int:
     session_name = f"FREQ-{name.upper()}"
     import subprocess
     subprocess.run(["tmux", "kill-session", "-t", session_name],
-                   capture_output=True, timeout=5)
+                   capture_output=True, timeout=AGENT_CMD_TIMEOUT)
 
     # Destroy VM
     if vmid:
@@ -584,8 +590,8 @@ def _cmd_destroy(cfg: FreqConfig, args) -> int:
         from freq.modules.pve import _find_reachable_node, _pve_cmd
         node_ip = _find_reachable_node(cfg)
         if node_ip:
-            _pve_cmd(cfg, node_ip, f"qm stop {vmid} --skiplock", timeout=30)
-            stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=120)
+            _pve_cmd(cfg, node_ip, f"qm stop {vmid} --skiplock", timeout=AGENT_STOP_TIMEOUT)
+            stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=AGENT_CREATE_TIMEOUT)
             if ok:
                 fmt.step_ok(f"VM {vmid} destroyed")
             else:
@@ -668,7 +674,7 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
             r = ssh_run(host=node_ip,
                         command=f"qm agent {vmid} network-get-interfaces 2>/dev/null | python3 -c \"import json,sys; data=json.load(sys.stdin); [print(a['ip-address']) for i in data.get('result',[]) for a in i.get('ip-addresses',[]) if a.get('ip-address-type')=='ipv4' and not a['ip-address'].startswith('127.')]\" 2>/dev/null || echo ''",
                         key_path=cfg.ssh_key_path,
-                        connect_timeout=5, command_timeout=10,
+                        connect_timeout=5, command_timeout=AGENT_DEPLOY_TIMEOUT,
                         htype="pve", use_sudo=True)
             if r.returncode == 0 and r.stdout.strip():
                 ip = r.stdout.strip().split('\n')[0]
@@ -676,7 +682,7 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
                 # Quick SSH test
                 ssh_result = ssh_run(host=ip, command="echo ok",
                                      key_path=cfg.ssh_key_path,
-                                     connect_timeout=3, command_timeout=5,
+                                     connect_timeout=3, command_timeout=AGENT_CMD_TIMEOUT,
                                      htype="linux", use_sudo=False)
                 ssh_badge = fmt.badge("ok") if ssh_result.returncode == 0 else fmt.badge("fail")
             else:

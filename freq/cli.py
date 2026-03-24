@@ -40,8 +40,8 @@ def main(argv: list = None) -> int:
                     p.add_argument("plugin_args", nargs="*", help="Plugin arguments")
                     h = plugin["handler"]
                     p.set_defaults(func=lambda c, pk, a, _h=h: _h(c, pk, a))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warn(f"failed to register plugin {plugin.get('name', '?')}: {e}")
 
     args = parser.parse_args(argv)
 
@@ -1011,8 +1011,8 @@ def _cmd_gwipe(cfg: FreqConfig, pack, args) -> int:
                 host = vault_get(cfg, "gwipe", "gwipe_host") or ""
             if not key:
                 key = vault_get(cfg, "gwipe", "gwipe_api_key") or ""
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warn(f"gwipe vault lookup failed: {e}")
 
     action = getattr(args, "action", "status") or "status"
     target = getattr(args, "target", None)

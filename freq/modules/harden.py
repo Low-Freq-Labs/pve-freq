@@ -9,6 +9,10 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
 
+# Harden timeouts
+HARDEN_CHECK_TIMEOUT = 10
+HARDEN_FIX_TIMEOUT = 15
+
 
 def cmd_harden(cfg: FreqConfig, pack, args) -> int:
     """Apply security hardening to fleet hosts."""
@@ -81,7 +85,7 @@ def cmd_harden(cfg: FreqConfig, pack, args) -> int:
                 host=h.ip, command=check_cmd,
                 key_path=cfg.ssh_key_path,
                 connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=10,
+                command_timeout=HARDEN_CHECK_TIMEOUT,
                 htype=h.htype, use_sudo=True,
             )
 
@@ -94,7 +98,7 @@ def cmd_harden(cfg: FreqConfig, pack, args) -> int:
                     host=h.ip, command=fix_cmd,
                     key_path=cfg.ssh_key_path,
                     connect_timeout=cfg.ssh_connect_timeout,
-                    command_timeout=10,
+                    command_timeout=HARDEN_CHECK_TIMEOUT,
                     htype=h.htype, use_sudo=True,
                 )
                 if r.returncode == 0:
@@ -115,7 +119,7 @@ def cmd_harden(cfg: FreqConfig, pack, args) -> int:
             command="systemctl restart sshd",
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=15,
+            command_timeout=HARDEN_FIX_TIMEOUT,
             max_parallel=cfg.ssh_max_parallel,
             use_sudo=True,
         )

@@ -18,6 +18,9 @@ from freq.engine.policies import ALL_POLICIES
 from freq.engine.runner import run_sync
 from freq.core.types import Phase
 
+# Patrol timeouts
+PATROL_CHECK_TIMEOUT = 10
+
 
 def cmd_patrol(cfg: FreqConfig, pack, args) -> int:
     """Continuous fleet monitoring with drift detection."""
@@ -50,7 +53,7 @@ def cmd_patrol(cfg: FreqConfig, pack, args) -> int:
                 command="echo ok",
                 key_path=cfg.ssh_key_path,
                 connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=10,
+                command_timeout=PATROL_CHECK_TIMEOUT,
                 max_parallel=cfg.ssh_max_parallel,
                 use_sudo=False,
             )

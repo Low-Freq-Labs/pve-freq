@@ -17,6 +17,12 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
+# Provisioning timeouts
+PROVISION_CMD_TIMEOUT = 60
+PROVISION_DOWNLOAD_TIMEOUT = 600
+PROVISION_CREATE_TIMEOUT = 120
+PROVISION_IMPORT_TIMEOUT = 300
+
 
 # Cloud image URLs — generic cloud images with cloud-init support
 CLOUD_IMAGES = {
@@ -56,7 +62,7 @@ DEFAULT_IMAGE = "debian-13"
 TEMPLATE_STORAGE = "/var/lib/vz/template/qcow2"
 
 
-def _pve_cmd(cfg, node_ip, command, timeout=60):
+def _pve_cmd(cfg, node_ip, command, timeout=PROVISION_CMD_TIMEOUT):
     """Run command on PVE node."""
     r = ssh_run(
         host=node_ip, command=command,
@@ -90,7 +96,7 @@ def download_cloud_image(cfg: FreqConfig, node_ip: str, image_key: str = None) -
     _pve_cmd(cfg, node_ip, f"mkdir -p {TEMPLATE_STORAGE}")
     stdout, ok = _pve_cmd(cfg, node_ip,
                           f"wget -q -O {remote_path} '{image['url']}'",
-                          timeout=600)
+                          timeout=PROVISION_DOWNLOAD_TIMEOUT)
     if ok:
         fmt.step_ok(f"Downloaded: {image['name']}")
         return remote_path
@@ -148,7 +154,7 @@ def provision_agent_vm(
         f"--serial0 socket --vga serial0 "
         f"--agent enabled=1"
     )
-    stdout, ok = _pve_cmd(cfg, node_ip, create_cmd, timeout=120)
+    stdout, ok = _pve_cmd(cfg, node_ip, create_cmd, timeout=PROVISION_CREATE_TIMEOUT)
     if not ok:
         fmt.step_fail(f"VM creation failed: {stdout[:60]}")
         return False
@@ -157,7 +163,7 @@ def provision_agent_vm(
     # Step 3: Import cloud image as disk
     fmt.step_start("Importing cloud image as boot disk")
     import_cmd = f"qm importdisk {vmid} {image_path} {storage}"
-    stdout, ok = _pve_cmd(cfg, node_ip, import_cmd, timeout=300)
+    stdout, ok = _pve_cmd(cfg, node_ip, import_cmd, timeout=PROVISION_IMPORT_TIMEOUT)
     if not ok:
         fmt.step_fail(f"Disk import failed: {stdout[:60]}")
         return False
@@ -208,7 +214,7 @@ def provision_agent_vm(
 
     # Step 6: Start VM
     fmt.step_start(f"Starting VM {vmid}")
-    stdout, ok = _pve_cmd(cfg, node_ip, f"qm start {vmid}", timeout=60)
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm start {vmid}", timeout=PROVISION_CMD_TIMEOUT)
     if ok:
         fmt.step_ok(f"VM {vmid} started — booting with cloud-init")
     else:

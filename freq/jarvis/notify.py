@@ -16,6 +16,9 @@ from freq.core import fmt
 from freq.core import log as logger
 from freq.core.config import FreqConfig
 
+# Notification timeouts
+NOTIFY_TIMEOUT = 10
+
 
 def send_discord(webhook_url: str, message: str, title: str = "PVE FREQ",
                  color: int = 0x7B2FBE, brand: str = "PVE FREQ") -> bool:
@@ -39,7 +42,7 @@ def send_discord(webhook_url: str, message: str, title: str = "PVE FREQ",
             data=data,
             headers={"Content-Type": "application/json"},
         )
-        urllib.request.urlopen(req, timeout=10)
+        urllib.request.urlopen(req, timeout=NOTIFY_TIMEOUT)
         return True
     except (urllib.error.URLError, OSError) as e:
         logger.error(f"Discord notification failed: {e}")
@@ -76,7 +79,7 @@ def send_slack(webhook_url: str, message: str, title: str = "PVE FREQ",
             data=data,
             headers={"Content-Type": "application/json"},
         )
-        urllib.request.urlopen(req, timeout=10)
+        urllib.request.urlopen(req, timeout=NOTIFY_TIMEOUT)
         return True
     except (urllib.error.URLError, OSError) as e:
         logger.error(f"Slack notification failed: {e}")

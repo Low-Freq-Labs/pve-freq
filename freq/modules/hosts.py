@@ -4,11 +4,16 @@ Commands: hosts list, hosts add, hosts remove, hosts sync, discover, groups
 """
 import json
 import os
+import shutil
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
 from freq.core import resolve
 from freq.core import validate
+
+# Hosts sync timeouts
+HOSTS_PVE_TIMEOUT = 15
+HOSTS_AGENT_TIMEOUT = 10
 
 
 def cmd_hosts(cfg: FreqConfig, pack, args) -> int:
@@ -279,7 +284,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             host=node_ip,
             command="pvesh get /cluster/resources --type vm --output-format json",
             key_path=cfg.ssh_key_path,
-            connect_timeout=5, command_timeout=15,
+            connect_timeout=5, command_timeout=HOSTS_PVE_TIMEOUT,
             htype="pve", use_sudo=True,
         )
         if r.returncode == 0 and r.stdout:
@@ -340,7 +345,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             host=node_ip,
             command=f"qm agent {vmid} network-get-interfaces 2>/dev/null",
             key_path=cfg.ssh_key_path,
-            connect_timeout=3, command_timeout=10,
+            connect_timeout=3, command_timeout=HOSTS_AGENT_TIMEOUT,
             htype="pve", use_sudo=True,
         )
 
@@ -576,7 +581,6 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
     # Backup existing
     if os.path.isfile(cfg.hosts_file):
         backup = cfg.hosts_file + ".bak"
-        import shutil
         shutil.copy2(cfg.hosts_file, backup)
         fmt.step_ok(f"Backed up to {backup}")
 

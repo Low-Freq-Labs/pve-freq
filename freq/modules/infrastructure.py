@@ -15,6 +15,11 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
+# Infrastructure timeouts
+INFRA_CMD_TIMEOUT = 15
+INFRA_TRUENAS_TIMEOUT = 30
+INFRA_RESCUE_TIMEOUT = 60
+
 
 # --- pfSense ---
 
@@ -58,7 +63,7 @@ def cmd_pfsense(cfg: FreqConfig, pack, args) -> int:
         host=pf_ip, command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=15,
+        command_timeout=INFRA_CMD_TIMEOUT,
         htype="pfsense", use_sudo=False,
     )
 
@@ -121,7 +126,7 @@ def cmd_truenas(cfg: FreqConfig, pack, args) -> int:
         host=tn_ip, command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=30,
+        command_timeout=INFRA_TRUENAS_TIMEOUT,
         htype="truenas", use_sudo=True,
     )
 
@@ -189,7 +194,7 @@ def cmd_switch(cfg: FreqConfig, pack, args) -> int:
         host=switch_ip, command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=15,
+        command_timeout=INFRA_CMD_TIMEOUT,
         htype="switch", use_sudo=False,
     )
 
@@ -255,7 +260,7 @@ def cmd_idrac(cfg: FreqConfig, pack, args) -> int:
             host=ip, command=cmd,
             key_path=cfg.ssh_key_path,
             connect_timeout=3,
-            command_timeout=15,
+            command_timeout=INFRA_CMD_TIMEOUT,
             htype="idrac", use_sudo=False,
         )
 
@@ -358,7 +363,7 @@ def cmd_rescue(cfg: FreqConfig, pack, args) -> int:
         return 0
 
     fmt.step_start(f"Executing rescue action")
-    stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=60)
+    stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=INFRA_RESCUE_TIMEOUT)
     if ok:
         fmt.step_ok("Rescue action completed")
     else:

@@ -14,13 +14,21 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
 
+# Lab timeouts
+LAB_CMD_TIMEOUT = 30
+LAB_QUICK_TIMEOUT = 5
+LAB_API_TIMEOUT = 10
+LAB_DOCKER_TIMEOUT = 60
+LAB_LONG_TIMEOUT = 120
+LAB_BUILD_TIMEOUT = 300
+
 
 def _get_lab_hosts(cfg: FreqConfig) -> list:
     """Get lab hosts from fleet config — hosts with 'lab' in their groups."""
     return [h for h in cfg.hosts if "lab" in (h.groups or "").split(",")]
 
 
-def _ssh(cfg, ip, command, timeout=30):
+def _ssh(cfg, ip, command, timeout=LAB_CMD_TIMEOUT):
     """SSH to a lab host."""
     return ssh_run(
         host=ip, command=command, key_path=cfg.ssh_key_path,
@@ -80,7 +88,7 @@ def _cmd_status(cfg, args) -> int:
     down = 0
 
     for host in lab_hosts:
-        r = _ssh(cfg, host.ip, "uptime -p 2>/dev/null || echo unknown", timeout=5)
+        r = _ssh(cfg, host.ip, "uptime -p 2>/dev/null || echo unknown", timeout=LAB_QUICK_TIMEOUT)
         if r.returncode == 0:
             up += 1
             uptime = r.stdout.strip().replace("up ", "")[:16]
@@ -106,7 +114,7 @@ def _cmd_status(cfg, args) -> int:
     # Docker containers on docker-dev (if configured)
     docker_dev_ip = cfg.docker_dev_ip
     if docker_dev_ip:
-        r = _ssh(cfg, docker_dev_ip, "docker ps --format '{{.Names}}|{{.Status}}' 2>/dev/null", timeout=10)
+        r = _ssh(cfg, docker_dev_ip, "docker ps --format '{{.Names}}|{{.Status}}' 2>/dev/null", timeout=LAB_API_TIMEOUT)
         if r.returncode == 0 and r.stdout.strip():
             containers = r.stdout.strip().split("\n")
             fmt.divider(f"docker-dev Containers ({len(containers)})")
@@ -209,7 +217,7 @@ def _deploy_media_stack(cfg, docker_dev_ip) -> int:
     r = _ssh(cfg, docker_dev_ip,
              "sudo mkdir -p /opt/media-lab/{movies,tv,downloads,config/{sonarr,radarr,prowlarr}} && "
              "sudo chmod -R 777 /opt/media-lab",
-             timeout=10)
+             timeout=LAB_API_TIMEOUT)
     fmt.step_ok("Directories created") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Deploy compose file
@@ -262,7 +270,7 @@ services:
     fmt.step_start("Deploying docker-compose.yml")
     r = _ssh(cfg, docker_dev_ip,
              f"cat > /opt/media-lab/docker-compose.yml << 'FREQEOF'\n{compose}\nFREQEOF",
-             timeout=10)
+             timeout=LAB_API_TIMEOUT)
     fmt.step_ok("Compose file deployed") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Create test media
@@ -274,14 +282,14 @@ services:
              "mkdir -p '/opt/media-lab/tv/Test Show/Season 01' && "
              "dd if=/dev/zero of='/opt/media-lab/tv/Test Show/Season 01/S01E01.mkv' "
              "bs=1M count=1 2>/dev/null",
-             timeout=10)
+             timeout=LAB_API_TIMEOUT)
     fmt.step_ok("Test media created") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Start stack
     fmt.step_start("Starting media stack")
     r = _ssh(cfg, docker_dev_ip,
              "cd /opt/media-lab && docker compose up -d",
-             timeout=120)
+             timeout=LAB_LONG_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok("Media stack running")
     else:
@@ -399,11 +407,11 @@ def _cmd_rebuild(cfg, args) -> int:
 
     # Destroy
     fmt.step_start(f"Stopping VM {vmid}")
-    _pve_cmd(cfg, node_ip, f"qm stop {vmid}", timeout=60)
+    _pve_cmd(cfg, node_ip, f"qm stop {vmid}", timeout=LAB_DOCKER_TIMEOUT)
     fmt.step_ok("Stopped")
 
     fmt.step_start(f"Destroying VM {vmid}")
-    stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=120)
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=LAB_LONG_TIMEOUT)
     if ok:
         fmt.step_ok("Destroyed")
     else:
@@ -415,14 +423,14 @@ def _cmd_rebuild(cfg, args) -> int:
         fmt.step_start(f"Cloning from template {template}")
         stdout, ok = _pve_cmd(cfg, node_ip,
                                f"qm clone {template} {vmid} --name {vm_name} --full",
-                               timeout=300)
+                               timeout=LAB_BUILD_TIMEOUT)
     else:
         fmt.step_start(f"Creating blank VM {vmid}")
         stdout, ok = _pve_cmd(cfg, node_ip,
                                f"qm create {vmid} --name {vm_name} "
                                f"--cores 2 --memory 2048 "
                                f"--net0 virtio,bridge={cfg.nic_bridge}",
-                               timeout=60)
+                               timeout=LAB_DOCKER_TIMEOUT)
 
     if ok:
         fmt.step_ok(f"VM {vmid} '{vm_name}' recreated")

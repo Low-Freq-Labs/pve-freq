@@ -20,6 +20,9 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
 
+# User management timeouts
+USER_CMD_TIMEOUT = 15
+
 
 # --- User Data ---
 
@@ -324,7 +327,7 @@ def cmd_passwd(cfg: FreqConfig, pack, args) -> int:
         command=f"echo {safe_user}':'{shlex.quote(new_pass)} | sudo /usr/sbin/chpasswd",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=15,
+        command_timeout=USER_CMD_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
     )
@@ -377,7 +380,7 @@ def cmd_install_user(cfg: FreqConfig, pack, args) -> int:
         command=f"id {safe_user} >/dev/null 2>&1 && echo 'EXISTS' || useradd -m -s /bin/bash {safe_user}",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=15,
+        command_timeout=USER_CMD_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=True,
     )

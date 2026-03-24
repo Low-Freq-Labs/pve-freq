@@ -3,14 +3,22 @@
 freq deploy-agent <host|all> — copies agent_collector.py, creates systemd service, starts it.
 freq agent-status — check which hosts have the agent running.
 """
+import json
 import os
 import time
+import urllib.error
+import urllib.request
 
 from freq.core import fmt
 from freq.core import resolve
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
 
+# Deploy timeouts
+DEPLOY_CMD_TIMEOUT = 10
+DEPLOY_UPLOAD_TIMEOUT = 15
+DEPLOY_QUICK_TIMEOUT = 5
+AGENT_CHECK_TIMEOUT = 3
 
 AGENT_PORT = 9990  # default — overridden by cfg.agent_port at deploy time
 AGENT_REMOTE_PATH = "/opt/freq-agent/collector.py"
@@ -76,8 +84,8 @@ def cmd_deploy_agent(cfg: FreqConfig, pack, args) -> int:
 
         # Step 1: Create directory
         r = ssh_run(host=h.ip, command="mkdir -p /opt/freq-agent",
-                    key_path=cfg.ssh_key_path, connect_timeout=5,
-                    command_timeout=10, htype=h.htype, use_sudo=True)
+                    key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
+                    command_timeout=DEPLOY_CMD_TIMEOUT, htype=h.htype, use_sudo=True)
         if r.returncode != 0:
             fmt.step_fail(f"{h.label}: cannot create directory")
             fail_count += 1
@@ -88,8 +96,8 @@ def cmd_deploy_agent(cfg: FreqConfig, pack, args) -> int:
         escaped = agent_code.replace("'", "'\\''")
         upload_cmd = f"cat > {AGENT_REMOTE_PATH} << 'FREQAGENTEOF'\n{agent_code}\nFREQAGENTEOF"
         r = ssh_run(host=h.ip, command=upload_cmd,
-                    key_path=cfg.ssh_key_path, connect_timeout=5,
-                    command_timeout=15, htype=h.htype, use_sudo=True)
+                    key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
+                    command_timeout=DEPLOY_UPLOAD_TIMEOUT, htype=h.htype, use_sudo=True)
         if r.returncode != 0:
             fmt.step_fail(f"{h.label}: cannot upload agent")
             fail_count += 1
@@ -97,27 +105,27 @@ def cmd_deploy_agent(cfg: FreqConfig, pack, args) -> int:
 
         # Step 3: Make executable
         ssh_run(host=h.ip, command=f"chmod +x {AGENT_REMOTE_PATH}",
-                key_path=cfg.ssh_key_path, connect_timeout=5,
-                command_timeout=5, htype=h.htype, use_sudo=True)
+                key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
+                command_timeout=DEPLOY_QUICK_TIMEOUT, htype=h.htype, use_sudo=True)
 
         # Step 4: Create systemd service
         unit_content = _systemd_unit(AGENT_PORT)
         service_cmd = f"cat > /etc/systemd/system/{SERVICE_NAME}.service << 'FREQSVCEOF'\n{unit_content}\nFREQSVCEOF"
         r = ssh_run(host=h.ip, command=service_cmd,
-                    key_path=cfg.ssh_key_path, connect_timeout=5,
-                    command_timeout=10, htype=h.htype, use_sudo=True)
+                    key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
+                    command_timeout=DEPLOY_CMD_TIMEOUT, htype=h.htype, use_sudo=True)
 
         # Step 5: Enable and start
         ssh_run(host=h.ip,
                 command=f"systemctl daemon-reload && systemctl enable {SERVICE_NAME} && systemctl restart {SERVICE_NAME}",
-                key_path=cfg.ssh_key_path, connect_timeout=5,
-                command_timeout=15, htype=h.htype, use_sudo=True)
+                key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
+                command_timeout=DEPLOY_UPLOAD_TIMEOUT, htype=h.htype, use_sudo=True)
 
         # Step 6: Verify
         time.sleep(1)
         r = ssh_run(host=h.ip, command=f"curl -s http://localhost:{AGENT_PORT}/health 2>/dev/null",
-                    key_path=cfg.ssh_key_path, connect_timeout=5,
-                    command_timeout=5, htype=h.htype, use_sudo=False)
+                    key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
+                    command_timeout=DEPLOY_QUICK_TIMEOUT, htype=h.htype, use_sudo=False)
 
         if r.returncode == 0 and "ok" in r.stdout:
             fmt.step_ok(f"{h.label}: agent running on port {AGENT_PORT}")
@@ -144,8 +152,6 @@ def cmd_agent_status(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     # Check each host for the agent
-    import urllib.request
-    import urllib.error
 
     fmt.table_header(
         ("HOST", 16),
@@ -159,9 +165,8 @@ def cmd_agent_status(cfg: FreqConfig, pack, args) -> int:
         try:
             url = f"http://{h.ip}:{AGENT_PORT}/metrics"
             req = urllib.request.Request(url)
-            resp = urllib.request.urlopen(req, timeout=3)
+            resp = urllib.request.urlopen(req, timeout=AGENT_CHECK_TIMEOUT)
             data = resp.read().decode()
-            import json
             metrics = json.loads(data)
 
             cpu_pct = f"{metrics.get('cpu', {}).get('usage_pct', '?')}%"

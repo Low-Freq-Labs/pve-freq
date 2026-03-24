@@ -17,6 +17,10 @@ from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
 
+# Comms timeouts
+COMMS_CMD_TIMEOUT = 10
+COMMS_READ_TIMEOUT = 5
+
 COMMS_DIR = "/opt/freq-comms"
 INBOX = f"{COMMS_DIR}/inbox"
 OUTBOX = f"{COMMS_DIR}/outbox"
@@ -65,7 +69,7 @@ def _cmd_setup(cfg, args) -> int:
         command=f"sudo mkdir -p {INBOX} {OUTBOX} && sudo chmod -R 777 {COMMS_DIR}",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10, htype=relay.htype, use_sudo=False,
+        command_timeout=COMMS_CMD_TIMEOUT, htype=relay.htype, use_sudo=False,
     )
     if r.returncode == 0:
         fmt.step_ok(f"Comms directory ready at {relay.label}:{COMMS_DIR}")
@@ -108,7 +112,7 @@ def _cmd_send(cfg, args) -> int:
         command=f"printf '%s' {base64.b64encode(msg_data.encode()).decode()} | base64 -d > {INBOX}/{filename}",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10, htype=relay.htype, use_sudo=False,
+        command_timeout=COMMS_CMD_TIMEOUT, htype=relay.htype, use_sudo=False,
     )
 
     if r.returncode == 0:
@@ -135,7 +139,7 @@ def _cmd_check(cfg, args) -> int:
         command=f"ls -1t {INBOX}/*.json 2>/dev/null",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=10, htype=relay.htype, use_sudo=False,
+        command_timeout=COMMS_CMD_TIMEOUT, htype=relay.htype, use_sudo=False,
     )
 
     if r.returncode != 0 or not r.stdout.strip():
@@ -154,7 +158,7 @@ def _cmd_check(cfg, args) -> int:
             host=relay.ip, command=f"cat {f_path}",
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=5, htype=relay.htype, use_sudo=False,
+            command_timeout=COMMS_READ_TIMEOUT, htype=relay.htype, use_sudo=False,
         )
         if r2.returncode == 0:
             try:

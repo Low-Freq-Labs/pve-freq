@@ -16,6 +16,10 @@ from freq.core.config import FreqConfig
 from freq.core import fmt
 from freq.core.ssh import run as ssh_run
 
+# Doctor check timeouts
+DOCTOR_CMD_TIMEOUT = 5
+DOCTOR_PVE_TIMEOUT = 10
+
 
 def run(cfg: FreqConfig) -> int:
     """Run all diagnostic checks. Returns 0 if all pass, 1 if any fail."""
@@ -209,7 +213,7 @@ def _check_ssh_binary(cfg: FreqConfig) -> int:
     if shutil.which("ssh"):
         try:
             result = subprocess.run(
-                ["ssh", "-V"], capture_output=True, text=True, timeout=5
+                ["ssh", "-V"], capture_output=True, text=True, timeout=DOCTOR_CMD_TIMEOUT
             )
             ver = (result.stderr or result.stdout).strip()
             fmt.step_ok(f"SSH: {ver.split(',')[0] if ver else 'available'}")
@@ -250,7 +254,7 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
         r = ssh_run(
             host=h.ip, command="echo ok",
             key_path=cfg.ssh_key_path,
-            connect_timeout=3, command_timeout=5,
+            connect_timeout=3, command_timeout=DOCTOR_CMD_TIMEOUT,
             htype=h.htype, use_sudo=False,
         )
         if r.returncode == 0:
@@ -352,7 +356,7 @@ def _check_pve_nodes(cfg: FreqConfig) -> int:
         r = ssh_run(
             host=ip, command="sudo pvesh get /version --output-format json 2>/dev/null || echo '{}'",
             key_path=cfg.ssh_key_path,
-            connect_timeout=3, command_timeout=10,
+            connect_timeout=3, command_timeout=DOCTOR_PVE_TIMEOUT,
             htype="pve", use_sudo=False,
         )
         if r.returncode == 0 and "version" in r.stdout:

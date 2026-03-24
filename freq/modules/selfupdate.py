@@ -12,6 +12,11 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 import freq
 
+# Update timeouts
+UPDATE_FETCH_TIMEOUT = 30
+UPDATE_CHECK_TIMEOUT = 10
+UPDATE_APPLY_TIMEOUT = 60
+
 
 def _detect_install_method(cfg: FreqConfig) -> str:
     """Detect how FREQ was installed."""
@@ -67,7 +72,7 @@ def _update_git(cfg: FreqConfig) -> int:
 
     r = subprocess.run(
         ["git", "-C", cfg.install_dir, "fetch", "--dry-run"],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, timeout=UPDATE_FETCH_TIMEOUT,
     )
 
     if r.returncode != 0:
@@ -79,12 +84,12 @@ def _update_git(cfg: FreqConfig) -> int:
     # Check if behind
     r = subprocess.run(
         ["git", "-C", cfg.install_dir, "status", "-uno", "--porcelain"],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True, text=True, timeout=UPDATE_CHECK_TIMEOUT,
     )
 
     r2 = subprocess.run(
         ["git", "-C", cfg.install_dir, "log", "HEAD..@{u}", "--oneline"],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True, text=True, timeout=UPDATE_CHECK_TIMEOUT,
     )
 
     if r2.returncode == 0 and r2.stdout.strip():
@@ -106,7 +111,7 @@ def _update_git(cfg: FreqConfig) -> int:
             fmt.step_start("Pulling updates")
             r = subprocess.run(
                 ["git", "-C", cfg.install_dir, "pull", "--ff-only"],
-                capture_output=True, text=True, timeout=60,
+                capture_output=True, text=True, timeout=UPDATE_APPLY_TIMEOUT,
             )
             if r.returncode == 0:
                 fmt.step_ok("Updated successfully")

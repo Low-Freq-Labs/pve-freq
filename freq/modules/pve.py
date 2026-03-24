@@ -14,8 +14,13 @@ from freq.core import validate
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
+# PVE timeouts
+PVE_CMD_TIMEOUT = 30
+PVE_QUICK_TIMEOUT = 10
+PVE_SNAPSHOT_TIMEOUT = 120
 
-def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = 30) -> tuple:
+
+def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = PVE_CMD_TIMEOUT) -> tuple:
     """Execute a command on a PVE node via SSH + sudo.
 
     Returns (stdout, success). This is the foundation — every PVE
@@ -39,7 +44,7 @@ def _find_reachable_node(cfg: FreqConfig) -> str:
         r = ssh_run(
             host=ip, command="pvesh get /version --output-format json",
             key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=10, htype="pve", use_sudo=True,
+            command_timeout=PVE_QUICK_TIMEOUT, htype="pve", use_sudo=True,
         )
         if r.returncode == 0:
             return ip
@@ -247,7 +252,7 @@ def cmd_snapshot(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     fmt.step_start(f"Creating snapshot '{snap_name}' for VM {vmid}")
-    stdout, ok = _pve_cmd(cfg, node_ip, f"qm snapshot {vmid} {snap_name} --description 'Created by FREQ'", timeout=120)
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm snapshot {vmid} {snap_name} --description 'Created by FREQ'", timeout=PVE_SNAPSHOT_TIMEOUT)
 
     if ok:
         fmt.step_ok(f"Snapshot '{snap_name}' created for VM {vmid}")

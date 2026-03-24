@@ -11,6 +11,9 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig, load_hosts
 from freq.core.ssh import run as ssh_run
 
+# Bootstrap timeouts
+BOOTSTRAP_CMD_TIMEOUT = 10
+
 
 def cmd_bootstrap(cfg: FreqConfig, pack, args) -> int:
     """Bootstrap a host — deploy SSH key and verify connectivity."""
@@ -32,7 +35,7 @@ def cmd_bootstrap(cfg: FreqConfig, pack, args) -> int:
     r = ssh_run(host=ip, command="echo ok",
                 key_path=cfg.ssh_key_path,
                 connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=10,
+                command_timeout=BOOTSTRAP_CMD_TIMEOUT,
                 htype="linux", use_sudo=False)
 
     if r.returncode == 0:
@@ -50,7 +53,7 @@ def cmd_bootstrap(cfg: FreqConfig, pack, args) -> int:
     r = ssh_run(host=ip, command="whoami",
                 key_path=cfg.ssh_key_path,
                 connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=10,
+                command_timeout=BOOTSTRAP_CMD_TIMEOUT,
                 htype="linux", use_sudo=True)
 
     if r.returncode == 0 and "root" in r.stdout:
@@ -69,7 +72,7 @@ def cmd_bootstrap(cfg: FreqConfig, pack, args) -> int:
     r = ssh_run(host=ip, command=info_cmd,
                 key_path=cfg.ssh_key_path,
                 connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=10,
+                command_timeout=BOOTSTRAP_CMD_TIMEOUT,
                 htype="linux", use_sudo=False)
 
     if r.returncode == 0:
@@ -87,7 +90,7 @@ def cmd_bootstrap(cfg: FreqConfig, pack, args) -> int:
     r = ssh_run(host=ip, command=f"id {cfg.ssh_service_account}",
                 key_path=cfg.ssh_key_path,
                 connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=10,
+                command_timeout=BOOTSTRAP_CMD_TIMEOUT,
                 htype="linux", use_sudo=False)
 
     if r.returncode == 0:
@@ -170,7 +173,7 @@ def cmd_onboard(cfg: FreqConfig, pack, args) -> int:
     r = ssh_run(host=target, command="echo ok",
                 key_path=cfg.ssh_key_path,
                 connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=10,
+                command_timeout=BOOTSTRAP_CMD_TIMEOUT,
                 htype=htype, use_sudo=False)
 
     if r.returncode == 0:
