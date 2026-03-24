@@ -10,7 +10,9 @@ FREQ RBAC model:
 
 Users are stored in conf/users.conf and deployed across the fleet via SSH.
 """
+import getpass
 import os
+import re
 import shlex
 
 from freq.core import fmt
@@ -67,7 +69,6 @@ def _save_users(cfg: FreqConfig, users: list) -> bool:
 
 def _valid_username(username: str) -> bool:
     """Check if a username is valid (alphanumeric, hyphens, underscores, 1-32 chars)."""
-    import re
     return bool(re.match(r'^[a-z_][a-z0-9_-]{0,31}$', username))
 
 
@@ -294,7 +295,6 @@ def cmd_passwd(cfg: FreqConfig, pack, args) -> int:
     fmt.header(f"Change Password: {username}")
     fmt.blank()
 
-    import getpass
     try:
         new_pass = getpass.getpass(f"  New password for '{username}': ")
         confirm = getpass.getpass(f"  Confirm password: ")

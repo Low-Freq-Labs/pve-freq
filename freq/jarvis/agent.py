@@ -18,6 +18,7 @@ Architecture:
 """
 import json
 import os
+import shutil
 import time
 
 from freq.core import fmt
@@ -605,7 +606,6 @@ def _cmd_destroy(cfg: FreqConfig, args) -> int:
 
     # Remove CLAUDE.md
     claude_md_dir = os.path.join(cfg.data_dir, "jarvis", "agents", name)
-    import shutil
     if os.path.isdir(claude_md_dir):
         shutil.rmtree(claude_md_dir)
 

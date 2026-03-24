@@ -5,6 +5,7 @@ Format: HOST|KEY|VALUE (pipe-delimited), encrypted at rest.
 
 Compatible with v1.0.0 vault files — same algorithm, same key derivation.
 """
+import getpass
 import hashlib
 import os
 import subprocess
@@ -281,7 +282,6 @@ def _vault_cmd_set(cfg: FreqConfig, args) -> int:
 
     # Prompt for value if not provided (for passwords)
     if not value:
-        import getpass
         try:
             value = getpass.getpass(f"  Value for '{cred_key}': ")
         except (EOFError, KeyboardInterrupt):
