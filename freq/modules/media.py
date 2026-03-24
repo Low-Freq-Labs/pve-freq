@@ -28,7 +28,8 @@ def _get_vault_credential(cfg, vault_key):
     try:
         from freq.modules.vault import vault_get
         return vault_get(cfg, vault_key) or ""
-    except Exception:
+    except (ImportError, OSError) as e:
+        logger.warn(f"vault credential lookup failed for {vault_key}: {e}")
         return ""
 
 

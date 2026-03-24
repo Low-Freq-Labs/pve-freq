@@ -298,8 +298,8 @@ def _cmd_list(cfg, args) -> int:
             fmt.blank()
             fmt.footer()
             return 0
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warn(f"failed to load agent registry: {e}")
 
     fmt.line(f"  {fmt.C.DIM}No specialists registered.{fmt.C.RESET}")
     fmt.info("Create one: freq specialist create <host> --role <role>")

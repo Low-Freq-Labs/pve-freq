@@ -11,6 +11,7 @@ FREQ RBAC model:
 Users are stored in conf/users.conf and deployed across the fleet via SSH.
 """
 import os
+import shlex
 
 from freq.core import fmt
 from freq.core import resolve
@@ -283,6 +284,10 @@ def cmd_passwd(cfg: FreqConfig, pack, args) -> int:
         fmt.error("Usage: freq passwd <username>")
         return 1
 
+    if not validate.username(username):
+        fmt.error(f"Invalid username: {username}")
+        return 1
+
     fmt.header(f"Change Password: {username}")
     fmt.blank()
 
@@ -313,9 +318,10 @@ def cmd_passwd(cfg: FreqConfig, pack, args) -> int:
 
     # Use chpasswd via SSH (requires sudo, full path for non-login shells)
     escaped_pass = new_pass.replace("'", "'\\''")
+    safe_user = shlex.quote(username)
     results = ssh_run_many(
         hosts=hosts,
-        command=f"echo '{username}:{escaped_pass}' | sudo /usr/sbin/chpasswd",
+        command=f"echo {safe_user}':'{shlex.quote(new_pass)} | sudo /usr/sbin/chpasswd",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=15,
@@ -349,6 +355,10 @@ def cmd_install_user(cfg: FreqConfig, pack, args) -> int:
         fmt.error("Usage: freq install-user <username>")
         return 1
 
+    if not validate.username(username):
+        fmt.error(f"Invalid username: {username}")
+        return 1
+
     fmt.header(f"Install User: {username}")
     fmt.blank()
 
@@ -361,9 +371,10 @@ def cmd_install_user(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     # Create user with home directory
+    safe_user = shlex.quote(username)
     results = ssh_run_many(
         hosts=hosts,
-        command=f"id {username} >/dev/null 2>&1 && echo 'EXISTS' || useradd -m -s /bin/bash {username}",
+        command=f"id {safe_user} >/dev/null 2>&1 && echo 'EXISTS' || useradd -m -s /bin/bash {safe_user}",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=15,
