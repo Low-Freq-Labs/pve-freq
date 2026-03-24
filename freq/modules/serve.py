@@ -166,9 +166,9 @@ def _bg_probe_infra():
                         m["total_size"] = pools[0]["size"] if len(pools) == 1 else str(round(total_size/1024, 1)) + "T"
                     # Parse alert count from raw JSON
                     try:
-                        alerts = _json.loads(r2.stdout) if r2.returncode == 0 else []
+                        alerts = json.loads(r2.stdout) if r2.returncode == 0 else []
                         m["alerts"] = len(alerts) if isinstance(alerts, list) else 0
-                    except (_json.JSONDecodeError, ValueError):
+                    except (json.JSONDecodeError, ValueError):
                         m["alerts"] = 0
             elif dt == "switch":
                 # Switch requires RSA key (no ed25519 support)
@@ -317,7 +317,7 @@ def _bg_probe_health():
         wd_path = "/var/lib/freq-watchdog/status.json"
         if os.path.isfile(wd_path):
             with open(wd_path) as f:
-                wd_vms = _json.load(f).get("watch", {}).get("vms", [])
+                wd_vms = json.load(f).get("watch", {}).get("vms", [])
             for wv in wd_vms:
                 vmid = wv.get("vmid", 0)
                 node = wv.get("node", "")
@@ -1632,8 +1632,8 @@ class FreqHandler(BaseHTTPRequestHandler):
 
         def _parse(raw):
             try:
-                return _json.loads(raw)
-            except (_json.JSONDecodeError, ValueError):
+                return json.loads(raw)
+            except (json.JSONDecodeError, ValueError):
                 return None
 
         if action == "status":
