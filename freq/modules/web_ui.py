@@ -304,6 +304,97 @@ tr:hover td{background:var(--card-hover)}
 .btn-row{display:flex;gap:8px;margin-top:8px}
 .flex-1{flex:1}
 .flex-fill{flex:1;min-width:0}
+
+/* === Utility classes (Tier 4B round 2-4) === */
+.flex-row-24{display:flex;gap:24px;margin-top:4px}
+.flex-row-8-center{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+.flex-between-mb8{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.flex-between-mb16{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.flex-between-mb12{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.flex-between{display:flex;justify-content:space-between;align-items:center}
+.flex-wrap-8-mb12{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.flex-gap-4{display:flex;gap:4px}
+.flex-gap-6{display:flex;gap:6px}
+.flex-border-row{display:flex;gap:8px;padding:6px 0;border-top:1px solid var(--border);font-size:12px;align-items:center}
+.flex-gap-16-center{display:flex;align-items:center;gap:16px}
+.flex-col-10-500{display:flex;flex-direction:column;gap:10px;max-width:500px}
+.flex-between-pad-top{padding:12px 16px 0;display:flex;justify-content:space-between;align-items:center}
+.flex-row-8-mb16-center{display:flex;gap:8px;margin-bottom:16px;align-items:center;min-height:44px}
+.flex-row-8-mb12{display:flex;gap:8px;margin-bottom:12px}
+.flex-wrap-8-mb12-wrap{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.pad-v8-fs11{padding:8px 0;font-size:11px}
+.pad-v8-warn{padding:8px 0;font-size:11px;color:var(--yellow)}
+.pill-sm{padding:4px 10px;font-size:12px}
+.pill-warn-sm{padding:3px 10px;font-size:12px;color:var(--yellow)}
+.pill-warn-xs{padding:3px 8px;font-size:11px;color:var(--yellow)}
+.pill-err-xs{padding:3px 8px;font-size:12px;color:var(--red)}
+.pill-ok-sm{padding:3px 10px;font-size:11px;color:var(--green)}
+.pill-xs{padding:3px 8px;font-size:11px}
+.pill-pad6{padding:6px 10px;font-size:11px}
+.pill-warn-4-10{padding:4px 10px;font-size:12px;color:var(--yellow)}
+.pill-4-10-fs11{padding:4px 10px;font-size:11px}
+.pill-err-3-8{padding:3px 8px;font-size:11px;color:var(--red)}
+.pill-ok-3-8{padding:3px 8px;font-size:11px;color:var(--green)}
+.pill-ok-3-10{padding:3px 10px;font-size:12px;color:var(--green)}
+.pill-purple-xs{padding:4px 12px;font-size:12px;color:var(--purple-light)}
+.pill-purple-2-8{padding:2px 8px;font-size:12px;color:var(--purple-light)}
+.pill-2-8{padding:2px 8px;font-size:12px}
+.pill-active-lg{color:var(--purple-light);border-color:var(--purple);padding:10px 20px;margin-bottom:12px}
+.pill-active-self{color:var(--purple-light);border-color:var(--purple);align-self:flex-start;padding:10px 20px}
+.pad-h16-fs12{padding:8px 16px;font-size:12px}
+.fs-11{font-size:11px}
+.fs-12{font-size:12px}
+.fs-12-fade{font-size:12px;opacity:0.6}
+.fs-12-dim{font-size:12px;opacity:0.6;font-weight:400}
+.mono-11{font-family:monospace;font-size:11px}
+.section-label-pl{color:var(--purple-light);font-size:13px;margin-bottom:12px}
+.section-label-pl-ls{color:var(--purple-light);font-size:13px;margin-bottom:12px;letter-spacing:1px}
+.h-60{height:60px}
+.h-50{height:50px}
+.w-30{width:30px}
+.min-w-120-center{min-width:120px;text-align:center}
+.my-8{margin:8px 0}
+.mb-8{margin-bottom:8px}
+.mb-12{margin-bottom:12px}
+.mb-16{margin-bottom:16px}
+.mb-24{margin-bottom:24px}
+.mb-0{margin-bottom:0}
+.m-0{margin:0}
+.mt-4{margin-top:4px}
+.mt-10{margin-top:10px}
+.mt-20{margin-top:20px}
+.stat-big-red{font-size:20px;font-weight:700;color:var(--red)}
+.stat-big-green{font-size:20px;font-weight:700;color:var(--green)}
+.stat-big-orange{font-size:20px;font-weight:700;color:var(--orange)}
+.stat-big-blue{font-size:20px;font-weight:700;color:var(--blue)}
+.card-box{background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:14px;margin-bottom:16px}
+.text-dim-pad12{color:var(--text-dim);padding:12px 0}
+.close-x{cursor:pointer;color:var(--text-dim);font-size:18px}
+.opacity-5{opacity:0.5}
+.opacity-7{opacity:0.7}
+.border-red{border-color:var(--red)}
+.meta-flex{font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px}
+.input-sm{background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:80px}
+.grid-auto-280{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.grid-auto-300{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.grid-auto-240{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.label-sub-10{font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px}
+.label-sub-10-tight{font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px}
+.cursor-ptr{cursor:pointer}
+.c-dim-mt8{color:var(--text-dim);margin-top:8px}
+.c-dim-fs12{color:var(--text-dim);font-size:12px}
+.c-dim-fs11-mt8{color:var(--text-dim);font-size:11px;margin-top:8px}
+.c-dim-fs11{color:var(--text-dim);font-size:11px}
+.c-dim-mb12-fs12{color:var(--text-dim);margin-bottom:12px;font-size:12px}
+.fs-10-dim-600-ls{font-size:10px;font-weight:600;letter-spacing:1px;color:var(--text-dim)}
+.fs-12-dim-mt2{font-size:12px;color:var(--text-dim);margin-top:2px}
+.fs-11-dim-mt2{font-size:11px;color:var(--text-dim);margin-top:2px}
+.fs-11-dim-mb10-ls{font-size:11px;color:var(--text-dim);margin-bottom:10px;letter-spacing:0.5px}
+.fs-12-dim-pad4{font-size:12px;color:var(--text-dim);padding:4px 0}
+.skel-mt12{min-height:60px;margin-top:12px;display:none}
+.text-center{text-align:center}
+.pos-rel{position:relative}
+.toggle-sw{position:relative;width:40px;height:22px;cursor:pointer;display:block;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -332,7 +423,7 @@ tr:hover td{background:var(--card-hover)}
 <!-- ═══ MAIN ═══ -->
 <div class="mn">
 <div class="mn-header">
-  <div style="display:flex;align-items:center;gap:16px">
+  <div class="flex-gap-16-center">
     <pre data-view="home" style="font-family:'Courier New',monospace;font-size:5px;line-height:1.1;margin:0;color:var(--purple-light);cursor:pointer;opacity:0.9"> ██████╗ ██╗   ██╗███████╗   ███████╗██████╗ ███████╗ ██████╗
  ██╔══██╗██║   ██║██╔════╝   ██╔════╝██╔══██╗██╔════╝██╔═══██╗
  ██████╔╝██║   ██║█████╗     █████╗  ██████╔╝█████╗  ██║   ██║
@@ -340,9 +431,9 @@ tr:hover td{background:var(--card-hover)}
  ██║      ╚████╔╝ ███████╗   ██║     ██║  ██║███████╗╚██████╔╝
  ╚═╝       ╚═══╝  ╚══════╝   ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝</pre><span style="font-size:12px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase" id="nav-ver"></span>
     <div style="width:1px;height:24px;background:var(--border)"></div>
-    <div><h1 id="page-title" style="font-size:16px">Home</h1><div class="tagline" id="header-tagline" style="font-size:11px"></div></div>
+    <div><h1 id="page-title" style="font-size:16px">Home</h1><div class="tagline" id="header-tagline" class="fs-11"></div></div>
   </div>
-  <div style="display:flex;align-items:center;gap:16px">
+  <div class="flex-gap-16-center">
     <button id="header-user-btn" onclick="openUserMenu()" style="display:none;background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 14px;border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--input-border)'"><span id="header-user-icon" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></span><span id="header-user-name" style="font-weight:600;text-transform:uppercase;letter-spacing:0.5px"></span><span id="header-user-role" style="font-size:10px;color:var(--text-dim)"></span></button>
     <span style="font-family:'Courier New',monospace;font-size:24px;font-weight:700;color:var(--purple-light);letter-spacing:2px;opacity:0.8" id="header-time"></span>
   </div>
@@ -370,8 +461,8 @@ tr:hover td{background:var(--card-hover)}
   <button class="fleet-btn view-btn" data-view="lab" data-view="lab">LAB TOOLS</button>
   <div class="flex-1"></div>
   <button class="fleet-btn" onclick="openNewTool()" id="btn-new-tool" style="opacity:0.7;display:none">+ NEW TOOL</button>
-  <button class="fleet-btn" onclick="nav('system')" style="opacity:0.7">&#9881; SETTINGS</button>
-  <button class="fleet-btn" onclick="openLayoutConfig()" id="layout-btn" style="opacity:0.7">&#9776; LAYOUT</button>
+  <button class="fleet-btn" onclick="nav('system')" class="opacity-7">&#9881; SETTINGS</button>
+  <button class="fleet-btn" data-action="openLayoutConfig" id="layout-btn" class="opacity-7">&#9776; LAYOUT</button>
   <button class="fleet-btn" onclick="refreshCurrentView()">REFRESH</button>
 </div></div>
 <!-- HOME VIEW -->
@@ -383,7 +474,7 @@ tr:hover td{background:var(--card-hover)}
   <div style="font-size:36px;opacity:0.15;margin-bottom:16px">&#9776;</div>
   <div style="font-size:16px;color:var(--text);margin-bottom:8px">Your Dashboard is Empty</div>
   <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.6">Click LAYOUT to add widgets from Fleet, Docker, Security, and Lab Tools. Or hit Quick Start for a ready-made dashboard.</div>
-  <button class="fleet-btn" onclick="openLayoutConfig()" class="c-purple-active">&#9776; CONFIGURE DASHBOARD</button>
+  <button class="fleet-btn" data-action="openLayoutConfig" class="c-purple-active">&#9776; CONFIGURE DASHBOARD</button>
 </div>
 <!-- Footer -->
 <div style="text-align:center;padding:32px 0 16px;border-top:1px solid var(--border);margin-top:24px">
@@ -423,7 +514,7 @@ tr:hover td{background:var(--card-hover)}
 </div>
 <!-- Infrastructure group -->
 <div class="section layout-section" id="fleet-sec-infra">
-  <div class="section-header"><h3 onclick="toggleSection(this.parentNode)" style="cursor:pointer">Infrastructure</h3><div class="flex-1"></div><input id="fleet-filter" placeholder="&#128269; Filter..." oninput="filterFleetCards(this.value)" onclick="event.stopPropagation()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit;width:180px;outline:none;transition:border-color 0.25s ease" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'"><span class="chev" onclick="toggleSection(this.parentNode)" style="cursor:pointer;margin-left:8px">▾</span></div>
+  <div class="section-header"><h3 class="cursor-ptr">Infrastructure</h3><div class="flex-1"></div><input id="fleet-filter" placeholder="&#128269; Filter..." oninput="filterFleetCards(this.value)" onclick="event.stopPropagation()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit;width:180px;outline:none;transition:border-color 0.25s ease" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'"><span class="chev" style="cursor:pointer;margin-left:8px">▾</span></div>
   <div class="section-body"><div id="metrics-cards"></div></div>
 </div>
 <!-- Overview -->
@@ -434,15 +525,15 @@ tr:hover td{background:var(--card-hover)}
       <div id="overview-physical-cards"><!-- populated dynamically from fleet config --></div>
       <div class="host-card">
         <div class="host-head"><h3 class="c-purple">PVE NODES</h3><div class="host-meta" id="pve-node-count"><span>NODES</span><span>·</span><span>HYPERVISOR</span></div></div>
-        <div class="divider-light"><div id="home-pve-summary"><div class="skeleton" style="height:60px"></div></div></div>
+        <div class="divider-light"><div id="home-pve-summary"><div class="skeleton h-60" ></div></div></div>
       </div>
       <div class="host-card">
         <div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PVE CLUSTER</span><span>·</span><span>PROXMOX</span></div></div>
-        <div class="divider-light"><div id="home-infra"><div class="skeleton" style="height:60px"></div></div></div>
+        <div class="divider-light"><div id="home-infra"><div class="skeleton h-60" ></div></div></div>
       </div>
       <div class="host-card">
         <div class="host-head"><h3 class="c-green">MEDIA STACK</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div>
-        <div class="divider-light"><div id="home-media"><div class="skeleton" style="height:60px"></div></div></div>
+        <div class="divider-light"><div id="home-media"><div class="skeleton h-60" ></div></div></div>
       </div>
     </div>
   </div>
@@ -451,11 +542,11 @@ tr:hover td{background:var(--card-hover)}
 <div class="section collapsed layout-section" id="fleet-lab-section" style="margin-top:20px;display:none">
   <div class="section-header"><h3>Lab Equipment</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div id="fleet-lab-cards" class="cards" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))"></div>
+    <div id="fleet-lab-cards" class="cards grid-auto-240" ></div>
   </div>
 </div>
 <!-- Agents -->
-<div class="section layout-section" id="fleet-sec-agents" style="margin-top:20px">
+<div class="section layout-section" id="fleet-sec-agents" class="mt-20">
   <div class="section-header"><h3>Agents</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="stats" id="agent-stats"></div>
@@ -469,7 +560,7 @@ tr:hover td{background:var(--card-hover)}
 <div class="section layout-section" id="fleet-sec-specialists">
   <div class="section-header"><h3>Specialists</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="cards" style="margin-bottom:12px">
+    <div class="cards mb-12" >
       <div class="crd"><h3>Create Specialist</h3><p><code>freq specialist create &lt;host&gt; --role dev</code></p></div>
       <div class="crd"><h3>Check Health</h3><p><code>freq specialist health &lt;host&gt;</code></p></div>
       <div class="crd"><h3>Roles</h3><p>sandbox, dev, infra, security, media</p></div>
@@ -484,10 +575,10 @@ tr:hover td{background:var(--card-hover)}
 <div class="section layout-section" id="docker-sec-containers">
   <div class="section-header"><h3>Containers</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
-      <button class="fleet-btn view-btn docker-sub active-view" data-view="docker-services" onclick="switchDockerSub('services')">SERVICES</button>
-      <button class="fleet-btn view-btn docker-sub" data-view="docker-media" onclick="switchDockerSub('media')">MEDIA</button>
-      <button class="fleet-btn view-btn docker-sub" data-view="docker-all" onclick="switchDockerSub('all')">ALL</button>
+    <div class="flex-row-8-center">
+      <button class="fleet-btn view-btn docker-sub active-view" data-view="docker-services" data-action="switchDockerSub" data-arg="services">SERVICES</button>
+      <button class="fleet-btn view-btn docker-sub" data-view="docker-media" data-action="switchDockerSub" data-arg="media">MEDIA</button>
+      <button class="fleet-btn view-btn docker-sub" data-view="docker-all" data-action="switchDockerSub" data-arg="all">ALL</button>
     </div>
     <div class="stats" id="container-stats"></div>
     <!-- SERVICES sub-view (default) -->
@@ -504,7 +595,7 @@ tr:hover td{background:var(--card-hover)}
     </div>
     <!-- MEDIA sub-view -->
     <div id="docker-sub-media" class="d-none">
-      <div id="media-container-cards" class="cards" style="margin-bottom:16px"></div>
+      <div id="media-container-cards" class="cards mb-16" ></div>
       <div class="section">
         <div class="section-header"><h3>Downloads</h3><span class="chev">▾</span></div>
         <div class="section-body">
@@ -529,7 +620,7 @@ tr:hover td{background:var(--card-hover)}
 <div class="section layout-section" id="sec-users">
   <div class="section-header"><h3>Users</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="exec-bar"><input id="u-name" placeholder="Username"><select id="u-role"><option>viewer</option><option selected>operator</option><option>admin</option></select><button onclick="userCreate()">Create User</button></div>
+    <div class="exec-bar"><input id="u-name" placeholder="Username"><select id="u-role"><option>viewer</option><option selected>operator</option><option>admin</option></select><button data-action="userCreate">Create User</button></div>
     <div id="users-c"></div>
   </div>
 </div>
@@ -540,14 +631,14 @@ tr:hover td{background:var(--card-hover)}
 <div class="section layout-section" id="sec-apikeys">
   <div class="section-header"><h3>API Keys</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="exec-bar"><input id="v-key" placeholder="Key name"><input id="v-val" placeholder="Value" type="password"><select id="v-host"><option>DEFAULT</option></select><button onclick="vaultSet()">Store</button></div>
+    <div class="exec-bar"><input id="v-key" placeholder="Key name"><input id="v-val" placeholder="Value" type="password"><select id="v-host"><option>DEFAULT</option></select><button data-action="vaultSet">Store</button></div>
     <div id="vault-c"></div>
   </div>
 </div>
 <div class="section layout-section" id="sec-audit">
   <div class="section-header"><h3>Audit</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <div class="flex-wrap-8-mb12-wrap">
       <button class="fleet-btn c-purple-active" data-audit="all">FULL AUDIT</button>
       <button class="fleet-btn" data-audit="ssh-root">SSH ROOT LOGIN</button>
       <button class="fleet-btn" data-audit="ssh-pass">SSH PASSWORD AUTH</button>
@@ -564,8 +655,8 @@ tr:hover td{background:var(--card-hover)}
 <div class="section layout-section" id="sec-harden">
   <div class="section-header"><h3>Hardening</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="fleet-btn" onclick="runHarden()" class="c-purple-active">FULL HARDENING AUDIT</button>
+    <div class="flex-wrap-8-mb12-wrap">
+      <button class="fleet-btn" data-action="runHarden" class="c-purple-active">FULL HARDENING AUDIT</button>
       <button class="fleet-btn" onclick="hardenAction('disable-root')">DISABLE ROOT SSH</button>
       <button class="fleet-btn" onclick="hardenAction('key-only')">ENFORCE KEY-ONLY AUTH</button>
       <button class="fleet-btn" onclick="hardenAction('disable-empty')">BLOCK EMPTY PASSWORDS</button>
@@ -579,7 +670,7 @@ tr:hover td{background:var(--card-hover)}
   <div class="section-header"><h3>Risk Analysis</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="chain" id="risk-chain"></div>
-    <p style="color:var(--text-dim);margin-bottom:12px;font-size:12px">Break any link in the kill chain = no remote recovery.</p>
+    <p class="c-dim-mb12-fs12">Break any link in the kill chain = no remote recovery.</p>
     <table><thead><tr><th>Target</th><th>Risk Level</th><th>Primary Impact</th><th>Recovery</th></tr></thead><tbody id="risk-tbl"></tbody></table>
   </div>
 </div>
@@ -588,7 +679,7 @@ tr:hover td{background:var(--card-hover)}
   <div class="section-body"><div id="policies-c"></div></div>
 </div>
 <!-- Locked Vault -->
-<div class="section layout-section" id="sec-vault" style="border-color:var(--red)">
+<div class="section layout-section" id="sec-vault" class="border-red">
   <div class="section-header"><h3 style="background:rgba(248,81,73,0.15)">&#128274; Vault</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="vault-locked">
@@ -599,16 +690,16 @@ tr:hover td{background:var(--card-hover)}
         <div style="max-width:300px;margin:0 auto;display:flex;flex-direction:column;gap:8px">
           <input id="vault-auth-user" placeholder="Admin username" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
           <input id="vault-auth-pass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')unlockVault()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
-          <button class="fleet-btn" onclick="unlockVault()" style="color:var(--red);border-color:var(--red)">UNLOCK VAULT</button>
+          <button class="fleet-btn" data-action="unlockVault" style="color:var(--red);border-color:var(--red)">UNLOCK VAULT</button>
         </div>
       </div>
     </div>
     <div id="vault-unlocked" class="d-none">
-      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+      <div class="flex-row-8-center">
         <span style="color:var(--green);font-size:12px;font-weight:600">&#128275; UNLOCKED</span>
-        <button class="fleet-btn vault-tab active-view" data-vtab="users" onclick="switchVaultTab('users')">USERS</button>
-        <button class="fleet-btn vault-tab" data-vtab="apikeys" onclick="switchVaultTab('apikeys')">API KEYS</button>
-        <button class="fleet-btn vault-tab" data-vtab="all" onclick="switchVaultTab('all')">ALL</button>
+        <button class="fleet-btn vault-tab active-view" data-vtab="users" data-action="switchVaultTab" data-arg="users">USERS</button>
+        <button class="fleet-btn vault-tab" data-vtab="apikeys" data-action="switchVaultTab" data-arg="apikeys">API KEYS</button>
+        <button class="fleet-btn vault-tab" data-vtab="all" data-action="switchVaultTab" data-arg="all">ALL</button>
         <div class="flex-1"></div>
         <button class="fleet-btn" onclick="lockVault()" style="padding:3px 10px;font-size:12px;color:var(--red)">LOCK</button>
       </div>
@@ -627,7 +718,7 @@ tr:hover td{background:var(--card-hover)}
 
 <!-- ════════ INFRA ════════ -->
 <div id="p-infra" class="page">
-<div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;min-height:44px">
+<div class="flex-row-8-mb16-center">
   <button class="fleet-btn" data-view="home" class="c-purple-active">&#9664; HOME</button>
   <button class="fleet-btn" onclick="loadInfraPage()">REFRESH</button>
 </div>
@@ -640,30 +731,30 @@ tr:hover td{background:var(--card-hover)}
   </div>
 </div>
 <div class="section collapsed">
-  <div class="section-header"><h3>pfSense <span id="pf-meta" style="font-size:12px;opacity:0.6;font-weight:400">FIREWALL</span></h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>pfSense <span id="pf-meta" class="fs-12-dim">FIREWALL</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="fleet-btn" onclick="pfAction('status')">STATUS</button><button class="fleet-btn" onclick="pfAction('rules')">RULES</button><button class="fleet-btn" onclick="pfAction('nat')">NAT</button><button class="fleet-btn" onclick="pfAction('states')">STATES</button><button class="fleet-btn" onclick="pfAction('interfaces')">INTERFACES</button></div>
+    <div class="flex-wrap-8-mb12"><button class="fleet-btn" data-action="pfAction" data-arg="status">STATUS</button><button class="fleet-btn" data-action="pfAction" data-arg="rules">RULES</button><button class="fleet-btn" data-action="pfAction" data-arg="nat">NAT</button><button class="fleet-btn" onclick="pfAction('states')">STATES</button><button class="fleet-btn" onclick="pfAction('interfaces')">INTERFACES</button></div>
     <div class="exec-out" id="pf-out">Click an action above.</div>
   </div>
 </div>
 <div class="section collapsed">
-  <div class="section-header"><h3>TrueNAS <span id="tn-meta" style="font-size:12px;opacity:0.6;font-weight:400">NETWORK STORAGE</span></h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>TrueNAS <span id="tn-meta" class="fs-12-dim">NETWORK STORAGE</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="fleet-btn" onclick="tnAction('status')">SYSTEM</button><button class="fleet-btn" onclick="tnAction('pools')">POOLS</button><button class="fleet-btn" onclick="tnAction('health')">HEALTH</button><button class="fleet-btn" onclick="tnAction('datasets')">DATASETS</button><button class="fleet-btn" onclick="tnAction('shares')">SHARES</button><button class="fleet-btn" onclick="tnAction('alerts')">ALERTS</button></div>
+    <div class="flex-wrap-8-mb12"><button class="fleet-btn" data-action="tnAction" data-arg="status">SYSTEM</button><button class="fleet-btn" data-action="tnAction" data-arg="pools">POOLS</button><button class="fleet-btn" data-action="tnAction" data-arg="health">HEALTH</button><button class="fleet-btn" data-action="tnAction" data-arg="datasets">DATASETS</button><button class="fleet-btn" data-action="tnAction" data-arg="shares">SHARES</button><button class="fleet-btn" data-action="tnAction" data-arg="alerts">ALERTS</button></div>
     <div class="exec-out" id="tn-out">Click an action above.</div>
   </div>
 </div>
 <div class="section collapsed">
-  <div class="section-header"><h3>iDRAC <span style="font-size:12px;opacity:0.6;font-weight:400">BMC Management</span></h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>iDRAC <span class="fs-12-dim">BMC Management</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="fleet-btn" onclick="idracAction('status')">SYSTEM INFO</button><button class="fleet-btn" onclick="idracAction('sensors')">SENSORS</button><button class="fleet-btn" onclick="idracAction('power')">POWER</button><button class="fleet-btn" onclick="idracAction('sel')">EVENT LOG</button></div>
+    <div class="flex-wrap-8-mb12"><button class="fleet-btn" onclick="idracAction('status')">SYSTEM INFO</button><button class="fleet-btn" onclick="idracAction('sensors')">SENSORS</button><button class="fleet-btn" data-action="idracAction" data-arg="power">POWER</button><button class="fleet-btn" onclick="idracAction('sel')">EVENT LOG</button></div>
     <div id="idrac-out"></div>
   </div>
 </div>
 <div class="section collapsed">
-  <div class="section-header"><h3>Switch <span id="sw-meta" style="font-size:12px;opacity:0.6;font-weight:400">L3 SWITCH</span></h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Switch <span id="sw-meta" class="fs-12-dim">L3 SWITCH</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="fleet-btn" onclick="swAction('status')">STATUS</button><button class="fleet-btn" onclick="swAction('vlans')">VLANS</button><button class="fleet-btn" onclick="swAction('interfaces')">INTERFACES</button><button class="fleet-btn" onclick="swAction('mac')">MAC TABLE</button></div>
+    <div class="flex-wrap-8-mb12"><button class="fleet-btn" data-action="swAction" data-arg="status">STATUS</button><button class="fleet-btn" data-action="swAction" data-arg="vlans">VLANS</button><button class="fleet-btn" onclick="swAction('interfaces')">INTERFACES</button><button class="fleet-btn" data-action="swAction" data-arg="mac">MAC TABLE</button></div>
     <div class="exec-out" id="sw-out">Click an action above.</div>
   </div>
 </div>
@@ -671,7 +762,7 @@ tr:hover td{background:var(--card-hover)}
 
 <!-- ════════ SYSTEM ════════ -->
 <div id="p-system" class="page">
-<div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;min-height:44px">
+<div class="flex-row-8-mb16-center">
   <button class="fleet-btn" data-view="home" class="c-purple-active">&#9664; HOME</button>
   <button class="fleet-btn" onclick="loadSystemPage()">REFRESH</button>
 </div>
@@ -724,7 +815,7 @@ tr:hover td{background:var(--card-hover)}
   <div class="section-header"><h3>Notifications</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="notify-status"></div>
-    <button class="fleet-btn" onclick="testNotify()" class="mt-12">SEND TEST</button>
+    <button class="fleet-btn" data-action="testNotify" class="mt-12">SEND TEST</button>
     <div id="notify-result" class="mt-8"></div>
   </div>
 </div>
@@ -844,6 +935,29 @@ document.addEventListener('click',function(e){
   if(ft){fleetTool(ft.dataset.fqc);return;}
   var ac=e.target.closest('[data-audit]');
   if(ac){runAuditCheck(ac.dataset.audit);return;}
+  var cx=e.target.closest('.close-x');
+  if(cx){closeModal();return;}
+  var da=e.target.closest('[data-action]');
+  if(da){
+    var a=da.dataset.action,g=da.dataset.arg||'';
+    if(a==='vmPower'){vmPower(+da.dataset.vmid,g);return;}
+    if(a==='vmDestroy'){vmDestroy(+da.dataset.vmid);return;}
+    if(a==='vmSnap'){vmSnap(+da.dataset.vmid);return;}
+    if(a==='openVmInfo'){openVmInfo(da.dataset.label,'',+da.dataset.vmid);return;}
+    if(a==='vaultReveal'){vaultReveal(da.dataset.uid,da.dataset.host,da.dataset.key);return;}
+    if(a==='vaultCopy'){vaultCopy(da.dataset.host,da.dataset.key);return;}
+    if(a==='vaultDelGroup'){vaultDelGroup(g);return;}
+    if(a==='labDockerAction'){labDockerAction(da.dataset.name,g);return;}
+    if(a==='hdLogs'){hdLogs(da);return;}
+    if(a==='hdExec'){hdExec(da);return;}
+    if(a==='hdDiagnose'){hdDiagnose(da);return;}
+    if(a==='togglePveGroup'){togglePveGroup(da);return;}
+    if(a==='clearHarden'){document.getElementById('harden-c').innerHTML='';return;}
+    var fns={sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll};
+    if(fns[a]){fns[a]();return;}
+    var argFns={tnAction:tnAction,swAction:swAction,pfAction:pfAction,idracAction:idracAction,switchVaultTab:switchVaultTab,switchDockerSub:switchDockerSub,toggleMediaTag:toggleMediaTag,runHostUpdate:runHostUpdate,sshdRestartHost:sshdRestartHost,ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart};
+    if(argFns[a]){argFns[a](g);return;}
+  }
 });
 /* === Global Settings === */
 function _loadSettings(){
@@ -937,7 +1051,7 @@ var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switc
 function _showApp(){
   /* Show loading screen while prefetching data */
   var login=document.getElementById('login-overlay');
-  login.innerHTML='<div style="text-align:center"><pre style="font-family:\'Courier New\',monospace;font-size:10px;line-height:1.1;color:var(--purple-light);display:inline-block;text-align:left;margin-bottom:24px"> \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557   \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557\n \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d   \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\n \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551   \u2588\u2588\u2551\n \u2588\u2588\u2554\u2550\u2550\u2550\u255d \u255a\u2588\u2588\u2557 \u2588\u2588\u2554\u255d\u2588\u2588\u2554\u2550\u2550\u255d     \u2588\u2588\u2554\u2550\u2550\u255d  \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u255d  \u2588\u2588\u2551\u2584\u2584 \u2588\u2588\u2551\n \u2588\u2588\u2551      \u255a\u2588\u2588\u2588\u2588\u2554\u255d \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2551     \u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\n \u255a\u2550\u255d       \u255a\u2550\u2550\u2550\u255d  \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d   \u255a\u2550\u255d     \u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u2550\u255d\u2550\u2550\u255d</pre>'+
+  login.innerHTML='<div class="text-center"><pre style="font-family:\'Courier New\',monospace;font-size:10px;line-height:1.1;color:var(--purple-light);display:inline-block;text-align:left;margin-bottom:24px"> \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557   \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557\n \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d   \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\n \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551   \u2588\u2588\u2551\n \u2588\u2588\u2554\u2550\u2550\u2550\u255d \u255a\u2588\u2588\u2557 \u2588\u2588\u2554\u255d\u2588\u2588\u2554\u2550\u2550\u255d     \u2588\u2588\u2554\u2550\u2550\u255d  \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u255d  \u2588\u2588\u2551\u2584\u2584 \u2588\u2588\u2551\n \u2588\u2588\u2551      \u255a\u2588\u2588\u2588\u2588\u2554\u255d \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2551     \u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\n \u255a\u2550\u255d       \u255a\u2550\u2550\u2550\u255d  \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d   \u255a\u2550\u255d     \u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u2550\u255d\u2550\u2550\u255d</pre>'+
     '<div id="load-status" style="color:var(--purple-light);font-size:13px;font-weight:600;letter-spacing:1px;margin-bottom:16px">INITIALIZING</div>'+
     '<div style="width:200px;height:4px;background:var(--input-border);border-radius:2px;margin:0 auto;overflow:hidden"><div id="load-bar" style="width:0%;height:100%;background:var(--purple);border-radius:2px;transition:width 0.4s ease"></div></div>'+
     '<div id="load-detail" style="color:var(--text-dim);font-size:11px;margin-top:12px">Connecting to fleet...</div></div>';
@@ -985,7 +1099,7 @@ function openUserMenu(){
   var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)'};
   var ov=document.getElementById('modal-container');
   ov.innerHTML='<div class="modal" style="max-width:340px">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="margin:0">Session</h3><span onclick="closeModal()" style="cursor:pointer;color:var(--text-dim);font-size:18px">&times;</span></div>'+
+    '<div class="flex-between-mb16"><h3 class="m-0">Session</h3><span class="close-x">&times;</span></div>'+
     '<div style="display:flex;align-items:center;gap:12px;padding:16px;background:var(--bg);border-radius:8px;margin-bottom:16px">'+
     '<div style="width:40px;height:40px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--text)">'+_currentUser.charAt(0).toUpperCase()+'</div>'+
     '<div><div style="font-size:14px;font-weight:600;color:var(--text)">'+_currentUser.toUpperCase()+'</div><div style="font-size:12px;color:'+(rc[_currentRole]||'var(--text-dim)')+';font-weight:600">'+_currentRole.toUpperCase()+'</div></div></div>'+
@@ -1027,14 +1141,14 @@ var WIDGET_REGISTRY=[
   {id:'w-fleet-overview',page:'FLEET',label:'Overview',loader:function(el){
     /* Summary cards row — cluster-level stats */
     var g='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">';
-    g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">PVE NODES</h3><div class="host-meta"><span>'+(PROD_HOSTS.filter(function(h){return h.type==="pve"}).length||'?')+' NODES</span><span>·</span><span>HYPERVISOR</span></div></div><div class="divider-light"><div id="hw-pve-sum"><div class="skeleton" style="height:60px"></div></div></div></div>';
-    g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PVE CLUSTER</span><span>·</span><span>PROXMOX</span></div></div><div class="divider-light"><div id="hw-vms"><div class="skeleton" style="height:60px"></div></div></div></div>';
-    g+='<div class="host-card"><div class="host-head"><h3 class="c-green">MEDIA STACK</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div><div class="divider-light"><div id="hw-media"><div class="skeleton" style="height:60px"></div></div></div></div></div>';
+    g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">PVE NODES</h3><div class="host-meta"><span>'+(PROD_HOSTS.filter(function(h){return h.type==="pve"}).length||'?')+' NODES</span><span>·</span><span>HYPERVISOR</span></div></div><div class="divider-light"><div id="hw-pve-sum"><div class="skeleton h-60" ></div></div></div></div>';
+    g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PVE CLUSTER</span><span>·</span><span>PROXMOX</span></div></div><div class="divider-light"><div id="hw-vms"><div class="skeleton h-60" ></div></div></div></div>';
+    g+='<div class="host-card"><div class="host-head"><h3 class="c-green">MEDIA STACK</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div><div class="divider-light"><div id="hw-media"><div class="skeleton h-60" ></div></div></div></div></div>';
     /* Infrastructure device cards — responsive grid */
     g+='<div id="hw-physical-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px"></div>';
     el.innerHTML=g;
     /* Populate physical device cards as individual grid items */
-    var pc='';PROD_HOSTS.filter(function(h){return h.type!=='pve'}).forEach(function(h){var tc={pfsense:'var(--text)',truenas:'var(--blue)',switch:'var(--cyan)',idrac:'var(--orange)'}; pc+='<div class="host-card"><div class="host-head"><h3 style="color:'+(tc[h.type]||'var(--text)')+'">'+h.label.toUpperCase()+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>·</span><span>'+h.role+'</span></div></div><div class="divider-light"><div id="hw-'+h.label.toLowerCase().replace(/[^a-z0-9]/g,'-')+'"><div class="skeleton" style="height:60px"></div></div></div></div>';});
+    var pc='';PROD_HOSTS.filter(function(h){return h.type!=='pve'}).forEach(function(h){var tc={pfsense:'var(--text)',truenas:'var(--blue)',switch:'var(--cyan)',idrac:'var(--orange)'}; pc+='<div class="host-card"><div class="host-head"><h3 style="color:'+(tc[h.type]||'var(--text)')+'">'+h.label.toUpperCase()+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>·</span><span>'+h.role+'</span></div></div><div class="divider-light"><div id="hw-'+h.label.toLowerCase().replace(/[^a-z0-9]/g,'-')+'"><div class="skeleton h-60" ></div></div></div></div>';});
     var pcd=document.getElementById('hw-physical-cards');if(pcd)pcd.innerHTML=pc;
     _loadWidgetOverview();
   }},
@@ -1095,16 +1209,16 @@ function _loadHomeFleetStats(){
     hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;if(h.type==='pve')pve++;if(h.groups&&h.groups.indexOf('lab')>=0)lab++;});
     var totalAll=hd.hosts.length;
     var totalOff=down;var prodCount=totalAll-lab;var pveCount=PROD_HOSTS.filter(function(h){return h.type==='pve';}).length||pve;
-    var _d=function(l,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+l+'</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'<span class="label-hint"> '+l1+'</span></span><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'<span class="label-hint"> '+l2+'</span></span></div></div>';};
+    var _d=function(l,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+l+'</div><div class="flex-row-24"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'<span class="label-hint"> '+l1+'</span></span><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'<span class="label-hint"> '+l2+'</span></span></div></div>';};
     var el=document.getElementById('hw-fleet-stats');if(el)el.innerHTML=_d('STATUS',up,'ONLINE','var(--green)',totalOff,'OFFLINE','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'ONLINE','var(--cyan)')+_d('RESPONSE',hd.duration+'s','','var(--blue)','','','var(--text-dim)');
     var el2=document.getElementById('hw-fleet-stats2');
     if(el2){el2.innerHTML=st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
       fetch(API.VMS).then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
-        el2.querySelector('.st:nth-child(1)').innerHTML='<div class="lb">VMs</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+run+'<span class="label-hint"> RUN</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+stop+'<span class="label-hint"> STOP</span></span></div>';}).catch(function(){});
+        el2.querySelector('.st:nth-child(1)').innerHTML='<div class="lb">VMs</div><div class="flex-row-24"><span class="stat-big-green">'+run+'<span class="label-hint"> RUN</span></span><span class="stat-big-red">'+stop+'<span class="label-hint"> STOP</span></span></div>';}).catch(function(){});
       fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
-        el2.querySelector('.st:nth-child(2)').innerHTML='<div class="lb">CONTAINERS</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+(md.containers_running||0)+'<span class="label-hint"> UP</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+(md.containers_down||0)+'<span class="label-hint"> DOWN</span></span></div>';}).catch(function(){});
+        el2.querySelector('.st:nth-child(2)').innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-big-green">'+(md.containers_running||0)+'<span class="label-hint"> UP</span></span><span class="stat-big-red">'+(md.containers_down||0)+'<span class="label-hint"> DOWN</span></span></div>';}).catch(function(){});
       Promise.all([fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return{count:0}}),fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return{count:0}})]).then(function(res){
-        el2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">ACTIVITY</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--orange)">'+(res[0].count||0)+'<span class="label-hint"> DL</span></span><span style="font-size:20px;font-weight:700;color:var(--blue)">'+(res[1].count||0)+'<span class="label-hint"> STREAM</span></span></div>';});
+        el2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-big-orange">'+(res[0].count||0)+'<span class="label-hint"> DL</span></span><span class="stat-big-blue">'+(res[1].count||0)+'<span class="label-hint"> STREAM</span></span></div>';});
     }
   });
 }
@@ -1179,14 +1293,14 @@ function openLayoutConfig(){
     h+='<div class="layout-item" draggable="true" data-id="'+id+'" ondragstart="_dragId=this.getAttribute(\'data-id\');this.style.opacity=\'0.4\'" ondragend="this.style.opacity=\'1\'" ondragover="event.preventDefault();this.style.borderTopColor=\'var(--purple)\'" ondragleave="this.style.borderTopColor=\'var(--border)\'" ondrop="event.preventDefault();this.style.borderTopColor=\'var(--border)\';dropLayoutItem(this.getAttribute(\'data-id\'))" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:2px solid var(--border);cursor:grab;user-select:none;transition:border-color 0.15s">';
     h+='<span style="color:var(--text-dim);font-size:14px;cursor:grab">&#9776;</span>';
     h+='<span style="flex:1;font-size:13px;color:var(--text)">'+label+'</span>';
-    h+='<label style="position:relative;width:40px;height:22px;cursor:pointer;display:block;flex-shrink:0" onclick="event.stopPropagation()">';
+    h+='<label class="toggle-sw" onclick="event.stopPropagation()">';
     h+='<input type="checkbox" '+(on?'checked':'')+' onchange="toggleViewSection(\''+view+'\',\''+id+'\',this.checked)" class="d-none">';
     h+='<span style="position:absolute;inset:0;background:'+(on?'var(--purple)':'var(--input-border)')+';border-radius:11px;transition:background 0.2s"></span>';
     h+='<span style="position:absolute;top:2px;left:'+(on?'20px':'2px')+';width:18px;height:18px;background:var(--text);border-radius:50%;transition:left 0.2s"></span>';
     h+='</label></div>';
   });
   h+='</div>';
-  document.getElementById('modal-container').innerHTML='<div class="modal" style="max-width:400px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="margin:0">Layout — '+VIEW_TITLES[view]+'</h3><span onclick="closeModal()" style="cursor:pointer;color:var(--text-dim);font-size:18px">&times;</span></div>'+h+'</div>';
+  document.getElementById('modal-container').innerHTML='<div class="modal" style="max-width:400px"><div class="flex-between-mb16"><h3 class="m-0">Layout — '+VIEW_TITLES[view]+'</h3><span class="close-x">&times;</span></div>'+h+'</div>';
   document.getElementById('modal-container').style.display='flex';
 }
 function dropLayoutItem(targetId){
@@ -1206,7 +1320,7 @@ Object.keys(VIEW_SECTIONS).forEach(function(v){_applyViewLayout(v);});
 function openHomeWidgetConfig(){
   var cfg=_loadHomeWidgetConfig()||[];
   var pages={};WIDGET_REGISTRY.forEach(function(w){if(!pages[w.page])pages[w.page]=[];pages[w.page].push(w);});
-  var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span class="text-sub">Toggle widgets for your HOME dashboard</span>';
+  var h='<div class="flex-between-mb12"><span class="text-sub">Toggle widgets for your HOME dashboard</span>';
   h+='<button class="fleet-btn" onclick="quickStartHome()" style="padding:4px 12px;font-size:12px;color:var(--purple-light);border-color:var(--purple)">&#9889; QUICK START</button></div>';
   /* Active widgets — draggable */
   if(cfg.length){
@@ -1231,14 +1345,14 @@ function openHomeWidgetConfig(){
       var active=cfg.indexOf(w.id)>=0;
       h+='<div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid var(--border)">';
       h+='<span style="flex:1;font-size:12px;color:var(--text)">'+w.label+'</span>';
-      h+='<label style="position:relative;width:40px;height:22px;cursor:pointer;display:block;flex-shrink:0">';
+      h+='<label class="toggle-sw">';
       h+='<input type="checkbox" '+(active?'checked':'')+' onchange="toggleHomeWidget(\''+w.id+'\',this.checked)" class="d-none">';
       h+='<span style="position:absolute;inset:0;background:'+(active?'var(--purple)':'var(--input-border)')+';border-radius:11px;transition:background 0.2s"></span>';
       h+='<span style="position:absolute;top:2px;left:'+(active?'20px':'2px')+';width:18px;height:18px;background:var(--text);border-radius:50%;transition:left 0.2s"></span>';
       h+='</label></div>';
     });
   });
-  document.getElementById('modal-container').innerHTML='<div class="modal" style="max-width:440px;max-height:80vh;overflow-y:auto"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="margin:0">Dashboard Layout</h3><span onclick="closeModal()" style="cursor:pointer;color:var(--text-dim);font-size:18px">&times;</span></div>'+h+'</div>';
+  document.getElementById('modal-container').innerHTML='<div class="modal" style="max-width:440px;max-height:80vh;overflow-y:auto"><div class="flex-between-mb16"><h3 class="m-0">Dashboard Layout</h3><span class="close-x">&times;</span></div>'+h+'</div>';
   document.getElementById('modal-container').style.display='flex';
 }
 function toggleHomeWidget(wid,on){
@@ -1445,8 +1559,8 @@ function renderGlobalSettings(){
 }
 function loadFleetPage(){
   if(!_fleetCache.fo&&!_fleetCache.hd){
-    document.getElementById('metrics-summary').innerHTML='<div class="skeleton" style="height:50px"></div>';
-    document.getElementById('metrics-row2').innerHTML='<div class="skeleton" style="height:50px"></div>';
+    document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
+    document.getElementById('metrics-row2').innerHTML='<div class="skeleton h-50" ></div>';
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   }
   loadMetricsQuick();loadAgents();loadSpecialists();
@@ -1463,7 +1577,7 @@ function _loadFleetOverviewMedia(){
     h+=_mrow('OFFLINE',(d.containers_total-d.containers_running),0,(d.containers_total-d.containers_running)>0?'var(--red)':'var(--green)');
     h+=_mrow('VMs',d.vm_count,0,'var(--blue)');
     var me=document.getElementById('home-media');if(me)me.innerHTML=h;
-  }).catch(function(){var me=document.getElementById('home-media');if(me)me.innerHTML='<span style="color:var(--text-dim);font-size:12px">NO MEDIA DATA</span>';});
+  }).catch(function(){var me=document.getElementById('home-media');if(me)me.innerHTML='<span class="c-dim-fs12">NO MEDIA DATA</span>';});
 }
 function _renderFleetOverview(fo){
     /* PVE summary */
@@ -1479,12 +1593,12 @@ function _renderFleetOverview(fo){
     var pfDev=fo.physical?fo.physical.find(function(p){return p.type==='pfsense'}):null;
     var pf='';
     if(pfDev){pf+=_mrow('DEVICE',pfDev.detail,0,'var(--purple-light)');pf+=_mrow('IP',pfDev.ip,0,'var(--purple-light)');pf+=_mrow('STATUS',pfDev.reachable?'ONLINE':'OFFLINE',0,pfDev.reachable?'var(--green)':'var(--red)');}
-    var pfe=document.getElementById('home-pfsense');if(pfe)pfe.innerHTML=pf||'<span style="color:var(--text-dim);font-size:12px">N/A</span>';
+    var pfe=document.getElementById('home-pfsense');if(pfe)pfe.innerHTML=pf||'<span class="c-dim-fs12">N/A</span>';
     /* TrueNAS */
     var tnDev=fo.physical?fo.physical.find(function(p){return p.type==='truenas'}):null;
     var tn='';
     if(tnDev){tn+=_mrow('DEVICE',tnDev.detail,0,'var(--purple-light)');tn+=_mrow('IP',tnDev.ip,0,'var(--purple-light)');tn+=_mrow('STATUS',tnDev.reachable?'ONLINE':'OFFLINE',0,tnDev.reachable?'var(--green)':'var(--red)');}
-    var tne=document.getElementById('home-truenas');if(tne)tne.innerHTML=tn||'<span style="color:var(--text-dim);font-size:12px">N/A</span>';
+    var tne=document.getElementById('home-truenas');if(tne)tne.innerHTML=tn||'<span class="c-dim-fs12">N/A</span>';
     /* VMs card */
     var vi='';
     vi+=_mrow('TOTAL',fo.summary.total_vms+' VMs',0,'var(--purple-light)');
@@ -1572,7 +1686,7 @@ function _renderServicesFromCache(){
   if(!_mediaCache)return;
   var tags=_getMediaTags();var html='';
   _mediaCache.containers.forEach(function(c){if(tags.indexOf(c.name)>=0)return;
-    var tagBtn='<button onclick="toggleMediaTag(\''+c.name+'\')" style="background:none;border:2px solid var(--input-border);border-radius:6px;padding:4px 6px;cursor:pointer;font-size:14px;margin-left:auto;opacity:0.4;transition:opacity 0.2s" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\'0.4\'" title="Tag as media">&#127909;</button>';
+    var tagBtn='<button data-action="toggleMediaTag" data-arg="'+c.name+'" style="background:none;border:2px solid var(--input-border);border-radius:6px;padding:4px 6px;cursor:pointer;font-size:14px;margin-left:auto;opacity:0.4;transition:opacity 0.2s" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\'0.4\'" title="Tag as media">&#127909;</button>';
     html+=_containerCard(c,tagBtn);});
   document.getElementById('services-container-cards').innerHTML=html||'<div class="empty-state"><div class="es-icon">&#9881;</div><p>All containers are tagged as media.</p></div>';
 }
@@ -1581,7 +1695,7 @@ function _renderAllFromCache(){
   var html='';
   _mediaCache.containers.forEach(function(c){
     var isMedia=_getMediaTags().indexOf(c.name)>=0;
-    var tagBtn='<button onclick="toggleMediaTag(\''+c.name+'\')" style="background:none;border:2px solid '+(isMedia?'var(--purple)':'var(--input-border)')+';border-radius:6px;padding:4px 6px;cursor:pointer;font-size:14px;margin-left:auto;opacity:'+(isMedia?'1':'0.4')+';transition:opacity 0.2s" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\''+(isMedia?'1':'0.4')+'\'" title="'+(isMedia?'Remove media tag':'Tag as media')+'">&#127909;</button>';
+    var tagBtn='<button data-action="toggleMediaTag" data-arg="'+c.name+'" style="background:none;border:2px solid '+(isMedia?'var(--purple)':'var(--input-border)')+';border-radius:6px;padding:4px 6px;cursor:pointer;font-size:14px;margin-left:auto;opacity:'+(isMedia?'1':'0.4')+';transition:opacity 0.2s" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\''+(isMedia?'1':'0.4')+'\'" title="'+(isMedia?'Remove media tag':'Tag as media')+'">&#127909;</button>';
     html+=_containerCard(c,tagBtn);});
   document.getElementById('container-cards').innerHTML=html||'<div class="empty-state"><div class="es-icon">▶</div><p>No containers found.</p></div>';
 }
@@ -1602,7 +1716,7 @@ function _containerCard(c,extra){
   var isHttps=_httpsContainers.indexOf(c.name)>=0;
   var proto=isHttps?'https':'http';
   var url=c.vm_ip&&c.port&&c.port!=='-'?proto+'://'+c.vm_ip+':'+c.port:'';
-  var h='<div class="crd"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="text-transform:uppercase">'+c.name+'</h3>'+badge(c.status)+'</div>';
+  var h='<div class="crd"><div class="flex-between"><h3 style="text-transform:uppercase">'+c.name+'</h3>'+badge(c.status)+'</div>';
   if(url){
     h+='<div style="display:flex;align-items:center;gap:6px;margin:4px 0">';
     h+='<a href="'+url+'" target="_blank" style="font-size:11px;color:var(--blue);font-family:monospace;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">'+url+'</a>';
@@ -1613,7 +1727,7 @@ function _containerCard(c,extra){
     h+='<div style="font-size:11px;color:var(--text-dim);margin:4px 0">'+c.vm_label+(c.port&&c.port!=='-'?' · '+c.port:'')+'</div>';
   }
   if(c.detail)h+='<div class="text-sub">'+c.detail+'</div>';
-  h+='<div style="margin-top:8px;display:flex;gap:6px;align-items:center"><button class="fleet-btn" onclick="mediaRestart(\''+c.name+'\')" style="padding:4px 10px;font-size:12px">RESTART</button><button class="fleet-btn" onclick="mediaLogs(\''+c.name+'\')" style="padding:4px 10px;font-size:12px">LOGS</button>';
+  h+='<div style="margin-top:8px;display:flex;gap:6px;align-items:center"><button class="fleet-btn" data-action="mediaRestart" data-arg="'+c.name+'" class="pill-sm">RESTART</button><button class="fleet-btn" onclick="mediaLogs(\''+c.name+'\')" class="pill-sm">LOGS</button>';
   if(extra)h+=extra;
   h+='</div></div>';
   return h;
@@ -1668,8 +1782,8 @@ function renderFleetAdmin(d){
   if(!body)return;
   var h='';
   /* ── Host Properties Editor ── */
-  h+='<div style="margin-bottom:24px">';
-  h+='<h4 style="color:var(--purple-light);font-size:13px;margin-bottom:12px;letter-spacing:1px">HOST PROPERTIES</h4>';
+  h+='<div class="mb-24">';
+  h+='<h4 class="section-label-pl-ls">HOST PROPERTIES</h4>';
   h+='<p class="desc-line">Change host type or groups. Updates hosts.conf immediately.</p>';
   h+='<table><thead><tr><th>Label</th><th>IP</th><th>Type</th><th>Groups</th><th>Actions</th></tr></thead><tbody>';
   var validTypes=['linux','pve','truenas','pfsense','docker','idrac','switch','unknown'];
@@ -1680,22 +1794,22 @@ function renderFleetAdmin(d){
     h+='<td class="text-sub">'+host.ip+'</td>';
     h+='<td><select id="ht-'+host.label+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">'+typeOpts+'</select></td>';
     h+='<td><input id="hg-'+host.label+'" value="'+host.groups+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:160px" placeholder="prod,media"></td>';
-    h+='<td><button class="fleet-btn" onclick="saveHostProps(\''+host.label+'\')" style="padding:3px 10px;font-size:11px;color:var(--green)">SAVE</button></td>';
+    h+='<td><button class="fleet-btn" onclick="saveHostProps(\''+host.label+'\')" class="pill-ok-sm">SAVE</button></td>';
     h+='</tr>';
   });
   h+='</tbody></table></div>';
   /* ── VM Categories ── */
-  h+='<div style="margin-bottom:24px">';
-  h+='<h4 style="color:var(--purple-light);font-size:13px;margin-bottom:12px;letter-spacing:1px">VM CATEGORIES & PERMISSIONS</h4>';
+  h+='<div class="mb-24">';
+  h+='<h4 class="section-label-pl-ls">VM CATEGORIES & PERMISSIONS</h4>';
   h+='<p class="desc-line">Assign VMIDs to categories. Controls what actions are allowed per VM.</p>';
   var tierNames=Object.keys(d.tiers||{});
   Object.keys(d.categories||{}).forEach(function(cat){
     var info=d.categories[cat];
     var tierOpts='';tierNames.forEach(function(t){tierOpts+='<option value="'+t+'"'+(t===info.tier?' selected':'')+'>'+t+'</option>';});
-    h+='<div class="crd" style="margin-bottom:8px">';
-    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+    h+='<div class="crd mb-8" >';
+    h+='<div class="flex-between-mb8">';
     h+='<div><h3 style="font-size:14px;text-transform:uppercase">'+cat.replace(/_/g,' ')+'</h3>';
-    h+='<p style="font-size:11px;color:var(--text-dim);margin-top:2px">'+info.description+'</p></div>';
+    h+='<p class="fs-11-dim-mt2">'+info.description+'</p></div>';
     h+='<div style="display:flex;align-items:center;gap:8px"><span class="text-meta">Tier:</span>';
     h+='<select onchange="updateCategoryTier(\''+cat+'\',this.value)" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">'+tierOpts+'</select></div>';
     h+='</div>';
@@ -1703,18 +1817,18 @@ function renderFleetAdmin(d){
     if(info.range_start!==undefined){
       h+='<div style="display:flex;gap:8px;align-items:center;margin-top:8px">';
       h+='<span class="text-sub">VMID Range:</span>';
-      h+='<input id="rs-'+cat+'" type="number" value="'+info.range_start+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:80px">';
+      h+='<input id="rs-'+cat+'" type="number" value="'+info.range_start+'" class="input-sm">';
       h+='<span class="c-dim">—</span>';
-      h+='<input id="re-'+cat+'" type="number" value="'+info.range_end+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:80px">';
-      h+='<button class="fleet-btn" onclick="updateCategoryRange(\''+cat+'\')" style="padding:3px 10px;font-size:11px;color:var(--green)">SAVE</button>';
+      h+='<input id="re-'+cat+'" type="number" value="'+info.range_end+'" class="input-sm">';
+      h+='<button class="fleet-btn" data-action="updateCategoryRange" data-arg="'+cat+'" class="pill-ok-sm">SAVE</button>';
       h+='</div>';
     } else {
       var vmids=(info.vmids||[]).join(', ');
       h+='<div class="mt-8">';
       h+='<div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">VMIDs: <span style="color:var(--text)">'+vmids+'</span></div>';
       h+='<div style="display:flex;gap:6px;align-items:center;margin-top:4px">';
-      h+='<input id="vmid-add-'+cat+'" type="number" placeholder="VMID" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:80px">';
-      h+='<button class="fleet-btn" onclick="addVmidToCategory(\''+cat+'\')" style="padding:3px 10px;font-size:11px;color:var(--green)">+ ADD</button>';
+      h+='<input id="vmid-add-'+cat+'" type="number" placeholder="VMID" class="input-sm">';
+      h+='<button class="fleet-btn" onclick="addVmidToCategory(\''+cat+'\')" class="pill-ok-sm">+ ADD</button>';
       /* Removable badges */
       (info.vmids||[]).forEach(function(vid){
         h+='<span style="display:inline-flex;align-items:center;gap:4px;background:var(--purple-faint);color:var(--purple-light);padding:2px 8px;border-radius:4px;font-size:12px">'+vid;
@@ -1731,12 +1845,12 @@ function renderFleetAdmin(d){
   });
   h+='</div>';
   /* ── Permission Tiers ── */
-  h+='<div style="margin-bottom:24px">';
-  h+='<h4 style="color:var(--purple-light);font-size:13px;margin-bottom:12px;letter-spacing:1px">PERMISSION TIERS</h4>';
+  h+='<div class="mb-24">';
+  h+='<h4 class="section-label-pl-ls">PERMISSION TIERS</h4>';
   h+='<p class="desc-line">Define what actions each tier allows. Tiers are assigned to categories above.</p>';
   Object.keys(d.tiers||{}).forEach(function(tier){
     var actions=d.tiers[tier]||[];
-    h+='<div class="crd" style="margin-bottom:8px">';
+    h+='<div class="crd mb-8" >';
     h+='<h3 style="font-size:14px;text-transform:uppercase">'+tier+'</h3>';
     h+='<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">';
     actions.forEach(function(a){h+='<span class="tag">'+a+'</span>';});
@@ -1852,7 +1966,7 @@ function _infraRoleCard(ph,healthMap){
   /* Role label row */
   c+='<div class="role-label" style="color:'+roleInfo.color+'"><span class="role-icon">'+roleInfo.icon+'</span>'+roleInfo.role+'</div>';
   /* Device name + status */
-  c+='<div style="display:flex;justify-content:space-between;align-items:center">';
+  c+='<div class="flex-between">';
   c+='<h3 class="device-name">'+ph.label+'</h3>';
   c+='<span id="infra-status-'+safeId+'" style="font-size:11px;font-weight:600;display:flex;align-items:center"><span class="status-dot '+(up?'up':'down')+'"></span>'+(up?'ONLINE':'OFFLINE')+'</span>';
   c+='</div>';
@@ -1950,8 +2064,8 @@ function loadMetricsQuick(){
     _renderFleetData(_fleetCache.fo,_fleetCache.hd);
   } else {
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
-    document.getElementById('metrics-summary').innerHTML='<div class="skeleton" style="height:50px"></div>';
-    document.getElementById('metrics-row2').innerHTML='<div class="skeleton" style="height:50px"></div>';
+    document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
+    document.getElementById('metrics-row2').innerHTML='<div class="skeleton h-50" ></div>';
   }
   /* Fetch fresh data in background and re-render */
   Promise.all([
@@ -1966,9 +2080,9 @@ function loadMetricsQuick(){
   });
 }
 /* ── Fleet rendering helpers (hoisted from _renderFleetData) ── */
-function _fStat(v,label,color){return '<div style="text-align:center"><div style="font-size:16px;font-weight:700;color:'+color+'">'+v+'</div><div style="font-size:12px;color:var(--text)">'+label+'</div></div>';}
+function _fStat(v,label,color){return '<div class="text-center"><div style="font-size:16px;font-weight:700;color:'+color+'">'+v+'</div><div style="font-size:12px;color:var(--text)">'+label+'</div></div>';}
 function _fGrp(title,cols,content){return '<div style="border:1px solid var(--border);border-radius:6px;padding:6px 4px 4px;background:var(--bg)"><div style="font-size:12px;color:var(--text);text-align:center;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;opacity:0.7">'+title+'</div><div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:4px">'+content+'</div></div>';}
-function _fDual(label,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+label+'</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'<span class="label-hint"> '+l1+'</span></span><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'<span class="label-hint"> '+l2+'</span></span></div></div>';}
+function _fDual(label,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+label+'</div><div class="flex-row-24"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'<span class="label-hint"> '+l1+'</span></span><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'<span class="label-hint"> '+l2+'</span></span></div></div>';}
 function _buildLabHostCards(hosts,infraLabels,labLabels){
   var labCards='';
   if(!hosts)return labCards;
@@ -1982,7 +2096,7 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
     var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
     var loadVal=parseFloat(h.load)||0;var cores=parseInt(h.cores)||1;
     var loadPct=cores>0?Math.round(loadVal/cores*100):0;
-    var c='<div class="host-card" onclick="openHost(\''+h.label+'\')" style="cursor:pointer">';
+    var c='<div class="host-card" onclick="openHost(\''+h.label+'\')" class="cursor-ptr">';
     c+='<div class="host-head"><h3 style="color:'+cl+'">'+h.label+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>\u00b7</span><span>'+(h.type||'Linux').toUpperCase()+'</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div>';
     c+='<div class="divider-light">';
     if(up){
@@ -1991,8 +2105,8 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
       if(_isStorage){c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM (ARC)</span><span class="metric-val">'+_ramGB(ramUsed)+' / '+_ramGB(ramTotal)+'</span></div><div class="pbar"><div class="pbar-fill" style="width:'+ramPct+'%;background:var(--blue)"></div></div></div>';}
       else{c+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,'var(--blue)');}
       c+=_mrow('DISK',(h.disk||'?'),diskPct,'var(--green)');
-      c+='<div class="metric-row" id="ntp-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val" style="color:var(--text-dim);font-size:11px">...</span></div></div>';
-      c+='<div class="metric-row" id="upd-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">UPDATES</span><span class="metric-val" style="color:var(--text-dim);font-size:11px">...</span></div></div>';
+      c+='<div class="metric-row" id="ntp-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val c-dim-fs11" >...</span></div></div>';
+      c+='<div class="metric-row" id="upd-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">UPDATES</span><span class="metric-val c-dim-fs11" >...</span></div></div>';
     } else {
       c+='<p style="color:var(--text-dim);font-size:12px;padding:8px 0">Host unreachable</p>';
     }
@@ -2023,7 +2137,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid){
     var nRamGb=Math.round(nRamMb/1024);
     var detailRam=pn.detail.match(/(\d+)GB/);var nodeRamStr=detailRam?detailRam[1]+'GB':'?';
     var nodeCard='<div class="host-card" style="cursor:pointer;" onclick="openVmInfo(\''+nodeName+'\',\''+pn.ip+'\',0)">';
-    nodeCard+='<div style="margin-bottom:8px"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
+    nodeCard+='<div class="mb-8"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
     nodeCard+='<div class="divider-light">';
     if(up&&live){
       var cores=parseInt(live.cores)||1;var loadVal=parseFloat(live.load)||0;
@@ -2033,7 +2147,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid){
       var ramUsed=ramParts?parseInt(ramParts[1]):0;var ramTotal=ramParts?parseInt(ramParts[2]):1;
       var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
       nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
-      nodeCard+=_fGrp('PVE NODE',2,_fStat(nCores+'<span style="font-size:12px;opacity:0.6">/'+cores+'</span>','CPU ALLOC','var(--purple-light)')+_fStat(nRamGb+'<span style="font-size:12px;opacity:0.6">GB/'+nodeRamStr+'</span>','RAM ALLOC','var(--purple-light)'));
+      nodeCard+=_fGrp('PVE NODE',2,_fStat(nCores+'<span class="fs-12-fade">/'+cores+'</span>','CPU ALLOC','var(--purple-light)')+_fStat(nRamGb+'<span class="fs-12-fade">GB/'+nodeRamStr+'</span>','RAM ALLOC','var(--purple-light)'));
       nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'ONLINE','var(--green)')+_fStat(nOffline,'OFFLINE','var(--red)'));
       nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
       nodeCard+='</div>';
@@ -2044,13 +2158,13 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid){
       nodeCard+='</div>';
     } else {
       nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
-      nodeCard+=_fGrp('PVE NODE',2,_fStat(nCores,'CPU ALLOC','var(--purple-light)')+_fStat(nRamGb+'<span style="font-size:12px;opacity:0.6">GB</span>','RAM ALLOC','var(--purple-light)'));
+      nodeCard+=_fGrp('PVE NODE',2,_fStat(nCores,'CPU ALLOC','var(--purple-light)')+_fStat(nRamGb+'<span class="fs-12-fade">GB</span>','RAM ALLOC','var(--purple-light)'));
       nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'ONLINE','var(--green)')+_fStat(nOffline,'OFFLINE','var(--red)'));
       nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
       nodeCard+='</div>';
       nodeCard+='<div id="pve-live-'+nodeName+'" style="margin:6px 0;padding:6px 8px;background:rgba(248,81,73,0.05);border:1px dashed var(--border);border-radius:6px;text-align:center">';
       nodeCard+='<span style="font-size:12px;color:var(--red);letter-spacing:0.5px">LIVE METRICS: OFFLINE</span>';
-      nodeCard+='<div style="font-size:12px;color:var(--text-dim);margin-top:2px">Deploy to same network for real-time CPU load, RAM usage, storage pools, cluster health</div>';
+      nodeCard+='<div class="fs-12-dim-mt2">Deploy to same network for real-time CPU load, RAM usage, storage pools, cluster health</div>';
       nodeCard+='</div>';
     }
     nodeCard+='</div></div>';
@@ -2064,7 +2178,7 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
     var ic=(infraCards.match(/infra-role-card/g)||[]).length;
     var cols=ic<=3?ic:ic<=6?3:4;
     out+='<div style="margin-bottom:16px;border:3px solid var(--text);border-radius:10px;background:#000000;overflow:hidden">';
-    out+='<div style="padding:12px 16px 0;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text);opacity:0.85">CORE SYSTEMS</span><span id="core-systems-age" style="font-size:10px;font-weight:600;letter-spacing:1px;color:var(--text-dim)"></span></div>';
+    out+='<div class="flex-between-pad-top"><span style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text);opacity:0.85">CORE SYSTEMS</span><span id="core-systems-age" class="fs-10-dim-600-ls"></span></div>';
     out+='<div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:12px;padding:12px 16px 16px">'+infraCards+'</div>';
     out+='</div>';
   }
@@ -2076,7 +2190,7 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
     var vmCount=nd.vms?(nd.vms.match(/host-card/g)||[]).length:0;
     var cols=Math.max(vmCount,3);if(cols>4)cols=4;
     pveContent+='<div class="pve-group" style="border-left:4px solid '+nodeColor+';border-radius:6px;background:var(--bg2);overflow:hidden">';
-    pveContent+='<div onclick="togglePveGroup(this)" style="cursor:pointer;padding:8px 12px;display:flex;align-items:center;gap:8px">';
+    pveContent+='<div data-action="togglePveGroup" style="cursor:pointer;padding:8px 12px;display:flex;align-items:center;gap:8px">';
     pveContent+='<span class="pve-chev" style="color:'+nodeColor+';font-size:14px;font-weight:700">\u25b8</span>';
     pveContent+='<div class="flex-1">'+nd.card+'</div>';
     pveContent+='</div>';
@@ -2087,7 +2201,7 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
   });
   if(pveContent){
     out+='<div style="margin-bottom:16px;border:3px solid var(--purple);border-radius:10px;background:#000000;overflow:hidden">';
-    out+='<div style="padding:12px 16px 0;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text);opacity:0.85">PROXMOX NODES</span><span style="font-size:10px;font-weight:600;letter-spacing:1px;color:var(--text-dim)">'+pveNodes.length+' NODES</span></div>';
+    out+='<div class="flex-between-pad-top"><span style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text);opacity:0.85">PROXMOX NODES</span><span class="fs-10-dim-600-ls">'+pveNodes.length+' NODES</span></div>';
     out+='<div style="display:flex;flex-direction:column;gap:8px;padding:12px 16px 16px">'+pveContent+'</div>';
     out+='</div>';
   }
@@ -2114,14 +2228,14 @@ function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDur
     st('CONTAINERS','...','p')+
     st('ACTIVITY','...','p');
   fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
-    row2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">CONTAINERS</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--green)">'+(md.containers_running||0)+'<span class="label-hint"> UP</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+(md.containers_down||0)+'<span class="label-hint"> DOWN</span></span></div>';
+    row2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-big-green">'+(md.containers_running||0)+'<span class="label-hint"> UP</span></span><span class="stat-big-red">'+(md.containers_down||0)+'<span class="label-hint"> DOWN</span></span></div>';
   }).catch(function(){});
   Promise.all([
     fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return {count:0}}),
     fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return {count:0}})
   ]).then(function(res){
     var dl=res[0].count||0;var str=res[1].count||0;
-    row2.querySelector('.st:nth-child(4)').innerHTML='<div class="lb">ACTIVITY</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--orange)">'+dl+'<span class="label-hint"> DL</span></span><span style="font-size:20px;font-weight:700;color:var(--blue)">'+str+'<span class="label-hint"> STREAM</span></span></div>';
+    row2.querySelector('.st:nth-child(4)').innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-big-orange">'+dl+'<span class="label-hint"> DL</span></span><span class="stat-big-blue">'+str+'<span class="label-hint"> STREAM</span></span></div>';
   });
 }
 function _enrichFleetNtpUpdates(){
@@ -2191,13 +2305,13 @@ function _renderFleetData(fo,hd,md){
       var cl=_hostColor(v.name,'vm',nodeName);
       var running=v.status==='running';
       var ramGb=_ramGB(v.ram_mb);
-      var c='<div class="host-card" style="cursor:pointer;" onclick="openVmInfo(\''+v.name+'\',\'\','+v.vmid+')">';
+      var c='<div class="host-card" style="cursor:pointer;" data-action="openVmInfo" data-label="'+v.name+'" data-vmid="'+v.vmid+'">';
       c+='<div class="host-head"><h3 style="color:'+cl+'">'+v.name+'</h3><div class="host-meta"><span>VM '+v.vmid+'</span><span>\u00b7</span>'+(running?'<span class="c-green">RUNNING</span>':'<span class="c-red">'+v.status.toUpperCase()+'</span>')+'</div></div>';
       c+='<div class="divider-light">';
       c+=_mrow('CPU',(v.cpu||0)+' Cores',0,'var(--purple-light)');
       c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM</span><span class="metric-val">'+ramGb+'</span></div></div>';
-      if(v.category&&v.category!=='unknown')c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">CATEGORY</span><span class="metric-val" style="font-size:11px">'+v.category+'</span></div></div>';
-      if(v.tier)c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">TIER</span><span class="metric-val" style="font-size:11px">'+v.tier+'</span></div></div>';
+      if(v.category&&v.category!=='unknown')c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">CATEGORY</span><span class="metric-val fs-11" >'+v.category+'</span></div></div>';
+      if(v.tier)c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">TIER</span><span class="metric-val fs-11" >'+v.tier+'</span></div></div>';
       c+='</div></div>';
       nodeData[nodeName].vms+=c;
     });
@@ -2222,16 +2336,16 @@ function loadMetrics(){
   var panel=document.getElementById('fleet-tool-panel');
   var content=document.getElementById('fleet-tool-content');
   panel.style.display='block';
-  content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">DEEP SCAN</h3><div class="skeleton"></div><div class="skeleton"></div><p style="color:var(--text-dim);font-size:11px;margin-top:8px">Collecting deep metrics from all reachable hosts...</p>';
+  content.innerHTML='<h3 class="section-label-pl">DEEP SCAN</h3><div class="skeleton"></div><div class="skeleton"></div><p class="c-dim-fs11-mt8">Collecting deep metrics from all reachable hosts...</p>';
   fetch(API.METRICS).then(function(r){return r.json()}).then(function(d){
-    var html='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">DEEP SCAN — '+d.hosts.length+' HOSTS</h3>';
+    var html='<h3 class="section-label-pl">DEEP SCAN — '+d.hosts.length+' HOSTS</h3>';
     if(!d.hosts.length){html+='<div class="empty-state"><div class="es-icon">&#9881;</div><p>No hosts returned deep metrics. Deploy agents or check connectivity.</p></div>';}
     d.hosts.forEach(function(m,i){
       var hn=m.hostname||m.system&&m.system.hostname||'unknown';var cpu=m.cpu||{};var mem=m.memory||{};var cl=HC[i%HC.length];
-      html+='<div class="crd" style="margin-bottom:12px"><h3 style="color:'+cl+'">'+hn+' <span class="text-meta">via '+m.source+'</span></h3>';
+      html+='<div class="crd mb-12" ><h3 style="color:'+cl+'">'+hn+' <span class="text-meta">via '+m.source+'</span></h3>';
       html+='<div class="stats" style="margin:12px 0">'+st('CPU',((cpu.usage_pct||0)+'%'),'p')+st('Load',cpu.load_1m||'?','b')+st('Cores',cpu.cores||'?','p')+st('RAM',((mem.usage_pct||0)+'%'),'g')+st('Used',_ramGB(mem.used_mb||0),'y')+st('Total',_ramGB(mem.total_mb||0),'b')+'</div>';
       if(m.disk&&m.disk.mounts){html+='<table class="mt-8"><thead><tr><th>Mount</th><th>Size</th><th>Used</th><th>Avail</th><th>Usage</th></tr></thead><tbody>';
-        m.disk.mounts.forEach(function(dd){html+='<tr><td style="font-family:monospace;font-size:11px">'+dd.mount+'</td><td>'+dd.size+'</td><td>'+dd.used+'</td><td>'+dd.avail+'</td><td>'+dd.usage_pct+'</td></tr>';});
+        m.disk.mounts.forEach(function(dd){html+='<tr><td class="mono-11">'+dd.mount+'</td><td>'+dd.size+'</td><td>'+dd.used+'</td><td>'+dd.avail+'</td><td>'+dd.usage_pct+'</td></tr>';});
         html+='</tbody></table>';}
       html+='</div>';
     });
@@ -2268,8 +2382,8 @@ function _buildToolTabs(title,tabs,tabClass,switchFn,subtitleId,formId,content){
 }
 /* ── Extracted tool renderers ── */
 function _toolExec(content){
-  content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">FLEET EXEC</h3>'+
-    '<div style="display:flex;gap:8px;margin-bottom:12px">'+
+  content.innerHTML='<h3 class="section-label-pl">FLEET EXEC</h3>'+
+    '<div class="flex-row-8-mb12">'+
     '<div style="position:relative;width:220px">'+
     '<input id="ft-exec-target" value="ALL HOSTS" autocomplete="off" onfocus="this.select();showExecDropdown()" oninput="filterExecDropdown(this.value)" onkeydown="if(event.key===\'Escape\')hideExecDropdown()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer;transition:border-color 0.25s ease">'+
     '<div id="ft-exec-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;max-height:390px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:var(--input-border) var(--card)"></div>'+
@@ -2289,42 +2403,42 @@ function _toolExec(content){
   });
 }
 function _toolNtp(content){
-  content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">NTP SYNC STATUS</h3><div id="ft-ntp-c" class="c-dim"><div class="skeleton"></div></div>';
+  content.innerHTML='<h3 class="section-label-pl">NTP SYNC STATUS</h3><div id="ft-ntp-c" class="c-dim"><div class="skeleton"></div></div>';
   fetch(API.FLEET_NTP).then(function(r){return r.json()}).then(function(d){
     var unsynced=d.hosts.filter(function(x){return !x.synced;});
     var h='';
     if(unsynced.length>0){
-      h+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
+      h+='<div class="flex-row-8-center">';
       h+='<button class="fleet-btn" onclick="ntpFixSelected()" class="c-purple-active">FIX SELECTED</button>';
       h+='<button class="fleet-btn" onclick="ntpFixAll()">FIX ALL ('+unsynced.length+')</button>';
-      h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" id="ft-ntp-selectall" onchange="document.querySelectorAll(\'.ft-ntp-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
+      h+='<label class="meta-flex"><input type="checkbox" id="ft-ntp-selectall" onchange="document.querySelectorAll(\'.ft-ntp-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
       h+='</div>';
     }
-    h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>SYNCED</th><th>TIME</th><th>ACTION</th></tr></thead><tbody>';
+    h+='<table class="w-full"><thead><tr><th class="w-30"></th><th>HOST</th><th>SYNCED</th><th>TIME</th><th>ACTION</th></tr></thead><tbody>';
     d.hosts.forEach(function(x){
       var synced=x.synced;
       h+='<tr><td>'+(!synced?'<input type="checkbox" class="ft-ntp-check" data-host="'+x.label+'">':'')+'</td>';
       h+='<td><strong>'+x.label.toUpperCase()+'</strong></td>';
       h+='<td>'+(synced?badge('ok'):badge('down'))+'</td>';
       h+='<td>'+x.time+'</td>';
-      h+='<td>'+(!synced?'<button class="fleet-btn" onclick="ntpFixHost(\''+x.label+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">FIX</button>':'<span style="color:var(--green);font-size:11px">OK</span>')+'</td></tr>';
+      h+='<td>'+(!synced?'<button class="fleet-btn" data-action="ntpFixHost" data-arg="'+x.label+'" class="pill-warn-sm">FIX</button>':'<span style="color:var(--green);font-size:11px">OK</span>')+'</td></tr>';
     });
     h+='</tbody></table>';document.getElementById('ft-ntp-c').innerHTML=h;
   });
 }
 function _toolUpdates(content){
-  content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">OS UPDATE STATUS</h3><div id="ft-updates-c" class="c-dim"><div class="skeleton"></div></div>';
+  content.innerHTML='<h3 class="section-label-pl">OS UPDATE STATUS</h3><div id="ft-updates-c" class="c-dim"><div class="skeleton"></div></div>';
   fetch(API.FLEET_UPDATES).then(function(r){return r.json()}).then(function(d){
     var pending=d.hosts.filter(function(x){return x.updates>0;});
     var h='';
-    h+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
-    h+='<button class="fleet-btn" onclick="updateSelected()" class="c-purple-active">UPDATE SELECTED</button>';
-    h+='<button class="fleet-btn" onclick="updateAll()">UPDATE ALL'+(pending.length>0?' ('+pending.length+')':'')+'</button>';
-    h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" id="ft-upd-selectall" onchange="toggleUpdateAll(this.checked)"> Select All</label>';
+    h+='<div class="flex-row-8-center">';
+    h+='<button class="fleet-btn" data-action="updateSelected" class="c-purple-active">UPDATE SELECTED</button>';
+    h+='<button class="fleet-btn" data-action="updateAll">UPDATE ALL'+(pending.length>0?' ('+pending.length+')':'')+'</button>';
+    h+='<label class="meta-flex"><input type="checkbox" id="ft-upd-selectall" onchange="toggleUpdateAll(this.checked)"> Select All</label>';
     h+='<div class="flex-1"></div>';
     h+='<span style="font-size:11px;color:'+(pending.length>0?'var(--yellow)':'var(--green)')+'">'+pending.length+' pending</span>';
     h+='</div>';
-    h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>UPDATES</th><th>PKG MGR</th><th>ACTION</th></tr></thead><tbody>';
+    h+='<table class="w-full"><thead><tr><th class="w-30"></th><th>HOST</th><th>UPDATES</th><th>PKG MGR</th><th>ACTION</th></tr></thead><tbody>';
     d.hosts.forEach(function(x){
       var cls=x.updates>0?'warn':x.updates===0?'up':'down';
       var hasPending=x.updates>0;
@@ -2332,27 +2446,27 @@ function _toolUpdates(content){
       h+='<td><strong>'+x.label.toUpperCase()+'</strong></td>';
       h+='<td><span class="badge '+cls+'">'+(x.updates>=0?x.updates:'?')+'</span></td>';
       h+='<td>'+x.pkg_mgr.toUpperCase()+'</td>';
-      h+='<td>'+(hasPending?'<button class="fleet-btn" onclick="runHostUpdate(\''+x.label+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">UPDATE</button>':'<button class="fleet-btn" onclick="runHostUpdate(\''+x.label+'\')" style="padding:3px 10px;font-size:12px">FORCE UPDATE</button>')+'</td></tr>';
+      h+='<td>'+(hasPending?'<button class="fleet-btn" data-action="runHostUpdate" data-arg="'+x.label+'" class="pill-warn-sm">UPDATE</button>':'<button class="fleet-btn" data-action="runHostUpdate" data-arg="'+x.label+'" style="padding:3px 10px;font-size:12px">FORCE UPDATE</button>')+'</td></tr>';
     });
     h+='</tbody></table>';
     document.getElementById('ft-updates-c').innerHTML=h;
   });
 }
 function _toolLabCtrl(content){
-  content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">LAB CONTROL</h3><div id="ft-lab-c" class="c-dim"><div class="skeleton"></div></div>';
+  content.innerHTML='<h3 class="section-label-pl">LAB CONTROL</h3><div id="ft-lab-c" class="c-dim"><div class="skeleton"></div></div>';
   fetch(API.LAB_STATUS).then(function(r){return r.json()}).then(function(d){
     var up=0,dn=0;d.hosts.forEach(function(x){if(x.status==='up')up++;else dn++;});
-    var h='<div class="stats" style="margin-bottom:12px">'+st('HOSTS',d.hosts.length,'p')+st('ONLINE',up,'g')+st('OFFLINE',dn,dn>0?'r':'g');
+    var h='<div class="stats mb-12" >'+st('HOSTS',d.hosts.length,'p')+st('ONLINE',up,'g')+st('OFFLINE',dn,dn>0?'r':'g');
     if(d.docker)h+=st('CONTAINERS',d.docker.length,'b');
     h+='</div>';
     h+='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>ROLE</th><th>UPTIME</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
     d.hosts.forEach(function(x){
       var isUp=x.status==='up';
       h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+x.role.toUpperCase()+'</td><td class="text-meta">'+(x.uptime||'-')+'</td><td>'+badge(isUp?'ok':'down')+'</td>';
-      h+='<td style="display:flex;gap:4px">';
-      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'uptime\')" style="padding:3px 8px;font-size:11px">PING</button>';
-      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'sudo reboot\')" style="padding:3px 8px;font-size:11px;color:var(--yellow)">REBOOT</button>';
-      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'sudo systemctl restart sshd\')" style="padding:3px 8px;font-size:11px">SSHD</button>';
+      h+='<td class="flex-gap-4">';
+      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'uptime\')" class="pill-xs">PING</button>';
+      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'sudo reboot\')" class="pill-warn-xs">REBOOT</button>';
+      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'sudo systemctl restart sshd\')" class="pill-xs">SSHD</button>';
       h+='</td></tr>';
     });
     h+='</tbody></table>';
@@ -2362,10 +2476,10 @@ function _toolLabCtrl(content){
       d.docker.forEach(function(c){
         var isUp=c.status==='up';
         h+='<tr><td><strong>'+c.name.toUpperCase()+'</strong></td><td>'+badge(isUp?'ok':'down')+'</td>';
-        h+='<td style="display:flex;gap:4px">';
-        if(isUp)h+='<button class="fleet-btn" onclick="labDockerAction(\''+c.name+'\',\'restart\')" style="padding:3px 8px;font-size:11px;color:var(--yellow)">RESTART</button>';
-        else h+='<button class="fleet-btn" onclick="labDockerAction(\''+c.name+'\',\'start\')" style="padding:3px 8px;font-size:11px;color:var(--green)">START</button>';
-        if(isUp)h+='<button class="fleet-btn" onclick="labDockerAction(\''+c.name+'\',\'stop\')" style="padding:3px 8px;font-size:11px;color:var(--red)">STOP</button>';
+        h+='<td class="flex-gap-4">';
+        if(isUp)h+='<button class="fleet-btn" data-action="labDockerAction" data-name="'+c.name+'" data-arg="restart" class="pill-warn-xs">RESTART</button>';
+        else h+='<button class="fleet-btn" data-action="labDockerAction" data-name="'+c.name+'" data-arg="start" class="pill-ok-3-8">START</button>';
+        if(isUp)h+='<button class="fleet-btn" data-action="labDockerAction" data-name="'+c.name+'" data-arg="stop" class="pill-err-3-8">STOP</button>';
         h+='</td></tr>';
       });
       h+='</tbody></table>';
@@ -2383,20 +2497,20 @@ function _fleetToolInner(tool,panel,content){
   } else if(tool==='vmmgmt'){
     _buildToolTabs('VM MANAGEMENT',[{id:'vmlist',label:'VM LIST'},{id:'vmcreate',label:'CREATE VM'},{id:'vmclone',label:'CLONE VM'},{id:'vmmigrate',label:'MIGRATE'},{id:'vmsnapshot',label:'SNAPSHOTS'},{id:'vmresize',label:'RESIZE'}],'vm-tab','switchVmMgmt','vm-subtitle','vm-form',content);return;
   } else if(tool==='newuser'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">NEW FLEET USER</h3>'+
+    content.innerHTML='<h3 class="section-label-pl">NEW FLEET USER</h3>'+
       '<div class="form-vertical">'+
       '<div><label class="label-sub">USERNAME</label><input id="ft-nu-user" placeholder="e.g. svc-admin" class="input-primary-lg"></div>'+
       '<div><label class="label-sub">PASSWORD</label><input id="ft-nu-pass" type="password" placeholder="Strong password" class="input-primary-lg"></div>'+
-      '<div><label class="label-sub">SSH PUBLIC KEY <span style="opacity:0.5">(optional — will generate if empty)</span></label><textarea id="ft-nu-key" placeholder="ssh-ed25519 AAAA... user@host" rows="3" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:11px;font-family:monospace;width:100%;resize:vertical"></textarea></div>'+
+      '<div><label class="label-sub">SSH PUBLIC KEY <span class="opacity-5">(optional — will generate if empty)</span></label><textarea id="ft-nu-key" placeholder="ssh-ed25519 AAAA... user@host" rows="3" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:11px;font-family:monospace;width:100%;resize:vertical"></textarea></div>'+
       '<div><label class="label-sub">ROLE</label><select id="ft-nu-role" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit">'+(_currentRole==='admin'?'<option value="admin">Admin (full sudo)</option>':'')+'<option value="operator" selected>Operator (limited sudo)</option><option value="viewer">Viewer (no sudo)</option></select></div>'+
       '<div class="btn-row"><button class="fleet-btn" onclick="fleetNewUser()" class="c-purple-active">CREATE & DEPLOY</button></div>'+
       '</div>'+
       '<div id="ft-nu-out" class="mt-12"></div>';
   } else if(tool==='passwd'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">PASSWORD UPDATE</h3>'+
+    content.innerHTML='<h3 class="section-label-pl">PASSWORD UPDATE</h3>'+
       '<div class="form-vertical">'+
       '<div><label class="label-sub">USERNAME</label>'+
-      '<div style="position:relative"><input id="ft-pw-user" autocomplete="off" placeholder="Select user..." onfocus="showUserDropdown(\'pw\')" oninput="filterUserDropdown(\'pw\',this.value)" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer">'+
+      '<div class="pos-rel"><input id="ft-pw-user" autocomplete="off" placeholder="Select user..." onfocus="showUserDropdown(\'pw\')" oninput="filterUserDropdown(\'pw\',this.value)" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer">'+
       '<div id="ft-pw-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;max-height:300px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:var(--input-border) var(--card)"></div></div></div>'+
       '<div><label class="label-sub">NEW PASSWORD</label><input id="ft-pw-pass" type="password" placeholder="New password" class="input-primary-lg"></div>'+
       '<div><label class="label-sub">CONFIRM PASSWORD</label><input id="ft-pw-confirm" type="password" placeholder="Confirm new password" class="input-primary-lg"></div>'+
@@ -2405,26 +2519,26 @@ function _fleetToolInner(tool,panel,content){
       '<div id="ft-pw-out" class="mt-12"></div>';
     _loadUserDropdown('pw');
   } else if(tool==='promote'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">PROMOTE / DEMOTE USER</h3><div id="ft-prom-c"><div class="skeleton"></div></div>';
+    content.innerHTML='<h3 class="section-label-pl">PROMOTE / DEMOTE USER</h3><div id="ft-prom-c"><div class="skeleton"></div></div>';
     fetch(API.USERS).then(function(r){return r.json()}).then(function(d){
       var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)',protected:'var(--purple-light)'};
       var h='<table class="w-full"><thead><tr><th>USER</th><th>CURRENT ROLE</th><th>ACTIONS</th></tr></thead><tbody>';
       d.users.forEach(function(u,i){
         h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+u.username.toUpperCase()+'</strong></td>';
         h+='<td><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-weight:600">'+u.role.toUpperCase()+'</span></td>';
-        h+='<td style="display:flex;gap:6px">';
-        if(u.role!=='admin')h+='<button class="fleet-btn" onclick="promoteUser(\''+u.username+'\')" style="padding:3px 10px;font-size:12px;color:var(--green)">PROMOTE</button>';
-        if(u.role!=='viewer')h+='<button class="fleet-btn" onclick="demoteUser(\''+u.username+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">DEMOTE</button>';
+        h+='<td class="flex-gap-6">';
+        if(u.role!=='admin')h+='<button class="fleet-btn" onclick="promoteUser(\''+u.username+'\')" class="pill-ok-3-10">PROMOTE</button>';
+        if(u.role!=='viewer')h+='<button class="fleet-btn" onclick="demoteUser(\''+u.username+'\')" class="pill-warn-sm">DEMOTE</button>';
         h+='</td></tr>';
       });
       h+='</tbody></table>';
       document.getElementById('ft-prom-c').innerHTML=h;
     });
   } else if(tool==='sshkey'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin:0 0 12px 0">SSH KEY UPDATE</h3>'+
-      '<div style="display:flex;flex-direction:column;gap:10px;max-width:500px">'+
+    content.innerHTML='<h3 class="section-label-pl">SSH KEY UPDATE</h3>'+
+      '<div class="flex-col-10-500">'+
       '<div><label class="label-sub">USERNAME</label>'+
-      '<div style="position:relative"><input id="ft-sk-user" autocomplete="off" placeholder="Select user..." onfocus="showUserDropdown(\'sk\')" oninput="filterUserDropdown(\'sk\',this.value)" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer">'+
+      '<div class="pos-rel"><input id="ft-sk-user" autocomplete="off" placeholder="Select user..." onfocus="showUserDropdown(\'sk\')" oninput="filterUserDropdown(\'sk\',this.value)" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer">'+
       '<div id="ft-sk-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;max-height:300px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:var(--input-border) var(--card)"></div></div></div>'+
       '<div><label class="label-sub">PUBLIC KEY</label><textarea id="ft-sk-key" placeholder="Paste your ssh-ed25519 or ssh-rsa public key here..." rows="4" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:11px;font-family:monospace;width:100%;resize:vertical"></textarea></div>'+
       '<div class="btn-row"><button class="fleet-btn" onclick="fleetSshKeyDeploy()" class="c-purple-active">DEPLOY TO FLEET</button></div>'+
@@ -2432,20 +2546,20 @@ function _fleetToolInner(tool,panel,content){
       '<div id="ft-sk-out" class="mt-12"></div>';
     _loadUserDropdown('sk');
   } else if(tool==='sshd'){
-    content.innerHTML='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:12px">RESTART SSHD</h3><div id="ft-sshd-c"><div class="skeleton"></div></div>';
+    content.innerHTML='<h3 class="section-label-pl">RESTART SSHD</h3><div id="ft-sshd-c"><div class="skeleton"></div></div>';
     fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
-      var h='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
-      h+='<button class="fleet-btn" onclick="sshdRestartSelected()" class="c-purple-active">RESTART SELECTED</button>';
-      h+='<button class="fleet-btn" onclick="sshdRestartAll()">RESTART ALL ('+d.hosts.length+')</button>';
-      h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" id="ft-sshd-selectall" onchange="document.querySelectorAll(\'.ft-sshd-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
+      var h='<div class="flex-row-8-center">';
+      h+='<button class="fleet-btn" data-action="sshdRestartSelected" class="c-purple-active">RESTART SELECTED</button>';
+      h+='<button class="fleet-btn" data-action="sshdRestartAll">RESTART ALL ('+d.hosts.length+')</button>';
+      h+='<label class="meta-flex"><input type="checkbox" id="ft-sshd-selectall" onchange="document.querySelectorAll(\'.ft-sshd-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
       h+='</div>';
-      h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>';
+      h+='<table class="w-full"><thead><tr><th class="w-30"></th><th>HOST</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>';
       d.hosts.forEach(function(x,i){
         var up=x.status==='healthy';
         h+='<tr><td><input type="checkbox" class="ft-sshd-check" data-host="'+x.label+'"></td>';
         h+='<td><strong style="color:'+HC[i%HC.length]+'">'+x.label.toUpperCase()+'</strong></td>';
         h+='<td>'+badge(up?'ok':'down')+'</td>';
-        h+='<td><button class="fleet-btn" onclick="sshdRestartHost(\''+x.label+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">RESTART</button></td></tr>';
+        h+='<td><button class="fleet-btn" data-action="sshdRestartHost" data-arg="'+x.label+'" class="pill-warn-sm">RESTART</button></td></tr>';
       });
       h+='</tbody></table><div id="ft-sshd-out" class="mt-12"></div>';
       document.getElementById('ft-sshd-c').innerHTML=h;
@@ -2484,9 +2598,9 @@ function switchFleetOps(tab){
   var sub=document.getElementById('fo-subtitle');if(sub)sub.textContent=_foLabels[tab]||'';
   var foForm=document.getElementById('fo-form');if(!foForm)return;
   if(tab==='deepscan'){
-    foForm.innerHTML='<div style="display:flex;flex-direction:column;gap:10px;max-width:500px">'+
+    foForm.innerHTML='<div class="flex-col-10-500">'+
       '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Run a comprehensive scan across all fleet hosts — CPU, RAM, disk, services, uptime.</div>'+
-      '<button class="fleet-btn" onclick="loadMetrics()" style="color:var(--purple-light);border-color:var(--purple);align-self:flex-start;padding:10px 20px">RUN DEEP SCAN</button>'+
+      '<button class="fleet-btn" onclick="loadMetrics()" class="pill-active-self">RUN DEEP SCAN</button>'+
       '</div>';
     return;
   }
@@ -2509,7 +2623,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">CPU CORES</label><select id="vmt-c-cores" class="input-primary"><option>1</option><option selected>2</option><option>4</option><option>8</option><option>16</option></select></div>'+
       '<div><label class="label-sub">RAM</label><select id="vmt-c-ram" class="input-primary"><option value="512">512MB</option><option value="1024">1GB</option><option value="2048" selected>2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
       '<div><label class="label-sub">TARGET NODE</label><select id="vmt-c-node" class="input-primary"><option value="auto">Auto (least loaded)</option></select></div>'+
-      '<div class="btn-row"><button class="fleet-btn" onclick="vmtCreate()" class="c-purple-active">CREATE VM</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn" data-action="vmtCreate" class="c-purple-active">CREATE VM</button></div>'+
       '</div><div id="vmt-c-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var nodes={};d.vms.forEach(function(v){nodes[v.node]=true;});
@@ -2520,7 +2634,7 @@ function switchVmMgmt(tab){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">SOURCE VMID</label><select id="vmt-cl-source" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div><label class="label-sub">NEW NAME</label><input id="vmt-cl-name" placeholder="e.g. clone-of-myvm" class="input-primary-lg"></div>'+
-      '<div class="btn-row"><button class="fleet-btn" onclick="vmtClone()" class="c-purple-active">CLONE VM</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn" data-action="vmtClone" class="c-purple-active">CLONE VM</button></div>'+
       '</div><div id="vmt-cl-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-cl-source');if(!sel)return;sel.innerHTML='';
@@ -2530,7 +2644,7 @@ function switchVmMgmt(tab){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM TO MIGRATE</label><select id="vmt-m-source" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div><label class="label-sub">TARGET NODE</label><select id="vmt-m-target" class="input-primary"><option value="">Loading...</option></select></div>'+
-      '<div class="btn-row"><button class="fleet-btn" onclick="vmtMigrate()" class="c-purple-active">MIGRATE</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn" data-action="vmtMigrate" class="c-purple-active">MIGRATE</button></div>'+
       '</div><div id="vmt-m-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-m-source');var tgt=document.getElementById('vmt-m-target');
@@ -2541,7 +2655,7 @@ function switchVmMgmt(tab){
   } else if(tab==='vmsnapshot'){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM</label><select id="vmt-s-source" class="input-primary"><option value="">Loading...</option></select></div>'+
-      '<div class="btn-row"><button class="fleet-btn" onclick="vmtSnapshot()" class="c-purple-active">CREATE SNAPSHOT</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn" data-action="vmtSnapshot" class="c-purple-active">CREATE SNAPSHOT</button></div>'+
       '</div><div id="vmt-s-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-s-source');if(!sel)return;sel.innerHTML='';
@@ -2552,7 +2666,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">VM</label><select id="vmt-r-source" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div><label class="label-sub">NEW CPU CORES</label><select id="vmt-r-cores" class="input-primary"><option value="">Keep current</option><option>1</option><option>2</option><option>4</option><option>8</option><option>16</option></select></div>'+
       '<div><label class="label-sub">NEW RAM</label><select id="vmt-r-ram" class="input-primary"><option value="">Keep current</option><option value="512">512MB</option><option value="1024">1GB</option><option value="2048">2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
-      '<div class="btn-row"><button class="fleet-btn" onclick="vmtResize()" class="c-purple-active">RESIZE VM</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn" data-action="vmtResize" class="c-purple-active">RESIZE VM</button></div>'+
       '</div><div id="vmt-r-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-r-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
@@ -2565,7 +2679,7 @@ function vmtLoadList(){
   var el=document.getElementById('vmt-list');if(!el)return;
   el.innerHTML='<div class="skeleton"></div>';
   fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
-    if(!d.count){el.innerHTML='<div style="color:var(--text-dim);padding:12px 0">No VMs found.</div>';document.getElementById('vmt-stats').innerHTML='';return;}
+    if(!d.count){el.innerHTML='<div class="text-dim-pad12">No VMs found.</div>';document.getElementById('vmt-stats').innerHTML='';return;}
     var running=0,stopped=0;d.vms.forEach(function(v){if(v.status==='running')running++;else stopped++;});
     var se=document.getElementById('vmt-stats');
     if(se)se.innerHTML=st('VMs',d.count,'p')+st('Running',running,'g')+st('Stopped',stopped,stopped>0?'r':'g');
@@ -2581,11 +2695,11 @@ function vmtLoadList(){
       var catLabel=(v.category||'unknown').replace(/_/g,' ');
       var displayStatus=v.status;
       h+='<tr><td><strong>'+v.vmid+'</strong></td><td>'+v.name+'</td><td><span class="cat-badge cat-'+(v.category||'unknown')+'">'+catLabel+'</span></td><td>'+v.node+'</td><td>'+v.cpu+'</td><td>'+_ramGB(v.ram_mb)+'</td>';
-      h+='<td>'+badge(displayStatus)+'</td><td style="display:flex;gap:4px">';
-      if(acts.indexOf('snapshot')>=0)h+='<button class="fleet-btn" onclick="_vmSnapWarn('+v.vmid+','+isRun+')" style="padding:3px 8px;font-size:11px;color:var(--yellow)">SNAP</button>';
-      if(acts.indexOf('stop')>=0&&isRun)h+='<button class="fleet-btn" onclick="vmPower('+v.vmid+',\'stop\')" style="padding:3px 8px;font-size:11px;color:var(--yellow)">STOP</button>';
-      if(acts.indexOf('start')>=0&&!isRun)h+='<button class="fleet-btn" onclick="vmPower('+v.vmid+',\'start\')" style="padding:3px 8px;font-size:11px;color:var(--green)">START</button>';
-      if(acts.indexOf('destroy')>=0)h+='<button class="fleet-btn" onclick="vmDestroy('+v.vmid+')" style="padding:3px 8px;font-size:11px;color:var(--red)">DESTROY</button>';
+      h+='<td>'+badge(displayStatus)+'</td><td class="flex-gap-4">';
+      if(acts.indexOf('snapshot')>=0)h+='<button class="fleet-btn" onclick="_vmSnapWarn('+v.vmid+','+isRun+')" class="pill-warn-xs">SNAP</button>';
+      if(acts.indexOf('stop')>=0&&isRun)h+='<button class="fleet-btn" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="stop" class="pill-warn-xs">STOP</button>';
+      if(acts.indexOf('start')>=0&&!isRun)h+='<button class="fleet-btn" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="start" class="pill-ok-3-8">START</button>';
+      if(acts.indexOf('destroy')>=0)h+='<button class="fleet-btn" data-action="vmDestroy" data-vmid="'+v.vmid+'" class="pill-err-3-8">DESTROY</button>';
       h+='</td></tr>';
     });
     h+='</tbody></table>';el.innerHTML=h;
@@ -2663,7 +2777,7 @@ function switchMonitoring(tab){
     f.innerHTML='<div id="mon-h-out"><div class="skeleton"></div></div>';
     fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
       var up=0,dn=0;d.hosts.forEach(function(h){if(h.status==='healthy')up++;else dn++;});
-      var h='<div class="stats" style="margin-bottom:12px">'+st('HOSTS',d.hosts.length,'p')+st('HEALTHY',up,'g')+st('UNHEALTHY',dn,dn>0?'r':'g')+st('RESPONSE',d.duration+'s','b')+'</div>';
+      var h='<div class="stats mb-12" >'+st('HOSTS',d.hosts.length,'p')+st('HEALTHY',up,'g')+st('UNHEALTHY',dn,dn>0?'r':'g')+st('RESPONSE',d.duration+'s','b')+'</div>';
       h+='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>TYPE</th><th>STATUS</th><th>UPTIME</th></tr></thead><tbody>';
       d.hosts.forEach(function(x){
         h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+(x.type||'linux').toUpperCase()+'</td><td>'+badge(x.status==='healthy'?'ok':'down')+'</td><td class="text-meta">'+(x.uptime||'-')+'</td></tr>';
@@ -2673,22 +2787,22 @@ function switchMonitoring(tab){
     }).catch(function(){document.getElementById('mon-h-out').innerHTML='<div class="c-red">Failed to fetch health data</div>';});
   } else if(tab==='mondoctor'){
     f.innerHTML='<div class="desc-line">Run self-diagnostic checks on the FREQ installation.</div>'+
-      '<button class="fleet-btn" onclick="monRunDoctor()" style="color:var(--purple-light);border-color:var(--purple);padding:10px 20px;margin-bottom:12px">RUN DOCTOR</button>'+
+      '<button class="fleet-btn" onclick="monRunDoctor()" class="pill-active-lg">RUN DOCTOR</button>'+
       '<div id="mon-doc-out" class="exec-out" style="min-height:80px;display:none"></div>';
   } else if(tab==='monjournal'){
     f.innerHTML='<div id="mon-j-out"><div class="skeleton"></div></div>';
     fetch(API.JOURNAL).then(function(r){return r.json()}).then(function(d){
-      if(!d.entries||!d.entries.length){document.getElementById('mon-j-out').innerHTML='<div style="color:var(--text-dim);padding:12px 0">No journal entries.</div>';return;}
+      if(!d.entries||!d.entries.length){document.getElementById('mon-j-out').innerHTML='<div class="text-dim-pad12">No journal entries.</div>';return;}
       var h='<table class="w-full"><thead><tr><th>TIME</th><th>TYPE</th><th>MESSAGE</th></tr></thead><tbody>';
       d.entries.slice(-50).reverse().forEach(function(e){
-        h+='<tr><td style="font-size:11px;white-space:nowrap;color:var(--text-dim)">'+(e.timestamp||e.time||'-')+'</td><td><span class="badge '+(e.level==='error'?'down':e.level==='warn'?'warn':'up')+'">'+(e.level||e.type||'info').toUpperCase()+'</span></td><td style="font-size:12px">'+(e.message||e.msg||'-')+'</td></tr>';
+        h+='<tr><td style="font-size:11px;white-space:nowrap;color:var(--text-dim)">'+(e.timestamp||e.time||'-')+'</td><td><span class="badge '+(e.level==='error'?'down':e.level==='warn'?'warn':'up')+'">'+(e.level||e.type||'info').toUpperCase()+'</span></td><td class="fs-12">'+(e.message||e.msg||'-')+'</td></tr>';
       });
       h+='</tbody></table>';
       document.getElementById('mon-j-out').innerHTML=h;
-    }).catch(function(){document.getElementById('mon-j-out').innerHTML='<div style="color:var(--text-dim);padding:12px 0">No journal entries.</div>';});
+    }).catch(function(){document.getElementById('mon-j-out').innerHTML='<div class="text-dim-pad12">No journal entries.</div>';});
   } else if(tab==='monwatch'){
     f.innerHTML='<div class="desc-line">Monitor fleet health continuously. Alerts on host down, high CPU/RAM, disk full.</div>'+
-      '<div style="display:flex;gap:8px;margin-bottom:12px">'+
+      '<div class="flex-row-8-mb12">'+
       '<button class="fleet-btn" onclick="monWatchStart()" style="color:var(--green);border-color:var(--green);padding:10px 20px">START WATCH</button>'+
       '<button class="fleet-btn" onclick="monWatchStop()" style="color:var(--red);border-color:var(--red);padding:10px 20px">STOP WATCH</button>'+
       '</div>'+
@@ -2737,18 +2851,18 @@ function switchNetwork(tab){
   } else if(tab==='netdns'){
     f.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">HOSTNAME TO RESOLVE</label><input id="net-dns-host" placeholder="e.g. google.com, hostname, 192.168.1.30" class="input-primary-lg"></div>'+
-      '<button class="fleet-btn" onclick="netDnsCheck()" style="color:var(--purple-light);border-color:var(--purple);align-self:flex-start;padding:10px 20px">RESOLVE</button>'+
-      '</div><div id="net-dns-out" class="exec-out" style="min-height:60px;margin-top:12px;display:none"></div>';
+      '<button class="fleet-btn" onclick="netDnsCheck()" class="pill-active-self">RESOLVE</button>'+
+      '</div><div id="net-dns-out" class="exec-out skel-mt12" ></div>';
   } else if(tab==='netping'){
     f.innerHTML='<div class="desc-line">Test connectivity to all fleet hosts.</div>'+
-      '<button class="fleet-btn" onclick="netPingAll()" style="color:var(--purple-light);border-color:var(--purple);padding:10px 20px;margin-bottom:12px">PING ALL HOSTS</button>'+
-      '<div id="net-ping-out"><div style="color:var(--text-dim);padding:12px 0">Click to test connectivity.</div></div>';
+      '<button class="fleet-btn" onclick="netPingAll()" class="pill-active-lg">PING ALL HOSTS</button>'+
+      '<div id="net-ping-out"><div class="text-dim-pad12">Click to test connectivity.</div></div>';
   } else if(tab==='netports'){
     f.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">TARGET HOST</label><input id="net-port-host" placeholder="e.g. 192.168.1.50" class="input-primary-lg"></div>'+
-      '<div><label class="label-sub">PORTS <span style="opacity:0.5">(comma-separated)</span></label><input id="net-port-ports" value="22,80,443,8006,8080,8888" class="input-primary-lg"></div>'+
-      '<button class="fleet-btn" onclick="netPortScan()" style="color:var(--purple-light);border-color:var(--purple);align-self:flex-start;padding:10px 20px">SCAN PORTS</button>'+
-      '</div><div id="net-port-out" class="exec-out" style="min-height:60px;margin-top:12px;display:none"></div>';
+      '<div><label class="label-sub">PORTS <span class="opacity-5">(comma-separated)</span></label><input id="net-port-ports" value="22,80,443,8006,8080,8888" class="input-primary-lg"></div>'+
+      '<button class="fleet-btn" onclick="netPortScan()" class="pill-active-self">SCAN PORTS</button>'+
+      '</div><div id="net-port-out" class="exec-out skel-mt12" ></div>';
   }
 }
 function netDnsCheck(){
@@ -2796,14 +2910,14 @@ function switchBackup(tab){
       h+='<table class="w-full"><thead><tr><th>VMID</th><th>NAME</th><th>NODE</th><th>STATUS</th><th>QUICK SNAP</th></tr></thead><tbody>';
       d.vms.forEach(function(v){
         h+='<tr><td><strong>'+v.vmid+'</strong></td><td>'+v.name+'</td><td>'+v.node+'</td><td>'+badge(v.status)+'</td>';
-        h+='<td><button class="fleet-btn" onclick="vmSnap('+v.vmid+')" style="padding:3px 8px;font-size:11px">SNAPSHOT</button></td></tr>';
+        h+='<td><button class="fleet-btn" data-action="vmSnap" data-vmid="'+v.vmid+'" class="pill-xs">SNAPSHOT</button></td></tr>';
       });
       h+='</tbody></table>';
       document.getElementById('bk-s-out').innerHTML=h;
     }).catch(function(){document.getElementById('bk-s-out').innerHTML='<div class="c-red">Failed to load VMs</div>';});
   } else if(tab==='bkschedule'){
     f.innerHTML='<div class="desc-line">PVE backup schedules are managed via the Proxmox GUI or <code>pvesh</code> CLI.</div>'+
-      '<button class="fleet-btn" onclick="bkCheckSchedules()" style="color:var(--purple-light);border-color:var(--purple);padding:10px 20px;margin-bottom:12px">CHECK SCHEDULES</button>'+
+      '<button class="fleet-btn" onclick="bkCheckSchedules()" class="pill-active-lg">CHECK SCHEDULES</button>'+
       '<div id="bk-sched-out" class="exec-out" style="min-height:60px;display:none"></div>';
   } else if(tab==='bksnapshot'){
     f.innerHTML='<div class="form-vertical">'+
@@ -2818,7 +2932,7 @@ function switchBackup(tab){
     f.innerHTML='<div class="desc-line">Export FREQ configuration (hosts, users, vault) for backup.</div>'+
       '<div style="display:flex;gap:8px">'+
       '<button class="fleet-btn" onclick="bkExportConfig()" style="color:var(--purple-light);border-color:var(--purple);padding:10px 20px">EXPORT CONFIG</button>'+
-      '</div><div id="bk-exp-out" class="exec-out" style="min-height:60px;margin-top:12px;display:none"></div>';
+      '</div><div id="bk-exp-out" class="exec-out skel-mt12" ></div>';
   } else if(tab==='bkrestore'){
     f.innerHTML='<div class="desc-line">Restore operations. Use with caution.</div>'+
       '<div class="form-vertical">'+
@@ -2916,7 +3030,7 @@ function _renderUserDropdown(prefix,items){
   var h='';
   items.forEach(function(item){
     h+='<div onmousedown="selectUserDropdown(\''+prefix+'\',\''+item.value+'\')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s" onmouseover="this.style.background=\'var(--purple-faint)\'" onmouseout="this.style.background=\'none\'">';
-    h+='<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:600;color:var(--text)">'+item.label+'</span><span style="font-size:12px;color:'+item.color+';font-weight:600">'+item.detail+'</span></div>';
+    h+='<div class="flex-between"><span style="font-size:12px;font-weight:600;color:var(--text)">'+item.label+'</span><span style="font-size:12px;color:'+item.color+';font-weight:600">'+item.detail+'</span></div>';
     h+='</div>';
   });
   if(!items.length)h='<div style="padding:14px;color:var(--text-dim);font-size:11px;text-align:center">No users found</div>';
@@ -2946,7 +3060,7 @@ function selectUserDropdown(prefix,value){
 /* New Tool — shows registered tools dashboard */
 function openNewTool(){
   var ov=document.getElementById('modal-container');
-  var h='<div class="modal" style="max-width:500px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="margin:0">Lab Tools</h3><span onclick="closeModal()" style="cursor:pointer;color:var(--text-dim);font-size:18px">&times;</span></div>';
+  var h='<div class="modal" style="max-width:500px"><div class="flex-between-mb16"><h3 class="m-0">Lab Tools</h3><span class="close-x">&times;</span></div>';
   h+='<div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">Registered tools appear in LAB TOOLS view and are available as HOME widgets.</div>';
   if(typeof LAB_TOOLS!=='undefined'&&LAB_TOOLS.length){
     LAB_TOOLS.forEach(function(t){
@@ -3024,22 +3138,22 @@ function renderVaultTab(){
     /* Users view — show each FREQ user with password + ssh key copy buttons */
     var users=d._users||[];
     var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)'};
-    html='<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">';
+    html='<div class="cards grid-auto-280" >';
     users.forEach(function(u,i){
       var passEntry=d.entries.find(function(e){return e.host===u.username&&(e.key.toLowerCase().indexOf('pass')>=0||e.key==='password');});
       var sshEntry=d.entries.find(function(e){return e.host===u.username&&(e.key.toLowerCase().indexOf('ssh')>=0||e.key.toLowerCase().indexOf('pub')>=0||e.key.toLowerCase().indexOf('id_')>=0);});
-      html+='<div class="crd" style="border-color:var(--red)">';
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3 style="color:'+HC[i%HC.length]+'">'+u.username.toUpperCase()+'</h3><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-size:12px;font-weight:600">'+u.role.toUpperCase()+'</span></div>';
+      html+='<div class="crd border-red" >';
+      html+='<div class="flex-between-mb8"><h3 style="color:'+HC[i%HC.length]+'">'+u.username.toUpperCase()+'</h3><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-size:12px;font-weight:600">'+u.role.toUpperCase()+'</span></div>';
       html+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
       if(passEntry){
-        html+='<button class="fleet-btn" onclick="vaultCopy(\''+passEntry.host+'\',\''+passEntry.key+'\')" style="padding:4px 12px;font-size:12px;color:var(--purple-light)">&#128273; COPY PASSWORD</button>';
+        html+='<button class="fleet-btn" data-action="vaultCopy" data-host="'+passEntry.host+'" data-key="'+passEntry.key+'" class="pill-purple-xs">&#128273; COPY PASSWORD</button>';
       } else {
-        html+='<span style="font-size:12px;color:var(--text-dim);padding:4px 0">No password stored</span>';
+        html+='<span class="fs-12-dim-pad4">No password stored</span>';
       }
       if(sshEntry){
-        html+='<button class="fleet-btn" onclick="vaultCopy(\''+sshEntry.host+'\',\''+sshEntry.key+'\')" style="padding:4px 12px;font-size:12px;color:var(--purple-light)">&#128272; COPY SSH KEY</button>';
+        html+='<button class="fleet-btn" data-action="vaultCopy" data-host="'+sshEntry.host+'" data-key="'+sshEntry.key+'" class="pill-purple-xs">&#128272; COPY SSH KEY</button>';
       } else {
-        html+='<span style="font-size:12px;color:var(--text-dim);padding:4px 0">No SSH key stored</span>';
+        html+='<span class="fs-12-dim-pad4">No SSH key stored</span>';
       }
       html+='</div></div>';
     });
@@ -3049,18 +3163,18 @@ function renderVaultTab(){
     var apiEntries=d.entries.filter(function(e){return !_isUserEntry(e);});
     var groups={};
     apiEntries.forEach(function(e){if(!groups[e.host])groups[e.host]=[];groups[e.host].push(e);});
-    html='<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">';
+    html='<div class="cards grid-auto-300" >';
     Object.keys(groups).sort().forEach(function(host){
       var entries=groups[host];
-      html+='<div class="crd" style="border-color:var(--red)">';
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn" onclick="vaultDelGroup(\''+host+'\')" style="padding:3px 8px;font-size:12px;color:var(--red)">DELETE</button></div>';
+      html+='<div class="crd border-red" >';
+      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn" data-action="vaultDelGroup" data-arg="'+host+'" class="pill-err-xs">DELETE</button></div>';
       entries.forEach(function(e){
         var uid=host.replace(/[^a-z0-9]/gi,'')+'-'+e.key.replace(/[^a-z0-9]/gi,'');
-        html+='<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid var(--border);font-size:12px;align-items:center">';
+        html+='<div class="flex-border-row">';
         html+='<span style="font-weight:600;color:var(--text);min-width:90px">'+e.key+'</span>';
         html+='<span style="color:var(--text-dim);flex:1;font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="vk-'+uid+'">'+e.masked+'</span>';
-        html+='<button class="fleet-btn" onclick="vaultReveal(\''+uid+'\',\''+e.host+'\',\''+e.key+'\')" style="padding:2px 8px;font-size:12px">SHOW</button>';
-        html+='<button class="fleet-btn" onclick="vaultCopy(\''+e.host+'\',\''+e.key+'\')" style="padding:2px 8px;font-size:12px;color:var(--purple-light)">COPY</button>';
+        html+='<button class="fleet-btn" data-action="vaultReveal" data-uid="'+uid+'" data-host="'+e.host+'" data-key="'+e.key+'" class="pill-2-8">SHOW</button>';
+        html+='<button class="fleet-btn" data-action="vaultCopy" data-host="'+e.host+'" data-key="'+e.key+'" class="pill-purple-2-8">COPY</button>';
         html+='</div>';
       });
       html+='</div>';
@@ -3071,18 +3185,18 @@ function renderVaultTab(){
     /* ALL tab */
     var groups={};
     d.entries.forEach(function(e){if(!groups[e.host])groups[e.host]=[];groups[e.host].push(e);});
-    html='<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">';
+    html='<div class="cards grid-auto-300" >';
     Object.keys(groups).sort().forEach(function(host){
       var entries=groups[host];
-      html+='<div class="crd" style="border-color:var(--red)">';
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn" onclick="vaultDelGroup(\''+host+'\')" style="padding:3px 8px;font-size:12px;color:var(--red)">DELETE</button></div>';
+      html+='<div class="crd border-red" >';
+      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn" data-action="vaultDelGroup" data-arg="'+host+'" class="pill-err-xs">DELETE</button></div>';
       entries.forEach(function(e){
         var uid=host.replace(/[^a-z0-9]/gi,'')+'-'+e.key.replace(/[^a-z0-9]/gi,'');
-        html+='<div style="display:flex;gap:8px;padding:6px 0;border-top:1px solid var(--border);font-size:12px;align-items:center">';
+        html+='<div class="flex-border-row">';
         html+='<span style="font-weight:600;color:var(--text);min-width:90px">'+e.key+'</span>';
         html+='<span style="color:var(--text-dim);flex:1;font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="vk-'+uid+'">'+e.masked+'</span>';
-        html+='<button class="fleet-btn" onclick="vaultReveal(\''+uid+'\',\''+e.host+'\',\''+e.key+'\')" style="padding:2px 8px;font-size:12px">SHOW</button>';
-        html+='<button class="fleet-btn" onclick="vaultCopy(\''+e.host+'\',\''+e.key+'\')" style="padding:2px 8px;font-size:12px;color:var(--purple-light)">COPY</button>';
+        html+='<button class="fleet-btn" data-action="vaultReveal" data-uid="'+uid+'" data-host="'+e.host+'" data-key="'+e.key+'" class="pill-2-8">SHOW</button>';
+        html+='<button class="fleet-btn" data-action="vaultCopy" data-host="'+e.host+'" data-key="'+e.key+'" class="pill-purple-2-8">COPY</button>';
         html+='</div>';
       });
       html+='</div>';
@@ -3210,19 +3324,19 @@ function sshdPanel(targetId){
   out.innerHTML='<div class="skeleton"></div>';
   fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
     var h='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:8px">RESTART SSHD</h3>';
-    h+='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
-    h+='<button class="fleet-btn" onclick="sshdRestartSelected()" class="c-purple-active">RESTART SELECTED</button>';
-    h+='<button class="fleet-btn" onclick="sshdRestartAll()">RESTART ALL ('+d.hosts.length+')</button>';
-    h+='<label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px"><input type="checkbox" onchange="document.querySelectorAll(\'.ft-sshd-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
+    h+='<div class="flex-row-8-center">';
+    h+='<button class="fleet-btn" data-action="sshdRestartSelected" class="c-purple-active">RESTART SELECTED</button>';
+    h+='<button class="fleet-btn" data-action="sshdRestartAll">RESTART ALL ('+d.hosts.length+')</button>';
+    h+='<label class="meta-flex"><input type="checkbox" onchange="document.querySelectorAll(\'.ft-sshd-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
     h+='<div class="flex-1"></div><button class="fleet-btn" onclick="document.getElementById(\''+targetId+'\').innerHTML=\'\'" style="opacity:0.6">CLOSE</button>';
     h+='</div>';
-    h+='<table class="w-full"><thead><tr><th style="width:30px"></th><th>HOST</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>';
+    h+='<table class="w-full"><thead><tr><th class="w-30"></th><th>HOST</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>';
     d.hosts.forEach(function(x,i){
       var up=x.status==='healthy';
       h+='<tr><td><input type="checkbox" class="ft-sshd-check" data-host="'+x.label+'"></td>';
       h+='<td><strong style="color:'+HC[i%HC.length]+'">'+x.label.toUpperCase()+'</strong></td>';
       h+='<td>'+badge(up?'ok':'down')+'</td>';
-      h+='<td><button class="fleet-btn" onclick="sshdRestartHost(\''+x.label+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">RESTART</button></td></tr>';
+      h+='<td><button class="fleet-btn" data-action="sshdRestartHost" data-arg="'+x.label+'" class="pill-warn-sm">RESTART</button></td></tr>';
     });
     h+='</tbody></table><div id="ft-sshd-out" class="mt-12"></div>';
     out.innerHTML=h;
@@ -3237,7 +3351,7 @@ function _sshdRestart(hosts){
     fetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var ok=d.results&&d.results[0]&&d.results[0].ok&&d.results[0].output.trim()==='OK';
       html+='<tr><td><strong>'+h.toUpperCase()+'</strong></td><td>'+(ok?'<span class="c-green">RESTARTED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
-      done++;if(done===total){html+='</tbody></table>';var cb='<button class="fleet-btn" onclick="document.getElementById(\'ft-sshd-out\').innerHTML=\'\'" style="margin:8px 0">CLOSE RESULTS</button>';out.innerHTML=cb+html+cb;toast('SSHD restarted on '+done+' hosts','success');}
+      done++;if(done===total){html+='</tbody></table>';var cb='<button class="fleet-btn" onclick="document.getElementById(\'ft-sshd-out\').innerHTML=\'\'" class="my-8">CLOSE RESULTS</button>';out.innerHTML=cb+html+cb;toast('SSHD restarted on '+done+' hosts','success');}
     });
   });
 }
@@ -3311,7 +3425,7 @@ function renderExecDropdown(items){
   items.forEach(function(item){
     h+='<div onmousedown="selectExecHost(\''+item.value+'\',\''+item.label+'\')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s" onmouseover="this.style.background=\'var(--purple-faint)\'" onmouseout="this.style.background=\'none\'">';
     h+='<div style="font-size:12px;font-weight:600;color:var(--text)">'+item.label+'</div>';
-    h+='<div style="font-size:12px;color:var(--text-dim);margin-top:2px">'+item.detail+'</div>';
+    h+='<div class="fs-12-dim-mt2">'+item.detail+'</div>';
     h+='</div>';
   });
   dd.innerHTML=h;
@@ -3417,9 +3531,9 @@ function loadVMs(){
     if(!d.count){document.getElementById('vms-c').innerHTML='<div class="empty-state"><div class="es-icon">▣</div><p>No VMs found on cluster.</p></div>';document.getElementById('vm-stats').innerHTML='';return;}
     var running=0,stopped=0;d.vms.forEach(function(v){if(v.status==='running')running++;else stopped++;});
     document.getElementById('vm-stats').innerHTML=
-      '<div class="st"><div class="lb">VMs</div><div style="display:flex;gap:24px;margin-top:4px"><span style="font-size:20px;font-weight:700;color:var(--purple-light)">'+d.count+'<span class="label-hint"> TOTAL</span></span><span style="font-size:20px;font-weight:700;color:var(--green)">'+running+'<span class="label-hint"> RUN</span></span><span style="font-size:20px;font-weight:700;color:var(--red)">'+stopped+'<span class="label-hint"> STOP</span></span></div></div>';
+      '<div class="st"><div class="lb">VMs</div><div class="flex-row-24"><span style="font-size:20px;font-weight:700;color:var(--purple-light)">'+d.count+'<span class="label-hint"> TOTAL</span></span><span class="stat-big-green">'+running+'<span class="label-hint"> RUN</span></span><span class="stat-big-red">'+stopped+'<span class="label-hint"> STOP</span></span></div></div>';
     var nodeFilter=document.getElementById('vm-node-filter').value;
-    var html='<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">';
+    var html='<div class="cards grid-auto-240" >';
     var nodes={};
     var catFilter=document.getElementById('vm-cat-filter')?document.getElementById('vm-cat-filter').value:'all';
     d.vms.forEach(function(v,i){
@@ -3430,7 +3544,7 @@ function loadVMs(){
       var acts=v.allowed_actions||['view'];
       var catLabel=(v.category||'unknown').replace(/_/g,' ');
       var displayStatus=v.status;
-      html+='<div class="host-card" onclick="openVmInfo(\''+v.name+'\',\'\','+v.vmid+')" style="cursor:pointer">';
+      html+='<div class="host-card" data-action="openVmInfo" data-label="'+v.name+'" data-vmid="'+v.vmid+'" class="cursor-ptr">';
       html+='<div class="host-head"><h3 style="color:'+cl+'">'+v.name+'</h3><div style="display:flex;align-items:center;gap:6px">'+
         '<span class="cat-badge cat-'+(v.category||'unknown')+'">'+catLabel+'</span>'+badge(displayStatus)+'</div></div>';
       html+='<div class="divider-light">';
@@ -3438,10 +3552,10 @@ function loadVMs(){
       html+=_mrow('CPU',v.cpu+' Cores',0,'var(--purple-light)');
       html+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM</span><span class="metric-val">'+_ramGB(v.ram_mb)+'</span></div></div>';
       html+='<div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap" onclick="event.stopPropagation()">';
-      if(acts.indexOf('snapshot')>=0)html+='<button class="fleet-btn" onclick="_vmSnapWarn('+v.vmid+','+isRunning+')" style="padding:4px 10px;font-size:12px;color:var(--yellow)">SNAP</button>';
-      if(acts.indexOf('stop')>=0&&isRunning)html+='<button class="fleet-btn" onclick="vmPower('+v.vmid+',\'stop\')" style="padding:4px 10px;font-size:12px;color:var(--yellow)">STOP</button>';
-      if(acts.indexOf('start')>=0&&!isRunning)html+='<button class="fleet-btn" onclick="vmPower('+v.vmid+',\'start\')" style="padding:4px 10px;font-size:12px;color:var(--green)">START</button>';
-      if(acts.indexOf('destroy')>=0)html+='<button class="fleet-btn" onclick="vmDestroy('+v.vmid+')" style="padding:4px 10px;font-size:12px;color:var(--red)">DESTROY</button>';
+      if(acts.indexOf('snapshot')>=0)html+='<button class="fleet-btn" onclick="_vmSnapWarn('+v.vmid+','+isRunning+')" class="pill-warn-4-10">SNAP</button>';
+      if(acts.indexOf('stop')>=0&&isRunning)html+='<button class="fleet-btn" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="stop" class="pill-warn-4-10">STOP</button>';
+      if(acts.indexOf('start')>=0&&!isRunning)html+='<button class="fleet-btn" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="start" style="padding:4px 10px;font-size:12px;color:var(--green)">START</button>';
+      if(acts.indexOf('destroy')>=0)html+='<button class="fleet-btn" data-action="vmDestroy" data-vmid="'+v.vmid+'" style="padding:4px 10px;font-size:12px;color:var(--red)">DESTROY</button>';
       html+='</div></div></div>';
     });
     html+='</div>';document.getElementById('vms-c').innerHTML=html;
@@ -3503,7 +3617,7 @@ function loadInfra(){
     d.hosts.forEach(function(h,i){
       if(h.status!=='up'){t.innerHTML+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+h.label+'</strong></td><td>'+h.type+'</td><td colspan="6">'+badge('down')+'</td></tr>';return;}
       var dn=parseInt(h.disk_pct);var dc=dn>=90?'r':dn>=75?'y':'g';
-      t.innerHTML+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+h.label+'</strong></td><td>'+h.type+'</td><td style="font-size:11px">'+h.os+'</td><td>'+h.cores+'</td><td>'+h.ram+'</td><td><span class="vl '+dc+'" style="font-size:12px">'+h.disk_pct+'</span></td><td>'+(h.containers>0?'<strong style="color:var(--blue)">'+h.containers+'</strong>':'-')+'</td><td>'+h.services+'</td><td>'+badge('up')+'</td></tr>';
+      t.innerHTML+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+h.label+'</strong></td><td>'+h.type+'</td><td class="fs-11">'+h.os+'</td><td>'+h.cores+'</td><td>'+h.ram+'</td><td><span class="vl '+dc+' fs-12" >'+h.disk_pct+'</span></td><td>'+(h.containers>0?'<strong style="color:var(--blue)">'+h.containers+'</strong>':'-')+'</td><td>'+h.services+'</td><td>'+badge('up')+'</td></tr>';
     });
     var vmhtml='';
     if(d.pve.vms.length){vmhtml='<table><thead><tr><th>VMID</th><th>Name</th><th>Node</th><th>Status</th><th>CPU</th><th>RAM</th></tr></thead><tbody>';
@@ -3525,7 +3639,7 @@ function pfAction(action){
   o.innerHTML='<span class="c-dim">Querying pfSense ('+action+')...</span>';
   fetch(API.INFRA_PFSENSE+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable){o.innerHTML=_infraPre('PFSENSE \u2014 '+action.toUpperCase(),d.output);}
-    else{o.innerHTML='<div class="c-red">Cannot reach pfSense at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';}
+    else{o.innerHTML='<div class="c-red">Cannot reach pfSense at '+d.host+'</div><div class="c-dim-mt8">'+d.error+'</div>';}
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
 }
 function tnAction(action){
@@ -3533,7 +3647,7 @@ function tnAction(action){
   o.innerHTML='<span class="c-dim">Querying TrueNAS ('+action+')...</span>';
   fetch(API.INFRA_TRUENAS+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output);}
-    else{o.innerHTML='<div class="c-red">Cannot reach TrueNAS at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';}
+    else{o.innerHTML='<div class="c-red">Cannot reach TrueNAS at '+d.host+'</div><div class="c-dim-mt8">'+d.error+'</div>';}
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
 }
 function idracAction(action){
@@ -3543,7 +3657,7 @@ function idracAction(action){
     var html='';
     d.targets.forEach(function(t){
       if(t.reachable){html+=_infraPre(t.name.toUpperCase()+' ('+t.ip+') \u2014 '+action.toUpperCase(),t.output);}
-      else{html+='<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;color:var(--red)">'+t.name.toUpperCase()+' ('+t.ip+') \u2014 UNREACHABLE</div><p style="color:var(--text-dim);font-size:11px">'+(t.error||'')+'</p></div>';}
+      else{html+='<div class="mb-12"><div style="font-size:12px;font-weight:600;color:var(--red)">'+t.name.toUpperCase()+' ('+t.ip+') \u2014 UNREACHABLE</div><p class="c-dim-fs11">'+(t.error||'')+'</p></div>';}
     });
     o.innerHTML=html;
   }).catch(function(e){o.innerHTML='<p class="c-red">Error: '+e+'</p>';});
@@ -3553,7 +3667,7 @@ function swAction(action){
   o.innerHTML='<span class="c-dim">Querying switch ('+action+')...</span>';
   fetch(API.SWITCH+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable)o.innerHTML=_infraPre('SWITCH \u2014 '+action.toUpperCase(),d.output);
-    else o.innerHTML='<div class="c-red">Cannot reach switch at '+d.host+'</div><div style="color:var(--text-dim);margin-top:8px">'+d.error+'</div>';
+    else o.innerHTML='<div class="c-red">Cannot reach switch at '+d.host+'</div><div class="c-dim-mt8">'+d.error+'</div>';
   });
 }
 
@@ -3565,11 +3679,11 @@ function loadVault(){
     if(!d.initialized){document.getElementById('vault-c').innerHTML='<p class="c-yellow">Vault not initialized. Store a credential to auto-initialize.</p>';return;}
     var groups={};
     d.entries.forEach(function(e){if(!groups[e.host])groups[e.host]=[];groups[e.host].push(e);});
-    var html='<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">';
+    var html='<div class="cards grid-auto-280" >';
     Object.keys(groups).sort().forEach(function(host){
       var entries=groups[host];
       html+='<div class="crd">';
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn" onclick="vaultDelGroup(\''+host+'\')" style="padding:3px 8px;font-size:12px;color:var(--red)">DELETE ALL</button></div>';
+      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn" data-action="vaultDelGroup" data-arg="'+host+'" class="pill-err-xs">DELETE ALL</button></div>';
       entries.forEach(function(e){
         html+='<div style="display:flex;gap:12px;padding:4px 0;border-top:1px solid var(--border);font-size:12px">';
         html+='<span style="font-weight:600;color:var(--text)">'+e.key+'</span><span class="c-dim">'+e.masked+'</span>';
@@ -3577,7 +3691,7 @@ function loadVault(){
       });
       html+='</div>';
     });
-    html+='</div><p style="color:var(--text-dim);font-size:11px;margin-top:8px">'+d.count+' credential(s) across '+Object.keys(groups).length+' service(s)</p>';
+    html+='</div><p class="c-dim-fs11-mt8">'+d.count+' credential(s) across '+Object.keys(groups).length+' service(s)</p>';
     document.getElementById('vault-c').innerHTML=html;
   });
 }
@@ -3602,7 +3716,7 @@ function loadUsers(){
   fetch(API.USERS).then(function(r){return r.json()}).then(function(d){
     var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)',protected:'var(--purple-light)'};
     /* Filter buttons */
-    var html='<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">';
+    var html='<div class="flex-row-8-center">';
     html+='<button class="fleet-btn user-filter active-view" data-filter="all" onclick="filterUsers(\'all\',this)">ALL ('+d.users.length+')</button>';
     var counts={admin:0,operator:0,viewer:0};
     d.users.forEach(function(u){if(counts[u.role]!==undefined)counts[u.role]++;});
@@ -3616,10 +3730,10 @@ function loadUsers(){
       html+='<tr class="user-row" data-role="'+u.role+'">';
       html+='<td><strong style="color:'+HC[i%HC.length]+'">'+u.username.toUpperCase()+'</strong></td>';
       html+='<td><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-weight:600">'+u.role.toUpperCase()+'</span></td>';
-      html+='<td style="display:flex;gap:6px">';
+      html+='<td class="flex-gap-6">';
       if(_currentRole==='admin'){
-        if(u.role!=='admin')html+='<button class="fleet-btn" onclick="userPromote(\''+u.username+'\')" style="padding:3px 10px;font-size:12px;color:var(--green)">PROMOTE</button>';
-        if(u.role!=='viewer')html+='<button class="fleet-btn" onclick="userDemote(\''+u.username+'\')" style="padding:3px 10px;font-size:12px;color:var(--yellow)">DEMOTE</button>';
+        if(u.role!=='admin')html+='<button class="fleet-btn" data-action="userPromote" data-arg="'+u.username+'" class="pill-ok-3-10">PROMOTE</button>';
+        if(u.role!=='viewer')html+='<button class="fleet-btn" data-action="userDemote" data-arg="'+u.username+'" class="pill-warn-sm">DEMOTE</button>';
         if(u.role==='admin')html+='<span class="text-sub">MAX</span>';
         if(u.role==='viewer')html+='<span class="text-sub">MIN</span>';
       } else {
@@ -3657,9 +3771,9 @@ function userDemote(u){
 }
 function loadKeys(){
   fetch(API.KEYS).then(function(r){return r.json()}).then(function(d){
-    var html='<p style="color:var(--text-dim);margin-bottom:12px;font-size:12px">SSH key: <code>'+d.ssh_key+'</code></p>';
+    var html='<p class="c-dim-mb12-fs12">SSH key: <code>'+d.ssh_key+'</code></p>';
     html+='<table><thead><tr><th>Host</th><th>IP</th><th>Reachable</th><th>Auth Keys</th></tr></thead><tbody>';
-    d.hosts.forEach(function(h,i){html+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+h.host+'</strong></td><td style="font-family:monospace;font-size:11px">'+h.ip+'</td><td>'+badge(h.reachable?'ok':'down')+'</td><td>'+h.key_count+'</td></tr>';});
+    d.hosts.forEach(function(h,i){html+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+h.host+'</strong></td><td class="mono-11">'+h.ip+'</td><td>'+badge(h.reachable?'ok':'down')+'</td><td>'+h.key_count+'</td></tr>';});
     html+='</tbody></table>';document.getElementById('keys-c').innerHTML=html;
   });
 }
@@ -3686,7 +3800,7 @@ function runAuditCheck(type){
         html+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+val+'</td><td>'+badge(ok?'ok':'CRITICAL')+'</td></tr>';
       });html+='</tbody></table>';done++;
       if(done===checks.length){
-        var closeBtn='<button class="fleet-btn" onclick="document.getElementById(\'audit-c\').innerHTML=\'\'" style="margin:8px 0">CLOSE RESULTS</button>';
+        var closeBtn='<button class="fleet-btn" onclick="document.getElementById(\'audit-c\').innerHTML=\'\'" class="my-8">CLOSE RESULTS</button>';
         out.innerHTML=closeBtn+html+closeBtn;
         toast('Audit complete — '+checks.length+' checks','success');
       }
@@ -3713,7 +3827,7 @@ function hardenAction(action){
         html+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">APPLIED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       });
       html+='</tbody></table>';
-      var closeBtn='<button class="fleet-btn" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" style="margin:8px 0">CLOSE RESULTS</button>';
+      var closeBtn='<button class="fleet-btn" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" class="my-8">CLOSE RESULTS</button>';
       out.innerHTML=closeBtn+html+closeBtn;
       toast(c.name+': '+ok+'/'+d.results.length+' hosts',ok===d.results.length?'success':'error');
     });
@@ -3731,7 +3845,7 @@ function runSweep(){
         var ok=(chk.name.includes('Password Auth')||chk.name.includes('Empty'))?val!=='0':val==='0';
         html+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+r.host+'</strong></td><td>'+val+'</td><td>'+badge(ok?'ok':'CRITICAL')+'</td></tr>';
       });html+='</tbody></table>';done++;
-      if(done===checks.length){var cb='<button class="fleet-btn" onclick="document.getElementById(\'sweep-c\').innerHTML=\'\'" style="margin:8px 0">CLOSE RESULTS</button>';document.getElementById('sweep-c').innerHTML=cb+html+cb;toast('Sweep complete','success');}
+      if(done===checks.length){var cb='<button class="fleet-btn" onclick="document.getElementById(\'sweep-c\').innerHTML=\'\'" class="my-8">CLOSE RESULTS</button>';document.getElementById('sweep-c').innerHTML=cb+html+cb;toast('Sweep complete','success');}
     });
   });
 }
@@ -3740,7 +3854,7 @@ function runHarden(){
   fetch(API.HARDEN).then(function(r){return r.json()}).then(function(d){
     var html='<table><thead><tr><th>Host</th><th>Check</th><th>Status</th></tr></thead><tbody>';
     d.results.forEach(function(r,i){html+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+r.host+'</strong></td><td>'+r.check+'</td><td>'+badge(r.ok?'ok':'CRITICAL')+'</td></tr>';});
-    html+='</tbody></table>';var cb2='<button class="fleet-btn" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" style="margin:8px 0">CLOSE RESULTS</button>';document.getElementById('harden-c').innerHTML=cb2+html+cb2;
+    html+='</tbody></table>';var cb2='<button class="fleet-btn" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" class="my-8">CLOSE RESULTS</button>';document.getElementById('harden-c').innerHTML=cb2+html+cb2;
     toast('Hardening audit complete','success');
   });
 }
@@ -3756,7 +3870,7 @@ function loadRisk(){
       if(i<ch.length-1)rc.innerHTML+='<span class="chain-arr">\u2192</span>';
     });
     var t=document.getElementById('risk-tbl');t.innerHTML='';
-    d.targets.forEach(function(r){t.innerHTML+='<tr><td><strong>'+r.name+'</strong><br><span class="text-meta">'+r.label+'</span></td><td>'+badge(r.risk)+'</td><td style="font-size:12px">'+r.impact+'</td><td class="text-meta">'+r.recovery.substring(0,60)+'</td></tr>';});
+    d.targets.forEach(function(r){t.innerHTML+='<tr><td><strong>'+r.name+'</strong><br><span class="text-meta">'+r.label+'</span></td><td>'+badge(r.risk)+'</td><td class="fs-12">'+r.impact+'</td><td class="text-meta">'+r.recovery.substring(0,60)+'</td></tr>';});
   }).catch(function(){});
 }
 function loadPolicies(){
@@ -3790,7 +3904,7 @@ function loadConfig(){
     html+='<tr><td class="c-dim">pfSense</td><td>'+d.pfsense_ip+'</td></tr>';
     html+='<tr><td class="c-dim">TrueNAS</td><td>'+d.truenas_ip+'</td></tr>';
     html+='</table></div><div class="crd"><h3>Safety</h3><table>';
-    html+='<tr><td class="c-dim">Protected VMIDs</td><td style="font-size:11px">'+d.protected_vmids.join(', ')+'</td></tr>';
+    html+='<tr><td class="c-dim">Protected VMIDs</td><td class="fs-11">'+d.protected_vmids.join(', ')+'</td></tr>';
     html+='<tr><td class="c-dim">Install Dir</td><td style="font-size:11px;font-family:monospace">'+d.install_dir+'</td></tr>';
     html+='</table></div></div>';
     document.getElementById('config-c').innerHTML=html;
@@ -3806,7 +3920,7 @@ function runDoctor(){
     html+='<tr><td class="c-dim">Cluster</td><td>'+d.cluster+'</td></tr>';
     html+='<tr><td class="c-dim">Hosts</td><td>'+d.hosts+'</td></tr>';
     html+='<tr><td class="c-dim">PVE Nodes</td><td>'+d.pve_nodes+'</td></tr>';
-    html+='<tr><td class="c-dim">Install Dir</td><td style="font-family:monospace;font-size:11px">'+d.install_dir+'</td></tr>';
+    html+='<tr><td class="c-dim">Install Dir</td><td class="mono-11">'+d.install_dir+'</td></tr>';
     html+='</table></div></div>';
     document.getElementById('doctor-c').innerHTML=html;
     toast('Doctor complete','success');
@@ -3826,7 +3940,7 @@ function loadJournal(){
     d.entries.reverse().forEach(function(e){
       var sc={ok:'var(--green)',fail:'var(--red)',warn:'var(--yellow)'}[e.status]||'var(--text-dim)';
       html+='<tr><td class="text-meta">'+e.timestamp+'</td><td><strong>'+e.action+'</strong></td><td>'+e.target+'</td><td style="color:'+sc+'">'+e.status+'</td><td class="text-meta">'+(e.detail||'')+'</td></tr>';
-    });html+='</tbody></table><p style="color:var(--text-dim);font-size:11px;margin-top:8px">'+d.count+' total entries</p>';
+    });html+='</tbody></table><p class="c-dim-fs11-mt8">'+d.count+' total entries</p>';
     document.getElementById('journal-c').innerHTML=html;
   });
 }
@@ -3846,14 +3960,14 @@ function searchLearn(){
 function loadDistros(){
   fetch(API.DISTROS).then(function(r){return r.json()}).then(function(d){
     var html='<div class="cards">';
-    d.distros.forEach(function(i){html+='<div class="crd"><h3>'+i.name+'</h3><div style="margin-top:4px"><span class="tag">'+i.family+'</span><span class="tag">'+i.tier+'</span></div><p style="margin-top:8px;font-size:13px;color:var(--text);word-break:break-all">'+i.url+'</p></div>';});
+    d.distros.forEach(function(i){html+='<div class="crd"><h3>'+i.name+'</h3><div class="mt-4"><span class="tag">'+i.family+'</span><span class="tag">'+i.tier+'</span></div><p style="margin-top:8px;font-size:13px;color:var(--text);word-break:break-all">'+i.url+'</p></div>';});
     html+='</div>';document.getElementById('distro-c').innerHTML=html;
   });
 }
 function loadGroups(){
   fetch(API.GROUPS).then(function(r){return r.json()}).then(function(d){
     var html='<div class="cards">';
-    Object.keys(d.groups).forEach(function(g){html+='<div class="crd"><h3>'+g+'</h3><p>'+d.groups[g].join(', ')+'</p><div style="margin-top:4px"><span class="tag">'+d.groups[g].length+' hosts</span></div></div>';});
+    Object.keys(d.groups).forEach(function(g){html+='<div class="crd"><h3>'+g+'</h3><p>'+d.groups[g].join(', ')+'</p><div class="mt-4"><span class="tag">'+d.groups[g].length+' hosts</span></div></div>';});
     html+='</div>';document.getElementById('groups-c').innerHTML=html;
   });
 }
@@ -3969,11 +4083,11 @@ function _vmToggleResize(vmid){
   if(out.getAttribute('data-mode')==='resize'){out.innerHTML='';out.removeAttribute('data-mode');return;}
   out.setAttribute('data-mode','resize');
   out.innerHTML='<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:12px 0">'+
-    '<div><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px">CPU CORES</label>'+
+    '<div><label class="label-sub-10">CPU CORES</label>'+
     '<select id="vm-rz-cores" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit"><option value="">Keep</option><option>1</option><option>2</option><option>4</option><option>8</option><option>12</option><option>16</option></select></div>'+
-    '<div><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px">RAM</label>'+
+    '<div><label class="label-sub-10">RAM</label>'+
     '<select id="vm-rz-ram" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit"><option value="">Keep</option><option value="512">512MB</option><option value="1024">1GB</option><option value="2048">2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
-    '<button class="fleet-btn" onclick="_vmDoResize('+vmid+')" style="padding:8px 16px;font-size:12px">APPLY</button></div>';
+    '<button class="fleet-btn" onclick="_vmDoResize('+vmid+')" class="pad-h16-fs12">APPLY</button></div>';
 }
 function _vmDoResize(vmid){
   var cores=(document.getElementById('vm-rz-cores')||{}).value;
@@ -3996,9 +4110,9 @@ function _vmToggleMigrate(vmid,currentNode){
   var nodes=(_fleetCache.fo&&_fleetCache.fo.pve_nodes)||[];
   var opts='';nodes.forEach(function(n){if(n.name!==currentNode)opts+='<option value="'+n.name+'">'+n.name+' ('+n.detail.split(' \u00b7 ')[0]+')</option>';});
   out.innerHTML='<div style="display:flex;gap:10px;align-items:flex-end;padding:12px 0">'+
-    '<div><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px">TARGET NODE <span style="opacity:0.5">(current: '+currentNode+')</span></label>'+
+    '<div><label class="label-sub-10">TARGET NODE <span class="opacity-5">(current: '+currentNode+')</span></label>'+
     '<select id="vm-mig-target" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit;min-width:200px">'+opts+'</select></div>'+
-    '<button class="fleet-btn" onclick="_vmDoMigrate('+vmid+')" style="padding:8px 16px;font-size:12px">MIGRATE</button></div>';
+    '<button class="fleet-btn" onclick="_vmDoMigrate('+vmid+')" class="pad-h16-fs12">MIGRATE</button></div>';
 }
 function _vmDoMigrate(vmid){
   var target=(document.getElementById('vm-mig-target')||{}).value;
@@ -4023,7 +4137,7 @@ function _updateNicPreviewCombo(){
   var pre=document.getElementById('vm-nic-preview');if(!pre)return;
   var ids=_getNicCombo();
   var octet=(document.getElementById('vm-nic-octet')||{}).value;
-  if(!octet){pre.innerHTML='<span style="opacity:0.5">Enter last octet...</span>';return;}
+  if(!octet){pre.innerHTML='<span class="opacity-5">Enter last octet...</span>';return;}
   var lines=[];
   ids.forEach(function(vid,i){
     var v=_VLAN_MAP[vid];if(!v)return;
@@ -4194,7 +4308,7 @@ function renderPveNodeCard(config){
   var vmRun=nodeVms.filter(function(v){return v.status==='running';}).length;
   var vmStop=nodeVms.length-vmRun;
   stats+=st('VMs',vmRun+' RUN / '+vmStop+' STOP','p');
-  var html='<div style="background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
+  var html='<div class="card-box"><div class="stats mb-0" >'+stats+'</div></div>';
   var _pveActs=[
     {l:'CLUSTER STATUS',a:'pvesh get /cluster/status --output-format json-pretty'},
     {l:'STORAGE',a:'pvesh get /storage --output-format json-pretty'},
@@ -4208,11 +4322,11 @@ function renderPveNodeCard(config){
   ];
   var btns='';
   _pveActs.forEach(function(a){
-    btns+='<button class="fleet-btn" style="min-width:120px;text-align:center" onclick="event.stopPropagation();_runPveNodeCmd(\''+label+'\',\''+ip+'\',\''+a.a.replace(/'/g,"\\'")+'\')">'+a.l+'</button>';
+    btns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();_runPveNodeCmd(\''+label+'\',\''+ip+'\',\''+a.a.replace(/'/g,"\\'")+'\')">'+a.l+'</button>';
   });
-  btns+='<button class="fleet-btn" style="min-width:120px;text-align:center" onclick="event.stopPropagation();hdExec(this)">RUN CMD</button>';
-  btns+='<button class="fleet-btn" style="min-width:120px;text-align:center" onclick="event.stopPropagation();hdLogs(this)">LOGS</button>';
-  btns+='<button class="fleet-btn" style="min-width:120px;text-align:center" onclick="event.stopPropagation();hdDiagnose(this)">DIAGNOSE</button>';
+  btns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();hdExec(this)">RUN CMD</button>';
+  btns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();hdLogs(this)">LOGS</button>';
+  btns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();hdDiagnose(this)">DIAGNOSE</button>';
   html+=_infraPanelHtml('PVE NODE CONTROLS','var(--purple-light)',btns);
   html+=_toolPanelHtml();
   _infraOutputTarget='hd-infra-out';
@@ -4237,14 +4351,14 @@ function renderInfraCard(config){
     if(live.disk)stats+=st('DISK',live.disk,'g');
     if(live.uptime)stats+=st('UPTIME',live.uptime.replace('up ','').split(',').slice(0,2).join(','),'p');
   }
-  var html='<div style="background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
+  var html='<div class="card-box"><div class="stats mb-0" >'+stats+'</div></div>';
   var actions=INFRA_ACTIONS[infraType];
   if(actions){
     var btns='';
     actions.forEach(function(a){
       var match=a.f.match(/\('([^']+)'\)/);
       var actionName=match?match[1]:'status';
-      btns+='<button class="fleet-btn" style="min-width:120px;text-align:center" onclick="event.stopPropagation();_runInfraAction(\''+infraType+'\',\''+actionName+'\')">'+a.l+'</button>';
+      btns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();_runInfraAction(\''+infraType+'\',\''+actionName+'\')">'+a.l+'</button>';
     });
     html+=_infraPanelHtml(roleInfo.role+' CONTROLS',roleInfo.color,btns);
   }
@@ -4272,13 +4386,13 @@ function renderHostCard(config){
     stats+=st('Uptime',(d.uptime||'?').replace('up ','').split(',').slice(0,2).join(','),'p');
     if(isDocker)stats+=st('Docker',dc+' Containers','b');
     var svcCount=parseInt(d.running_services)||0;if(svcCount>0)stats+=st('Services',svcCount+' Running','y');
-    var html='<div style="background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
+    var html='<div class="card-box"><div class="stats mb-0" >'+stats+'</div></div>';
     /* ── Action buttons ── */
     html+='<div class="ho-actions" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:24px">';
-    html+='<button onclick="hdExec(this)">RUN COMMAND</button>';
-    html+='<button onclick="hdLogs(this)">VIEW LOGS</button>';
-    html+='<button onclick="hdDiagnose(this)">FULL DIAGNOSE</button>';
-    html+='<button onclick="hdRestart()" class="c-yellow">RESTART SERVICES</button>';
+    html+='<button data-action="hdExec">RUN COMMAND</button>';
+    html+='<button data-action="hdLogs">VIEW LOGS</button>';
+    html+='<button data-action="hdDiagnose">FULL DIAGNOSE</button>';
+    html+='<button data-action="hdRestart" class="c-yellow">RESTART SERVICES</button>';
     html+='</div>';
     html+=_toolPanelHtml();
     /* ── Build reusable data sections ── */
@@ -4306,7 +4420,7 @@ function renderHostCard(config){
       var upCount=0;containers.forEach(function(c){if(c.status.indexOf('Up')>=0)upCount++;});
       var downCount=containers.length-upCount;
       /* Container header */
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+      html+='<div class="flex-between-mb12">';
       html+='<h3 style="font-size:15px;color:var(--purple-light);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin:0">CONTAINERS</h3>';
       html+='<div style="display:flex;gap:8px;align-items:center">';
       html+='<span style="font-size:11px;font-weight:600;color:var(--green)">'+upCount+' UP</span>';
@@ -4327,9 +4441,9 @@ function renderHostCard(config){
         html+='</div>';
         html+='<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;font-family:monospace">'+imgShort+'</div>';
         html+='<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">'+c.status+'</div>';
-        html+='<div style="display:flex;gap:6px">';
-        html+='<button class="fleet-btn" onclick="hdDockerRestart(\''+c.name+'\')" style="padding:4px 10px;font-size:11px">RESTART</button>';
-        html+='<button class="fleet-btn" onclick="hdDockerLogs(\''+c.name+'\')" style="padding:4px 10px;font-size:11px">LOGS</button>';
+        html+='<div class="flex-gap-6">';
+        html+='<button class="fleet-btn" onclick="hdDockerRestart(\''+c.name+'\')" class="pill-4-10-fs11">RESTART</button>';
+        html+='<button class="fleet-btn" onclick="hdDockerLogs(\''+c.name+'\')" class="pill-4-10-fs11">LOGS</button>';
         html+='</div></div>';
       });
       html+='</div>';
@@ -4347,7 +4461,7 @@ function renderHostCard(config){
       html+='<div class="ho-section"><h3>System</h3>'+sysContent+'</div>';
       html+='<div class="ho-section"><h3>Network</h3>'+netContent+'</div>';
       html+='</div>';
-      html+='<div class="ho-section" style="margin-top:10px"><h3>SECURITY & STATUS</h3>'+secContent+'</div>';
+      html+='<div class="ho-section mt-10" ><h3>SECURITY & STATUS</h3>'+secContent+'</div>';
     }
     _cardReady(html);
   }).catch(function(e){_cardReady('<p class="c-red">Error: '+e+'</p>');});
@@ -4370,10 +4484,10 @@ function hdDockerLogs(name){
 /* ── VM Card helpers ── */
 function _vmConfigPanel(vmid,label){
   var h='<div class="flex-fill">';
-  h+='<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;letter-spacing:0.5px">CONFIGURE</div>';
-  h+='<div style="margin-bottom:8px"><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">RENAME</label><div style="display:flex;gap:4px"><input id="vm-new-name" placeholder="new name" value="'+label+'" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:180px"><button class="fleet-btn" onclick="_vmRename('+vmid+')" style="padding:6px 10px;font-size:11px">SET</button></div></div>';
-  h+='<div style="margin-bottom:8px"><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">VMID</label><div style="display:flex;gap:4px"><input id="vm-new-id" placeholder="new ID" type="number" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:100px"><button class="fleet-btn" onclick="_vmChangeId('+vmid+')" style="padding:6px 10px;font-size:11px">SET</button></div></div>';
-  h+='<div><label style="font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px">NETWORK CONFIG</label>';
+  h+='<div class="fs-11-dim-mb10-ls">CONFIGURE</div>';
+  h+='<div class="mb-8"><label class="label-sub-10-tight">RENAME</label><div class="flex-gap-4"><input id="vm-new-name" placeholder="new name" value="'+label+'" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:180px"><button class="fleet-btn" onclick="_vmRename('+vmid+')" class="pill-pad6">SET</button></div></div>';
+  h+='<div class="mb-8"><label class="label-sub-10-tight">VMID</label><div class="flex-gap-4"><input id="vm-new-id" placeholder="new ID" type="number" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:100px"><button class="fleet-btn" onclick="_vmChangeId('+vmid+')" class="pill-pad6">SET</button></div></div>';
+  h+='<div><label class="label-sub-10-tight">NETWORK CONFIG</label>';
   h+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">';
   h+='<select id="vm-nic-combo" onchange="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit">';
   var _vids=Object.keys(_VLAN_MAP).sort(function(a,b){return parseInt(a)-parseInt(b);});
@@ -4386,7 +4500,7 @@ function _vmConfigPanel(vmid,label){
   h+='</select>';
   h+='<span style="color:var(--text-dim);font-size:12px;font-weight:600">OCTET:</span>';
   h+='<input id="vm-nic-octet" type="number" min="1" max="254" placeholder="x" oninput="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:monospace;width:55px">';
-  h+='<button class="fleet-btn" onclick="_vmApplyNicCombo('+vmid+')" style="padding:6px 10px;font-size:11px">APPLY</button>';
+  h+='<button class="fleet-btn" onclick="_vmApplyNicCombo('+vmid+')" class="pill-pad6">APPLY</button>';
   h+='</div>';
   h+='<div id="vm-nic-preview" style="font-size:11px;color:var(--text-dim);font-family:monospace;line-height:1.6"></div>';
   h+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--input-border)">';
@@ -4398,7 +4512,7 @@ function _vmConfigPanel(vmid,label){
   h+='<span style="color:var(--text-dim);font-size:14px;font-weight:700">.</span>';
   h+='<input id="vm-add-nic-octet" type="number" min="1" max="254" placeholder="x" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:11px;font-family:monospace;width:50px">';
   h+='<button class="fleet-btn" onclick="_vmCheckAndAddNic('+vmid+')" style="padding:5px 10px;font-size:11px">CHECK & ADD</button>';
-  h+='<span id="vm-add-nic-status" style="font-size:11px"></span>';
+  h+='<span id="vm-add-nic-status" class="fs-11"></span>';
   h+='</div></div></div>';
   h+='</div>';
   return h;
@@ -4421,6 +4535,53 @@ function _vmNicCards(allIps){
     h+='</div>';
   });
   return h;
+}
+function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel){
+  var ctrl='<div style="display:flex;gap:16px;margin:12px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">';
+  if(acts.indexOf('configure')>=0){
+    ctrl+=_vmConfigPanel(vmid,label);
+  }
+  ctrl+='<div style="width:1px;background:var(--input-border)"></div>';
+  ctrl+='<div class="flex-fill">';
+  ctrl+='<div class="fs-11-dim-mb10-ls">VM CONTROLS \u00b7 '+tier.toUpperCase()+'</div>';
+  ctrl+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">';
+  if(acts.indexOf('start')>=0&&!isRunning)ctrl+='<button class="fleet-btn btn-green" data-action="vmPower" data-vmid="'+vmid+'" data-arg="start" class="pad-v8-fs11">START</button>';
+  if(acts.indexOf('stop')>=0&&isRunning)ctrl+='<button class="fleet-btn" data-action="vmPower" data-vmid="'+vmid+'" data-arg="stop" class="pad-v8-warn">STOP</button>';
+  if(acts.indexOf('restart')>=0&&isRunning)ctrl+='<button class="fleet-btn" onclick="vmPower('+vmid+',\'stop\');setTimeout(function(){vmPower('+vmid+',\'start\')},5000)" style="padding:8px 0;font-size:11px;color:var(--orange)">RESTART</button>';
+  if(acts.indexOf('snapshot')>=0)ctrl+='<button class="fleet-btn" onclick="_vmSnapWarn('+vmid+','+isRunning+')" class="pad-v8-warn">SNAPSHOT</button>';
+  if(acts.indexOf('snapshot')>=0)ctrl+='<button class="fleet-btn" onclick="_vmListSnaps('+vmid+')" class="pad-v8-fs11">SNAPSHOTS</button>';
+  if(acts.indexOf('resize')>=0)ctrl+='<button class="fleet-btn" onclick="_vmToggleResize('+vmid+')" class="pad-v8-fs11">RESIZE</button>';
+  if(acts.indexOf('migrate')>=0)ctrl+='<button class="fleet-btn" onclick="_vmToggleMigrate('+vmid+',\''+(vm?vm.node:'')+'\')" class="pad-v8-fs11">MIGRATE</button>';
+  if(acts.indexOf('destroy')>=0)ctrl+='<button class="fleet-btn btn-red" data-action="vmDestroy" data-vmid="'+vmid+'" class="pad-v8-fs11">DESTROY</button>';
+  if(acts.length<=1)ctrl+='<span style="font-size:12px;color:var(--text-dim);grid-column:1/-1">View only \u2014 no actions for '+catLabel+'</span>';
+  ctrl+='<div style="grid-column:1/-1;border-top:1px solid var(--input-border);margin-top:6px;padding-top:8px;font-size:11px;color:var(--text-dim);letter-spacing:0.5px">HOST TOOLS</div>';
+  ctrl+='<button class="fleet-btn" data-action="hdExec" class="pad-v8-fs11">RUN CMD</button>';
+  ctrl+='<button class="fleet-btn" data-action="hdLogs" class="pad-v8-fs11">LOGS</button>';
+  ctrl+='<button class="fleet-btn" data-action="hdDiagnose" class="pad-v8-fs11">DIAGNOSE</button>';
+  ctrl+='<button class="fleet-btn" data-action="hdRestart" class="pad-v8-warn">RESTART SVC</button>';
+  ctrl+='</div></div>';
+  ctrl+='</div>';
+  ctrl+='<div id="vm-ctrl-out"></div>';
+  return ctrl;
+}
+function _resolveVmIps(vmid,ip,liveHost){
+  var _vmNicData=(_fleetCache.fo&&_fleetCache.fo.vm_nics&&_fleetCache.fo.vm_nics[vmid])||[];
+  var _vlanPrefixes={};Object.keys(_VLAN_MAP).forEach(function(id){var v=_VLAN_MAP[id];if(v.name&&v.prefix)_vlanPrefixes[v.name]=v.prefix;});
+  var knownIp=ip||'';
+  if(!knownIp&&liveHost)knownIp=liveHost.ip||'';
+  var octet='';
+  if(knownIp){var parts=knownIp.split('.');if(parts.length===4)octet=parts[3];}
+  var allIps=[];
+  if(_vmNicData.length){
+    _vmNicData.forEach(function(n){
+      var prefix=_vlanPrefixes[n.vlan_name]||'';
+      allIps.push({nic:n.nic,vlan:n.vlan_name,ip:octet?(prefix+'.'+octet):'?'});
+    });
+  } else if(knownIp){
+    allIps.push({nic:'net0',vlan:'?',ip:knownIp});
+  }
+  var subtitleIp=knownIp||((allIps.length&&allIps[0].ip!=='?')?allIps[0].ip:'?');
+  return {allIps:allIps,subtitleIp:subtitleIp};
 }
 function _vmDockerFetch(vmid){
   fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
@@ -4472,25 +4633,8 @@ function renderVmCard(config){
     if(cip)liveHost=_fleetCache.hd.hosts.find(function(h){return h.ip===cip;});
   }
   var kv=_kvRow;
-  /* Network data — from real PVE NIC configs via vm_nics */
-  var _vmNicData=(_fleetCache.fo&&_fleetCache.fo.vm_nics&&_fleetCache.fo.vm_nics[vmid])||[];
-  var _vlanPrefixes={};Object.keys(_VLAN_MAP).forEach(function(id){var v=_VLAN_MAP[id];if(v.name&&v.prefix)_vlanPrefixes[v.name]=v.prefix;});
-  var knownIp=ip||'';
-  if(!knownIp&&liveHost)knownIp=liveHost.ip||'';
-  var octet='';
-  if(knownIp){var parts=knownIp.split('.');if(parts.length===4)octet=parts[3];}
-  var allIps=[];
-  if(_vmNicData.length){
-    _vmNicData.forEach(function(n){
-      var prefix=_vlanPrefixes[n.vlan_name]||'';
-      allIps.push({nic:n.nic,vlan:n.vlan_name,ip:octet?(prefix+'.'+octet):'?'});
-    });
-  } else if(knownIp){
-    /* Fallback — no NIC data, show known IP without VLAN guess */
-    allIps.push({nic:'net0',vlan:'?',ip:knownIp});
-  }
-  var subtitleIp=knownIp||((allIps.length&&allIps[0].ip!=='?')?allIps[0].ip:'?');
-  var sysIp=subtitleIp;
+  var _ips=_resolveVmIps(vmid,ip,liveHost);
+  var allIps=_ips.allIps,subtitleIp=_ips.subtitleIp;
   document.getElementById('hd-subtitle').textContent=subtitleIp+' \u00b7 VM '+vmid+' \u00b7 '+(vm?vm.node:'?');
   /* Stats */
   var stats='';
@@ -4506,34 +4650,8 @@ function renderVmCard(config){
   } else {
     if(vm){stats+=st('CPU',vm.cpu+' cores','p');stats+=st('RAM',_ramGB(vm.ram_mb),'b');}
   }
-  var html='<div style="background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:14px;margin-bottom:16px"><div class="stats" style="margin-bottom:0">'+stats+'</div></div>';
-  /* Configure + VM Controls side by side */
-  var ctrl='<div style="display:flex;gap:16px;margin:12px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">';
-  if(acts.indexOf('configure')>=0){
-    ctrl+=_vmConfigPanel(vmid,label);
-  }
-  ctrl+='<div style="width:1px;background:var(--input-border)"></div>';
-  ctrl+='<div class="flex-fill">';
-  ctrl+='<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;letter-spacing:0.5px">VM CONTROLS \u00b7 '+tier.toUpperCase()+'</div>';
-  ctrl+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">';
-  if(acts.indexOf('start')>=0&&!isRunning)ctrl+='<button class="fleet-btn btn-green" onclick="vmPower('+vmid+',\'start\')" style="padding:8px 0;font-size:11px">START</button>';
-  if(acts.indexOf('stop')>=0&&isRunning)ctrl+='<button class="fleet-btn" onclick="vmPower('+vmid+',\'stop\')" style="padding:8px 0;font-size:11px;color:var(--yellow)">STOP</button>';
-  if(acts.indexOf('restart')>=0&&isRunning)ctrl+='<button class="fleet-btn" onclick="vmPower('+vmid+',\'stop\');setTimeout(function(){vmPower('+vmid+',\'start\')},5000)" style="padding:8px 0;font-size:11px;color:var(--orange)">RESTART</button>';
-  if(acts.indexOf('snapshot')>=0)ctrl+='<button class="fleet-btn" onclick="_vmSnapWarn('+vmid+','+isRunning+')" style="padding:8px 0;font-size:11px;color:var(--yellow)">SNAPSHOT</button>';
-  if(acts.indexOf('snapshot')>=0)ctrl+='<button class="fleet-btn" onclick="_vmListSnaps('+vmid+')" style="padding:8px 0;font-size:11px">SNAPSHOTS</button>';
-  if(acts.indexOf('resize')>=0)ctrl+='<button class="fleet-btn" onclick="_vmToggleResize('+vmid+')" style="padding:8px 0;font-size:11px">RESIZE</button>';
-  if(acts.indexOf('migrate')>=0)ctrl+='<button class="fleet-btn" onclick="_vmToggleMigrate('+vmid+',\''+(vm?vm.node:'')+'\')" style="padding:8px 0;font-size:11px">MIGRATE</button>';
-  if(acts.indexOf('destroy')>=0)ctrl+='<button class="fleet-btn btn-red" onclick="vmDestroy('+vmid+')" style="padding:8px 0;font-size:11px">DESTROY</button>';
-  if(acts.length<=1)ctrl+='<span style="font-size:12px;color:var(--text-dim);grid-column:1/-1">View only \u2014 no actions for '+catLabel+'</span>';
-  ctrl+='<div style="grid-column:1/-1;border-top:1px solid var(--input-border);margin-top:6px;padding-top:8px;font-size:11px;color:var(--text-dim);letter-spacing:0.5px">HOST TOOLS</div>';
-  ctrl+='<button class="fleet-btn" onclick="hdExec(this)" style="padding:8px 0;font-size:11px">RUN CMD</button>';
-  ctrl+='<button class="fleet-btn" onclick="hdLogs(this)" style="padding:8px 0;font-size:11px">LOGS</button>';
-  ctrl+='<button class="fleet-btn" onclick="hdDiagnose(this)" style="padding:8px 0;font-size:11px">DIAGNOSE</button>';
-  ctrl+='<button class="fleet-btn" onclick="hdRestart()" style="padding:8px 0;font-size:11px;color:var(--yellow)">RESTART SVC</button>';
-  ctrl+='</div></div>';
-  ctrl+='</div>';
-  ctrl+='<div id="vm-ctrl-out"></div>';
-  html+=ctrl;
+  var html='<div class="card-box"><div class="stats mb-0" >'+stats+'</div></div>';
+  html+=_vmControlPanel(vmid,label,acts,tier,isRunning,catLabel);
   html+=_toolPanelHtml();
   /* Build reusable data */
   var sys='';
@@ -4556,8 +4674,8 @@ function renderVmCard(config){
   /* ── ADAPTIVE LAYOUT ── */
   if(hasDocker){
     /* === DOCKER VM — containers are the hero === */
-    html+='<div id="hd-docker-hero" style="margin-bottom:16px">';
-    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+    html+='<div id="hd-docker-hero" class="mb-16">';
+    html+='<div class="flex-between-mb12">';
     html+='<h3 style="font-size:15px;color:var(--purple-light);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin:0">CONTAINERS</h3>';
     html+='<span id="hd-docker-counts" class="text-meta">Loading...</span>';
     html+='</div>';
@@ -4575,7 +4693,7 @@ function renderVmCard(config){
     html+='<div class="ho-section"><h3>System</h3>'+sys+'</div>';
     html+='<div class="ho-section"><h3>Network</h3>'+net+'</div>';
     html+='</div>';
-    html+='<div class="ho-section" style="margin-top:10px"><h3>SECURITY & STATUS</h3>'+secContent+'</div>';
+    html+='<div class="ho-section mt-10" ><h3>SECURITY & STATUS</h3>'+secContent+'</div>';
   }
   _cardReady(html);
   if(document.getElementById('vm-nic-combo'))_updateNicPreviewCombo();
@@ -4697,9 +4815,9 @@ function _ltHostKey(toolId,pfx){
 
 function _ltGenerateHTML(toolId,pfx){
   pfx=pfx||'';var t=_ltGetTool(toolId);if(!t)return '';
-  return '<div style="background:var(--bg2);border:2px solid var(--input-border);border-radius:8px;margin-bottom:16px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center"><div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px;font-weight:800;letter-spacing:2px;background:linear-gradient(135deg,var(--purple-light),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">'+t.name+'</span><span id="'+pfx+'lt-version" class="text-meta"></span><span id="'+pfx+'lt-live-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)"></span></div><div style="font-size:11px;color:var(--text-dim);margin-top:2px">'+t.subtitle+'</div></div><div style="text-align:right"><div id="'+pfx+'lt-station-label" class="text-sub"></div></div></div>'+
+  return '<div style="background:var(--bg2);border:2px solid var(--input-border);border-radius:8px;margin-bottom:16px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center"><div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px;font-weight:800;letter-spacing:2px;background:linear-gradient(135deg,var(--purple-light),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">'+t.name+'</span><span id="'+pfx+'lt-version" class="text-meta"></span><span id="'+pfx+'lt-live-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)"></span></div><div class="fs-11-dim-mt2">'+t.subtitle+'</div></div><div style="text-align:right"><div id="'+pfx+'lt-station-label" class="text-sub"></div></div></div>'+
     '<div class="stats" id="'+pfx+'lt-stats"></div>'+
-    '<div class="exec-bar" id="'+pfx+'lt-connect-bar" style="margin-bottom:0"><input id="'+pfx+'lt-host" placeholder="'+t.name+' station IP" style="max-width:200px" value=""><input id="'+pfx+'lt-key" type="password" placeholder="API key" class="flex-1"><button onclick="ltConnect(\''+toolId+'\',\''+pfx+'\')">CONNECT</button><button onclick="ltSaveConfig(\''+toolId+'\',\''+pfx+'\')" style="background:var(--card);border:2px solid var(--input-border);color:var(--text)">SAVE TO VAULT</button></div>'+
+    '<div class="exec-bar" id="'+pfx+'lt-connect-bar" class="mb-0"><input id="'+pfx+'lt-host" placeholder="'+t.name+' station IP" style="max-width:200px" value=""><input id="'+pfx+'lt-key" type="password" placeholder="API key" class="flex-1"><button onclick="ltConnect(\''+toolId+'\',\''+pfx+'\')">CONNECT</button><button onclick="ltSaveConfig(\''+toolId+'\',\''+pfx+'\')" style="background:var(--card);border:2px solid var(--input-border);color:var(--text)">SAVE TO VAULT</button></div>'+
     '<div id="'+pfx+'lt-conn-status" style="font-size:11px;color:var(--text-dim);margin:6px 0 16px 2px"></div>'+
     '<div id="'+pfx+'lt-controls" style="display:none;margin-bottom:16px"><div style="display:flex;gap:8px;flex-wrap:wrap">'+(t.renderControls?t.renderControls(pfx):'')+'</div></div>'+
     '<div id="'+pfx+'lt-content"></div>'+
@@ -4800,7 +4918,7 @@ function gwipeRefreshBays(host,key,pfx){
   _ltProxy('gwipe','GET','bays',host,key,function(d){
     if(d.error||!d.bays)return;var html='';
     Object.keys(d.bays).sort().forEach(function(dev,i){html+=gwipeBayCard(dev,d.bays[dev],i,pfx);});
-    var el=_ltEl(pfx,'lt-content');if(el)el.innerHTML='<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">'+(html||'<div style="color:var(--text-dim);padding:24px">No bays detected</div>')+'</div>';
+    var el=_ltEl(pfx,'lt-content');if(el)el.innerHTML='<div class="cards grid-auto-280" >'+(html||'<div style="color:var(--text-dim);padding:24px">No bays detected</div>')+'</div>';
   });
 }
 function gwipeBayCard(dev,b,idx,pfx){
@@ -4808,7 +4926,7 @@ function gwipeBayCard(dev,b,idx,pfx){
   var state=b.state||'EMPTY';
   var displayState=(state==='DETECTED')?'IDLE':state;
   var h='<div class="host-card">';
-  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+  h+='<div class="flex-between-mb8">';
   h+='<div style="font-size:16px;font-weight:700;color:var(--purple-light)">BAY '+(idx+1)+'</div>';
   var stBg='background:rgba(110,118,129,0.1);color:var(--text-dim)';
   if(displayState==='WIPING')stBg='background:rgba(210,153,34,0.15);color:var(--yellow)';
@@ -4844,17 +4962,17 @@ function gwipeBayCard(dev,b,idx,pfx){
     h+='</div>';
   }
   if(state==='WIPING'&&b.wipe){var pct=b.wipe.percent||0;
-    h+='<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span class="c-yellow">'+(b.wipe.method||'')+'</span><span style="color:var(--text-bright);font-weight:600">'+pct.toFixed(1)+'%</span></div>';
+    h+='<div class="mt-10"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span class="c-yellow">'+(b.wipe.method||'')+'</span><span style="color:var(--text-bright);font-weight:600">'+pct.toFixed(1)+'%</span></div>';
     h+='<div style="background:rgba(255,255,255,0.06);border-radius:3px;height:6px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,var(--yellow),var(--orange));border-radius:3px;transition:width 0.5s"></div></div>';
     h+='<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:3px;color:var(--text-dim)"><span>'+(b.wipe.speed||'')+'</span><span>ETA: '+(b.wipe.eta||'')+'</span></div></div>';
   }
   if(state==='WIPED'&&b.wipe)h+='<div style="margin-top:8px;padding:6px 10px;background:rgba(63,185,80,0.08);border-radius:6px;font-size:11px;color:var(--green);font-weight:600;text-align:center">CLEAN — '+(b.wipe.method||'')+(b.wipe.duration?' ('+b.wipe.duration+')':'')+'</div>';
   if(b.present){
     h+='<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">';
-    h+='<button class="fleet-btn btn-cyan" onclick="gwipeBayAction(\''+dev+'\',\'smart\',\''+pfx+'\')" style="padding:4px 10px;font-size:12px">SMART TEST</button>';
-    h+='<button class="fleet-btn btn-red" onclick="gwipeBayWipe(\''+dev+'\',\''+pfx+'\')" style="padding:4px 10px;font-size:12px">WIPE</button>';
-    h+='<button class="fleet-btn btn-orange" onclick="gwipeBayAction(\''+dev+'\',\'pause\',\''+pfx+'\')" style="padding:4px 10px;font-size:12px">PAUSE</button>';
-    h+='<button class="fleet-btn btn-green" onclick="gwipeBayAction(\''+dev+'\',\'resume\',\''+pfx+'\')" style="padding:4px 10px;font-size:12px">RESUME</button>';
+    h+='<button class="fleet-btn btn-cyan" onclick="gwipeBayAction(\''+dev+'\',\'smart\',\''+pfx+'\')" class="pill-sm">SMART TEST</button>';
+    h+='<button class="fleet-btn btn-red" onclick="gwipeBayWipe(\''+dev+'\',\''+pfx+'\')" class="pill-sm">WIPE</button>';
+    h+='<button class="fleet-btn btn-orange" onclick="gwipeBayAction(\''+dev+'\',\'pause\',\''+pfx+'\')" class="pill-sm">PAUSE</button>';
+    h+='<button class="fleet-btn btn-green" onclick="gwipeBayAction(\''+dev+'\',\'resume\',\''+pfx+'\')" class="pill-sm">RESUME</button>';
     h+='<button class="fleet-btn" onclick="gwipeBayClear(\''+dev+'\',\''+pfx+'\')" style="padding:4px 10px;font-size:12px;color:var(--text);border-color:var(--text)">CLEAR</button>';
     h+='</div>';
   }
@@ -4867,10 +4985,10 @@ function gwipeRefreshHistory(host,key,pfx){
     if(d.error||!d.history)return;
     var sec=_ltEl(pfx,'lt-extra');
     if(d.history.length===0){if(sec)sec.innerHTML='';return;}
-    var h='<div style="margin-top:20px"><h3 style="color:var(--purple-light);font-size:13px;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">Wipe History</h3><table><thead><tr><th>Time</th><th>Bay</th><th>Model</th><th>Serial</th><th>Size</th><th>Method</th><th>Result</th><th>Duration</th></tr></thead><tbody>';
+    var h='<div class="mt-20"><h3 style="color:var(--purple-light);font-size:13px;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">Wipe History</h3><table><thead><tr><th>Time</th><th>Bay</th><th>Model</th><th>Serial</th><th>Size</th><th>Method</th><th>Result</th><th>Duration</th></tr></thead><tbody>';
     d.history.slice().reverse().forEach(function(e){
       var cls=e.result==='WIPED'?'up':e.result==='FAILED'?'down':'warn';
-      h+='<tr><td style="font-size:11px;white-space:nowrap">'+(e.timestamp||'-')+'</td><td>'+e.bay+'</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(e.model||'')+'">'+(e.model||'-')+'</td><td style="font-family:monospace;font-size:11px">'+(e.serial||'-')+'</td><td>'+(e.size||'-')+'</td><td>'+(e.method||'-')+'</td><td><span class="badge '+cls+'">'+(e.result||'?')+'</span></td><td>'+(e.duration||'-')+'</td></tr>';
+      h+='<tr><td style="font-size:11px;white-space:nowrap">'+(e.timestamp||'-')+'</td><td>'+e.bay+'</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(e.model||'')+'">'+(e.model||'-')+'</td><td class="mono-11">'+(e.serial||'-')+'</td><td>'+(e.size||'-')+'</td><td>'+(e.method||'-')+'</td><td><span class="badge '+cls+'">'+(e.result||'?')+'</span></td><td>'+(e.duration||'-')+'</td></tr>';
     });
     h+='</tbody></table></div>';
     if(sec)sec.innerHTML=h;
