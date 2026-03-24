@@ -48,7 +48,10 @@ INIT_MARKER = None  # Set in cmd_init from cfg
 DEFAULT_CMD_TIMEOUT = 30
 SSH_CONNECT_TIMEOUT = 5
 IDRAC_SETUP_TIMEOUT = 60
+IDRAC_VERIFY_TIMEOUT = 15
 SWITCH_CONFIG_TIMEOUT = 30
+QUICK_CHECK_TIMEOUT = 10
+PING_TIMEOUT = 5
 VERIFY_TIMEOUT = 20
 
 # iDRAC user slot range (slots 1-2 are reserved by Dell for root/admin)
@@ -109,7 +112,7 @@ def _parse_idrac_slots(output, svc_name):
     return target_slot, existing_slot
 
 
-def _run(cmd, timeout=30):
+def _run(cmd, timeout=DEFAULT_CMD_TIMEOUT):
     """Run a command, return (rc, stdout, stderr)."""
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
@@ -118,7 +121,7 @@ def _run(cmd, timeout=30):
         return 1, "", str(e)
 
 
-def _run_with_input(cmd, input_text, timeout=30):
+def _run_with_input(cmd, input_text, timeout=DEFAULT_CMD_TIMEOUT):
     """Run a command with stdin input, return (rc, stdout, stderr).
 
     Used for IOS switch config — commands must be piped via stdin,
@@ -564,7 +567,7 @@ def _setup_sudoers(svc_name):
         fmt.step_fail("Cannot write sudoers (not root?)")
 
 
-def _ssh_with_pass(password, ssh_cmd_list, timeout=30, input_text=None):
+def _ssh_with_pass(password, ssh_cmd_list, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
     """Run SSH command using sshpass with secure tempfile (not process-visible).
 
     Writes password to a chmod-600 tempfile, uses 'sshpass -f', then deletes.
@@ -1112,7 +1115,7 @@ def _init_ssh(ip, auth_pass, auth_key, auth_user):
     """
     ssh_opts = ["-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=accept-new"]
 
-    def _ssh(cmd, extra_opts=None, timeout=30, as_root=False):
+    def _ssh(cmd, extra_opts=None, timeout=DEFAULT_CMD_TIMEOUT, as_root=False):
         # Wrap in sudo if needed (non-root user running privileged commands)
         if as_root and auth_user != "root":
             # Base64-encode the script to avoid shell quoting nightmares
@@ -1371,7 +1374,7 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
         f"racadm set iDRAC.Users.{target_slot}.IpmiLanPrivilege 4",
     ]
     setup_script = " && ".join(setup_cmds) + " && echo SETUP_OK"
-    rc, out, err = _ssh(setup_script, extra_opts=extra_opts, timeout=60)
+    rc, out, err = _ssh(setup_script, extra_opts=extra_opts, timeout=IDRAC_SETUP_TIMEOUT)
 
     if MARKER_SETUP_OK not in out:
         fmt.step_fail(f"iDRAC user setup failed ({(err or out).strip()[:80]})")
@@ -1391,7 +1394,7 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     # Verify the key was actually stored
     rc2, out2, _ = _ssh(
         f"racadm sshpkauth -v -i {target_slot} -k 1",
-        extra_opts=extra_opts, timeout=15,
+        extra_opts=extra_opts, timeout=IDRAC_VERIFY_TIMEOUT,
     )
     if rc2 == 0 and out2.strip():
         fmt.step_ok("RSA public key deployed and verified on iDRAC")
@@ -1539,7 +1542,7 @@ def _deploy_to_host_dispatch(ip, htype, ctx, auth_pass, auth_key, auth_user):
 
 def _uninstall_ssh(ip, svc_name, key_path, extra_opts=None):
     """Build an SSH runner for uninstall — auths as the FREQ service account."""
-    def _ssh(cmd, timeout=30):
+    def _ssh(cmd, timeout=DEFAULT_CMD_TIMEOUT):
         ssh_cmd = [
             "ssh", "-n", "-i", key_path,
             "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
@@ -1573,7 +1576,7 @@ def _remove_linux(ip, svc_name, key_path):
         f"rm -f /etc/sudoers.d/freq-{svc_name}; "
         f"gpasswd -d {svc_name} docker 2>/dev/null || true; "
         f"echo CLEAN_OK'",
-        timeout=10,
+        timeout=QUICK_CHECK_TIMEOUT,
     )
     if MARKER_CLEAN_OK not in (out or ""):
         return False, f"privilege cleanup failed: {(err or out).strip()[:80]}"
@@ -1587,7 +1590,7 @@ def _remove_linux(ip, svc_name, key_path):
         f"pkill -u {svc_name} 2>/dev/null || true; "
         f"userdel -r {svc_name} 2>/dev/null || userdel {svc_name} 2>/dev/null || true"
         f"' >/dev/null 2>&1 &",
-        timeout=5,
+        timeout=PING_TIMEOUT,
     )
 
     return True, ""
@@ -1826,11 +1829,11 @@ def _verify_host(ip, htype, svc_name, key_path, rsa_key_path):
         "-o", "StrictHostKeyChecking=accept-new",
     ] + extra_opts + [f"{svc_name}@{ip}", verify_cmd]
 
-    rc, out, err = _run(ssh_cmd, timeout=20)
+    rc, out, err = _run(ssh_cmd, timeout=VERIFY_TIMEOUT)
     # iDRAC has a 2-session SSH limit — retry once after a short wait
     if rc != 0 and htype in ("idrac", "switch") and "no more sessions" in (out + err).lower():
         time.sleep(5)
-        rc, out, err = _run(ssh_cmd, timeout=20)
+        rc, out, err = _run(ssh_cmd, timeout=VERIFY_TIMEOUT)
     return rc == 0, err
 
 
@@ -3141,7 +3144,7 @@ def _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
                 "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
                 "-o", "StrictHostKeyChecking=accept-new",
                 f"{bootstrap_user}@{ip}", "echo OK",
-            ], timeout=10)
+            ], timeout=QUICK_CHECK_TIMEOUT)
             if rc != 0:
                 if _is_skip_error(err):
                     fmt.step_warn(f"{label} ({ip}) — {_skip_reason(err)} (skipped)")
