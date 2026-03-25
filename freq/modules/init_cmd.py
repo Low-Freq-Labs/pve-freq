@@ -1209,6 +1209,12 @@ def _discover_and_register(cfg, ctx):
 
 def _phase_fleet_deploy(cfg, ctx, args=None):
     """Deploy service account + key to fleet hosts (all platform types)."""
+    # Load per-device credentials (--device-credentials TOML)
+    device_creds_file = getattr(args, "device_credentials", None) if args else None
+    device_creds = _load_device_credentials(device_creds_file)
+    if device_creds:
+        fmt.step_ok(f"Device credentials loaded: {', '.join(sorted(device_creds.keys()))}")
+
     # Import hosts from file if --hosts-file provided
     hosts_file_arg = getattr(args, "hosts_file", None) if args else None
     if hosts_file_arg and os.path.isfile(hosts_file_arg) and not cfg.hosts:
@@ -1342,7 +1348,21 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
         fmt.line(f"  {fmt.C.BOLD}pfSense hosts ({len(pfsense_hosts)}){fmt.C.RESET}")
         fmt.blank()
 
-        if has_bootstrap:
+        pf_creds = device_creds.get("pfsense")
+        if pf_creds:
+            # Device credentials mode — password auth from --device-credentials
+            pf_user = pf_creds["user"]
+            pf_pass = pf_creds["password"]
+            pf_key = ""
+            fmt.step_ok(f"Using device credentials for pfSense: {pf_user}")
+            for h in pfsense_hosts:
+                fmt.blank()
+                fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [pfsense]")
+                if _deploy_to_host_dispatch(h.ip, "pfsense", ctx, pf_pass, pf_key, pf_user):
+                    ok += 1
+                else:
+                    fail += 1
+        elif has_bootstrap:
             # Bootstrap mode for pfSense — use bootstrap key
             pf_user = bootstrap_user or "admin"
             pf_key = bootstrap_key
@@ -1383,41 +1403,59 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
         fmt.line(f"  {fmt.C.BOLD}Device hosts ({len(device_hosts)}){fmt.C.RESET}")
         fmt.blank()
 
-        if has_bootstrap:
-            # Bootstrap mode for devices — use bootstrap key
-            dev_user = bootstrap_user or "root"
-            fmt.step_ok(f"Using bootstrap auth for devices: {dev_user} via {bootstrap_key}")
-            for h in device_hosts:
+        # Split devices by credential availability
+        dev_with_creds = [h for h in device_hosts if h.htype in device_creds]
+        dev_without_creds = [h for h in device_hosts if h.htype not in device_creds]
+
+        # Deploy devices that have per-device credentials
+        if dev_with_creds:
+            for h in dev_with_creds:
+                creds = device_creds[h.htype]
                 fmt.blank()
                 fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
-                if _deploy_to_host_dispatch(h.ip, h.htype, ctx, "", bootstrap_key, dev_user):
+                fmt.step_ok(f"Using device credentials: {creds['user']}")
+                if _deploy_to_host_dispatch(h.ip, h.htype, ctx, creds["password"], "", creds["user"]):
                     ok += 1
                 else:
                     fail += 1
-        else:
-            fmt.line(f"  {fmt.C.DIM}How to authenticate to iDRAC/switch?{fmt.C.RESET}")
-            fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Admin password")
-            fmt.line(f"    {fmt.C.BOLD}S{fmt.C.RESET}) Skip")
-            fmt.blank()
 
-            choice = _input("Choice", "A").upper()
-            if choice != "S":
-                dev_user = _input("Auth user", "root")
-                rc, _, _ = _run(["which", "sshpass"])
-                if rc != 0:
-                    fmt.step_fail("'sshpass' not installed — required for device auth")
-                    fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
-                else:
-                    dev_pass = getpass.getpass(f"  Password for device admin ({dev_user}): ")
-                    for h in device_hosts:
-                        fmt.blank()
-                        fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
-                        if _deploy_to_host_dispatch(h.ip, h.htype, ctx, dev_pass, "", dev_user):
-                            ok += 1
-                        else:
-                            fail += 1
+        # Remaining devices — bootstrap key or interactive
+        if dev_without_creds:
+            if has_bootstrap:
+                # Bootstrap mode for devices — use bootstrap key
+                dev_user = bootstrap_user or "root"
+                fmt.step_ok(f"Using bootstrap auth for devices: {dev_user} via {bootstrap_key}")
+                for h in dev_without_creds:
+                    fmt.blank()
+                    fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
+                    if _deploy_to_host_dispatch(h.ip, h.htype, ctx, "", bootstrap_key, dev_user):
+                        ok += 1
+                    else:
+                        fail += 1
             else:
-                fmt.step_warn("Skipping device hosts")
+                fmt.line(f"  {fmt.C.DIM}How to authenticate to iDRAC/switch?{fmt.C.RESET}")
+                fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Admin password")
+                fmt.line(f"    {fmt.C.BOLD}S{fmt.C.RESET}) Skip")
+                fmt.blank()
+
+                choice = _input("Choice", "A").upper()
+                if choice != "S":
+                    dev_user = _input("Auth user", "root")
+                    rc, _, _ = _run(["which", "sshpass"])
+                    if rc != 0:
+                        fmt.step_fail("'sshpass' not installed — required for device auth")
+                        fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
+                    else:
+                        dev_pass = getpass.getpass(f"  Password for device admin ({dev_user}): ")
+                        for h in dev_without_creds:
+                            fmt.blank()
+                            fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
+                            if _deploy_to_host_dispatch(h.ip, h.htype, ctx, dev_pass, "", dev_user):
+                                ok += 1
+                            else:
+                                fail += 1
+                else:
+                    fmt.step_warn("Skipping device hosts")
 
     fmt.blank()
     fmt.line(f"  Fleet deployment: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, {fmt.C.RED}{fail} failed{fmt.C.RESET}")

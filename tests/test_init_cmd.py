@@ -469,11 +469,11 @@ class TestPhaseConfigure(unittest.TestCase):
         cfg.pve_storage = overrides.get("pve_storage", {})
         return cfg
 
-    @patch("freq.modules.init_cmd.FreqConfig")
+    @patch("freq.core.config.load_config")
     @patch("freq.modules.init_cmd._input")
     @patch("freq.modules.init_cmd.fmt")
-    def test_phase_configure_writes_pve_nodes(self, mock_fmt, mock_input, mock_fc):
-        """PVE node IPs and names are written to freq.toml."""
+    def test_phase_configure_writes_pve_nodes(self, mock_fmt, mock_input, mock_lc):
+        """PVE node IPs and names are written to freq.toml via interactive prompt."""
         cfg = self._make_cfg()
         # _input calls in order: node IPs, node names, storage×3, gateway, nameserver, cluster, ssh mode
         mock_input.side_effect = [
@@ -487,7 +487,7 @@ class TestPhaseConfigure(unittest.TestCase):
             "testlab",                        # Cluster name
             "sudo",                           # SSH mode
         ]
-        mock_fc.return_value = cfg  # Reload returns same cfg
+        mock_lc.return_value = cfg  # Reload returns same cfg
 
         from freq.modules.init_cmd import _phase_configure
         _phase_configure(cfg)
@@ -502,11 +502,11 @@ class TestPhaseConfigure(unittest.TestCase):
         self.assertIn("pve02", content)
         self.assertIn("pve03", content)
 
-    @patch("freq.modules.init_cmd.FreqConfig")
+    @patch("freq.core.config.load_config")
     @patch("freq.modules.init_cmd._input")
     @patch("freq.modules.init_cmd.fmt")
-    def test_phase_configure_writes_gateway(self, mock_fmt, mock_input, mock_fc):
-        """Gateway and nameserver are written to freq.toml."""
+    def test_phase_configure_writes_gateway(self, mock_fmt, mock_input, mock_lc):
+        """Gateway and nameserver are written to freq.toml via interactive prompt."""
         cfg = self._make_cfg()
         mock_input.side_effect = [
             "10.0.0.1",       # PVE node IPs (single node)
@@ -517,7 +517,7 @@ class TestPhaseConfigure(unittest.TestCase):
             "homelab",         # Cluster name
             "sudo",            # SSH mode
         ]
-        mock_fc.return_value = cfg
+        mock_lc.return_value = cfg
 
         from freq.modules.init_cmd import _phase_configure
         _phase_configure(cfg)
@@ -526,6 +526,74 @@ class TestPhaseConfigure(unittest.TestCase):
             content = f.read()
 
         self.assertIn('gateway = "192.168.1.1"', content)
+
+    @patch("freq.core.config.load_config")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_phase_configure_cli_pve_nodes(self, mock_fmt, mock_input, mock_lc):
+        """--pve-nodes CLI arg writes nodes to freq.toml without interactive prompt."""
+        cfg = self._make_cfg()
+        args = MagicMock()
+        args.pve_nodes = "10.0.0.1 10.0.0.2"
+        args.pve_node_names = "pve01 pve02"
+        args.gateway = None
+        args.nameserver = None
+        args.hosts_file = None
+        args.yes = False
+
+        # Only interactive prompts that remain: gateway, nameserver, cluster, ssh mode
+        mock_input.side_effect = [
+            "10.0.0.1",   # Gateway
+            "1.1.1.1",    # Nameserver (default)
+            "",            # Cluster name (skip)
+            "sudo",        # SSH mode
+        ]
+        mock_lc.return_value = cfg
+
+        from freq.modules.init_cmd import _phase_configure
+        _phase_configure(cfg, args)
+
+        with open(self.toml_path) as f:
+            content = f.read()
+
+        self.assertIn("10.0.0.1", content)
+        self.assertIn("10.0.0.2", content)
+        self.assertIn("pve01", content)
+        self.assertIn("pve02", content)
+        # Verify cfg was updated
+        self.assertEqual(cfg.pve_nodes, ["10.0.0.1", "10.0.0.2"])
+
+    @patch("freq.core.config.load_config")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_phase_configure_cli_gateway(self, mock_fmt, mock_input, mock_lc):
+        """--gateway CLI arg writes gateway without interactive prompt."""
+        cfg = self._make_cfg()
+        args = MagicMock()
+        args.pve_nodes = "10.0.0.1"
+        args.pve_node_names = "pve01"
+        args.gateway = "192.168.1.1"
+        args.nameserver = "8.8.4.4"
+        args.hosts_file = None
+        args.yes = False
+
+        # Only cluster name and SSH mode remain interactive
+        mock_input.side_effect = [
+            "mylab",   # Cluster name
+            "sudo",    # SSH mode
+        ]
+        mock_lc.return_value = cfg
+
+        from freq.modules.init_cmd import _phase_configure
+        _phase_configure(cfg, args)
+
+        with open(self.toml_path) as f:
+            content = f.read()
+
+        self.assertIn('gateway = "192.168.1.1"', content)
+        self.assertIn('nameserver = "8.8.4.4"', content)
+        self.assertEqual(cfg.vm_gateway, "192.168.1.1")
+        self.assertEqual(cfg.vm_nameserver, "8.8.4.4")
 
     @patch("freq.modules.init_cmd._confirm")
     @patch("freq.modules.init_cmd._input")
@@ -641,6 +709,353 @@ class TestBootstrapKey(unittest.TestCase):
         call_args = mock_dispatch.call_args[0]
         self.assertEqual(call_args[4], self.key_path)  # auth_key = bootstrap key path
         self.assertEqual(call_args[5], "root")          # auth_user = bootstrap_user
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Device credentials in interactive fleet deploy
+# ═══════════════════════════════════════════════════════════════════
+
+class TestDeviceCredsInteractive(unittest.TestCase):
+    """Test --device-credentials in interactive _phase_fleet_deploy."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="freq-test-devcreds-")
+        self.key_path = os.path.join(self.tmpdir, "id_ed25519")
+        with open(self.key_path, "w") as f:
+            f.write("fake-key")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _make_args(self, device_credentials=None, bootstrap_key=None, bootstrap_user=None, hosts_file=None):
+        args = MagicMock()
+        args.device_credentials = device_credentials
+        args.bootstrap_key = bootstrap_key
+        args.bootstrap_user = bootstrap_user
+        args.hosts_file = hosts_file
+        return args
+
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._load_device_credentials")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_fleet_deploy_uses_device_creds_for_pfsense(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
+        """pfSense host uses credentials from --device-credentials, skipping interactive prompt."""
+        cfg = MagicMock()
+        cfg.hosts = [MagicMock(ip="10.0.0.1", label="fw01", htype="pfsense")]
+
+        mock_load_dc.return_value = {
+            "pfsense": {"user": "admin", "password": "fw-secret"},
+        }
+        mock_dispatch.return_value = True
+
+        args = self._make_args(device_credentials="/fake/creds.toml")
+        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+
+        from freq.modules.init_cmd import _phase_fleet_deploy
+        _phase_fleet_deploy(cfg, ctx, args)
+
+        # Dispatch called with password from device creds, not interactive
+        mock_dispatch.assert_called_once()
+        call_args = mock_dispatch.call_args[0]
+        self.assertEqual(call_args[0], "10.0.0.1")       # ip
+        self.assertEqual(call_args[1], "pfsense")         # htype
+        self.assertEqual(call_args[3], "fw-secret")       # auth_pass from device creds
+        self.assertEqual(call_args[4], "")                 # auth_key empty (password mode)
+        self.assertEqual(call_args[5], "admin")            # auth_user from device creds
+
+        # No interactive auth prompts for pfSense
+        for call in mock_input.call_args_list:
+            prompt = call[0][0] if call[0] else ""
+            self.assertNotIn("pfSense", prompt)
+            self.assertNotIn("Choice", prompt)
+
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._load_device_credentials")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_fleet_deploy_uses_device_creds_per_htype(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
+        """iDRAC and switch get different credentials from device_creds dict."""
+        cfg = MagicMock()
+        cfg.hosts = [
+            MagicMock(ip="10.0.0.2", label="idrac01", htype="idrac"),
+            MagicMock(ip="10.0.0.3", label="sw01", htype="switch"),
+        ]
+
+        mock_load_dc.return_value = {
+            "idrac": {"user": "root", "password": "idrac-pass"},
+            "switch": {"user": "gigecolo", "password": "switch-pass"},
+        }
+        mock_dispatch.return_value = True
+
+        args = self._make_args(device_credentials="/fake/creds.toml")
+        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+
+        from freq.modules.init_cmd import _phase_fleet_deploy
+        _phase_fleet_deploy(cfg, ctx, args)
+
+        # Both dispatched with their own creds
+        self.assertEqual(mock_dispatch.call_count, 2)
+        calls = mock_dispatch.call_args_list
+
+        # iDRAC call
+        idrac_call = [c for c in calls if c[0][1] == "idrac"][0]
+        self.assertEqual(idrac_call[0][3], "idrac-pass")   # password
+        self.assertEqual(idrac_call[0][5], "root")          # user
+
+        # Switch call
+        switch_call = [c for c in calls if c[0][1] == "switch"][0]
+        self.assertEqual(switch_call[0][3], "switch-pass")  # password
+        self.assertEqual(switch_call[0][5], "gigecolo")      # user
+
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._load_device_credentials")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_fleet_deploy_device_creds_over_bootstrap(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
+        """--device-credentials takes priority over --bootstrap-key for devices."""
+        cfg = MagicMock()
+        cfg.hosts = [MagicMock(ip="10.0.0.1", label="fw01", htype="pfsense")]
+
+        mock_load_dc.return_value = {
+            "pfsense": {"user": "admin", "password": "creds-password"},
+        }
+        mock_dispatch.return_value = True
+
+        # Both device creds AND bootstrap key provided
+        args = self._make_args(
+            device_credentials="/fake/creds.toml",
+            bootstrap_key=self.key_path,
+            bootstrap_user="root",
+        )
+        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+
+        from freq.modules.init_cmd import _phase_fleet_deploy
+        _phase_fleet_deploy(cfg, ctx, args)
+
+        # Device creds win — password auth used, not bootstrap key
+        call_args = mock_dispatch.call_args[0]
+        self.assertEqual(call_args[3], "creds-password")  # password from device creds
+        self.assertEqual(call_args[4], "")                 # NOT the bootstrap key
+        self.assertEqual(call_args[5], "admin")            # user from device creds
+
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._load_device_credentials")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_fleet_deploy_mixed_creds(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
+        """Devices with creds use them; devices without fall back to bootstrap key."""
+        cfg = MagicMock()
+        cfg.hosts = [
+            MagicMock(ip="10.0.0.2", label="idrac01", htype="idrac"),
+            MagicMock(ip="10.0.0.3", label="sw01", htype="switch"),
+        ]
+
+        # Only iDRAC has device creds — switch does not
+        mock_load_dc.return_value = {
+            "idrac": {"user": "root", "password": "idrac-pass"},
+        }
+        mock_dispatch.return_value = True
+
+        args = self._make_args(
+            device_credentials="/fake/creds.toml",
+            bootstrap_key=self.key_path,
+            bootstrap_user="root",
+        )
+        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+
+        from freq.modules.init_cmd import _phase_fleet_deploy
+        _phase_fleet_deploy(cfg, ctx, args)
+
+        self.assertEqual(mock_dispatch.call_count, 2)
+        calls = mock_dispatch.call_args_list
+
+        # iDRAC: uses device creds (password)
+        idrac_call = [c for c in calls if c[0][1] == "idrac"][0]
+        self.assertEqual(idrac_call[0][3], "idrac-pass")  # password from creds
+        self.assertEqual(idrac_call[0][4], "")              # no key
+
+        # Switch: falls back to bootstrap key
+        switch_call = [c for c in calls if c[0][1] == "switch"][0]
+        self.assertEqual(switch_call[0][3], "")              # no password
+        self.assertEqual(switch_call[0][4], self.key_path)   # bootstrap key
+        self.assertEqual(switch_call[0][5], "root")          # bootstrap user
+
+
+# ═══════════════════════════════════════════════════════════════════
+# --hosts-file import tests
+# ═══════════════════════════════════════════════════════════════════
+
+class TestHostsFileImport(unittest.TestCase):
+    """Test that --hosts-file imports fleet hosts into cfg before deployment."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="freq-test-hostsfile-")
+        # Create a hosts.conf with test entries
+        self.hosts_file = os.path.join(self.tmpdir, "hosts.conf")
+        with open(self.hosts_file, "w") as f:
+            f.write("10.0.0.10  testhost  linux\n")
+            f.write("10.0.0.11  docker01  docker\n")
+        # Create the target hosts_file location cfg will point to
+        self.cfg_hosts_file = os.path.join(self.tmpdir, "hosts-target.conf")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @patch("freq.modules.init_cmd.getpass")
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_hosts_file_imports_hosts(self, mock_fmt, mock_input, mock_dispatch, mock_getpass):
+        """--hosts-file copies hosts.conf and loads hosts into cfg."""
+        cfg = MagicMock()
+        cfg.hosts = []  # Empty — no hosts registered yet
+        cfg.hosts_file = self.cfg_hosts_file
+
+        args = MagicMock()
+        args.hosts_file = self.hosts_file
+        args.bootstrap_key = None
+        args.bootstrap_user = None
+
+        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+
+        # Mock load_hosts to return parsed host objects
+        host1 = MagicMock(ip="10.0.0.10", label="testhost", htype="linux")
+        host2 = MagicMock(ip="10.0.0.11", label="docker01", htype="docker")
+
+        mock_getpass.getpass.return_value = "testpass"
+        mock_dispatch.return_value = True
+
+        with patch("freq.core.config.load_hosts", return_value=[host1, host2]):
+            # Auth prompts: deploy user, auth choice, then getpass handles password
+            mock_input.side_effect = [
+                "root",    # Deploy as user
+                "A",       # Auth choice (password)
+            ]
+
+            from freq.modules.init_cmd import _phase_fleet_deploy
+            try:
+                _phase_fleet_deploy(cfg, ctx, args)
+            except StopIteration:
+                pass  # Input exhaustion is fine — we're testing the import
+
+        # Verify hosts.conf was copied to cfg's hosts_file location
+        self.assertTrue(os.path.isfile(self.cfg_hosts_file))
+        with open(self.cfg_hosts_file) as f:
+            content = f.read()
+        self.assertIn("testhost", content)
+        self.assertIn("docker01", content)
+
+    @patch("freq.modules.init_cmd.getpass")
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_hosts_file_skips_if_hosts_already_registered(self, mock_fmt, mock_input, mock_dispatch, mock_getpass):
+        """--hosts-file does NOT overwrite if cfg.hosts is already populated."""
+        cfg = MagicMock()
+        cfg.hosts = [MagicMock(ip="10.0.0.99", label="existing", htype="linux")]
+        cfg.hosts_file = self.cfg_hosts_file
+
+        args = MagicMock()
+        args.hosts_file = self.hosts_file
+        args.bootstrap_key = None
+        args.bootstrap_user = None
+
+        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+
+        mock_getpass.getpass.return_value = "testpass"
+        mock_dispatch.return_value = True
+        mock_input.side_effect = [
+            "root",  # Deploy as user
+            "A",     # Auth choice
+        ]
+
+        from freq.modules.init_cmd import _phase_fleet_deploy
+        try:
+            _phase_fleet_deploy(cfg, ctx, args)
+        except StopIteration:
+            pass
+
+        # hosts-target.conf should NOT have been created (import skipped)
+        self.assertFalse(os.path.isfile(self.cfg_hosts_file))
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Config reload fix — load_config() instead of FreqConfig()
+# ═══════════════════════════════════════════════════════════════════
+
+class TestConfigReload(unittest.TestCase):
+    """Test that _phase_configure reloads config via load_config() after writing."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="freq-test-reload-")
+        self.toml_path = os.path.join(self.tmpdir, "freq.toml")
+        with open(self.toml_path, "w") as f:
+            f.write(
+                "[freq]\n"
+                'version = "2.0.0"\n'
+                "\n"
+                "[ssh]\n"
+                'mode = "sudo"\n'
+                "\n"
+                "[pve]\n"
+                "# nodes = []\n"
+                "\n"
+                "[vm.defaults]\n"
+                '# gateway = ""\n'
+                '# nameserver = "1.1.1.1"\n'
+                "\n"
+                "[infrastructure]\n"
+                '# cluster_name = ""\n'
+            )
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @patch("freq.core.config.load_config")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_reload_uses_load_config(self, mock_fmt, mock_input, mock_lc):
+        """After writing freq.toml, reload calls load_config(install_dir)."""
+        cfg = MagicMock()
+        cfg.conf_dir = self.tmpdir
+        cfg.install_dir = "/opt/freq"
+        cfg.pve_nodes = []
+        cfg.pve_node_names = []
+        cfg.vm_gateway = ""
+        cfg.vm_nameserver = ""
+        cfg.cluster_name = ""
+        cfg.ssh_mode = "sudo"
+        cfg.pve_storage = {}
+
+        mock_input.side_effect = [
+            "10.0.0.1",   # PVE node IP
+            "pve01",       # Node name
+            "local-lvm",   # Storage
+            "10.0.0.1",   # Gateway
+            "1.1.1.1",    # Nameserver
+            "test",        # Cluster name
+            "sudo",        # SSH mode
+        ]
+
+        reloaded_cfg = MagicMock()
+        reloaded_cfg.pve_nodes = ["10.0.0.1"]
+        reloaded_cfg.pve_node_names = ["pve01"]
+        reloaded_cfg.vm_gateway = "10.0.0.1"
+        reloaded_cfg.vm_nameserver = "1.1.1.1"
+        reloaded_cfg.cluster_name = "test"
+        reloaded_cfg.ssh_mode = "sudo"
+        reloaded_cfg.pve_storage = {}
+        mock_lc.return_value = reloaded_cfg
+
+        from freq.modules.init_cmd import _phase_configure
+        _phase_configure(cfg)
+
+        # Verify load_config was called (not FreqConfig constructor)
+        mock_lc.assert_called_once_with(cfg.install_dir)
 
 
 if __name__ == "__main__":
