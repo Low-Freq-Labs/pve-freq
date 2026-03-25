@@ -431,7 +431,7 @@ tr:hover td{background:var(--card-hover)}
  ██║      ╚████╔╝ ███████╗   ██║     ██║  ██║███████╗╚██████╔╝
  ╚═╝       ╚═══╝  ╚══════╝   ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝</pre><span style="font-size:12px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase" id="nav-ver"></span>
     <div style="width:1px;height:24px;background:var(--border)"></div>
-    <div><h1 id="page-title" style="font-size:16px">Home</h1><div class="tagline" id="header-tagline" class="fs-11"></div></div>
+    <div><h1 id="page-title" style="font-size:16px">Home</h1><div class="tagline fs-11" id="header-tagline" ></div></div>
   </div>
   <div class="flex-gap-16-center">
     <button id="header-user-btn" onclick="openUserMenu()" style="display:none;background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 14px;border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--input-border)'"><span id="header-user-icon" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></span><span id="header-user-name" style="font-weight:600;text-transform:uppercase;letter-spacing:0.5px"></span><span id="header-user-role" style="font-size:10px;color:var(--text-dim)"></span></button>
@@ -461,8 +461,8 @@ tr:hover td{background:var(--card-hover)}
   <button class="fleet-btn view-btn" data-view="lab" data-view="lab">LAB TOOLS</button>
   <div class="flex-1"></div>
   <button class="fleet-btn" onclick="openNewTool()" id="btn-new-tool" style="opacity:0.7;display:none">+ NEW TOOL</button>
-  <button class="fleet-btn" onclick="nav('system')" class="opacity-7">&#9881; SETTINGS</button>
-  <button class="fleet-btn" data-action="openLayoutConfig" id="layout-btn" class="opacity-7">&#9776; LAYOUT</button>
+  <button class="fleet-btn opacity-7" onclick="nav('system')" >&#9881; SETTINGS</button>
+  <button class="fleet-btn opacity-7" data-action="openLayoutConfig" id="layout-btn" >&#9776; LAYOUT</button>
   <button class="fleet-btn" onclick="refreshCurrentView()">REFRESH</button>
 </div></div>
 <!-- HOME VIEW -->
@@ -474,7 +474,7 @@ tr:hover td{background:var(--card-hover)}
   <div style="font-size:36px;opacity:0.15;margin-bottom:16px">&#9776;</div>
   <div style="font-size:16px;color:var(--text);margin-bottom:8px">Your Dashboard is Empty</div>
   <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.6">Click LAYOUT to add widgets from Fleet, Docker, Security, and Lab Tools. Or hit Quick Start for a ready-made dashboard.</div>
-  <button class="fleet-btn" data-action="openLayoutConfig" class="c-purple-active">&#9776; CONFIGURE DASHBOARD</button>
+  <button class="fleet-btn c-purple-active" data-action="openLayoutConfig" >&#9776; CONFIGURE DASHBOARD</button>
 </div>
 <!-- Footer -->
 <div style="text-align:center;padding:32px 0 16px;border-top:1px solid var(--border);margin-top:24px">
@@ -546,7 +546,7 @@ tr:hover td{background:var(--card-hover)}
   </div>
 </div>
 <!-- Agents -->
-<div class="section layout-section" id="fleet-sec-agents" class="mt-20">
+<div class="section layout-section mt-20" id="fleet-sec-agents" >
   <div class="section-header"><h3>Agents</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="stats" id="agent-stats"></div>
@@ -656,7 +656,7 @@ tr:hover td{background:var(--card-hover)}
   <div class="section-header"><h3>Hardening</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12-wrap">
-      <button class="fleet-btn" data-action="runHarden" class="c-purple-active">FULL HARDENING AUDIT</button>
+      <button class="fleet-btn c-purple-active" data-action="runHarden" >FULL HARDENING AUDIT</button>
       <button class="fleet-btn" onclick="hardenAction('disable-root')">DISABLE ROOT SSH</button>
       <button class="fleet-btn" onclick="hardenAction('key-only')">ENFORCE KEY-ONLY AUTH</button>
       <button class="fleet-btn" onclick="hardenAction('disable-empty')">BLOCK EMPTY PASSWORDS</button>
@@ -679,7 +679,7 @@ tr:hover td{background:var(--card-hover)}
   <div class="section-body"><div id="policies-c"></div></div>
 </div>
 <!-- Locked Vault -->
-<div class="section layout-section" id="sec-vault" class="border-red">
+<div class="section layout-section border-red" id="sec-vault" >
   <div class="section-header"><h3 style="background:rgba(248,81,73,0.15)">&#128274; Vault</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="vault-locked">
@@ -719,7 +719,7 @@ tr:hover td{background:var(--card-hover)}
 <!-- ════════ INFRA ════════ -->
 <div id="p-infra" class="page">
 <div class="flex-row-8-mb16-center">
-  <button class="fleet-btn" data-view="home" class="c-purple-active">&#9664; HOME</button>
+  <button class="fleet-btn c-purple-active" data-view="home" >&#9664; HOME</button>
   <button class="fleet-btn" onclick="loadInfraPage()">REFRESH</button>
 </div>
 <div class="section">
@@ -763,7 +763,7 @@ tr:hover td{background:var(--card-hover)}
 <!-- ════════ SYSTEM ════════ -->
 <div id="p-system" class="page">
 <div class="flex-row-8-mb16-center">
-  <button class="fleet-btn" data-view="home" class="c-purple-active">&#9664; HOME</button>
+  <button class="fleet-btn c-purple-active" data-view="home" >&#9664; HOME</button>
   <button class="fleet-btn" onclick="loadSystemPage()">REFRESH</button>
 </div>
 <!-- Global Settings -->
@@ -774,7 +774,7 @@ tr:hover td{background:var(--card-hover)}
   </div>
 </div>
 <!-- Fleet Admin — admin role only, root tax -->
-<div class="section" id="fleet-admin-section" class="d-none">
+<div class="section d-none" id="fleet-admin-section" >
   <div class="section-header"><h3>Fleet Admin <span style="font-size:11px;font-weight:400;color:var(--yellow);margin-left:8px">ADMIN ONLY</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="fleet-admin-body"><div class="skeleton"></div></div>
@@ -787,7 +787,7 @@ tr:hover td{background:var(--card-hover)}
 <div class="section">
   <div class="section-header"><h3>Doctor</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="display:flex;gap:8px;margin-bottom:16px"><button class="fleet-btn" onclick="runDoctor()" class="c-purple-active">RUN SELF-DIAGNOSTIC</button><button class="fleet-btn" onclick="runBackup()">EXPORT CONFIG BACKUP</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px"><button class="fleet-btn c-purple-active" onclick="runDoctor()" >RUN SELF-DIAGNOSTIC</button><button class="fleet-btn" onclick="runBackup()">EXPORT CONFIG BACKUP</button></div>
     <div id="doctor-c"></div>
     <div id="backup-c" class="mt-12"></div>
   </div>
@@ -815,7 +815,7 @@ tr:hover td{background:var(--card-hover)}
   <div class="section-header"><h3>Notifications</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="notify-status"></div>
-    <button class="fleet-btn" data-action="testNotify" class="mt-12">SEND TEST</button>
+    <button class="fleet-btn mt-12" data-action="testNotify" >SEND TEST</button>
     <div id="notify-result" class="mt-8"></div>
   </div>
 </div>
@@ -1727,7 +1727,7 @@ function _containerCard(c,extra){
     h+='<div style="font-size:11px;color:var(--text-dim);margin:4px 0">'+c.vm_label+(c.port&&c.port!=='-'?' · '+c.port:'')+'</div>';
   }
   if(c.detail)h+='<div class="text-sub">'+c.detail+'</div>';
-  h+='<div style="margin-top:8px;display:flex;gap:6px;align-items:center"><button class="fleet-btn" data-action="mediaRestart" data-arg="'+c.name+'" class="pill-sm">RESTART</button><button class="fleet-btn" onclick="mediaLogs(\''+c.name+'\')" class="pill-sm">LOGS</button>';
+  h+='<div style="margin-top:8px;display:flex;gap:6px;align-items:center"><button class="fleet-btn pill-sm" data-action="mediaRestart" data-arg="'+c.name+'" >RESTART</button><button class="fleet-btn pill-sm" onclick="mediaLogs(\''+c.name+'\')" >LOGS</button>';
   if(extra)h+=extra;
   h+='</div></div>';
   return h;
@@ -1794,7 +1794,7 @@ function renderFleetAdmin(d){
     h+='<td class="text-sub">'+host.ip+'</td>';
     h+='<td><select id="ht-'+host.label+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">'+typeOpts+'</select></td>';
     h+='<td><input id="hg-'+host.label+'" value="'+host.groups+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:160px" placeholder="prod,media"></td>';
-    h+='<td><button class="fleet-btn" onclick="saveHostProps(\''+host.label+'\')" class="pill-ok-sm">SAVE</button></td>';
+    h+='<td><button class="fleet-btn pill-ok-sm" onclick="saveHostProps(\''+host.label+'\')" >SAVE</button></td>';
     h+='</tr>';
   });
   h+='</tbody></table></div>';
@@ -1820,7 +1820,7 @@ function renderFleetAdmin(d){
       h+='<input id="rs-'+cat+'" type="number" value="'+info.range_start+'" class="input-sm">';
       h+='<span class="c-dim">—</span>';
       h+='<input id="re-'+cat+'" type="number" value="'+info.range_end+'" class="input-sm">';
-      h+='<button class="fleet-btn" data-action="updateCategoryRange" data-arg="'+cat+'" class="pill-ok-sm">SAVE</button>';
+      h+='<button class="fleet-btn pill-ok-sm" data-action="updateCategoryRange" data-arg="'+cat+'" >SAVE</button>';
       h+='</div>';
     } else {
       var vmids=(info.vmids||[]).join(', ');
@@ -1828,7 +1828,7 @@ function renderFleetAdmin(d){
       h+='<div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">VMIDs: <span style="color:var(--text)">'+vmids+'</span></div>';
       h+='<div style="display:flex;gap:6px;align-items:center;margin-top:4px">';
       h+='<input id="vmid-add-'+cat+'" type="number" placeholder="VMID" class="input-sm">';
-      h+='<button class="fleet-btn" onclick="addVmidToCategory(\''+cat+'\')" class="pill-ok-sm">+ ADD</button>';
+      h+='<button class="fleet-btn pill-ok-sm" onclick="addVmidToCategory(\''+cat+'\')" >+ ADD</button>';
       /* Removable badges */
       (info.vmids||[]).forEach(function(vid){
         h+='<span style="display:inline-flex;align-items:center;gap:4px;background:var(--purple-faint);color:var(--purple-light);padding:2px 8px;border-radius:4px;font-size:12px">'+vid;
@@ -2096,7 +2096,7 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
     var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
     var loadVal=parseFloat(h.load)||0;var cores=parseInt(h.cores)||1;
     var loadPct=cores>0?Math.round(loadVal/cores*100):0;
-    var c='<div class="host-card" onclick="openHost(\''+h.label+'\')" class="cursor-ptr">';
+    var c='<div class="host-card cursor-ptr" onclick="openHost(\''+h.label+'\')" >';
     c+='<div class="host-head"><h3 style="color:'+cl+'">'+h.label+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>\u00b7</span><span>'+(h.type||'Linux').toUpperCase()+'</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div>';
     c+='<div class="divider-light">';
     if(up){
@@ -2389,7 +2389,7 @@ function _toolExec(content){
     '<div id="ft-exec-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;max-height:390px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:var(--input-border) var(--card)"></div>'+
     '</div>'+
     '<input id="ft-exec-cmd" placeholder="Command (e.g. uptime, df -h, hostname, free -m)" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;flex:1" onkeydown="if(event.key===\'Enter\')ftRunExec()">'+
-    '<button class="fleet-btn" onclick="ftRunExec()" class="c-purple-active">RUN</button>'+
+    '<button class="fleet-btn c-purple-active" onclick="ftRunExec()" >RUN</button>'+
     '</div>'+
     '<div class="exec-out" id="ft-exec-out" style="min-height:120px">Pick a target and enter a command.</div>';
   var _execHosts=[];
@@ -2409,7 +2409,7 @@ function _toolNtp(content){
     var h='';
     if(unsynced.length>0){
       h+='<div class="flex-row-8-center">';
-      h+='<button class="fleet-btn" onclick="ntpFixSelected()" class="c-purple-active">FIX SELECTED</button>';
+      h+='<button class="fleet-btn c-purple-active" onclick="ntpFixSelected()" >FIX SELECTED</button>';
       h+='<button class="fleet-btn" onclick="ntpFixAll()">FIX ALL ('+unsynced.length+')</button>';
       h+='<label class="meta-flex"><input type="checkbox" id="ft-ntp-selectall" onchange="document.querySelectorAll(\'.ft-ntp-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
       h+='</div>';
@@ -2421,7 +2421,7 @@ function _toolNtp(content){
       h+='<td><strong>'+x.label.toUpperCase()+'</strong></td>';
       h+='<td>'+(synced?badge('ok'):badge('down'))+'</td>';
       h+='<td>'+x.time+'</td>';
-      h+='<td>'+(!synced?'<button class="fleet-btn" data-action="ntpFixHost" data-arg="'+x.label+'" class="pill-warn-sm">FIX</button>':'<span style="color:var(--green);font-size:11px">OK</span>')+'</td></tr>';
+      h+='<td>'+(!synced?'<button class="fleet-btn pill-warn-sm" data-action="ntpFixHost" data-arg="'+x.label+'" >FIX</button>':'<span style="color:var(--green);font-size:11px">OK</span>')+'</td></tr>';
     });
     h+='</tbody></table>';document.getElementById('ft-ntp-c').innerHTML=h;
   });
@@ -2432,7 +2432,7 @@ function _toolUpdates(content){
     var pending=d.hosts.filter(function(x){return x.updates>0;});
     var h='';
     h+='<div class="flex-row-8-center">';
-    h+='<button class="fleet-btn" data-action="updateSelected" class="c-purple-active">UPDATE SELECTED</button>';
+    h+='<button class="fleet-btn c-purple-active" data-action="updateSelected" >UPDATE SELECTED</button>';
     h+='<button class="fleet-btn" data-action="updateAll">UPDATE ALL'+(pending.length>0?' ('+pending.length+')':'')+'</button>';
     h+='<label class="meta-flex"><input type="checkbox" id="ft-upd-selectall" onchange="toggleUpdateAll(this.checked)"> Select All</label>';
     h+='<div class="flex-1"></div>';
@@ -2446,7 +2446,7 @@ function _toolUpdates(content){
       h+='<td><strong>'+x.label.toUpperCase()+'</strong></td>';
       h+='<td><span class="badge '+cls+'">'+(x.updates>=0?x.updates:'?')+'</span></td>';
       h+='<td>'+x.pkg_mgr.toUpperCase()+'</td>';
-      h+='<td>'+(hasPending?'<button class="fleet-btn" data-action="runHostUpdate" data-arg="'+x.label+'" class="pill-warn-sm">UPDATE</button>':'<button class="fleet-btn" data-action="runHostUpdate" data-arg="'+x.label+'" style="padding:3px 10px;font-size:12px">FORCE UPDATE</button>')+'</td></tr>';
+      h+='<td>'+(hasPending?'<button class="fleet-btn pill-warn-sm" data-action="runHostUpdate" data-arg="'+x.label+'" >UPDATE</button>':'<button class="fleet-btn" data-action="runHostUpdate" data-arg="'+x.label+'" style="padding:3px 10px;font-size:12px">FORCE UPDATE</button>')+'</td></tr>';
     });
     h+='</tbody></table>';
     document.getElementById('ft-updates-c').innerHTML=h;
@@ -2464,9 +2464,9 @@ function _toolLabCtrl(content){
       var isUp=x.status==='up';
       h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+x.role.toUpperCase()+'</td><td class="text-meta">'+(x.uptime||'-')+'</td><td>'+badge(isUp?'ok':'down')+'</td>';
       h+='<td class="flex-gap-4">';
-      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'uptime\')" class="pill-xs">PING</button>';
-      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'sudo reboot\')" class="pill-warn-xs">REBOOT</button>';
-      h+='<button class="fleet-btn" onclick="labExec(\''+x.label+'\',\'sudo systemctl restart sshd\')" class="pill-xs">SSHD</button>';
+      h+='<button class="fleet-btn pill-xs" onclick="labExec(\''+x.label+'\',\'uptime\')" >PING</button>';
+      h+='<button class="fleet-btn pill-warn-xs" onclick="labExec(\''+x.label+'\',\'sudo reboot\')" >REBOOT</button>';
+      h+='<button class="fleet-btn pill-xs" onclick="labExec(\''+x.label+'\',\'sudo systemctl restart sshd\')" >SSHD</button>';
       h+='</td></tr>';
     });
     h+='</tbody></table>';
@@ -2477,9 +2477,9 @@ function _toolLabCtrl(content){
         var isUp=c.status==='up';
         h+='<tr><td><strong>'+c.name.toUpperCase()+'</strong></td><td>'+badge(isUp?'ok':'down')+'</td>';
         h+='<td class="flex-gap-4">';
-        if(isUp)h+='<button class="fleet-btn" data-action="labDockerAction" data-name="'+c.name+'" data-arg="restart" class="pill-warn-xs">RESTART</button>';
-        else h+='<button class="fleet-btn" data-action="labDockerAction" data-name="'+c.name+'" data-arg="start" class="pill-ok-3-8">START</button>';
-        if(isUp)h+='<button class="fleet-btn" data-action="labDockerAction" data-name="'+c.name+'" data-arg="stop" class="pill-err-3-8">STOP</button>';
+        if(isUp)h+='<button class="fleet-btn pill-warn-xs" data-action="labDockerAction" data-name="'+c.name+'" data-arg="restart" >RESTART</button>';
+        else h+='<button class="fleet-btn pill-ok-3-8" data-action="labDockerAction" data-name="'+c.name+'" data-arg="start" >START</button>';
+        if(isUp)h+='<button class="fleet-btn pill-err-3-8" data-action="labDockerAction" data-name="'+c.name+'" data-arg="stop" >STOP</button>';
         h+='</td></tr>';
       });
       h+='</tbody></table>';
@@ -2503,7 +2503,7 @@ function _fleetToolInner(tool,panel,content){
       '<div><label class="label-sub">PASSWORD</label><input id="ft-nu-pass" type="password" placeholder="Strong password" class="input-primary-lg"></div>'+
       '<div><label class="label-sub">SSH PUBLIC KEY <span class="opacity-5">(optional — will generate if empty)</span></label><textarea id="ft-nu-key" placeholder="ssh-ed25519 AAAA... user@host" rows="3" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:11px;font-family:monospace;width:100%;resize:vertical"></textarea></div>'+
       '<div><label class="label-sub">ROLE</label><select id="ft-nu-role" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;font-family:inherit">'+(_currentRole==='admin'?'<option value="admin">Admin (full sudo)</option>':'')+'<option value="operator" selected>Operator (limited sudo)</option><option value="viewer">Viewer (no sudo)</option></select></div>'+
-      '<div class="btn-row"><button class="fleet-btn" onclick="fleetNewUser()" class="c-purple-active">CREATE & DEPLOY</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn c-purple-active" onclick="fleetNewUser()" >CREATE & DEPLOY</button></div>'+
       '</div>'+
       '<div id="ft-nu-out" class="mt-12"></div>';
   } else if(tool==='passwd'){
@@ -2514,7 +2514,7 @@ function _fleetToolInner(tool,panel,content){
       '<div id="ft-pw-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;max-height:300px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:var(--input-border) var(--card)"></div></div></div>'+
       '<div><label class="label-sub">NEW PASSWORD</label><input id="ft-pw-pass" type="password" placeholder="New password" class="input-primary-lg"></div>'+
       '<div><label class="label-sub">CONFIRM PASSWORD</label><input id="ft-pw-confirm" type="password" placeholder="Confirm new password" class="input-primary-lg"></div>'+
-      '<div class="btn-row"><button class="fleet-btn" onclick="fleetPasswdUpdate()" class="c-purple-active">UPDATE & DEPLOY</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn c-purple-active" onclick="fleetPasswdUpdate()" >UPDATE & DEPLOY</button></div>'+
       '</div>'+
       '<div id="ft-pw-out" class="mt-12"></div>';
     _loadUserDropdown('pw');
@@ -2527,8 +2527,8 @@ function _fleetToolInner(tool,panel,content){
         h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+u.username.toUpperCase()+'</strong></td>';
         h+='<td><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-weight:600">'+u.role.toUpperCase()+'</span></td>';
         h+='<td class="flex-gap-6">';
-        if(u.role!=='admin')h+='<button class="fleet-btn" onclick="promoteUser(\''+u.username+'\')" class="pill-ok-3-10">PROMOTE</button>';
-        if(u.role!=='viewer')h+='<button class="fleet-btn" onclick="demoteUser(\''+u.username+'\')" class="pill-warn-sm">DEMOTE</button>';
+        if(u.role!=='admin')h+='<button class="fleet-btn pill-ok-3-10" onclick="promoteUser(\''+u.username+'\')" >PROMOTE</button>';
+        if(u.role!=='viewer')h+='<button class="fleet-btn pill-warn-sm" onclick="demoteUser(\''+u.username+'\')" >DEMOTE</button>';
         h+='</td></tr>';
       });
       h+='</tbody></table>';
@@ -2541,7 +2541,7 @@ function _fleetToolInner(tool,panel,content){
       '<div class="pos-rel"><input id="ft-sk-user" autocomplete="off" placeholder="Select user..." onfocus="showUserDropdown(\'sk\')" oninput="filterUserDropdown(\'sk\',this.value)" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;width:100%;cursor:pointer">'+
       '<div id="ft-sk-dropdown" onmousedown="event.preventDefault()" style="display:none;position:fixed;width:320px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;max-height:300px;overflow-y:auto;z-index:100;scrollbar-width:thin;scrollbar-color:var(--input-border) var(--card)"></div></div></div>'+
       '<div><label class="label-sub">PUBLIC KEY</label><textarea id="ft-sk-key" placeholder="Paste your ssh-ed25519 or ssh-rsa public key here..." rows="4" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:11px;font-family:monospace;width:100%;resize:vertical"></textarea></div>'+
-      '<div class="btn-row"><button class="fleet-btn" onclick="fleetSshKeyDeploy()" class="c-purple-active">DEPLOY TO FLEET</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn c-purple-active" onclick="fleetSshKeyDeploy()" >DEPLOY TO FLEET</button></div>'+
       '</div>'+
       '<div id="ft-sk-out" class="mt-12"></div>';
     _loadUserDropdown('sk');
@@ -2549,7 +2549,7 @@ function _fleetToolInner(tool,panel,content){
     content.innerHTML='<h3 class="section-label-pl">RESTART SSHD</h3><div id="ft-sshd-c"><div class="skeleton"></div></div>';
     fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
       var h='<div class="flex-row-8-center">';
-      h+='<button class="fleet-btn" data-action="sshdRestartSelected" class="c-purple-active">RESTART SELECTED</button>';
+      h+='<button class="fleet-btn c-purple-active" data-action="sshdRestartSelected" >RESTART SELECTED</button>';
       h+='<button class="fleet-btn" data-action="sshdRestartAll">RESTART ALL ('+d.hosts.length+')</button>';
       h+='<label class="meta-flex"><input type="checkbox" id="ft-sshd-selectall" onchange="document.querySelectorAll(\'.ft-sshd-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
       h+='</div>';
@@ -2559,7 +2559,7 @@ function _fleetToolInner(tool,panel,content){
         h+='<tr><td><input type="checkbox" class="ft-sshd-check" data-host="'+x.label+'"></td>';
         h+='<td><strong style="color:'+HC[i%HC.length]+'">'+x.label.toUpperCase()+'</strong></td>';
         h+='<td>'+badge(up?'ok':'down')+'</td>';
-        h+='<td><button class="fleet-btn" data-action="sshdRestartHost" data-arg="'+x.label+'" class="pill-warn-sm">RESTART</button></td></tr>';
+        h+='<td><button class="fleet-btn pill-warn-sm" data-action="sshdRestartHost" data-arg="'+x.label+'" >RESTART</button></td></tr>';
       });
       h+='</tbody></table><div id="ft-sshd-out" class="mt-12"></div>';
       document.getElementById('ft-sshd-c').innerHTML=h;
@@ -2600,7 +2600,7 @@ function switchFleetOps(tab){
   if(tab==='deepscan'){
     foForm.innerHTML='<div class="flex-col-10-500">'+
       '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Run a comprehensive scan across all fleet hosts — CPU, RAM, disk, services, uptime.</div>'+
-      '<button class="fleet-btn" onclick="loadMetrics()" class="pill-active-self">RUN DEEP SCAN</button>'+
+      '<button class="fleet-btn pill-active-self" onclick="loadMetrics()" >RUN DEEP SCAN</button>'+
       '</div>';
     return;
   }
@@ -2623,7 +2623,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">CPU CORES</label><select id="vmt-c-cores" class="input-primary"><option>1</option><option selected>2</option><option>4</option><option>8</option><option>16</option></select></div>'+
       '<div><label class="label-sub">RAM</label><select id="vmt-c-ram" class="input-primary"><option value="512">512MB</option><option value="1024">1GB</option><option value="2048" selected>2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
       '<div><label class="label-sub">TARGET NODE</label><select id="vmt-c-node" class="input-primary"><option value="auto">Auto (least loaded)</option></select></div>'+
-      '<div class="btn-row"><button class="fleet-btn" data-action="vmtCreate" class="c-purple-active">CREATE VM</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtCreate" >CREATE VM</button></div>'+
       '</div><div id="vmt-c-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var nodes={};d.vms.forEach(function(v){nodes[v.node]=true;});
@@ -2634,7 +2634,7 @@ function switchVmMgmt(tab){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">SOURCE VMID</label><select id="vmt-cl-source" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div><label class="label-sub">NEW NAME</label><input id="vmt-cl-name" placeholder="e.g. clone-of-myvm" class="input-primary-lg"></div>'+
-      '<div class="btn-row"><button class="fleet-btn" data-action="vmtClone" class="c-purple-active">CLONE VM</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtClone" >CLONE VM</button></div>'+
       '</div><div id="vmt-cl-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-cl-source');if(!sel)return;sel.innerHTML='';
@@ -2644,7 +2644,7 @@ function switchVmMgmt(tab){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM TO MIGRATE</label><select id="vmt-m-source" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div><label class="label-sub">TARGET NODE</label><select id="vmt-m-target" class="input-primary"><option value="">Loading...</option></select></div>'+
-      '<div class="btn-row"><button class="fleet-btn" data-action="vmtMigrate" class="c-purple-active">MIGRATE</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtMigrate" >MIGRATE</button></div>'+
       '</div><div id="vmt-m-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-m-source');var tgt=document.getElementById('vmt-m-target');
@@ -2655,7 +2655,7 @@ function switchVmMgmt(tab){
   } else if(tab==='vmsnapshot'){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM</label><select id="vmt-s-source" class="input-primary"><option value="">Loading...</option></select></div>'+
-      '<div class="btn-row"><button class="fleet-btn" data-action="vmtSnapshot" class="c-purple-active">CREATE SNAPSHOT</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtSnapshot" >CREATE SNAPSHOT</button></div>'+
       '</div><div id="vmt-s-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-s-source');if(!sel)return;sel.innerHTML='';
@@ -2666,7 +2666,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">VM</label><select id="vmt-r-source" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div><label class="label-sub">NEW CPU CORES</label><select id="vmt-r-cores" class="input-primary"><option value="">Keep current</option><option>1</option><option>2</option><option>4</option><option>8</option><option>16</option></select></div>'+
       '<div><label class="label-sub">NEW RAM</label><select id="vmt-r-ram" class="input-primary"><option value="">Keep current</option><option value="512">512MB</option><option value="1024">1GB</option><option value="2048">2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
-      '<div class="btn-row"><button class="fleet-btn" data-action="vmtResize" class="c-purple-active">RESIZE VM</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtResize" >RESIZE VM</button></div>'+
       '</div><div id="vmt-r-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-r-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
@@ -2696,10 +2696,10 @@ function vmtLoadList(){
       var displayStatus=v.status;
       h+='<tr><td><strong>'+v.vmid+'</strong></td><td>'+v.name+'</td><td><span class="cat-badge cat-'+(v.category||'unknown')+'">'+catLabel+'</span></td><td>'+v.node+'</td><td>'+v.cpu+'</td><td>'+_ramGB(v.ram_mb)+'</td>';
       h+='<td>'+badge(displayStatus)+'</td><td class="flex-gap-4">';
-      if(acts.indexOf('snapshot')>=0)h+='<button class="fleet-btn" onclick="_vmSnapWarn('+v.vmid+','+isRun+')" class="pill-warn-xs">SNAP</button>';
-      if(acts.indexOf('stop')>=0&&isRun)h+='<button class="fleet-btn" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="stop" class="pill-warn-xs">STOP</button>';
-      if(acts.indexOf('start')>=0&&!isRun)h+='<button class="fleet-btn" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="start" class="pill-ok-3-8">START</button>';
-      if(acts.indexOf('destroy')>=0)h+='<button class="fleet-btn" data-action="vmDestroy" data-vmid="'+v.vmid+'" class="pill-err-3-8">DESTROY</button>';
+      if(acts.indexOf('snapshot')>=0)h+='<button class="fleet-btn pill-warn-xs" onclick="_vmSnapWarn('+v.vmid+','+isRun+')" >SNAP</button>';
+      if(acts.indexOf('stop')>=0&&isRun)h+='<button class="fleet-btn pill-warn-xs" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="stop" >STOP</button>';
+      if(acts.indexOf('start')>=0&&!isRun)h+='<button class="fleet-btn pill-ok-3-8" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="start" >START</button>';
+      if(acts.indexOf('destroy')>=0)h+='<button class="fleet-btn pill-err-3-8" data-action="vmDestroy" data-vmid="'+v.vmid+'" >DESTROY</button>';
       h+='</td></tr>';
     });
     h+='</tbody></table>';el.innerHTML=h;
@@ -2787,7 +2787,7 @@ function switchMonitoring(tab){
     }).catch(function(){document.getElementById('mon-h-out').innerHTML='<div class="c-red">Failed to fetch health data</div>';});
   } else if(tab==='mondoctor'){
     f.innerHTML='<div class="desc-line">Run self-diagnostic checks on the FREQ installation.</div>'+
-      '<button class="fleet-btn" onclick="monRunDoctor()" class="pill-active-lg">RUN DOCTOR</button>'+
+      '<button class="fleet-btn pill-active-lg" onclick="monRunDoctor()" >RUN DOCTOR</button>'+
       '<div id="mon-doc-out" class="exec-out" style="min-height:80px;display:none"></div>';
   } else if(tab==='monjournal'){
     f.innerHTML='<div id="mon-j-out"><div class="skeleton"></div></div>';
@@ -2851,17 +2851,17 @@ function switchNetwork(tab){
   } else if(tab==='netdns'){
     f.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">HOSTNAME TO RESOLVE</label><input id="net-dns-host" placeholder="e.g. google.com, hostname, 192.168.1.30" class="input-primary-lg"></div>'+
-      '<button class="fleet-btn" onclick="netDnsCheck()" class="pill-active-self">RESOLVE</button>'+
+      '<button class="fleet-btn pill-active-self" onclick="netDnsCheck()" >RESOLVE</button>'+
       '</div><div id="net-dns-out" class="exec-out skel-mt12" ></div>';
   } else if(tab==='netping'){
     f.innerHTML='<div class="desc-line">Test connectivity to all fleet hosts.</div>'+
-      '<button class="fleet-btn" onclick="netPingAll()" class="pill-active-lg">PING ALL HOSTS</button>'+
+      '<button class="fleet-btn pill-active-lg" onclick="netPingAll()" >PING ALL HOSTS</button>'+
       '<div id="net-ping-out"><div class="text-dim-pad12">Click to test connectivity.</div></div>';
   } else if(tab==='netports'){
     f.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">TARGET HOST</label><input id="net-port-host" placeholder="e.g. 192.168.1.50" class="input-primary-lg"></div>'+
       '<div><label class="label-sub">PORTS <span class="opacity-5">(comma-separated)</span></label><input id="net-port-ports" value="22,80,443,8006,8080,8888" class="input-primary-lg"></div>'+
-      '<button class="fleet-btn" onclick="netPortScan()" class="pill-active-self">SCAN PORTS</button>'+
+      '<button class="fleet-btn pill-active-self" onclick="netPortScan()" >SCAN PORTS</button>'+
       '</div><div id="net-port-out" class="exec-out skel-mt12" ></div>';
   }
 }
@@ -2910,19 +2910,19 @@ function switchBackup(tab){
       h+='<table class="w-full"><thead><tr><th>VMID</th><th>NAME</th><th>NODE</th><th>STATUS</th><th>QUICK SNAP</th></tr></thead><tbody>';
       d.vms.forEach(function(v){
         h+='<tr><td><strong>'+v.vmid+'</strong></td><td>'+v.name+'</td><td>'+v.node+'</td><td>'+badge(v.status)+'</td>';
-        h+='<td><button class="fleet-btn" data-action="vmSnap" data-vmid="'+v.vmid+'" class="pill-xs">SNAPSHOT</button></td></tr>';
+        h+='<td><button class="fleet-btn pill-xs" data-action="vmSnap" data-vmid="'+v.vmid+'" >SNAPSHOT</button></td></tr>';
       });
       h+='</tbody></table>';
       document.getElementById('bk-s-out').innerHTML=h;
     }).catch(function(){document.getElementById('bk-s-out').innerHTML='<div class="c-red">Failed to load VMs</div>';});
   } else if(tab==='bkschedule'){
     f.innerHTML='<div class="desc-line">PVE backup schedules are managed via the Proxmox GUI or <code>pvesh</code> CLI.</div>'+
-      '<button class="fleet-btn" onclick="bkCheckSchedules()" class="pill-active-lg">CHECK SCHEDULES</button>'+
+      '<button class="fleet-btn pill-active-lg" onclick="bkCheckSchedules()" >CHECK SCHEDULES</button>'+
       '<div id="bk-sched-out" class="exec-out" style="min-height:60px;display:none"></div>';
   } else if(tab==='bksnapshot'){
     f.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM</label><select id="bk-snap-vm" class="input-primary"><option value="">Loading...</option></select></div>'+
-      '<div class="btn-row"><button class="fleet-btn" onclick="bkTakeSnap()" class="c-purple-active">CREATE SNAPSHOT</button><button class="fleet-btn" onclick="bkListSnaps()">LIST SNAPSHOTS</button></div>'+
+      '<div class="btn-row"><button class="fleet-btn c-purple-active" onclick="bkTakeSnap()" >CREATE SNAPSHOT</button><button class="fleet-btn" onclick="bkListSnaps()">LIST SNAPSHOTS</button></div>'+
       '</div><div id="bk-snap-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('bk-snap-vm');if(!sel)return;sel.innerHTML='';
@@ -3146,12 +3146,12 @@ function renderVaultTab(){
       html+='<div class="flex-between-mb8"><h3 style="color:'+HC[i%HC.length]+'">'+u.username.toUpperCase()+'</h3><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-size:12px;font-weight:600">'+u.role.toUpperCase()+'</span></div>';
       html+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
       if(passEntry){
-        html+='<button class="fleet-btn" data-action="vaultCopy" data-host="'+passEntry.host+'" data-key="'+passEntry.key+'" class="pill-purple-xs">&#128273; COPY PASSWORD</button>';
+        html+='<button class="fleet-btn pill-purple-xs" data-action="vaultCopy" data-host="'+passEntry.host+'" data-key="'+passEntry.key+'" >&#128273; COPY PASSWORD</button>';
       } else {
         html+='<span class="fs-12-dim-pad4">No password stored</span>';
       }
       if(sshEntry){
-        html+='<button class="fleet-btn" data-action="vaultCopy" data-host="'+sshEntry.host+'" data-key="'+sshEntry.key+'" class="pill-purple-xs">&#128272; COPY SSH KEY</button>';
+        html+='<button class="fleet-btn pill-purple-xs" data-action="vaultCopy" data-host="'+sshEntry.host+'" data-key="'+sshEntry.key+'" >&#128272; COPY SSH KEY</button>';
       } else {
         html+='<span class="fs-12-dim-pad4">No SSH key stored</span>';
       }
@@ -3167,14 +3167,14 @@ function renderVaultTab(){
     Object.keys(groups).sort().forEach(function(host){
       var entries=groups[host];
       html+='<div class="crd border-red" >';
-      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn" data-action="vaultDelGroup" data-arg="'+host+'" class="pill-err-xs">DELETE</button></div>';
+      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn pill-err-xs" data-action="vaultDelGroup" data-arg="'+host+'" >DELETE</button></div>';
       entries.forEach(function(e){
         var uid=host.replace(/[^a-z0-9]/gi,'')+'-'+e.key.replace(/[^a-z0-9]/gi,'');
         html+='<div class="flex-border-row">';
         html+='<span style="font-weight:600;color:var(--text);min-width:90px">'+e.key+'</span>';
         html+='<span style="color:var(--text-dim);flex:1;font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="vk-'+uid+'">'+e.masked+'</span>';
-        html+='<button class="fleet-btn" data-action="vaultReveal" data-uid="'+uid+'" data-host="'+e.host+'" data-key="'+e.key+'" class="pill-2-8">SHOW</button>';
-        html+='<button class="fleet-btn" data-action="vaultCopy" data-host="'+e.host+'" data-key="'+e.key+'" class="pill-purple-2-8">COPY</button>';
+        html+='<button class="fleet-btn pill-2-8" data-action="vaultReveal" data-uid="'+uid+'" data-host="'+e.host+'" data-key="'+e.key+'" >SHOW</button>';
+        html+='<button class="fleet-btn pill-purple-2-8" data-action="vaultCopy" data-host="'+e.host+'" data-key="'+e.key+'" >COPY</button>';
         html+='</div>';
       });
       html+='</div>';
@@ -3189,14 +3189,14 @@ function renderVaultTab(){
     Object.keys(groups).sort().forEach(function(host){
       var entries=groups[host];
       html+='<div class="crd border-red" >';
-      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn" data-action="vaultDelGroup" data-arg="'+host+'" class="pill-err-xs">DELETE</button></div>';
+      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn pill-err-xs" data-action="vaultDelGroup" data-arg="'+host+'" >DELETE</button></div>';
       entries.forEach(function(e){
         var uid=host.replace(/[^a-z0-9]/gi,'')+'-'+e.key.replace(/[^a-z0-9]/gi,'');
         html+='<div class="flex-border-row">';
         html+='<span style="font-weight:600;color:var(--text);min-width:90px">'+e.key+'</span>';
         html+='<span style="color:var(--text-dim);flex:1;font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="vk-'+uid+'">'+e.masked+'</span>';
-        html+='<button class="fleet-btn" data-action="vaultReveal" data-uid="'+uid+'" data-host="'+e.host+'" data-key="'+e.key+'" class="pill-2-8">SHOW</button>';
-        html+='<button class="fleet-btn" data-action="vaultCopy" data-host="'+e.host+'" data-key="'+e.key+'" class="pill-purple-2-8">COPY</button>';
+        html+='<button class="fleet-btn pill-2-8" data-action="vaultReveal" data-uid="'+uid+'" data-host="'+e.host+'" data-key="'+e.key+'" >SHOW</button>';
+        html+='<button class="fleet-btn pill-purple-2-8" data-action="vaultCopy" data-host="'+e.host+'" data-key="'+e.key+'" >COPY</button>';
         html+='</div>';
       });
       html+='</div>';
@@ -3325,7 +3325,7 @@ function sshdPanel(targetId){
   fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
     var h='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:8px">RESTART SSHD</h3>';
     h+='<div class="flex-row-8-center">';
-    h+='<button class="fleet-btn" data-action="sshdRestartSelected" class="c-purple-active">RESTART SELECTED</button>';
+    h+='<button class="fleet-btn c-purple-active" data-action="sshdRestartSelected" >RESTART SELECTED</button>';
     h+='<button class="fleet-btn" data-action="sshdRestartAll">RESTART ALL ('+d.hosts.length+')</button>';
     h+='<label class="meta-flex"><input type="checkbox" onchange="document.querySelectorAll(\'.ft-sshd-check\').forEach(function(c){c.checked=this.checked}.bind(this))"> Select All</label>';
     h+='<div class="flex-1"></div><button class="fleet-btn" onclick="document.getElementById(\''+targetId+'\').innerHTML=\'\'" style="opacity:0.6">CLOSE</button>';
@@ -3336,7 +3336,7 @@ function sshdPanel(targetId){
       h+='<tr><td><input type="checkbox" class="ft-sshd-check" data-host="'+x.label+'"></td>';
       h+='<td><strong style="color:'+HC[i%HC.length]+'">'+x.label.toUpperCase()+'</strong></td>';
       h+='<td>'+badge(up?'ok':'down')+'</td>';
-      h+='<td><button class="fleet-btn" data-action="sshdRestartHost" data-arg="'+x.label+'" class="pill-warn-sm">RESTART</button></td></tr>';
+      h+='<td><button class="fleet-btn pill-warn-sm" data-action="sshdRestartHost" data-arg="'+x.label+'" >RESTART</button></td></tr>';
     });
     h+='</tbody></table><div id="ft-sshd-out" class="mt-12"></div>';
     out.innerHTML=h;
@@ -3351,7 +3351,7 @@ function _sshdRestart(hosts){
     fetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var ok=d.results&&d.results[0]&&d.results[0].ok&&d.results[0].output.trim()==='OK';
       html+='<tr><td><strong>'+h.toUpperCase()+'</strong></td><td>'+(ok?'<span class="c-green">RESTARTED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
-      done++;if(done===total){html+='</tbody></table>';var cb='<button class="fleet-btn" onclick="document.getElementById(\'ft-sshd-out\').innerHTML=\'\'" class="my-8">CLOSE RESULTS</button>';out.innerHTML=cb+html+cb;toast('SSHD restarted on '+done+' hosts','success');}
+      done++;if(done===total){html+='</tbody></table>';var cb='<button class="fleet-btn my-8" onclick="document.getElementById(\'ft-sshd-out\').innerHTML=\'\'" >CLOSE RESULTS</button>';out.innerHTML=cb+html+cb;toast('SSHD restarted on '+done+' hosts','success');}
     });
   });
 }
@@ -3544,7 +3544,7 @@ function loadVMs(){
       var acts=v.allowed_actions||['view'];
       var catLabel=(v.category||'unknown').replace(/_/g,' ');
       var displayStatus=v.status;
-      html+='<div class="host-card" data-action="openVmInfo" data-label="'+v.name+'" data-vmid="'+v.vmid+'" class="cursor-ptr">';
+      html+='<div class="host-card cursor-ptr" data-action="openVmInfo" data-label="'+v.name+'" data-vmid="'+v.vmid+'" >';
       html+='<div class="host-head"><h3 style="color:'+cl+'">'+v.name+'</h3><div style="display:flex;align-items:center;gap:6px">'+
         '<span class="cat-badge cat-'+(v.category||'unknown')+'">'+catLabel+'</span>'+badge(displayStatus)+'</div></div>';
       html+='<div class="divider-light">';
@@ -3552,8 +3552,8 @@ function loadVMs(){
       html+=_mrow('CPU',v.cpu+' Cores',0,'var(--purple-light)');
       html+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM</span><span class="metric-val">'+_ramGB(v.ram_mb)+'</span></div></div>';
       html+='<div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap" onclick="event.stopPropagation()">';
-      if(acts.indexOf('snapshot')>=0)html+='<button class="fleet-btn" onclick="_vmSnapWarn('+v.vmid+','+isRunning+')" class="pill-warn-4-10">SNAP</button>';
-      if(acts.indexOf('stop')>=0&&isRunning)html+='<button class="fleet-btn" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="stop" class="pill-warn-4-10">STOP</button>';
+      if(acts.indexOf('snapshot')>=0)html+='<button class="fleet-btn pill-warn-4-10" onclick="_vmSnapWarn('+v.vmid+','+isRunning+')" >SNAP</button>';
+      if(acts.indexOf('stop')>=0&&isRunning)html+='<button class="fleet-btn pill-warn-4-10" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="stop" >STOP</button>';
       if(acts.indexOf('start')>=0&&!isRunning)html+='<button class="fleet-btn" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="start" style="padding:4px 10px;font-size:12px;color:var(--green)">START</button>';
       if(acts.indexOf('destroy')>=0)html+='<button class="fleet-btn" data-action="vmDestroy" data-vmid="'+v.vmid+'" style="padding:4px 10px;font-size:12px;color:var(--red)">DESTROY</button>';
       html+='</div></div></div>';
@@ -3683,7 +3683,7 @@ function loadVault(){
     Object.keys(groups).sort().forEach(function(host){
       var entries=groups[host];
       html+='<div class="crd">';
-      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn" data-action="vaultDelGroup" data-arg="'+host+'" class="pill-err-xs">DELETE ALL</button></div>';
+      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn pill-err-xs" data-action="vaultDelGroup" data-arg="'+host+'" >DELETE ALL</button></div>';
       entries.forEach(function(e){
         html+='<div style="display:flex;gap:12px;padding:4px 0;border-top:1px solid var(--border);font-size:12px">';
         html+='<span style="font-weight:600;color:var(--text)">'+e.key+'</span><span class="c-dim">'+e.masked+'</span>';
@@ -3720,9 +3720,9 @@ function loadUsers(){
     html+='<button class="fleet-btn user-filter active-view" data-filter="all" onclick="filterUsers(\'all\',this)">ALL ('+d.users.length+')</button>';
     var counts={admin:0,operator:0,viewer:0};
     d.users.forEach(function(u){if(counts[u.role]!==undefined)counts[u.role]++;});
-    if(_currentRole==='admin')html+='<button class="fleet-btn user-filter" data-filter="admin" onclick="filterUsers(\'admin\',this)" class="c-red">ADMIN ('+counts.admin+')</button>';
-    html+='<button class="fleet-btn user-filter" data-filter="operator" onclick="filterUsers(\'operator\',this)" class="c-yellow">OPERATOR ('+counts.operator+')</button>';
-    html+='<button class="fleet-btn user-filter" data-filter="viewer" onclick="filterUsers(\'viewer\',this)" class="c-green">VIEWER ('+counts.viewer+')</button>';
+    if(_currentRole==='admin')html+='<button class="fleet-btn user-filter c-red" data-filter="admin" onclick="filterUsers(\'admin\',this)" >ADMIN ('+counts.admin+')</button>';
+    html+='<button class="fleet-btn user-filter c-yellow" data-filter="operator" onclick="filterUsers(\'operator\',this)" >OPERATOR ('+counts.operator+')</button>';
+    html+='<button class="fleet-btn user-filter c-green" data-filter="viewer" onclick="filterUsers(\'viewer\',this)" >VIEWER ('+counts.viewer+')</button>';
     html+='</div>';
     /* User table */
     html+='<table class="w-full"><thead><tr><th>USERNAME</th><th>ROLE</th><th>PROMOTE / DEMOTE</th></tr></thead><tbody>';
@@ -3732,8 +3732,8 @@ function loadUsers(){
       html+='<td><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-weight:600">'+u.role.toUpperCase()+'</span></td>';
       html+='<td class="flex-gap-6">';
       if(_currentRole==='admin'){
-        if(u.role!=='admin')html+='<button class="fleet-btn" data-action="userPromote" data-arg="'+u.username+'" class="pill-ok-3-10">PROMOTE</button>';
-        if(u.role!=='viewer')html+='<button class="fleet-btn" data-action="userDemote" data-arg="'+u.username+'" class="pill-warn-sm">DEMOTE</button>';
+        if(u.role!=='admin')html+='<button class="fleet-btn pill-ok-3-10" data-action="userPromote" data-arg="'+u.username+'" >PROMOTE</button>';
+        if(u.role!=='viewer')html+='<button class="fleet-btn pill-warn-sm" data-action="userDemote" data-arg="'+u.username+'" >DEMOTE</button>';
         if(u.role==='admin')html+='<span class="text-sub">MAX</span>';
         if(u.role==='viewer')html+='<span class="text-sub">MIN</span>';
       } else {
@@ -3800,7 +3800,7 @@ function runAuditCheck(type){
         html+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+val+'</td><td>'+badge(ok?'ok':'CRITICAL')+'</td></tr>';
       });html+='</tbody></table>';done++;
       if(done===checks.length){
-        var closeBtn='<button class="fleet-btn" onclick="document.getElementById(\'audit-c\').innerHTML=\'\'" class="my-8">CLOSE RESULTS</button>';
+        var closeBtn='<button class="fleet-btn my-8" onclick="document.getElementById(\'audit-c\').innerHTML=\'\'" >CLOSE RESULTS</button>';
         out.innerHTML=closeBtn+html+closeBtn;
         toast('Audit complete — '+checks.length+' checks','success');
       }
@@ -3827,7 +3827,7 @@ function hardenAction(action){
         html+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">APPLIED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       });
       html+='</tbody></table>';
-      var closeBtn='<button class="fleet-btn" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" class="my-8">CLOSE RESULTS</button>';
+      var closeBtn='<button class="fleet-btn my-8" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" >CLOSE RESULTS</button>';
       out.innerHTML=closeBtn+html+closeBtn;
       toast(c.name+': '+ok+'/'+d.results.length+' hosts',ok===d.results.length?'success':'error');
     });
@@ -3845,7 +3845,7 @@ function runSweep(){
         var ok=(chk.name.includes('Password Auth')||chk.name.includes('Empty'))?val!=='0':val==='0';
         html+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+r.host+'</strong></td><td>'+val+'</td><td>'+badge(ok?'ok':'CRITICAL')+'</td></tr>';
       });html+='</tbody></table>';done++;
-      if(done===checks.length){var cb='<button class="fleet-btn" onclick="document.getElementById(\'sweep-c\').innerHTML=\'\'" class="my-8">CLOSE RESULTS</button>';document.getElementById('sweep-c').innerHTML=cb+html+cb;toast('Sweep complete','success');}
+      if(done===checks.length){var cb='<button class="fleet-btn my-8" onclick="document.getElementById(\'sweep-c\').innerHTML=\'\'" >CLOSE RESULTS</button>';document.getElementById('sweep-c').innerHTML=cb+html+cb;toast('Sweep complete','success');}
     });
   });
 }
@@ -3854,7 +3854,7 @@ function runHarden(){
   fetch(API.HARDEN).then(function(r){return r.json()}).then(function(d){
     var html='<table><thead><tr><th>Host</th><th>Check</th><th>Status</th></tr></thead><tbody>';
     d.results.forEach(function(r,i){html+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+r.host+'</strong></td><td>'+r.check+'</td><td>'+badge(r.ok?'ok':'CRITICAL')+'</td></tr>';});
-    html+='</tbody></table>';var cb2='<button class="fleet-btn" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" class="my-8">CLOSE RESULTS</button>';document.getElementById('harden-c').innerHTML=cb2+html+cb2;
+    html+='</tbody></table>';var cb2='<button class="fleet-btn my-8" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" >CLOSE RESULTS</button>';document.getElementById('harden-c').innerHTML=cb2+html+cb2;
     toast('Hardening audit complete','success');
   });
 }
@@ -4087,7 +4087,7 @@ function _vmToggleResize(vmid){
     '<select id="vm-rz-cores" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit"><option value="">Keep</option><option>1</option><option>2</option><option>4</option><option>8</option><option>12</option><option>16</option></select></div>'+
     '<div><label class="label-sub-10">RAM</label>'+
     '<select id="vm-rz-ram" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit"><option value="">Keep</option><option value="512">512MB</option><option value="1024">1GB</option><option value="2048">2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
-    '<button class="fleet-btn" onclick="_vmDoResize('+vmid+')" class="pad-h16-fs12">APPLY</button></div>';
+    '<button class="fleet-btn pad-h16-fs12" onclick="_vmDoResize('+vmid+')" >APPLY</button></div>';
 }
 function _vmDoResize(vmid){
   var cores=(document.getElementById('vm-rz-cores')||{}).value;
@@ -4112,7 +4112,7 @@ function _vmToggleMigrate(vmid,currentNode){
   out.innerHTML='<div style="display:flex;gap:10px;align-items:flex-end;padding:12px 0">'+
     '<div><label class="label-sub-10">TARGET NODE <span class="opacity-5">(current: '+currentNode+')</span></label>'+
     '<select id="vm-mig-target" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;font-family:inherit;min-width:200px">'+opts+'</select></div>'+
-    '<button class="fleet-btn" onclick="_vmDoMigrate('+vmid+')" class="pad-h16-fs12">MIGRATE</button></div>';
+    '<button class="fleet-btn pad-h16-fs12" onclick="_vmDoMigrate('+vmid+')" >MIGRATE</button></div>';
 }
 function _vmDoMigrate(vmid){
   var target=(document.getElementById('vm-mig-target')||{}).value;
@@ -4442,8 +4442,8 @@ function renderHostCard(config){
         html+='<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;font-family:monospace">'+imgShort+'</div>';
         html+='<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">'+c.status+'</div>';
         html+='<div class="flex-gap-6">';
-        html+='<button class="fleet-btn" onclick="hdDockerRestart(\''+c.name+'\')" class="pill-4-10-fs11">RESTART</button>';
-        html+='<button class="fleet-btn" onclick="hdDockerLogs(\''+c.name+'\')" class="pill-4-10-fs11">LOGS</button>';
+        html+='<button class="fleet-btn pill-4-10-fs11" onclick="hdDockerRestart(\''+c.name+'\')" >RESTART</button>';
+        html+='<button class="fleet-btn pill-4-10-fs11" onclick="hdDockerLogs(\''+c.name+'\')" >LOGS</button>';
         html+='</div></div>';
       });
       html+='</div>';
@@ -4485,8 +4485,8 @@ function hdDockerLogs(name){
 function _vmConfigPanel(vmid,label){
   var h='<div class="flex-fill">';
   h+='<div class="fs-11-dim-mb10-ls">CONFIGURE</div>';
-  h+='<div class="mb-8"><label class="label-sub-10-tight">RENAME</label><div class="flex-gap-4"><input id="vm-new-name" placeholder="new name" value="'+label+'" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:180px"><button class="fleet-btn" onclick="_vmRename('+vmid+')" class="pill-pad6">SET</button></div></div>';
-  h+='<div class="mb-8"><label class="label-sub-10-tight">VMID</label><div class="flex-gap-4"><input id="vm-new-id" placeholder="new ID" type="number" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:100px"><button class="fleet-btn" onclick="_vmChangeId('+vmid+')" class="pill-pad6">SET</button></div></div>';
+  h+='<div class="mb-8"><label class="label-sub-10-tight">RENAME</label><div class="flex-gap-4"><input id="vm-new-name" placeholder="new name" value="'+label+'" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:180px"><button class="fleet-btn pill-pad6" onclick="_vmRename('+vmid+')" >SET</button></div></div>';
+  h+='<div class="mb-8"><label class="label-sub-10-tight">VMID</label><div class="flex-gap-4"><input id="vm-new-id" placeholder="new ID" type="number" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;width:100px"><button class="fleet-btn pill-pad6" onclick="_vmChangeId('+vmid+')" >SET</button></div></div>';
   h+='<div><label class="label-sub-10-tight">NETWORK CONFIG</label>';
   h+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">';
   h+='<select id="vm-nic-combo" onchange="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit">';
@@ -4500,7 +4500,7 @@ function _vmConfigPanel(vmid,label){
   h+='</select>';
   h+='<span style="color:var(--text-dim);font-size:12px;font-weight:600">OCTET:</span>';
   h+='<input id="vm-nic-octet" type="number" min="1" max="254" placeholder="x" oninput="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:monospace;width:55px">';
-  h+='<button class="fleet-btn" onclick="_vmApplyNicCombo('+vmid+')" class="pill-pad6">APPLY</button>';
+  h+='<button class="fleet-btn pill-pad6" onclick="_vmApplyNicCombo('+vmid+')" >APPLY</button>';
   h+='</div>';
   h+='<div id="vm-nic-preview" style="font-size:11px;color:var(--text-dim);font-family:monospace;line-height:1.6"></div>';
   h+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--input-border)">';
@@ -4536,7 +4536,7 @@ function _vmNicCards(allIps){
   });
   return h;
 }
-function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel){
+function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm){
   var ctrl='<div style="display:flex;gap:16px;margin:12px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">';
   if(acts.indexOf('configure')>=0){
     ctrl+=_vmConfigPanel(vmid,label);
@@ -4545,20 +4545,20 @@ function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel){
   ctrl+='<div class="flex-fill">';
   ctrl+='<div class="fs-11-dim-mb10-ls">VM CONTROLS \u00b7 '+tier.toUpperCase()+'</div>';
   ctrl+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">';
-  if(acts.indexOf('start')>=0&&!isRunning)ctrl+='<button class="fleet-btn btn-green" data-action="vmPower" data-vmid="'+vmid+'" data-arg="start" class="pad-v8-fs11">START</button>';
-  if(acts.indexOf('stop')>=0&&isRunning)ctrl+='<button class="fleet-btn" data-action="vmPower" data-vmid="'+vmid+'" data-arg="stop" class="pad-v8-warn">STOP</button>';
+  if(acts.indexOf('start')>=0&&!isRunning)ctrl+='<button class="fleet-btn btn-green pad-v8-fs11" data-action="vmPower" data-vmid="'+vmid+'" data-arg="start" >START</button>';
+  if(acts.indexOf('stop')>=0&&isRunning)ctrl+='<button class="fleet-btn pad-v8-warn" data-action="vmPower" data-vmid="'+vmid+'" data-arg="stop" >STOP</button>';
   if(acts.indexOf('restart')>=0&&isRunning)ctrl+='<button class="fleet-btn" onclick="vmPower('+vmid+',\'stop\');setTimeout(function(){vmPower('+vmid+',\'start\')},5000)" style="padding:8px 0;font-size:11px;color:var(--orange)">RESTART</button>';
-  if(acts.indexOf('snapshot')>=0)ctrl+='<button class="fleet-btn" onclick="_vmSnapWarn('+vmid+','+isRunning+')" class="pad-v8-warn">SNAPSHOT</button>';
-  if(acts.indexOf('snapshot')>=0)ctrl+='<button class="fleet-btn" onclick="_vmListSnaps('+vmid+')" class="pad-v8-fs11">SNAPSHOTS</button>';
-  if(acts.indexOf('resize')>=0)ctrl+='<button class="fleet-btn" onclick="_vmToggleResize('+vmid+')" class="pad-v8-fs11">RESIZE</button>';
-  if(acts.indexOf('migrate')>=0)ctrl+='<button class="fleet-btn" onclick="_vmToggleMigrate('+vmid+',\''+(vm?vm.node:'')+'\')" class="pad-v8-fs11">MIGRATE</button>';
-  if(acts.indexOf('destroy')>=0)ctrl+='<button class="fleet-btn btn-red" data-action="vmDestroy" data-vmid="'+vmid+'" class="pad-v8-fs11">DESTROY</button>';
+  if(acts.indexOf('snapshot')>=0)ctrl+='<button class="fleet-btn pad-v8-warn" onclick="_vmSnapWarn('+vmid+','+isRunning+')" >SNAPSHOT</button>';
+  if(acts.indexOf('snapshot')>=0)ctrl+='<button class="fleet-btn pad-v8-fs11" onclick="_vmListSnaps('+vmid+')" >SNAPSHOTS</button>';
+  if(acts.indexOf('resize')>=0)ctrl+='<button class="fleet-btn pad-v8-fs11" onclick="_vmToggleResize('+vmid+')" >RESIZE</button>';
+  if(acts.indexOf('migrate')>=0)ctrl+='<button class="fleet-btn pad-v8-fs11" onclick="_vmToggleMigrate('+vmid+',\''+(vm?vm.node:'')+'\')" >MIGRATE</button>';
+  if(acts.indexOf('destroy')>=0)ctrl+='<button class="fleet-btn btn-red pad-v8-fs11" data-action="vmDestroy" data-vmid="'+vmid+'" >DESTROY</button>';
   if(acts.length<=1)ctrl+='<span style="font-size:12px;color:var(--text-dim);grid-column:1/-1">View only \u2014 no actions for '+catLabel+'</span>';
   ctrl+='<div style="grid-column:1/-1;border-top:1px solid var(--input-border);margin-top:6px;padding-top:8px;font-size:11px;color:var(--text-dim);letter-spacing:0.5px">HOST TOOLS</div>';
-  ctrl+='<button class="fleet-btn" data-action="hdExec" class="pad-v8-fs11">RUN CMD</button>';
-  ctrl+='<button class="fleet-btn" data-action="hdLogs" class="pad-v8-fs11">LOGS</button>';
-  ctrl+='<button class="fleet-btn" data-action="hdDiagnose" class="pad-v8-fs11">DIAGNOSE</button>';
-  ctrl+='<button class="fleet-btn" data-action="hdRestart" class="pad-v8-warn">RESTART SVC</button>';
+  ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdExec" >RUN CMD</button>';
+  ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdLogs" >LOGS</button>';
+  ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdDiagnose" >DIAGNOSE</button>';
+  ctrl+='<button class="fleet-btn pad-v8-warn" data-action="hdRestart" >RESTART SVC</button>';
   ctrl+='</div></div>';
   ctrl+='</div>';
   ctrl+='<div id="vm-ctrl-out"></div>';
@@ -4651,7 +4651,7 @@ function renderVmCard(config){
     if(vm){stats+=st('CPU',vm.cpu+' cores','p');stats+=st('RAM',_ramGB(vm.ram_mb),'b');}
   }
   var html='<div class="card-box"><div class="stats mb-0" >'+stats+'</div></div>';
-  html+=_vmControlPanel(vmid,label,acts,tier,isRunning,catLabel);
+  html+=_vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm);
   html+=_toolPanelHtml();
   /* Build reusable data */
   var sys='';
@@ -4817,7 +4817,7 @@ function _ltGenerateHTML(toolId,pfx){
   pfx=pfx||'';var t=_ltGetTool(toolId);if(!t)return '';
   return '<div style="background:var(--bg2);border:2px solid var(--input-border);border-radius:8px;margin-bottom:16px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center"><div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px;font-weight:800;letter-spacing:2px;background:linear-gradient(135deg,var(--purple-light),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">'+t.name+'</span><span id="'+pfx+'lt-version" class="text-meta"></span><span id="'+pfx+'lt-live-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)"></span></div><div class="fs-11-dim-mt2">'+t.subtitle+'</div></div><div style="text-align:right"><div id="'+pfx+'lt-station-label" class="text-sub"></div></div></div>'+
     '<div class="stats" id="'+pfx+'lt-stats"></div>'+
-    '<div class="exec-bar" id="'+pfx+'lt-connect-bar" class="mb-0"><input id="'+pfx+'lt-host" placeholder="'+t.name+' station IP" style="max-width:200px" value=""><input id="'+pfx+'lt-key" type="password" placeholder="API key" class="flex-1"><button onclick="ltConnect(\''+toolId+'\',\''+pfx+'\')">CONNECT</button><button onclick="ltSaveConfig(\''+toolId+'\',\''+pfx+'\')" style="background:var(--card);border:2px solid var(--input-border);color:var(--text)">SAVE TO VAULT</button></div>'+
+    '<div class="exec-bar mb-0" id="'+pfx+'lt-connect-bar" ><input id="'+pfx+'lt-host" placeholder="'+t.name+' station IP" style="max-width:200px" value=""><input id="'+pfx+'lt-key" type="password" placeholder="API key" class="flex-1"><button onclick="ltConnect(\''+toolId+'\',\''+pfx+'\')">CONNECT</button><button onclick="ltSaveConfig(\''+toolId+'\',\''+pfx+'\')" style="background:var(--card);border:2px solid var(--input-border);color:var(--text)">SAVE TO VAULT</button></div>'+
     '<div id="'+pfx+'lt-conn-status" style="font-size:11px;color:var(--text-dim);margin:6px 0 16px 2px"></div>'+
     '<div id="'+pfx+'lt-controls" style="display:none;margin-bottom:16px"><div style="display:flex;gap:8px;flex-wrap:wrap">'+(t.renderControls?t.renderControls(pfx):'')+'</div></div>'+
     '<div id="'+pfx+'lt-content"></div>'+
@@ -4969,10 +4969,10 @@ function gwipeBayCard(dev,b,idx,pfx){
   if(state==='WIPED'&&b.wipe)h+='<div style="margin-top:8px;padding:6px 10px;background:rgba(63,185,80,0.08);border-radius:6px;font-size:11px;color:var(--green);font-weight:600;text-align:center">CLEAN — '+(b.wipe.method||'')+(b.wipe.duration?' ('+b.wipe.duration+')':'')+'</div>';
   if(b.present){
     h+='<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">';
-    h+='<button class="fleet-btn btn-cyan" onclick="gwipeBayAction(\''+dev+'\',\'smart\',\''+pfx+'\')" class="pill-sm">SMART TEST</button>';
-    h+='<button class="fleet-btn btn-red" onclick="gwipeBayWipe(\''+dev+'\',\''+pfx+'\')" class="pill-sm">WIPE</button>';
-    h+='<button class="fleet-btn btn-orange" onclick="gwipeBayAction(\''+dev+'\',\'pause\',\''+pfx+'\')" class="pill-sm">PAUSE</button>';
-    h+='<button class="fleet-btn btn-green" onclick="gwipeBayAction(\''+dev+'\',\'resume\',\''+pfx+'\')" class="pill-sm">RESUME</button>';
+    h+='<button class="fleet-btn btn-cyan pill-sm" onclick="gwipeBayAction(\''+dev+'\',\'smart\',\''+pfx+'\')" >SMART TEST</button>';
+    h+='<button class="fleet-btn btn-red pill-sm" onclick="gwipeBayWipe(\''+dev+'\',\''+pfx+'\')" >WIPE</button>';
+    h+='<button class="fleet-btn btn-orange pill-sm" onclick="gwipeBayAction(\''+dev+'\',\'pause\',\''+pfx+'\')" >PAUSE</button>';
+    h+='<button class="fleet-btn btn-green pill-sm" onclick="gwipeBayAction(\''+dev+'\',\'resume\',\''+pfx+'\')" >RESUME</button>';
     h+='<button class="fleet-btn" onclick="gwipeBayClear(\''+dev+'\',\''+pfx+'\')" style="padding:4px 10px;font-size:12px;color:var(--text);border-color:var(--text)">CLEAR</button>';
     h+='</div>';
   }

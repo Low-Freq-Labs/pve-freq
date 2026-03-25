@@ -780,7 +780,16 @@ class FreqHandler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         method_name = self._ROUTES.get(path)
         if method_name:
-            getattr(self, method_name)()
+            try:
+                getattr(self, method_name)()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                try:
+                    self._json_response({"error": str(e), "path": path}, 500)
+                except Exception as e2:
+                    import sys
+                    print(f"[FREQ] Failed to send error response for {path}: {e2}", file=sys.stderr)
         elif path.startswith("/api/comms/") or path.startswith("/api/watch/"):
             self._proxy_watchdog()
         else:
@@ -3707,8 +3716,13 @@ class FreqHandler(BaseHTTPRequestHandler):
                     lines[i] = f'{tier_name:<9}= [{actions_str}]\n'
                     break
 
-        with open(path, "w") as f:
-            f.writelines(lines)
+        try:
+            with open(path, "w") as f:
+                f.writelines(lines)
+        except OSError as e:
+            self._json_response({"error": f"Failed to write {path}: {e}"}, 500)
+            return
+        self._json_response({"ok": True})
 
     def _serve_admin_hosts_update(self):
         """GET /api/admin/hosts/update — update host type or groups in hosts.conf.
@@ -3762,14 +3776,18 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"error": f"Host '{label}' not found in hosts.conf"})
             return
 
-        with open(hosts_path, "w") as f:
-            f.writelines(lines)
+        try:
+            with open(hosts_path, "w") as f:
+                f.writelines(lines)
+        except OSError as e:
+            self._json_response({"error": f"Failed to write hosts.conf: {e}"}, 500)
+            return
         self._json_response({"ok": True, "label": label})
 
-    def _json_response(self, data):
+    def _json_response(self, data, status=200):
         """Send a JSON response."""
         body = json.dumps(data).encode()
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
