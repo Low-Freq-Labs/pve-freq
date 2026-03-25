@@ -343,14 +343,14 @@ class TestNotify(unittest.TestCase):
 class TestConfigCompat(unittest.TestCase):
     """Test config loading compatibility."""
 
-    def test_toml_fallback_parser(self):
-        from freq.core.config import _parse_toml_basic
+    def test_toml_loading(self):
+        from freq.core.config import load_toml
         tmpdir = tempfile.mkdtemp()
         toml_path = os.path.join(tmpdir, "test.toml")
         with open(toml_path, "w") as f:
             f.write('[freq]\nversion = "1.0.0"\ndebug = false\ncount = 42\n')
             f.write('[ssh]\nservice_account = "svc-admin"\ntimeout = 5\n')
-        result = _parse_toml_basic(toml_path)
+        result = load_toml(toml_path)
         self.assertEqual(result["freq"]["version"], "1.0.0")
         self.assertEqual(result["freq"]["debug"], False)
         self.assertEqual(result["freq"]["count"], 42)
@@ -358,18 +358,10 @@ class TestConfigCompat(unittest.TestCase):
         import shutil
         shutil.rmtree(tmpdir, ignore_errors=True)
 
-    def test_toml_value_parser(self):
-        from freq.core.config import _parse_toml_value
-        self.assertEqual(_parse_toml_value('"hello"'), "hello")
-        self.assertEqual(_parse_toml_value("true"), True)
-        self.assertEqual(_parse_toml_value("false"), False)
-        self.assertEqual(_parse_toml_value("42"), 42)
-        self.assertEqual(_parse_toml_value("[1, 2, 3]"), [1, 2, 3])
-
     def test_python_version_check(self):
         from freq.core.compat import check_python
         result = check_python()
-        self.assertIsNone(result)  # Should pass on 3.7+
+        self.assertIsNone(result)  # Should pass on 3.11+
 
 
 class TestResolver(unittest.TestCase):

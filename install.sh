@@ -13,11 +13,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-FREQ_VERSION="2.0.0"
+FREQ_VERSION="${FREQ_VERSION:-2.0.0}"
 INSTALL_DIR="${FREQ_DIR:-/opt/pve-freq}"
 REPO_URL="https://github.com/Low-Freq-Labs/pve-freq"
 MIN_PYTHON_MAJOR=3
-MIN_PYTHON_MINOR=7
+MIN_PYTHON_MINOR=11
 MIN_DISK_MB=50
 
 # FREQ brand colors
@@ -166,7 +166,7 @@ preflight() {
             debian) echo -e "       ${C_GRAY}Fix: apt install python3${C_RESET}" ;;
             rhel)   echo -e "       ${C_GRAY}Fix: dnf install python39${C_RESET}" ;;
             suse)   echo -e "       ${C_GRAY}Fix: zypper install python39${C_RESET}" ;;
-            *)      echo -e "       ${C_GRAY}Fix: install Python 3.7+ for your distro${C_RESET}" ;;
+            *)      echo -e "       ${C_GRAY}Fix: install Python 3.11+ for your distro${C_RESET}" ;;
         esac
         errors=$((errors + 1))
     else

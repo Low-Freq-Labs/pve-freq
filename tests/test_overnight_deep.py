@@ -15,71 +15,11 @@ RICK_DIR = str(Path(__file__).parent.parent)
 CONF_DIR = os.path.join(RICK_DIR, "conf")
 
 
-class TestTOMLParser(unittest.TestCase):
-    """Test the basic TOML parser (Python < 3.11 fallback)."""
+class TestTOMLLoading(unittest.TestCase):
+    """Test TOML loading via tomllib (Python 3.11+)."""
 
-    def test_parse_string_double_quotes(self):
-        from freq.core.config import _parse_toml_value
-        self.assertEqual(_parse_toml_value('"hello world"'), "hello world")
-
-    def test_parse_string_single_quotes(self):
-        from freq.core.config import _parse_toml_value
-        self.assertEqual(_parse_toml_value("'hello'"), "hello")
-
-    def test_parse_boolean_true(self):
-        from freq.core.config import _parse_toml_value
-        self.assertTrue(_parse_toml_value("true"))
-        self.assertTrue(_parse_toml_value("True"))
-
-    def test_parse_boolean_false(self):
-        from freq.core.config import _parse_toml_value
-        self.assertFalse(_parse_toml_value("false"))
-        self.assertFalse(_parse_toml_value("False"))
-
-    def test_parse_integer(self):
-        from freq.core.config import _parse_toml_value
-        self.assertEqual(_parse_toml_value("42"), 42)
-        self.assertEqual(_parse_toml_value("0"), 0)
-        self.assertEqual(_parse_toml_value("-1"), -1)
-
-    def test_parse_float(self):
-        from freq.core.config import _parse_toml_value
-        self.assertEqual(_parse_toml_value("3.14"), 3.14)
-
-    def test_parse_empty_array(self):
-        from freq.core.config import _parse_toml_value
-        self.assertEqual(_parse_toml_value("[]"), [])
-
-    def test_parse_string_array(self):
-        from freq.core.config import _parse_toml_value
-        result = _parse_toml_value('["a", "b", "c"]')
-        self.assertEqual(result, ["a", "b", "c"])
-
-    def test_parse_int_array(self):
-        from freq.core.config import _parse_toml_value
-        result = _parse_toml_value("[1, 2, 3]")
-        self.assertEqual(result, [1, 2, 3])
-
-    def test_parse_empty_inline_table(self):
-        from freq.core.config import _parse_toml_value
-        self.assertEqual(_parse_toml_value("{}"), {})
-
-    def test_parse_inline_table(self):
-        from freq.core.config import _parse_toml_value
-        result = _parse_toml_value('{cores = 2, ram = 1024}')
-        self.assertEqual(result["cores"], 2)
-        self.assertEqual(result["ram"], 1024)
-
-    def test_parse_bare_string(self):
-        from freq.core.config import _parse_toml_value
-        self.assertEqual(_parse_toml_value("hello"), "hello")
-
-
-class TestTOMLBasicParser(unittest.TestCase):
-    """Test the basic TOML file parser."""
-
-    def test_parse_simple_file(self):
-        from freq.core.config import _parse_toml_basic
+    def test_load_simple_file(self):
+        from freq.core.config import load_toml
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write("[freq]\n")
             f.write('version = "1.0"\n')
@@ -87,56 +27,30 @@ class TestTOMLBasicParser(unittest.TestCase):
             f.write("cores = 4\n")
             path = f.name
         try:
-            data = _parse_toml_basic(path)
+            data = load_toml(path)
             self.assertEqual(data["freq"]["version"], "1.0")
             self.assertTrue(data["freq"]["debug"])
             self.assertEqual(data["freq"]["cores"], 4)
         finally:
             os.unlink(path)
 
-    def test_parse_nested_sections(self):
-        from freq.core.config import _parse_toml_basic
+    def test_load_nested_sections(self):
+        from freq.core.config import load_toml
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write("[vm.defaults]\n")
             f.write("cores = 2\n")
             f.write("ram = 2048\n")
             path = f.name
         try:
-            data = _parse_toml_basic(path)
+            data = load_toml(path)
             self.assertEqual(data["vm"]["defaults"]["cores"], 2)
             self.assertEqual(data["vm"]["defaults"]["ram"], 2048)
         finally:
             os.unlink(path)
 
-    def test_parse_comments_ignored(self):
-        from freq.core.config import _parse_toml_basic
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write("# This is a comment\n")
-            f.write("[freq]\n")
-            f.write("# Another comment\n")
-            f.write('brand = "test"\n')
-            path = f.name
-        try:
-            data = _parse_toml_basic(path)
-            self.assertEqual(data["freq"]["brand"], "test")
-        finally:
-            os.unlink(path)
-
-    def test_parse_empty_lines_ignored(self):
-        from freq.core.config import _parse_toml_basic
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write("\n\n[freq]\n\n")
-            f.write('brand = "test"\n\n')
-            path = f.name
-        try:
-            data = _parse_toml_basic(path)
-            self.assertEqual(data["freq"]["brand"], "test")
-        finally:
-            os.unlink(path)
-
-    def test_parse_nonexistent_file(self):
-        from freq.core.config import _parse_toml_basic
-        data = _parse_toml_basic("/nonexistent/file.toml")
+    def test_load_nonexistent_file(self):
+        from freq.core.config import load_toml
+        data = load_toml("/nonexistent/file.toml")
         self.assertEqual(data, {})
 
 
@@ -332,7 +246,7 @@ class TestCompatModule(unittest.TestCase):
 
     def test_min_python_constant(self):
         from freq.core.compat import MIN_PYTHON
-        self.assertEqual(MIN_PYTHON, (3, 7))
+        self.assertEqual(MIN_PYTHON, (3, 11))
 
 
 class TestFleetBoundariesDetailed(unittest.TestCase):

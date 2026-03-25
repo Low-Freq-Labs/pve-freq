@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pve-freq"
-version = "2.0.0"
+dynamic = ["version"]
 description = "Datacenter management CLI for Proxmox homelabbers"
-requires-python = ">=3.7"
+requires-python = ">=3.11"
 dependencies = []
 license = {text = "MIT"}
 readme = "README.md"
@@ -19,10 +19,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -39,3 +35,6 @@ freq = "freq.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["freq*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "freq.__version__"}

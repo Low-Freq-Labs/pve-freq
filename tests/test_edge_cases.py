@@ -22,8 +22,7 @@ from freq.core.types import (
 from freq.core import validate
 from freq.core.config import (
     FreqConfig, load_hosts, load_toml, load_fleet_boundaries,
-    load_containers, _parse_toml_value, _parse_toml_basic, _apply_toml,
-    _resolve_paths,
+    load_containers, _apply_toml, _resolve_paths,
 )
 
 
@@ -696,53 +695,6 @@ class TestValidateEdgeCases(unittest.TestCase):
 
     def test_protected_vmid_none_input(self):
         self.assertFalse(validate.is_protected_vmid(None, [], []))
-
-
-# ---------------------------------------------------------------------------
-# 8. TOML basic parser edge cases (_parse_toml_value)
-# ---------------------------------------------------------------------------
-
-class TestParseTomlValue(unittest.TestCase):
-    """_parse_toml_value handles all TOML value types."""
-
-    def test_quoted_string(self):
-        self.assertEqual(_parse_toml_value('"hello"'), "hello")
-
-    def test_single_quoted_string(self):
-        self.assertEqual(_parse_toml_value("'hello'"), "hello")
-
-    def test_boolean_true(self):
-        self.assertTrue(_parse_toml_value("true"))
-
-    def test_boolean_false(self):
-        self.assertFalse(_parse_toml_value("false"))
-
-    def test_boolean_case_insensitive(self):
-        self.assertTrue(_parse_toml_value("True"))
-        self.assertFalse(_parse_toml_value("FALSE"))
-
-    def test_integer(self):
-        self.assertEqual(_parse_toml_value("42"), 42)
-
-    def test_float(self):
-        self.assertEqual(_parse_toml_value("3.14"), 3.14)
-
-    def test_empty_array(self):
-        self.assertEqual(_parse_toml_value("[]"), [])
-
-    def test_array_of_ints(self):
-        self.assertEqual(_parse_toml_value("[1, 2, 3]"), [1, 2, 3])
-
-    def test_empty_inline_table(self):
-        self.assertEqual(_parse_toml_value("{}"), {})
-
-    def test_inline_table(self):
-        result = _parse_toml_value('{key = "val"}')
-        self.assertEqual(result, {"key": "val"})
-
-    def test_bare_string(self):
-        """Unrecognized value falls through to bare string."""
-        self.assertEqual(_parse_toml_value("something"), "something")
 
 
 if __name__ == "__main__":

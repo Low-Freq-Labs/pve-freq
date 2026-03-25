@@ -5,13 +5,8 @@ Safe defaults are set BEFORE loading any config — if config is broken, FREQ st
 This is Trap #4 from the 5 Traps: config vs code confusion.
 """
 import os
+import tomllib
 from dataclasses import dataclass, field
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    # Python < 3.11 fallback — minimal TOML parser for freq.toml
-    tomllib = None
 from pathlib import Path
 from typing import Optional
 
@@ -180,110 +175,12 @@ def _resolve_paths(cfg: FreqConfig) -> None:
 
 
 def load_toml(path: str) -> dict:
-    """Load a TOML config file. Returns empty dict on failure.
-
-    Uses tomllib (3.11+) or falls back to a basic parser for 3.9+.
-    """
-    if tomllib is not None:
-        try:
-            with open(path, "rb") as f:
-                return tomllib.load(f)
-        except (FileNotFoundError, tomllib.TOMLDecodeError):
-            return {}
-    else:
-        return _parse_toml_basic(path)
-
-
-def _parse_toml_basic(path: str) -> dict:
-    """Minimal TOML parser for Python < 3.11. Handles freq.toml structure."""
+    """Load a TOML config file. Returns empty dict on failure."""
     try:
-        with open(path) as f:
-            lines = f.readlines()
-    except FileNotFoundError:
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+    except (FileNotFoundError, tomllib.TOMLDecodeError):
         return {}
-
-    result = {}
-    current_section = None
-    current_subsection = None
-
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-
-        # Section header [section] or [section.subsection]
-        if line.startswith("[") and line.endswith("]"):
-            parts = line[1:-1].split(".")
-            current_section = parts[0]
-            current_subsection = ".".join(parts[1:]) if len(parts) > 1 else None
-            if current_section not in result:
-                result[current_section] = {}
-            if current_subsection and current_subsection not in result[current_section]:
-                result[current_section][current_subsection] = {}
-            continue
-
-        # Key = value
-        if "=" in line and current_section:
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip()
-
-            # Parse value
-            parsed = _parse_toml_value(value)
-
-            if current_subsection:
-                if current_subsection not in result[current_section]:
-                    result[current_section][current_subsection] = {}
-                result[current_section][current_subsection][key] = parsed
-            else:
-                result[current_section][key] = parsed
-
-    return result
-
-
-def _parse_toml_value(value: str):
-    """Parse a TOML value string."""
-    # String
-    if (value.startswith('"') and value.endswith('"')) or \
-       (value.startswith("'") and value.endswith("'")):
-        return value[1:-1]
-    # Boolean
-    if value.lower() == "true":
-        return True
-    if value.lower() == "false":
-        return False
-    # Integer
-    try:
-        return int(value)
-    except ValueError:
-        pass
-    # Float
-    try:
-        return float(value)
-    except ValueError:
-        pass
-    # Array
-    if value.startswith("[") and value.endswith("]"):
-        inner = value[1:-1].strip()
-        if not inner:
-            return []
-        items = []
-        for item in inner.split(","):
-            items.append(_parse_toml_value(item.strip()))
-        return items
-    # Inline table
-    if value.startswith("{") and value.endswith("}"):
-        inner = value[1:-1].strip()
-        if not inner:
-            return {}
-        result = {}
-        for pair in inner.split(","):
-            if "=" in pair:
-                k, _, v = pair.partition("=")
-                result[k.strip()] = _parse_toml_value(v.strip())
-        return result
-    # Bare string
-    return value
 
 
 def load_config(install_dir: Optional[str] = None) -> FreqConfig:
