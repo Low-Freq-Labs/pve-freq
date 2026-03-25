@@ -6,6 +6,7 @@ Every operation goes through the PVE API via SSH + qm/pvesh commands.
 Safety gates enforce protected VMID ranges and confirmation prompts.
 """
 import json
+import os
 import shlex
 import subprocess
 import threading
@@ -85,6 +86,61 @@ def _find_node(cfg: FreqConfig) -> str:
         if r.returncode == 0:
             return ip
     return ""
+
+
+def _node_storage(cfg: FreqConfig, node_ip: str) -> str:
+    """Pick storage pool for a specific PVE node. Falls back to 'local-lvm'."""
+    # Resolve IP → node name via parallel lists
+    node_name = ""
+    for i, ip in enumerate(cfg.pve_nodes):
+        if ip == node_ip and i < len(cfg.pve_node_names):
+            node_name = cfg.pve_node_names[i]
+            break
+
+    # Try exact node match first
+    if node_name and node_name in cfg.pve_storage:
+        pool = cfg.pve_storage[node_name].get("pool", "")
+        if pool:
+            return pool
+
+    # Fall back to any configured storage
+    for _, store_info in cfg.pve_storage.items():
+        if store_info.get("pool"):
+            return store_info["pool"]
+
+    if not cfg.pve_storage:
+        logger.warn("no pve_storage configured — falling back to 'local-lvm'")
+        fmt.warn("No storage configured in freq.toml — using 'local-lvm' default")
+    return "local-lvm"
+
+
+def _apply_cloudinit(cfg: FreqConfig, node_ip: str, vmid: int, ip_addr: str = None):
+    """Apply cloud-init settings to a VM: user, SSH keys, IP, nameserver."""
+    _pve_cmd(cfg, node_ip, f"qm set {vmid} --ciuser {cfg.ssh_service_account}")
+    _pve_cmd(cfg, node_ip, f"qm set {vmid} --citype nocloud")
+
+    # SSH key
+    pubkey_path = cfg.ssh_key_path + ".pub" if cfg.ssh_key_path else ""
+    if pubkey_path and os.path.isfile(pubkey_path):
+        with open(pubkey_path) as f:
+            pubkey = f.read().strip()
+        _pve_cmd(cfg, node_ip, f"echo '{pubkey}' > /tmp/agent-sshkey-{vmid}.pub")
+        _pve_cmd(cfg, node_ip, f"qm set {vmid} --sshkeys /tmp/agent-sshkey-{vmid}.pub")
+
+    # IP address
+    if ip_addr:
+        ip_with_prefix = ip_addr if "/" in ip_addr else f"{ip_addr}/24"
+        if "/" not in ip_addr:
+            logger.warn(f"no CIDR prefix on IP {ip_addr} — assuming /24")
+        gw = cfg.vm_gateway
+        _pve_cmd(cfg, node_ip, f"qm set {vmid} --ipconfig0 ip={ip_with_prefix},gw={gw}")
+    else:
+        _pve_cmd(cfg, node_ip, f"qm set {vmid} --ipconfig0 ip=dhcp")
+
+    # Nameserver
+    _pve_cmd(cfg, node_ip, f"qm set {vmid} --nameserver {cfg.vm_nameserver}")
+    fmt.step_ok(f"Cloud-init configured: user={cfg.ssh_service_account}" +
+                (f", ip={ip_addr}" if ip_addr else ", ip=dhcp"))
 
 
 def _find_vm_node(cfg: FreqConfig, vmid: int) -> str:
@@ -180,16 +236,8 @@ def cmd_create(cfg: FreqConfig, pack, args) -> int:
     if not _safety_check(cfg, vmid, "create"):
         return 1
 
-    # Pick storage from config, warn if falling back to default
-    storage = "local-lvm"
-    for node_name, store_info in cfg.pve_storage.items():
-        if store_info.get("pool"):
-            storage = store_info["pool"]
-            break
-    else:
-        if not cfg.pve_storage:
-            logger.warn("no pve_storage configured — falling back to 'local-lvm'")
-            fmt.warn("No storage configured in freq.toml — using 'local-lvm' default")
+    # Pick storage for target node
+    storage = _node_storage(cfg, node_ip)
 
     # Show plan
     fmt.line(f"  {fmt.C.BOLD}Creating VM:{fmt.C.RESET}")
@@ -368,20 +416,10 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
             else:
                 # Fallback: use cloud-init
                 fmt.step_fail("Disk mount failed, trying cloud-init")
-                ip_with_prefix = ip_addr if "/" in ip_addr else f"{ip_addr}/24"
-                if "/" not in ip_addr:
-                    logger.warn(f"no CIDR prefix on IP {ip_addr} — assuming /24")
-                _pve_cmd(cfg, node_ip,
-                         f"qm set {new_vmid} --ipconfig0 ip={ip_with_prefix},gw={cfg.vm_gateway}")
-                fmt.step_ok(f"Cloud-init IP set: {ip_addr}")
+                _apply_cloudinit(cfg, node_ip, new_vmid, ip_addr)
         else:
             # No disk path found — use cloud-init
-            ip_with_prefix = ip_addr if "/" in ip_addr else f"{ip_addr}/24"
-            if "/" not in ip_addr:
-                logger.warn(f"no CIDR prefix on IP {ip_addr} — assuming /24")
-            _pve_cmd(cfg, node_ip,
-                     f"qm set {new_vmid} --ipconfig0 ip={ip_with_prefix},gw={cfg.vm_gateway}")
-            fmt.step_ok(f"Cloud-init IP set: {ip_addr}")
+            _apply_cloudinit(cfg, node_ip, new_vmid, ip_addr)
 
     # Step 3: Start if requested
     if ip_addr or getattr(args, "start", False):
@@ -740,14 +778,7 @@ def cmd_add_disk(cfg: FreqConfig, pack, args) -> int:
             next_slot = i
             break
 
-    storage = "local-lvm"
-    for node_name, store_info in cfg.pve_storage.items():
-        if store_info.get("pool"):
-            storage = store_info["pool"]
-            break
-    else:
-        if not cfg.pve_storage:
-            logger.warn("no pve_storage configured — falling back to 'local-lvm'")
+    storage = _node_storage(cfg, node_ip)
 
     added = 0
     for i in range(count):

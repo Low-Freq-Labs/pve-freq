@@ -27,13 +27,13 @@ PROVISION_IMPORT_TIMEOUT = 300
 CLOUD_IMAGES = {
     "debian-13": {
         "name": "Debian 13 (trixie)",
-        "url": "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2",
-        "filename": "debian-13-genericcloud-amd64.qcow2",
+        "url": "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2",
+        "filename": "debian-13-generic-amd64.qcow2",
     },
     "debian-12": {
         "name": "Debian 12 (bookworm)",
-        "url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
-        "filename": "debian-12-genericcloud-amd64.qcow2",
+        "url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2",
+        "filename": "debian-12-generic-amd64.qcow2",
     },
     "ubuntu-2404": {
         "name": "Ubuntu 24.04 LTS",
@@ -132,26 +132,39 @@ def provision_agent_vm(
     # Step 2: Create VM with cloud-init
     fmt.step_start(f"Creating VM {vmid} with cloud-init")
 
-    # Determine storage — warn if no config
+    # Determine storage — node-aware selection
     storage = "local-lvm"
-    for _, store_info in cfg.pve_storage.items():
-        if store_info.get("pool"):
-            storage = store_info["pool"]
+    # Resolve node IP → name for node-specific storage
+    target_name = ""
+    for i, ip in enumerate(cfg.pve_nodes):
+        if ip == node_ip and i < len(cfg.pve_node_names):
+            target_name = cfg.pve_node_names[i]
             break
+    if target_name and target_name in cfg.pve_storage:
+        pool = cfg.pve_storage[target_name].get("pool", "")
+        if pool:
+            storage = pool
     else:
-        if not cfg.pve_storage:
-            fmt.warn("No storage configured in freq.toml — using 'local-lvm' default")
+        for _, store_info in cfg.pve_storage.items():
+            if store_info.get("pool"):
+                storage = store_info["pool"]
+                break
+        else:
+            if not cfg.pve_storage:
+                fmt.warn("No storage configured in freq.toml — using 'local-lvm' default")
 
     create_cmd = (
         f"qm create {vmid} --name {agent_name} "
-        f"--cores {cores} --memory {ram} "
+        f"--cores {cores} --memory {ram} --balloon 512 "
         f"--cpu {cfg.vm_cpu} --machine {cfg.vm_machine} "
         f"--net0 virtio,bridge={cfg.nic_bridge} "
         f"--scsihw {cfg.vm_scsihw} "
         f"--ide2 {storage}:cloudinit "
         f"--boot order=scsi0 "
         f"--serial0 socket --vga serial0 "
-        f"--agent enabled=1"
+        f"--rng0 source=/dev/urandom "
+        f"--tablet 0 "
+        f"--agent enabled=1,fstrim_cloned_disks=1"
     )
     stdout, ok = _pve_cmd(cfg, node_ip, create_cmd, timeout=PROVISION_CREATE_TIMEOUT)
     if not ok:
@@ -161,14 +174,18 @@ def provision_agent_vm(
 
     # Step 3: Import cloud image as disk
     fmt.step_start("Importing cloud image as boot disk")
-    import_cmd = f"qm importdisk {vmid} {image_path} {storage}"
+    # Detect ZFS storage — use raw format to avoid double CoW
+    storage_type = cfg.pve_storage.get(storage, {}).get("type", "")
+    format_flag = " --format raw" if "zfs" in storage_type.lower() else ""
+    import_cmd = f"qm importdisk {vmid} {image_path} {storage}{format_flag}"
     stdout, ok = _pve_cmd(cfg, node_ip, import_cmd, timeout=PROVISION_IMPORT_TIMEOUT)
     if not ok:
         fmt.step_fail(f"Disk import failed: {stdout[:60]}")
         return False
 
-    # Attach the imported disk
-    _pve_cmd(cfg, node_ip, f"qm set {vmid} --scsi0 {storage}:vm-{vmid}-disk-0")
+    # Attach the imported disk with performance flags
+    _pve_cmd(cfg, node_ip,
+             f"qm set {vmid} --scsi0 {storage}:vm-{vmid}-disk-0,discard=on,ssd=1,iothread=1")
     fmt.step_ok("Boot disk imported")
 
     # Step 4: Resize disk
