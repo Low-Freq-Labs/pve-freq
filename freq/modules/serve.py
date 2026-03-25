@@ -673,8 +673,8 @@ def _get_fleet_vms(cfg):
             host=node_ip,
             command="pvesh get /cluster/resources --type vm --output-format json",
             key_path=cfg.ssh_key_path,
-            connect_timeout=5, command_timeout=15,
-            htype="pve", use_sudo=True,
+            command_timeout=15,
+            htype="pve", use_sudo=True, cfg=cfg,
         )
         if r.returncode == 0 and r.stdout:
             try:
@@ -825,7 +825,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         results = ssh_run_many(
             hosts=cfg.hosts, command="uptime -p 2>/dev/null || uptime",
             key_path=cfg.ssh_key_path, connect_timeout=3,
-            command_timeout=5, max_parallel=10, use_sudo=False,
+            command_timeout=5, max_parallel=10, use_sudo=False, cfg=cfg,
         )
         duration = round(time.monotonic() - start, 1)
 
@@ -891,7 +891,7 @@ class FreqHandler(BaseHTTPRequestHandler):
             connect_timeout=3,    # Fast timeout for web UI
             command_timeout=5,    # Don't let one slow host block the page
             max_parallel=10,      # All hosts at once
-            use_sudo=False,
+            use_sudo=False, cfg=cfg,
         )
 
         duration = round(time.monotonic() - start, 1)
@@ -1075,8 +1075,8 @@ class FreqHandler(BaseHTTPRequestHandler):
                 host=node_ip,
                 command="pvesh get /cluster/resources --type node --output-format json",
                 key_path=cfg.ssh_key_path,
-                connect_timeout=5, command_timeout=15,
-                htype="pve", use_sudo=True,
+                command_timeout=15,
+                htype="pve", use_sudo=True, cfg=cfg,
             )
             if r.returncode == 0 and r.stdout:
                 try:
@@ -1141,8 +1141,8 @@ class FreqHandler(BaseHTTPRequestHandler):
             r = ssh_single(
                 host=nip, command=batch_cmd,
                 key_path=cfg.ssh_key_path,
-                connect_timeout=5, command_timeout=20,
-                htype="pve", use_sudo=True,
+                command_timeout=20,
+                htype="pve", use_sudo=True, cfg=cfg,
             )
             if r.returncode == 0 and r.stdout:
                 cur_vmid = None
@@ -1353,7 +1353,7 @@ class FreqHandler(BaseHTTPRequestHandler):
                 "\"source\":\"ssh\"}'"
             )
             r = ssh_single(host=h.ip, command=cmd, key_path=cfg.ssh_key_path,
-                           connect_timeout=3, command_timeout=5, htype=h.htype, use_sudo=False)
+                           connect_timeout=3, command_timeout=5, htype=h.htype, use_sudo=False, cfg=cfg)
             if r.returncode == 0:
                 try:
                     data = json.loads(r.stdout)
@@ -1554,8 +1554,8 @@ class FreqHandler(BaseHTTPRequestHandler):
 
         cmd = actions.get(action, actions["status"])
         r = ssh_single(host=pf_ip, command=cmd, key_path=cfg.ssh_key_path,
-                        connect_timeout=5, command_timeout=15,
-                        htype="pfsense", use_sudo=False)
+                        command_timeout=15,
+                        htype="pfsense", use_sudo=False, cfg=cfg)
 
         self._json_response({
             "action": action,
@@ -1646,8 +1646,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         if action in shell_actions:
             cmd = shell_actions[action]
             r = ssh_single(host=tn_ip, command=cmd, key_path=cfg.ssh_key_path,
-                            connect_timeout=5, command_timeout=30,
-                            htype="truenas", use_sudo=True)
+                            command_timeout=30,
+                            htype="truenas", use_sudo=True, cfg=cfg)
             self._json_response({
                 "action": action, "host": tn_ip,
                 "reachable": r.returncode == 0,
@@ -1659,8 +1659,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         # Handle midclt actions — fetch raw JSON, format locally
         def _ssh(cmd):
             return ssh_single(host=tn_ip, command=cmd, key_path=cfg.ssh_key_path,
-                              connect_timeout=5, command_timeout=30,
-                              htype="truenas", use_sudo=True)
+                              command_timeout=30,
+                              htype="truenas", use_sudo=True, cfg=cfg)
 
         def _parse(raw):
             try:
@@ -2179,7 +2179,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         cfg = load_config()
         results = ssh_run_many(hosts=cfg.hosts, command="cat ~/.ssh/authorized_keys 2>/dev/null | wc -l",
                            key_path=cfg.ssh_key_path, connect_timeout=3, command_timeout=5,
-                           max_parallel=10, use_sudo=False)
+                           max_parallel=10, use_sudo=False, cfg=cfg)
         keys = []
         for h in cfg.hosts:
             r = results.get(h.label)
@@ -2489,7 +2489,7 @@ class FreqHandler(BaseHTTPRequestHandler):
                             f"--connect-timeout 2 'http://localhost:{container.port}{container.api_path}' "
                             f"2>/dev/null || echo 000",
                     key_path=cfg.ssh_key_path, connect_timeout=3,
-                    command_timeout=5, htype="docker", use_sudo=False,
+                    command_timeout=5, htype="docker", use_sudo=False, cfg=cfg,
                 )
                 code = r.stdout.strip()[-3:] if r.returncode == 0 else "000"
                 healthy = code in ("200", "301", "302")
@@ -3253,7 +3253,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         for h in lab_hosts:
             r = ssh_single(host=h.ip, command="uptime -p 2>/dev/null || echo unknown",
                            key_path=cfg.ssh_key_path, connect_timeout=3,
-                           command_timeout=5, htype="linux", use_sudo=False)
+                           command_timeout=5, htype="linux", use_sudo=False, cfg=cfg)
             hosts.append({
                 "label": h.label, "ip": h.ip, "role": h.htype,
                 "status": "up" if r.returncode == 0 else "down",

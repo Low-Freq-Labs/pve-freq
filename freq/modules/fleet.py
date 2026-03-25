@@ -1252,8 +1252,8 @@ def cmd_test_connection(cfg: FreqConfig, pack, args) -> int:
     fmt.step_start("SSH authentication")
     r = ssh_run(
         host=ip, command="echo FREQ_AUTH_OK",
-        key_path=cfg.ssh_key_path, connect_timeout=5,
-        command_timeout=10, htype="linux", use_sudo=False,
+        key_path=cfg.ssh_key_path,
+        command_timeout=10, htype="linux", use_sudo=False, cfg=cfg,
     )
     if r.returncode == 0 and "FREQ_AUTH_OK" in r.stdout:
         fmt.step_ok("SSH auth succeeded as {}".format(cfg.ssh_service_account))
@@ -1270,8 +1270,8 @@ def cmd_test_connection(cfg: FreqConfig, pack, args) -> int:
     fmt.step_start("Sudo access")
     r = ssh_run(
         host=ip, command="echo FREQ_SUDO_OK",
-        key_path=cfg.ssh_key_path, connect_timeout=5,
-        command_timeout=10, htype="linux", use_sudo=True,
+        key_path=cfg.ssh_key_path,
+        command_timeout=10, htype="linux", use_sudo=True, cfg=cfg,
     )
     if r.returncode == 0 and "FREQ_SUDO_OK" in r.stdout:
         fmt.step_ok("Sudo access confirmed (NOPASSWD)")

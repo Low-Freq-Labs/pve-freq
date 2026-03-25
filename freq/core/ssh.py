@@ -118,18 +118,28 @@ def _resolve_legacy_key(key_path: str) -> str:
     return key_path
 
 
+def _resolve_connect_timeout(connect_timeout, cfg) -> int:
+    """Resolve SSH connect timeout: explicit value > cfg > default 5."""
+    if connect_timeout is not None:
+        return connect_timeout
+    if cfg and hasattr(cfg, "ssh_connect_timeout"):
+        return cfg.ssh_connect_timeout
+    return 5
+
+
 def _build_ssh_cmd(
     host: str,
     command: str,
     user: Optional[str] = None,
     key_path: Optional[str] = None,
-    connect_timeout: int = 5,
+    connect_timeout: Optional[int] = None,
     htype: str = "linux",
     use_sudo: bool = True,
     extra_opts: Optional[list] = None,
     cfg=None,
 ) -> list:
     """Build an SSH command list for subprocess execution."""
+    connect_timeout = _resolve_connect_timeout(connect_timeout, cfg)
     platform = get_platform_ssh(htype, cfg)
 
     ssh_user = user or platform["user"]
@@ -198,7 +208,7 @@ def run(
     command: str,
     user: Optional[str] = None,
     key_path: Optional[str] = None,
-    connect_timeout: int = 5,
+    connect_timeout: Optional[int] = None,
     command_timeout: int = 30,
     htype: str = "linux",
     use_sudo: bool = True,
@@ -253,7 +263,7 @@ async def async_run(
     command: str,
     user: Optional[str] = None,
     key_path: Optional[str] = None,
-    connect_timeout: int = 5,
+    connect_timeout: Optional[int] = None,
     command_timeout: int = 30,
     htype: str = "linux",
     use_sudo: bool = True,
@@ -305,7 +315,7 @@ async def async_run_many(
     hosts: list,
     command: str,
     key_path: Optional[str] = None,
-    connect_timeout: int = 5,
+    connect_timeout: Optional[int] = None,
     command_timeout: int = 30,
     max_parallel: int = 5,
     use_sudo: bool = True,
@@ -345,7 +355,7 @@ def run_many(
     hosts: list,
     command: str,
     key_path: Optional[str] = None,
-    connect_timeout: int = 5,
+    connect_timeout: Optional[int] = None,
     command_timeout: int = 30,
     max_parallel: int = 5,
     use_sudo: bool = True,

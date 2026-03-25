@@ -39,7 +39,7 @@ async def _run_host(
 
         # 1. PING
         r = await ssh_run(host.ip, "echo ok", key_path=ssh_key,
-                          connect_timeout=5, command_timeout=RUNNER_PING_TIMEOUT,
+                          command_timeout=RUNNER_PING_TIMEOUT,
                           htype=host.htype, use_sudo=False)
         if r.returncode != 0:
             host.phase = Phase.FAILED

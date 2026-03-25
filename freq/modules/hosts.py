@@ -284,8 +284,8 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             host=node_ip,
             command="pvesh get /cluster/resources --type vm --output-format json",
             key_path=cfg.ssh_key_path,
-            connect_timeout=5, command_timeout=HOSTS_PVE_TIMEOUT,
-            htype="pve", use_sudo=True,
+            command_timeout=HOSTS_PVE_TIMEOUT,
+            htype="pve", use_sudo=True, cfg=cfg,
         )
         if r.returncode == 0 and r.stdout:
             try:

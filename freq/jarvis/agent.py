@@ -674,8 +674,8 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
             r = ssh_run(host=node_ip,
                         command=f"qm agent {vmid} network-get-interfaces 2>/dev/null | python3 -c \"import json,sys; data=json.load(sys.stdin); [print(a['ip-address']) for i in data.get('result',[]) for a in i.get('ip-addresses',[]) if a.get('ip-address-type')=='ipv4' and not a['ip-address'].startswith('127.')]\" 2>/dev/null || echo ''",
                         key_path=cfg.ssh_key_path,
-                        connect_timeout=5, command_timeout=AGENT_DEPLOY_TIMEOUT,
-                        htype="pve", use_sudo=True)
+                        command_timeout=AGENT_DEPLOY_TIMEOUT,
+                        htype="pve", use_sudo=True, cfg=cfg)
             if r.returncode == 0 and r.stdout.strip():
                 ip = r.stdout.strip().split('\n')[0]
                 agent["ip"] = ip
