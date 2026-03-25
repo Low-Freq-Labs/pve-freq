@@ -114,6 +114,21 @@ class FreqConfig:
     # Notifications
     discord_webhook: str = ""
     slack_webhook: str = ""
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_to: str = ""
+    smtp_tls: bool = True
+    ntfy_url: str = ""
+    ntfy_topic: str = ""
+    gotify_url: str = ""
+    gotify_token: str = ""
+    pushover_user: str = ""
+    pushover_token: str = ""
+    webhook_url: str = ""
 
     # Fleet data (loaded separately)
     hosts: list = field(default_factory=list)
@@ -357,6 +372,21 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     notify = data.get("notifications", {})
     cfg.discord_webhook = notify.get("discord_webhook", cfg.discord_webhook)
     cfg.slack_webhook = notify.get("slack_webhook", cfg.slack_webhook)
+    cfg.telegram_bot_token = notify.get("telegram_bot_token", cfg.telegram_bot_token)
+    cfg.telegram_chat_id = notify.get("telegram_chat_id", cfg.telegram_chat_id)
+    cfg.smtp_host = notify.get("smtp_host", cfg.smtp_host)
+    cfg.smtp_port = _safe_int(notify.get("smtp_port"), cfg.smtp_port)
+    cfg.smtp_user = notify.get("smtp_user", cfg.smtp_user)
+    cfg.smtp_password = notify.get("smtp_password", cfg.smtp_password)
+    cfg.smtp_to = notify.get("smtp_to", cfg.smtp_to)
+    cfg.smtp_tls = notify.get("smtp_tls", cfg.smtp_tls)
+    cfg.ntfy_url = notify.get("ntfy_url", cfg.ntfy_url)
+    cfg.ntfy_topic = notify.get("ntfy_topic", cfg.ntfy_topic)
+    cfg.gotify_url = notify.get("gotify_url", cfg.gotify_url)
+    cfg.gotify_token = notify.get("gotify_token", cfg.gotify_token)
+    cfg.pushover_user = notify.get("pushover_user", cfg.pushover_user)
+    cfg.pushover_token = notify.get("pushover_token", cfg.pushover_token)
+    cfg.webhook_url = notify.get("webhook_url", cfg.webhook_url)
 
     services = data.get("services", {})
     cfg.dashboard_port = _safe_int(services.get("dashboard_port"), cfg.dashboard_port)

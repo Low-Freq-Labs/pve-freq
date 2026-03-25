@@ -67,11 +67,14 @@ CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 _bg_cache = {
     "infra_quick": None,
     "health": None,
+    "update": None,
 }
 _bg_cache_ts = {
     "infra_quick": 0,
     "health": 0,
+    "update": 0,
 }
+UPDATE_CHECK_INTERVAL = 6 * 3600  # 6 hours
 _bg_lock = threading.Lock()
 
 
@@ -346,6 +349,76 @@ def _bg_probe_health():
         _bg_cache_ts["health"] = time.time()
     _save_disk_cache("health", result)
 
+    # Evaluate alert rules against fresh health data
+    _evaluate_alert_rules(cfg, result)
+
+
+def _bg_check_update():
+    """Check GitHub releases for newer version. Runs every 6 hours."""
+    with _bg_lock:
+        last_check = _bg_cache_ts.get("update", 0)
+    if time.time() - last_check < UPDATE_CHECK_INTERVAL:
+        return  # Not time yet
+
+    from freq import __version__
+    try:
+        url = "https://api.github.com/repos/lowfreqlabs/pve-freq/releases/latest"
+        req = urllib.request.Request(url, headers={"User-Agent": "PVE-FREQ-UpdateCheck"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        latest = data.get("tag_name", "").lstrip("v")
+        update_available = latest and latest != __version__
+        result = {
+            "current": __version__,
+            "latest": latest,
+            "update_available": update_available,
+            "release_url": data.get("html_url", ""),
+            "checked_at": time.time(),
+        }
+    except Exception:
+        # Air-gapped or rate-limited — gracefully degrade
+        result = {
+            "current": __version__,
+            "latest": "",
+            "update_available": False,
+            "release_url": "",
+            "checked_at": time.time(),
+            "error": "Could not reach GitHub",
+        }
+
+    with _bg_lock:
+        _bg_cache["update"] = result
+        _bg_cache_ts["update"] = time.time()
+    _save_disk_cache("update", result)
+
+
+def _evaluate_alert_rules(cfg, health_data):
+    """Evaluate alert rules and fire notifications for triggered alerts."""
+    try:
+        from freq.jarvis.rules import (
+            load_rules, evaluate_rules, load_rule_state, save_rule_state,
+            load_alert_history, save_alert_history, alert_to_dict,
+        )
+        rules = load_rules(cfg.conf_dir)
+        state = load_rule_state(CACHE_DIR)
+        alerts = evaluate_rules(health_data, rules, state)
+        save_rule_state(CACHE_DIR, state)
+
+        if alerts:
+            history = load_alert_history(CACHE_DIR)
+            for alert in alerts:
+                # Fire notification
+                try:
+                    jarvis_notify(cfg, alert.message,
+                                  title=f"FREQ Alert: {alert.rule_name}",
+                                  severity=alert.severity)
+                except Exception as e:
+                    logger.warn(f"Alert notification failed: {e}")
+                history.append(alert_to_dict(alert))
+            save_alert_history(CACHE_DIR, history)
+    except Exception as e:
+        logger.warn(f"Alert rule evaluation failed: {e}")
+
 
 def _bg_refresh_loop(interval=BG_CACHE_REFRESH_INTERVAL):
     """Continuous background refresh — runs forever as a daemon thread."""
@@ -358,6 +431,10 @@ def _bg_refresh_loop(interval=BG_CACHE_REFRESH_INTERVAL):
             _bg_probe_infra()
         except Exception as e:
             logger.error(f"bg infra probe failed: {e}")
+        try:
+            _bg_check_update()
+        except Exception as e:
+            logger.error(f"bg update check failed: {e}")
         time.sleep(interval)
 
 
@@ -661,6 +738,30 @@ def _parse_query(handler):
     return parse_qs(urlparse(handler.path).query)
 
 
+def _is_first_run():
+    """Detect if this is the first run (no admin exists, no setup-complete marker).
+
+    Returns True if:
+      1. No data/setup-complete marker exists, AND
+      2. No users exist in users.conf (or file doesn't exist)
+    """
+    # Check marker first (fast path — already set up)
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+    if os.path.isfile(os.path.join(data_dir, "setup-complete")):
+        return False
+
+    # Check if any users exist
+    try:
+        cfg = load_config()
+        users = _load_users(cfg)
+        if users:
+            return False
+    except Exception:
+        pass
+
+    return True
+
+
 def _get_fleet_vms(cfg):
     """Fetch VM list from PVE cluster, enriched with fleet boundary data.
 
@@ -798,10 +899,27 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/backup": "_serve_backup",
         "/api/discover": "_serve_discover",
         "/api/gwipe": "_serve_gwipe",
+        # Documentation
+        "/api/docs": "_serve_api_docs",
+        "/api/openapi.json": "_serve_openapi_json",
         # Orchestration endpoints (no auth)
         "/healthz": "_serve_healthz",
         "/readyz": "_serve_readyz",
         "/api/metrics/prometheus": "_serve_metrics_prometheus",
+        # Update check
+        "/api/update/check": "_serve_update_check",
+        # Alert rules
+        "/api/rules": "_serve_rules",
+        "/api/rules/create": "_serve_rules_create",
+        "/api/rules/update": "_serve_rules_update",
+        "/api/rules/delete": "_serve_rules_delete",
+        "/api/rules/history": "_serve_rules_history",
+        # Setup wizard (no auth — only works during first run)
+        "/api/setup/status": "_serve_setup_status",
+        "/api/setup/create-admin": "_serve_setup_create_admin",
+        "/api/setup/configure": "_serve_setup_configure",
+        "/api/setup/generate-key": "_serve_setup_generate_key",
+        "/api/setup/complete": "_serve_setup_complete",
     }
 
     def do_GET(self):
@@ -822,6 +940,106 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._proxy_watchdog()
         else:
             self.send_error(404)
+
+    # ── API Documentation ────────────────────────────────────────────────
+
+    def _serve_api_docs(self):
+        """Self-contained API documentation page."""
+        from freq import __version__
+        routes = self._ROUTES
+        # Group routes by category
+        categories = {}
+        for path, method_name in sorted(routes.items()):
+            if path in ("/", "/dashboard", "/old", "/api/docs", "/api/openapi.json"):
+                continue
+            # Extract category from path
+            parts = path.strip("/").split("/")
+            if len(parts) >= 2 and parts[0] == "api":
+                cat = parts[1].capitalize()
+            elif path.startswith("/"):
+                cat = "System"
+            else:
+                cat = "Other"
+            # Get docstring from handler
+            handler = getattr(self, method_name, None)
+            desc = (handler.__doc__ or "").strip().split("\n")[0] if handler else ""
+            categories.setdefault(cat, []).append({"path": path, "description": desc})
+
+        # Build HTML
+        rows = []
+        for cat in sorted(categories.keys()):
+            rows.append(f'<tr><td colspan="2" style="background:rgba(123,47,190,0.1);font-weight:600;'
+                        f'color:var(--purple-light);letter-spacing:1px;text-transform:uppercase;'
+                        f'padding:10px 14px">{cat}</td></tr>')
+            for ep in categories[cat]:
+                rows.append(f'<tr><td><code>{ep["path"]}</code></td>'
+                            f'<td>{ep["description"]}</td></tr>')
+
+        table = "\n".join(rows)
+        html = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE FREQ — API Documentation</title>
+<style>
+:root{{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#c9d1d9;--dim:#8b949e;--purple:#7B2FBE;--purple-light:#9B4FDE;--green:#3fb950}}
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:'Inter',-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);padding:32px;max-width:960px;margin:0 auto}}
+h1{{font-size:24px;margin-bottom:8px;color:var(--purple-light)}}
+.ver{{font-size:13px;color:var(--dim);margin-bottom:24px}}
+table{{width:100%;border-collapse:collapse;background:var(--card);border:2px solid var(--border);border-radius:8px;overflow:hidden}}
+th{{text-align:left;padding:10px 14px;font-size:11px;color:var(--text);text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid var(--border);background:rgba(0,0,0,0.3)}}
+td{{padding:8px 14px;font-size:13px;border-bottom:1px solid var(--border)}}
+tr:last-child td{{border-bottom:none}}
+code{{background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px;color:var(--green)}}
+a{{color:var(--purple-light);text-decoration:none}}
+a:hover{{text-decoration:underline}}
+.links{{margin-bottom:24px;font-size:13px}}
+</style>
+</head><body>
+<h1>PVE FREQ API</h1>
+<div class="ver">v{__version__} &mdash; {len(routes)} endpoints</div>
+<div class="links"><a href="/api/openapi.json">OpenAPI 3.0 Spec (JSON)</a> &middot; <a href="/">Dashboard</a></div>
+<table>
+<tr><th>Endpoint</th><th>Description</th></tr>
+{table}
+</table>
+</body></html>"""
+        body = html.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_openapi_json(self):
+        """OpenAPI 3.0 spec generated from route table."""
+        from freq import __version__
+        routes = self._ROUTES
+        paths = {}
+        for path, method_name in sorted(routes.items()):
+            if path in ("/", "/dashboard", "/old", "/api/docs", "/api/openapi.json"):
+                continue
+            handler = getattr(self, method_name, None)
+            desc = (handler.__doc__ or "").strip().split("\n")[0] if handler else ""
+            paths[path] = {
+                "get": {
+                    "summary": desc or method_name,
+                    "responses": {
+                        "200": {"description": "Successful response", "content": {"application/json": {}}},
+                    },
+                }
+            }
+
+        spec = {
+            "openapi": "3.0.3",
+            "info": {
+                "title": "PVE FREQ API",
+                "version": __version__,
+                "description": "Datacenter management API for PVE FREQ",
+            },
+            "servers": [{"url": "/"}],
+            "paths": paths,
+        }
+        self._json_response(spec)
 
     # ── Orchestration Endpoints (no auth, lightweight) ──────────────────
 
@@ -880,6 +1098,307 @@ class FreqHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body.encode())
+
+    # ── Update Check ─────────────────────────────────────────────────
+
+    def _serve_update_check(self):
+        """Return cached update check result."""
+        from freq import __version__
+        with _bg_lock:
+            update = _bg_cache.get("update")
+        if update:
+            self._json_response(update)
+        else:
+            self._json_response({
+                "current": __version__,
+                "latest": "",
+                "update_available": False,
+                "checked_at": 0,
+            })
+
+    # ── Alert Rules Endpoints ──────────────────────────────────────────
+
+    def _serve_rules(self):
+        """List all alert rules and their current state."""
+        from freq.jarvis.rules import load_rules, rules_to_dicts, load_rule_state
+        cfg = load_config()
+        rules = load_rules(cfg.conf_dir)
+        state = load_rule_state(CACHE_DIR)
+        rule_list = rules_to_dicts(rules)
+        # Annotate with state info
+        for rd in rule_list:
+            active_hosts = [k.split(":", 1)[1] for k in state if k.startswith(f"{rd['name']}:")]
+            rd["active_hosts"] = active_hosts
+        self._json_response({"rules": rule_list, "count": len(rule_list)})
+
+    def _serve_rules_create(self):
+        """Create a new alert rule."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.rules import Rule, load_rules, save_rules
+        cfg = load_config()
+        params = _parse_query(self)
+        name = params.get("name", [""])[0].strip()
+        condition = params.get("condition", [""])[0].strip()
+        if not name or not condition:
+            self._json_response({"error": "name and condition required"}); return
+        valid_conditions = ("host_unreachable", "cpu_above", "ram_above", "disk_above", "docker_down")
+        if condition not in valid_conditions:
+            self._json_response({"error": f"Invalid condition. Valid: {', '.join(valid_conditions)}"}); return
+        rules = load_rules(cfg.conf_dir)
+        if any(r.name == name for r in rules):
+            self._json_response({"error": f"Rule '{name}' already exists"}); return
+        rules.append(Rule(
+            name=name,
+            condition=condition,
+            target=params.get("target", ["*"])[0].strip(),
+            threshold=float(params.get("threshold", ["0"])[0]),
+            duration=int(params.get("duration", ["0"])[0]),
+            severity=params.get("severity", ["warning"])[0].strip(),
+            cooldown=int(params.get("cooldown", ["300"])[0]),
+            enabled=params.get("enabled", ["true"])[0].lower() == "true",
+        ))
+        if save_rules(cfg.conf_dir, rules):
+            self._json_response({"ok": True, "name": name})
+        else:
+            self._json_response({"error": "Failed to save rules"}, 500)
+
+    def _serve_rules_update(self):
+        """Update an existing alert rule (enable/disable/modify)."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.rules import load_rules, save_rules
+        cfg = load_config()
+        params = _parse_query(self)
+        name = params.get("name", [""])[0].strip()
+        if not name:
+            self._json_response({"error": "name required"}); return
+        rules = load_rules(cfg.conf_dir)
+        rule = next((r for r in rules if r.name == name), None)
+        if not rule:
+            self._json_response({"error": f"Rule '{name}' not found"}); return
+        # Update fields if provided
+        if "enabled" in params:
+            rule.enabled = params["enabled"][0].lower() == "true"
+        if "threshold" in params:
+            rule.threshold = float(params["threshold"][0])
+        if "duration" in params:
+            rule.duration = int(params["duration"][0])
+        if "cooldown" in params:
+            rule.cooldown = int(params["cooldown"][0])
+        if "severity" in params:
+            rule.severity = params["severity"][0].strip()
+        if "target" in params:
+            rule.target = params["target"][0].strip()
+        if save_rules(cfg.conf_dir, rules):
+            self._json_response({"ok": True, "name": name})
+        else:
+            self._json_response({"error": "Failed to save rules"}, 500)
+
+    def _serve_rules_delete(self):
+        """Delete an alert rule."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.rules import load_rules, save_rules
+        cfg = load_config()
+        params = _parse_query(self)
+        name = params.get("name", [""])[0].strip()
+        if not name:
+            self._json_response({"error": "name required"}); return
+        rules = load_rules(cfg.conf_dir)
+        before = len(rules)
+        rules = [r for r in rules if r.name != name]
+        if len(rules) == before:
+            self._json_response({"error": f"Rule '{name}' not found"}); return
+        if save_rules(cfg.conf_dir, rules):
+            self._json_response({"ok": True, "deleted": name})
+        else:
+            self._json_response({"error": "Failed to save rules"}, 500)
+
+    def _serve_rules_history(self):
+        """Return recent alert history."""
+        from freq.jarvis.rules import load_alert_history
+        history = load_alert_history(CACHE_DIR)
+        self._json_response({"alerts": history, "count": len(history)})
+
+    # ── Setup Wizard Endpoints (no auth — gated by _is_first_run) ──────
+
+    def _serve_setup_status(self):
+        """Return current setup state including SSH key existence."""
+        from freq import __version__
+        cfg = load_config()
+        ed_key = os.path.join(cfg.key_dir, "freq_id_ed25519")
+        self._json_response({
+            "first_run": _is_first_run(),
+            "version": __version__,
+            "ssh_key_exists": os.path.isfile(ed_key),
+            "ssh_key_path": ed_key,
+        })
+
+    def _serve_setup_create_admin(self):
+        """Create admin account during first-run setup."""
+        if not _is_first_run():
+            self._json_response({"error": "Setup already complete"}, 403)
+            return
+
+        params = _parse_query(self)
+        username = params.get("username", [""])[0].strip().lower()
+        password = params.get("password", [""])[0]
+
+        if not username or not password:
+            self._json_response({"error": "Username and password required"})
+            return
+
+        # Validate username
+        if not re.match(r'^[a-z_][a-z0-9_-]{0,31}$', username):
+            self._json_response({"error": "Invalid username (lowercase, 1-32 chars, alphanumeric/hyphens/underscores)"})
+            return
+
+        if len(password) < 8:
+            self._json_response({"error": "Password must be at least 8 characters"})
+            return
+
+        cfg = load_config()
+
+        # Create user in users.conf
+        users = _load_users(cfg)
+        if any(u["username"] == username for u in users):
+            self._json_response({"error": f"User '{username}' already exists"})
+            return
+
+        users.append({"username": username, "role": "admin", "groups": ""})
+        os.makedirs(cfg.conf_dir, exist_ok=True)
+        if not _save_users(cfg, users):
+            self._json_response({"error": "Failed to save user"}, 500)
+            return
+
+        # Store password hash in vault
+        pw_hash = hashlib.sha256(password.encode()).hexdigest()
+        try:
+            if not os.path.exists(cfg.vault_file):
+                vault_init(cfg)
+            vault_set(cfg, "auth", f"password_{username}", pw_hash)
+        except Exception as e:
+            self._json_response({"error": f"Failed to store password: {e}"}, 500)
+            return
+
+        self._json_response({"ok": True, "user": username, "role": "admin"})
+
+    def _serve_setup_configure(self):
+        """Save cluster configuration during first-run setup."""
+        if not _is_first_run():
+            self._json_response({"error": "Setup already complete"}, 403)
+            return
+
+        params = _parse_query(self)
+        cluster_name = params.get("cluster_name", [""])[0].strip()
+        timezone = params.get("timezone", ["UTC"])[0].strip()
+        pve_nodes = params.get("pve_nodes", [""])[0].strip()
+
+        cfg = load_config()
+
+        # Write/update freq.toml
+        toml_path = os.path.join(cfg.conf_dir, "freq.toml")
+        os.makedirs(cfg.conf_dir, exist_ok=True)
+
+        # Build config content
+        lines = ['[freq]']
+        if cluster_name:
+            lines.append(f'cluster_name = "{cluster_name}"')
+        lines.append(f'timezone = "{timezone}"')
+        lines.append('')
+
+        if pve_nodes:
+            node_ips = [ip.strip() for ip in pve_nodes.split(",") if ip.strip()]
+            if node_ips:
+                lines.append('[pve]')
+                lines.append(f'nodes = {json.dumps(node_ips)}')
+                lines.append('')
+
+        try:
+            with open(toml_path, "w") as f:
+                f.write("\n".join(lines) + "\n")
+            self._json_response({"ok": True, "cluster_name": cluster_name, "timezone": timezone})
+        except OSError as e:
+            self._json_response({"error": f"Failed to write config: {e}"}, 500)
+
+    def _serve_setup_generate_key(self):
+        """Generate SSH keypair during first-run setup."""
+        if not _is_first_run():
+            self._json_response({"error": "Setup already complete"}, 403)
+            return
+
+        cfg = load_config()
+        key_dir = cfg.key_dir
+        os.makedirs(key_dir, mode=0o700, exist_ok=True)
+
+        hostname = os.uname().nodename
+        ed_key = os.path.join(key_dir, "freq_id_ed25519")
+
+        if os.path.isfile(ed_key):
+            # Key already exists — read and return public key
+            pub_path = f"{ed_key}.pub"
+            pubkey = ""
+            if os.path.isfile(pub_path):
+                with open(pub_path) as f:
+                    pubkey = f.read().strip()
+            self._json_response({"ok": True, "exists": True, "pubkey": pubkey, "key_path": ed_key})
+            return
+
+        # Generate ed25519 keypair
+        result = subprocess.run(
+            ["ssh-keygen", "-t", "ed25519", "-C", f"freq@{hostname}",
+             "-f", ed_key, "-N", "", "-q"],
+            capture_output=True, text=True, timeout=30,
+        )
+
+        if result.returncode != 0:
+            self._json_response({"error": f"Key generation failed: {result.stderr[:100]}"}, 500)
+            return
+
+        os.chmod(ed_key, 0o600)
+        os.chmod(f"{ed_key}.pub", 0o644)
+
+        # Also generate RSA key for legacy devices
+        rsa_key = os.path.join(key_dir, "freq_id_rsa")
+        if not os.path.isfile(rsa_key):
+            subprocess.run(
+                ["ssh-keygen", "-t", "rsa", "-b", "4096",
+                 "-C", f"freq-legacy@{hostname}", "-f", rsa_key, "-N", "", "-q"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if os.path.isfile(rsa_key):
+                os.chmod(rsa_key, 0o600)
+                os.chmod(f"{rsa_key}.pub", 0o644)
+
+        # Read public key
+        pubkey = ""
+        pub_path = f"{ed_key}.pub"
+        if os.path.isfile(pub_path):
+            with open(pub_path) as f:
+                pubkey = f.read().strip()
+
+        self._json_response({"ok": True, "exists": False, "pubkey": pubkey, "key_path": ed_key})
+
+    def _serve_setup_complete(self):
+        """Mark setup as complete — writes marker file."""
+        if not _is_first_run():
+            self._json_response({"error": "Setup already complete"}, 403)
+            return
+
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+        os.makedirs(data_dir, exist_ok=True)
+        marker = os.path.join(data_dir, "setup-complete")
+
+        try:
+            with open(marker, "w") as f:
+                f.write(f"Setup completed: {datetime.datetime.now().isoformat()}\n")
+            self._json_response({"ok": True, "message": "Setup complete — redirecting to dashboard"})
+        except OSError as e:
+            self._json_response({"error": f"Failed to write setup marker: {e}"}, 500)
 
     # ── Legacy + Main HTML ───────────────────────────────────────────────
 
@@ -1296,9 +1815,13 @@ class FreqHandler(BaseHTTPRequestHandler):
         })
 
     def _serve_app(self):
-        """Serve the full web UI."""
-        from freq.modules.web_ui import APP_HTML
-        body = APP_HTML.encode()
+        """Serve the full web UI, or setup wizard on first run."""
+        if _is_first_run():
+            from freq.modules.web_ui import SETUP_HTML
+            body = SETUP_HTML.encode()
+        else:
+            from freq.modules.web_ui import APP_HTML
+            body = APP_HTML.encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -2275,6 +2798,20 @@ class FreqHandler(BaseHTTPRequestHandler):
             "vlans_count": len(cfg.vlans), "distros_count": len(cfg.distros),
             "protected_vmids": cfg.protected_vmids,
             "kill_chain": _load_kill_chain(cfg) or ["Operator", "VPN", "Firewall", "Switch", "Network", "Target"],
+            # Notification provider status (booleans only — no secrets)
+            "discord_webhook": bool(cfg.discord_webhook),
+            "slack_webhook": bool(cfg.slack_webhook),
+            "telegram_bot_token": bool(cfg.telegram_bot_token),
+            "telegram_chat_id": bool(cfg.telegram_chat_id),
+            "smtp_host": bool(cfg.smtp_host),
+            "smtp_to": bool(cfg.smtp_to),
+            "ntfy_url": bool(cfg.ntfy_url),
+            "ntfy_topic": bool(cfg.ntfy_topic),
+            "gotify_url": bool(cfg.gotify_url),
+            "gotify_token": bool(cfg.gotify_token),
+            "pushover_user": bool(cfg.pushover_user),
+            "pushover_token": bool(cfg.pushover_token),
+            "webhook_url": bool(cfg.webhook_url),
         })
 
     def _serve_distros(self):

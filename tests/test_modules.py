@@ -331,12 +331,16 @@ class TestNotify(unittest.TestCase):
 
     def test_send_discord_no_webhook(self):
         from freq.jarvis.notify import send_discord
-        result = send_discord("", "test message")
+        from freq.core.config import FreqConfig
+        cfg = FreqConfig()  # discord_webhook defaults to ""
+        result = send_discord(cfg, "test message")
         self.assertFalse(result)
 
     def test_send_slack_no_webhook(self):
         from freq.jarvis.notify import send_slack
-        result = send_slack("", "test message")
+        from freq.core.config import FreqConfig
+        cfg = FreqConfig()  # slack_webhook defaults to ""
+        result = send_slack(cfg, "test message")
         self.assertFalse(result)
 
 

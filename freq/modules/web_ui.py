@@ -7,6 +7,207 @@ Pure Python stdlib. Single-file SPA. Zero dependencies.
 "the bass is the foundation. so is this tool. so is this friendship."
 """
 
+SETUP_HTML = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE FREQ — Setup</title>
+<style>
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#c9d1d9;--dim:#8b949e;--purple:#7B2FBE;--purple-dim:#5a1f8e;--green:#3fb950;--red:#f85149;--input-bg:#0d1117;--input-border:#30363d}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center}
+.setup{max-width:520px;width:100%;padding:40px 32px;background:var(--card);border-radius:16px;border:1px solid var(--border);margin:20px}
+.logo{text-align:center;margin-bottom:32px}
+.logo h1{font-size:28px;background:linear-gradient(135deg,#7B2FBE,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.logo p{color:var(--dim);font-size:13px;margin-top:4px}
+.steps{display:flex;gap:8px;margin-bottom:28px;justify-content:center}
+.step-dot{width:10px;height:10px;border-radius:50%;background:var(--border);transition:background 0.3s}
+.step-dot.active{background:var(--purple)}
+.step-dot.done{background:var(--green)}
+.pane{display:none}
+.pane.active{display:block}
+h2{font-size:18px;margin-bottom:6px}
+.desc{color:var(--dim);font-size:13px;margin-bottom:20px}
+label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px;margin-top:14px}
+input[type=text],input[type=password]{width:100%;padding:10px 14px;background:var(--input-bg);border:2px solid var(--input-border);color:var(--text);border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s}
+input:focus{border-color:var(--purple)}
+.btn{display:inline-block;padding:10px 24px;background:var(--purple);color:#fff;border:none;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer;margin-top:20px;transition:background 0.2s}
+.btn:hover{background:var(--purple-dim)}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+.btn-row{display:flex;gap:10px;justify-content:flex-end;margin-top:24px}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-ghost:hover{background:var(--border)}
+.err{color:var(--red);font-size:12px;margin-top:8px;min-height:18px}
+.ok{color:var(--green);font-size:12px;margin-top:8px}
+.result{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-top:16px;font-size:12px;font-family:monospace;line-height:1.6}
+.result .check{color:var(--green)}
+.skip{color:var(--dim);font-size:12px;margin-top:8px;cursor:pointer;text-decoration:underline}
+.skip:hover{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="setup">
+  <div class="logo">
+    <h1>PVE FREQ</h1>
+    <p>Datacenter management CLI for homelabbers</p>
+  </div>
+  <div class="steps">
+    <div class="step-dot active" id="dot-0"></div>
+    <div class="step-dot" id="dot-1"></div>
+    <div class="step-dot" id="dot-2"></div>
+    <div class="step-dot" id="dot-3"></div>
+  </div>
+
+  <!-- Step 0: Welcome + Admin -->
+  <div class="pane active" id="pane-0">
+    <h2>Create Admin Account</h2>
+    <p class="desc">This account controls your FREQ dashboard and fleet operations.</p>
+    <label>Username</label>
+    <input type="text" id="s-user" placeholder="admin" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="s-pass" placeholder="Choose a strong password" autocomplete="new-password">
+    <label>Confirm Password</label>
+    <input type="password" id="s-pass2" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')nextStep()">
+    <div class="err" id="err-0"></div>
+    <div class="btn-row"><button class="btn" onclick="nextStep()">Create Account</button></div>
+  </div>
+
+  <!-- Step 1: Cluster Basics -->
+  <div class="pane" id="pane-1">
+    <h2>Cluster Configuration</h2>
+    <p class="desc">Basic settings for your Proxmox cluster. All optional — you can change these later.</p>
+    <label>Cluster Name</label>
+    <input type="text" id="s-cluster" placeholder="homelab">
+    <label>Timezone</label>
+    <input type="text" id="s-tz" placeholder="UTC" value="UTC">
+    <label>PVE Node IPs (comma-separated, optional)</label>
+    <input type="text" id="s-nodes" placeholder="192.168.1.10, 192.168.1.11">
+    <div class="err" id="err-1"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="prevStep()">Back</button>
+      <button class="btn" onclick="nextStep()">Continue</button>
+    </div>
+  </div>
+
+  <!-- Step 2: SSH Key -->
+  <div class="pane" id="pane-2">
+    <h2>SSH Key Setup</h2>
+    <p class="desc">FREQ uses SSH to manage your fleet. Generate a new keypair or skip if you'll configure SSH later.</p>
+    <div id="key-status"></div>
+    <div class="err" id="err-2"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="prevStep()">Back</button>
+      <button class="btn" id="btn-keygen" onclick="genKey()">Generate SSH Key</button>
+      <button class="btn" onclick="nextStep()">Continue</button>
+    </div>
+    <div class="skip" onclick="nextStep()">Skip — I'll set up SSH later</div>
+  </div>
+
+  <!-- Step 3: Done -->
+  <div class="pane" id="pane-3">
+    <h2>Setup Complete</h2>
+    <p class="desc">Your FREQ instance is ready.</p>
+    <div class="result" id="summary"></div>
+    <div class="btn-row"><button class="btn" onclick="launch()">Launch Dashboard</button></div>
+  </div>
+</div>
+
+<script>
+var step=0,adminUser='',adminCreated=false,clusterConfigured=false,keyGenerated=false;
+
+function show(s){
+  document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('active')});
+  document.getElementById('pane-'+s).classList.add('active');
+  for(var i=0;i<4;i++){
+    var d=document.getElementById('dot-'+i);
+    d.className='step-dot'+(i<s?' done':'')+(i===s?' active':'');
+  }
+}
+
+function err(s,msg){document.getElementById('err-'+s).textContent=msg}
+
+function nextStep(){
+  err(step,'');
+  if(step===0){
+    var u=document.getElementById('s-user').value.trim();
+    var p=document.getElementById('s-pass').value;
+    var p2=document.getElementById('s-pass2').value;
+    if(!u){err(0,'Username required');return}
+    if(u.length<2||!/^[a-z_][a-z0-9_-]*$/.test(u)){err(0,'Lowercase letters, numbers, hyphens only');return}
+    if(!p||p.length<8){err(0,'Password must be at least 8 characters');return}
+    if(p!==p2){err(0,'Passwords do not match');return}
+    var btn=document.querySelector('#pane-0 .btn');btn.disabled=true;btn.textContent='Creating...';
+    fetch('/api/setup/create-admin?username='+encodeURIComponent(u)+'&password='+encodeURIComponent(p))
+    .then(function(r){return r.json()}).then(function(d){
+      btn.disabled=false;btn.textContent='Create Account';
+      if(d.error){err(0,d.error);return}
+      adminUser=u;adminCreated=true;step=1;show(1);
+    }).catch(function(e){btn.disabled=false;btn.textContent='Create Account';err(0,'Request failed: '+e)});
+    return;
+  }
+  if(step===1){
+    var cluster=document.getElementById('s-cluster').value.trim();
+    var tz=document.getElementById('s-tz').value.trim()||'UTC';
+    var nodes=document.getElementById('s-nodes').value.trim();
+    var q='timezone='+encodeURIComponent(tz);
+    if(cluster)q+='&cluster_name='+encodeURIComponent(cluster);
+    if(nodes)q+='&pve_nodes='+encodeURIComponent(nodes);
+    fetch('/api/setup/configure?'+q).then(function(r){return r.json()}).then(function(d){
+      if(d.error){err(1,d.error);return}
+      clusterConfigured=true;step=2;show(2);checkKey();
+    }).catch(function(e){err(1,'Request failed: '+e)});
+    return;
+  }
+  if(step===2){step=3;show(3);renderSummary();return}
+}
+
+function prevStep(){if(step>0){step--;show(step)}}
+
+function checkKey(){
+  fetch('/api/setup/status').then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('key-status');
+    if(d.ssh_key_exists){
+      el.innerHTML='<div class="ok">SSH key already exists at '+d.ssh_key_path+'</div>';
+      keyGenerated=true;
+      document.getElementById('btn-keygen').textContent='Key Exists';
+      document.getElementById('btn-keygen').disabled=true;
+    } else {
+      el.innerHTML='<div style="color:var(--dim);font-size:12px">No SSH key found. Click "Generate SSH Key" to create one.</div>';
+    }
+  });
+}
+
+function genKey(){
+  var btn=document.getElementById('btn-keygen');btn.disabled=true;btn.textContent='Generating...';
+  fetch('/api/setup/generate-key').then(function(r){return r.json()}).then(function(d){
+    if(d.error){err(2,d.error);btn.disabled=false;btn.textContent='Generate SSH Key';return}
+    keyGenerated=true;
+    document.getElementById('key-status').innerHTML='<div class="ok">SSH keypair generated: '+d.key_path+'</div>';
+    btn.textContent='Key Generated';
+  }).catch(function(e){err(2,'Failed: '+e);btn.disabled=false;btn.textContent='Generate SSH Key'});
+}
+
+function renderSummary(){
+  var s='<span class="check">&#10003;</span> Admin account: <b>'+adminUser+'</b> (admin role)\n';
+  if(clusterConfigured){
+    var c=document.getElementById('s-cluster').value.trim();
+    var tz=document.getElementById('s-tz').value.trim()||'UTC';
+    if(c)s+='<span class="check">&#10003;</span> Cluster: <b>'+c+'</b>\n';
+    s+='<span class="check">&#10003;</span> Timezone: <b>'+tz+'</b>\n';
+  }
+  s+='<span class="check">&#10003;</span> SSH key: '+(keyGenerated?'<b>configured</b>':'<b>skipped</b> (configure later)')+'\n';
+  s+='\nNext steps:\n  - Add PVE nodes in System &gt; Config\n  - Add fleet hosts via freq hosts add\n  - Run freq doctor to verify';
+  document.getElementById('summary').innerHTML=s;
+}
+
+function launch(){
+  fetch('/api/setup/complete').then(function(){window.location.href='/'}).catch(function(){window.location.href='/'});
+}
+</script>
+</body>
+</html>"""
+
 APP_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -395,6 +596,45 @@ tr:hover td{background:var(--card-hover)}
 .text-center{text-align:center}
 .pos-rel{position:relative}
 .toggle-sw{position:relative;width:40px;height:22px;cursor:pointer;display:block;flex-shrink:0}
+
+/* ── Mobile Responsive ──────────────────────────────────────────────── */
+.mobile-menu-btn{display:none;background:var(--card);border:2px solid var(--input-border);color:var(--purple-light);padding:6px 10px;border-radius:6px;font-size:16px;cursor:pointer;line-height:1}
+@media(max-width:768px){
+.mn-header{flex-direction:column;gap:10px;padding:12px 16px;text-align:center}
+.mn-header .flex-gap-16-center{flex-wrap:wrap;justify-content:center}
+.mn-header pre{display:none}
+.mn-body{padding:12px 14px}
+.stats{grid-template-columns:repeat(2,1fr);gap:8px}
+.st{padding:10px 12px}
+.st .vl{font-size:16px}
+table{font-size:12px;display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+th,td{padding:7px 10px;white-space:nowrap}
+.two{grid-template-columns:1fr}
+.ho-grid{columns:1}
+.ho-row{grid-template-columns:100px 1fr;gap:8px;font-size:12px}
+.exec-bar{flex-direction:column}
+.chain{flex-direction:column;align-items:flex-start;gap:4px;padding:12px}
+.grid-auto-280,.grid-auto-300,.grid-auto-240{grid-template-columns:1fr}
+#p-home>div:first-child pre{font-size:8px}
+.mobile-menu-btn{display:block}
+.nav-toolbar{display:none!important;flex-direction:column;gap:4px;width:100%}
+.nav-toolbar.open{display:flex!important}
+.fleet-btn{font-size:11px;padding:6px 10px}
+}
+@media(max-width:480px){
+.mn-header{padding:10px 12px}
+.mn-body{padding:10px 12px}
+.stats{grid-template-columns:1fr 1fr;gap:6px}
+.st .lb{font-size:10px;padding:2px 8px}
+.st .vl{font-size:14px}
+#p-home>div:first-child{display:none}
+th,td{padding:5px 8px;font-size:11px}
+.ho-row{grid-template-columns:1fr;gap:4px}
+.btn,button{font-size:12px}
+#header-time{font-size:18px}
+#login-overlay>div{width:90%!important;max-width:380px}
+#login-overlay pre{font-size:6px!important}
+}
 </style>
 </head>
 <body>
@@ -438,6 +678,10 @@ tr:hover td{background:var(--card-hover)}
     <span style="font-family:'Courier New',monospace;font-size:24px;font-weight:700;color:var(--purple-light);letter-spacing:2px;opacity:0.8" id="header-time"></span>
   </div>
 </div>
+<div id="update-banner" style="display:none;background:linear-gradient(135deg,rgba(123,47,190,0.15),rgba(168,85,247,0.1));border-bottom:1px solid var(--purple);padding:10px 32px;font-size:13px;color:var(--text)">
+  <span id="update-banner-text"></span>
+  <button onclick="document.getElementById('update-banner').style.display='none';sessionStorage.setItem('freq_update_dismissed','1')" style="float:right;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button>
+</div>
 <div class="mn-body">
 
 <!-- ════════ HOME ════════ -->
@@ -453,19 +697,22 @@ tr:hover td{background:var(--card-hover)}
 </div>
 <!-- Toolbar -->
 <div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:10px 14px;margin-bottom:16px;margin-top:12px">
-<div style="display:flex;gap:8px;align-items:center;min-height:36px">
+<div style="display:flex;gap:8px;align-items:center;min-height:36px;flex-wrap:wrap">
+  <button class="mobile-menu-btn" onclick="document.getElementById('nav-items').classList.toggle('open')" aria-label="Menu">&#9776;</button>
+  <div id="nav-items" class="nav-toolbar" style="display:contents">
   <button class="fleet-btn view-btn active-view" data-view="home">HOME</button>
-  <button class="fleet-btn view-btn" data-view="fleet" data-view="fleet">FLEET</button>
-  <button class="fleet-btn view-btn" data-view="docker" data-view="docker">DOCKER</button>
-  <button class="fleet-btn view-btn" data-view="security" data-view="security">SECURITY</button>
-  <button class="fleet-btn view-btn" data-view="lab" data-view="lab">LAB TOOLS</button>
+  <button class="fleet-btn view-btn" data-view="fleet">FLEET</button>
+  <button class="fleet-btn view-btn" data-view="docker">DOCKER</button>
+  <button class="fleet-btn view-btn" data-view="security">SECURITY</button>
+  <button class="fleet-btn view-btn" data-view="lab">LAB TOOLS</button>
   <button class="fleet-btn view-btn" data-view="policies">POLICIES</button>
   <button class="fleet-btn view-btn" data-view="ops">OPS</button>
   <div class="flex-1"></div>
   <button class="fleet-btn" onclick="openNewTool()" id="btn-new-tool" style="opacity:0.7;display:none">+ NEW TOOL</button>
-  <button class="fleet-btn opacity-7" onclick="nav('system')" >&#9881; SETTINGS</button>
-  <button class="fleet-btn opacity-7" data-action="openLayoutConfig" id="layout-btn" >&#9776; LAYOUT</button>
+  <button class="fleet-btn opacity-7" onclick="nav('system')">&#9881; SETTINGS</button>
+  <button class="fleet-btn opacity-7" data-action="openLayoutConfig" id="layout-btn">&#9776; LAYOUT</button>
   <button class="fleet-btn" onclick="refreshCurrentView()">REFRESH</button>
+  </div>
 </div></div>
 <!-- HOME VIEW -->
 <div id="home-view">
@@ -909,6 +1156,30 @@ tr:hover td{background:var(--card-hover)}
   <div class="section-body"><div id="groups-c"><div class="skeleton"></div></div></div>
 </div>
 <div class="section">
+  <div class="section-header"><h3>Alert Rules</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="rules-list"><div class="skeleton"></div></div>
+    <div style="margin-top:16px;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
+      <h4 style="font-size:13px;margin-bottom:12px;color:var(--purple-light)">Create Rule</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="label-sub-10">Name</label><input id="rule-name" class="input-sm" style="width:100%" placeholder="my-rule"></div>
+        <div><label class="label-sub-10">Condition</label><select id="rule-cond" class="input-sm" style="width:100%"><option value="host_unreachable">Host Unreachable</option><option value="cpu_above">CPU Above</option><option value="ram_above">RAM Above %</option><option value="disk_above">Disk Above %</option><option value="docker_down">Docker Down</option></select></div>
+        <div><label class="label-sub-10">Target</label><input id="rule-target" class="input-sm" style="width:100%" value="*" placeholder="* or hostname"></div>
+        <div><label class="label-sub-10">Threshold</label><input id="rule-threshold" class="input-sm" style="width:100%" value="0" type="number"></div>
+        <div><label class="label-sub-10">Duration (s)</label><input id="rule-duration" class="input-sm" style="width:100%" value="0" type="number"></div>
+        <div><label class="label-sub-10">Cooldown (s)</label><input id="rule-cooldown" class="input-sm" style="width:100%" value="300" type="number"></div>
+        <div><label class="label-sub-10">Severity</label><select id="rule-severity" class="input-sm" style="width:100%"><option value="warning">Warning</option><option value="critical">Critical</option><option value="info">Info</option></select></div>
+      </div>
+      <button class="fleet-btn mt-12" onclick="createRule()">CREATE RULE</button>
+      <div id="rule-create-msg" class="mt-8"></div>
+    </div>
+    <div style="margin-top:16px">
+      <h4 style="font-size:13px;margin-bottom:8px;color:var(--purple-light)">Recent Alerts</h4>
+      <div id="alert-history"><span class="c-dim-fs12">No alerts yet</span></div>
+    </div>
+  </div>
+</div>
+<div class="section">
   <div class="section-header"><h3>Notifications</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="notify-status"></div>
@@ -1192,8 +1463,23 @@ function _showApp(){
       var iconEl=document.getElementById('header-user-icon');if(iconEl)iconEl.style.background=rc[_currentRole]||'var(--green)';
       _applyRoleUI();
       _renderHomeWidgets();
+      _checkForUpdate();
     },600);
   });
+}
+
+function _checkForUpdate(){
+  if(sessionStorage.getItem('freq_update_dismissed'))return;
+  fetch('/api/update/check').then(function(r){return r.json()}).then(function(d){
+    if(d.update_available&&d.latest){
+      var banner=document.getElementById('update-banner');
+      var text=document.getElementById('update-banner-text');
+      if(banner&&text){
+        text.innerHTML='<strong>Update Available:</strong> v'+d.latest+' &mdash; Pull latest: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">docker compose pull && docker compose up -d</code>';
+        banner.style.display='block';
+      }
+    }
+  }).catch(function(){});
 }
 
 function openUserMenu(){
@@ -1857,7 +2143,64 @@ function loadDockerPage(){
 }
 function loadInfraPage(){loadInfra();}
 function loadSecurityPage(){loadVault();loadUsers();loadKeys();loadRisk();loadPolicies();}
-function loadSystemPage(){renderGlobalSettings();loadFleetAdmin();loadConfig();loadJournal();loadDistros();loadGroups();loadNotify();}
+function loadSystemPage(){renderGlobalSettings();loadFleetAdmin();loadConfig();loadJournal();loadDistros();loadGroups();loadNotify();loadRules();loadAlertHistory();}
+
+function loadRules(){
+  fetch('/api/rules?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('rules-list');if(!el)return;
+    if(!d.rules||d.rules.length===0){el.innerHTML='<span class="c-dim-fs12">No rules configured</span>';return;}
+    var h='<table><tr><th>Name</th><th>Condition</th><th>Target</th><th>Threshold</th><th>Severity</th><th>Enabled</th><th>Actions</th></tr>';
+    d.rules.forEach(function(r){
+      h+='<tr><td><strong>'+r.name+'</strong></td><td>'+r.condition+'</td><td>'+r.target+'</td><td>'+r.threshold+'</td>';
+      h+='<td><span class="badge '+(r.severity==='critical'?'CRITICAL':r.severity)+'">'+r.severity+'</span></td>';
+      h+='<td>'+(r.enabled?'<span class="c-green">ON</span>':'<span class="c-red">OFF</span>')+'</td>';
+      h+='<td><button class="fleet-btn" style="font-size:10px;padding:2px 8px" onclick="toggleRule(\''+r.name+'\','+(!r.enabled)+')">'+(r.enabled?'Disable':'Enable')+'</button> ';
+      h+='<button class="fleet-btn" style="font-size:10px;padding:2px 8px" onclick="deleteRule(\''+r.name+'\')">Delete</button></td></tr>';
+    });
+    h+='</table>';
+    el.innerHTML=h;
+  }).catch(function(e){var el=document.getElementById('rules-list');if(el)el.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
+}
+function createRule(){
+  var n=document.getElementById('rule-name').value.trim();
+  var c=document.getElementById('rule-cond').value;
+  var t=document.getElementById('rule-target').value.trim()||'*';
+  var th=document.getElementById('rule-threshold').value||'0';
+  var dur=document.getElementById('rule-duration').value||'0';
+  var cd=document.getElementById('rule-cooldown').value||'300';
+  var sev=document.getElementById('rule-severity').value;
+  var msg=document.getElementById('rule-create-msg');
+  if(!n){msg.innerHTML='<span class="c-red">Name required</span>';return;}
+  fetch('/api/rules/create?token='+_authToken+'&name='+encodeURIComponent(n)+'&condition='+c+'&target='+encodeURIComponent(t)+'&threshold='+th+'&duration='+dur+'&cooldown='+cd+'&severity='+sev)
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.error){msg.innerHTML='<span class="c-red">'+d.error+'</span>';return;}
+    msg.innerHTML='<span class="c-green">Rule created</span>';loadRules();
+    document.getElementById('rule-name').value='';
+  }).catch(function(e){msg.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
+}
+function toggleRule(name,enabled){
+  fetch('/api/rules/update?token='+_authToken+'&name='+encodeURIComponent(name)+'&enabled='+enabled)
+  .then(function(r){return r.json()}).then(function(d){loadRules();});
+}
+function deleteRule(name){
+  if(!confirm('Delete rule "'+name+'"?'))return;
+  fetch('/api/rules/delete?token='+_authToken+'&name='+encodeURIComponent(name))
+  .then(function(r){return r.json()}).then(function(d){loadRules();});
+}
+function loadAlertHistory(){
+  fetch('/api/rules/history?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('alert-history');if(!el)return;
+    if(!d.alerts||d.alerts.length===0){el.innerHTML='<span class="c-dim-fs12">No alerts yet</span>';return;}
+    var h='<table><tr><th>Time</th><th>Rule</th><th>Host</th><th>Message</th><th>Severity</th></tr>';
+    d.alerts.slice(-20).reverse().forEach(function(a){
+      var t=a.fired_at?new Date(a.fired_at*1000).toLocaleString():'?';
+      h+='<tr><td style="white-space:nowrap">'+t+'</td><td>'+a.rule_name+'</td><td>'+a.host+'</td><td>'+a.message+'</td>';
+      h+='<td><span class="badge '+(a.severity==='critical'?'CRITICAL':a.severity)+'">'+a.severity+'</span></td></tr>';
+    });
+    h+='</table>';
+    el.innerHTML=h;
+  });
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    FLEET ADMIN — admin role only
@@ -4075,9 +4418,24 @@ function loadGroups(){
 function loadNotify(){
   document.getElementById('notify-status').innerHTML='<div class="skeleton" style="height:40px"></div>';
   fetch(API.CONFIG).then(function(r){return r.json()}).then(function(d){
-    var html='<table class="mt-8"><tr><td>Discord</td><td>'+(d.discord_webhook?badge('ok')+' Configured':badge('down')+' Not configured')+'</td></tr>';
-    html+='<tr><td>Slack</td><td>'+(d.slack_webhook?badge('ok')+' Configured':badge('down')+' Not configured')+'</td></tr></table>';
-    html+='<p style="margin-top:8px;font-size:11px;color:var(--text-dim)">Configure webhooks in freq.toml under [notifications]</p>';
+    var providers=[
+      {name:'Discord',key:'discord_webhook'},{name:'Slack',key:'slack_webhook'},
+      {name:'Telegram',keys:['telegram_bot_token','telegram_chat_id']},
+      {name:'Email',keys:['smtp_host','smtp_to']},
+      {name:'ntfy',keys:['ntfy_url','ntfy_topic']},
+      {name:'Gotify',keys:['gotify_url','gotify_token']},
+      {name:'Pushover',keys:['pushover_user','pushover_token']},
+      {name:'Webhook',key:'webhook_url'}
+    ];
+    var html='<table class="mt-8"><tr><th>Provider</th><th>Status</th></tr>';
+    providers.forEach(function(p){
+      var ok=false;
+      if(p.key)ok=!!d[p.key];
+      if(p.keys)ok=p.keys.every(function(k){return !!d[k]});
+      html+='<tr><td>'+p.name+'</td><td>'+(ok?badge('ok')+' Configured':badge('down')+' Not configured')+'</td></tr>';
+    });
+    html+='</table>';
+    html+='<p style="margin-top:8px;font-size:11px;color:var(--text-dim)">Configure in freq.toml under [notifications]</p>';
     document.getElementById('notify-status').innerHTML=html;
   });
 }
