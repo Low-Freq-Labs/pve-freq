@@ -3314,21 +3314,25 @@ def _init_headless(cfg, args):
     fmt.blank()
 
     # ── Phase 1: Prerequisites ──
-    _phase(1, 6, "Prerequisites")
+    _phase(1, 7, "Prerequisites")
     if not _phase_welcome(cfg):
         return 1
 
-    # ── Phase 2: Local Service Account ──
-    _phase(2, 6, "Local Service Account")
+    # ── Phase 2: Cluster Configuration ──
+    _phase(2, 7, "Cluster Configuration")
+    _phase_configure(cfg, args)
+
+    # ── Phase 3: Local Service Account ──
+    _phase(3, 7, "Local Service Account")
     if not _headless_local_account(cfg, ctx):
         return 1
 
-    # ── Phase 3: SSH Keys ──
-    _phase(3, 6, "SSH Key Generation")
+    # ── Phase 4: SSH Keys ──
+    _phase(4, 7, "SSH Key Generation")
     _phase_ssh_keys(cfg, ctx)
 
-    # ── Phase 4: Fleet Deployment ──
-    _phase(4, 6, "Fleet Deployment")
+    # ── Phase 5: Fleet Deployment ──
+    _phase(5, 7, "Fleet Deployment")
 
     # Load per-device credentials (new style) or fall back to legacy single-file
     device_creds = _load_device_credentials(device_credentials_file)
@@ -3342,8 +3346,8 @@ def _init_headless(cfg, args):
                            device_user=device_user,
                            device_creds=device_creds)
 
-    # ── Phase 5: RBAC ──
-    _phase(5, 6, "RBAC Setup")
+    # ── Phase 6: RBAC ──
+    _phase(6, 7, "RBAC Setup")
     roles_file = os.path.join(cfg.conf_dir, "roles.conf")
     existing = ""
     if os.path.isfile(roles_file):
@@ -3362,8 +3366,8 @@ def _init_headless(cfg, args):
         else:
             fmt.step_ok(f"{svc_name} already in roles")
 
-    # ── Phase 6: Verification ──
-    _phase(6, 6, "Verification")
+    # ── Phase 7: Verification ──
+    _phase(7, 7, "Verification")
     verified = _phase_verify(cfg, ctx)
 
     # Write marker
