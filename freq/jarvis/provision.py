@@ -222,6 +222,49 @@ def provision_agent_vm(
     return True
 
 
+def cmd_import(cfg: FreqConfig, pack, args) -> int:
+    """Import a cloud image as a VM with cloud-init."""
+    from freq.modules.pve import _find_reachable_node, _pve_cmd as pve_cmd
+
+    image = getattr(args, "image", None) or "debian-13"
+    name = getattr(args, "name", None) or "freq-{}".format(image)
+    vmid = getattr(args, "vmid", None)
+
+    fmt.header("Import: {}".format(image))
+    fmt.blank()
+
+    if image not in CLOUD_IMAGES:
+        fmt.error("Unknown image: {}".format(image))
+        fmt.info("Available: {}".format(", ".join(CLOUD_IMAGES.keys())))
+        return 1
+
+    node_ip = _find_reachable_node(cfg)
+    if not node_ip:
+        fmt.error("No PVE node reachable.")
+        return 1
+
+    if not vmid:
+        stdout, ok = pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
+        if ok:
+            vmid = int(stdout.strip())
+        else:
+            fmt.error("Cannot allocate VMID.")
+            return 1
+
+    fmt.line("  {b}Image:{r}  {n}".format(
+        b=fmt.C.BOLD, r=fmt.C.RESET, n=CLOUD_IMAGES[image]["name"]))
+    fmt.line("  {b}VMID:{r}   {v}".format(
+        b=fmt.C.BOLD, r=fmt.C.RESET, v=vmid))
+    fmt.line("  {b}Name:{r}   {n}".format(
+        b=fmt.C.BOLD, r=fmt.C.RESET, n=name))
+    fmt.blank()
+
+    ok = provision_agent_vm(cfg, node_ip, vmid, name, image_key=image)
+    fmt.blank()
+    fmt.footer()
+    return 0 if ok else 1
+
+
 def cmd_provision(cfg: FreqConfig, pack, args) -> int:
     """Provision a VM with cloud-init."""
     fmt.header("Provision")
