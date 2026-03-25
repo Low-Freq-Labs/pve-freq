@@ -1,2 +1,0 @@
-search infa.internal
-nameserver 10.25.0.1

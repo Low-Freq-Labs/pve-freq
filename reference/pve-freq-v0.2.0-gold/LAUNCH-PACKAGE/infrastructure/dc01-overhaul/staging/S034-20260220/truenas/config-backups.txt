@@ -1,6 +1,0 @@
-total 60
-drwxrwxr-x+ 2 svc-admin truenas_admin 3 Feb 20 15:43 tdarr-node
-drwxrwxr-x+ 2 svc-admin truenas_admin 2 Feb 20 15:43 plex-server
-drwxrwxr-x+ 2 svc-admin truenas_admin 2 Feb 20 15:43 arr-stack
-drwxrwxr-x+ 2 svc-admin truenas_admin 2 Feb 20 15:43 qbit-downloader
-drwxrwxr-x+ 2 svc-admin truenas_admin 2 Feb 20 15:43 tdarr-server

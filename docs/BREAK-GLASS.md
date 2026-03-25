@@ -1,124 +1,92 @@
 # Break Glass — Emergency Operations Procedure
 
-> **Purpose:** When the specialist system is broken, here's how to operate while you fix it.
-> **Audience:** Sonny (operator)
-> **Created:** 2026-03-13 (Phase 3 prerequisite, per STRESS-TEST ISSUE-01)
+> **Purpose:** When FREQ or the management system is broken, here's how to recover.
+> **Audience:** Cluster operator
 
 ---
 
 ## When To Use This
 
-- SessionStart hook blocks ALL sessions (hash check bug or corrupted hash file)
-- Cold storage hash file corrupted on SMB share
-- Claude Code update changes hook behavior
-- Model update degrades constitution adherence
-- Screen session crashes mid-operation with half-completed work
+- FREQ config is corrupted or missing
+- SSH keys are lost or compromised
+- Fleet connectivity is down
+- Dashboard won't start
 
 ---
 
-## Scenario 1: Constitution Hash Mismatch (Session Won't Start)
+## Scenario 1: FREQ Config Corrupted
 
-**Symptom:** `CONSTITUTION MISMATCH. Expected: X Got: Y. REFUSING TO OPERATE.`
+**Symptom:** `freq doctor` fails, commands error on config load.
 
-**If the change was authorized (you edited CLAUDE.md intentionally):**
 ```bash
-cd /home/jarvis-ai/rick
-sha256sum CLAUDE.md | cut -d' ' -f1 > cold-storage/claude-md-hash.sha256
-# Add entry to cold-storage/CHANGELOG.md explaining the change
-# Restart the session
-```
+# Re-seed config from examples
+cd /opt/pve-freq
+for f in conf/*.example; do
+    active="${f%.example}"
+    [ -f "$active" ] || cp "$f" "$active"
+done
 
-**If the change was NOT authorized (corruption, rogue edit):**
-```bash
-cd /home/jarvis-ai/rick
-# Restore from cold storage backup
-cp cold-storage/CLAUDE.md.v1 CLAUDE.md
-# Or restore from Obsidian warm backup
-cp /mnt/obsidian/backup/jarvis-projects/freq-dev/CLAUDE.md .
-# Restart the session
+# Verify
+freq doctor
 ```
 
 ---
 
-## Scenario 2: Cold Storage Corrupted
+## Scenario 2: SSH Keys Lost
 
-**Symptom:** Hash file empty, corrupted, or SMB share unmounted.
+**Symptom:** Fleet commands fail with "Permission denied" or "No such file".
 
 ```bash
-# Check if Obsidian is mounted
-mountpoint -q /mnt/obsidian && echo "OK" || echo "MOUNT DOWN"
+# Regenerate FREQ SSH keys
+freq init --regenerate-keys
 
-# If mount is down, remount
-sudo mount -t cifs //10.25.25.25/smb-share/public/DB_01 /mnt/obsidian \
-  -o credentials=/home/jarvis-ai/jarvis_prod/credentials/smb-credentials,vers=3.0,uid=3004,gid=3004
+# Or manually:
+ssh-keygen -t ed25519 -f /opt/pve-freq/data/keys/freq_id_ed25519 -N ""
+ssh-keygen -t rsa -b 4096 -f /opt/pve-freq/data/keys/freq_id_rsa -N ""
 
-# Regenerate hash from current (verified) CLAUDE.md
-cd /home/jarvis-ai/rick
-sha256sum CLAUDE.md | cut -d' ' -f1 > cold-storage/claude-md-hash.sha256
+# Re-deploy to fleet
+freq init --deploy-keys
 ```
 
 ---
 
-## Scenario 3: Specialist System Completely Broken
+## Scenario 3: Fleet Connectivity Down
 
-**Symptom:** Can't start any specialist session. Hooks broken. Claude Code acting weird after update.
+**Symptom:** `freq exec all "hostname"` returns all failures.
 
-**Fallback: Use JARVIS directly.**
-
-The old way still works. JARVIS in `jarvis_prod/` has full infrastructure access:
 ```bash
-cd /home/jarvis-ai/jarvis_prod
-claude   # Opens JARVIS with the original CLAUDE.md and full SSH access
+# Test individual host connectivity
+ssh -o ConnectTimeout=5 freq-admin@<host-ip> "hostname"
+
+# Check if it's a network issue or auth issue
+# Network: ping <host-ip>
+# Auth: ssh -v freq-admin@<host-ip>
+
+# Common fixes:
+# - Firewall rule changed: check pfSense/OPNsense rules
+# - SSH key permissions: chmod 600 on key files
+# - Service account locked: check /etc/shadow on target host
 ```
-
-JARVIS can:
-- SSH to all hosts
-- Run quick-check.sh
-- Fix infrastructure issues
-- Read/write memory files
-
-JARVIS cannot (and should not):
-- Write FREQ code (that's freq-dev's job)
-- Modify the specialist system without operator approval
-
-**This is the fire escape. Use it to fix the specialist system, then go back to normal.**
 
 ---
 
-## Scenario 4: Screen Session Crash Mid-Operation
+## Scenario 4: Dashboard Won't Start
 
-**Symptom:** Terminal closed, SSH dropped, screen died.
+**Symptom:** `freq serve` exits immediately or port already in use.
 
 ```bash
-# Check if screen session still exists
-screen -list
+# Check if already running
+pgrep -f 'freq serve' && echo "Already running"
 
-# If session exists, reattach
-screen -r FREQDEV
+# Kill existing and restart
+kill $(pgrep -f 'freq serve') 2>/dev/null
+sleep 1
+freq serve --port 8888 &
 
-# If session is dead, check for unsaved work
-cd /home/jarvis-ai/rick
-git status                    # Check for uncommitted changes
-cat journal/CW-*.md | tail -20  # Read last journal checkpoints
-ls tickets/open/              # Check for tickets filed before crash
+# Verify
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/
+# Should print: 200
 ```
-
-The CW journal (Rule B13) is the recovery point. Everything up to the last `/checkpoint` is captured. Read the journal, understand where the session was, start a new session.
-
----
-
-## Scenario 5: Model Degradation (Constitution Not Followed)
-
-**Symptom:** Specialist ignores rules, drifts from constitution, stops using /ticket or /checkpoint.
-
-1. Export the session: `/export problem-session.md`
-2. Review against the 22 rules — which ones were violated?
-3. Options:
-   - Reword the violated rules to be more explicit
-   - Add examples to the CLAUDE.md for the specific failure mode
-   - Try a different model (Sonnet vs Opus)
-   - Add a PreToolUse hook that specifically checks for the violation pattern
-4. Update CLAUDE.md → update hash → update CHANGELOG → test again
 
 ---
 
@@ -127,13 +95,9 @@ The CW journal (Rule B13) is the recovery point. Everything up to the last `/che
 | Priority | Action |
 |----------|--------|
 | 1 | Stop. Don't make it worse. |
-| 2 | Check the journal for last known good state |
-| 3 | Check git for uncommitted changes |
-| 4 | Restore from cold storage if constitution corrupted |
-| 5 | Fall back to JARVIS if specialist system is broken |
+| 2 | Run `freq doctor` to identify what's broken |
+| 3 | Check `data/log/freq.log` for error details |
+| 4 | Re-seed config from examples if config is corrupted |
+| 5 | Regenerate SSH keys if auth is broken |
 | 6 | Fix the root cause |
-| 7 | Update this document with the new failure mode |
-
----
-
-*This document must exist before Phase 3 execution. STRESS-TEST ISSUE-01.*
+| 7 | Document the failure mode for next time |

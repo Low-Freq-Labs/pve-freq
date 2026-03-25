@@ -1,5 +1,0 @@
-gigecolo#terminal length 0
-gigecolo#show cdp neighbors detail
-
-Total cdp entries displayed : 0
-gigecolo#exit

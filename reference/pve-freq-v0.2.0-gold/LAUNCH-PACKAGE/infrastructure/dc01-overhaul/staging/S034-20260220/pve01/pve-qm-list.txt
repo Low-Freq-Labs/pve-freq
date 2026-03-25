@@ -1,8 +1,0 @@
-      VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID       
-       101 Plex-Server          running    8192              64.00 502295    
-       102 Arr-Stack            running    8192              64.00 495491    
-       103 qBit-Downloader      running    4096              64.00 3905      
-       105 Tdarr-Server         running    4096              64.00 4142      
-       420 DonnyisGay           stopped    8192              64.00 0         
-       802 Blue                 running    4000              80.00 13264     
-       804 Talos                running    8000              80.00 13432     

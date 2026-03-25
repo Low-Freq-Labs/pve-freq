@@ -40,6 +40,7 @@ planning/
 workspace/
 cold-storage/
 resume-state.md
+reference/
 
 # Credentials and sensitive data (never commit)
 *.pem

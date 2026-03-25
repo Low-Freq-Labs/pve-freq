@@ -1,5 +1,0 @@
-quorum OK
-master pve03 (idle, Tue Feb 17 15:55:02 2026)
-lrm pve01 (idle, Fri Feb 20 11:25:44 2026)
-lrm pve02 (old timestamp - dead?, Thu Feb  5 19:21:30 2026)
-lrm pve03 (idle, Fri Feb 20 11:25:43 2026)

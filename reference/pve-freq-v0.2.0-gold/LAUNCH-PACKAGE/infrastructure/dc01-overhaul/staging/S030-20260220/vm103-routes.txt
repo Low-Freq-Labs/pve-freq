@@ -1,7 +1,0 @@
-default via 10.25.66.1 dev ens18 proto dhcp src 10.25.66.10 metric 1002 
-10.25.66.0/24 dev ens18 proto dhcp scope link src 10.25.66.10 metric 1002 
-10.25.100.0/24 via 10.25.255.1 dev ens19 
-10.25.255.0/24 dev ens19 proto kernel scope link src 10.25.255.32 
-172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown 
-172.18.0.0/16 dev br-b2c56765c3da proto kernel scope link src 172.18.0.1 
-172.19.0.0/16 dev br-eef6c993bea5 proto kernel scope link src 172.19.0.1 linkdown 

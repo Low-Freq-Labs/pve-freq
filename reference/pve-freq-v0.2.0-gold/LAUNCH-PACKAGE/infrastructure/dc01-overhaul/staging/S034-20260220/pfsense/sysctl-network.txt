@@ -1,3 +1,0 @@
-net.inet.tcp.recvspace: 65228
-net.inet.tcp.sendspace: 65228
-net.link.lagg.default_flowid_shift: 16

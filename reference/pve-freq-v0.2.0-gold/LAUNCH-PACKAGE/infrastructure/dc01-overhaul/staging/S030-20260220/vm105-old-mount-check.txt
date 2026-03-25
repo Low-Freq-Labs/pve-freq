@@ -1,1 +1,0 @@
-lrwxrwxrwx 1 root root 27 Feb 20 09:57 /mnt/nfs-mega-share -> /mnt/truenas/nfs-mega-share

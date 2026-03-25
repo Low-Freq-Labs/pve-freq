@@ -1,4 +1,0 @@
-/cf/conf/rules.debug.old
-/cf/conf/kea4_scripts.d/kea2unbound.sh
-/cf/conf/kea6_scripts.d/kea2fib6.sh
-/cf/conf/kea6_scripts.d/kea2unbound.sh

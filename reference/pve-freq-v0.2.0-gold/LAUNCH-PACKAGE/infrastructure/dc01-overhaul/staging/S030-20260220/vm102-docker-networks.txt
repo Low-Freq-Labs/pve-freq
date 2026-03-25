@@ -1,5 +1,0 @@
-NETWORK ID     NAME           DRIVER    SCOPE
-6c4db0eea077   bridge         bridge    local
-40ffb951f976   host           host      local
-58e951ed530e   none           null      local
-667a4e7aaba4   plex_default   bridge    local

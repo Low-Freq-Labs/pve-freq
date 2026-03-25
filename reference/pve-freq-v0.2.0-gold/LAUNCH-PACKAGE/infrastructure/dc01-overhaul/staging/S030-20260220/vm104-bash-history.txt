@@ -1,7 +1,0 @@
-clear
-apt install sudo -y
-usermod -aG sudo sonny-aif
-sudo groupadd -g 950 truenas_admin
-sudo usermod -g 950 sonny-aif
-sudo usermod -u 3000 sonny-aif
-sudo chown -R 3000:950 /home/sonny-aif

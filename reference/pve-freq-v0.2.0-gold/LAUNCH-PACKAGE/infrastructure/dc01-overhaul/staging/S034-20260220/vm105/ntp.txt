@@ -1,7 +1,0 @@
-               Local time: Fri 2026-02-20 19:31:19 CST
-           Universal time: Sat 2026-02-21 01:31:19 UTC
-                 RTC time: Sat 2026-02-21 01:31:18
-                Time zone: America/Chicago (CST, -0600)
-System clock synchronized: no
-              NTP service: active
-          RTC in local TZ: no

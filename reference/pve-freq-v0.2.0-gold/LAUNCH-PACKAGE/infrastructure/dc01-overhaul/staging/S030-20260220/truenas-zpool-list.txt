@@ -1,3 +1,0 @@
-NAME        SIZE  ALLOC   FREE  CKPOINT  EXPANDSZ   FRAG    CAP  DEDUP    HEALTH  ALTROOT
-boot-pool   114G  3.07G   111G        -         -     1%     2%  1.00x    ONLINE  -
-mega-pool  43.6T  2.99T  40.6T        -         -     0%     6%  1.00x    ONLINE  /mnt

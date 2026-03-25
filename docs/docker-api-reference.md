@@ -1,11 +1,12 @@
-# Docker API Reference (for `freq media` interactive)
+# Docker Container API Reference
 
-> Extracted from CLAUDE.md for on-demand reference. Production fleet APIs.
+> Reference for common Docker container APIs managed by FREQ's media stack.
+> Replace IPs and ports with your actual deployment values.
 
-### Sonarr (VM 102)
+### Sonarr
 ```
-Base URL: http://10.25.255.31:8989
-Auth: X-Api-Key header (key in /opt/dc01/configs/sonarr/config.xml — <ApiKey>)
+Base URL: http://<docker-host>:8989
+Auth: X-Api-Key header (from config.xml — <ApiKey>)
   GET /api/v3/health          — health alerts
   GET /api/v3/series          — all shows
   GET /api/v3/queue           — download queue
@@ -14,10 +15,10 @@ Auth: X-Api-Key header (key in /opt/dc01/configs/sonarr/config.xml — <ApiKey>)
   POST /api/v3/command        — trigger actions
 ```
 
-### Radarr (VM 102)
+### Radarr
 ```
-Base URL: http://10.25.255.31:7878
-Auth: X-Api-Key header (key in /opt/dc01/configs/radarr/config.xml — <ApiKey>)
+Base URL: http://<docker-host>:7878
+Auth: X-Api-Key header (from config.xml — <ApiKey>)
   GET /api/v3/health          — health alerts
   GET /api/v3/movie           — all movies
   GET /api/v3/queue           — download queue
@@ -25,46 +26,46 @@ Auth: X-Api-Key header (key in /opt/dc01/configs/radarr/config.xml — <ApiKey>)
   POST /api/v3/command        — trigger actions
 ```
 
-### Prowlarr (VM 102) — SOURCE OF TRUTH for indexers
+### Prowlarr — Indexer source of truth
 ```
-Base URL: http://10.25.255.31:9696
-Auth: X-Api-Key header (key in /opt/dc01/configs/prowlarr/config.xml — <ApiKey>)
+Base URL: http://<docker-host>:9696
+Auth: X-Api-Key header (from config.xml — <ApiKey>)
   GET /api/v1/health          — health alerts
   GET /api/v1/indexer         — all indexers
   GET /api/v1/indexerstats    — indexer performance
   GET /api/v1/system/status   — system info
 ```
 
-### Bazarr (VM 102)
+### Bazarr
 ```
-Base URL: http://10.25.255.31:6767
-Auth: X-Api-Key header (key in /opt/dc01/configs/bazarr/config/config.ini — [auth] apikey)
+Base URL: http://<docker-host>:6767
+Auth: X-Api-Key header (from config.ini — [auth] apikey)
   GET /api/series             — TV with subtitle status
   GET /api/movies             — movies with subtitle status
   GET /api/system/status      — system info
 ```
 
-### Overseerr (VM 102)
+### Overseerr
 ```
-Base URL: http://10.25.255.31:5055
-Auth: X-Api-Key header (key in /opt/dc01/configs/overseerr/settings.json — main.apiKey)
+Base URL: http://<docker-host>:5055
+Auth: X-Api-Key header (from settings.json — main.apiKey)
   GET /api/v1/request         — all requests
   GET /api/v1/status          — system status
   GET /api/v1/media           — media items
 ```
 
-### Tautulli (VM 102)
+### Tautulli
 ```
-Base URL: http://10.25.255.31:8181
-Auth: apikey query parameter (key in /opt/dc01/configs/tautulli/config.ini — api_key)
+Base URL: http://<docker-host>:8181
+Auth: apikey query parameter (from config.ini — api_key)
   GET /api/v2?apikey=KEY&cmd=get_activity    — active streams
   GET /api/v2?apikey=KEY&cmd=get_libraries   — library stats
   GET /api/v2?apikey=KEY&cmd=get_history     — play history
 ```
 
-### Plex (VM 101)
+### Plex
 ```
-Base URL: http://10.25.255.30:32400
+Base URL: http://<plex-host>:32400
 Auth: X-Plex-Token header
   GET /status/sessions        — active streams
   GET /library/sections       — all libraries
@@ -72,9 +73,9 @@ Auth: X-Plex-Token header
   GET /library/sections/2/all — all shows
 ```
 
-### qBittorrent (VM 103 + VM 202)
+### qBittorrent
 ```
-Base URLs: http://10.25.255.32:8080, http://10.25.255.35:8080
+Base URL: http://<docker-host>:8080
 Auth: POST /api/v2/auth/login (session cookie)
   GET /api/v2/app/version         — app version
   GET /api/v2/transfer/info       — transfer stats
@@ -83,9 +84,9 @@ Auth: POST /api/v2/auth/login (session cookie)
   POST /api/v2/torrents/resume    — resume torrent
 ```
 
-### SABnzbd (VM 201)
+### SABnzbd
 ```
-Base URL: http://10.25.255.150:8080
+Base URL: http://<docker-host>:8080
 Auth: apikey query parameter
   GET /api?mode=queue&apikey=KEY&output=json     — download queue
   GET /api?mode=history&apikey=KEY&output=json    — history
@@ -93,17 +94,17 @@ Auth: apikey query parameter
   GET /api?mode=version&apikey=KEY&output=json    — version
 ```
 
-### Tdarr (VM 104 server, VM 301 worker)
+### Tdarr
 ```
-Base URL: http://10.25.255.33:8265
+Base URL: http://<docker-host>:8265
 Auth: x-api-key header
   POST /api/v2/cruddb         — database queries (file stats, library stats)
   GET  /api/v2/get-nodes      — worker node status
 ```
 
-### Gluetun (VM 103, VM 202)
+### Gluetun (VPN container)
 ```
-Port: 8000 (internal only)
+Port: 8000 (internal only — services route through gluetun's network)
   GET /v1/openvpn/status      — VPN status
   GET /v1/publicip/ip         — current public IP
 ```

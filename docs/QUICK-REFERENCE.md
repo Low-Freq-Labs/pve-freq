@@ -1,6 +1,6 @@
-# Rick's Quick Reference — Things You'll Need Every Session
+# FREQ Developer Quick Reference
 
-## How to restart the server
+## How to restart the dashboard server
 ```bash
 kill $(pgrep -f 'python3 -m freq serve' | head -1) 2>/dev/null
 sleep 1
@@ -13,7 +13,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/
 ## How to test a change
 1. Edit `freq/modules/web_ui.py` or `freq/modules/serve.py`
 2. Restart server (above)
-3. Tell Sonny to hard refresh (Ctrl+Shift+R)
+3. Hard refresh browser (Ctrl+Shift+R)
 4. If serve.py syntax is bad: `python3 -c "import freq.modules.serve"` to check
 
 ## Web UI file structure (web_ui.py ~4990 lines)
@@ -125,7 +125,7 @@ Lines 4990-end  JS: INIT — keyboard handlers, page load
 
 **Cisco Switch:**
 - Password auth only (no SSH keys on IOS)
-- Uses `sshpass -f /home/freq-ops/.ssh/switch-pass`
+- Uses `sshpass -f <password-file>` for authentication
 - Legacy crypto required: `KexAlgorithms=+diffie-hellman-group14-sha1`
 - One command per session works best
 - `show` commands don't need enable mode if user has privilege 15
@@ -135,7 +135,7 @@ Lines 4990-end  JS: INIT — keyboard handlers, page load
 - Legacy crypto required (same as switch)
 - ONE command per SSH session — multi-command strings FAIL
 - `racadm` is the CLI: `getversion`, `getsysinfo`, `getsensorinfo`
-- iDRAC .12 (pve02) is UNREACHABLE — no network path. Don't probe it.
+- Some iDRAC units may be unreachable if on a separate management network.
 - ControlMaster must be disabled (`-o ControlMaster=no`)
 
 **PVE Nodes:**
@@ -164,15 +164,13 @@ Stats: .st cards with .lb label + .vl value
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/
 
 # Test SSH to a fleet host
-ssh -o ConnectTimeout=5 freq-admin@10.25.255.30 "hostname"
+ssh -o ConnectTimeout=5 freq-admin@<host-ip> "hostname"
 
 # Test a pfSense command raw
-ssh -o ConnectTimeout=5 freq-admin@10.25.255.1 "sudo pfctl -sr | head -10"
+ssh -o ConnectTimeout=5 freq-admin@<pfsense-ip> "sudo pfctl -sr | head -10"
 
 # Test a TrueNAS command raw
-ssh -o ConnectTimeout=5 freq-admin@10.25.255.25 "sudo zpool list"
-
-# Comms — use SendMessage (AI-NET inbox decommissioned 2026-03-18)
+ssh -o ConnectTimeout=5 freq-admin@<truenas-ip> "sudo zpool list"
 
 # Validate Python syntax
 python3 -c "import freq.modules.serve; import freq.modules.web_ui"

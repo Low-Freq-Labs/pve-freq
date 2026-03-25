@@ -1,3 +1,0 @@
-/qbittorrent: Mounts=/opt/dc01/configs/qbittorrent->/config /mnt/truenas/nfs-mega-share/media/downloads->/downloads 
-/flaresolverr: Mounts=/var/lib/docker/volumes/37fc681380e90bcfa3c884bba2713bec37ed7b92d3a440aa6c3c6e80e1713e0f/_data->/config 
-/gluetun: Mounts=/opt/dc01/configs/gluetun->/gluetun 

@@ -1,1 +1,0 @@
-/tdarr: Mounts=/opt/dc01/configs/tdarr/server->/app/server /opt/dc01/configs/tdarr/configs->/app/configs /opt/dc01/configs/tdarr/logs->/app/logs /mnt/truenas/nfs-mega-share/media/movies->/media/Movies /mnt/truenas/nfs-mega-share/media/tv->/media/TV /mnt/truenas/nfs-mega-share/media/audio->/media/Audio /mnt/truenas/nfs-mega-share/media/transcode->/tcache 

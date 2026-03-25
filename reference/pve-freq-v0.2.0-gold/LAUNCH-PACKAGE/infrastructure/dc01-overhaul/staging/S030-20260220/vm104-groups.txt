@@ -1,3 +1,0 @@
-sudo:x:27:sonny-aif,svc-admin
-truenas_admin:x:950:
-docker:x:989:sonny-aif,svc-admin

@@ -1,1 +1,0 @@
-/plex: Mounts=/tmp/plex-transcode->/transcode /mnt/truenas/nfs-mega-share/media/movies->/movies /mnt/truenas/nfs-mega-share/media/tv->/tv /opt/dc01/configs/plex->/config 

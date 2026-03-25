@@ -1,4 +1,0 @@
-Listing...
-libgnutls30t64/stable-security 3.8.9-3+deb13u2 amd64 [upgradable from: 3.8.9-3+deb13u1]
-libpng16-16t64/stable-security 1.6.48-1+deb13u3 amd64 [upgradable from: 1.6.48-1+deb13u1]
-linux-image-amd64/stable-security 6.12.73-1 amd64 [upgradable from: 6.12.69-1]

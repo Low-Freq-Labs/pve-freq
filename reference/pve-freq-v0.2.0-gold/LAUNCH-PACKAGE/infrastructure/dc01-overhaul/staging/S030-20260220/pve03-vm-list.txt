@@ -1,2 +1,0 @@
-      VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID       
-       104 Tdarr-Node           running    16384             64.00 549711    

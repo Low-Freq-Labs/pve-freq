@@ -1,6 +1,0 @@
-# <file system> <mount point> <type> <options> <dump> <pass>
-/dev/pve/root / ext4 errors=remount-ro 0 1
-UUID=7AF1-B075 /boot/efi vfat defaults 0 1
-/dev/pve/swap none swap sw 0 0
-proc /proc proc defaults 0 0
-/os-pool-hdd/iso-storage /mnt/iso-share none bind,x-systemd.requires=zfs-mount.service,x-systemd.after=zfs-mount.service 0 0

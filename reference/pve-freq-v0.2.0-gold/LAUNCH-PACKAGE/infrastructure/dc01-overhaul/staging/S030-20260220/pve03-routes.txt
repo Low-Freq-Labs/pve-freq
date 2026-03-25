@@ -1,6 +1,0 @@
-default via 10.25.0.1 dev vmbr0 proto kernel onlink 
-10.25.0.0/24 dev vmbr0 proto kernel scope link src 10.25.0.28 
-10.25.5.0/24 dev vmbr0v5 proto kernel scope link src 10.25.5.28 
-10.25.25.0/24 dev vmbr0v25 proto kernel scope link src 10.25.25.28 
-10.25.100.0/24 via 10.25.255.1 dev vmbr0v2550 
-10.25.255.0/24 dev vmbr0v2550 proto kernel scope link src 10.25.255.28 

@@ -1,3 +1,0 @@
-127.0.0.1	localhost localhost.infra.internal
-::1	localhost localhost.infra.internal
-10.25.0.1	fw01.infra.internal fw01

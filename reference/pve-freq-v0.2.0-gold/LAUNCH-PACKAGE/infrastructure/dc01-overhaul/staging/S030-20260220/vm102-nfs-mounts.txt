@@ -1,1 +1,0 @@
-10.25.25.25:/mnt/mega-pool/nfs-mega-share on /mnt/truenas/nfs-mega-share type nfs (rw,relatime,vers=3,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,mountaddr=10.25.25.25,mountvers=3,mountport=51604,mountproto=udp,local_lock=none,addr=10.25.25.25,_netdev)

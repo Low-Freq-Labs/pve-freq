@@ -1,4 +1,0 @@
-ui_address: ['10.25.255.25']
-ui_v6address: ['::']
-ui_port: 80
-ui_httpsport: 443

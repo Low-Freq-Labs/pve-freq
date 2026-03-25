@@ -1,2 +1,0 @@
-sonny-aif:x:3000:950:sonny-aif,,,:/home/sonny-aif:/bin/bash
-svc-admin:x:3003:950::/home/svc-admin:/bin/bash

@@ -1,2 +1,0 @@
-uid=3003(svc-admin) gid=950(truenas_admin) groups=950(truenas_admin),27(sudo),989(docker)
-svc-admin : truenas_admin sudo docker
