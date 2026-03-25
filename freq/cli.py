@@ -115,6 +115,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("menu", help="Interactive TUI menu")
     p.set_defaults(func=cmd_menu)
 
+    p = sub.add_parser("demo", help="Interactive demo — no fleet required")
+    p.set_defaults(func=_cmd_demo)
+
     # --- Fleet Operations ---
     p = sub.add_parser("status", help="Fleet health summary")
     p.set_defaults(func=_cmd_status)
@@ -573,6 +576,7 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("help", "This command reference"),
             ("doctor", "Self-diagnostic"),
             ("menu", "Interactive TUI menu"),
+            ("demo", "Interactive demo (no fleet required)"),
         ]),
         ("Fleet Operations", [
             ("status", "Fleet health summary"),
@@ -703,6 +707,11 @@ def cmd_menu(cfg: FreqConfig, pack, args) -> int:
     """Launch interactive TUI menu."""
     from freq.tui.menu import run as tui_run
     return tui_run(cfg, pack)
+
+
+def _cmd_demo(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.demo import run
+    return run(cfg, pack, args)
 
 
 def _cmd_status(cfg: FreqConfig, pack, args) -> int:

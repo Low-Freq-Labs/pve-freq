@@ -1,0 +1,32 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: ['debian:12', 'ubuntu:22.04', 'rockylinux:9']
+    container:
+      image: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python
+        run: |
+          if command -v apt-get &>/dev/null; then
+            apt-get update -qq && apt-get install -y -qq python3 openssh-client
+          elif command -v dnf &>/dev/null; then
+            dnf install -y -q python3 openssh-clients
+          fi
+
+      - name: Run tests
+        run: python3 -m pytest tests/ -v --tb=short
+        env:
+          FREQ_DIR: ${{ github.workspace }}

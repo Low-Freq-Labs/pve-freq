@@ -22,7 +22,7 @@ class TestCLIDispatch(unittest.TestCase):
     def test_all_commands_registered(self):
         """All expected commands are registered in the parser."""
         expected = [
-            "version", "help", "doctor", "menu", "status", "dashboard",
+            "version", "help", "doctor", "menu", "demo", "status", "dashboard",
             "exec", "info", "diagnose", "ssh", "docker", "log", "keys",
             "hosts", "discover", "groups", "bootstrap", "onboard",
             "list", "create", "clone", "destroy", "resize", "snapshot",

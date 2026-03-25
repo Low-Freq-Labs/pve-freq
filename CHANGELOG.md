@@ -24,7 +24,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `freq init` — 8-phase deployment wizard (accounts, SSH keys, PVE deploy, fleet deploy)
 - `freq init --uninstall` — fleet-wide teardown
 - `freq update` — self-update with install method detection
-- 825 tests across 21 test files
+- 867+ tests across 22 test files
+- `freq demo` — interactive demo mode, works without a fleet
+- ARCHITECTURE.md — design philosophy and code structure documentation
+- CONTRIBUTING.md — contributor guide with development setup
+- SECURITY.md — security policy and vulnerability reporting
+- GitHub issue templates (bug report, feature request) and PR template
+- CI test workflow — pytest matrix on push to main (Debian 12, Ubuntu 22.04, Rocky 9)
+- README badges (tests, Python version, license, zero dependencies, LOC)
+- Screenshot capture guide in docs/screenshots/
 
 ### Changed
 - Rewrote from 17,720 lines of bash to pure Python
