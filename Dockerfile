@@ -38,6 +38,10 @@ VOLUME ["/opt/pve-freq/conf", "/opt/pve-freq/data"]
 # Dashboard port
 EXPOSE 8888
 
+# Health check for orchestrators
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:8888/healthz || exit 1
+
 USER freq
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["serve"]

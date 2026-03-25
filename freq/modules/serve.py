@@ -52,6 +52,7 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 BG_CACHE_REFRESH_INTERVAL = 60   # seconds between background cache refreshes
 DASHBOARD_AUTO_REFRESH_MS = 30000  # milliseconds between frontend auto-refreshes
 SESSION_TIMEOUT_HOURS = 8
+_SERVER_START_TIME = time.monotonic()
 SESSION_TIMEOUT_SECONDS = SESSION_TIMEOUT_HOURS * 3600
 DEFAULT_LOG_LINES = 50
 
@@ -797,6 +798,10 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/backup": "_serve_backup",
         "/api/discover": "_serve_discover",
         "/api/gwipe": "_serve_gwipe",
+        # Orchestration endpoints (no auth)
+        "/healthz": "_serve_healthz",
+        "/readyz": "_serve_readyz",
+        "/api/metrics/prometheus": "_serve_metrics_prometheus",
     }
 
     def do_GET(self):
@@ -817,6 +822,66 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._proxy_watchdog()
         else:
             self.send_error(404)
+
+    # ── Orchestration Endpoints (no auth, lightweight) ──────────────────
+
+    def _serve_healthz(self):
+        """Liveness probe — confirms HTTP server is alive. <1ms, no backend work."""
+        from freq import __version__
+        self._json_response({"status": "ok", "version": __version__})
+
+    def _serve_readyz(self):
+        """Readiness probe — 200 if background cache has run, 503 if still warming up."""
+        from freq import __version__
+        with _bg_lock:
+            health_ready = _bg_cache.get("health") is not None
+        if health_ready:
+            self._json_response({"status": "ready", "version": __version__})
+        else:
+            self._json_response({"status": "warming_up", "version": __version__}, 503)
+
+    def _serve_metrics_prometheus(self):
+        """Prometheus-format metrics from background health cache."""
+        from freq import __version__
+        uptime = round(time.monotonic() - _SERVER_START_TIME)
+        lines = [
+            "# HELP freq_info FREQ server info",
+            "# TYPE freq_info gauge",
+            f'freq_info{{version="{__version__}"}} 1',
+            "# HELP freq_uptime_seconds Server uptime in seconds",
+            "# TYPE freq_uptime_seconds gauge",
+            f"freq_uptime_seconds {uptime}",
+        ]
+        with _bg_lock:
+            health = _bg_cache.get("health")
+        if health and "hosts" in health:
+            hosts = health["hosts"]
+            total = len(hosts)
+            healthy = sum(1 for h in hosts if h.get("reachable"))
+            unreachable = total - healthy
+            total_vms = sum(h.get("vm_count", 0) for h in hosts if isinstance(h.get("vm_count"), int))
+            lines.extend([
+                "# HELP freq_hosts_total Total fleet hosts",
+                "# TYPE freq_hosts_total gauge",
+                f"freq_hosts_total {total}",
+                "# HELP freq_hosts_healthy Reachable fleet hosts",
+                "# TYPE freq_hosts_healthy gauge",
+                f"freq_hosts_healthy {healthy}",
+                "# HELP freq_hosts_unreachable Unreachable fleet hosts",
+                "# TYPE freq_hosts_unreachable gauge",
+                f"freq_hosts_unreachable {unreachable}",
+                "# HELP freq_vms_total Total VMs across fleet",
+                "# TYPE freq_vms_total gauge",
+                f"freq_vms_total {total_vms}",
+            ])
+        body = "\n".join(lines) + "\n"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body.encode())
+
+    # ── Legacy + Main HTML ───────────────────────────────────────────────
 
     def _serve_html(self):
         # Pre-fetch fleet data and embed it in HTML for instant load
