@@ -369,5 +369,279 @@ password_file = "{sw_pass}"
             pass  # Not a hard requirement — depends on implementation
 
 
+# ═══════════════════════════════════════════════════════════════════
+# _update_toml_value() tests
+# ═══════════════════════════════════════════════════════════════════
+
+class TestUpdateTomlValue(unittest.TestCase):
+    """Test the TOML content updater used by _phase_configure."""
+
+    def _update(self, content, key, value):
+        from freq.modules.init_cmd import _update_toml_value
+        return _update_toml_value(content, key, value)
+
+    def test_updates_string_value(self):
+        """Simple string key gets updated."""
+        content = 'gateway = "10.0.0.1"\n'
+        result = self._update(content, "gateway", "192.168.1.1")
+        self.assertIn('gateway = "192.168.1.1"', result)
+        self.assertNotIn("10.0.0.1", result)
+
+    def test_updates_list_value(self):
+        """List value is formatted as TOML array."""
+        content = 'nodes = ["old1"]\n'
+        result = self._update(content, "nodes", ["10.0.0.1", "10.0.0.2"])
+        self.assertIn('nodes = ["10.0.0.1", "10.0.0.2"]', result)
+
+    def test_updates_bool_value(self):
+        """Boolean value is formatted as TOML true/false."""
+        content = 'debug = false\n'
+        result = self._update(content, "debug", True)
+        self.assertIn("debug = true", result)
+
+    def test_uncomments_commented_key(self):
+        """Commented-out key is uncommented and set."""
+        content = '# nodes = []\n'
+        result = self._update(content, "nodes", ["1.2.3.4"])
+        self.assertIn('nodes = ["1.2.3.4"]', result)
+        self.assertNotIn("#", result.split("\n")[0])
+
+    def test_preserves_inline_comment(self):
+        """Inline comment after value is preserved."""
+        content = 'mode = "root"  # SSH as root directly\n'
+        result = self._update(content, "mode", "sudo")
+        self.assertIn('mode = "sudo"', result)
+        self.assertIn("# SSH as root directly", result)
+
+    def test_no_match_returns_unchanged(self):
+        """Key not found — content returned unchanged."""
+        content = 'something_else = "value"\n'
+        result = self._update(content, "nonexistent", "test")
+        self.assertEqual(content, result)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# _phase_configure() tests
+# ═══════════════════════════════════════════════════════════════════
+
+class TestPhaseConfigure(unittest.TestCase):
+    """Test Phase 2: interactive cluster configuration."""
+
+    def setUp(self):
+        """Create temp directory with a minimal freq.toml."""
+        self.tmpdir = tempfile.mkdtemp(prefix="freq-test-configure-")
+        self.toml_path = os.path.join(self.tmpdir, "freq.toml")
+        self.base_toml = (
+            "[freq]\n"
+            'version = "2.0.0"\n'
+            "\n"
+            "[ssh]\n"
+            'mode = "sudo"\n'
+            "\n"
+            "[pve]\n"
+            "# nodes = []\n"
+            "# node_names = []\n"
+            "\n"
+            "[vm.defaults]\n"
+            '# gateway = ""\n'
+            '# nameserver = "1.1.1.1"\n'
+            "\n"
+            "[infrastructure]\n"
+            '# cluster_name = ""\n'
+        )
+        with open(self.toml_path, "w") as f:
+            f.write(self.base_toml)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _make_cfg(self, **overrides):
+        """Build a mock cfg object with defaults for _phase_configure."""
+        cfg = MagicMock()
+        cfg.conf_dir = self.tmpdir
+        cfg.pve_nodes = overrides.get("pve_nodes", [])
+        cfg.pve_node_names = overrides.get("pve_node_names", [])
+        cfg.vm_gateway = overrides.get("vm_gateway", "")
+        cfg.vm_nameserver = overrides.get("vm_nameserver", "")
+        cfg.cluster_name = overrides.get("cluster_name", "")
+        cfg.ssh_mode = overrides.get("ssh_mode", "sudo")
+        cfg.pve_storage = overrides.get("pve_storage", {})
+        return cfg
+
+    @patch("freq.modules.init_cmd.FreqConfig")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_phase_configure_writes_pve_nodes(self, mock_fmt, mock_input, mock_fc):
+        """PVE node IPs and names are written to freq.toml."""
+        cfg = self._make_cfg()
+        # _input calls in order: node IPs, node names, storage×3, gateway, nameserver, cluster, ssh mode
+        mock_input.side_effect = [
+            "10.0.0.1 10.0.0.2 10.0.0.3",  # PVE node IPs
+            "pve01 pve02 pve03",             # Node names
+            "local-lvm",                      # Storage pve01
+            "local-lvm",                      # Storage pve02
+            "local-lvm",                      # Storage pve03
+            "10.0.0.1",                       # Gateway
+            "1.1.1.1",                        # Nameserver
+            "testlab",                        # Cluster name
+            "sudo",                           # SSH mode
+        ]
+        mock_fc.return_value = cfg  # Reload returns same cfg
+
+        from freq.modules.init_cmd import _phase_configure
+        _phase_configure(cfg)
+
+        with open(self.toml_path) as f:
+            content = f.read()
+
+        self.assertIn("10.0.0.1", content)
+        self.assertIn("10.0.0.2", content)
+        self.assertIn("10.0.0.3", content)
+        self.assertIn("pve01", content)
+        self.assertIn("pve02", content)
+        self.assertIn("pve03", content)
+
+    @patch("freq.modules.init_cmd.FreqConfig")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_phase_configure_writes_gateway(self, mock_fmt, mock_input, mock_fc):
+        """Gateway and nameserver are written to freq.toml."""
+        cfg = self._make_cfg()
+        mock_input.side_effect = [
+            "10.0.0.1",       # PVE node IPs (single node)
+            "pve01",           # Node name
+            "local-lvm",       # Storage
+            "192.168.1.1",     # Gateway
+            "8.8.8.8",         # Nameserver
+            "homelab",         # Cluster name
+            "sudo",            # SSH mode
+        ]
+        mock_fc.return_value = cfg
+
+        from freq.modules.init_cmd import _phase_configure
+        _phase_configure(cfg)
+
+        with open(self.toml_path) as f:
+            content = f.read()
+
+        self.assertIn('gateway = "192.168.1.1"', content)
+
+    @patch("freq.modules.init_cmd._confirm")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_phase_configure_skips_if_populated(self, mock_fmt, mock_input, mock_confirm):
+        """Already-configured values are shown but not re-prompted (unless user opts in)."""
+        cfg = self._make_cfg(
+            pve_nodes=["10.0.0.1"],
+            pve_node_names=["pve01"],
+            vm_gateway="10.0.0.1",
+            vm_nameserver="8.8.8.8",
+            cluster_name="dc01",
+            ssh_mode="sudo",
+        )
+        # User declines to reconfigure nodes
+        mock_confirm.return_value = False
+        # Only nameserver and SSH mode prompts will fire (they always prompt)
+        # Nameserver: already set and != 1.1.1.1, so skipped
+        # SSH mode: prompted but same as current
+        mock_input.side_effect = [
+            "sudo",  # SSH mode — same as current
+        ]
+
+        from freq.modules.init_cmd import _phase_configure
+        _phase_configure(cfg)
+
+        # freq.toml should be unchanged (no write happened)
+        with open(self.toml_path) as f:
+            content = f.read()
+
+        self.assertEqual(content, self.base_toml)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Bootstrap key tests — _phase_pve_deploy + _phase_fleet_deploy
+# ═══════════════════════════════════════════════════════════════════
+
+class TestBootstrapKey(unittest.TestCase):
+    """Test that --bootstrap-key skips interactive prompts in deploy phases."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="freq-test-bootstrap-")
+        # Create a fake SSH key file
+        self.key_path = os.path.join(self.tmpdir, "id_ed25519")
+        with open(self.key_path, "w") as f:
+            f.write("fake-ssh-key-for-testing")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _make_args(self, bootstrap_key=None, bootstrap_user=None):
+        args = MagicMock()
+        args.bootstrap_key = bootstrap_key
+        args.bootstrap_user = bootstrap_user
+        return args
+
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_pve_deploy_uses_bootstrap_key(self, mock_fmt, mock_input, mock_dispatch):
+        """When bootstrap_key is set, PVE deploy skips interactive auth prompts."""
+        cfg = MagicMock()
+        cfg.pve_nodes = ["10.0.0.1"]
+        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+        args = self._make_args(bootstrap_key=self.key_path, bootstrap_user="root")
+
+        mock_dispatch.return_value = True
+
+        from freq.modules.init_cmd import _phase_pve_deploy
+        _phase_pve_deploy(cfg, ctx, args)
+
+        # _input should NOT have been called for auth method selection
+        # (bootstrap mode skips the A/B choice prompt)
+        for call in mock_input.call_args_list:
+            prompt = call[0][0] if call[0] else ""
+            self.assertNotIn("Deploy as user", prompt,
+                             "Bootstrap mode should skip interactive user prompt")
+            self.assertNotIn("Choice", prompt,
+                             "Bootstrap mode should skip A/B auth choice")
+
+        # Verify dispatch was called with the bootstrap key
+        mock_dispatch.assert_called_once()
+        call_args = mock_dispatch.call_args[0]
+        # call_args: (ip, htype, ctx, auth_pass, auth_key, pve_user)
+        self.assertEqual(call_args[4], self.key_path)  # auth_key = bootstrap key path
+        self.assertEqual(call_args[5], "root")          # pve_user = bootstrap_user
+
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_fleet_deploy_uses_bootstrap_key(self, mock_fmt, mock_input, mock_dispatch):
+        """When bootstrap_key is set, fleet deploy skips interactive auth prompts for linux hosts."""
+        from freq.core.config import Host
+        cfg = MagicMock()
+        cfg.hosts = [MagicMock(ip="10.0.0.10", label="testhost", htype="linux")]
+        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+        args = self._make_args(bootstrap_key=self.key_path, bootstrap_user="root")
+
+        mock_dispatch.return_value = True
+
+        from freq.modules.init_cmd import _phase_fleet_deploy
+        _phase_fleet_deploy(cfg, ctx, args)
+
+        # _input should NOT have been called for auth method selection
+        for call in mock_input.call_args_list:
+            prompt = call[0][0] if call[0] else ""
+            self.assertNotIn("Password", prompt,
+                             "Bootstrap mode should skip password prompt")
+
+        # Verify dispatch was called with the bootstrap key
+        mock_dispatch.assert_called_once()
+        call_args = mock_dispatch.call_args[0]
+        self.assertEqual(call_args[4], self.key_path)  # auth_key = bootstrap key path
+        self.assertEqual(call_args[5], "root")          # auth_user = bootstrap_user
+
+
 if __name__ == "__main__":
     unittest.main()

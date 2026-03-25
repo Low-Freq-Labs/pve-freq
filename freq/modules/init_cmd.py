@@ -1,14 +1,15 @@
 """FREQ init — first-run setup wizard.
 
-8-phase deployment pipeline:
+9-phase deployment pipeline:
 1. Welcome + prerequisites check
-2. Service account creation (configurable, NOPASSWD sudo)
-3. SSH key generation
-4. PVE node deployment (create account + deploy key on each node)
-5. Fleet host deployment (create account + deploy key on each host)
-6. Admin account setup (RBAC roles)
-7. Configuration + verification
-8. Summary
+2. Cluster configuration (PVE nodes, gateway, nameserver → freq.toml)
+3. Service account creation (configurable, NOPASSWD sudo)
+4. SSH key generation
+5. PVE node deployment (create account + deploy key on each node)
+6. Fleet host deployment (create account + deploy key on each host)
+7. Admin account setup (RBAC roles)
+8. Configuration + verification
+9. Summary
 
 Must run as root. Creates a service account (default: from freq.toml) with
 NOPASSWD sudo on this host and all managed nodes.
@@ -308,13 +309,14 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     # Check if already initialized
+    yes_flag = getattr(args, "yes", False)
     if os.path.isfile(INIT_MARKER):
         with open(INIT_MARKER) as f:
             ver = f.read().strip()
         fmt.line(f"  {fmt.C.GREEN}FREQ already initialized ({ver}){fmt.C.RESET}")
         fmt.line(f"  {fmt.C.DIM}Run 'freq doctor' to check status, or re-run below.{fmt.C.RESET}")
         fmt.blank()
-        if not _confirm("Re-run initialization wizard?"):
+        if not yes_flag and not _confirm("Re-run initialization wizard?"):
             return 0
 
     # State passed between phases
@@ -327,40 +329,44 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
         "rsa_pubkey": "",
     }
 
-    total = 8
+    total = 9
 
     # Phase 1: Welcome + Prerequisites
     _phase(1, total, "Welcome + Prerequisites")
     if not _phase_welcome(cfg):
         return 1
 
-    # Phase 2: Service Account
-    _phase(2, total, "Service Account Setup")
-    if not _phase_service_account(cfg, ctx):
+    # Phase 2: Cluster Configuration
+    _phase(2, total, "Cluster Configuration")
+    _phase_configure(cfg, args)
+
+    # Phase 3: Service Account
+    _phase(3, total, "Service Account Setup")
+    if not _phase_service_account(cfg, ctx, args):
         return 1
 
-    # Phase 3: SSH Keys
-    _phase(3, total, "SSH Key Generation")
+    # Phase 4: SSH Keys
+    _phase(4, total, "SSH Key Generation")
     _phase_ssh_keys(cfg, ctx)
 
-    # Phase 4: PVE Node Deployment
-    _phase(4, total, "PVE Node Deployment")
-    _phase_pve_deploy(cfg, ctx)
+    # Phase 5: PVE Node Deployment
+    _phase(5, total, "PVE Node Deployment")
+    _phase_pve_deploy(cfg, ctx, args)
 
-    # Phase 5: Fleet Host Deployment
-    _phase(5, total, "Fleet Host Deployment")
-    _phase_fleet_deploy(cfg, ctx)
+    # Phase 6: Fleet Host Deployment
+    _phase(6, total, "Fleet Host Deployment")
+    _phase_fleet_deploy(cfg, ctx, args)
 
-    # Phase 6: Admin Accounts
-    _phase(6, total, "Admin Account Setup")
+    # Phase 7: Admin Accounts
+    _phase(7, total, "Admin Account Setup")
     _phase_admin_setup(cfg, ctx)
 
-    # Phase 7: Verification
-    _phase(7, total, "Configuration + Verification")
+    # Phase 8: Verification
+    _phase(8, total, "Configuration + Verification")
     verified = _phase_verify(cfg, ctx)
 
-    # Phase 8: Summary
-    _phase(8, total, "Summary")
+    # Phase 9: Summary
+    _phase(9, total, "Summary")
     _phase_summary(cfg, ctx, verified, pack)
 
     logger.info("init complete", service_account=ctx["svc_name"])
@@ -455,10 +461,249 @@ def _seed_config_files(cfg):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 2: Service Account
+# PHASE 2: Cluster Configuration
 # ═══════════════════════════════════════════════════════════════════
 
-def _phase_service_account(cfg, ctx):
+def _update_toml_value(content, key, value):
+    """Update a single key = value in TOML content, preserving comments.
+
+    Handles string, list, and boolean values. Works on simple top-level and
+    section-level keys. Does NOT handle nested tables or inline tables.
+    """
+    # Format value for TOML
+    if isinstance(value, list):
+        items = ', '.join(f'"{v}"' for v in value)
+        toml_val = f"[{items}]"
+    elif isinstance(value, bool):
+        toml_val = "true" if value else "false"
+    elif isinstance(value, int):
+        toml_val = str(value)
+    else:
+        toml_val = f'"{value}"'
+
+    # Try to find and replace existing key (commented or not)
+    # Match: optional # + optional spaces + key + optional spaces + = + rest of line
+    pattern = re.compile(
+        r'^([ \t]*#?[ \t]*)(' + re.escape(key) + r')([ \t]*=[ \t]*)(.*)$',
+        re.MULTILINE,
+    )
+    match = pattern.search(content)
+    if match:
+        # Preserve any inline comment after the value
+        old_val = match.group(4)
+        inline_comment = ""
+        # Check if there's an inline comment (not inside a string)
+        stripped = old_val.strip()
+        if "#" in stripped:
+            # Find comment that's not inside quotes
+            in_str = False
+            for i, ch in enumerate(stripped):
+                if ch == '"' and (i == 0 or stripped[i-1] != '\\'):
+                    in_str = not in_str
+                elif ch == '#' and not in_str:
+                    inline_comment = "  " + stripped[i:]
+                    break
+
+        # Replace: uncomment if commented, set new value
+        new_line = f"{key} = {toml_val}{inline_comment}"
+        content = content[:match.start()] + new_line + content[match.end():]
+    return content
+
+
+def _phase_configure(cfg, args=None):
+    """Interactive cluster configuration — writes freq.toml with user's details.
+
+    Asks for PVE nodes, network settings, and cluster name. Skips values
+    that are already configured (non-empty, non-default) unless user opts to
+    reconfigure.
+    """
+    toml_path = os.path.join(cfg.conf_dir, "freq.toml")
+    if not os.path.isfile(toml_path):
+        fmt.step_fail(f"freq.toml not found at {toml_path}")
+        return
+
+    with open(toml_path) as f:
+        content = f.read()
+
+    changed = False
+    yes_flag = getattr(args, "yes", False) if args else False
+
+    # Extract CLI overrides
+    cli_pve_nodes = getattr(args, "pve_nodes", None) if args else None
+    cli_pve_names = getattr(args, "pve_node_names", None) if args else None
+    cli_gateway = getattr(args, "gateway", None) if args else None
+    cli_nameserver = getattr(args, "nameserver", None) if args else None
+    cli_hosts_file = getattr(args, "hosts_file", None) if args else None
+
+    # ── PVE Nodes ──
+    if cli_pve_nodes:
+        # CLI override — skip interactive prompt
+        nodes = cli_pve_nodes.split()
+        names = cli_pve_names.split() if cli_pve_names else [f"pve{i+1:02d}" for i in range(len(nodes))]
+        while len(names) < len(nodes):
+            names.append(f"pve{len(names)+1:02d}")
+        content = _update_toml_value(content, "nodes", nodes)
+        content = _update_toml_value(content, "node_names", names)
+        cfg.pve_nodes = nodes
+        cfg.pve_node_names = names
+        changed = True
+        fmt.step_ok(f"PVE nodes (from CLI): {', '.join(nodes)}")
+    elif cfg.pve_nodes:
+        fmt.step_ok(f"PVE nodes already configured: {', '.join(cfg.pve_nodes)}")
+        if not yes_flag and _confirm("Reconfigure PVE nodes?"):
+            cfg.pve_nodes = []  # force re-prompt below
+        # else keep existing
+
+    if not cfg.pve_nodes and not cli_pve_nodes:
+        fmt.line(f"  {fmt.C.DIM}Enter your Proxmox VE node IPs (space-separated).{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Example: 192.168.1.10 192.168.1.11 192.168.1.12{fmt.C.RESET}")
+        node_input = _input("PVE node IPs")
+        if node_input:
+            nodes = node_input.split()
+            # Ask for node names
+            fmt.line(f"  {fmt.C.DIM}Enter names for each node (space-separated, same order).{fmt.C.RESET}")
+            name_default = " ".join(f"pve{i+1:02d}" for i in range(len(nodes)))
+            name_input = _input("Node names", name_default)
+            names = name_input.split()
+            # Pad names if fewer than nodes
+            while len(names) < len(nodes):
+                names.append(f"pve{len(names)+1:02d}")
+
+            content = _update_toml_value(content, "nodes", nodes)
+            content = _update_toml_value(content, "node_names", names)
+            cfg.pve_nodes = nodes
+            cfg.pve_node_names = names
+            changed = True
+            fmt.step_ok(f"PVE nodes: {', '.join(nodes)}")
+
+            # ── Per-node storage ──
+            fmt.blank()
+            fmt.line(f"  {fmt.C.DIM}Storage pool per node (default: local-lvm).{fmt.C.RESET}")
+            for i, name in enumerate(names):
+                pool = _input(f"  Storage for {name}", "local-lvm")
+                if pool:
+                    # Add [pve.storage.<name>] section if not present
+                    section = f"[pve.storage.{name}]"
+                    if section not in content:
+                        # Find insertion point after [pve] section's last key
+                        pve_section = content.find("[pve]")
+                        if pve_section >= 0:
+                            # Find the next section header after [pve]
+                            next_section = re.search(r'^\[(?!pve\.)', content[pve_section+5:], re.MULTILINE)
+                            if next_section:
+                                insert_at = pve_section + 5 + next_section.start()
+                            else:
+                                insert_at = len(content)
+                            storage_block = f"\n{section}\npool = \"{pool}\"\ntype = \"SSD\"\n\n"
+                            content = content[:insert_at] + storage_block + content[insert_at:]
+                            changed = True
+                    else:
+                        # Section exists, update the pool value
+                        section_pos = content.find(section)
+                        pool_pattern = re.compile(
+                            r'^(pool\s*=\s*).*$',
+                            re.MULTILINE,
+                        )
+                        section_end = content.find("\n[", section_pos + len(section))
+                        if section_end < 0:
+                            section_end = len(content)
+                        section_text = content[section_pos:section_end]
+                        new_section = pool_pattern.sub(f'pool = "{pool}"', section_text)
+                        content = content[:section_pos] + new_section + content[section_end:]
+                        changed = True
+        else:
+            fmt.step_warn("No PVE nodes configured — PVE features will be unavailable")
+
+    # ── Gateway ──
+    fmt.blank()
+    if cli_gateway:
+        content = _update_toml_value(content, "gateway", cli_gateway)
+        cfg.vm_gateway = cli_gateway
+        changed = True
+        fmt.step_ok(f"Gateway (from CLI): {cli_gateway}")
+    elif cfg.vm_gateway:
+        fmt.step_ok(f"Gateway: {cfg.vm_gateway}")
+    else:
+        fmt.line(f"  {fmt.C.DIM}Your network gateway IP (for VM networking).{fmt.C.RESET}")
+        gw = _input("Gateway IP")
+        if gw:
+            content = _update_toml_value(content, "gateway", gw)
+            cfg.vm_gateway = gw
+            changed = True
+            fmt.step_ok(f"Gateway: {gw}")
+        else:
+            fmt.step_warn("No gateway set — VM networking may not work")
+
+    # ── Nameserver ──
+    if cli_nameserver:
+        content = _update_toml_value(content, "nameserver", cli_nameserver)
+        cfg.vm_nameserver = cli_nameserver
+        changed = True
+        fmt.step_ok(f"Nameserver (from CLI): {cli_nameserver}")
+    elif cfg.vm_nameserver and cfg.vm_nameserver != "1.1.1.1":
+        fmt.step_ok(f"Nameserver: {cfg.vm_nameserver}")
+    else:
+        ns = _input("DNS nameserver", cfg.vm_nameserver or "1.1.1.1")
+        if ns != (cfg.vm_nameserver or "1.1.1.1"):
+            content = _update_toml_value(content, "nameserver", ns)
+            cfg.vm_nameserver = ns
+            changed = True
+            fmt.step_ok(f"Nameserver: {ns}")
+        else:
+            fmt.step_ok(f"Nameserver: {ns} (default)")
+
+    # ── Cluster name ──
+    if cfg.cluster_name:
+        fmt.step_ok(f"Cluster: {cfg.cluster_name}")
+    else:
+        name = _input("Cluster name (optional, e.g. dc01, homelab)")
+        if name:
+            content = _update_toml_value(content, "cluster_name", name)
+            cfg.cluster_name = name
+            changed = True
+            fmt.step_ok(f"Cluster: {name}")
+
+    # ── SSH mode ──
+    fmt.blank()
+    fmt.line(f"  {fmt.C.DIM}SSH mode: 'sudo' = SSH as service account + sudo (recommended){fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.DIM}          'root' = SSH as root directly{fmt.C.RESET}")
+    mode = _input("SSH mode", cfg.ssh_mode or "sudo")
+    if mode in ("sudo", "root") and mode != cfg.ssh_mode:
+        content = _update_toml_value(content, "mode", mode)
+        cfg.ssh_mode = mode
+        changed = True
+    fmt.step_ok(f"SSH mode: {mode}")
+
+    # ── Write changes ──
+    if changed:
+        with open(toml_path, "w") as f:
+            f.write(content)
+        fmt.blank()
+        fmt.step_ok(f"Configuration saved to {toml_path}")
+        # Reload config to pick up changes
+        try:
+            from freq.core.config import load_config
+            new_cfg = load_config(cfg.install_dir)
+            cfg.pve_nodes = new_cfg.pve_nodes
+            cfg.pve_node_names = new_cfg.pve_node_names
+            cfg.pve_storage = new_cfg.pve_storage
+            cfg.vm_gateway = new_cfg.vm_gateway
+            cfg.vm_nameserver = new_cfg.vm_nameserver
+            cfg.cluster_name = new_cfg.cluster_name
+            cfg.ssh_mode = new_cfg.ssh_mode
+            cfg.hosts = new_cfg.hosts
+            fmt.step_ok(f"Config reloaded: {len(cfg.pve_nodes)} PVE nodes, {len(cfg.hosts)} hosts")
+        except Exception as e:
+            fmt.step_warn(f"Config reload issue: {e} — continuing with current values")
+    else:
+        fmt.step_ok("Configuration unchanged — all values already set")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# PHASE 3: Service Account
+# ═══════════════════════════════════════════════════════════════════
+
+def _phase_service_account(cfg, ctx, args=None):
     """Create service account with NOPASSWD sudo."""
     fmt.line(f"  {fmt.C.DIM}The service account is used for fleet-wide SSH operations.{fmt.C.RESET}")
     fmt.line(f"  {fmt.C.DIM}It will be created on this host and deployed to all managed nodes.{fmt.C.RESET}")
@@ -471,6 +716,24 @@ def _phase_service_account(cfg, ctx):
         return 1
     ctx["svc_name"] = svc_name
     fmt.blank()
+
+    # Read password from file if provided, otherwise prompt
+    pw_file = getattr(args, "password_file", None) if args else None
+    file_pass = None
+    if pw_file:
+        if os.path.isfile(pw_file):
+            with open(pw_file) as f:
+                file_pass = f.read().strip()
+            if not file_pass:
+                fmt.step_fail(f"Password file is empty: {pw_file}")
+                return False
+            if len(file_pass) < 4:
+                fmt.step_fail("Password too short (min 4 characters)")
+                return False
+            fmt.step_ok(f"Password loaded from {pw_file}")
+        else:
+            fmt.step_fail(f"Password file not found: {pw_file}")
+            return False
 
     # Check if account exists
     rc, _, _ = _run(["id", svc_name])
@@ -485,9 +748,12 @@ def _phase_service_account(cfg, ctx):
             _setup_sudoers(svc_name)
 
         # Get password for vault + remote deployment
-        fmt.blank()
-        fmt.line(f"  {fmt.C.DIM}Enter password for '{svc_name}' (for vault + remote deployment){fmt.C.RESET}")
-        svc_pass = _read_password(f"Password for '{svc_name}'")
+        if file_pass:
+            svc_pass = file_pass
+        else:
+            fmt.blank()
+            fmt.line(f"  {fmt.C.DIM}Enter password for '{svc_name}' (for vault + remote deployment){fmt.C.RESET}")
+            svc_pass = _read_password(f"Password for '{svc_name}'")
         if not svc_pass:
             fmt.step_fail("Password required")
             return False
@@ -497,7 +763,10 @@ def _phase_service_account(cfg, ctx):
         fmt.line(f"  {fmt.C.DIM}Creating service account '{svc_name}'...{fmt.C.RESET}")
         fmt.blank()
 
-        svc_pass = _read_password(f"Password for '{svc_name}'")
+        if file_pass:
+            svc_pass = file_pass
+        else:
+            svc_pass = _read_password(f"Password for '{svc_name}'")
         if not svc_pass:
             fmt.step_fail("Password required")
             return False
@@ -590,7 +859,7 @@ def _ssh_with_pass(password, ssh_cmd_list, timeout=DEFAULT_CMD_TIMEOUT, input_te
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 3: SSH Keys
+# PHASE 4: SSH Keys
 # ═══════════════════════════════════════════════════════════════════
 
 def _phase_ssh_keys(cfg, ctx):
@@ -725,10 +994,10 @@ def _phase_ssh_keys(cfg, ctx):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 4: PVE Node Deployment
+# PHASE 5: PVE Node Deployment
 # ═══════════════════════════════════════════════════════════════════
 
-def _phase_pve_deploy(cfg, ctx):
+def _phase_pve_deploy(cfg, ctx, args=None):
     """Deploy service account + key to PVE nodes."""
     pve_nodes = cfg.pve_nodes
 
@@ -745,34 +1014,43 @@ def _phase_pve_deploy(cfg, ctx):
         fmt.line(f"    {fmt.C.CYAN}{ip}{fmt.C.RESET}")
     fmt.blank()
 
-    # Auth user
-    pve_user = _input("Deploy as user (root or sudo account)", "root")
+    # Check for CLI bootstrap credentials (--bootstrap-key, --bootstrap-user)
+    bootstrap_key = getattr(args, "bootstrap_key", None) if args else None
+    bootstrap_user = getattr(args, "bootstrap_user", None) if args else None
 
-    # Auth method
-    fmt.line(f"  {fmt.C.DIM}How to authenticate to PVE nodes as '{pve_user}'?{fmt.C.RESET}")
-    fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Password")
-    fmt.line(f"    {fmt.C.BOLD}B{fmt.C.RESET}) Existing SSH key")
-    fmt.blank()
+    if bootstrap_key and os.path.isfile(bootstrap_key):
+        # Bootstrap mode — skip interactive prompts
+        pve_user = bootstrap_user or "root"
+        auth_key = bootstrap_key
+        auth_pass = ""
+        fmt.step_ok(f"Using bootstrap auth: {pve_user} via {auth_key}")
+    else:
+        # Interactive mode
+        pve_user = _input("Deploy as user (root or sudo account)", "root")
 
-    auth_choice = _input("Choice", "A").upper()
-    auth_pass = ""
-    auth_key = ""
+        fmt.line(f"  {fmt.C.DIM}How to authenticate to PVE nodes as '{pve_user}'?{fmt.C.RESET}")
+        fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Password")
+        fmt.line(f"    {fmt.C.BOLD}B{fmt.C.RESET}) Existing SSH key")
+        fmt.blank()
 
-    if auth_choice == "B":
-        auth_key = _input("SSH key path", os.path.expanduser("~/.ssh/id_ed25519"))
-        if not os.path.isfile(auth_key):
-            fmt.step_warn(f"Key not found: {auth_key} — falling back to password")
-            auth_key = ""
+        auth_choice = _input("Choice", "A").upper()
+        auth_pass = ""
+        auth_key = ""
 
-    if not auth_key:
-        # Verify sshpass is available before asking for password
-        rc, _, _ = _run(["which", "sshpass"])
-        if rc != 0:
-            fmt.step_fail("'sshpass' not installed — required for password-based SSH")
-            fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
-            fmt.line(f"  {fmt.C.DIM}Or choose option B (SSH key) instead.{fmt.C.RESET}")
-            return
-        auth_pass = getpass.getpass(f"  Password for '{pve_user}' on PVE nodes: ")
+        if auth_choice == "B":
+            auth_key = _input("SSH key path", os.path.expanduser("~/.ssh/id_ed25519"))
+            if not os.path.isfile(auth_key):
+                fmt.step_warn(f"Key not found: {auth_key} — falling back to password")
+                auth_key = ""
+
+        if not auth_key:
+            rc, _, _ = _run(["which", "sshpass"])
+            if rc != 0:
+                fmt.step_fail("'sshpass' not installed — required for password-based SSH")
+                fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
+                fmt.line(f"  {fmt.C.DIM}Or choose option B (SSH key) instead.{fmt.C.RESET}")
+                return
+            auth_pass = getpass.getpass(f"  Password for '{pve_user}' on PVE nodes: ")
 
     if pve_user != "root":
         fmt.line(f"  {fmt.C.DIM}Commands will be elevated via sudo on remote hosts.{fmt.C.RESET}")
@@ -793,7 +1071,7 @@ def _phase_pve_deploy(cfg, ctx):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 5: Fleet Host Deployment
+# PHASE 6: Fleet Host Deployment
 # ═══════════════════════════════════════════════════════════════════
 
 def _register_host_interactive(cfg):
@@ -929,8 +1207,21 @@ def _discover_and_register(cfg, ctx):
         _discover_and_register(cfg, ctx)
 
 
-def _phase_fleet_deploy(cfg, ctx):
+def _phase_fleet_deploy(cfg, ctx, args=None):
     """Deploy service account + key to fleet hosts (all platform types)."""
+    # Import hosts from file if --hosts-file provided
+    hosts_file_arg = getattr(args, "hosts_file", None) if args else None
+    if hosts_file_arg and os.path.isfile(hosts_file_arg) and not cfg.hosts:
+        fmt.step_start(f"Importing fleet hosts from {hosts_file_arg}")
+        shutil.copy2(hosts_file_arg, cfg.hosts_file)
+        # Reload hosts
+        from freq.core.config import load_hosts
+        try:
+            cfg.hosts = load_hosts(cfg.hosts_file)
+            fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")
+        except Exception as e:
+            fmt.step_fail(f"Failed to reload hosts: {e}")
+
     if not cfg.hosts:
         fmt.line(f"  {fmt.C.DIM}No hosts registered yet.{fmt.C.RESET}")
         fmt.blank()
@@ -992,35 +1283,58 @@ def _phase_fleet_deploy(cfg, ctx):
 
     ok = fail = 0
 
+    # Check for CLI bootstrap credentials (--bootstrap-key, --bootstrap-user)
+    bootstrap_key = getattr(args, "bootstrap_key", None) if args else None
+    bootstrap_user = getattr(args, "bootstrap_user", None) if args else None
+    has_bootstrap = bootstrap_key and os.path.isfile(bootstrap_key)
+
     # ── Linux-family hosts (linux, pve, docker, truenas) ──
     if linux_hosts:
         fmt.line(f"  {fmt.C.BOLD}Linux-family hosts ({len(linux_hosts)}){fmt.C.RESET}")
         fmt.blank()
 
-        linux_user = _input("Deploy as user (root or sudo account)", "root")
-
-        fmt.line(f"  {fmt.C.DIM}How to authenticate to Linux hosts as '{linux_user}'?{fmt.C.RESET}")
-        fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Password (same for all)")
-        fmt.line(f"    {fmt.C.BOLD}B{fmt.C.RESET}) Existing SSH key")
-        fmt.line(f"    {fmt.C.BOLD}S{fmt.C.RESET}) Skip")
-        fmt.blank()
-
-        choice = _input("Choice", "A").upper()
-        if choice != "S":
-            linux_pass, linux_key = _get_auth_creds(choice, "Linux hosts")
-            if linux_pass or linux_key:
-                if linux_user != "root":
-                    fmt.line(f"  {fmt.C.DIM}Commands will be elevated via sudo on remote hosts.{fmt.C.RESET}")
-                    fmt.blank()
-                for h in linux_hosts:
-                    fmt.blank()
-                    fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
-                    if _deploy_to_host_dispatch(h.ip, h.htype, ctx, linux_pass, linux_key, linux_user):
-                        ok += 1
-                    else:
-                        fail += 1
+        if has_bootstrap:
+            # Bootstrap mode — skip interactive prompts
+            linux_user = bootstrap_user or "root"
+            linux_key = bootstrap_key
+            linux_pass = ""
+            fmt.step_ok(f"Using bootstrap auth: {linux_user} via {linux_key}")
+            if linux_user != "root":
+                fmt.line(f"  {fmt.C.DIM}Commands will be elevated via sudo on remote hosts.{fmt.C.RESET}")
+                fmt.blank()
+            for h in linux_hosts:
+                fmt.blank()
+                fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
+                if _deploy_to_host_dispatch(h.ip, h.htype, ctx, linux_pass, linux_key, linux_user):
+                    ok += 1
+                else:
+                    fail += 1
         else:
-            fmt.step_warn("Skipping Linux hosts")
+            # Interactive mode
+            linux_user = _input("Deploy as user (root or sudo account)", "root")
+
+            fmt.line(f"  {fmt.C.DIM}How to authenticate to Linux hosts as '{linux_user}'?{fmt.C.RESET}")
+            fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Password (same for all)")
+            fmt.line(f"    {fmt.C.BOLD}B{fmt.C.RESET}) Existing SSH key")
+            fmt.line(f"    {fmt.C.BOLD}S{fmt.C.RESET}) Skip")
+            fmt.blank()
+
+            choice = _input("Choice", "A").upper()
+            if choice != "S":
+                linux_pass, linux_key = _get_auth_creds(choice, "Linux hosts")
+                if linux_pass or linux_key:
+                    if linux_user != "root":
+                        fmt.line(f"  {fmt.C.DIM}Commands will be elevated via sudo on remote hosts.{fmt.C.RESET}")
+                        fmt.blank()
+                    for h in linux_hosts:
+                        fmt.blank()
+                        fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
+                        if _deploy_to_host_dispatch(h.ip, h.htype, ctx, linux_pass, linux_key, linux_user):
+                            ok += 1
+                        else:
+                            fail += 1
+            else:
+                fmt.step_warn("Skipping Linux hosts")
 
     # ── pfSense hosts ──
     if pfsense_hosts:
@@ -1028,26 +1342,40 @@ def _phase_fleet_deploy(cfg, ctx):
         fmt.line(f"  {fmt.C.BOLD}pfSense hosts ({len(pfsense_hosts)}){fmt.C.RESET}")
         fmt.blank()
 
-        fmt.line(f"  {fmt.C.DIM}How to authenticate to pfSense?{fmt.C.RESET}")
-        fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Admin password")
-        fmt.line(f"    {fmt.C.BOLD}B{fmt.C.RESET}) Existing SSH key")
-        fmt.line(f"    {fmt.C.BOLD}S{fmt.C.RESET}) Skip")
-        fmt.blank()
-
-        choice = _input("Choice", "A").upper()
-        if choice != "S":
-            pf_user = _input("Auth user", "admin")
-            pf_pass, pf_key = _get_auth_creds(choice, "pfSense")
-            if pf_pass or pf_key:
-                for h in pfsense_hosts:
-                    fmt.blank()
-                    fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [pfsense]")
-                    if _deploy_to_host_dispatch(h.ip, "pfsense", ctx, pf_pass, pf_key, pf_user):
-                        ok += 1
-                    else:
-                        fail += 1
+        if has_bootstrap:
+            # Bootstrap mode for pfSense — use bootstrap key
+            pf_user = bootstrap_user or "admin"
+            pf_key = bootstrap_key
+            pf_pass = ""
+            fmt.step_ok(f"Using bootstrap auth for pfSense: {pf_user} via {pf_key}")
+            for h in pfsense_hosts:
+                fmt.blank()
+                fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [pfsense]")
+                if _deploy_to_host_dispatch(h.ip, "pfsense", ctx, pf_pass, pf_key, pf_user):
+                    ok += 1
+                else:
+                    fail += 1
         else:
-            fmt.step_warn("Skipping pfSense hosts")
+            fmt.line(f"  {fmt.C.DIM}How to authenticate to pfSense?{fmt.C.RESET}")
+            fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Admin password")
+            fmt.line(f"    {fmt.C.BOLD}B{fmt.C.RESET}) Existing SSH key")
+            fmt.line(f"    {fmt.C.BOLD}S{fmt.C.RESET}) Skip")
+            fmt.blank()
+
+            choice = _input("Choice", "A").upper()
+            if choice != "S":
+                pf_user = _input("Auth user", "admin")
+                pf_pass, pf_key = _get_auth_creds(choice, "pfSense")
+                if pf_pass or pf_key:
+                    for h in pfsense_hosts:
+                        fmt.blank()
+                        fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [pfsense]")
+                        if _deploy_to_host_dispatch(h.ip, "pfsense", ctx, pf_pass, pf_key, pf_user):
+                            ok += 1
+                        else:
+                            fail += 1
+            else:
+                fmt.step_warn("Skipping pfSense hosts")
 
     # ── Device hosts (iDRAC, switch) ──
     if device_hosts:
@@ -1055,30 +1383,41 @@ def _phase_fleet_deploy(cfg, ctx):
         fmt.line(f"  {fmt.C.BOLD}Device hosts ({len(device_hosts)}){fmt.C.RESET}")
         fmt.blank()
 
-        fmt.line(f"  {fmt.C.DIM}How to authenticate to iDRAC/switch?{fmt.C.RESET}")
-        fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Admin password")
-        fmt.line(f"    {fmt.C.BOLD}S{fmt.C.RESET}) Skip")
-        fmt.blank()
-
-        choice = _input("Choice", "A").upper()
-        if choice != "S":
-            dev_user = _input("Auth user", "root")
-            # Verify sshpass is available
-            rc, _, _ = _run(["which", "sshpass"])
-            if rc != 0:
-                fmt.step_fail("'sshpass' not installed — required for device auth")
-                fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
-            else:
-                dev_pass = getpass.getpass(f"  Password for device admin ({dev_user}): ")
-                for h in device_hosts:
-                    fmt.blank()
-                    fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
-                    if _deploy_to_host_dispatch(h.ip, h.htype, ctx, dev_pass, "", dev_user):
-                        ok += 1
-                    else:
-                        fail += 1
+        if has_bootstrap:
+            # Bootstrap mode for devices — use bootstrap key
+            dev_user = bootstrap_user or "root"
+            fmt.step_ok(f"Using bootstrap auth for devices: {dev_user} via {bootstrap_key}")
+            for h in device_hosts:
+                fmt.blank()
+                fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
+                if _deploy_to_host_dispatch(h.ip, h.htype, ctx, "", bootstrap_key, dev_user):
+                    ok += 1
+                else:
+                    fail += 1
         else:
-            fmt.step_warn("Skipping device hosts")
+            fmt.line(f"  {fmt.C.DIM}How to authenticate to iDRAC/switch?{fmt.C.RESET}")
+            fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Admin password")
+            fmt.line(f"    {fmt.C.BOLD}S{fmt.C.RESET}) Skip")
+            fmt.blank()
+
+            choice = _input("Choice", "A").upper()
+            if choice != "S":
+                dev_user = _input("Auth user", "root")
+                rc, _, _ = _run(["which", "sshpass"])
+                if rc != 0:
+                    fmt.step_fail("'sshpass' not installed — required for device auth")
+                    fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
+                else:
+                    dev_pass = getpass.getpass(f"  Password for device admin ({dev_user}): ")
+                    for h in device_hosts:
+                        fmt.blank()
+                        fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
+                        if _deploy_to_host_dispatch(h.ip, h.htype, ctx, dev_pass, "", dev_user):
+                            ok += 1
+                        else:
+                            fail += 1
+            else:
+                fmt.step_warn("Skipping device hosts")
 
     fmt.blank()
     fmt.line(f"  Fleet deployment: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, {fmt.C.RED}{fail} failed{fmt.C.RESET}")
@@ -1710,7 +2049,7 @@ def _remove_from_host_dispatch(ip, htype, svc_name, key_path, rsa_key_path):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 6: Admin Account Setup
+# PHASE 7: Admin Account Setup
 # ═══════════════════════════════════════════════════════════════════
 
 def _phase_admin_setup(cfg, ctx):
@@ -1773,7 +2112,7 @@ def _phase_admin_setup(cfg, ctx):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 7: Verification
+# PHASE 8: Verification
 # ═══════════════════════════════════════════════════════════════════
 
 def _is_skip_error(err):
@@ -1953,7 +2292,7 @@ def _phase_verify(cfg, ctx):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 8: Summary
+# PHASE 9: Summary
 # ═══════════════════════════════════════════════════════════════════
 
 def _phase_summary(cfg, ctx, verified, pack=None):

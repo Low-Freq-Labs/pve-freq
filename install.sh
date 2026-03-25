@@ -414,7 +414,7 @@ do_install() {
     if [[ "$freq_ready" == false ]]; then
         cat > /usr/local/bin/freq << WRAPPER
 #!/bin/sh
-FREQ_DIR="${INSTALL_DIR}" exec python3 -m freq "\$@"
+FREQ_DIR="${INSTALL_DIR}" PYTHONPATH="${INSTALL_DIR}" exec python3 -m freq "\$@"
 WRAPPER
         chmod 755 /usr/local/bin/freq
         if /usr/local/bin/freq --version &>/dev/null; then
