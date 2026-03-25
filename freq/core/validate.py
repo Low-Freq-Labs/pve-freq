@@ -91,6 +91,20 @@ def port(value) -> bool:
         return False
 
 
+def shell_safe_name(value: str) -> bool:
+    """VM name safe for shell: alphanumeric + hyphens/underscores/dots, max 63."""
+    if not value or len(value) > 63:
+        return False
+    return bool(re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$").match(value))
+
+
+def bay_device(value: str) -> bool:
+    """Block device name (sda, nvme0n1). No slashes, no dots."""
+    if not value or len(value) > 32:
+        return False
+    return bool(re.compile(r"^[a-z][a-z0-9]*$").match(value))
+
+
 def is_protected_vmid(value, protected_ids: list, protected_ranges: list) -> bool:
     """Check if a VMID is in the protected list or ranges."""
     try:

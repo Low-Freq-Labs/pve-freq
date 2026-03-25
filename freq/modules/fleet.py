@@ -1,8 +1,9 @@
 """Fleet operations for FREQ.
 
-Commands: status, exec, info, diagnose, docker, keys, dashboard
+Commands: status, exec, info, diagnose, docker, keys, dashboard, test-connection
 The core of fleet management — every command talks to real hosts via SSH.
 """
+import socket
 import subprocess
 import time
 
@@ -108,10 +109,38 @@ def cmd_exec(cfg: FreqConfig, pack, args) -> int:
 
     command = " ".join(cmd_parts)
 
+    # Safety gate: dangerous commands on "all" require YES confirmation
+    DANGEROUS_PATTERNS = [
+        "rm ", "dd ", "mkfs", "reboot", "shutdown", "halt",
+        "systemctl stop", "wipefs", "fdisk", "parted",
+    ]
+    if target and target.lower() == "all":
+        cmd_lower = command.lower()
+        for pattern in DANGEROUS_PATTERNS:
+            if pattern in cmd_lower:
+                fmt.warn("Dangerous command detected: {}".format(command[:60]))
+                fmt.line("  Target: ALL hosts")
+                try:
+                    confirm = input(
+                        "  {}Type YES to confirm:{} ".format(fmt.C.RED, fmt.C.RESET)
+                    ).strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    return 1
+                if confirm != "YES":
+                    fmt.info("Cancelled.")
+                    return 0
+                break
+
     # Resolve targets
     hosts = _resolve_targets(cfg, target)
     if not hosts:
-        fmt.error(f"No hosts matched: {target}")
+        fmt.error("No hosts matched: {}".format(target))
+        _host_groups = [g for h in cfg.hosts for g in h.groups.split(",") if g]
+        available = sorted(set(_host_groups)) if _host_groups else []
+        if available:
+            fmt.info("Available groups: {}".format(", ".join(available)))
+        fmt.info("Try: freq hosts list")
         return 1
 
     fmt.header("Fleet Exec")
@@ -1184,3 +1213,78 @@ def _fleet_update_apply(cfg, hosts) -> int:
 def _info_field(label: str, value: str) -> None:
     """Print a key-value info field."""
     fmt.line(f"  {fmt.C.GRAY}{label:>12}:{fmt.C.RESET}  {value}")
+
+
+def cmd_test_connection(cfg: FreqConfig, pack, args) -> int:
+    """Three-step connectivity test: TCP → SSH auth → sudo access."""
+    target = getattr(args, "target", None)
+    if not target:
+        fmt.error("Usage: freq test-connection <host>")
+        fmt.info("  host: IP address or hostname")
+        return 1
+
+    # Resolve label to IP if needed
+    ip = target
+    for h in cfg.hosts:
+        if h.label == target:
+            ip = h.ip
+            break
+
+    fmt.header("Test Connection: {}".format(ip))
+    fmt.blank()
+
+    # Step 1: TCP connect to port 22
+    fmt.step_start("TCP connect to port 22")
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect((ip, 22))
+        s.close()
+        fmt.step_ok("Port 22 reachable")
+    except (socket.timeout, socket.error, OSError) as e:
+        fmt.step_fail("Port 22 unreachable: {}".format(e))
+        fmt.info("Check: firewall rules, host is up, SSH service running")
+        fmt.blank()
+        fmt.footer()
+        return 1
+
+    # Step 2: SSH auth
+    fmt.step_start("SSH authentication")
+    r = ssh_run(
+        host=ip, command="echo FREQ_AUTH_OK",
+        key_path=cfg.ssh_key_path, connect_timeout=5,
+        command_timeout=10, htype="linux", use_sudo=False,
+    )
+    if r.returncode == 0 and "FREQ_AUTH_OK" in r.stdout:
+        fmt.step_ok("SSH auth succeeded as {}".format(cfg.ssh_service_account))
+    else:
+        fmt.step_fail("SSH auth failed")
+        fmt.info("Check: SSH key deployed, user exists, sshd allows key auth")
+        if r.stderr:
+            fmt.info("Error: {}".format(r.stderr.split("\\n")[0][:60]))
+        fmt.blank()
+        fmt.footer()
+        return 1
+
+    # Step 3: sudo access
+    fmt.step_start("Sudo access")
+    r = ssh_run(
+        host=ip, command="echo FREQ_SUDO_OK",
+        key_path=cfg.ssh_key_path, connect_timeout=5,
+        command_timeout=10, htype="linux", use_sudo=True,
+    )
+    if r.returncode == 0 and "FREQ_SUDO_OK" in r.stdout:
+        fmt.step_ok("Sudo access confirmed (NOPASSWD)")
+    else:
+        fmt.step_fail("Sudo access denied")
+        fmt.info("Check: sudoers entry for {} with NOPASSWD".format(cfg.ssh_service_account))
+        fmt.blank()
+        fmt.footer()
+        return 1
+
+    fmt.blank()
+    fmt.line("  {g}All checks passed — host is FREQ-ready{r}".format(
+        g=fmt.C.GREEN, r=fmt.C.RESET))
+    fmt.blank()
+    fmt.footer()
+    return 0

@@ -7,11 +7,14 @@ Pipeline per host:
   PING → DISCOVER → COMPARE → [DRY-RUN stops] → FIX → ACTIVATE → VERIFY → DONE
 """
 import asyncio
+import logging
 import time
 
 from freq.core.types import Host, Phase, FleetResult
 from freq.core.ssh import async_run as ssh_run
 from freq.engine.policy import PolicyExecutor
+
+logger = logging.getLogger(__name__)
 
 # Runner timeouts
 RUNNER_PING_TIMEOUT = 10
@@ -130,24 +133,41 @@ async def _run_host(
                 host.duration = time.monotonic() - start
                 return host
 
-        # 6. VERIFY — re-discover and compare
+        # 6. VERIFY — re-discover and re-compare actual values
         host.phase = Phase.VERIFYING
-        # Re-read current state (simplified: re-check findings)
+        verify_current = {}
         verify_ok = True
         for res in resources:
             if res.get("type") == "file_line" and res.get("path"):
-                r = await ssh_run(host.ip, f"cat {res['path']} 2>/dev/null",
+                r = await ssh_run(host.ip, "cat {} 2>/dev/null".format(res["path"]),
                                   key_path=ssh_key, htype=host.htype, use_sudo=True)
-                # Basic verification — just check command succeeded
-                if r.returncode != 0:
+                if r.returncode == 0:
+                    for line in r.stdout.split("\n"):
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        for delim in (" ", "="):
+                            if delim in line:
+                                k, _, v = line.partition(delim)
+                                k, v = k.strip(), v.strip()
+                                if k in res.get("entries", {}):
+                                    verify_current[k] = v
+                                break
+                else:
                     verify_ok = False
 
         if verify_ok:
-            host.phase = Phase.DONE
-            host.changes = [f"{f.key}: {f.current} → {f.desired}" for f in findings]
+            verify_findings = executor.compare(verify_current, desired)
+            if verify_findings:
+                host.phase = Phase.FAILED
+                unresolved = [f.key for f in verify_findings[:3]]
+                host.error = "verify failed: {} still drifted".format(", ".join(unresolved))
+            else:
+                host.phase = Phase.DONE
+                host.changes = ["{}: {} -> {}".format(f.key, f.current, f.desired) for f in findings]
         else:
             host.phase = Phase.FAILED
-            host.error = "verification failed"
+            host.error = "verification failed: could not read config files"
 
         host.duration = time.monotonic() - start
         return host
@@ -181,6 +201,8 @@ async def run_pipeline(
     # Handle exceptions
     for i, r in enumerate(results):
         if isinstance(r, Exception):
+            logger.error("pipeline failed for %s: %s: %s",
+                         applicable[i].label, type(r).__name__, r)
             applicable[i].phase = Phase.FAILED
             applicable[i].error = str(r)
 

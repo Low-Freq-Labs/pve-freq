@@ -6,13 +6,43 @@ Every operation goes through the PVE API via SSH + qm/pvesh commands.
 Safety gates enforce protected VMID ranges and confirmation prompts.
 """
 import json
+import shlex
 import subprocess
+import threading
+import time
 
 from freq.core import fmt
 from freq.core import validate
 from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
+
+class _ProgressTicker:
+    """Prints elapsed time every N seconds during long operations."""
+
+    def __init__(self, label, interval=5):
+        self._label = label
+        self._interval = interval
+        self._stop = threading.Event()
+        self._thread = None
+        self._start = None
+
+    def __enter__(self):
+        self._start = time.monotonic()
+        self._thread = threading.Thread(target=self._tick, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self._stop.set()
+        self._thread.join(timeout=1)
+
+    def _tick(self):
+        while not self._stop.wait(self._interval):
+            elapsed = int(time.monotonic() - self._start)
+            fmt.line("  {d}{l} ({e}s elapsed){z}".format(
+                d=fmt.C.DIM, l=self._label, e=elapsed, z=fmt.C.RESET))
+
 
 # VM operation timeouts
 VM_CMD_TIMEOUT = 60
@@ -33,6 +63,15 @@ def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = VM_CMD_
         htype="pve", use_sudo=True,
     )
     return r.stdout, r.returncode == 0
+
+
+def _pve_unreachable_hint(cfg):
+    """Show remediation hints when no PVE node is reachable."""
+    if cfg.pve_nodes:
+        fmt.info("Configured nodes: {}".format(", ".join(cfg.pve_nodes)))
+    else:
+        fmt.info("No PVE nodes configured. Check conf/freq.toml [pve]")
+    fmt.info("Try: freq doctor")
 
 
 def _find_node(cfg: FreqConfig) -> str:
@@ -101,6 +140,7 @@ def cmd_create(cfg: FreqConfig, pack, args) -> int:
     node_ip = _find_node(cfg)
     if not node_ip:
         fmt.step_fail("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         fmt.blank()
         fmt.footer()
         return 1
@@ -123,6 +163,11 @@ def cmd_create(cfg: FreqConfig, pack, args) -> int:
         if not name:
             fmt.error("VM name is required.")
             return 1
+
+    if not validate.shell_safe_name(name):
+        fmt.error("Invalid VM name: {}".format(name))
+        fmt.info("Names: alphanumeric, hyphens, underscores, dots. Max 63 chars.")
+        return 1
 
     # Get next VMID if not specified
     if not vmid:
@@ -212,6 +257,7 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
     node_ip = _find_node(cfg)
     if not node_ip:
         fmt.step_fail("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         fmt.blank()
         fmt.footer()
         return 1
@@ -220,6 +266,17 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
     new_vmid = getattr(args, "vmid", None)
     ip_addr = getattr(args, "ip", None)
     vlan = getattr(args, "vlan", None)
+
+    if not validate.shell_safe_name(new_name):
+        fmt.error("Invalid VM name: {}".format(new_name))
+        fmt.info("Names: alphanumeric, hyphens, underscores, dots. Max 63 chars.")
+        return 1
+    if ip_addr and not validate.ip(ip_addr.split("/")[0]):
+        fmt.error("Invalid IP address: {}".format(ip_addr))
+        return 1
+    if vlan and not validate.vlan_id(vlan):
+        fmt.error("Invalid VLAN ID: {} (must be 0-4094)".format(vlan))
+        return 1
 
     if not new_vmid:
         new_vmid = _next_vmid(cfg, node_ip)
@@ -250,8 +307,9 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
 
     # Step 1: Full clone
     fmt.step_start(f"Cloning VM {src_vmid} to {new_vmid}")
-    stdout, ok = _pve_cmd(cfg, node_ip,
-        f"qm clone {src_vmid} {new_vmid} --name {new_name} --full", timeout=VM_CLONE_TIMEOUT)
+    with _ProgressTicker("Cloning"):
+        stdout, ok = _pve_cmd(cfg, node_ip,
+            f"qm clone {src_vmid} {new_vmid} --name {new_name} --full", timeout=VM_CLONE_TIMEOUT)
 
     if not ok:
         fmt.step_fail(f"Clone failed: {stdout}")
@@ -283,9 +341,10 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
             stdout, ok = _pve_cmd(cfg, node_ip, mount_cmds, timeout=VM_CONFIG_TIMEOUT)
 
             if ok:
-                # Configure hostname
+                # Configure hostname (validated name + printf for safety)
+                safe_name = shlex.quote(new_name)
                 _pve_cmd(cfg, node_ip,
-                         f"echo '{new_name}' > /mnt/vm{new_vmid}/etc/hostname")
+                         f"printf '%s\\n' {safe_name} > /mnt/vm{new_vmid}/etc/hostname")
                 # Clear machine-id for regen
                 _pve_cmd(cfg, node_ip,
                          f"truncate -s 0 /mnt/vm{new_vmid}/etc/machine-id")
@@ -294,7 +353,7 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
                          f"rm -f /mnt/vm{new_vmid}/etc/ssh/ssh_host_*")
                 # Update /etc/hosts
                 _pve_cmd(cfg, node_ip,
-                         f"sed -i 's/127.0.1.1.*/127.0.1.1\\t{new_name}/' "
+                         f"sed -i 's/127.0.1.1.*/127.0.1.1\\t'{safe_name}'/' "
                          f"/mnt/vm{new_vmid}/etc/hosts")
 
                 # Set static IP if interfaces file exists
@@ -364,6 +423,7 @@ def cmd_destroy(cfg: FreqConfig, pack, args) -> int:
     node_ip = _find_node(cfg)
     if not node_ip:
         fmt.step_fail("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         fmt.blank()
         fmt.footer()
         return 1
@@ -384,6 +444,13 @@ def cmd_destroy(cfg: FreqConfig, pack, args) -> int:
 
     fmt.line(f"  {fmt.C.RED}{fmt.C.BOLD}WARNING: This will permanently destroy VM {vmid} '{vm_name}'{fmt.C.RESET}")
     fmt.blank()
+
+    # Dry-run stops here
+    if getattr(args, "dry_run", False):
+        fmt.info("Dry run — no changes made.")
+        fmt.blank()
+        fmt.footer()
+        return 0
 
     # Double confirmation for destructive operations
     if not getattr(args, "yes", False):
@@ -440,6 +507,7 @@ def cmd_resize(cfg: FreqConfig, pack, args) -> int:
     node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         return 1
 
     fmt.header(f"Resize VM {vmid}")
@@ -508,6 +576,7 @@ def cmd_template(cfg: FreqConfig, pack, args) -> int:
         node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         return 1
 
     fmt.header(f"Template VM {vmid}")
@@ -588,6 +657,7 @@ def cmd_rename(cfg: FreqConfig, pack, args) -> int:
         node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         return 1
 
     fmt.header(f"Rename VM {vmid}")
@@ -602,6 +672,11 @@ def cmd_rename(cfg: FreqConfig, pack, args) -> int:
         if not new_name:
             fmt.error("Name is required.")
             return 1
+
+    if not validate.shell_safe_name(new_name):
+        fmt.error("Invalid VM name: {}".format(new_name))
+        fmt.info("Names: alphanumeric, hyphens, underscores, dots. Max 63 chars.")
+        return 1
 
     fmt.line(f"  {fmt.C.BOLD}VM:{fmt.C.RESET}       {vmid}")
     fmt.line(f"  {fmt.C.BOLD}New name:{fmt.C.RESET}  {new_name}")
@@ -641,6 +716,7 @@ def cmd_add_disk(cfg: FreqConfig, pack, args) -> int:
         node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         return 1
 
     fmt.header(f"Add Disk to VM {vmid}")
@@ -712,6 +788,7 @@ def cmd_tag(cfg: FreqConfig, pack, args) -> int:
         node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         return 1
 
     if not tags:
@@ -742,6 +819,7 @@ def cmd_pool(cfg: FreqConfig, pack, args) -> int:
     node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         return 1
 
     if action == "create":
@@ -819,10 +897,19 @@ def cmd_sandbox(cfg: FreqConfig, pack, args) -> int:
     node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         return 1
 
     new_name = getattr(args, "name", None) or f"sandbox-{src_vmid}"
     ip_addr = getattr(args, "ip", None)
+
+    if not validate.shell_safe_name(new_name):
+        fmt.error("Invalid VM name: {}".format(new_name))
+        fmt.info("Names: alphanumeric, hyphens, underscores, dots. Max 63 chars.")
+        return 1
+    if ip_addr and not validate.ip(ip_addr.split("/")[0]):
+        fmt.error("Invalid IP address: {}".format(ip_addr))
+        return 1
 
     # Get next VMID
     new_vmid = getattr(args, "vmid", None)
@@ -1113,9 +1200,17 @@ def cmd_migrate(cfg: FreqConfig, pack, args) -> int:
     if target_storage:
         migrate_cmd += f" --targetstorage {target_storage}"
 
+    # Dry-run stops here
+    if getattr(args, "dry_run", False):
+        fmt.info("Dry run — migration plan shown above, no changes made.")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
     # Try online first (zero downtime), fall back to offline
     fmt.step_start(f"Live migrating VM {vmid} to {target_node} (this may take several minutes)")
-    stdout, ok = _pve_cmd(cfg, source_ip, migrate_cmd + " --online", timeout=VM_MIGRATE_TIMEOUT)
+    with _ProgressTicker("Migrating"):
+        stdout, ok = _pve_cmd(cfg, source_ip, migrate_cmd + " --online", timeout=VM_MIGRATE_TIMEOUT)
 
     if not ok:
         if "not running" in stdout.lower():
@@ -1188,6 +1283,13 @@ def _nic_add(cfg: FreqConfig, args) -> int:
         fmt.error("Usage: freq nic add <vmid> --ip <ip> [--gw <gateway>] [--vlan <vlan>]")
         return 1
 
+    if not validate.ip(ip.split("/")[0]):
+        fmt.error("Invalid IP address: {}".format(ip))
+        return 1
+    if vlan and not validate.vlan_id(vlan):
+        fmt.error("Invalid VLAN ID: {} (must be 0-4094)".format(vlan))
+        return 1
+
     try:
         vmid = int(target)
     except ValueError:
@@ -1200,6 +1302,7 @@ def _nic_add(cfg: FreqConfig, args) -> int:
     node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         return 1
 
     fmt.header(f"Add NIC: VM {vmid}")
@@ -1265,6 +1368,7 @@ def _nic_clear(cfg: FreqConfig, args) -> int:
     node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         return 1
 
     fmt.header(f"Clear NICs: VM {vmid}")
@@ -1322,6 +1426,13 @@ def _nic_change_ip(cfg: FreqConfig, args) -> int:
         fmt.error("Usage: freq nic change-ip <vmid> --ip <ip> [--gw <gw>] [--nic-index N] [--vlan V]")
         return 1
 
+    if not validate.ip(ip.split("/")[0]):
+        fmt.error("Invalid IP address: {}".format(ip))
+        return 1
+    if vlan and not validate.vlan_id(vlan):
+        fmt.error("Invalid VLAN ID: {} (must be 0-4094)".format(vlan))
+        return 1
+
     try:
         vmid = int(target)
     except ValueError:
@@ -1334,6 +1445,7 @@ def _nic_change_ip(cfg: FreqConfig, args) -> int:
     node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         return 1
 
     fmt.header(f"Change IP: VM {vmid}")
@@ -1390,6 +1502,7 @@ def _nic_change_id(cfg: FreqConfig, args) -> int:
     node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
         return 1
 
     fmt.header(f"Change VMID: {vmid} → {newid}")

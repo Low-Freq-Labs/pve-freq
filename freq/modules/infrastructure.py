@@ -141,8 +141,9 @@ def cmd_idrac(cfg: FreqConfig, pack, args) -> int:
             targets[h.label] = h.ip
     if not targets:
         fmt.line(f"  {fmt.C.YELLOW}No iDRAC hosts in hosts.conf (type: idrac){fmt.C.RESET}")
+        fmt.info("Add hosts with type 'idrac' to conf/hosts.conf")
         fmt.blank()
-        return 0
+        return 1
 
     actions = {
         "status": ("System status", "racadm getconfig -g cfgServerInfo"),

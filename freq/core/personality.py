@@ -5,6 +5,7 @@ Celebrations, vibes, taglines, quotes. What makes someone choose FREQ over Ansib
 
 Packs live in conf/personality/<name>.toml. Loaded at startup based on freq.toml build setting.
 """
+import logging
 import os
 import random
 from dataclasses import dataclass, field
@@ -13,6 +14,8 @@ try:
     import tomllib
 except ModuleNotFoundError:
     tomllib = None
+
+_logger = logging.getLogger(__name__)
 from typing import Optional
 
 from freq.core.fmt import C, S, B_H, B_V, B_TL, B_TR, B_BL, B_BR, term_width
@@ -48,8 +51,11 @@ def load_pack(conf_dir: str, pack_name: str = "default") -> PersonalityPack:
         else:
             from freq.core.config import load_toml
             data = load_toml(path)
-    except (FileNotFoundError, Exception):
-        return pack  # Return defaults if pack not found
+    except FileNotFoundError:
+        return pack  # Pack file doesn't exist — use defaults
+    except Exception as e:
+        _logger.warning("failed to load personality pack %s: %s", pack_name, e)
+        return pack
 
     pack.subtitle = data.get("subtitle", pack.subtitle)
     pack.vibe_enabled = data.get("vibe_enabled", pack.vibe_enabled)

@@ -9,6 +9,7 @@ import urllib.request
 import urllib.error
 
 from freq.core import fmt
+from freq.core import validate
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,11 @@ def cmd_gwipe(cfg, pack, args):
     host, key = _resolve_creds(cfg, args)
     action = getattr(args, "action", "status") or "status"
     target = getattr(args, "target", None)
+
+    # Validate bay target if provided (path traversal prevention)
+    if target and not validate.bay_device(target):
+        fmt.line("  {r}Invalid bay: {t}{z}".format(r=fmt.C.RED, t=target, z=fmt.C.RESET))
+        return 1
 
     # Connect: save credentials to vault
     if action == "connect":

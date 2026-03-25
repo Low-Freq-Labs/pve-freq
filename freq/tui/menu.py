@@ -6,6 +6,7 @@ No external dependencies — works in PuTTY, xterm, any terminal.
 Design: reimagined from v1.0.0 menu.sh (890 lines, 14 submenus).
 """
 import os
+import shlex
 import sys
 import termios
 import tty
@@ -235,7 +236,7 @@ def _menu_quick_actions(cfg, pack):
                 cmd = _input("Command:")
                 if cmd:
                     from freq.cli import _build_parser
-                    argv = ["exec", target] + cmd.split()
+                    argv = ["exec", target] + shlex.split(cmd)
                     parser = _build_parser()
                     args = parser.parse_args(argv)
                     if hasattr(args, "func"):
@@ -550,7 +551,7 @@ def _menu_run_commands(cfg, pack):
             cmd = _input("Command:")
             if cmd:
                 from freq.cli import _build_parser
-                argv = ["exec", "all"] + cmd.split()
+                argv = ["exec", "all"] + shlex.split(cmd)
                 parser = _build_parser()
                 args = parser.parse_args(argv)
                 if hasattr(args, "func"):
@@ -562,7 +563,7 @@ def _menu_run_commands(cfg, pack):
                 cmd = _input("Command:")
                 if cmd:
                     from freq.cli import _build_parser
-                    argv = ["exec", host] + cmd.split()
+                    argv = ["exec", host] + shlex.split(cmd)
                     parser = _build_parser()
                     args = parser.parse_args(argv)
                     if hasattr(args, "func"):
@@ -1273,7 +1274,7 @@ def run(cfg, pack) -> int:
             query = _input("Search knowledge base:")
             if query:
                 from freq.cli import _build_parser
-                argv = ["learn"] + query.split()
+                argv = ["learn"] + shlex.split(query)
                 parser = _build_parser()
                 args = parser.parse_args(argv)
                 if hasattr(args, "func"):

@@ -16,6 +16,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -94,11 +95,21 @@ def _load_disk_cache():
 
 
 def _save_disk_cache(name, data):
-    """Persist to disk so next server start is instant."""
+    """Persist to disk atomically so next server start is instant."""
     os.makedirs(CACHE_DIR, exist_ok=True)
+    target = _cache_path(name)
     try:
-        with open(_cache_path(name), "w") as f:
-            json.dump({"data": data, "ts": time.time()}, f)
+        fd, tmp = tempfile.mkstemp(dir=CACHE_DIR, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump({"data": data, "ts": time.time()}, f)
+            os.replace(tmp, target)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
     except OSError as e:
         logger.warn(f"cache save failed: {name}: {e}")
 

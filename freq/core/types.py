@@ -230,11 +230,11 @@ class FleetBoundaries:
         """Return (category_name, tier_name) for a VMID."""
         for name, cat in self.categories.items():
             if vmid in cat.get("vmids", []):
-                return (name, cat["tier"])
+                return (name, cat.get("tier", "probe"))
             rs = cat.get("range_start")
-            re = cat.get("range_end")
-            if rs is not None and re is not None and rs <= vmid <= re:
-                return (name, cat["tier"])
+            range_end = cat.get("range_end")
+            if rs is not None and range_end is not None and rs <= vmid <= range_end:
+                return (name, cat.get("tier", "probe"))
         return ("unknown", "probe")
 
     def allowed_actions(self, vmid: int) -> list:
@@ -243,7 +243,12 @@ class FleetBoundaries:
         return list(self.tiers.get(tier, ["view"]))
 
     def is_prod(self, vmid: int) -> bool:
-        """True if this VMID belongs to a production or protected category."""
+        """True if this VMID belongs to a production category."""
+        cat, _ = self.categorize(vmid)
+        return cat in ("infrastructure", "prod_media", "prod_other")
+
+    def is_protected(self, vmid: int) -> bool:
+        """True if this VMID belongs to a category that should not be casually modified."""
         cat, _ = self.categorize(vmid)
         return cat in ("personal", "infrastructure", "prod_media", "prod_other")
 

@@ -23,7 +23,7 @@ class TestCLIDispatch(unittest.TestCase):
         """All expected commands are registered in the parser."""
         expected = [
             # Core
-            "version", "help", "doctor", "menu", "demo",
+            "version", "help", "doctor", "why", "test-connection", "menu", "demo",
             # Fleet ops
             "status", "dashboard", "exec", "info", "diagnose", "ssh",
             "docker", "log", "keys", "hosts", "discover", "groups",

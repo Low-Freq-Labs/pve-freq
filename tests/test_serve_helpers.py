@@ -445,7 +445,8 @@ class TestFleetBoundaries(unittest.TestCase):
         self.assertEqual(actions, ["view"])
 
     def test_is_prod_personal(self):
-        self.assertTrue(self.fb.is_prod(100))
+        # Personal VMs are protected but not production
+        self.assertFalse(self.fb.is_prod(100))
 
     def test_is_prod_infrastructure(self):
         self.assertTrue(self.fb.is_prod(900))
@@ -455,6 +456,15 @@ class TestFleetBoundaries(unittest.TestCase):
 
     def test_is_prod_unknown(self):
         self.assertFalse(self.fb.is_prod(9999))
+
+    def test_is_protected_personal(self):
+        self.assertTrue(self.fb.is_protected(100))
+
+    def test_is_protected_infrastructure(self):
+        self.assertTrue(self.fb.is_protected(900))
+
+    def test_is_protected_lab(self):
+        self.assertFalse(self.fb.is_protected(5001))
 
     def test_category_description(self):
         desc = self.fb.category_description(100)

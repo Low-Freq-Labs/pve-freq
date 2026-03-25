@@ -317,6 +317,16 @@ def load_config(install_dir: Optional[str] = None) -> FreqConfig:
     return cfg
 
 
+def _safe_int(value, default):
+    """Coerce a value to int, falling back to default on failure."""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     """Apply TOML config values to FreqConfig."""
     freq = data.get("freq", {})
@@ -328,8 +338,8 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
 
     ssh = data.get("ssh", {})
     cfg.ssh_service_account = ssh.get("service_account", cfg.ssh_service_account)
-    cfg.ssh_connect_timeout = ssh.get("connect_timeout", cfg.ssh_connect_timeout)
-    cfg.ssh_max_parallel = ssh.get("max_parallel", cfg.ssh_max_parallel)
+    cfg.ssh_connect_timeout = _safe_int(ssh.get("connect_timeout"), cfg.ssh_connect_timeout)
+    cfg.ssh_max_parallel = _safe_int(ssh.get("max_parallel"), cfg.ssh_max_parallel)
     cfg.ssh_mode = ssh.get("mode", cfg.ssh_mode)
     cfg.legacy_password_file = ssh.get("legacy_password_file", cfg.legacy_password_file)
 
@@ -341,9 +351,9 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
         cfg.pve_storage[node] = {"pool": info.get("pool", ""), "type": info.get("type", "")}
 
     vm = data.get("vm", {}).get("defaults", {})
-    cfg.vm_default_cores = vm.get("cores", cfg.vm_default_cores)
-    cfg.vm_default_ram = vm.get("ram", cfg.vm_default_ram)
-    cfg.vm_default_disk = vm.get("disk", cfg.vm_default_disk)
+    cfg.vm_default_cores = _safe_int(vm.get("cores"), cfg.vm_default_cores)
+    cfg.vm_default_ram = _safe_int(vm.get("ram"), cfg.vm_default_ram)
+    cfg.vm_default_disk = _safe_int(vm.get("disk"), cfg.vm_default_disk)
     cfg.vm_cpu = vm.get("cpu", cfg.vm_cpu)
     cfg.vm_machine = vm.get("machine", cfg.vm_machine)
     cfg.vm_scsihw = vm.get("scsihw", cfg.vm_scsihw)
@@ -355,7 +365,7 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     safety = data.get("safety", {})
     cfg.protected_vmids = safety.get("protected_vmids", cfg.protected_vmids)
     cfg.protected_ranges = safety.get("protected_ranges", cfg.protected_ranges)
-    cfg.max_failure_percent = safety.get("max_failure_percent", cfg.max_failure_percent)
+    cfg.max_failure_percent = _safe_int(safety.get("max_failure_percent"), cfg.max_failure_percent)
 
     infra = data.get("infrastructure", {})
     cfg.cluster_name = infra.get("cluster_name", cfg.cluster_name)
@@ -372,7 +382,7 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
 
     nic = data.get("nic", {})
     cfg.nic_bridge = nic.get("bridge", cfg.nic_bridge)
-    cfg.nic_mtu = nic.get("mtu", cfg.nic_mtu)
+    cfg.nic_mtu = _safe_int(nic.get("mtu"), cfg.nic_mtu)
     cfg.nic_profiles = nic.get("profiles", cfg.nic_profiles)
 
     notify = data.get("notifications", {})
@@ -380,9 +390,9 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.slack_webhook = notify.get("slack_webhook", cfg.slack_webhook)
 
     services = data.get("services", {})
-    cfg.dashboard_port = services.get("dashboard_port", cfg.dashboard_port)
-    cfg.watchdog_port = services.get("watchdog_port", cfg.watchdog_port)
-    cfg.agent_port = services.get("agent_port", cfg.agent_port)
+    cfg.dashboard_port = _safe_int(services.get("dashboard_port"), cfg.dashboard_port)
+    cfg.watchdog_port = _safe_int(services.get("watchdog_port"), cfg.watchdog_port)
+    cfg.agent_port = _safe_int(services.get("agent_port"), cfg.agent_port)
 
 
 # --- Fleet Loaders ---

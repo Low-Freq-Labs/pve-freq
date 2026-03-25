@@ -112,6 +112,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("doctor", help="Self-diagnostic")
     p.set_defaults(func=cmd_doctor)
 
+    p = sub.add_parser("why", help="Explain VM permissions and protections")
+    p.add_argument("target", nargs="?", help="VMID to explain")
+    p.set_defaults(func=_cmd_why)
+
+    p = sub.add_parser("test-connection", help="Test host connectivity (TCP + SSH + sudo)")
+    p.add_argument("target", nargs="?", help="Host IP or label")
+    p.set_defaults(func=_cmd_test_connection)
+
     p = sub.add_parser("menu", help="Interactive TUI menu")
     p.set_defaults(func=cmd_menu)
 
@@ -219,6 +227,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("destroy", help="Destroy a VM")
     p.add_argument("target", nargs="?", help="VMID or name")
+    p.add_argument("--dry-run", action="store_true", help="Show what would be destroyed without executing")
     p.set_defaults(func=_cmd_destroy)
 
     p = sub.add_parser("resize", help="Resize a VM")
@@ -263,6 +272,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--node", help="Target PVE node")
     p.add_argument("--storage", help="Target storage pool (auto-detected if omitted)")
     p.add_argument("--yes", "-y", action="store_true", help="Skip confirmations (auto-delete snapshots)")
+    p.add_argument("--dry-run", action="store_true", help="Show migration plan without executing")
     p.set_defaults(func=_cmd_migrate)
 
     p = sub.add_parser("template", help="Convert a VM to a template")
@@ -571,6 +581,8 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("version", "Show version and branding"),
             ("help", "This command reference"),
             ("doctor", "Self-diagnostic"),
+            ("why <vmid>", "Explain VM permissions and protections"),
+            ("test-connection <host>", "Test host connectivity (TCP + SSH + sudo)"),
             ("menu", "Interactive TUI menu"),
             ("demo", "Interactive demo (no fleet required)"),
         ]),
@@ -708,6 +720,16 @@ def cmd_menu(cfg: FreqConfig, pack, args) -> int:
 def _cmd_demo(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.demo import run
     return run(cfg, pack, args)
+
+
+def _cmd_why(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.why import cmd_why
+    return cmd_why(cfg, pack, args)
+
+
+def _cmd_test_connection(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.fleet import cmd_test_connection
+    return cmd_test_connection(cfg, pack, args)
 
 
 def _cmd_status(cfg: FreqConfig, pack, args) -> int:

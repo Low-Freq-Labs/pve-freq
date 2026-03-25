@@ -6,14 +6,24 @@ replaces 200 lines of bash. The Convergence architecture proved this.
 PolicyExecutor handles: discover → desired → compare → fix → activate → verify
 """
 import difflib
+import re as re_mod
 
 from freq.core.types import Finding, Severity
+
+
+def _escape_sed(text):
+    """Escape regex metacharacters for safe use in sed patterns."""
+    for ch in r'\.^$*+?{}[]|()':
+        text = text.replace(ch, '\\' + ch)
+    return text
 
 
 class PolicyExecutor:
     """Executes a single policy against a host."""
 
     def __init__(self, policy: dict):
+        if "name" not in policy:
+            raise ValueError("Policy missing required 'name' key")
         self.policy = policy
         self.name = policy["name"]
         self.scope = policy.get("scope", [])
@@ -89,10 +99,11 @@ class PolicyExecutor:
 
                 if res_type == "file_line" and path:
                     # sed command to update or append
+                    escaped_key = _escape_sed(key)
                     escaped_desired = desired.replace("/", "\\/")
                     commands.append(
-                        f"grep -q '^{key}' {path} && "
-                        f"sed -i 's/^{key}.*/{key} {escaped_desired}/' {path} || "
+                        f"grep -q '^{escaped_key}' {path} && "
+                        f"sed -i 's/^{escaped_key}.*/{key} {escaped_desired}/' {path} || "
                         f"echo '{key} {escaped_desired}' >> {path}"
                     )
                 elif res_type == "command_check":

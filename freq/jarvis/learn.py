@@ -8,11 +8,14 @@ Usage:
   freq learn docker gluetun   # search for Docker/Gluetun gotchas
   freq learn pfsense reboot   # search for pfSense reboot issues
 """
+import logging
 import os
 import sqlite3
 
 from freq.core import fmt
 from freq.core.config import FreqConfig, load_toml
+
+_logger = logging.getLogger(__name__)
 
 
 # --- Knowledge Loader ---
@@ -98,7 +101,7 @@ def _init_db(db_path: str) -> sqlite3.Connection:
             )
         """)
     except sqlite3.OperationalError:
-        pass  # FTS5 not available — fall back to LIKE
+        _logger.info("FTS5 not available — falling back to LIKE queries")
 
     return conn
 
