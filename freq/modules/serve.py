@@ -911,6 +911,27 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/topology": "_serve_topology",
         "/api/capacity": "_serve_capacity",
         "/api/capacity/snapshot": "_serve_capacity_snapshot",
+        # Chaos engineering
+        "/api/chaos/types": "_serve_chaos_types",
+        "/api/chaos/run": "_serve_chaos_run",
+        "/api/chaos/log": "_serve_chaos_log",
+        # Federation
+        "/api/federation/status": "_serve_federation_status",
+        "/api/federation/register": "_serve_federation_register",
+        "/api/federation/unregister": "_serve_federation_unregister",
+        "/api/federation/poll": "_serve_federation_poll",
+        "/api/federation/toggle": "_serve_federation_toggle",
+        # Cost tracking
+        "/api/cost": "_serve_cost",
+        "/api/cost/config": "_serve_cost_config",
+        # GitOps config sync
+        "/api/gitops/status": "_serve_gitops_status",
+        "/api/gitops/sync": "_serve_gitops_sync",
+        "/api/gitops/apply": "_serve_gitops_apply",
+        "/api/gitops/diff": "_serve_gitops_diff",
+        "/api/gitops/log": "_serve_gitops_log",
+        "/api/gitops/rollback": "_serve_gitops_rollback",
+        "/api/gitops/init": "_serve_gitops_init",
         # Playbook runner
         "/api/playbooks": "_serve_playbooks",
         "/api/playbooks/run": "_serve_playbooks_run",
@@ -1051,6 +1072,261 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"ok": True, "snapshot": fname})
         else:
             self._json_response({"error": "Failed to save snapshot"}, 500)
+
+    # ── Chaos Engineering ─────────────────────────────────────────────────
+
+    def _serve_chaos_types(self):
+        """List available chaos experiment types."""
+        from freq.jarvis.chaos import list_experiment_types
+        self._json_response({"types": list_experiment_types()})
+
+    def _serve_chaos_run(self):
+        """Run a chaos experiment (admin only)."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.chaos import Experiment, run_experiment, result_to_dict
+        from freq.core.ssh import run as ssh_run
+        cfg = load_config()
+        params = _parse_query(self.path)
+        name = params.get("name", "").strip()
+        exp_type = params.get("type", "").strip()
+        target = params.get("target", "").strip()
+        service = params.get("service", "")
+        duration = int(params.get("duration", "60"))
+
+        if not name or not exp_type or not target:
+            self._json_response({"error": "Missing name, type, or target parameter"}); return
+
+        exp = Experiment(
+            name=name, experiment_type=exp_type, target_host=target,
+            target_service=service, duration=duration,
+        )
+        result = run_experiment(exp, ssh_run, cfg)
+        self._json_response({"result": result_to_dict(result)})
+
+    def _serve_chaos_log(self):
+        """Return recent chaos experiment log."""
+        from freq.jarvis.chaos import load_experiment_log
+        cfg = load_config()
+        params = _parse_query(self.path)
+        count = min(int(params.get("count", "20")), 50)
+        log = load_experiment_log(cfg.data_dir, count)
+        self._json_response({"experiments": log})
+
+    # ── Federation ────────────────────────────────────────────────────────
+
+    def _serve_federation_status(self):
+        """Return federation status and registered sites."""
+        from freq.jarvis.federation import load_sites, sites_to_dicts, federation_summary
+        cfg = load_config()
+        sites = load_sites(cfg.data_dir)
+        self._json_response({
+            "sites": sites_to_dicts(sites),
+            "summary": federation_summary(sites),
+        })
+
+    def _serve_federation_register(self):
+        """Register a new remote FREQ site."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.federation import register_site
+        cfg = load_config()
+        params = _parse_query(self.path)
+        name = params.get("name", "").strip()
+        url = params.get("url", "").strip()
+        secret = params.get("secret", "")
+        if not name or not url:
+            self._json_response({"error": "Missing name or url parameter"}); return
+        ok, msg = register_site(cfg.data_dir, name, url, secret)
+        self._json_response({"ok": ok, "message": msg})
+
+    def _serve_federation_unregister(self):
+        """Remove a registered remote site."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.federation import unregister_site
+        cfg = load_config()
+        params = _parse_query(self.path)
+        name = params.get("name", "").strip()
+        if not name:
+            self._json_response({"error": "Missing name parameter"}); return
+        ok, msg = unregister_site(cfg.data_dir, name)
+        self._json_response({"ok": ok, "message": msg})
+
+    def _serve_federation_poll(self):
+        """Trigger a poll of all remote sites."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.federation import poll_all_sites, sites_to_dicts, federation_summary
+        cfg = load_config()
+        sites = poll_all_sites(cfg.data_dir)
+        self._json_response({
+            "ok": True,
+            "sites": sites_to_dicts(sites),
+            "summary": federation_summary(sites),
+        })
+
+    def _serve_federation_toggle(self):
+        """Enable or disable a registered site."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.federation import load_sites, save_sites
+        cfg = load_config()
+        params = _parse_query(self.path)
+        name = params.get("name", "").strip()
+        if not name:
+            self._json_response({"error": "Missing name parameter"}); return
+        sites = load_sites(cfg.data_dir)
+        found = False
+        for s in sites:
+            if s.name == name:
+                s.enabled = not s.enabled
+                found = True
+                break
+        if not found:
+            self._json_response({"error": f"Site '{name}' not found"}); return
+        save_sites(cfg.data_dir, sites)
+        self._json_response({"ok": True, "enabled": s.enabled})
+
+    # ── Cost Tracking ────────────────────────────────────────────────────
+
+    def _serve_cost(self):
+        """Return fleet cost estimates per host."""
+        from freq.jarvis.cost import load_cost_config, compute_costs, costs_to_dicts, fleet_summary
+        cfg = load_config()
+        cost_cfg = load_cost_config(cfg.conf_dir)
+        with _bg_lock:
+            health = _bg_cache.get("health")
+        if not health:
+            self._json_response({"error": "No health data available yet"}, 503); return
+
+        # Try to get iDRAC power data from infra cache
+        idrac_power = {}
+        with _bg_lock:
+            infra = _bg_cache.get("infra_quick")
+        if infra:
+            for dev in infra.get("devices", []):
+                if dev.get("type") == "idrac" and dev.get("reachable"):
+                    from freq.jarvis.cost import parse_idrac_power
+                    watts = parse_idrac_power(dev.get("raw_sensors", ""))
+                    if watts > 0:
+                        idrac_power[dev.get("label", "")] = watts
+
+        costs = compute_costs(health, idrac_power, cost_cfg)
+        summary = fleet_summary(costs, cost_cfg)
+        self._json_response({
+            "hosts": costs_to_dicts(costs),
+            "summary": summary,
+        })
+
+    def _serve_cost_config(self):
+        """Return current cost configuration."""
+        from freq.jarvis.cost import load_cost_config
+        cfg = load_config()
+        cost_cfg = load_cost_config(cfg.conf_dir)
+        self._json_response({
+            "rate_per_kwh": cost_cfg.rate_per_kwh,
+            "currency": cost_cfg.currency,
+            "pue": cost_cfg.pue,
+        })
+
+    # ── GitOps Config Sync ──────────────────────────────────────────────
+
+    def _serve_gitops_status(self):
+        """Return GitOps sync status and configuration."""
+        from freq.jarvis.gitops import load_gitops_config, load_state, state_to_dict
+        cfg = load_config()
+        go_cfg = load_gitops_config(cfg.conf_dir)
+        state = load_state(cfg.data_dir)
+        self._json_response({
+            "enabled": go_cfg.enabled,
+            "repo_url": go_cfg.repo_url,
+            "branch": go_cfg.branch,
+            "sync_interval": go_cfg.sync_interval,
+            "auto_apply": go_cfg.auto_apply,
+            "state": state_to_dict(state),
+        })
+
+    def _serve_gitops_sync(self):
+        """Trigger a sync (fetch) from remote."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.gitops import load_gitops_config, sync, state_to_dict
+        cfg = load_config()
+        go_cfg = load_gitops_config(cfg.conf_dir)
+        if not go_cfg.enabled:
+            self._json_response({"error": "GitOps not configured — set repo_url in freq.toml [gitops]"}); return
+        state = sync(cfg.data_dir, go_cfg.branch)
+        self._json_response({"ok": True, "state": state_to_dict(state)})
+
+    def _serve_gitops_apply(self):
+        """Apply pending changes (pull)."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.gitops import load_gitops_config, apply_changes, load_state, state_to_dict
+        cfg = load_config()
+        go_cfg = load_gitops_config(cfg.conf_dir)
+        if not go_cfg.enabled:
+            self._json_response({"error": "GitOps not configured"}); return
+        ok, msg = apply_changes(cfg.data_dir, go_cfg.branch)
+        state = load_state(cfg.data_dir)
+        self._json_response({"ok": ok, "message": msg, "state": state_to_dict(state)})
+
+    def _serve_gitops_diff(self):
+        """Show diff between local and remote."""
+        from freq.jarvis.gitops import load_gitops_config, get_diff, get_diff_full
+        cfg = load_config()
+        go_cfg = load_gitops_config(cfg.conf_dir)
+        params = _parse_query(self.path)
+        full = params.get("full", "") == "1"
+        if full:
+            diff = get_diff_full(cfg.data_dir, go_cfg.branch)
+        else:
+            diff = get_diff(cfg.data_dir, go_cfg.branch)
+        self._json_response({"diff": diff})
+
+    def _serve_gitops_log(self):
+        """Return recent commit history."""
+        from freq.jarvis.gitops import get_log
+        cfg = load_config()
+        params = _parse_query(self.path)
+        count = min(int(params.get("count", "20")), 50)
+        commits = get_log(cfg.data_dir, count)
+        self._json_response({"commits": commits})
+
+    def _serve_gitops_rollback(self):
+        """Rollback config to a specific commit."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.gitops import rollback
+        cfg = load_config()
+        params = _parse_query(self.path)
+        commit = params.get("commit", "").strip()
+        if not commit:
+            self._json_response({"error": "Missing commit parameter"}); return
+        ok, msg = rollback(cfg.data_dir, commit)
+        self._json_response({"ok": ok, "message": msg})
+
+    def _serve_gitops_init(self):
+        """Initialize the gitops repo clone."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.gitops import load_gitops_config, init_repo
+        cfg = load_config()
+        go_cfg = load_gitops_config(cfg.conf_dir)
+        if not go_cfg.repo_url:
+            self._json_response({"error": "No repo_url configured in freq.toml [gitops]"}); return
+        ok, msg = init_repo(cfg.data_dir, go_cfg.repo_url, go_cfg.branch)
+        self._json_response({"ok": ok, "message": msg})
 
     # ── Playbook Runner ─────────────────────────────────────────────────
 

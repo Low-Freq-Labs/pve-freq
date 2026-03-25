@@ -710,6 +710,10 @@ th,td{padding:5px 8px;font-size:11px}
   <button class="fleet-btn view-btn" data-view="topology">TOPOLOGY</button>
   <button class="fleet-btn view-btn" data-view="capacity">CAPACITY</button>
   <button class="fleet-btn view-btn" data-view="playbooks">PLAYBOOKS</button>
+  <button class="fleet-btn view-btn" data-view="gitops">GITOPS</button>
+  <button class="fleet-btn view-btn" data-view="costs">COSTS</button>
+  <button class="fleet-btn view-btn" data-view="federation">SITES</button>
+  <button class="fleet-btn view-btn" data-view="chaos">CHAOS</button>
   <div class="flex-1"></div>
   <button class="fleet-btn" onclick="openNewTool()" id="btn-new-tool" style="opacity:0.7;display:none">+ NEW TOOL</button>
   <button class="fleet-btn opacity-7" onclick="nav('system')">&#9881; SETTINGS</button>
@@ -1109,6 +1113,89 @@ th,td{padding:5px 8px;font-size:11px}
   </div>
 </div>
 </div><!-- close playbook-view -->
+
+<div id="gitops-view" class="d-none">
+<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">GitOps Config Sync</h3>
+    <div style="display:flex;gap:8px">
+      <button class="fleet-btn" onclick="gitopsFetch()">SYNC</button>
+      <button class="fleet-btn" onclick="loadGitops()">REFRESH</button>
+    </div>
+  </div>
+  <div id="go-status" style="font-size:12px;color:var(--text-dim);margin-bottom:12px"></div>
+  <div id="go-actions" class="d-none" style="display:flex;gap:8px;margin-bottom:12px">
+    <button class="fleet-btn" onclick="gitopsApply()">APPLY CHANGES</button>
+    <button class="fleet-btn" onclick="gitopsDiff()">VIEW DIFF</button>
+  </div>
+  <div id="go-diff" class="d-none" style="margin-bottom:12px">
+    <pre id="go-diff-content" style="font-size:11px;color:var(--text);background:rgba(0,0,0,0.3);padding:12px;border-radius:6px;white-space:pre-wrap;max-height:300px;overflow-y:auto"></pre>
+  </div>
+  <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">COMMIT HISTORY</h4>
+  <div id="go-log"></div>
+</div>
+</div><!-- close gitops-view -->
+
+<div id="costs-view" class="d-none">
+<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">Fleet Cost Tracker</h3>
+    <button class="fleet-btn" onclick="loadCosts()">REFRESH</button>
+  </div>
+  <div id="cost-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
+  <div id="cost-table"></div>
+</div>
+</div><!-- close costs-view -->
+
+<div id="federation-view" class="d-none">
+<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">Multi-Site Federation</h3>
+    <div style="display:flex;gap:8px">
+      <button class="fleet-btn" onclick="fedPoll()">POLL ALL</button>
+      <button class="fleet-btn" onclick="loadFederation()">REFRESH</button>
+    </div>
+  </div>
+  <div id="fed-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
+  <div id="fed-sites"></div>
+  <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--input-border)">
+    <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">REGISTER NEW SITE</h4>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="fed-name" placeholder="Site name" style="flex:1;min-width:100px" class="freq-input">
+      <input id="fed-url" placeholder="https://freq.dc02:8888" style="flex:2;min-width:200px" class="freq-input">
+      <input id="fed-secret" placeholder="Shared secret (optional)" type="password" style="flex:1;min-width:100px" class="freq-input">
+      <button class="fleet-btn" onclick="fedRegister()">REGISTER</button>
+    </div>
+  </div>
+</div>
+</div><!-- close federation-view -->
+
+<div id="chaos-view" class="d-none">
+<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--red)">Chaos Engineering</h3>
+    <button class="fleet-btn" onclick="loadChaos()">REFRESH</button>
+  </div>
+  <div style="background:rgba(255,60,60,0.08);border:1px solid rgba(255,60,60,0.3);border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text-dim)">
+    Chaos experiments intentionally disrupt services to test recovery. Production hosts are blocked by safety gates. Use only on lab/dev infrastructure.
+  </div>
+  <div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--input-border)">
+    <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">NEW EXPERIMENT</h4>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <input id="chaos-name" placeholder="Experiment name" class="freq-input" style="flex:1;min-width:120px">
+      <select id="chaos-type" class="freq-input" style="flex:1;min-width:120px">
+        <option value="">Select type...</option>
+      </select>
+      <input id="chaos-target" placeholder="Host label" class="freq-input" style="flex:1;min-width:100px">
+      <input id="chaos-service" placeholder="Service/container" class="freq-input" style="flex:1;min-width:100px">
+      <input id="chaos-duration" placeholder="Duration (s)" type="number" value="60" class="freq-input" style="width:100px">
+      <button class="fleet-btn" style="background:var(--red);color:#fff" onclick="chaosRun()">INJECT</button>
+    </div>
+  </div>
+  <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">EXPERIMENT LOG</h4>
+  <div id="chaos-log"></div>
+</div>
+</div><!-- close chaos-view -->
 
 </div><!-- close p-home -->
 
@@ -1843,7 +1930,7 @@ var qf=document.getElementById('home-quote-footer');if(qf)qf.textContent=rq();
 var _currentView='home';
 var VIEW_IDS=['home','fleet','docker','security','lab','policies','ops'];
 var VIEW_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',security:'SECURITY',lab:'LAB TOOLS',policies:'POLICIES',ops:'OPERATIONS'};
-var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityPage()},lab:function(){loadLabTools()},policies:function(){loadPoliciesPage()},ops:function(){loadOpsPage()},topology:function(){loadTopology()},capacity:function(){loadCapacity()},playbooks:function(){loadPlaybooks()}};
+var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityPage()},lab:function(){loadLabTools()},policies:function(){loadPoliciesPage()},ops:function(){loadOpsPage()},topology:function(){loadTopology()},capacity:function(){loadCapacity()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},costs:function(){loadCosts()},federation:function(){loadFederation()},chaos:function(){loadChaos()}};
 
 function nav(p){
   try{
@@ -5828,6 +5915,258 @@ function runPbStep(idx){
     if(r.status==='pass'){_pbCurrentStep=idx+1;}
     _renderPbSteps();
   }).catch(function(e){_pbSteps[idx]._status='fail';_pbSteps[idx]._error=''+e;_renderPbSteps();});
+}
+
+// ── GITOPS CONFIG SYNC ──────────────────────────────────────────────
+function loadGitops(){
+  var st=document.getElementById('go-status');
+  var log=document.getElementById('go-log');
+  var acts=document.getElementById('go-actions');
+  if(!st||!log)return;
+  st.innerHTML='<div class="skeleton"></div>';
+  fetch('/api/gitops/status?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(!d.enabled){
+      st.innerHTML='<div class="c-dim-fs12">GitOps not configured. Add <code>[gitops]</code> section with <code>repo_url</code> to freq.toml.</div>';
+      if(acts)acts.classList.add('d-none');
+      log.innerHTML='';
+      return;
+    }
+    var s=d.state||{};
+    var statusColor=s.status==='error'?'var(--red)':s.status==='changes_pending'?'var(--yellow)':'var(--green)';
+    var h='<div style="display:flex;gap:20px;flex-wrap:wrap">';
+    h+='<div>Repo: <strong>'+_esc(d.repo_url)+'</strong></div>';
+    h+='<div>Branch: <strong>'+_esc(d.branch)+'</strong></div>';
+    h+='<div>Status: <span style="color:'+statusColor+'">'+_esc(s.status)+'</span></div>';
+    if(s.last_commit)h+='<div>Commit: <code>'+_esc(s.last_commit)+'</code> '+_esc(s.last_message)+'</div>';
+    if(s.pending_changes>0)h+='<div style="color:var(--yellow)">'+s.pending_changes+' pending changes</div>';
+    if(s.last_error)h+='<div style="color:var(--red)">Error: '+_esc(s.last_error)+'</div>';
+    if(s.last_sync>0)h+='<div>Last sync: '+new Date(s.last_sync*1000).toLocaleString()+'</div>';
+    h+='</div>';
+    st.innerHTML=h;
+    if(acts){if(s.pending_changes>0)acts.classList.remove('d-none');else acts.classList.add('d-none');}
+    // Load commit log
+    fetch('/api/gitops/log?token='+_authToken).then(function(r){return r.json()}).then(function(ld){
+      var commits=ld.commits||[];
+      if(commits.length===0){log.innerHTML='<div class="c-dim-fs12">No commit history.</div>';return;}
+      var t='<table><tr><th>Hash</th><th>Message</th><th>Date</th><th>Author</th><th></th></tr>';
+      commits.forEach(function(c){
+        t+='<tr><td><code>'+_esc(c.hash)+'</code></td><td>'+_esc(c.message)+'</td>';
+        t+='<td class="c-dim-fs12">'+_esc(c.date)+'</td><td>'+_esc(c.author)+'</td>';
+        t+='<td><button class="fleet-btn" onclick="gitopsRollback(\''+_esc(c.hash)+'\')">ROLLBACK</button></td></tr>';
+      });
+      t+='</table>';
+      log.innerHTML=t;
+    });
+  }).catch(function(e){st.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
+}
+function gitopsFetch(){
+  toast('Syncing...','info');
+  fetch('/api/gitops/sync?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(d.ok)toast('Sync complete','success');
+    else toast('Error: '+(d.error||'unknown'),'error');
+    loadGitops();
+  }).catch(function(e){toast('Failed: '+e,'error');});
+}
+function gitopsApply(){
+  toast('Applying changes...','info');
+  fetch('/api/gitops/apply?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(d.ok)toast(d.message||'Applied','success');
+    else toast('Error: '+(d.error||'unknown'),'error');
+    loadGitops();
+  }).catch(function(e){toast('Failed: '+e,'error');});
+}
+function gitopsDiff(){
+  var el=document.getElementById('go-diff');
+  var content=document.getElementById('go-diff-content');
+  if(!el||!content)return;
+  el.classList.toggle('d-none');
+  if(!el.classList.contains('d-none')){
+    content.textContent='Loading diff...';
+    fetch('/api/gitops/diff?token='+_authToken+'&full=1').then(function(r){return r.json()}).then(function(d){
+      content.textContent=d.diff||'No differences.';
+    }).catch(function(e){content.textContent='Error: '+e;});
+  }
+}
+function gitopsRollback(hash){
+  if(!confirm('Roll back config to commit '+hash+'?'))return;
+  fetch('/api/gitops/rollback?token='+_authToken+'&commit='+encodeURIComponent(hash)).then(function(r){return r.json()}).then(function(d){
+    if(d.ok)toast(d.message||'Rolled back','success');
+    else toast('Error: '+(d.error||'unknown'),'error');
+    loadGitops();
+  }).catch(function(e){toast('Failed: '+e,'error');});
+}
+
+// ── COST TRACKING ───────────────────────────────────────────────────
+function loadCosts(){
+  var sum=document.getElementById('cost-summary');
+  var tbl=document.getElementById('cost-table');
+  if(!tbl)return;
+  tbl.innerHTML='<div class="skeleton"></div>';
+  fetch('/api/cost?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(d.error){tbl.innerHTML='<span class="c-red">'+_esc(d.error)+'</span>';return;}
+    var s=d.summary||{};
+    if(sum){
+      var cur=s.currency||'USD';
+      sum.innerHTML=
+        '<div style="background:rgba(123,47,190,0.1);padding:12px 16px;border-radius:8px;text-align:center;flex:1;min-width:120px">'+
+          '<div class="c-dim-fs12">TOTAL / MONTH</div><div style="font-size:20px;font-weight:700;color:var(--purple-light)">'+cur+' '+s.total_cost_month+'</div></div>'+
+        '<div style="background:rgba(123,47,190,0.1);padding:12px 16px;border-radius:8px;text-align:center;flex:1;min-width:120px">'+
+          '<div class="c-dim-fs12">TOTAL / YEAR</div><div style="font-size:20px;font-weight:700;color:var(--text)">'+cur+' '+s.total_cost_year+'</div></div>'+
+        '<div style="background:rgba(123,47,190,0.1);padding:12px 16px;border-radius:8px;text-align:center;flex:1;min-width:120px">'+
+          '<div class="c-dim-fs12">TOTAL WATTS</div><div style="font-size:20px;font-weight:700;color:var(--yellow)">'+s.total_watts+'W</div></div>'+
+        '<div style="background:rgba(123,47,190,0.1);padding:12px 16px;border-radius:8px;text-align:center;flex:1;min-width:120px">'+
+          '<div class="c-dim-fs12">kWh / MONTH</div><div style="font-size:20px;font-weight:700;color:var(--text-dim)">'+s.total_kwh_month+'</div></div>'+
+        '<div style="background:rgba(123,47,190,0.1);padding:12px 16px;border-radius:8px;text-align:center;flex:1;min-width:120px">'+
+          '<div class="c-dim-fs12">RATE</div><div style="font-size:16px;font-weight:700;color:var(--text-dim)">'+cur+' '+s.rate_per_kwh+'/kWh &middot; PUE '+s.pue+'</div></div>';
+    }
+    var hosts=d.hosts||[];
+    if(hosts.length===0){tbl.innerHTML='<div class="c-dim-fs12" style="text-align:center;padding:20px">No host data.</div>';return;}
+    var h='<table><tr><th>Host</th><th>Watts</th><th>Source</th><th>kWh/mo</th><th>Cost/mo</th><th>RAM</th><th>Containers</th></tr>';
+    hosts.forEach(function(c){
+      var srcColor=c.watts_source==='idrac'?'var(--green)':'var(--text-dim)';
+      h+='<tr><td><strong>'+_esc(c.label)+'</strong></td>';
+      h+='<td>'+c.watts+'W</td>';
+      h+='<td style="color:'+srcColor+'">'+c.watts_source+'</td>';
+      h+='<td>'+c.kwh_month+'</td>';
+      h+='<td style="color:var(--purple-light)">$'+c.cost_month+'</td>';
+      h+='<td>'+c.ram_gb+'GB</td>';
+      h+='<td>'+c.vms+'</td></tr>';
+    });
+    h+='</table>';
+    tbl.innerHTML=h;
+  }).catch(function(e){tbl.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
+}
+
+// ── FEDERATION ──────────────────────────────────────────────────────
+function loadFederation(){
+  var sum=document.getElementById('fed-summary');
+  var sites=document.getElementById('fed-sites');
+  if(!sites)return;
+  sites.innerHTML='<div class="skeleton"></div>';
+  fetch('/api/federation/status?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    var s=d.summary||{};
+    if(sum){
+      sum.innerHTML=
+        '<div style="background:rgba(123,47,190,0.1);padding:10px 14px;border-radius:8px;text-align:center;flex:1;min-width:100px">'+
+          '<div class="c-dim-fs12">SITES</div><div style="font-size:18px;font-weight:700;color:var(--purple-light)">'+s.total_sites+'</div></div>'+
+        '<div style="background:rgba(123,47,190,0.1);padding:10px 14px;border-radius:8px;text-align:center;flex:1;min-width:100px">'+
+          '<div class="c-dim-fs12">REACHABLE</div><div style="font-size:18px;font-weight:700;color:var(--green)">'+s.reachable_sites+'</div></div>'+
+        '<div style="background:rgba(123,47,190,0.1);padding:10px 14px;border-radius:8px;text-align:center;flex:1;min-width:100px">'+
+          '<div class="c-dim-fs12">TOTAL HOSTS</div><div style="font-size:18px;font-weight:700;color:var(--text)">'+s.total_hosts+'</div></div>'+
+        '<div style="background:rgba(123,47,190,0.1);padding:10px 14px;border-radius:8px;text-align:center;flex:1;min-width:100px">'+
+          '<div class="c-dim-fs12">HEALTHY</div><div style="font-size:18px;font-weight:700;color:var(--green)">'+s.total_healthy+'</div></div>';
+    }
+    var sl=d.sites||[];
+    if(sl.length===0){sites.innerHTML='<div class="c-dim-fs12" style="text-align:center;padding:20px">No sites registered. Add a remote FREQ instance below.</div>';return;}
+    var h='<table><tr><th>Site</th><th>URL</th><th>Status</th><th>Version</th><th>Hosts</th><th>Healthy</th><th>Last Seen</th><th>Actions</th></tr>';
+    sl.forEach(function(site){
+      var sc=site.last_status==='ok'?'var(--green)':site.last_status==='unreachable'?'var(--red)':'var(--text-dim)';
+      h+='<tr'+(site.enabled?'':' style="opacity:0.5"')+'><td><strong>'+_esc(site.name)+'</strong></td>';
+      h+='<td class="c-dim-fs12">'+_esc(site.url)+'</td>';
+      h+='<td style="color:'+sc+'">'+_esc(site.last_status)+'</td>';
+      h+='<td>'+_esc(site.last_version||'—')+'</td>';
+      h+='<td>'+site.last_hosts+'</td>';
+      h+='<td>'+site.last_healthy+'</td>';
+      h+='<td class="c-dim-fs12">'+(site.age>=0?(site.age<60?site.age+'s':Math.round(site.age/60)+'m')+' ago':'never')+'</td>';
+      h+='<td style="display:flex;gap:4px">';
+      h+='<button class="fleet-btn" onclick="fedToggle(\''+_esc(site.name)+'\')">'+(site.enabled?'DISABLE':'ENABLE')+'</button>';
+      h+='<button class="fleet-btn" style="color:var(--red)" onclick="fedRemove(\''+_esc(site.name)+'\')">REMOVE</button>';
+      h+='</td></tr>';
+    });
+    h+='</table>';
+    sites.innerHTML=h;
+  }).catch(function(e){sites.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
+}
+function fedPoll(){
+  toast('Polling all sites...','info');
+  fetch('/api/federation/poll?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(d.ok)toast('Poll complete','success');
+    else toast('Error: '+(d.error||'unknown'),'error');
+    loadFederation();
+  }).catch(function(e){toast('Failed: '+e,'error');});
+}
+function fedRegister(){
+  var name=document.getElementById('fed-name').value.trim();
+  var url=document.getElementById('fed-url').value.trim();
+  var secret=document.getElementById('fed-secret').value;
+  if(!name||!url){toast('Name and URL required','error');return;}
+  var q='/api/federation/register?token='+_authToken+'&name='+encodeURIComponent(name)+'&url='+encodeURIComponent(url);
+  if(secret)q+='&secret='+encodeURIComponent(secret);
+  fetch(q).then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast(d.message||'Registered','success');document.getElementById('fed-name').value='';document.getElementById('fed-url').value='';document.getElementById('fed-secret').value='';}
+    else toast('Error: '+(d.error||'unknown'),'error');
+    loadFederation();
+  }).catch(function(e){toast('Failed: '+e,'error');});
+}
+function fedToggle(name){
+  fetch('/api/federation/toggle?token='+_authToken+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    if(d.ok)toast(name+' '+(d.enabled?'enabled':'disabled'),'success');
+    else toast('Error: '+(d.error||'unknown'),'error');
+    loadFederation();
+  }).catch(function(e){toast('Failed: '+e,'error');});
+}
+function fedRemove(name){
+  if(!confirm('Remove site "'+name+'"?'))return;
+  fetch('/api/federation/unregister?token='+_authToken+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    if(d.ok)toast(d.message||'Removed','success');
+    else toast('Error: '+(d.error||'unknown'),'error');
+    loadFederation();
+  }).catch(function(e){toast('Failed: '+e,'error');});
+}
+
+// ── CHAOS ENGINEERING ───────────────────────────────────────────────
+function loadChaos(){
+  var log=document.getElementById('chaos-log');
+  var sel=document.getElementById('chaos-type');
+  if(!log)return;
+  // Load experiment types into dropdown
+  if(sel&&sel.options.length<=1){
+    fetch('/api/chaos/types?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+      (d.types||[]).forEach(function(t){
+        var o=document.createElement('option');o.value=t.type;o.textContent=t.type+' — '+t.description;
+        sel.appendChild(o);
+      });
+    });
+  }
+  // Load experiment log
+  log.innerHTML='<div class="skeleton"></div>';
+  fetch('/api/chaos/log?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    var exps=d.experiments||[];
+    if(exps.length===0){log.innerHTML='<div class="c-dim-fs12" style="text-align:center;padding:20px">No experiments run yet.</div>';return;}
+    var h='<table><tr><th>Name</th><th>Type</th><th>Target</th><th>Status</th><th>Duration</th><th>Recovery</th><th>Error</th></tr>';
+    exps.forEach(function(e){
+      var sc=e.status==='completed'?'var(--green)':e.status==='blocked'?'var(--yellow)':'var(--red)';
+      h+='<tr><td><strong>'+_esc(e.experiment_name)+'</strong></td>';
+      h+='<td>'+_esc(e.experiment_type)+'</td>';
+      h+='<td>'+_esc(e.target_host)+'</td>';
+      h+='<td style="color:'+sc+'">'+_esc(e.status)+'</td>';
+      h+='<td>'+(e.duration>0?e.duration+'s':'—')+'</td>';
+      h+='<td>'+(e.recovery_time>0?e.recovery_time+'s':'—')+'</td>';
+      h+='<td class="c-dim-fs12">'+_esc(e.error||'—')+'</td></tr>';
+    });
+    h+='</table>';
+    log.innerHTML=h;
+  }).catch(function(e){log.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
+}
+function chaosRun(){
+  var name=document.getElementById('chaos-name').value.trim();
+  var type=document.getElementById('chaos-type').value;
+  var target=document.getElementById('chaos-target').value.trim();
+  var service=document.getElementById('chaos-service').value.trim();
+  var duration=document.getElementById('chaos-duration').value||'60';
+  if(!name||!type||!target){toast('Name, type, and target are required','error');return;}
+  if(!confirm('Run chaos experiment "'+name+'" ('+type+') on '+target+'? This will intentionally disrupt the service.')){return;}
+  toast('Running experiment...','info');
+  var q='/api/chaos/run?token='+_authToken+'&name='+encodeURIComponent(name)+'&type='+encodeURIComponent(type);
+  q+='&target='+encodeURIComponent(target)+'&service='+encodeURIComponent(service)+'&duration='+duration;
+  fetch(q).then(function(r){return r.json()}).then(function(d){
+    if(d.error){toast('Error: '+d.error,'error');return;}
+    var r=d.result||{};
+    if(r.status==='completed')toast('Experiment completed — recovery: '+(r.recovery_time||0)+'s','success');
+    else if(r.status==='blocked')toast('Blocked: '+(r.error||'safety gate'),'error');
+    else toast('Status: '+r.status+' '+(r.error||''),'error');
+    loadChaos();
+  }).catch(function(e){toast('Failed: '+e,'error');});
 }
 
 function runDoctor(){
