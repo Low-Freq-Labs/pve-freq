@@ -5,6 +5,7 @@ Safe defaults are set BEFORE loading any config — if config is broken, FREQ st
 This is Trap #4 from the 5 Traps: config vs code confusion.
 """
 import os
+import shutil
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -183,6 +184,73 @@ def load_toml(path: str) -> dict:
         return {}
 
 
+def bootstrap_conf(install_dir: str) -> bool:
+    """Seed conf/ and data/ directories from package data on first run.
+
+    Returns True if bootstrap happened, False if conf/ already exists.
+    Idempotent — never overwrites existing files.
+    """
+    conf_dir = os.path.join(install_dir, "conf")
+    if os.path.isdir(conf_dir) and os.listdir(conf_dir):
+        return False  # Already has config files
+
+    try:
+        from freq.data import get_data_path
+    except ImportError:
+        return False  # Package data not available (shouldn't happen)
+
+    templates = get_data_path() / "conf-templates"
+    if not templates.is_dir():
+        return False
+
+    os.makedirs(conf_dir, exist_ok=True)
+
+    # Copy all template files (*.example, *.toml, *.conf)
+    for src in templates.iterdir():
+        if src.is_file():
+            dst = os.path.join(conf_dir, src.name)
+            if not os.path.exists(dst):
+                shutil.copy2(str(src), dst)
+
+    # Copy personality/
+    personality_src = templates / "personality"
+    if personality_src.is_dir():
+        personality_dst = os.path.join(conf_dir, "personality")
+        os.makedirs(personality_dst, exist_ok=True)
+        for src in personality_src.glob("*.toml"):
+            dst = os.path.join(personality_dst, src.name)
+            if not os.path.exists(dst):
+                shutil.copy2(str(src), dst)
+
+    # Copy plugins/
+    plugins_src = templates / "plugins"
+    if plugins_src.is_dir():
+        plugins_dst = os.path.join(conf_dir, "plugins")
+        os.makedirs(plugins_dst, exist_ok=True)
+        for src in plugins_src.glob("*.py"):
+            dst = os.path.join(plugins_dst, src.name)
+            if not os.path.exists(dst):
+                shutil.copy2(str(src), dst)
+
+    # Create data directories
+    for subdir in ("log", "vault", "keys", "cache", "knowledge"):
+        os.makedirs(os.path.join(install_dir, "data", subdir), exist_ok=True)
+
+    # Seed knowledge base
+    try:
+        knowledge_src = get_data_path() / "knowledge"
+        if knowledge_src.is_dir():
+            knowledge_dst = os.path.join(install_dir, "data", "knowledge")
+            for src in knowledge_src.glob("*.toml"):
+                dst = os.path.join(knowledge_dst, src.name)
+                if not os.path.exists(dst):
+                    shutil.copy2(str(src), dst)
+    except Exception:
+        pass  # Knowledge base is optional
+
+    return True
+
+
 def load_config(install_dir: Optional[str] = None) -> FreqConfig:
     """Load FREQ configuration with safe defaults.
 
@@ -192,6 +260,9 @@ def load_config(install_dir: Optional[str] = None) -> FreqConfig:
     cfg = FreqConfig()
     cfg.install_dir = install_dir or resolve_install_dir()
     _resolve_paths(cfg)
+
+    # Bootstrap conf/ from package data if missing
+    bootstrap_conf(cfg.install_dir)
 
     # Try TOML config first
     toml_path = os.path.join(cfg.conf_dir, "freq.toml")
