@@ -1,71 +1,200 @@
-# freq-dev — FREQ v2.0 Python Core Builder
+# PVE FREQ
 
-## What This Is
+Datacenter management CLI for Proxmox homelabbers. One tool to manage your entire fleet.
 
-An autonomous Claude Code specialist environment for building PVE FREQ v2.0 — a Python rewrite of the 17,720-line bash datacenter management platform. This specialist has full SSH access to a controlled test zone (VMs 5000-5999) and will build, deploy, test, destroy, and rebuild until every command and menu works.
-
-## How to Launch
-
-```bash
-cd /home/freq-ops/dev-ops/rick
-claude
-```
-
-That's it. Claude Code reads `CLAUDE.md` (the mission), `.claude/settings.json` (permissions + hooks), and the SessionStart hook verifies the constitution hash. The agent knows what to build, where to build it, and how to test it.
+**65 commands. Zero dependencies. Pure Python. Works offline.**
 
 ## What It Does
 
-1. Reads the bash FREQ source at `src/pve-freq/` (55 commands, 39 libs)
-2. Builds a Python equivalent with 1:1 command parity
-3. Deploys to VM 999 (10.25.255.50) via SSH
-4. Tests against live DC01 infrastructure
-5. When ready: destroys VM 999, recreates clean, runs `freq init`, verifies everything works
-6. Repeats until all 14 menus have working data
+- **Fleet Operations** — SSH into any host, run commands across your fleet in parallel, view system info, diagnose issues
+- **VM Management** — Create, clone, destroy, resize, snapshot, migrate, power control, NIC management — all from one CLI
+- **Security** — Automated auditing, SSH hardening, encrypted credential vault, RBAC user management, policy engine with drift detection
+- **Infrastructure** — pfSense, TrueNAS, Dell iDRAC, network switches, ZFS — unified interface
+- **Monitoring** — Real-time fleet health, web dashboard at `http://localhost:8888`, continuous patrol with auto-remediation
+- **Media Stack** — Plex, Sonarr, Radarr, Tdarr, qBittorrent, SABnzbd, Prowlarr — status, health, actions
 
-## Safety
+## Quick Install
 
-| Zone | Access |
-|------|--------|
-| VMs 5000-5999 on pve02 | FULL (create, destroy, clone, modify) |
-| VM 999 (Nexus) | Local dev + build target |
-| Production VMs (0-899) | BLOCKED by PreToolUse hook |
-| Production credentials | BLOCKED by deny rules |
-| Live fleet (read-only) | ALLOWED (SSH for data gathering) |
-
-## Backups (taken before this was created)
-
-- **vzdump:** VM 999 full snapshot on pve01 local storage (1.21GB, 2026-03-13)
-- **Source:** `/mnt/obsidian/backup/freq-v1-pre-rebuild/pve-freq-full-backup-s156.tar.gz`
-- **Snapshot:** VM 999 has PVE snapshot `freq-snap-20260309-231551`
-
-## Recovery
-
-If something goes wrong:
 ```bash
-# Restore VM 999 from snapshot (route through JARVIS for root ops)
-sudo -u freq-ops ssh -n -o StrictHostKeyChecking=no freq-ops@10.25.255.27 'sudo qm rollback 999 freq-snap-20260309-231551'
-
-# Or just read the break-glass doc
-cat /home/freq-ops/dev-ops/rick/docs/BREAK-GLASS.md
+curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq/main/install.sh | sudo bash
 ```
 
-## Completion Gate
+Or install manually:
 
-The session is NOT done until:
-- [ ] `freq init` deploys to a clean Debian 13 VM
-- [ ] All 55 commands have Python implementations
-- [ ] All 14 TUI menus render with real data
-- [ ] VM 999 was destroyed, recreated, deployed, and verified
+```bash
+git clone https://github.com/Low-Freq-Labs/pve-freq.git /opt/pve-freq
+cd /opt/pve-freq
+sudo pip3 install --no-deps .
+```
 
-## Files
+Or from local source:
+
+```bash
+sudo bash install.sh --from-local /path/to/pve-freq
+```
+
+## First Run
+
+```bash
+# Check your system
+freq doctor
+
+# Edit your cluster config (PVE nodes, service account, VLANs)
+sudo nano /opt/pve-freq/conf/freq.toml
+
+# Deploy to your fleet — creates service account, SSH keys, deploys to all hosts
+sudo freq init
+
+# See your fleet
+freq status
+```
+
+## Commands
+
+### Utilities
+| Command | Description |
+|---------|-------------|
+| `freq version` | Show version and branding |
+| `freq help` | Full command reference |
+| `freq doctor` | 13-point self-diagnostic |
+| `freq menu` | Interactive TUI menu |
+
+### Fleet Operations
+| Command | Description |
+|---------|-------------|
+| `freq status` | Fleet health summary (parallel SSH ping) |
+| `freq dashboard` | Fleet dashboard overview |
+| `freq exec <target> <cmd>` | Run command across fleet |
+| `freq info <host>` | System info for a host |
+| `freq detail <host>` | Deep host inventory (30+ data points) |
+| `freq diagnose <host>` | Deep diagnostic scan |
+| `freq ssh <host>` | SSH to a fleet host |
+| `freq docker <host>` | Container discovery and management |
+| `freq log <host>` | View remote host logs |
+| `freq keys` | SSH key management |
+| `freq boundaries` | Fleet permission tiers and categories |
+
+### VM Management
+| Command | Description |
+|---------|-------------|
+| `freq list` | List VMs across PVE cluster |
+| `freq create` | Create a new VM |
+| `freq clone <source>` | Clone with optional network config |
+| `freq destroy <target>` | Destroy a VM |
+| `freq resize <target>` | Resize cores, RAM, disk |
+| `freq power <action> <vmid>` | Start, stop, reboot, shutdown, status |
+| `freq snapshot [create\|list\|delete]` | Snapshot management |
+| `freq nic <action> <vmid>` | NIC add, clear, change-ip, change-id, check-ip |
+| `freq migrate <target> --node` | Live migration between nodes |
+| `freq import` | Import cloud image as VM |
+| `freq template <vmid>` | Convert to template |
+| `freq rename <vmid> --name` | Rename a VM |
+| `freq sandbox <template>` | Quick-spawn from template |
+
+### Host Management
+| Command | Description |
+|---------|-------------|
+| `freq hosts` | List and manage fleet hosts |
+| `freq discover` | Scan network for new hosts |
+| `freq groups` | Manage host groups |
+| `freq bootstrap <host>` | Bootstrap a new host |
+| `freq onboard <host>` | Onboard to fleet |
+
+### Security & Policy
+| Command | Description |
+|---------|-------------|
+| `freq vault <action>` | Encrypted credential store (AES-256-CBC) |
+| `freq audit` | Security audit |
+| `freq harden <target>` | Apply SSH hardening |
+| `freq check <policy>` | Check compliance (dry run) |
+| `freq fix <policy>` | Apply remediation |
+| `freq diff <policy>` | Show drift as git-style diff |
+| `freq policies` | List available policies |
+
+### Infrastructure
+| Command | Description |
+|---------|-------------|
+| `freq pfsense` | pfSense firewall management |
+| `freq truenas` | TrueNAS pool/share management |
+| `freq zfs` | ZFS operations |
+| `freq switch` | Cisco Catalyst VLAN/port management |
+| `freq idrac` | Dell iDRAC BMC management |
+| `freq media <action>` | Media stack (40+ subcommands) |
+
+### Monitoring
+| Command | Description |
+|---------|-------------|
+| `freq health` | Comprehensive fleet health check |
+| `freq sweep` | Full audit + policy sweep pipeline |
+| `freq patrol` | Continuous monitoring + drift detection |
+| `freq ntp` | Fleet NTP check/fix |
+| `freq fleet-update` | Fleet OS update check/apply |
+
+### Web Dashboard
+| Command | Description |
+|---------|-------------|
+| `freq serve` | Start web dashboard on port 8888 |
+
+The dashboard provides 89 API endpoints, 7 views (Home, Fleet, Docker, Security, Lab, Policies, Ops), and real-time fleet monitoring — all as a single-file SPA with zero JavaScript dependencies.
+
+## Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **OS** | Debian 11-13, Ubuntu 20.04-24.04, Rocky/RHEL/AlmaLinux 8-9 |
+| **Python** | 3.7+ (ships with all supported distros) |
+| **SSH** | openssh-client (pre-installed on all Linux) |
+| **Optional** | sshpass (for initial fleet deployment with password auth) |
+
+Zero external Python packages. Every import is stdlib. No pip dependencies. No compiled extensions.
+
+## How It Works
+
+FREQ runs on a single management host. It SSHs into your Proxmox nodes and fleet VMs to manage them. No agents on managed hosts — just SSH access.
+
+```
+                          ┌─────────────┐
+                     ┌───>│  PVE Node 1  │
+                     │    └─────────────┘
+┌──────────────┐     │    ┌─────────────┐
+│  Management  │─SSH─┼───>│  PVE Node 2  │
+│    Host      │     │    └─────────────┘
+│   (freq)     │     │    ┌─────────────┐
+└──────────────┘     ├───>│  Docker VM   │
+                     │    └─────────────┘
+                     │    ┌─────────────┐
+                     ├───>│  pfSense     │
+                     │    └─────────────┘
+                     │    ┌─────────────┐
+                     └───>│  TrueNAS     │
+                          └─────────────┘
+```
+
+## Configuration
+
+All config lives in `/opt/pve-freq/conf/`:
 
 | File | Purpose |
 |------|---------|
-| `CLAUDE.md` | Mission + rules + architecture + build order |
-| `.claude/settings.json` | Permissions + hooks |
-| `.claude/skills/` | /ticket, /checkpoint, /preflight, /test |
-| `src/pve-freq/` | Bash v1.0.0 reference (17,720 lines) |
-| `cold-storage/` | Constitution hash + backup |
-| `docs/BREAK-GLASS.md` | Emergency procedures |
-| `docs/BOOTSTRAP-SCOPE-LOCK.md` | What was done to set this up |
-| `~/archive/` | Ghost archive (old FREQ versions, mailbox, workspaces) |
+| `freq.toml` | Main config — cluster, SSH, VM defaults, safety rules |
+| `hosts.conf` | Fleet host registry — IP, label, type, groups |
+| `fleet-boundaries.toml` | VM permission tiers (probe/operator/admin) |
+| `vlans.toml` | VLAN definitions |
+| `distros.toml` | Cloud image definitions for `freq import` |
+| `containers.toml` | Docker container registry |
+| `personality/` | Personality packs — celebrations, vibes, branding |
+| `plugins/` | Custom command plugins (drop .py files here) |
+
+## Uninstall
+
+```bash
+# Remove FREQ from fleet hosts first
+sudo freq init --uninstall
+
+# Remove FREQ from management host
+sudo bash install.sh --uninstall
+```
+
+## License
+
+MIT

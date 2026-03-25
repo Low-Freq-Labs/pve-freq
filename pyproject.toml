@@ -5,10 +5,33 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pve-freq"
 version = "2.0.0"
-description = "Datacenter management CLI for homelabbers"
+description = "Datacenter management CLI for Proxmox homelabbers"
 requires-python = ">=3.7"
 license = {text = "MIT"}
-authors = [{name = "PVE FREQ"}]
+readme = "README.md"
+authors = [{name = "LOW FREQ Labs"}]
+keywords = ["proxmox", "datacenter", "fleet", "management", "cli", "homelab", "pve"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Systems Administration",
+]
+
+[project.urls]
+Homepage = "https://github.com/Low-Freq-Labs/pve-freq"
+Repository = "https://github.com/Low-Freq-Labs/pve-freq"
+Issues = "https://github.com/Low-Freq-Labs/pve-freq/issues"
 
 [project.scripts]
 freq = "freq.cli:main"

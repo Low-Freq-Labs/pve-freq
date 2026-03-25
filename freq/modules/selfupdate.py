@@ -18,20 +18,37 @@ UPDATE_APPLY_TIMEOUT = 60
 
 def _detect_install_method(cfg: FreqConfig) -> str:
     """Detect how FREQ was installed."""
+    # Check for install.sh marker first (most specific)
+    marker = os.path.join(cfg.install_dir, ".install-method")
+    if os.path.isfile(marker):
+        try:
+            with open(marker) as f:
+                method = f.read().strip()
+            if method in ("tarball", "git-release", "local"):
+                return method
+        except OSError:
+            pass
+
     # Check for .git directory (development install)
     git_dir = os.path.join(cfg.install_dir, ".git")
     if os.path.isdir(git_dir):
         return "git"
 
     # Check for dpkg
-    r = subprocess.run(["dpkg", "-s", "pve-freq"], capture_output=True, text=True)
-    if r.returncode == 0:
-        return "dpkg"
+    try:
+        r = subprocess.run(["dpkg", "-s", "pve-freq"], capture_output=True, text=True)
+        if r.returncode == 0:
+            return "dpkg"
+    except FileNotFoundError:
+        pass
 
     # Check for rpm
-    r = subprocess.run(["rpm", "-q", "pve-freq"], capture_output=True, text=True)
-    if r.returncode == 0:
-        return "rpm"
+    try:
+        r = subprocess.run(["rpm", "-q", "pve-freq"], capture_output=True, text=True)
+        if r.returncode == 0:
+            return "rpm"
+    except FileNotFoundError:
+        pass
 
     return "manual"
 

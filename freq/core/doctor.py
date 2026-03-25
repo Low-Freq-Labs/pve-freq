@@ -97,56 +97,41 @@ def run(cfg: FreqConfig) -> int:
 # --- System ---
 
 def _check_python(cfg: FreqConfig) -> int:
-    from freq.core.compat import MIN_PYTHON
-    ver = sys.version_info
-    ver_str = f"{ver.major}.{ver.minor}.{ver.micro}"
-    if ver >= MIN_PYTHON:
-        extra = ""
-        if ver < (3, 11):
-            extra = " (using fallback TOML parser)"
-        fmt.step_ok(f"Python {ver_str}{extra}")
+    from freq.core.preflight import check_python_version
+    ok, msg = check_python_version()
+    if ok:
+        fmt.step_ok(msg)
         return 0
     else:
-        fmt.step_fail(f"Python {ver_str} (need >= {MIN_PYTHON[0]}.{MIN_PYTHON[1]})")
+        fmt.step_fail(msg)
         return 1
 
 
 def _check_platform(cfg: FreqConfig) -> int:
-    os_name = platform.system()
-    if os_name == "Linux":
-        try:
-            with open("/etc/os-release") as f:
-                for line in f:
-                    if line.startswith("PRETTY_NAME="):
-                        distro = line.split("=", 1)[1].strip().strip('"')
-                        fmt.step_ok(f"Platform: {distro}")
-                        return 0
-        except FileNotFoundError:
-            pass
-        fmt.step_ok(f"Platform: Linux {platform.release()}")
+    from freq.core.preflight import check_platform
+    ok, msg, _info = check_platform()
+    if ok:
+        fmt.step_ok(msg)
         return 0
     else:
-        fmt.step_warn(f"Platform: {os_name} (FREQ is designed for Linux)")
+        fmt.step_warn(msg)
         return 2
 
 
 def _check_prerequisites(cfg: FreqConfig) -> int:
-    """Check required system tools."""
-    required = ["ssh", "scp"]
-    optional = ["sshpass", "jq", "curl"]
-
-    missing_required = [t for t in required if not shutil.which(t)]
-    missing_optional = [t for t in optional if not shutil.which(t)]
-
-    if missing_required:
-        fmt.step_fail(f"Missing required: {', '.join(missing_required)}")
+    """Check required and optional system tools."""
+    from freq.core.preflight import check_required_binaries, check_optional_binaries
+    ok_req, msg_req, _ = check_required_binaries()
+    if not ok_req:
+        fmt.step_fail(msg_req)
         return 1
 
-    if missing_optional:
-        fmt.step_warn(f"Optional tools missing: {', '.join(missing_optional)}")
+    ok_opt, msg_opt, _ = check_optional_binaries()
+    if not ok_opt:
+        fmt.step_warn(msg_opt)
         return 2
 
-    fmt.step_ok(f"Prerequisites: all found")
+    fmt.step_ok("Prerequisites: all found")
     return 0
 
 
