@@ -50,6 +50,7 @@ jobs:
           tar czf pve-freq-${VERSION}.tar.gz \
             --transform "s,^,pve-freq-${VERSION}/," \
             freq/ conf/*.example conf/personality/ conf/distros.toml conf/plugins/ \
+            data/knowledge/ \
             pyproject.toml install.sh README.md LICENSE CHANGELOG.md \
             --exclude='__pycache__' --exclude='*.pyc'
           sha256sum pve-freq-${VERSION}.tar.gz > pve-freq-${VERSION}.tar.gz.sha256

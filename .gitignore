@@ -19,8 +19,8 @@ venv/
 .coverage
 htmlcov/
 
-# Runtime data (not source)
-data/
+# Runtime data (not source — top-level only, not freq/data/)
+/data/
 
 # Active configs (only .example files are committed)
 conf/freq.toml

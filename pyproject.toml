@@ -36,5 +36,15 @@ freq = "freq.cli:main"
 [tool.setuptools.packages.find]
 include = ["freq*"]
 
+[tool.setuptools.package-data]
+"freq.data" = [
+    "conf-templates/*.example",
+    "conf-templates/*.toml",
+    "conf-templates/*.conf",
+    "conf-templates/personality/*.toml",
+    "conf-templates/plugins/*.py",
+    "knowledge/*.toml",
+]
+
 [tool.setuptools.dynamic]
 version = {attr = "freq.__version__"}
