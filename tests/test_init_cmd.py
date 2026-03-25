@@ -689,7 +689,9 @@ class TestBootstrapKey(unittest.TestCase):
         """When bootstrap_key is set, fleet deploy skips interactive auth prompts for linux hosts."""
         from freq.core.config import Host
         cfg = MagicMock()
-        cfg.hosts = [MagicMock(ip="10.0.0.10", label="testhost", htype="linux")]
+        host = MagicMock(ip="10.0.0.10", label="testhost", htype="linux")
+        host.category = "server"
+        cfg.hosts = [host]
         ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
         args = self._make_args(bootstrap_key=self.key_path, bootstrap_user="root")
 
@@ -743,7 +745,9 @@ class TestDeviceCredsInteractive(unittest.TestCase):
     def test_fleet_deploy_uses_device_creds_for_pfsense(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
         """pfSense host uses credentials from --device-credentials, skipping interactive prompt."""
         cfg = MagicMock()
-        cfg.hosts = [MagicMock(ip="10.0.0.1", label="fw01", htype="pfsense")]
+        host = MagicMock(ip="10.0.0.1", label="fw01", htype="pfsense")
+        host.category = "firewall"
+        cfg.hosts = [host]
 
         mock_load_dc.return_value = {
             "pfsense": {"user": "admin", "password": "fw-secret"},
@@ -778,10 +782,11 @@ class TestDeviceCredsInteractive(unittest.TestCase):
     def test_fleet_deploy_uses_device_creds_per_htype(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
         """iDRAC and switch get different credentials from device_creds dict."""
         cfg = MagicMock()
-        cfg.hosts = [
-            MagicMock(ip="10.0.0.2", label="idrac01", htype="idrac"),
-            MagicMock(ip="10.0.0.3", label="sw01", htype="switch"),
-        ]
+        idrac_host = MagicMock(ip="10.0.0.2", label="idrac01", htype="idrac")
+        idrac_host.category = "bmc"
+        switch_host = MagicMock(ip="10.0.0.3", label="sw01", htype="switch")
+        switch_host.category = "switch"
+        cfg.hosts = [idrac_host, switch_host]
 
         mock_load_dc.return_value = {
             "idrac": {"user": "root", "password": "idrac-pass"},
@@ -816,7 +821,9 @@ class TestDeviceCredsInteractive(unittest.TestCase):
     def test_fleet_deploy_device_creds_over_bootstrap(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
         """--device-credentials takes priority over --bootstrap-key for devices."""
         cfg = MagicMock()
-        cfg.hosts = [MagicMock(ip="10.0.0.1", label="fw01", htype="pfsense")]
+        host = MagicMock(ip="10.0.0.1", label="fw01", htype="pfsense")
+        host.category = "firewall"
+        cfg.hosts = [host]
 
         mock_load_dc.return_value = {
             "pfsense": {"user": "admin", "password": "creds-password"},
@@ -847,10 +854,11 @@ class TestDeviceCredsInteractive(unittest.TestCase):
     def test_fleet_deploy_mixed_creds(self, mock_fmt, mock_input, mock_load_dc, mock_dispatch):
         """Devices with creds use them; devices without fall back to bootstrap key."""
         cfg = MagicMock()
-        cfg.hosts = [
-            MagicMock(ip="10.0.0.2", label="idrac01", htype="idrac"),
-            MagicMock(ip="10.0.0.3", label="sw01", htype="switch"),
-        ]
+        idrac_host = MagicMock(ip="10.0.0.2", label="idrac01", htype="idrac")
+        idrac_host.category = "bmc"
+        switch_host = MagicMock(ip="10.0.0.3", label="sw01", htype="switch")
+        switch_host.category = "switch"
+        cfg.hosts = [idrac_host, switch_host]
 
         # Only iDRAC has device creds — switch does not
         mock_load_dc.return_value = {
@@ -923,7 +931,9 @@ class TestHostsFileImport(unittest.TestCase):
 
         # Mock load_hosts to return parsed host objects
         host1 = MagicMock(ip="10.0.0.10", label="testhost", htype="linux")
+        host1.category = "server"
         host2 = MagicMock(ip="10.0.0.11", label="docker01", htype="docker")
+        host2.category = "server"
 
         mock_getpass.getpass.return_value = "testpass"
         mock_dispatch.return_value = True

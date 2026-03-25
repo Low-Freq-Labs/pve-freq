@@ -38,6 +38,7 @@ from freq.core.ssh import PLATFORM_SSH
 
 
 # Device types that support per-device credentials
+# Legacy list — will be replaced by deployer registry categories
 DEVICE_HTYPES = ("pfsense", "idrac", "switch", "truenas")
 
 INIT_MARKER = None  # Set in cmd_init from cfg
@@ -138,18 +139,16 @@ def _run_with_input(cmd, input_text, timeout=DEFAULT_CMD_TIMEOUT):
 def _load_device_credentials(cred_file):
     """Load per-device-type credentials from a TOML file.
 
-    File format:
-        [pfsense]
-        user = "root"
-        password_file = "/etc/freq/credentials/root-pass"
+    Supports three section name formats (in priority order):
+        [firewall:pfsense]    — new category:vendor format
+        [firewall]            — category fallback (applies to all vendors in category)
+        [pfsense]             — legacy htype format (backward compat)
 
-        [switch]
-        user = "gigecolo"
-        password_file = "/etc/freq/credentials/device-pass"
-
-    Returns dict: {"pfsense": {"user": "root", "password": "thepass"}, ...}
-    Missing or unreadable entries are skipped with warnings.
+    Returns dict keyed by LEGACY htype for backward compat with fleet deploy:
+        {"pfsense": {"user": "root", "password": "thepass"}, ...}
     """
+    from freq.deployers import HTYPE_COMPAT
+
     result = {}
     if not cred_file or not os.path.isfile(cred_file):
         return result
@@ -177,22 +176,41 @@ def _load_device_credentials(cred_file):
         fmt.step_warn(f"Failed to parse device credentials: {e}")
         return result
 
-    for dtype in DEVICE_HTYPES:
-        if dtype not in data:
-            continue
-        entry = data[dtype]
+    def _read_entry(entry, label):
+        """Extract user + password from a credential entry."""
         user = entry.get("user", "root")
         pw_file = entry.get("password_file", "")
         if not pw_file:
-            fmt.step_warn(f"Device '{dtype}' has no password_file — skipped")
-            continue
+            fmt.step_warn(f"Device '{label}' has no password_file — skipped")
+            return None
         try:
             with open(pw_file) as f:
                 password = f.read().strip()
         except (OSError, IOError) as e:
-            fmt.step_warn(f"Cannot read {dtype} password from {pw_file}: {e}")
+            fmt.step_warn(f"Cannot read {label} password from {pw_file}: {e}")
+            return None
+        return {"user": user, "password": password}
+
+    # Build lookup: check all three formats per device type
+    for legacy_htype, (category, vendor) in HTYPE_COMPAT.items():
+        # Skip server types — they don't use device credentials
+        if category == "server":
             continue
-        result[dtype] = {"user": user, "password": password}
+
+        # Priority: category:vendor > category > legacy htype
+        entry = None
+        cv_key = f"{category}:{vendor}"
+        if cv_key in data:
+            entry = data[cv_key]
+        elif category in data and isinstance(data[category], dict) and "user" in data.get(category, {}):
+            entry = data[category]
+        elif legacy_htype in data:
+            entry = data[legacy_htype]
+
+        if entry:
+            cred = _read_entry(entry, cv_key)
+            if cred:
+                result[legacy_htype] = cred
 
     return result
 
@@ -1290,14 +1308,18 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
         fmt.line(f"  {fmt.C.GREEN}{len(cfg.hosts)} host(s) registered.{fmt.C.RESET} Proceeding to deployment...")
         fmt.blank()
 
-    # Group hosts by auth category
-    linux_hosts = [h for h in cfg.hosts if h.htype in ("linux", "docker", "pve", "truenas")]
-    pfsense_hosts = [h for h in cfg.hosts if h.htype == "pfsense"]
-    device_hosts = [h for h in cfg.hosts if h.htype in ("idrac", "switch")]
+    # Group hosts by auth category (using deployer registry)
+    from freq.deployers import resolve_htype, PASSWORD_AUTH_CATEGORIES
+    linux_hosts = [h for h in cfg.hosts if h.category == "server"]
+    pfsense_hosts = [h for h in cfg.hosts if h.category == "firewall"]
+    device_hosts = [h for h in cfg.hosts if h.category in ("bmc", "switch")]
+    nas_hosts = [h for h in cfg.hosts if h.category == "nas"]
+    # NAS hosts use server deployer (same SSH+useradd flow)
+    linux_hosts.extend(nas_hosts)
 
     total = len(linux_hosts) + len(pfsense_hosts) + len(device_hosts)
-    fmt.line(f"  {fmt.C.DIM}Fleet: {len(linux_hosts)} Linux, "
-             f"{len(pfsense_hosts)} pfSense, "
+    fmt.line(f"  {fmt.C.DIM}Fleet: {len(linux_hosts)} server, "
+             f"{len(pfsense_hosts)} firewall, "
              f"{len(device_hosts)} device(s) — {total} total{fmt.C.RESET}")
     fmt.blank()
 
@@ -1912,18 +1934,23 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
 
 def _deploy_to_host_dispatch(ip, htype, ctx, auth_pass, auth_key, auth_user):
     """Route to platform-specific deployer based on host type.
-    Returns True on success."""
-    if htype in ("linux", "pve", "docker", "truenas"):
-        return _deploy_linux(ip, ctx, auth_pass, auth_key, auth_user, htype=htype)
-    elif htype == "pfsense":
-        return _deploy_pfsense(ip, ctx, auth_pass, auth_key, auth_user)
-    elif htype == "idrac":
-        return _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user)
-    elif htype == "switch":
-        return _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user)
-    else:
-        fmt.step_warn(f"Unknown host type '{htype}' — skipping")
-        return False
+
+    Supports both legacy htypes ('pfsense') and category:vendor ('firewall:pfsense').
+    Returns True on success.
+    """
+    from freq.deployers import resolve_htype, get_deployer
+
+    category, vendor = resolve_htype(htype)
+    deployer = get_deployer(category, vendor)
+    if deployer:
+        # Server deployers accept htype kwarg for docker group handling
+        if category == "server":
+            return deployer.deploy(ip, ctx, auth_pass, auth_key, auth_user, htype=htype)
+        return deployer.deploy(ip, ctx, auth_pass, auth_key, auth_user)
+
+    # Fallback for unknown types — try linux deployer (best effort)
+    fmt.step_warn(f"No deployer for '{htype}' ({category}:{vendor}) — trying generic Linux")
+    return _deploy_linux(ip, ctx, auth_pass, auth_key, auth_user, htype=htype)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -2088,16 +2115,15 @@ def _remove_switch(ip, svc_name, key_path):
 
 def _remove_from_host_dispatch(ip, htype, svc_name, key_path, rsa_key_path):
     """Route to platform-specific remover. Returns (success, error_info)."""
-    if htype in ("linux", "pve", "docker", "truenas"):
-        return _remove_linux(ip, svc_name, key_path)
-    elif htype == "pfsense":
-        return _remove_pfsense(ip, svc_name, key_path)
-    elif htype == "idrac":
-        return _remove_idrac(ip, svc_name, rsa_key_path)
-    elif htype == "switch":
-        return _remove_switch(ip, svc_name, rsa_key_path)
-    else:
-        return False, f"unknown htype: {htype}"
+    from freq.deployers import resolve_htype, get_deployer, RSA_REQUIRED_CATEGORIES
+
+    category, vendor = resolve_htype(htype)
+    deployer = get_deployer(category, vendor)
+    if deployer:
+        use_key = rsa_key_path if category in RSA_REQUIRED_CATEGORIES else key_path
+        return deployer.remove(ip, svc_name, use_key, rsa_key_path=rsa_key_path)
+
+    return False, f"no deployer for {htype} ({category}:{vendor})"
 
 
 # ═══════════════════════════════════════════════════════════════════

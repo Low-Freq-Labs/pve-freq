@@ -89,6 +89,18 @@ class Host:
     error: str = ""
     duration: float = 0.0
 
+    @property
+    def category(self):
+        """Device category (server, firewall, switch, bmc, nas)."""
+        from freq.deployers import resolve_htype
+        return resolve_htype(self.htype)[0]
+
+    @property
+    def vendor(self):
+        """Device vendor (linux, pfsense, cisco, idrac, etc.)."""
+        from freq.deployers import resolve_htype
+        return resolve_htype(self.htype)[1]
+
 
 @dataclass
 class CmdResult:
