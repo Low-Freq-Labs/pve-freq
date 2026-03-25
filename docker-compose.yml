@@ -1,0 +1,15 @@
+services:
+  freq:
+    build: .
+    image: lowfreqlabs/pve-freq:latest
+    container_name: pve-freq
+    restart: unless-stopped
+    ports:
+      - "${FREQ_PORT:-8888}:8888"
+    volumes:
+      - ./conf:/opt/pve-freq/conf
+      - ./data:/opt/pve-freq/data
+      - ~/.ssh:/home/freq/.ssh:ro
+    environment:
+      - TZ=${TZ:-UTC}
+      - FREQ_PORT=8888
