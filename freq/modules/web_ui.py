@@ -707,6 +707,9 @@ th,td{padding:5px 8px;font-size:11px}
   <button class="fleet-btn view-btn" data-view="lab">LAB TOOLS</button>
   <button class="fleet-btn view-btn" data-view="policies">POLICIES</button>
   <button class="fleet-btn view-btn" data-view="ops">OPS</button>
+  <button class="fleet-btn view-btn" data-view="topology">TOPOLOGY</button>
+  <button class="fleet-btn view-btn" data-view="capacity">CAPACITY</button>
+  <button class="fleet-btn view-btn" data-view="playbooks">PLAYBOOKS</button>
   <div class="flex-1"></div>
   <button class="fleet-btn" onclick="openNewTool()" id="btn-new-tool" style="opacity:0.7;display:none">+ NEW TOOL</button>
   <button class="fleet-btn opacity-7" onclick="nav('system')">&#9881; SETTINGS</button>
@@ -1057,6 +1060,55 @@ th,td{padding:5px 8px;font-size:11px}
   </div>
 </div>
 </div><!-- close ops-view -->
+
+<div id="topology-view" class="d-none">
+<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">Network Topology</h3>
+    <button class="fleet-btn" onclick="loadTopology()">REFRESH</button>
+  </div>
+  <div id="topo-legend" style="font-size:11px;color:var(--text-dim);margin-bottom:8px">
+    <span style="color:var(--purple-light)">&#9632;</span> PVE Node &nbsp;
+    <span style="color:var(--green)">&#9632;</span> VM (running) &nbsp;
+    <span style="color:var(--text-dim)">&#9632;</span> VM (stopped) &nbsp;
+    <span style="color:var(--red)">&#9632;</span> Unreachable &nbsp;
+    <span style="color:var(--blue)">&#9632;</span> Device
+  </div>
+  <svg id="topo-svg" width="100%" height="500" style="background:var(--bg);border-radius:8px;border:1px solid var(--border)"></svg>
+  <div id="topo-info" style="margin-top:8px;font-size:12px;color:var(--text-dim)"></div>
+</div>
+</div><!-- close topology-view -->
+
+<div id="capacity-view" class="d-none">
+<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">Capacity Planner</h3>
+    <div style="display:flex;gap:8px">
+      <button class="fleet-btn" onclick="forceCapSnapshot()">TAKE SNAPSHOT</button>
+      <button class="fleet-btn" onclick="loadCapacity()">REFRESH</button>
+    </div>
+  </div>
+  <div id="cap-info" style="font-size:12px;color:var(--text-dim);margin-bottom:12px"></div>
+  <div id="cap-table"></div>
+</div>
+</div><!-- close capacity-view -->
+
+<div id="playbook-view" class="d-none">
+<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">Incident Playbooks</h3>
+    <button class="fleet-btn" onclick="loadPlaybooks()">REFRESH</button>
+  </div>
+  <div id="pb-list"></div>
+  <div id="pb-runner" class="d-none" style="margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h4 id="pb-runner-title" style="font-size:13px;color:var(--text)"></h4>
+      <button class="fleet-btn" onclick="closePbRunner()">CLOSE</button>
+    </div>
+    <div id="pb-steps"></div>
+  </div>
+</div>
+</div><!-- close playbook-view -->
 
 </div><!-- close p-home -->
 
@@ -1791,7 +1843,7 @@ var qf=document.getElementById('home-quote-footer');if(qf)qf.textContent=rq();
 var _currentView='home';
 var VIEW_IDS=['home','fleet','docker','security','lab','policies','ops'];
 var VIEW_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',security:'SECURITY',lab:'LAB TOOLS',policies:'POLICIES',ops:'OPERATIONS'};
-var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityPage()},lab:function(){loadLabTools()},policies:function(){loadPoliciesPage()},ops:function(){loadOpsPage()}};
+var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityPage()},lab:function(){loadLabTools()},policies:function(){loadPoliciesPage()},ops:function(){loadOpsPage()},topology:function(){loadTopology()},capacity:function(){loadCapacity()},playbooks:function(){loadPlaybooks()}};
 
 function nav(p){
   try{
@@ -5517,6 +5569,267 @@ function loadPatrolStatus(){
 function loadOpsPage(){
   /* Static panels — no auto-load needed */
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOPOLOGY MAP — force-directed SVG
+   ═══════════════════════════════════════════════════════════════════ */
+function loadTopology(){
+  var svg=document.getElementById('topo-svg');if(!svg)return;
+  var info=document.getElementById('topo-info');
+  if(info)info.textContent='Loading topology...';
+  fetch('/api/topology?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(info)info.textContent=d.pve_count+' PVE nodes, '+d.vm_count+' VMs';
+    _renderTopology(svg,d.nodes,d.links);
+  }).catch(function(e){if(info)info.textContent='Failed: '+e;});
+}
+
+function _renderTopology(svg,nodes,links){
+  var W=svg.clientWidth||800,H=500;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.innerHTML='';
+  if(!nodes||nodes.length===0){svg.innerHTML='<text x="'+W/2+'" y="'+H/2+'" fill="#8b949e" text-anchor="middle" font-size="14">No topology data</text>';return;}
+
+  /* Color map */
+  var colors={pve:'#9B4FDE',running:'#3fb950',stopped:'#484f58',unreachable:'#f85149',
+    healthy:'#3fb950',pfsense:'#58a6ff',truenas:'#58a6ff',switch:'#58a6ff',idrac:'#58a6ff'};
+  function nodeColor(n){
+    if(n.status==='unreachable')return colors.unreachable;
+    if(n.type==='pve')return colors.pve;
+    if(n.type==='vm')return n.status==='running'?colors.running:colors.stopped;
+    return colors[n.type]||'#58a6ff';
+  }
+  function nodeRadius(n){return n.type==='pve'?20:n.type==='vm'?8:12;}
+
+  /* Build index */
+  var idxMap={};
+  nodes.forEach(function(n,i){idxMap[n.id]=i;n.x=W/2+(Math.random()-0.5)*W*0.6;n.y=H/2+(Math.random()-0.5)*H*0.6;n.vx=0;n.vy=0;});
+  var edgeList=[];
+  links.forEach(function(l){
+    var si=idxMap[l.source],ti=idxMap[l.target];
+    if(si!==undefined&&ti!==undefined)edgeList.push({s:si,t:ti});
+  });
+
+  /* Force simulation — simple spring/repulsion */
+  var dt=0.3,repK=5000,springK=0.01,springL=80,damping=0.85,iterations=120;
+  for(var iter=0;iter<iterations;iter++){
+    /* Repulsion */
+    for(var i=0;i<nodes.length;i++){
+      for(var j=i+1;j<nodes.length;j++){
+        var dx=nodes[j].x-nodes[i].x,dy=nodes[j].y-nodes[i].y;
+        var dist=Math.sqrt(dx*dx+dy*dy)||1;
+        var force=repK/(dist*dist);
+        var fx=force*dx/dist,fy=force*dy/dist;
+        nodes[i].vx-=fx;nodes[i].vy-=fy;
+        nodes[j].vx+=fx;nodes[j].vy+=fy;
+      }
+    }
+    /* Spring attraction */
+    edgeList.forEach(function(e){
+      var a=nodes[e.s],b=nodes[e.t];
+      var dx=b.x-a.x,dy=b.y-a.y;
+      var dist=Math.sqrt(dx*dx+dy*dy)||1;
+      var force=springK*(dist-springL);
+      var fx=force*dx/dist,fy=force*dy/dist;
+      a.vx+=fx;a.vy+=fy;b.vx-=fx;b.vy-=fy;
+    });
+    /* Center gravity */
+    nodes.forEach(function(n){
+      n.vx+=(W/2-n.x)*0.001;
+      n.vy+=(H/2-n.y)*0.001;
+      n.vx*=damping;n.vy*=damping;
+      n.x+=n.vx*dt;n.y+=n.vy*dt;
+      n.x=Math.max(30,Math.min(W-30,n.x));
+      n.y=Math.max(30,Math.min(H-30,n.y));
+    });
+  }
+
+  /* Render edges */
+  edgeList.forEach(function(e){
+    var a=nodes[e.s],b=nodes[e.t];
+    var line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',a.x);line.setAttribute('y1',a.y);
+    line.setAttribute('x2',b.x);line.setAttribute('y2',b.y);
+    line.setAttribute('stroke','#30363d');line.setAttribute('stroke-width','1');
+    svg.appendChild(line);
+  });
+
+  /* Render nodes */
+  nodes.forEach(function(n){
+    var g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.style.cursor='pointer';
+    var r=nodeRadius(n);
+    var circle=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx',n.x);circle.setAttribute('cy',n.y);
+    circle.setAttribute('r',r);circle.setAttribute('fill',nodeColor(n));
+    circle.setAttribute('stroke',n.type==='pve'?'#7B2FBE':'none');
+    circle.setAttribute('stroke-width',n.type==='pve'?'3':'0');
+    g.appendChild(circle);
+    /* Label */
+    var text=document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.setAttribute('x',n.x);text.setAttribute('y',n.y+r+12);
+    text.setAttribute('text-anchor','middle');
+    text.setAttribute('fill','#8b949e');text.setAttribute('font-size',n.type==='pve'?'11':'9');
+    text.textContent=n.label;
+    g.appendChild(text);
+    /* Click handler */
+    g.addEventListener('click',function(){
+      var info=document.getElementById('topo-info');
+      if(info){
+        var parts=[n.label+' ('+n.type+')'];
+        if(n.ip)parts.push('IP: '+n.ip);
+        if(n.status)parts.push('Status: '+n.status);
+        if(n.ram)parts.push('RAM: '+n.ram);
+        if(n.disk)parts.push('Disk: '+n.disk);
+        if(n.docker&&n.docker!=='0')parts.push('Containers: '+n.docker);
+        if(n.vmid)parts.push('VMID: '+n.vmid);
+        info.textContent=parts.join(' | ');
+      }
+    });
+    svg.appendChild(g);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CAPACITY PLANNER — trend projections + sparklines
+   ═══════════════════════════════════════════════════════════════════ */
+function loadCapacity(){
+  var info=document.getElementById('cap-info');
+  var tbl=document.getElementById('cap-table');
+  if(!tbl)return;
+  tbl.innerHTML='<div class="skeleton"></div>';
+  fetch('/api/capacity?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(info)info.textContent=d.snapshot_count+' snapshots, '+d.hosts+' hosts tracked';
+    if(!d.projections||d.hosts===0){
+      tbl.innerHTML='<div class="c-dim-fs12" style="padding:20px;text-align:center">'+
+        (d.snapshot_count<2?'Need at least 2 snapshots for projections. Snapshots are taken weekly, or click TAKE SNAPSHOT.':
+        'No projection data available.')+'</div>';
+      return;
+    }
+    var h='<table><tr><th>Host</th><th>Metric</th><th>Current</th><th>Trend</th><th>Days to 80%</th><th>Sparkline</th></tr>';
+    Object.keys(d.projections).sort().forEach(function(host){
+      var metrics=d.projections[host];
+      ['ram','disk','load'].forEach(function(m){
+        if(!metrics[m])return;
+        var p=metrics[m];
+        var trendColor=p.trend_direction==='rising'?'var(--yellow)':p.trend_direction==='falling'?'var(--green)':'var(--text-dim)';
+        var trendIcon=p.trend_direction==='rising'?'&#9650;':p.trend_direction==='falling'?'&#9660;':'&#8212;';
+        var daysCell=p.days_to_80pct>0?('<span style="color:'+(p.days_to_80pct<30?'var(--red)':'var(--yellow)')+'">'+p.days_to_80pct+' days</span>'):'<span class="c-dim-fs12">&mdash;</span>';
+        var spark=_miniSparkline(p.sparkline||[]);
+        h+='<tr><td><strong>'+host+'</strong></td><td>'+m.toUpperCase()+'</td>';
+        h+='<td>'+p.current+(m!=='load'?'%':'')+'</td>';
+        h+='<td style="color:'+trendColor+'">'+trendIcon+' '+p.trend_direction+'</td>';
+        h+='<td>'+daysCell+'</td>';
+        h+='<td>'+spark+'</td></tr>';
+      });
+    });
+    h+='</table>';
+    tbl.innerHTML=h;
+  }).catch(function(e){tbl.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
+}
+function _miniSparkline(data){
+  if(!data||data.length<2)return'<span class="c-dim-fs12">—</span>';
+  var w=80,ht=20,mn=Math.min.apply(null,data),mx=Math.max.apply(null,data);
+  if(mx===mn)mx=mn+1;
+  var pts=data.map(function(v,i){return (i/(data.length-1))*w+','+(ht-(v-mn)/(mx-mn)*ht);}).join(' ');
+  return'<svg width="'+w+'" height="'+ht+'" style="vertical-align:middle"><polyline points="'+pts+'" fill="none" stroke="#9B4FDE" stroke-width="1.5"/></svg>';
+}
+function forceCapSnapshot(){
+  fetch('/api/capacity/snapshot?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(d.ok)toast('Snapshot saved: '+d.snapshot,'success');
+    else toast('Error: '+(d.error||'unknown'),'error');
+    loadCapacity();
+  }).catch(function(e){toast('Failed: '+e,'error');});
+}
+
+// ── PLAYBOOK RUNNER ──────────────────────────────────────────────────
+function loadPlaybooks(){
+  var list=document.getElementById('pb-list');
+  if(!list)return;
+  list.innerHTML='<div class="skeleton"></div>';
+  fetch('/api/playbooks?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    var pbs=d.playbooks||[];
+    if(pbs.length===0){
+      list.innerHTML='<div class="c-dim-fs12" style="padding:20px;text-align:center">No playbooks found. Add TOML files to conf/playbooks/.</div>';
+      return;
+    }
+    var h='<table><tr><th>Name</th><th>Trigger</th><th>Steps</th><th>Actions</th></tr>';
+    pbs.forEach(function(pb){
+      h+='<tr><td><strong>'+_esc(pb.name)+'</strong>';
+      if(pb.description)h+='<br><span class="c-dim-fs12">'+_esc(pb.description)+'</span>';
+      h+='</td><td>'+_esc(pb.trigger||'manual')+'</td>';
+      h+='<td>'+pb.steps.length+'</td>';
+      h+='<td><button class="fleet-btn" onclick="openPbRunner(\''+_esc(pb.filename)+'\',\''+_esc(pb.name)+'\')">RUN</button></td></tr>';
+    });
+    h+='</table>';
+    list.innerHTML=h;
+  }).catch(function(e){list.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
+}
+var _pbSteps=[];var _pbFilename='';var _pbCurrentStep=0;
+function openPbRunner(filename,name){
+  _pbFilename=filename;_pbCurrentStep=0;_pbSteps=[];
+  document.getElementById('pb-runner').classList.remove('d-none');
+  document.getElementById('pb-runner-title').textContent='Running: '+name;
+  var stepsEl=document.getElementById('pb-steps');
+  stepsEl.innerHTML='<div class="skeleton"></div>';
+  // Load playbook details to show step list
+  fetch('/api/playbooks?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    var pb=(d.playbooks||[]).find(function(p){return p.filename===filename});
+    if(!pb){stepsEl.innerHTML='<span class="c-red">Playbook not found</span>';return;}
+    _pbSteps=pb.steps;_pbCurrentStep=0;
+    _renderPbSteps();
+  });
+}
+function closePbRunner(){
+  document.getElementById('pb-runner').classList.add('d-none');
+  _pbSteps=[];_pbFilename='';_pbCurrentStep=0;
+}
+function _renderPbSteps(){
+  var el=document.getElementById('pb-steps');if(!el)return;
+  var h='';
+  _pbSteps.forEach(function(s,i){
+    var statusColor=s._status==='pass'?'var(--green)':s._status==='fail'?'var(--red)':
+      s._status==='running'?'var(--yellow)':'var(--text-dim)';
+    var statusIcon=s._status==='pass'?'&#10003;':s._status==='fail'?'&#10007;':
+      s._status==='running'?'&#8987;':'&#9679;';
+    h+='<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;margin-bottom:4px;';
+    h+='background:'+(i===_pbCurrentStep?'rgba(123,47,190,0.1)':'transparent')+';border-radius:6px">';
+    h+='<span style="color:'+statusColor+';font-size:16px">'+statusIcon+'</span>';
+    h+='<div style="flex:1"><div style="font-size:13px;color:var(--text)">'+_esc(s.name)+'</div>';
+    h+='<div class="c-dim-fs12">'+s.type+(s.target?' &rarr; '+_esc(s.target):'')+'</div>';
+    if(s._output)h+='<pre style="font-size:11px;color:var(--text-dim);margin:4px 0 0 0;white-space:pre-wrap">'+_esc(s._output)+'</pre>';
+    if(s._error)h+='<pre style="font-size:11px;color:var(--red);margin:2px 0 0 0">'+_esc(s._error)+'</pre>';
+    h+='</div>';
+    if(i===_pbCurrentStep&&!s._status){
+      if(s.confirm){
+        h+='<button class="fleet-btn" style="background:var(--yellow);color:#000" onclick="runPbStep('+i+')">CONFIRM &amp; RUN</button>';
+      } else {
+        h+='<button class="fleet-btn" onclick="runPbStep('+i+')">RUN STEP</button>';
+      }
+    }
+    h+='</div>';
+  });
+  if(_pbCurrentStep>=_pbSteps.length&&_pbSteps.length>0){
+    var allPass=_pbSteps.every(function(s){return s._status==='pass'});
+    h+='<div style="padding:12px;text-align:center;font-size:13px;color:'+(allPass?'var(--green)':'var(--red)')+'">'+
+      (allPass?'All steps completed successfully':'Playbook stopped — check failures above')+'</div>';
+  }
+  el.innerHTML=h;
+}
+function runPbStep(idx){
+  _pbSteps[idx]._status='running';
+  _renderPbSteps();
+  fetch('/api/playbooks/step?token='+_authToken+'&filename='+encodeURIComponent(_pbFilename)+'&step='+idx)
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.error){_pbSteps[idx]._status='fail';_pbSteps[idx]._error=d.error;_renderPbSteps();return;}
+    var r=d.result;
+    _pbSteps[idx]._status=r.status;
+    _pbSteps[idx]._output=r.output||'';
+    _pbSteps[idx]._error=r.error||'';
+    if(r.status==='pass'){_pbCurrentStep=idx+1;}
+    _renderPbSteps();
+  }).catch(function(e){_pbSteps[idx]._status='fail';_pbSteps[idx]._error=''+e;_renderPbSteps();});
+}
+
 function runDoctor(){
   var out=document.getElementById('diag-out');if(!out)return;
   out.innerHTML='<span style="color:var(--text-dim)">Running self-diagnostic...</span>';

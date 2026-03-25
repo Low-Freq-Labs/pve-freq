@@ -1,0 +1,29 @@
+# Example: Plex Down Recovery Playbook
+# Copy to plex-down.toml and adjust targets to match your hosts.conf labels.
+
+[playbook]
+name = "Plex Down Recovery"
+description = "Restart Plex container and verify it responds"
+trigger = "docker_down"
+
+[[step]]
+name = "Check container status"
+type = "check"
+command = "docker ps -a --filter name=plex --format '{{.Status}}'"
+target = "docker-media"
+expect = "Up"
+
+[[step]]
+name = "Restart Plex container"
+type = "action"
+command = "docker restart plex"
+target = "docker-media"
+confirm = true
+
+[[step]]
+name = "Verify Plex is responding"
+type = "check"
+command = "curl -sf http://localhost:32400/web/index.html -o /dev/null && echo ok"
+target = "docker-media"
+expect = "ok"
+timeout = 15

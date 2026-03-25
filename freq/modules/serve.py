@@ -352,6 +352,14 @@ def _bg_probe_health():
     # Evaluate alert rules against fresh health data
     _evaluate_alert_rules(cfg, result)
 
+    # Save capacity snapshot if due (weekly)
+    try:
+        from freq.jarvis.capacity import should_snapshot, save_snapshot
+        if should_snapshot(cfg.data_dir):
+            save_snapshot(cfg.data_dir, result)
+    except Exception as e:
+        logger.warn(f"Capacity snapshot failed: {e}")
+
 
 def _bg_check_update():
     """Check GitHub releases for newer version. Runs every 6 hours."""
@@ -899,6 +907,15 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/backup": "_serve_backup",
         "/api/discover": "_serve_discover",
         "/api/gwipe": "_serve_gwipe",
+        # Topology & Capacity
+        "/api/topology": "_serve_topology",
+        "/api/capacity": "_serve_capacity",
+        "/api/capacity/snapshot": "_serve_capacity_snapshot",
+        # Playbook runner
+        "/api/playbooks": "_serve_playbooks",
+        "/api/playbooks/run": "_serve_playbooks_run",
+        "/api/playbooks/step": "_serve_playbooks_step",
+        "/api/playbooks/create": "_serve_playbooks_create",
         # Documentation
         "/api/docs": "_serve_api_docs",
         "/api/openapi.json": "_serve_openapi_json",
@@ -940,6 +957,212 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._proxy_watchdog()
         else:
             self.send_error(404)
+
+    # ── Topology ─────────────────────────────────────────────────────────
+
+    def _serve_topology(self):
+        """Return network topology data for visualization (nodes, VMs, links)."""
+        with _bg_lock:
+            health = _bg_cache.get("health")
+            fo_cached = _bg_cache.get("infra_quick")
+
+        # Build health lookup
+        health_map = {}
+        if health and "hosts" in health:
+            for h in health["hosts"]:
+                health_map[h.get("label", "")] = h
+
+        cfg = load_config()
+        fb = cfg.fleet_boundaries
+        nodes = []
+        links = []
+
+        # PVE nodes
+        for pn in fb.pve_nodes.values():
+            status = "healthy"
+            h = health_map.get(pn.name, {})
+            if h.get("status") == "unreachable":
+                status = "unreachable"
+            nodes.append({
+                "id": f"pve:{pn.name}", "label": pn.name, "type": "pve",
+                "ip": pn.ip, "status": status,
+                "ram": h.get("ram", ""), "disk": h.get("disk", ""), "load": h.get("load", ""),
+            })
+
+        # VMs from fleet overview cache or live
+        vm_list = _get_fleet_vms(cfg)
+        for vm in vm_list:
+            node_id = f"pve:{vm['node']}"
+            vm_id = f"vm:{vm['vmid']}"
+            status = "running" if vm.get("status") == "running" else "stopped"
+            # Check if this VM is also a fleet host with health data
+            h = health_map.get(vm.get("name", ""), {})
+            if h.get("status") == "unreachable" and status == "running":
+                status = "unreachable"
+            nodes.append({
+                "id": vm_id, "label": vm.get("name", str(vm["vmid"])),
+                "type": "vm", "vmid": vm["vmid"], "status": status,
+                "category": vm.get("category", ""), "node": vm["node"],
+                "ram": h.get("ram", ""), "disk": h.get("disk", ""),
+                "docker": h.get("docker", "0"),
+            })
+            links.append({"source": node_id, "target": vm_id})
+
+        # Physical devices
+        for dev in fb.physical.values():
+            nodes.append({
+                "id": f"dev:{dev.key}", "label": dev.label, "type": dev.device_type,
+                "ip": dev.ip, "status": "healthy",
+            })
+
+        self._json_response({
+            "nodes": nodes, "links": links,
+            "pve_count": len(fb.pve_nodes),
+            "vm_count": len(vm_list),
+        })
+
+    # ── Capacity Planner ─────────────────────────────────────────────────
+
+    def _serve_capacity(self):
+        """Return capacity projections and trend data."""
+        from freq.jarvis.capacity import load_snapshots, compute_projections
+        cfg = load_config()
+        snapshots = load_snapshots(cfg.data_dir)
+        projections = compute_projections(snapshots)
+        self._json_response({
+            "projections": projections,
+            "snapshot_count": len(snapshots),
+            "hosts": len(projections),
+        })
+
+    def _serve_capacity_snapshot(self):
+        """Force a capacity snapshot now (admin only)."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        from freq.jarvis.capacity import save_snapshot
+        cfg = load_config()
+        with _bg_lock:
+            health = _bg_cache.get("health")
+        if not health:
+            self._json_response({"error": "No health data available yet"}, 503); return
+        fname = save_snapshot(cfg.data_dir, health)
+        if fname:
+            self._json_response({"ok": True, "snapshot": fname})
+        else:
+            self._json_response({"error": "Failed to save snapshot"}, 500)
+
+    # ── Playbook Runner ─────────────────────────────────────────────────
+
+    def _serve_playbooks(self):
+        """List all available playbooks."""
+        from freq.jarvis.playbook import load_playbooks, playbooks_to_dicts
+        cfg = load_config()
+        playbooks = load_playbooks(cfg.conf_dir)
+        self._json_response({"playbooks": playbooks_to_dicts(playbooks)})
+
+    def _serve_playbooks_run(self):
+        """Run all steps of a playbook (non-confirm steps only)."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        params = _parse_query(self.path)
+        filename = params.get("filename", "")
+        if not filename:
+            self._json_response({"error": "Missing filename parameter"}); return
+
+        from freq.jarvis.playbook import load_playbooks, run_step, result_to_dict
+        from freq.core.ssh import run as ssh_run
+        cfg = load_config()
+        playbooks = load_playbooks(cfg.conf_dir)
+        pb = next((p for p in playbooks if p.filename == filename), None)
+        if not pb:
+            self._json_response({"error": f"Playbook '{filename}' not found"}); return
+
+        results = []
+        for step in pb.steps:
+            if step.confirm:
+                results.append({
+                    "step_name": step.name, "step_type": step.step_type,
+                    "status": "pending_confirm", "output": "",
+                    "error": "Requires confirmation", "duration": 0,
+                })
+                break
+            r = run_step(step, ssh_run, cfg)
+            results.append(result_to_dict(r))
+            if r.status == "fail":
+                break
+
+        self._json_response({
+            "playbook": pb.name,
+            "filename": pb.filename,
+            "results": results,
+            "completed": len(results) == len(pb.steps) and all(
+                r["status"] == "pass" for r in results
+            ),
+        })
+
+    def _serve_playbooks_step(self):
+        """Run a single step of a playbook by index."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        params = _parse_query(self.path)
+        filename = params.get("filename", "")
+        step_idx = params.get("step", "")
+        if not filename or step_idx == "":
+            self._json_response({"error": "Missing filename or step parameter"}); return
+
+        try:
+            step_idx = int(step_idx)
+        except ValueError:
+            self._json_response({"error": "step must be an integer"}); return
+
+        from freq.jarvis.playbook import load_playbooks, run_step, result_to_dict
+        from freq.core.ssh import run as ssh_run
+        cfg = load_config()
+        playbooks = load_playbooks(cfg.conf_dir)
+        pb = next((p for p in playbooks if p.filename == filename), None)
+        if not pb:
+            self._json_response({"error": f"Playbook '{filename}' not found"}); return
+        if step_idx < 0 or step_idx >= len(pb.steps):
+            self._json_response({"error": f"Step index {step_idx} out of range"}); return
+
+        r = run_step(pb.steps[step_idx], ssh_run, cfg)
+        self._json_response({
+            "playbook": pb.name,
+            "step_index": step_idx,
+            "total_steps": len(pb.steps),
+            "result": result_to_dict(r),
+        })
+
+    def _serve_playbooks_create(self):
+        """Create a new playbook from parameters."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        params = _parse_query(self.path)
+        name = params.get("name", "").strip()
+        if not name:
+            self._json_response({"error": "Missing playbook name"}); return
+
+        filename = re.sub(r'[^a-z0-9_-]', '-', name.lower()) + ".toml"
+        cfg = load_config()
+        pb_dir = os.path.join(cfg.conf_dir, "playbooks")
+        os.makedirs(pb_dir, exist_ok=True)
+        path = os.path.join(pb_dir, filename)
+        if os.path.exists(path):
+            self._json_response({"error": f"Playbook '{filename}' already exists"}); return
+
+        description = params.get("description", "")
+        trigger = params.get("trigger", "")
+        content = f'[playbook]\nname = "{name}"\ndescription = "{description}"\ntrigger = "{trigger}"\n'
+        try:
+            with open(path, "w") as f:
+                f.write(content)
+            self._json_response({"ok": True, "filename": filename})
+        except OSError as e:
+            self._json_response({"error": str(e)}, 500)
 
     # ── API Documentation ────────────────────────────────────────────────
 
