@@ -215,10 +215,29 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--disk", type=int, help="Add disk in GB")
     p.set_defaults(func=_cmd_resize)
 
-    p = sub.add_parser("snapshot", help="Snapshot a VM")
+    p = sub.add_parser("snapshot", help="Snapshot management (create/list/delete)")
+    p.add_argument("snap_action", nargs="?", choices=["create", "list", "delete"], default="create",
+                   help="Action: create (default), list, delete")
     p.add_argument("target", nargs="?", help="VMID or name")
-    p.add_argument("--name", help="Snapshot name")
+    p.add_argument("--name", help="Snapshot name (for create/delete)")
     p.set_defaults(func=_cmd_snapshot)
+
+    p = sub.add_parser("power", help="VM power control (start/stop/reboot/shutdown/status)")
+    p.add_argument("action", choices=["start", "stop", "reboot", "shutdown", "status"],
+                   help="Power action")
+    p.add_argument("target", help="VMID")
+    p.set_defaults(func=_cmd_power)
+
+    p = sub.add_parser("nic", help="VM NIC management (add/clear/change-ip/change-id/check-ip)")
+    p.add_argument("action", choices=["add", "clear", "change-ip", "change-id", "check-ip"],
+                   help="NIC action")
+    p.add_argument("target", nargs="?", help="VMID")
+    p.add_argument("--ip", help="IP address (CIDR or bare)")
+    p.add_argument("--gw", help="Gateway IP")
+    p.add_argument("--vlan", help="VLAN ID")
+    p.add_argument("--nic-index", type=int, default=0, help="NIC index (default: 0)")
+    p.add_argument("--new-id", help="New VMID (for change-id)")
+    p.set_defaults(func=_cmd_nic)
 
     p = sub.add_parser("import", help="Import a cloud image as a VM")
     p.add_argument("--image", help="Cloud image (debian-13, ubuntu-2404, etc.)")
@@ -230,6 +249,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("target", nargs="?", help="VMID or name")
     p.add_argument("--node", help="Target PVE node")
     p.add_argument("--storage", help="Target storage pool (auto-detected if omitted)")
+    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmations (auto-delete snapshots)")
     p.set_defaults(func=_cmd_migrate)
 
     p = sub.add_parser("template", help="Convert a VM to a template")
@@ -568,7 +588,9 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("clone <source> [--name]", "Clone an existing VM"),
             ("destroy <target>", "Destroy a VM"),
             ("resize <target> [--cores --ram]", "Resize a VM"),
-            ("snapshot <target>", "Snapshot a VM"),
+            ("power <action> <vmid>", "Power control (start/stop/reboot/shutdown)"),
+            ("snapshot [create|list|delete]", "Snapshot management"),
+            ("nic <action> <vmid>", "NIC management (add/clear/change-ip/change-id)"),
             ("migrate <target> --node", "Migrate between nodes"),
             ("import", "Import VM from backup"),
             ("template <vmid>", "Convert VM to template"),
@@ -736,6 +758,16 @@ def _cmd_vmconfig(cfg: FreqConfig, pack, args) -> int:
 def _cmd_snapshot(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.pve import cmd_snapshot
     return cmd_snapshot(cfg, pack, args)
+
+
+def _cmd_power(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.pve import cmd_power
+    return cmd_power(cfg, pack, args)
+
+
+def _cmd_nic(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.vm import cmd_nic
+    return cmd_nic(cfg, pack, args)
 
 
 def _cmd_create(cfg: FreqConfig, pack, args) -> int:

@@ -774,6 +774,18 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/admin/fleet-boundaries/update": "_serve_admin_fleet_boundaries_update",
         "/api/admin/hosts/update": "_serve_admin_hosts_update",
         "/api/watchdog/health": "_proxy_watchdog",
+        "/api/doctor": "_serve_doctor",
+        "/api/diagnose": "_serve_diagnose",
+        "/api/log": "_serve_log",
+        "/api/policy/check": "_serve_policy_check",
+        "/api/policy/fix": "_serve_policy_fix",
+        "/api/policy/diff": "_serve_policy_diff",
+        "/api/sweep": "_serve_sweep",
+        "/api/patrol/status": "_serve_patrol_status",
+        "/api/zfs": "_serve_zfs",
+        "/api/backup": "_serve_backup",
+        "/api/discover": "_serve_discover",
+        "/api/gwipe": "_serve_gwipe",
     }
 
     def do_GET(self):
@@ -3783,6 +3795,275 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"error": f"Failed to write hosts.conf: {e}"}, 500)
             return
         self._json_response({"ok": True, "label": label})
+
+    # --- Phase 2: Feature parity endpoints ---
+
+    def _serve_doctor(self):
+        """Run FREQ self-diagnostic and return results as JSON."""
+        try:
+            from freq.core.doctor import run as doctor_run
+            import io, contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                from freq.core.config import load_config as _lc
+                cfg = _lc()
+                result = doctor_run(cfg)
+            self._json_response({"ok": result == 0, "output": buf.getvalue(), "exit_code": result})
+        except Exception as e:
+            self._json_response({"error": f"Doctor failed: {e}"}, 500)
+
+    def _serve_diagnose(self):
+        """Run deep diagnostic for a specific host."""
+        cfg = load_config()
+        query = _parse_query(self)
+        target = query.get("target", [""])[0]
+        if not target:
+            self._json_response({"error": "target parameter required"}); return
+        try:
+            host = res.by_target(cfg.hosts, target)
+            if not host:
+                self._json_response({"error": f"Unknown host: {target}"}); return
+            # Gather diagnostic data via SSH
+            checks = {}
+            cmds = {
+                "uptime": "uptime",
+                "disk": "df -h --output=target,pcent,avail | head -20",
+                "memory": "free -h",
+                "load": "cat /proc/loadavg",
+                "services": "systemctl list-units --state=failed --no-pager --no-legend 2>/dev/null || echo 'N/A'",
+                "docker": "docker ps --format 'table {{.Names}}\t{{.Status}}' 2>/dev/null || echo 'No docker'",
+                "network": "ip -br addr 2>/dev/null || ifconfig 2>/dev/null || echo 'N/A'",
+                "journal_errors": "journalctl -p err --since '1 hour ago' --no-pager -q 2>/dev/null | tail -20 || echo 'N/A'",
+            }
+            for label, cmd in cmds.items():
+                r = ssh_single(host=host.ip, command=cmd,
+                               key_path=cfg.ssh_key_path, connect_timeout=3,
+                               command_timeout=15, htype=host.htype, use_sudo=False)
+                checks[label] = r.stdout if r.returncode == 0 else f"ERROR: {r.stderr or r.stdout}"
+            self._json_response({"host": target, "ip": host.ip, "checks": checks})
+        except Exception as e:
+            self._json_response({"error": f"Diagnose failed: {e}"}, 500)
+
+    def _serve_log(self):
+        """View remote host logs via SSH."""
+        cfg = load_config()
+        query = _parse_query(self)
+        target = query.get("target", [""])[0]
+        lines = int(query.get("lines", ["50"])[0])
+        unit = query.get("unit", [""])[0]
+        if not target:
+            self._json_response({"error": "target parameter required"}); return
+        try:
+            host = res.by_target(cfg.hosts, target)
+            if not host:
+                self._json_response({"error": f"Unknown host: {target}"}); return
+            cmd = f"journalctl --no-pager -n {min(lines, 500)}"
+            if unit:
+                cmd += f" -u {unit}"
+            r = ssh_single(host=host.ip, command=cmd,
+                           key_path=cfg.ssh_key_path, connect_timeout=3,
+                           command_timeout=15, htype=host.htype, use_sudo=True)
+            self._json_response({
+                "host": target, "ip": host.ip, "lines": r.stdout.split("\n") if r.returncode == 0 else [],
+                "error": "" if r.returncode == 0 else (r.stderr or r.stdout)
+            })
+        except Exception as e:
+            self._json_response({"error": f"Log fetch failed: {e}"}, 500)
+
+    def _serve_policy_check(self):
+        """Run policy compliance check (dry run)."""
+        cfg = load_config()
+        query = _parse_query(self)
+        policy = query.get("policy", [""])[0]
+        hosts_param = query.get("hosts", [""])[0]
+        try:
+            import io, contextlib
+            from freq.modules.engine_cmds import cmd_check
+            # Build a mock args object
+            class Args:
+                pass
+            args = Args()
+            args.policy = policy or None
+            args.hosts = hosts_param or None
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = cmd_check(cfg, None, args)
+            self._json_response({"ok": result == 0, "output": buf.getvalue(), "policy": policy})
+        except Exception as e:
+            self._json_response({"error": f"Policy check failed: {e}"}, 500)
+
+    def _serve_policy_fix(self):
+        """Apply policy remediation."""
+        cfg = load_config()
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        query = _parse_query(self)
+        policy = query.get("policy", [""])[0]
+        hosts_param = query.get("hosts", [""])[0]
+        try:
+            import io, contextlib
+            from freq.modules.engine_cmds import cmd_fix
+            class Args:
+                pass
+            args = Args()
+            args.policy = policy or None
+            args.hosts = hosts_param or None
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = cmd_fix(cfg, None, args)
+            self._json_response({"ok": result == 0, "output": buf.getvalue(), "policy": policy})
+        except Exception as e:
+            self._json_response({"error": f"Policy fix failed: {e}"}, 500)
+
+    def _serve_policy_diff(self):
+        """Show policy drift as git-style diff."""
+        cfg = load_config()
+        query = _parse_query(self)
+        policy = query.get("policy", [""])[0]
+        hosts_param = query.get("hosts", [""])[0]
+        try:
+            import io, contextlib
+            from freq.modules.engine_cmds import cmd_diff
+            class Args:
+                pass
+            args = Args()
+            args.policy = policy or None
+            args.hosts = hosts_param or None
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = cmd_diff(cfg, None, args)
+            self._json_response({"ok": result == 0, "output": buf.getvalue(), "policy": policy})
+        except Exception as e:
+            self._json_response({"error": f"Policy diff failed: {e}"}, 500)
+
+    def _serve_sweep(self):
+        """Run full audit + policy sweep pipeline."""
+        cfg = load_config()
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
+        query = _parse_query(self)
+        do_fix = query.get("fix", ["false"])[0].lower() == "true"
+        try:
+            import io, contextlib
+            from freq.jarvis.sweep import cmd_sweep
+            class Args:
+                pass
+            args = Args()
+            args.fix = do_fix
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = cmd_sweep(cfg, None, args)
+            self._json_response({"ok": result == 0, "output": buf.getvalue(), "fix_mode": do_fix})
+        except Exception as e:
+            self._json_response({"error": f"Sweep failed: {e}"}, 500)
+
+    def _serve_patrol_status(self):
+        """Get patrol (continuous monitoring) status."""
+        cfg = load_config()
+        try:
+            import io, contextlib
+            # Patrol is a long-running process — we return a one-shot status check
+            from freq.modules.engine_cmds import cmd_check
+            class Args:
+                pass
+            args = Args()
+            args.policy = None
+            args.hosts = None
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = cmd_check(cfg, None, args)
+            self._json_response({"ok": result == 0, "output": buf.getvalue(),
+                                  "note": "One-shot compliance check (patrol is a long-running CLI process)"})
+        except Exception as e:
+            self._json_response({"error": f"Patrol status failed: {e}"}, 500)
+
+    def _serve_zfs(self):
+        """ZFS pool status and operations."""
+        cfg = load_config()
+        query = _parse_query(self)
+        action = query.get("action", ["status"])[0]
+        try:
+            import io, contextlib
+            from freq.modules.infrastructure import cmd_zfs
+            class Args:
+                pass
+            args = Args()
+            args.action = action
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = cmd_zfs(cfg, None, args)
+            self._json_response({"ok": result == 0, "output": buf.getvalue(), "action": action})
+        except Exception as e:
+            self._json_response({"error": f"ZFS operation failed: {e}"}, 500)
+
+    def _serve_backup(self):
+        """Backup management: list, create, status, prune."""
+        cfg = load_config()
+        query = _parse_query(self)
+        action = query.get("action", ["list"])[0]
+        target = query.get("target", [""])[0]
+        try:
+            import io, contextlib
+            from freq.modules.backup import cmd_backup
+            class Args:
+                pass
+            args = Args()
+            args.action = action
+            args.target = target or None
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = cmd_backup(cfg, None, args)
+            self._json_response({"ok": result == 0, "output": buf.getvalue(), "action": action})
+        except Exception as e:
+            self._json_response({"error": f"Backup operation failed: {e}"}, 500)
+
+    def _serve_discover(self):
+        """Discover hosts on network."""
+        cfg = load_config()
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
+        query = _parse_query(self)
+        subnet = query.get("subnet", [""])[0]
+        try:
+            import io, contextlib
+            from freq.modules.discover import cmd_discover
+            class Args:
+                pass
+            args = Args()
+            args.subnet = subnet or None
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = cmd_discover(cfg, None, args)
+            self._json_response({"ok": result == 0, "output": buf.getvalue()})
+        except Exception as e:
+            self._json_response({"error": f"Discovery failed: {e}"}, 500)
+
+    def _serve_gwipe(self):
+        """FREQ WIPE station status and operations."""
+        cfg = load_config()
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        query = _parse_query(self)
+        action = query.get("action", ["status"])[0]
+        try:
+            # GWipe talks to an external API — reuse the vault lookup pattern
+            host = vault_get(cfg, "gwipe", "gwipe_host") or ""
+            key = vault_get(cfg, "gwipe", "gwipe_api_key") or ""
+            if not host or not key:
+                self._json_response({"error": "GWIPE station not configured in vault"}); return
+            import urllib.request, urllib.error
+            url = f"http://{host}:7980/api/v1/{action}"
+            req = urllib.request.Request(url)
+            req.add_header("X-API-Key", key)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+            self._json_response({"ok": True, "action": action, "data": data})
+        except Exception as e:
+            self._json_response({"error": f"GWIPE operation failed: {e}"}, 500)
 
     def _json_response(self, data, status=200):
         """Send a JSON response."""

@@ -153,6 +153,26 @@ def _run_command(cfg, pack, cmd_name: str, args_override: dict = None):
                 traceback.print_exc()
 
 
+def _run_argv(cfg, pack, argv: list):
+    """Run a FREQ command with raw argv list."""
+    from freq.cli import _build_parser
+
+    print()
+    parser = _build_parser()
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit:
+        return
+
+    if hasattr(args, "func"):
+        try:
+            args.func(cfg, pack, args)
+        except KeyboardInterrupt:
+            print(f"\n  {fmt.C.YELLOW}Interrupted.{fmt.C.RESET}")
+        except Exception as e:
+            fmt.error(f"Command failed: {e}")
+
+
 def _run_with_target(cfg, pack, cmd_name: str, prompt: str = "Target:"):
     """Run a command that needs a target argument."""
     target = _input(prompt)
@@ -254,6 +274,12 @@ def _menu_vm_lifecycle(cfg, pack):
             ("d", "add-disk", "Add disk to a VM", Tag.CHANGES),
             ("g", "tag", "Set/view PVE tags", ""),
             ("p", "pool", "PVE pool management", ""),
+            None,
+            "Power & NIC",
+            ("w", "power", "Start/stop/reboot a VM", Tag.CHANGES),
+            ("s", "snapshot list", "List VM snapshots", ""),
+            ("x", "snapshot delete", "Delete a snapshot", Tag.DESTRUCTIVE),
+            ("n", "nic", "NIC management submenu", Tag.CHANGES),
             ("0", "Back", "", ""),
         ], crumb)
 
@@ -296,6 +322,91 @@ def _menu_vm_lifecycle(cfg, pack):
             _run_with_target(cfg, pack, "tag", "VMID:")
         elif ch == "p":
             _run_command(cfg, pack, "pool")
+        elif ch == "w":
+            print()
+            action = _input("Action (start/stop/reboot/shutdown/status):")
+            if action:
+                vmid = _input("VMID:")
+                if vmid:
+                    _run_argv(cfg, pack, ["power", action, vmid])
+        elif ch == "s":
+            print()
+            vmid = _input("VMID:")
+            if vmid:
+                _run_argv(cfg, pack, ["snapshot", "list", vmid])
+        elif ch == "x":
+            print()
+            vmid = _input("VMID:")
+            if vmid:
+                name = _input("Snapshot name:")
+                if name:
+                    _run_argv(cfg, pack, ["snapshot", "delete", vmid, "--name", name])
+        elif ch == "n":
+            _menu_nic(cfg, pack)
+            continue
+        else:
+            continue
+        _pause()
+
+
+def _menu_nic(cfg, pack):
+    """NIC Management submenu."""
+    crumb = ["PVE FREQ", "VM Lifecycle", "NIC Management"]
+    while True:
+        _render_menu("NIC Management", [
+            ("1", "nic add", "Add a NIC to a VM", Tag.CHANGES),
+            ("2", "nic clear", "Remove all NICs from a VM", Tag.DESTRUCTIVE),
+            ("3", "nic change-ip", "Change VM IP config", Tag.CHANGES),
+            ("4", "nic change-id", "Change VMID (clone + destroy)", Tag.RISKY),
+            ("5", "nic check-ip", "Check if IP is available", ""),
+            ("0", "Back", "", ""),
+        ], crumb)
+
+        ch = _getch()
+        if ch in ("0", "b", "q", "\x1b"):
+            return
+        elif ch == "1":
+            print()
+            vmid = _input("VMID:")
+            if vmid:
+                ip = _input("IP address:")
+                if ip:
+                    gw = _input("Gateway (optional):")
+                    vlan = _input("VLAN (optional):")
+                    argv = ["nic", "add", vmid, "--ip", ip]
+                    if gw:
+                        argv += ["--gw", gw]
+                    if vlan:
+                        argv += ["--vlan", vlan]
+                    _run_argv(cfg, pack, argv)
+        elif ch == "2":
+            print()
+            vmid = _input("VMID:")
+            if vmid:
+                _run_argv(cfg, pack, ["nic", "clear", vmid])
+        elif ch == "3":
+            print()
+            vmid = _input("VMID:")
+            if vmid:
+                ip = _input("New IP address:")
+                if ip:
+                    gw = _input("Gateway (optional):")
+                    argv = ["nic", "change-ip", vmid, "--ip", ip]
+                    if gw:
+                        argv += ["--gw", gw]
+                    _run_argv(cfg, pack, argv)
+        elif ch == "4":
+            print()
+            vmid = _input("Current VMID:")
+            if vmid:
+                newid = _input("New VMID:")
+                if newid:
+                    _run_argv(cfg, pack, ["nic", "change-id", vmid, "--new-id", newid])
+        elif ch == "5":
+            print()
+            ip = _input("IP to check:")
+            if ip:
+                _run_argv(cfg, pack, ["nic", "check-ip", "--ip", ip])
         else:
             continue
         _pause()
@@ -506,6 +617,12 @@ def _menu_security(cfg, pack):
             ("4", "vault set", "Store a credential", Tag.CHANGES),
             ("5", "vault get", "Retrieve a credential", ""),
             ("6", "vault init", "Initialize vault", Tag.CHANGES),
+            None,
+            "Policy Engine",
+            ("7", "check", "Check policy compliance (dry run)", ""),
+            ("8", "fix", "Apply policy remediation", Tag.CHANGES),
+            ("9", "diff", "Show policy drift", ""),
+            ("c", "policies", "List available policies", ""),
             ("0", "Back", "", ""),
         ], crumb)
 
@@ -542,6 +659,14 @@ def _menu_security(cfg, pack):
             parser = _build_parser()
             args = parser.parse_args(["vault", "init"])
             args.func(cfg, pack, args)
+        elif ch == "7":
+            _run_command(cfg, pack, "check")
+        elif ch == "8":
+            _run_command(cfg, pack, "fix")
+        elif ch == "9":
+            _run_command(cfg, pack, "diff")
+        elif ch == "c":
+            _run_command(cfg, pack, "policies")
         else:
             continue
         _pause()
@@ -821,6 +946,10 @@ def _menu_infrastructure(cfg, pack):
             ("6", "NTP", "Fleet time sync check/fix", ""),
             ("7", "Updates", "Fleet OS updates", ""),
             ("8", "Comms", "Inter-VM mailbox", ""),
+            ("9", "ZFS", "ZFS pool operations", ""),
+            ("a", "Backup", "VM backup management", ""),
+            ("j", "Journal", "Operation history", ""),
+            ("n", "Notify", "Send notification", Tag.CHANGES),
             ("0", "Back", "", ""),
         ], crumb)
 
@@ -843,6 +972,14 @@ def _menu_infrastructure(cfg, pack):
             _run_command(cfg, pack, "fleet-update")
         elif ch == "8":
             _run_command(cfg, pack, "comms")
+        elif ch == "9":
+            _run_command(cfg, pack, "zfs")
+        elif ch == "a":
+            _run_command(cfg, pack, "backup")
+        elif ch == "j":
+            _run_command(cfg, pack, "journal")
+        elif ch == "n":
+            _run_command(cfg, pack, "notify")
         else:
             continue
         _pause()

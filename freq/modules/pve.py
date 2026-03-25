@@ -226,8 +226,17 @@ def cmd_vmconfig(cfg: FreqConfig, pack, args) -> int:
 
 
 def cmd_snapshot(cfg: FreqConfig, pack, args) -> int:
-    """Create a VM snapshot."""
+    """Snapshot management: create, list, or delete snapshots."""
     target = getattr(args, "target", None)
+    action = getattr(args, "snap_action", None) or "create"
+
+    # Handle subactions
+    if action == "list":
+        return cmd_snapshot_list(cfg, pack, args)
+    elif action == "delete":
+        return cmd_snapshot_delete(cfg, pack, args)
+
+    # Default: create
     if not target:
         fmt.error("Usage: freq snapshot <vmid> [--name <snap_name>]")
         return 1
@@ -257,6 +266,179 @@ def cmd_snapshot(cfg: FreqConfig, pack, args) -> int:
         fmt.step_ok(f"Snapshot '{snap_name}' created for VM {vmid}")
     else:
         fmt.step_fail(f"Snapshot failed: {stdout}")
+
+    fmt.blank()
+    fmt.footer()
+    return 0 if ok else 1
+
+
+def cmd_snapshot_list(cfg: FreqConfig, pack, args) -> int:
+    """List all snapshots for a VM."""
+    target = getattr(args, "target", None)
+    if not target:
+        fmt.error("Usage: freq snapshot list <vmid>")
+        return 1
+
+    try:
+        vmid = int(target)
+    except ValueError:
+        fmt.error(f"Invalid VMID: {target}")
+        return 1
+
+    fmt.header(f"Snapshots: VM {vmid}")
+    fmt.blank()
+
+    node_ip = _find_reachable_node(cfg)
+    if not node_ip:
+        fmt.step_fail("Cannot reach any PVE node")
+        fmt.blank()
+        fmt.footer()
+        return 1
+
+    fmt.step_start(f"Querying snapshots for VM {vmid}")
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm listsnapshot {vmid}", timeout=PVE_CMD_TIMEOUT)
+
+    if not ok:
+        fmt.step_fail(f"Failed to list snapshots: {stdout}")
+        fmt.blank()
+        fmt.footer()
+        return 1
+
+    # Parse snapshot output
+    snaps = []
+    for line in stdout.strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if parts:
+            name = parts[0].replace("`-", "").replace("->", "").strip()
+            if name and name != "current":
+                snaps.append(name)
+
+    fmt.step_ok(f"Found {len(snaps)} snapshot(s)")
+    fmt.blank()
+
+    if not snaps:
+        fmt.line(f"  {fmt.C.YELLOW}No snapshots found for VM {vmid}.{fmt.C.RESET}")
+    else:
+        fmt.table_header(("SNAPSHOT", 30), ("VM", 8))
+        for snap in snaps:
+            fmt.table_row((snap, 30), (str(vmid), 8))
+
+    fmt.blank()
+    fmt.footer()
+    return 0
+
+
+def cmd_snapshot_delete(cfg: FreqConfig, pack, args) -> int:
+    """Delete a snapshot from a VM."""
+    target = getattr(args, "target", None)
+    snap_name = getattr(args, "name", None)
+
+    if not target or not snap_name:
+        fmt.error("Usage: freq snapshot delete <vmid> --name <snapshot_name>")
+        return 1
+
+    try:
+        vmid = int(target)
+    except ValueError:
+        fmt.error(f"Invalid VMID: {target}")
+        return 1
+
+    import re
+    if not re.match(r'^[a-zA-Z0-9_-]+$', snap_name):
+        fmt.error(f"Invalid snapshot name: {snap_name} (alphanumeric, hyphens, underscores only)")
+        return 1
+
+    fmt.header(f"Delete Snapshot: VM {vmid}")
+    fmt.blank()
+
+    node_ip = _find_reachable_node(cfg)
+    if not node_ip:
+        fmt.step_fail("Cannot reach any PVE node")
+        fmt.blank()
+        fmt.footer()
+        return 1
+
+    # Confirm unless --yes
+    if not getattr(args, "yes", False):
+        fmt.line(f"  {fmt.C.YELLOW}Delete snapshot '{snap_name}' from VM {vmid}?{fmt.C.RESET}")
+        try:
+            confirm = input(f"  {fmt.C.YELLOW}Confirm [y/N]:{fmt.C.RESET} ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 1
+        if confirm != "y":
+            fmt.info("Cancelled.")
+            return 0
+
+    fmt.step_start(f"Deleting snapshot '{snap_name}' from VM {vmid}")
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm delsnapshot {vmid} {snap_name}", timeout=PVE_SNAPSHOT_TIMEOUT)
+
+    if ok:
+        fmt.step_ok(f"Snapshot '{snap_name}' deleted from VM {vmid}")
+    else:
+        fmt.step_fail(f"Delete failed: {stdout}")
+
+    fmt.blank()
+    fmt.footer()
+    return 0 if ok else 1
+
+
+def cmd_power(cfg: FreqConfig, pack, args) -> int:
+    """VM power control: start, stop, reboot, shutdown, status."""
+    action = getattr(args, "action", None)
+    target = getattr(args, "target", None)
+
+    if not action or not target:
+        fmt.error("Usage: freq power <start|stop|reboot|shutdown|status> <vmid>")
+        return 1
+
+    try:
+        vmid = int(target)
+    except ValueError:
+        fmt.error(f"Invalid VMID: {target}")
+        return 1
+
+    # Safety check for destructive actions
+    if action in ("stop", "reboot", "shutdown"):
+        if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges):
+            fmt.error(f"VM {vmid} is PROTECTED. Cannot {action}.")
+            return 1
+
+    fmt.header(f"VM Power: {action.upper()} {vmid}")
+    fmt.blank()
+
+    node_ip = _find_reachable_node(cfg)
+    if not node_ip:
+        fmt.step_fail("Cannot reach any PVE node")
+        fmt.blank()
+        fmt.footer()
+        return 1
+
+    cmds = {
+        "start": f"qm start {vmid}",
+        "stop": f"qm stop {vmid}",
+        "reboot": f"qm reset {vmid}",
+        "shutdown": f"qm shutdown {vmid}",
+        "status": f"qm status {vmid}",
+    }
+    cmd = cmds.get(action)
+    if not cmd:
+        fmt.error(f"Unknown action: {action}. Use start|stop|reboot|shutdown|status")
+        return 1
+
+    fmt.step_start(f"Executing: {action} VM {vmid}")
+    stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=60)
+
+    if ok:
+        if action == "status":
+            fmt.step_ok(f"VM {vmid}: {stdout.strip()}")
+        else:
+            fmt.step_ok(f"VM {vmid} — {action} successful")
+    else:
+        fmt.step_fail(f"{action} failed: {stdout}")
 
     fmt.blank()
     fmt.footer()

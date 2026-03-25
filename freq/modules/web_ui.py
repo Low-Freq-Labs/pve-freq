@@ -459,6 +459,8 @@ tr:hover td{background:var(--card-hover)}
   <button class="fleet-btn view-btn" data-view="docker" data-view="docker">DOCKER</button>
   <button class="fleet-btn view-btn" data-view="security" data-view="security">SECURITY</button>
   <button class="fleet-btn view-btn" data-view="lab" data-view="lab">LAB TOOLS</button>
+  <button class="fleet-btn view-btn" data-view="policies">POLICIES</button>
+  <button class="fleet-btn view-btn" data-view="ops">OPS</button>
   <div class="flex-1"></div>
   <button class="fleet-btn" onclick="openNewTool()" id="btn-new-tool" style="opacity:0.7;display:none">+ NEW TOOL</button>
   <button class="fleet-btn opacity-7" onclick="nav('system')" >&#9881; SETTINGS</button>
@@ -713,6 +715,101 @@ tr:hover td{background:var(--card-hover)}
 <div id="lab-view" class="d-none">
 <div id="lab-tools-container"></div>
 </div><!-- close lab-view -->
+
+<div id="policies-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>Policy Compliance</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="policyAction('check')">CHECK COMPLIANCE</button>
+      <button class="fleet-btn" onclick="policyAction('diff')">SHOW DRIFT</button>
+      <button class="fleet-btn c-red" onclick="policyAction('fix')">APPLY FIX</button>
+    </div>
+    <div class="exec-out" id="policy-out">Run a compliance check to see policy status.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>Sweep <span class="fs-12-dim">FULL AUDIT PIPELINE</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="runSweep(false)">DRY RUN</button>
+      <button class="fleet-btn c-red" onclick="runSweep(true)">SWEEP + FIX</button>
+    </div>
+    <div class="exec-out" id="sweep-out">Click to run a full audit sweep.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>Patrol Status <span class="fs-12-dim">CONTINUOUS MONITORING</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <button class="fleet-btn" onclick="loadPatrolStatus()">CHECK STATUS</button>
+    <div class="exec-out" id="patrol-out">Click to check current compliance status.</div>
+  </div>
+</div>
+</div><!-- close policies-view -->
+
+<div id="ops-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>Diagnostics</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="runDoctor()">RUN DOCTOR</button>
+      <input type="text" id="diag-host" placeholder="Host label..." class="input-field" style="width:180px">
+      <button class="fleet-btn" onclick="runDiagnose()">DIAGNOSE HOST</button>
+    </div>
+    <div class="exec-out" id="diag-out">Run self-diagnostic or diagnose a specific host.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>Log Viewer</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <input type="text" id="log-host" placeholder="Host label..." class="input-field" style="width:180px">
+      <input type="text" id="log-unit" placeholder="Unit (optional)..." class="input-field" style="width:180px">
+      <input type="number" id="log-lines" placeholder="Lines" value="50" class="input-field" style="width:80px">
+      <button class="fleet-btn" onclick="fetchLogs()">FETCH LOGS</button>
+    </div>
+    <div class="exec-out" id="log-out" style="max-height:400px;overflow-y:auto">Enter a host to view its logs.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>ZFS</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <button class="fleet-btn" onclick="loadZfs()">LOAD ZFS STATUS</button>
+    <div class="exec-out" id="zfs-out">Click to load ZFS pool status.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>Backups</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="loadBackups('list')">LIST</button>
+      <button class="fleet-btn" onclick="loadBackups('status')">STATUS</button>
+    </div>
+    <div class="exec-out" id="backup-out">Click to view backup status.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>Discovery</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <input type="text" id="discover-subnet" placeholder="Subnet (e.g. 10.25.10)" class="input-field" style="width:200px">
+      <button class="fleet-btn" onclick="runDiscover()">SCAN NETWORK</button>
+    </div>
+    <div class="exec-out" id="discover-out">Enter a subnet to discover hosts.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>FREQ WIPE <span class="fs-12-dim">DRIVE SANITIZATION</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="loadGwipe('status')">STATUS</button>
+      <button class="fleet-btn" onclick="loadGwipe('bays')">BAYS</button>
+      <button class="fleet-btn" onclick="loadGwipe('history')">HISTORY</button>
+    </div>
+    <div class="exec-out" id="gwipe-out">Click to check wipe station status.</div>
+  </div>
+</div>
+</div><!-- close ops-view -->
 
 </div><!-- close p-home -->
 
@@ -1044,7 +1141,11 @@ var API={
   SWITCH:'/api/switch',NOTIFY_TEST:'/api/notify/test',RISK:'/api/risk',LEARN:'/api/learn',METRICS:'/api/metrics',
   VAULT_SET:'/api/vault/set',VAULT_DELETE:'/api/vault/delete',
   USERS_CREATE:'/api/users/create',USERS_PROMOTE:'/api/users/promote',USERS_DEMOTE:'/api/users/demote',
-  LAB_TOOL_CONFIG:'/api/lab-tool/config',LAB_TOOL_PROXY:'/api/lab-tool/proxy',LAB_TOOL_SAVE:'/api/lab-tool/save-config'
+  LAB_TOOL_CONFIG:'/api/lab-tool/config',LAB_TOOL_PROXY:'/api/lab-tool/proxy',LAB_TOOL_SAVE:'/api/lab-tool/save-config',
+  DOCTOR:'/api/doctor',DIAGNOSE:'/api/diagnose',LOG:'/api/log',
+  POLICY_CHECK:'/api/policy/check',POLICY_FIX:'/api/policy/fix',POLICY_DIFF:'/api/policy/diff',
+  SWEEP:'/api/sweep',PATROL_STATUS:'/api/patrol/status',
+  ZFS:'/api/zfs',BACKUP:'/api/backup',DISCOVER:'/api/discover',GWIPE:'/api/gwipe'
 };
 var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switch */
 
@@ -1402,9 +1503,9 @@ document.getElementById('header-tagline').textContent=rt();
 var qf=document.getElementById('home-quote-footer');if(qf)qf.textContent=rq();
 
 var _currentView='home';
-var VIEW_IDS=['home','fleet','docker','security','lab'];
-var VIEW_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',security:'SECURITY',lab:'LAB TOOLS'};
-var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityPage()},lab:function(){loadLabTools()}};
+var VIEW_IDS=['home','fleet','docker','security','lab','policies','ops'];
+var VIEW_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',security:'SECURITY',lab:'LAB TOOLS',policies:'POLICIES',ops:'OPERATIONS'};
+var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityPage()},lab:function(){loadLabTools()},policies:function(){loadPoliciesPage()},ops:function(){loadOpsPage()}};
 
 function nav(p){
   try{
@@ -5021,6 +5122,118 @@ function gwipeBayWipe(dev,pfx){
   });
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   POLICIES VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+function loadPoliciesPage(){
+  policyAction('check');
+}
+function policyAction(action){
+  var out=document.getElementById('policy-out');if(!out)return;
+  out.innerHTML='<span style="color:var(--text-dim)">Running policy '+action+'...</span>';
+  var url=action==='check'?API.POLICY_CHECK:action==='diff'?API.POLICY_DIFF:API.POLICY_FIX;
+  fetch(url+'?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+    out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No output')+'</pre>';
+  }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
+function runSweep(doFix){
+  var out=document.getElementById('sweep-out');if(!out)return;
+  out.innerHTML='<span style="color:var(--text-dim)">Running sweep'+(doFix?' with fixes':'...')+'</span>';
+  fetch(API.SWEEP+'?fix='+doFix+'&token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+    out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No output')+'</pre>';
+  }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
+function loadPatrolStatus(){
+  var out=document.getElementById('patrol-out');if(!out)return;
+  out.innerHTML='<span style="color:var(--text-dim)">Checking compliance...</span>';
+  fetch(API.PATROL_STATUS).then(function(r){return r.json()}).then(function(d){
+    if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+    out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No output')+'</pre>';
+  }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
+/* ═══════════════════════════════════════════════════════════════════
+   OPS VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+function loadOpsPage(){
+  /* Static panels — no auto-load needed */
+}
+function runDoctor(){
+  var out=document.getElementById('diag-out');if(!out)return;
+  out.innerHTML='<span style="color:var(--text-dim)">Running self-diagnostic...</span>';
+  fetch(API.DOCTOR).then(function(r){return r.json()}).then(function(d){
+    if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+    out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'OK')+'</pre>';
+  }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
+function runDiagnose(){
+  var host=document.getElementById('diag-host').value.trim();
+  if(!host){toast('Enter a host label','error');return;}
+  var out=document.getElementById('diag-out');if(!out)return;
+  out.innerHTML='<span style="color:var(--text-dim)">Diagnosing '+_esc(host)+'...</span>';
+  fetch(API.DIAGNOSE+'?target='+encodeURIComponent(host)).then(function(r){return r.json()}).then(function(d){
+    if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+    var h='<div style="font-size:14px;font-weight:700;color:var(--purple-light);margin-bottom:8px">'+_esc(d.host)+' ('+_esc(d.ip)+')</div>';
+    var checks=d.checks||{};
+    Object.keys(checks).forEach(function(k){
+      h+='<div style="margin-bottom:8px"><div style="font-size:11px;letter-spacing:1px;color:var(--text-dim);text-transform:uppercase">'+_esc(k)+'</div>';
+      h+='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text);margin:2px 0 0 0">'+_esc(checks[k])+'</pre></div>';
+    });
+    out.innerHTML=h;
+  }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
+function fetchLogs(){
+  var host=document.getElementById('log-host').value.trim();
+  if(!host){toast('Enter a host label','error');return;}
+  var unit=document.getElementById('log-unit').value.trim();
+  var lines=document.getElementById('log-lines').value||50;
+  var out=document.getElementById('log-out');if(!out)return;
+  out.innerHTML='<span style="color:var(--text-dim)">Fetching logs from '+_esc(host)+'...</span>';
+  var url=API.LOG+'?target='+encodeURIComponent(host)+'&lines='+lines;
+  if(unit)url+='&unit='+encodeURIComponent(unit);
+  fetch(url).then(function(r){return r.json()}).then(function(d){
+    if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+    var logLines=d.lines||[];
+    out.innerHTML='<pre style="white-space:pre-wrap;font-size:11px;color:var(--text);line-height:1.5">'+_esc(logLines.join('\\n'))+'</pre>';
+  }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
+function loadZfs(){
+  var out=document.getElementById('zfs-out');if(!out)return;
+  out.innerHTML='<span style="color:var(--text-dim)">Loading ZFS status...</span>';
+  fetch(API.ZFS).then(function(r){return r.json()}).then(function(d){
+    if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+    out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No ZFS data')+'</pre>';
+  }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
+function loadBackups(action){
+  var out=document.getElementById('backup-out');if(!out)return;
+  out.innerHTML='<span style="color:var(--text-dim)">Loading backups...</span>';
+  fetch(API.BACKUP+'?action='+action).then(function(r){return r.json()}).then(function(d){
+    if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+    out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No backup data')+'</pre>';
+  }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
+function runDiscover(){
+  var subnet=document.getElementById('discover-subnet').value.trim();
+  var out=document.getElementById('discover-out');if(!out)return;
+  out.innerHTML='<span style="color:var(--text-dim)">Scanning network...</span>';
+  var url=API.DISCOVER;
+  if(subnet)url+='?subnet='+encodeURIComponent(subnet);
+  fetch(url+'&token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+    out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No hosts discovered')+'</pre>';
+  }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
+function loadGwipe(action){
+  var out=document.getElementById('gwipe-out');if(!out)return;
+  out.innerHTML='<span style="color:var(--text-dim)">Loading GWIPE '+action+'...</span>';
+  fetch(API.GWIPE+'?action='+action+'&token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+    var data=d.data||{};
+    out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(JSON.stringify(data,null,2))+'</pre>';
+  }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
 /* ═══════════════════════════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════════════════════════ */

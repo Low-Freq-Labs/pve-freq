@@ -20,7 +20,7 @@ VM_QUICK_TIMEOUT = 10
 VM_CONFIG_TIMEOUT = 30
 VM_CREATE_TIMEOUT = 120
 VM_CLONE_TIMEOUT = 300
-VM_MIGRATE_TIMEOUT = 600
+VM_MIGRATE_TIMEOUT = 1800  # 30 min — large disks over 1Gbps need time
 
 
 def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = VM_CMD_TIMEOUT) -> tuple:
@@ -930,14 +930,101 @@ def cmd_file_send(cfg: FreqConfig, pack, args) -> int:
     return r.returncode
 
 
-def cmd_migrate(cfg: FreqConfig, pack, args) -> int:
-    """Migrate a VM between PVE nodes with auto storage mapping.
+def _find_best_local_storage(cfg: FreqConfig, node_ip: str, target_node: str) -> str:
+    """Find best local storage on target node for VM disks.
 
-    Detects source/target storage pools and remaps if they differ.
+    Prefers local SSD/ZFS over NFS. Never picks shared NFS for permanent
+    VM placement — NFS is a transit layer, not a home.
+    """
+    stdout, ok = _pve_cmd(cfg, node_ip,
+                           f"pvesh get /nodes/{target_node}/storage --output-format json 2>/dev/null")
+    if not ok:
+        return ""
+
+    try:
+        storages = json.loads(stdout)
+    except json.JSONDecodeError:
+        return ""
+
+    # Score storages: local SSD > local HDD > shared (never pick shared)
+    candidates = []
+    for s in storages:
+        content = s.get("content", "")
+        if "images" not in content or not s.get("active", False):
+            continue
+        stype = s.get("type", "")
+        name = s.get("storage", "")
+        shared = s.get("shared", 0)
+
+        # Skip shared/NFS storage — VMs belong on local disks
+        if shared or stype in ("nfs", "cifs", "cephfs", "glusterfs"):
+            continue
+
+        # Prefer SSD-named pools, then ZFS, then anything local
+        score = 0
+        if "ssd" in name.lower():
+            score = 100
+        elif stype == "zfspool":
+            score = 80
+        elif stype in ("lvmthin", "lvm"):
+            score = 60
+        else:
+            score = 40
+        candidates.append((score, name))
+
+    if candidates:
+        candidates.sort(reverse=True)
+        return candidates[0][1]
+    return ""
+
+
+def _check_snapshots(cfg: FreqConfig, source_ip: str, vmid: int) -> list:
+    """Check if VM has snapshots that would block live migration."""
+    stdout, ok = _pve_cmd(cfg, source_ip, f"qm listsnapshot {vmid}")
+    if not ok:
+        return []
+    snapshots = []
+    for line in stdout.strip().splitlines():
+        line = line.strip()
+        if not line or "current" in line.lower():
+            continue
+        # Parse snapshot name from qm listsnapshot output
+        # Format: `-> name  timestamp  description` or ` `-> name ...`
+        parts = line.lstrip("`-> ").lstrip("-> ").split()
+        if parts:
+            snapshots.append(parts[0])
+    return snapshots
+
+
+def _delete_snapshots(cfg: FreqConfig, source_ip: str, vmid: int, snapshots: list) -> bool:
+    """Delete all snapshots from a VM."""
+    for snap in snapshots:
+        fmt.step_start(f"Deleting snapshot '{snap}'")
+        stdout, ok = _pve_cmd(cfg, source_ip, f"qm delsnapshot {vmid} {snap}",
+                               timeout=VM_CLONE_TIMEOUT)
+        if ok:
+            fmt.step_ok(f"Deleted '{snap}'")
+        else:
+            fmt.step_fail(f"Failed to delete '{snap}': {stdout}")
+            return False
+    return True
+
+
+def cmd_migrate(cfg: FreqConfig, pack, args) -> int:
+    """Live migrate a VM between PVE nodes.
+
+    Workflow:
+      1. Find which node currently hosts the VM
+      2. Check for snapshots (block live migration) and offer to delete
+      3. Auto-detect best LOCAL storage on target (prefers SSD, never NFS)
+      4. Live migrate with --with-local-disks (direct node-to-node, no NFS middleman)
+      5. Fall back to offline if VM is stopped
+      6. Verify VM is running on target after migration
     """
     target = getattr(args, "target", None)
     target_node = getattr(args, "node", None)
     target_storage = getattr(args, "storage", None)
+    skip_confirm = getattr(args, "yes", False)
 
     if not target or not target_node:
         fmt.error("Usage: freq migrate <vmid> --node <target_node> [--storage <pool>]")
@@ -949,38 +1036,69 @@ def cmd_migrate(cfg: FreqConfig, pack, args) -> int:
         fmt.error(f"Invalid VMID: {target}")
         return 1
 
-    node_ip = _find_node(cfg)
-    if not node_ip:
-        fmt.error("Cannot reach any PVE node")
+    # Find which node actually hosts this VM (must run migrate from source)
+    source_ip = _find_vm_node(cfg, vmid)
+    if not source_ip:
+        fmt.error(f"Cannot find VM {vmid} on any PVE node")
+        return 1
+
+    # Resolve source node name for display
+    source_node = "unknown"
+    for i, ip in enumerate(cfg.pve_nodes):
+        if ip == source_ip and i < len(cfg.pve_node_names):
+            source_node = cfg.pve_node_names[i]
+            break
+
+    # Don't migrate to the same node
+    if source_node == target_node:
+        fmt.error(f"VM {vmid} is already on {target_node}")
         return 1
 
     fmt.header(f"Migrate VM {vmid}")
     fmt.blank()
-    fmt.line(f"  Target node: {fmt.C.CYAN}{target_node}{fmt.C.RESET}")
+    fmt.line(f"  Source: {fmt.C.CYAN}{source_node}{fmt.C.RESET} ({source_ip})")
+    fmt.line(f"  Target: {fmt.C.CYAN}{target_node}{fmt.C.RESET}")
 
-    # Auto-detect storage mapping if not specified
+    # Auto-detect best local storage on target if not specified
     if not target_storage:
-        # Get target node storage pools
-        stdout, ok = _pve_cmd(cfg, node_ip,
-                               f"pvesh get /nodes/{target_node}/storage --output-format json 2>/dev/null")
-        if ok:
-            try:
-                storages = json.loads(stdout)
-                # Find first storage that supports images
-                for s in storages:
-                    content = s.get("content", "")
-                    if "images" in content and s.get("active", False):
-                        target_storage = s.get("storage", "")
-                        break
-            except json.JSONDecodeError:
-                pass
+        target_storage = _find_best_local_storage(cfg, source_ip, target_node)
+        if target_storage:
+            fmt.line(f"  Storage: {fmt.C.CYAN}{target_storage}{fmt.C.RESET} (auto-detected, local)")
+        else:
+            fmt.warn("No local storage found on target — migration may use default")
+    else:
+        fmt.line(f"  Storage: {fmt.C.CYAN}{target_storage}{fmt.C.RESET}")
 
-    if target_storage:
-        fmt.line(f"  Target storage: {fmt.C.CYAN}{target_storage}{fmt.C.RESET}")
+    # Check for snapshots — they block live migration with local disks
+    snapshots = _check_snapshots(cfg, source_ip, vmid)
+    if snapshots:
+        fmt.blank()
+        fmt.warn(f"VM has {len(snapshots)} snapshot(s) that block live migration:")
+        for s in snapshots:
+            fmt.line(f"    - {s}")
+        fmt.blank()
+
+        if not skip_confirm:
+            try:
+                confirm = input(
+                    f"  {fmt.C.YELLOW}Delete snapshots to enable live migration? [y/N]:{fmt.C.RESET} "
+                ).strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return 1
+            if confirm != "y":
+                fmt.info("Cancelled — cannot live migrate with snapshots.")
+                return 1
+        else:
+            fmt.info("Auto-deleting snapshots (--yes)")
+
+        if not _delete_snapshots(cfg, source_ip, vmid, snapshots):
+            fmt.error("Failed to delete snapshots — aborting migration")
+            return 1
 
     fmt.blank()
 
-    if not getattr(args, "yes", False):
+    if not skip_confirm:
         try:
             confirm = input(f"  {fmt.C.YELLOW}Migrate? [y/N]:{fmt.C.RESET} ").strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -990,27 +1108,360 @@ def cmd_migrate(cfg: FreqConfig, pack, args) -> int:
             fmt.info("Cancelled.")
             return 0
 
-    # Build migration command
+    # Build migration command — direct node-to-node, no NFS middleman
     migrate_cmd = f"qm migrate {vmid} {target_node} --with-local-disks"
     if target_storage:
         migrate_cmd += f" --targetstorage {target_storage}"
 
-    # Try online first, fall back to offline
-    fmt.step_start(f"Migrating VM {vmid} to {target_node}")
-    stdout, ok = _pve_cmd(cfg, node_ip, migrate_cmd + " --online", timeout=VM_MIGRATE_TIMEOUT)
+    # Try online first (zero downtime), fall back to offline
+    fmt.step_start(f"Live migrating VM {vmid} to {target_node} (this may take several minutes)")
+    stdout, ok = _pve_cmd(cfg, source_ip, migrate_cmd + " --online", timeout=VM_MIGRATE_TIMEOUT)
 
-    if not ok and "not running" in stdout.lower():
-        # VM is stopped — offline migration
-        fmt.step_fail("Online migration failed (VM not running), trying offline")
-        fmt.step_start(f"Offline migration to {target_node}")
-        stdout, ok = _pve_cmd(cfg, node_ip, migrate_cmd, timeout=VM_MIGRATE_TIMEOUT)
+    if not ok:
+        if "not running" in stdout.lower():
+            fmt.step_fail("VM is stopped — switching to offline migration")
+            fmt.step_start(f"Offline migration to {target_node}")
+            stdout, ok = _pve_cmd(cfg, source_ip, migrate_cmd, timeout=VM_MIGRATE_TIMEOUT)
+        elif "snapshot" in stdout.lower():
+            fmt.step_fail("Snapshot still blocking migration — check qm listsnapshot")
+            fmt.blank()
+            fmt.footer()
+            return 1
 
     if ok:
         fmt.step_ok(f"VM {vmid} migrated to {target_node}")
-        logger.info(f"VM migrated: {vmid} -> {target_node}", storage=target_storage)
+        logger.info(f"VM migrated: {vmid} -> {target_node} (storage={target_storage})")
+
+        # Verify VM is running on target
+        fmt.step_start("Verifying VM on target node")
+        new_ip = _find_vm_node(cfg, vmid)
+        target_resolved = ""
+        for i, name in enumerate(cfg.pve_node_names):
+            if name == target_node and i < len(cfg.pve_nodes):
+                target_resolved = cfg.pve_nodes[i]
+                break
+        if new_ip == target_resolved:
+            fmt.step_ok(f"Confirmed: VM {vmid} running on {target_node}")
+        else:
+            fmt.step_fail(f"VM {vmid} not found on {target_node} — check PVE cluster status")
     else:
         fmt.step_fail(f"Migration failed: {stdout}")
 
     fmt.blank()
     fmt.footer()
     return 0 if ok else 1
+
+
+def cmd_nic(cfg: FreqConfig, pack, args) -> int:
+    """NIC management: add, clear, change-ip, change-id, check-ip."""
+    action = getattr(args, "action", None)
+    target = getattr(args, "target", None)
+
+    if not action:
+        fmt.error("Usage: freq nic <add|clear|change-ip|change-id|check-ip> <vmid> [options]")
+        return 1
+
+    dispatch = {
+        "add": _nic_add,
+        "clear": _nic_clear,
+        "change-ip": _nic_change_ip,
+        "change-id": _nic_change_id,
+        "check-ip": _nic_check_ip,
+    }
+
+    handler = dispatch.get(action)
+    if not handler:
+        fmt.error(f"Unknown NIC action: {action}. Use add|clear|change-ip|change-id|check-ip")
+        return 1
+
+    return handler(cfg, args)
+
+
+def _nic_add(cfg: FreqConfig, args) -> int:
+    """Add a NIC to a VM."""
+    target = getattr(args, "target", None)
+    ip = getattr(args, "ip", None)
+    gateway = getattr(args, "gw", None)
+    vlan = getattr(args, "vlan", None)
+
+    if not target or not ip:
+        fmt.error("Usage: freq nic add <vmid> --ip <ip> [--gw <gateway>] [--vlan <vlan>]")
+        return 1
+
+    try:
+        vmid = int(target)
+    except ValueError:
+        fmt.error(f"Invalid VMID: {target}")
+        return 1
+
+    if not _safety_check(cfg, vmid, "configure"):
+        return 1
+
+    node_ip = _find_node(cfg)
+    if not node_ip:
+        fmt.error("Cannot reach any PVE node")
+        return 1
+
+    fmt.header(f"Add NIC: VM {vmid}")
+    fmt.blank()
+
+    # Find next available NIC index
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm config {vmid}", timeout=VM_CONFIG_TIMEOUT)
+    next_nic = 0
+    if ok:
+        for line in stdout.split("\n"):
+            key = line.split(":")[0].strip()
+            if key.startswith("net"):
+                try:
+                    idx = int(key.replace("net", ""))
+                    if idx >= next_nic:
+                        next_nic = idx + 1
+                except ValueError:
+                    pass
+
+    cidr = ip if "/" in ip else ip + "/24"
+    gw_part = f",gw={gateway}" if gateway else ""
+    tag_part = f",tag={vlan}" if vlan else ""
+
+    # Create NIC
+    fmt.step_start(f"Adding net{next_nic} to VM {vmid}")
+    stdout1, ok1 = _pve_cmd(cfg, node_ip,
+        f"qm set {vmid} --net{next_nic} virtio,bridge={cfg.nic_bridge}{tag_part}",
+        timeout=VM_CONFIG_TIMEOUT)
+
+    # Set IP config
+    stdout2, ok2 = _pve_cmd(cfg, node_ip,
+        f"qm set {vmid} --ipconfig{next_nic} ip={cidr}{gw_part}",
+        timeout=VM_CONFIG_TIMEOUT)
+
+    if ok1 and ok2:
+        fmt.step_ok(f"net{next_nic} added: {ip}" + (f" VLAN {vlan}" if vlan else ""))
+        logger.info(f"NIC added to VM {vmid}: net{next_nic} ip={ip}")
+    else:
+        err = stdout1 if not ok1 else stdout2
+        fmt.step_fail(f"Failed: {err}")
+
+    fmt.blank()
+    fmt.footer()
+    return 0 if ok1 and ok2 else 1
+
+
+def _nic_clear(cfg: FreqConfig, args) -> int:
+    """Remove all NICs from a VM."""
+    target = getattr(args, "target", None)
+    if not target:
+        fmt.error("Usage: freq nic clear <vmid>")
+        return 1
+
+    try:
+        vmid = int(target)
+    except ValueError:
+        fmt.error(f"Invalid VMID: {target}")
+        return 1
+
+    if not _safety_check(cfg, vmid, "configure"):
+        return 1
+
+    node_ip = _find_node(cfg)
+    if not node_ip:
+        fmt.error("Cannot reach any PVE node")
+        return 1
+
+    fmt.header(f"Clear NICs: VM {vmid}")
+    fmt.blank()
+
+    if not getattr(args, "yes", False):
+        try:
+            confirm = input(f"  {fmt.C.YELLOW}Remove ALL NICs from VM {vmid}? [y/N]:{fmt.C.RESET} ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 1
+        if confirm != "y":
+            fmt.info("Cancelled.")
+            return 0
+
+    # Get current config
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm config {vmid}", timeout=VM_CONFIG_TIMEOUT)
+    if not ok:
+        fmt.step_fail(f"Cannot read VM config: {stdout}")
+        fmt.blank()
+        fmt.footer()
+        return 1
+
+    deleted = []
+    for line in stdout.split("\n"):
+        line = line.strip()
+        if ":" not in line:
+            continue
+        key = line.split(":")[0].strip()
+        if key.startswith("ipconfig") or key.startswith("net"):
+            fmt.step_start(f"Removing {key}")
+            _, del_ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} --delete {key}", timeout=VM_CONFIG_TIMEOUT)
+            if del_ok:
+                fmt.step_ok(f"Removed {key}")
+                deleted.append(key)
+            else:
+                fmt.step_fail(f"Failed to remove {key}")
+
+    fmt.blank()
+    fmt.line(f"  Cleared {len(deleted)} NIC entries from VM {vmid}")
+    fmt.blank()
+    fmt.footer()
+    return 0
+
+
+def _nic_change_ip(cfg: FreqConfig, args) -> int:
+    """Change a VM's IP configuration."""
+    target = getattr(args, "target", None)
+    ip = getattr(args, "ip", None)
+    gateway = getattr(args, "gw", None)
+    nic_idx = getattr(args, "nic_index", 0) or 0
+    vlan = getattr(args, "vlan", None)
+
+    if not target or not ip:
+        fmt.error("Usage: freq nic change-ip <vmid> --ip <ip> [--gw <gw>] [--nic-index N] [--vlan V]")
+        return 1
+
+    try:
+        vmid = int(target)
+    except ValueError:
+        fmt.error(f"Invalid VMID: {target}")
+        return 1
+
+    if not _safety_check(cfg, vmid, "configure"):
+        return 1
+
+    node_ip = _find_node(cfg)
+    if not node_ip:
+        fmt.error("Cannot reach any PVE node")
+        return 1
+
+    fmt.header(f"Change IP: VM {vmid}")
+    fmt.blank()
+
+    cidr = ip if "/" in ip else ip + "/24"
+    gw_part = f",gw={gateway}" if gateway else ""
+    tag_part = f",tag={vlan}" if vlan else ""
+
+    # Set NIC
+    fmt.step_start(f"Updating net{nic_idx}")
+    stdout1, ok1 = _pve_cmd(cfg, node_ip,
+        f"qm set {vmid} --net{nic_idx} virtio,bridge={cfg.nic_bridge}{tag_part}",
+        timeout=VM_CONFIG_TIMEOUT)
+
+    # Set IP config
+    fmt.step_start(f"Setting ipconfig{nic_idx} to {ip}")
+    stdout2, ok2 = _pve_cmd(cfg, node_ip,
+        f"qm set {vmid} --ipconfig{nic_idx} ip={cidr}{gw_part}",
+        timeout=VM_CONFIG_TIMEOUT)
+
+    if ok1 and ok2:
+        fmt.step_ok(f"VM {vmid} net{nic_idx} → {ip}")
+    else:
+        err = stdout1 if not ok1 else stdout2
+        fmt.step_fail(f"Failed: {err}")
+
+    fmt.blank()
+    fmt.footer()
+    return 0 if ok1 and ok2 else 1
+
+
+def _nic_change_id(cfg: FreqConfig, args) -> int:
+    """Change a VM's VMID (clone + destroy)."""
+    target = getattr(args, "target", None)
+    new_id = getattr(args, "new_id", None)
+
+    if not target or not new_id:
+        fmt.error("Usage: freq nic change-id <vmid> --new-id <new_vmid>")
+        return 1
+
+    try:
+        vmid = int(target)
+        newid = int(new_id)
+    except ValueError:
+        fmt.error("Both VMIDs must be integers")
+        return 1
+
+    if not _safety_check(cfg, vmid, "change-id"):
+        return 1
+    if not _safety_check(cfg, newid, "change-id"):
+        return 1
+
+    node_ip = _find_node(cfg)
+    if not node_ip:
+        fmt.error("Cannot reach any PVE node")
+        return 1
+
+    fmt.header(f"Change VMID: {vmid} → {newid}")
+    fmt.blank()
+
+    # Check VM is stopped
+    stdout, _ = _pve_cmd(cfg, node_ip, f"qm status {vmid}", timeout=VM_QUICK_TIMEOUT)
+    if "running" in (stdout or ""):
+        fmt.error(f"VM {vmid} must be stopped first")
+        return 1
+
+    if not getattr(args, "yes", False):
+        try:
+            confirm = input(f"  {fmt.C.YELLOW}Change VMID {vmid} → {newid}? [y/N]:{fmt.C.RESET} ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 1
+        if confirm != "y":
+            fmt.info("Cancelled.")
+            return 0
+
+    # Clone to new ID
+    fmt.step_start(f"Cloning {vmid} → {newid}")
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm clone {vmid} {newid} --full", timeout=VM_CLONE_TIMEOUT)
+    if not ok:
+        fmt.step_fail(f"Clone failed: {stdout}")
+        fmt.blank()
+        fmt.footer()
+        return 1
+    fmt.step_ok("Clone complete")
+
+    # Destroy old
+    fmt.step_start(f"Removing old VM {vmid}")
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=VM_CREATE_TIMEOUT)
+    if ok:
+        fmt.step_ok(f"VMID changed: {vmid} → {newid}")
+        logger.info(f"VMID changed: {vmid} -> {newid}")
+    else:
+        fmt.step_fail(f"Destroy old VM failed: {stdout}")
+        fmt.warn(f"New VM {newid} exists but old VM {vmid} remains")
+
+    fmt.blank()
+    fmt.footer()
+    return 0 if ok else 1
+
+
+def _nic_check_ip(cfg: FreqConfig, args) -> int:
+    """Check if an IP address is available (ping test)."""
+    ip = getattr(args, "ip", None)
+    if not ip:
+        fmt.error("Usage: freq nic check-ip --ip <ip_address>")
+        return 1
+
+    fmt.header(f"IP Check: {ip}")
+    fmt.blank()
+
+    fmt.step_start(f"Pinging {ip}")
+    try:
+        result = subprocess.run(
+            ["ping", "-c", "1", "-W", "2", ip],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            fmt.step_ok(f"{ip} is REACHABLE (in use)")
+            fmt.line(f"  {fmt.C.YELLOW}This IP is already taken.{fmt.C.RESET}")
+        else:
+            fmt.step_ok(f"{ip} is UNREACHABLE (available)")
+            fmt.line(f"  {fmt.C.GREEN}This IP appears to be free.{fmt.C.RESET}")
+    except subprocess.TimeoutExpired:
+        fmt.step_ok(f"{ip} is UNREACHABLE (available)")
+        fmt.line(f"  {fmt.C.GREEN}This IP appears to be free.{fmt.C.RESET}")
+
+    fmt.blank()
+    fmt.footer()
+    return 0
