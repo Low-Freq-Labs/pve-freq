@@ -1079,16 +1079,34 @@ def _phase_pve_deploy(cfg, ctx, args=None):
         fmt.line(f"    {fmt.C.CYAN}{ip}{fmt.C.RESET}")
     fmt.blank()
 
-    # Check for CLI bootstrap credentials (--bootstrap-key, --bootstrap-user)
+    # Check for CLI bootstrap credentials (--bootstrap-key, --bootstrap-user, --bootstrap-password-file)
     bootstrap_key = getattr(args, "bootstrap_key", None) if args else None
     bootstrap_user = getattr(args, "bootstrap_user", None) if args else None
+    bootstrap_pass_file = getattr(args, "bootstrap_password_file", None) if args else None
+
+    # Read bootstrap password from file if provided
+    bootstrap_pass = ""
+    if bootstrap_pass_file and os.path.isfile(bootstrap_pass_file):
+        with open(bootstrap_pass_file) as f:
+            bootstrap_pass = f.read().strip()
 
     if bootstrap_key and os.path.isfile(bootstrap_key):
-        # Bootstrap mode — skip interactive prompts
+        # Bootstrap key mode — skip interactive prompts
         pve_user = bootstrap_user or "root"
         auth_key = bootstrap_key
         auth_pass = ""
-        fmt.step_ok(f"Using bootstrap auth: {pve_user} via {auth_key}")
+        fmt.step_ok(f"Using bootstrap key auth: {pve_user} via {auth_key}")
+    elif bootstrap_pass:
+        # Bootstrap password mode — use sshpass
+        pve_user = bootstrap_user or "root"
+        auth_key = ""
+        auth_pass = bootstrap_pass
+        rc, _, _ = _run(["which", "sshpass"])
+        if rc != 0:
+            fmt.step_fail("'sshpass' not installed — required for --bootstrap-password-file")
+            fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
+            return
+        fmt.step_ok(f"Using bootstrap password auth: {pve_user} via sshpass")
     else:
         # Interactive mode
         pve_user = _input("Deploy as user (root or sudo account)", "root")
@@ -1604,12 +1622,24 @@ def _phase_pdm(cfg, ctx, args=None):
     fmt.blank()
 
     # Get PDM admin password for API auth
-    if headless:
-        # In headless mode, read from password file or environment
+    # Priority: --pdm-pass file > PDM_PASSWORD env var > interactive prompt
+    pdm_pass_file = getattr(args, "pdm_pass", None) if args else None
+    pdm_pass = ""
+    if pdm_pass_file and os.path.isfile(pdm_pass_file):
+        with open(pdm_pass_file) as f:
+            pdm_pass = f.read().strip()
+        if pdm_pass:
+            fmt.step_ok(f"PDM password loaded from {pdm_pass_file}")
+
+    if not pdm_pass:
         pdm_pass = os.environ.get("PDM_PASSWORD", "")
+        if pdm_pass:
+            fmt.step_ok("PDM password loaded from PDM_PASSWORD env var")
+
+    if headless:
         if not pdm_pass:
             fmt.step_warn("PDM remote setup requires authentication")
-            fmt.line(f"  {fmt.C.DIM}Set PDM_PASSWORD env var or configure manually via PDM web UI{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.DIM}Use --pdm-pass FILE or set PDM_PASSWORD env var{fmt.C.RESET}")
             return
     else:
         fmt.line(f"  {fmt.C.DIM}PDM web UI: https://localhost:8443{fmt.C.RESET}")
@@ -1618,7 +1648,8 @@ def _phase_pdm(cfg, ctx, args=None):
         if not _confirm("Configure PVE cluster remote now?"):
             fmt.step_warn("Skipping remote setup — configure manually via PDM web UI")
             return
-        pdm_pass = getpass.getpass("  PDM root password (root@pam): ")
+        if not pdm_pass:
+            pdm_pass = getpass.getpass("  PDM root password (root@pam): ")
 
     # Authenticate to PDM
     fmt.step_start("Authenticating to PDM API...")
@@ -3737,11 +3768,18 @@ def _init_headless(cfg, args):
 
     bootstrap_key = getattr(args, "bootstrap_key", None)
     bootstrap_user = getattr(args, "bootstrap_user", "root")
+    bootstrap_pass_file = getattr(args, "bootstrap_password_file", None)
     password_file = getattr(args, "password_file", None)
     device_credentials_file = getattr(args, "device_credentials", None)
     # Legacy flags (deprecated, still functional as fallback)
     device_password_file = getattr(args, "device_password_file", None)
     device_user = getattr(args, "device_user", "root")
+
+    # Read bootstrap password from file if provided
+    bootstrap_pass = ""
+    if bootstrap_pass_file and os.path.isfile(bootstrap_pass_file):
+        with open(bootstrap_pass_file) as f:
+            bootstrap_pass = f.read().strip()
 
     # Auto-detect bootstrap key if not specified
     if not bootstrap_key:
@@ -3753,9 +3791,9 @@ def _init_headless(cfg, args):
                 bootstrap_key = candidate
                 break
 
-    if not bootstrap_key or not os.path.isfile(bootstrap_key):
-        fmt.line(f"  {fmt.C.RED}No bootstrap SSH key found.{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}Use --bootstrap-key PATH{fmt.C.RESET}")
+    if (not bootstrap_key or not os.path.isfile(bootstrap_key)) and not bootstrap_pass:
+        fmt.line(f"  {fmt.C.RED}No bootstrap auth found.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Use --bootstrap-key PATH or --bootstrap-password-file PATH{fmt.C.RESET}")
         return 1
 
     # Read password from file
@@ -3780,7 +3818,10 @@ def _init_headless(cfg, args):
 
     fmt.header("Init — Headless Mode")
     fmt.blank()
-    fmt.line(f"  Bootstrap: {fmt.C.CYAN}{bootstrap_user}{fmt.C.RESET} via {fmt.C.CYAN}{bootstrap_key}{fmt.C.RESET}")
+    if bootstrap_key:
+        fmt.line(f"  Bootstrap: {fmt.C.CYAN}{bootstrap_user}{fmt.C.RESET} via key {fmt.C.CYAN}{bootstrap_key}{fmt.C.RESET}")
+    else:
+        fmt.line(f"  Bootstrap: {fmt.C.CYAN}{bootstrap_user}{fmt.C.RESET} via password (sshpass)")
     fmt.line(f"  Service account: {fmt.C.CYAN}{ctx['svc_name']}{fmt.C.RESET}")
     fmt.blank()
 
@@ -3825,6 +3866,7 @@ def _init_headless(cfg, args):
         fmt.step_warn("Using deprecated --device-password-file (migrate to --device-credentials)")
 
     _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
+                           bootstrap_pass=bootstrap_pass,
                            device_password_file=device_password_file,
                            device_user=device_user,
                            device_creds=device_creds)
@@ -3919,11 +3961,13 @@ def _headless_local_account(cfg, ctx):
 
 
 def _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
+                           bootstrap_pass="",
                            device_password_file=None, device_user="root",
                            device_creds=None):
     """Deploy service account to PVE + fleet hosts using bootstrap credentials.
 
     Uses the unified platform dispatcher for all host types.
+    Supports bootstrap via SSH key (--bootstrap-key) or password (--bootstrap-password-file).
 
     device_creds: dict from _load_device_credentials() — per-device-type auth:
         {"pfsense": {"user": "root", "password": "..."}, "switch": {"user": "gigecolo", "password": "..."}}
@@ -3994,24 +4038,54 @@ def _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
                 auth_key = bootstrap_key
         elif htype == "truenas":
             # TrueNAS: use bootstrap creds by default, device_creds override if present
-            auth_pass = ""
-            auth_key = bootstrap_key
+            if bootstrap_key:
+                auth_pass = ""
+                auth_key = bootstrap_key
+            else:
+                auth_pass = bootstrap_pass
+                auth_key = ""
             auth_user = bootstrap_user
         else:
-            # Linux-family: use bootstrap credentials
-            auth_pass = ""
-            auth_key = bootstrap_key
+            # Linux-family: use bootstrap credentials (key or password)
+            if bootstrap_key:
+                auth_pass = ""
+                auth_key = bootstrap_key
+            else:
+                auth_pass = bootstrap_pass
+                auth_key = ""
             auth_user = bootstrap_user
 
         # Check connectivity for Linux-family hosts (bootstrap creds)
         # Skip for devices (iDRAC/switch) and pfSense — deployers have own checks
         if htype not in ("idrac", "switch", "pfsense"):
-            rc, _, err = _run([
-                "ssh", "-n", "-i", bootstrap_key,
-                "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
-                "-o", "StrictHostKeyChecking=accept-new",
-                f"{bootstrap_user}@{ip}", "echo OK",
-            ], timeout=QUICK_CHECK_TIMEOUT)
+            if bootstrap_key:
+                ssh_check = [
+                    "ssh", "-n", "-i", bootstrap_key,
+                    "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
+                    "-o", "StrictHostKeyChecking=accept-new",
+                    f"{bootstrap_user}@{ip}", "echo OK",
+                ]
+            else:
+                # Password-based connectivity check via sshpass (tempfile, not CLI arg)
+                import tempfile
+                _bp_fd, _bp_path = tempfile.mkstemp(prefix="freq-bp-")
+                os.write(_bp_fd, bootstrap_pass.encode())
+                os.close(_bp_fd)
+                ssh_check = [
+                    "sshpass", "-f", _bp_path,
+                    "ssh", "-n",
+                    "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
+                    "-o", "StrictHostKeyChecking=accept-new",
+                    "-o", "PubkeyAuthentication=no",
+                    f"{bootstrap_user}@{ip}", "echo OK",
+                ]
+            rc, _, err = _run(ssh_check, timeout=QUICK_CHECK_TIMEOUT)
+            # Clean up temp password file if created
+            if not bootstrap_key:
+                try:
+                    os.unlink(_bp_path)
+                except OSError:
+                    pass
             if rc != 0:
                 if _is_skip_error(err):
                     fmt.step_warn(f"{label} ({ip}) — {_skip_reason(err)} (skipped)")
