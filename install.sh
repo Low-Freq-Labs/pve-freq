@@ -36,6 +36,7 @@ MODE="install"
 SOURCE=""
 SKIP_DOCTOR=false
 YES=false
+WITH_SYSTEMD=false
 
 usage() {
     echo -e "${C_PURPLE}${C_BOLD}PVE FREQ Installer v${FREQ_VERSION}${C_RESET}"
@@ -47,6 +48,7 @@ usage() {
     echo "  --from-git           Clone from GitHub"
     echo "  --dir <path>         Custom install directory (default: /opt/pve-freq)"
     echo "  --skip-doctor        Skip post-install verification"
+    echo "  --with-systemd       Install systemd unit for freq serve"
     echo "  --uninstall          Remove FREQ from this host"
     echo "  --yes, -y            Non-interactive (no confirmations)"
     echo "  --help               Show this help"
@@ -71,6 +73,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-doctor)
             SKIP_DOCTOR=true
+            shift
+            ;;
+        --with-systemd)
+            WITH_SYSTEMD=true
             shift
             ;;
         --uninstall)
@@ -443,6 +449,21 @@ post_install() {
         echo -e "${C_BOLD}Running diagnostics...${C_RESET}"
         echo ""
         freq doctor 2>/dev/null || true
+        echo ""
+    fi
+
+    # Install systemd unit if requested
+    if [[ "$WITH_SYSTEMD" == true ]]; then
+        if [[ -f "$INSTALL_DIR/contrib/freq-serve.service" ]]; then
+            step "Installing systemd unit"
+            cp "$INSTALL_DIR/contrib/freq-serve.service" /etc/systemd/system/
+            systemctl daemon-reload
+            systemctl enable freq-serve
+            ok "Systemd unit installed (freq-serve.service)"
+            info "Start with: systemctl start freq-serve"
+        else
+            warn "Systemd unit not found at $INSTALL_DIR/contrib/freq-serve.service"
+        fi
         echo ""
     fi
 

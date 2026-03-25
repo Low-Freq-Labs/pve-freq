@@ -1,0 +1,18 @@
+[Unit]
+Description=PVE FREQ Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Environment=FREQ_DIR=/opt/pve-freq
+ExecStart=/usr/local/bin/freq serve
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=freq-serve
+
+[Install]
+WantedBy=multi-user.target
