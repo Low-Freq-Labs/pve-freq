@@ -4,6 +4,32 @@ All notable changes to PVE FREQ will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.0] - 2026-03-25
+
+### Added
+- Docker packaging — Dockerfile, docker-compose.yml, entrypoint script
+- Systemd unit (`contrib/freq-serve.service`) for bare-metal daemon installs
+- Package data (`freq/data/`) — config templates, personality packs, knowledge base ship with pip install
+- First-run config bootstrap — `load_config()` seeds `conf/` from package data when directories are empty
+- `install.sh --with-systemd` flag to install and enable systemd unit
+- CI: Docker build step in release workflow, package-data verification in test workflow
+- `.dockerignore` for clean Docker builds
+
+### Changed
+- **Python requirement raised to >=3.11** — `tomllib` is always available, removed fragile fallback TOML parser (~90 lines)
+- Single-source version — `freq/__init__.py` is the sole version source, `pyproject.toml` reads it via setuptools dynamic
+- CI test matrix updated: Debian 13/12, Ubuntu 24.04, Rocky Linux 9
+- Release tarball now includes Docker files, contrib/, and data/knowledge/
+- README: added pip install, Docker Compose, and systemd install methods
+
+### Removed
+- `_parse_toml_basic()` and `_parse_toml_value()` — fallback TOML parser no longer needed with Python 3.11+
+- DC01-specific data scrubbed from all tracked files — repo is safe for public distribution
+- `reference/` directory untracked (development workspace, not product)
+
+### Fixed
+- `.gitignore` `data/` rule changed to `/data/` to avoid blocking `freq/data/` package data
+
 ## [2.0.0] - 2026-03-24
 
 ### Added

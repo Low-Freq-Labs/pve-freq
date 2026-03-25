@@ -13,7 +13,17 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-FREQ_VERSION="${FREQ_VERSION:-2.0.0}"
+# Version: read from freq/__init__.py if available, else fallback
+_detect_version() {
+    local init_py
+    for init_py in "./freq/__init__.py" "${FREQ_DIR:-/opt/pve-freq}/freq/__init__.py"; do
+        if [[ -f "$init_py" ]]; then
+            grep -oP '__version__\s*=\s*"\K[^"]+' "$init_py" 2>/dev/null && return
+        fi
+    done
+    echo "2.1.0"  # fallback — keep in sync with freq/__init__.py
+}
+FREQ_VERSION="${FREQ_VERSION:-$(_detect_version)}"
 INSTALL_DIR="${FREQ_DIR:-/opt/pve-freq}"
 REPO_URL="https://github.com/Low-Freq-Labs/pve-freq"
 MIN_PYTHON_MAJOR=3

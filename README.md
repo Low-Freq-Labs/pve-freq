@@ -4,13 +4,13 @@
 
 **Datacenter management CLI for Proxmox homelabbers.**
 
-65 commands. Zero dependencies. Pure Python. Works offline.
+83 commands. Zero dependencies. Pure Python. Works offline.
 
 [![Tests](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml/badge.svg)](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml)
-[![Python 3.7+](https://img.shields.io/badge/python-3.7%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-7B2FBE.svg)](#requirements)
-[![LOC](https://img.shields.io/badge/LOC-30%2C700-7B2FBE.svg)](ARCHITECTURE.md)
+[![LOC](https://img.shields.io/badge/LOC-31%2C100-7B2FBE.svg)](ARCHITECTURE.md)
 
 *Drop the bass, not the uptime.*
 
@@ -72,24 +72,43 @@ Legendary vibe drops tell stories:
 
 Customize everything in `conf/personality/`. Ship your own pack.
 
-## Quick Install
+## Install
+
+### One-liner (recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq/main/install.sh | sudo bash
 ```
 
-Or install manually:
+### pip install
+
+```bash
+pip install --no-deps pve-freq
+```
+
+### Docker Compose
+
+```bash
+git clone https://github.com/Low-Freq-Labs/pve-freq.git
+cd pve-freq
+docker compose up -d
+```
+
+Dashboard runs at `http://localhost:8888`. Config and data persist in `./conf/` and `./data/`.
+
+### From source
 
 ```bash
 git clone https://github.com/Low-Freq-Labs/pve-freq.git /opt/pve-freq
 cd /opt/pve-freq
-sudo pip3 install --no-deps .
+sudo bash install.sh --from-local . --yes
 ```
 
-Or from local source:
+### Systemd (bare-metal daemon)
 
 ```bash
-sudo bash install.sh --from-local /path/to/pve-freq
+sudo bash install.sh --from-local . --yes --with-systemd
+systemctl start freq-serve
 ```
 
 ## First Run
@@ -113,7 +132,7 @@ freq status
 
 ## Features
 
-### 65+ CLI Commands
+### 83 CLI Commands
 
 | Category | Count | Highlights |
 |----------|-------|------------|
@@ -127,7 +146,7 @@ freq status
 | Smart Commands | 4 | Knowledge base, risk analysis, sweep, patrol |
 | Deployment | 2 | 8-phase init wizard, configuration |
 
-Run `freq help` for the full command reference with all 65+ commands.
+Run `freq help` for the full command reference.
 
 ### Web Dashboard
 
@@ -152,8 +171,8 @@ Declarative policies (dicts, not code). Async pipeline runner.
 
 | Requirement | Details |
 |-------------|---------|
-| **OS** | Debian 11-13, Ubuntu 20.04-24.04, Rocky/RHEL/AlmaLinux 8-9 |
-| **Python** | 3.7+ (ships with all supported distros) |
+| **OS** | Debian 12-13, Ubuntu 24.04+, Rocky/RHEL/AlmaLinux 9+ |
+| **Python** | 3.11+ (ships with all supported distros) |
 | **SSH** | openssh-client (pre-installed on all Linux) |
 | **Optional** | sshpass (for initial fleet deployment with password auth) |
 

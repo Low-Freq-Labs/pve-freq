@@ -15,13 +15,14 @@ from freq.core.types import (
     Host, VLAN, Distro, Container, ContainerVM,
     FleetBoundaries, PhysicalDevice, PVENode,
 )
+from freq import __version__
 
 
 # --- Safe Defaults (set BEFORE config load) ---
 # These survive missing/broken config. Trap #4 lesson.
 
 _DEFAULTS = {
-    "version": "2.0.0",
+    "version": __version__,
     "brand": "PVE FREQ",
     "build": "default",
     "ascii": False,

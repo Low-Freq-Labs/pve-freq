@@ -50,8 +50,9 @@ jobs:
           tar czf pve-freq-${VERSION}.tar.gz \
             --transform "s,^,pve-freq-${VERSION}/," \
             freq/ conf/*.example conf/personality/ conf/distros.toml conf/plugins/ \
-            data/knowledge/ \
+            data/knowledge/ contrib/ \
             pyproject.toml install.sh README.md LICENSE CHANGELOG.md \
+            Dockerfile docker-compose.yml docker-entrypoint.sh \
             --exclude='__pycache__' --exclude='*.pyc'
           sha256sum pve-freq-${VERSION}.tar.gz > pve-freq-${VERSION}.tar.gz.sha256
 
@@ -63,3 +64,16 @@ jobs:
             pve-freq-*.sha256
             install.sh
           generate_release_notes: true
+
+  docker:
+    name: Build Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: lowfreqlabs/pve-freq:${{ github.ref_name }}

@@ -167,7 +167,8 @@ class TestInstallScript:
             capture_output=True, text=True, timeout=10,
         )
         assert result.returncode == 0
-        assert "2.0.0" in result.stdout
+        import freq
+        assert freq.__version__ in result.stdout
 
     def test_shebang(self):
         with open(INSTALL_SCRIPT) as f:
@@ -259,7 +260,9 @@ class TestEntryPoint:
 
     def test_version_accessible(self):
         import freq
-        assert freq.__version__ == "2.0.0"
+        # Version should be a valid semver string, not empty
+        assert freq.__version__
+        assert len(freq.__version__.split(".")) == 3
 
     def test_cli_parser_builds(self):
         from freq.cli import _build_parser

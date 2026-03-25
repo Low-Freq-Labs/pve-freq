@@ -30,3 +30,9 @@ jobs:
         run: python3 -m pytest tests/ -v --tb=short
         env:
           FREQ_DIR: ${{ github.workspace }}
+
+      - name: Verify package data
+        run: |
+          python3 -c "from freq.data import get_data_path; p = get_data_path(); assert (p / 'conf-templates' / 'freq.toml.example').exists(), 'Missing package data'"
+        env:
+          FREQ_DIR: ${{ github.workspace }}

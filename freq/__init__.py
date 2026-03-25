@@ -1,5 +1,5 @@
 """PVE FREQ — Datacenter management CLI for homelabbers."""
 
-# Keep in sync with pyproject.toml
-__version__ = "2.0.0"
+# Single source of truth — pyproject.toml reads this via setuptools dynamic
+__version__ = "2.1.0"
 __brand__ = "PVE FREQ"

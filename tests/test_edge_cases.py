@@ -74,7 +74,8 @@ class TestMalformedToml(unittest.TestCase):
         """_apply_toml with empty dict leaves defaults intact."""
         cfg = FreqConfig()
         _apply_toml(cfg, {})
-        self.assertEqual(cfg.version, "2.0.0")
+        import freq
+        self.assertEqual(cfg.version, freq.__version__)
         self.assertEqual(cfg.brand, "PVE FREQ")
         self.assertEqual(cfg.ssh_service_account, "freq-admin")
 
@@ -272,7 +273,8 @@ class TestConfigMissingFields(unittest.TestCase):
     def test_default_config_all_fields_set(self):
         """Default FreqConfig has sane values for every field."""
         cfg = FreqConfig()
-        self.assertEqual(cfg.version, "2.0.0")
+        import freq
+        self.assertEqual(cfg.version, freq.__version__)
         self.assertEqual(cfg.ssh_connect_timeout, 5)
         self.assertEqual(cfg.vm_default_cores, 2)
         self.assertEqual(cfg.vm_default_ram, 2048)

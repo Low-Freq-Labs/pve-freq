@@ -345,7 +345,8 @@ class TestTier1EdgeCases(unittest.TestCase):
         """FreqConfig() with no args has safe defaults."""
         from freq.core.config import FreqConfig
         cfg = FreqConfig()
-        self.assertEqual(cfg.version, "2.0.0")
+        import freq
+        self.assertEqual(cfg.version, freq.__version__)
         self.assertEqual(cfg.brand, "PVE FREQ")
         self.assertEqual(cfg.build, "default")
         self.assertFalse(cfg.ascii_mode)

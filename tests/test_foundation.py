@@ -64,7 +64,8 @@ class TestConfig(unittest.TestCase):
         """Config loads with safe defaults even without a config file."""
         from freq.core.config import FreqConfig
         cfg = FreqConfig()
-        self.assertEqual(cfg.version, "2.0.0")
+        import freq
+        self.assertEqual(cfg.version, freq.__version__)
         self.assertEqual(cfg.brand, "PVE FREQ")
         self.assertEqual(cfg.ssh_service_account, "freq-admin")
         self.assertEqual(cfg.ssh_max_parallel, 5)
