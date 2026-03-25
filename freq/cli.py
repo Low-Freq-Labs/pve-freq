@@ -484,6 +484,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--pve-node-names", help="PVE node names (space-separated, same order as --pve-nodes)")
     p.add_argument("--gateway", help="Network gateway IP for VM networking")
     p.add_argument("--nameserver", help="DNS nameserver IP (default: 1.1.1.1)")
+    p.add_argument("--cluster-name", help="Cluster name (e.g. dc01, homelab)")
+    p.add_argument("--ssh-mode", choices=["sudo", "root"], help="SSH mode: sudo (recommended) or root")
     p.add_argument("--hosts-file", help="Path to hosts.conf to import fleet hosts from")
     p.add_argument("--device-credentials", help="TOML file with per-device-type auth (user + password_file per section)")
     p.add_argument("--device-password-file", help="(deprecated) Single password file for all devices — use --device-credentials instead")

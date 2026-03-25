@@ -534,6 +534,8 @@ def _phase_configure(cfg, args=None):
     cli_gateway = getattr(args, "gateway", None) if args else None
     cli_nameserver = getattr(args, "nameserver", None) if args else None
     cli_hosts_file = getattr(args, "hosts_file", None) if args else None
+    cli_cluster_name = getattr(args, "cluster_name", None) if args else None
+    cli_ssh_mode = getattr(args, "ssh_mode", None) if args else None
 
     # ── PVE Nodes ──
     if cli_pve_nodes:
@@ -653,7 +655,12 @@ def _phase_configure(cfg, args=None):
             fmt.step_ok(f"Nameserver: {ns} (default)")
 
     # ── Cluster name ──
-    if cfg.cluster_name:
+    if cli_cluster_name:
+        content = _update_toml_value(content, "cluster_name", cli_cluster_name)
+        cfg.cluster_name = cli_cluster_name
+        changed = True
+        fmt.step_ok(f"Cluster (from CLI): {cli_cluster_name}")
+    elif cfg.cluster_name:
         fmt.step_ok(f"Cluster: {cfg.cluster_name}")
     else:
         name = _input("Cluster name (optional, e.g. dc01, homelab)")
@@ -664,15 +671,22 @@ def _phase_configure(cfg, args=None):
             fmt.step_ok(f"Cluster: {name}")
 
     # ── SSH mode ──
-    fmt.blank()
-    fmt.line(f"  {fmt.C.DIM}SSH mode: 'sudo' = SSH as service account + sudo (recommended){fmt.C.RESET}")
-    fmt.line(f"  {fmt.C.DIM}          'root' = SSH as root directly{fmt.C.RESET}")
-    mode = _input("SSH mode", cfg.ssh_mode or "sudo")
-    if mode in ("sudo", "root") and mode != cfg.ssh_mode:
-        content = _update_toml_value(content, "mode", mode)
-        cfg.ssh_mode = mode
-        changed = True
-    fmt.step_ok(f"SSH mode: {mode}")
+    if cli_ssh_mode:
+        if cli_ssh_mode != cfg.ssh_mode:
+            content = _update_toml_value(content, "mode", cli_ssh_mode)
+            cfg.ssh_mode = cli_ssh_mode
+            changed = True
+        fmt.step_ok(f"SSH mode (from CLI): {cli_ssh_mode}")
+    else:
+        fmt.blank()
+        fmt.line(f"  {fmt.C.DIM}SSH mode: 'sudo' = SSH as service account + sudo (recommended){fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}          'root' = SSH as root directly{fmt.C.RESET}")
+        mode = _input("SSH mode", cfg.ssh_mode or "sudo")
+        if mode in ("sudo", "root") and mode != cfg.ssh_mode:
+            content = _update_toml_value(content, "mode", mode)
+            cfg.ssh_mode = mode
+            changed = True
+        fmt.step_ok(f"SSH mode: {mode}")
 
     # ── Write changes ──
     if changed:
