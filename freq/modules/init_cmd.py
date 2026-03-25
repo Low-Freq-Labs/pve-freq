@@ -1,15 +1,16 @@
 """FREQ init — first-run setup wizard.
 
-9-phase deployment pipeline:
+10-phase deployment pipeline:
 1. Welcome + prerequisites check
 2. Cluster configuration (PVE nodes, gateway, nameserver → freq.toml)
 3. Service account creation (configurable, NOPASSWD sudo)
 4. SSH key generation
 5. PVE node deployment (create account + deploy key on each node)
-6. Fleet host deployment (create account + deploy key on each host)
-7. Admin account setup (RBAC roles)
-8. Configuration + verification
-9. Summary
+6. PDM setup (detect/install Proxmox Datacenter Manager, configure remote)
+7. Fleet host deployment (create account + deploy key on each host)
+8. Admin account setup (RBAC roles)
+9. Configuration + verification
+10. Summary
 
 Must run as root. Creates a service account (default: from freq.toml) with
 NOPASSWD sudo on this host and all managed nodes.
@@ -347,7 +348,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
         "rsa_pubkey": "",
     }
 
-    total = 9
+    total = 10
 
     # Phase 1: Welcome + Prerequisites
     _phase(1, total, "Welcome + Prerequisites")
@@ -371,20 +372,24 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     _phase(5, total, "PVE Node Deployment")
     _phase_pve_deploy(cfg, ctx, args)
 
-    # Phase 6: Fleet Host Deployment
-    _phase(6, total, "Fleet Host Deployment")
+    # Phase 6: PDM Setup
+    _phase(6, total, "PDM Setup")
+    _phase_pdm(cfg, ctx, args)
+
+    # Phase 7: Fleet Host Deployment
+    _phase(7, total, "Fleet Host Deployment")
     _phase_fleet_deploy(cfg, ctx, args)
 
-    # Phase 7: Admin Accounts
-    _phase(7, total, "Admin Account Setup")
+    # Phase 8: Admin Accounts
+    _phase(8, total, "Admin Account Setup")
     _phase_admin_setup(cfg, ctx)
 
-    # Phase 8: Verification
-    _phase(8, total, "Configuration + Verification")
+    # Phase 9: Verification
+    _phase(9, total, "Configuration + Verification")
     verified = _phase_verify(cfg, ctx)
 
-    # Phase 9: Summary
-    _phase(9, total, "Summary")
+    # Phase 10: Summary
+    _phase(10, total, "Summary")
     _phase_summary(cfg, ctx, verified, pack)
 
     logger.info("init complete", service_account=ctx["svc_name"])
@@ -1237,6 +1242,385 @@ def _discover_and_register(cfg, ctx):
     fmt.blank()
     if _confirm("Scan another subnet?"):
         _discover_and_register(cfg, ctx)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# PHASE 6: PDM Setup (detect / install / configure)
+# ═══════════════════════════════════════════════════════════════════
+
+def _pdm_is_installed():
+    """Check if PDM is installed on this host."""
+    rc, _, _ = _run(["systemctl", "is-active", "proxmox-datacenter-api"])
+    return rc == 0
+
+
+def _pdm_install():
+    """Install PDM from Proxmox repos (Debian 13/trixie only).
+
+    Returns True on success.
+    """
+    fmt.step_start("Checking OS compatibility...")
+
+    # Verify Debian trixie
+    rc, out, _ = _run(["cat", "/etc/os-release"])
+    if rc != 0 or "trixie" not in out.lower():
+        fmt.step_fail("PDM requires Debian 13 (trixie)")
+        fmt.line(f"  {fmt.C.DIM}Install PDM manually or use a Debian 13 host.{fmt.C.RESET}")
+        return False
+
+    fmt.step_ok("Debian 13 (trixie) detected")
+
+    # Add GPG key
+    fmt.step_start("Adding Proxmox GPG key...")
+    rc, _, err = _run([
+        "wget", "-qO", "/etc/apt/trusted.gpg.d/proxmox-release-trixie.gpg",
+        "https://enterprise.proxmox.com/debian/proxmox-release-trixie.gpg",
+    ], timeout=30)
+    if rc != 0:
+        fmt.step_fail(f"Failed to download GPG key: {err.strip()}")
+        return False
+    fmt.step_ok("GPG key installed")
+
+    # Add repo
+    fmt.step_start("Adding PDM repository...")
+    repo_line = "deb http://download.proxmox.com/debian/pdm trixie pdm-no-subscription"
+    repo_path = "/etc/apt/sources.list.d/pdm.list"
+    try:
+        with open(repo_path, "w") as f:
+            f.write(repo_line + "\n")
+        fmt.step_ok("Repository added")
+    except OSError as e:
+        fmt.step_fail(f"Cannot write {repo_path}: {e}")
+        return False
+
+    # apt update
+    fmt.step_start("Updating package lists...")
+    rc, _, err = _run(["apt-get", "update", "-qq"], timeout=120)
+    if rc != 0:
+        fmt.step_fail(f"apt-get update failed: {err.strip()[:200]}")
+        return False
+    fmt.step_ok("Package lists updated")
+
+    # Install PDM
+    fmt.step_start("Installing proxmox-datacenter-manager (this may take a few minutes)...")
+    rc, _, err = _run([
+        "apt-get", "install", "-y", "proxmox-datacenter-manager",
+    ], timeout=600)
+    if rc != 0:
+        fmt.step_fail(f"Installation failed: {err.strip()[:200]}")
+        return False
+
+    # Verify services started
+    rc, _, _ = _run(["systemctl", "is-active", "proxmox-datacenter-api"])
+    if rc != 0:
+        fmt.step_warn("PDM installed but service not running — try: systemctl start proxmox-datacenter-api")
+        return False
+
+    fmt.step_ok("PDM installed and running")
+    return True
+
+
+def _pdm_api_request(method, path, data=None, cookies=None, csrf_token=None):
+    """Make an HTTP request to the local PDM API.
+
+    Returns (success, response_dict_or_error_string).
+    """
+    import json
+    import urllib.request
+    import urllib.error
+    import ssl
+
+    url = f"https://localhost:8443{path}"
+
+    # PDM uses self-signed certs
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+
+    if data and method == "POST":
+        # URL-encode form data
+        import urllib.parse
+        if isinstance(data, dict):
+            # Handle repeated params (e.g. nodes=[...])
+            parts = []
+            for k, v in data.items():
+                if isinstance(v, list):
+                    for item in v:
+                        parts.append((k, item))
+                else:
+                    parts.append((k, v))
+            body = urllib.parse.urlencode(parts).encode()
+        else:
+            body = data.encode() if isinstance(data, str) else data
+    else:
+        body = None
+
+    req = urllib.request.Request(url, data=body, method=method)
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    if csrf_token:
+        req.add_header("CSRFPreventionToken", csrf_token)
+    if cookies:
+        req.add_header("Cookie", cookies)
+
+    try:
+        with urllib.request.urlopen(req, context=ssl_ctx, timeout=15) as resp:
+            raw = resp.read().decode()
+            # Extract Set-Cookie for auth flow
+            set_cookie = resp.headers.get("Set-Cookie", "")
+            try:
+                result = json.loads(raw)
+            except (json.JSONDecodeError, ValueError):
+                result = {"raw": raw}
+            return True, result, set_cookie
+    except urllib.error.HTTPError as e:
+        body = ""
+        try:
+            body = e.read().decode()[:300]
+        except Exception:
+            pass
+        return False, f"HTTP {e.code}: {body}", ""
+    except Exception as e:
+        return False, str(e), ""
+
+
+def _pdm_authenticate(password):
+    """Authenticate to PDM API, return (cookies, csrf_token) or (None, None)."""
+    ok, result, set_cookie = _pdm_api_request("POST", "/api2/json/access/ticket", {
+        "username": "root@pam",
+        "password": password,
+    })
+    if not ok:
+        return None, None
+
+    data = result.get("data", {})
+    ticket = data.get("ticket", "")
+    csrf = data.get("CSRFPreventionToken", "")
+    if not ticket:
+        return None, None
+
+    cookies = f"__Host-PDMAuthCookie={ticket}"
+    return cookies, csrf
+
+
+def _pdm_probe_tls(ip, cookies, csrf):
+    """Probe TLS fingerprint for a PVE node. Returns fingerprint string or None."""
+    ok, result, _ = _pdm_api_request("POST", "/api2/json/pve/probe-tls", {
+        "hostname": ip,
+    }, cookies=cookies, csrf_token=csrf)
+    if not ok:
+        return None
+    data = result.get("data", {})
+    return data.get("fingerprint")
+
+
+def _pdm_add_remote(remote_name, token_id, token_secret, node_entries, cookies, csrf):
+    """Add a PVE cluster as a PDM remote.
+
+    node_entries: list of "IP,fingerprint=XX:XX:..." strings
+    Returns True on success.
+    """
+    data = {
+        "id": remote_name,
+        "type": "pve",
+        "authid": token_id,
+        "token": token_secret,
+        "nodes": node_entries,
+    }
+    ok, result, _ = _pdm_api_request("POST", "/api2/json/remotes/remote", data,
+                                      cookies=cookies, csrf_token=csrf)
+    return ok
+
+
+def _pdm_create_pve_token(pve_ip, ctx):
+    """Create pdm@pve user and API token on a PVE node via SSH.
+
+    Uses the already-deployed freq service account for SSH access.
+    Returns (token_id, token_secret) or (None, None).
+    """
+    key_path = ctx.get("key_path", "")
+    svc_name = ctx.get("svc_name", "freq-ops")
+
+    ssh_base = [
+        "ssh", "-n",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "ConnectTimeout=5",
+        "-o", "BatchMode=yes",
+        "-i", key_path,
+        f"{svc_name}@{pve_ip}",
+    ]
+
+    # Check if pdm@pve user already exists
+    rc, out, _ = _run(ssh_base + ["sudo pveum user list --output-format json 2>/dev/null"])
+    pdm_user_exists = "pdm@pve" in out if rc == 0 else False
+
+    if not pdm_user_exists:
+        # Create pdm@pve user
+        rc, _, err = _run(ssh_base + ["sudo pveum user add pdm@pve --comment 'PDM API access'"])
+        if rc != 0:
+            fmt.step_fail(f"Failed to create pdm@pve user: {err.strip()[:200]}")
+            return None, None
+
+        # Grant PVEAuditor role
+        rc, _, err = _run(ssh_base + ["sudo pveum acl modify / --roles PVEAuditor --users pdm@pve"])
+        if rc != 0:
+            fmt.step_warn(f"Failed to set PVEAuditor role: {err.strip()[:200]}")
+
+    # Create API token (--privsep 0 = full user privileges)
+    rc, out, err = _run(ssh_base + ["sudo pveum user token add pdm@pve pdm --privsep 0 --output-format json 2>/dev/null"])
+    if rc != 0:
+        # Token may already exist — try to read existing
+        if "already exists" in err:
+            fmt.step_warn("pdm@pve!pdm token already exists — cannot read secret")
+            fmt.line(f"  {fmt.C.DIM}Delete and recreate: pveum user token remove pdm@pve pdm{fmt.C.RESET}")
+            return None, None
+        fmt.step_fail(f"Failed to create API token: {err.strip()[:200]}")
+        return None, None
+
+    # Parse token output
+    import json
+    try:
+        token_data = json.loads(out)
+        # PVE returns: {"full-tokenid": "pdm@pve!pdm", "info": {...}, "value": "UUID-SECRET"}
+        token_id = token_data.get("full-tokenid", "pdm@pve!pdm")
+        token_secret = token_data.get("value", "")
+        if not token_secret:
+            fmt.step_fail("Token created but no secret returned")
+            return None, None
+        return token_id, token_secret
+    except (json.JSONDecodeError, ValueError):
+        # Try plain text parse: "full-tokenid: ...\nvalue: ..."
+        token_id = "pdm@pve!pdm"
+        for line in out.split("\n"):
+            if "value" in line.lower() and ":" in line:
+                token_secret = line.split(":", 1)[1].strip().strip('"')
+                return token_id, token_secret
+        fmt.step_fail("Could not parse token output")
+        return None, None
+
+
+def _phase_pdm(cfg, ctx, args=None):
+    """PDM setup phase — detect, optionally install, configure remote."""
+    skip_pdm = getattr(args, "skip_pdm", False) if args else False
+    install_pdm = getattr(args, "install_pdm", False) if args else False
+    remote_name = getattr(args, "pdm_remote_name", None) if args else None
+    headless = getattr(args, "headless", False) if args else False
+
+    if skip_pdm:
+        fmt.step_warn("PDM setup skipped (--skip-pdm)")
+        return
+
+    # Step 1: Detect PDM
+    fmt.line(f"  {fmt.C.DIM}Checking for Proxmox Datacenter Manager...{fmt.C.RESET}")
+    fmt.blank()
+
+    pdm_running = _pdm_is_installed()
+
+    if pdm_running:
+        fmt.step_ok("PDM detected (proxmox-datacenter-api is active)")
+    else:
+        fmt.line(f"  {fmt.C.DIM}PDM is not installed.{fmt.C.RESET}")
+        fmt.blank()
+
+        if headless:
+            if not install_pdm:
+                fmt.step_warn("PDM not installed — use --install-pdm to install in headless mode")
+                return
+            # Headless install
+            fmt.step_start("Installing PDM (headless)...")
+            if not _pdm_install():
+                fmt.step_warn("PDM installation failed — continuing without PDM")
+                return
+            pdm_running = True
+        else:
+            # Interactive — ask
+            fmt.line(f"  {fmt.C.BOLD}PDM provides:{fmt.C.RESET} unified dashboard, cross-node migration,")
+            fmt.line(f"  capacity planning, aggregated tasks across your PVE cluster.")
+            fmt.blank()
+            if _confirm("Install PDM? (recommended for multi-node clusters)"):
+                if not _pdm_install():
+                    fmt.step_warn("PDM installation failed — continuing without PDM")
+                    return
+                pdm_running = True
+            else:
+                fmt.step_warn("Skipping PDM — freq works fully without it")
+                fmt.line(f"  {fmt.C.DIM}Install later: apt install proxmox-datacenter-manager{fmt.C.RESET}")
+                return
+
+    # Step 2: Configure PVE remote (if we have PVE nodes)
+    if not cfg.pve_nodes:
+        fmt.line(f"  {fmt.C.DIM}No PVE nodes configured — skipping remote setup.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Add PVE nodes later and re-run init to configure PDM.{fmt.C.RESET}")
+        return
+
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Configuring PVE cluster remote...{fmt.C.RESET}")
+    fmt.blank()
+
+    # Get PDM admin password for API auth
+    if headless:
+        # In headless mode, read from password file or environment
+        pdm_pass = os.environ.get("PDM_PASSWORD", "")
+        if not pdm_pass:
+            fmt.step_warn("PDM remote setup requires authentication")
+            fmt.line(f"  {fmt.C.DIM}Set PDM_PASSWORD env var or configure manually via PDM web UI{fmt.C.RESET}")
+            return
+    else:
+        fmt.line(f"  {fmt.C.DIM}PDM web UI: https://localhost:8443{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Login as root@pam (system root password){fmt.C.RESET}")
+        fmt.blank()
+        if not _confirm("Configure PVE cluster remote now?"):
+            fmt.step_warn("Skipping remote setup — configure manually via PDM web UI")
+            return
+        pdm_pass = getpass.getpass("  PDM root password (root@pam): ")
+
+    # Authenticate to PDM
+    fmt.step_start("Authenticating to PDM API...")
+    cookies, csrf = _pdm_authenticate(pdm_pass)
+    if not cookies:
+        fmt.step_fail("PDM authentication failed — check root password")
+        fmt.line(f"  {fmt.C.DIM}Configure manually: https://localhost:8443{fmt.C.RESET}")
+        return
+    fmt.step_ok("Authenticated to PDM")
+
+    # Create PVE API token on first node
+    first_node = cfg.pve_nodes[0] if isinstance(cfg.pve_nodes, list) else cfg.pve_nodes.split()[0]
+    fmt.step_start(f"Creating pdm@pve API token on {first_node}...")
+
+    token_id, token_secret = _pdm_create_pve_token(first_node, ctx)
+    if not token_id:
+        fmt.step_fail("Could not create PVE API token")
+        fmt.line(f"  {fmt.C.DIM}Create manually: pveum user add pdm@pve && pveum user token add pdm@pve pdm --privsep 0{fmt.C.RESET}")
+        return
+    fmt.step_ok(f"Token created: {token_id}")
+
+    # Probe TLS fingerprints for all PVE nodes
+    pve_node_list = cfg.pve_nodes if isinstance(cfg.pve_nodes, list) else cfg.pve_nodes.split()
+    node_entries = []
+    for node_ip in pve_node_list:
+        fmt.step_start(f"Probing TLS fingerprint for {node_ip}...")
+        fp = _pdm_probe_tls(node_ip, cookies, csrf)
+        if fp:
+            node_entries.append(f"{node_ip},fingerprint={fp}")
+            fmt.step_ok(f"{node_ip}: {fp[:20]}...")
+        else:
+            fmt.step_fail(f"Could not probe TLS for {node_ip}")
+
+    if not node_entries:
+        fmt.step_fail("No PVE nodes reachable — cannot add remote")
+        return
+
+    # Add remote
+    if not remote_name:
+        remote_name = getattr(cfg, "cluster_name", "") or "pve-cluster"
+    fmt.step_start(f"Adding remote '{remote_name}' ({len(node_entries)} node(s))...")
+
+    if _pdm_add_remote(remote_name, token_id, token_secret, node_entries, cookies, csrf):
+        fmt.step_ok(f"Remote '{remote_name}' added to PDM")
+        fmt.blank()
+        fmt.line(f"  {fmt.C.GREEN}PDM configured!{fmt.C.RESET} Dashboard: {fmt.C.CYAN}https://localhost:8443{fmt.C.RESET}")
+    else:
+        fmt.step_fail(f"Failed to add remote '{remote_name}'")
+        fmt.line(f"  {fmt.C.DIM}The remote may already exist. Check: https://localhost:8443{fmt.C.RESET}")
 
 
 def _phase_fleet_deploy(cfg, ctx, args=None):
@@ -3354,25 +3738,25 @@ def _init_headless(cfg, args):
     fmt.blank()
 
     # ── Phase 1: Prerequisites ──
-    _phase(1, 7, "Prerequisites")
+    _phase(1, 8, "Prerequisites")
     if not _phase_welcome(cfg):
         return 1
 
     # ── Phase 2: Cluster Configuration ──
-    _phase(2, 7, "Cluster Configuration")
+    _phase(2, 8, "Cluster Configuration")
     _phase_configure(cfg, args)
 
     # ── Phase 3: Local Service Account ──
-    _phase(3, 7, "Local Service Account")
+    _phase(3, 8, "Local Service Account")
     if not _headless_local_account(cfg, ctx):
         return 1
 
     # ── Phase 4: SSH Keys ──
-    _phase(4, 7, "SSH Key Generation")
+    _phase(4, 8, "SSH Key Generation")
     _phase_ssh_keys(cfg, ctx)
 
     # ── Phase 5: Fleet Deployment ──
-    _phase(5, 7, "Fleet Deployment")
+    _phase(5, 8, "Fleet Deployment")
 
     # Load per-device credentials (new style) or fall back to legacy single-file
     device_creds = _load_device_credentials(device_credentials_file)
@@ -3386,8 +3770,12 @@ def _init_headless(cfg, args):
                            device_user=device_user,
                            device_creds=device_creds)
 
-    # ── Phase 6: RBAC ──
-    _phase(6, 7, "RBAC Setup")
+    # ── Phase 6: PDM Setup ──
+    _phase(6, 8, "PDM Setup")
+    _phase_pdm(cfg, ctx, args)
+
+    # ── Phase 7: RBAC ──
+    _phase(7, 8, "RBAC Setup")
     roles_file = os.path.join(cfg.conf_dir, "roles.conf")
     existing = ""
     if os.path.isfile(roles_file):
@@ -3406,8 +3794,8 @@ def _init_headless(cfg, args):
         else:
             fmt.step_ok(f"{svc_name} already in roles")
 
-    # ── Phase 7: Verification ──
-    _phase(7, 7, "Verification")
+    # ── Phase 8: Verification ──
+    _phase(8, 8, "Verification")
     verified = _phase_verify(cfg, ctx)
 
     # Write marker

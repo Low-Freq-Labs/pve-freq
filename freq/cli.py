@@ -490,6 +490,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--device-credentials", help="TOML file with per-device-type auth (user + password_file per section)")
     p.add_argument("--device-password-file", help="(deprecated) Single password file for all devices — use --device-credentials instead")
     p.add_argument("--device-user", default="root", help="(deprecated) Single SSH user for all devices — use --device-credentials instead")
+    p.add_argument("--install-pdm", action="store_true", help="Install Proxmox Datacenter Manager (headless: skip by default)")
+    p.add_argument("--pdm-remote-name", help="PDM remote name for PVE cluster (default: cluster name from freq.toml)")
+    p.add_argument("--skip-pdm", action="store_true", help="Skip PDM detection and setup entirely")
     p.set_defaults(func=_cmd_init)
 
     p = sub.add_parser("configure", help="Reconfigure FREQ settings")
