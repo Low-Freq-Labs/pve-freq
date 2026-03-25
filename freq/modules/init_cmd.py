@@ -563,8 +563,9 @@ def _phase_configure(cfg, args=None):
     # ── PVE Nodes ──
     if cli_pve_nodes:
         # CLI override — skip interactive prompt
-        nodes = cli_pve_nodes.split()
-        names = cli_pve_names.split() if cli_pve_names else [f"pve{i+1:02d}" for i in range(len(nodes))]
+        # Accept both comma-separated and space-separated node lists
+        nodes = re.split(r'[,\s]+', cli_pve_nodes.strip())
+        names = re.split(r'[,\s]+', cli_pve_names.strip()) if cli_pve_names else [f"pve{i+1:02d}" for i in range(len(nodes))]
         while len(names) < len(nodes):
             names.append(f"pve{len(names)+1:02d}")
         content = _update_toml_value(content, "nodes", nodes)
@@ -914,6 +915,9 @@ def _phase_ssh_keys(cfg, ctx):
     ed_key = os.path.join(key_dir, "freq_id_ed25519")
     if os.path.isfile(ed_key):
         fmt.step_ok("FREQ ed25519 key already exists")
+        os.chmod(ed_key, 0o600)  # Enforce correct permissions
+        if os.path.isfile(f"{ed_key}.pub"):
+            os.chmod(f"{ed_key}.pub", 0o644)
         rc, out, _ = _run(["ssh-keygen", "-l", "-f", f"{ed_key}.pub"])
         if rc == 0:
             fmt.line(f"    {fmt.C.DIM}{out.strip()}{fmt.C.RESET}")
@@ -936,6 +940,9 @@ def _phase_ssh_keys(cfg, ctx):
     rsa_key = os.path.join(key_dir, "freq_id_rsa")
     if os.path.isfile(rsa_key):
         fmt.step_ok("FREQ RSA key already exists (legacy devices)")
+        os.chmod(rsa_key, 0o600)  # Enforce correct permissions
+        if os.path.isfile(f"{rsa_key}.pub"):
+            os.chmod(f"{rsa_key}.pub", 0o644)
         rc, out, _ = _run(["ssh-keygen", "-l", "-f", f"{rsa_key}.pub"])
         if rc == 0:
             fmt.line(f"    {fmt.C.DIM}{out.strip()}{fmt.C.RESET}")
@@ -1384,7 +1391,11 @@ def _pdm_api_request(method, path, data=None, cookies=None, csrf_token=None):
 
 
 def _pdm_authenticate(password):
-    """Authenticate to PDM API, return (cookies, csrf_token) or (None, None)."""
+    """Authenticate to PDM API, return (cookies, csrf_token) or (None, None).
+
+    PDM v1.0.3 returns the auth ticket via Set-Cookie header (not in JSON body).
+    The JSON body contains CSRFPreventionToken and ticket-info.
+    """
     ok, result, set_cookie = _pdm_api_request("POST", "/api2/json/access/ticket", {
         "username": "root@pam",
         "password": password,
@@ -1393,13 +1404,28 @@ def _pdm_authenticate(password):
         return None, None
 
     data = result.get("data", {})
-    ticket = data.get("ticket", "")
     csrf = data.get("CSRFPreventionToken", "")
-    if not ticket:
+
+    # PDM returns ticket via Set-Cookie header, not JSON body
+    # Extract __Host-PDMAuthCookie from Set-Cookie header
+    cookie_str = ""
+    if set_cookie and "__Host-PDMAuthCookie=" in set_cookie:
+        for part in set_cookie.split(";"):
+            part = part.strip()
+            if part.startswith("__Host-PDMAuthCookie="):
+                cookie_str = part
+                break
+
+    # Fallback: check JSON body (older PDM versions may include ticket there)
+    if not cookie_str:
+        ticket = data.get("ticket", "")
+        if ticket:
+            cookie_str = f"__Host-PDMAuthCookie={ticket}"
+
+    if not cookie_str or not csrf:
         return None, None
 
-    cookies = f"__Host-PDMAuthCookie={ticket}"
-    return cookies, csrf
+    return cookie_str, csrf
 
 
 def _pdm_probe_tls(ip, cookies, csrf):
@@ -1466,13 +1492,13 @@ def _pdm_create_pve_token(pve_ip, ctx):
             fmt.step_warn(f"Failed to set PVEAuditor role: {err.strip()[:200]}")
 
     # Create API token (--privsep 0 = full user privileges)
+    # If token already exists, delete and recreate (PVE only shows secret at creation)
     rc, out, err = _run(ssh_base + ["sudo pveum user token add pdm@pve pdm --privsep 0 --output-format json 2>/dev/null"])
+    if rc != 0 and "already exists" in (err + out):
+        # Token exists — delete and recreate to get the secret
+        _run(ssh_base + ["sudo pveum user token remove pdm@pve pdm"])
+        rc, out, err = _run(ssh_base + ["sudo pveum user token add pdm@pve pdm --privsep 0 --output-format json 2>/dev/null"])
     if rc != 0:
-        # Token may already exist — try to read existing
-        if "already exists" in err:
-            fmt.step_warn("pdm@pve!pdm token already exists — cannot read secret")
-            fmt.line(f"  {fmt.C.DIM}Delete and recreate: pveum user token remove pdm@pve pdm{fmt.C.RESET}")
-            return None, None
         fmt.step_fail(f"Failed to create API token: {err.strip()[:200]}")
         return None, None
 
@@ -3757,6 +3783,18 @@ def _init_headless(cfg, args):
 
     # ── Phase 5: Fleet Deployment ──
     _phase(5, 8, "Fleet Deployment")
+
+    # Import hosts from --hosts-file if provided (before fleet deploy so all targets are included)
+    hosts_file_arg = getattr(args, "hosts_file", None)
+    if hosts_file_arg and os.path.isfile(hosts_file_arg):
+        fmt.step_start(f"Importing fleet hosts from {hosts_file_arg}")
+        shutil.copy2(hosts_file_arg, cfg.hosts_file)
+        from freq.core.config import load_hosts
+        try:
+            cfg.hosts = load_hosts(cfg.hosts_file)
+            fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")
+        except Exception as e:
+            fmt.step_fail(f"Failed to reload hosts: {e}")
 
     # Load per-device credentials (new style) or fall back to legacy single-file
     device_creds = _load_device_credentials(device_credentials_file)
