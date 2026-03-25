@@ -728,3 +728,131 @@ class TestRouteRegistration:
             # Verify handler method exists
             method_name = routes[route]
             assert hasattr(FreqHandler, method_name), f"Missing handler: {method_name}"
+
+
+# ── Phase 1D: detail + boundaries CLI ────────────────────────────────
+
+class TestCmdDetail:
+    """Tests for cmd_detail — deep host inventory."""
+
+    def _make_cfg(self):
+        from freq.core.types import Host
+        cfg = MagicMock()
+        cfg.hosts = [Host(ip="10.0.0.1", label="web01", htype="linux", groups="web")]
+        cfg.ssh_key_path = "/tmp/fake_key"
+        cfg.ssh_connect_timeout = 3
+        return cfg
+
+    @patch("freq.modules.fleet.ssh_run")
+    def test_detail_ok(self, mock_ssh):
+        from freq.modules.fleet import cmd_detail
+        mock_ssh.return_value = MagicMock(returncode=0, stdout="test-output")
+        cfg = self._make_cfg()
+        args = SimpleNamespace(target="web01")
+        rc = cmd_detail(cfg, None, args)
+        assert rc == 0
+        assert mock_ssh.called
+
+    def test_detail_no_target(self):
+        from freq.modules.fleet import cmd_detail
+        cfg = self._make_cfg()
+        args = SimpleNamespace(target=None)
+        rc = cmd_detail(cfg, None, args)
+        assert rc == 1
+
+    @patch("freq.modules.fleet.ssh_run")
+    def test_detail_unknown_host(self, mock_ssh):
+        from freq.modules.fleet import cmd_detail
+        cfg = self._make_cfg()
+        args = SimpleNamespace(target="nope99")
+        rc = cmd_detail(cfg, None, args)
+        assert rc == 1
+        assert not mock_ssh.called
+
+
+class TestCmdBoundaries:
+    """Tests for cmd_boundaries — fleet permission tiers."""
+
+    def _make_cfg(self):
+        from freq.core.types import FleetBoundaries
+        fb = FleetBoundaries()
+        fb.tiers = {
+            "probe": ["view"],
+            "operator": ["view", "start", "stop", "restart", "snapshot"],
+            "admin": ["view", "start", "stop", "restart", "snapshot", "destroy", "clone", "migrate"],
+        }
+        fb.categories = {
+            "lab": {"description": "Lab VMs", "tier": "admin", "range_start": 5000, "range_end": 5999},
+            "infrastructure": {"description": "Core infra", "tier": "operator", "vmids": [100, 101]},
+        }
+        cfg = MagicMock()
+        cfg.fleet_boundaries = fb
+        return cfg
+
+    def test_show(self):
+        from freq.modules.fleet import cmd_boundaries
+        cfg = self._make_cfg()
+        args = SimpleNamespace(action="show", target=None)
+        rc = cmd_boundaries(cfg, None, args)
+        assert rc == 0
+
+    def test_lookup_lab(self):
+        from freq.modules.fleet import cmd_boundaries
+        cfg = self._make_cfg()
+        args = SimpleNamespace(action="lookup", target="5001")
+        rc = cmd_boundaries(cfg, None, args)
+        assert rc == 0
+
+    def test_lookup_infra(self):
+        from freq.modules.fleet import cmd_boundaries
+        cfg = self._make_cfg()
+        args = SimpleNamespace(action="lookup", target="100")
+        rc = cmd_boundaries(cfg, None, args)
+        assert rc == 0
+
+    def test_lookup_no_target(self):
+        from freq.modules.fleet import cmd_boundaries
+        cfg = self._make_cfg()
+        args = SimpleNamespace(action="lookup", target=None)
+        rc = cmd_boundaries(cfg, None, args)
+        assert rc == 1
+
+    def test_lookup_invalid_vmid(self):
+        from freq.modules.fleet import cmd_boundaries
+        cfg = self._make_cfg()
+        args = SimpleNamespace(action="lookup", target="abc")
+        rc = cmd_boundaries(cfg, None, args)
+        assert rc == 1
+
+    def test_unknown_action(self):
+        from freq.modules.fleet import cmd_boundaries
+        cfg = self._make_cfg()
+        args = SimpleNamespace(action="nope", target=None)
+        rc = cmd_boundaries(cfg, None, args)
+        assert rc == 1
+
+
+class TestCLIParserPhase1D:
+    """Verify detail + boundaries are registered in argparse."""
+
+    def test_detail_registered(self):
+        from freq.cli import _build_parser
+        parser = _build_parser()
+        args = parser.parse_args(["detail", "web01"])
+        assert hasattr(args, "func")
+        assert args.target == "web01"
+
+    def test_boundaries_show(self):
+        from freq.cli import _build_parser
+        parser = _build_parser()
+        args = parser.parse_args(["boundaries"])
+        assert hasattr(args, "func")
+        assert args.action == "show"
+
+    def test_boundaries_lookup(self):
+        from freq.cli import _build_parser
+        parser = _build_parser()
+        args = parser.parse_args(["boundaries", "lookup", "5001"])
+        assert hasattr(args, "func")
+        assert args.action == "lookup"
+        assert args.target == "5001"

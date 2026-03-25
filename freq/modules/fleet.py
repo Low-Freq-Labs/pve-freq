@@ -244,6 +244,186 @@ def cmd_info(cfg: FreqConfig, pack, args) -> int:
     return 0
 
 
+def cmd_detail(cfg: FreqConfig, pack, args) -> int:
+    """Deep host detail — full system inventory (mirrors /api/host/detail)."""
+    target = getattr(args, "target", None)
+    if not target:
+        fmt.error("Usage: freq detail <host>")
+        return 1
+
+    host = resolve.by_target(cfg.hosts, target)
+    if not host:
+        fmt.error(f"Host not found: {target}")
+        return 1
+
+    fmt.header(f"Host Detail: {host.label}")
+    fmt.blank()
+
+    def _cmd(command, timeout=10):
+        r = ssh_run(host=host.ip, command=command,
+                    key_path=cfg.ssh_key_path,
+                    connect_timeout=cfg.ssh_connect_timeout,
+                    htype=host.htype, use_sudo=False)
+        return r.stdout.strip() if r.returncode == 0 else "—"
+
+    # Identity
+    _info_field("Label", f"{fmt.C.BOLD}{host.label}{fmt.C.RESET}")
+    _info_field("IP", host.ip)
+    _info_field("Type", host.htype)
+    _info_field("Groups", host.groups or "—")
+    fmt.blank()
+
+    # System
+    _info_field("Hostname", _cmd("hostname -f 2>/dev/null || hostname"))
+    _info_field("OS", _cmd("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'"))
+    _info_field("Kernel", _cmd("uname -r"))
+    _info_field("Uptime", _cmd("uptime -p 2>/dev/null || uptime").replace("up ", ""))
+    fmt.blank()
+
+    # Hardware
+    _info_field("CPU Model", _cmd("grep 'model name' /proc/cpuinfo 2>/dev/null | head -1 | cut -d: -f2 | xargs"))
+    _info_field("Cores", _cmd("nproc"))
+    _info_field("RAM", _cmd("free -m | awk '/Mem:/ {printf \"%d/%dMB (%d%%)\", $3, $2, $3/$2*100}'"))
+    _info_field("Load Avg", _cmd("cat /proc/loadavg | awk '{print $1, $2, $3}'"))
+    _info_field("Disk (/)", _cmd("df -h / | awk 'NR==2 {print $3\"/\"$2\" (\"$5\" used)\"}'"))
+    fmt.blank()
+
+    # Network
+    _info_field("IPs", _cmd("ip -4 addr show | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $NF\": \"$2}'"))
+    _info_field("Gateway", _cmd("ip route show default 2>/dev/null | awk '{print $3}' | head -1"))
+    _info_field("DNS", _cmd("grep nameserver /etc/resolv.conf 2>/dev/null | awk '{print $2}' | tr '\\n' ' '"))
+    _info_field("Listening", _cmd("ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | sed 's/.*://' | sort -un | tr '\\n' ' '"))
+    fmt.blank()
+
+    # Security
+    _info_field("SSH Root", _cmd("grep -i '^PermitRootLogin' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}'"))
+    _info_field("SSH PwAuth", _cmd("grep -i '^PasswordAuthentication' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}'"))
+    _info_field("Last Login", _cmd("last -1 --time-format iso 2>/dev/null | head -1"))
+    fmt.blank()
+
+    # Services
+    _info_field("NTP Synced", _cmd("timedatectl show --property=NTPSynchronized --value 2>/dev/null"))
+    _info_field("NTP Service", _cmd("systemctl is-active systemd-timesyncd 2>/dev/null"))
+    _info_field("Running Svcs", _cmd("systemctl list-units --type=service --state=running --no-legend 2>/dev/null | wc -l"))
+    _info_field("Failed Svcs", _cmd("systemctl --failed --no-legend 2>/dev/null | head -5 || echo none"))
+    _info_field("Pkg Manager", _cmd(
+        "if command -v apt >/dev/null 2>&1; then echo APT; "
+        "elif command -v dnf >/dev/null 2>&1; then echo DNF; "
+        "elif command -v zypper >/dev/null 2>&1; then echo ZYPPER; "
+        "else echo UNKNOWN; fi"
+    ))
+    _info_field("Updates", _cmd(
+        "if command -v apt >/dev/null 2>&1; then "
+        "  apt list --upgradable 2>/dev/null | grep -c upgradable; "
+        "elif command -v dnf >/dev/null 2>&1; then "
+        "  dnf check-update 2>/dev/null | grep -c '^[a-zA-Z]'; "
+        "else echo 0; fi"
+    ))
+    fmt.blank()
+
+    # Docker
+    dc_count = _cmd("docker ps -q 2>/dev/null | wc -l")
+    if dc_count and dc_count not in ("0", "—"):
+        _info_field("Docker", f"{dc_count} containers")
+        containers = _cmd("docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null")
+        if containers and containers != "—":
+            for line in containers.split("\n"):
+                parts = line.split("|")
+                if len(parts) >= 3:
+                    fmt.line(f"    {fmt.C.CYAN}{parts[0]:<20}{fmt.C.RESET} {parts[1]:<25} {parts[2]}")
+        fmt.blank()
+
+    fmt.footer()
+    return 0
+
+
+def cmd_boundaries(cfg: FreqConfig, pack, args) -> int:
+    """Fleet boundaries — show permission tiers and VM categories."""
+    action = getattr(args, "action", None) or "show"
+    fb = cfg.fleet_boundaries
+
+    if action == "show":
+        fmt.header("Fleet Boundaries")
+        fmt.blank()
+
+        # Tiers
+        fmt.line(f"{fmt.C.BOLD}Permission Tiers{fmt.C.RESET}")
+        fmt.blank()
+        for tier_name, actions in fb.tiers.items():
+            fmt.line(f"  {fmt.C.CYAN}{tier_name:<12}{fmt.C.RESET} {', '.join(actions)}")
+        fmt.blank()
+
+        # Categories
+        fmt.line(f"{fmt.C.BOLD}VM Categories{fmt.C.RESET}")
+        fmt.blank()
+        fmt.table_header(("CATEGORY", 20), ("TIER", 10), ("VMIDS", 15), ("RANGE", 15))
+        for cat_name, cat in fb.categories.items():
+            vmids = cat.get("vmids", [])
+            vmid_str = ", ".join(str(v) for v in vmids[:5])
+            if len(vmids) > 5:
+                vmid_str += f" (+{len(vmids)-5})"
+            rs = cat.get("range_start")
+            re = cat.get("range_end")
+            range_str = f"{rs}-{re}" if rs is not None and re is not None else "—"
+            fmt.table_row(
+                (cat_name, 20),
+                (cat.get("tier", "probe"), 10),
+                (vmid_str or "—", 15),
+                (range_str, 15),
+            )
+        fmt.blank()
+
+        # Physical devices
+        if fb.physical:
+            fmt.line(f"{fmt.C.BOLD}Physical Devices{fmt.C.RESET}")
+            fmt.blank()
+            for key, dev in fb.physical.items():
+                fmt.line(f"  {fmt.C.CYAN}{dev.label:<16}{fmt.C.RESET} {dev.ip:<16} {dev.device_type:<10} tier={dev.tier}")
+            fmt.blank()
+
+        # PVE nodes
+        if fb.pve_nodes:
+            fmt.line(f"{fmt.C.BOLD}PVE Nodes{fmt.C.RESET}")
+            fmt.blank()
+            for name, node in fb.pve_nodes.items():
+                fmt.line(f"  {fmt.C.CYAN}{name:<12}{fmt.C.RESET} {node.ip}")
+            fmt.blank()
+
+        fmt.footer()
+        return 0
+
+    elif action == "lookup":
+        # Look up a specific VMID
+        target = getattr(args, "target", None)
+        if not target:
+            fmt.error("Usage: freq boundaries lookup <vmid>")
+            return 1
+        try:
+            vmid = int(target)
+        except ValueError:
+            fmt.error(f"Invalid VMID: {target}")
+            return 1
+        cat_name, tier = fb.categorize(vmid)
+        actions = fb.allowed_actions(vmid)
+        is_prod = fb.is_prod(vmid)
+        desc = fb.category_description(vmid)
+
+        fmt.header(f"Boundaries: VM {vmid}")
+        fmt.blank()
+        _info_field("Category", cat_name)
+        _info_field("Description", desc)
+        _info_field("Tier", tier)
+        _info_field("Production", "YES" if is_prod else "no")
+        _info_field("Allowed", ", ".join(actions))
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    else:
+        fmt.error(f"Unknown action: {action}. Use: show, lookup")
+        return 1
+
+
 def cmd_dashboard(cfg: FreqConfig, pack, args) -> int:
     """Fleet dashboard — overview of all hosts with key metrics."""
     fmt.header(pack.dashboard_header if hasattr(pack, "dashboard_header") else "Fleet Dashboard")

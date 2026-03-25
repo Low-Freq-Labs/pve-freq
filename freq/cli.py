@@ -131,6 +131,16 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("target", nargs="?", help="Host label or IP")
     p.set_defaults(func=_cmd_info)
 
+    p = sub.add_parser("detail", help="Deep host inventory (full system detail)")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_detail)
+
+    p = sub.add_parser("boundaries", help="Fleet boundary tiers and VM categories")
+    p.add_argument("action", nargs="?", default="show", choices=["show", "lookup"],
+                   help="Action (default: show)")
+    p.add_argument("target", nargs="?", help="VMID (for lookup)")
+    p.set_defaults(func=_cmd_boundaries)
+
     p = sub.add_parser("diagnose", help="Deep diagnostic for a host")
     p.add_argument("target", nargs="?", help="Host label or IP")
     p.set_defaults(func=_cmd_diagnose)
@@ -713,6 +723,16 @@ def _cmd_exec(cfg: FreqConfig, pack, args) -> int:
 def _cmd_info(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_info
     return cmd_info(cfg, pack, args)
+
+
+def _cmd_detail(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.fleet import cmd_detail
+    return cmd_detail(cfg, pack, args)
+
+
+def _cmd_boundaries(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.fleet import cmd_boundaries
+    return cmd_boundaries(cfg, pack, args)
 
 
 def _cmd_diagnose(cfg: FreqConfig, pack, args) -> int:

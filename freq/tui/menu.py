@@ -424,6 +424,7 @@ def _menu_fleet_info(cfg, pack):
             ("5", "docker", "Container status", ""),
             ("6", "log", "View host logs", ""),
             ("7", "keys", "SSH key status", ""),
+            ("8", "detail", "Deep host inventory", ""),
             ("0", "Back", "", ""),
         ], crumb)
 
@@ -448,6 +449,9 @@ def _menu_fleet_info(cfg, pack):
             _run_with_target(cfg, pack, "log", "Host:")
         elif ch == "7":
             _run_command(cfg, pack, "keys")
+        elif ch == "8":
+            print()
+            _run_with_target(cfg, pack, "detail", "Host:")
         else:
             continue
         _pause()
@@ -950,11 +954,12 @@ def _menu_infrastructure(cfg, pack):
             ("a", "Backup", "VM backup management", ""),
             ("j", "Journal", "Operation history", ""),
             ("n", "Notify", "Send notification", Tag.CHANGES),
+            ("b", "Boundaries", "Fleet permission tiers", ""),
             ("0", "Back", "", ""),
         ], crumb)
 
         ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
+        if ch in ("0", "q", "\x1b"):
             return
         elif ch == "1":
             _run_command(cfg, pack, "pfsense")
@@ -980,6 +985,8 @@ def _menu_infrastructure(cfg, pack):
             _run_command(cfg, pack, "journal")
         elif ch == "n":
             _run_command(cfg, pack, "notify")
+        elif ch == "b":
+            _run_command(cfg, pack, "boundaries")
         else:
             continue
         _pause()
