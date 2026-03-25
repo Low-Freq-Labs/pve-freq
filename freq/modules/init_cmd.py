@@ -1493,11 +1493,11 @@ def _pdm_create_pve_token(pve_ip, ctx):
 
     # Create API token (--privsep 0 = full user privileges)
     # If token already exists, delete and recreate (PVE only shows secret at creation)
-    rc, out, err = _run(ssh_base + ["sudo pveum user token add pdm@pve pdm --privsep 0 --output-format json 2>/dev/null"])
+    rc, out, err = _run(ssh_base + ["sudo pveum user token add pdm@pve pdm --privsep 0 --output-format json 2>&1"])
     if rc != 0 and "already exists" in (err + out):
         # Token exists — delete and recreate to get the secret
         _run(ssh_base + ["sudo pveum user token remove pdm@pve pdm"])
-        rc, out, err = _run(ssh_base + ["sudo pveum user token add pdm@pve pdm --privsep 0 --output-format json 2>/dev/null"])
+        rc, out, err = _run(ssh_base + ["sudo pveum user token add pdm@pve pdm --privsep 0 --output-format json 2>&1"])
     if rc != 0:
         fmt.step_fail(f"Failed to create API token: {err.strip()[:200]}")
         return None, None
