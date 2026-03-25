@@ -429,6 +429,27 @@ def _phase_welcome(cfg):
         rc, _, _ = _run(["which", cmd])
         if rc == 0:
             fmt.step_ok(desc)
+        elif cmd == "sshpass":
+            # Auto-install sshpass — detect package manager and try sudo install
+            pkg_managers = [
+                ("apt-get", ["sudo", "apt-get", "install", "-y", "sshpass"]),
+                ("dnf", ["sudo", "dnf", "install", "-y", "sshpass"]),
+                ("zypper", ["sudo", "zypper", "--non-interactive", "install", "sshpass"]),
+            ]
+            found_pm = False
+            for pkg_mgr, install_args in pkg_managers:
+                pm_rc, _, _ = _run(["which", pkg_mgr])
+                if pm_rc == 0:
+                    found_pm = True
+                    fmt.step_start(f"Installing sshpass via {pkg_mgr}...")
+                    inst_rc, _, _ = _run(install_args, timeout=120)
+                    if inst_rc == 0:
+                        fmt.step_ok(f"{desc} (auto-installed)")
+                    else:
+                        fmt.step_warn(f"{desc} — auto-install failed (install manually)")
+                    break
+            if not found_pm:
+                fmt.step_warn(f"{desc} — '{cmd}' not found (install recommended)")
         else:
             fmt.step_warn(f"{desc} — '{cmd}' not found (install recommended)")
 
