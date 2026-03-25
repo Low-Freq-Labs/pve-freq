@@ -549,10 +549,6 @@ def _build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("update", help="Check for updates and upgrade FREQ")
     p.set_defaults(func=_cmd_update)
 
-    for cmd_name in ["serial", "vpn", "wazuh", "pdm", "registry", "mount"]:
-        p = sub.add_parser(cmd_name, help=f"{cmd_name} operations")
-        p.set_defaults(func=_stub(cmd_name))
-
     return parser
 
 
@@ -980,8 +976,8 @@ def _cmd_truenas(cfg: FreqConfig, pack, args) -> int:
 
 
 def _cmd_zfs(cfg: FreqConfig, pack, args) -> int:
-    from freq.modules.infrastructure import cmd_zfs
-    return cmd_zfs(cfg, pack, args)
+    from freq.modules.infrastructure import cmd_truenas
+    return cmd_truenas(cfg, pack, args)
 
 
 def _cmd_switch(cfg: FreqConfig, pack, args) -> int:
@@ -1344,14 +1340,3 @@ def _cmd_groups(cfg: FreqConfig, pack, args) -> int:
     return cmd_groups(cfg, pack, args)
 
 
-def _stub(name: str):
-    """Create a stub handler for unimplemented commands."""
-    def handler(cfg: FreqConfig, pack, args) -> int:
-        fmt.header(name.replace("-", " ").title())
-        fmt.blank()
-        fmt.line(f"{fmt.C.YELLOW}Command '{name}' is not yet implemented.{fmt.C.RESET}")
-        fmt.line(f"{fmt.C.GRAY}This command will be available in a future phase.{fmt.C.RESET}")
-        fmt.blank()
-        fmt.footer()
-        return 0
-    return handler

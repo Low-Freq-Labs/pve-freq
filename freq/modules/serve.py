@@ -3986,14 +3986,14 @@ class FreqHandler(BaseHTTPRequestHandler):
         action = query.get("action", ["status"])[0]
         try:
             import io, contextlib
-            from freq.modules.infrastructure import cmd_zfs
+            from freq.modules.infrastructure import cmd_truenas
             class Args:
                 pass
             args = Args()
             args.action = action
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                result = cmd_zfs(cfg, None, args)
+                result = cmd_truenas(cfg, None, args)
             self._json_response({"ok": result == 0, "output": buf.getvalue(), "action": action})
         except Exception as e:
             self._json_response({"error": f"ZFS operation failed: {e}"}, 500)

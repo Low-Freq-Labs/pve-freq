@@ -314,11 +314,6 @@ def info(msg: str) -> None:
     print(f"{C.CYAN}{S.INFO}{C.RESET}  {msg}")
 
 
-def purple(msg: str) -> None:
-    """Print in FREQ purple."""
-    print(f"{C.PURPLE}{msg}{C.RESET}")
-
-
 def dim(msg: str) -> None:
     """Print dimmed text."""
     print(f"{C.DIM}{msg}{C.RESET}")

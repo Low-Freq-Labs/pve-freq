@@ -588,7 +588,7 @@ class TestServeSweep:
 class TestServeZfs:
     """Test /api/zfs endpoint."""
 
-    @patch("freq.modules.infrastructure.cmd_zfs", return_value=0)
+    @patch("freq.modules.infrastructure.cmd_truenas", return_value=0)
     @patch("freq.modules.serve.load_config")
     def test_zfs_status(self, mock_cfg, mock_zfs):
         mock_cfg.return_value = _mock_cfg()

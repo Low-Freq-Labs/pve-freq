@@ -19,12 +19,18 @@ venv/
 .coverage
 htmlcov/
 
-# Runtime data (vault, logs, cache — not source)
-data/cache/
-data/vault/
-data/log/
-data/jarvis/
-data/keys/
+# Runtime data (not source)
+data/
+
+# Active configs (only .example files are committed)
+conf/freq.toml
+conf/hosts.conf
+conf/vlans.toml
+conf/fleet-boundaries.toml
+conf/containers.toml
+conf/roles.conf
+conf/users.conf
+conf/.initialized
 
 # Agent workspace (not part of PVE FREQ)
 .claude/
@@ -33,25 +39,10 @@ journal/
 planning/
 workspace/
 cold-storage/
-emergency/
-archive/
-jarvis-skills/
-simon-scrapes-skills/
-skills/
 resume-state.md
-
-# Personal configs
-.bashrc
-.bash_logout
-.profile
-.tmux.conf
-.gitconfig
 
 # Credentials and sensitive data (never commit)
 *.pem
 *.key
 *.bak
 credentials/
-*credentials*
-*password*
-*SENSITIVE*

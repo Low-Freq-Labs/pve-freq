@@ -968,35 +968,6 @@ def _keys_deploy(cfg: FreqConfig, args) -> int:
     return 0 if r.returncode == 0 else 1
 
 
-# --- Helpers ---
-
-def _resolve_targets(cfg: FreqConfig, target: str) -> list:
-    """Resolve a target string to a list of hosts."""
-    if not target or target.lower() == "all":
-        return cfg.hosts
-
-    # Try as group first
-    group_hosts = resolve.by_group(cfg.hosts, target)
-    if group_hosts:
-        return group_hosts
-
-    # Try as type
-    type_hosts = resolve.by_type(cfg.hosts, target)
-    if type_hosts:
-        return type_hosts
-
-    # Try as single host
-    host = resolve.by_target(cfg.hosts, target)
-    if host:
-        return [host]
-
-    # Try as comma-separated labels
-    if "," in target:
-        return resolve.by_labels(cfg.hosts, target)
-
-    return []
-
-
 def cmd_ntp(cfg: FreqConfig, pack, args) -> int:
     """NTP check/fix across fleet."""
     action = getattr(args, "action", None) or "check"

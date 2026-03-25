@@ -1,6 +1,6 @@
 """Infrastructure modules for FREQ.
 
-Commands: pfsense, truenas, zfs, switch, idrac, watch, rescue
+Commands: pfsense, truenas, switch, idrac, watch, rescue
 These connect to infrastructure appliances via SSH.
 
 Note: pfSense and TrueNAS are not reachable from VLAN 10 (dev).
@@ -20,84 +20,86 @@ INFRA_TRUENAS_TIMEOUT = 30
 INFRA_RESCUE_TIMEOUT = 60
 
 
-# --- pfSense ---
+def _device_cmd(cfg, args, title, ip, htype, actions, timeout=INFRA_CMD_TIMEOUT,
+                use_sudo=False, help_note=""):
+    """Shared handler for SSH-based infrastructure devices.
 
-def cmd_pfsense(cfg: FreqConfig, pack, args) -> int:
-    """pfSense management — firewall rules, NAT, status."""
+    Handles: action lookup, help display, SSH execution, output formatting.
+    Used by pfSense, TrueNAS, and switch commands.
+    """
     action = getattr(args, "action", None) or "status"
 
-    fmt.header("pfSense")
+    fmt.header(title)
     fmt.blank()
 
-    pf_ip = cfg.pfsense_ip
-    if not pf_ip:
-        fmt.line(f"{fmt.C.YELLOW}pfSense IP not configured.{fmt.C.RESET}")
-        fmt.line(f"{fmt.C.GRAY}Set infrastructure.pfsense_ip in freq.toml{fmt.C.RESET}")
+    if not ip:
+        fmt.line("{y}{title} IP not configured.{r}".format(
+            y=fmt.C.YELLOW, title=title, r=fmt.C.RESET))
+        fmt.line("{g}Set the IP in freq.toml [infrastructure]{r}".format(
+            g=fmt.C.GRAY, r=fmt.C.RESET))
         fmt.blank()
         fmt.footer()
         return 1
 
-    actions = {
-        "status": ("System status", "uname -a; pfctl -s info 2>/dev/null | head -5"),
-        "rules": ("Firewall rules", "pfctl -sr 2>/dev/null | head -30"),
-        "nat": ("NAT rules", "pfctl -sn 2>/dev/null | head -20"),
-        "states": ("Active states", "pfctl -ss 2>/dev/null | wc -l"),
-        "interfaces": ("Interfaces", "ifconfig -a | grep '^[a-z]' | awk '{print $1}'"),
-        "gateways": ("Gateway status", "netstat -rn | head -10"),
-    }
-
     if action == "help" or action not in actions:
-        fmt.line(f"{fmt.C.BOLD}Available actions:{fmt.C.RESET}")
+        fmt.line("{b}Available actions:{r}".format(b=fmt.C.BOLD, r=fmt.C.RESET))
         for name, (desc, _) in actions.items():
-            fmt.line(f"  {fmt.C.CYAN}{name:<12}{fmt.C.RESET} {desc}")
+            fmt.line("  {c}{n:<12}{r} {d}".format(
+                c=fmt.C.CYAN, n=name, r=fmt.C.RESET, d=desc))
+        if help_note:
+            fmt.blank()
+            fmt.line("{g}{note}{r}".format(
+                g=fmt.C.GRAY, note=help_note, r=fmt.C.RESET))
         fmt.blank()
         fmt.footer()
         return 0
 
     desc, cmd = actions[action]
-    fmt.line(f"{fmt.C.BOLD}{desc}{fmt.C.RESET}")
+    fmt.line("{b}{d}{r}".format(b=fmt.C.BOLD, d=desc, r=fmt.C.RESET))
     fmt.blank()
 
     r = ssh_run(
-        host=pf_ip, command=cmd,
+        host=ip, command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=INFRA_CMD_TIMEOUT,
-        htype="pfsense", use_sudo=False,
+        command_timeout=timeout,
+        htype=htype, use_sudo=use_sudo,
     )
 
     if r.returncode == 0 and r.stdout:
         for line in r.stdout.split("\n"):
-            print(f"  {fmt.C.DIM}{line}{fmt.C.RESET}")
+            print("  {d}{l}{r}".format(d=fmt.C.DIM, l=line, r=fmt.C.RESET))
     else:
-        fmt.line(f"{fmt.C.RED}Cannot reach pfSense at {pf_ip}{fmt.C.RESET}")
+        fmt.line("{red}Cannot reach {title} at {ip}{r}".format(
+            red=fmt.C.RED, title=title, ip=ip, r=fmt.C.RESET))
         if r.stderr:
-            fmt.line(f"{fmt.C.DIM}{r.stderr[:60]}{fmt.C.RESET}")
+            fmt.line("{d}{err}{r}".format(
+                d=fmt.C.DIM, err=r.stderr[:60], r=fmt.C.RESET))
 
     fmt.blank()
     fmt.footer()
     return 0 if r.returncode == 0 else 1
 
 
+# --- pfSense ---
+
+def cmd_pfsense(cfg: FreqConfig, pack, args) -> int:
+    """pfSense management — firewall rules, NAT, status."""
+    return _device_cmd(cfg, args, "pfSense", cfg.pfsense_ip, "pfsense", {
+        "status": ("System status", "uname -a; pfctl -s info 2>/dev/null | head -5"),
+        "rules": ("Firewall rules", "pfctl -sr 2>/dev/null | head -30"),
+        "nat": ("NAT rules", "pfctl -sn 2>/dev/null | head -20"),
+        "states": ("Active states", "pfctl -ss 2>/dev/null | wc -l"),
+        "interfaces": ("Interfaces", "ifconfig -a | grep '^[a-z]' | awk '{print $1}'"),
+        "gateways": ("Gateway status", "netstat -rn | head -10"),
+    })
+
+
 # --- TrueNAS ---
 
 def cmd_truenas(cfg: FreqConfig, pack, args) -> int:
     """TrueNAS management via midclt SSH."""
-    action = getattr(args, "action", None) or "status"
-
-    fmt.header("TrueNAS")
-    fmt.blank()
-
-    tn_ip = cfg.truenas_ip
-    if not tn_ip:
-        fmt.line(f"{fmt.C.YELLOW}TrueNAS IP not configured.{fmt.C.RESET}")
-        fmt.line(f"{fmt.C.GRAY}Set infrastructure.truenas_ip in freq.toml{fmt.C.RESET}")
-        fmt.blank()
-        fmt.footer()
-        return 1
-
-    # midclt-based commands (future-proof, no REST API dependency)
-    actions = {
+    return _device_cmd(cfg, args, "TrueNAS", cfg.truenas_ip, "truenas", {
         "status": ("System status", "midclt call system.info 2>/dev/null || echo 'midclt not available'"),
         "pools": ("ZFS pools", "zpool list 2>/dev/null"),
         "health": ("Pool health", "zpool status -x 2>/dev/null"),
@@ -105,109 +107,22 @@ def cmd_truenas(cfg: FreqConfig, pack, args) -> int:
         "shares": ("Shares", "midclt call sharing.smb.query '[]' 2>/dev/null | python3 -m json.tool 2>/dev/null || echo 'query failed'"),
         "alerts": ("Active alerts", "midclt call alert.list 2>/dev/null | python3 -c \"import json,sys; [print(a.get('formatted','?')) for a in json.load(sys.stdin)]\" 2>/dev/null || echo 'no alerts or midclt unavailable'"),
         "smart": ("SMART health", "midclt call disk.query '[]' 2>/dev/null | python3 -c \"import json,sys; [print(f\\\"{d['name']:>6} {d.get('serial','?'):>20} {'PASS' if not d.get('hddstandby_force') else 'CHECK'}\\\") for d in json.load(sys.stdin)]\" 2>/dev/null || echo 'unavailable'"),
-    }
-
-    if action == "help" or action not in actions:
-        fmt.line(f"{fmt.C.BOLD}Available actions:{fmt.C.RESET}")
-        for name, (desc, _) in actions.items():
-            fmt.line(f"  {fmt.C.CYAN}{name:<12}{fmt.C.RESET} {desc}")
-        fmt.blank()
-        fmt.line(f"{fmt.C.GRAY}Uses midclt over SSH (no REST API dependency).{fmt.C.RESET}")
-        fmt.blank()
-        fmt.footer()
-        return 0
-
-    desc, cmd = actions[action]
-    fmt.line(f"{fmt.C.BOLD}{desc}{fmt.C.RESET}")
-    fmt.blank()
-
-    r = ssh_run(
-        host=tn_ip, command=cmd,
-        key_path=cfg.ssh_key_path,
-        connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=INFRA_TRUENAS_TIMEOUT,
-        htype="truenas", use_sudo=True,
-    )
-
-    if r.returncode == 0 and r.stdout:
-        for line in r.stdout.split("\n"):
-            print(f"  {fmt.C.DIM}{line}{fmt.C.RESET}")
-    else:
-        fmt.line(f"{fmt.C.RED}Cannot reach TrueNAS at {tn_ip}{fmt.C.RESET}")
-        if r.stderr:
-            fmt.line(f"{fmt.C.DIM}{r.stderr[:60]}{fmt.C.RESET}")
-
-    fmt.blank()
-    fmt.footer()
-    return 0 if r.returncode == 0 else 1
-
-
-# --- ZFS ---
-
-def cmd_zfs(cfg: FreqConfig, pack, args) -> int:
-    """ZFS operations — pool and dataset management."""
-    action = getattr(args, "action", None) or "status"
-    return cmd_truenas(cfg, pack, args)  # ZFS ops route through TrueNAS
+    }, timeout=INFRA_TRUENAS_TIMEOUT, use_sudo=True,
+       help_note="Uses midclt over SSH (no REST API dependency).")
 
 
 # --- Switch ---
 
 def cmd_switch(cfg: FreqConfig, pack, args) -> int:
     """Network switch management — VLANs and ports."""
-    action = getattr(args, "action", None) or "status"
-
-    fmt.header("Switch")
-    fmt.blank()
-
-    # Switch IP from config
-    switch_ip = cfg.switch_ip
-    if not switch_ip:
-        fmt.line(f"  {fmt.C.YELLOW}No switch_ip configured in freq.toml [infrastructure]{fmt.C.RESET}")
-        fmt.blank()
-        return 0
-
-    actions = {
+    return _device_cmd(cfg, args, "Switch", cfg.switch_ip, "switch", {
         "status": ("Switch status", "show version | include uptime"),
         "vlans": ("VLAN database", "show vlan brief"),
         "interfaces": ("Interface status", "show ip interface brief"),
         "mac": ("MAC address table", "show mac address-table | head -30"),
         "arp": ("ARP table", "show arp | head -20"),
         "trunk": ("Trunk ports", "show interfaces trunk"),
-    }
-
-    if action == "help" or action not in actions:
-        fmt.line(f"{fmt.C.BOLD}Available actions:{fmt.C.RESET}")
-        for name, (desc, _) in actions.items():
-            fmt.line(f"  {fmt.C.CYAN}{name:<12}{fmt.C.RESET} {desc}")
-        fmt.blank()
-        fmt.line(f"{fmt.C.GRAY}Connects to Cisco switch via SSH.{fmt.C.RESET}")
-        fmt.blank()
-        fmt.footer()
-        return 0
-
-    desc, cmd = actions[action]
-    fmt.line(f"{fmt.C.BOLD}{desc}{fmt.C.RESET}")
-    fmt.blank()
-
-    r = ssh_run(
-        host=switch_ip, command=cmd,
-        key_path=cfg.ssh_key_path,
-        connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=INFRA_CMD_TIMEOUT,
-        htype="switch", use_sudo=False,
-    )
-
-    if r.returncode == 0 and r.stdout:
-        for line in r.stdout.split("\n"):
-            print(f"  {fmt.C.DIM}{line}{fmt.C.RESET}")
-    else:
-        fmt.line(f"{fmt.C.RED}Cannot reach switch at {switch_ip}{fmt.C.RESET}")
-        if r.stderr:
-            fmt.line(f"{fmt.C.DIM}{r.stderr[:60]}{fmt.C.RESET}")
-
-    fmt.blank()
-    fmt.footer()
-    return 0 if r.returncode == 0 else 1
+    }, help_note="Connects to Cisco switch via SSH.")
 
 
 # --- iDRAC ---

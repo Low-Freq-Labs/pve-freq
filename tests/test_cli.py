@@ -22,30 +22,44 @@ class TestCLIDispatch(unittest.TestCase):
     def test_all_commands_registered(self):
         """All expected commands are registered in the parser."""
         expected = [
-            "version", "help", "doctor", "menu", "demo", "status", "dashboard",
-            "exec", "info", "diagnose", "ssh", "docker", "log", "keys",
-            "hosts", "discover", "groups", "bootstrap", "onboard",
+            # Core
+            "version", "help", "doctor", "menu", "demo",
+            # Fleet ops
+            "status", "dashboard", "exec", "info", "diagnose", "ssh",
+            "docker", "log", "keys", "hosts", "discover", "groups",
+            "bootstrap", "onboard", "detail", "boundaries",
+            # VM management
             "list", "create", "clone", "destroy", "resize", "snapshot",
-            "migrate", "vm-overview", "vmconfig", "rescue",
+            "migrate", "vm-overview", "vmconfig", "rescue", "power",
+            "nic", "template", "rename", "add-disk", "tag", "pool",
+            # Security & users
             "users", "new-user", "passwd", "roles", "promote", "demote",
             "install-user", "vault", "audit", "harden",
+            # Infrastructure
             "pfsense", "truenas", "zfs", "switch", "idrac", "media",
+            "ntp", "fleet-update", "comms",
+            # Compliance
             "health", "watch", "check", "fix", "diff", "policies",
+            # Setup
             "init", "configure", "distros",
+            # Jarvis / smart commands
             "agent", "learn", "risk", "sweep", "patrol",
+            # Utilities
             "notify", "backup", "journal", "provision",
-            "import", "update",
+            "import", "update", "serve",
+            # Operations
+            "sandbox", "file", "specialist", "lab",
+            "deploy-agent", "agent-status", "gwipe",
         ]
-        # Parse each command to verify it's registered
+        # Check parser's registered subcommands directly (avoids
+        # required-arg issues with parse_args on commands like 'power')
+        import argparse
+        registered = set()
+        for action in self.parser._subparsers._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                registered.update(action.choices.keys())
         for cmd in expected:
-            try:
-                args = self.parser.parse_args([cmd])
-                self.assertTrue(
-                    hasattr(args, "func") or hasattr(args, "command"),
-                    f"Command '{cmd}' has no handler"
-                )
-            except SystemExit:
-                self.fail(f"Command '{cmd}' caused SystemExit (not registered?)")
+            self.assertIn(cmd, registered, f"Command '{cmd}' not registered")
 
     def test_version_has_func(self):
         args = self.parser.parse_args(["version"])
