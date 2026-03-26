@@ -168,7 +168,7 @@ function checkKey(){
   fetch('/api/setup/status').then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('key-status');
     if(d.ssh_key_exists){
-      el.innerHTML='<div class="ok">SSH key already exists at '+d.ssh_key_path+'</div>';
+      el.innerHTML='<div class="ok">SSH key already exists at '+_esc(d.ssh_key_path)+'</div>';
       keyGenerated=true;
       document.getElementById('btn-keygen').textContent='Key Exists';
       document.getElementById('btn-keygen').disabled=true;
@@ -183,7 +183,7 @@ function genKey(){
   fetch('/api/setup/generate-key').then(function(r){return r.json()}).then(function(d){
     if(d.error){err(2,d.error);btn.disabled=false;btn.textContent='Generate SSH Key';return}
     keyGenerated=true;
-    document.getElementById('key-status').innerHTML='<div class="ok">SSH keypair generated: '+d.key_path+'</div>';
+    document.getElementById('key-status').innerHTML='<div class="ok">SSH keypair generated: '+_esc(d.key_path)+'</div>';
     btn.textContent='Key Generated';
   }).catch(function(e){err(2,'Failed: '+e);btn.disabled=false;btn.textContent='Generate SSH Key'});
 }
@@ -1415,6 +1415,9 @@ function _safe(fn){try{fn();}catch(e){console.error(e);}}
 function upTime(){document.getElementById('header-time').textContent=new Date().toLocaleTimeString();}
 setInterval(upTime,1000);upTime();
 
+/* === Utility === */
+function _esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
 /* === Toast === */
 function toast(msg,type){
   var t=document.createElement('div');t.className='toast '+(type||'info');t.textContent=msg;
@@ -1614,7 +1617,7 @@ function _checkForUpdate(){
       var banner=document.getElementById('update-banner');
       var text=document.getElementById('update-banner-text');
       if(banner&&text){
-        text.innerHTML='<strong>Update Available:</strong> v'+d.latest+' &mdash; Pull latest: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">docker compose pull && docker compose up -d</code>';
+        text.innerHTML='<strong>Update Available:</strong> v'+_esc(d.latest)+' &mdash; Pull latest: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">docker compose pull && docker compose up -d</code>';
         banner.style.display='block';
       }
     }

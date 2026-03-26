@@ -119,6 +119,9 @@ def _linear_regression(points: list) -> tuple:
         return (0, sum_y / n)
     slope = (n * sum_xy - sum_x * sum_y) / denom
     intercept = (sum_y - slope * sum_x) / n
+    import math
+    if not math.isfinite(slope) or not math.isfinite(intercept):
+        return (0, sum_y / n if n > 0 else 0)
     return (slope, intercept)
 
 
@@ -178,7 +181,7 @@ def compute_projections(snapshots: list) -> dict:
                 days_at_threshold = (threshold - intercept) / slope
                 remaining = days_at_threshold - days_now
                 if remaining > 0:
-                    days_to_threshold = round(remaining)
+                    days_to_threshold = min(round(remaining), 3650)  # cap at 10 years
 
             host_proj[metric] = {
                 "current": round(current, 1),

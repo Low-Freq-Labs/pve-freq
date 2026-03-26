@@ -12,6 +12,7 @@ Configuration in freq.toml:
   pue = 1.2              # Power Usage Effectiveness (datacenter overhead)
 """
 import json
+import math
 import os
 import re
 import time
@@ -107,6 +108,8 @@ def estimate_host_watts(host_data: dict) -> float:
     # Load/CPU contribution (use load as proxy for active cores)
     try:
         load = float(host_data.get("load", "0"))
+        if not math.isfinite(load) or load < 0:
+            load = 1
         watts += max(load, 1) * WATTS_PER_VCPU
     except (ValueError, TypeError):
         watts += WATTS_PER_VCPU  # at least 1 vCPU
@@ -118,7 +121,7 @@ def estimate_host_watts(host_data: dict) -> float:
     except (ValueError, TypeError):
         pass
 
-    return max(watts, 5.0)  # minimum 5W for any running host
+    return min(max(watts, 5.0), 2000.0)  # clamp 5W-2000W
 
 
 def compute_costs(health_data: dict, idrac_data: dict, cost_cfg: CostConfig) -> list:
@@ -131,6 +134,8 @@ def compute_costs(health_data: dict, idrac_data: dict, cost_cfg: CostConfig) -> 
     Returns list of HostCost objects.
     """
     costs = []
+    pue = max(1.0, min(cost_cfg.pue, 3.0))
+    rate = max(0.0, min(cost_cfg.rate_per_kwh, 2.0))
 
     for h in health_data.get("hosts", []):
         label = h.get("label", "")
@@ -149,12 +154,12 @@ def compute_costs(health_data: dict, idrac_data: dict, cost_cfg: CostConfig) -> 
             hc.watts = estimate_host_watts(h)
             hc.watts_source = "estimate"
 
-        # Apply PUE
-        effective_watts = hc.watts * cost_cfg.pue
+        # Apply PUE (clamped)
+        effective_watts = hc.watts * pue
 
-        # Calculate monthly cost
+        # Calculate monthly cost (clamped rate)
         hc.kwh_month = round(effective_watts * HOURS_PER_MONTH / 1000, 2)
-        hc.cost_month = round(hc.kwh_month * cost_cfg.rate_per_kwh, 2)
+        hc.cost_month = round(hc.kwh_month * rate, 2)
 
         # Resource info
         try:

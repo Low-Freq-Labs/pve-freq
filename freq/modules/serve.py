@@ -742,8 +742,14 @@ def _find_reachable_pve_node(cfg):
 
 
 def _parse_query(handler):
-    """Parse query parameters from the request path. Returns dict."""
+    """Parse query parameters from the request path. Returns dict of lists."""
     return parse_qs(urlparse(handler.path).query)
+
+
+def _parse_query_flat(path_str):
+    """Parse query params from a URL path string. Returns {key: str}."""
+    raw = parse_qs(urlparse(path_str).query)
+    return {k: v[0] if v else "" for k, v in raw.items()}
 
 
 def _is_first_run():
@@ -1077,6 +1083,9 @@ class FreqHandler(BaseHTTPRequestHandler):
 
     def _serve_chaos_types(self):
         """List available chaos experiment types."""
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
         from freq.jarvis.chaos import list_experiment_types
         self._json_response({"types": list_experiment_types()})
 
@@ -1088,12 +1097,15 @@ class FreqHandler(BaseHTTPRequestHandler):
         from freq.jarvis.chaos import Experiment, run_experiment, result_to_dict
         from freq.core.ssh import run as ssh_run
         cfg = load_config()
-        params = _parse_query(self.path)
+        params = _parse_query_flat(self.path)
         name = params.get("name", "").strip()
         exp_type = params.get("type", "").strip()
         target = params.get("target", "").strip()
         service = params.get("service", "")
-        duration = int(params.get("duration", "60"))
+        try:
+            duration = int(params.get("duration", "60"))
+        except (ValueError, TypeError):
+            self._json_response({"error": "duration must be an integer"}); return
 
         if not name or not exp_type or not target:
             self._json_response({"error": "Missing name, type, or target parameter"}); return
@@ -1109,8 +1121,11 @@ class FreqHandler(BaseHTTPRequestHandler):
         """Return recent chaos experiment log."""
         from freq.jarvis.chaos import load_experiment_log
         cfg = load_config()
-        params = _parse_query(self.path)
-        count = min(int(params.get("count", "20")), 50)
+        params = _parse_query_flat(self.path)
+        try:
+            count = min(int(params.get("count", "20")), 50)
+        except (ValueError, TypeError):
+            count = 20
         log = load_experiment_log(cfg.data_dir, count)
         self._json_response({"experiments": log})
 
@@ -1133,7 +1148,7 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"error": err}); return
         from freq.jarvis.federation import register_site
         cfg = load_config()
-        params = _parse_query(self.path)
+        params = _parse_query_flat(self.path)
         name = params.get("name", "").strip()
         url = params.get("url", "").strip()
         secret = params.get("secret", "")
@@ -1149,7 +1164,7 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"error": err}); return
         from freq.jarvis.federation import unregister_site
         cfg = load_config()
-        params = _parse_query(self.path)
+        params = _parse_query_flat(self.path)
         name = params.get("name", "").strip()
         if not name:
             self._json_response({"error": "Missing name parameter"}); return
@@ -1177,7 +1192,7 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"error": err}); return
         from freq.jarvis.federation import load_sites, save_sites
         cfg = load_config()
-        params = _parse_query(self.path)
+        params = _parse_query_flat(self.path)
         name = params.get("name", "").strip()
         if not name:
             self._json_response({"error": "Missing name parameter"}); return
@@ -1284,7 +1299,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         from freq.jarvis.gitops import load_gitops_config, get_diff, get_diff_full
         cfg = load_config()
         go_cfg = load_gitops_config(cfg.conf_dir)
-        params = _parse_query(self.path)
+        params = _parse_query_flat(self.path)
         full = params.get("full", "") == "1"
         if full:
             diff = get_diff_full(cfg.data_dir, go_cfg.branch)
@@ -1296,8 +1311,11 @@ class FreqHandler(BaseHTTPRequestHandler):
         """Return recent commit history."""
         from freq.jarvis.gitops import get_log
         cfg = load_config()
-        params = _parse_query(self.path)
-        count = min(int(params.get("count", "20")), 50)
+        params = _parse_query_flat(self.path)
+        try:
+            count = min(int(params.get("count", "20")), 50)
+        except (ValueError, TypeError):
+            count = 20
         commits = get_log(cfg.data_dir, count)
         self._json_response({"commits": commits})
 
@@ -1308,7 +1326,7 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"error": err}); return
         from freq.jarvis.gitops import rollback
         cfg = load_config()
-        params = _parse_query(self.path)
+        params = _parse_query_flat(self.path)
         commit = params.get("commit", "").strip()
         if not commit:
             self._json_response({"error": "Missing commit parameter"}); return
@@ -1342,10 +1360,10 @@ class FreqHandler(BaseHTTPRequestHandler):
         role, err = _check_session_role(self, "admin")
         if err:
             self._json_response({"error": err}); return
-        params = _parse_query(self.path)
+        params = _parse_query_flat(self.path)
         filename = params.get("filename", "")
-        if not filename:
-            self._json_response({"error": "Missing filename parameter"}); return
+        if not filename or '/' in filename or '\\' in filename or '..' in filename:
+            self._json_response({"error": "Invalid or missing filename"}); return
 
         from freq.jarvis.playbook import load_playbooks, run_step, result_to_dict
         from freq.core.ssh import run as ssh_run
@@ -1383,11 +1401,13 @@ class FreqHandler(BaseHTTPRequestHandler):
         role, err = _check_session_role(self, "admin")
         if err:
             self._json_response({"error": err}); return
-        params = _parse_query(self.path)
+        params = _parse_query_flat(self.path)
         filename = params.get("filename", "")
         step_idx = params.get("step", "")
-        if not filename or step_idx == "":
-            self._json_response({"error": "Missing filename or step parameter"}); return
+        if not filename or '/' in filename or '\\' in filename or '..' in filename:
+            self._json_response({"error": "Invalid or missing filename"}); return
+        if step_idx == "":
+            self._json_response({"error": "Missing step parameter"}); return
 
         try:
             step_idx = int(step_idx)
@@ -1417,7 +1437,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         role, err = _check_session_role(self, "admin")
         if err:
             self._json_response({"error": err}); return
-        params = _parse_query(self.path)
+        params = _parse_query_flat(self.path)
         name = params.get("name", "").strip()
         if not name:
             self._json_response({"error": "Missing playbook name"}); return
@@ -1432,7 +1452,8 @@ class FreqHandler(BaseHTTPRequestHandler):
 
         description = params.get("description", "")
         trigger = params.get("trigger", "")
-        content = f'[playbook]\nname = "{name}"\ndescription = "{description}"\ntrigger = "{trigger}"\n'
+        _te = lambda s: s.replace('\\', '\\\\').replace('"', '\\"')
+        content = f'[playbook]\nname = "{_te(name)}"\ndescription = "{_te(description)}"\ntrigger = "{_te(trigger)}"\n'
         try:
             with open(path, "w") as f:
                 f.write(content)
