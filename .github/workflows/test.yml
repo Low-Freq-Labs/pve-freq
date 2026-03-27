@@ -17,19 +17,19 @@ jobs:
           # Debian family
           - 'debian:12'
           - 'debian:13'
-          # Ubuntu
+          # Ubuntu (LTS only — non-LTS releases go EOL fast)
           - 'ubuntu:24.04'
-          - 'ubuntu:24.10'
           # RHEL family
           - 'rockylinux:9'
           - 'almalinux:9'
+          # Fedora (ships Python 3.12+)
           - 'fedora:41'
           - 'fedora:40'
           # Arch
           - 'archlinux:latest'
           # SUSE
           - 'opensuse/tumbleweed:latest'
-          # Alpine
+          # Alpine (musl libc)
           - 'alpine:3.21'
     container:
       image: ${{ matrix.os }}
@@ -39,32 +39,37 @@ jobs:
       - name: Install Python and pytest
         shell: sh
         run: |
-          # Detect package manager and install Python 3.11+, pip, pytest, openssh
+          # Detect package manager and install Python 3.11+, pip, pytest, openssh, openssl
           if command -v apt-get >/dev/null 2>&1; then
             # Debian, Ubuntu
             apt-get update -qq
-            apt-get install -y -qq python3 python3-pip openssh-client
+            apt-get install -y -qq python3 python3-pip openssh-client openssl
           elif command -v dnf >/dev/null 2>&1; then
-            # Fedora ships python3 as 3.12+, Rocky/Alma 9 default to 3.9
-            # Try python3.11 first (RHEL AppStream), fall back to python3
-            if dnf list python3.11 >/dev/null 2>&1; then
-              dnf install -y -q python3.11 python3.11-pip openssh-clients
-              # Make python3.11 the default python3
+            # Rocky/Alma 9 default to Python 3.9 — need 3.11 from AppStream
+            # Fedora 40+ ships Python 3.12+ as default python3
+            PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
+            PY_NUM=$(echo "$PY_VER" | awk -F. '{print ($1*100+$2)}')
+            if [ "$PY_NUM" -ge 311 ] 2>/dev/null; then
+              # Python is already 3.11+ (Fedora) — just install pip
+              dnf install -y -q python3-pip openssh-clients openssl
+            elif dnf list python3.11 >/dev/null 2>&1; then
+              # RHEL/Rocky/Alma — install python3.11 from AppStream
+              dnf install -y -q python3.11 python3.11-pip openssh-clients openssl
               alternatives --set python3 /usr/bin/python3.11 2>/dev/null || \
                 ln -sf /usr/bin/python3.11 /usr/local/bin/python3
               ln -sf /usr/bin/pip3.11 /usr/local/bin/pip3 2>/dev/null || true
             else
-              dnf install -y -q python3 python3-pip openssh-clients
+              dnf install -y -q python3 python3-pip openssh-clients openssl
             fi
           elif command -v pacman >/dev/null 2>&1; then
             # Arch
-            pacman -Sy --noconfirm python python-pip openssh
+            pacman -Sy --noconfirm python python-pip openssh openssl
           elif command -v zypper >/dev/null 2>&1; then
             # openSUSE
-            zypper --non-interactive install python3 python3-pip openssh-clients
+            zypper --non-interactive install python3 python3-pip openssh-clients openssl
           elif command -v apk >/dev/null 2>&1; then
-            # Alpine
-            apk add --no-cache python3 py3-pip openssh-client
+            # Alpine (musl) — needs bash for install script tests, openssl for vault
+            apk add --no-cache python3 py3-pip openssh-client openssl bash
           fi
           # Install pytest — handle PEP 668 (externally-managed) gracefully
           pip3 install --break-system-packages pytest 2>/dev/null || pip3 install pytest
