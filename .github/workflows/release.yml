@@ -49,9 +49,10 @@ jobs:
           VERSION=${GITHUB_REF_NAME#v}
           tar czf pve-freq-${VERSION}.tar.gz \
             --transform "s,^,pve-freq-${VERSION}/," \
-            freq/ conf/*.example conf/personality/ conf/distros.toml conf/plugins/ \
-            data/knowledge/ contrib/ \
+            freq/ conf/*.example conf/plugins/ conf/playbooks/ \
+            contrib/ docs/ \
             pyproject.toml install.sh README.md LICENSE CHANGELOG.md \
+            ARCHITECTURE.md CONTRIBUTING.md SECURITY.md \
             Dockerfile docker-compose.yml docker-entrypoint.sh \
             --exclude='__pycache__' --exclude='*.pyc'
           sha256sum pve-freq-${VERSION}.tar.gz > pve-freq-${VERSION}.tar.gz.sha256

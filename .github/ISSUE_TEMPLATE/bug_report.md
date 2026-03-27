@@ -21,7 +21,7 @@ What should have happened instead.
 
 ## Environment
 
-- **OS:** (e.g., Debian 12, Ubuntu 22.04, Rocky 9)
+- **OS:** (e.g., Debian 13, Debian 12, Ubuntu 24.04, Rocky 9)
 - **Python version:** (`python3 --version`)
 - **FREQ version:** (`freq --version`)
 - **Install method:** (curl installer / git clone / pip)

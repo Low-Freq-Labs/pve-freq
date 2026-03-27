@@ -24,7 +24,7 @@ Run tests:
 python3 -m pytest tests/ -v
 ```
 
-All 867+ tests run without a fleet — SSH calls are mocked, configs are synthetic.
+All 1,281 tests run without a fleet — SSH calls are mocked, configs are synthetic.
 
 ## Architecture
 

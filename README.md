@@ -4,13 +4,13 @@
 
 **Datacenter management CLI for Proxmox homelabbers.**
 
-83 commands. Zero dependencies. Pure Python. Works offline.
+88 commands. Zero dependencies. Pure Python. Works offline.
 
 [![Tests](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml/badge.svg)](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-7B2FBE.svg)](#requirements)
-[![LOC](https://img.shields.io/badge/LOC-31%2C100-7B2FBE.svg)](ARCHITECTURE.md)
+[![LOC](https://img.shields.io/badge/LOC-39%2C500-7B2FBE.svg)](ARCHITECTURE.md)
 
 *Drop the bass, not the uptime.*
 
@@ -132,30 +132,30 @@ freq status
 
 ## Features
 
-### 83 CLI Commands
+### 88 CLI Commands
 
 | Category | Count | Highlights |
 |----------|-------|------------|
 | Fleet Operations | 11 | Parallel SSH, fleet-wide exec, deep host inventory |
-| VM Management | 16 | Create, clone, migrate, snapshot, NIC, resize, power |
-| Host Management | 5 | Discovery, bootstrap, onboard, groups |
+| VM Management | 18 | Create, clone, migrate, snapshot, NIC, resize, power, tags, disks |
+| Host Management | 7 | Discovery, bootstrap, onboard, groups, key rotation |
 | Security & Policy | 7 | AES-256 vault, policy engine, drift detection |
 | Infrastructure | 6 | pfSense, TrueNAS, iDRAC, Cisco switch, ZFS |
 | Media Stack | 40+ | Plex, Sonarr, Radarr, Tdarr, qBit, SABnzbd |
 | Monitoring | 5 | Health checks, patrol mode, NTP, OS updates |
 | Smart Commands | 4 | Knowledge base, risk analysis, sweep, patrol |
-| Deployment | 2 | 8-phase init wizard, configuration |
+| Deployment | 2 | 10-phase init wizard, configuration |
 
 Run `freq help` for the full command reference.
 
 ### Web Dashboard
 
-89 API endpoints. 7 views. Single-file SPA. Zero JavaScript dependencies.
+100+ API endpoints. 7 views. Single-file SPA. Zero JavaScript dependencies.
 Start with `freq serve` — runs at `http://localhost:8888`.
 
 ### Interactive TUI
 
-97 menu entries. Risk-tagged operations. Color-coded categories. 14 submenus.
+168 menu entries. Risk-tagged operations. Color-coded categories. 15 submenus.
 Launch with `freq menu` or just `freq`.
 
 ### Policy Engine
@@ -163,7 +163,7 @@ Launch with `freq menu` or just `freq`.
 Declarative policies (dicts, not code). Async pipeline runner.
 `freq check ssh-hardening` → `freq diff ssh-hardening` → `freq fix ssh-hardening`
 
-### 16-Point Self-Diagnostic
+### 15-Point Self-Diagnostic
 
 `freq doctor` checks Python, platform, prerequisites, install directory, config, data directories, personality pack, SSH binary, SSH key, fleet connectivity, fleet data, fleet validity, VLANs, distros, and PVE cluster.
 

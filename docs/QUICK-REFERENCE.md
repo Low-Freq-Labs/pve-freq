@@ -16,96 +16,78 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/
 3. Hard refresh browser (Ctrl+Shift+R)
 4. If serve.py syntax is bad: `python3 -c "import freq.modules.serve"` to check
 
-## Web UI file structure (web_ui.py ~4990 lines)
+## Key files
+
+| File | Lines | What |
+|------|-------|------|
+| `freq/modules/web_ui.py` | 7,234 | Single-file SPA (HTML/CSS/JS) |
+| `freq/modules/serve.py` | 6,323 | HTTP server, 100+ API endpoints |
+| `freq/cli.py` | 1,148 | Argparse dispatcher, 88 commands |
+| `freq/tui/menu.py` | 1,315 | Interactive TUI, 168 entries, 15 submenus |
+| `freq/modules/init_cmd.py` | ~3,800 | 10-phase deployment wizard |
+| `freq/core/config.py` | ~580 | Config loader, bootstrap, FreqConfig dataclass |
+
+## API endpoints (serve.py — 100+ endpoints)
+
+Core endpoints:
 ```
-Lines 1-9       Python docstring
-Lines 10-770    HTML (CSS + page structure + overlay shell)
-Lines 770-845   JS: Utilities (badge, stat, ramGB, quotes, taglines)
-Lines 846-1580  JS: AUTH — Login, Sessions, Per-user Storage
-Lines 1580-1760 JS: HOME — Widget dashboard
-Lines 1760-2200 JS: FLEET — Fleet page, host cards, INFRA_ROLES, INFRA_ACTIONS
-Lines 2200-3530 JS: VMs, MEDIA, INFRA, SECURITY, SYSTEM pages
-Lines 3530-3620 JS: VM ACTIONS — toast/modal (create, destroy, power, snapshot, resize, migrate, rename, NIC)
-Lines 3620-3910 JS: INFRA ACTIONS — pfAction, tnAction, swAction, idracAction
-Lines 3910-4010 JS: VM ACTIONS continued (resize, migrate, NIC combo, snapshots)
-Lines 4010-4270 JS: More VM controls
-Lines 4270-4730 JS: HOST OVERLAY — Card Dispatch System (openCard, closeCard, 4 renderers)
-Lines 4730-4990 JS: LAB TOOLS — Plugin Framework (FREQ WIPE etc.)
-Lines 4990-end  JS: INIT — keyboard handlers, page load
+/                           Main page (web UI)
+/healthz                    Health check (for Docker/orchestrators)
+/api/status                 Fleet status summary
+/api/health                 Fleet health (background cache, instant)
+/api/vms                    VM list from PVE API
+/api/fleet/overview         Fleet overview (VMs + physical + nodes)
+/api/fleet/ntp              NTP status across fleet
+/api/fleet/updates          OS update status across fleet
+/api/host/detail            Deep SSH probe of single host
+/api/exec                   Run command on fleet host(s)
+/api/info                   Host info
+/api/metrics                Metrics data
 ```
 
-## API endpoints (serve.py — 72 endpoints)
+VM management:
 ```
-/                       Main page (web UI)
-/api/status             Fleet status summary
-/api/health             Fleet health (background cache, instant)
-/api/vms                VM list from PVE API
-/api/fleet/overview     Fleet overview (VMs + physical + nodes)
-/api/fleet/ntp          NTP status across fleet
-/api/fleet/updates      OS update status across fleet
-/api/host/detail        Deep SSH probe of single host
-/api/exec               Run command on fleet host(s)
-/api/info               Host info
-/api/metrics            Metrics data
-/api/vm/create          Create VM
-/api/vm/destroy         Destroy VM
-/api/vm/snapshot        Take snapshot
-/api/vm/snapshots       List snapshots
-/api/vm/delete-snapshot Delete snapshot
-/api/vm/resize          Resize VM disk
-/api/vm/power           Start/stop/reboot VM
-/api/vm/template        Convert to template
-/api/vm/rename          Rename VM
-/api/vm/change-id       Change VMID
-/api/vm/check-ip        Check if IP is available
-/api/vm/add-nic         Add NIC to VM
-/api/vm/clear-nics      Remove all NICs
-/api/vm/change-ip       Change VM IP
-/api/pool               Storage pool info
-/api/vault              List vault entries
-/api/vault/set          Set vault entry
-/api/vault/delete       Delete vault entry
-/api/users              List users
-/api/users/create       Create user
-/api/users/promote      Promote user tier
-/api/users/demote       Demote user tier
-/api/keys               SSH keys
-/api/journal            Journal entries
-/api/config             Configuration
-/api/distros            Cloud image list
-/api/groups             Host groups
-/api/harden             Hardening scan
-/api/agents             Agent list
-/api/agent/create       Create agent
-/api/agent/destroy      Destroy agent
-/api/deploy-agent       Deploy agent to VM
-/api/specialists        Specialist agent list
-/api/switch             Switch operations
-/api/notify/test        Test notifications
-/api/infra/pfsense      pfSense operations (17 actions)
-/api/infra/truenas      TrueNAS operations (12 actions)
-/api/infra/idrac        iDRAC operations (7 actions)
-/api/infra/overview     Infrastructure overview
-/api/infra/quick        Quick infra probe (background cache)
-/api/media/status       Container status (all VMs)
-/api/media/health       Media stack health
-/api/media/downloads    Active downloads (qBit + SABnzbd)
-/api/media/streams      Active Plex streams
-/api/media/dashboard    Media dashboard data
-/api/media/restart      Restart container
-/api/media/logs         Container logs
-/api/media/update       Pull + restart container
-/api/learn              Knowledge base
-/api/risk               Risk assessment
-/api/policies           Policy engine
-/api/lab/status         Lab tool status
-/api/lab-tool/proxy     Proxy to lab tool API
-/api/lab-tool/config    Lab tool config
-/api/lab-tool/save-config  Save lab tool config
-/api/auth/login         Login
-/api/auth/verify        Verify session
-/api/auth/change-password  Change password
+/api/vm/create              Create VM
+/api/vm/destroy             Destroy VM
+/api/vm/clone               Clone VM (dedicated endpoint)
+/api/vm/migrate             Migrate VM (with live migration option)
+/api/vm/snapshot            Take snapshot
+/api/vm/snapshots           List snapshots
+/api/vm/delete-snapshot     Delete snapshot
+/api/vm/resize              Resize VM disk
+/api/vm/power               Start/stop/reboot VM
+/api/vm/template            Convert to template
+/api/vm/rename              Rename VM
+/api/vm/change-id           Change VMID
+/api/vm/check-ip            Check if IP is available
+/api/vm/add-nic             Add NIC to VM
+/api/vm/clear-nics          Remove all NICs
+/api/vm/change-ip           Change VM IP
+/api/vm/add-disk            Add disk to VM
+/api/vm/tag                 Set VM tags
 ```
+
+Docker & Compose:
+```
+/api/containers/compose-up      Compose up for a Docker VM
+/api/containers/compose-down    Compose down for a Docker VM
+/api/containers/compose-view    View compose.yml content
+```
+
+Backup:
+```
+/api/backup/list            List snapshots and exports
+/api/backup/create          Create backup/snapshot
+/api/backup/restore         Restore from backup/snapshot
+```
+
+Setup:
+```
+/api/setup/test-ssh         Test SSH connectivity to a host
+/api/setup/reset            Reset setup wizard
+```
+
+Infrastructure, media, security, vault, users, and more — see `serve.py` for the full list.
 
 ## Host quirks (things that WILL bite you)
 
@@ -175,11 +157,6 @@ ssh -o ConnectTimeout=5 freq-admin@<truenas-ip> "sudo zpool list"
 # Validate Python syntax
 python3 -c "import freq.modules.serve; import freq.modules.web_ui"
 
-# Check JS brace balance
-python3 -c "
-import re
-with open('freq/modules/web_ui.py') as f: content = f.read()
-js = re.search(r'<script>(.*?)</script>', content, re.DOTALL).group(1)
-print(f'Braces: {js.count(chr(123))} open, {js.count(chr(125))} close')
-"
+# Run test suite
+python3 -m pytest tests/ -v --tb=short
 ```

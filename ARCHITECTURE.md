@@ -1,6 +1,6 @@
-# Architecture — PVE FREQ v2.0
+# Architecture — PVE FREQ v2.2.0
 
-> 30,700 lines of Python. Zero external dependencies. Every import is stdlib.
+> 39,500+ lines of Python. Zero external dependencies. Every import is stdlib.
 
 ## Design Philosophy
 
@@ -10,9 +10,9 @@ FREQ depends on nothing outside the Python standard library. No pip packages, no
 
 **Why:** FREQ runs on Proxmox hosts — hardened, air-gapped, minimal installs. Requiring `pip install requests` on a production hypervisor is a non-starter. The installer (`install.sh`) uses `pip3 install --no-deps` specifically to guarantee it never touches PyPI.
 
-**What it costs:** We write our own TOML parser fallback (for Python <3.11 without `tomllib`), our own parallel SSH executor, our own HTTP server for the dashboard. About 800 lines of code that a dependency would have saved.
+**What it costs:** We write our own parallel SSH executor, our own HTTP server for the dashboard, our own TOML-based config system. About 800 lines of code that a dependency would have saved.
 
-**What it buys:** `python3 -m freq` works on any Linux box with Python 3.7+. No venv, no internet, no package manager. Copy the directory, run it.
+**What it buys:** `python3 -m freq` works on any Linux box with Python 3.11+. No venv, no internet, no package manager. Copy the directory, run it.
 
 ### Config Survives Broken Code
 
@@ -30,73 +30,87 @@ def _cmd_status(cfg, pack, args):
 
 If `fleet.py` has a syntax error, `freq doctor` still works. If `media.py` is deleted, `freq status` still works. This is the "muscles can be missing" principle — the spine survives anything.
 
-### Python 3.7+ Compatibility
+### Python 3.11+ Required
 
-- `tomllib` (3.11+) with hand-rolled fallback parser
-- `concurrent.futures` for parallel SSH (3.7+)
-- `asyncio` for the policy engine runner (3.7+)
-- No walrus operator, no `match` statements, no f-string `=` debug syntax
+- `tomllib` (3.11+ stdlib) for TOML config parsing — no fallback needed
+- `concurrent.futures` for parallel SSH
+- `asyncio` for the policy engine runner
 
 ---
 
 ## Package Layout
 
 ```
-freq/                          # 30,766 lines across 50+ files
+freq/                          # 39,500+ lines across 50+ files
 ├── __init__.py                # Version string + brand constants
 ├── __main__.py                # Entry point for python -m freq
-├── cli.py                     # 1,357 LOC — argparse dispatcher, 65+ commands
+├── cli.py                     # 1,148 LOC — argparse dispatcher, 88 commands
 │
-├── core/                      # THE SPINE — survives everything (2,642 LOC)
-│   ├── config.py              # 578 LOC — TOML loader, FreqConfig dataclass, safe defaults
-│   ├── fmt.py                 # 324 LOC — ANSI colors, Unicode borders, tables, badges
-│   ├── personality.py         # 158 LOC — celebrations, vibes, taglines, splash, logos
-│   ├── ssh.py                 # 362 LOC — sync/async SSH, single/parallel execution
-│   ├── types.py               # 258 LOC — all dataclasses (Host, Finding, Policy, VLAN, ...)
-│   ├── doctor.py              # 376 LOC — 16-point self-diagnostic
-│   ├── preflight.py           # 153 LOC — pre-install environment validation
-│   ├── resolve.py             # 127 LOC — host/target resolution (label, IP, group, type)
-│   ├── validate.py            # 108 LOC — input validation (IPs, labels, VMIDs)
-│   ├── log.py                 # 95 LOC — structured logging
-│   ├── plugins.py             # 72 LOC — plugin discovery from conf/plugins/
-│   └── compat.py              # 30 LOC — distro detection, platform-aware install hints
+├── core/                      # THE SPINE — survives everything
+│   ├── config.py              # TOML loader, FreqConfig dataclass, safe defaults, bootstrap
+│   ├── fmt.py                 # ANSI colors, Unicode borders, tables, badges
+│   ├── personality.py         # Celebrations, vibes, taglines, splash, logos
+│   ├── ssh.py                 # Sync/async SSH, single/parallel execution
+│   ├── types.py               # All dataclasses (Host, Finding, Policy, VLAN, ...)
+│   ├── doctor.py              # 15-point self-diagnostic
+│   ├── preflight.py           # Pre-install environment validation
+│   ├── resolve.py             # Host/target resolution (label, IP, group, type)
+│   ├── validate.py            # Input validation (IPs, labels, VMIDs)
+│   ├── log.py                 # Structured logging
+│   ├── plugins.py             # Plugin discovery from conf/plugins/
+│   └── compat.py              # Distro detection, platform-aware install hints
 │
-├── modules/                   # THE MUSCLES — independently removable (27 files)
+├── modules/                   # THE MUSCLES — independently removable
 │   ├── fleet.py               # Fleet ops: status, exec, info, detail, diagnose, SSH, docker
-│   ├── vm.py                  # VM lifecycle: create, clone, destroy, resize, rename
+│   ├── vm.py                  # VM lifecycle: create, clone, destroy, resize, rename, tags, disks
 │   ├── pve.py                 # Proxmox API: list, power, snapshot, config, rescue
 │   ├── media.py               # Media stack: 40+ subcommands for Plex/Sonarr/Radarr/Tdarr/etc.
 │   ├── infrastructure.py      # pfSense, TrueNAS, iDRAC, Cisco switch
-│   ├── serve.py               # HTTP server for the web dashboard
-│   ├── web_ui.py              # 5,244 LOC — single-file SPA (HTML/CSS/JS embedded in Python)
-│   ├── init_cmd.py            # 8-phase deployment wizard
+│   ├── serve.py               # 6,323 LOC — HTTP server, 100+ API endpoints, background polling
+│   ├── web_ui.py              # 7,234 LOC — single-file SPA (HTML/CSS/JS embedded in Python)
+│   ├── init_cmd.py            # 10-phase deployment wizard
 │   ├── demo.py                # Interactive demo mode (works without fleet)
 │   ├── vault.py               # AES-256-CBC encrypted credential store
 │   ├── users.py               # RBAC: create, promote, demote, install across fleet
 │   ├── audit.py               # Security audit
 │   ├── harden.py              # Security hardening application
 │   ├── selfupdate.py          # freq update — git pull / tarball / dpkg detection
-│   └── ...                    # 13 more modules (backup, journal, lab, specialist, ...)
+│   ├── backup.py              # Snapshot and backup management
+│   ├── discover.py            # Host and PVE node auto-discovery
+│   ├── hosts.py               # Host management, groups, onboarding
+│   └── ...                    # 10 more modules (journal, lab, specialist, ...)
 │
 ├── engine/                    # THE BRAIN — policy & compliance
 │   ├── policy.py              # PolicyExecutor: discover → compare → fix → verify
 │   ├── runner.py              # Async pipeline runner (semaphore-bounded concurrency)
 │   └── policies/              # Declarative policy definitions
-│       ├── ssh_hardening.py   # 39 lines — SSH config desired state
+│       ├── ssh_hardening.py   # SSH config desired state
 │       ├── ntp_sync.py        # NTP/chrony compliance
 │       └── rpcbind.py         # Disable rpcbind on non-NFS hosts
 │
 ├── tui/                       # Interactive terminal UI
-│   └── menu.py                # 1,314 LOC — 97 entries, 14 submenus, risk tags, color keys
+│   └── menu.py                # 1,315 LOC — 168 entries, 15 submenus, risk tags, color keys
 │
-└── jarvis/                    # Smart commands
-    ├── agent.py               # AI specialist VM management
-    ├── learn.py               # Proxmox operational knowledge base search
-    ├── risk.py                # Kill-chain blast radius analysis
-    ├── sweep.py               # Full audit + policy sweep pipeline
-    ├── patrol.py              # Continuous monitoring + drift detection
-    ├── provision.py           # Cloud-init VM provisioning
-    └── notify.py              # Discord/Slack notifications
+├── deployers/                 # Vendor-specific device deployers
+│   ├── server/linux.py        # Linux server deployment
+│   ├── firewall/pfsense.py    # pfSense deployment
+│   ├── nas/truenas.py         # TrueNAS deployment
+│   ├── bmc/idrac.py           # Dell iDRAC BMC
+│   └── switch/cisco.py        # Cisco switch deployment
+│
+├── jarvis/                    # Smart commands
+│   ├── agent.py               # AI specialist VM management
+│   ├── federation.py          # Multi-site federation
+│   ├── learn.py               # Proxmox operational knowledge base search
+│   ├── risk.py                # Kill-chain blast radius analysis
+│   ├── sweep.py               # Full audit + policy sweep pipeline
+│   ├── patrol.py              # Continuous monitoring + drift detection
+│   ├── provision.py           # Cloud-init VM provisioning
+│   └── notify.py              # Discord/Slack/Telegram/SMTP/ntfy/Gotify/Pushover notifications
+│
+└── data/                      # Package data (ships with pip install)
+    ├── conf-templates/        # Default config files seeded on first run
+    └── knowledge/             # Operational knowledge base (lessons + gotchas)
 ```
 
 ---
@@ -107,7 +121,7 @@ The survival layer. If every module in `modules/`, `engine/`, `tui/`, and `jarvi
 
 - Load configuration with safe defaults
 - Show the ASCII splash screen
-- Run the 16-point self-diagnostic (`freq doctor`)
+- Run the 15-point self-diagnostic (`freq doctor`)
 - Resolve hosts from `hosts.conf`
 - Execute SSH commands
 - Validate user input
@@ -118,10 +132,11 @@ The survival layer. If every module in `modules/`, `engine/`, `tui/`, and `jarvi
 `FreqConfig` is a dataclass with ~40 fields. Every field has a default. The loading sequence:
 
 1. Set defaults (install_dir, conf_dir, data_dir from `$FREQ_DIR` or `/opt/pve-freq`)
-2. Read `freq.toml` (TOML with fallback parser for Python <3.11)
-3. Read `hosts.conf` (custom line format: `IP LABEL TYPE [GROUPS]`)
-4. Read `vlans.toml`, `distros.toml`, `fleet-boundaries.toml`
-5. Override from environment variables (`$FREQ_DIR`, `$FREQ_DEBUG`)
+2. Bootstrap from package data if first run (seed `conf/` and `data/` from `freq/data/`)
+3. Read `freq.toml` (stdlib `tomllib`)
+4. Read `hosts.conf` (custom line format: `IP LABEL TYPE [GROUPS]`)
+5. Read `vlans.toml`, `distros.toml`, `fleet-boundaries.toml`
+6. Override from environment variables (`$FREQ_DIR`, `$FREQ_DEBUG`)
 
 If any step fails, the previous defaults survive. Config loading never raises.
 
@@ -166,9 +181,9 @@ Return `0` for success, non-zero for failure. The dispatcher in `cli.py` catches
 
 ### The Dashboard (`serve.py` + `web_ui.py`)
 
-`web_ui.py` is a 5,244-line Python file that contains an entire single-page application: HTML structure, CSS styles, and JavaScript — all as Python string templates. No external JS libraries, no build step, no npm.
+`web_ui.py` is a 7,234-line Python file that contains an entire single-page application: HTML structure, CSS styles, and JavaScript — all as Python string templates. No external JS libraries, no build step, no npm.
 
-`serve.py` subclasses `http.server.HTTPServer` with `ThreadingMixIn` for concurrent requests. A background thread refreshes fleet data every 60 seconds into a cache. 89 API endpoints serve JSON for the dashboard views.
+`serve.py` subclasses `http.server.HTTPServer` with `ThreadingMixIn` for concurrent requests. A background thread refreshes fleet data every 60 seconds into a cache. 100+ API endpoints serve JSON for the 7 dashboard views: Home, Fleet, Docker, Media, Security, Tools, Settings.
 
 Start it: `freq serve` → `http://localhost:8888`
 
@@ -232,8 +247,8 @@ conf/personality/
 
 Select pack in `freq.toml`:
 ```toml
-[build]
-personality = "personal"
+[freq]
+build = "personal"
 ```
 
 ### Vibe Drop Mechanics
@@ -254,24 +269,28 @@ The probability being prime (47) means the pattern doesn't align with common loo
 
 ## Testing
 
-**867 tests** across 21 test files. All tests run without a fleet — SSH calls are mocked, configs are synthetic.
+**1,281 tests** across 33 test files. All tests run without a fleet — SSH calls are mocked, configs are synthetic.
 
 ```
 tests/
-├── test_foundation.py    # Core types, config loading, fmt output, validate
-├── test_cli.py           # Parser registration, command dispatch, output patterns
-├── test_demo.py          # Demo command (splash, doctor, status, personality)
-├── test_fleet.py         # Fleet operations (status, exec, info, diagnose)
-├── test_vm.py            # VM management (create, clone, destroy, resize)
-├── test_pve.py           # Proxmox operations
-├── test_engine.py        # Policy engine (executor, runner, findings)
-├── test_install.py       # Pre-flight, installer syntax, entry points
-├── test_parity.py        # CLI/TUI/Web UI feature parity verification
-├── test_media.py         # Media stack operations
-└── ...                   # 11 more test files
+├── test_foundation.py       # Core types, config loading, fmt output, validate
+├── test_cli.py              # Parser registration, command dispatch, output patterns
+├── test_demo.py             # Demo command (splash, doctor, status, personality)
+├── test_auto_discovery.py   # PVE node discovery, VM tags, host resolution (48 tests)
+├── test_admin_api.py        # Admin API endpoints, host management
+├── test_serve_handlers.py   # Dashboard API handler coverage
+├── test_serve_helpers.py    # Serve utility functions
+├── test_serve_cache.py      # Background cache behavior
+├── test_hosts_sync.py       # Host sync and label management
+├── test_install.py          # Pre-flight, installer syntax, entry points
+├── test_parity.py           # CLI/TUI/Web UI feature parity verification
+├── test_policies.py         # Policy engine (executor, runner, findings)
+├── test_security.py         # Security audit and hardening
+├── test_modules.py          # Module-level tests (knowledge base, risk, etc.)
+└── ...                      # 19 more test files (jarvis, edge cases, overnight tiers)
 ```
 
-CI matrix: Debian 12, Ubuntu 22.04, Rocky Linux 9.
+CI matrix: Debian 13, Debian 12, Ubuntu 24.04, Rocky Linux 9.
 
 ---
 
@@ -279,17 +298,21 @@ CI matrix: Debian 12, Ubuntu 22.04, Rocky Linux 9.
 
 ```
 conf/
-├── freq.toml              # Main config: hosts file path, SSH settings, personality
+├── freq.toml              # Main config: cluster, SSH, VM defaults, notifications, safety
 ├── freq.toml.example      # Template for new installs
 ├── hosts.conf             # Fleet host registry (IP LABEL TYPE GROUPS)
 ├── hosts.conf.example     # Template
 ├── vlans.toml             # VLAN definitions (ID, name, subnet, gateway)
 ├── distros.toml           # Cloud image catalog (URL, checksum, family)
 ├── fleet-boundaries.toml  # Permission tiers, VM categories, physical devices
+├── containers.toml        # Docker container registry
+├── rules.toml             # Custom automation rules
+├── risk.toml              # Dependency and kill-chain definitions
 ├── personality/           # Personality packs
 │   ├── default.toml
 │   └── personal.toml
-└── plugins/               # Plugin modules (auto-discovered)
+├── playbooks/             # Automated recovery playbooks
+└── plugins/               # Custom command plugins (auto-discovered)
 ```
 
 ```
@@ -297,7 +320,8 @@ data/
 ├── log/                   # Operation logs
 ├── vault/                 # AES-256-CBC encrypted credentials
 ├── keys/                  # SSH keys for fleet access
-└── cache/                 # Dashboard cache, fleet state
+├── cache/                 # Dashboard cache, fleet state
+└── knowledge/             # Operational knowledge base (lessons + gotchas)
 ```
 
 ---
@@ -311,4 +335,5 @@ data/
 | Policies as dicts | Declarative > imperative. A policy author doesn't need to know Python — just define desired state. The executor handles the rest. |
 | Personality as first-class | CLI tools are commodities. The personality system is the moat. It makes FREQ memorable and shareable. |
 | `concurrent.futures` over asyncio everywhere | Simpler mental model for SSH parallelism. asyncio is reserved for the engine pipeline where true async matters. |
-| TOML over YAML/JSON | Human-readable, unambiguous, stdlib in Python 3.11+. Our fallback parser handles the subset we need. |
+| TOML config | Human-readable, unambiguous, stdlib in Python 3.11+. No YAML ambiguity, no JSON comment hacks. |
+| Package data bootstrap | `freq/data/` ships config templates and knowledge base. First run auto-seeds `conf/` and `data/` — zero manual file copying. |
