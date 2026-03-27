@@ -86,6 +86,10 @@ def warn(msg: str, **extra) -> None:
     _write("WARN", msg, **extra)
 
 
+# Alias: some modules use log.warning() (stdlib convention)
+warning = warn
+
+
 def error(msg: str, **extra) -> None:
     _write("ERROR", msg, **extra)
 
