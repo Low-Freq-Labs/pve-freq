@@ -14,22 +14,26 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          # Debian family
+          # Debian family (11/bullseye has no Python 3.11 — two versions is the max)
           - 'debian:12'
           - 'debian:13'
-          # Ubuntu (LTS only — non-LTS releases go EOL fast)
+          # Ubuntu (LTS only — 22.04 has no Python 3.11 without PPA)
           - 'ubuntu:24.04'
-          # RHEL family
+          # RHEL family (8 + 9 — python3.11 from AppStream on both)
+          - 'rockylinux:8'
           - 'rockylinux:9'
+          - 'almalinux:8'
           - 'almalinux:9'
-          # Fedora (ships Python 3.12+)
+          # Fedora (ships Python 3.12+ — older releases have dead repos)
           - 'fedora:41'
           - 'fedora:40'
-          # Arch
+          # Arch (rolling — only latest)
           - 'archlinux:latest'
-          # SUSE
+          # SUSE (Tumbleweed rolling — Leap lacks Python 3.11)
           - 'opensuse/tumbleweed:latest'
-          # Alpine (musl libc)
+          # Alpine (musl libc — 3.18 and older lack Python 3.11)
+          - 'alpine:3.19'
+          - 'alpine:3.20'
           - 'alpine:3.21'
     container:
       image: ${{ matrix.os }}
