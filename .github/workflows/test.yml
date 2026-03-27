@@ -101,6 +101,22 @@ jobs:
         env:
           FREQ_DIR: ${{ github.workspace }}
 
+      - name: Verify freq init --dry-run
+        shell: sh
+        run: |
+          # Dry-run previews what init would do — no root, no network, always exits 0
+          freq init --dry-run
+        env:
+          FREQ_DIR: ${{ github.workspace }}
+
+      - name: Verify freq init --check
+        shell: sh
+        run: |
+          # Check validates local init state. Fails in CI (no freq.toml, no keys) but must not crash.
+          freq init --check || true
+        env:
+          FREQ_DIR: ${{ github.workspace }}
+
       - name: Run tests
         shell: sh
         run: python3 -m pytest tests/ -v --tb=short
