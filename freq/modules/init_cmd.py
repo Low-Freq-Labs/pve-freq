@@ -1955,6 +1955,29 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                 else:
                     fmt.step_warn("Skipping device hosts")
 
+    # Persist device (iDRAC/switch) password for ongoing SSH access
+    if device_hosts and ok > 0 and ctx.get("svc_pass"):
+        pass_path = os.path.join(os.path.expanduser("~" + ctx["svc_name"]), ".ssh", "switch-pass")
+        # Also write to freq-ops home if running as root
+        freq_ops_path = os.path.expanduser("~freq-ops/.ssh/switch-pass")
+        for pp in {pass_path, freq_ops_path}:
+            try:
+                os.makedirs(os.path.dirname(pp), mode=0o700, exist_ok=True)
+                with open(pp, "w") as f:
+                    f.write(ctx["svc_pass"])
+                os.chmod(pp, 0o600)
+                # Set ownership to freq-ops if we can
+                import pwd
+                try:
+                    pw = pwd.getpwnam("freq-ops")
+                    os.chown(pp, pw.pw_uid, pw.pw_gid)
+                    os.chown(os.path.dirname(pp), pw.pw_uid, pw.pw_gid)
+                except (KeyError, PermissionError):
+                    pass
+                fmt.step_ok(f"Device password saved to {pp}")
+            except OSError as e:
+                fmt.step_warn(f"Could not save device password to {pp}: {e}")
+
     fmt.blank()
     fmt.line(f"  Fleet deployment: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, {fmt.C.RED}{fail} failed{fmt.C.RESET}")
 
@@ -4099,6 +4122,26 @@ def _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
             ok += 1
         else:
             fail += 1
+
+    # Persist device password for ongoing iDRAC/switch SSH access
+    has_devices = any(t["htype"] in ("idrac", "switch") for t in targets)
+    svc_pass = ctx.get("svc_pass", "")
+    if has_devices and ok > 0 and svc_pass:
+        freq_ops_path = os.path.expanduser("~freq-ops/.ssh/switch-pass")
+        try:
+            os.makedirs(os.path.dirname(freq_ops_path), mode=0o700, exist_ok=True)
+            with open(freq_ops_path, "w") as f:
+                f.write(svc_pass)
+            os.chmod(freq_ops_path, 0o600)
+            import pwd
+            try:
+                pw = pwd.getpwnam("freq-ops")
+                os.chown(freq_ops_path, pw.pw_uid, pw.pw_gid)
+            except (KeyError, PermissionError):
+                pass
+            fmt.step_ok(f"Device password saved to {freq_ops_path}")
+        except OSError as e:
+            fmt.step_warn(f"Could not save device password: {e}")
 
     fmt.blank()
     fmt.line(f"  Fleet: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, "

@@ -115,6 +115,7 @@ input:focus{border-color:var(--purple)}
 
 <script>
 var step=0,adminUser='',adminCreated=false,clusterConfigured=false,keyGenerated=false;
+function _esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 function show(s){
   document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('active')});
@@ -216,55 +217,45 @@ APP_HTML = r"""<!DOCTYPE html>
 <title>PVE FREQ</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%239B4FDE'/%3E%3Cstop offset='100%25' stop-color='%237B2FBE'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='6' fill='%230d1117'/%3E%3Cpath d='M7 8h18v3.5H11.5v4H20v3.5H11.5V24H7V8z' fill='url(%23g)'/%3E%3Cpath d='M3 21 Q8 15 13 21 Q18 27 23 21 Q28 15 32 21' stroke='%239B4FDE' stroke-width='1.5' fill='none' opacity='0.4'/%3E%3C/svg%3E">
 <style>
+/* ── Tokens ── */
 :root {
   --purple: #7B2FBE; --purple-light: #9B4FDE; --purple-dark: #5a1f8e;
   --purple-glow: rgba(123,47,190,0.15); --purple-faint: rgba(123,47,190,0.04);
   --bg: #0a0d12; --bg2: #0d1117; --card: #141920; --card-hover: #1a2028;
-  --border: #1e2530; --border-light: #2a3140; --input-border: var(--input-border);
+  --border: #1e2530; --border-light: #2a3140; --input-border: #2a3140;
   --text: #ffffff; --text-dim: #6e7681; --text-bright: #ffffff;
   --green: #3fb950; --yellow: #d29922; --red: #f85149; --blue: #58a6ff;
   --cyan: #56d4dd; --orange: #f0883e;
 }
+
+/* ── Reset ── */
 *{margin:0;padding:0;box-sizing:border-box}
 h1,h2,h3,h4{text-transform:uppercase}
-body{font-family:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;font-size:16px}
+body{font-family:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
 
-/* Sidebar */
-.sb{width:240px;background:var(--card);border-right:1px solid var(--border);position:fixed;height:100vh;overflow-y:auto;display:flex;flex-direction:column;z-index:10}
-.sb-logo{padding:20px;text-align:center;border-bottom:1px solid var(--border);background:linear-gradient(180deg,rgba(123,47,190,0.12) 0%,transparent 100%)}
-.sb-logo .freq-mark{font-size:32px;font-weight:900;letter-spacing:3px;background:linear-gradient(135deg,#9B4FDE,#7B2FBE,#5a1f8e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.sb-logo .freq-sub{font-size:12px;letter-spacing:5px;color:var(--text-dim);margin-top:2px;text-transform:uppercase}
-.sb-logo .freq-ver{font-size:13px;color:var(--text);margin-top:6px;opacity:0.6}
-.sb-nav{flex:1;padding:8px 0}
-.sb-section{padding:16px 16px 4px;font-size:12px;color:var(--purple-light);text-transform:uppercase;letter-spacing:2px;font-weight:600}
-.sb-item{display:flex;align-items:center;gap:10px;padding:8px 16px;color:var(--text-dim);font-size:13px;cursor:pointer;border-left:2px solid transparent;transition:all 0.15s}
-.sb-item:hover{background:var(--purple-faint);color:var(--text)}
-.sb-item.active{color:var(--purple-light);border-left-color:var(--purple);background:var(--purple-faint)}
-.sb-item .icon{width:16px;text-align:center;font-size:14px}
-.sb-quote{padding:16px;border-top:1px solid var(--border);font-size:13px;color:var(--text);font-style:italic;line-height:1.5}
-
-/* Main */
-.mn{flex:1;min-height:100vh}
-.mn-header{padding:20px 32px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg2)}
-.mn-header h1{font-size:20px;font-weight:600;color:var(--text-bright)}
-.mn-header .tagline{font-size:13px;color:var(--text);font-style:italic}
-.mn-body{padding:24px 32px}
+/* ── Layout ── */
+.mn{min-height:100vh}
+.mn-header{padding:12px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg2)}
+.mn-header h1{font-size:16px;font-weight:600;color:var(--text-bright)}
+.mn-header .tagline{font-size:12px;color:var(--text);font-style:italic}
+.mn-body{padding:16px 24px}
 .page{display:none}.page.active{display:block}
 
-/* Stats */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px}
-.st{background:var(--card);border:3px solid var(--input-border);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;align-items:center}
-.st .lb{font-size:12px;color:var(--text);text-transform:uppercase;letter-spacing:1.5px;font-weight:600;background:var(--purple-faint);padding:3px 12px;border-radius:4px;margin-bottom:6px}
-.st .vl{font-size:20px;font-weight:700;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ── Stats ── */
+.stats{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;justify-content:center}
+.stats .st{min-width:140px;max-width:180px;flex:0 1 180px}
+.st{background:var(--card);border:1px solid var(--border-light);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,0.3)}
+.st .lb{font-size:10px;color:var(--text);text-transform:uppercase;letter-spacing:1.5px;font-weight:600;background:var(--purple-faint);padding:2px 8px;border-radius:3px;margin-bottom:4px}
+.st .vl{font-size:17px;font-weight:700;margin-top:2px;white-space:nowrap}
 .st .vl.g{color:var(--green)}.st .vl.r{color:var(--red)}.st .vl.p{color:var(--purple-light)}.st .vl.y{color:var(--yellow)}.st .vl.b{color:var(--blue)}
 
-/* Tables */
-table{width:100%;border-collapse:collapse;background:var(--card);border:2px solid var(--input-border);border-radius:8px;overflow:hidden;margin-bottom:16px}
-th{text-align:left;padding:10px 14px;font-size:11px;color:var(--text);text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid var(--input-border);background:rgba(0,0,0,0.3);font-weight:600}
-td{padding:9px 14px;font-size:13px;border-bottom:1px solid var(--border)}
+/* ── Tables ── */
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--input-border);border-radius:6px;overflow:hidden;margin-bottom:12px}
+th{text-align:left;padding:7px 12px;font-size:10px;color:var(--text);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--input-border);background:rgba(0,0,0,0.3);font-weight:600}
+td{padding:6px 12px;font-size:12px;border-bottom:1px solid var(--border)}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--card-hover)}
-.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
 .badge.up,.badge.ok,.badge.healthy,.badge.running{background:rgba(63,185,80,0.12);color:var(--green)}
 .badge.down,.badge.stopped,.badge.unreachable,.badge.CRITICAL{background:rgba(248,81,73,0.12);color:var(--red)}
 .badge.warn,.badge.HIGH,.badge.created{background:rgba(210,153,34,0.12);color:var(--yellow)}
@@ -273,48 +264,54 @@ tr:hover td{background:var(--card-hover)}
 .badge.unknown{background:rgba(110,118,129,0.12);color:var(--text-dim)}
 .badge.MEDIUM{background:rgba(88,166,255,0.12);color:var(--blue)}
 
-/* Cards */
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-bottom:16px;align-items:start}
-.crd{background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:12px 14px;transition:border-color 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease}
-.crd:hover{border-color:var(--purple);box-shadow:0 2px 8px rgba(123,47,190,0.06);transform:translateY(-2px)}
+/* ── Cards ── */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-bottom:12px;align-items:stretch}
+.crd{background:var(--card);border:1px solid var(--border-light);border-radius:6px;padding:10px 12px;transition:border-color 0.2s ease,box-shadow 0.2s ease,transform 0.2s ease;box-shadow:0 1px 4px rgba(0,0,0,0.3)}
+.crd:hover{border-color:var(--purple);box-shadow:0 2px 6px rgba(123,47,190,0.06);transform:translateY(-1px)}
 .no-hover-fx .crd{transition:none}
 .no-hover-fx .crd:hover{box-shadow:none;transform:none}
-.crd h3{font-size:14px;color:var(--purple-light);margin-bottom:6px}
-.crd p{font-size:13px;color:var(--text);line-height:1.6}
-.crd .tag{display:inline-block;background:var(--purple-faint);color:var(--purple-light);padding:2px 8px;border-radius:4px;font-size:12px;margin:2px 2px 0 0;font-weight:500}
+.crd h3{font-size:13px;color:var(--purple-light);margin-bottom:4px}
+.crd p{font-size:12px;color:var(--text);line-height:1.5}
+.crd .tag{display:inline-block;background:var(--purple-faint);color:var(--purple-light);padding:2px 6px;border-radius:3px;font-size:11px;margin:2px 2px 0 0;font-weight:500}
 
-/* Exec */
-.exec-bar{display:flex;gap:8px;margin-bottom:16px}
-.exec-bar select,.exec-bar input{background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:13px;font-family:inherit;transition:border-color 0.25s ease}
+/* ── Exec ── */
+.exec-bar{display:flex;gap:6px;margin-bottom:12px}
+.exec-bar select,.exec-bar input{background:var(--card);border:1px solid var(--input-border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:12px;font-family:inherit;transition:border-color 0.2s ease}
 .exec-bar input{flex:1}
 .exec-bar input:focus,.exec-bar select:focus{outline:none;border-color:var(--purple)}
-.exec-bar button{background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 24px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;transition:border-color 0.25s ease,color 0.25s ease,background 0.25s ease}
+.exec-bar button{background:var(--card);border:1px solid var(--input-border);color:var(--text);padding:7px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;transition:border-color 0.2s ease,color 0.2s ease,background 0.2s ease}
 .exec-bar button:hover{border-color:var(--purple);color:var(--purple-light);background:var(--purple-faint)}
-.exec-out{background:#080b10;border:2px solid var(--input-border);border-radius:8px;padding:18px;font-family:'Fira Code','Cascadia Code','JetBrains Mono',monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;line-height:1.7}
+.exec-out{background:#080b10;border:1px solid var(--input-border);border-radius:6px;padding:14px;font-family:'Fira Code','Cascadia Code','JetBrains Mono',monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;line-height:1.6}
 .exec-line{padding:1px 0}
 
-/* Search */
-.search{background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:12px 16px;border-radius:8px;font-size:13px;width:100%;margin-bottom:16px;font-family:inherit;transition:border-color 0.25s ease}
-.search:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 3px var(--purple-glow)}
+/* ── Search ── */
+.search{background:var(--card);border:1px solid var(--input-border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:12px;width:100%;margin-bottom:12px;font-family:inherit;transition:border-color 0.2s ease}
+.search:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 2px var(--purple-glow)}
 
-/* Risk chain */
-.chain{display:flex;align-items:center;gap:6px;padding:18px;background:var(--card);border-radius:8px;border:2px solid var(--input-border);margin-bottom:16px;flex-wrap:wrap}
-.chain-node{padding:8px 16px;border-radius:8px;font-weight:600;font-size:12px;letter-spacing:0.5px}
+/* ── Sub-tabs ── */
+.sub-tabs{display:flex;gap:2px;margin-bottom:12px;padding:3px;background:var(--card);border-radius:6px;border:1px solid var(--border)}
+.sub-tab{background:none;border:none;color:var(--text-dim);padding:4px 12px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px;font-family:inherit;transition:all 0.15s}
+.sub-tab:hover{color:var(--text);background:var(--purple-faint)}
+.sub-tab.active-sub{color:var(--purple-light);background:var(--purple-faint);box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+
+/* ── Risk Chain ── */
+.chain{display:flex;align-items:center;gap:6px;padding:12px;background:var(--card);border-radius:6px;border:1px solid var(--input-border);margin-bottom:12px;flex-wrap:wrap}
+.chain-node{padding:5px 12px;border-radius:6px;font-weight:600;font-size:11px;letter-spacing:0.5px}
 .chain-arr{color:var(--red);font-size:16px}
 
-/* Timeline */
+/* ── Timeline ── */
 .timeline{position:relative;padding-left:24px;border-left:2px solid var(--border)}
-.timeline-item{margin-bottom:24px;position:relative}
+.timeline-item{margin-bottom:16px;position:relative}
 .timeline-item::before{content:'';position:absolute;left:-29px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--purple);border:2px solid var(--bg)}
 .timeline-item h3{font-size:14px;color:var(--purple-light);margin-bottom:4px}
 .timeline-item .meta{font-size:11px;color:var(--text-dim);margin-bottom:6px}
 .timeline-item p{font-size:13px;color:var(--text);line-height:1.6}
 
-/* Two col */
+/* ── Two Column ── */
 .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:900px){.two{grid-template-columns:1fr}}
 
-/* Severity */
+/* ── Severity ── */
 .sev-critical{color:var(--red);font-weight:600}
 .sev-important{color:var(--yellow)}
 .sev-info{color:var(--blue)}
@@ -322,52 +319,57 @@ tr:hover td{background:var(--card-hover)}
 .gotcha{border-left:3px solid var(--yellow);padding-left:14px;margin-bottom:12px}
 .gotcha .fix{color:var(--green);font-size:12px;margin-top:4px}
 
-/* Host overlay */
+/* ── Host Overlay ── */
 .host-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:20;overflow-y:auto;display:none}
 .host-overlay.open{display:block}
-.host-overlay .ho-header{padding:24px 0;border-bottom:1px solid var(--border);background:linear-gradient(180deg,var(--bg2) 0%,var(--bg) 100%);position:sticky;top:0;z-index:1}
-.host-overlay .ho-header-inner{max-width:960px;margin:0 auto;padding:0 40px;display:flex;justify-content:space-between;align-items:center}
-.host-overlay .ho-header h1{font-size:22px;font-weight:700;color:var(--text-bright);text-transform:uppercase}
+.host-overlay .ho-header{padding:14px 0;border-bottom:1px solid var(--border);background:linear-gradient(180deg,var(--bg2) 0%,var(--bg) 100%);position:sticky;top:0;z-index:1}
+.host-overlay .ho-header-inner{max-width:960px;margin:0 auto;padding:0 24px;display:flex;justify-content:space-between;align-items:center}
+.host-overlay .ho-header h1{font-size:18px;font-weight:700;color:var(--text-bright);text-transform:uppercase}
 .host-overlay .ho-close{background:none;border:1px solid var(--border);color:var(--text-dim);width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
 .host-overlay .ho-close:hover{border-color:var(--red);color:var(--red);background:rgba(248,81,73,0.1)}
-.host-overlay .ho-body{max-width:960px;margin:0 auto;padding:28px 40px}
-.host-overlay .ho-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:24px}
-.host-overlay .ho-actions button{background:var(--card);border:1px solid var(--border);color:var(--text);padding:12px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.15s;text-align:center}
+.host-overlay .ho-body{max-width:960px;margin:0 auto;padding:16px 24px}
+.host-overlay .ho-actions{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;margin-bottom:16px}
+.host-overlay .ho-actions button{background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;transition:all 0.15s;text-align:center}
 .host-overlay .ho-actions button:hover{border-color:var(--purple);color:var(--purple-light);background:var(--purple-faint)}
 .host-overlay .ho-actions button.active{border-color:var(--purple);color:var(--purple-light);background:var(--purple-faint)}
-.ho-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;grid-template-rows:1fr auto}
+.ho-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;grid-template-rows:1fr auto}
 .ho-grid>.ho-section:first-child{grid-row:1/-1}
 @media(max-width:900px){.ho-grid{columns:1}}
-.ho-section{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.ho-section{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
 .ho-section.wide{grid-column:1/-1}
-.ho-section h3{font-size:15px;color:var(--purple-light);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;font-weight:700}
-.ho-row{display:grid;grid-template-columns:120px 1fr;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;gap:16px;align-items:baseline}
+.ho-section h3{font-size:12px;color:var(--purple-light);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;font-weight:700}
+.ho-row{display:grid;grid-template-columns:100px 1fr;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;gap:12px;align-items:baseline}
 .ho-row:last-child{border-bottom:none}
 .ho-row .k{color:var(--text-dim);white-space:nowrap}
 .ho-row .v{font-weight:500;word-break:break-word}
 
-/* Progress bars */
+/* ── Progress Bars ── */
 .pbar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:3px}
 .pbar-fill{height:100%;border-radius:2px;transition:width 0.3s}
-.metric-row{padding:4px 0;border-bottom:1px solid var(--border);font-size:12px}
+.metric-row{padding:3px 0;border-bottom:1px solid var(--border);font-size:11px}
 .metric-row:last-child{border-bottom:none}
 .metric-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;gap:8px;min-width:0}
-.metric-label{color:var(--text);font-size:12px;white-space:nowrap;flex-shrink:0}
-.metric-val{font-weight:600;color:var(--text);font-size:12px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.host-card{background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:10px 14px;overflow:hidden;transition:border-color 0.25s ease,background 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease}
-.host-card:hover{border-color:var(--purple);box-shadow:0 2px 8px rgba(123,47,190,0.06);transform:translateY(-2px)}
+.metric-label{color:var(--text);font-size:11px;white-space:nowrap;flex-shrink:0}
+.metric-val{font-weight:600;color:var(--text);font-size:11px;text-align:right;white-space:nowrap}
+.host-card{background:var(--card);border:1px solid var(--border-light);border-radius:6px;padding:8px 12px;overflow:hidden;transition:border-color 0.2s ease,box-shadow 0.2s ease,transform 0.2s ease;box-shadow:0 1px 4px rgba(0,0,0,0.3)}
+.host-card:hover{border-color:var(--purple);box-shadow:0 2px 6px rgba(123,47,190,0.06);transform:translateY(-1px)}
 .no-hover-fx .host-card{transition:none}
 .no-hover-fx .host-card:hover{border-color:var(--purple);box-shadow:none;transform:none}
-.host-card .host-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
-.host-card .host-head h3{font-size:15px;font-weight:700;margin:0;text-transform:uppercase}
-.host-card .host-head .host-meta{font-size:11px;color:var(--text);display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.host-card .host-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.host-card .host-head h3{font-size:13px;font-weight:700;margin:0;text-transform:uppercase}
+.host-card .host-head .host-meta{font-size:10px;color:var(--text);display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end}
 
-/* Fleet tools */
+/* ── Fleet Tools ── */
 .fleet-tools{margin-bottom:4px}
 .fleet-tools-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.fleet-btn{background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 20px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;letter-spacing:0.8px;transition:border-color 0.25s ease,color 0.25s ease,background 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease;font-family:inherit}
-.fleet-btn:hover{color:var(--purple-light);background:var(--purple-faint);border-color:var(--purple);box-shadow:0 2px 8px rgba(123,47,190,0.06);transform:translateY(-1px)}
-.view-btn.active-view{color:var(--purple-light);border-color:var(--purple);background:var(--purple-faint)}
+.fleet-btn{background:var(--card);border:1px solid var(--input-border);color:var(--text);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;letter-spacing:0.8px;transition:border-color 0.2s ease,color 0.2s ease,background 0.2s ease,box-shadow 0.2s ease;font-family:inherit}
+.fleet-btn:hover{color:var(--purple-light);background:var(--purple-faint);border-color:var(--purple)}
+.view-btn{position:relative;background:transparent;border-color:transparent}
+.view-btn::after{content:'';position:absolute;bottom:-2px;left:25%;right:25%;height:2px;background:var(--purple);border-radius:1px;transform:scaleX(0);transition:transform 0.2s ease}
+.view-btn:hover{background:transparent;border-color:transparent}
+.view-btn:hover::after{transform:scaleX(0.6)}
+.view-btn.active-view{color:var(--purple-light);background:transparent;border-color:transparent}
+.view-btn.active-view::after{transform:scaleX(1)}
 .fleet-btn.btn-red{color:var(--red);border-color:var(--red)}
 .fleet-btn.btn-red:hover{color:var(--red);border-color:var(--red);background:rgba(248,81,73,0.04);box-shadow:0 2px 8px rgba(248,81,73,0.06);transform:translateY(-1px)}
 .fleet-btn.btn-cyan{color:var(--cyan);border-color:var(--cyan)}
@@ -381,7 +383,7 @@ tr:hover td{background:var(--card-hover)}
 .no-hover-fx .fleet-btn{transition:none}
 .no-hover-fx .fleet-btn:hover{color:var(--purple-light);background:var(--purple-faint);border-color:var(--purple);box-shadow:none;transform:none}
 
-/* Category badges */
+/* ── Category Badges ── */
 .cat-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase}
 .cat-personal{background:rgba(210,153,34,0.12);color:var(--yellow)}
 .cat-infrastructure{background:rgba(248,81,73,0.12);color:var(--red)}
@@ -391,7 +393,7 @@ tr:hover td{background:var(--card-hover)}
 .cat-lab{background:rgba(86,212,221,0.12);color:var(--cyan)}
 .cat-templates{background:rgba(110,118,129,0.12);color:var(--text-dim)}
 .cat-unknown{background:rgba(110,118,129,0.12);color:var(--text-dim)}
-/* PVE toggle chevron hover */
+/* ── PVE Toggle ── */
 .pve-tab{transition:opacity 0.25s ease}
 .pve-tab:hover{opacity:1 !important}
 .pve-chev{transition:border-color 0.25s ease,background 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease}
@@ -399,23 +401,23 @@ tr:hover td{background:var(--card-hover)}
 .no-hover-fx .pve-chev{transition:none}
 .no-hover-fx .pve-chev:hover{box-shadow:none;transform:none}
 
-/* PVE group box hover */
+/* ── PVE Group ── */
 .pve-group{transition:box-shadow 0.25s ease,transform 0.25s ease}
 .pve-group:hover{box-shadow:0 2px 8px rgba(123,47,190,0.06);transform:translateY(-2px)}
 .no-hover-fx .pve-group{transition:none}
 .no-hover-fx .pve-group:hover{box-shadow:none;transform:none}
 
-/* === NEW: Collapsible sections === */
-.section{background:var(--card);border:3px solid var(--input-border);border-radius:10px;margin-bottom:16px;overflow:hidden;transition:border-color 0.25s ease,box-shadow 0.25s ease}
+/* ── Sections ── */
+.section{background:var(--card);border:1px solid var(--input-border);border-radius:6px;margin-bottom:12px;overflow:hidden;transition:border-color 0.2s ease,box-shadow 0.2s ease}
 .section:hover{border-color:#4a5568}
-.section-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;cursor:pointer;user-select:none}
-.section-header h3{font-size:13px;color:var(--text);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin:0;background:var(--purple-faint);padding:3px 12px;border-radius:4px;display:inline-block}
+.section-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;user-select:none}
+.section-header h3{font-size:12px;color:var(--text);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin:0;background:var(--purple-faint);padding:2px 10px;border-radius:3px;display:inline-block}
 .section-header .chev{color:var(--text);font-size:14px;transition:transform 0.2s}
 .section.collapsed .section-body{display:none}
 .section.collapsed .chev{transform:rotate(-90deg)}
-.section-body{padding:0 18px 18px}
+.section-body{padding:0 14px 14px}
 
-/* === NEW: Toast === */
+/* ── Toast ── */
 .toast-container{position:fixed;top:16px;right:16px;z-index:100;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .toast{pointer-events:auto;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:500;color:white;animation:slideIn 0.3s ease;min-width:280px;max-width:420px;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
 .toast.success{background:#1a7f37;border-left:3px solid var(--green)}
@@ -425,23 +427,23 @@ tr:hover td{background:var(--card-hover)}
 @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes slideOut{from{transform:translateX(0);opacity:1}to{transform:translateX(100%);opacity:0}}
 
-/* === NEW: Modal === */
+/* ── Modal ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:90;display:flex;align-items:center;justify-content:center}
 .modal{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:440px;width:90%}
 .modal h3{font-size:16px;color:var(--text-bright);margin-bottom:12px}
 .modal p{font-size:13px;color:var(--text);margin-bottom:20px;line-height:1.6}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end}
 
-/* === NEW: Skeleton === */
+/* ── Skeleton ── */
 .skeleton{background:linear-gradient(90deg,var(--card) 25%,var(--border) 50%,var(--card) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px;height:60px;margin-bottom:8px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
-/* === NEW: Empty state === */
-.empty-state{text-align:center;padding:40px 20px;color:var(--text-dim)}
+/* ── Empty State ── */
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-dim);grid-column:1/-1}
 .empty-state .es-icon{font-size:36px;opacity:0.3;margin-bottom:12px}
 .empty-state p{font-size:13px;line-height:1.6}
 
-/* === NEW: Buttons === */
+/* ── Buttons ── */
 .btn{background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;transition:all 0.15s;position:relative}
 .btn:hover{border-color:var(--purple);color:var(--purple-light)}
 .btn-primary{background:linear-gradient(135deg,var(--purple),var(--purple-dark));color:white;border:none}
@@ -452,7 +454,7 @@ tr:hover td{background:var(--card-hover)}
 .btn.loading::after{content:'';position:absolute;inset:0;margin:auto;width:14px;height:14px;border:2px solid var(--text-dim);border-top-color:transparent;border-radius:50%;animation:spin 0.6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* === Infra Role Cards === */
+/* ── Infra Cards ── */
 .infra-role-card{background:var(--card);border:2px solid var(--input-border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color 0.25s ease,box-shadow 0.25s ease,transform 0.25s ease;position:relative;overflow:hidden}
 .infra-role-card:hover{border-color:var(--purple);box-shadow:0 2px 8px rgba(123,47,190,0.06);transform:translateY(-2px)}
 .no-hover-fx .infra-role-card{transition:none}
@@ -469,20 +471,20 @@ tr:hover td{background:var(--card-hover)}
 .infra-role-card .role-metric .rm-val{font-weight:700}
 .infra-role-card .role-metric .rm-lbl{color:var(--text-dim);font-weight:400}
 
-/* === NEW: Action bar, VM cards === */
+/* ── VM Cards ── */
 .action-bar{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
 .action-bar select,.action-bar input{background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:13px;font-family:inherit}
 .vm-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;transition:border-color 0.2s}
 .vm-card:hover{border-color:var(--purple)}
 .vm-card-actions{display:flex;gap:4px;margin-top:10px}
 
-/* Mini cards for home */
+/* ── Mini Cards ── */
 .mc{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
 .mc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .mc-row{display:flex;flex-wrap:wrap;gap:6px;font-size:13px;color:var(--text);margin-top:4px}
 .mc-row .u{font-size:11px;opacity:0.5}
 
-/* === Utility classes (Tier 4B) === */
+/* ── Utilities ── */
 .c-dim{color:var(--text-dim)}
 .c-red{color:var(--red)}
 .c-green{color:var(--green)}
@@ -491,6 +493,7 @@ tr:hover td{background:var(--card-hover)}
 .c-purple-active{color:var(--purple-light);border-color:var(--purple)}
 .label-sub{font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px}
 .label-hint{font-size:12px;font-weight:500;opacity:0.7}
+.stat-pair{display:flex;flex-direction:column;align-items:center}
 .text-meta{font-size:11px;color:var(--text-dim)}
 .text-sub{font-size:12px;color:var(--text-dim)}
 .desc-line{font-size:12px;color:var(--text-dim);margin-bottom:12px}
@@ -506,7 +509,7 @@ tr:hover td{background:var(--card-hover)}
 .flex-1{flex:1}
 .flex-fill{flex:1;min-width:0}
 
-/* === Utility classes (Tier 4B round 2-4) === */
+/* ── Utilities (extended) ── */
 .flex-row-24{display:flex;gap:24px;margin-top:4px}
 .flex-row-8-center{display:flex;gap:8px;margin-bottom:12px;align-items:center}
 .flex-between-mb8{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
@@ -576,9 +579,9 @@ tr:hover td{background:var(--card-hover)}
 .border-red{border-color:var(--red)}
 .meta-flex{font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;margin-left:8px}
 .input-sm{background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:80px}
-.grid-auto-280{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-.grid-auto-300{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
-.grid-auto-240{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.grid-auto-280{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.grid-auto-300{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.grid-auto-240{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
 .label-sub-10{font-size:10px;color:var(--text-dim);display:block;margin-bottom:4px}
 .label-sub-10-tight{font-size:10px;color:var(--text-dim);display:block;margin-bottom:2px}
 .cursor-ptr{cursor:pointer}
@@ -696,29 +699,19 @@ th,td{padding:5px 8px;font-size:11px}
  ╚═╝       ╚═══╝  ╚══════╝   ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝</pre>
 </div>
 <!-- Toolbar -->
-<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:10px 14px;margin-bottom:16px;margin-top:12px">
-<div style="display:flex;gap:8px;align-items:center;min-height:36px;flex-wrap:wrap">
+<div style="border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:12px">
+<div style="display:flex;gap:4px;align-items:center;min-height:32px;flex-wrap:wrap">
   <button class="mobile-menu-btn" onclick="document.getElementById('nav-items').classList.toggle('open')" aria-label="Menu">&#9776;</button>
   <div id="nav-items" class="nav-toolbar" style="display:contents">
   <button class="fleet-btn view-btn active-view" data-view="home">HOME</button>
   <button class="fleet-btn view-btn" data-view="fleet">FLEET</button>
   <button class="fleet-btn view-btn" data-view="docker">DOCKER</button>
+  <button class="fleet-btn view-btn" data-view="media">MEDIA</button>
   <button class="fleet-btn view-btn" data-view="security">SECURITY</button>
-  <button class="fleet-btn view-btn" data-view="lab">LAB TOOLS</button>
-  <button class="fleet-btn view-btn" data-view="policies">POLICIES</button>
-  <button class="fleet-btn view-btn" data-view="ops">OPS</button>
-  <button class="fleet-btn view-btn" data-view="topology">TOPOLOGY</button>
-  <button class="fleet-btn view-btn" data-view="capacity">CAPACITY</button>
-  <button class="fleet-btn view-btn" data-view="playbooks">PLAYBOOKS</button>
-  <button class="fleet-btn view-btn" data-view="gitops">GITOPS</button>
-  <button class="fleet-btn view-btn" data-view="costs">COSTS</button>
-  <button class="fleet-btn view-btn" data-view="federation">SITES</button>
-  <button class="fleet-btn view-btn" data-view="chaos">CHAOS</button>
+  <button class="fleet-btn view-btn" data-view="tools">SYSTEM</button>
+  <button class="fleet-btn view-btn" data-view="lab">LAB</button>
   <div class="flex-1"></div>
-  <button class="fleet-btn" onclick="openNewTool()" id="btn-new-tool" style="opacity:0.7;display:none">+ NEW TOOL</button>
-  <button class="fleet-btn opacity-7" onclick="nav('system')">&#9881; SETTINGS</button>
-  <button class="fleet-btn opacity-7" data-action="openLayoutConfig" id="layout-btn">&#9776; LAYOUT</button>
-  <button class="fleet-btn" onclick="refreshCurrentView()">REFRESH</button>
+  <button class="fleet-btn view-btn opacity-7" data-view="settings">&#9881; SETTINGS</button>
   </div>
 </div></div>
 <!-- HOME VIEW -->
@@ -741,36 +734,21 @@ th,td{padding:5px 8px;font-size:11px}
 </div><!-- close home-view -->
 <!-- FLEET VIEW (hidden by default) -->
 <div id="fleet-view" class="d-none">
+<div class="sub-tabs" id="subtabs-fleet">
+  <button class="sub-tab active-sub" onclick="switchView('fleet')">Fleet</button>
+  <button class="sub-tab" onclick="switchView('topology')">Topology</button>
+  <button class="sub-tab" onclick="switchView('capacity')">Capacity</button>
+</div>
 <!-- Fleet Stats group -->
 <div class="section layout-section" id="fleet-sec-stats">
   <div class="section-header"><h3>Fleet Stats</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="stats" id="metrics-summary"></div>
-    <div class="stats" id="metrics-row2"></div>
   </div>
 </div>
-<!-- Fleet Quick Controls -->
-<div class="section layout-section" id="fleet-sec-controls">
-  <div class="section-header"><h3>Fleet Quick Controls</h3><span class="chev">▾</span></div>
-  <div class="section-body">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <button class="fleet-btn fqc-btn" data-fqc="usermgmt">USER MANAGEMENT</button>
-      <button class="fleet-btn fqc-btn" data-fqc="fleetops">FLEET OPS</button>
-      <button class="fleet-btn fqc-btn" data-fqc="vmmgmt">VM MANAGEMENT</button>
-      <button class="fleet-btn fqc-btn" data-fqc="monitoring">MONITORING</button>
-      <button class="fleet-btn fqc-btn" data-fqc="network">NETWORK</button>
-      <button class="fleet-btn fqc-btn" data-fqc="backup">BACKUP & RECOVERY</button>
-      <button class="fleet-btn fqc-btn" data-fqc="labctrl">LAB CONTROL</button>
-    </div>
-    <div id="fleet-tool-panel" style="display:none;margin-top:12px;background:var(--bg);border:2px solid var(--input-border);border-radius:8px;padding:16px;position:relative">
-      <button onclick="document.getElementById('fleet-tool-panel').style.display='none';_activeFleetTool=null;document.querySelectorAll('.fqc-btn').forEach(function(b){b.classList.remove('active-view')})" style="position:absolute;top:10px;right:12px;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px">&#10005;</button>
-      <div id="fleet-tool-content"></div>
-    </div>
-  </div>
-</div>
-<!-- Infrastructure group -->
+<!-- Hosts & VMs group -->
 <div class="section layout-section" id="fleet-sec-infra">
-  <div class="section-header"><h3 class="cursor-ptr">Infrastructure</h3><div class="flex-1"></div><input id="fleet-filter" placeholder="&#128269; Filter..." oninput="filterFleetCards(this.value)" onclick="event.stopPropagation()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit;width:180px;outline:none;transition:border-color 0.25s ease" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'"><span class="chev" style="cursor:pointer;margin-left:8px">▾</span></div>
+  <div class="section-header"><h3 class="cursor-ptr">Hosts &amp; VMs</h3><div class="flex-1"></div><input id="fleet-filter" placeholder="&#128269; Filter..." oninput="filterFleetCards(this.value)" onclick="event.stopPropagation()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit;width:180px;outline:none;transition:border-color 0.25s ease" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'"><span class="chev" style="cursor:pointer;margin-left:8px">▾</span></div>
   <div class="section-body"><div id="metrics-cards"></div></div>
 </div>
 <!-- Overview -->
@@ -780,11 +758,11 @@ th,td{padding:5px 8px;font-size:11px}
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
       <div id="overview-physical-cards"><!-- populated dynamically from fleet config --></div>
       <div class="host-card">
-        <div class="host-head"><h3 class="c-purple">PVE NODES</h3><div class="host-meta" id="pve-node-count"><span>NODES</span><span>·</span><span>HYPERVISOR</span></div></div>
+        <div class="host-head"><h3 class="c-purple">PVE<br>NODES</h3><div class="host-meta" id="pve-node-count"><span>HYPERVISOR</span></div></div>
         <div class="divider-light"><div id="home-pve-summary"><div class="skeleton h-60" ></div></div></div>
       </div>
       <div class="host-card">
-        <div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PVE CLUSTER</span><span>·</span><span>PROXMOX</span></div></div>
+        <div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PROXMOX</span></div></div>
         <div class="divider-light"><div id="home-infra"><div class="skeleton h-60" ></div></div></div>
       </div>
       <div class="host-card">
@@ -812,9 +790,9 @@ th,td{padding:5px 8px;font-size:11px}
     <div id="agent-list"></div>
   </div>
 </div>
-<!-- Specialists -->
+<!-- Sandbox VMs -->
 <div class="section layout-section" id="fleet-sec-specialists">
-  <div class="section-header"><h3>Specialists</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Sandbox VMs</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="cards mb-12" >
       <div class="crd"><h3>Create Specialist</h3><p><code>freq specialist create &lt;host&gt; --role dev</code></p></div>
@@ -829,14 +807,13 @@ th,td{padding:5px 8px;font-size:11px}
 <!-- DOCKER VIEW -->
 <div id="docker-view" class="d-none">
 <div class="section layout-section" id="docker-sec-containers">
-  <div class="section-header"><h3>Containers</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Containers</h3><div class="stats" id="container-stats" style="margin-bottom:0;flex:1;justify-content:center"></div><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="flex-row-8-center">
-      <button class="fleet-btn view-btn docker-sub active-view" data-view="docker-services" data-action="switchDockerSub" data-arg="services">SERVICES</button>
-      <button class="fleet-btn view-btn docker-sub" data-view="docker-media" data-action="switchDockerSub" data-arg="media">MEDIA</button>
-      <button class="fleet-btn view-btn docker-sub" data-view="docker-all" data-action="switchDockerSub" data-arg="all">ALL</button>
+    <div class="flex-row-8-center" style="margin-bottom:8px">
+      <button class="fleet-btn docker-sub active-view" data-dsub="docker-services" data-action="switchDockerSub" data-arg="services">SERVICES</button>
+      <button class="fleet-btn docker-sub" data-dsub="docker-all" data-action="switchDockerSub" data-arg="all">ALL</button>
+      <button class="fleet-btn docker-sub" data-dsub="docker-registry" data-action="switchDockerSub" data-arg="registry">REGISTRY</button>
     </div>
-    <div class="stats" id="container-stats"></div>
     <!-- SERVICES sub-view (default) -->
     <div id="docker-sub-services">
       <div id="services-container-cards" class="cards"></div>
@@ -846,24 +823,23 @@ th,td{padding:5px 8px;font-size:11px}
       <div id="container-cards" class="cards"></div>
       <div class="exec-out" id="container-logs" style="margin-top:12px;min-height:100px;display:none">Select a container to view logs...</div>
     </div>
-    <!-- Remove old services div that was here -->
-      <div id="services-container-cards" class="cards"></div>
-    </div>
-    <!-- MEDIA sub-view -->
-    <div id="docker-sub-media" class="d-none">
-      <div id="media-container-cards" class="cards mb-16" ></div>
-      <div class="section">
-        <div class="section-header"><h3>Downloads</h3><span class="chev">▾</span></div>
-        <div class="section-body">
-          <div class="stats" id="dl-stats"></div>
-          <table><thead><tr><th>Name</th><th>Client</th><th>VM</th><th>Size</th><th>Progress</th><th>Speed</th></tr></thead><tbody id="dl-table"></tbody></table>
-        </div>
+    <!-- REGISTRY sub-view -->
+    <div id="docker-sub-registry" class="d-none">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <button class="fleet-btn c-purple-active" onclick="rescanContainers()">RESCAN FLEET</button>
+        <button class="fleet-btn" onclick="loadContainerRegistry()">REFRESH</button>
+        <span id="registry-status" class="text-meta"></span>
       </div>
-      <div class="section">
-        <div class="section-header"><h3>Streams</h3><span class="chev">▾</span></div>
-        <div class="section-body">
-          <div class="stats" id="stream-stats"></div>
-          <table><thead><tr><th>User</th><th>Title</th><th>Type</th><th>Quality</th><th>State</th></tr></thead><tbody id="stream-table"></tbody></table>
+      <div id="rescan-results" style="display:none;margin-bottom:12px"></div>
+      <div id="registry-table"></div>
+      <div style="margin-top:12px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+        <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">ADD CONTAINER</h4>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input class="input" id="reg-name" placeholder="Container name" style="width:160px">
+          <select class="input" id="reg-vmid" style="width:160px"><option value="">Select VM...</option></select>
+          <input class="input" id="reg-port" placeholder="Port (optional)" style="width:100px" type="number">
+          <button class="fleet-btn" onclick="addContainer()">ADD</button>
+          <span id="reg-msg" class="text-meta"></span>
         </div>
       </div>
     </div>
@@ -871,25 +847,64 @@ th,td{padding:5px 8px;font-size:11px}
 </div>
 </div><!-- close docker-view -->
 
-<!-- SECURITY VIEW -->
+<!-- ============================================================
+     MEDIA VIEW — Top-level media dashboard
+     Services: Plex, Sonarr, Radarr, etc. status cards
+     Downloads: Active transfers with progress
+     Streams: Plex streams with user/quality info
+     ============================================================ -->
+<div id="media-view" class="d-none">
+  <!-- Media service status cards -->
+  <div id="media-container-cards" class="cards mb-16"></div>
+  <!-- Downloads -->
+  <div class="section">
+    <div class="section-header"><h3>Downloads</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div class="stats" id="dl-stats"></div>
+      <table><thead><tr><th>Name</th><th>Client</th><th>VM</th><th>Size</th><th>Progress</th><th>Speed</th></tr></thead><tbody id="dl-table"></tbody></table>
+    </div>
+  </div>
+  <!-- Streams -->
+  <div class="section">
+    <div class="section-header"><h3>Streams</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div class="stats" id="stream-stats"></div>
+      <table><thead><tr><th>User</th><th>Title</th><th>Type</th><th>Quality</th><th>State</th></tr></thead><tbody id="stream-table"></tbody></table>
+    </div>
+  </div>
+</div><!-- close media-view -->
+
+<!-- SECURITY VIEW — Overview -->
 <div id="security-view" class="d-none">
-<div class="section layout-section" id="sec-users">
-  <div class="section-header"><h3>Users</h3><span class="chev">▾</span></div>
+<div class="sub-tabs" id="subtabs-security">
+  <button class="sub-tab active-sub" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+</div>
+<div class="section layout-section" id="sec-risk">
+  <div class="section-header"><h3>Risk Analysis</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="exec-bar"><input id="u-name" placeholder="Username"><select id="u-role"><option>viewer</option><option selected>operator</option><option>admin</option></select><button data-action="userCreate">Create User</button></div>
-    <div id="users-c"></div>
+    <div class="chain" id="risk-chain"></div>
+    <p class="c-dim-mb12-fs12">Break any link in the kill chain = no remote recovery.</p>
+    <table><thead><tr><th>Target</th><th>Risk Level</th><th>Primary Impact</th><th>Recovery</th></tr></thead><tbody id="risk-tbl"></tbody></table>
   </div>
 </div>
-<div class="section layout-section" id="sec-sshkeys">
-  <div class="section-header"><h3>SSH Keys</h3><span class="chev">▾</span></div>
-  <div class="section-body"><div id="keys-c"><div class="skeleton"></div><div class="skeleton"></div></div></div>
+<div class="section layout-section" id="sec-policies">
+  <div class="section-header"><h3>Policies</h3><span class="chev">▾</span></div>
+  <div class="section-body"><div id="policies-c"></div></div>
 </div>
-<div class="section layout-section" id="sec-apikeys">
-  <div class="section-header"><h3>API Keys</h3><span class="chev">▾</span></div>
-  <div class="section-body">
-    <div class="exec-bar"><input id="v-key" placeholder="Key name"><input id="v-val" placeholder="Value" type="password"><select id="v-host"><option>DEFAULT</option></select><button data-action="vaultSet">Store</button></div>
-    <div id="vault-c"></div>
-  </div>
+</div><!-- close security-view -->
+
+<!-- SECURITY — Hardening -->
+<div id="sec-hardening-view" class="d-none">
+<div class="sub-tabs">
+  <button class="sub-tab" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab active-sub" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
 </div>
 <div class="section layout-section" id="sec-audit">
   <div class="section-header"><h3>Audit</h3><span class="chev">▾</span></div>
@@ -902,7 +917,7 @@ th,td{padding:5px 8px;font-size:11px}
       <button class="fleet-btn" data-audit="ports">OPEN PORTS</button>
       <button class="fleet-btn" data-audit="failed">FAILED SERVICES</button>
       <button class="fleet-btn" data-audit="firewall">FIREWALL STATUS</button>
-      <button class="fleet-btn" onclick="runSweep()">POLICY SWEEP</button>
+      <button class="fleet-btn" onclick="runSshSweep()">POLICY SWEEP</button>
     </div>
     <div id="audit-c"></div>
     <div id="sweep-c" class="mt-12"></div>
@@ -922,20 +937,47 @@ th,td{padding:5px 8px;font-size:11px}
     <div id="harden-c"></div>
   </div>
 </div>
-<div class="section layout-section" id="sec-risk">
-  <div class="section-header"><h3>Risk Analysis</h3><span class="chev">▾</span></div>
+</div><!-- close sec-hardening-view -->
+
+<!-- SECURITY — Access -->
+<div id="sec-access-view" class="d-none">
+<div class="sub-tabs">
+  <button class="sub-tab" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab active-sub" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+</div>
+<div class="section layout-section" id="sec-users">
+  <div class="section-header"><h3>Users</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="chain" id="risk-chain"></div>
-    <p class="c-dim-mb12-fs12">Break any link in the kill chain = no remote recovery.</p>
-    <table><thead><tr><th>Target</th><th>Risk Level</th><th>Primary Impact</th><th>Recovery</th></tr></thead><tbody id="risk-tbl"></tbody></table>
+    <div class="exec-bar"><input id="u-name" placeholder="Username"><select id="u-role"><option>viewer</option><option selected>operator</option><option>admin</option></select><button data-action="userCreate">Create User</button></div>
+    <div id="users-c"></div>
   </div>
 </div>
-<div class="section layout-section" id="sec-policies">
-  <div class="section-header"><h3>Policies</h3><span class="chev">▾</span></div>
-  <div class="section-body"><div id="policies-c"></div></div>
+<div class="section layout-section" id="sec-sshkeys">
+  <div class="section-header"><h3>SSH Keys</h3><span class="chev">▾</span></div>
+  <div class="section-body"><div id="keys-c"><div class="skeleton"></div><div class="skeleton"></div></div></div>
 </div>
-<!-- Locked Vault -->
-<div class="section layout-section border-red" id="sec-vault" >
+<div class="section layout-section" id="sec-apikeys">
+  <div class="section-header"><h3>API Keys</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="exec-bar"><input id="v-key" placeholder="Key name"><input id="v-val" placeholder="Value" type="password"><select id="v-host"><option>DEFAULT</option></select><button data-action="vaultSet">Store</button></div>
+    <div id="vault-c"></div>
+  </div>
+</div>
+</div><!-- close sec-access-view -->
+
+<!-- SECURITY — Vault -->
+<div id="sec-vault-view" class="d-none">
+<div class="sub-tabs">
+  <button class="sub-tab" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab active-sub" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+</div>
+<div class="section layout-section border-red" id="sec-vault-section">
   <div class="section-header"><h3 style="background:rgba(248,81,73,0.15)">&#128274; Vault</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div id="vault-locked">
@@ -963,14 +1005,19 @@ th,td{padding:5px 8px;font-size:11px}
     </div>
   </div>
 </div>
-</div><!-- close security-view -->
+</div><!-- close sec-vault-view -->
 
-<!-- LAB TOOLS VIEW -->
-<div id="lab-view" class="d-none">
-<div id="lab-tools-container"></div>
-</div><!-- close lab-view -->
+<!-- LAB TOOLS VIEW — REMOVED: merged into TOOLS > Lab Tools section -->
 
-<div id="policies-view" class="d-none">
+<!-- SECURITY — Compliance -->
+<div id="sec-compliance-view" class="d-none">
+<div class="sub-tabs">
+  <button class="sub-tab" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab active-sub" onclick="switchView('sec-compliance')">Compliance</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>Policy Compliance</h3><span class="chev">▾</span></div>
   <div class="section-body">
@@ -983,7 +1030,7 @@ th,td{padding:5px 8px;font-size:11px}
   </div>
 </div>
 <div class="section collapsed">
-  <div class="section-header"><h3>Sweep <span class="fs-12-dim">FULL AUDIT PIPELINE</span></h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Compliance Scan</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
       <button class="fleet-btn" onclick="runSweep(false)">DRY RUN</button>
@@ -993,31 +1040,44 @@ th,td{padding:5px 8px;font-size:11px}
   </div>
 </div>
 <div class="section collapsed">
-  <div class="section-header"><h3>Patrol Status <span class="fs-12-dim">CONTINUOUS MONITORING</span></h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Continuous Monitoring</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <button class="fleet-btn" onclick="loadPatrolStatus()">CHECK STATUS</button>
     <div class="exec-out" id="patrol-out">Click to check current compliance status.</div>
   </div>
 </div>
-</div><!-- close policies-view -->
+</div><!-- close sec-compliance-view -->
 
-<div id="ops-view" class="d-none">
+<!-- ============================================================
+     SYSTEM VIEW — Overview page with system utility tools
+     Sub-tabs: Overview | Playbooks | Config Sync | Chaos
+     Sections: Diagnostics, Logs, Storage, Network Scanner
+     ============================================================ -->
+<div id="tools-view" class="d-none">
+<div class="sub-tabs" id="subtabs-tools">
+  <button class="sub-tab active-sub" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+</div>
+<!-- Diagnostics — health checks and host diagnosis -->
 <div class="section">
   <div class="section-header"><h3>Diagnostics</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
       <button class="fleet-btn" onclick="runDoctor()">RUN DOCTOR</button>
-      <input type="text" id="diag-host" placeholder="Host label..." class="input-field" style="width:180px">
+      <select id="diag-host" class="input-field" style="width:180px"><option value="">Select host...</option></select>
       <button class="fleet-btn" onclick="runDiagnose()">DIAGNOSE HOST</button>
     </div>
     <div class="exec-out" id="diag-out">Run self-diagnostic or diagnose a specific host.</div>
   </div>
 </div>
-<div class="section collapsed">
-  <div class="section-header"><h3>Log Viewer</h3><span class="chev">▾</span></div>
+<!-- Logs — fleet-wide log viewer -->
+<div class="section">
+  <div class="section-header"><h3>Logs</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <input type="text" id="log-host" placeholder="Host label..." class="input-field" style="width:180px">
+      <select id="log-host" class="input-field" style="width:180px"><option value="">Select host...</option></select>
       <input type="text" id="log-unit" placeholder="Unit (optional)..." class="input-field" style="width:180px">
       <input type="number" id="log-lines" placeholder="Lines" value="50" class="input-field" style="width:80px">
       <button class="fleet-btn" onclick="fetchLogs()">FETCH LOGS</button>
@@ -1025,25 +1085,28 @@ th,td{padding:5px 8px;font-size:11px}
     <div class="exec-out" id="log-out" style="max-height:400px;overflow-y:auto">Enter a host to view its logs.</div>
   </div>
 </div>
-<div class="section collapsed">
-  <div class="section-header"><h3>ZFS</h3><span class="chev">▾</span></div>
+<!-- Storage — ZFS pools + backup status (grouped: disk health) -->
+<div class="section">
+  <div class="section-header"><h3>Storage</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <button class="fleet-btn" onclick="loadZfs()">LOAD ZFS STATUS</button>
-    <div class="exec-out" id="zfs-out">Click to load ZFS pool status.</div>
-  </div>
-</div>
-<div class="section collapsed">
-  <div class="section-header"><h3>Backups</h3><span class="chev">▾</span></div>
-  <div class="section-body">
-    <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn" onclick="loadBackups('list')">LIST</button>
-      <button class="fleet-btn" onclick="loadBackups('status')">STATUS</button>
+    <div style="margin-bottom:16px">
+      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">ZFS POOLS</h4>
+      <button class="fleet-btn" onclick="loadZfs()">LOAD ZFS STATUS</button>
+      <div class="exec-out" id="zfs-out" style="margin-top:8px">Click to load ZFS pool status.</div>
     </div>
-    <div class="exec-out" id="backup-out">Click to view backup status.</div>
+    <div>
+      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">BACKUPS</h4>
+      <div class="flex-wrap-8-mb12">
+        <button class="fleet-btn" onclick="loadBackups('list')">LIST</button>
+        <button class="fleet-btn" onclick="loadBackups('status')">STATUS</button>
+      </div>
+      <div class="exec-out" id="backup-out">Click to view backup status.</div>
+    </div>
   </div>
 </div>
-<div class="section collapsed">
-  <div class="section-header"><h3>Discovery</h3><span class="chev">▾</span></div>
+<!-- Network Scanner — subnet discovery -->
+<div class="section">
+  <div class="section-header"><h3>Network Scanner</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
       <input type="text" id="discover-subnet" placeholder="Subnet (e.g. 10.25.10)" class="input-field" style="width:200px">
@@ -1052,23 +1115,32 @@ th,td{padding:5px 8px;font-size:11px}
     <div class="exec-out" id="discover-out">Enter a subnet to discover hosts.</div>
   </div>
 </div>
-<div class="section collapsed">
-  <div class="section-header"><h3>FREQ WIPE <span class="fs-12-dim">DRIVE SANITIZATION</span></h3><span class="chev">▾</span></div>
-  <div class="section-body">
-    <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn" onclick="loadGwipe('status')">STATUS</button>
-      <button class="fleet-btn" onclick="loadGwipe('bays')">BAYS</button>
-      <button class="fleet-btn" onclick="loadGwipe('history')">HISTORY</button>
-    </div>
-    <div class="exec-out" id="gwipe-out">Click to check wipe station status.</div>
-  </div>
-</div>
-</div><!-- close ops-view -->
+</div><!-- close tools-view -->
 
+<!-- ============================================================
+     LAB VIEW — Lab Tools (plugin framework)
+     ============================================================ -->
+<div id="lab-view" class="d-none">
+<div class="sub-tabs" id="subtabs-lab">
+  <button class="sub-tab active-sub" onclick="switchView('lab')">Tools</button>
+  <button class="sub-tab" onclick="openManageTools()">Manage</button>
+  <button class="sub-tab" onclick="openAddTool()" style="color:var(--green)">+ Add Tool</button>
+</div>
+<div id="lab-tools-container"></div>
+</div><!-- close lab-view -->
+
+<!-- TOPOLOGY VIEW -->
 <div id="topology-view" class="d-none">
-<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+<div class="sub-tabs" id="subtabs-topology">
+  <button class="sub-tab" onclick="switchView('fleet')">Fleet</button>
+  <button class="sub-tab active-sub" onclick="switchView('topology')">Topology</button>
+  <button class="sub-tab" onclick="switchView('capacity')">Capacity</button>
+</div>
+<div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">Network Topology</h3>
+    <span style="font-size:11px;color:var(--text-dim);margin-right:8px">Drag nodes to rearrange</span>
+    <button class="fleet-btn" onclick="resetTopoLayout()" style="margin-right:4px">RESET LAYOUT</button>
     <button class="fleet-btn" onclick="loadTopology()">REFRESH</button>
   </div>
   <div id="topo-legend" style="font-size:11px;color:var(--text-dim);margin-bottom:8px">
@@ -1078,13 +1150,19 @@ th,td{padding:5px 8px;font-size:11px}
     <span style="color:var(--red)">&#9632;</span> Unreachable &nbsp;
     <span style="color:var(--blue)">&#9632;</span> Device
   </div>
-  <svg id="topo-svg" width="100%" height="500" style="background:var(--bg);border-radius:8px;border:1px solid var(--border)"></svg>
+  <svg id="topo-svg" width="calc(100% + 32px)" height="700" style="margin:0 -16px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:visible"></svg>
   <div id="topo-info" style="margin-top:8px;font-size:12px;color:var(--text-dim)"></div>
 </div>
 </div><!-- close topology-view -->
 
+<!-- CAPACITY VIEW -->
 <div id="capacity-view" class="d-none">
-<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+<div class="sub-tabs" id="subtabs-capacity">
+  <button class="sub-tab" onclick="switchView('fleet')">Fleet</button>
+  <button class="sub-tab" onclick="switchView('topology')">Topology</button>
+  <button class="sub-tab active-sub" onclick="switchView('capacity')">Capacity</button>
+</div>
+<div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">Capacity Planner</h3>
     <div style="display:flex;gap:8px">
@@ -1097,7 +1175,14 @@ th,td{padding:5px 8px;font-size:11px}
 </div>
 </div><!-- close capacity-view -->
 
-<div id="playbook-view" class="d-none">
+<!-- PLAYBOOKS VIEW -->
+<div id="playbooks-view" class="d-none">
+<div class="sub-tabs" id="subtabs-playbooks">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab active-sub" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+</div>
 <div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">Incident Playbooks</h3>
@@ -1114,7 +1199,14 @@ th,td{padding:5px 8px;font-size:11px}
 </div>
 </div><!-- close playbook-view -->
 
+<!-- GITOPS VIEW -->
 <div id="gitops-view" class="d-none">
+<div class="sub-tabs" id="subtabs-gitops">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab active-sub" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+</div>
 <div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">GitOps Config Sync</h3>
@@ -1124,7 +1216,7 @@ th,td{padding:5px 8px;font-size:11px}
     </div>
   </div>
   <div id="go-status" style="font-size:12px;color:var(--text-dim);margin-bottom:12px"></div>
-  <div id="go-actions" class="d-none" style="display:flex;gap:8px;margin-bottom:12px">
+  <div id="go-actions" class="d-none" style="gap:8px;margin-bottom:12px">
     <button class="fleet-btn" onclick="gitopsApply()">APPLY CHANGES</button>
     <button class="fleet-btn" onclick="gitopsDiff()">VIEW DIFF</button>
   </div>
@@ -1136,41 +1228,17 @@ th,td{padding:5px 8px;font-size:11px}
 </div>
 </div><!-- close gitops-view -->
 
-<div id="costs-view" class="d-none">
-<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h3 style="font-size:14px;color:var(--purple-light)">Fleet Cost Tracker</h3>
-    <button class="fleet-btn" onclick="loadCosts()">REFRESH</button>
-  </div>
-  <div id="cost-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
-  <div id="cost-table"></div>
-</div>
-</div><!-- close costs-view -->
+<!-- COSTS VIEW — REMOVED: absorbed into SETTINGS > Fleet Costs -->
+<!-- FEDERATION VIEW — REMOVED: absorbed into SETTINGS > Sites -->
 
-<div id="federation-view" class="d-none">
-<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h3 style="font-size:14px;color:var(--purple-light)">Multi-Site Federation</h3>
-    <div style="display:flex;gap:8px">
-      <button class="fleet-btn" onclick="fedPoll()">POLL ALL</button>
-      <button class="fleet-btn" onclick="loadFederation()">REFRESH</button>
-    </div>
-  </div>
-  <div id="fed-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
-  <div id="fed-sites"></div>
-  <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--input-border)">
-    <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">REGISTER NEW SITE</h4>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <input id="fed-name" placeholder="Site name" style="flex:1;min-width:100px" class="freq-input">
-      <input id="fed-url" placeholder="https://freq.dc02:8888" style="flex:2;min-width:200px" class="freq-input">
-      <input id="fed-secret" placeholder="Shared secret (optional)" type="password" style="flex:1;min-width:100px" class="freq-input">
-      <button class="fleet-btn" onclick="fedRegister()">REGISTER</button>
-    </div>
-  </div>
-</div>
-</div><!-- close federation-view -->
-
+<!-- CHAOS VIEW -->
 <div id="chaos-view" class="d-none">
+<div class="sub-tabs" id="subtabs-chaos">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab active-sub" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+</div>
 <div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--red)">Chaos Engineering</h3>
@@ -1185,8 +1253,13 @@ th,td{padding:5px 8px;font-size:11px}
       <input id="chaos-name" placeholder="Experiment name" class="freq-input" style="flex:1;min-width:120px">
       <select id="chaos-type" class="freq-input" style="flex:1;min-width:120px">
         <option value="">Select type...</option>
+        <option value="service_kill">service_kill — Stop a Docker container</option>
+        <option value="service_restart">service_restart — Restart a systemd service</option>
+        <option value="network_delay">network_delay — Add network latency</option>
+        <option value="disk_fill">disk_fill — Simulate disk pressure</option>
+        <option value="cpu_stress">cpu_stress — Spike CPU load</option>
       </select>
-      <input id="chaos-target" placeholder="Host label" class="freq-input" style="flex:1;min-width:100px">
+      <select id="chaos-target" class="freq-input" style="flex:1;min-width:100px"><option value="">Select host...</option></select>
       <input id="chaos-service" placeholder="Service/container" class="freq-input" style="flex:1;min-width:100px">
       <input id="chaos-duration" placeholder="Duration (s)" type="number" value="60" class="freq-input" style="width:100px">
       <button class="fleet-btn" style="background:var(--red);color:#fff" onclick="chaosRun()">INJECT</button>
@@ -1196,6 +1269,95 @@ th,td{padding:5px 8px;font-size:11px}
   <div id="chaos-log"></div>
 </div>
 </div><!-- close chaos-view -->
+
+<!-- ============================================================
+     SETTINGS VIEW — Dashboard configuration and management
+     Sections: Dashboard Layout, Fleet Costs, Sites (Federation),
+               User Preferences
+     ============================================================ -->
+<div id="settings-view" class="d-none">
+  <!-- Dashboard Layout — widget and section configuration -->
+  <div class="section">
+    <div class="section-header"><h3>Dashboard Layout</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Configure which widgets appear on your HOME dashboard and reorder sections on any view.</div>
+      <div class="flex-wrap-8-mb12">
+        <button class="fleet-btn" onclick="openHomeWidgetConfig()">CONFIGURE HOME WIDGETS</button>
+        <button class="fleet-btn" onclick="openLayoutConfig()">CONFIGURE CURRENT VIEW</button>
+      </div>
+    </div>
+  </div>
+  <!-- Fleet Costs — cost tracking (moved from Planning) -->
+  <div class="section">
+    <div class="section-header"><h3>Fleet Costs</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--text-dim)">Track infrastructure costs across the fleet.</span>
+        <button class="fleet-btn" onclick="loadCosts()">REFRESH</button>
+      </div>
+      <div id="cost-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
+      <div id="cost-table"></div>
+    </div>
+  </div>
+  <!-- Sites — multi-site federation (moved from Planning) -->
+  <div class="section">
+    <div class="section-header"><h3>Sites</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--text-dim)">Connect and manage multiple FREQ instances.</span>
+        <div style="display:flex;gap:8px">
+          <button class="fleet-btn" onclick="fedPoll()">POLL ALL</button>
+          <button class="fleet-btn" onclick="loadFederation()">REFRESH</button>
+        </div>
+      </div>
+      <div id="fed-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
+      <div id="fed-sites"></div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--input-border)">
+        <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">REGISTER NEW SITE</h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="fed-name" placeholder="Site name" style="flex:1;min-width:100px" class="freq-input">
+          <input id="fed-url" placeholder="https://freq.dc02:8888" style="flex:2;min-width:200px" class="freq-input">
+          <input id="fed-secret" placeholder="Shared secret (optional)" type="password" style="flex:1;min-width:100px" class="freq-input">
+          <button class="fleet-btn" onclick="fedRegister()">REGISTER</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Lab Assignment — tag any fleet member as LAB -->
+  <div class="section">
+    <div class="section-header"><h3>Lab Assignment</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Tag any host or VM as Lab Equipment. Tagged items appear in the LAB EQUIPMENT section on the Fleet page.</div>
+      <div id="lab-assign-list"><div class="skeleton"></div></div>
+    </div>
+  </div>
+  <!-- User Preferences -->
+  <div class="section">
+    <div class="section-header"><h3>Preferences</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+        <div>
+          <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block">Auto-Refresh Interval</label>
+          <select id="pref-refresh" class="input-field" style="width:100%" onchange="updatePref('refresh',this.value)">
+            <option value="0">Disabled</option>
+            <option value="10">10 seconds</option>
+            <option value="30" selected>30 seconds</option>
+            <option value="60">60 seconds</option>
+            <option value="120">2 minutes</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block">UI Density</label>
+          <select id="pref-density" class="input-field" style="width:100%" onchange="updatePref('density',this.value)">
+            <option value="compact">Compact</option>
+            <option value="normal" selected>Normal</option>
+            <option value="comfortable">Comfortable</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- close settings-view -->
 
 </div><!-- close p-home -->
 
@@ -1270,7 +1432,7 @@ th,td{padding:5px 8px;font-size:11px}
 <div class="section">
   <div class="section-header"><h3>Doctor</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="display:flex;gap:8px;margin-bottom:16px"><button class="fleet-btn c-purple-active" onclick="runDoctor()" >RUN SELF-DIAGNOSTIC</button><button class="fleet-btn" onclick="runBackup()">EXPORT CONFIG BACKUP</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px"><button class="fleet-btn c-purple-active" onclick="runSysInfo()" >RUN SELF-DIAGNOSTIC</button><button class="fleet-btn" onclick="runBackup()">EXPORT CONFIG BACKUP</button></div>
     <div id="doctor-c"></div>
     <div id="backup-c" class="mt-12"></div>
   </div>
@@ -1367,13 +1529,13 @@ th,td{padding:5px 8px;font-size:11px}
       <div style="font-size:28px;margin-bottom:12px;opacity:0.6">&#9881;</div>
       <div style="font-size:13px">Loading Host Details...</div>
     </div>
-    <div id="hd-content" class="d-none"></div>
+    <div id="hd-content" style="display:none"></div>
   </div>
 </div>
 
 <!-- ═══ TOAST + MODAL ═══ -->
 <div id="toast-container" class="toast-container"></div>
-<div id="modal-container" class="modal-overlay d-none"></div>
+<div id="modal-container" class="modal-overlay" style="display:none"></div>
 
 <script>
 var HC=['#58a6ff','#3fb950','#d29922','#f778ba','#79c0ff','#d2a8ff','#ff7b72','#ffa657','#7ee787'];
@@ -1403,7 +1565,7 @@ function rt(){return taglines[Math.floor(Math.random()*taglines.length)];}
 function badge(s){var c={up:'up',running:'up',online:'up',ok:'ok',healthy:'ok',down:'down',stopped:'down',unreachable:'down',CRITICAL:'CRITICAL',HIGH:'HIGH',MEDIUM:'MEDIUM',created:'created',remote:'remote',paused:'paused',unknown:'unknown'}[s]||'warn';return '<span class="badge '+c+'">'+s.toUpperCase()+'</span>';}
 function s(l,v,c){return '<div class="st"><div class="lb">'+l+'</div><div class="vl '+c+'">'+v+'</div></div>';}
 var st=s;
-function _pbar(pct,color){var c=pct>=90?'var(--red)':pct>=75?'var(--yellow)':color||'var(--purple-light)';return '<div class="pbar"><div class="pbar-fill" style="width:'+pct+'%;background:'+c+'"></div></div>';}
+function _pbar(pct,color){if(!pct)return '';var c=pct>=90?'var(--red)':pct>=75?'var(--yellow)':color||'var(--purple-light)';return '<div class="pbar"><div class="pbar-fill" style="width:'+pct+'%;background:'+c+'"></div></div>';}
 function _mrow(label,val,pct,color){return '<div class="metric-row"><div class="metric-top"><span class="metric-label">'+label+'</span><span class="metric-val">'+val+'</span></div>'+_pbar(pct,color)+'</div>';}
 function _ramGB(mb){mb=parseInt(mb)||0;if(mb>=1024)return (mb/1024).toFixed(1).replace(/\.0$/,'')+'GB';return mb+'MB';}
 function _ramStr(ramText){
@@ -1514,16 +1676,15 @@ function doLogin(){
     if(btn){btn.textContent='LOG IN';btn.disabled=false;}
     if(d.error){if(errEl){errEl.textContent=d.error;errEl.style.display='block';}passEl.value='';return;}
     _authToken=d.token;_currentUser=d.user;_currentRole=d.role;
-    localStorage.setItem('freq_auth_token',d.token);
-    localStorage.setItem('freq_auth_user',d.user);
     _showApp();
   }).catch(function(e){if(btn){btn.textContent='LOG IN';btn.disabled=false;}if(errEl){errEl.textContent='Connection failed: '+e;errEl.style.display='block';}});
 }
 
 function doLogout(){
   _authToken='';_currentUser='';_currentRole='operator';
-  localStorage.removeItem('freq_auth_token');
-  localStorage.removeItem('freq_auth_user');
+  /* Clear any legacy storage tokens */
+  try{sessionStorage.removeItem('freq_auth_token');sessionStorage.removeItem('freq_auth_user');}catch(e){}
+  try{localStorage.removeItem('freq_auth_token');localStorage.removeItem('freq_auth_user');}catch(e){}
   document.getElementById('login-overlay').style.display='flex';
   document.getElementById('login-user').value='';
   document.getElementById('login-pass').value='';
@@ -1637,18 +1798,14 @@ function openUserMenu(){
   ov.style.display='flex';
 }
 
-/* Check for existing session on page load */
+/* Auth: always require login on page load — no stored sessions.
+   Tokens live only in JS memory; refresh = re-authenticate. */
 function _checkSession(){
-  var token=localStorage.getItem('freq_auth_token');
-  var user=localStorage.getItem('freq_auth_user');
-  if(!token||!user){document.getElementById('login-overlay').style.display='flex';document.getElementById('login-user').focus();return;}
-  fetch(API.AUTH_VERIFY+'?token='+encodeURIComponent(token)).then(function(r){return r.json()}).then(function(d){
-    if(d.valid){_authToken=token;_currentUser=d.user;_currentRole=d.role;_showApp();}
-    else{localStorage.removeItem('freq_auth_token');localStorage.removeItem('freq_auth_user');document.getElementById('login-overlay').style.display='flex';document.getElementById('login-user').focus();}
-  }).catch(function(){
-    /* Server might have restarted — show login */
-    document.getElementById('login-overlay').style.display='flex';document.getElementById('login-user').focus();
-  });
+  /* Clear any legacy stored tokens */
+  try{sessionStorage.removeItem('freq_auth_token');sessionStorage.removeItem('freq_auth_user');}catch(e){}
+  try{localStorage.removeItem('freq_auth_token');localStorage.removeItem('freq_auth_user');}catch(e){}
+  document.getElementById('login-overlay').style.display='flex';
+  document.getElementById('login-user').focus();
 }
 
 function _applyRoleUI(){
@@ -1664,14 +1821,13 @@ _checkSession();
 /* Generic layout system — works for any view */
 /* Widget registry — all possible widgets for HOME dashboard */
 var WIDGET_REGISTRY=[
-  {id:'w-fleet-stats',page:'FLEET',label:'Fleet Stats',loader:function(el){el.innerHTML='<div class="stats" id="hw-fleet-stats"></div><div class="stats" id="hw-fleet-stats2"></div>';_loadHomeFleetStats();}},
-  {id:'w-fleet-controls',page:'FLEET',label:'Quick Controls',ref:'fleet-sec-controls',preload:function(){loadFleetPage();}},
-  {id:'w-fleet-infra',page:'FLEET',label:'Infrastructure',ref:'fleet-sec-infra',preload:function(){loadFleetPage();}},
+  {id:'w-fleet-stats',page:'FLEET',label:'Fleet Stats',loader:function(el){el.innerHTML='<div class="stats" id="hw-fleet-stats"></div>';_loadHomeFleetStats();}},
+  {id:'w-fleet-infra',page:'FLEET',label:'Hosts & VMs',ref:'fleet-sec-infra',preload:function(){loadFleetPage();}},
   {id:'w-fleet-overview',page:'FLEET',label:'Overview',loader:function(el){
     /* Summary cards row — cluster-level stats */
     var g='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">';
-    g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">PVE NODES</h3><div class="host-meta"><span>'+(PROD_HOSTS.filter(function(h){return h.type==="pve"}).length||'?')+' NODES</span><span>·</span><span>HYPERVISOR</span></div></div><div class="divider-light"><div id="hw-pve-sum"><div class="skeleton h-60" ></div></div></div></div>';
-    g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PVE CLUSTER</span><span>·</span><span>PROXMOX</span></div></div><div class="divider-light"><div id="hw-vms"><div class="skeleton h-60" ></div></div></div></div>';
+    g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">PVE NODES</h3><div class="host-meta"><span>HYPERVISOR</span></div></div><div class="divider-light"><div id="hw-pve-sum"><div class="skeleton h-60" ></div></div></div></div>';
+    g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PROXMOX</span></div></div><div class="divider-light"><div id="hw-vms"><div class="skeleton h-60" ></div></div></div></div>';
     g+='<div class="host-card"><div class="host-head"><h3 class="c-green">MEDIA STACK</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div><div class="divider-light"><div id="hw-media"><div class="skeleton h-60" ></div></div></div></div></div>';
     /* Infrastructure device cards — responsive grid */
     g+='<div id="hw-physical-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px"></div>';
@@ -1682,11 +1838,11 @@ var WIDGET_REGISTRY=[
     _loadWidgetOverview();
   }},
   {id:'w-fleet-agents',page:'FLEET',label:'Agents',ref:'fleet-sec-agents',preload:function(){loadAgents();}},
-  {id:'w-fleet-specialists',page:'FLEET',label:'Specialists',ref:'fleet-sec-specialists',preload:function(){loadSpecialists();}},
+  {id:'w-fleet-specialists',page:'FLEET',label:'Sandbox VMs',ref:'fleet-sec-specialists',preload:function(){loadSpecialists();}},
   {id:'w-docker-containers',page:'DOCKER',label:'Containers',loader:function(el){
     el.innerHTML='<div class="stats" id="hw-ctr-stats"></div><div id="hw-ctr-cards" class="cards"><div class="skeleton"></div></div>';
     fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
-      var s=document.getElementById('hw-ctr-stats');if(s)s.innerHTML=st('Total',d.containers_total,'p')+st('Online',d.containers_running,'g')+st('Offline',d.containers_down,d.containers_down>0?'r':'g')+st('VMs',d.vm_count,'b');
+      var _coff2=Math.max(0,d.containers_down||0);var s=document.getElementById('hw-ctr-stats');if(s)s.innerHTML=st('Total',d.containers_total,'p')+st('Online',d.containers_running,'g')+st('Offline',_coff2,_coff2>0?'r':'g')+st('VMs',d.vm_count,'b');
     });
     fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
       var h='';d.containers.forEach(function(c){h+=_containerCard(c,'');});
@@ -1700,7 +1856,7 @@ var WIDGET_REGISTRY=[
   {id:'w-sec-harden',page:'SECURITY',label:'Hardening',ref:'sec-harden'},
   {id:'w-sec-risk',page:'SECURITY',label:'Risk Analysis',ref:'sec-risk',preload:function(){loadRisk();}},
   {id:'w-sec-policies',page:'SECURITY',label:'Policies',ref:'sec-policies',preload:function(){loadPolicies();}},
-  {id:'w-sec-vault',page:'SECURITY',label:'Vault',ref:'sec-vault'}
+  {id:'w-sec-vault',page:'SECURITY',label:'Vault',ref:'sec-vault-section'}
 ];
 var QUICK_START_WIDGETS=['w-fleet-stats','w-fleet-infra','w-fleet-overview','w-docker-containers'];
 function _loadHomeWidgetConfig(){try{return JSON.parse(localStorage.getItem(_userKey('home_widgets'))||'null');}catch(e){return null;}}
@@ -1734,21 +1890,19 @@ function _renderHomeWidgets(){
 }
 function _loadHomeFleetStats(){
   fetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
-    var up=0,down=0,pve=0,lab=0;
-    hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;if(h.type==='pve')pve++;if(h.groups&&h.groups.indexOf('lab')>=0)lab++;});
+    var up=0,down=0,pve=0;var _homeLabLabels=_getLabLabels(hd.hosts);var lab=Object.keys(_homeLabLabels).length;
+    hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;if(h.type==='pve')pve++;});
     var totalAll=hd.hosts.length;
     var totalOff=down;var prodCount=totalAll-lab;var pveCount=PROD_HOSTS.filter(function(h){return h.type==='pve';}).length||pve;
-    var _d=function(l,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+l+'</div><div class="flex-row-24"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'<span class="label-hint"> '+l1+'</span></span><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'<span class="label-hint"> '+l2+'</span></span></div></div>';};
-    var el=document.getElementById('hw-fleet-stats');if(el)el.innerHTML=_d('STATUS',up,'ONLINE','var(--green)',totalOff,'OFFLINE','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'ONLINE','var(--cyan)')+_d('RESPONSE',hd.duration+'s','','var(--blue)','','','var(--text-dim)');
-    var el2=document.getElementById('hw-fleet-stats2');
-    if(el2){el2.innerHTML=st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
-      fetch(API.VMS).then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
-        el2.querySelector('.st:nth-child(1)').innerHTML='<div class="lb">VMs</div><div class="flex-row-24"><span class="stat-big-green">'+run+'<span class="label-hint"> RUN</span></span><span class="stat-big-red">'+stop+'<span class="label-hint"> STOP</span></span></div>';}).catch(function(){});
-      fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
-        el2.querySelector('.st:nth-child(2)').innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-big-green">'+(md.containers_running||0)+'<span class="label-hint"> UP</span></span><span class="stat-big-red">'+(md.containers_down||0)+'<span class="label-hint"> DOWN</span></span></div>';}).catch(function(){});
-      Promise.all([fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return{count:0}}),fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return{count:0}})]).then(function(res){
-        el2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-big-orange">'+(res[0].count||0)+'<span class="label-hint"> DL</span></span><span class="stat-big-blue">'+(res[1].count||0)+'<span class="label-hint"> STREAM</span></span></div>';});
-    }
+    var _d=function(l,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+l+'</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'</span><span class="label-hint">'+l1+'</span></span><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'</span><span class="label-hint">'+l2+'</span></span></div></div>';};
+    var el=document.getElementById('hw-fleet-stats');if(!el)return;
+    el.innerHTML=_d('STATUS',up,'ONLINE','var(--green)',totalOff,'OFFLINE','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'ONLINE','var(--cyan)')+_d('RESPONSE',hd.duration+'s','','var(--blue)','','','var(--text-dim)')+st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
+    fetch(API.VMS).then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
+      var c=el.querySelector('.st:nth-child(5)');if(c)c.innerHTML='<div class="lb">VMs</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+run+'</span><span class="label-hint">RUN</span></span><span class="stat-pair"><span class="stat-big-red">'+stop+'</span><span class="label-hint">STOP</span></span></div>';}).catch(function(){});
+    fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
+      var _cdn=Math.max(0,md.containers_down||0);var c=el.querySelector('.st:nth-child(6)');if(c)c.innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+(md.containers_running||0)+'</span><span class="label-hint">UP</span></span><span class="stat-pair"><span class="stat-big-red">'+_cdn+'</span><span class="label-hint">DOWN</span></span></div>';}).catch(function(){});
+    Promise.all([fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return{count:0}}),fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return{count:0}})]).then(function(res){
+      var c=el.querySelector('.st:nth-child(7)');if(c)c.innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-orange">'+(res[0].count||0)+'</span><span class="label-hint">DL</span></span><span class="stat-pair"><span class="stat-big-blue">'+(res[1].count||0)+'</span><span class="label-hint">STREAM</span></span></div>';});
   });
 }
 function _loadWidgetOverview(){
@@ -1770,21 +1924,25 @@ function _loadWidgetOverview(){
   /* VMs — exclude templates from counts */
   fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
     var _st=_loadSettings();var run=0,stop=0,total=0;d.vms.forEach(function(v){if(!_st.showTemplates&&v.category==='templates')return;total++;if(v.status==='running')run++;else stop++;});
-    var h='';h+=_mrow('TOTAL',total+' VMs',0,'var(--purple-light)');h+=_mrow('RUNNING',run,total>0?Math.round(run/total*100):0,'var(--green)');h+=_mrow('STOPPED',stop,0,stop>0?'var(--red)':'var(--green)');
+    var h='';h+=_mrow('TOTAL',total+' VMs',0,'var(--purple-light)');h+=_mrow('RUNNING',run,0,'var(--green)');h+=_mrow('STOPPED',stop,0,stop>0?'var(--red)':'var(--green)');
     var ve=document.getElementById('hw-vms');if(ve)ve.innerHTML=h;
   }).catch(function(){});
   /* Media */
   fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
-    var run=d.containers_running||0,tot=d.containers_total||0,dn=tot-run;
-    var h='';h+=_mrow('ONLINE',run+' / '+tot,tot>0?Math.round(run/tot*100):0,'var(--green)');h+=_mrow('OFFLINE',dn,0,dn>0?'var(--red)':'var(--green)');h+=_mrow('VMs',d.vm_count,0,'var(--blue)');
+    var run=d.containers_running||0,tot=d.containers_total||0,dn=Math.max(0,tot-run);
+    var h='';h+=_mrow('ONLINE',run+' / '+tot,0,'var(--green)');h+=_mrow('OFFLINE',dn,0,dn>0?'var(--red)':'var(--green)');h+=_mrow('VMs',d.vm_count,0,'var(--blue)');
     var me=document.getElementById('hw-media');if(me)me.innerHTML=h;
   }).catch(function(){});
 }
 var VIEW_SECTIONS={
   home:[],
-  fleet:['fleet-sec-stats','fleet-sec-controls','fleet-sec-infra','fleet-sec-overview','fleet-lab-section','fleet-sec-agents','fleet-sec-specialists'],
+  fleet:['fleet-sec-stats','fleet-sec-infra','fleet-sec-overview','fleet-lab-section','fleet-sec-agents','fleet-sec-specialists'],
   docker:['docker-sec-containers'],
-  security:['sec-users','sec-sshkeys','sec-apikeys','sec-audit','sec-harden','sec-risk','sec-policies','sec-vault'],
+  security:['sec-risk','sec-policies'],
+  'sec-hardening':['sec-audit','sec-harden'],
+  'sec-access':['sec-users','sec-sshkeys','sec-apikeys'],
+  'sec-vault':['sec-vault-section'],
+  'sec-compliance':[],
   lab:[]
 };
 var _sectionNames={};
@@ -1931,16 +2089,23 @@ document.getElementById('header-tagline').textContent=rt();
 var qf=document.getElementById('home-quote-footer');if(qf)qf.textContent=rq();
 
 var _currentView='home';
-var VIEW_IDS=['home','fleet','docker','security','lab','policies','ops'];
-var VIEW_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',security:'SECURITY',lab:'LAB TOOLS',policies:'POLICIES',ops:'OPERATIONS'};
-var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityPage()},lab:function(){loadLabTools()},policies:function(){loadPoliciesPage()},ops:function(){loadOpsPage()},topology:function(){loadTopology()},capacity:function(){loadCapacity()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},costs:function(){loadCosts()},federation:function(){loadFederation()},chaos:function(){loadChaos()}};
+var VIEW_IDS=['home','fleet','topology','capacity','docker','media','security','sec-hardening','sec-access','sec-vault','sec-compliance','tools','playbooks','gitops','chaos','lab','settings'];
+var VIEW_TITLES={home:'HOME',fleet:'FLEET',topology:'TOPOLOGY',capacity:'CAPACITY',docker:'DOCKER',media:'MEDIA',security:'SECURITY','sec-hardening':'HARDENING','sec-access':'ACCESS','sec-vault':'VAULT','sec-compliance':'COMPLIANCE',tools:'SYSTEM',playbooks:'PLAYBOOKS',gitops:'CONFIG SYNC',chaos:'CHAOS',lab:'LAB',settings:'SETTINGS'};
+var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},topology:function(){loadTopology()},capacity:function(){loadCapacity()},docker:function(){loadDockerPage()},media:function(){loadMediaPage()},security:function(){loadSecurityOverview()},'sec-hardening':function(){loadSecHardening()},'sec-access':function(){loadSecAccess()},'sec-vault':function(){loadSecVault()},'sec-compliance':function(){loadSecCompliance()},tools:function(){loadToolsPage()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},chaos:function(){loadChaos()},lab:function(){loadLabPage()},settings:function(){loadSettingsPage()}};
+/* Nav grouping — maps sub-views to their parent nav button */
+var VIEW_TO_NAV={home:'home',fleet:'fleet',topology:'fleet',capacity:'fleet',docker:'docker',media:'media',security:'security','sec-hardening':'security','sec-access':'security','sec-vault':'security','sec-compliance':'security',tools:'tools',playbooks:'tools',gitops:'tools',chaos:'tools',lab:'lab',settings:'settings'};
+var NAV_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',media:'MEDIA',security:'SECURITY',tools:'SYSTEM',lab:'LAB',settings:'SETTINGS'};
 
 function nav(p){
   try{
+    /* Deactivate all pages */
     document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active')});
-    document.querySelectorAll('.sb-item').forEach(function(x){x.classList.remove('active')});
+    /* When leaving p-home, hide all views to prevent stale display */
+    if(p!=='home'){
+      VIEW_IDS.forEach(function(v){var el=document.getElementById(v+'-view');if(el)el.style.display='none';});
+      document.querySelectorAll('.view-btn').forEach(function(b){b.classList.remove('active-view');});
+    }
     var el=document.getElementById('p-'+p);if(el)el.classList.add('active');
-    document.querySelectorAll('.sb-item').forEach(function(x){if(x.getAttribute('data-page')===p)x.classList.add('active');});
     if(p==='home'){
       document.getElementById('page-title').textContent=VIEW_TITLES[_currentView]||'HOME';
       document.getElementById('header-tagline').textContent=rt();
@@ -1965,22 +2130,16 @@ function switchView(view){
   VIEW_IDS.forEach(function(v){var el=document.getElementById(v+'-view');if(el)el.style.display='none';});
   /* Show selected */
   var el=document.getElementById(view+'-view');if(el)el.style.display='block';
-  /* Update button highlights */
+  /* Highlight the PARENT nav button, not the sub-view */
+  var navGroup=VIEW_TO_NAV[view]||view;
   document.querySelectorAll('.view-btn').forEach(function(b){b.classList.remove('active-view');});
-  var activeBtn=document.querySelector('.view-btn[data-view="'+view+'"]');
+  var activeBtn=document.querySelector('.view-btn[data-view="'+navGroup+'"]');
   if(activeBtn)activeBtn.classList.add('active-view');
   /* Update title */
-  document.getElementById('page-title').textContent=VIEW_TITLES[view]||view;
-  /* Layout button always visible */
-  /* Show/hide new tool button (only for lab view) */
-  var newToolBtn=document.getElementById('btn-new-tool');
-  if(newToolBtn)newToolBtn.style.display=(view==='lab')?'':'none';
+  document.getElementById('page-title').textContent=NAV_TITLES[navGroup]||VIEW_TITLES[view]||view;
   /* Make sure we're on p-home */
   document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active')});
   document.getElementById('p-home').classList.add('active');
-  document.querySelectorAll('.sb-item').forEach(function(x){x.classList.remove('active')});
-  var homeItem=document.querySelector('.sb-item[data-page="home"]');
-  if(homeItem)homeItem.classList.add('active');
   /* Load data */
   _safe(VIEW_LOADERS[view]||loadHome);
 }
@@ -2089,7 +2248,6 @@ function renderGlobalSettings(){
 function loadFleetPage(){
   if(!_fleetCache.fo&&!_fleetCache.hd){
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
-    document.getElementById('metrics-row2').innerHTML='<div class="skeleton h-50" ></div>';
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   }
   loadMetricsQuick();loadAgents();loadSpecialists();
@@ -2102,8 +2260,9 @@ function loadFleetPage(){
 function _loadFleetOverviewMedia(){
   fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
     var h='';
-    h+=_mrow('ONLINE',d.containers_running+' / '+d.containers_total,d.containers_total>0?Math.round(d.containers_running/d.containers_total*100):0,'var(--green)');
-    h+=_mrow('OFFLINE',(d.containers_total-d.containers_running),0,(d.containers_total-d.containers_running)>0?'var(--red)':'var(--green)');
+    var _dn=Math.max(0,d.containers_total-d.containers_running);
+    h+=_mrow('ONLINE',d.containers_running+' / '+d.containers_total,0,'var(--green)');
+    h+=_mrow('OFFLINE',_dn,0,_dn>0?'var(--red)':'var(--green)');
     h+=_mrow('VMs',d.vm_count,0,'var(--blue)');
     var me=document.getElementById('home-media');if(me)me.innerHTML=h;
   }).catch(function(){var me=document.getElementById('home-media');if(me)me.innerHTML='<span class="c-dim-fs12">NO MEDIA DATA</span>';});
@@ -2113,9 +2272,9 @@ function _renderFleetOverview(fo){
     var nodeCount=fo.pve_nodes?fo.pve_nodes.length:0;
     var nodeNames=fo.pve_nodes?fo.pve_nodes.map(function(n){return n.name}).join(', '):'';
     var ps='';
-    ps+=_mrow('NODES',nodeCount+' ('+nodeNames+')',0,'var(--purple-light)');
-    ps+=_mrow('VMs',fo.summary.total_vms+' total',0,'var(--green)');
-    ps+=_mrow('RUNNING',fo.summary.running,fo.summary.total_vms>0?Math.round(fo.summary.running/fo.summary.total_vms*100):0,'var(--green)');
+    ps+=_mrow('NODES',nodeCount,0,'var(--purple-light)');
+    ps+=_mrow('VMs',fo.summary.total_vms,0,'var(--green)');
+    ps+=_mrow('RUNNING',fo.summary.running,0,'var(--green)');
     ps+=_mrow('STOPPED',fo.summary.stopped,0,fo.summary.stopped>0?'var(--red)':'var(--green)');
     var pse=document.getElementById('home-pve-summary');if(pse)pse.innerHTML=ps;
     /* pfSense */
@@ -2130,8 +2289,8 @@ function _renderFleetOverview(fo){
     var tne=document.getElementById('home-truenas');if(tne)tne.innerHTML=tn||'<span class="c-dim-fs12">N/A</span>';
     /* VMs card */
     var vi='';
-    vi+=_mrow('TOTAL',fo.summary.total_vms+' VMs',0,'var(--purple-light)');
-    vi+=_mrow('RUNNING',fo.summary.running,fo.summary.total_vms>0?Math.round(fo.summary.running/fo.summary.total_vms*100):0,'var(--green)');
+    vi+=_mrow('TOTAL',fo.summary.total_vms,0,'var(--purple-light)');
+    vi+=_mrow('RUNNING',fo.summary.running,0,'var(--green)');
     vi+=_mrow('STOPPED',fo.summary.stopped,0,fo.summary.stopped>0?'var(--red)':'var(--green)');
     var vie=document.getElementById('home-infra');if(vie)vie.innerHTML=vi;
 }
@@ -2186,11 +2345,11 @@ function _initFleetData(fo){
 var _dockerSub='services';
 function switchDockerSub(sub){
   _dockerSub=sub;
-  ['all','media','services'].forEach(function(s){var el=document.getElementById('docker-sub-'+s);if(el)el.style.display=(s===sub)?'':'none';});
+  ['all','services','registry'].forEach(function(s){var el=document.getElementById('docker-sub-'+s);if(el){if(s===sub){el.classList.remove('d-none');el.style.display='';}else{el.classList.add('d-none');el.style.display='';}}});
   document.querySelectorAll('.docker-sub').forEach(function(b){b.classList.remove('active-view');});
-  var btn=document.querySelector('.docker-sub[data-view="docker-'+sub+'"]');if(btn)btn.classList.add('active-view');
-  if(sub==='media'){loadMediaContainers();loadDownloads();loadStreams();}
+  var btn=document.querySelector('.docker-sub[data-dsub="docker-'+sub+'"]');if(btn)btn.classList.add('active-view');
   if(sub==='services')loadServiceContainers();
+  if(sub==='registry')loadContainerRegistry();
 }
 function _getMediaTags(){try{return JSON.parse(localStorage.getItem('freq_media_tags')||'[]');}catch(e){return [];}}
 function _setMediaTags(tags){localStorage.setItem('freq_media_tags',JSON.stringify(tags));}
@@ -2241,22 +2400,34 @@ function loadServiceContainers(){
   });
 }
 var _httpsContainers=JSON.parse(localStorage.getItem('freq_https_containers')||'[]');
+var _webPaths={plex:'/web',tautulli:'/home',organizr:'/auth/login'};
+var _publicUrls=JSON.parse(localStorage.getItem('freq_public_urls')||'{}');
 function _containerCard(c,extra){
   var isHttps=_httpsContainers.indexOf(c.name)>=0;
   var proto=isHttps?'https':'http';
-  var url=c.vm_ip&&c.port&&c.port!=='-'?proto+'://'+c.vm_ip+':'+c.port:'';
-  var h='<div class="crd"><div class="flex-between"><h3 style="text-transform:uppercase">'+c.name+'</h3>'+badge(c.status)+'</div>';
-  if(url){
-    h+='<div style="display:flex;align-items:center;gap:6px;margin:4px 0">';
-    h+='<a href="'+url+'" target="_blank" style="font-size:11px;color:var(--blue);font-family:monospace;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">'+url+'</a>';
-    h+='<button onclick="event.stopPropagation();copyUrl(\''+proto+'://'+c.vm_ip+':'+c.port+'\')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:0" title="Copy URL">&#128203;</button>';
-    h+='<button onclick="event.stopPropagation();toggleHttps(\''+c.name+'\')" style="background:none;border:none;color:'+(isHttps?'var(--green)':'var(--text-dim)')+';cursor:pointer;font-size:12px;padding:2px 4px;font-family:inherit" title="Toggle HTTPS">'+(isHttps?'HTTPS':'HTTP')+'</button>';
-    h+='</div>';
+  var wp=_webPaths[c.name.toLowerCase()]||'';
+  var shortUrl=c.vm_ip&&c.port&&c.port!=='-'?proto+'://'+c.vm_ip+':'+c.port:'';
+  var url=shortUrl?shortUrl+wp:'';
+  var pubUrl=_publicUrls[c.name]||'';
+  var h='<div class="crd" style="display:flex;flex-direction:column"><div class="flex-between"><h3 style="text-transform:uppercase">'+c.name+'</h3>'+badge(c.status)+'</div>';
+  if(url||pubUrl){
+    if(url){
+      h+='<div style="display:flex;align-items:center;gap:6px;margin:4px 0">';
+      h+='<a href="'+url+'" target="_blank" style="font-size:11px;color:var(--blue);font-family:monospace;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">'+shortUrl+'</a>';
+      h+='<span onclick="event.stopPropagation();toggleHttps(\''+c.name+'\')" style="background:'+(isHttps?'rgba(63,185,80,0.15)':'rgba(255,255,255,0.06)')+';border:1px solid '+(isHttps?'var(--green)':'var(--border-light)')+';border-radius:4px;padding:1px 6px;color:'+(isHttps?'var(--green)':'var(--text-dim)')+';cursor:pointer;font-size:10px;font-family:monospace;font-weight:600" title="Click to switch to '+(isHttps?'HTTP':'HTTPS')+'">'+(isHttps?'HTTPS':'HTTP')+'</span>';
+      h+='</div>';
+    }
+    if(pubUrl){
+      var pu=pubUrl;try{var _u=new URL(pubUrl);pu=_u.protocol+'//'+_u.host;}catch(e){}
+      h+='<div style="display:flex;align-items:center;gap:6px;margin:2px 0">';
+      h+='<a href="'+_esc(pubUrl)+'" target="_blank" style="font-size:11px;color:var(--green);font-family:monospace;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">'+_esc(pu)+'</a>';
+      h+='</div>';
+    }
   } else {
     h+='<div style="font-size:11px;color:var(--text-dim);margin:4px 0">'+c.vm_label+(c.port&&c.port!=='-'?' · '+c.port:'')+'</div>';
   }
   if(c.detail)h+='<div class="text-sub">'+c.detail+'</div>';
-  h+='<div style="margin-top:8px;display:flex;gap:6px;align-items:center"><button class="fleet-btn pill-sm" data-action="mediaRestart" data-arg="'+c.name+'" >RESTART</button><button class="fleet-btn pill-sm" onclick="mediaLogs(\''+c.name+'\')" >LOGS</button>';
+  h+='<div style="margin-top:auto;padding-top:8px;display:flex;gap:6px;align-items:center"><button class="fleet-btn pill-sm" data-action="mediaRestart" data-arg="'+c.name+'" >RESTART</button><button class="fleet-btn pill-sm" onclick="mediaLogs(\''+c.name+'\')" >LOGS</button>';
   if(extra)h+=extra;
   h+='</div></div>';
   return h;
@@ -2274,17 +2445,252 @@ function copyUrl(url){
 function toggleHttps(name){
   var idx=_httpsContainers.indexOf(name);
   if(idx>=0)_httpsContainers.splice(idx,1);else _httpsContainers.push(name);
+  var nowHttps=_httpsContainers.indexOf(name)>=0;
   localStorage.setItem('freq_https_containers',JSON.stringify(_httpsContainers));
+  /* Also update public URL protocol to match */
+  if(_publicUrls[name]){
+    try{
+      var u=new URL(_publicUrls[name]);
+      u.protocol=nowHttps?'https:':'http:';
+      _publicUrls[name]=u.toString();
+      localStorage.setItem('freq_public_urls',JSON.stringify(_publicUrls));
+    }catch(e){}
+  }
+  /* Reload whichever view is showing these cards */
+  _mediaCache=null;
   loadDockerPage();
-  toast(name+' set to '+(_httpsContainers.indexOf(name)>=0?'HTTPS':'HTTP'),'success');
+  if(typeof loadMediaPage==='function')loadMediaPage();
+  toast(name+' set to '+(nowHttps?'HTTPS':'HTTP'),'success');
+}
+function setPublicUrl(name){
+  var current=_publicUrls[name]||'';
+  var val=prompt('Public URL for '+name.toUpperCase()+':\n(e.g. https://plex.example.com)',current);
+  if(val===null)return;
+  val=val.trim();
+  if(val){_publicUrls[name]=val;}else{delete _publicUrls[name];}
+  localStorage.setItem('freq_public_urls',JSON.stringify(_publicUrls));
+  loadDockerPage();
+  toast(val?name+' public URL set':'Public URL removed for '+name,'success');
 }
 function loadDockerPage(){
   loadContainerSection();
   if(_dockerSub==='services')loadServiceContainers();
   else if(_dockerSub==='media'){loadMediaContainers();loadDownloads();loadStreams();}
+  loadContainerRegistry();
+}
+var _regVMs=[];/* cached VM list for edit dropdowns */
+function loadContainerRegistry(){
+  var tbl=document.getElementById('registry-table');
+  if(!tbl)return;
+  tbl.innerHTML='<div class="skeleton"></div>';
+  fetch('/api/containers/registry?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(!d.containers||d.containers.length===0){tbl.innerHTML='<span class="c-dim-fs12">No containers registered</span>';return;}
+    /* Build unique VM list for dropdowns */
+    var seen={};_regVMs=[];
+    d.containers.forEach(function(c){if(!seen[c.vm_id]){seen[c.vm_id]=true;_regVMs.push({id:c.vm_id,label:c.vm_label,ip:c.vm_ip});}});
+    var h='<table><tr><th>Container</th><th>VM</th><th>VMID</th><th>Local IP</th><th>Public IP</th><th>Port</th><th>API Path</th><th></th></tr>';
+    d.containers.forEach(function(c){
+      var rid='reg-row-'+c.vm_id+'-'+c.name.replace(/[^a-z0-9]/gi,'_');
+      var pu=_publicUrls[c.name]||'';
+      var puIP='—';if(pu){try{puIP=new URL(pu).hostname;}catch(e){puIP=pu;}}
+      h+='<tr id="'+rid+'">';
+      h+='<td><strong>'+_esc(c.name)+'</strong></td>';
+      h+='<td>'+_esc(c.vm_label)+'</td>';
+      h+='<td>'+c.vm_id+'</td>';
+      h+='<td class="mono-11">'+_esc(c.vm_ip)+'</td>';
+      h+='<td class="mono-11">'+_esc(puIP)+'</td>';
+      h+='<td>'+(c.port||'—')+'</td>';
+      h+='<td class="mono-11">'+(c.api_path||'—')+'</td>';
+      h+='<td style="display:flex;gap:4px">';
+      h+='<button class="fleet-btn" style="font-size:10px;padding:2px 8px" onclick="editContainerRow(\''+_esc(c.name)+'\','+c.vm_id+','+(c.port||0)+',\''+_esc(c.api_path||'')+'\')">EDIT</button>';
+      h+='<button class="fleet-btn" style="font-size:10px;padding:2px 8px;color:var(--red)" onclick="deleteContainer(\''+_esc(c.name)+'\','+c.vm_id+')">DEL</button>';
+      h+='</td></tr>';
+    });
+    h+='</table>';
+    tbl.innerHTML=h;
+    /* Populate VM select for add form */
+    var sel=document.getElementById('reg-vmid');
+    if(sel){
+      sel.innerHTML='<option value="">Select VM...</option>';
+      _regVMs.forEach(function(v){sel.innerHTML+='<option value="'+v.id+'">'+_esc(v.label)+' ('+v.id+')</option>';});
+    }
+  }).catch(function(e){tbl.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
+}
+function editContainerRow(name,vmId,port,apiPath){
+  var opts='';_regVMs.forEach(function(v){opts+='<option value="'+v.id+'"'+(v.id===vmId?' selected':'')+'>'+_esc(v.label)+' ('+v.id+')</option>';});
+  var pu=_publicUrls[name]||'';
+  var h='<div class="modal" style="max-width:400px"><div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Edit: '+_esc(name)+'</h3><span class="close-x">&times;</span></div>';
+  h+='<div style="display:flex;flex-direction:column;gap:12px">';
+  h+='<div><label class="c-dim-fs12">VM</label><select class="input" id="edit-vm" style="width:100%;margin-top:4px">'+opts+'</select></div>';
+  h+='<div><label class="c-dim-fs12">Port</label><input class="input" id="edit-port" type="number" value="'+port+'" style="width:100%;margin-top:4px"></div>';
+  h+='<div><label class="c-dim-fs12">API Path</label><input class="input" id="edit-api-path" value="'+_esc(apiPath)+'" placeholder="/api/v1/health" style="width:100%;margin-top:4px"></div>';
+  h+='<div><label class="c-dim-fs12">Public URL</label><input class="input" id="edit-public-url" value="'+_esc(pu)+'" placeholder="https://plex.example.com" style="width:100%;margin-top:4px"></div>';
+  h+='<div style="display:flex;gap:8px;margin-top:8px">';
+  h+='<button class="fleet-btn c-purple-active" onclick="saveContainerEdit(\''+_esc(name)+'\','+vmId+')">SAVE</button>';
+  h+='<button class="fleet-btn" onclick="closeModal()">CANCEL</button>';
+  h+='</div></div></div>';
+  var ov=document.getElementById('modal-container');ov.innerHTML=h;ov.style.display='flex';
+}
+function saveContainerEdit(name,oldVmId){
+  var newVmId=document.getElementById('edit-vm').value;
+  var port=document.getElementById('edit-port').value||'0';
+  var apiPath=document.getElementById('edit-api-path').value||'';
+  var pu=(document.getElementById('edit-public-url').value||'').trim();
+  if(pu){_publicUrls[name]=pu;}else{delete _publicUrls[name];}
+  localStorage.setItem('freq_public_urls',JSON.stringify(_publicUrls));
+  fetch('/api/containers/edit?token='+_authToken+'&name='+encodeURIComponent(name)+'&old_vm_id='+oldVmId+'&new_vm_id='+newVmId+'&port='+port+'&api_path='+encodeURIComponent(apiPath))
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.error){toast(d.error,'error');return;}
+    toast(name+' updated','success');closeModal();_mediaCache=null;loadContainerRegistry();loadContainerSection();
+  });
+}
+function rescanContainers(){
+  var st=document.getElementById('registry-status');
+  var res=document.getElementById('rescan-results');
+  if(st)st.textContent='Scanning fleet...';
+  fetch('/api/containers/rescan?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(st)st.textContent='Scan complete';
+    if(!res)return;
+    var h='';
+    if(d.stale&&d.stale.length>0){
+      h+='<div style="margin-bottom:8px"><strong style="color:var(--red)">Stale (not found on VM):</strong></div>';
+      h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
+      d.stale.forEach(function(s){
+        h+='<button class="fleet-btn" style="font-size:11px;border-color:var(--red);color:var(--red)" onclick="deleteContainer(\''+_esc(s.name)+'\','+s.vm_id+');rescanContainers()">Remove '+_esc(s.name)+' from '+_esc(s.vm_label)+'</button>';
+      });
+      h+='</div>';
+    }
+    if(d.new&&d.new.length>0){
+      h+='<div style="margin-bottom:8px"><strong style="color:var(--green)">New (found but not registered):</strong></div>';
+      h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
+      d.new.forEach(function(n){
+        h+='<button class="fleet-btn" style="font-size:11px;border-color:var(--green);color:var(--green)" onclick="addContainerQuick(\''+_esc(n.name)+'\','+n.vm_id+')">Add '+_esc(n.name)+' to '+_esc(n.vm_label)+'</button>';
+      });
+      h+='</div>';
+    }
+    if(!d.stale.length&&!d.new.length){h='<span class="c-green" style="font-size:12px">Registry is in sync with fleet</span>';}
+    res.innerHTML=h;res.style.display='block';
+  }).catch(function(e){if(st)st.textContent='Scan failed: '+e;});
+}
+function deleteContainer(name,vmId){
+  if(!confirm('Remove "'+name+'" from registry?'))return;
+  fetch('/api/containers/delete?token='+_authToken+'&name='+encodeURIComponent(name)+'&vm_id='+vmId)
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.error){toast(d.error,'error');return;}
+    toast(name+' removed','success');_mediaCache=null;loadContainerRegistry();loadContainerSection();
+  });
+}
+function addContainer(){
+  var name=document.getElementById('reg-name').value.trim();
+  var vmId=document.getElementById('reg-vmid').value;
+  var port=document.getElementById('reg-port').value||'0';
+  var msg=document.getElementById('reg-msg');
+  if(!name||!vmId){if(msg)msg.innerHTML='<span class="c-red">Name and VM required</span>';return;}
+  fetch('/api/containers/add?token='+_authToken+'&name='+encodeURIComponent(name)+'&vm_id='+vmId+'&port='+port)
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.error){if(msg)msg.innerHTML='<span class="c-red">'+d.error+'</span>';return;}
+    if(msg)msg.innerHTML='<span class="c-green">Added</span>';
+    document.getElementById('reg-name').value='';document.getElementById('reg-port').value='';
+    _mediaCache=null;loadContainerRegistry();loadContainerSection();
+  });
+}
+function addContainerQuick(name,vmId){
+  fetch('/api/containers/add?token='+_authToken+'&name='+encodeURIComponent(name)+'&vm_id='+vmId+'&port=0')
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.error){toast(d.error,'error');return;}
+    toast(name+' registered','success');_mediaCache=null;loadContainerRegistry();rescanContainers();
+  });
 }
 function loadInfraPage(){loadInfra();}
-function loadSecurityPage(){loadVault();loadUsers();loadKeys();loadRisk();loadPolicies();}
+/* Security sub-view loaders */
+function loadSecurityOverview(){loadRisk();}
+function loadSecHardening(){/* audit + hardening sections are button-triggered */}
+function loadSecAccess(){loadUsers();loadKeys();}
+function loadSecVault(){loadVault();}
+function loadSecCompliance(){loadPoliciesPage();}
+/* Stub loaders for Morty's views */
+function loadMediaPage(){loadMediaContainers();loadDownloads();loadStreams();}
+function loadToolsPage(){_populateHostDropdowns();}
+function loadLabPage(){loadLabTools();}
+function loadSettingsPage(){loadCosts();loadFederation();_loadSettingsPrefs();_loadLabAssignments();}
+function _loadSettingsPrefs(){
+  var r=localStorage.getItem('freq_refresh_interval');
+  var d=localStorage.getItem('freq_density');
+  if(r){var el=document.getElementById('pref-refresh');if(el)el.value=r;}
+  if(d){var el=document.getElementById('pref-density');if(el)el.value=d;}
+}
+function updatePref(key,val){
+  localStorage.setItem('freq_'+key,val);
+  if(key==='refresh'){
+    if(window._autoRefreshTimer)clearInterval(window._autoRefreshTimer);
+    var ms=parseInt(val)*1000;
+    if(ms>0)window._autoRefreshTimer=setInterval(function(){refreshCurrentView();},ms);
+  }
+  toast('Preference saved: '+key+' = '+val,'ok');
+}
+/* ── Lab Assignment — tag fleet members as LAB ── */
+var _labAssignments=JSON.parse(localStorage.getItem('freq_lab_assign')||'{}');
+function _getLabLabels(healthHosts){
+  /* Merge: server-side groups + client-side overrides */
+  var labels={};
+  if(healthHosts){healthHosts.forEach(function(h){
+    if(h.groups&&h.groups.indexOf('lab')>=0)labels[h.label]=true;
+  });}
+  /* Apply user overrides from Settings */
+  Object.keys(_labAssignments).forEach(function(k){
+    if(_labAssignments[k])labels[k]=true;
+    else delete labels[k];
+  });
+  return labels;
+}
+function _loadLabAssignments(){
+  var el=document.getElementById('lab-assign-list');if(!el)return;
+  /* Need both fleet overview (for VMs) and health (for hosts) */
+  Promise.all([
+    fetch(API.FLEET_OVERVIEW).then(function(r){return r.json();}),
+    fetch(API.HEALTH).then(function(r){return r.json();})
+  ]).then(function(results){
+    var fo=results[0],hd=results[1];
+    var items=[];
+    /* Add all hosts from health data */
+    if(hd&&hd.hosts)hd.hosts.forEach(function(h){
+      var serverLab=h.groups&&h.groups.indexOf('lab')>=0;
+      items.push({label:h.label,type:h.type||'linux',node:'',status:h.status==='healthy'?'online':'offline',serverLab:serverLab,source:'host'});
+    });
+    /* Add VMs not already covered by hosts (VMs without SSH entries) */
+    var hostSet={};items.forEach(function(i){hostSet[i.label]=true;});
+    if(fo&&fo.vms)fo.vms.forEach(function(v){
+      if(hostSet[v.name])return;
+      items.push({label:v.name,type:'vm',node:v.node||'',status:v.status||'stopped',serverLab:v.category==='lab',source:'pve'});
+    });
+    /* Sort: lab items first, then alphabetical */
+    items.sort(function(a,b){
+      var aLab=_labAssignments[a.label]!==undefined?_labAssignments[a.label]:a.serverLab;
+      var bLab=_labAssignments[b.label]!==undefined?_labAssignments[b.label]:b.serverLab;
+      if(aLab&&!bLab)return -1;if(!aLab&&bLab)return 1;
+      return a.label<b.label?-1:1;
+    });
+    var h='<table><thead><tr><th>Name</th><th>Type</th><th>Node</th><th>Status</th><th style="text-align:center">LAB</th></tr></thead><tbody>';
+    items.forEach(function(it){
+      var isLab=_labAssignments[it.label]!==undefined?_labAssignments[it.label]:it.serverLab;
+      var statusColor=it.status==='online'||it.status==='running'?'var(--green)':'var(--text-dim)';
+      h+='<tr><td><strong>'+it.label+'</strong></td>';
+      h+='<td class="mono-11">'+it.type.toUpperCase()+'</td>';
+      h+='<td class="mono-11">'+(it.node||'-')+'</td>';
+      h+='<td><span style="color:'+statusColor+'">'+it.status.toUpperCase()+'</span></td>';
+      h+='<td style="text-align:center"><span onclick="toggleLabAssign(\''+it.label+'\','+!isLab+')" style="cursor:pointer;display:inline-block;padding:2px 10px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid '+(isLab?'var(--green)':'var(--border-light)')+';background:'+(isLab?'rgba(63,185,80,0.15)':'transparent')+';color:'+(isLab?'var(--green)':'var(--text-dim)')+'">'+(isLab?'LAB':'—')+'</span></td>';
+      h+='</tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(e){el.innerHTML='<span class="c-red">Failed to load fleet: '+e+'</span>';});
+}
+function toggleLabAssign(label,isLab){
+  _labAssignments[label]=isLab;
+  localStorage.setItem('freq_lab_assign',JSON.stringify(_labAssignments));
+  _loadLabAssignments();
+  toast(label+(isLab?' tagged as LAB':' removed from LAB'),'success');
+}
 function loadSystemPage(){renderGlobalSettings();loadFleetAdmin();loadConfig();loadJournal();loadDistros();loadGroups();loadNotify();loadRules();loadAlertHistory();}
 
 function loadRules(){
@@ -2651,7 +3057,6 @@ function loadMetricsQuick(){
   } else {
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
-    document.getElementById('metrics-row2').innerHTML='<div class="skeleton h-50" ></div>';
   }
   /* Fetch fresh data in background and re-render */
   Promise.all([
@@ -2668,7 +3073,7 @@ function loadMetricsQuick(){
 /* ── Fleet rendering helpers (hoisted from _renderFleetData) ── */
 function _fStat(v,label,color){return '<div class="text-center"><div style="font-size:16px;font-weight:700;color:'+color+'">'+v+'</div><div style="font-size:12px;color:var(--text)">'+label+'</div></div>';}
 function _fGrp(title,cols,content){return '<div style="border:1px solid var(--border);border-radius:6px;padding:6px 4px 4px;background:var(--bg)"><div style="font-size:12px;color:var(--text);text-align:center;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;opacity:0.7">'+title+'</div><div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:4px">'+content+'</div></div>';}
-function _fDual(label,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+label+'</div><div class="flex-row-24"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'<span class="label-hint"> '+l1+'</span></span><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'<span class="label-hint"> '+l2+'</span></span></div></div>';}
+function _fDual(label,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+label+'</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'</span><span class="label-hint">'+l1+'</span></span><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'</span><span class="label-hint">'+l2+'</span></span></div></div>';}
 function _buildLabHostCards(hosts,infraLabels,labLabels){
   var labCards='';
   if(!hosts)return labCards;
@@ -2699,16 +3104,28 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
     c+='</div></div>';
     if(isLab)labCards+=c;
   });
+  /* Also show lab-tagged or lab-category VMs from PVE that aren't in hosts.conf */
+  var hostSet={};if(hosts)hosts.forEach(function(h){hostSet[h.label]=true;});
+  PROD_VMS.forEach(function(v){
+    if(hostSet[v.label])return;
+    if(!labLabels[v.label]&&v.category!=='lab')return;
+    var isRunning=v.status==='running';
+    var cl=_hostColor(v.label,'vm',v.node);
+    var c='<div class="host-card">';
+    c+='<div class="host-head"><h3 style="color:'+cl+'">'+v.label+'</h3><div class="host-meta"><span>VM '+v.vmid+'</span><span>\u00b7</span><span>'+(v.node||'?')+'</span><span>\u00b7</span>'+(isRunning?'<span class="c-green">RUNNING</span>':'<span class="c-dim">STOPPED</span>')+'</div></div>';
+    c+='<div class="divider-light"><p style="color:var(--text-dim);font-size:12px;padding:8px 0">'+(isRunning?v.cores+' cores \u00b7 '+v.ram:'No SSH entry \u00b7 PVE data only')+'</p></div></div>';
+    labCards+=c;
+  });
   return labCards;
 }
-function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid){
+function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
   var nodeData={};
   pveNodes.forEach(function(pn){
     var nodeName=pn.name;
     var cl=_hostColor(nodeName,'pve');
     var live=healthMap[nodeName];
     var up=live&&live.status==='healthy';
-    var nodeVms=vmsByNode[nodeName]||[];
+    var nodeVms=(vmsByNode[nodeName]||[]).filter(function(v){return !labLabels[v.name]&&v.category!=='lab';});
     var nVms=nodeVms.length;
     var nCores=0,nRamMb=0,nOnline=0,nOffline=0;
     nodeVms.forEach(function(v){
@@ -2762,7 +3179,7 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
   var out='';
   if(infraCards){
     var ic=(infraCards.match(/infra-role-card/g)||[]).length;
-    var cols=ic<=3?ic:ic<=6?3:4;
+    var cols=ic<=3?ic:3;
     out+='<div style="margin-bottom:16px;border:3px solid var(--text);border-radius:10px;background:#000000;overflow:hidden">';
     out+='<div class="flex-between-pad-top"><span style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text);opacity:0.85">CORE SYSTEMS</span><span id="core-systems-age" class="fs-10-dim-600-ls"></span></div>';
     out+='<div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:12px;padding:12px 16px 16px">'+infraCards+'</div>';
@@ -2801,27 +3218,26 @@ function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDur
   var hdAge=hd&&hd.age!==undefined?Math.round(hd.age):0;
   var ageLabel=hdAge<5?'LIVE':hdAge<60?hdAge+'s':Math.round(hdAge/60)+'m';
   var ageColor=hdAge<30?'var(--green)':hdAge<120?'var(--yellow)':'var(--red)';
-  document.getElementById('metrics-summary').innerHTML=
+  var vmRunning=summary.running||0;var vmStopped=summary.stopped||0;
+  var sumEl=document.getElementById('metrics-summary');
+  sumEl.innerHTML=
     _fDual('FLEET SPLIT',summary.prod_count||0,'PROD','var(--purple-light)',summary.lab_count||0,'LAB','var(--cyan)')+
     _fDual('FLEET',prodCount,'PROD','var(--purple-light)',labCount,'LAB','var(--cyan)')+
     _fDual('PVE NODES',prodPveNodes,'PROD','var(--purple-light)',labPveNodes,'LAB','var(--cyan)')+
-    _fDual('RESPONSE',responseDur+'s','',ageColor,ageLabel,'',ageColor);
-  var row2=document.getElementById('metrics-row2');
-  var vmRunning=summary.running||0;var vmStopped=summary.stopped||0;
-  row2.innerHTML=
+    st('RESPONSE',responseDur+'s','b')+
     _fDual('STATUS',totalUp,'ONLINE','var(--green)',totalDown,'OFFLINE','var(--red)')+
     _fDual('VMs',vmRunning,'RUN','var(--green)',vmStopped,'STOP','var(--red)')+
     st('CONTAINERS','...','p')+
     st('ACTIVITY','...','p');
   fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
-    row2.querySelector('.st:nth-child(3)').innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-big-green">'+(md.containers_running||0)+'<span class="label-hint"> UP</span></span><span class="stat-big-red">'+(md.containers_down||0)+'<span class="label-hint"> DOWN</span></span></div>';
+    var _cdn2=Math.max(0,md.containers_down||0);var c=sumEl.querySelector('.st:nth-child(7)');if(c)c.innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+(md.containers_running||0)+'</span><span class="label-hint">UP</span></span><span class="stat-pair"><span class="stat-big-red">'+_cdn2+'</span><span class="label-hint">DOWN</span></span></div>';
   }).catch(function(){});
   Promise.all([
     fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return {count:0}}),
     fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return {count:0}})
   ]).then(function(res){
     var dl=res[0].count||0;var str=res[1].count||0;
-    row2.querySelector('.st:nth-child(4)').innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-big-orange">'+dl+'<span class="label-hint"> DL</span></span><span class="stat-big-blue">'+str+'<span class="label-hint"> STREAM</span></span></div>';
+    var a=sumEl.querySelector('.st:nth-child(8)');if(a)a.innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-orange">'+dl+'</span><span class="label-hint">DL</span></span><span class="stat-pair"><span class="stat-big-blue">'+str+'</span><span class="label-hint">STREAM</span></span></div>';
   });
 }
 function _enrichFleetNtpUpdates(){
@@ -2856,11 +3272,10 @@ function _renderFleetData(fo,hd,md){
     });}
     /* Build lookup maps from API data */
     var healthMap={};var totalUp=0,totalDown=0,labPveNodes=0;
-    var labLabels={};
+    var labLabels=_getLabLabels(hd?hd.hosts:null);
     if(hd&&hd.hosts){
       hd.hosts.forEach(function(h){
         healthMap[h.label]=h;
-        if(h.groups&&h.groups.indexOf('lab')>=0)labLabels[h.label]=true;
         var up=h.status==='healthy';
         if(up)totalUp++;else totalDown++;
         if(h.type==='pve'&&labLabels[h.label])labPveNodes++;
@@ -2875,17 +3290,20 @@ function _renderFleetData(fo,hd,md){
     var summary=fo?fo.summary:{};
     var foDuration=fo?fo.duration:0;
     var hdDuration=hd?hd.duration:0;
-    /* Infrastructure role cards */
+    /* Infrastructure role cards — sorted: firewall → switch → network_storage → bmc */
+    var _infraOrder={pfsense:1,opnsense:1,switch:2,truenas:3,bmc:4,idrac:4};
+    var sortedPhysicals=physicals.slice().sort(function(a,b){return (_infraOrder[a.type]||99)-(_infraOrder[b.type]||99);});
     var infraCards='';
-    physicals.forEach(function(ph){infraCards+=_infraRoleCard(ph,healthMap);});
+    sortedPhysicals.forEach(function(ph){infraCards+=_infraRoleCard(ph,healthMap);});
     /* Lab host cards */
     var infraLabels={};physicals.forEach(function(p){infraLabels[p.label]=true;});
     pveNodes.forEach(function(pn){infraLabels[pn.name]=true;});
     var labCards=_buildLabHostCards(hd?hd.hosts:null,infraLabels,labLabels);
     /* PVE node cards */
-    var nodeData=_buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid);
-    /* VM cards grouped under nodes */
+    var nodeData=_buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels);
+    /* VM cards grouped under nodes — skip lab-tagged VMs */
     foVms.forEach(function(v){
+      if(labLabels[v.name]||v.category==='lab')return;
       var nodeName=v.node||'unknown';
       if(!nodeData[nodeName])nodeData[nodeName]={card:'',vms:''};
       var cl=_hostColor(v.name,'vm',nodeName);
@@ -3647,7 +4065,7 @@ function selectUserDropdown(prefix,value){
 function openNewTool(){
   var ov=document.getElementById('modal-container');
   var h='<div class="modal" style="max-width:500px"><div class="flex-between-mb16"><h3 class="m-0">Lab Tools</h3><span class="close-x">&times;</span></div>';
-  h+='<div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">Registered tools appear in LAB TOOLS view and are available as HOME widgets.</div>';
+  h+='<div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">Registered tools appear in LAB view and are available as HOME widgets.</div>';
   if(typeof LAB_TOOLS!=='undefined'&&LAB_TOOLS.length){
     LAB_TOOLS.forEach(function(t){
       var connected=false;for(var k in _ltState){if(k.indexOf(t.id)>=0&&_ltState[k])connected=true;}
@@ -3679,8 +4097,8 @@ function unlockVault(){
       var isAdmin=ud.users.some(function(u){return u.username===user&&u.role==='admin';});
       if(!isAdmin){toast('Access denied — admin role required','error');document.getElementById('vault-auth-pass').value='';return;}
       _vaultUnlocked=true;
-      document.getElementById('vault-locked').style.display='none';
-      document.getElementById('vault-unlocked').style.display='block';
+      document.getElementById('vault-locked').classList.add('d-none');
+      document.getElementById('vault-unlocked').classList.remove('d-none');
       toast('Vault unlocked','success');
       loadSensitiveVault();
     });
@@ -3688,8 +4106,8 @@ function unlockVault(){
 }
 function lockVault(){
   _vaultUnlocked=false;
-  document.getElementById('vault-locked').style.display='block';
-  document.getElementById('vault-unlocked').style.display='none';
+  document.getElementById('vault-locked').classList.remove('d-none');
+  document.getElementById('vault-unlocked').classList.add('d-none');
   document.getElementById('vault-sensitive-c').innerHTML='';
   document.getElementById('vault-auth-pass').value='';
   toast('Vault locked','info');
@@ -3729,7 +4147,7 @@ function renderVaultTab(){
       var passEntry=d.entries.find(function(e){return e.host===u.username&&(e.key.toLowerCase().indexOf('pass')>=0||e.key==='password');});
       var sshEntry=d.entries.find(function(e){return e.host===u.username&&(e.key.toLowerCase().indexOf('ssh')>=0||e.key.toLowerCase().indexOf('pub')>=0||e.key.toLowerCase().indexOf('id_')>=0);});
       html+='<div class="crd border-red" >';
-      html+='<div class="flex-between-mb8"><h3 style="color:'+HC[i%HC.length]+'">'+u.username.toUpperCase()+'</h3><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-size:12px;font-weight:600">'+u.role.toUpperCase()+'</span></div>';
+      html+='<div class="flex-between-mb8"><h3 style="color:var(--text)">'+u.username.toUpperCase()+'</h3><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-size:12px;font-weight:600">'+u.role.toUpperCase()+'</span></div>';
       html+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
       if(passEntry){
         html+='<button class="fleet-btn pill-purple-xs" data-action="vaultCopy" data-host="'+passEntry.host+'" data-key="'+passEntry.key+'" >&#128273; COPY PASSWORD</button>';
@@ -3850,7 +4268,7 @@ function fleetNewUser(){
     var out=document.getElementById('ft-nu-out');out.innerHTML='<div class="skeleton"></div>';
     fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
-      d.results.forEach(function(r,i){h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(r.ok?'<span class="c-green">DEPLOYED</span>':'<span class="c-red">'+r.error+'</span>')+'</td></tr>';});
+      d.results.forEach(function(r,i){h+='<tr><td><strong>'+r.host.toUpperCase()+'</strong></td><td>'+(r.ok?'<span class="c-green">DEPLOYED</span>':'<span class="c-red">'+r.error+'</span>')+'</td></tr>';});
       h+='</tbody></table>';out.innerHTML=h;
       toast('User '+user+' deployed to '+d.results.length+' hosts','success');
       /* Also register in FREQ */
@@ -3875,7 +4293,7 @@ function fleetPasswdUpdate(){
       var ok=0;
       d.results.forEach(function(r,i){
         var success=r.ok&&r.output.trim()==='OK';if(success)ok++;
-        h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">UPDATED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
+        h+='<tr><td><strong>'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">UPDATED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       });
       h+='</tbody></table>';out.innerHTML=h;
       toast('Password updated on '+ok+'/'+d.results.length+' hosts','success');
@@ -3897,7 +4315,7 @@ function fleetSshKeyDeploy(){
       var ok=0;
       d.results.forEach(function(r,i){
         var success=r.ok&&r.output.trim()==='OK';if(success)ok++;
-        h+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">DEPLOYED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
+        h+='<tr><td><strong>'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">DEPLOYED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       });
       h+='</tbody></table>';out.innerHTML=h;
       toast('SSH key deployed to '+ok+'/'+d.results.length+' hosts','success');
@@ -4117,7 +4535,7 @@ function loadVMs(){
     if(!d.count){document.getElementById('vms-c').innerHTML='<div class="empty-state"><div class="es-icon">▣</div><p>No VMs found on cluster.</p></div>';document.getElementById('vm-stats').innerHTML='';return;}
     var running=0,stopped=0;d.vms.forEach(function(v){if(v.status==='running')running++;else stopped++;});
     document.getElementById('vm-stats').innerHTML=
-      '<div class="st"><div class="lb">VMs</div><div class="flex-row-24"><span style="font-size:20px;font-weight:700;color:var(--purple-light)">'+d.count+'<span class="label-hint"> TOTAL</span></span><span class="stat-big-green">'+running+'<span class="label-hint"> RUN</span></span><span class="stat-big-red">'+stopped+'<span class="label-hint"> STOP</span></span></div></div>';
+      '<div class="st"><div class="lb">VMs</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:var(--purple-light)">'+d.count+'</span><span class="label-hint">TOTAL</span></span><span class="stat-pair"><span class="stat-big-green">'+running+'</span><span class="label-hint">RUN</span></span><span class="stat-pair"><span class="stat-big-red">'+stopped+'</span><span class="label-hint">STOP</span></span></div></div>';
     var nodeFilter=document.getElementById('vm-node-filter').value;
     var html='<div class="cards grid-auto-240" >';
     var nodes={};
@@ -4156,7 +4574,7 @@ function loadVMs(){
    ═══════════════════════════════════════════════════════════════════ */
 function loadContainerSection(){
   fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
-    document.getElementById('container-stats').innerHTML=st('Total',d.containers_total,'p')+st('Online',d.containers_running,'g')+st('Offline',d.containers_down,d.containers_down>0?'r':'g')+st('VMs',d.vm_count,'b');
+    var _coff=Math.max(0,d.containers_down||0);document.getElementById('container-stats').innerHTML=st('Total',d.containers_total,'p')+st('Online',d.containers_running,'g')+st('Offline',_coff,_coff>0?'r':'g')+st('VMs',d.vm_count,'b');
   });
   fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
     _mediaCache=d;_renderAllFromCache();
@@ -4314,7 +4732,7 @@ function loadUsers(){
     html+='<table class="w-full"><thead><tr><th>USERNAME</th><th>ROLE</th><th>PROMOTE / DEMOTE</th></tr></thead><tbody>';
     d.users.forEach(function(u,i){
       html+='<tr class="user-row" data-role="'+u.role+'">';
-      html+='<td><strong style="color:'+HC[i%HC.length]+'">'+u.username.toUpperCase()+'</strong></td>';
+      html+='<td><strong>'+u.username.toUpperCase()+'</strong></td>';
       html+='<td><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-weight:600">'+u.role.toUpperCase()+'</span></td>';
       html+='<td class="flex-gap-6">';
       if(_currentRole==='admin'){
@@ -4359,17 +4777,23 @@ function loadKeys(){
   fetch(API.KEYS).then(function(r){return r.json()}).then(function(d){
     var html='<p class="c-dim-mb12-fs12">SSH key: <code>'+d.ssh_key+'</code></p>';
     html+='<table><thead><tr><th>Host</th><th>IP</th><th>Reachable</th><th>Auth Keys</th></tr></thead><tbody>';
-    d.hosts.forEach(function(h,i){html+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+h.host+'</strong></td><td class="mono-11">'+h.ip+'</td><td>'+badge(h.reachable?'ok':'down')+'</td><td>'+h.key_count+'</td></tr>';});
+    d.hosts.forEach(function(h){
+      var ph=PROD_HOSTS.find(function(p){return p.label===h.host;});
+      var pv=PROD_VMS.find(function(v){return v.label===h.host;});
+      var ht=ph?ph.type:'';var nd=pv?pv.node:'';
+      var cl=_hostColor(h.host,ht,nd);
+      html+='<tr><td style="color:'+cl+'"><strong>'+h.host+'</strong></td><td class="mono-11">'+h.ip+'</td><td>'+badge(h.reachable?'ok':'down')+'</td><td>'+h.key_count+'</td></tr>';
+    });
     html+='</tbody></table>';document.getElementById('keys-c').innerHTML=html;
   });
 }
 var AUDIT_CHECKS={
-  'ssh-root':{name:'SSH Root Login',cmd:"grep -c '^PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null || echo 0",pass:function(v){return v.trim()==='0';}},
-  'ssh-pass':{name:'SSH Password Auth',cmd:"grep -c '^PasswordAuthentication yes' /etc/ssh/sshd_config 2>/dev/null || echo 0",pass:function(v){return v.trim()==='0';}},
-  'ssh-empty':{name:'Empty Passwords',cmd:"grep -c '^PermitEmptyPasswords yes' /etc/ssh/sshd_config 2>/dev/null || echo 0",pass:function(v){return v.trim()==='0';}},
-  'ports':{name:'Open Ports',cmd:"ss -tlnp 2>/dev/null | grep LISTEN | wc -l",pass:function(v){return parseInt(v.trim())<20;}},
-  'failed':{name:'Failed Services',cmd:"systemctl --failed --no-legend 2>/dev/null | wc -l || echo 0",pass:function(v){return v.trim()==='0';}},
-  'firewall':{name:'Firewall Active',cmd:"(ufw status 2>/dev/null | grep -c 'active' || iptables -L -n 2>/dev/null | grep -c 'Chain' || echo 0)",pass:function(v){return parseInt(v.trim())>0;}}
+  'ssh-root':{name:'SSH Root Login',cmd:"grep -c '^PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null; true",pass:function(v){return parseInt(v)===0;}},
+  'ssh-pass':{name:'SSH Password Auth',cmd:"grep -c '^PasswordAuthentication yes' /etc/ssh/sshd_config 2>/dev/null; true",pass:function(v){return parseInt(v)===0;}},
+  'ssh-empty':{name:'Empty Passwords',cmd:"grep -c '^PermitEmptyPasswords yes' /etc/ssh/sshd_config 2>/dev/null; true",pass:function(v){return parseInt(v)===0;}},
+  'ports':{name:'Open Ports',cmd:"ss -tlnp 2>/dev/null | grep LISTEN | wc -l",pass:function(v){return parseInt(v)<20;}},
+  'failed':{name:'Failed Services',cmd:"systemctl --failed --no-legend 2>/dev/null | wc -l; true",pass:function(v){return parseInt(v)===0;}},
+  'firewall':{name:'Firewall Active',cmd:"iptables -L -n 2>/dev/null | grep -c '^Chain'; true",pass:function(v){return parseInt(v)>0;}}
 };
 function runAuditCheck(type){
   var checks=type==='all'?Object.keys(AUDIT_CHECKS):[type];
@@ -4383,7 +4807,7 @@ function runAuditCheck(type){
       d.results.forEach(function(r,i){
         var val=r.ok?r.output.trim():'error';
         var ok=r.ok&&chk.pass(r.output);
-        html+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+val+'</td><td>'+badge(ok?'ok':'CRITICAL')+'</td></tr>';
+        html+='<tr><td><strong>'+r.host.toUpperCase()+'</strong></td><td>'+val+'</td><td>'+badge(ok?'ok':'CRITICAL')+'</td></tr>';
       });html+='</tbody></table>';done++;
       if(done===checks.length){
         var closeBtn='<button class="fleet-btn my-8" onclick="document.getElementById(\'audit-c\').innerHTML=\'\'" >CLOSE RESULTS</button>';
@@ -4410,7 +4834,7 @@ function hardenAction(action){
       var ok=0;
       d.results.forEach(function(r,i){
         var success=r.ok&&r.output.trim()==='OK';if(success)ok++;
-        html+='<tr><td><strong style="color:'+HC[i%HC.length]+'">'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">APPLIED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
+        html+='<tr><td><strong>'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">APPLIED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       });
       html+='</tbody></table>';
       var closeBtn='<button class="fleet-btn my-8" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" >CLOSE RESULTS</button>';
@@ -4419,7 +4843,7 @@ function hardenAction(action){
     });
   });
 }
-function runSweep(){
+function runSshSweep(){
   document.getElementById('sweep-c').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   var checks=[{name:'SSH: Password Auth',cmd:"grep -c '^PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null||echo 0"},{name:'SSH: Root Login',cmd:"grep -c '^PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null||echo 0"},{name:'SSH: Empty Passwords',cmd:"grep -c '^PermitEmptyPasswords no' /etc/ssh/sshd_config 2>/dev/null||echo 0"}];
   var html='';var done=0;
@@ -4429,7 +4853,7 @@ function runSweep(){
       d.results.forEach(function(r,i){
         var val=r.ok?r.output.trim():'error';
         var ok=(chk.name.includes('Password Auth')||chk.name.includes('Empty'))?val!=='0':val==='0';
-        html+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+r.host+'</strong></td><td>'+val+'</td><td>'+badge(ok?'ok':'CRITICAL')+'</td></tr>';
+        html+='<tr><td><strong>'+r.host+'</strong></td><td>'+val+'</td><td>'+badge(ok?'ok':'CRITICAL')+'</td></tr>';
       });html+='</tbody></table>';done++;
       if(done===checks.length){var cb='<button class="fleet-btn my-8" onclick="document.getElementById(\'sweep-c\').innerHTML=\'\'" >CLOSE RESULTS</button>';document.getElementById('sweep-c').innerHTML=cb+html+cb;toast('Sweep complete','success');}
     });
@@ -4439,7 +4863,7 @@ function runHarden(){
   document.getElementById('harden-c').innerHTML='<div class="skeleton"></div>';
   fetch(API.HARDEN).then(function(r){return r.json()}).then(function(d){
     var html='<table><thead><tr><th>Host</th><th>Check</th><th>Status</th></tr></thead><tbody>';
-    d.results.forEach(function(r,i){html+='<tr><td style="color:'+HC[i%HC.length]+'"><strong>'+r.host+'</strong></td><td>'+r.check+'</td><td>'+badge(r.ok?'ok':'CRITICAL')+'</td></tr>';});
+    d.results.forEach(function(r,i){html+='<tr><td><strong>'+r.host+'</strong></td><td>'+r.check+'</td><td>'+badge(r.ok?'ok':'CRITICAL')+'</td></tr>';});
     html+='</tbody></table>';var cb2='<button class="fleet-btn my-8" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" >CLOSE RESULTS</button>';document.getElementById('harden-c').innerHTML=cb2+html+cb2;
     toast('Hardening audit complete','success');
   });
@@ -4496,7 +4920,7 @@ function loadConfig(){
     document.getElementById('config-c').innerHTML=html;
   });
 }
-function runDoctor(){
+function runSysInfo(){
   document.getElementById('doctor-c').innerHTML='<div class="skeleton"></div>';
   fetch(API.INFO).then(function(r){return r.json()}).then(function(d){
     var html='<div class="cards"><div class="crd"><h3>Installation</h3><table>';
@@ -4589,7 +5013,7 @@ function testNotify(){fetch(API.NOTIFY_TEST).then(function(r){return r.json()}).
 function vmDestroy(vmid){
   confirmAction('Destroy VM <strong>'+vmid+'</strong>? This cannot be undone.',function(){
     fetch(API.VM_DESTROY+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
-      if(d.ok)toast('VM '+vmid+' destroyed','success');else toast('Error: '+d.error,'error');loadVMs();
+      if(d.ok)toast('VM '+vmid+' destroyed','success');else toast('Error: '+d.error,'error');refreshCurrentView();
     });
   });
 }
@@ -4600,7 +5024,17 @@ function vmSnap(vmid){
 }
 function vmPower(vmid,action){
   fetch(API.VM_POWER+'?vmid='+vmid+'&action='+action).then(function(r){return r.json()}).then(function(d){
-    toast(d.action+': '+(d.ok?d.output:d.error),d.ok?'success':'error');loadVMs();
+    toast(d.action+': '+(d.ok?d.output:d.error),d.ok?'success':'error');refreshCurrentView();
+  });
+}
+function vmPushKey(ip){
+  if(!ip){toast('No IP available for this VM','error');return;}
+  confirmAction('Push freq SSH key to <strong>'+ip+'</strong>?<br><span style="font-size:12px;color:var(--text-dim)">Deploys the freq-admin authorized_keys so FREQ can manage this host.</span>',function(){
+    toast('Pushing key to '+ip+'...','info');
+    fetch('/api/vm/push-key?token='+_authToken+'&ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
+      if(d.error){toast('Key push failed: '+d.error,'error');return;}
+      toast('Key deployed to '+ip+(d.verified?' — verified':''),'success');
+    }).catch(function(e){toast('Key push failed: '+e,'error');});
   });
 }
 
@@ -5137,7 +5571,7 @@ function _vmNicCards(allIps){
   });
   return h;
 }
-function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm){
+function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip){
   var ctrl='<div style="display:flex;gap:16px;margin:12px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">';
   if(acts.indexOf('configure')>=0){
     ctrl+=_vmConfigPanel(vmid,label);
@@ -5160,6 +5594,7 @@ function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm){
   ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdLogs" >LOGS</button>';
   ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdDiagnose" >DIAGNOSE</button>';
   ctrl+='<button class="fleet-btn pad-v8-warn" data-action="hdRestart" >RESTART SVC</button>';
+  ctrl+='<button class="fleet-btn pad-v8-fs11" onclick="vmPushKey(\''+(ip||'')+'\')" >PUSH KEY</button>';
   ctrl+='</div></div>';
   ctrl+='</div>';
   ctrl+='<div id="vm-ctrl-out"></div>';
@@ -5252,7 +5687,7 @@ function renderVmCard(config){
     if(vm){stats+=st('CPU',vm.cpu+' cores','p');stats+=st('RAM',_ramGB(vm.ram_mb),'b');}
   }
   var html='<div class="card-box"><div class="stats mb-0" >'+stats+'</div></div>';
-  html+=_vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm);
+  html+=_vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip);
   html+=_toolPanelHtml();
   /* Build reusable data */
   var sys='';
@@ -5373,7 +5808,7 @@ var _ltTimers={};var _ltState={};
 /* ── Registry ──────────────────────────────────────────────────── */
 var LAB_TOOLS=[{
   id:'gwipe',
-  name:'FREQ WIPE',
+  name:'Drive Wipe',
   subtitle:'NIST 800-88 Clear &middot; Drive Sanitization Station &middot; PVE FREQ',
   defaultPort:7980,
   connectEndpoint:'status',
@@ -5399,7 +5834,7 @@ var LAB_TOOLS=[{
 }];
 /* Auto-register LAB_TOOLS as HOME widgets */
 LAB_TOOLS.forEach(function(t){
-  WIDGET_REGISTRY.push({id:'w-lab-'+t.id,page:'LAB TOOLS',label:t.name,loader:function(el){
+  WIDGET_REGISTRY.push({id:'w-lab-'+t.id,page:'LAB',label:t.name,loader:function(el){
     var P='hw-'+t.id+'-';
     el.innerHTML=_ltGenerateHTML(t.id,P);
     ltLoad(t.id,P);
@@ -5408,15 +5843,16 @@ LAB_TOOLS.forEach(function(t){
 
 /* ── Framework functions ───────────────────────────────────────── */
 function _ltEl(pfx,id){return document.getElementById((pfx||'')+id);}
-function _ltGetTool(toolId){return LAB_TOOLS.find(function(t){return t.id===toolId;});}
+function _ltGetTool(toolId){return _allLabTools().find(function(t){return t.id===toolId;});}
 function _ltHostKey(toolId,pfx){
   pfx=pfx||'';
   return{host:((_ltEl(pfx,'lt-host')||{}).value||'').trim(),key:((_ltEl(pfx,'lt-key')||{}).value||'').trim()};
 }
 
-function _ltGenerateHTML(toolId,pfx){
+function _ltGenerateHTML(toolId,pfx,hideBtn){
   pfx=pfx||'';var t=_ltGetTool(toolId);if(!t)return '';
-  return '<div style="background:var(--bg2);border:2px solid var(--input-border);border-radius:8px;margin-bottom:16px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center"><div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px;font-weight:800;letter-spacing:2px;background:linear-gradient(135deg,var(--purple-light),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">'+t.name+'</span><span id="'+pfx+'lt-version" class="text-meta"></span><span id="'+pfx+'lt-live-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)"></span></div><div class="fs-11-dim-mt2">'+t.subtitle+'</div></div><div style="text-align:right"><div id="'+pfx+'lt-station-label" class="text-sub"></div></div></div>'+
+  var hb=hideBtn||'';
+  return '<div style="background:var(--bg2);border:2px solid var(--input-border);border-radius:8px;margin-bottom:16px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center"><div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px;font-weight:800;letter-spacing:2px;background:linear-gradient(135deg,var(--purple-light),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">'+t.name+'</span><span id="'+pfx+'lt-version" class="text-meta"></span><span id="'+pfx+'lt-live-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)"></span></div><div class="fs-11-dim-mt2">'+t.subtitle+'</div></div><div style="display:flex;align-items:center;gap:10px"><div id="'+pfx+'lt-station-label" class="text-sub"></div>'+hb+'</div></div>'+
     '<div class="stats" id="'+pfx+'lt-stats"></div>'+
     '<div class="exec-bar mb-0" id="'+pfx+'lt-connect-bar" ><input id="'+pfx+'lt-host" placeholder="'+t.name+' station IP" style="max-width:200px" value=""><input id="'+pfx+'lt-key" type="password" placeholder="API key" class="flex-1"><button onclick="ltConnect(\''+toolId+'\',\''+pfx+'\')">CONNECT</button><button onclick="ltSaveConfig(\''+toolId+'\',\''+pfx+'\')" style="background:var(--card);border:2px solid var(--input-border);color:var(--text)">SAVE TO VAULT</button></div>'+
     '<div id="'+pfx+'lt-conn-status" style="font-size:11px;color:var(--text-dim);margin:6px 0 16px 2px"></div>'+
@@ -5498,16 +5934,126 @@ function ltAction(toolId,action,pfx,confirm){
   });
 }
 
+var _hiddenLabTools=JSON.parse(localStorage.getItem('freq_hidden_lab_tools')||'[]');
+var _customLabTools=JSON.parse(localStorage.getItem('freq_custom_lab_tools')||'[]');
+function _allLabTools(){
+  var custom=_customLabTools.map(function(ct){
+    var hint=ct.offlineHint||'Enter the IP and API key above to connect.';
+    return {id:ct.id,name:ct.name,subtitle:ct.subtitle||(ct.type==='freq'?'PVE FREQ':'Custom API Tool'),defaultPort:ct.port||0,connectEndpoint:ct.endpoint||'status',refreshInterval:ct.refresh||5000,isCustom:true,toolType:ct.type||'custom',vaultNamespace:ct.vaultNamespace||'',offlineHint:hint};
+  });
+  return LAB_TOOLS.concat(custom);
+}
+function hideLabTool(id){
+  if(_hiddenLabTools.indexOf(id)<0)_hiddenLabTools.push(id);
+  localStorage.setItem('freq_hidden_lab_tools',JSON.stringify(_hiddenLabTools));
+  loadLabTools();
+  toast(id+' hidden','info');
+}
+function openManageTools(){
+  var all=_allLabTools();
+  var h='<div class="modal" style="max-width:460px"><div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Manage Lab Tools</h3><span class="close-x">&times;</span></div>';
+  h+='<div style="display:flex;flex-direction:column;gap:8px">';
+  if(!all.length){h+='<p class="c-dim-fs12">No tools registered.</p>';}
+  all.forEach(function(t){
+    var hidden=_hiddenLabTools.indexOf(t.id)>=0;
+    var typeBadge=t.isCustom?(t.toolType==='freq'?'<span style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--purple-faint);color:var(--purple-light);margin-left:6px">FREQ</span>':'<span style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--bg);color:var(--text-dim);margin-left:6px;border:1px solid var(--input-border)">CUSTOM</span>'):'<span style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--purple-faint);color:var(--purple-light);margin-left:6px">BUILT-IN</span>';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg2);border:1px solid var(--input-border);border-radius:6px">';
+    h+='<div><strong>'+_esc(t.name)+'</strong>'+typeBadge+'<div class="fs-11-dim-mt2">'+_esc(t.subtitle||'')+'</div></div>';
+    h+='<div style="display:flex;gap:6px;align-items:center">';
+    h+='<button class="fleet-btn" style="font-size:10px;padding:3px 10px" onclick="toggleLabToolVis(\''+t.id+'\')">'+( hidden?'SHOW':'HIDE')+'</button>';
+    if(t.isCustom){h+='<button class="fleet-btn" style="font-size:10px;padding:3px 10px;color:var(--red)" onclick="removeLabTool(\''+t.id+'\')">DELETE</button>';}
+    h+='</div></div>';
+  });
+  h+='</div></div>';
+  var ov=document.getElementById('modal-container');ov.innerHTML=h;ov.style.display='flex';
+}
+function toggleLabToolVis(id){
+  var idx=_hiddenLabTools.indexOf(id);
+  if(idx>=0)_hiddenLabTools.splice(idx,1);else _hiddenLabTools.push(id);
+  localStorage.setItem('freq_hidden_lab_tools',JSON.stringify(_hiddenLabTools));
+  openManageTools();
+  loadLabTools();
+}
+function removeLabTool(id){
+  if(!confirm('Remove this tool permanently?'))return;
+  _customLabTools=_customLabTools.filter(function(t){return t.id!==id;});
+  localStorage.setItem('freq_custom_lab_tools',JSON.stringify(_customLabTools));
+  var hi=_hiddenLabTools.indexOf(id);if(hi>=0)_hiddenLabTools.splice(hi,1);
+  localStorage.setItem('freq_hidden_lab_tools',JSON.stringify(_hiddenLabTools));
+  closeModal();loadLabTools();
+  toast('Tool removed','success');
+}
+function openAddTool(){
+  var h='<div class="modal" style="max-width:480px"><div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Add Lab Tool</h3><span class="close-x">&times;</span></div>';
+  h+='<div style="display:flex;flex-direction:column;gap:12px">';
+  h+='<div><label class="c-dim-fs12">Type</label><div style="display:flex;gap:8px;margin-top:6px">';
+  h+='<button class="fleet-btn at-type active-view" id="at-type-freq" onclick="switchAddToolType(\'freq\')" style="flex:1;font-size:11px">FREQ TOOL</button>';
+  h+='<button class="fleet-btn at-type" id="at-type-custom" onclick="switchAddToolType(\'custom\')" style="flex:1;font-size:11px">CUSTOM API</button>';
+  h+='</div></div>';
+  h+='<div><label class="c-dim-fs12">Tool Name</label><input class="input" id="at-name" placeholder="Drive Wipe, Bench Station..." style="width:100%;margin-top:4px"></div>';
+  h+='<div><label class="c-dim-fs12">Description</label><input class="input" id="at-subtitle" placeholder="Short description of what this tool does" style="width:100%;margin-top:4px"></div>';
+  h+='<div><label class="c-dim-fs12">Default Port</label><input class="input" id="at-port" type="number" placeholder="8080" style="width:100%;margin-top:4px"></div>';
+  h+='<div id="at-freq-fields">';
+  h+='<div style="margin-bottom:12px"><label class="c-dim-fs12">Vault Namespace</label><input class="input" id="at-vault-ns" placeholder="tool-name (for freq vault set)" style="width:100%;margin-top:4px"></div>';
+  h+='<div><label class="c-dim-fs12">Vault Keys</label><div class="fs-11-dim-mt2">Auto-generated: <code style="color:var(--purple-light)">&lt;namespace&gt;_host</code>, <code style="color:var(--purple-light)">&lt;namespace&gt;_api_key</code></div></div>';
+  h+='</div>';
+  h+='<div id="at-custom-fields" style="display:none">';
+  h+='<div style="margin-bottom:12px"><label class="c-dim-fs12">Connect Endpoint</label><input class="input" id="at-endpoint" value="status" placeholder="status, health, api/v1/ping..." style="width:100%;margin-top:4px"></div>';
+  h+='<div><label class="c-dim-fs12">Refresh Interval (ms)</label><input class="input" id="at-refresh" type="number" value="5000" style="width:100%;margin-top:4px"></div>';
+  h+='</div>';
+  h+='<div style="display:flex;gap:8px;margin-top:8px">';
+  h+='<button class="fleet-btn c-purple-active" onclick="saveNewTool()">ADD TOOL</button>';
+  h+='<button class="fleet-btn" onclick="closeModal()">CANCEL</button>';
+  h+='</div></div></div>';
+  var ov=document.getElementById('modal-container');ov.innerHTML=h;ov.style.display='flex';
+}
+var _addToolType='freq';
+function switchAddToolType(type){
+  _addToolType=type;
+  document.querySelectorAll('.at-type').forEach(function(b){b.classList.remove('active-view');});
+  document.getElementById('at-type-'+type).classList.add('active-view');
+  document.getElementById('at-freq-fields').style.display=type==='freq'?'block':'none';
+  document.getElementById('at-custom-fields').style.display=type==='custom'?'block':'none';
+}
+function saveNewTool(){
+  var name=(document.getElementById('at-name').value||'').trim();
+  if(!name){toast('Name is required','error');return;}
+  var id=name.toLowerCase().replace(/[^a-z0-9]+/g,'-');
+  var existing=_allLabTools();
+  for(var i=0;i<existing.length;i++){if(existing[i].id===id){toast('Tool ID "'+id+'" already exists','error');return;}}
+  var tool={id:id,name:name,subtitle:(document.getElementById('at-subtitle').value||'').trim(),port:parseInt(document.getElementById('at-port').value)||0,type:_addToolType};
+  if(_addToolType==='freq'){
+    var ns=(document.getElementById('at-vault-ns').value||'').trim()||id;
+    tool.vaultNamespace=ns;
+    tool.endpoint='status';
+    tool.refresh=3000;
+    tool.offlineHint='Enter the IP and API key above, or save to vault via CLI:<br><code class="c-purple">freq vault set '+_esc(ns)+' '+_esc(ns)+'_host &lt;ip&gt;</code><br><code class="c-purple">freq vault set '+_esc(ns)+' '+_esc(ns)+'_api_key &lt;key&gt;</code>';
+  } else {
+    tool.endpoint=(document.getElementById('at-endpoint').value||'status').trim();
+    tool.refresh=parseInt(document.getElementById('at-refresh').value)||5000;
+  }
+  _customLabTools.push(tool);
+  localStorage.setItem('freq_custom_lab_tools',JSON.stringify(_customLabTools));
+  closeModal();loadLabTools();
+  toast(name+' added to lab','success');
+}
 function loadLabTools(){
   _ltPopulateSections();
   var container=document.getElementById('lab-tools-container');if(!container)return;
   container.innerHTML='';
-  LAB_TOOLS.forEach(function(t){
+  var all=_allLabTools();
+  var visible=all.filter(function(t){return _hiddenLabTools.indexOf(t.id)<0;});
+  if(!visible.length){
+    container.innerHTML='<div class="empty-state" style="grid-column:1/-1"><div class="es-icon">&#128295;</div><p>No lab tools visible.</p><button class="fleet-btn mt-12" onclick="openManageTools()">MANAGE TOOLS</button></div>';
+    return;
+  }
+  visible.forEach(function(t){
     var sec=document.createElement('div');
     sec.className='layout-section';
     sec.id='lab-sec-'+t.id;
     sec.style.cssText='background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:20px;margin-bottom:16px';
-    sec.innerHTML=_ltGenerateHTML(t.id,'');
+    var hBtn='<button onclick="hideLabTool(\''+t.id+'\')" style="background:var(--bg);border:2px solid var(--input-border);border-radius:6px;color:var(--text-dim);cursor:pointer;font-size:12px;padding:4px 12px;font-family:inherit" title="Hide this tool">HIDE</button>';
+    sec.innerHTML=_ltGenerateHTML(t.id,'',hBtn);
     container.appendChild(sec);
     ltLoad(t.id,'');
   });
@@ -5657,7 +6203,23 @@ function loadPatrolStatus(){
    OPS VIEW
    ═══════════════════════════════════════════════════════════════════ */
 function loadOpsPage(){
-  /* Static panels — no auto-load needed */
+  _populateHostDropdowns();
+}
+function _populateHostDropdowns(){
+  fetch(API.STATUS).then(function(r){return r.json()}).then(function(d){
+    var hosts=d.hosts||[];
+    var selects=['diag-host','log-host','chaos-target'];
+    selects.forEach(function(id){
+      var el=document.getElementById(id);if(!el)return;
+      var val=el.value;
+      var opts='<option value="">Select host...</option>';
+      hosts.forEach(function(h){
+        opts+='<option value="'+h.label+'">'+h.label.toUpperCase()+' ('+h.ip+')</option>';
+      });
+      el.innerHTML=opts;
+      if(val)el.value=val;
+    });
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -5668,101 +6230,264 @@ function loadTopology(){
   var info=document.getElementById('topo-info');
   if(info)info.textContent='Loading topology...';
   fetch('/api/topology?token='+_authToken).then(function(r){return r.json()}).then(function(d){
-    if(info)info.textContent=d.pve_count+' PVE nodes, '+d.vm_count+' VMs';
-    _renderTopology(svg,d.nodes,d.links);
+    var showTpl=_loadSettings().showTemplates===true;
+    var nodes=d.nodes,links=d.links;
+    if(!showTpl){
+      /* Filter template VMs (VMID >= 9000) */
+      var tplIds={};
+      nodes.forEach(function(n){if(n.type==='vm'&&n.vmid&&n.vmid>=9000)tplIds[n.id||('vm:'+n.vmid)]=true;});
+      nodes=nodes.filter(function(n){return !tplIds[n.id];});
+      links=links.filter(function(l){return !tplIds[l.target];});
+    }
+    var vmCount=nodes.filter(function(n){return n.type==='vm';}).length;
+    if(info)info.textContent=d.pve_count+' PVE nodes, '+vmCount+' VMs';
+    _renderTopology(svg,nodes,links);
   }).catch(function(e){if(info)info.textContent='Failed: '+e;});
 }
 
+/* Topology position persistence — lets users drag nodes and save layout */
+function _loadTopoPositions(){try{return JSON.parse(localStorage.getItem(_userKey('topo_positions'))||'{}');}catch(e){return {};}}
+function _saveTopoPositions(positions){localStorage.setItem(_userKey('topo_positions'),JSON.stringify(positions));}
+function resetTopoLayout(){localStorage.removeItem(_userKey('topo_positions'));loadTopology();}
+var _topoResizeTimer;window.addEventListener('resize',function(){clearTimeout(_topoResizeTimer);_topoResizeTimer=setTimeout(function(){if(_currentView==='topology')loadTopology();},250);});
+
 function _renderTopology(svg,nodes,links){
-  var W=svg.clientWidth||800,H=500;
-  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  var W=Math.round(svg.getBoundingClientRect().width)||svg.clientWidth||900;
   svg.innerHTML='';
-  if(!nodes||nodes.length===0){svg.innerHTML='<text x="'+W/2+'" y="'+H/2+'" fill="#8b949e" text-anchor="middle" font-size="14">No topology data</text>';return;}
+  if(!nodes||nodes.length===0){svg.setAttribute('viewBox','0 0 '+W+' 700');svg.innerHTML='<text x="'+W/2+'" y="350" fill="#8b949e" text-anchor="middle" font-size="14">No topology data</text>';return;}
 
   /* Color map */
   var colors={pve:'#9B4FDE',running:'#3fb950',stopped:'#484f58',unreachable:'#f85149',
-    healthy:'#3fb950',pfsense:'#58a6ff',truenas:'#58a6ff',switch:'#58a6ff',idrac:'#58a6ff'};
+    healthy:'#3fb950',pfsense:'#f0883e',truenas:'#58a6ff',switch:'#56d4dd',idrac:'#d29922'};
   function nodeColor(n){
     if(n.status==='unreachable')return colors.unreachable;
     if(n.type==='pve')return colors.pve;
     if(n.type==='vm')return n.status==='running'?colors.running:colors.stopped;
     return colors[n.type]||'#58a6ff';
   }
-  function nodeRadius(n){return n.type==='pve'?20:n.type==='vm'?8:12;}
+  function nodeRadius(n){
+    if(n.type==='pve')return 26;
+    if(n.type==='switch')return 22;
+    if(n.type==='pfsense'||n.type==='truenas')return 18;
+    if(n.type==='idrac')return 14;
+    return 9; /* vm */
+  }
 
-  /* Build index */
-  var idxMap={};
-  nodes.forEach(function(n,i){idxMap[n.id]=i;n.x=W/2+(Math.random()-0.5)*W*0.6;n.y=H/2+(Math.random()-0.5)*H*0.6;n.vx=0;n.vy=0;});
-  var edgeList=[];
-  links.forEach(function(l){
-    var si=idxMap[l.source],ti=idxMap[l.target];
-    if(si!==undefined&&ti!==undefined)edgeList.push({s:si,t:ti});
+  /* Classify nodes into tiers */
+  var tier1=[]; /* core infra: switch, pfsense, truenas, idrac */
+  var tier2=[]; /* PVE hypervisors */
+  var tier3=[]; /* VMs */
+  var nodeMap={};
+  nodes.forEach(function(n){
+    nodeMap[n.id]=n;
+    if(n.type==='pve')tier2.push(n);
+    else if(n.type==='vm')tier3.push(n);
+    else tier1.push(n);
   });
 
-  /* Force simulation — simple spring/repulsion */
-  var dt=0.3,repK=5000,springK=0.01,springL=80,damping=0.85,iterations=120;
-  for(var iter=0;iter<iterations;iter++){
-    /* Repulsion */
-    for(var i=0;i<nodes.length;i++){
-      for(var j=i+1;j<nodes.length;j++){
-        var dx=nodes[j].x-nodes[i].x,dy=nodes[j].y-nodes[i].y;
-        var dist=Math.sqrt(dx*dx+dy*dy)||1;
-        var force=repK/(dist*dist);
-        var fx=force*dx/dist,fy=force*dy/dist;
-        nodes[i].vx-=fx;nodes[i].vy-=fy;
-        nodes[j].vx+=fx;nodes[j].vy+=fy;
-      }
+  /* Sort tier1: switch first, then pfsense, truenas, idrac */
+  var t1order={switch:0,pfsense:1,truenas:2,idrac:3};
+  tier1.sort(function(a,b){return(t1order[a.type]||9)-(t1order[b.type]||9);});
+  tier2.sort(function(a,b){return a.label<b.label?-1:1;});
+
+  /* Group VMs by parent PVE node */
+  var vmsByNode={};
+  tier2.forEach(function(pve){vmsByNode[pve.id]=[];});
+  links.forEach(function(l){
+    var src=nodeMap[l.source],tgt=nodeMap[l.target];
+    if(src&&tgt&&src.type==='pve'&&tgt.type==='vm'){
+      if(!vmsByNode[src.id])vmsByNode[src.id]=[];
+      vmsByNode[src.id].push(tgt);
     }
-    /* Spring attraction */
-    edgeList.forEach(function(e){
-      var a=nodes[e.s],b=nodes[e.t];
-      var dx=b.x-a.x,dy=b.y-a.y;
-      var dist=Math.sqrt(dx*dx+dy*dy)||1;
-      var force=springK*(dist-springL);
-      var fx=force*dx/dist,fy=force*dy/dist;
-      a.vx+=fx;a.vy+=fy;b.vx-=fx;b.vy-=fy;
+  });
+
+  /* Layout constants */
+  var padX=60,padY=50;
+  var switchY=55;    /* switch hub — top center */
+  var coreY=150;     /* other core infra — below switch */
+  var tierY2=260;    /* PVE nodes */
+  var tierY3=380;    /* VMs start */
+  var vmSpacingX=110,vmSpacingY=56;
+  var vmColsMax=4;   /* max VMs per row under a PVE node */
+
+  /* Position Tier 1 — switch as elevated hub, others radiate below */
+  var switchNode=tier1.find(function(n){return n.type==='switch';});
+  if(switchNode){
+    switchNode.x=W/2;switchNode.y=switchY;
+    var others=tier1.filter(function(n){return n!==switchNode;});
+    var coreSpread=Math.min(W-2*padX,others.length*180);
+    var coreStart=W/2-coreSpread/2;
+    var coreStep=others.length>1?coreSpread/(others.length-1):0;
+    others.forEach(function(n,i){
+      n.x=others.length===1?W/2:coreStart+i*coreStep;
+      n.y=coreY;
     });
-    /* Center gravity */
-    nodes.forEach(function(n){
-      n.vx+=(W/2-n.x)*0.001;
-      n.vy+=(H/2-n.y)*0.001;
-      n.vx*=damping;n.vy*=damping;
-      n.x+=n.vx*dt;n.y+=n.vy*dt;
-      n.x=Math.max(30,Math.min(W-30,n.x));
-      n.y=Math.max(30,Math.min(H-30,n.y));
+  } else {
+    var t1spacing=tier1.length>1?(W-2*padX)/(tier1.length-1):0;
+    var t1start=tier1.length>1?padX:W/2;
+    tier1.forEach(function(n,i){n.x=t1start+i*t1spacing;n.y=coreY;});
+  }
+
+  /* Position Tier 2 — PVE nodes evenly spaced */
+  var pveCount=tier2.length;
+  var colWidth=(W-2*padX)/Math.max(pveCount,1);
+  tier2.forEach(function(n,i){n.x=padX+colWidth*i+colWidth/2;n.y=tierY2;});
+
+  /* Position Tier 3 — VMs in columns under their parent PVE */
+  var maxVmRows=0;
+  tier2.forEach(function(pve){
+    var vms=vmsByNode[pve.id]||[];
+    /* Sort: running first, then by label */
+    vms.sort(function(a,b){
+      if(a.status==='running'&&b.status!=='running')return -1;
+      if(a.status!=='running'&&b.status==='running')return 1;
+      return a.label<b.label?-1:1;
+    });
+    var cols=Math.min(vms.length,vmColsMax);
+    var rows=Math.ceil(vms.length/vmColsMax);
+    if(rows>maxVmRows)maxVmRows=rows;
+    var blockW=cols*vmSpacingX;
+    var startX=pve.x-blockW/2+vmSpacingX/2;
+    vms.forEach(function(vm,i){
+      var col=i%vmColsMax;
+      var row=Math.floor(i/vmColsMax);
+      vm.x=startX+col*vmSpacingX;
+      vm.y=tierY3+row*vmSpacingY;
+    });
+  });
+
+  /* Load saved positions — override auto-layout with user's custom positions */
+  var _savedPositions=_loadTopoPositions();
+  var allNodes=tier1.concat(tier2).concat(tier3);
+  allNodes.forEach(function(n){
+    if(_savedPositions[n.id]){n.x=_savedPositions[n.id].x;n.y=_savedPositions[n.id].y;}
+  });
+
+  /* Dynamic height */
+  var maxY=0;
+  allNodes.forEach(function(n){if(n.y>maxY)maxY=n.y;});
+  var H=Math.max(maxY+padY+40, tierY3+maxVmRows*vmSpacingY+padY);
+  if(H<500)H=500;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.setAttribute('height',H);
+
+  /* === Tier divider lines with labels === */
+  function tierDivider(txt,y){
+    /* Midpoint between tiers — the dividing line */
+    var lineY=y-20;
+    /* Full-width line */
+    var line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1','0');line.setAttribute('y1',lineY);
+    line.setAttribute('x2',W);line.setAttribute('y2',lineY);
+    line.setAttribute('stroke','#1e2530');line.setAttribute('stroke-width','1');
+    line.setAttribute('stroke-opacity','0.8');
+    svg.appendChild(line);
+    /* Label centered on line */
+    var lblW=txt.length*7+16;
+    var bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    bg.setAttribute('x',W/2-lblW/2);bg.setAttribute('y',lineY-8);
+    bg.setAttribute('width',lblW);bg.setAttribute('height','16');
+    bg.setAttribute('fill','#0a0d12');bg.setAttribute('rx','3');
+    svg.appendChild(bg);
+    var t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',W/2);t.setAttribute('y',lineY+4);
+    t.setAttribute('text-anchor','middle');
+    t.setAttribute('fill','#484f58');t.setAttribute('font-size','10');
+    t.setAttribute('font-weight','600');t.setAttribute('letter-spacing','2');
+    t.textContent=txt;svg.appendChild(t);
+  }
+  tierDivider('CORE INFRASTRUCTURE',switchY);
+  tierDivider('HYPERVISORS',tierY2);
+  if(tier3.length>0)tierDivider('VIRTUAL MACHINES',tierY3);
+
+  /* === Draw links === */
+  function drawLink(x1,y1,x2,y2,color,width,opacity,dashed){
+    var line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.classList.add('topo-link');
+    line.setAttribute('x1',x1);line.setAttribute('y1',y1);
+    line.setAttribute('x2',x2);line.setAttribute('y2',y2);
+    line.setAttribute('stroke',color||'#2a3140');
+    line.setAttribute('stroke-width',width||'1');
+    line.setAttribute('stroke-opacity',opacity||'0.5');
+    if(dashed)line.setAttribute('stroke-dasharray','4,4');
+    svg.appendChild(line);
+  }
+
+  /* Core → switch links (switchNode already found during layout) */
+  if(switchNode){
+    tier1.forEach(function(n){
+      if(n!==switchNode)drawLink(n.x,n.y,switchNode.x,switchNode.y,'#56d4dd','1.5','0.4');
+    });
+    /* Switch → PVE links */
+    tier2.forEach(function(pve){
+      drawLink(switchNode.x,switchNode.y,pve.x,pve.y,'#7B2FBE','2','0.35');
     });
   }
 
-  /* Render edges */
-  edgeList.forEach(function(e){
-    var a=nodes[e.s],b=nodes[e.t];
-    var line=document.createElementNS('http://www.w3.org/2000/svg','line');
-    line.setAttribute('x1',a.x);line.setAttribute('y1',a.y);
-    line.setAttribute('x2',b.x);line.setAttribute('y2',b.y);
-    line.setAttribute('stroke','#30363d');line.setAttribute('stroke-width','1');
-    svg.appendChild(line);
+  /* PVE → VM links */
+  tier2.forEach(function(pve){
+    var vms=vmsByNode[pve.id]||[];
+    vms.forEach(function(vm){
+      var c=vm.status==='running'?'#3fb950':'#484f58';
+      drawLink(pve.x,pve.y,vm.x,vm.y,c,'1','0.3');
+    });
   });
 
-  /* Render nodes */
-  nodes.forEach(function(n){
+  /* === Draw nodes === */
+  function drawNode(n){
     var g=document.createElementNS('http://www.w3.org/2000/svg','g');
     g.style.cursor='pointer';
     var r=nodeRadius(n);
+    var col=nodeColor(n);
+
+    /* Glow for PVE + core infra */
+    if(n.type==='pve'||n.type==='switch'){
+      var glow=document.createElementNS('http://www.w3.org/2000/svg','circle');
+      glow.setAttribute('cx',n.x);glow.setAttribute('cy',n.y);
+      glow.setAttribute('r',r+5);glow.setAttribute('fill','none');
+      glow.setAttribute('stroke',col);glow.setAttribute('stroke-width','2');
+      glow.setAttribute('stroke-opacity','0.25');
+      g.appendChild(glow);
+    }
+
     var circle=document.createElementNS('http://www.w3.org/2000/svg','circle');
     circle.setAttribute('cx',n.x);circle.setAttribute('cy',n.y);
-    circle.setAttribute('r',r);circle.setAttribute('fill',nodeColor(n));
-    circle.setAttribute('stroke',n.type==='pve'?'#7B2FBE':'none');
-    circle.setAttribute('stroke-width',n.type==='pve'?'3':'0');
+    circle.setAttribute('r',r);circle.setAttribute('fill',col);
+    if(n.type==='pve'){circle.setAttribute('stroke','#5a1f8e');circle.setAttribute('stroke-width','2');}
     g.appendChild(circle);
+
     /* Label */
     var text=document.createElementNS('http://www.w3.org/2000/svg','text');
-    text.setAttribute('x',n.x);text.setAttribute('y',n.y+r+12);
+    text.setAttribute('x',n.x);
+    var lblY=n.type==='vm'?n.y+r+11:n.y+r+14;
+    text.setAttribute('y',lblY);
     text.setAttribute('text-anchor','middle');
-    text.setAttribute('fill','#8b949e');text.setAttribute('font-size',n.type==='pve'?'11':'9');
+    var isCore=n.type!=='vm';
+    text.setAttribute('fill',isCore?'#c9d1d9':'#8b949e');
+    text.setAttribute('font-size',n.type==='pve'?'12':n.type==='vm'?'9':'11');
+    text.setAttribute('font-weight',isCore?'600':'normal');
     text.textContent=n.label;
     g.appendChild(text);
-    /* Click handler */
+
+    /* Type badge for core infra */
+    if(n.type!=='pve'&&n.type!=='vm'){
+      var badge=document.createElementNS('http://www.w3.org/2000/svg','text');
+      badge.setAttribute('x',n.x);badge.setAttribute('y',n.y+4);
+      badge.setAttribute('text-anchor','middle');
+      badge.setAttribute('fill','#0a0d12');badge.setAttribute('font-size','8');
+      badge.setAttribute('font-weight','bold');
+      var icons={switch:'SW',pfsense:'FW',truenas:'NAS',idrac:'BMC'};
+      badge.textContent=icons[n.type]||n.type.substring(0,3).toUpperCase();
+      g.appendChild(badge);
+    }
+
+    /* Store node ref on group for drag */
+    g._topoNode=n;
+
+    /* Click handler — show info (only fires if not dragged) */
+    g._wasDragged=false;
     g.addEventListener('click',function(){
+      if(g._wasDragged){g._wasDragged=false;return;}
       var info=document.getElementById('topo-info');
       if(info){
         var parts=[n.label+' ('+n.type+')'];
@@ -5776,7 +6501,95 @@ function _renderTopology(svg,nodes,links){
       }
     });
     svg.appendChild(g);
+  }
+
+  /* Draw in order: links first (already done), then nodes back-to-front */
+  tier1.forEach(drawNode);
+  tier2.forEach(drawNode);
+  tier3.forEach(drawNode);
+
+  /* === Drag-to-move nodes === */
+  var _dragNode=null,_dragOffset={x:0,y:0},_dragMoved=false;
+  function _svgPoint(evt){
+    var pt=svg.createSVGPoint();
+    pt.x=evt.clientX;pt.y=evt.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  svg.addEventListener('mousedown',function(evt){
+    var g=evt.target.closest('g');
+    if(!g||!g._topoNode)return;
+    evt.preventDefault();
+    _dragNode=g;_dragMoved=false;
+    var p=_svgPoint(evt);
+    _dragOffset.x=p.x-g._topoNode.x;
+    _dragOffset.y=p.y-g._topoNode.y;
+    svg.style.cursor='grabbing';
   });
+  svg.addEventListener('mousemove',function(evt){
+    if(!_dragNode)return;
+    evt.preventDefault();
+    _dragMoved=true;
+    var p=_svgPoint(evt);
+    var n=_dragNode._topoNode;
+    n.x=p.x-_dragOffset.x;
+    n.y=p.y-_dragOffset.y;
+    /* Update all child elements in this group */
+    _dragNode.querySelectorAll('circle').forEach(function(c){c.setAttribute('cx',n.x);c.setAttribute('cy',n.y);});
+    _dragNode.querySelectorAll('text').forEach(function(t){
+      t.setAttribute('x',n.x);
+      /* Reposition label below node */
+      if(t.textContent===n.label){
+        var r=nodeRadius(n);
+        t.setAttribute('y',n.type==='vm'?n.y+r+11:n.y+r+14);
+      } else {
+        t.setAttribute('y',n.y+4); /* badge */
+      }
+    });
+    /* Redraw connection links (not divider lines) */
+    svg.querySelectorAll('line.topo-link').forEach(function(l){l.remove();});
+    if(switchNode){
+      tier1.forEach(function(nd){if(nd!==switchNode)_drawLinkLive(svg,nd.x,nd.y,switchNode.x,switchNode.y,'#56d4dd','1.5','0.4');});
+      tier2.forEach(function(pve){_drawLinkLive(svg,switchNode.x,switchNode.y,pve.x,pve.y,'#7B2FBE','2','0.35');});
+    }
+    tier2.forEach(function(pve){
+      (vmsByNode[pve.id]||[]).forEach(function(vm){
+        _drawLinkLive(svg,pve.x,pve.y,vm.x,vm.y,vm.status==='running'?'#3fb950':'#484f58','1','0.3');
+      });
+    });
+    /* Re-append node groups on top of links */
+    svg.querySelectorAll('g').forEach(function(g2){svg.appendChild(g2);});
+  });
+  svg.addEventListener('mouseup',function(){
+    if(_dragNode&&_dragMoved){
+      _dragNode._wasDragged=true;
+      /* Save position */
+      var positions=_loadTopoPositions();
+      var n=_dragNode._topoNode;
+      positions[n.id]={x:Math.round(n.x),y:Math.round(n.y)};
+      _saveTopoPositions(positions);
+    }
+    _dragNode=null;
+    svg.style.cursor='';
+  });
+  svg.addEventListener('mouseleave',function(){
+    if(_dragNode&&_dragMoved){
+      var positions=_loadTopoPositions();
+      var n=_dragNode._topoNode;
+      positions[n.id]={x:Math.round(n.x),y:Math.round(n.y)};
+      _saveTopoPositions(positions);
+    }
+    _dragNode=null;svg.style.cursor='';
+  });
+}
+/* Helper for live link redraw during drag */
+function _drawLinkLive(svg,x1,y1,x2,y2,color,width,opacity){
+  var line=document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.classList.add('topo-link');
+  line.setAttribute('x1',x1);line.setAttribute('y1',y1);
+  line.setAttribute('x2',x2);line.setAttribute('y2',y2);
+  line.setAttribute('stroke',color);line.setAttribute('stroke-width',width);
+  line.setAttribute('stroke-opacity',opacity);
+  svg.insertBefore(line,svg.firstChild);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -5946,7 +6759,7 @@ function loadGitops(){
     if(s.last_sync>0)h+='<div>Last sync: '+new Date(s.last_sync*1000).toLocaleString()+'</div>';
     h+='</div>';
     st.innerHTML=h;
-    if(acts){if(s.pending_changes>0)acts.classList.remove('d-none');else acts.classList.add('d-none');}
+    if(acts){if(s.pending_changes>0){acts.classList.remove('d-none');acts.style.display='flex';}else{acts.classList.add('d-none');acts.style.display='';}}
     // Load commit log
     fetch('/api/gitops/log?token='+_authToken).then(function(r){return r.json()}).then(function(ld){
       var commits=ld.commits||[];
@@ -6150,6 +6963,7 @@ function loadChaos(){
     h+='</table>';
     log.innerHTML=h;
   }).catch(function(e){log.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
+  _populateHostDropdowns();
 }
 function chaosRun(){
   var name=document.getElementById('chaos-name').value.trim();
@@ -6182,7 +6996,7 @@ function runDoctor(){
 }
 function runDiagnose(){
   var host=document.getElementById('diag-host').value.trim();
-  if(!host){toast('Enter a host label','error');return;}
+  if(!host){toast('Select a host','error');return;}
   var out=document.getElementById('diag-out');if(!out)return;
   out.innerHTML='<span style="color:var(--text-dim)">Diagnosing '+_esc(host)+'...</span>';
   fetch(API.DIAGNOSE+'?target='+encodeURIComponent(host)).then(function(r){return r.json()}).then(function(d){
@@ -6198,7 +7012,7 @@ function runDiagnose(){
 }
 function fetchLogs(){
   var host=document.getElementById('log-host').value.trim();
-  if(!host){toast('Enter a host label','error');return;}
+  if(!host){toast('Select a host','error');return;}
   var unit=document.getElementById('log-unit').value.trim();
   var lines=document.getElementById('log-lines').value||50;
   var out=document.getElementById('log-out');if(!out)return;
