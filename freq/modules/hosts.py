@@ -39,9 +39,14 @@ def cmd_groups(cfg: FreqConfig, pack, args) -> int:
 
     if action == "list":
         return _groups_list(cfg)
+    elif action == "add":
+        return _groups_add(cfg, args)
+    elif action == "remove":
+        return _groups_remove(cfg, args)
     else:
-        fmt.warn(f"Groups '{action}' not yet implemented.")
-        return 0
+        fmt.error(f"Unknown groups action: {action}")
+        fmt.info("Usage: freq groups [list|add|remove] --target <host> --group <name>")
+        return 1
 
 
 def _hosts_list(cfg: FreqConfig) -> int:
@@ -673,4 +678,129 @@ def _groups_list(cfg: FreqConfig) -> int:
         fmt.blank()
 
     fmt.footer()
+    return 0
+
+
+def _groups_add(cfg: FreqConfig, args) -> int:
+    """Add a host to a group."""
+    target = getattr(args, "target", None)
+    group = getattr(args, "group", None)
+
+    if not target or not group:
+        fmt.error("Usage: freq groups add --target <host> --group <name>")
+        return 1
+
+    host = resolve.by_target(cfg.hosts, target)
+    if not host:
+        fmt.error(f"Host not found: {target}")
+        return 1
+
+    existing = [g.strip() for g in host.groups.split(",") if g.strip()] if host.groups else []
+    if group in existing:
+        fmt.info(f"{host.label} is already in group '{group}'.")
+        return 0
+
+    existing.append(group)
+    new_groups = ",".join(existing)
+
+    if not os.path.isfile(cfg.hosts_file):
+        fmt.error("hosts.conf not found.")
+        return 1
+
+    with open(cfg.hosts_file) as f:
+        lines = f.readlines()
+
+    updated = False
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            new_lines.append(line)
+            continue
+        parts = stripped.split()
+        if len(parts) >= 3 and parts[0] == host.ip:
+            ip = parts[0]
+            label_val = parts[1]
+            htype = parts[2]
+            all_ips = parts[4] if len(parts) > 4 else ""
+            rebuilt = [f"{ip:<16}", f"{label_val:<15}", f"{htype:<10}"]
+            rebuilt.append(f"{new_groups:<20}" if all_ips else new_groups)
+            if all_ips:
+                rebuilt.append(all_ips)
+            new_lines.append("  ".join(rebuilt).rstrip() + "\n")
+            updated = True
+        else:
+            new_lines.append(line)
+
+    if updated:
+        with open(cfg.hosts_file, "w") as f:
+            f.writelines(new_lines)
+        fmt.info(f"Added {host.label} to group '{group}'.")
+    else:
+        fmt.error(f"Could not find {host.ip} in hosts.conf.")
+        return 1
+
+    return 0
+
+
+def _groups_remove(cfg: FreqConfig, args) -> int:
+    """Remove a host from a group."""
+    target = getattr(args, "target", None)
+    group = getattr(args, "group", None)
+
+    if not target or not group:
+        fmt.error("Usage: freq groups remove --target <host> --group <name>")
+        return 1
+
+    host = resolve.by_target(cfg.hosts, target)
+    if not host:
+        fmt.error(f"Host not found: {target}")
+        return 1
+
+    existing = [g.strip() for g in host.groups.split(",") if g.strip()] if host.groups else []
+    if group not in existing:
+        fmt.info(f"{host.label} is not in group '{group}'.")
+        return 0
+
+    existing.remove(group)
+    new_groups = ",".join(existing)
+
+    if not os.path.isfile(cfg.hosts_file):
+        fmt.error("hosts.conf not found.")
+        return 1
+
+    with open(cfg.hosts_file) as f:
+        lines = f.readlines()
+
+    updated = False
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            new_lines.append(line)
+            continue
+        parts = stripped.split()
+        if len(parts) >= 3 and parts[0] == host.ip:
+            ip = parts[0]
+            label_val = parts[1]
+            htype = parts[2]
+            all_ips = parts[4] if len(parts) > 4 else ""
+            rebuilt = [f"{ip:<16}", f"{label_val:<15}", f"{htype:<10}"]
+            if new_groups or all_ips:
+                rebuilt.append(f"{new_groups:<20}" if all_ips else new_groups)
+            if all_ips:
+                rebuilt.append(all_ips)
+            new_lines.append("  ".join(rebuilt).rstrip() + "\n")
+            updated = True
+        else:
+            new_lines.append(line)
+
+    if updated:
+        with open(cfg.hosts_file, "w") as f:
+            f.writelines(new_lines)
+        fmt.info(f"Removed {host.label} from group '{group}'.")
+    else:
+        fmt.error(f"Could not find {host.ip} in hosts.conf.")
+        return 1
+
     return 0

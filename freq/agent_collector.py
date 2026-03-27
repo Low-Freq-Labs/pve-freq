@@ -53,7 +53,7 @@ def collect_cpu():
             "load_5m": float(load_5),
             "load_15m": float(load_15),
         }
-    except Exception:
+    except (OSError, ValueError, IndexError):
         return {"cores": 0, "usage_pct": 0, "load_1m": 0, "load_5m": 0, "load_15m": 0}
 
 
@@ -87,7 +87,7 @@ def collect_memory():
             "swap_total_mb": swap_total // 1024,
             "swap_used_mb": (swap_total - swap_free) // 1024,
         }
-    except Exception:
+    except (OSError, ValueError, KeyError):
         return {"total_mb": 0, "used_mb": 0, "available_mb": 0, "usage_pct": 0}
 
 
@@ -109,7 +109,7 @@ def collect_disk():
                         "usage_pct": parts[4],
                         "mount": parts[5],
                     })
-    except Exception:
+    except (OSError, subprocess.TimeoutExpired):
         pass
 
     # I/O stats from /proc/diskstats
@@ -128,7 +128,7 @@ def collect_disk():
                                 "read_sectors": int(parts[5]),
                                 "write_sectors": int(parts[9]),
                             }
-    except Exception:
+    except (OSError, ValueError, IndexError):
         pass
 
     return {"mounts": mounts, "io": io}
@@ -150,7 +150,7 @@ def collect_network():
                             "tx_bytes": int(parts[9]),
                             "tx_packets": int(parts[10]),
                         }
-    except Exception:
+    except (OSError, ValueError, IndexError):
         pass
     return interfaces
 
@@ -177,7 +177,7 @@ def collect_temps():
                         })
                     except (OSError, ValueError):
                         pass
-    except Exception:
+    except (OSError, ValueError):
         pass
 
     # Also try lm-sensors if available
@@ -212,7 +212,7 @@ def collect_system():
         try:
             with open("/proc/version") as f:
                 kernel = f.read().split()[2]
-        except Exception:
+        except (OSError, IndexError):
             pass
 
         os_name = ""
@@ -222,14 +222,14 @@ def collect_system():
                     if line.startswith("PRETTY_NAME="):
                         os_name = line.split("=", 1)[1].strip().strip('"')
                         break
-        except Exception:
+        except OSError:
             pass
 
         # Process count
         proc_count = 0
         try:
             proc_count = len([d for d in os.listdir("/proc") if d.isdigit()])
-        except Exception:
+        except OSError:
             pass
 
         # Docker container count
@@ -250,7 +250,7 @@ def collect_system():
             "processes": proc_count,
             "docker_containers": docker_count,
         }
-    except Exception:
+    except (OSError, ValueError, KeyError):
         return {"hostname": HOSTNAME}
 
 

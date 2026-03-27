@@ -1422,7 +1422,7 @@ def _pdm_api_request(method, path, data=None, cookies=None, csrf_token=None):
         body = ""
         try:
             body = e.read().decode()[:300]
-        except Exception:
+        except (OSError, UnicodeDecodeError, AttributeError):
             pass
         return False, f"HTTP {e.code}: {body}", ""
     except Exception as e:

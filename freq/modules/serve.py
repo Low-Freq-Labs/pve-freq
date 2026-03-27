@@ -292,9 +292,11 @@ def _bg_probe_health():
                         htype=htype, use_sudo=use_sudo, cfg=cfg)
         _groups = getattr(h, "groups", "") or ""
         if r.returncode != 0 or not r.stdout.strip():
+            err = r.stderr.strip()[:120] if r.stderr else "no response"
             return {"label": h.label, "ip": h.ip, "type": htype, "groups": _groups,
                     "status": "unreachable", "cores": "-", "ram": "-",
-                    "disk": "-", "load": "-", "docker": "0"}
+                    "disk": "-", "load": "-", "docker": "0",
+                    "last_error": err}
         if htype == "switch":
             m = re.search(r'one minute:\s*(\d+)%', r.stdout)
             cpu_pct = m.group(1) if m else "0"
@@ -340,7 +342,8 @@ def _bg_probe_health():
                 logger.warn(f"health probe failed for {h.label}: {e}")
                 host_data.append({"label": h.label, "ip": h.ip, "type": h.htype,
                                   "status": "unreachable", "cores": "-", "ram": "-",
-                                  "disk": "-", "load": "-", "docker": "0"})
+                                  "disk": "-", "load": "-", "docker": "0",
+                                  "last_error": str(e)[:120]})
 
     # Aggregate container counts per PVE node.
     # Chain: container_vms (vm_id→IP) + WATCHDOG (vm_id→node) + health (IP→docker count)
@@ -1194,8 +1197,8 @@ def _resolve_container_vm_ip(vm) -> str:
             resolved = resolve_host_ip(cfg, vm.label)
             if resolved:
                 return resolved
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"_resolve_container_vm_ip: failed to resolve '{vm.label}': {e}")
     return vm.ip
 
 
@@ -1246,8 +1249,8 @@ def _is_first_run():
         users = _load_users(cfg)
         if users:
             return False
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"_is_first_run: failed to check users: {e}")
 
     return True
 
@@ -1335,6 +1338,10 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/vm/clear-nics": "_serve_vm_clear_nics",
         "/api/vm/change-ip": "_serve_vm_change_ip",
         "/api/vm/push-key": "_serve_vm_push_key",
+        "/api/vm/add-disk": "_serve_vm_add_disk",
+        "/api/vm/tag": "_serve_vm_tag",
+        "/api/vm/clone": "_serve_vm_clone",
+        "/api/vm/migrate": "_serve_vm_migrate",
         "/api/vault": "_serve_vault",
         "/api/vault/set": "_serve_vault_set",
         "/api/vault/delete": "_serve_vault_delete",
@@ -1371,6 +1378,9 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/containers/delete": "_serve_containers_delete",
         "/api/containers/add": "_serve_containers_add",
         "/api/containers/edit": "_serve_containers_edit",
+        "/api/containers/compose-up": "_serve_containers_compose_up",
+        "/api/containers/compose-down": "_serve_containers_compose_down",
+        "/api/containers/compose-view": "_serve_containers_compose_view",
         "/api/pool": "_serve_pool",
         "/api/host/detail": "_serve_host_detail",
         "/api/lab/status": "_serve_lab_status",
@@ -1395,6 +1405,9 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/patrol/status": "_serve_patrol_status",
         "/api/zfs": "_serve_zfs",
         "/api/backup": "_serve_backup",
+        "/api/backup/list": "_serve_backup_list",
+        "/api/backup/create": "_serve_backup_create",
+        "/api/backup/restore": "_serve_backup_restore",
         "/api/discover": "_serve_discover",
         "/api/gwipe": "_serve_gwipe",
         # Topology & Capacity
@@ -1448,6 +1461,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/setup/configure": "_serve_setup_configure",
         "/api/setup/generate-key": "_serve_setup_generate_key",
         "/api/setup/complete": "_serve_setup_complete",
+        "/api/setup/test-ssh": "_serve_setup_test_ssh",
+        "/api/setup/reset": "_serve_setup_reset",
     }
 
     def do_GET(self):
@@ -2242,6 +2257,7 @@ a:hover{{text-decoration:underline}}
             "version": __version__,
             "ssh_key_exists": os.path.isfile(ed_key),
             "ssh_key_path": ed_key,
+            "pve_nodes_configured": bool(cfg.pve_nodes),
         })
 
     def _serve_setup_create_admin(self):
@@ -2402,9 +2418,93 @@ a:hover{{text-decoration:underline}}
         try:
             with open(marker, "w") as f:
                 f.write(f"Setup completed: {datetime.datetime.now().isoformat()}\n")
+
+            # Auto-trigger hosts sync so fleet populates immediately
+            try:
+                threading.Thread(target=_bg_sync_hosts, daemon=True).start()
+            except Exception as e:
+                logger.warning(f"Post-setup hosts sync failed to start: {e}")
+
             self._json_response({"ok": True, "message": "Setup complete — redirecting to dashboard"})
         except OSError as e:
             self._json_response({"error": f"Failed to write setup marker: {e}"}, 500)
+
+    def _serve_setup_test_ssh(self):
+        """Test SSH connectivity to a PVE node during setup."""
+        if not _is_first_run():
+            self._json_response({"error": "Setup already complete"}, 403)
+            return
+
+        params = _parse_query(self)
+        host = params.get("host", [""])[0].strip()
+
+        if not host:
+            self._json_response({"error": "host parameter required"})
+            return
+
+        # Basic IP/hostname validation
+        from freq.core import validate as _val
+        if not (_val.ip(host) or _val.hostname(host)):
+            self._json_response({"error": f"Invalid host: {host}"})
+            return
+
+        cfg = load_config()
+        key_path = cfg.ssh_key_path
+        user = cfg.ssh_service_account
+
+        try:
+            r = ssh_single(
+                host=host, command="pvesh get /version --output-format json",
+                key_path=key_path, connect_timeout=cfg.ssh_connect_timeout,
+                command_timeout=10, htype="pve", use_sudo=True, cfg=cfg,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                try:
+                    version_info = json.loads(r.stdout)
+                    pve_version = version_info.get("version", "unknown")
+                except json.JSONDecodeError:
+                    pve_version = "unknown"
+                self._json_response({
+                    "ok": True, "host": host, "user": user,
+                    "pve_version": pve_version,
+                })
+            else:
+                err = r.stderr.strip()[:200] if r.stderr else "Connection failed"
+                self._json_response({
+                    "ok": False, "host": host, "user": user, "error": err,
+                })
+        except Exception as e:
+            self._json_response({"ok": False, "host": host, "error": str(e)[:200]})
+
+    def _serve_setup_reset(self):
+        """Reset setup wizard — admin only. Deletes setup-complete marker."""
+        cfg = load_config()
+
+        # This endpoint requires admin auth (NOT gated by _is_first_run)
+        if not self._check_auth(cfg):
+            return
+
+        # Verify admin role
+        auth_user = self._get_auth_user(cfg)
+        if not auth_user:
+            self._json_response({"error": "Authentication required"}, 401)
+            return
+
+        users = _load_users(cfg)
+        user_rec = next((u for u in users if u["username"] == auth_user), None)
+        if not user_rec or user_rec.get("role") != "admin":
+            self._json_response({"error": "Admin role required"}, 403)
+            return
+
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+        marker = os.path.join(data_dir, "setup-complete")
+
+        try:
+            if os.path.isfile(marker):
+                os.remove(marker)
+            self._json_response({"ok": True, "message": "Setup wizard re-enabled"})
+        except OSError as e:
+            self._json_response({"error": f"Failed to reset setup: {e}"}, 500)
 
     # ── Legacy + Main HTML ───────────────────────────────────────────────
 
@@ -4416,6 +4516,89 @@ a:hover{{text-decoration:underline}}
         _write_containers_toml(toml_path, cfg.container_vms)
         self._json_response({"ok": True, "name": name, "vm_id": new_vm_id})
 
+    def _serve_containers_compose_up(self):
+        """Start a Docker Compose stack on a container VM."""
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
+        cfg = load_config()
+        query = _parse_query_flat(self.path)
+        vm_id = int(query.get("vm_id", "0"))
+
+        vm = cfg.container_vms.get(vm_id)
+        if not vm:
+            self._json_response({"error": f"VM {vm_id} not in container registry"}); return
+
+        compose_path = vm.compose_path or f"{cfg.docker_config_base}/{vm.label}"
+        host_ip = _resolve_container_vm_ip(vm)
+        cmd = f"cd {compose_path} && docker compose up -d"
+        r = ssh_single(
+            host=host_ip, command=cmd,
+            key_path=cfg.ssh_key_path, connect_timeout=3,
+            command_timeout=120, htype="docker", use_sudo=False,
+        )
+        self._json_response({
+            "ok": r.returncode == 0, "vm_id": vm_id, "vm": vm.label,
+            "output": (r.stdout or "")[:1000],
+            "error": (r.stderr or "")[:500] if r.returncode != 0 else "",
+        })
+
+    def _serve_containers_compose_down(self):
+        """Stop a Docker Compose stack on a container VM."""
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
+        cfg = load_config()
+        query = _parse_query_flat(self.path)
+        vm_id = int(query.get("vm_id", "0"))
+
+        vm = cfg.container_vms.get(vm_id)
+        if not vm:
+            self._json_response({"error": f"VM {vm_id} not in container registry"}); return
+
+        compose_path = vm.compose_path or f"{cfg.docker_config_base}/{vm.label}"
+        host_ip = _resolve_container_vm_ip(vm)
+        cmd = f"cd {compose_path} && docker compose down"
+        r = ssh_single(
+            host=host_ip, command=cmd,
+            key_path=cfg.ssh_key_path, connect_timeout=3,
+            command_timeout=120, htype="docker", use_sudo=False,
+        )
+        self._json_response({
+            "ok": r.returncode == 0, "vm_id": vm_id, "vm": vm.label,
+            "output": (r.stdout or "")[:1000],
+            "error": (r.stderr or "")[:500] if r.returncode != 0 else "",
+        })
+
+    def _serve_containers_compose_view(self):
+        """Read and return the docker-compose.yml for a container VM."""
+        cfg = load_config()
+        query = _parse_query_flat(self.path)
+        vm_id = int(query.get("vm_id", "0"))
+
+        vm = cfg.container_vms.get(vm_id)
+        if not vm:
+            self._json_response({"error": f"VM {vm_id} not in container registry"}); return
+
+        compose_path = vm.compose_path or f"{cfg.docker_config_base}/{vm.label}"
+        host_ip = _resolve_container_vm_ip(vm)
+        cmd = f"cat {compose_path}/docker-compose.yml 2>/dev/null || cat {compose_path}/compose.yml 2>/dev/null"
+        r = ssh_single(
+            host=host_ip, command=cmd,
+            key_path=cfg.ssh_key_path, connect_timeout=3,
+            command_timeout=10, htype="docker", use_sudo=False,
+        )
+        if r.returncode == 0 and r.stdout:
+            self._json_response({
+                "ok": True, "vm_id": vm_id, "vm": vm.label,
+                "content": r.stdout[:10000],
+            })
+        else:
+            self._json_response({
+                "ok": False, "vm_id": vm_id,
+                "error": "Compose file not found or not readable",
+            })
+
     def _serve_vm_template(self):
         """Convert VM to template (GET with ?vmid=xxx)."""
         cfg = load_config()
@@ -4834,6 +5017,180 @@ a:hover{{text-decoration:underline}}
         )
         verified = r2.returncode == 0 and "ok" in (r2.stdout or "")
         self._json_response({"ok": True, "verified": verified, "ip": target_ip})
+
+    def _serve_vm_add_disk(self):
+        """Add a disk to a VM."""
+        cfg = load_config()
+        params = _parse_query(self)
+        vmid = int(params.get("vmid", ["0"])[0])
+        size = params.get("size", [""])[0]  # e.g. "32G"
+        storage = params.get("storage", [""])[0]
+
+        if not vmid or not size:
+            self._json_response({"error": "vmid and size required"}); return
+
+        allowed, err = _check_vm_permission(cfg, vmid, "configure")
+        if not allowed:
+            self._json_response({"error": err}); return
+
+        # Validate size format
+        import re as _re
+        if not _re.match(r'^\d+[GMTgmt]?$', size):
+            self._json_response({"error": "Invalid size (e.g. '32G', '100')"}); return
+
+        try:
+            node_ip = _find_reachable_node(cfg)
+            if not node_ip:
+                self._json_response({"error": "No PVE node reachable"}); return
+
+            # Find next available scsi slot
+            stdout, ok = _pve_cmd(cfg, node_ip, f"qm config {vmid}")
+            if not ok:
+                self._json_response({"error": f"Cannot read VM config: {stdout}"}); return
+
+            next_idx = 0
+            for line in stdout.split("\n"):
+                if line.startswith("scsi") and ":" in line:
+                    key = line.split(":")[0]
+                    try:
+                        idx = int(key.replace("scsi", ""))
+                        if idx >= next_idx:
+                            next_idx = idx + 1
+                    except ValueError:
+                        pass
+
+            storage_target = storage or "local-lvm"
+            cmd = f"qm set {vmid} --scsi{next_idx} {storage_target}:{size}"
+            stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=60)
+            self._json_response({
+                "ok": ok, "vmid": vmid, "disk": f"scsi{next_idx}",
+                "size": size, "storage": storage_target,
+                "error": stdout if not ok else "",
+            })
+        except Exception as e:
+            self._json_response({"error": f"SSH operation failed: {e}"})
+
+    def _serve_vm_tag(self):
+        """Set PVE tags on a VM."""
+        cfg = load_config()
+        params = _parse_query(self)
+        vmid = int(params.get("vmid", ["0"])[0])
+        tags = params.get("tags", [""])[0]  # comma-separated
+
+        if not vmid:
+            self._json_response({"error": "vmid required"}); return
+
+        allowed, err = _check_vm_permission(cfg, vmid, "configure")
+        if not allowed:
+            self._json_response({"error": err}); return
+
+        # Validate tag names
+        import re as _re
+        if tags:
+            for tag in tags.split(","):
+                tag = tag.strip()
+                if tag and not _re.match(r'^[a-zA-Z0-9_-]+$', tag):
+                    self._json_response({"error": f"Invalid tag name: {tag}"}); return
+
+        try:
+            node_ip = _find_reachable_node(cfg)
+            if not node_ip:
+                self._json_response({"error": "No PVE node reachable"}); return
+
+            # PVE uses semicolon-separated tags
+            pve_tags = ";".join(t.strip() for t in tags.split(",") if t.strip()) if tags else ""
+            cmd = f'qm set {vmid} --tags "{pve_tags}"'
+            stdout, ok = _pve_cmd(cfg, node_ip, cmd)
+            self._json_response({
+                "ok": ok, "vmid": vmid, "tags": tags,
+                "error": stdout if not ok else "",
+            })
+        except Exception as e:
+            self._json_response({"error": f"SSH operation failed: {e}"})
+
+    def _serve_vm_clone(self):
+        """Clone a VM. Dedicated endpoint replacing /api/vm/create?clone workaround."""
+        cfg = load_config()
+        params = _parse_query(self)
+        source_vmid = int(params.get("vmid", ["0"])[0])
+        name = params.get("name", [""])[0]
+        target_node = params.get("target_node", [""])[0]
+        full = params.get("full", ["1"])[0] == "1"
+
+        if not source_vmid:
+            self._json_response({"error": "vmid (source) required"}); return
+
+        allowed, err = _check_vm_permission(cfg, source_vmid, "view")
+        if not allowed:
+            self._json_response({"error": err}); return
+
+        try:
+            node_ip = _find_reachable_node(cfg)
+            if not node_ip:
+                self._json_response({"error": "No PVE node reachable"}); return
+
+            # Get next available VMID
+            stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
+            if not ok:
+                self._json_response({"error": "Cannot get next VMID"}); return
+            new_vmid = stdout.strip()
+
+            parts = [f"qm clone {source_vmid} {new_vmid}"]
+            if name:
+                from freq.core.validate import shell_safe_name
+                if not shell_safe_name(name):
+                    self._json_response({"error": f"Invalid VM name: {name}"}); return
+                parts.append(f"--name {name}")
+            if target_node:
+                parts.append(f"--target {target_node}")
+            if full:
+                parts.append("--full")
+
+            cmd = " ".join(parts)
+            stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=300)
+            self._json_response({
+                "ok": ok, "source_vmid": source_vmid, "new_vmid": int(new_vmid),
+                "name": name, "full_clone": full,
+                "error": stdout if not ok else "",
+            })
+        except Exception as e:
+            self._json_response({"error": f"Clone failed: {e}"})
+
+    def _serve_vm_migrate(self):
+        """Migrate a VM to another node."""
+        cfg = load_config()
+        params = _parse_query(self)
+        vmid = int(params.get("vmid", ["0"])[0])
+        target_node = params.get("target_node", [""])[0]
+        online = params.get("online", ["0"])[0] == "1"
+
+        if not vmid or not target_node:
+            self._json_response({"error": "vmid and target_node required"}); return
+
+        allowed, err = _check_vm_permission(cfg, vmid, "migrate")
+        if not allowed:
+            self._json_response({"error": err}); return
+
+        import re as _re
+        if not _re.match(r'^[a-zA-Z0-9_-]+$', target_node):
+            self._json_response({"error": f"Invalid node name: {target_node}"}); return
+
+        try:
+            node_ip = _find_reachable_node(cfg)
+            if not node_ip:
+                self._json_response({"error": "No PVE node reachable"}); return
+
+            parts = [f"qm migrate {vmid} {target_node}"]
+            if online:
+                parts.append("--online")
+            cmd = " ".join(parts)
+            stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=600)
+            self._json_response({
+                "ok": ok, "vmid": vmid, "target_node": target_node,
+                "online": online, "error": stdout if not ok else "",
+            })
+        except Exception as e:
+            self._json_response({"error": f"Migration failed: {e}"})
 
     def _serve_pool(self):
         """List PVE pools."""
@@ -5760,6 +6117,123 @@ a:hover{{text-decoration:underline}}
             self._json_response({"ok": result == 0, "output": buf.getvalue(), "action": action})
         except Exception as e:
             self._json_response({"error": f"Backup operation failed: {e}"}, 500)
+
+    def _serve_backup_list(self):
+        """List all VM snapshots and config exports as structured JSON."""
+        cfg = load_config()
+        result = {"snapshots": [], "exports": []}
+
+        try:
+            node_ip = _find_reachable_node(cfg)
+            if node_ip:
+                stdout, ok = _pve_cmd(cfg, node_ip,
+                                      "pvesh get /cluster/resources --type vm --output-format json")
+                if ok and stdout:
+                    try:
+                        vms = json.loads(stdout)
+                        for vm in vms:
+                            vmid = vm.get("vmid", 0)
+                            name = vm.get("name", "?")
+                            snap_out, snap_ok = _pve_cmd(cfg, node_ip,
+                                                          f"qm listsnapshot {vmid} 2>/dev/null")
+                            if snap_ok and snap_out.strip():
+                                for line in snap_out.strip().split("\n"):
+                                    line = line.strip()
+                                    if not line or "current" in line.lower():
+                                        continue
+                                    parts = line.split()
+                                    snap_name = parts[0].replace("`-", "").replace("->", "").strip()
+                                    if snap_name:
+                                        result["snapshots"].append({
+                                            "vmid": vmid, "vm_name": name,
+                                            "snapshot": snap_name,
+                                        })
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as e:
+            logger.warning(f"backup list: failed to get snapshots: {e}")
+
+        # Config exports
+        export_dir = os.path.join(cfg.data_dir, "backups")
+        if os.path.isdir(export_dir):
+            for f in sorted(os.listdir(export_dir), reverse=True)[:20]:
+                fpath = os.path.join(export_dir, f)
+                result["exports"].append({
+                    "filename": f,
+                    "size_kb": os.path.getsize(fpath) // 1024 if os.path.isfile(fpath) else 0,
+                })
+
+        self._json_response(result)
+
+    def _serve_backup_create(self):
+        """Create a VM snapshot."""
+        cfg = load_config()
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
+
+        query = _parse_query_flat(self.path)
+        vmid = int(query.get("vmid", "0"))
+        snap_name = query.get("name", f"freq-snap-{vmid}")
+
+        if not vmid:
+            self._json_response({"error": "vmid required"}); return
+
+        allowed, err_msg = _check_vm_permission(cfg, vmid, "snapshot")
+        if not allowed:
+            self._json_response({"error": err_msg}); return
+
+        import re as _re
+        if not _re.match(r'^[a-zA-Z0-9_-]+$', snap_name):
+            self._json_response({"error": f"Invalid snapshot name: {snap_name}"}); return
+
+        try:
+            node_ip = _find_reachable_node(cfg)
+            if not node_ip:
+                self._json_response({"error": "No PVE node reachable"}); return
+            cmd = f"qm snapshot {vmid} {snap_name} --description 'Created by FREQ dashboard'"
+            stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=120)
+            self._json_response({
+                "ok": ok, "vmid": vmid, "snapshot": snap_name,
+                "error": stdout if not ok else "",
+            })
+        except Exception as e:
+            self._json_response({"error": f"Snapshot failed: {e}"})
+
+    def _serve_backup_restore(self):
+        """Rollback a VM to a snapshot."""
+        cfg = load_config()
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+
+        query = _parse_query_flat(self.path)
+        vmid = int(query.get("vmid", "0"))
+        snap_name = query.get("name", "")
+
+        if not vmid or not snap_name:
+            self._json_response({"error": "vmid and name required"}); return
+
+        allowed, err_msg = _check_vm_permission(cfg, vmid, "configure")
+        if not allowed:
+            self._json_response({"error": err_msg}); return
+
+        import re as _re
+        if not _re.match(r'^[a-zA-Z0-9_-]+$', snap_name):
+            self._json_response({"error": f"Invalid snapshot name: {snap_name}"}); return
+
+        try:
+            node_ip = _find_reachable_node(cfg)
+            if not node_ip:
+                self._json_response({"error": "No PVE node reachable"}); return
+            cmd = f"qm rollback {vmid} {snap_name}"
+            stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=300)
+            self._json_response({
+                "ok": ok, "vmid": vmid, "snapshot": snap_name,
+                "error": stdout if not ok else "",
+            })
+        except Exception as e:
+            self._json_response({"error": f"Restore failed: {e}"})
 
     def _serve_discover(self):
         """Discover hosts on network."""

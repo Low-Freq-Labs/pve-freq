@@ -671,20 +671,20 @@ class TestWebUIApiConstants:
 class TestWebUIViews:
     """Verify new view containers exist in web_ui.py."""
 
-    def test_policies_view_exists(self):
+    def test_security_view_exists(self):
         from freq.modules.web_ui import APP_HTML
-        assert 'id="policies-view"' in APP_HTML
-        assert 'data-view="policies"' in APP_HTML
+        assert 'id="security-view"' in APP_HTML
+        assert 'data-view="security"' in APP_HTML
 
-    def test_ops_view_exists(self):
+    def test_tools_view_exists(self):
         from freq.modules.web_ui import APP_HTML
-        assert 'id="ops-view"' in APP_HTML
-        assert 'data-view="ops"' in APP_HTML
+        assert 'id="tools-view"' in APP_HTML
+        assert 'data-view="tools"' in APP_HTML
 
     def test_view_ids_includes_new(self):
         from freq.modules.web_ui import APP_HTML
-        assert "'policies'" in APP_HTML
-        assert "'ops'" in APP_HTML
+        assert "'security'" in APP_HTML
+        assert "'tools'" in APP_HTML
 
 
 class TestWebUIJsFunctions:

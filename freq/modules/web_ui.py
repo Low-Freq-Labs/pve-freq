@@ -813,6 +813,7 @@ th,td{padding:5px 8px;font-size:11px}
       <button class="fleet-btn docker-sub active-view" data-dsub="docker-services" data-action="switchDockerSub" data-arg="services">SERVICES</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-all" data-action="switchDockerSub" data-arg="all">ALL</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-registry" data-action="switchDockerSub" data-arg="registry">REGISTRY</button>
+      <button class="fleet-btn docker-sub" data-dsub="docker-compose" data-action="switchDockerSub" data-arg="compose">COMPOSE</button>
     </div>
     <!-- SERVICES sub-view (default) -->
     <div id="docker-sub-services">
@@ -842,6 +843,17 @@ th,td{padding:5px 8px;font-size:11px}
           <span id="reg-msg" class="text-meta"></span>
         </div>
       </div>
+    </div>
+    <!-- COMPOSE sub-view -->
+    <div id="docker-sub-compose" class="d-none">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Manage Docker Compose stacks per VM. Select a VM to bring stacks up/down or view compose files.</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <select id="compose-vm-select" class="input" style="width:240px"><option value="">Select Docker VM...</option></select>
+        <button class="fleet-btn" onclick="composeUp()">COMPOSE UP</button>
+        <button class="fleet-btn" onclick="composeDown()" style="color:var(--red);border-color:var(--red)">COMPOSE DOWN</button>
+        <button class="fleet-btn" onclick="composeView()">VIEW COMPOSE</button>
+      </div>
+      <div id="compose-out" class="exec-out" style="min-height:80px">Select a Docker VM and an action.</div>
     </div>
   </div>
 </div>
@@ -1104,15 +1116,35 @@ th,td{padding:5px 8px;font-size:11px}
     </div>
   </div>
 </div>
-<!-- Network Scanner — subnet discovery -->
+<!-- Host Discovery & Onboarding -->
 <div class="section">
-  <div class="section-header"><h3>Network Scanner</h3><span class="chev">▾</span></div>
+  <div class="section-header"><h3>Host Discovery & Onboarding</h3><span class="chev">▾</span></div>
   <div class="section-body">
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Discover hosts on your network, add them to the fleet, and onboard with SSH key deployment.</div>
     <div class="flex-wrap-8-mb12">
       <input type="text" id="discover-subnet" placeholder="Subnet (e.g. 10.25.10)" class="input-field" style="width:200px">
-      <button class="fleet-btn" onclick="runDiscover()">SCAN NETWORK</button>
+      <button class="fleet-btn c-purple-active" onclick="runDiscover()">SCAN NETWORK</button>
     </div>
     <div class="exec-out" id="discover-out">Enter a subnet to discover hosts.</div>
+    <div style="margin-top:16px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">ADD HOST MANUALLY</h4>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input class="input" id="add-host-ip" placeholder="IP address" style="width:140px">
+        <input class="input" id="add-host-label" placeholder="Label (e.g. web-01)" style="width:140px">
+        <select class="input" id="add-host-type" style="width:120px">
+          <option value="vm">VM</option>
+          <option value="ct">Container</option>
+          <option value="physical">Physical</option>
+          <option value="firewall">Firewall</option>
+          <option value="switch">Switch</option>
+          <option value="storage">Storage</option>
+          <option value="bmc">BMC</option>
+        </select>
+        <input class="input" id="add-host-groups" placeholder="Groups (optional)" style="width:160px">
+        <button class="fleet-btn" onclick="addHostManual()">ADD HOST</button>
+        <span id="add-host-msg" class="text-meta"></span>
+      </div>
+    </div>
   </div>
 </div>
 </div><!-- close tools-view -->
@@ -1615,6 +1647,7 @@ document.addEventListener('click',function(e){
     if(a==='vmPower'){vmPower(+da.dataset.vmid,g);return;}
     if(a==='vmDestroy'){vmDestroy(+da.dataset.vmid);return;}
     if(a==='vmSnap'){vmSnap(+da.dataset.vmid);return;}
+    if(a==='vmQuickTag'){var tags=prompt('Enter tags for VM '+da.dataset.vmid+' (comma-separated):');if(tags!==null)fetch(API.VM_TAG+'?vmid='+da.dataset.vmid+'&tags='+encodeURIComponent(tags)).then(function(r){return r.json()}).then(function(d){if(d.ok)toast('Tags updated','success');else toast(d.error,'error');});return;}
     if(a==='openVmInfo'){openVmInfo(da.dataset.label,'',+da.dataset.vmid);return;}
     if(a==='vaultReveal'){vaultReveal(da.dataset.uid,da.dataset.host,da.dataset.key);return;}
     if(a==='vaultCopy'){vaultCopy(da.dataset.host,da.dataset.key);return;}
@@ -1625,7 +1658,7 @@ document.addEventListener('click',function(e){
     if(a==='hdDiagnose'){hdDiagnose(da);return;}
     if(a==='togglePveGroup'){togglePveGroup(da);return;}
     if(a==='clearHarden'){document.getElementById('harden-c').innerHTML='';return;}
-    var fns={sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll};
+    var fns={sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll};
     if(fns[a]){fns[a]();return;}
     var argFns={tnAction:tnAction,swAction:swAction,pfAction:pfAction,idracAction:idracAction,switchVaultTab:switchVaultTab,switchDockerSub:switchDockerSub,toggleMediaTag:toggleMediaTag,runHostUpdate:runHostUpdate,sshdRestartHost:sshdRestartHost,ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart};
     if(argFns[a]){argFns[a](g);return;}
@@ -1719,7 +1752,10 @@ var API={
   DOCTOR:'/api/doctor',DIAGNOSE:'/api/diagnose',LOG:'/api/log',
   POLICY_CHECK:'/api/policy/check',POLICY_FIX:'/api/policy/fix',POLICY_DIFF:'/api/policy/diff',
   SWEEP:'/api/sweep',PATROL_STATUS:'/api/patrol/status',
-  ZFS:'/api/zfs',BACKUP:'/api/backup',DISCOVER:'/api/discover',GWIPE:'/api/gwipe'
+  ZFS:'/api/zfs',BACKUP:'/api/backup',DISCOVER:'/api/discover',GWIPE:'/api/gwipe',
+  VM_ADD_DISK:'/api/vm/add-disk',VM_TAG:'/api/vm/tag',VM_CLONE:'/api/vm/clone',VM_MIGRATE:'/api/vm/migrate',
+  COMPOSE_UP:'/api/containers/compose-up',COMPOSE_DOWN:'/api/containers/compose-down',COMPOSE_VIEW:'/api/containers/compose-view',
+  BACKUP_LIST:'/api/backup/list',BACKUP_CREATE:'/api/backup/create',BACKUP_RESTORE:'/api/backup/restore'
 };
 var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switch */
 
@@ -2254,7 +2290,7 @@ function loadFleetPage(){
   /* Overview cards — wait for cache or fetch independently */
   setTimeout(function(){
     if(_fleetCache.fo){_renderFleetOverview(_fleetCache.fo);_loadFleetOverviewMedia();}
-    else{fetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(){});}
+    else{fetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(){toast('Failed to load fleet overview','error');});}
   },4000);
 }
 function _loadFleetOverviewMedia(){
@@ -2345,11 +2381,12 @@ function _initFleetData(fo){
 var _dockerSub='services';
 function switchDockerSub(sub){
   _dockerSub=sub;
-  ['all','services','registry'].forEach(function(s){var el=document.getElementById('docker-sub-'+s);if(el){if(s===sub){el.classList.remove('d-none');el.style.display='';}else{el.classList.add('d-none');el.style.display='';}}});
+  ['all','services','registry','compose'].forEach(function(s){var el=document.getElementById('docker-sub-'+s);if(el){if(s===sub){el.classList.remove('d-none');el.style.display='';}else{el.classList.add('d-none');el.style.display='';}}});
   document.querySelectorAll('.docker-sub').forEach(function(b){b.classList.remove('active-view');});
   var btn=document.querySelector('.docker-sub[data-dsub="docker-'+sub+'"]');if(btn)btn.classList.add('active-view');
   if(sub==='services')loadServiceContainers();
   if(sub==='registry')loadContainerRegistry();
+  if(sub==='compose')loadComposeVMs();
 }
 function _getMediaTags(){try{return JSON.parse(localStorage.getItem('freq_media_tags')||'[]');}catch(e){return [];}}
 function _setMediaTags(tags){localStorage.setItem('freq_media_tags',JSON.stringify(tags));}
@@ -2543,6 +2580,43 @@ function saveContainerEdit(name,oldVmId){
     if(d.error){toast(d.error,'error');return;}
     toast(name+' updated','success');closeModal();_mediaCache=null;loadContainerRegistry();loadContainerSection();
   });
+}
+/* ── Compose Management ────────────────────────────────────────── */
+function loadComposeVMs(){
+  var sel=document.getElementById('compose-vm-select');if(!sel)return;
+  sel.innerHTML='<option value="">Loading...</option>';
+  fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
+    var seen={};sel.innerHTML='<option value="">Select Docker VM...</option>';
+    d.containers.forEach(function(c){if(!seen[c.vm_id]){seen[c.vm_id]=true;sel.innerHTML+='<option value="'+c.vm_id+'">'+_esc(c.vm_label)+' ('+c.vm_id+')</option>';}});
+    if(!Object.keys(seen).length)sel.innerHTML='<option value="">No Docker VMs found</option>';
+  }).catch(function(){sel.innerHTML='<option value="">Failed to load VMs</option>';});
+}
+function _getComposeVmId(){var v=(document.getElementById('compose-vm-select')||{}).value;if(!v){toast('Select a Docker VM','error');}return v;}
+function composeUp(){
+  var vmid=_getComposeVmId();if(!vmid)return;
+  var out=document.getElementById('compose-out');if(out)out.innerHTML='<span class="c-yellow">Running compose up on VM '+vmid+'...</span>';
+  fetch(API.COMPOSE_UP+'?vm_id='+vmid).then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('Compose up complete on '+d.vm,'success');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--green);white-space:pre-wrap;margin:0">'+_esc(d.output||'Compose up complete')+'</pre>';}
+    else{toast('Compose up failed','error');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--red);white-space:pre-wrap;margin:0">'+_esc(d.error||'Unknown error')+'</pre>';}
+  }).catch(function(e){toast('Compose up failed','error');if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
+}
+function composeDown(){
+  var vmid=_getComposeVmId();if(!vmid)return;
+  confirmAction('Bring down all compose services on VM <strong>'+vmid+'</strong>?',function(){
+    var out=document.getElementById('compose-out');if(out)out.innerHTML='<span class="c-yellow">Running compose down on VM '+vmid+'...</span>';
+    fetch(API.COMPOSE_DOWN+'?vm_id='+vmid).then(function(r){return r.json()}).then(function(d){
+      if(d.ok){toast('Compose down complete on '+d.vm,'success');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--green);white-space:pre-wrap;margin:0">'+_esc(d.output||'Compose down complete')+'</pre>';}
+      else{toast('Compose down failed','error');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--red);white-space:pre-wrap;margin:0">'+_esc(d.error||'Unknown error')+'</pre>';}
+    }).catch(function(e){toast('Compose down failed','error');if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
+  });
+}
+function composeView(){
+  var vmid=_getComposeVmId();if(!vmid)return;
+  var out=document.getElementById('compose-out');if(out)out.innerHTML='<span class="c-yellow">Loading compose file from VM '+vmid+'...</span>';
+  fetch(API.COMPOSE_VIEW+'?vm_id='+vmid).then(function(r){return r.json()}).then(function(d){
+    if(d.ok){if(out)out.innerHTML='<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">'+_esc(d.vm)+' — docker-compose.yml</div><pre style="font-size:11px;color:var(--text);white-space:pre-wrap;margin:0;background:var(--bg2);padding:12px;border-radius:6px;border:1px solid var(--border);max-height:500px;overflow:auto">'+_esc(d.content)+'</pre>';}
+    else{toast(d.error||'Failed to load compose file','error');if(out)out.innerHTML='<span class="c-red">'+(d.error||'Compose file not found')+'</span>';}
+  }).catch(function(e){toast('Failed to load compose file','error');if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
 }
 function rescanContainers(){
   var st=document.getElementById('registry-status');
@@ -3499,7 +3573,7 @@ function _fleetToolInner(tool,panel,content){
   } else if(tool==='fleetops'){
     _buildToolTabs('FLEET OPS',[{id:'deepscan',label:'DEEP SCAN'},{id:'ntp',label:'NTP SYNC'},{id:'updates',label:'OS UPDATES'},{id:'sshd',label:'RESTART SSHD'},{id:'exec',label:'FLEET EXEC'}],'fo-tab','switchFleetOps','fo-subtitle','fo-form',content);return;
   } else if(tool==='vmmgmt'){
-    _buildToolTabs('VM MANAGEMENT',[{id:'vmlist',label:'VM LIST'},{id:'vmcreate',label:'CREATE VM'},{id:'vmclone',label:'CLONE VM'},{id:'vmmigrate',label:'MIGRATE'},{id:'vmsnapshot',label:'SNAPSHOTS'},{id:'vmresize',label:'RESIZE'}],'vm-tab','switchVmMgmt','vm-subtitle','vm-form',content);return;
+    _buildToolTabs('VM MANAGEMENT',[{id:'vmlist',label:'VM LIST'},{id:'vmcreate',label:'CREATE VM'},{id:'vmclone',label:'CLONE VM'},{id:'vmmigrate',label:'MIGRATE'},{id:'vmsnapshot',label:'SNAPSHOTS'},{id:'vmresize',label:'RESIZE'},{id:'vmadddisk',label:'ADD DISK'},{id:'vmtag',label:'TAGS'}],'vm-tab','switchVmMgmt','vm-subtitle','vm-form',content);return;
   } else if(tool==='newuser'){
     content.innerHTML='<h3 class="section-label-pl">NEW FLEET USER</h3>'+
       '<div class="form-vertical">'+
@@ -3612,7 +3686,7 @@ function switchFleetOps(tab){
   _fleetToolInner(tab,fakePanel,foForm);
   var innerH3=foForm.querySelector('h3');if(innerH3)innerH3.remove();
 }
-var _vmLabels={vmlist:'VM LIST',vmcreate:'CREATE VM',vmclone:'CLONE VM',vmmigrate:'MIGRATE',vmsnapshot:'SNAPSHOTS',vmresize:'RESIZE'};
+var _vmLabels={vmlist:'VM LIST',vmcreate:'CREATE VM',vmclone:'CLONE VM',vmmigrate:'MIGRATE',vmsnapshot:'SNAPSHOTS',vmresize:'RESIZE',vmadddisk:'ADD DISK',vmtag:'TAGS'};
 function switchVmMgmt(tab){
   document.querySelectorAll('.vm-tab').forEach(function(b){b.classList.remove('active-view');});
   var active=document.querySelector('.vm-tab[data-vmtab="'+tab+'"]');if(active)active.classList.add('active-view');
@@ -3648,6 +3722,7 @@ function switchVmMgmt(tab){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM TO MIGRATE</label><select id="vmt-m-source" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div><label class="label-sub">TARGET NODE</label><select id="vmt-m-target" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div><label class="label-sub" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="vmt-m-online"> LIVE MIGRATION (online)</label></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtMigrate" >MIGRATE</button></div>'+
       '</div><div id="vmt-m-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
@@ -3676,6 +3751,30 @@ function switchVmMgmt(tab){
       var sel=document.getElementById('vmt-r-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.cpu+' cores, '+_ramGB(v.ram_mb)+')</option>';});
     }).catch(function(){});
+  } else if(tab==='vmadddisk'){
+    vmForm.innerHTML='<div class="form-vertical">'+
+      '<div><label class="label-sub">VM</label><select id="vmt-ad-source" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div><label class="label-sub">DISK SIZE</label><div style="display:flex;gap:8px;align-items:center"><input id="vmt-ad-size" placeholder="e.g. 32" class="input-primary" style="width:100px" type="number" min="1"><select id="vmt-ad-unit" class="input-primary" style="width:80px"><option value="G" selected>GB</option><option value="T">TB</option></select></div></div>'+
+      '<div><label class="label-sub">STORAGE POOL</label><input id="vmt-ad-storage" placeholder="local-lvm" class="input-primary" value="local-lvm"></div>'+
+      '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtAddDisk" >ADD DISK</button></div>'+
+      '</div><div id="vmt-ad-out" class="mt-12"></div>';
+    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+      var sel=document.getElementById('vmt-ad-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
+      d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
+    }).catch(function(){});
+  } else if(tab==='vmtag'){
+    vmForm.innerHTML='<div class="form-vertical">'+
+      '<div><label class="label-sub">VM</label><select id="vmt-tag-source" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div><label class="label-sub">TAGS</label><input id="vmt-tag-tags" placeholder="e.g. prod,critical,backup" class="input-primary-lg"><div class="text-sub" style="margin-top:4px">Comma-separated. Allowed: letters, numbers, hyphens, underscores.</div></div>'+
+      '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtTag" >SET TAGS</button></div>'+
+      '</div><div id="vmt-tag-out" class="mt-12"></div>';
+    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+      var sel=document.getElementById('vmt-tag-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
+      d.vms.forEach(function(v){
+        var tagInfo=v.tags?' ['+v.tags+']':'';
+        sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+tagInfo+'</option>';
+      });
+    }).catch(function(){});
   }
 }
 /* VM Management action handlers */
@@ -3703,6 +3802,7 @@ function vmtLoadList(){
       if(acts.indexOf('snapshot')>=0)h+='<button class="fleet-btn pill-warn-xs" onclick="_vmSnapWarn('+v.vmid+','+isRun+')" >SNAP</button>';
       if(acts.indexOf('stop')>=0&&isRun)h+='<button class="fleet-btn pill-warn-xs" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="stop" >STOP</button>';
       if(acts.indexOf('start')>=0&&!isRun)h+='<button class="fleet-btn pill-ok-3-8" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="start" >START</button>';
+      if(acts.indexOf('configure')>=0)h+='<button class="fleet-btn pill-xs" data-action="vmQuickTag" data-vmid="'+v.vmid+'" >TAG</button>';
       if(acts.indexOf('destroy')>=0)h+='<button class="fleet-btn pill-err-3-8" data-action="vmDestroy" data-vmid="'+v.vmid+'" >DESTROY</button>';
       h+='</td></tr>';
     });
@@ -3729,22 +3829,46 @@ function vmtClone(){
   if(!src){toast('Select a source VM','error');return;}
   if(!name){toast('Enter a name for the clone','error');return;}
   var out=document.getElementById('vmt-cl-out');if(out)out.innerHTML='<div class="c-yellow">Cloning VM '+src+'...</div>';
-  fetch(API.VM_CREATE+'?clone='+src+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
-    if(d.ok){toast('Clone created!','success');if(out)out.innerHTML='<div class="c-green">Clone "'+name+'" created as VM '+d.vmid+'</div>';}
+  fetch(API.VM_CLONE+'?vmid='+src+'&name='+encodeURIComponent(name)+'&full=1').then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('Clone created as VM '+d.new_vmid+'!','success');if(out)out.innerHTML='<div class="c-green">Clone "'+name+'" created as VM '+d.new_vmid+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
-  });
+  }).catch(function(e){toast('Clone failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
 }
 function vmtMigrate(){
   var src=(document.getElementById('vmt-m-source')||{}).value;
   var tgt=(document.getElementById('vmt-m-target')||{}).value;
+  var online=document.getElementById('vmt-m-online')&&document.getElementById('vmt-m-online').checked?'1':'0';
   if(!src||!tgt){toast('Select VM and target node','error');return;}
   var out=document.getElementById('vmt-m-out');if(out)out.innerHTML='<div class="c-yellow">Migrating VM '+src+' to '+tgt+'...</div>';
   confirmAction('Migrate VM <strong>'+src+'</strong> to <strong>'+tgt+'</strong>?',function(){
-    fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm migrate '+src+' '+tgt+' --online')).then(function(r){return r.json()}).then(function(d){
-      var txt=d.results?d.results.map(function(r){return r.output;}).join(''):'';
-      if(out)out.innerHTML='<div class="c-green">'+txt+'</div>';toast('Migration started','success');
-    }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
+    fetch(API.VM_MIGRATE+'?vmid='+src+'&target_node='+encodeURIComponent(tgt)+'&online='+online).then(function(r){return r.json()}).then(function(d){
+      if(d.ok){toast('Migration started','success');if(out)out.innerHTML='<div class="c-green">VM '+src+' migrating to '+tgt+(d.online?' (live)':' (offline)')+'</div>';}
+      else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
+    }).catch(function(e){toast('Migration failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
   });
+}
+function vmtAddDisk(){
+  var vmid=(document.getElementById('vmt-ad-source')||{}).value;
+  var size=(document.getElementById('vmt-ad-size')||{}).value;
+  var unit=(document.getElementById('vmt-ad-unit')||{}).value||'G';
+  var storage=(document.getElementById('vmt-ad-storage')||{}).value||'local-lvm';
+  if(!vmid){toast('Select a VM','error');return;}
+  if(!size||+size<1){toast('Enter a valid disk size','error');return;}
+  var out=document.getElementById('vmt-ad-out');if(out)out.innerHTML='<div class="c-yellow">Adding '+size+unit+' disk to VM '+vmid+'...</div>';
+  fetch(API.VM_ADD_DISK+'?vmid='+vmid+'&size='+size+unit+'&storage='+encodeURIComponent(storage)).then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('Disk '+d.disk+' added to VM '+vmid,'success');if(out)out.innerHTML='<div class="c-green">Added '+d.size+' disk as '+d.disk+' on '+d.storage+'</div>';}
+    else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
+  }).catch(function(e){toast('Add disk failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
+}
+function vmtTag(){
+  var vmid=(document.getElementById('vmt-tag-source')||{}).value;
+  var tags=(document.getElementById('vmt-tag-tags')||{}).value;
+  if(!vmid){toast('Select a VM','error');return;}
+  var out=document.getElementById('vmt-tag-out');if(out)out.innerHTML='<div class="c-yellow">Setting tags on VM '+vmid+'...</div>';
+  fetch(API.VM_TAG+'?vmid='+vmid+'&tags='+encodeURIComponent(tags||'')).then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('Tags updated on VM '+vmid,'success');if(out)out.innerHTML='<div class="c-green">VM '+vmid+' tags set to: '+(d.tags||'(cleared)')+'</div>';}
+    else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
+  }).catch(function(e){toast('Tag update failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
 }
 function vmtSnapshot(){
   var src=(document.getElementById('vmt-s-source')||{}).value;
@@ -3909,16 +4033,23 @@ function switchBackup(tab){
   var f=document.getElementById('bk-form');if(!f)return;
   if(tab==='bkstatus'){
     f.innerHTML='<div id="bk-s-out"><div class="skeleton"></div></div>';
-    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
-      var h='<div class="desc-line">Snapshot status across all VMs.</div>';
-      h+='<table class="w-full"><thead><tr><th>VMID</th><th>NAME</th><th>NODE</th><th>STATUS</th><th>QUICK SNAP</th></tr></thead><tbody>';
-      d.vms.forEach(function(v){
-        h+='<tr><td><strong>'+v.vmid+'</strong></td><td>'+v.name+'</td><td>'+v.node+'</td><td>'+badge(v.status)+'</td>';
-        h+='<td><button class="fleet-btn pill-xs" data-action="vmSnap" data-vmid="'+v.vmid+'" >SNAPSHOT</button></td></tr>';
-      });
-      h+='</tbody></table>';
+    fetch(API.BACKUP_LIST).then(function(r){return r.json()}).then(function(d){
+      var h='<div class="desc-line">Snapshots and backup exports across the cluster.</div>';
+      var snaps=d.snapshots||[];var exports=d.exports||[];
+      if(snaps.length){
+        h+='<h4 style="font-size:12px;color:var(--text-dim);margin:12px 0 8px">VM SNAPSHOTS</h4>';
+        h+='<table class="w-full"><thead><tr><th>VMID</th><th>VM NAME</th><th>SNAPSHOT</th><th>ACTION</th></tr></thead><tbody>';
+        snaps.forEach(function(s){h+='<tr><td><strong>'+s.vmid+'</strong></td><td>'+_esc(s.vm_name)+'</td><td>'+_esc(s.snapshot)+'</td><td><button class="fleet-btn pill-xs" onclick="bkRestoreSnap('+s.vmid+',\''+_esc(s.snapshot)+'\')">RESTORE</button></td></tr>';});
+        h+='</tbody></table>';
+      } else {h+='<div class="empty-state"><div class="es-icon">&#128230;</div><p>No VM snapshots found. Create one from the VM SNAPSHOTS tab.</p></div>';}
+      if(exports.length){
+        h+='<h4 style="font-size:12px;color:var(--text-dim);margin:12px 0 8px">BACKUP EXPORTS</h4>';
+        h+='<table class="w-full"><thead><tr><th>FILENAME</th><th>SIZE</th></tr></thead><tbody>';
+        exports.forEach(function(e){h+='<tr><td>'+_esc(e.filename)+'</td><td>'+(e.size_kb>1024?Math.round(e.size_kb/1024)+'MB':e.size_kb+'KB')+'</td></tr>';});
+        h+='</tbody></table>';
+      }
       document.getElementById('bk-s-out').innerHTML=h;
-    }).catch(function(){document.getElementById('bk-s-out').innerHTML='<div class="c-red">Failed to load VMs</div>';});
+    }).catch(function(){document.getElementById('bk-s-out').innerHTML='<div class="c-red">Failed to load backup data</div>';});
   } else if(tab==='bkschedule'){
     f.innerHTML='<div class="desc-line">PVE backup schedules are managed via the Proxmox GUI or <code>pvesh</code> CLI.</div>'+
       '<button class="fleet-btn pill-active-lg" onclick="bkCheckSchedules()" >CHECK SCHEDULES</button>'+
@@ -3926,10 +4057,11 @@ function switchBackup(tab){
   } else if(tab==='bksnapshot'){
     f.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM</label><select id="bk-snap-vm" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div><label class="label-sub">SNAPSHOT NAME (optional)</label><input id="bk-snap-name" placeholder="auto-generated if empty" class="input-primary"></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" onclick="bkTakeSnap()" >CREATE SNAPSHOT</button><button class="fleet-btn" onclick="bkListSnaps()">LIST SNAPSHOTS</button></div>'+
       '</div><div id="bk-snap-out" class="mt-12"></div>';
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
-      var sel=document.getElementById('bk-snap-vm');if(!sel)return;sel.innerHTML='';
+      var sel=document.getElementById('bk-snap-vm');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+'</option>';});
     }).catch(function(){});
   } else if(tab==='bkexport'){
@@ -3938,14 +4070,15 @@ function switchBackup(tab){
       '<button class="fleet-btn" onclick="bkExportConfig()" style="color:var(--purple-light);border-color:var(--purple);padding:10px 20px">EXPORT CONFIG</button>'+
       '</div><div id="bk-exp-out" class="exec-out skel-mt12" ></div>';
   } else if(tab==='bkrestore'){
-    f.innerHTML='<div class="desc-line">Restore operations. Use with caution.</div>'+
+    f.innerHTML='<div class="desc-line">Restore a VM from a named snapshot. Use with caution — this will revert the VM.</div>'+
       '<div class="form-vertical">'+
-      '<div><label class="label-sub">VM TO RESTORE (from latest snapshot)</label><select id="bk-rest-vm" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div><label class="label-sub">VM</label><select id="bk-rest-vm" class="input-primary"><option value="">Loading...</option></select></div>'+
+      '<div><label class="label-sub">SNAPSHOT NAME</label><input id="bk-rest-name" placeholder="Snapshot name to restore" class="input-primary"></div>'+
       '<button class="fleet-btn" onclick="bkRestore()" style="color:var(--red);border-color:var(--red);align-self:flex-start;padding:10px 20px">RESTORE SNAPSHOT</button>'+
       '</div><div id="bk-rest-out" class="mt-12"></div>';
-    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+    fetch(API.BACKUP_LIST).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('bk-rest-vm');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
-      d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+'</option>';});
+      var seen={};(d.snapshots||[]).forEach(function(s){if(!seen[s.vmid]){seen[s.vmid]=true;sel.innerHTML+='<option value="'+s.vmid+'">'+s.vmid+' — '+_esc(s.vm_name)+'</option>';}});
     }).catch(function(){});
   }
 }
@@ -3958,11 +4091,14 @@ function bkCheckSchedules(){
 }
 function bkTakeSnap(){
   var vmid=(document.getElementById('bk-snap-vm')||{}).value;if(!vmid){toast('Select a VM','error');return;}
+  var name=(document.getElementById('bk-snap-name')||{}).value.trim();
   var out=document.getElementById('bk-snap-out');if(out)out.innerHTML='<div class="c-yellow">Creating snapshot...</div>';
-  fetch(API.VM_SNAPSHOT+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
-    if(d.ok){toast('Snapshot created','success');if(out)out.innerHTML='<div class="c-green">Snapshot "'+d.snapshot+'" created for VM '+vmid+'</div>';}
-    else{if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
-  });
+  var url=API.BACKUP_CREATE+'?vmid='+vmid;
+  if(name)url+='&name='+encodeURIComponent(name);
+  fetch(url).then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('Snapshot "'+d.snapshot+'" created','success');if(out)out.innerHTML='<div class="c-green">Snapshot "'+d.snapshot+'" created for VM '+vmid+'</div>';}
+    else{toast(d.error||'Snapshot failed','error');if(out)out.innerHTML='<div class="c-red">'+(d.error||'Failed')+'</div>';}
+  }).catch(function(e){toast('Snapshot failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
 }
 function bkListSnaps(){
   var vmid=(document.getElementById('bk-snap-vm')||{}).value;if(!vmid){toast('Select a VM','error');return;}
@@ -3980,14 +4116,20 @@ function bkExportConfig(){
 }
 function bkRestore(){
   var vmid=(document.getElementById('bk-rest-vm')||{}).value;if(!vmid){toast('Select a VM','error');return;}
-  confirmAction('Restore VM <strong>'+vmid+'</strong> from latest snapshot? This will revert the VM to its snapshot state.',function(){
-    var out=document.getElementById('bk-rest-out');if(out)out.innerHTML='<div class="c-yellow">Restoring VM '+vmid+'...</div>';
-    fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm rollback '+vmid+' $(sudo qm listsnapshot '+vmid+' 2>/dev/null | tail -2 | head -1 | awk \"{print \\$2}\") 2>&1')).then(function(r){return r.json()}).then(function(d){
-      var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
-      if(out)out.innerHTML='<div class="c-green">'+(txt||'Restore complete')+'</div>';
-      toast('Restore complete','success');
-    }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
+  var name=(document.getElementById('bk-rest-name')||{}).value.trim();if(!name){toast('Enter a snapshot name','error');return;}
+  confirmAction('Restore VM <strong>'+vmid+'</strong> from snapshot <strong>'+_esc(name)+'</strong>? This will revert the VM.',function(){
+    var out=document.getElementById('bk-rest-out');if(out)out.innerHTML='<div class="c-yellow">Restoring VM '+vmid+' from "'+_esc(name)+'"...</div>';
+    fetch(API.BACKUP_RESTORE+'?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+      if(d.ok){toast('Restore complete','success');if(out)out.innerHTML='<div class="c-green">VM '+vmid+' restored from snapshot "'+_esc(d.snapshot)+'"</div>';}
+      else{toast(d.error||'Restore failed','error');if(out)out.innerHTML='<div class="c-red">'+(d.error||'Failed')+'</div>';}
+    }).catch(function(e){toast('Restore failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
   });
+}
+function bkRestoreSnap(vmid,snapname){
+  document.getElementById('bk-rest-name').value=snapname;
+  document.getElementById('bk-rest-vm').value=vmid;
+  switchBackup('bkrestore');
+  toast('Snapshot "'+snapname+'" selected — review and confirm restore','info');
 }
 
 /* ── LAB CONTROL actions ───────────────────────────────────────── */
@@ -4573,14 +4715,16 @@ function loadVMs(){
    MEDIA
    ═══════════════════════════════════════════════════════════════════ */
 function loadContainerSection(){
+  var cards=document.getElementById('container-cards');if(cards&&!cards.innerHTML.trim())cards.innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
     var _coff=Math.max(0,d.containers_down||0);document.getElementById('container-stats').innerHTML=st('Total',d.containers_total,'p')+st('Online',d.containers_running,'g')+st('Offline',_coff,_coff>0?'r':'g')+st('VMs',d.vm_count,'b');
-  });
+  }).catch(function(){document.getElementById('container-stats').innerHTML='<span class="c-red">Failed to load stats</span>';});
   fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
     _mediaCache=d;_renderAllFromCache();
-  });
+  }).catch(function(){toast('Failed to load containers','error');});
 }
 function loadDownloads(){
+  var tbl=document.getElementById('dl-table');if(tbl)tbl.innerHTML='<tr><td colspan="6"><div class="skeleton"></div></td></tr>';
   fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).then(function(d){
     document.getElementById('dl-stats').innerHTML=st('Active',d.count,d.count>0?'y':'g');
     var h='';d.downloads.forEach(function(dl){
@@ -4588,14 +4732,15 @@ function loadDownloads(){
       var sp=dl.speed>1048576?(dl.speed/1048576).toFixed(1)+'MB/s':(dl.speed/1024).toFixed(0)+'KB/s';
       h+='<tr><td>'+dl.name.substring(0,50)+'</td><td>'+dl.client+'</td><td>'+dl.vm+'</td><td>'+sz+'</td><td>'+dl.progress+'%</td><td>'+sp+'</td></tr>';
     });document.getElementById('dl-table').innerHTML=h||'<tr><td colspan="6" class="c-dim">No active downloads</td></tr>';
-  });
+  }).catch(function(){toast('Failed to load downloads','error');if(tbl)tbl.innerHTML='<tr><td colspan="6" class="c-red">Failed to load</td></tr>';});
 }
 function loadStreams(){
+  var tbl=document.getElementById('stream-table');if(tbl)tbl.innerHTML='<tr><td colspan="5"><div class="skeleton"></div></td></tr>';
   fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).then(function(d){
     document.getElementById('stream-stats').innerHTML=st('Active Streams',d.count,d.count>0?'g':'p');
     var h='';d.sessions.forEach(function(ss){h+='<tr><td><strong>'+ss.user+'</strong></td><td>'+ss.title+'</td><td>'+ss.type+'</td><td>'+ss.quality+'</td><td>'+ss.state+'</td></tr>';});
     document.getElementById('stream-table').innerHTML=h||'<tr><td colspan="5" class="c-dim">No active streams</td></tr>';
-  });
+  }).catch(function(){toast('Failed to load streams','error');if(tbl)tbl.innerHTML='<tr><td colspan="5" class="c-red">Failed to load</td></tr>';});
 }
 function mediaRestart(name){
   confirmAction('Restart container <strong>'+name+'</strong>?',function(){
@@ -4607,7 +4752,7 @@ function mediaRestart(name){
 function mediaLogs(name){
   var el=document.getElementById('container-logs');el.style.display='block';
   el.textContent='Loading logs for '+name+'...';
-  fetch(API.MEDIA_LOGS+'?name='+encodeURIComponent(name)+'&lines=50').then(function(r){return r.json()}).then(function(d){el.textContent=d.logs||'No logs available.';});
+  fetch(API.MEDIA_LOGS+'?name='+encodeURIComponent(name)+'&lines=50').then(function(r){return r.json()}).then(function(d){el.textContent=d.logs||'No logs available.';}).catch(function(e){el.textContent='Failed to load logs: '+e;toast('Failed to load logs','error');});
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -4628,7 +4773,7 @@ function loadInfra(){
       d.pve.vms.forEach(function(v){vmhtml+='<tr><td>'+v.vmid+'</td><td><strong>'+v.name+'</strong></td><td>'+v.node+'</td><td>'+badge(v.status)+'</td><td>'+v.cpu+'</td><td>'+_ramGB(v.ram_mb)+'</td></tr>';});
       vmhtml+='</tbody></table>';}
     document.getElementById('infra-vms').innerHTML=vmhtml;
-  });
+  }).catch(function(){toast('Failed to load infrastructure overview','error');});
 }
 function _infraOut(defaultId){
   /* If called from host overlay, route output to the infra panel instead */
@@ -4880,8 +5025,9 @@ function loadRisk(){
       if(i<ch.length-1)rc.innerHTML+='<span class="chain-arr">\u2192</span>';
     });
     var t=document.getElementById('risk-tbl');t.innerHTML='';
-    d.targets.forEach(function(r){t.innerHTML+='<tr><td><strong>'+r.name+'</strong><br><span class="text-meta">'+r.label+'</span></td><td>'+badge(r.risk)+'</td><td class="fs-12">'+r.impact+'</td><td class="text-meta">'+r.recovery.substring(0,60)+'</td></tr>';});
-  }).catch(function(){});
+    if(!d.targets||!d.targets.length){t.innerHTML='<tr><td colspan="4" class="c-dim">No risk targets detected</td></tr>';}
+    else d.targets.forEach(function(r){t.innerHTML+='<tr><td><strong>'+r.name+'</strong><br><span class="text-meta">'+r.label+'</span></td><td>'+badge(r.risk)+'</td><td class="fs-12">'+r.impact+'</td><td class="text-meta">'+r.recovery.substring(0,60)+'</td></tr>';});
+  }).catch(function(){toast('Failed to load risk assessment','error');});
 }
 function loadPolicies(){
   fetch(API.POLICIES).then(function(r){return r.json()}).then(function(d){
@@ -7045,12 +7191,29 @@ function runDiscover(){
   var subnet=document.getElementById('discover-subnet').value.trim();
   var out=document.getElementById('discover-out');if(!out)return;
   out.innerHTML='<span style="color:var(--text-dim)">Scanning network...</span>';
-  var url=API.DISCOVER;
-  if(subnet)url+='?subnet='+encodeURIComponent(subnet);
-  fetch(url+'&token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  var url=API.DISCOVER+'?token='+_authToken;
+  if(subnet)url+='&subnet='+encodeURIComponent(subnet);
+  fetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No hosts discovered')+'</pre>';
   }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
+function addHostManual(){
+  var ip=(document.getElementById('add-host-ip')||{}).value.trim();
+  var label=(document.getElementById('add-host-label')||{}).value.trim();
+  var htype=(document.getElementById('add-host-type')||{}).value;
+  var groups=(document.getElementById('add-host-groups')||{}).value.trim();
+  var msg=document.getElementById('add-host-msg');
+  if(!ip||!label){toast('IP and label are required','error');return;}
+  if(msg)msg.textContent='Adding host...';msg.style.color='var(--text-dim)';
+  fetch(API.ADMIN_HOSTS_UPDATE+'?label='+encodeURIComponent(label)+'&type='+encodeURIComponent(htype)+(groups?'&groups='+encodeURIComponent(groups):'')+'&ip='+encodeURIComponent(ip)+'&token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    if(d.error){toast(d.error,'error');if(msg){msg.textContent=d.error;msg.style.color='var(--red)';}return;}
+    toast('Host '+label+' added','success');
+    if(msg){msg.textContent='Added '+label+' ('+ip+')';msg.style.color='var(--green)';}
+    document.getElementById('add-host-ip').value='';
+    document.getElementById('add-host-label').value='';
+    document.getElementById('add-host-groups').value='';
+  }).catch(function(e){toast('Failed to add host','error');if(msg){msg.textContent='Error: '+e;msg.style.color='var(--red)';}});
 }
 function loadGwipe(action){
   var out=document.getElementById('gwipe-out');if(!out)return;

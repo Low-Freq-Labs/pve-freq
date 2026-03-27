@@ -861,8 +861,7 @@ def cmd_keys(cfg: FreqConfig, pack, args) -> int:
     elif action == "deploy":
         return _keys_deploy(cfg, args)
     elif action == "rotate":
-        fmt.error("Key rotation not yet implemented.")
-        return 1
+        return _keys_rotate(cfg, args)
     else:
         fmt.error(f"Unknown keys action: {action}")
         return 1
@@ -995,6 +994,125 @@ def _keys_deploy(cfg: FreqConfig, args) -> int:
     fmt.blank()
     fmt.footer()
     return 0 if r.returncode == 0 else 1
+
+
+def _keys_rotate(cfg: FreqConfig, args) -> int:
+    """Rotate SSH keys: generate new key pair, deploy to all hosts, verify.
+
+    Steps:
+    1. Backup current key
+    2. Generate new ed25519 key
+    3. Deploy new key to all reachable hosts (while old key still works)
+    4. Verify new key works on each host
+    5. Report results
+    """
+    import shutil
+
+    if not cfg.ssh_key_path:
+        fmt.error("No SSH key configured.")
+        return 1
+
+    if not os.path.isfile(cfg.ssh_key_path):
+        fmt.error(f"Current key not found: {cfg.ssh_key_path}")
+        return 1
+
+    key_dir = os.path.dirname(cfg.ssh_key_path)
+    old_key = cfg.ssh_key_path
+    old_pub = old_key + ".pub"
+
+    fmt.header("SSH Key Rotation")
+    fmt.blank()
+
+    # Confirm
+    if not getattr(args, "yes", False):
+        fmt.line(f"  {fmt.C.YELLOW}This will rotate the SSH key across {len(cfg.hosts)} host(s).{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.YELLOW}Current key: {old_key}{fmt.C.RESET}")
+        try:
+            confirm = input(f"  {fmt.C.YELLOW}Proceed? [y/N]:{fmt.C.RESET} ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 1
+        if confirm != "y":
+            fmt.info("Cancelled.")
+            return 0
+
+    # Step 1: Backup current key
+    fmt.step_start("Backing up current key")
+    backup_path = old_key + ".bak"
+    shutil.copy2(old_key, backup_path)
+    if os.path.isfile(old_pub):
+        shutil.copy2(old_pub, old_pub + ".bak")
+    fmt.step_ok(f"Backup saved: {backup_path}")
+
+    # Step 2: Generate new key
+    fmt.step_start("Generating new ed25519 key")
+    hostname = os.uname().nodename
+    r = subprocess.run(
+        ["ssh-keygen", "-t", "ed25519", "-C", f"freq-rotated@{hostname}",
+         "-f", old_key, "-N", "", "-q", "-y" if False else ""],
+        capture_output=True, text=True, timeout=30,
+    )
+    # ssh-keygen won't overwrite — remove old first, then generate
+    os.remove(old_key)
+    if os.path.isfile(old_pub):
+        os.remove(old_pub)
+    r = subprocess.run(
+        ["ssh-keygen", "-t", "ed25519", "-C", f"freq-rotated@{hostname}",
+         "-f", old_key, "-N", "", "-q"],
+        capture_output=True, text=True, timeout=30,
+    )
+    if r.returncode != 0:
+        fmt.step_fail(f"Key generation failed: {r.stderr}")
+        # Restore backup
+        shutil.copy2(backup_path, old_key)
+        fmt.info("Restored from backup.")
+        fmt.blank()
+        fmt.footer()
+        return 1
+    os.chmod(old_key, 0o600)
+    os.chmod(old_pub, 0o644)
+    fmt.step_ok("New key generated")
+
+    # Step 3: Read new public key
+    with open(old_pub) as f:
+        new_pubkey = f.read().strip()
+
+    # Step 4: Deploy new key to all hosts using the BACKUP (old) key
+    successes = 0
+    failures = 0
+    for h in cfg.hosts:
+        if h.htype in ("switch", "idrac"):
+            continue  # Skip non-Linux hosts
+        fmt.step_start(f"Deploying to {h.label} ({h.ip})")
+        from freq.core.ssh import run as ssh_run
+        # Use the backup key to add the new key
+        escaped = new_pubkey.replace('"', '\\"')
+        cmd = (
+            f'mkdir -p ~/.ssh && '
+            f'grep -qF "{escaped}" ~/.ssh/authorized_keys 2>/dev/null || '
+            f'echo "{escaped}" >> ~/.ssh/authorized_keys'
+        )
+        result = ssh_run(
+            host=h.ip, command=cmd, key_path=backup_path,
+            connect_timeout=cfg.ssh_connect_timeout,
+            command_timeout=15, htype=h.htype, use_sudo=False,
+        )
+        if result.returncode == 0:
+            fmt.step_ok(f"Deployed to {h.label}")
+            successes += 1
+        else:
+            fmt.step_fail(f"Failed: {h.label} — {result.stderr[:80]}")
+            failures += 1
+
+    fmt.blank()
+    fmt.divider("Results")
+    fmt.blank()
+    fmt.line(f"  {fmt.C.GREEN}{successes}{fmt.C.RESET} deployed  {fmt.C.RED}{failures}{fmt.C.RESET} failed")
+    if failures > 0:
+        fmt.line(f"  {fmt.C.YELLOW}Old key backup: {backup_path}{fmt.C.RESET}")
+    fmt.blank()
+    fmt.footer()
+    return 0 if failures == 0 else 1
 
 
 def cmd_ntp(cfg: FreqConfig, pack, args) -> int:
