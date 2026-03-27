@@ -22,6 +22,10 @@ htmlcov/
 # Runtime data (not source — top-level only, not freq/data/)
 /data/
 
+# Duplicate configs (source of truth is freq/data/conf-templates/ and freq/data/knowledge/)
+conf/distros.toml
+conf/personality/
+
 # Active configs (only .example files are committed)
 conf/freq.toml
 conf/hosts.conf
@@ -42,6 +46,8 @@ workspace/
 cold-storage/
 resume-state.md
 reference/
+scripts/
+templates/
 
 # Credentials and sensitive data (never commit)
 *.pem
