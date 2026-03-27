@@ -3026,9 +3026,10 @@ def _init_check(cfg):
         summary += f", {fmt.C.YELLOW}{warns} warn{fmt.C.RESET}"
     fmt.line(summary)
 
-    if fail_list:
-        fmt.blank()
-        fmt.line(f"  {fmt.C.DIM}Run 'freq init --fix' to repair broken hosts.{fmt.C.RESET}")
+    if cfg.hosts or cfg.pve_nodes:
+        if fail_list:
+            fmt.blank()
+            fmt.line(f"  {fmt.C.DIM}Run 'freq init --fix' to repair broken hosts.{fmt.C.RESET}")
 
     fmt.blank()
     fmt.footer()
