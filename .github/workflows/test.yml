@@ -38,7 +38,7 @@ jobs:
     container:
       image: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Python and pytest
         shell: sh
@@ -72,8 +72,8 @@ jobs:
             # Alpine (musl) — needs bash for install script tests, openssl for vault
             apk add --no-cache python3 py3-pip openssh-client openssl bash
           fi
-          # Install pytest — handle PEP 668 (externally-managed) gracefully
-          pip3 install --break-system-packages pytest 2>/dev/null || pip3 install pytest
+          # Install pytest + build — handle PEP 668 (externally-managed) gracefully
+          pip3 install --break-system-packages pytest build 2>/dev/null || pip3 install pytest build
 
       - name: Verify Python version
         shell: sh
@@ -129,3 +129,17 @@ jobs:
           python3 -c "from freq.data import get_data_path; p = get_data_path(); assert (p / 'conf-templates' / 'freq.toml.example').exists(), 'Missing package data'"
         env:
           FREQ_DIR: ${{ github.workspace }}
+
+      - name: Build wheel
+        shell: sh
+        run: |
+          python3 -m build --wheel --outdir dist/
+
+      - name: Install from wheel
+        shell: sh
+        run: |
+          # Uninstall source install, reinstall from built wheel
+          pip3 install --break-system-packages --force-reinstall --no-deps dist/*.whl 2>/dev/null || \
+            pip3 install --force-reinstall --no-deps dist/*.whl
+          # Verify the wheel-installed package works
+          freq --version
