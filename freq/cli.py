@@ -19,6 +19,12 @@ from freq.core.personality import load_pack, show_vibe, splash
 
 def main(argv: list = None) -> int:
     """Main entry point for FREQ CLI."""
+    # Handle --version before config (no dirs needed)
+    check_args = argv if argv is not None else os.sys.argv[1:]
+    if "--version" in check_args:
+        print(f"PVE FREQ v{freq.__version__}")
+        return 0
+
     # Load config first (needed for plugin discovery)
     cfg = load_config()
 

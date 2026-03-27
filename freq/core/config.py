@@ -172,11 +172,8 @@ def resolve_install_dir() -> str:
     if (src_dir / "pyproject.toml").exists():
         return str(src_dir)
 
-    # Production default
-    if os.path.isdir("/opt/pve-freq"):
-        return "/opt/pve-freq"
-
-    return str(src_dir)
+    # Production default — always use /opt/pve-freq for pip installs
+    return "/opt/pve-freq"
 
 
 def _resolve_paths(cfg: FreqConfig) -> None:
@@ -219,7 +216,10 @@ def bootstrap_conf(install_dir: str) -> bool:
     if not templates.is_dir():
         return False
 
-    os.makedirs(conf_dir, exist_ok=True)
+    try:
+        os.makedirs(conf_dir, exist_ok=True)
+    except PermissionError:
+        return False  # Non-root user — bootstrap deferred to freq init
 
     # Copy all template files (*.example, *.toml, *.conf)
     for src in templates.iterdir():
