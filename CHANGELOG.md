@@ -4,6 +4,45 @@ All notable changes to PVE FREQ will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.0] - 2026-03-27
+
+### Added
+- **Dashboard: VM Management** — ADD DISK and TAGS tabs, inline tag button in VM list
+- **Dashboard: Docker Compose** — COMPOSE sub-tab with Up/Down/View per Docker VM
+- **Dashboard: Host Discovery** — full onboarding UI with subnet scanner and manual host add form
+- **Dashboard: Backup Management** — structured backup list (snapshots + exports), create/restore via dedicated API
+- **VM API endpoints** — `/api/vm/add-disk`, `/api/vm/tag`, `/api/vm/clone`, `/api/vm/migrate`
+- **Docker Compose API** — `/api/containers/compose-up`, `compose-down`, `compose-view`
+- **Backup API** — `/api/backup/list`, `/api/backup/create`, `/api/backup/restore`
+- **Setup API** — `/api/setup/test-ssh` for SSH connectivity testing, `/api/setup/reset` to re-enable wizard
+- **Auto-discovery** — PVE nodes discovered from cluster API, VM tags for protection/categorization, container IP auto-resolve from hosts.conf
+- **48 auto-discovery tests** — sanitize_label, is_protected_vmid, update_host_label, resolve_host_ip, VM tag cache, container VM IP resolve
+- **CLI commands implemented** — `freq keys rotate`, `freq groups add`, `freq groups remove`
+- Loading skeletons on containers, downloads, and streams sections
+- Error toasts on all major view loaders (fleet, infra, media, docker)
+- Empty states with action hints for backup and risk tables
+
+### Changed
+- `vmtClone()` rewired to dedicated `/api/vm/clone` endpoint (was `/api/vm/create?clone=X` workaround)
+- `vmtMigrate()` rewired to dedicated `/api/vm/migrate` endpoint (was raw `qm migrate` via `/api/exec`)
+- VM migrate UI now has live migration checkbox
+- Backup restore UI takes explicit snapshot name instead of guessing "latest"
+- Network scanner expanded into Host Discovery & Onboarding section
+- Dashboard nav restructured to 7 items: HOME, FLEET, DOCKER, MEDIA, SECURITY, TOOLS, SETTINGS
+- SSH health probes now include `last_error` field for debugging unreachable hosts
+
+### Fixed
+- 10 bare `except: pass` blocks replaced with proper logging (agent_collector, serve, init_cmd)
+- 17 silent API exception handlers now log errors
+- `_resolve_container_vm_ip()` logs resolution failures
+- `_is_first_run()` logs user-check errors
+- Config template: 19 missing fields added, 2 default value mismatches corrected (vm_cpu, vm_bios)
+- Stub deployers (opnsense, ilo, ubiquiti) now show clear "community plugin" messaging
+- Discovery URL fixed — token parameter now correctly appended with `?` separator
+
+### Removed
+- Internal agent identity file (`CLAUDE.md`) removed from tracking
+
 ## [2.1.0] - 2026-03-25
 
 ### Added

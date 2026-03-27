@@ -34,6 +34,7 @@ conf/.initialized
 
 # Agent workspace (not part of PVE FREQ)
 .claude/
+CLAUDE.md
 memory/
 journal/
 planning/

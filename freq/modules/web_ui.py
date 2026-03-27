@@ -1122,7 +1122,7 @@ th,td{padding:5px 8px;font-size:11px}
   <div class="section-body">
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Discover hosts on your network, add them to the fleet, and onboard with SSH key deployment.</div>
     <div class="flex-wrap-8-mb12">
-      <input type="text" id="discover-subnet" placeholder="Subnet (e.g. 10.25.10)" class="input-field" style="width:200px">
+      <input type="text" id="discover-subnet" placeholder="Subnet (e.g. 192.168.1)" class="input-field" style="width:200px">
       <button class="fleet-btn c-purple-active" onclick="runDiscover()">SCAN NETWORK</button>
     </div>
     <div class="exec-out" id="discover-out">Enter a subnet to discover hosts.</div>

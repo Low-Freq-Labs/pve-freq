@@ -1,7 +1,7 @@
 """FREQ WHY — explain what FREQ can do to a VM and why.
 
 Shows: category, tier, production status, protected status,
-allowed actions, blocked actions. Answers "why can't I destroy VM 802?"
+allowed actions, blocked actions. Answers "why can't I destroy VM 100?"
 """
 from freq.core import fmt
 from freq.core.config import FreqConfig

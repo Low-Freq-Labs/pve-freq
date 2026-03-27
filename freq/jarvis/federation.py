@@ -5,7 +5,7 @@ Each site has a name, URL, and shared secret for authenticated API calls.
 
 Configuration in freq.toml:
   [federation]
-  site_name = "dc01"
+  site_name = "homelab"
 
 Sites are registered via the API and stored in data/federation.json.
 Each site periodically polls the others' /healthz and /api/health endpoints.
