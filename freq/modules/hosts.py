@@ -415,11 +415,13 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
         # Filter all_ips: skip Docker bridge IPs, keep real NICs
         real_all_ips = [ip for ip in all_ips if not _is_docker_bridge_ip(ip)]
 
-        # Preserve existing label/groups/type if already known
+        # PVE name is source of truth for label — always sync it.
+        # Preserve groups and type from existing entry (user may have customized).
+        safe_label = validate.sanitize_label(name)
         if chosen_ip in existing:
             e = existing[chosen_ip]
             discovered[chosen_ip] = {
-                "label": e["label"], "htype": e["htype"],
+                "label": safe_label, "htype": e["htype"],
                 "groups": e["groups"], "vmid": vmid, "source": "pve",
                 "all_ips": real_all_ips,
             }
@@ -434,8 +436,9 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                 vlan_name = vlan_prefixes.get(ip_prefix.rstrip("."), "")
                 if "lab" in vlan_name or "dev" in vlan_name:
                     groups = "lab"
+            safe_label = validate.sanitize_label(name)
             discovered[chosen_ip] = {
-                "label": name, "htype": htype,
+                "label": safe_label, "htype": htype,
                 "groups": groups, "vmid": vmid, "source": "pve",
                 "all_ips": real_all_ips,
             }
@@ -591,6 +594,63 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
     fmt.blank()
     fmt.footer()
     return 0
+
+
+def update_host_label(cfg: FreqConfig, target_ip: str, new_label: str) -> bool:
+    """Update a single host's label in hosts.conf by IP match.
+
+    Used by cmd_rename() to immediately sync the label after a PVE rename,
+    instead of waiting for the hourly background sync.
+    Returns True if the entry was found and updated.
+    """
+    if not os.path.isfile(cfg.hosts_file):
+        return False
+
+    with open(cfg.hosts_file) as f:
+        lines = f.readlines()
+
+    updated = False
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            new_lines.append(line)
+            continue
+        parts = stripped.split()
+        if len(parts) >= 3 and parts[0] == target_ip:
+            # Reconstruct line with new label, preserving type/groups/all_ips
+            ip = parts[0]
+            htype = parts[2]
+            groups = parts[3] if len(parts) > 3 else ""
+            all_ips = parts[4] if len(parts) > 4 else ""
+            rebuilt = [f"{ip:<16}", f"{new_label:<15}", f"{htype:<10}"]
+            if groups or all_ips:
+                rebuilt.append(f"{groups:<20}" if all_ips else groups)
+            if all_ips:
+                rebuilt.append(all_ips)
+            new_lines.append("  ".join(rebuilt).rstrip() + "\n")
+            updated = True
+        else:
+            new_lines.append(line)
+
+    if updated:
+        with open(cfg.hosts_file, "w") as f:
+            f.writelines(new_lines)
+
+    return updated
+
+
+def resolve_host_ip(cfg: FreqConfig, label: str) -> str:
+    """Look up a host's IP from hosts.conf by label.
+
+    Used by container probing to resolve label → IP at probe time
+    instead of relying on hardcoded IPs in containers.toml.
+    Returns IP string or empty string if not found.
+    """
+    for h in cfg.hosts:
+        if h.label == label:
+            return h.ip
+    return ""
 
 
 def _groups_list(cfg: FreqConfig) -> int:

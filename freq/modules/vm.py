@@ -180,10 +180,21 @@ def _next_vmid(cfg: FreqConfig, node_ip: str) -> int:
 
 def _safety_check(cfg: FreqConfig, vmid: int, operation: str) -> bool:
     """Check if a VMID is safe to operate on. Returns True if safe."""
-    if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges):
+    # Try to get PVE tags for tag-based protection
+    vm_tags = None
+    try:
+        from freq.modules.serve import get_vm_tags
+        vm_tags = get_vm_tags(vmid)
+    except ImportError:
+        pass
+    if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges,
+                                  vm_tags=vm_tags):
         fmt.error(f"VM {vmid} is PROTECTED. Cannot {operation}.")
-        fmt.info(f"Protected VMIDs: {cfg.protected_vmids}")
-        fmt.info(f"Protected ranges: {cfg.protected_ranges}")
+        if vm_tags and ("prod" in vm_tags or "protected" in vm_tags):
+            fmt.info(f"Protected by PVE tag: {', '.join(vm_tags)}")
+        else:
+            fmt.info(f"Protected VMIDs: {cfg.protected_vmids}")
+            fmt.info(f"Protected ranges: {cfg.protected_ranges}")
         return False
     return True
 
@@ -725,6 +736,34 @@ def cmd_rename(cfg: FreqConfig, pack, args) -> int:
     if ok:
         fmt.step_ok(f"VM {vmid} renamed to {new_name}")
         logger.info(f"VM renamed: {vmid} -> {new_name}")
+
+        # Auto-sync hosts.conf — resolve VM IP via guest agent, update label
+        safe_label = validate.sanitize_label(new_name)
+        r = ssh_run(
+            host=node_ip,
+            command=f"qm agent {vmid} network-get-interfaces 2>/dev/null",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3, command_timeout=10,
+            htype="pve", use_sudo=True,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            try:
+                data = json.loads(r.stdout)
+                ifaces = data.get("result", data) if isinstance(data, dict) else data
+                for iface in ifaces:
+                    for addr in iface.get("ip-addresses", []):
+                        if addr.get("ip-address-type") == "ipv4":
+                            ip = addr.get("ip-address", "")
+                            if ip and not ip.startswith("127."):
+                                from freq.modules.hosts import update_host_label
+                                if update_host_label(cfg, ip, safe_label):
+                                    fmt.step_ok(f"hosts.conf updated: {ip} → {safe_label}")
+                                    break
+                    else:
+                        continue
+                    break
+            except (json.JSONDecodeError, ValueError):
+                pass
     else:
         fmt.step_fail(f"Rename failed: {stdout}")
 

@@ -140,9 +140,16 @@ def cmd_list(cfg: FreqConfig, pack, args) -> int:
         else:
             status_badge = fmt.badge(status)
 
-        # Protected VMID indicator
+        # Protected VMID indicator — PVE tags + static fallback
+        vm_tags = None
+        try:
+            from freq.modules.serve import get_vm_tags
+            vm_tags = get_vm_tags(vmid)
+        except ImportError:
+            pass
         protected = ""
-        if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges):
+        if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges,
+                                      vm_tags=vm_tags):
             protected = f" {fmt.C.YELLOW}{fmt.S.WARN}{fmt.C.RESET}"
 
         fmt.table_row(
@@ -401,9 +408,16 @@ def cmd_power(cfg: FreqConfig, pack, args) -> int:
         fmt.error(f"Invalid VMID: {target}")
         return 1
 
-    # Safety check for destructive actions
+    # Safety check for destructive actions — PVE tags + static fallback
     if action in ("stop", "reboot", "shutdown"):
-        if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges):
+        pve_tags = None
+        try:
+            from freq.modules.serve import get_vm_tags
+            pve_tags = get_vm_tags(vmid)
+        except ImportError:
+            pass
+        if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges,
+                                      vm_tags=pve_tags):
             fmt.error(f"VM {vmid} is PROTECTED. Cannot {action}.")
             return 1
 

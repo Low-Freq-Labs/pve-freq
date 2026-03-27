@@ -63,6 +63,27 @@ def label(value: str) -> bool:
     return bool(pattern.match(value))
 
 
+def sanitize_label(name: str) -> str:
+    """Convert a PVE VM name to a safe host label.
+
+    Rules: lowercase, alphanumeric + hyphens only, no leading/trailing hyphens,
+    no consecutive hyphens, max 64 chars. Strips anything shell-unsafe.
+    """
+    s = name.lower().strip()
+    # Replace underscores and spaces with hyphens
+    s = s.replace("_", "-").replace(" ", "-")
+    # Remove anything that isn't alphanumeric or hyphen
+    s = re.sub(r"[^a-z0-9\-]", "", s)
+    # Collapse consecutive hyphens
+    s = re.sub(r"-{2,}", "-", s)
+    # Strip leading/trailing hyphens
+    s = s.strip("-")
+    # Truncate
+    if len(s) > MAX_LABEL_LEN:
+        s = s[:MAX_LABEL_LEN].rstrip("-")
+    return s or "unknown"
+
+
 def ssh_pubkey(value: str) -> bool:
     """Validate an SSH public key (basic format check)."""
     parts = value.strip().split()
@@ -105,13 +126,31 @@ def bay_device(value: str) -> bool:
     return bool(re.compile(r"^[a-z][a-z0-9]*$").match(value))
 
 
-def is_protected_vmid(value, protected_ids: list, protected_ranges: list) -> bool:
-    """Check if a VMID is in the protected list or ranges."""
+def is_protected_vmid(value, protected_ids: list, protected_ranges: list,
+                      vm_tags: list = None) -> bool:
+    """Check if a VMID is protected.
+
+    Protection sources (any match = protected):
+    1. PVE tag "prod" or "protected" on the VM (preferred — auto-discovery)
+    2. Static protected_ids list from freq.toml (fallback)
+    3. Static protected_ranges from freq.toml (fallback)
+
+    Args:
+        vm_tags: Optional list of PVE tags for this VM. If provided and
+                 contains "prod" or "protected", the VM is protected regardless
+                 of the static lists.
+    """
     try:
         n = int(value)
     except (ValueError, TypeError):
         return False
 
+    # Tag-based protection — PVE tags are source of truth
+    if vm_tags:
+        if "prod" in vm_tags or "protected" in vm_tags:
+            return True
+
+    # Static fallback — freq.toml lists/ranges
     if n in protected_ids:
         return True
 

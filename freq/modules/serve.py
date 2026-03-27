@@ -68,13 +68,24 @@ _bg_cache = {
     "infra_quick": None,
     "health": None,
     "update": None,
+    "fleet_overview": None,
+    "hosts_sync": None,
+    "pve_nodes": None,
+    "vm_tags": None,
 }
 _bg_cache_ts = {
     "infra_quick": 0,
     "health": 0,
     "update": 0,
+    "fleet_overview": 0,
+    "hosts_sync": 0,
+    "pve_nodes": 0,
+    "vm_tags": 0,
 }
 UPDATE_CHECK_INTERVAL = 6 * 3600  # 6 hours
+HOSTS_SYNC_INTERVAL = 3600        # 1 hour — keep hosts.conf in sync with PVE
+NODE_DISCOVERY_INTERVAL = 300     # 5 min — discover PVE cluster nodes
+VM_TAGS_INTERVAL = 300            # 5 min — refresh PVE VM tags
 _bg_lock = threading.Lock()
 
 
@@ -193,6 +204,11 @@ def _bg_probe_infra():
                 if r.returncode == 0 and r.stdout.strip():
                     d["reachable"] = True
                     d["metrics"]["uptime"] = r.stdout.strip()
+                else:
+                    pr = subprocess.run(["ping", "-c", "1", "-W", "1", dev.ip], capture_output=True, timeout=2)
+                    d["reachable"] = pr.returncode == 0
+                    if d["reachable"]:
+                        d["metrics"]["note"] = "Reachable (no SSH)"
             elif dt == "idrac":
                 # iDRAC requires RSA key (no ed25519 support)
                 idrac_key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
@@ -210,6 +226,12 @@ def _bg_probe_infra():
                             m["inlet_temp"] = line.split("=")[-1].strip() if "=" in line else line.split(":")[-1].strip()
                         elif "system model" in low:
                             m["model"] = line.split("=")[-1].strip() if "=" in line else line.split(":")[-1].strip()
+                else:
+                    # SSH failed — fall back to ping so we don't mark a reachable iDRAC as offline
+                    pr = subprocess.run(["ping", "-c", "1", "-W", "1", dev.ip], capture_output=True, timeout=2)
+                    d["reachable"] = pr.returncode == 0
+                    if d["reachable"]:
+                        d["metrics"]["note"] = "Reachable (no SSH)"
             else:
                 pr = subprocess.run(["ping", "-c", "1", "-W", "1", dev.ip], capture_output=True, timeout=2)
                 d["reachable"] = pr.returncode == 0
@@ -326,8 +348,8 @@ def _bg_probe_health():
     try:
         # Build IP→docker count from health data
         ip_docker = {h["ip"]: int(h.get("docker", 0)) for h in host_data if h.get("type") == "docker"}
-        # Build vm_id→IP from container_vms config
-        vmid_to_ip = {vm.vm_id: vm.ip for vm in cfg.container_vms.values()}
+        # Build vm_id→IP from container_vms config (resolved from hosts.conf)
+        vmid_to_ip = {vm.vm_id: _resolve_container_vm_ip(vm) for vm in cfg.container_vms.values()}
         # Read WATCHDOG for vm_id→node mapping
         wd_path = "/var/lib/freq-watchdog/status.json"
         if os.path.isfile(wd_path):
@@ -359,6 +381,392 @@ def _bg_probe_health():
             save_snapshot(cfg.data_dir, result)
     except Exception as e:
         logger.warn(f"Capacity snapshot failed: {e}")
+
+
+def _bg_probe_fleet_overview():
+    """Build fleet overview in background — PVE API + pings + NIC data."""
+    try:
+        cfg = load_config()
+    except Exception as e:
+        logger.error(f"bg_probe_fleet_overview: config load failed: {e}")
+        return
+    fb = cfg.fleet_boundaries
+    start = time.monotonic()
+
+    vm_list = _get_fleet_vms(cfg)
+
+    # Physical devices — ping in parallel
+    physical = []
+    def _ping_device(dev):
+        reachable = False
+        try:
+            r = subprocess.run(
+                ["ping", "-c", "1", "-W", "1", dev.ip],
+                capture_output=True, timeout=2,
+            )
+            reachable = r.returncode == 0
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+        return {
+            "key": dev.key, "ip": dev.ip, "label": dev.label,
+            "type": dev.device_type, "tier": dev.tier, "detail": dev.detail,
+            "reachable": reachable,
+        }
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {pool.submit(_ping_device, dev): dev for dev in fb.physical.values()}
+        for f in concurrent.futures.as_completed(futures):
+            try:
+                physical.append(f.result())
+            except Exception:
+                dev = futures[f]
+                physical.append({"key": dev.key, "ip": dev.ip, "label": dev.label,
+                                 "type": dev.device_type, "tier": dev.tier, "detail": dev.detail,
+                                 "reachable": False})
+
+    # PVE nodes — use auto-discovered nodes, enrich with live stats + config detail
+    discovered_nodes = _get_discovered_nodes()
+    # Also keep fleet-boundaries detail strings for enrichment
+    fb_detail = {n.name: n.detail for n in fb.pve_nodes.values()}
+
+    pve_nodes = []
+    for dn in discovered_nodes:
+        entry = {
+            "name": dn.get("name", ""),
+            "ip": dn.get("ip", ""),
+            "detail": fb_detail.get(dn.get("name", ""), dn.get("detail", "")),
+        }
+        if dn.get("cores"):
+            entry["cores"] = dn["cores"]
+        if dn.get("ram_gb"):
+            entry["ram_gb"] = dn["ram_gb"]
+        pve_nodes.append(entry)
+
+    # Category summaries
+    cat_summary = {}
+    for cat_name, cat_info in fb.categories.items():
+        running = sum(1 for v in vm_list if v["category"] == cat_name and v["status"] == "running")
+        total = sum(1 for v in vm_list if v["category"] == cat_name)
+        cat_summary[cat_name] = {
+            "count": total, "running": running,
+            "description": cat_info.get("description", ""),
+            "tier": cat_info.get("tier", "probe"),
+        }
+
+    non_template = [v for v in vm_list if v["category"] != "templates"]
+    total_vms = len(non_template)
+    running = sum(1 for v in non_template if v["status"] == "running")
+    stopped = sum(1 for v in non_template if v["status"] == "stopped")
+    prod_count = sum(1 for v in non_template if v["is_prod"])
+    lab_count = sum(1 for v in non_template if v["category"] == "lab")
+    template_count = sum(1 for v in vm_list if v["category"] == "templates")
+
+    # VM NIC data — batch per node
+    vlan_id_to_name = {v.id: v.name for v in cfg.vlans}
+    if 2550 not in vlan_id_to_name:
+        vlan_id_to_name[2550] = "MGMT"
+    vm_nics = {}
+    node_vmids = {}
+    for v in vm_list:
+        node_vmids.setdefault(v["node"], []).append(v["vmid"])
+    node_ips = {n["name"]: n["ip"] for n in discovered_nodes if n.get("name") and n.get("ip")}
+    for node_name, vmids in node_vmids.items():
+        nip = node_ips.get(node_name)
+        if not nip:
+            continue
+        cmd_parts = []
+        for vid in vmids:
+            cmd_parts.append(f"echo VMID:{vid}; qm config {vid} 2>/dev/null | grep ^net")
+        batch_cmd = "; ".join(cmd_parts)
+        r = ssh_single(
+            host=nip, command=batch_cmd,
+            key_path=cfg.ssh_key_path,
+            command_timeout=20,
+            htype="pve", use_sudo=True, cfg=cfg,
+        )
+        if r.returncode == 0 and r.stdout:
+            cur_vmid = None
+            for line in r.stdout.strip().split("\n"):
+                if line.startswith("VMID:"):
+                    cur_vmid = int(line[5:])
+                    vm_nics[cur_vmid] = []
+                elif cur_vmid is not None and line.startswith("net"):
+                    nic_name = line.split(":")[0].strip()
+                    tag_match = re.search(r'tag=(\d+)', line)
+                    vlan_tag = int(tag_match.group(1)) if tag_match else 0
+                    vlan_name = vlan_id_to_name.get(vlan_tag, f"VLAN {vlan_tag}" if vlan_tag else "UNTAGGED")
+                    vm_nics[cur_vmid].append({
+                        "nic": nic_name, "tag": vlan_tag, "vlan_name": vlan_name,
+                    })
+
+    duration = round(time.monotonic() - start, 2)
+    result = {
+        "vms": vm_list,
+        "vm_nics": {str(k): v for k, v in vm_nics.items()},
+        "physical": physical,
+        "pve_nodes": pve_nodes,
+        "vlans": [{"id": v.id, "name": v.name, "prefix": v.prefix, "gateway": v.gateway,
+                   "cidr": v.subnet.split("/")[1] if "/" in v.subnet else "24"}
+                  for v in cfg.vlans],
+        "nic_profiles": cfg.nic_profiles,
+        "categories": cat_summary,
+        "summary": {
+            "total_vms": total_vms, "running": running, "stopped": stopped,
+            "prod_count": prod_count, "lab_count": lab_count, "template_count": template_count,
+        },
+        "duration": duration,
+    }
+
+    with _bg_lock:
+        _bg_cache["fleet_overview"] = result
+        _bg_cache_ts["fleet_overview"] = time.time()
+    _save_disk_cache("fleet_overview", result)
+
+
+def _bg_discover_pve_nodes():
+    """Discover PVE cluster nodes from API + corosync config.
+
+    Queries any reachable seed node (from freq.toml) for:
+    - /cluster/resources --type node → node names, status, hardware stats
+    - /etc/pve/corosync.conf → node name ↔ IP mapping
+
+    Results cached in _bg_cache["pve_nodes"] for 5 minutes.
+    Falls back to freq.toml static list if discovery fails.
+    """
+    with _bg_lock:
+        last = _bg_cache_ts.get("pve_nodes", 0)
+    if time.time() - last < NODE_DISCOVERY_INTERVAL:
+        return
+
+    try:
+        cfg = load_config()
+        # Find first reachable seed node
+        seed_ip = None
+        for ip in cfg.pve_nodes:
+            r = ssh_single(host=ip, command="echo ok",
+                           key_path=cfg.ssh_key_path, connect_timeout=3,
+                           command_timeout=5, htype="pve", use_sudo=False)
+            if r.returncode == 0:
+                seed_ip = ip
+                break
+
+        if not seed_ip:
+            logger.warn("PVE node discovery: no reachable seed node")
+            with _bg_lock:
+                _bg_cache_ts["pve_nodes"] = time.time()
+            return
+
+        # Get node names + stats from cluster API
+        r = ssh_single(
+            host=seed_ip,
+            command="pvesh get /cluster/resources --type node --output-format json",
+            key_path=cfg.ssh_key_path, command_timeout=15,
+            htype="pve", use_sudo=True, cfg=cfg,
+        )
+
+        node_stats = {}
+        if r.returncode == 0 and r.stdout:
+            try:
+                for n in json.loads(r.stdout):
+                    name = n.get("node", "")
+                    if name:
+                        node_stats[name] = {
+                            "status": "online" if n.get("status") == "online" else "offline",
+                            "cores": n.get("maxcpu", 0),
+                            "ram_gb": round(n.get("maxmem", 0) / (1024 ** 3)),
+                        }
+            except json.JSONDecodeError:
+                pass
+
+        # Get IPs from corosync config
+        r2 = ssh_single(
+            host=seed_ip,
+            command="cat /etc/pve/corosync.conf 2>/dev/null",
+            key_path=cfg.ssh_key_path, command_timeout=10,
+            htype="pve", use_sudo=True, cfg=cfg,
+        )
+
+        node_ips = {}
+        if r2.returncode == 0 and r2.stdout:
+            current_name = None
+            for line in r2.stdout.split("\n"):
+                line = line.strip()
+                if line.startswith("name:"):
+                    current_name = line.split(":", 1)[1].strip()
+                elif line.startswith("ring0_addr:") and current_name:
+                    node_ips[current_name] = line.split(":", 1)[1].strip()
+                    current_name = None
+
+        # Build discovered nodes
+        discovered = []
+        for name, stats in node_stats.items():
+            discovered.append({
+                "name": name,
+                "ip": node_ips.get(name, ""),
+                "status": stats["status"],
+                "cores": stats["cores"],
+                "ram_gb": stats["ram_gb"],
+            })
+
+        result = {"nodes": discovered, "discovered_at": time.time()} if discovered else None
+    except Exception as e:
+        logger.error(f"PVE node discovery failed: {e}")
+        result = None
+
+    with _bg_lock:
+        _bg_cache["pve_nodes"] = result
+        _bg_cache_ts["pve_nodes"] = time.time()
+
+
+def _get_discovered_node_ips():
+    """Get PVE node IPs — prefers auto-discovered, falls back to freq.toml."""
+    with _bg_lock:
+        discovered = _bg_cache.get("pve_nodes")
+    if discovered and discovered.get("nodes"):
+        ips = [n["ip"] for n in discovered["nodes"] if n.get("ip")]
+        if ips:
+            return ips
+    cfg = load_config()
+    return list(cfg.pve_nodes)
+
+
+def _get_discovered_nodes():
+    """Get PVE nodes as list of dicts with name/ip/stats.
+
+    Prefers auto-discovered nodes, falls back to fleet-boundaries config.
+    """
+    with _bg_lock:
+        discovered = _bg_cache.get("pve_nodes")
+    if discovered and discovered.get("nodes"):
+        return discovered["nodes"]
+    cfg = load_config()
+    fb = cfg.fleet_boundaries
+    return [{"name": n.name, "ip": n.ip, "detail": getattr(n, "detail", "")}
+            for n in fb.pve_nodes.values()]
+
+
+def _bg_fetch_vm_tags():
+    """Fetch PVE tags for all VMs via batch SSH.
+
+    Queries each PVE node for VM configs, extracts tags.
+    Result: {vmid: ["tag1", "tag2", ...]}
+    Used for tag-based protection (prod) and categorization (lab, core, etc).
+    """
+    with _bg_lock:
+        last = _bg_cache_ts.get("vm_tags", 0)
+    if time.time() - last < VM_TAGS_INTERVAL:
+        return
+
+    try:
+        cfg = load_config()
+        node_ips = _get_discovered_node_ips()
+        if not node_ips:
+            return
+
+        # Get VM list from cluster resources (one node is enough)
+        seed_ip = node_ips[0]
+        r = ssh_single(
+            host=seed_ip,
+            command="pvesh get /cluster/resources --type vm --output-format json",
+            key_path=cfg.ssh_key_path, command_timeout=15,
+            htype="pve", use_sudo=True, cfg=cfg,
+        )
+        if r.returncode != 0 or not r.stdout:
+            return
+
+        vms = json.loads(r.stdout)
+        # Group VMIDs by node
+        node_vmids = {}
+        for v in vms:
+            if v.get("type") == "qemu":
+                node_vmids.setdefault(v.get("node", ""), []).append(v.get("vmid", 0))
+
+        # Build node name → IP mapping
+        node_ip_map = {n["name"]: n["ip"] for n in _get_discovered_nodes()
+                       if n.get("name") and n.get("ip")}
+
+        # Batch query tags per node
+        all_tags = {}
+        for node_name, vmids in node_vmids.items():
+            nip = node_ip_map.get(node_name)
+            if not nip:
+                continue
+            # Build batch command: for each VMID, print "VMID:<id>" then grep tags
+            cmd_parts = []
+            for vid in vmids:
+                cmd_parts.append(f"echo VMID:{vid}; qm config {vid} 2>/dev/null | grep ^tags || true")
+            batch_cmd = "; ".join(cmd_parts)
+            r = ssh_single(
+                host=nip, command=batch_cmd,
+                key_path=cfg.ssh_key_path, command_timeout=30,
+                htype="pve", use_sudo=True, cfg=cfg,
+            )
+            if r.returncode == 0 and r.stdout:
+                cur_vmid = None
+                for line in r.stdout.strip().split("\n"):
+                    if line.startswith("VMID:"):
+                        cur_vmid = int(line[5:])
+                    elif cur_vmid is not None and line.startswith("tags:"):
+                        raw = line.split(":", 1)[1].strip()
+                        # PVE tags are semicolon-separated
+                        tags = [t.strip() for t in raw.replace(",", ";").split(";") if t.strip()]
+                        all_tags[cur_vmid] = tags
+
+        result = {"tags": all_tags, "fetched_at": time.time()}
+    except Exception as e:
+        logger.error(f"VM tag fetch failed: {e}")
+        result = None
+
+    with _bg_lock:
+        _bg_cache["vm_tags"] = result
+        _bg_cache_ts["vm_tags"] = time.time()
+
+
+def get_vm_tags(vmid: int) -> list:
+    """Get cached PVE tags for a VMID. Returns list of tag strings."""
+    with _bg_lock:
+        cache = _bg_cache.get("vm_tags")
+    if cache and cache.get("tags"):
+        return cache["tags"].get(vmid, [])
+    return []
+
+
+def is_vm_tagged(vmid: int, tag: str) -> bool:
+    """Check if a VM has a specific PVE tag (from cache)."""
+    return tag in get_vm_tags(vmid)
+
+
+def _bg_sync_hosts():
+    """Auto-sync hosts.conf from PVE every hour.
+
+    Keeps hosts.conf labels in sync with PVE VM names so the dashboard,
+    SSH keys, and fleet data all use the same names. Users never need to
+    run 'freq hosts sync' manually.
+    """
+    with _bg_lock:
+        last_sync = _bg_cache_ts.get("hosts_sync", 0)
+    if time.time() - last_sync < HOSTS_SYNC_INTERVAL:
+        return  # Not time yet
+
+    try:
+        import io, sys
+        from freq.modules.hosts import _hosts_sync
+        cfg = load_config()
+        # Suppress fmt output — hosts_sync prints to stdout
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            _hosts_sync(cfg, dry_run=False)
+        finally:
+            sys.stdout = old_stdout
+        result = {"synced_at": time.time(), "ok": True}
+    except Exception as e:
+        logger.error(f"bg hosts sync failed: {e}")
+        result = {"synced_at": time.time(), "ok": False, "error": str(e)}
+
+    with _bg_lock:
+        _bg_cache["hosts_sync"] = result
+        _bg_cache_ts["hosts_sync"] = time.time()
 
 
 def _bg_check_update():
@@ -432,6 +840,14 @@ def _bg_refresh_loop(interval=BG_CACHE_REFRESH_INTERVAL):
     """Continuous background refresh — runs forever as a daemon thread."""
     while True:
         try:
+            _bg_discover_pve_nodes()
+        except Exception as e:
+            logger.error(f"bg node discovery failed: {e}")
+        try:
+            _bg_fetch_vm_tags()
+        except Exception as e:
+            logger.error(f"bg tag fetch failed: {e}")
+        try:
             _bg_probe_health()
         except Exception as e:
             logger.error(f"bg health probe failed: {e}")
@@ -440,9 +856,17 @@ def _bg_refresh_loop(interval=BG_CACHE_REFRESH_INTERVAL):
         except Exception as e:
             logger.error(f"bg infra probe failed: {e}")
         try:
+            _bg_probe_fleet_overview()
+        except Exception as e:
+            logger.error(f"bg fleet overview probe failed: {e}")
+        try:
             _bg_check_update()
         except Exception as e:
             logger.error(f"bg update check failed: {e}")
+        try:
+            _bg_sync_hosts()
+        except Exception as e:
+            logger.error(f"bg hosts sync failed: {e}")
         time.sleep(interval)
 
 
@@ -731,8 +1155,12 @@ def _check_session_role(handler, min_role="operator"):
 
 
 def _find_reachable_pve_node(cfg):
-    """Find the first reachable PVE node. Returns IP string or None."""
-    for ip in cfg.pve_nodes:
+    """Find the first reachable PVE node. Returns IP string or None.
+
+    Prefers auto-discovered nodes, falls back to freq.toml static list.
+    """
+    node_ips = _get_discovered_node_ips()
+    for ip in node_ips:
         r = ssh_single(host=ip, command="sudo pvesh get /version --output-format json",
                        key_path=cfg.ssh_key_path, connect_timeout=3,
                        command_timeout=10, htype="pve", use_sudo=False)
@@ -750,6 +1178,54 @@ def _parse_query_flat(path_str):
     """Parse query params from a URL path string. Returns {key: str}."""
     raw = parse_qs(urlparse(path_str).query)
     return {k: v[0] if v else "" for k, v in raw.items()}
+
+
+def _resolve_container_vm_ip(vm) -> str:
+    """Resolve container VM IP from hosts.conf by label, falling back to hardcoded IP.
+
+    This eliminates hardcoded IPs in containers.toml — if the VM gets re-IPed,
+    the hourly hosts.conf sync picks up the new IP, and container probes
+    automatically use it.
+    """
+    if vm.label:
+        try:
+            from freq.modules.hosts import resolve_host_ip
+            cfg = load_config()
+            resolved = resolve_host_ip(cfg, vm.label)
+            if resolved:
+                return resolved
+        except Exception:
+            pass
+    return vm.ip
+
+
+def _write_containers_toml(path: str, container_vms: dict):
+    """Write container registry back to containers.toml."""
+    lines = ["# FREQ Container Registry\n"]
+    for vm_id in sorted(container_vms.keys()):
+        vm = container_vms[vm_id]
+        lines.append(f"\n[vm.{vm_id}]")
+        if vm.ip:
+            lines.append(f'ip = "{vm.ip}"')
+        if vm.label:
+            lines.append(f'label = "{vm.label}"')
+        if vm.compose_path:
+            lines.append(f'compose_path = "{vm.compose_path}"')
+        for cname, c in sorted(vm.containers.items()):
+            lines.append(f"\n[vm.{vm_id}.containers.{cname}]")
+            if c.port:
+                lines.append(f"port = {c.port}")
+            if c.api_path:
+                lines.append(f'api_path = "{c.api_path}"')
+            if c.auth_type:
+                lines.append(f'auth_type = "{c.auth_type}"')
+            if c.auth_header:
+                lines.append(f'auth_header = "{c.auth_header}"')
+            if c.vault_key:
+                lines.append(f'vault_key = "{c.vault_key}"')
+    lines.append("")
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
 
 
 def _is_first_run():
@@ -784,7 +1260,7 @@ def _get_fleet_vms(cfg):
     """
     fb = cfg.fleet_boundaries
     vm_list = []
-    for node_ip in cfg.pve_nodes:
+    for node_ip in _get_discovered_node_ips():
         r = ssh_single(
             host=node_ip,
             command="pvesh get /cluster/resources --type vm --output-format json",
@@ -798,6 +1274,7 @@ def _get_fleet_vms(cfg):
                 for v in vms:
                     vmid = v.get("vmid", 0)
                     cat_name, tier = fb.categorize(vmid)
+                    tags = get_vm_tags(vmid)
                     vm_list.append({
                         "vmid": vmid,
                         "name": v.get("name", ""),
@@ -808,8 +1285,9 @@ def _get_fleet_vms(cfg):
                         "type": v.get("type", ""),
                         "category": cat_name,
                         "tier": tier,
+                        "tags": tags,
                         "allowed_actions": fb.allowed_actions(vmid),
-                        "is_prod": fb.is_prod(vmid),
+                        "is_prod": fb.is_prod(vmid) or "prod" in tags,
                     })
             except json.JSONDecodeError:
                 pass
@@ -856,6 +1334,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/vm/add-nic": "_serve_vm_add_nic",
         "/api/vm/clear-nics": "_serve_vm_clear_nics",
         "/api/vm/change-ip": "_serve_vm_change_ip",
+        "/api/vm/push-key": "_serve_vm_push_key",
         "/api/vault": "_serve_vault",
         "/api/vault/set": "_serve_vault_set",
         "/api/vault/delete": "_serve_vault_delete",
@@ -887,6 +1366,11 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/media/restart": "_serve_media_restart",
         "/api/media/logs": "_serve_media_logs",
         "/api/media/update": "_serve_media_update",
+        "/api/containers/registry": "_serve_containers_registry",
+        "/api/containers/rescan": "_serve_containers_rescan",
+        "/api/containers/delete": "_serve_containers_delete",
+        "/api/containers/add": "_serve_containers_add",
+        "/api/containers/edit": "_serve_containers_edit",
         "/api/pool": "_serve_pool",
         "/api/host/detail": "_serve_host_detail",
         "/api/lab/status": "_serve_lab_status",
@@ -1004,15 +1488,17 @@ class FreqHandler(BaseHTTPRequestHandler):
         nodes = []
         links = []
 
-        # PVE nodes
-        for pn in fb.pve_nodes.values():
+        # PVE nodes — auto-discovered with fallback to fleet-boundaries
+        for pn in _get_discovered_nodes():
+            pn_name = pn.get("name", "") if isinstance(pn, dict) else pn.name
+            pn_ip = pn.get("ip", "") if isinstance(pn, dict) else pn.ip
             status = "healthy"
-            h = health_map.get(pn.name, {})
+            h = health_map.get(pn_name, {})
             if h.get("status") == "unreachable":
                 status = "unreachable"
             nodes.append({
-                "id": f"pve:{pn.name}", "label": pn.name, "type": "pve",
-                "ip": pn.ip, "status": status,
+                "id": f"pve:{pn_name}", "label": pn_name, "type": "pve",
+                "ip": pn_ip, "status": status,
                 "ram": h.get("ram", ""), "disk": h.get("disk", ""), "load": h.get("load", ""),
             })
 
@@ -1044,7 +1530,7 @@ class FreqHandler(BaseHTTPRequestHandler):
 
         self._json_response({
             "nodes": nodes, "links": links,
-            "pve_count": len(fb.pve_nodes),
+            "pve_count": len(_get_discovered_nodes()),
             "vm_count": len(vm_list),
         })
 
@@ -2147,146 +2633,20 @@ a:hover{{text-decoration:underline}}
         self._json_response({"vms": vm_list, "count": len(vm_list)})
 
     def _serve_fleet_overview(self):
-        """Master endpoint — everything the frontend needs in one call."""
-        cfg = load_config()
-        fb = cfg.fleet_boundaries
-        start = time.monotonic()
-
-        vm_list = _get_fleet_vms(cfg)
-
-        # Physical devices — ping each to check reachability
-        physical = []
-        for dev in fb.physical.values():
-            reachable = False
-            try:
-                r = subprocess.run(
-                    ["ping", "-c", "1", "-W", "1", dev.ip],
-                    capture_output=True, timeout=2,
-                )
-                reachable = r.returncode == 0
-            except (subprocess.TimeoutExpired, OSError):
-                pass
-            physical.append({
-                "key": dev.key, "ip": dev.ip, "label": dev.label,
-                "type": dev.device_type, "tier": dev.tier, "detail": dev.detail,
-                "reachable": reachable,
+        """Master endpoint — serves from background cache (instant)."""
+        with _bg_lock:
+            cached = _bg_cache.get("fleet_overview")
+        if cached:
+            self._json_response(cached)
+        else:
+            # First request before background probe completes — return skeleton
+            self._json_response({
+                "vms": [], "vm_nics": {}, "physical": [], "pve_nodes": [],
+                "vlans": [], "nic_profiles": {}, "categories": {},
+                "summary": {"total_vms": 0, "running": 0, "stopped": 0,
+                             "prod_count": 0, "lab_count": 0, "template_count": 0},
+                "duration": 0, "_loading": True,
             })
-
-        # PVE nodes — enrich with live stats from PVE API
-        node_stats = {}
-        for node_ip in cfg.pve_nodes[:1]:  # query one node for cluster-wide data
-            r = ssh_single(
-                host=node_ip,
-                command="pvesh get /cluster/resources --type node --output-format json",
-                key_path=cfg.ssh_key_path,
-                command_timeout=15,
-                htype="pve", use_sudo=True, cfg=cfg,
-            )
-            if r.returncode == 0 and r.stdout:
-                try:
-                    for n in json.loads(r.stdout):
-                        node_stats[n.get("node", "")] = {
-                            "cores": n.get("maxcpu", 0),
-                            "ram_gb": round(n.get("maxmem", 0) / (1024 ** 3)),
-                        }
-                except json.JSONDecodeError:
-                    pass
-
-        pve_nodes = []
-        for node in fb.pve_nodes.values():
-            entry = {"name": node.name, "ip": node.ip, "detail": node.detail}
-            ns = node_stats.get(node.name, {})
-            if ns:
-                entry["cores"] = ns["cores"]
-                entry["ram_gb"] = ns["ram_gb"]
-            pve_nodes.append(entry)
-
-        # Category summaries
-        cat_summary = {}
-        for cat_name, cat_info in fb.categories.items():
-            running = sum(1 for v in vm_list if v["category"] == cat_name and v["status"] == "running")
-            total = sum(1 for v in vm_list if v["category"] == cat_name)
-            cat_summary[cat_name] = {
-                "count": total,
-                "running": running,
-                "description": cat_info.get("description", ""),
-                "tier": cat_info.get("tier", "probe"),
-            }
-
-        # Overall summary (exclude templates from main counts)
-        non_template = [v for v in vm_list if v["category"] != "templates"]
-        total_vms = len(non_template)
-        running = sum(1 for v in non_template if v["status"] == "running")
-        stopped = sum(1 for v in non_template if v["status"] == "stopped")
-        prod_count = sum(1 for v in non_template if v["is_prod"])
-        lab_count = sum(1 for v in non_template if v["category"] == "lab")
-        template_count = sum(1 for v in vm_list if v["category"] == "templates")
-
-        # VM NIC data — batch fetch per node, parse VLAN tags
-        vlan_id_to_name = {v.id: v.name for v in cfg.vlans}
-        # Tag 2550 is MGMT VLAN (untagged on some bridges as vmbr0v2550)
-        if 2550 not in vlan_id_to_name:
-            vlan_id_to_name[2550] = "MGMT"
-        vm_nics = {}
-        # Group VMs by node
-        node_vmids = {}
-        for v in vm_list:
-            node_vmids.setdefault(v["node"], []).append(v["vmid"])
-        node_ips = {n.name: n.ip for n in fb.pve_nodes.values()}
-        for node_name, vmids in node_vmids.items():
-            nip = node_ips.get(node_name)
-            if not nip:
-                continue
-            # Batch: dump net* lines for all VMIDs on this node
-            cmd_parts = []
-            for vid in vmids:
-                cmd_parts.append(f"echo VMID:{vid}; qm config {vid} 2>/dev/null | grep ^net")
-            batch_cmd = "; ".join(cmd_parts)
-            r = ssh_single(
-                host=nip, command=batch_cmd,
-                key_path=cfg.ssh_key_path,
-                command_timeout=20,
-                htype="pve", use_sudo=True, cfg=cfg,
-            )
-            if r.returncode == 0 and r.stdout:
-                cur_vmid = None
-                for line in r.stdout.strip().split("\n"):
-                    if line.startswith("VMID:"):
-                        cur_vmid = int(line[5:])
-                        vm_nics[cur_vmid] = []
-                    elif cur_vmid is not None and line.startswith("net"):
-                        # Parse: net0: virtio=XX,bridge=vmbr0,tag=2550
-                        nic_name = line.split(":")[0].strip()
-                        tag_match = re.search(r'tag=(\d+)', line)
-                        vlan_tag = int(tag_match.group(1)) if tag_match else 0
-                        vlan_name = vlan_id_to_name.get(vlan_tag, f"VLAN {vlan_tag}" if vlan_tag else "UNTAGGED")
-                        vm_nics[cur_vmid].append({
-                            "nic": nic_name,
-                            "tag": vlan_tag,
-                            "vlan_name": vlan_name,
-                        })
-
-        duration = round(time.monotonic() - start, 2)
-        self._json_response({
-            "vms": vm_list,
-            "vm_nics": {str(k): v for k, v in vm_nics.items()},
-            "physical": physical,
-            "pve_nodes": pve_nodes,
-            "vlans": [{"id": v.id, "name": v.name, "prefix": v.prefix, "gateway": v.gateway,
-                       "cidr": v.subnet.split("/")[1] if "/" in v.subnet else "24"}
-                      for v in cfg.vlans],
-            "nic_profiles": cfg.nic_profiles,
-            "categories": cat_summary,
-            "summary": {
-                "total_vms": total_vms,
-                "running": running,
-                "stopped": stopped,
-                "prod_count": prod_count,
-                "lab_count": lab_count,
-                "template_count": template_count,
-            },
-            "duration": duration,
-        })
 
     def _serve_agents(self):
         """Agent registry."""
@@ -2327,7 +2687,7 @@ a:hover{{text-decoration:underline}}
             "brand": cfg.brand,
             "build": cfg.build,
             "hosts": len(cfg.hosts),
-            "pve_nodes": len(cfg.pve_nodes),
+            "pve_nodes": len(_get_discovered_nodes()),
             "cluster": cfg.cluster_name,
             "install_dir": cfg.install_dir,
             "subtitle": getattr(pack, "subtitle", cfg.brand) if pack else cfg.brand,
@@ -2345,6 +2705,8 @@ a:hover{{text-decoration:underline}}
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.send_header("Pragma", "no-cache")
         self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(body)
@@ -3107,7 +3469,8 @@ a:hover{{text-decoration:underline}}
         allowed, err = _check_vm_permission(cfg, vmid, "destroy")
         if not allowed:
             self._json_response({"error": err}); return
-        if is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges):
+        if is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges,
+                             vm_tags=get_vm_tags(vmid)):
             self._json_response({"error": f"VMID {vmid} is PROTECTED"}); return
         try:
             node_ip = _find_reachable_node(cfg)
@@ -3291,7 +3654,11 @@ a:hover{{text-decoration:underline}}
         keys = []
         for h in cfg.hosts:
             r = results.get(h.label)
-            keys.append({"host": h.label, "ip": h.ip, "reachable": r is not None and r.returncode == 0,
+            # Host is DOWN only if truly unreachable (timeout, refused, no route)
+            err = r.stderr or "" if r else ""
+            down = r is None or r.returncode == 124 or "Connection timed out" in err or "Connection refused" in err or "No route to host" in err
+            reachable = not down
+            keys.append({"host": h.label, "ip": h.ip, "reachable": reachable,
                          "key_count": int(r.stdout.strip()) if r and r.returncode == 0 and r.stdout.strip().isdigit() else 0})
         self._json_response({"hosts": keys, "ssh_key": cfg.ssh_key_path})
 
@@ -3317,6 +3684,7 @@ a:hover{{text-decoration:underline}}
             "install_dir": cfg.install_dir, "hosts_count": len(cfg.hosts),
             "vlans_count": len(cfg.vlans), "distros_count": len(cfg.distros),
             "protected_vmids": cfg.protected_vmids,
+            "pve_nodes_discovered": [n.get("name", "") for n in _get_discovered_nodes()],
             "kill_chain": _load_kill_chain(cfg) or ["Operator", "VPN", "Firewall", "Switch", "Network", "Target"],
             # Notification provider status (booleans only — no secrets)
             "discord_webhook": bool(cfg.discord_webhook),
@@ -3510,7 +3878,7 @@ a:hover{{text-decoration:underline}}
 
         # PVE cluster info
         pve_info = {"nodes": [], "vms": []}
-        for node_ip in cfg.pve_nodes:
+        for node_ip in _get_discovered_node_ips():
             r = ssh_single(host=node_ip,
                            command="pvesh get /cluster/resources --type vm --output-format json 2>/dev/null",
                            key_path=cfg.ssh_key_path, connect_timeout=3,
@@ -3568,8 +3936,9 @@ a:hover{{text-decoration:underline}}
         cfg = load_config()
         containers = []
         for vm in sorted(cfg.container_vms.values(), key=lambda v: v.vm_id):
+            resolved_ip = _resolve_container_vm_ip(vm)
             r = ssh_single(
-                host=vm.ip,
+                host=resolved_ip,
                 command="docker ps -a --format '{{.Names}}|{{.Status}}' 2>/dev/null",
                 key_path=cfg.ssh_key_path, connect_timeout=3,
                 command_timeout=10, htype="docker", use_sudo=False,
@@ -3589,7 +3958,7 @@ a:hover{{text-decoration:underline}}
                         break
                 containers.append({
                     "name": cname, "vm_id": vm.vm_id, "vm_label": vm.label,
-                    "vm_ip": vm.ip, "port": container.port,
+                    "vm_ip": resolved_ip, "port": container.port,
                     "status": "up" if "Up" in status else "down",
                     "detail": status,
                 })
@@ -3601,12 +3970,13 @@ a:hover{{text-decoration:underline}}
         results = []
         skipped = 0
         for vm in sorted(cfg.container_vms.values(), key=lambda v: v.vm_id):
+            resolved_ip = _resolve_container_vm_ip(vm)
             for cname, container in vm.containers.items():
                 if not container.port or not container.api_path:
                     skipped += 1
                     continue
                 r = ssh_single(
-                    host=vm.ip,
+                    host=resolved_ip,
                     command=f"curl -s -o /dev/null -w '%{{http_code}}' "
                             f"--connect-timeout 2 'http://localhost:{container.port}{container.api_path}' "
                             f"2>/dev/null || echo 000",
@@ -3627,6 +3997,7 @@ a:hover{{text-decoration:underline}}
         cfg = load_config()
         downloads = []
         for vm in cfg.container_vms.values():
+            resolved_ip = _resolve_container_vm_ip(vm)
             for cname, container in vm.containers.items():
                 if "qbittorrent" in cname.lower():
                     # qBit needs session cookie auth — try login first
@@ -3636,12 +4007,12 @@ a:hover{{text-decoration:underline}}
                         logger.warn("qBittorrent password not in vault — skipping download check")
                         continue
                     r = ssh_single(
-                        host=vm.ip,
+                        host=resolved_ip,
                         command=f"curl -s -c /tmp/qb.cookie --connect-timeout 3 "
-                                f"'http://{vm.ip}:{container.port}/api/v2/auth/login' "
+                                f"'http://localhost:{container.port}/api/v2/auth/login' "
                                 f"-d 'username={qb_user}&password={qb_pass}' && "
                                 f"curl -s -b /tmp/qb.cookie --connect-timeout 3 "
-                                f"'http://{vm.ip}:{container.port}/api/v2/torrents/info?filter=downloading'",
+                                f"'http://localhost:{container.port}/api/v2/torrents/info?filter=downloading'",
                         key_path=cfg.ssh_key_path, connect_timeout=3,
                         command_timeout=10, htype="docker", use_sudo=False,
                     )
@@ -3671,9 +4042,9 @@ a:hover{{text-decoration:underline}}
                     except Exception as e:
                         logger.warn(f"vault read failed for {cname}: {e}")
                     r = ssh_single(
-                        host=vm.ip,
+                        host=resolved_ip,
                         command=f"curl -s --connect-timeout 3 "
-                                f"'http://{vm.ip}:{container.port}/api?mode=queue&apikey={api_key}&output=json'",
+                                f"'http://localhost:{container.port}/api?mode=queue&apikey={api_key}&output=json'",
                         key_path=cfg.ssh_key_path, connect_timeout=3,
                         command_timeout=10, htype="docker", use_sudo=False,
                     )
@@ -3717,9 +4088,9 @@ a:hover{{text-decoration:underline}}
             except Exception as e:
                 logger.warn(f"vault read failed for {container.vault_key}: {e}")
             r = ssh_single(
-                host=vm.ip,
+                host=_resolve_container_vm_ip(vm),
                 command=f"curl -s --connect-timeout 3 "
-                        f"'http://{vm.ip}:{container.port}/api/v2?apikey={api_key}&cmd=get_activity'",
+                        f"'http://localhost:{container.port}/api/v2?apikey={api_key}&cmd=get_activity'",
                 key_path=cfg.ssh_key_path, connect_timeout=3,
                 command_timeout=10, htype="docker", use_sudo=False,
             )
@@ -3739,24 +4110,37 @@ a:hover{{text-decoration:underline}}
         self._json_response({"sessions": sessions, "count": len(sessions)})
 
     def _serve_media_dashboard(self):
-        """Aggregate media dashboard data."""
+        """Aggregate media dashboard data — from health cache (instant)."""
         cfg = load_config()
 
-        total = 0
+        # Derive from health cache — already has docker counts per host
+        with _bg_lock:
+            health = _bg_cache.get("health")
+
+        total = sum(len(vm.containers) for vm in cfg.container_vms.values())
         running = 0
-        for vm in cfg.container_vms.values():
-            r = ssh_single(
-                host=vm.ip,
-                command="docker ps --format '{{.Names}}' 2>/dev/null | wc -l",
-                key_path=cfg.ssh_key_path, connect_timeout=3,
-                command_timeout=10, htype="docker", use_sudo=False,
-            )
-            total += len(vm.containers)
-            if r.returncode == 0:
-                try:
-                    running += int(r.stdout.strip())
-                except ValueError:
-                    pass
+        if health and "hosts" in health:
+            docker_ips = {_resolve_container_vm_ip(vm) for vm in cfg.container_vms.values()}
+            for h in health["hosts"]:
+                if h.get("ip") in docker_ips and h.get("status") != "unreachable":
+                    try:
+                        running += int(h.get("docker", "0"))
+                    except (ValueError, TypeError):
+                        pass
+        elif not health:
+            # No cache yet — do a quick live count as fallback
+            for vm in cfg.container_vms.values():
+                r = ssh_single(
+                    host=_resolve_container_vm_ip(vm),
+                    command="docker ps --format '{{.Names}}' 2>/dev/null | wc -l",
+                    key_path=cfg.ssh_key_path, connect_timeout=3,
+                    command_timeout=10, htype="docker", use_sudo=False,
+                )
+                if r.returncode == 0:
+                    try:
+                        running += int(r.stdout.strip())
+                    except ValueError:
+                        pass
 
         self._json_response({
             "containers_total": total,
@@ -3782,7 +4166,7 @@ a:hover{{text-decoration:underline}}
             return
 
         r = ssh_single(
-            host=vm.ip, command=f"docker restart {container.name}",
+            host=_resolve_container_vm_ip(vm), command=f"docker restart {container.name}",
             key_path=cfg.ssh_key_path, connect_timeout=3,
             command_timeout=60, htype="docker", use_sudo=False,
         )
@@ -3812,7 +4196,7 @@ a:hover{{text-decoration:underline}}
             return
 
         r = ssh_single(
-            host=vm.ip, command=f"docker logs --tail {lines} {container.name} 2>&1",
+            host=_resolve_container_vm_ip(vm), command=f"docker logs --tail {lines} {container.name} 2>&1",
             key_path=cfg.ssh_key_path, connect_timeout=3,
             command_timeout=15, htype="docker", use_sudo=False,
         )
@@ -3841,7 +4225,7 @@ a:hover{{text-decoration:underline}}
 
         compose_dir = vm.compose_path.rsplit("/", 1)[0]
         r = ssh_single(
-            host=vm.ip,
+            host=_resolve_container_vm_ip(vm),
             command=f"cd {compose_dir} && docker compose pull {container.name} && "
                     f"docker compose up -d {container.name}",
             key_path=cfg.ssh_key_path, connect_timeout=3,
@@ -3853,6 +4237,184 @@ a:hover{{text-decoration:underline}}
             "vm": vm.label,
             "output": r.stdout[:500] if r.stdout else r.stderr[:500],
         })
+
+    # ── Container Registry Management ──────────────────────────────────
+
+    def _serve_containers_registry(self):
+        """List all registered containers from containers.toml."""
+        cfg = load_config()
+        entries = []
+        for vm in sorted(cfg.container_vms.values(), key=lambda v: v.vm_id):
+            for cname, c in vm.containers.items():
+                entries.append({
+                    "name": cname, "vm_id": vm.vm_id, "vm_label": vm.label,
+                    "vm_ip": vm.ip, "port": c.port, "api_path": c.api_path,
+                })
+        self._json_response({"containers": entries})
+
+    def _serve_containers_rescan(self):
+        """SSH into all docker VMs, discover running containers, update registry."""
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
+        cfg = load_config()
+        discovered = {}  # vm_id -> list of container names
+        for vm in cfg.container_vms.values():
+            r = ssh_single(
+                host=_resolve_container_vm_ip(vm),
+                command="docker ps -a --format '{{.Names}}' 2>/dev/null",
+                key_path=cfg.ssh_key_path, connect_timeout=3,
+                command_timeout=10, htype="docker", use_sudo=False,
+            )
+            names = []
+            if r.returncode == 0 and r.stdout:
+                for line in r.stdout.strip().split("\n"):
+                    n = line.strip()
+                    if n:
+                        names.append(n)
+            discovered[vm.vm_id] = names
+
+        # Compare: find stale (registered but not on any VM) and new (on VM but not registered)
+        registered = {}
+        for vm in cfg.container_vms.values():
+            for cname in vm.containers:
+                registered[f"{vm.vm_id}:{cname}"] = {"name": cname, "vm_id": vm.vm_id, "vm_label": vm.label}
+
+        stale = []
+        for key, info in registered.items():
+            vm_id = info["vm_id"]
+            cname = info["name"]
+            vm_containers = discovered.get(vm_id, [])
+            # Check if container exists (case-insensitive partial match)
+            found = any(cname.lower() in dc.lower() or dc.lower() in cname.lower() for dc in vm_containers)
+            if not found:
+                stale.append(info)
+
+        new_found = []
+        for vm_id, names in discovered.items():
+            vm = cfg.container_vms.get(vm_id)
+            if not vm:
+                continue
+            for dc in names:
+                # Check if already registered
+                already = any(dc.lower() in cname.lower() or cname.lower() in dc.lower()
+                              for cname in vm.containers)
+                if not already:
+                    new_found.append({"name": dc, "vm_id": vm_id, "vm_label": vm.label})
+
+        self._json_response({
+            "discovered": {str(k): v for k, v in discovered.items()},
+            "stale": stale,
+            "new": new_found,
+            "vm_count": len(cfg.container_vms),
+        })
+
+    def _serve_containers_delete(self):
+        """Remove a container from the registry (containers.toml)."""
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
+        query = _parse_query_flat(self.path)
+        name = query.get("name", "")
+        try:
+            vm_id = int(query.get("vm_id", "0"))
+        except (ValueError, TypeError):
+            self._json_response({"error": "Invalid vm_id"}); return
+        if not name or not vm_id:
+            self._json_response({"error": "name and vm_id required"}); return
+
+        cfg = load_config()
+        toml_path = os.path.join(cfg.conf_dir, "containers.toml")
+        vm = cfg.container_vms.get(vm_id)
+        if not vm:
+            self._json_response({"error": f"VM {vm_id} not in registry"}); return
+        if name not in vm.containers:
+            self._json_response({"error": f"Container {name} not found on VM {vm_id}"}); return
+
+        del vm.containers[name]
+        _write_containers_toml(toml_path, cfg.container_vms)
+        self._json_response({"ok": True, "deleted": name, "vm_id": vm_id})
+
+    def _serve_containers_add(self):
+        """Add a container to the registry."""
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
+        query = _parse_query_flat(self.path)
+        name = query.get("name", "").strip()
+        try:
+            vm_id = int(query.get("vm_id", "0"))
+        except (ValueError, TypeError):
+            self._json_response({"error": "Invalid vm_id"}); return
+        try:
+            port = int(query.get("port", "0"))
+        except (ValueError, TypeError):
+            port = 0
+        if not name or not vm_id:
+            self._json_response({"error": "name and vm_id required"}); return
+
+        cfg = load_config()
+        toml_path = os.path.join(cfg.conf_dir, "containers.toml")
+        vm = cfg.container_vms.get(vm_id)
+        if not vm:
+            self._json_response({"error": f"VM {vm_id} not in registry"}); return
+        if name in vm.containers:
+            self._json_response({"error": f"Container {name} already registered on VM {vm_id}"}); return
+
+        from freq.core.config import Container
+        vm.containers[name] = Container(name=name, vm_id=vm_id, port=port)
+        _write_containers_toml(toml_path, cfg.container_vms)
+        self._json_response({"ok": True, "added": name, "vm_id": vm_id})
+
+    def _serve_containers_edit(self):
+        """Edit a container in the registry (move VM, change port/api_path)."""
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
+        query = _parse_query_flat(self.path)
+        name = query.get("name", "").strip()
+        try:
+            old_vm_id = int(query.get("old_vm_id", "0"))
+        except (ValueError, TypeError):
+            self._json_response({"error": "Invalid old_vm_id"}); return
+        try:
+            new_vm_id = int(query.get("new_vm_id", "0"))
+        except (ValueError, TypeError):
+            self._json_response({"error": "Invalid new_vm_id"}); return
+        try:
+            port = int(query.get("port", "0"))
+        except (ValueError, TypeError):
+            port = 0
+        api_path = query.get("api_path", "")
+        if not name or not old_vm_id or not new_vm_id:
+            self._json_response({"error": "name, old_vm_id, new_vm_id required"}); return
+
+        cfg = load_config()
+        toml_path = os.path.join(cfg.conf_dir, "containers.toml")
+        old_vm = cfg.container_vms.get(old_vm_id)
+        if not old_vm or name not in old_vm.containers:
+            self._json_response({"error": f"Container {name} not found on VM {old_vm_id}"}); return
+
+        if old_vm_id == new_vm_id:
+            # Same VM — just update fields
+            c = old_vm.containers[name]
+            c.port = port
+            c.api_path = api_path
+        else:
+            # Moving to a different VM
+            new_vm = cfg.container_vms.get(new_vm_id)
+            if not new_vm:
+                self._json_response({"error": f"VM {new_vm_id} not in registry"}); return
+            if name in new_vm.containers:
+                self._json_response({"error": f"Container {name} already exists on VM {new_vm_id}"}); return
+            from freq.core.config import Container
+            new_vm.containers[name] = Container(
+                name=name, vm_id=new_vm_id, port=port, api_path=api_path,
+            )
+            del old_vm.containers[name]
+
+        _write_containers_toml(toml_path, cfg.container_vms)
+        self._json_response({"ok": True, "name": name, "vm_id": new_vm_id})
 
     def _serve_vm_template(self):
         """Convert VM to template (GET with ?vmid=xxx)."""
@@ -4226,11 +4788,58 @@ a:hover{{text-decoration:underline}}
         except Exception as e:
             self._json_response({"error": f"SSH operation failed: {e}"})
 
+    def _serve_vm_push_key(self):
+        """Push the freq SSH key to a target VM's freq-admin authorized_keys."""
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
+        cfg = load_config()
+        query = _parse_query_flat(self.path)
+        target_ip = query.get("ip", "")
+        if not target_ip or not valid_ip(target_ip):
+            self._json_response({"error": "Valid IP required"}); return
+
+        # Read the public key
+        pub_path = cfg.ssh_key_path + ".pub"
+        if not os.path.isfile(pub_path):
+            self._json_response({"error": f"Public key not found: {pub_path}"}); return
+        with open(pub_path) as f:
+            pubkey = f.read().strip()
+        if not pubkey:
+            self._json_response({"error": "Public key file is empty"}); return
+
+        # SSH via freq-ops (who has sudo) to write the key for freq-admin
+        escaped_key = pubkey.replace('"', '\\"')
+        cmd = (
+            f'sudo mkdir -p /home/freq-admin/.ssh && '
+            f'echo "{escaped_key}" | sudo tee /home/freq-admin/.ssh/authorized_keys > /dev/null && '
+            f'sudo chown -R freq-admin:freq-admin /home/freq-admin/.ssh && '
+            f'sudo chmod 700 /home/freq-admin/.ssh && '
+            f'sudo chmod 600 /home/freq-admin/.ssh/authorized_keys'
+        )
+        # Use freq-ops (the fleet admin with sudo everywhere) — NOT freq-admin
+        r = ssh_single(
+            host=target_ip, command=cmd,
+            user="freq-ops", key_path=os.path.expanduser("~/.ssh/id_rsa"),
+            connect_timeout=5, command_timeout=15, htype="linux", use_sudo=False,
+        )
+        if r.returncode != 0:
+            self._json_response({"error": f"Key push failed: {r.stderr or r.stdout}"}); return
+
+        # Verify: try connecting as freq-admin with the freq key
+        r2 = ssh_single(
+            host=target_ip, command="echo ok",
+            key_path=cfg.ssh_key_path, connect_timeout=3,
+            command_timeout=5, htype="docker", use_sudo=False,
+        )
+        verified = r2.returncode == 0 and "ok" in (r2.stdout or "")
+        self._json_response({"ok": True, "verified": verified, "ip": target_ip})
+
     def _serve_pool(self):
         """List PVE pools."""
         cfg = load_config()
         pools = []
-        for ip in cfg.pve_nodes:
+        for ip in _get_discovered_node_ips():
             r = ssh_single(host=ip,
                            command="sudo pvesh get /pools --output-format json 2>/dev/null",
                            key_path=cfg.ssh_key_path, connect_timeout=3,
