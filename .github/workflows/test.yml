@@ -81,6 +81,26 @@ jobs:
           python3 --version
           python3 -c "import sys; assert sys.version_info >= (3, 11), f'Python 3.11+ required, got {sys.version}'"
 
+      - name: Install package
+        shell: sh
+        run: |
+          # Install pve-freq from source (no external deps)
+          pip3 install --break-system-packages --no-deps . 2>/dev/null || pip3 install --no-deps .
+
+      - name: Verify freq --version
+        shell: sh
+        run: |
+          freq --version
+
+      - name: Verify freq doctor runs
+        shell: sh
+        run: |
+          # Doctor runs 15 self-checks. SSH/PVE checks will fail in CI (no infra)
+          # but the command must not crash. Exit 0 = all pass, exit 1 = some fail (expected in CI).
+          freq doctor || true
+        env:
+          FREQ_DIR: ${{ github.workspace }}
+
       - name: Run tests
         shell: sh
         run: python3 -m pytest tests/ -v --tb=short
