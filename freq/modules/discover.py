@@ -51,11 +51,11 @@ async def _scan_subnet(prefix: str, start: int = SCAN_HOST_START, end: int = SCA
     return sorted(alive, key=lambda x: int(x.split(".")[-1]))
 
 
-async def _identify_host(ip: str, key_path: str) -> dict:
+async def _identify_host(ip: str, key_path: str, cfg=None) -> dict:
     """Try to SSH into a host and identify its platform."""
     info = {"ip": ip, "reachable": False, "hostname": "", "os": "", "type": "unknown"}
 
-    # Try SSH as service account
+    # Try SSH as service account (cfg needed for correct user resolution)
     r = await async_run(
         host=ip,
         command="hostname; cat /etc/os-release 2>/dev/null | grep -oP '(?<=^ID=).*' | head -1",
@@ -64,6 +64,7 @@ async def _identify_host(ip: str, key_path: str) -> dict:
         command_timeout=IDENTIFY_CMD_TIMEOUT,
         htype="linux",
         use_sudo=False,
+        cfg=cfg,
     )
 
     if r.returncode != 0:
@@ -82,7 +83,7 @@ async def _identify_host(ip: str, key_path: str) -> dict:
         r2 = await async_run(
             host=ip, command="which pvesh 2>/dev/null",
             key_path=key_path, connect_timeout=IDENTIFY_CONNECT_TIMEOUT, command_timeout=IDENTIFY_CMD_TIMEOUT,
-            htype="linux", use_sudo=False,
+            htype="linux", use_sudo=False, cfg=cfg,
         )
         if r2.returncode == 0 and r2.stdout.strip():
             info["type"] = "pve"
@@ -91,7 +92,7 @@ async def _identify_host(ip: str, key_path: str) -> dict:
             r3 = await async_run(
                 host=ip, command="docker --version 2>/dev/null",
                 key_path=key_path, connect_timeout=IDENTIFY_CONNECT_TIMEOUT, command_timeout=IDENTIFY_CMD_TIMEOUT,
-                htype="linux", use_sudo=False,
+                htype="linux", use_sudo=False, cfg=cfg,
             )
             if r3.returncode == 0 and "Docker" in r3.stdout:
                 info["type"] = "docker"
@@ -107,10 +108,11 @@ async def _identify_host(ip: str, key_path: str) -> dict:
     return info
 
 
-def scan_and_identify(prefix: str, key_path: str, start: int = 1, end: int = 254) -> tuple:
+def scan_and_identify(prefix: str, key_path: str, start: int = 1, end: int = 254, cfg=None) -> tuple:
     """Scan a subnet and identify hosts. Returns (alive_ips, hosts_info).
 
-    Reusable core — called by both `freq discover` and `freq init` Phase 5.
+    Reusable core — called by both `freq discover` and `freq init` Phase 7.
+    cfg is needed so SSH uses the correct service account (not hardcoded default).
     """
     fmt.step_start("Ping sweep")
     scan_start = time.monotonic()
@@ -124,7 +126,7 @@ def scan_and_identify(prefix: str, key_path: str, start: int = 1, end: int = 254
     fmt.step_start("Identifying hosts via SSH")
 
     async def _identify_all():
-        tasks = [_identify_host(ip, key_path) for ip in alive]
+        tasks = [_identify_host(ip, key_path, cfg=cfg) for ip in alive]
         return await asyncio.gather(*tasks)
 
     hosts_info = asyncio.run(_identify_all())
@@ -246,7 +248,7 @@ def cmd_discover(cfg: FreqConfig, pack, args) -> int:
     fmt.line(f"{fmt.C.BOLD}Scanning {prefix}.{start}-{end}...{fmt.C.RESET}")
     fmt.blank()
 
-    alive, hosts_info = scan_and_identify(prefix, cfg.ssh_key_path, start, end)
+    alive, hosts_info = scan_and_identify(prefix, cfg.ssh_key_path, start, end, cfg=cfg)
 
     if not alive:
         fmt.blank()

@@ -226,30 +226,59 @@ def divider(title: str = "") -> None:
 
 
 # --- Step Indicators ---
+# All step functions render inside the bordered box.
+
+def _bordered_line(content: str, end: str = "\n") -> None:
+    """Print content wrapped in box borders with correct padding."""
+    w = term_width()
+    inner = w - 2
+    content_vis = visible_len(content)
+    if content_vis > inner:
+        content = truncate(content, inner)
+        content_vis = inner
+    pad = max(0, inner - content_vis)
+    print(f"{C.PURPLE}{B_V()}{C.RESET}{content}{' ' * pad}{C.PURPLE}{B_V()}{C.RESET}", end=end, flush=(end != "\n"))
+
 
 def step_start(msg: str) -> None:
-    """Print a step-in-progress indicator."""
-    print(f"  {C.CYAN}{S.ARROW}{C.RESET} {msg}...", end="", flush=True)
+    """Print a step-in-progress indicator (bordered)."""
+    _bordered_line(f"  {C.CYAN}{S.ARROW}{C.RESET} {msg}...", end="")
 
 
 def step_ok(msg: str = "done") -> None:
-    """Complete a step with success."""
-    print(f"\r  {C.GREEN}{S.TICK}{C.RESET} {msg}")
+    """Complete a step with success (bordered)."""
+    w = term_width()
+    inner = w - 2
+    content = f"  {C.GREEN}{S.TICK}{C.RESET} {msg}"
+    content_vis = visible_len(content)
+    if content_vis > inner:
+        content = truncate(content, inner)
+        content_vis = inner
+    pad = max(0, inner - content_vis)
+    print(f"\r{C.PURPLE}{B_V()}{C.RESET}{content}{' ' * pad}{C.PURPLE}{B_V()}{C.RESET}")
 
 
 def step_fail(msg: str = "failed") -> None:
-    """Complete a step with failure."""
-    print(f"\r  {C.RED}{S.CROSS}{C.RESET} {msg}")
+    """Complete a step with failure (bordered)."""
+    w = term_width()
+    inner = w - 2
+    content = f"  {C.RED}{S.CROSS}{C.RESET} {msg}"
+    content_vis = visible_len(content)
+    if content_vis > inner:
+        content = truncate(content, inner)
+        content_vis = inner
+    pad = max(0, inner - content_vis)
+    print(f"\r{C.PURPLE}{B_V()}{C.RESET}{content}{' ' * pad}{C.PURPLE}{B_V()}{C.RESET}")
 
 
 def step_warn(msg: str) -> None:
-    """Print a warning step."""
-    print(f"  {C.YELLOW}{S.WARN}{C.RESET}  {msg}")
+    """Print a warning step (bordered)."""
+    _bordered_line(f"  {C.YELLOW}{S.WARN}{C.RESET}  {msg}")
 
 
 def step_info(msg: str) -> None:
-    """Print an info step."""
-    print(f"  {C.CYAN}{S.INFO}{C.RESET}  {msg}")
+    """Print an info step (bordered)."""
+    _bordered_line(f"  {C.CYAN}{S.INFO}{C.RESET}  {msg}")
 
 
 # --- Badges ---
@@ -273,23 +302,23 @@ def badge(status: str) -> str:
 # --- Table Helpers ---
 
 def table_header(*columns: tuple) -> None:
-    """Print a table header row. Each column is (label, width)."""
+    """Print a bordered table header row. Each column is (label, width)."""
     parts = []
     for label, width in columns:
         parts.append(f"{C.BOLD}{label:<{width}}{C.RESET}")
-    print(f"  {'  '.join(parts)}")
+    _bordered_line(f"  {'  '.join(parts)}")
     total = sum(w for _, w in columns) + 2 * (len(columns) - 1) + 2
-    print(f"  {C.DARK_GRAY}{B_H() * total}{C.RESET}")
+    _bordered_line(f"  {C.DARK_GRAY}{B_H() * total}{C.RESET}")
 
 
 def table_row(*cells: tuple) -> None:
-    """Print a table data row. Each cell is (value, width)."""
+    """Print a bordered table data row. Each cell is (value, width)."""
     parts = []
     for value, width in cells:
         vis = visible_len(str(value))
         padding = max(0, width - vis)
         parts.append(f"{value}{' ' * padding}")
-    print(f"  {'  '.join(parts)}")
+    _bordered_line(f"  {'  '.join(parts)}")
 
 
 # --- Direct Output ---

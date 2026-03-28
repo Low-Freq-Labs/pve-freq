@@ -4991,19 +4991,19 @@ a:hover{{text-decoration:underline}}
         if not pubkey:
             self._json_response({"error": "Public key file is empty"}); return
 
-        # SSH via freq-ops (who has sudo) to write the key for freq-admin
+        # SSH as service account (who has sudo) to write the key
+        svc_account = self.cfg.ssh_service_account
         escaped_key = pubkey.replace('"', '\\"')
         cmd = (
-            f'sudo mkdir -p /home/freq-admin/.ssh && '
-            f'echo "{escaped_key}" | sudo tee /home/freq-admin/.ssh/authorized_keys > /dev/null && '
-            f'sudo chown -R freq-admin:freq-admin /home/freq-admin/.ssh && '
-            f'sudo chmod 700 /home/freq-admin/.ssh && '
-            f'sudo chmod 600 /home/freq-admin/.ssh/authorized_keys'
+            f'sudo mkdir -p /home/{svc_account}/.ssh && '
+            f'echo "{escaped_key}" | sudo tee /home/{svc_account}/.ssh/authorized_keys > /dev/null && '
+            f'sudo chown -R {svc_account}:{svc_account} /home/{svc_account}/.ssh && '
+            f'sudo chmod 700 /home/{svc_account}/.ssh && '
+            f'sudo chmod 600 /home/{svc_account}/.ssh/authorized_keys'
         )
-        # Use freq-ops (the fleet admin with sudo everywhere) — NOT freq-admin
         r = ssh_single(
             host=target_ip, command=cmd,
-            user="freq-ops", key_path=os.path.expanduser("~/.ssh/id_rsa"),
+            user=svc_account, key_path=self.cfg.ssh_key_path,
             connect_timeout=5, command_timeout=15, htype="linux", use_sudo=False,
         )
         if r.returncode != 0:

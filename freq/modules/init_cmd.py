@@ -218,9 +218,10 @@ def _load_device_credentials(cred_file):
 
 def _read_password(prompt="Password"):
     """Read password twice, confirm match. Returns password or None."""
+    border = f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}"
     try:
-        p1 = getpass.getpass(f"  {prompt}: ")
-        p2 = getpass.getpass(f"  Confirm {prompt.lower()}: ")
+        p1 = getpass.getpass(f"{border}  {prompt}: ")
+        p2 = getpass.getpass(f"{border}  Confirm {prompt.lower()}: ")
         if p1 != p2:
             fmt.step_fail("Passwords do not match")
             return None
@@ -234,10 +235,11 @@ def _read_password(prompt="Password"):
 
 
 def _input(prompt, default=""):
-    """Read input with optional default."""
+    """Read input with optional default (left-bordered for box continuity)."""
     suffix = f" [{default}]" if default else ""
+    border = f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}"
     try:
-        val = input(f"  {prompt}{suffix}: ").strip()
+        val = input(f"{border}  {prompt}{suffix}: ").strip()
         return val if val else default
     except (EOFError, KeyboardInterrupt):
         print()
@@ -245,10 +247,11 @@ def _input(prompt, default=""):
 
 
 def _confirm(prompt, default=False):
-    """Yes/no confirmation."""
+    """Yes/no confirmation (left-bordered for box continuity)."""
     suffix = "[Y/n]" if default else "[y/N]"
+    border = f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}"
     try:
-        ans = input(f"  {prompt} {suffix}: ").strip().lower()
+        ans = input(f"{border}  {prompt} {suffix}: ").strip().lower()
         if not ans:
             return default
         return ans in ("y", "yes")
@@ -857,13 +860,17 @@ def _phase_service_account(cfg, ctx, args=None):
     # Initialize vault if needed
     if not os.path.exists(cfg.vault_file):
         from freq.modules.vault import vault_init
-        vault_init(cfg)
+        if not vault_init(cfg):
+            fmt.step_fail("Vault init failed — check /etc/machine-id exists")
+            return False
 
     # Store password in vault
     from freq.modules.vault import vault_set
     vault_key = f"{svc_name}-pass"
-    vault_set(cfg, "DEFAULT", vault_key, ctx["svc_pass"])
-    fmt.step_ok(f"Password stored in vault (key: {vault_key})")
+    if vault_set(cfg, "DEFAULT", vault_key, ctx["svc_pass"]):
+        fmt.step_ok(f"Password stored in vault (key: {vault_key})")
+    else:
+        fmt.step_fail(f"Failed to store password in vault (key: {vault_key})")
 
     # Update config
     _update_toml(cfg, "ssh", "service_account", svc_name)
@@ -1133,7 +1140,7 @@ def _phase_pve_deploy(cfg, ctx, args=None):
                 fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
                 fmt.line(f"  {fmt.C.DIM}Or choose option B (SSH key) instead.{fmt.C.RESET}")
                 return
-            auth_pass = getpass.getpass(f"  Password for '{pve_user}' on PVE nodes: ")
+            auth_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for '{pve_user}' on PVE nodes: ")
 
     if pve_user != "root":
         fmt.line(f"  {fmt.C.DIM}Commands will be elevated via sudo on remote hosts.{fmt.C.RESET}")
@@ -1237,7 +1244,7 @@ def _discover_and_register(cfg, ctx):
     fmt.blank()
 
     key_path = ctx.get("key_path", "") or cfg.ssh_key_path
-    alive, hosts_info = scan_and_identify(prefix, key_path, start, end)
+    alive, hosts_info = scan_and_identify(prefix, key_path, start, end, cfg=cfg)
 
     if not alive:
         fmt.blank()
@@ -1245,11 +1252,18 @@ def _discover_and_register(cfg, ctx):
         return
 
     known_ips = {h.ip for h in cfg.hosts}
+    ssh_reachable = sum(1 for h in hosts_info if h["reachable"])
     new_count = _display_discovery_results(alive, hosts_info, known_ips)
 
     if new_count == 0:
         fmt.blank()
-        fmt.line(f"  {fmt.C.GREEN}All discovered hosts are already registered.{fmt.C.RESET}")
+        if ssh_reachable == 0:
+            svc = cfg.ssh_service_account or "freq-admin"
+            fmt.line(f"  {fmt.C.YELLOW}No hosts could be identified via SSH.{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.DIM}Tried connecting as '{svc}'. Hosts need this account + key first.{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.DIM}Use 'freq hosts add' to register hosts manually, then deploy keys.{fmt.C.RESET}")
+        else:
+            fmt.line(f"  {fmt.C.GREEN}All discovered hosts are already registered.{fmt.C.RESET}")
         return
 
     fmt.blank()
@@ -1503,7 +1517,7 @@ def _pdm_create_pve_token(pve_ip, ctx):
     Returns (token_id, token_secret) or (None, None).
     """
     key_path = ctx.get("key_path", "")
-    svc_name = ctx.get("svc_name", "freq-ops")
+    svc_name = ctx.get("svc_name", "freq-admin")
 
     ssh_base = [
         "ssh", "-n",
@@ -1649,7 +1663,7 @@ def _phase_pdm(cfg, ctx, args=None):
             fmt.step_warn("Skipping remote setup — configure manually via PDM web UI")
             return
         if not pdm_pass:
-            pdm_pass = getpass.getpass("  PDM root password (root@pam): ")
+            pdm_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  PDM root password (root@pam): ")
 
     # Authenticate to PDM
     fmt.step_start("Authenticating to PDM API...")
@@ -1944,7 +1958,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                         fmt.step_fail("'sshpass' not installed — required for device auth")
                         fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
                     else:
-                        dev_pass = getpass.getpass(f"  Password for device admin ({dev_user}): ")
+                        dev_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for device admin ({dev_user}): ")
                         for h in dev_without_creds:
                             fmt.blank()
                             fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
@@ -1957,26 +1971,23 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
 
     # Persist device (iDRAC/switch) password for ongoing SSH access
     if device_hosts and ok > 0 and ctx.get("svc_pass"):
-        pass_path = os.path.join(os.path.expanduser("~" + ctx["svc_name"]), ".ssh", "switch-pass")
-        # Also write to freq-ops home if running as root
-        freq_ops_path = os.path.expanduser("~freq-ops/.ssh/switch-pass")
-        for pp in {pass_path, freq_ops_path}:
+        svc_home = os.path.expanduser("~" + ctx["svc_name"])
+        pass_path = os.path.join(svc_home, ".ssh", "switch-pass")
+        try:
+            os.makedirs(os.path.dirname(pass_path), mode=0o700, exist_ok=True)
+            with open(pass_path, "w") as f:
+                f.write(ctx["svc_pass"])
+            os.chmod(pass_path, 0o600)
+            import pwd
             try:
-                os.makedirs(os.path.dirname(pp), mode=0o700, exist_ok=True)
-                with open(pp, "w") as f:
-                    f.write(ctx["svc_pass"])
-                os.chmod(pp, 0o600)
-                # Set ownership to freq-ops if we can
-                import pwd
-                try:
-                    pw = pwd.getpwnam("freq-ops")
-                    os.chown(pp, pw.pw_uid, pw.pw_gid)
-                    os.chown(os.path.dirname(pp), pw.pw_uid, pw.pw_gid)
-                except (KeyError, PermissionError):
-                    pass
-                fmt.step_ok(f"Device password saved to {pp}")
-            except OSError as e:
-                fmt.step_warn(f"Could not save device password to {pp}: {e}")
+                pw = pwd.getpwnam(ctx["svc_name"])
+                os.chown(pass_path, pw.pw_uid, pw.pw_gid)
+                os.chown(os.path.dirname(pass_path), pw.pw_uid, pw.pw_gid)
+            except (KeyError, PermissionError):
+                pass
+            fmt.step_ok(f"Device password saved to {pass_path}")
+        except OSError as e:
+            fmt.step_warn(f"Could not save device password to {pass_path}: {e}")
 
     fmt.blank()
     fmt.line(f"  Fleet deployment: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, {fmt.C.RED}{fail} failed{fmt.C.RESET}")
@@ -1999,7 +2010,7 @@ def _get_auth_creds(choice, label):
             fmt.step_fail("'sshpass' not installed — required for password-based SSH")
             fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
             return "", ""
-        auth_pass = getpass.getpass(f"  Root password for {label}: ")
+        auth_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Root password for {label}: ")
     return auth_pass, auth_key
 
 
@@ -3257,7 +3268,7 @@ def _init_fix(cfg, args):
                         device_broken = []
                         dev_pass = ""
                     else:
-                        dev_pass = getpass.getpass(f"  Password for device admin ({dev_user}): ")
+                        dev_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for device admin ({dev_user}): ")
 
             for h in device_broken:
                 fmt.blank()
@@ -4052,7 +4063,7 @@ def _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
                 fmt.step_warn("No device credentials — using service account password for device auth")
         elif htype == "pfsense":
             # pfSense: root IS the admin. No sudo — must auth as root.
-            # bootstrap_user (e.g. freq-ops) can connect but can't create users.
+            # bootstrap_user (service account) can connect but can't create users.
             auth_user = "root"
             if device_pass:
                 auth_pass = device_pass
@@ -4128,19 +4139,21 @@ def _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
     has_devices = any(t["htype"] in ("idrac", "switch") for t in targets)
     svc_pass = ctx.get("svc_pass", "")
     if has_devices and ok > 0 and svc_pass:
-        freq_ops_path = os.path.expanduser("~freq-ops/.ssh/switch-pass")
+        svc_name = ctx.get("svc_name", "freq-admin")
+        svc_home = os.path.expanduser("~" + svc_name)
+        pass_path = os.path.join(svc_home, ".ssh", "switch-pass")
         try:
-            os.makedirs(os.path.dirname(freq_ops_path), mode=0o700, exist_ok=True)
-            with open(freq_ops_path, "w") as f:
+            os.makedirs(os.path.dirname(pass_path), mode=0o700, exist_ok=True)
+            with open(pass_path, "w") as f:
                 f.write(svc_pass)
-            os.chmod(freq_ops_path, 0o600)
+            os.chmod(pass_path, 0o600)
             import pwd
             try:
-                pw = pwd.getpwnam("freq-ops")
-                os.chown(freq_ops_path, pw.pw_uid, pw.pw_gid)
+                pw = pwd.getpwnam(svc_name)
+                os.chown(pass_path, pw.pw_uid, pw.pw_gid)
             except (KeyError, PermissionError):
                 pass
-            fmt.step_ok(f"Device password saved to {freq_ops_path}")
+            fmt.step_ok(f"Device password saved to {pass_path}")
         except OSError as e:
             fmt.step_warn(f"Could not save device password: {e}")
 
