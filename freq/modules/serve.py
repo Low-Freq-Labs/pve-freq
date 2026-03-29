@@ -2412,7 +2412,8 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": "Setup already complete"}, 403)
             return
 
-        data_dir = self.cfg.data_dir
+        cfg = load_config()
+        data_dir = cfg.data_dir
         os.makedirs(data_dir, exist_ok=True)
         marker = os.path.join(data_dir, "setup-complete")
 
