@@ -1239,7 +1239,8 @@ def _is_first_run():
       2. No users exist in users.conf (or file doesn't exist)
     """
     # Check marker first (fast path — already set up)
-    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+    cfg = load_config()
+    data_dir = cfg.data_dir
     if os.path.isfile(os.path.join(data_dir, "setup-complete")):
         return False
 
@@ -2411,7 +2412,7 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": "Setup already complete"}, 403)
             return
 
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+        data_dir = self.cfg.data_dir
         os.makedirs(data_dir, exist_ok=True)
         marker = os.path.join(data_dir, "setup-complete")
 
@@ -2496,7 +2497,7 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": "Admin role required"}, 403)
             return
 
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+        data_dir = cfg.data_dir
         marker = os.path.join(data_dir, "setup-complete")
 
         try:
