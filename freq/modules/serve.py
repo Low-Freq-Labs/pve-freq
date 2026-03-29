@@ -2483,19 +2483,9 @@ a:hover{{text-decoration:underline}}
         cfg = load_config()
 
         # This endpoint requires admin auth (NOT gated by _is_first_run)
-        if not self._check_auth(cfg):
-            return
-
-        # Verify admin role
-        auth_user = self._get_auth_user(cfg)
-        if not auth_user:
-            self._json_response({"error": "Authentication required"}, 401)
-            return
-
-        users = _load_users(cfg)
-        user_rec = next((u for u in users if u["username"] == auth_user), None)
-        if not user_rec or user_rec.get("role") != "admin":
-            self._json_response({"error": "Admin role required"}, 403)
+        role, err = _check_session_role(self, min_role="admin")
+        if err:
+            self._json_response({"error": err}, 403)
             return
 
         data_dir = cfg.data_dir
