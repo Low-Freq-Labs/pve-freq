@@ -63,7 +63,22 @@ DEFAULT_LOG_LINES = 50
 
 import threading
 
-CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "cache")
+def _get_cache_dir():
+    """Resolve cache directory from config at runtime — not from __file__.
+    Using __file__ breaks pip-installed packages where site-packages is read-only."""
+    try:
+        cfg = load_config()
+        return os.path.join(cfg.data_dir, "cache")
+    except Exception:
+        return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "cache")
+
+
+CACHE_DIR = None  # Set at runtime by _init_cache_dir()
+
+
+def _init_cache_dir():
+    global CACHE_DIR
+    CACHE_DIR = _get_cache_dir()
 _bg_cache = {
     "infra_quick": None,
     "health": None,
@@ -90,11 +105,17 @@ _bg_lock = threading.Lock()
 
 
 def _cache_path(name):
+    global CACHE_DIR
+    if CACHE_DIR is None:
+        _init_cache_dir()
     return os.path.join(CACHE_DIR, f"{name}.json")
 
 
 def _load_disk_cache():
     """Load cached probe data from disk — instant startup."""
+    global CACHE_DIR
+    if CACHE_DIR is None:
+        _init_cache_dir()
     os.makedirs(CACHE_DIR, exist_ok=True)
     for name in _bg_cache:
         p = _cache_path(name)
@@ -875,6 +896,7 @@ def _bg_refresh_loop(interval=BG_CACHE_REFRESH_INTERVAL):
 
 def start_background_cache():
     """Load disk cache, then start the background refresh loop."""
+    _init_cache_dir()
     _load_disk_cache()
     t = threading.Thread(target=_bg_refresh_loop, args=(BG_CACHE_REFRESH_INTERVAL,), daemon=True)
     t.start()

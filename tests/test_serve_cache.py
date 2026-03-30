@@ -31,9 +31,11 @@ class TestCachePathGeneration(unittest.TestCase):
     """_cache_path(name) builds the correct filesystem path."""
 
     def setUp(self):
-        from freq.modules.serve import _cache_path, CACHE_DIR
+        from freq.modules.serve import _cache_path, _init_cache_dir
+        import freq.modules.serve as _serve_mod
+        _init_cache_dir()
         self.fn = _cache_path
-        self.cache_dir = CACHE_DIR
+        self.cache_dir = _serve_mod.CACHE_DIR
 
     def test_health_key(self):
         p = self.fn("health")
