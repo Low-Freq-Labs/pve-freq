@@ -74,7 +74,7 @@ class TestConfig(unittest.TestCase):
         """Load config from workspace."""
         from freq.core.config import load_config
         cfg = load_config()
-        # Brand depends on whether freq.toml exists (DC01 = "LOW FREQ Labs", default = "PVE FREQ")
+        # Brand depends on whether freq.toml exists (personal = "LOW FREQ Labs", default = "PVE FREQ")
         self.assertIn(cfg.brand, ("PVE FREQ", "LOW FREQ Labs"))
         self.assertTrue(len(cfg.install_dir) > 0)
         self.assertTrue(os.path.isdir(cfg.install_dir))
@@ -151,7 +151,7 @@ class TestValidation(unittest.TestCase):
         from freq.core.validate import hostname
         self.assertTrue(hostname("pve01"))
         self.assertTrue(hostname("my-host"))
-        self.assertTrue(hostname("host.dc01.local"))
+        self.assertTrue(hostname("host.homelab.local"))
 
     def test_invalid_hostname(self):
         from freq.core.validate import hostname

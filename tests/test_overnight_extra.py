@@ -279,11 +279,11 @@ class TestValidateExtras(unittest.TestCase):
 
 
 class TestFleetBoundaries(unittest.TestCase):
-    """Test FleetBoundaries categorization with DC01 config."""
+    """Test FleetBoundaries categorization with production config."""
 
     def setUp(self):
         from freq.core.config import load_config
-        self.cfg = load_config()  # DC01 config
+        self.cfg = load_config()
         self.fb = self.cfg.fleet_boundaries
 
     def test_categorize_known_vmid(self):

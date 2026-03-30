@@ -415,8 +415,8 @@ class TestPortabilityConfig(unittest.TestCase):
         opts = get_platform_ssh("linux", cfg=None)
         self.assertEqual(opts["user"], _DEFAULTS["ssh_service_account"])
 
-    def test_no_dc01_ips_in_source(self):
-        """No DC01-specific IPs (10.25.x.x) in Python source files."""
+    def test_no_site_specific_ips_in_source(self):
+        """No site-specific IPs (10.25.x.x) in Python source files."""
         import glob
         freq_dir = os.path.join(os.path.dirname(__file__), "..", "freq")
         violations = []
@@ -431,7 +431,7 @@ class TestPortabilityConfig(unittest.TestCase):
                         if "placeholder" in line or "e.g." in line:
                             continue
                         violations.append(f"{os.path.basename(py_file)}:{i}")
-        self.assertEqual(violations, [], f"DC01 IPs found in source: {violations}")
+        self.assertEqual(violations, [], f"Site-specific IPs found in source: {violations}")
 
     def test_cache_dir_has_gitkeep(self):
         """Cache directory has .gitkeep so git tracks the dir but not data files."""

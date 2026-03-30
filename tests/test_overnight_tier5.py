@@ -231,7 +231,7 @@ class TestTier5Credits(unittest.TestCase):
         self.assertEqual(credits, "HomeCluster · PVE FREQ")
 
     def test_5_14b_credits_personal_pack(self):
-        """Personal pack from DC01 config: shows 'LOW FREQ Labs'."""
+        """Personal pack shows 'LOW FREQ Labs' branding."""
         from freq.core.personality import load_pack
         from freq.core.config import load_config
         cfg = load_config()

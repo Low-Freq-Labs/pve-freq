@@ -11,7 +11,7 @@
 
 - **Codebase:** 86 Python files, 39,500+ LOC, 88 CLI commands — all implemented, not stubbed
 - **CI:** 14 distros, all green (Debian 12/13, Ubuntu 24.04, Rocky 8/9, Alma 8/9, Fedora 40/41, Arch, openSUSE Tumbleweed, Alpine 3.19/3.20/3.21)
-- **Tests:** 33 test files, 13,740 LOC — universal (no DC01 dependencies)
+- **Tests:** 33 test files, 13,740 LOC — universal (no site-specific dependencies)
 - **Packaging:** pyproject.toml exists (setuptools), zero external deps, `freq` entry point defined
 - **Dependencies:** NONE. Pure Python stdlib. Python 3.11+ only (tomllib).
 

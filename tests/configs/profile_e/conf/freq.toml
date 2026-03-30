@@ -1,1 +1,86 @@
-/home/freq-ops/dev-ops/rick/conf/freq.toml
+# freq.toml — PVE FREQ Configuration
+# Full production-style config (all sections populated)
+
+[freq]
+version = "2.0.0"
+brand = "LOW FREQ Labs"
+build = "personal"          # personality pack: personal (bass/dubstep) or enterprise
+ascii = false               # true = ASCII box drawing (PuTTY-safe)
+debug = false
+
+[ssh]
+service_account = "freq-admin"
+connect_timeout = 5
+max_parallel = 5
+mode = "sudo"               # "root" = SSH as root, "sudo" = SSH as service account + sudo
+legacy_password_file = "/home/freq-admin/.ssh/switch-pass"  # password auth for iDRAC/switch
+
+[pve]
+# Production PVE nodes
+nodes = ["192.168.10.26", "192.168.10.27", "192.168.10.28"]
+node_names = ["pve01", "pve02", "pve03"]
+ssh_user = "freq-admin"
+
+[pve.storage.pve01]
+pool = "os-drive-hdd"
+type = "HDD"
+
+[pve.storage.pve02]
+pool = "os-pool-ssd"
+type = "SSD"
+
+[pve.storage.pve03]
+pool = "os-drive-ssd"
+type = "SSD"
+
+[vm.defaults]
+cores = 2
+ram = 2048
+disk = 32
+cpu = "x86-64-v2-AES"
+machine = "q35"
+scsihw = "virtio-scsi-single"
+bios = "ovmf"
+domain = "homelab.local"
+gateway = "192.168.10.1"
+nameserver = "1.1.1.1"
+ci_user = "freq-admin"
+
+[safety]
+protected_vmids = [100, 101, 102, 103, 104, 201, 202, 301, 400, 666, 802, 804, 811, 999]
+protected_ranges = [[900, 999], [9000, 9999]]
+max_failure_percent = 50
+
+[infrastructure]
+cluster_name = "homelab"
+timezone = "America/Chicago"
+truenas_ip = "192.168.10.25"
+pfsense_ip = "192.168.10.1"
+docker_config_base = "/opt/homelab/configs"
+docker_backup_dir = "/opt/homelab/backups"
+
+[templates.profiles]
+minimal = { cores = 1, ram = 1024, disk = 8 }
+standard = { cores = 2, ram = 2048, disk = 32 }
+dev = { cores = 4, ram = 4096, disk = 64 }
+prod = { cores = 4, ram = 8192, disk = 128 }
+docker = { cores = 4, ram = 4096, disk = 64 }
+
+[nic]
+bridge = "vmbr0"
+mtu = 1500
+
+[nic.profiles]
+standard = [10, 25]
+public = [10, 25, 50]
+dirty = [100, 10, 25]
+minimal = [10]
+
+[pfsense]
+host = "192.168.10.1"
+user = "freq-admin"
+config_path = "/cf/conf/config.xml"
+
+[notifications]
+discord_webhook = ""
+slack_webhook = ""

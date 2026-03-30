@@ -605,7 +605,7 @@ class TestPhaseConfigure(unittest.TestCase):
             pve_node_names=["pve01"],
             vm_gateway="10.0.0.1",
             vm_nameserver="8.8.8.8",
-            cluster_name="dc01",
+            cluster_name="homelab",
             ssh_mode="sudo",
         )
         # User declines to reconfigure nodes

@@ -1,7 +1,6 @@
 services:
   freq:
     build: .
-    image: lowfreqlabs/pve-freq:latest
     container_name: pve-freq
     restart: unless-stopped
     ports:
@@ -9,7 +8,9 @@ services:
     volumes:
       - ./conf:/opt/pve-freq/conf
       - ./data:/opt/pve-freq/data
-      - ~/.ssh:/home/freq/.ssh:ro
+      # Uncomment and adjust to mount your SSH key:
+      # - ~/.ssh/id_ed25519:/home/freq/.ssh/id_ed25519:ro
+      # - ~/.ssh/known_hosts:/home/freq/.ssh/known_hosts:ro
     environment:
       - TZ=${TZ:-UTC}
       - FREQ_PORT=8888

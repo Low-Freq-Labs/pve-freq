@@ -1,13 +1,17 @@
-FROM python:3.13-slim-bookworm
+FROM python:3.13-slim
 
 LABEL maintainer="LOW FREQ Labs"
 LABEL description="PVE FREQ — Datacenter management CLI"
 
-# Install system deps (ssh client, sshpass for fleet ops)
+# Install system deps (ssh client, sshpass for fleet ops, tini for signal handling)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        openssh-client sshpass curl jq && \
+        openssh-client sshpass curl jq tini && \
     rm -rf /var/lib/apt/lists/*
+
+# Generate machine-id (needed for vault key derivation)
+RUN [ -f /etc/machine-id ] || python3 -c "import uuid; print(uuid.uuid4().hex)" > /etc/machine-id \
+    && chmod 444 /etc/machine-id
 
 # Create freq user and directories
 RUN useradd -r -m -s /bin/bash freq && \
@@ -43,5 +47,5 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD curl -f http://localhost:8888/healthz || exit 1
 
 USER freq
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["tini", "--", "docker-entrypoint.sh"]
 CMD ["serve"]

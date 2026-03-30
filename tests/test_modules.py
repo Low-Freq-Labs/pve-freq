@@ -585,7 +585,7 @@ class TestInitFleetRegistration(unittest.TestCase):
         cfg = load_config(self.tmpdir)
         # The dry run reads cfg.hosts — with 0 hosts it should show no fleet steps
         self.assertEqual(len(cfg.hosts), 0)
-        # PVE nodes count depends on config — 0 for .example, 3 for DC01
+        # PVE nodes count depends on config — 0 for .example, 3 for production
         self.assertIsInstance(cfg.pve_nodes, list)
 
 

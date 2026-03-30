@@ -92,8 +92,8 @@ class TestContainerLoading(unittest.TestCase):
         containers = load_containers("/nonexistent/containers.toml")
         self.assertEqual(containers, {})
 
-    def test_load_containers_from_dc01(self):
-        """Load actual DC01 containers.toml."""
+    def test_load_containers_from_config(self):
+        """Load actual containers.toml if present."""
         from freq.core.config import load_containers
         path = os.path.join(CONF_DIR, "containers.toml")
         if os.path.isfile(path):
@@ -104,7 +104,7 @@ class TestContainerLoading(unittest.TestCase):
                 self.assertIsInstance(vm_id, int)
                 self.assertTrue(len(vm.ip) > 0 or vm.ip == "")
         else:
-            self.skipTest("No containers.toml in DC01 config")
+            self.skipTest("No containers.toml in config")
 
 
 class TestDistroLoading(unittest.TestCase):
@@ -116,8 +116,8 @@ class TestDistroLoading(unittest.TestCase):
         distros = load_distros("/nonexistent/distros.toml")
         self.assertEqual(distros, [])
 
-    def test_load_distros_dc01(self):
-        """Load actual DC01 distros.toml."""
+    def test_load_distros_from_config(self):
+        """Load actual distros.toml if present."""
         from freq.core.config import load_distros
         path = os.path.join(CONF_DIR, "distros.toml")
         if os.path.isfile(path):
@@ -129,14 +129,14 @@ class TestDistroLoading(unittest.TestCase):
                 self.assertTrue(len(d.name) > 0)
                 self.assertTrue(len(d.url) > 0)
         else:
-            self.skipTest("No distros.toml in DC01 config")
+            self.skipTest("No distros.toml in config")
 
 
 class TestVLANLoading(unittest.TestCase):
     """Test VLAN definition loading."""
 
-    def test_load_vlans_dc01(self):
-        """Load actual DC01 vlans.toml."""
+    def test_load_vlans_from_config(self):
+        """Load actual vlans.toml if present."""
         from freq.core.config import load_vlans
         path = os.path.join(CONF_DIR, "vlans.toml")
         if os.path.isfile(path):
@@ -147,7 +147,7 @@ class TestVLANLoading(unittest.TestCase):
                 self.assertTrue(len(v.name) > 0)
                 self.assertTrue(len(v.subnet) > 0)
         else:
-            self.skipTest("No vlans.toml in DC01 config")
+            self.skipTest("No vlans.toml in config")
 
     def test_load_vlans_with_gateway(self):
         """VLANs with gateway field."""
@@ -253,7 +253,7 @@ class TestCompatModule(unittest.TestCase):
 
 
 class TestFleetBoundariesDetailed(unittest.TestCase):
-    """Detailed FleetBoundaries tests with DC01 config."""
+    """Detailed FleetBoundaries tests with production config."""
 
     def setUp(self):
         from freq.core.config import load_config

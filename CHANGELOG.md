@@ -106,7 +106,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Async SSH execution via `concurrent.futures` (4x faster than sequential)
 
 ### Requirements
-- Python 3.7+ (ships with all supported distros)
+- Python 3.11+ (raised from 3.7 in v2.1.0)
 - openssh-client (pre-installed on all Linux)
 - Optional: sshpass (for initial fleet deployment with password auth)
-- Supported: Debian 11-13, Ubuntu 20.04-24.04, Rocky/RHEL/AlmaLinux 8-9
+- Supported: Debian 12-13, Ubuntu 24.04+, Rocky/RHEL/AlmaLinux 9+

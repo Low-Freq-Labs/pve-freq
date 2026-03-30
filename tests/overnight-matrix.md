@@ -51,9 +51,9 @@
 - Storage: `ceph-pool` (not local-lvm)
 - Service account: `root`
 
-### Profile E: "DC01 Regression"
-- Exact DC01 config (current conf/freq.toml)
-- Verify everything still works identically
+### Profile E: "Full Production Config"
+- Complete config with all sections populated
+- Verify everything works with a full production-style configuration
 - This is the regression guard
 
 ---
@@ -181,7 +181,7 @@
 | # | Test | Input | Expected | Owner |
 |---|------|-------|----------|-------|
 | 7.1 | Load default pack | `build = "default"` | Loads default.toml, neutral values | Rick |
-| 7.2 | Load personal pack | `build = "personal"` | Loads personal.toml, DC01-specific OK | Rick |
+| 7.2 | Load personal pack | `build = "personal"` | Loads personal.toml, custom branding | Rick |
 | 7.3 | Load nonexistent pack | `build = "enterprise"` | Falls back to defaults, no crash | Rick |
 | 7.4 | Load with missing personality dir | No `conf/personality/` | Falls back to hardcoded defaults | Rick |
 | 7.5 | Celebrate with None pack | `celebrate(pack=None)` | No crash (was a bug, verify fixed) | Rick |
@@ -202,20 +202,20 @@
 | 8.6 | `_resolve_legacy_key()` | ed25519 key path | Finds sibling RSA key | Morty |
 | 8.7 | `_resolve_legacy_key()` | RSA key path | Returns same path | Morty |
 
-### TIER 9: Regression — DC01 (Profile E)
+### TIER 9: Regression — Full Config (Profile E)
 
 | # | Test | Expected | Owner |
 |---|------|----------|-------|
 | 9.1 | `freq status` | Same output as before overhaul | Morty |
-| 9.2 | `freq risk all` | Shows DC01 topology from risk.toml | Morty |
+| 9.2 | `freq risk all` | Shows topology from risk.toml | Morty |
 | 9.3 | `freq risk pfsense` | Shows pfSense detail | Morty |
 | 9.4 | `freq learn nfs` | Returns NFS lessons | Morty |
 | 9.5 | `freq doctor` | All checks pass | Morty |
-| 9.6 | `freq configure` | Shows DC01 config values | Morty |
+| 9.6 | `freq configure` | Shows production config values | Morty |
 | 9.7 | Dashboard `/api/info` | Shows "LOW FREQ Labs Dashboard" (personal pack) | Morty |
-| 9.8 | Dashboard `/api/config` | kill_chain = DC01 chain from risk.toml | Morty |
+| 9.8 | Dashboard `/api/config` | kill_chain = chain from risk.toml | Morty |
 | 9.9 | Dashboard `/api/fleet/overview` | VLANs have cidr="24" | Morty |
-| 9.10 | `freq vm create` args | Uses x86-64-v2-AES and vmbr0 (from DC01 freq.toml) | Morty |
+| 9.10 | `freq vm create` args | Uses x86-64-v2-AES and vmbr0 (from freq.toml) | Morty |
 
 ---
 
@@ -225,7 +225,7 @@
 ```python
 # Create temporary config state
 import sys, os, tempfile
-sys.path.insert(0, "/home/freq-ops/dev-ops/rick")
+sys.path.insert(0, "/path/to/pve-freq")
 
 # Build a test config directory with the profile's files
 # Call functions directly with mock args
@@ -259,7 +259,7 @@ sys.path.insert(0, "/home/freq-ops/dev-ops/rick")
 | 6. VM Network Edge | 6.1-6.5 | 6.6-6.10 |
 | 7. Personality | ALL (7.1-7.9) | — |
 | 8. SSH System | — | ALL (8.1-8.7) |
-| 9. DC01 Regression | — | ALL (9.1-9.10) |
+| 9. Full Config Regression | — | ALL (9.1-9.10) |
 
 **Rick:** Tiers 1, 3, 5, 7 + half of 6 = **51 tests**
 **Morty:** Tiers 2, 4, 8, 9 + half of 6 = **60 tests**
@@ -268,7 +268,7 @@ sys.path.insert(0, "/home/freq-ops/dev-ops/rick")
 
 ## Test Config Files Needed
 
-Create these in `/home/freq-ops/dev-ops/rick/tests/configs/`:
+Create these in `tests/configs/`:
 
 ```
 profile_a/          # Bare Metal Baby
@@ -291,5 +291,5 @@ profile_d/          # /23 network
   hosts.conf        # 5 hosts
   vlans.toml        # 2 VLANs with /23
 
-profile_e/          # DC01 (symlink to current conf/)
+profile_e/          # Full production config
 ```

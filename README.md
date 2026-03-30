@@ -10,7 +10,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-7B2FBE.svg)](#requirements)
-[![LOC](https://img.shields.io/badge/LOC-39%2C500-7B2FBE.svg)](ARCHITECTURE.md)
+[![LOC](https://img.shields.io/badge/LOC-53%2C400-7B2FBE.svg)](ARCHITECTURE.md)
 
 *Drop the bass, not the uptime.*
 
@@ -87,6 +87,10 @@ pip install --no-deps pve-freq
 ```
 
 ### Docker Compose
+
+See [pve-freq-docker](https://github.com/Low-Freq-Labs/pve-freq-docker) for the recommended Docker deployment with build scripts, volume management, and a CLI wrapper.
+
+Quick start from source:
 
 ```bash
 git clone https://github.com/Low-Freq-Labs/pve-freq.git

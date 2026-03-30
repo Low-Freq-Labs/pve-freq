@@ -51,7 +51,7 @@ class TestTier7Personality(unittest.TestCase):
 
     # --- 7.2: Load personal pack ---
     def test_7_2_load_personal_pack(self):
-        """Personal pack loads with DC01-specific values."""
+        """Personal pack loads with custom branding values."""
         from freq.core.personality import load_pack
         pdir = _personality_conf_dir()
         pack = load_pack(pdir, "personal")
