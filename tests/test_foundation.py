@@ -17,8 +17,8 @@ class TestTypes(unittest.TestCase):
 
     def test_host_creation(self):
         from freq.core.types import Host, Phase
-        h = Host(ip="10.25.255.26", label="pve01", htype="pve", groups="cluster,prod")
-        self.assertEqual(h.ip, "10.25.255.26")
+        h = Host(ip="192.168.255.26", label="pve01", htype="pve", groups="cluster,prod")
+        self.assertEqual(h.ip, "192.168.255.26")
         self.assertEqual(h.label, "pve01")
         self.assertEqual(h.htype, "pve")
         self.assertEqual(h.phase, Phase.PENDING)
@@ -39,7 +39,7 @@ class TestTypes(unittest.TestCase):
 
     def test_vlan_creation(self):
         from freq.core.types import VLAN
-        v = VLAN(id=10, name="DEV", subnet="10.25.10.0/24", prefix="10.25.10")
+        v = VLAN(id=10, name="DEV", subnet="192.168.10.0/24", prefix="192.168.10")
         self.assertEqual(v.id, 10)
         self.assertEqual(v.gateway, "")
 
@@ -104,8 +104,8 @@ class TestConfig(unittest.TestCase):
         import tempfile
         with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as f:
             f.write("# Fleet\n")
-            f.write("10.25.255.26  pve01  pve  cluster,prod\n")
-            f.write("10.25.255.30  vm101  linux  media\n")
+            f.write("192.168.255.26  pve01  pve  cluster,prod\n")
+            f.write("192.168.255.30  vm101  linux  media\n")
             path = f.name
         try:
             hosts = load_hosts(path)
@@ -136,14 +136,14 @@ class TestValidation(unittest.TestCase):
 
     def test_valid_ip(self):
         from freq.core.validate import ip
-        self.assertTrue(ip("10.25.255.26"))
+        self.assertTrue(ip("192.168.255.26"))
         self.assertTrue(ip("192.168.1.1"))
         self.assertTrue(ip("0.0.0.0"))
 
     def test_invalid_ip(self):
         from freq.core.validate import ip
         self.assertFalse(ip("256.1.1.1"))
-        self.assertFalse(ip("10.25.255"))
+        self.assertFalse(ip("192.168.255"))
         self.assertFalse(ip("not-an-ip"))
         self.assertFalse(ip(""))
 

@@ -98,7 +98,7 @@ def _mock_cfg(**overrides):
     )
     defaults = dict(
         hosts=[],
-        pve_nodes=["10.25.10.1"],
+        pve_nodes=["192.168.10.1"],
         ssh_key_path="/tmp/fake_key",
         brand="FREQ",
         build="dev",
@@ -114,7 +114,7 @@ def _mock_cfg(**overrides):
     return SimpleNamespace(**defaults)
 
 
-def _mock_host(label="testhost", ip="10.25.10.50", htype="linux", groups=""):
+def _mock_host(label="testhost", ip="192.168.10.50", htype="linux", groups=""):
     return SimpleNamespace(label=label, ip=ip, htype=htype, groups=groups)
 
 
@@ -608,7 +608,7 @@ class TestServeVmPower:
     """Test /api/vm/power endpoint."""
 
     @patch("freq.modules.serve._pve_cmd", return_value=("OK", True))
-    @patch("freq.modules.serve._find_reachable_node", return_value="10.25.10.1")
+    @patch("freq.modules.serve._find_reachable_node", return_value="192.168.10.1")
     @patch("freq.modules.serve._check_vm_permission", return_value=(True, ""))
     @patch("freq.modules.serve.load_config")
     def test_vm_power_start(self, mock_cfg_fn, mock_perm, mock_node, mock_pve):
@@ -761,8 +761,8 @@ class TestServeLabStatus:
     @patch("freq.modules.serve.ssh_single")
     @patch("freq.modules.serve.load_config")
     def test_lab_status(self, mock_cfg_fn, mock_ssh_single):
-        hosts = [_mock_host("lab1", "10.25.10.100", "linux", groups="lab")]
-        cfg = _mock_cfg(hosts=hosts, docker_dev_ip="10.25.10.200")
+        hosts = [_mock_host("lab1", "192.168.10.100", "linux", groups="lab")]
+        cfg = _mock_cfg(hosts=hosts, docker_dev_ip="192.168.10.200")
         mock_cfg_fn.return_value = cfg
         mock_ssh_single.return_value = _mock_ssh_result("up 3 days")
 

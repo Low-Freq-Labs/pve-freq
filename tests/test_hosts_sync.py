@@ -113,7 +113,7 @@ class TestHostsSync(unittest.TestCase):
     @patch("freq.core.ssh.run")
     def test_discovers_new_vm_from_pve(self, mock_ssh):
         """New VM found in PVE gets added to hosts.conf."""
-        cfg = _make_cfg(self.tmpdir, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 101, "name": "plex", "node": "pve01", "status": "running", "type": "qemu"},
@@ -123,7 +123,7 @@ class TestHostsSync(unittest.TestCase):
             if "pvesh" in command:
                 return _fake_ssh_result(stdout=cluster_json)
             if "qm agent 101" in command:
-                return _fake_ssh_result(stdout=_qm_agent_json(["10.25.255.30"]))
+                return _fake_ssh_result(stdout=_qm_agent_json(["192.168.255.30"]))
             return _fake_ssh_result(stdout="", returncode=1)
 
         mock_ssh.side_effect = ssh_side_effect
@@ -134,13 +134,13 @@ class TestHostsSync(unittest.TestCase):
 
         lines = self._read_hosts_conf(cfg)
         ips = [l.split()[0] for l in lines]
-        self.assertIn("10.25.255.30", ips)
+        self.assertIn("192.168.255.30", ips)
 
     @patch("freq.core.ssh.run")
     def test_preserves_existing_host_metadata(self, mock_ssh):
         """Existing host keeps its label/type/groups when re-discovered."""
-        existing = [Host(ip="10.25.255.30", label="plex", htype="docker", groups="prod,media")]
-        cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        existing = [Host(ip="192.168.255.30", label="plex", htype="docker", groups="prod,media")]
+        cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 101, "name": "plex-server", "node": "pve01", "status": "running", "type": "qemu"},
@@ -150,7 +150,7 @@ class TestHostsSync(unittest.TestCase):
             if "pvesh" in command:
                 return _fake_ssh_result(stdout=cluster_json)
             if "qm agent 101" in command:
-                return _fake_ssh_result(stdout=_qm_agent_json(["10.25.255.30"]))
+                return _fake_ssh_result(stdout=_qm_agent_json(["192.168.255.30"]))
             return _fake_ssh_result(stdout="", returncode=1)
 
         mock_ssh.side_effect = ssh_side_effect
@@ -167,7 +167,7 @@ class TestHostsSync(unittest.TestCase):
     @patch("freq.core.ssh.run")
     def test_skips_vms_without_guest_agent(self, mock_ssh):
         """VMs where qm agent fails are skipped (no crash)."""
-        cfg = _make_cfg(self.tmpdir, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 900, "name": "nexus", "node": "pve02", "status": "running", "type": "qemu"},
@@ -189,7 +189,7 @@ class TestHostsSync(unittest.TestCase):
     @patch("freq.core.ssh.run")
     def test_skips_stopped_vms(self, mock_ssh):
         """Stopped VMs are not queried for IP."""
-        cfg = _make_cfg(self.tmpdir, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 802, "name": "vault", "node": "pve01", "status": "stopped", "type": "qemu"},
@@ -218,10 +218,10 @@ class TestHostsSync(unittest.TestCase):
         """Physical devices from fleet-boundaries.toml get added."""
         fb = FleetBoundaries()
         fb.physical = {
-            "idrac_pve01": PhysicalDevice(key="idrac_pve01", ip="10.25.255.11", label="iDRAC - PVE01", device_type="idrac"),
-            "switch": PhysicalDevice(key="switch", ip="10.25.255.5", label="gigecolo", device_type="switch"),
+            "idrac_pve01": PhysicalDevice(key="idrac_pve01", ip="192.168.255.11", label="iDRAC - PVE01", device_type="idrac"),
+            "switch": PhysicalDevice(key="switch", ip="192.168.255.5", label="gigecolo", device_type="switch"),
         }
-        cfg = _make_cfg(self.tmpdir, fleet_boundaries=fb, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, fleet_boundaries=fb, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         def ssh_side_effect(host, command, **kwargs):
             if "pvesh" in command:
@@ -234,9 +234,9 @@ class TestHostsSync(unittest.TestCase):
         _hosts_sync(cfg)
 
         content = self._read_hosts_conf_raw(cfg)
-        self.assertIn("10.25.255.11", content)
+        self.assertIn("192.168.255.11", content)
         self.assertIn("idrac", content)
-        self.assertIn("10.25.255.5", content)
+        self.assertIn("192.168.255.5", content)
         self.assertIn("switch", content)
 
     @patch("freq.core.ssh.run")
@@ -244,7 +244,7 @@ class TestHostsSync(unittest.TestCase):
         """Physical device labels with spaces get sanitized to hyphens."""
         fb = FleetBoundaries()
         fb.physical = {
-            "idrac_truenas": PhysicalDevice(key="idrac_truenas", ip="10.25.255.10", label="iDRAC - TRUENAS", device_type="idrac"),
+            "idrac_truenas": PhysicalDevice(key="idrac_truenas", ip="192.168.255.10", label="iDRAC - TRUENAS", device_type="idrac"),
         }
         cfg = _make_cfg(self.tmpdir, fleet_boundaries=fb, pve_nodes=[], pve_node_names=[])
 
@@ -262,7 +262,7 @@ class TestHostsSync(unittest.TestCase):
         # Label should be sanitized — no spaces (hosts.conf uses whitespace as delimiter)
         lines = self._read_hosts_conf(cfg)
         for line in lines:
-            if "10.25.255.10" in line:
+            if "192.168.255.10" in line:
                 label = line.split()[1]
                 self.assertNotIn(" ", label)
                 self.assertEqual(label, "idrac---truenas")
@@ -275,8 +275,8 @@ class TestHostsSync(unittest.TestCase):
     @patch("freq.core.ssh.run")
     def test_creates_backup_before_write(self, mock_ssh):
         """hosts.conf.bak is created before overwriting."""
-        existing = [Host(ip="10.25.255.30", label="plex", htype="docker", groups="prod,media")]
-        cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        existing = [Host(ip="192.168.255.30", label="plex", htype="docker", groups="prod,media")]
+        cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 999, "name": "new-vm", "node": "pve01", "status": "running", "type": "qemu"},
@@ -286,7 +286,7 @@ class TestHostsSync(unittest.TestCase):
             if "pvesh" in command:
                 return _fake_ssh_result(stdout=cluster_json)
             if "qm agent 999" in command:
-                return _fake_ssh_result(stdout=_qm_agent_json(["10.25.10.99"]))
+                return _fake_ssh_result(stdout=_qm_agent_json(["192.168.10.99"]))
             return _fake_ssh_result(stdout="", returncode=1)
 
         mock_ssh.side_effect = ssh_side_effect
@@ -308,9 +308,9 @@ class TestHostsSync(unittest.TestCase):
     def test_preserves_manually_added_hosts(self, mock_ssh):
         """Hosts in hosts.conf but not in PVE or fleet-boundaries are kept."""
         existing = [
-            Host(ip="10.25.255.8", label="gigenet", htype="linux", groups="prod,network"),
+            Host(ip="192.168.255.8", label="gigenet", htype="linux", groups="prod,network"),
         ]
-        cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         def ssh_side_effect(host, command, **kwargs):
             if "pvesh" in command:
@@ -324,14 +324,14 @@ class TestHostsSync(unittest.TestCase):
 
         content = self._read_hosts_conf_raw(cfg)
         self.assertIn("gigenet", content)
-        self.assertIn("10.25.255.8", content)
+        self.assertIn("192.168.255.8", content)
 
     # ── Dry run ──
 
     @patch("freq.core.ssh.run")
     def test_dry_run_does_not_modify_file(self, mock_ssh):
         """--dry-run reports changes but doesn't write hosts.conf."""
-        cfg = _make_cfg(self.tmpdir, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
         original_content = self._read_hosts_conf_raw(cfg)
 
         cluster_json = _pve_cluster_json([
@@ -342,7 +342,7 @@ class TestHostsSync(unittest.TestCase):
             if "pvesh" in command:
                 return _fake_ssh_result(stdout=cluster_json)
             if "qm agent 101" in command:
-                return _fake_ssh_result(stdout=_qm_agent_json(["10.25.255.30"]))
+                return _fake_ssh_result(stdout=_qm_agent_json(["192.168.255.30"]))
             return _fake_ssh_result(stdout="", returncode=1)
 
         mock_ssh.side_effect = ssh_side_effect
@@ -363,7 +363,7 @@ class TestHostsSync(unittest.TestCase):
     @patch("freq.core.ssh.run")
     def test_adds_pve_nodes_themselves(self, mock_ssh):
         """PVE hypervisor nodes are added to hosts.conf."""
-        cfg = _make_cfg(self.tmpdir, pve_nodes=["10.25.255.26", "10.25.255.27"], pve_node_names=["pve01", "pve02"])
+        cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26", "192.168.255.27"], pve_node_names=["pve01", "pve02"])
 
         def ssh_side_effect(host, command, **kwargs):
             if "pvesh" in command:
@@ -376,9 +376,9 @@ class TestHostsSync(unittest.TestCase):
         _hosts_sync(cfg)
 
         content = self._read_hosts_conf_raw(cfg)
-        self.assertIn("10.25.255.26", content)
+        self.assertIn("192.168.255.26", content)
         self.assertIn("pve01", content)
-        self.assertIn("10.25.255.27", content)
+        self.assertIn("192.168.255.27", content)
         self.assertIn("pve02", content)
 
     # ── No-op when up to date ──
@@ -386,8 +386,8 @@ class TestHostsSync(unittest.TestCase):
     @patch("freq.core.ssh.run")
     def test_no_changes_when_already_synced(self, mock_ssh):
         """When all hosts are already in hosts.conf, returns 0 with no write."""
-        existing = [Host(ip="10.25.255.26", label="pve01", htype="pve", groups="prod,cluster")]
-        cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        existing = [Host(ip="192.168.255.26", label="pve01", htype="pve", groups="prod,cluster")]
+        cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
         mtime_before = os.path.getmtime(cfg.hosts_file)
 
         def ssh_side_effect(host, command, **kwargs):
@@ -409,13 +409,13 @@ class TestHostsSync(unittest.TestCase):
     @patch("freq.core.ssh.run")
     def test_pve_api_failure_still_preserves_existing(self, mock_ssh):
         """If PVE API fails, existing hosts + fleet boundaries still written."""
-        existing = [Host(ip="10.25.255.30", label="plex", htype="docker", groups="prod,media")]
+        existing = [Host(ip="192.168.255.30", label="plex", htype="docker", groups="prod,media")]
         fb = FleetBoundaries()
         fb.physical = {
-            "switch": PhysicalDevice(key="switch", ip="10.25.255.5", label="gigecolo", device_type="switch"),
+            "switch": PhysicalDevice(key="switch", ip="192.168.255.5", label="gigecolo", device_type="switch"),
         }
         cfg = _make_cfg(self.tmpdir, hosts=existing, fleet_boundaries=fb,
-                        pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+                        pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         def ssh_side_effect(host, command, **kwargs):
             # PVE API call fails
@@ -437,7 +437,7 @@ class TestHostsSync(unittest.TestCase):
     @patch("freq.core.ssh.run")
     def test_auto_classifies_docker_vm_by_name(self, mock_ssh):
         """VM named 'arr-stack' is classified as docker type."""
-        cfg = _make_cfg(self.tmpdir, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 102, "name": "arr-stack", "node": "pve01", "status": "running", "type": "qemu"},
@@ -447,7 +447,7 @@ class TestHostsSync(unittest.TestCase):
             if "pvesh" in command:
                 return _fake_ssh_result(stdout=cluster_json)
             if "qm agent 102" in command:
-                return _fake_ssh_result(stdout=_qm_agent_json(["10.25.255.31"]))
+                return _fake_ssh_result(stdout=_qm_agent_json(["192.168.255.31"]))
             return _fake_ssh_result(stdout="", returncode=1)
 
         mock_ssh.side_effect = ssh_side_effect
@@ -464,7 +464,7 @@ class TestHostsSync(unittest.TestCase):
     @patch("freq.core.ssh.run")
     def test_auto_assigns_prod_group_for_255_vlan(self, mock_ssh):
         """VM on .255. subnet gets 'prod' group."""
-        cfg = _make_cfg(self.tmpdir, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 101, "name": "newvm", "node": "pve01", "status": "running", "type": "qemu"},
@@ -474,7 +474,7 @@ class TestHostsSync(unittest.TestCase):
             if "pvesh" in command:
                 return _fake_ssh_result(stdout=cluster_json)
             if "qm agent 101" in command:
-                return _fake_ssh_result(stdout=_qm_agent_json(["10.25.255.99"]))
+                return _fake_ssh_result(stdout=_qm_agent_json(["192.168.255.99"]))
             return _fake_ssh_result(stdout="", returncode=1)
 
         mock_ssh.side_effect = ssh_side_effect
@@ -488,7 +488,7 @@ class TestHostsSync(unittest.TestCase):
     @patch("freq.core.ssh.run")
     def test_auto_assigns_lab_group_for_10_vlan(self, mock_ssh):
         """VM on .10. subnet gets 'lab' group."""
-        cfg = _make_cfg(self.tmpdir, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 5001, "name": "lab-test", "node": "pve01", "status": "running", "type": "qemu"},
@@ -498,7 +498,7 @@ class TestHostsSync(unittest.TestCase):
             if "pvesh" in command:
                 return _fake_ssh_result(stdout=cluster_json)
             if "qm agent 5001" in command:
-                return _fake_ssh_result(stdout=_qm_agent_json(["10.25.10.70"]))
+                return _fake_ssh_result(stdout=_qm_agent_json(["192.168.10.70"]))
             return _fake_ssh_result(stdout="", returncode=1)
 
         mock_ssh.side_effect = ssh_side_effect
@@ -515,10 +515,10 @@ class TestHostsSync(unittest.TestCase):
     def test_output_has_section_headers(self, mock_ssh):
         """Written hosts.conf contains section headers (Production, Lab)."""
         existing = [
-            Host(ip="10.25.255.30", label="plex", htype="docker", groups="prod,media"),
-            Host(ip="10.25.10.60", label="lab-debian12", htype="linux", groups="lab,distro"),
+            Host(ip="192.168.255.30", label="plex", htype="docker", groups="prod,media"),
+            Host(ip="192.168.10.60", label="lab-debian12", htype="linux", groups="lab,distro"),
         ]
-        cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 999, "name": "new-prod", "node": "pve01", "status": "running", "type": "qemu"},
@@ -528,7 +528,7 @@ class TestHostsSync(unittest.TestCase):
             if "pvesh" in command:
                 return _fake_ssh_result(stdout=cluster_json)
             if "qm agent 999" in command:
-                return _fake_ssh_result(stdout=_qm_agent_json(["10.25.255.99"]))
+                return _fake_ssh_result(stdout=_qm_agent_json(["192.168.255.99"]))
             return _fake_ssh_result(stdout="", returncode=1)
 
         mock_ssh.side_effect = ssh_side_effect
@@ -546,7 +546,7 @@ class TestHostsSync(unittest.TestCase):
     @patch("freq.core.ssh.run")
     def test_multi_ip_written_to_hosts_conf(self, mock_ssh):
         """VM with multiple NICs has all IPs written as column 5."""
-        cfg = _make_cfg(self.tmpdir, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 101, "name": "plex", "node": "pve01", "status": "running", "type": "qemu"},
@@ -558,9 +558,9 @@ class TestHostsSync(unittest.TestCase):
             if "qm agent 101" in command:
                 # Plex has MGMT + Public + Storage NICs
                 return _fake_ssh_result(stdout=_qm_agent_json([
-                    ("eth0", "10.25.255.30"),
-                    ("eth1", "10.25.5.30"),
-                    ("eth2", "10.25.25.30"),
+                    ("eth0", "192.168.255.30"),
+                    ("eth1", "192.168.5.30"),
+                    ("eth2", "192.168.25.30"),
                 ]))
             return _fake_ssh_result(stdout="", returncode=1)
 
@@ -571,14 +571,14 @@ class TestHostsSync(unittest.TestCase):
 
         content = self._read_hosts_conf_raw(cfg)
         # All three real IPs should appear in the all_ips column
-        self.assertIn("10.25.255.30", content)
-        self.assertIn("10.25.5.30", content)
-        self.assertIn("10.25.25.30", content)
+        self.assertIn("192.168.255.30", content)
+        self.assertIn("192.168.5.30", content)
+        self.assertIn("192.168.25.30", content)
 
     @patch("freq.core.ssh.run")
     def test_multi_ip_filters_docker_bridge(self, mock_ssh):
         """Docker bridge IPs (172.x) are excluded from all_ips."""
-        cfg = _make_cfg(self.tmpdir, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 101, "name": "plex", "node": "pve01", "status": "running", "type": "qemu"},
@@ -589,7 +589,7 @@ class TestHostsSync(unittest.TestCase):
                 return _fake_ssh_result(stdout=cluster_json)
             if "qm agent 101" in command:
                 return _fake_ssh_result(stdout=_qm_agent_json([
-                    ("eth0", "10.25.255.30"),
+                    ("eth0", "192.168.255.30"),
                     ("docker0", "172.17.0.1"),
                 ]))
             return _fake_ssh_result(stdout="", returncode=1)
@@ -600,13 +600,13 @@ class TestHostsSync(unittest.TestCase):
         _hosts_sync(cfg)
 
         content = self._read_hosts_conf_raw(cfg)
-        self.assertIn("10.25.255.30", content)
+        self.assertIn("192.168.255.30", content)
         self.assertNotIn("172.17.0.1", content)
 
     @patch("freq.core.ssh.run")
     def test_multi_ip_prefers_mgmt_vlan_as_primary(self, mock_ssh):
         """Primary IP (column 1) should be on management VLAN (same subnet as PVE nodes)."""
-        cfg = _make_cfg(self.tmpdir, pve_nodes=["10.25.255.26"], pve_node_names=["pve01"])
+        cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
             {"vmid": 101, "name": "plex", "node": "pve01", "status": "running", "type": "qemu"},
@@ -618,8 +618,8 @@ class TestHostsSync(unittest.TestCase):
             if "qm agent 101" in command:
                 # Storage NIC listed first, MGMT NIC second
                 return _fake_ssh_result(stdout=_qm_agent_json([
-                    ("eth0", "10.25.25.30"),
-                    ("eth1", "10.25.255.30"),
+                    ("eth0", "192.168.25.30"),
+                    ("eth1", "192.168.255.30"),
                 ]))
             return _fake_ssh_result(stdout="", returncode=1)
 
@@ -633,7 +633,7 @@ class TestHostsSync(unittest.TestCase):
             if "plex" in line:
                 primary_ip = line.split()[0]
                 # Should pick MGMT VLAN IP as primary, not storage
-                self.assertEqual(primary_ip, "10.25.255.30")
+                self.assertEqual(primary_ip, "192.168.255.30")
                 break
         else:
             self.fail("plex not found in hosts.conf")
@@ -646,12 +646,12 @@ class TestHostsSync(unittest.TestCase):
 
         hosts_file = os.path.join(self.tmpdir, "hosts.conf")
         with open(hosts_file, "w") as f:
-            f.write("10.25.255.30  plex  docker  prod,media\n")
-            f.write("10.25.255.26  pve01  pve  prod,cluster\n")
+            f.write("192.168.255.30  plex  docker  prod,media\n")
+            f.write("192.168.255.26  pve01  pve  prod,cluster\n")
 
         hosts = load_hosts(hosts_file)
         self.assertEqual(len(hosts), 2)
-        self.assertEqual(hosts[0].ip, "10.25.255.30")
+        self.assertEqual(hosts[0].ip, "192.168.255.30")
         self.assertEqual(hosts[0].all_ips, [])
         self.assertEqual(hosts[1].all_ips, [])
 
@@ -661,12 +661,12 @@ class TestHostsSync(unittest.TestCase):
 
         hosts_file = os.path.join(self.tmpdir, "hosts.conf")
         with open(hosts_file, "w") as f:
-            f.write("10.25.255.30  plex  docker  prod,media  10.25.255.30,10.25.5.30,10.25.25.30\n")
+            f.write("192.168.255.30  plex  docker  prod,media  192.168.255.30,192.168.5.30,192.168.25.30\n")
 
         hosts = load_hosts(hosts_file)
         self.assertEqual(len(hosts), 1)
-        self.assertEqual(hosts[0].ip, "10.25.255.30")
-        self.assertEqual(hosts[0].all_ips, ["10.25.255.30", "10.25.5.30", "10.25.25.30"])
+        self.assertEqual(hosts[0].ip, "192.168.255.30")
+        self.assertEqual(hosts[0].all_ips, ["192.168.255.30", "192.168.5.30", "192.168.25.30"])
 
     def test_parse_3_column_minimal_format(self):
         """Minimal 3-column entries (no groups, no all_ips) still parse."""
@@ -674,7 +674,7 @@ class TestHostsSync(unittest.TestCase):
 
         hosts_file = os.path.join(self.tmpdir, "hosts.conf")
         with open(hosts_file, "w") as f:
-            f.write("10.25.255.30  plex  docker\n")
+            f.write("192.168.255.30  plex  docker\n")
 
         hosts = load_hosts(hosts_file)
         self.assertEqual(len(hosts), 1)
@@ -688,13 +688,13 @@ class TestHostsSync(unittest.TestCase):
         hosts_file = os.path.join(self.tmpdir, "hosts.conf")
         with open(hosts_file, "w") as f:
             f.write("# Mixed format\n")
-            f.write("10.25.255.30  plex  docker  prod,media  10.25.255.30,10.25.5.30\n")
-            f.write("10.25.255.26  pve01  pve  prod,cluster\n")
-            f.write("10.25.255.5  gigecolo  switch\n")
+            f.write("192.168.255.30  plex  docker  prod,media  192.168.255.30,192.168.5.30\n")
+            f.write("192.168.255.26  pve01  pve  prod,cluster\n")
+            f.write("192.168.255.5  gigecolo  switch\n")
 
         hosts = load_hosts(hosts_file)
         self.assertEqual(len(hosts), 3)
-        self.assertEqual(hosts[0].all_ips, ["10.25.255.30", "10.25.5.30"])
+        self.assertEqual(hosts[0].all_ips, ["192.168.255.30", "192.168.5.30"])
         self.assertEqual(hosts[1].all_ips, [])
         self.assertEqual(hosts[2].all_ips, [])
 
@@ -704,8 +704,8 @@ class TestHostsSync(unittest.TestCase):
         """by_ip() finds host by primary IP."""
         from freq.core.resolve import by_ip
 
-        hosts = [Host(ip="10.25.255.30", label="plex", htype="docker", all_ips=["10.25.255.30", "10.25.5.30"])]
-        result = by_ip(hosts, "10.25.255.30")
+        hosts = [Host(ip="192.168.255.30", label="plex", htype="docker", all_ips=["192.168.255.30", "192.168.5.30"])]
+        result = by_ip(hosts, "192.168.255.30")
         self.assertIsNotNone(result)
         self.assertEqual(result.label, "plex")
 
@@ -713,8 +713,8 @@ class TestHostsSync(unittest.TestCase):
         """by_ip() finds host by non-primary IP in all_ips."""
         from freq.core.resolve import by_ip
 
-        hosts = [Host(ip="10.25.255.30", label="plex", htype="docker", all_ips=["10.25.255.30", "10.25.5.30", "10.25.25.30"])]
-        result = by_ip(hosts, "10.25.5.30")
+        hosts = [Host(ip="192.168.255.30", label="plex", htype="docker", all_ips=["192.168.255.30", "192.168.5.30", "192.168.25.30"])]
+        result = by_ip(hosts, "192.168.5.30")
         self.assertIsNotNone(result)
         self.assertEqual(result.label, "plex")
 
@@ -722,16 +722,16 @@ class TestHostsSync(unittest.TestCase):
         """by_ip() returns None for IP not in any host."""
         from freq.core.resolve import by_ip
 
-        hosts = [Host(ip="10.25.255.30", label="plex", htype="docker", all_ips=["10.25.255.30", "10.25.5.30"])]
-        result = by_ip(hosts, "10.25.66.99")
+        hosts = [Host(ip="192.168.255.30", label="plex", htype="docker", all_ips=["192.168.255.30", "192.168.5.30"])]
+        result = by_ip(hosts, "192.168.66.99")
         self.assertIsNone(result)
 
     def test_by_ip_works_with_empty_all_ips(self):
         """by_ip() still works for old hosts without all_ips."""
         from freq.core.resolve import by_ip
 
-        hosts = [Host(ip="10.25.255.30", label="plex", htype="docker")]
-        result = by_ip(hosts, "10.25.255.30")
+        hosts = [Host(ip="192.168.255.30", label="plex", htype="docker")]
+        result = by_ip(hosts, "192.168.255.30")
         self.assertIsNotNone(result)
         self.assertEqual(result.label, "plex")
 

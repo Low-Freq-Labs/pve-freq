@@ -159,9 +159,9 @@ class TestUpdateHostLabel(unittest.TestCase):
         from freq.modules.hosts import update_host_label
         cfg = self._make_cfg([
             "# FREQ Fleet Registry",
-            "10.25.10.1  old-name  linux  cluster",
+            "192.168.10.1  old-name  linux  cluster",
         ])
-        result = update_host_label(cfg, "10.25.10.1", "new-name")
+        result = update_host_label(cfg, "192.168.10.1", "new-name")
         self.assertTrue(result)
         with open(self.hosts_file) as f:
             content = f.read()
@@ -171,9 +171,9 @@ class TestUpdateHostLabel(unittest.TestCase):
     def test_no_match_returns_false(self):
         from freq.modules.hosts import update_host_label
         cfg = self._make_cfg([
-            "10.25.10.1  server  linux",
+            "192.168.10.1  server  linux",
         ])
-        result = update_host_label(cfg, "10.25.10.99", "new-name")
+        result = update_host_label(cfg, "192.168.10.99", "new-name")
         self.assertFalse(result)
         with open(self.hosts_file) as f:
             content = f.read()
@@ -183,9 +183,9 @@ class TestUpdateHostLabel(unittest.TestCase):
         from freq.modules.hosts import update_host_label
         cfg = self._make_cfg([
             "# This is a comment",
-            "10.25.10.1  server  linux",
+            "192.168.10.1  server  linux",
         ])
-        update_host_label(cfg, "10.25.10.1", "renamed")
+        update_host_label(cfg, "192.168.10.1", "renamed")
         with open(self.hosts_file) as f:
             lines = f.readlines()
         self.assertTrue(lines[0].startswith("#"))
@@ -193,9 +193,9 @@ class TestUpdateHostLabel(unittest.TestCase):
     def test_preserves_type_and_groups(self):
         from freq.modules.hosts import update_host_label
         cfg = self._make_cfg([
-            "10.25.10.1  server  docker  media,prod",
+            "192.168.10.1  server  docker  media,prod",
         ])
-        update_host_label(cfg, "10.25.10.1", "new-server")
+        update_host_label(cfg, "192.168.10.1", "new-server")
         with open(self.hosts_file) as f:
             content = f.read()
         self.assertIn("docker", content)
@@ -219,17 +219,17 @@ class TestResolveHostIp(unittest.TestCase):
         from freq.core.types import Host
         cfg = MagicMock()
         cfg.hosts = [
-            Host(ip="10.25.10.1", label="plex", htype="docker"),
-            Host(ip="10.25.10.2", label="tdarr", htype="docker"),
+            Host(ip="192.168.10.1", label="plex", htype="docker"),
+            Host(ip="192.168.10.2", label="tdarr", htype="docker"),
         ]
-        self.assertEqual(resolve_host_ip(cfg, "plex"), "10.25.10.1")
+        self.assertEqual(resolve_host_ip(cfg, "plex"), "192.168.10.1")
 
     def test_label_not_found(self):
         from freq.modules.hosts import resolve_host_ip
         from freq.core.types import Host
         cfg = MagicMock()
         cfg.hosts = [
-            Host(ip="10.25.10.1", label="plex", htype="docker"),
+            Host(ip="192.168.10.1", label="plex", htype="docker"),
         ]
         self.assertEqual(resolve_host_ip(cfg, "nonexistent"), "")
 
@@ -297,39 +297,39 @@ class TestResolveContainerVmIp(unittest.TestCase):
 
         vm = MagicMock()
         vm.label = "plex"
-        vm.ip = "10.25.10.99"  # hardcoded fallback
+        vm.ip = "192.168.10.99"  # hardcoded fallback
 
         # Mock the imports inside _resolve_container_vm_ip
         mock_cfg = MagicMock()
-        mock_cfg.hosts = [Host(ip="10.25.10.1", label="plex", htype="docker")]
+        mock_cfg.hosts = [Host(ip="192.168.10.1", label="plex", htype="docker")]
 
         with patch.object(serve, 'load_config', return_value=mock_cfg):
             result = serve._resolve_container_vm_ip(vm)
-        self.assertEqual(result, "10.25.10.1")
+        self.assertEqual(result, "192.168.10.1")
 
     def test_falls_back_to_hardcoded_ip(self):
         from freq.modules import serve
 
         vm = MagicMock()
         vm.label = "nonexistent"
-        vm.ip = "10.25.10.99"
+        vm.ip = "192.168.10.99"
 
         mock_cfg = MagicMock()
         mock_cfg.hosts = []
 
         with patch.object(serve, 'load_config', return_value=mock_cfg):
             result = serve._resolve_container_vm_ip(vm)
-        self.assertEqual(result, "10.25.10.99")
+        self.assertEqual(result, "192.168.10.99")
 
     def test_no_label_returns_hardcoded_ip(self):
         from freq.modules import serve
 
         vm = MagicMock()
         vm.label = ""
-        vm.ip = "10.25.10.99"
+        vm.ip = "192.168.10.99"
 
         result = serve._resolve_container_vm_ip(vm)
-        self.assertEqual(result, "10.25.10.99")
+        self.assertEqual(result, "192.168.10.99")
 
 
 if __name__ == "__main__":

@@ -64,7 +64,7 @@ def _mock_cfg(**overrides):
     )
     defaults = dict(
         hosts=[],
-        pve_nodes=["10.25.10.1"],
+        pve_nodes=["192.168.10.1"],
         pve_node_names=["pve01"],
         ssh_key_path="/tmp/fake_key",
         ssh_connect_timeout=3,
@@ -119,7 +119,7 @@ class TestCmdPower:
     """Test cmd_power in pve.py."""
 
     @patch("freq.modules.pve._pve_cmd", return_value=("OK", True))
-    @patch("freq.modules.pve._find_reachable_node", return_value="10.25.10.1")
+    @patch("freq.modules.pve._find_reachable_node", return_value="192.168.10.1")
     def test_power_start(self, mock_node, mock_pve):
         from freq.modules.pve import cmd_power
         args = _mock_args(action="start", target="5001")
@@ -129,7 +129,7 @@ class TestCmdPower:
         assert "qm start 5001" in mock_pve.call_args[0][2]
 
     @patch("freq.modules.pve._pve_cmd", return_value=("OK", True))
-    @patch("freq.modules.pve._find_reachable_node", return_value="10.25.10.1")
+    @patch("freq.modules.pve._find_reachable_node", return_value="192.168.10.1")
     def test_power_stop(self, mock_node, mock_pve):
         from freq.modules.pve import cmd_power
         args = _mock_args(action="stop", target="5001")
@@ -138,7 +138,7 @@ class TestCmdPower:
         assert "qm stop 5001" in mock_pve.call_args[0][2]
 
     @patch("freq.modules.pve._pve_cmd", return_value=("OK", True))
-    @patch("freq.modules.pve._find_reachable_node", return_value="10.25.10.1")
+    @patch("freq.modules.pve._find_reachable_node", return_value="192.168.10.1")
     def test_power_status(self, mock_node, mock_pve):
         from freq.modules.pve import cmd_power
         args = _mock_args(action="status", target="5001")
@@ -146,7 +146,7 @@ class TestCmdPower:
         assert result == 0
         assert "qm status 5001" in mock_pve.call_args[0][2]
 
-    @patch("freq.modules.pve._find_reachable_node", return_value="10.25.10.1")
+    @patch("freq.modules.pve._find_reachable_node", return_value="192.168.10.1")
     def test_power_protected_vm(self, mock_node):
         from freq.modules.pve import cmd_power
         args = _mock_args(action="stop", target="900")
@@ -160,7 +160,7 @@ class TestCmdPower:
         assert result == 1
 
     @patch("freq.modules.pve._pve_cmd", return_value=("FAIL", False))
-    @patch("freq.modules.pve._find_reachable_node", return_value="10.25.10.1")
+    @patch("freq.modules.pve._find_reachable_node", return_value="192.168.10.1")
     def test_power_ssh_fail(self, mock_node, mock_pve):
         from freq.modules.pve import cmd_power
         args = _mock_args(action="start", target="5001")
@@ -184,7 +184,7 @@ class TestCmdSnapshotList:
 
     @patch("freq.modules.pve._pve_cmd", return_value=(
         "`- snap1 0 bytes 2025-03-01\n`- snap2 0 bytes 2025-03-02\n-> current", True))
-    @patch("freq.modules.pve._find_reachable_node", return_value="10.25.10.1")
+    @patch("freq.modules.pve._find_reachable_node", return_value="192.168.10.1")
     def test_snapshot_list_found(self, mock_node, mock_pve):
         from freq.modules.pve import cmd_snapshot_list
         args = _mock_args(target="5001")
@@ -192,7 +192,7 @@ class TestCmdSnapshotList:
         assert result == 0
 
     @patch("freq.modules.pve._pve_cmd", return_value=("", True))
-    @patch("freq.modules.pve._find_reachable_node", return_value="10.25.10.1")
+    @patch("freq.modules.pve._find_reachable_node", return_value="192.168.10.1")
     def test_snapshot_list_empty(self, mock_node, mock_pve):
         from freq.modules.pve import cmd_snapshot_list
         args = _mock_args(target="5001")
@@ -217,7 +217,7 @@ class TestCmdSnapshotDelete:
     """Test snapshot delete action."""
 
     @patch("freq.modules.pve._pve_cmd", return_value=("", True))
-    @patch("freq.modules.pve._find_reachable_node", return_value="10.25.10.1")
+    @patch("freq.modules.pve._find_reachable_node", return_value="192.168.10.1")
     def test_snapshot_delete_ok(self, mock_node, mock_pve):
         from freq.modules.pve import cmd_snapshot_delete
         args = _mock_args(target="5001", name="snap1", yes=True)
@@ -238,7 +238,7 @@ class TestCmdSnapshotDelete:
         assert result == 1
 
     @patch("freq.modules.pve._pve_cmd", return_value=("FAIL", False))
-    @patch("freq.modules.pve._find_reachable_node", return_value="10.25.10.1")
+    @patch("freq.modules.pve._find_reachable_node", return_value="192.168.10.1")
     def test_snapshot_delete_fail(self, mock_node, mock_pve):
         from freq.modules.pve import cmd_snapshot_delete
         args = _mock_args(target="5001", name="snap1", yes=True)
@@ -286,7 +286,7 @@ class TestCmdNic:
         assert result == 1
 
     @patch("freq.modules.vm._pve_cmd")
-    @patch("freq.modules.vm._find_node", return_value="10.25.10.1")
+    @patch("freq.modules.vm._find_node", return_value="192.168.10.1")
     def test_nic_add(self, mock_node, mock_pve):
         mock_pve.side_effect = [
             ("net0: virtio...", True),  # qm config
@@ -294,15 +294,15 @@ class TestCmdNic:
             ("", True),                  # qm set ipconfig
         ]
         from freq.modules.vm import cmd_nic
-        args = _mock_args(action="add", target="5001", ip="10.25.10.50")
+        args = _mock_args(action="add", target="5001", ip="192.168.10.50")
         result = cmd_nic(_mock_cfg(), None, args)
         assert result == 0
 
     @patch("freq.modules.vm._pve_cmd")
-    @patch("freq.modules.vm._find_node", return_value="10.25.10.1")
+    @patch("freq.modules.vm._find_node", return_value="192.168.10.1")
     def test_nic_clear(self, mock_node, mock_pve):
         mock_pve.side_effect = [
-            ("net0: virtio\nipconfig0: ip=10.25.10.1/24", True),  # qm config
+            ("net0: virtio\nipconfig0: ip=192.168.10.1/24", True),  # qm config
             ("", True),  # delete net0
             ("", True),  # delete ipconfig0
         ]
@@ -312,14 +312,14 @@ class TestCmdNic:
         assert result == 0
 
     @patch("freq.modules.vm._pve_cmd")
-    @patch("freq.modules.vm._find_node", return_value="10.25.10.1")
+    @patch("freq.modules.vm._find_node", return_value="192.168.10.1")
     def test_nic_change_ip(self, mock_node, mock_pve):
         mock_pve.side_effect = [
             ("", True),  # qm set net
             ("", True),  # qm set ipconfig
         ]
         from freq.modules.vm import cmd_nic
-        args = _mock_args(action="change-ip", target="5001", ip="10.25.10.99")
+        args = _mock_args(action="change-ip", target="5001", ip="192.168.10.99")
         result = cmd_nic(_mock_cfg(), None, args)
         assert result == 0
 
@@ -327,7 +327,7 @@ class TestCmdNic:
     def test_nic_check_ip_available(self, mock_run):
         mock_run.return_value = SimpleNamespace(returncode=1)
         from freq.modules.vm import cmd_nic
-        args = _mock_args(action="check-ip", ip="10.25.10.99")
+        args = _mock_args(action="check-ip", ip="192.168.10.99")
         result = cmd_nic(_mock_cfg(), None, args)
         assert result == 0
 
@@ -335,13 +335,13 @@ class TestCmdNic:
     def test_nic_check_ip_taken(self, mock_run):
         mock_run.return_value = SimpleNamespace(returncode=0)
         from freq.modules.vm import cmd_nic
-        args = _mock_args(action="check-ip", ip="10.25.10.1")
+        args = _mock_args(action="check-ip", ip="192.168.10.1")
         result = cmd_nic(_mock_cfg(), None, args)
         assert result == 0
 
     def test_nic_add_no_target(self):
         from freq.modules.vm import _nic_add
-        args = _mock_args(ip="10.25.10.50")
+        args = _mock_args(ip="192.168.10.50")
         result = _nic_add(_mock_cfg(), args)
         assert result == 1
 
@@ -353,12 +353,12 @@ class TestCmdNic:
 
     def test_nic_add_protected(self):
         from freq.modules.vm import _nic_add
-        args = _mock_args(target="900", ip="10.25.10.50")
+        args = _mock_args(target="900", ip="192.168.10.50")
         result = _nic_add(_mock_cfg(), args)
         assert result == 1
 
     @patch("freq.modules.vm._pve_cmd")
-    @patch("freq.modules.vm._find_node", return_value="10.25.10.1")
+    @patch("freq.modules.vm._find_node", return_value="192.168.10.1")
     def test_nic_change_id(self, mock_node, mock_pve):
         mock_pve.side_effect = [
             ("status: stopped", True),   # qm status
@@ -403,10 +403,10 @@ class TestCLIParserParity:
     def test_nic_add_registered(self):
         from freq.cli import _build_parser
         p = _build_parser()
-        args = p.parse_args(["nic", "add", "5001", "--ip", "10.25.10.50", "--vlan", "10"])
+        args = p.parse_args(["nic", "add", "5001", "--ip", "192.168.10.50", "--vlan", "10"])
         assert args.action == "add"
         assert args.target == "5001"
-        assert args.ip == "10.25.10.50"
+        assert args.ip == "192.168.10.50"
         assert args.vlan == "10"
 
     def test_nic_clear_registered(self):
@@ -425,9 +425,9 @@ class TestCLIParserParity:
     def test_nic_check_ip_registered(self):
         from freq.cli import _build_parser
         p = _build_parser()
-        args = p.parse_args(["nic", "check-ip", "--ip", "10.25.10.1"])
+        args = p.parse_args(["nic", "check-ip", "--ip", "192.168.10.1"])
         assert args.action == "check-ip"
-        assert args.ip == "10.25.10.1"
+        assert args.ip == "192.168.10.1"
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -443,7 +443,7 @@ class TestServeDiagnose:
     def test_diagnose_ok(self, mock_cfg, mock_res, mock_ssh):
         mock_cfg.return_value = _mock_cfg()
         mock_res.by_target.return_value = SimpleNamespace(
-            label="testhost", ip="10.25.10.50", htype="linux", groups="")
+            label="testhost", ip="192.168.10.50", htype="linux", groups="")
         mock_ssh.return_value = _mock_ssh_result(stdout="test output")
 
         h = _make_handler("/api/diagnose?target=testhost")
@@ -482,7 +482,7 @@ class TestServeLog:
     def test_log_ok(self, mock_cfg, mock_res, mock_ssh):
         mock_cfg.return_value = _mock_cfg()
         mock_res.by_target.return_value = SimpleNamespace(
-            label="testhost", ip="10.25.10.50", htype="linux", groups="")
+            label="testhost", ip="192.168.10.50", htype="linux", groups="")
         mock_ssh.return_value = _mock_ssh_result(stdout="Mar 25 log line 1\nMar 25 log line 2")
 
         h = _make_handler("/api/log?target=testhost&lines=10")

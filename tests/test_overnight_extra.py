@@ -266,9 +266,9 @@ class TestValidateExtras(unittest.TestCase):
         from freq.core.validate import ip
         self.assertTrue(ip("0.0.0.0"))
         self.assertTrue(ip("255.255.255.255"))
-        self.assertFalse(ip("10.25.255"))      # Only 3 octets
-        self.assertFalse(ip("10.25.255.256"))   # Octet > 255
-        self.assertFalse(ip("10.25.255.-1"))    # Negative
+        self.assertFalse(ip("192.168.255"))      # Only 3 octets
+        self.assertFalse(ip("192.168.255.256"))   # Octet > 255
+        self.assertFalse(ip("192.168.255.-1"))    # Negative
 
     def test_vmid_boundaries(self):
         from freq.core.validate import vmid

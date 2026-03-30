@@ -163,11 +163,11 @@ class TestHostsConf(unittest.TestCase):
         """5-column line parses ALL_IPS correctly."""
         path = os.path.join(self.tmpdir, "hosts.conf")
         with open(path, "w") as f:
-            f.write("10.0.0.1  myhost  docker  prod  10.0.0.1,10.25.10.5\n")
+            f.write("10.0.0.1  myhost  docker  prod  10.0.0.1,192.168.10.5\n")
         result = load_hosts(path)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].groups, "prod")
-        self.assertEqual(result[0].all_ips, ["10.0.0.1", "10.25.10.5"])
+        self.assertEqual(result[0].all_ips, ["10.0.0.1", "192.168.10.5"])
 
     def test_all_ips_trailing_comma(self):
         """Trailing comma in ALL_IPS column does not produce empty string."""
@@ -516,7 +516,7 @@ class TestValidateEdgeCases(unittest.TestCase):
         self.assertFalse(validate.ip(""))
 
     def test_ip_valid(self):
-        self.assertTrue(validate.ip("10.25.255.1"))
+        self.assertTrue(validate.ip("192.168.255.1"))
 
     def test_ip_boundary_zeros(self):
         self.assertTrue(validate.ip("0.0.0.0"))

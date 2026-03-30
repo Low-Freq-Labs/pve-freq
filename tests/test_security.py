@@ -118,7 +118,7 @@ class TestBayDevice:
 def _make_cfg():
     """Create a minimal FreqConfig mock."""
     cfg = MagicMock()
-    cfg.pve_nodes = ["10.25.255.1"]
+    cfg.pve_nodes = ["192.168.255.1"]
     cfg.ssh_key_path = "/tmp/test_key"
     cfg.ssh_connect_timeout = 5
     cfg.vm_cpu = "host"
@@ -127,7 +127,7 @@ def _make_cfg():
     cfg.vm_default_cores = 2
     cfg.vm_default_ram = 2048
     cfg.vm_default_disk = 32
-    cfg.vm_gateway = "10.25.10.1"
+    cfg.vm_gateway = "192.168.10.1"
     cfg.nic_bridge = "vmbr0"
     cfg.pve_storage = {}
     cfg.ssh_service_account = "freq-ops"
@@ -139,7 +139,7 @@ def _make_cfg():
 class TestCreateRejectsBadName:
     """cmd_create must reject invalid names before calling _pve_cmd."""
 
-    @patch("freq.modules.vm._find_node", return_value="10.25.255.1")
+    @patch("freq.modules.vm._find_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._pve_cmd")
     def test_injection_name_rejected(self, mock_pve, mock_node):
         from freq.modules.vm import cmd_create
@@ -152,7 +152,7 @@ class TestCreateRejectsBadName:
         assert result == 1
         mock_pve.assert_not_called()
 
-    @patch("freq.modules.vm._find_node", return_value="10.25.255.1")
+    @patch("freq.modules.vm._find_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._pve_cmd")
     def test_valid_name_proceeds(self, mock_pve, mock_node):
         from freq.modules.vm import cmd_create
@@ -170,7 +170,7 @@ class TestCreateRejectsBadName:
 class TestCloneRejectsBadInput:
     """cmd_clone must reject invalid names, IPs, and VLANs."""
 
-    @patch("freq.modules.vm._find_node", return_value="10.25.255.1")
+    @patch("freq.modules.vm._find_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._pve_cmd")
     def test_bad_name_rejected(self, mock_pve, mock_node):
         from freq.modules.vm import cmd_clone
@@ -183,7 +183,7 @@ class TestCloneRejectsBadInput:
         assert result == 1
         mock_pve.assert_not_called()
 
-    @patch("freq.modules.vm._find_node", return_value="10.25.255.1")
+    @patch("freq.modules.vm._find_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._pve_cmd")
     def test_bad_vlan_rejected(self, mock_pve, mock_node):
         from freq.modules.vm import cmd_clone
@@ -196,7 +196,7 @@ class TestCloneRejectsBadInput:
         assert result == 1
         mock_pve.assert_not_called()
 
-    @patch("freq.modules.vm._find_node", return_value="10.25.255.1")
+    @patch("freq.modules.vm._find_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._pve_cmd")
     def test_bad_ip_rejected(self, mock_pve, mock_node):
         from freq.modules.vm import cmd_clone
@@ -209,7 +209,7 @@ class TestCloneRejectsBadInput:
         assert result == 1
         mock_pve.assert_not_called()
 
-    @patch("freq.modules.vm._find_node", return_value="10.25.255.1")
+    @patch("freq.modules.vm._find_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._pve_cmd")
     def test_valid_vlan_accepted(self, mock_pve, mock_node):
         from freq.modules.vm import cmd_clone
@@ -229,7 +229,7 @@ class TestCloneRejectsBadInput:
 class TestRenameRejectsBadName:
     """cmd_rename must reject invalid names."""
 
-    @patch("freq.modules.vm._find_vm_node", return_value="10.25.255.1")
+    @patch("freq.modules.vm._find_vm_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._pve_cmd")
     def test_injection_rejected(self, mock_pve, mock_node):
         from freq.modules.vm import cmd_rename
@@ -253,7 +253,7 @@ class TestNicAddRejectsBadInput:
     def test_bad_vlan_rejected(self):
         from freq.modules.vm import _nic_add
         cfg = _make_cfg()
-        args = SimpleNamespace(target="5001", ip="10.25.10.50", gw=None, vlan="99999")
+        args = SimpleNamespace(target="5001", ip="192.168.10.50", gw=None, vlan="99999")
         result = _nic_add(cfg, args)
         assert result == 1
 
@@ -271,7 +271,7 @@ class TestNicChangeIpRejectsBadInput:
     def test_bad_vlan_rejected(self):
         from freq.modules.vm import _nic_change_ip
         cfg = _make_cfg()
-        args = SimpleNamespace(target="5001", ip="10.25.10.50", gw=None, nic_index=0, vlan="-1")
+        args = SimpleNamespace(target="5001", ip="192.168.10.50", gw=None, nic_index=0, vlan="-1")
         result = _nic_change_ip(cfg, args)
         assert result == 1
 

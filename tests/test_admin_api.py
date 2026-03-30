@@ -64,10 +64,10 @@ range_start = 9000
 range_end = 9099
 
 [physical]
-pfsense = { ip = "10.25.255.1", label = "pfsense01", type = "pfsense", tier = "probe", detail = "Gateway" }
+pfsense = { ip = "192.168.255.1", label = "pfsense01", type = "pfsense", tier = "probe", detail = "Gateway" }
 
 [pve_nodes]
-pve01 = { ip = "10.25.255.26", detail = "Dell T620" }
+pve01 = { ip = "192.168.255.26", detail = "Dell T620" }
 """
 
 
@@ -101,7 +101,7 @@ class TestDockerBridgeFilter(unittest.TestCase):
 
     def test_non_172_ip(self):
         """10.x.x.x should never be filtered."""
-        self.assertFalse(self.fn("10.25.255.1"))
+        self.assertFalse(self.fn("192.168.255.1"))
         self.assertFalse(self.fn("192.168.1.1"))
 
     def test_172_low_octets(self):
@@ -404,7 +404,7 @@ class TestHostsUpdateToml(unittest.TestCase):
         """Change host type from linux to docker."""
         with open(self.hosts_path, "w") as f:
             f.write("# Fleet\n")
-            f.write("10.25.10.50  myhost  linux  lab\n")
+            f.write("192.168.10.50  myhost  linux  lab\n")
 
         with open(self.hosts_path) as f:
             lines = f.readlines()
@@ -436,7 +436,7 @@ class TestHostsUpdateToml(unittest.TestCase):
     def test_update_host_groups(self):
         """Change host groups from lab to prod."""
         with open(self.hosts_path, "w") as f:
-            f.write("10.25.10.50  myhost  linux  lab\n")
+            f.write("192.168.10.50  myhost  linux  lab\n")
 
         with open(self.hosts_path) as f:
             lines = f.readlines()

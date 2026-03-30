@@ -287,7 +287,7 @@ class TestTier5CIDRExtraction(unittest.TestCase):
 
     def test_cidr_from_24_subnet(self):
         """Standard /24 subnet: cidr = '24'."""
-        subnet = "10.25.10.0/24"
+        subnet = "192.168.10.0/24"
         cidr = subnet.split("/")[1] if "/" in subnet else "24"
         self.assertEqual(cidr, "24")
 

@@ -69,7 +69,7 @@ def _mock_cfg(**overrides):
     )
     defaults = dict(
         hosts=[],
-        pve_nodes=["10.25.10.1"],
+        pve_nodes=["192.168.10.1"],
         ssh_key_path="/tmp/fake_key",
         ssh_connect_timeout=5,
         brand="FREQ",

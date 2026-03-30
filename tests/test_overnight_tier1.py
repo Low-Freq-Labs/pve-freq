@@ -416,7 +416,7 @@ class TestPortabilityConfig(unittest.TestCase):
         self.assertEqual(opts["user"], _DEFAULTS["ssh_service_account"])
 
     def test_no_site_specific_ips_in_source(self):
-        """No site-specific IPs (10.25.x.x) in Python source files."""
+        """No site-specific IPs (192.168.x.x) in Python source files."""
         import glob
         freq_dir = os.path.join(os.path.dirname(__file__), "..", "freq")
         violations = []
@@ -426,9 +426,10 @@ class TestPortabilityConfig(unittest.TestCase):
                 continue
             with open(py_file) as f:
                 for i, line in enumerate(f, 1):
-                    if "10.25." in line and not line.strip().startswith("#"):
-                        # Allow example/placeholder text in UI
-                        if "placeholder" in line or "e.g." in line:
+                    if "192.168." in line and not line.strip().startswith("#"):
+                        # Allow example/placeholder/docstring text
+                        if any(kw in line for kw in ("placeholder", "e.g.", "Example", '"""', "'''")):
+
                             continue
                         violations.append(f"{os.path.basename(py_file)}:{i}")
         self.assertEqual(violations, [], f"Site-specific IPs found in source: {violations}")

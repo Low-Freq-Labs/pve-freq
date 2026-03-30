@@ -460,8 +460,8 @@ class TestDiscover(unittest.TestCase):
 
     def test_parse_subnet_3_octet(self):
         from freq.modules.discover import _parse_subnet_input
-        prefix, start, end = _parse_subnet_input("10.25.255")
-        self.assertEqual(prefix, "10.25.255")
+        prefix, start, end = _parse_subnet_input("192.168.255")
+        self.assertEqual(prefix, "192.168.255")
         self.assertEqual(start, 1)
         self.assertEqual(end, 254)
 
@@ -496,8 +496,8 @@ class TestDiscover(unittest.TestCase):
 
     def test_parse_subnet_with_spaces(self):
         from freq.modules.discover import _parse_subnet_input
-        prefix, start, end = _parse_subnet_input("  10.25.10  ")
-        self.assertEqual(prefix, "10.25.10")
+        prefix, start, end = _parse_subnet_input("  192.168.10  ")
+        self.assertEqual(prefix, "192.168.10")
         self.assertEqual(start, 1)
         self.assertEqual(end, 254)
 
