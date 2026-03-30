@@ -1,6 +1,6 @@
 # PVE FREQ Overnight Edge Case Matrix
 
-**Purpose:** Hammer every code path with non-DC01 configurations to find crashes, wrong behavior, and confusing output.
+**Purpose:** Hammer every code path with diverse configurations to find crashes, wrong behavior, and confusing output.
 **Method:** For each test, simulate the config state by creating temporary freq.toml/hosts.conf variants and calling the Python functions directly (no SSH needed — we mock or skip network calls).
 
 ---

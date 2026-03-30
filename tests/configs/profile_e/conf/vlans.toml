@@ -1,1 +1,35 @@
-/home/freq-ops/dev-ops/rick/conf/vlans.toml
+# FREQ VLAN Definitions
+
+[vlan.mgmt]
+id = 10
+name = "MGMT"
+subnet = "192.168.10.0/24"
+prefix = "192.168.10"
+gateway = "192.168.10.1"
+
+[vlan.services]
+id = 20
+name = "SERVICES"
+subnet = "192.168.20.0/24"
+prefix = "192.168.20"
+gateway = "192.168.20.1"
+
+[vlan.storage]
+id = 30
+name = "STORAGE"
+subnet = "192.168.30.0/24"
+prefix = "192.168.30"
+
+[vlan.public]
+id = 50
+name = "PUBLIC"
+subnet = "192.168.50.0/24"
+prefix = "192.168.50"
+gateway = "192.168.50.1"
+
+[vlan.lab]
+id = 100
+name = "LAB"
+subnet = "192.168.100.0/24"
+prefix = "192.168.100"
+gateway = "192.168.100.1"
