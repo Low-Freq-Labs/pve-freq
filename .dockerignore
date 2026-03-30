@@ -1,11 +1,26 @@
+# Version control
 .git
+.gitignore
 .github
+
+# IDE
+.vscode/
+.idea/
+
+# Python artifacts
 __pycache__
 *.pyc
+*.pyo
+*.egg-info/
 .pytest_cache
-*.egg-info
+build/
+dist/
+
+# Tests and docs (not needed in image)
 tests/
 docs/
+
+# Agent / workspace files
 reference/
 planning/
 memory/
@@ -15,5 +30,24 @@ cold-storage/
 .claude/
 resume-state.md
 CLAUDE.md
+CLAUDE-reference.md
+MASTER-PLAN.md
+
+# Runtime data (live config — never bake into image)
+conf/
+data/cache/
+data/log/
 data/vault/*
 data/keys/*
+
+# Docker files (prevent recursive context)
+docker-compose*.yml
+compose.yml
+.dockerignore
+
+# Environment / secrets
+.env
+.env.*
+*.key
+*.pem
+credentials/

@@ -1,16 +1,58 @@
+# ──────────────────────────────────────────────────────────────────
+# PVE FREQ — Docker Compose (in-repo build)
+#
+# Quick start:
+#   docker compose up -d
+#   docker exec -it pve-freq freq init    <- first-time setup
+#
+# Dashboard:  http://localhost:8888
+# CLI:        docker exec pve-freq freq doctor
+# TUI:        docker exec -it pve-freq freq
+# ──────────────────────────────────────────────────────────────────
+
 services:
   freq:
     build: .
     container_name: pve-freq
     restart: unless-stopped
+
     ports:
       - "${FREQ_PORT:-8888}:8888"
+
+    environment:
+      - TZ=${TZ:-UTC}
+
     volumes:
       - ./conf:/opt/pve-freq/conf
       - ./data:/opt/pve-freq/data
-      # Uncomment and adjust to mount your SSH key:
+      # SSH keys — mount your fleet SSH key (read-only)
+      # Uncomment and adjust the path to your SSH key:
       # - ~/.ssh/id_ed25519:/home/freq/.ssh/id_ed25519:ro
+      # - ~/.ssh/id_rsa:/home/freq/.ssh/id_rsa:ro
       # - ~/.ssh/known_hosts:/home/freq/.ssh/known_hosts:ro
-    environment:
-      - TZ=${TZ:-UTC}
-      - FREQ_PORT=8888
+
+    # Read-only root filesystem — only volumes and tmpfs are writable
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+      - /home/freq
+
+    # Prevent in-container privilege escalation
+    security_opt:
+      - no-new-privileges:true
+
+    # Resource limits (adjust to your needs)
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+    # Log rotation — prevent unbounded log growth
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
