@@ -1574,6 +1574,10 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/playbooks/run": "_serve_playbooks_run",
         "/api/playbooks/step": "_serve_playbooks_step",
         "/api/playbooks/create": "_serve_playbooks_create",
+        # Storage & Media Extended
+        "/api/storage/health": "_serve_storage_health",
+        "/api/media/tdarr": "_serve_media_tdarr",
+        "/api/media/downloads/detail": "_serve_media_downloads_detail",
         # Activity Feed
         "/api/activity": "_serve_activity",
         # HTTP Monitors
@@ -2170,6 +2174,141 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"ok": True, "filename": filename})
         except OSError as e:
             self._json_response({"error": str(e)}, 500)
+
+    # ── Storage & Media Extended ────────────────────────────────────────
+
+    def _serve_storage_health(self):
+        """GET /api/storage/health — storage pool status across PVE + TrueNAS."""
+        cfg = load_config()
+        from freq.core.ssh import run as ssh_run_fn
+
+        pools = []
+        # PVE storage pools
+        for i, node_ip in enumerate(cfg.pve_nodes):
+            node_name = cfg.pve_node_names[i] if i < len(cfg.pve_node_names) else f"node{i}"
+            r = ssh_run_fn(
+                host=node_ip,
+                command="sudo pvesm status 2>/dev/null | tail -n +2",
+                key_path=cfg.ssh_key_path,
+                connect_timeout=cfg.ssh_connect_timeout,
+                command_timeout=15,
+                htype="pve", use_sudo=False,
+            )
+            if r.returncode == 0:
+                for line in r.stdout.strip().split("\n"):
+                    parts = line.split()
+                    if len(parts) >= 7:
+                        total_bytes = int(parts[3]) if parts[3].isdigit() else 0
+                        used_bytes = int(parts[4]) if parts[4].isdigit() else 0
+                        avail_bytes = int(parts[5]) if parts[5].isdigit() else 0
+                        pct = round(used_bytes / total_bytes * 100, 1) if total_bytes > 0 else 0
+                        pools.append({
+                            "name": parts[0],
+                            "type": parts[1],
+                            "status": parts[2],
+                            "total_gb": round(total_bytes / (1024**3), 1),
+                            "used_gb": round(used_bytes / (1024**3), 1),
+                            "avail_gb": round(avail_bytes / (1024**3), 1),
+                            "used_pct": pct,
+                            "node": node_name,
+                            "source": "pve",
+                        })
+
+        # TrueNAS pools (if configured)
+        if cfg.truenas_ip:
+            r = ssh_run_fn(
+                host=cfg.truenas_ip,
+                command="zpool list -Hp 2>/dev/null | head -10",
+                key_path=cfg.ssh_key_path,
+                connect_timeout=cfg.ssh_connect_timeout,
+                command_timeout=15,
+                htype="truenas", use_sudo=False,
+            )
+            if r.returncode == 0:
+                for line in r.stdout.strip().split("\n"):
+                    parts = line.split("\t")
+                    if len(parts) >= 4:
+                        try:
+                            total = int(parts[1])
+                            used = int(parts[2])
+                            pools.append({
+                                "name": parts[0],
+                                "type": "zfs",
+                                "status": parts[9] if len(parts) > 9 else "unknown",
+                                "total_gb": round(total / (1024**3), 1),
+                                "used_gb": round(used / (1024**3), 1),
+                                "avail_gb": round((total - used) / (1024**3), 1),
+                                "used_pct": round(used / total * 100, 1) if total > 0 else 0,
+                                "node": "truenas",
+                                "source": "truenas",
+                            })
+                        except (ValueError, IndexError):
+                            pass
+
+        self._json_response({
+            "pools": pools,
+            "count": len(pools),
+            "total_tb": round(sum(p["total_gb"] for p in pools) / 1024, 2),
+            "used_tb": round(sum(p["used_gb"] for p in pools) / 1024, 2),
+        })
+
+    def _serve_media_tdarr(self):
+        """GET /api/media/tdarr — Tdarr transcoding status."""
+        cfg = load_config()
+        # Tdarr is typically on a docker host — query via container exec or API
+        tdarr_data = {"status": "not_configured", "queue": 0, "processed": 0, "errors": 0}
+
+        # Check if any container named tdarr exists
+        with _bg_lock:
+            health = _bg_cache.get("health")
+        if health:
+            for h in health.get("hosts", []):
+                if h.get("status") != "healthy":
+                    continue
+                from freq.core.ssh import run as ssh_fn
+                r = ssh_fn(
+                    host=h.get("ip", ""),
+                    command="docker inspect tdarr 2>/dev/null | grep -c '\"Running\": true'",
+                    key_path=cfg.ssh_key_path,
+                    connect_timeout=3,
+                    command_timeout=10,
+                    htype=h.get("type", "linux"), use_sudo=False,
+                )
+                if r.returncode == 0 and r.stdout.strip() == "1":
+                    tdarr_data["status"] = "running"
+                    tdarr_data["host"] = h.get("label", "")
+                    break
+
+        self._json_response(tdarr_data)
+
+    def _serve_media_downloads_detail(self):
+        """GET /api/media/downloads/detail — enhanced download queue info."""
+        cfg = load_config()
+        # Re-use existing media downloads but add more detail
+        with _bg_lock:
+            health = _bg_cache.get("health")
+
+        downloads = {"active": [], "queued": [], "history": [], "total": 0}
+
+        if health:
+            from freq.core.ssh import run as ssh_fn
+            for h in health.get("hosts", []):
+                if h.get("type") != "docker" or h.get("status") != "healthy":
+                    continue
+                # Check SABnzbd or NZBGet queue
+                r = ssh_fn(
+                    host=h.get("ip", ""),
+                    command="docker logs --tail 5 sabnzbd 2>/dev/null || docker logs --tail 5 nzbget 2>/dev/null || echo 'no-dl-client'",
+                    key_path=cfg.ssh_key_path,
+                    connect_timeout=3,
+                    command_timeout=10,
+                    htype="docker", use_sudo=False,
+                )
+                if r.returncode == 0 and "no-dl-client" not in r.stdout:
+                    downloads["total"] = len([l for l in r.stdout.split("\n") if l.strip()])
+                break
+
+        self._json_response(downloads)
 
     # ── Activity Feed ──────────────────────────────────────────────────
 

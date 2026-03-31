@@ -326,6 +326,41 @@ var WIDGET_REGISTRY=[
     el.innerHTML='<div id="hw-activity-list" class="activity-feed"><div class="skeleton"></div></div>';
     _loadActivityFeed();
   }},
+  {id:'w-storage-health',page:'STORAGE',label:'Storage Health',loader:function(el){
+    el.innerHTML='<div id="hw-storage-pools"><div class="skeleton"></div></div>';
+    fetch('/api/storage/health').then(function(r){return r.json()}).then(function(d){
+      var t=document.getElementById('hw-storage-pools');if(!t)return;
+      if(!d.pools||!d.pools.length){t.innerHTML='<div class="empty-state"><p>No storage pools detected</p></div>';return;}
+      var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+d.total_tb+'TB total \u2022 '+d.used_tb+'TB used</div>';
+      d.pools.forEach(function(p){
+        var color=p.used_pct>=80?'var(--red)':p.used_pct>=60?'var(--orange)':'var(--green)';
+        h+='<div style="padding:6px 0;border-bottom:1px solid var(--border)">';
+        h+='<div style="display:flex;justify-content:space-between"><span style="font-weight:500">'+_esc(p.name)+'</span><span style="font-size:12px;color:var(--text-dim)">'+p.node+'</span></div>';
+        h+='<div style="display:flex;align-items:center;gap:8px;margin-top:4px">';
+        h+='<div style="flex:1;height:6px;background:var(--border);border-radius:3px"><div style="height:100%;width:'+p.used_pct+'%;background:'+color+';border-radius:3px"></div></div>';
+        h+='<span style="font-size:12px;color:'+color+'">'+p.used_pct+'%</span>';
+        h+='</div>';
+        h+='<div style="font-size:11px;color:var(--text-dim);margin-top:2px">'+p.used_gb+'GB / '+p.total_gb+'GB ('+p.type+')</div>';
+        h+='</div>';
+      });
+      t.innerHTML=h;
+    }).catch(function(e){var t=document.getElementById('hw-storage-pools');if(t)t.innerHTML='<div class="empty-state"><p>Storage check failed</p></div>';});
+  }},
+  {id:'w-tdarr',page:'MEDIA',label:'Tdarr Transcode',loader:function(el){
+    el.innerHTML='<div id="hw-tdarr"><div class="skeleton"></div></div>';
+    fetch('/api/media/tdarr').then(function(r){return r.json()}).then(function(d){
+      var t=document.getElementById('hw-tdarr');if(!t)return;
+      if(d.status==='not_configured'){t.innerHTML='<div class="empty-state"><p>Tdarr not detected</p></div>';return;}
+      var h='<div style="display:flex;align-items:center;gap:8px;padding:8px 0">';
+      h+='<span style="color:var(--green)">\u2705</span>';
+      h+='<span style="font-weight:500">Tdarr Running</span>';
+      if(d.host)h+='<span style="font-size:12px;color:var(--text-dim)">on '+_esc(d.host)+'</span>';
+      h+='</div>';
+      if(d.queue>0)h+='<div>Queue: '+d.queue+' files</div>';
+      if(d.processed>0)h+='<div>Processed: '+d.processed+'</div>';
+      t.innerHTML=h;
+    }).catch(function(e){var t=document.getElementById('hw-tdarr');if(t)t.innerHTML='<div class="empty-state"><p>Tdarr unavailable</p></div>';});
+  }},
   {id:'w-monitors',page:'OPS',label:'HTTP Monitors',loader:function(el){
     el.innerHTML='<div id="hw-monitors-list"><div class="skeleton"></div></div>';
     _loadMonitorsWidget();
