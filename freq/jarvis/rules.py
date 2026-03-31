@@ -351,3 +351,116 @@ def alert_to_dict(alert: Alert) -> dict:
         "severity": alert.severity,
         "fired_at": alert.fired_at,
     }
+
+
+# ── CLI Command ────────────────────────────────────────────────────────
+
+VALID_CONDITIONS = ["host_unreachable", "cpu_above", "ram_above", "disk_above", "docker_down"]
+VALID_SEVERITIES = ["info", "warning", "critical"]
+
+
+def cmd_rules(cfg, pack, args) -> int:
+    """Manage alert rules."""
+    from freq.core import fmt
+
+    action = getattr(args, "action", "list")
+    name = getattr(args, "name", None)
+
+    rules = load_rules(cfg.conf_dir)
+
+    if action == "list":
+        fmt.header("Alert Rules")
+        fmt.blank()
+        if not rules:
+            fmt.line(f"  {fmt.C.DIM}No rules configured.{fmt.C.RESET}")
+        else:
+            fmt.line(f"  {'NAME':<25} {'CONDITION':<20} {'TARGET':<10} {'THRESH':>7} {'SEV':<10} {'ON':>3}")
+            fmt.line(f"  {'─' * 78}")
+            for r in rules:
+                on = f"{fmt.C.GREEN}yes{fmt.C.RESET}" if r.enabled else f"{fmt.C.RED}no{fmt.C.RESET}"
+                sev_color = fmt.C.RED if r.severity == "critical" else fmt.C.YELLOW if r.severity == "warning" else fmt.C.DIM
+                fmt.line(f"  {r.name:<25} {r.condition:<20} {r.target:<10} {r.threshold:>7.1f} {sev_color}{r.severity:<10}{fmt.C.RESET} {on}")
+
+        # Show recent alerts
+        history = load_alert_history(os.path.join(cfg.data_dir, "cache"))
+        if history:
+            fmt.blank()
+            fmt.line(f"  {fmt.C.BOLD}Recent Alerts ({len(history)}){fmt.C.RESET}")
+            for a in history[-5:]:
+                ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(a.get("fired_at", 0)))
+                sev = a.get("severity", "?")
+                fmt.line(f"    {fmt.C.DIM}{ts}{fmt.C.RESET} [{sev}] {a.get('message', '')}")
+
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    elif action == "create":
+        if not name:
+            fmt.error("Usage: freq rules create <name> --condition <type> --threshold <N>")
+            return 1
+
+        condition = getattr(args, "condition", "")
+        if condition not in VALID_CONDITIONS:
+            fmt.error(f"Invalid condition. Must be one of: {', '.join(VALID_CONDITIONS)}")
+            return 1
+
+        threshold = getattr(args, "threshold", 0.0)
+        severity = getattr(args, "severity", "warning")
+        if severity not in VALID_SEVERITIES:
+            severity = "warning"
+        target = getattr(args, "target_host", "*")
+        duration = getattr(args, "duration", 0)
+        cooldown = getattr(args, "cooldown", 300)
+
+        new_rule = Rule(
+            name=name, condition=condition, target=target,
+            threshold=float(threshold), duration=int(duration),
+            severity=severity, cooldown=int(cooldown), enabled=True,
+        )
+        rules.append(new_rule)
+        if save_rules(cfg.conf_dir, rules):
+            fmt.header("Alert Rules")
+            fmt.step_ok(f"Created rule: {name}")
+            fmt.footer()
+            return 0
+        else:
+            fmt.error("Failed to save rules")
+            return 1
+
+    elif action == "delete":
+        if not name:
+            fmt.error("Usage: freq rules delete <name>")
+            return 1
+        original = len(rules)
+        rules = [r for r in rules if r.name != name]
+        if len(rules) == original:
+            fmt.error(f"Rule not found: {name}")
+            return 1
+        if save_rules(cfg.conf_dir, rules):
+            fmt.header("Alert Rules")
+            fmt.step_ok(f"Deleted rule: {name}")
+            fmt.footer()
+            return 0
+        else:
+            fmt.error("Failed to save rules")
+            return 1
+
+    elif action == "history":
+        fmt.header("Alert History")
+        fmt.blank()
+        history = load_alert_history(os.path.join(cfg.data_dir, "cache"))
+        if not history:
+            fmt.line(f"  {fmt.C.DIM}No alerts fired yet.{fmt.C.RESET}")
+        else:
+            for a in history[-20:]:
+                ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(a.get("fired_at", 0)))
+                sev = a.get("severity", "?")
+                sev_color = fmt.C.RED if sev == "critical" else fmt.C.YELLOW if sev == "warning" else fmt.C.DIM
+                fmt.line(f"  {fmt.C.DIM}{ts}{fmt.C.RESET} {sev_color}[{sev}]{fmt.C.RESET} {a.get('host', '?')}: {a.get('message', '')}")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    fmt.error(f"Unknown action: {action}")
+    return 1

@@ -533,6 +533,26 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--auto-fix", action="store_true", help="Auto-remediate drift")
     p.set_defaults(func=_cmd_patrol)
 
+    p = sub.add_parser("capacity", help="Fleet capacity projections")
+    p.add_argument("action", nargs="?", choices=["show", "snapshot"], default="show",
+                   help="show projections or force a snapshot")
+    p.set_defaults(func=_cmd_capacity)
+
+    p = sub.add_parser("cost", help="Fleet power cost estimates")
+    p.set_defaults(func=_cmd_cost)
+
+    p = sub.add_parser("rules", help="Alert rule management")
+    p.add_argument("action", nargs="?", choices=["list", "create", "delete", "history"],
+                   default="list", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Rule name (for create/delete)")
+    p.add_argument("--condition", help="Rule condition (host_unreachable, cpu_above, ram_above, disk_above, docker_down)")
+    p.add_argument("--threshold", type=float, default=0, help="Threshold value")
+    p.add_argument("--severity", default="warning", help="Alert severity (info/warning/critical)")
+    p.add_argument("--target-host", default="*", help="Target host pattern")
+    p.add_argument("--duration", type=int, default=0, help="Seconds before alerting")
+    p.add_argument("--cooldown", type=int, default=300, help="Seconds between re-alerts")
+    p.set_defaults(func=_cmd_rules)
+
     # --- Remaining ---
     p = sub.add_parser("distros", help="List available cloud images")
     p.set_defaults(func=_cmd_distros)
@@ -706,6 +726,9 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("risk <target>", "Kill-chain blast radius analysis"),
             ("sweep [--fix]", "Full audit + policy sweep pipeline"),
             ("patrol [--interval N]", "Continuous monitoring + drift detection"),
+            ("capacity [show|snapshot]", "Fleet capacity projections"),
+            ("cost", "Fleet power cost estimates"),
+            ("rules [list|create|delete]", "Alert rule management"),
         ]),
         ("Deployment", [
             ("init", "First-run setup wizard"),
@@ -1138,6 +1161,21 @@ def _cmd_sweep(cfg: FreqConfig, pack, args) -> int:
 def _cmd_patrol(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.patrol import cmd_patrol
     return cmd_patrol(cfg, pack, args)
+
+
+def _cmd_capacity(cfg: FreqConfig, pack, args) -> int:
+    from freq.jarvis.capacity import cmd_capacity
+    return cmd_capacity(cfg, pack, args)
+
+
+def _cmd_cost(cfg: FreqConfig, pack, args) -> int:
+    from freq.jarvis.cost import cmd_cost
+    return cmd_cost(cfg, pack, args)
+
+
+def _cmd_rules(cfg: FreqConfig, pack, args) -> int:
+    from freq.jarvis.rules import cmd_rules
+    return cmd_rules(cfg, pack, args)
 
 
 def _cmd_hosts(cfg: FreqConfig, pack, args) -> int:

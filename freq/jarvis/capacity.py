@@ -217,3 +217,73 @@ def should_snapshot(data_dir: str, interval_hours: int = 168) -> bool:
         return (time.time() - last_epoch) > (interval_hours * 3600)
     except (json.JSONDecodeError, OSError):
         return True
+
+
+# ── CLI Command ────────────────────────────────────────────────────────
+
+def cmd_capacity(cfg, pack, args) -> int:
+    """Show fleet capacity projections."""
+    from freq.core import fmt
+
+    action = getattr(args, "action", "show")
+
+    if action == "snapshot":
+        # Force a snapshot now
+        from freq.modules.serve import _bg_cache, _bg_lock
+        with _bg_lock:
+            health = _bg_cache.get("health")
+        if not health:
+            fmt.error("No health data available. Is freq serve running?")
+            return 1
+        fname = save_snapshot(cfg.data_dir, health)
+        if fname:
+            fmt.header("Capacity Snapshot")
+            fmt.step_ok(f"Saved: {fname}")
+            fmt.footer()
+        return 0
+
+    # Show projections
+    fmt.header("Fleet Capacity")
+    fmt.blank()
+
+    snapshots = load_snapshots(cfg.data_dir)
+    if len(snapshots) < MIN_WEEKS_FOR_PROJECTION:
+        fmt.line(f"  {fmt.C.YELLOW}Need {MIN_WEEKS_FOR_PROJECTION}+ weeks of data for projections.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Snapshots collected: {len(snapshots)}{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Data is collected automatically when freq serve is running.{fmt.C.RESET}")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    projections = compute_projections(snapshots)
+    if not projections:
+        fmt.line(f"  {fmt.C.DIM}No projection data available.{fmt.C.RESET}")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    for label, metrics in sorted(projections.items()):
+        fmt.line(f"  {fmt.C.BOLD}{label}{fmt.C.RESET}")
+        for metric, data in metrics.items():
+            current = data["current"]
+            direction = data["trend_direction"]
+            days = data.get("days_to_80pct", -1)
+
+            if metric in ("ram", "disk"):
+                color = fmt.C.RED if current >= 80 else fmt.C.YELLOW if current >= 60 else fmt.C.GREEN
+                val = f"{current}%"
+                if days > 0:
+                    warn = f" → 80% in {days} days" if days < 90 else ""
+                else:
+                    warn = ""
+            else:
+                color = fmt.C.GREEN
+                val = str(current)
+                warn = ""
+
+            arrow = "↑" if direction == "rising" else "↓" if direction == "falling" else "→"
+            fmt.line(f"    {metric:<6} {color}{val:>6}{fmt.C.RESET} {arrow} {fmt.C.DIM}{direction}{warn}{fmt.C.RESET}")
+        fmt.blank()
+
+    fmt.footer()
+    return 0

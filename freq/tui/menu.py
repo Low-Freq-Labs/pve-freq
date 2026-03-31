@@ -915,6 +915,9 @@ def _menu_monitoring(cfg, pack):
             ("4", "doctor", "Self-diagnostic", ""),
             ("5", "compose", "Compose file audit", ""),
             ("6", "ntp", "Fleet NTP status", ""),
+            ("7", "capacity", "Fleet capacity projections", ""),
+            ("8", "cost", "Fleet power cost estimates", ""),
+            ("9", "rules", "Alert rule management", ""),
             ("0", "Back", "", ""),
         ], crumb)
 
@@ -939,6 +942,12 @@ def _menu_monitoring(cfg, pack):
             args.func(cfg, pack, args)
         elif ch == "6":
             _run_command(cfg, pack, "ntp")
+        elif ch == "7":
+            _run_command(cfg, pack, "capacity")
+        elif ch == "8":
+            _run_command(cfg, pack, "cost")
+        elif ch == "9":
+            _run_command(cfg, pack, "rules")
         else:
             continue
         _pause()

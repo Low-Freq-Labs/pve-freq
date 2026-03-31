@@ -211,3 +211,71 @@ def fleet_summary(costs: list, cost_cfg: CostConfig) -> dict:
         "rate_per_kwh": cost_cfg.rate_per_kwh,
         "pue": cost_cfg.pue,
     }
+
+
+# ── CLI Command ────────────────────────────────────────────────────────
+
+def cmd_cost(cfg, pack, args) -> int:
+    """Show fleet power cost estimates."""
+    from freq.core import fmt
+
+    fmt.header("Fleet Power Costs")
+    fmt.blank()
+
+    # Load cost config
+    cost_cfg = load_cost_config(cfg.conf_dir)
+
+    # Get health data from cache or live probe
+    health = None
+    try:
+        from freq.modules.serve import _bg_cache, _bg_lock
+        with _bg_lock:
+            health = _bg_cache.get("health")
+    except (ImportError, AttributeError):
+        pass
+
+    if not health or not health.get("hosts"):
+        fmt.line(f"  {fmt.C.YELLOW}No health data available.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Run freq serve first, or use freq health to collect data.{fmt.C.RESET}")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    # Get iDRAC data if available
+    idrac_data = {}
+    try:
+        from freq.modules.serve import _bg_cache as bgc, _bg_lock as bgl
+        with bgl:
+            infra = bgc.get("infra_quick")
+        if infra:
+            for dev in infra.get("devices", []):
+                if dev.get("type") == "idrac" and dev.get("power_watts"):
+                    idrac_data[dev["label"]] = dev["power_watts"]
+    except (ImportError, AttributeError):
+        pass
+
+    costs = compute_costs(health, idrac_data, cost_cfg)
+    if not costs:
+        fmt.line(f"  {fmt.C.DIM}No hosts to estimate costs for.{fmt.C.RESET}")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    # Per-host table
+    fmt.line(f"  {'HOST':<20} {'WATTS':>8} {'SOURCE':>10} {'kWh/mo':>10} {cost_cfg.currency + '/mo':>10}")
+    fmt.line(f"  {'─' * 62}")
+    for c in costs:
+        fmt.line(f"  {c.label:<20} {c.watts:>7.0f}W {c.watts_source:>10} {c.kwh_month:>9.1f} {c.cost_month:>9.2f}")
+    fmt.blank()
+
+    # Summary
+    summary = fleet_summary(costs, cost_cfg)
+    fmt.line(f"  {fmt.C.BOLD}Fleet Total{fmt.C.RESET}")
+    fmt.line(f"    Power:      {summary['total_watts']:.0f}W")
+    fmt.line(f"    Monthly:    {summary['currency']} {summary['total_cost_month']:.2f}")
+    fmt.line(f"    Annual:     {summary['currency']} {summary['total_cost_year']:.2f}")
+    fmt.line(f"    Rate:       {summary['rate_per_kwh']:.3f}/kWh  PUE: {summary['pue']:.1f}")
+    fmt.line(f"    Sources:    {summary['idrac_measured']} iDRAC, {summary['estimated']} estimated")
+    fmt.blank()
+    fmt.footer()
+    return 0
