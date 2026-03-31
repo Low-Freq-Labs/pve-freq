@@ -151,6 +151,30 @@ def _sse_broadcast(event_type: str, data: dict):
                 pass
 
 
+# ── ACTIVITY FEED ────────────────────────────────────────────────────────
+# Ring buffer for recent system events — powers the dashboard activity widget.
+# Max 200 events kept in memory, newest first.
+
+import collections
+
+_activity_feed: collections.deque = collections.deque(maxlen=200)
+_activity_lock = threading.Lock()
+
+
+def _activity_add(event_type: str, message: str, detail: str = "", severity: str = "info"):
+    """Record an activity event."""
+    entry = {
+        "ts": time.time(),
+        "type": event_type,
+        "message": message,
+        "detail": detail,
+        "severity": severity,  # info, success, warning, error
+    }
+    with _activity_lock:
+        _activity_feed.appendleft(entry)
+    _sse_broadcast("activity", entry)
+
+
 def _cache_path(name):
     global CACHE_DIR
     if CACHE_DIR is None:
@@ -456,6 +480,10 @@ def _bg_probe_health():
             if prev and prev != h["status"]:
                 _sse_broadcast("health_change", {
                     "host": h["label"], "old": prev, "new": h["status"]})
+                severity = "success" if h["status"] == "healthy" else "error"
+                _activity_add("health_change",
+                              f"{h['label']} is now {h['status']}",
+                              f"was {prev}", severity)
 
     # Evaluate alert rules against fresh health data
     _evaluate_alert_rules(cfg, result)
@@ -620,6 +648,9 @@ def _bg_probe_fleet_overview():
                 _sse_broadcast("vm_state", {
                     "vmid": v["vmid"], "name": v.get("name", ""),
                     "old": prev, "new": v["status"]})
+                vm_label = v.get("name") or f"VM {v['vmid']}"
+                _activity_add("vm_state", f"{vm_label}: {prev} \u2192 {v['status']}",
+                              f"VMID {v['vmid']}", "info")
 
 
 def _bg_discover_pve_nodes():
@@ -1543,6 +1574,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/playbooks/run": "_serve_playbooks_run",
         "/api/playbooks/step": "_serve_playbooks_step",
         "/api/playbooks/create": "_serve_playbooks_create",
+        # Activity Feed
+        "/api/activity": "_serve_activity",
         # HTTP Monitors
         "/api/monitors": "_serve_monitors",
         "/api/monitors/check": "_serve_monitors_check",
@@ -2137,6 +2170,19 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"ok": True, "filename": filename})
         except OSError as e:
             self._json_response({"error": str(e)}, 500)
+
+    # ── Activity Feed ──────────────────────────────────────────────────
+
+    def _serve_activity(self):
+        """GET /api/activity — recent system events."""
+        params = _parse_query_flat(self.path)
+        try:
+            limit = min(int(params.get("limit", "50")), 200)
+        except (ValueError, TypeError):
+            limit = 50
+        with _activity_lock:
+            events = list(_activity_feed)[:limit]
+        self._json_response({"events": events, "count": len(events)})
 
     # ── HTTP Monitors ────────────────────────────────────────────────────
 

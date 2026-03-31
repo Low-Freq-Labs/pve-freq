@@ -321,7 +321,15 @@ var WIDGET_REGISTRY=[
   {id:'w-sec-harden',page:'SECURITY',label:'Hardening',ref:'sec-harden'},
   {id:'w-sec-risk',page:'SECURITY',label:'Risk Analysis',ref:'sec-risk',preload:function(){loadRisk();}},
   {id:'w-sec-policies',page:'SECURITY',label:'Policies',ref:'sec-policies',preload:function(){loadPolicies();}},
-  {id:'w-sec-vault',page:'SECURITY',label:'Vault',ref:'sec-vault-section'}
+  {id:'w-sec-vault',page:'SECURITY',label:'Vault',ref:'sec-vault-section'},
+  {id:'w-activity-feed',page:'OPS',label:'Activity Feed',loader:function(el){
+    el.innerHTML='<div id="hw-activity-list" class="activity-feed"><div class="skeleton"></div></div>';
+    _loadActivityFeed();
+  }},
+  {id:'w-monitors',page:'OPS',label:'HTTP Monitors',loader:function(el){
+    el.innerHTML='<div id="hw-monitors-list"><div class="skeleton"></div></div>';
+    _loadMonitorsWidget();
+  }}
 ];
 var QUICK_START_WIDGETS=['w-fleet-stats','w-fleet-infra','w-fleet-overview','w-docker-containers'];
 function _loadHomeWidgetConfig(){try{return JSON.parse(localStorage.getItem(_userKey('home_widgets'))||'null');}catch(e){return null;}}
@@ -722,6 +730,33 @@ function startSSE(){
   _evtSource.addEventListener('alert',function(e){
     var d=JSON.parse(e.data);
     toast('Alert: '+d.message,'error');
+  });
+
+  _evtSource.addEventListener('activity',function(e){
+    var d=JSON.parse(e.data);
+    if(d.severity==='error')toast(d.message,'error');
+    else if(d.severity==='warning')toast(d.message,'warn');
+    _updateActivityWidget(d);
+  });
+
+  _evtSource.addEventListener('capacity_update',function(e){
+    var d=JSON.parse(e.data);
+    toast('Capacity snapshot saved','info');
+  });
+
+  _evtSource.addEventListener('rule_fired',function(e){
+    var d=JSON.parse(e.data);
+    toast('Rule fired: '+d.rule,'warn');
+  });
+
+  _evtSource.addEventListener('playbook_complete',function(e){
+    var d=JSON.parse(e.data);
+    toast('Playbook completed: '+d.name,d.ok?'success':'error');
+  });
+
+  _evtSource.addEventListener('gitops_sync',function(e){
+    var d=JSON.parse(e.data);
+    toast('GitOps sync: '+d.status,'info');
   });
 
   _evtSource.onopen=function(){
@@ -5714,6 +5749,54 @@ function loadGwipe(action){
     var data=d.data||{};
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(JSON.stringify(data,null,2))+'</pre>';
   }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+}
+/* ═══════════════════════════════════════════════════════════════════
+   ACTIVITY FEED + MONITORS WIDGETS
+   ═══════════════════════════════════════════════════════════════════ */
+function _loadActivityFeed(){
+  fetch('/api/activity?limit=20').then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('hw-activity-list');if(!el)return;
+    if(!d.events||!d.events.length){el.innerHTML='<div class="empty-state"><p>No recent activity</p></div>';return;}
+    var h='';d.events.forEach(function(ev){
+      var icon=ev.severity==='error'?'\u274c':ev.severity==='warning'?'\u26a0':ev.severity==='success'?'\u2705':'\u2139\ufe0f';
+      var ts=new Date(ev.ts*1000);var timeStr=ts.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+      h+='<div class="activity-item" style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">';
+      h+='<span style="flex-shrink:0">'+icon+'</span>';
+      h+='<span style="flex:1;font-size:13px">'+_esc(ev.message)+'</span>';
+      h+='<span style="flex-shrink:0;font-size:11px;color:var(--text-dim)">'+timeStr+'</span>';
+      h+='</div>';
+    });
+    el.innerHTML=h;
+  }).catch(function(e){var el=document.getElementById('hw-activity-list');if(el)el.innerHTML='<div class="empty-state"><p>Activity feed unavailable</p></div>';});
+}
+function _updateActivityWidget(ev){
+  var el=document.getElementById('hw-activity-list');if(!el)return;
+  var icon=ev.severity==='error'?'\u274c':ev.severity==='warning'?'\u26a0':ev.severity==='success'?'\u2705':'\u2139\ufe0f';
+  var ts=new Date(ev.ts*1000);var timeStr=ts.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+  var item=document.createElement('div');item.className='activity-item';
+  item.style.cssText='display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)';
+  item.innerHTML='<span style="flex-shrink:0">'+icon+'</span><span style="flex:1;font-size:13px">'+_esc(ev.message)+'</span><span style="flex-shrink:0;font-size:11px;color:var(--text-dim)">'+timeStr+'</span>';
+  el.insertBefore(item,el.firstChild);
+  /* Trim to 20 items */
+  while(el.children.length>20)el.removeChild(el.lastChild);
+}
+function _loadMonitorsWidget(){
+  fetch('/api/monitors/check').then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('hw-monitors-list');if(!el)return;
+    if(!d.results||!d.results.length){el.innerHTML='<div class="empty-state"><p>No monitors configured</p></div>';return;}
+    var h='';d.results.forEach(function(r){
+      var icon=r.ok?'\u2705':'\u274c';
+      var status=r.ok?'<span style="color:var(--green)">OK</span>':'<span style="color:var(--red)">'+(r.error||'HTTP '+r.status)+'</span>';
+      h+='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">';
+      h+='<span>'+icon+'</span>';
+      h+='<span style="flex:1;font-weight:500">'+_esc(r.name)+'</span>';
+      h+=status;
+      h+='<span style="font-size:11px;color:var(--text-dim)">'+r.latency_ms+'ms</span>';
+      h+='</div>';
+    });
+    h+='<div style="margin-top:8px;font-size:12px;color:var(--text-dim)">'+d.healthy+'/'+d.count+' healthy</div>';
+    el.innerHTML=h;
+  }).catch(function(e){var el=document.getElementById('hw-monitors-list');if(el)el.innerHTML='<div class="empty-state"><p>Monitor check failed</p></div>';});
 }
 /* ═══════════════════════════════════════════════════════════════════
    INIT
