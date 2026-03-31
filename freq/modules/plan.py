@@ -290,8 +290,11 @@ def cmd_plan(cfg: FreqConfig, pack, args) -> int:
     diff = _compute_diff(desired, current)
     _render_plan(diff)
 
-    # Store diff for apply
-    _save_plan_cache(cfg, diff, plan_path)
+    # Store diff for apply (non-fatal if dir not writable)
+    try:
+        _save_plan_cache(cfg, diff, plan_path)
+    except OSError:
+        pass
 
     fmt.blank()
     fmt.footer()
