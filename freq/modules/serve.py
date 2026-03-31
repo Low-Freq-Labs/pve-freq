@@ -1361,21 +1361,21 @@ def _get_fleet_vms(cfg):
     """Fetch VM list from PVE cluster, enriched with fleet boundary data.
 
     Shared by _serve_vms and _serve_fleet_overview to avoid duplication.
+    Tries PVE REST API first, falls back to SSH.
     Returns list of VM dicts.
     """
     fb = cfg.fleet_boundaries
     vm_list = []
     for node_ip in _get_discovered_node_ips():
-        r = ssh_single(
-            host=node_ip,
-            command="pvesh get /cluster/resources --type vm --output-format json",
-            key_path=cfg.ssh_key_path,
-            command_timeout=15,
-            htype="pve", use_sudo=True, cfg=cfg,
-        )
-        if r.returncode == 0 and r.stdout:
+        # Try API first, fall back to SSH
+        from freq.modules.pve import _pve_call
+        result, ok = _pve_call(cfg, node_ip,
+                               api_endpoint="/cluster/resources?type=vm",
+                               ssh_command="pvesh get /cluster/resources --type vm --output-format json",
+                               timeout=15)
+        if ok and result:
             try:
-                vms = json.loads(r.stdout)
+                vms = result if isinstance(result, list) else json.loads(result)
                 for v in vms:
                     vmid = v.get("vmid", 0)
                     cat_name, tier = fb.categorize(vmid)
@@ -1394,7 +1394,7 @@ def _get_fleet_vms(cfg):
                         "allowed_actions": fb.allowed_actions(vmid),
                         "is_prod": fb.is_prod(vmid) or "prod" in tags,
                     })
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, TypeError):
                 pass
         break  # Only need one node for cluster-wide view
     return vm_list
@@ -3821,13 +3821,35 @@ a:hover{{text-decoration:underline}}
             node_ip = _find_reachable_node(cfg)
             if not node_ip:
                 self._json_response({"error": "No PVE node reachable"}); return
-            cmds = {"start": f"qm start {vmid}", "stop": f"qm stop {vmid}", "reset": f"qm reset {vmid}",
-                    "status": f"qm status {vmid}"}
-            cmd = cmds.get(action, cmds["status"])
-            stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=60)
-            self._json_response({"ok": ok, "vmid": vmid, "action": action, "output": stdout, "error": "" if ok else stdout})
+            ssh_cmds = {"start": f"qm start {vmid}", "stop": f"qm stop {vmid}",
+                        "reset": f"qm reset {vmid}", "status": f"qm status {vmid}"}
+            api_actions = {"start": ("start", "POST"), "stop": ("stop", "POST"),
+                          "reset": ("reset", "POST"), "status": ("current", "GET")}
+            ssh_cmd = ssh_cmds.get(action, ssh_cmds["status"])
+            api_action, api_method = api_actions.get(action, api_actions["status"])
+
+            # Try API first: resolve node name for this VM
+            from freq.modules.pve import _pve_api_call
+            ok = False
+            result = ""
+            if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+                res_data, res_ok = _pve_api_call(cfg, node_ip,
+                                                 "/cluster/resources?type=vm",
+                                                 timeout=10)
+                if res_ok and isinstance(res_data, list):
+                    vm_entry = next((v for v in res_data if v.get("vmid") == vmid), None)
+                    if vm_entry and vm_entry.get("node"):
+                        result, ok = _pve_api_call(
+                            cfg, node_ip,
+                            f"/nodes/{vm_entry['node']}/qemu/{vmid}/status/{api_action}",
+                            method=api_method, timeout=60)
+            if not ok:
+                result, ok = _pve_cmd(cfg, node_ip, ssh_cmd, timeout=60)
+            output = result if isinstance(result, str) else json.dumps(result) if result else ""
+            self._json_response({"ok": ok, "vmid": vmid, "action": action,
+                                "output": output, "error": "" if ok else output})
         except Exception as e:
-            self._json_response({"error": f"SSH operation failed: {e}"})
+            self._json_response({"error": f"PVE operation failed: {e}"})
 
     def _serve_vault(self):
         cfg = load_config()

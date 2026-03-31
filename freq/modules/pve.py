@@ -3,12 +3,17 @@
 Commands: list, vm-overview, vmconfig, create, clone, destroy, resize,
           snapshot, migrate, rescue
 
-All PVE operations go through SSH + qm/pvesh commands on PVE nodes.
-No REST API, no tokens — just SSH keys and native Proxmox tools.
+PVE operations try the REST API first (token auth) and fall back to SSH
+when the API is unreachable or no token is configured.
 """
 import json
+import ssl
+import urllib.error
+import urllib.parse
+import urllib.request
 
 from freq.core import fmt
+from freq.core import log as logger
 from freq.core import validate
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
@@ -17,7 +22,71 @@ from freq.core.ssh import run as ssh_run
 PVE_CMD_TIMEOUT = 30
 PVE_QUICK_TIMEOUT = 10
 PVE_SNAPSHOT_TIMEOUT = 120
+PVE_API_PORT = 8006
+PVE_API_TIMEOUT = 15
 
+
+# ── PVE REST API Client ────────────────────────────────────────────────
+
+def _pve_api_call(cfg: FreqConfig, node_ip: str, endpoint: str,
+                  method: str = "GET", data: dict = None,
+                  timeout: int = PVE_API_TIMEOUT) -> tuple:
+    """Call PVE REST API with token auth.
+
+    Returns (parsed_data, success_bool).
+    Token auth header: PVEAPIToken=user@realm!tokenname=UUID-SECRET
+    """
+    if not getattr(cfg, "pve_api_token_id", "") or not getattr(cfg, "pve_api_token_secret", ""):
+        return "", False
+
+    url = f"https://{node_ip}:{PVE_API_PORT}/api2/json{endpoint}"
+    auth = f"PVEAPIToken={cfg.pve_api_token_id}={cfg.pve_api_token_secret}"
+
+    headers = {"Authorization": auth, "Accept": "application/json"}
+
+    req_data = None
+    if data:
+        req_data = urllib.parse.urlencode(data).encode()
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+    req = urllib.request.Request(url, data=req_data, headers=headers, method=method)
+
+    ctx = ssl.create_default_context()
+    if not getattr(cfg, "pve_api_verify_ssl", False):
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            body = json.loads(resp.read().decode())
+            return body.get("data", body), True
+    except (urllib.error.URLError, urllib.error.HTTPError,
+            json.JSONDecodeError, OSError, TimeoutError) as e:
+        logger.debug(f"PVE API call failed ({node_ip}{endpoint}): {e}")
+        return str(e), False
+
+
+def _pve_call(cfg: FreqConfig, node_ip: str,
+              api_endpoint: str, ssh_command: str,
+              timeout: int = PVE_CMD_TIMEOUT,
+              method: str = "GET", data: dict = None) -> tuple:
+    """Try PVE REST API first, fall back to SSH.
+
+    Returns (result, success_bool). Result is parsed JSON from API
+    or stdout string from SSH.
+    """
+    if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+        result, ok = _pve_api_call(cfg, node_ip, api_endpoint,
+                                   method=method, data=data,
+                                   timeout=min(timeout, PVE_API_TIMEOUT))
+        if ok:
+            return result, True
+
+    # Fallback to SSH
+    return _pve_cmd(cfg, node_ip, ssh_command, timeout=timeout)
+
+
+# ── SSH Foundation ──────────────────────────────────────────────────────
 
 def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = PVE_CMD_TIMEOUT) -> tuple:
     """Execute a command on a PVE node via SSH + sudo.
@@ -38,8 +107,14 @@ def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = PVE_CMD
 
 
 def _find_reachable_node(cfg: FreqConfig) -> str:
-    """Find the first reachable PVE node. Any node can answer cluster queries."""
+    """Find the first reachable PVE node. Tries API first, then SSH."""
     for ip in cfg.pve_nodes:
+        # Try API first if token is configured
+        if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+            _, ok = _pve_api_call(cfg, ip, "/version", timeout=PVE_QUICK_TIMEOUT)
+            if ok:
+                return ip
+        # Fall back to SSH
         r = ssh_run(
             host=ip, command="pvesh get /version --output-format json",
             key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
@@ -73,17 +148,19 @@ def cmd_list(cfg: FreqConfig, pack, args) -> int:
         fmt.footer()
         return 1
 
-    # Get cluster VM list
-    stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/resources --type vm --output-format json")
-    if not ok or not stdout:
+    # Get cluster VM list (API-first with SSH fallback)
+    result, ok = _pve_call(cfg, node_ip,
+                           api_endpoint="/cluster/resources?type=vm",
+                           ssh_command="pvesh get /cluster/resources --type vm --output-format json")
+    if not ok or not result:
         fmt.step_fail("Failed to query cluster resources")
         fmt.blank()
         fmt.footer()
         return 1
 
     try:
-        vms = json.loads(stdout)
-    except json.JSONDecodeError:
+        vms = result if isinstance(result, list) else json.loads(result)
+    except (json.JSONDecodeError, TypeError):
         fmt.step_fail("Invalid JSON from PVE API")
         fmt.blank()
         fmt.footer()
@@ -431,28 +508,63 @@ def cmd_power(cfg: FreqConfig, pack, args) -> int:
         fmt.footer()
         return 1
 
-    cmds = {
+    ssh_cmds = {
         "start": f"qm start {vmid}",
         "stop": f"qm stop {vmid}",
         "reboot": f"qm reset {vmid}",
         "shutdown": f"qm shutdown {vmid}",
         "status": f"qm status {vmid}",
     }
-    cmd = cmds.get(action)
-    if not cmd:
+    # API endpoints need the node name — resolve via cluster resources
+    api_actions = {
+        "start": ("start", "POST"),
+        "stop": ("stop", "POST"),
+        "reboot": ("reset", "POST"),
+        "shutdown": ("shutdown", "POST"),
+        "status": ("current", "GET"),
+    }
+    ssh_cmd = ssh_cmds.get(action)
+    if not ssh_cmd:
         fmt.error(f"Unknown action: {action}. Use start|stop|reboot|shutdown|status")
         return 1
 
     fmt.step_start(f"Executing: {action} VM {vmid}")
-    stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=60)
+
+    # Try API first: need to resolve which node hosts this VM
+    ok = False
+    result = ""
+    if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+        api_action, api_method = api_actions[action]
+        # Find the VM's node via cluster resources
+        res_data, res_ok = _pve_api_call(cfg, node_ip,
+                                         f"/cluster/resources?type=vm",
+                                         timeout=PVE_QUICK_TIMEOUT)
+        if res_ok and isinstance(res_data, list):
+            vm_entry = next((v for v in res_data if v.get("vmid") == vmid), None)
+            if vm_entry:
+                node_name = vm_entry.get("node", "")
+                if node_name:
+                    result, ok = _pve_api_call(
+                        cfg, node_ip,
+                        f"/nodes/{node_name}/qemu/{vmid}/status/{api_action}",
+                        method=api_method, timeout=60)
+
+    # Fallback to SSH
+    if not ok:
+        result, ok = _pve_cmd(cfg, node_ip, ssh_cmd, timeout=60)
 
     if ok:
         if action == "status":
-            fmt.step_ok(f"VM {vmid}: {stdout.strip()}")
+            status_text = result
+            if isinstance(result, dict):
+                status_text = result.get("status", str(result))
+            elif isinstance(result, str):
+                status_text = result.strip()
+            fmt.step_ok(f"VM {vmid}: {status_text}")
         else:
             fmt.step_ok(f"VM {vmid} — {action} successful")
     else:
-        fmt.step_fail(f"{action} failed: {stdout}")
+        fmt.step_fail(f"{action} failed: {result}")
 
     fmt.blank()
     fmt.footer()
