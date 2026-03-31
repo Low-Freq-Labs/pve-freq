@@ -419,3 +419,40 @@ th,td{padding:5px 8px;font-size:11px}
 #login-overlay>div{width:90%!important;max-width:380px}
 #login-overlay pre{font-size:6px!important}
 }
+/* ═══ COMPACT MODE ═══ */
+body.compact .mn-body{padding:8px 12px}
+body.compact .section{margin-bottom:8px}
+body.compact .section-header{padding:6px 12px}
+body.compact .section-body{padding:8px 12px}
+body.compact .stats{gap:4px}
+body.compact .st{padding:6px 8px}
+body.compact .st .lb{font-size:9px;padding:1px 6px}
+body.compact .st .vl{font-size:14px}
+body.compact .host-card{padding:8px}
+body.compact .host-head h3{font-size:12px}
+body.compact h3{font-size:13px}
+body.compact .ho-row{gap:4px;font-size:12px}
+body.compact .ho-row .ho-v{font-size:12px}
+body.compact .infra-role-card{padding:8px 10px}
+body.compact table td,body.compact table th{padding:4px 8px;font-size:11px}
+body.compact .card-box{padding:8px}
+body.compact .fleet-btn{font-size:10px;padding:4px 8px}
+body.compact .btn{font-size:11px;padding:4px 10px}
+/* ═══ PREFERENCES PANEL ═══ */
+.prefs-panel{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px}
+.prefs-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.prefs-row:last-child{border-bottom:none}
+.prefs-label{font-size:13px}
+.prefs-desc{font-size:11px;color:var(--text-dim)}
+.toggle-switch{position:relative;width:36px;height:20px;cursor:pointer}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-track{position:absolute;inset:0;background:var(--border);border-radius:10px;transition:background 0.2s}
+.toggle-switch input:checked+.toggle-track{background:var(--purple-light)}
+.toggle-knob{position:absolute;top:2px;left:2px;width:16px;height:16px;background:var(--text);border-radius:50%;transition:transform 0.2s}
+.toggle-switch input:checked+.toggle-track .toggle-knob{transform:translateX(16px)}
+/* ═══ SEARCH OVERLAY ═══ */
+.search-item:hover{background:var(--border)}
+@media(max-width:768px){
+  #search-overlay>div{margin:0 16px}
+  #shortcuts-modal>div{margin:0 16px}
+}

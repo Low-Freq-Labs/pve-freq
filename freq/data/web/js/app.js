@@ -987,11 +987,19 @@ function renderGlobalSettings(){
   };
   var showTpl=s.showTemplates===true;
   var h='';
+  var compactOn=s.compactMode===true;
   h+=_toggle('set-hover','Hover Effects','Cards lift and glow purple on hover',hoverOn,"saveSetting('hoverFx',this.checked)");
   h+=_toggle('set-tpl','Show Template VMs','Include template VMs (9000+) in counts and VM lists',showTpl,"saveSetting('showTemplates',this.checked);refreshCurrentView()");
+  h+=_toggle('set-compact','Compact Mode','Reduce padding and font sizes for dense layouts',compactOn,"saveSetting('compactMode',this.checked);_applyCompactMode(this.checked)");
   var el=document.getElementById('global-settings-body');
   if(el)el.innerHTML=h;
 }
+function _applyCompactMode(on){
+  if(on)document.body.classList.add('compact');
+  else document.body.classList.remove('compact');
+}
+/* Apply compact mode on load if saved */
+(function(){var s=_loadSettings();if(s&&s.compactMode)_applyCompactMode(true);})();
 function loadFleetPage(){
   if(!_fleetCache.fo&&!_fleetCache.hd){
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
