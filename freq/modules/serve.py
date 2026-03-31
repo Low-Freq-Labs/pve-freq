@@ -1516,6 +1516,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/topology": "_serve_topology",
         "/api/capacity": "_serve_capacity",
         "/api/capacity/snapshot": "_serve_capacity_snapshot",
+        "/api/capacity/recommend": "_serve_capacity_recommend",
         # Chaos engineering
         "/api/chaos/types": "_serve_chaos_types",
         "/api/chaos/run": "_serve_chaos_run",
@@ -1727,6 +1728,33 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"ok": True, "snapshot": fname})
         else:
             self._json_response({"error": "Failed to save snapshot"}, 500)
+
+    def _serve_capacity_recommend(self):
+        """GET /api/capacity/recommend — migration + optimization suggestions."""
+        from freq.jarvis.capacity import load_snapshots, compute_projections, recommend_migrations
+        cfg = load_config()
+        snapshots = load_snapshots(cfg.data_dir)
+        projections = compute_projections(snapshots)
+
+        # Get cost data if available
+        costs = []
+        try:
+            from freq.jarvis.cost import load_cost_config, compute_costs
+            cost_cfg = load_cost_config(cfg.conf_dir)
+            with _bg_lock:
+                health = _bg_cache.get("health")
+            if health:
+                costs = compute_costs(health, {}, cost_cfg)
+        except Exception:
+            pass
+
+        recs = recommend_migrations(projections, costs)
+        self._json_response({
+            "recommendations": recs,
+            "count": len(recs),
+            "critical": sum(1 for r in recs if r["urgency"] == "critical"),
+            "warning": sum(1 for r in recs if r["urgency"] == "warning"),
+        })
 
     # ── Chaos Engineering ─────────────────────────────────────────────────
 

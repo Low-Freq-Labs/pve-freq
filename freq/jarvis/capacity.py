@@ -219,6 +219,155 @@ def should_snapshot(data_dir: str, interval_hours: int = 168) -> bool:
         return True
 
 
+def recommend_migrations(projections: dict, costs: list = None) -> list:
+    """Generate migration recommendations based on capacity + cost data.
+
+    Finds hosts approaching limits and suggests migrating workloads
+    to hosts with more headroom.
+
+    Returns list of recommendation dicts:
+        {
+            "type": "migrate" | "alert" | "optimize",
+            "source": host_label,
+            "target": host_label or "",
+            "reason": str,
+            "metric": "ram" | "disk",
+            "urgency": "critical" | "warning" | "info",
+            "savings_month": float (from cost data, if available),
+            "days_extended": int (estimated),
+        }
+    """
+    recommendations = []
+
+    if not projections:
+        return recommendations
+
+    # Classify hosts by resource pressure
+    hosts_at_risk = []   # approaching 80% within 90 days
+    hosts_stable = []    # stable or declining usage
+
+    for label, metrics in projections.items():
+        for metric in ("ram", "disk"):
+            if metric not in metrics:
+                continue
+            data = metrics[metric]
+            current = data.get("current", 0)
+            days = data.get("days_to_80pct", -1)
+            direction = data.get("trend_direction", "stable")
+
+            if current >= 80:
+                hosts_at_risk.append({
+                    "label": label,
+                    "metric": metric,
+                    "current": current,
+                    "days": 0,
+                    "direction": direction,
+                    "urgency": "critical",
+                })
+            elif 0 < days <= 30:
+                hosts_at_risk.append({
+                    "label": label,
+                    "metric": metric,
+                    "current": current,
+                    "days": days,
+                    "direction": direction,
+                    "urgency": "warning",
+                })
+            elif 0 < days <= 90:
+                hosts_at_risk.append({
+                    "label": label,
+                    "metric": metric,
+                    "current": current,
+                    "days": days,
+                    "direction": direction,
+                    "urgency": "info",
+                })
+            elif direction in ("stable", "falling") and current < 50:
+                hosts_stable.append({
+                    "label": label,
+                    "metric": metric,
+                    "current": current,
+                })
+
+    # Build cost lookup
+    cost_by_label = {}
+    if costs:
+        for c in costs:
+            cost_by_label[c.label] = c
+
+    # Generate recommendations
+    for risk in hosts_at_risk:
+        # Find a stable target for migration
+        targets = [
+            s for s in hosts_stable
+            if s["label"] != risk["label"] and s["metric"] == risk["metric"]
+        ]
+        # Sort by most headroom
+        targets.sort(key=lambda t: t["current"])
+
+        if risk["urgency"] == "critical":
+            reason = (f"{risk['label']} {risk['metric'].upper()} at {risk['current']:.0f}% — "
+                      f"over threshold")
+        elif risk["days"] > 0:
+            reason = (f"{risk['label']} {risk['metric'].upper()} at {risk['current']:.0f}% — "
+                      f"hits 80% in {risk['days']} days")
+        else:
+            reason = f"{risk['label']} {risk['metric'].upper()} trending {risk['direction']}"
+
+        rec = {
+            "type": "migrate" if targets else "alert",
+            "source": risk["label"],
+            "target": targets[0]["label"] if targets else "",
+            "reason": reason,
+            "metric": risk["metric"],
+            "urgency": risk["urgency"],
+            "savings_month": 0.0,
+            "days_extended": 0,
+        }
+
+        if targets:
+            # Estimate extension: if target has 50% headroom and source is at 80%,
+            # migrating some load could extend by ~2x the current runway
+            target_headroom = 80 - targets[0]["current"]
+            if risk["days"] > 0 and target_headroom > 20:
+                rec["days_extended"] = min(risk["days"] * 2, 365)
+            rec["reason"] += f" → migrate to {targets[0]['label']} ({targets[0]['current']:.0f}% used)"
+
+        # Add cost savings estimate if we have cost data
+        if rec["target"] and rec["target"] in cost_by_label and risk["label"] in cost_by_label:
+            # If we can move load off, savings come from potential right-sizing
+            target_cost = cost_by_label[rec["target"]]
+            if target_cost.watts_source == "estimate":
+                # Conservative: 10% of target host monthly cost
+                rec["savings_month"] = round(target_cost.cost_month * 0.1, 2)
+
+        recommendations.append(rec)
+
+    # Add optimization recommendations for very idle hosts
+    for stable in hosts_stable:
+        if stable["current"] < 20 and stable["label"] in cost_by_label:
+            cost = cost_by_label[stable["label"]]
+            if cost.cost_month > 5:  # Only flag if meaningful cost
+                recommendations.append({
+                    "type": "optimize",
+                    "source": stable["label"],
+                    "target": "",
+                    "reason": f"{stable['label']} is only {stable['current']:.0f}% "
+                              f"{stable['metric'].upper()} — consider consolidation "
+                              f"(saves ~{cost.cost_month:.2f}/mo)",
+                    "metric": stable["metric"],
+                    "urgency": "info",
+                    "savings_month": round(cost.cost_month, 2),
+                    "days_extended": 0,
+                })
+
+    # Sort by urgency: critical > warning > info
+    urgency_order = {"critical": 0, "warning": 1, "info": 2}
+    recommendations.sort(key=lambda r: urgency_order.get(r["urgency"], 3))
+
+    return recommendations
+
+
 # ── CLI Command ────────────────────────────────────────────────────────
 
 def cmd_capacity(cfg, pack, args) -> int:
@@ -283,6 +432,26 @@ def cmd_capacity(cfg, pack, args) -> int:
 
             arrow = "↑" if direction == "rising" else "↓" if direction == "falling" else "→"
             fmt.line(f"    {metric:<6} {color}{val:>6}{fmt.C.RESET} {arrow} {fmt.C.DIM}{direction}{warn}{fmt.C.RESET}")
+        fmt.blank()
+
+    # Show recommendations if available
+    recs = recommend_migrations(projections)
+    if recs:
+        fmt.divider("Recommendations")
+        fmt.blank()
+        for rec in recs:
+            if rec["urgency"] == "critical":
+                icon = f"{fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET}"
+            elif rec["urgency"] == "warning":
+                icon = f"{fmt.C.YELLOW}{fmt.S.WARN}{fmt.C.RESET}"
+            else:
+                icon = f"{fmt.C.CYAN}i{fmt.C.RESET}"
+
+            fmt.line(f"  {icon} {rec['reason']}")
+            if rec.get("days_extended") and rec["days_extended"] > 0:
+                fmt.line(f"    {fmt.C.DIM}Extends runway by ~{rec['days_extended']} days{fmt.C.RESET}")
+            if rec.get("savings_month") and rec["savings_month"] > 0:
+                fmt.line(f"    {fmt.C.DIM}Est. savings: ~${rec['savings_month']:.2f}/mo{fmt.C.RESET}")
         fmt.blank()
 
     fmt.footer()
