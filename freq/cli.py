@@ -582,6 +582,17 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cooldown", type=int, default=300, help="Seconds between re-alerts")
     p.set_defaults(func=_cmd_rules)
 
+    # --- Declarative Fleet ---
+    p = sub.add_parser("plan", help="Show fleet plan diff (desired vs actual)")
+    p.add_argument("--file", help="Path to fleet plan TOML (default: conf/fleet-plan.toml)")
+    p.set_defaults(func=_cmd_plan)
+
+    p = sub.add_parser("apply", help="Apply fleet plan (execute creates/resizes)")
+    p.add_argument("--file", help="Path to fleet plan TOML (default: conf/fleet-plan.toml)")
+    p.add_argument("--dry-run", action="store_true", help="Show what would change without executing")
+    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmations")
+    p.set_defaults(func=_cmd_apply)
+
     # --- Remaining ---
     p = sub.add_parser("distros", help="List available cloud images")
     p.set_defaults(func=_cmd_distros)
@@ -749,6 +760,10 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("agent list", "Show registered agents"),
             ("agent start/stop <name>", "Manage agent sessions"),
             ("agent destroy <name>", "Remove agent + VM"),
+        ]),
+        ("Declarative Fleet", [
+            ("plan [--file path]", "Show fleet plan diff (desired vs actual)"),
+            ("apply [--file path]", "Apply fleet plan (create/resize VMs)"),
         ]),
         ("Smart Commands", [
             ("learn <query>", "Search Proxmox operational knowledge"),
@@ -1229,6 +1244,16 @@ def _cmd_cost(cfg: FreqConfig, pack, args) -> int:
 def _cmd_rules(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.rules import cmd_rules
     return cmd_rules(cfg, pack, args)
+
+
+def _cmd_plan(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.plan import cmd_plan
+    return cmd_plan(cfg, pack, args)
+
+
+def _cmd_apply(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.plan import cmd_apply
+    return cmd_apply(cfg, pack, args)
 
 
 def _cmd_hosts(cfg: FreqConfig, pack, args) -> int:

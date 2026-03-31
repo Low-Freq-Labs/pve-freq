@@ -269,6 +269,10 @@ def _menu_vm_lifecycle(cfg, pack):
             ("7", "migrate", "Move VM between nodes", Tag.RISKY),
             ("8", "destroy", "Safely remove a VM", Tag.DESTRUCTIVE),
             None,
+            "Declarative Fleet",
+            ("f", "plan", "Show fleet plan diff (desired vs actual)", ""),
+            ("a", "apply", "Apply fleet plan (create/resize VMs)", Tag.CHANGES),
+            None,
             "Extended Operations",
             ("t", "template", "Convert VM to template", Tag.CHANGES),
             ("r", "rename", "Rename a VM", Tag.CHANGES),
@@ -309,6 +313,10 @@ def _menu_vm_lifecycle(cfg, pack):
         elif ch == "8":
             print()
             _run_with_target(cfg, pack, "destroy", "VMID:")
+        elif ch == "f":
+            _run_command(cfg, pack, "plan")
+        elif ch == "a":
+            _run_command(cfg, pack, "apply")
         elif ch == "t":
             print()
             _run_with_target(cfg, pack, "template", "VMID:")
