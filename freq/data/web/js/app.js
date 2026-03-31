@@ -1401,7 +1401,7 @@ function loadSecHardening(){/* audit + hardening sections are button-triggered *
 function loadSecAccess(){loadUsers();loadKeys();}
 function loadSecVault(){loadVault();}
 function loadSecCompliance(){loadPoliciesPage();}
-/* Stub loaders for Morty's views */
+/* Stub loaders for extended views */
 function loadMediaPage(){loadMediaContainers();loadDownloads();loadStreams();}
 function loadToolsPage(){_populateHostDropdowns();}
 function loadLabPage(){loadLabTools();}
