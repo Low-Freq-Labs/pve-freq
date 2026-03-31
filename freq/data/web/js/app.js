@@ -349,6 +349,55 @@ var WIDGET_REGISTRY=[
       t.innerHTML=h;
     }).catch(function(e){var t=document.getElementById('hw-health-score');if(t)t.innerHTML='<div class="empty-state"><p>Score unavailable</p></div>';});
   }},
+  {id:'w-vlan-topology',page:'NETWORK',label:'VLAN Topology',loader:function(el){
+    el.innerHTML='<div id="hw-vlan-topo"><div class="skeleton"></div></div>';
+    fetch('/api/fleet/topology-enhanced').then(function(r){return r.json()}).then(function(d){
+      var t=document.getElementById('hw-vlan-topo');if(!t)return;
+      if(!d.vlans||!d.vlans.length){t.innerHTML='<div class="empty-state"><p>No VLANs configured</p></div>';return;}
+      var h='';
+      d.vlans.forEach(function(v){
+        if(!v.hosts||!v.hosts.length)return;
+        var color=v.id===0?'var(--text-dim)':'var(--purple-light)';
+        h+='<div style="margin-bottom:12px">';
+        h+='<div style="font-weight:600;font-size:13px;color:'+color+'">'+_esc(v.name)+' <span style="font-size:11px;color:var(--text-dim)">VLAN '+v.id+(v.subnet?' \u2022 '+v.subnet:'')+'</span></div>';
+        h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">';
+        v.hosts.forEach(function(host){
+          var bg=host.status==='healthy'?'rgba(50,255,50,0.1)':'rgba(255,50,50,0.1)';
+          var dot=host.status==='healthy'?'\u2022':'!';
+          var dotColor=host.status==='healthy'?'var(--green)':'var(--red)';
+          h+='<span style="padding:2px 8px;border-radius:4px;background:'+bg+';font-size:11px"><span style="color:'+dotColor+'">'+dot+'</span> '+_esc(host.label)+'</span>';
+        });
+        h+='</div></div>';
+      });
+      if(d.nodes&&d.nodes.length){
+        h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">';
+        h+='<div style="font-weight:600;font-size:13px;margin-bottom:4px">PVE Nodes</div>';
+        d.nodes.forEach(function(n){
+          h+='<div style="font-size:12px;padding:2px 0">'+_esc(n.name)+': '+n.running+'/'+n.vms+' VMs running</div>';
+        });
+        h+='</div>';
+      }
+      t.innerHTML=h;
+    }).catch(function(e){var t=document.getElementById('hw-vlan-topo');if(t)t.innerHTML='<div class="empty-state"><p>Topology unavailable</p></div>';});
+  }},
+  {id:'w-ntp-status',page:'NETWORK',label:'NTP Sync Status',loader:function(el){
+    el.innerHTML='<div id="hw-ntp"><div class="skeleton"></div></div>';
+    fetch('/api/fleet/ntp').then(function(r){return r.json()}).then(function(d){
+      var t=document.getElementById('hw-ntp');if(!t)return;
+      if(!d.hosts||!d.hosts.length){t.innerHTML='<div class="empty-state"><p>No NTP data</p></div>';return;}
+      var h='';var synced=0;
+      d.hosts.forEach(function(host){
+        var ok=host.synced||host.status==='synced';if(ok)synced++;
+        var icon=ok?'\u2705':'\u274c';
+        h+='<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">';
+        h+='<span>'+icon+' '+_esc(host.label)+'</span>';
+        h+='<span style="color:var(--text-dim)">'+(host.offset||host.server||'')+'</span>';
+        h+='</div>';
+      });
+      h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+synced+'/'+d.hosts.length+' synced</div>'+h;
+      t.innerHTML=h;
+    }).catch(function(e){var t=document.getElementById('hw-ntp');if(t)t.innerHTML='<div class="empty-state"><p>NTP check failed</p></div>';});
+  }},
   {id:'w-resource-heatmap',page:'FLEET',label:'Resource Heatmap',loader:function(el){
     el.innerHTML='<div id="hw-heatmap"><div class="skeleton"></div></div>';
     fetch('/api/fleet/heatmap').then(function(r){return r.json()}).then(function(d){

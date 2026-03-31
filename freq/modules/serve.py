@@ -1593,6 +1593,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/playbooks/create": "_serve_playbooks_create",
         # Fleet Intelligence
         "/api/fleet/health-score": "_serve_fleet_health_score",
+        "/api/fleet/topology-enhanced": "_serve_topology_enhanced",
         "/api/fleet/heatmap": "_serve_fleet_heatmap",
         "/api/snapshots/stale": "_serve_snapshots_stale",
         # Storage & Media Extended
@@ -2253,6 +2254,70 @@ class FreqHandler(BaseHTTPRequestHandler):
             "grade": grade,
             "factors": factors,
             "max_score": 100,
+        })
+
+    def _serve_topology_enhanced(self):
+        """GET /api/fleet/topology-enhanced — topology with VLAN grouping."""
+        cfg = load_config()
+        with _bg_lock:
+            fleet = _bg_cache.get("fleet_overview")
+            health = _bg_cache.get("health")
+
+        # Build VLAN groups
+        vlan_groups = {}
+        for vlan in cfg.vlans:
+            vlan_groups[vlan.name] = {
+                "id": vlan.id,
+                "name": vlan.name,
+                "subnet": vlan.subnet,
+                "gateway": vlan.gateway,
+                "hosts": [],
+            }
+
+        # Map hosts to VLANs by IP prefix
+        health_hosts = health.get("hosts", []) if health and isinstance(health, dict) else []
+        for h in health_hosts:
+            ip = h.get("ip", "")
+            matched = False
+            for vlan in cfg.vlans:
+                if vlan.prefix and ip.startswith(vlan.prefix):
+                    vlan_groups[vlan.name]["hosts"].append({
+                        "label": h.get("label", ""),
+                        "ip": ip,
+                        "type": h.get("type", ""),
+                        "status": h.get("status", ""),
+                    })
+                    matched = True
+                    break
+            if not matched and "untagged" not in vlan_groups:
+                if "untagged" not in vlan_groups:
+                    vlan_groups["untagged"] = {
+                        "id": 0, "name": "Untagged", "subnet": "",
+                        "gateway": "", "hosts": [],
+                    }
+                vlan_groups["untagged"]["hosts"].append({
+                    "label": h.get("label", ""),
+                    "ip": ip,
+                    "type": h.get("type", ""),
+                    "status": h.get("status", ""),
+                })
+
+        # PVE nodes and VMs per node
+        nodes = {}
+        if fleet and isinstance(fleet, dict):
+            for vm in fleet.get("vms", []):
+                node = vm.get("node", "unknown")
+                if node not in nodes:
+                    nodes[node] = {"name": node, "vms": 0, "running": 0}
+                nodes[node]["vms"] += 1
+                if vm.get("status") == "running":
+                    nodes[node]["running"] += 1
+
+        self._json_response({
+            "vlans": list(vlan_groups.values()),
+            "nodes": list(nodes.values()),
+            "total_hosts": len(health_hosts),
+            "total_vlans": len(cfg.vlans),
         })
 
     def _serve_fleet_heatmap(self):
