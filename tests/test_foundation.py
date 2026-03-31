@@ -366,5 +366,133 @@ class TestLogging(unittest.TestCase):
             os.unlink(path)
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Config Unification Tests
+# ═══════════════════════════════════════════════════════════════════
+
+class TestHostsToml(unittest.TestCase):
+    """Tests for TOML-based hosts loading."""
+
+    def test_load_hosts_toml_basic(self):
+        """Load hosts from TOML format."""
+        import tempfile
+        from freq.core.config import load_hosts_toml
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write('[[host]]\nip = "10.0.0.1"\nlabel = "node1"\ntype = "pve"\ngroups = "prod"\n')
+            f.write('[[host]]\nip = "10.0.0.2"\nlabel = "nas"\ntype = "truenas"\ngroups = "storage"\n')
+            path = f.name
+        try:
+            hosts = load_hosts_toml(path)
+            self.assertEqual(len(hosts), 2)
+            self.assertEqual(hosts[0].ip, "10.0.0.1")
+            self.assertEqual(hosts[0].label, "node1")
+            self.assertEqual(hosts[0].htype, "pve")
+            self.assertEqual(hosts[0].groups, "prod")
+            self.assertEqual(hosts[1].label, "nas")
+        finally:
+            os.unlink(path)
+
+    def test_load_hosts_toml_empty(self):
+        """Empty TOML returns empty list."""
+        import tempfile
+        from freq.core.config import load_hosts_toml
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write("# empty\n")
+            path = f.name
+        try:
+            hosts = load_hosts_toml(path)
+            self.assertEqual(hosts, [])
+        finally:
+            os.unlink(path)
+
+    def test_load_hosts_toml_with_all_ips(self):
+        """Hosts with all_ips field (list format)."""
+        import tempfile
+        from freq.core.config import load_hosts_toml
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write('[[host]]\nip = "10.0.0.1"\nlabel = "multi"\ntype = "linux"\n')
+            f.write('all_ips = ["10.0.0.1", "10.0.1.1"]\n')
+            path = f.name
+        try:
+            hosts = load_hosts_toml(path)
+            self.assertEqual(len(hosts), 1)
+            self.assertEqual(hosts[0].all_ips, ["10.0.0.1", "10.0.1.1"])
+        finally:
+            os.unlink(path)
+
+    def test_load_hosts_toml_missing_file(self):
+        """Missing TOML file returns empty list."""
+        from freq.core.config import load_hosts_toml
+        hosts = load_hosts_toml("/nonexistent/hosts.toml")
+        self.assertEqual(hosts, [])
+
+
+class TestTomlUsers(unittest.TestCase):
+    """Tests for TOML-based user loading."""
+
+    def test_toml_users_from_config(self):
+        """Users defined in [users] section override users.conf."""
+        from freq.core.config import FreqConfig
+        from freq.modules.users import _load_users
+        cfg = FreqConfig()
+        cfg._toml_users = [
+            {"username": "admin1", "role": "admin", "groups": ""},
+            {"username": "viewer1", "role": "viewer", "groups": "lab"},
+        ]
+        users = _load_users(cfg)
+        self.assertEqual(len(users), 2)
+        self.assertEqual(users[0]["username"], "admin1")
+        self.assertEqual(users[1]["role"], "viewer")
+
+    def test_toml_users_fallback_to_conf(self):
+        """When no TOML users, falls back to users.conf."""
+        from freq.core.config import FreqConfig
+        from freq.modules.users import _load_users
+        cfg = FreqConfig()
+        cfg._toml_users = []
+        cfg.conf_dir = "/nonexistent"
+        users = _load_users(cfg)
+        self.assertEqual(users, [])
+
+
+class TestPveApiConfig(unittest.TestCase):
+    """Tests for PVE API configuration fields."""
+
+    def test_pve_api_defaults(self):
+        """PVE API fields have safe defaults."""
+        from freq.core.config import FreqConfig
+        cfg = FreqConfig()
+        self.assertEqual(cfg.pve_api_token_id, "")
+        self.assertEqual(cfg.pve_api_token_secret, "")
+        self.assertFalse(cfg.pve_api_verify_ssl)
+
+    def test_pve_api_call_no_token(self):
+        """_pve_api_call returns failure when no token configured."""
+        from freq.core.config import FreqConfig
+        from freq.modules.pve import _pve_api_call
+        cfg = FreqConfig()
+        result, ok = _pve_api_call(cfg, "10.0.0.1", "/version")
+        self.assertFalse(ok)
+        self.assertEqual(result, "")
+
+    def test_pve_call_no_token_uses_ssh(self):
+        """_pve_call falls back to SSH when no token configured."""
+        from unittest.mock import patch, MagicMock
+        from freq.core.config import FreqConfig
+        from freq.modules.pve import _pve_call
+        cfg = FreqConfig()
+        cfg.ssh_key_path = "/tmp/fake"
+        cfg.ssh_connect_timeout = 5
+        mock_result = MagicMock()
+        mock_result.stdout = '{"version": "8.0"}'
+        mock_result.returncode = 0
+        with patch("freq.modules.pve.ssh_run", return_value=mock_result):
+            result, ok = _pve_call(cfg, "10.0.0.1",
+                                   api_endpoint="/version",
+                                   ssh_command="pvesh get /version --output-format json")
+            self.assertTrue(ok)
+            self.assertIn("version", result)
+
+
 if __name__ == "__main__":
     unittest.main()
