@@ -426,6 +426,8 @@ def _menu_fleet_info(cfg, pack):
             ("6", "log", "View host logs", ""),
             ("7", "keys", "SSH key status", ""),
             ("8", "detail", "Deep host inventory", ""),
+            ("9", "ssh", "SSH to a fleet host", ""),
+            ("t", "test-connection", "Test TCP + SSH + sudo", ""),
             ("0", "Back", "", ""),
         ], crumb)
 
@@ -453,6 +455,12 @@ def _menu_fleet_info(cfg, pack):
         elif ch == "8":
             print()
             _run_with_target(cfg, pack, "detail", "Host:")
+        elif ch == "9":
+            print()
+            _run_with_target(cfg, pack, "ssh", "Host:")
+        elif ch == "t":
+            print()
+            _run_with_target(cfg, pack, "test-connection", "Host:")
         else:
             continue
         _pause()
@@ -711,7 +719,7 @@ def _menu_media_stack(cfg, pack):
         ], crumb)
 
         ch = _getch()
-        if ch in ("0", "q", "\x1b"):
+        if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
             from freq.cli import _build_parser
@@ -841,7 +849,7 @@ def _menu_lab(cfg, pack):
         ], crumb)
 
         ch = _getch()
-        if ch in ("0", "q", "\x1b"):
+        if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
             _run_command(cfg, pack, "lab")
@@ -960,7 +968,7 @@ def _menu_infrastructure(cfg, pack):
         ], crumb)
 
         ch = _getch()
-        if ch in ("0", "q", "\x1b"):
+        if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
             _run_command(cfg, pack, "pfsense")
@@ -1098,7 +1106,7 @@ def _menu_freq_wipe(cfg, pack):
         ], crumb)
 
         ch = _getch()
-        if ch in ("\x1b", "0", "q"):
+        if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
             _gwipe_cmd(cfg, pack, "status")
@@ -1203,6 +1211,8 @@ def run(cfg, pack) -> int:
             ("d", "Doctor", "Self-diagnostic", ""),
             ("e", "Version", "Build info", ""),
             ("h", "Help", "Command reference", ""),
+            ("j", "Dashboard", "Start web dashboard (freq serve)", ""),
+            ("c", "Update", "Check for updates", ""),
             ("q", "Quit", "", ""),
         ]
 
@@ -1309,6 +1319,12 @@ def run(cfg, pack) -> int:
             _pause()
         elif ch_lower == "h":
             _run_command(cfg, pack, "help")
+            _pause()
+        elif ch_lower == "j":
+            _run_command(cfg, pack, "serve")
+            _pause()
+        elif ch_lower == "c":
+            _run_command(cfg, pack, "update")
             _pause()
         # Enter = redraw
         elif ch in ("\r", "\n"):

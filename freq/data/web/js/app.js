@@ -247,7 +247,7 @@ function _checkForUpdate(){
         banner.style.display='block';
       }
     }
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 
 function openUserMenu(){
@@ -363,9 +363,9 @@ function _loadHomeFleetStats(){
     var el=document.getElementById('hw-fleet-stats');if(!el)return;
     el.innerHTML=_d('STATUS',up,'ONLINE','var(--green)',totalOff,'OFFLINE','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'ONLINE','var(--cyan)')+_d('RESPONSE',hd.duration+'s','','var(--blue)','','','var(--text-dim)')+st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
     fetch(API.VMS).then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
-      var c=el.querySelector('.st:nth-child(5)');if(c)c.innerHTML='<div class="lb">VMs</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+run+'</span><span class="label-hint">RUN</span></span><span class="stat-pair"><span class="stat-big-red">'+stop+'</span><span class="label-hint">STOP</span></span></div>';}).catch(function(){});
+      var c=el.querySelector('.st:nth-child(5)');if(c)c.innerHTML='<div class="lb">VMs</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+run+'</span><span class="label-hint">RUN</span></span><span class="stat-pair"><span class="stat-big-red">'+stop+'</span><span class="label-hint">STOP</span></span></div>';}).catch(function(e){console.error('API error:',e);});
     fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
-      var _cdn=Math.max(0,md.containers_down||0);var c=el.querySelector('.st:nth-child(6)');if(c)c.innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+(md.containers_running||0)+'</span><span class="label-hint">UP</span></span><span class="stat-pair"><span class="stat-big-red">'+_cdn+'</span><span class="label-hint">DOWN</span></span></div>';}).catch(function(){});
+      var _cdn=Math.max(0,md.containers_down||0);var c=el.querySelector('.st:nth-child(6)');if(c)c.innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+(md.containers_running||0)+'</span><span class="label-hint">UP</span></span><span class="stat-pair"><span class="stat-big-red">'+_cdn+'</span><span class="label-hint">DOWN</span></span></div>';}).catch(function(e){console.error('API error:',e);});
     Promise.all([fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return{count:0}}),fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return{count:0}})]).then(function(res){
       var c=el.querySelector('.st:nth-child(7)');if(c)c.innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-orange">'+(res[0].count||0)+'</span><span class="label-hint">DL</span></span><span class="stat-pair"><span class="stat-big-blue">'+(res[1].count||0)+'</span><span class="label-hint">STREAM</span></span></div>';});
   });
@@ -391,13 +391,13 @@ function _loadWidgetOverview(){
     var _st=_loadSettings();var run=0,stop=0,total=0;d.vms.forEach(function(v){if(!_st.showTemplates&&v.category==='templates')return;total++;if(v.status==='running')run++;else stop++;});
     var h='';h+=_mrow('TOTAL',total+' VMs',0,'var(--purple-light)');h+=_mrow('RUNNING',run,0,'var(--green)');h+=_mrow('STOPPED',stop,0,stop>0?'var(--red)':'var(--green)');
     var ve=document.getElementById('hw-vms');if(ve)ve.innerHTML=h;
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
   /* Media */
   fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
     var run=d.containers_running||0,tot=d.containers_total||0,dn=Math.max(0,tot-run);
     var h='';h+=_mrow('ONLINE',run+' / '+tot,0,'var(--green)');h+=_mrow('OFFLINE',dn,0,dn>0?'var(--red)':'var(--green)');h+=_mrow('VMs',d.vm_count,0,'var(--blue)');
     var me=document.getElementById('hw-media');if(me)me.innerHTML=h;
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 var VIEW_SECTIONS={
   home:[],
@@ -1787,7 +1787,7 @@ function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDur
     st('ACTIVITY','...','p');
   fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
     var _cdn2=Math.max(0,md.containers_down||0);var c=sumEl.querySelector('.st:nth-child(7)');if(c)c.innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+(md.containers_running||0)+'</span><span class="label-hint">UP</span></span><span class="stat-pair"><span class="stat-big-red">'+_cdn2+'</span><span class="label-hint">DOWN</span></span></div>';
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
   Promise.all([
     fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return {count:0}}),
     fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return {count:0}})
@@ -1802,7 +1802,7 @@ function _enrichFleetNtpUpdates(){
       var el=document.getElementById('ntp-'+x.label.replace(/[^a-z0-9]/gi,''));
       if(el){var synced=x.synced;el.innerHTML='<div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val" style="font-size:11px;color:'+(synced?'var(--green)':'var(--red)')+'">'+(synced?'SYNCED':'NOT SYNCED')+' <span style="color:var(--text-dim);font-weight:400">'+x.time+'</span></span></div>';}
     });
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
   fetch(API.FLEET_UPDATES).then(function(r){return r.json()}).then(function(ud){
     ud.hosts.forEach(function(x){
       var el=document.getElementById('upd-'+x.label.replace(/[^a-z0-9]/gi,''));
@@ -1813,7 +1813,7 @@ function _enrichFleetNtpUpdates(){
         el.innerHTML='<div class="metric-top"><span class="metric-label">UPDATES</span><span class="metric-val" style="font-size:11px;color:'+color+'">'+txt+btn+'</span></div>';
       }
     });
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 function _renderFleetData(fo,hd,md){
   try{
@@ -2189,7 +2189,7 @@ function switchVmMgmt(tab){
       var nodes={};d.vms.forEach(function(v){nodes[v.node]=true;});
       var sel=document.getElementById('vmt-c-node');if(!sel)return;
       Object.keys(nodes).sort().forEach(function(n){sel.innerHTML+='<option value="'+n+'">'+n+'</option>';});
-    }).catch(function(){});
+    }).catch(function(e){console.error('API error:',e);});
   } else if(tab==='vmclone'){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">SOURCE VMID</label><select id="vmt-cl-source" class="input-primary"><option value="">Loading...</option></select></div>'+
@@ -2199,7 +2199,7 @@ function switchVmMgmt(tab){
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-cl-source');if(!sel)return;sel.innerHTML='';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
-    }).catch(function(){});
+    }).catch(function(e){console.error('API error:',e);});
   } else if(tab==='vmmigrate'){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM TO MIGRATE</label><select id="vmt-m-source" class="input-primary"><option value="">Loading...</option></select></div>'+
@@ -2212,7 +2212,7 @@ function switchVmMgmt(tab){
       if(!sel||!tgt)return;sel.innerHTML='';var nodes={};
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';nodes[v.node]=true;});
       tgt.innerHTML='';Object.keys(nodes).sort().forEach(function(n){tgt.innerHTML+='<option value="'+n+'">'+n+'</option>';});
-    }).catch(function(){});
+    }).catch(function(e){console.error('API error:',e);});
   } else if(tab==='vmsnapshot'){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM</label><select id="vmt-s-source" class="input-primary"><option value="">Loading...</option></select></div>'+
@@ -2221,7 +2221,7 @@ function switchVmMgmt(tab){
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-s-source');if(!sel)return;sel.innerHTML='';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
-    }).catch(function(){});
+    }).catch(function(e){console.error('API error:',e);});
   } else if(tab==='vmresize'){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM</label><select id="vmt-r-source" class="input-primary"><option value="">Loading...</option></select></div>'+
@@ -2232,7 +2232,7 @@ function switchVmMgmt(tab){
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-r-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.cpu+' cores, '+_ramGB(v.ram_mb)+')</option>';});
-    }).catch(function(){});
+    }).catch(function(e){console.error('API error:',e);});
   } else if(tab==='vmadddisk'){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM</label><select id="vmt-ad-source" class="input-primary"><option value="">Loading...</option></select></div>'+
@@ -2243,7 +2243,7 @@ function switchVmMgmt(tab){
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-ad-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
-    }).catch(function(){});
+    }).catch(function(e){console.error('API error:',e);});
   } else if(tab==='vmtag'){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM</label><select id="vmt-tag-source" class="input-primary"><option value="">Loading...</option></select></div>'+
@@ -2256,7 +2256,7 @@ function switchVmMgmt(tab){
         var tagInfo=v.tags?' ['+v.tags+']':'';
         sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+tagInfo+'</option>';
       });
-    }).catch(function(){});
+    }).catch(function(e){console.error('API error:',e);});
   }
 }
 /* VM Management action handlers */
@@ -2545,7 +2545,7 @@ function switchBackup(tab){
     fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('bk-snap-vm');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+'</option>';});
-    }).catch(function(){});
+    }).catch(function(e){console.error('API error:',e);});
   } else if(tab==='bkexport'){
     f.innerHTML='<div class="desc-line">Export FREQ configuration (hosts, users, vault) for backup.</div>'+
       '<div style="display:flex;gap:8px">'+
@@ -2561,7 +2561,7 @@ function switchBackup(tab){
     fetch(API.BACKUP_LIST).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('bk-rest-vm');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       var seen={};(d.snapshots||[]).forEach(function(s){if(!seen[s.vmid]){seen[s.vmid]=true;sel.innerHTML+='<option value="'+s.vmid+'">'+s.vmid+' — '+_esc(s.vm_name)+'</option>';}});
-    }).catch(function(){});
+    }).catch(function(e){console.error('API error:',e);});
   }
 }
 function bkCheckSchedules(){
@@ -2651,7 +2651,7 @@ function _loadUserDropdown(prefix){
     var users=d.users.map(function(u){return {value:u.username,label:u.username.toUpperCase(),detail:u.role.toUpperCase(),color:rc[u.role]||'var(--text-dim)'};});
     _userDropdownData[prefix]=users;
     _renderUserDropdown(prefix,users);
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 function _renderUserDropdown(prefix,items){
   var dd=document.getElementById('ft-'+prefix+'-dropdown');if(!dd)return;
@@ -3401,7 +3401,9 @@ function userDemote(u){
   });
 }
 function loadKeys(){
+  document.getElementById('keys-c').innerHTML='<div class="skeleton"></div>';
   fetch(API.KEYS).then(function(r){return r.json()}).then(function(d){
+    if(!d.hosts||!d.hosts.length){document.getElementById('keys-c').innerHTML='<p class="c-dim-fs12">No hosts registered. Add hosts with <code>freq hosts add</code>.</p>';return;}
     var html='<p class="c-dim-mb12-fs12">SSH key: <code>'+d.ssh_key+'</code></p>';
     html+='<table><thead><tr><th>Host</th><th>IP</th><th>Reachable</th><th>Auth Keys</th></tr></thead><tbody>';
     d.hosts.forEach(function(h){
@@ -3412,7 +3414,7 @@ function loadKeys(){
       html+='<tr><td style="color:'+cl+'"><strong>'+h.host+'</strong></td><td class="mono-11">'+h.ip+'</td><td>'+badge(h.reachable?'ok':'down')+'</td><td>'+h.key_count+'</td></tr>';
     });
     html+='</tbody></table>';document.getElementById('keys-c').innerHTML=html;
-  });
+  }).catch(function(e){document.getElementById('keys-c').innerHTML='<p style="color:var(--red)">Failed to load SSH keys</p>';});
 }
 var AUDIT_CHECKS={
   'ssh-root':{name:'SSH Root Login',cmd:"grep -c '^PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null; true",pass:function(v){return parseInt(v)===0;}},
@@ -3512,11 +3514,13 @@ function loadRisk(){
   }).catch(function(){toast('Failed to load risk assessment','error');});
 }
 function loadPolicies(){
+  document.getElementById('policies-c').innerHTML='<div class="skeleton"></div>';
   fetch(API.POLICIES).then(function(r){return r.json()}).then(function(d){
+    if(!d.policies||!d.policies.length){document.getElementById('policies-c').innerHTML='<p class="c-dim-fs12">No policies configured.</p>';return;}
     var h='<div class="cards">';
     d.policies.forEach(function(p){h+='<div class="crd"><h3>'+p.name+'</h3><p>'+p.description+'</p><div class="mt-8">';p.scope.forEach(function(ss){h+='<span class="tag">'+ss+'</span>';});h+='</div></div>';});
     h+='</div>';document.getElementById('policies-c').innerHTML=h;
-  });
+  }).catch(function(e){document.getElementById('policies-c').innerHTML='<p style="color:var(--red)">Failed to load policies</p>';});
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -3546,7 +3550,7 @@ function loadConfig(){
     html+='<tr><td class="c-dim">Install Dir</td><td style="font-size:11px;font-family:monospace">'+d.install_dir+'</td></tr>';
     html+='</table></div></div>';
     document.getElementById('config-c').innerHTML=html;
-  });
+  }).catch(function(e){document.getElementById('config-c').innerHTML='<p style="color:var(--red)">Failed to load configuration</p>';});
 }
 function runSysInfo(){
   document.getElementById('doctor-c').innerHTML='<div class="skeleton"></div>';
@@ -3596,18 +3600,23 @@ function searchLearn(){
   });
 }
 function loadDistros(){
+  document.getElementById('distro-c').innerHTML='<div class="skeleton"></div>';
   fetch(API.DISTROS).then(function(r){return r.json()}).then(function(d){
+    if(!d.distros||!d.distros.length){document.getElementById('distro-c').innerHTML='<p class="c-dim-fs12">No cloud images available.</p>';return;}
     var html='<div class="cards">';
     d.distros.forEach(function(i){html+='<div class="crd"><h3>'+i.name+'</h3><div class="mt-4"><span class="tag">'+i.family+'</span><span class="tag">'+i.tier+'</span></div><p style="margin-top:8px;font-size:13px;color:var(--text);word-break:break-all">'+i.url+'</p></div>';});
     html+='</div>';document.getElementById('distro-c').innerHTML=html;
-  });
+  }).catch(function(e){document.getElementById('distro-c').innerHTML='<p style="color:var(--red)">Failed to load distros</p>';});
 }
 function loadGroups(){
+  document.getElementById('groups-c').innerHTML='<div class="skeleton"></div>';
   fetch(API.GROUPS).then(function(r){return r.json()}).then(function(d){
+    var keys=Object.keys(d.groups||{});
+    if(!keys.length){document.getElementById('groups-c').innerHTML='<p class="c-dim-fs12">No groups configured. Create groups with <code>freq groups add</code>.</p>';return;}
     var html='<div class="cards">';
-    Object.keys(d.groups).forEach(function(g){html+='<div class="crd"><h3>'+g+'</h3><p>'+d.groups[g].join(', ')+'</p><div class="mt-4"><span class="tag">'+d.groups[g].length+' hosts</span></div></div>';});
+    keys.forEach(function(g){html+='<div class="crd"><h3>'+g+'</h3><p>'+d.groups[g].join(', ')+'</p><div class="mt-4"><span class="tag">'+d.groups[g].length+' hosts</span></div></div>';});
     html+='</div>';document.getElementById('groups-c').innerHTML=html;
-  });
+  }).catch(function(e){document.getElementById('groups-c').innerHTML='<p style="color:var(--red)">Failed to load groups</p>';});
 }
 function loadNotify(){
   document.getElementById('notify-status').innerHTML='<div class="skeleton" style="height:40px"></div>';
@@ -4268,7 +4277,7 @@ function _vmDockerFetch(vmid){
       myContainers.forEach(function(c){gh+=_containerCard(c,'');});
       gridEl.innerHTML=gh;
     }
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 
 /* ── Renderer: VM Card ── */
@@ -4497,7 +4506,7 @@ function ltLoad(toolId,pfx){
     if(d.host&&hEl)hEl.value=d.host;
     if(d.key&&kEl)kEl.value=d.key;
     if(d.host&&d.key)ltConnect(toolId,pfx);
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 
 function ltConnect(toolId,pfx){
