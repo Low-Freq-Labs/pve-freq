@@ -326,6 +326,29 @@ var WIDGET_REGISTRY=[
     el.innerHTML='<div id="hw-activity-list" class="activity-feed"><div class="skeleton"></div></div>';
     _loadActivityFeed();
   }},
+  {id:'w-fleet-health-score',page:'FLEET',label:'Health Score',loader:function(el){
+    el.innerHTML='<div id="hw-health-score"><div class="skeleton"></div></div>';
+    fetch('/api/fleet/health-score').then(function(r){return r.json()}).then(function(d){
+      var t=document.getElementById('hw-health-score');if(!t)return;
+      var color=d.score>=90?'var(--green)':d.score>=75?'var(--blue)':d.score>=60?'var(--orange)':'var(--red)';
+      var h='<div style="text-align:center;padding:12px 0">';
+      h+='<div style="font-size:48px;font-weight:700;color:'+color+'">'+d.score+'</div>';
+      h+='<div style="font-size:24px;font-weight:600;color:'+color+';margin-top:-4px">'+d.grade+'</div>';
+      h+='<div style="font-size:12px;color:var(--text-dim);margin-top:8px">Fleet Health Score</div>';
+      h+='</div>';
+      if(d.factors&&d.factors.length>0){
+        h+='<div style="border-top:1px solid var(--border);padding-top:8px">';
+        d.factors.forEach(function(f){
+          h+='<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0">';
+          h+='<span style="color:var(--text-dim)">'+_esc(f.detail)+'</span>';
+          h+='<span style="color:var(--red)">-'+f.penalty+'</span>';
+          h+='</div>';
+        });
+        h+='</div>';
+      }
+      t.innerHTML=h;
+    }).catch(function(e){var t=document.getElementById('hw-health-score');if(t)t.innerHTML='<div class="empty-state"><p>Score unavailable</p></div>';});
+  }},
   {id:'w-storage-health',page:'STORAGE',label:'Storage Health',loader:function(el){
     el.innerHTML='<div id="hw-storage-pools"><div class="skeleton"></div></div>';
     fetch('/api/storage/health').then(function(r){return r.json()}).then(function(d){
@@ -4438,6 +4461,18 @@ function renderVmCard(config){
     html+='</div>';
     html+='<div class="ho-section mt-10" ><h3>SECURITY & STATUS</h3>'+secContent+'</div>';
   }
+  /* Snapshot info section */
+  html+='<div class="ho-section mt-10"><h3>SNAPSHOTS</h3><div id="hd-snap-list"><span class="text-meta">Loading...</span></div></div>';
+  setTimeout(function(){
+    fetch('/api/vm/snapshots?vmid='+vmid+'&token='+_authToken).then(function(r){return r.json()}).then(function(d){
+      var el=document.getElementById('hd-snap-list');if(!el)return;
+      if(!d.snapshots||!d.snapshots.length){el.innerHTML='<span class="text-meta">No snapshots</span>';return;}
+      var h='';d.snapshots.forEach(function(s){
+        h+=kv(s.name||'snap',s.date||s.description||'','var(--text-dim)');
+      });
+      el.innerHTML=h;
+    }).catch(function(){var el=document.getElementById('hd-snap-list');if(el)el.innerHTML='<span class="text-meta">Snapshot info unavailable</span>';});
+  },500);
   _cardReady(html);
   if(document.getElementById('vm-nic-combo'))_updateNicPreviewCombo();
   if(hasDocker)_vmDockerFetch(vmid);

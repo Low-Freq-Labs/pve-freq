@@ -1309,6 +1309,23 @@ def _parse_query(handler):
     return parse_qs(urlparse(handler.path).query)
 
 
+def _parse_pct(value: str) -> float:
+    """Parse a percentage string like '45%' or RAM string '4096/8192MB' into float."""
+    if not value:
+        return 0.0
+    import re as _re
+    # Try percentage: "45%"
+    m = _re.match(r'(\d+)%', value)
+    if m:
+        return float(m.group(1))
+    # Try fraction: "4096/8192"
+    m = _re.match(r'(\d+)/(\d+)', value)
+    if m:
+        used, total = float(m.group(1)), float(m.group(2))
+        return round(used / total * 100, 1) if total > 0 else 0.0
+    return 0.0
+
+
 def _parse_query_flat(path_str):
     """Parse query params from a URL path string. Returns {key: str}."""
     raw = parse_qs(urlparse(path_str).query)
@@ -1574,6 +1591,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/playbooks/run": "_serve_playbooks_run",
         "/api/playbooks/step": "_serve_playbooks_step",
         "/api/playbooks/create": "_serve_playbooks_create",
+        # Fleet Intelligence
+        "/api/fleet/health-score": "_serve_fleet_health_score",
         # Storage & Media Extended
         "/api/storage/health": "_serve_storage_health",
         "/api/media/tdarr": "_serve_media_tdarr",
@@ -2174,6 +2193,65 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"ok": True, "filename": filename})
         except OSError as e:
             self._json_response({"error": str(e)}, 500)
+
+    # ── Fleet Intelligence ──────────────────────────────────────────────
+
+    def _serve_fleet_health_score(self):
+        """GET /api/fleet/health-score — composite fleet health score 0-100."""
+        with _bg_lock:
+            health = _bg_cache.get("health")
+            fleet = _bg_cache.get("fleet_overview")
+
+        score = 100
+        factors = []
+
+        if health and isinstance(health, dict):
+            hosts = health.get("hosts", [])
+            total = len(hosts)
+            healthy = sum(1 for h in hosts if h.get("status") == "healthy")
+            unhealthy = total - healthy
+
+            if total > 0:
+                host_pct = round(healthy / total * 100)
+                if host_pct < 100:
+                    penalty = min(40, (100 - host_pct) * 2)
+                    score -= penalty
+                    factors.append({"factor": "hosts_down", "penalty": penalty,
+                                    "detail": f"{unhealthy}/{total} hosts unhealthy"})
+
+                # Check resource pressure
+                high_ram = sum(1 for h in hosts if _parse_pct(h.get("ram", "")) > 80)
+                high_disk = sum(1 for h in hosts if _parse_pct(h.get("disk", "")) > 80)
+                if high_ram > 0:
+                    penalty = min(15, high_ram * 5)
+                    score -= penalty
+                    factors.append({"factor": "ram_pressure", "penalty": penalty,
+                                    "detail": f"{high_ram} host(s) >80% RAM"})
+                if high_disk > 0:
+                    penalty = min(15, high_disk * 5)
+                    score -= penalty
+                    factors.append({"factor": "disk_pressure", "penalty": penalty,
+                                    "detail": f"{high_disk} host(s) >80% disk"})
+
+        if fleet and isinstance(fleet, dict):
+            vms = fleet.get("vms", [])
+            stopped = sum(1 for v in vms if v.get("status") == "stopped")
+            total_vms = len(vms)
+            if total_vms > 0 and stopped > total_vms * 0.3:
+                penalty = min(10, stopped)
+                score -= penalty
+                factors.append({"factor": "vms_stopped", "penalty": penalty,
+                                "detail": f"{stopped}/{total_vms} VMs stopped"})
+
+        score = max(0, min(100, score))
+        grade = "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F"
+
+        self._json_response({
+            "score": score,
+            "grade": grade,
+            "factors": factors,
+            "max_score": 100,
+        })
 
     # ── Storage & Media Extended ────────────────────────────────────────
 
