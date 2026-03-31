@@ -1593,6 +1593,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/playbooks/create": "_serve_playbooks_create",
         # Fleet Intelligence
         "/api/fleet/health-score": "_serve_fleet_health_score",
+        "/api/fleet/heatmap": "_serve_fleet_heatmap",
+        "/api/snapshots/stale": "_serve_snapshots_stale",
         # Storage & Media Extended
         "/api/storage/health": "_serve_storage_health",
         "/api/media/tdarr": "_serve_media_tdarr",
@@ -2251,6 +2253,102 @@ class FreqHandler(BaseHTTPRequestHandler):
             "grade": grade,
             "factors": factors,
             "max_score": 100,
+        })
+
+    def _serve_fleet_heatmap(self):
+        """GET /api/fleet/heatmap — resource usage per host for heatmap viz."""
+        with _bg_lock:
+            health = _bg_cache.get("health")
+
+        heatmap = []
+        if health and isinstance(health, dict):
+            for h in health.get("hosts", []):
+                if h.get("status") != "healthy":
+                    continue
+                ram_pct = _parse_pct(h.get("ram", ""))
+                disk_pct = _parse_pct(h.get("disk", ""))
+                try:
+                    load = float(h.get("load", "0"))
+                except (ValueError, TypeError):
+                    load = 0
+                heatmap.append({
+                    "label": h.get("label", ""),
+                    "type": h.get("type", ""),
+                    "ram_pct": round(ram_pct, 1),
+                    "disk_pct": round(disk_pct, 1),
+                    "load": round(load, 2),
+                    "containers": int(h.get("docker", "0") or 0),
+                })
+
+        self._json_response({"hosts": heatmap, "count": len(heatmap)})
+
+    def _serve_snapshots_stale(self):
+        """GET /api/snapshots/stale — find VM snapshots older than threshold."""
+        cfg = load_config()
+        from freq.core.ssh import run as ssh_fn
+
+        params = _parse_query_flat(self.path)
+        try:
+            days = int(params.get("days", "30"))
+        except (ValueError, TypeError):
+            days = 30
+
+        stale = []
+        for i, node_ip in enumerate(cfg.pve_nodes):
+            node_name = cfg.pve_node_names[i] if i < len(cfg.pve_node_names) else f"node{i}"
+            # Get all VMIDs
+            r = ssh_fn(
+                host=node_ip,
+                command="sudo qm list 2>/dev/null | tail -n +2 | awk '{print $1, $2}'",
+                key_path=cfg.ssh_key_path,
+                connect_timeout=cfg.ssh_connect_timeout,
+                command_timeout=30,
+                htype="pve", use_sudo=False,
+            )
+            if r.returncode != 0:
+                continue
+
+            for line in r.stdout.strip().split("\n"):
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                vmid = parts[0]
+                vm_name = parts[1]
+
+                # Get snapshots for this VM
+                sr = ssh_fn(
+                    host=node_ip,
+                    command=f"sudo qm listsnapshot {vmid} 2>/dev/null | grep -v current | grep -v '^$'",
+                    key_path=cfg.ssh_key_path,
+                    connect_timeout=cfg.ssh_connect_timeout,
+                    command_timeout=15,
+                    htype="pve", use_sudo=False,
+                )
+                if sr.returncode != 0 or not sr.stdout.strip():
+                    continue
+
+                for sline in sr.stdout.strip().split("\n"):
+                    sline = sline.strip()
+                    if not sline or sline.startswith("`") or "current" in sline.lower():
+                        continue
+                    # Parse snapshot line: "  `->` snapname       timestamp     description"
+                    sparts = sline.replace("`->", "").strip().split()
+                    if len(sparts) >= 1:
+                        snap_name = sparts[0]
+                        # Try to extract date
+                        snap_date = " ".join(sparts[1:3]) if len(sparts) >= 3 else ""
+                        stale.append({
+                            "vmid": int(vmid),
+                            "vm_name": vm_name,
+                            "snapshot": snap_name,
+                            "date": snap_date,
+                            "node": node_name,
+                        })
+
+        self._json_response({
+            "stale": stale,
+            "count": len(stale),
+            "threshold_days": days,
         })
 
     # ── Storage & Media Extended ────────────────────────────────────────

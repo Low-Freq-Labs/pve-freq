@@ -349,6 +349,43 @@ var WIDGET_REGISTRY=[
       t.innerHTML=h;
     }).catch(function(e){var t=document.getElementById('hw-health-score');if(t)t.innerHTML='<div class="empty-state"><p>Score unavailable</p></div>';});
   }},
+  {id:'w-resource-heatmap',page:'FLEET',label:'Resource Heatmap',loader:function(el){
+    el.innerHTML='<div id="hw-heatmap"><div class="skeleton"></div></div>';
+    fetch('/api/fleet/heatmap').then(function(r){return r.json()}).then(function(d){
+      var t=document.getElementById('hw-heatmap');if(!t)return;
+      if(!d.hosts||!d.hosts.length){t.innerHTML='<div class="empty-state"><p>No data</p></div>';return;}
+      var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px">';
+      d.hosts.forEach(function(host){
+        var maxPct=Math.max(host.ram_pct,host.disk_pct);
+        var bg=maxPct>=80?'rgba(255,50,50,0.15)':maxPct>=60?'rgba(255,165,0,0.1)':'rgba(50,255,50,0.08)';
+        var border=maxPct>=80?'var(--red)':maxPct>=60?'var(--orange)':'var(--green)';
+        h+='<div style="padding:8px;border:1px solid '+border+';border-radius:6px;background:'+bg+';text-align:center">';
+        h+='<div style="font-size:11px;font-weight:600;margin-bottom:4px">'+_esc(host.label)+'</div>';
+        h+='<div style="font-size:10px;color:var(--text-dim)">RAM '+host.ram_pct+'%</div>';
+        h+='<div style="font-size:10px;color:var(--text-dim)">Disk '+host.disk_pct+'%</div>';
+        if(host.containers>0)h+='<div style="font-size:10px;color:var(--text-dim)">'+host.containers+' ctr</div>';
+        h+='</div>';
+      });
+      h+='</div>';
+      t.innerHTML=h;
+    }).catch(function(e){var t=document.getElementById('hw-heatmap');if(t)t.innerHTML='<div class="empty-state"><p>Heatmap unavailable</p></div>';});
+  }},
+  {id:'w-stale-snapshots',page:'FLEET',label:'Stale Snapshots',loader:function(el){
+    el.innerHTML='<div id="hw-stale-snaps"><div class="skeleton"></div></div>';
+    fetch('/api/snapshots/stale?days=30').then(function(r){return r.json()}).then(function(d){
+      var t=document.getElementById('hw-stale-snaps');if(!t)return;
+      if(!d.stale||!d.stale.length){t.innerHTML='<div style="color:var(--green);padding:8px 0">\u2705 No stale snapshots</div>';return;}
+      var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+d.count+' snapshot(s) found</div>';
+      d.stale.slice(0,20).forEach(function(s){
+        h+='<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">';
+        h+='<span><span style="font-weight:500">'+_esc(s.vm_name)+'</span> <span style="color:var(--text-dim)">VM '+s.vmid+'</span></span>';
+        h+='<span style="color:var(--text-dim)">'+_esc(s.snapshot)+'</span>';
+        h+='</div>';
+      });
+      if(d.count>20)h+='<div style="font-size:11px;color:var(--text-dim);margin-top:4px">+'+(d.count-20)+' more</div>';
+      t.innerHTML=h;
+    }).catch(function(e){var t=document.getElementById('hw-stale-snaps');if(t)t.innerHTML='<div class="empty-state"><p>Snapshot check failed</p></div>';});
+  }},
   {id:'w-storage-health',page:'STORAGE',label:'Storage Health',loader:function(el){
     el.innerHTML='<div id="hw-storage-pools"><div class="skeleton"></div></div>';
     fetch('/api/storage/health').then(function(r){return r.json()}).then(function(d){
