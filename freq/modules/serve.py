@@ -1542,6 +1542,11 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/playbooks/run": "_serve_playbooks_run",
         "/api/playbooks/step": "_serve_playbooks_step",
         "/api/playbooks/create": "_serve_playbooks_create",
+        # HTTP Monitors
+        "/api/monitors": "_serve_monitors",
+        "/api/monitors/check": "_serve_monitors_check",
+        # Docker Fleet
+        "/api/docker-fleet": "_serve_docker_fleet",
         # Documentation
         "/api/docs": "_serve_api_docs",
         "/api/openapi.json": "_serve_openapi_json",
@@ -2104,6 +2109,90 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._json_response({"ok": True, "filename": filename})
         except OSError as e:
             self._json_response({"error": str(e)}, 500)
+
+    # ── HTTP Monitors ────────────────────────────────────────────────────
+
+    def _serve_monitors(self):
+        """GET /api/monitors — list configured HTTP monitors."""
+        cfg = load_config()
+        monitors = []
+        for m in cfg.monitors:
+            monitors.append({
+                "name": m.name,
+                "url": m.url,
+                "interval": m.interval,
+                "timeout": m.timeout,
+                "expected_status": m.expected_status,
+                "method": m.method,
+            })
+        self._json_response({"monitors": monitors, "count": len(monitors)})
+
+    def _serve_monitors_check(self):
+        """GET /api/monitors/check — run all HTTP checks now."""
+        cfg = load_config()
+        if not cfg.monitors:
+            self._json_response({"results": [], "count": 0})
+            return
+        from freq.jarvis.patrol import check_http_monitors
+        results = check_http_monitors(cfg.monitors)
+        ok = sum(1 for r in results if r["ok"])
+        self._json_response({
+            "results": results,
+            "count": len(results),
+            "healthy": ok,
+            "unhealthy": len(results) - ok,
+        })
+
+    # ── Docker Fleet ────────────────────────────────────────────────────
+
+    def _serve_docker_fleet(self):
+        """GET /api/docker-fleet — fleet-wide container inventory."""
+        cfg = load_config()
+        from freq.core.resolve import by_type
+        from freq.core.ssh import run_many as ssh_run_many_fn
+
+        docker_hosts = by_type(cfg.hosts, "docker")
+        if not docker_hosts:
+            self._json_response({"hosts": [], "total_containers": 0})
+            return
+
+        results = ssh_run_many_fn(
+            hosts=docker_hosts,
+            command="docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' 2>/dev/null",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=cfg.ssh_connect_timeout,
+            command_timeout=30,
+            max_parallel=cfg.ssh_max_parallel,
+            use_sudo=False,
+        )
+
+        hosts_data = []
+        total = 0
+        for host in docker_hosts:
+            r = results.get(host.label)
+            containers = []
+            if r and r.returncode == 0 and r.stdout.strip():
+                for line in r.stdout.strip().split("\n"):
+                    parts = line.split("|")
+                    containers.append({
+                        "name": parts[0] if len(parts) > 0 else "?",
+                        "image": parts[1] if len(parts) > 1 else "",
+                        "status": parts[2] if len(parts) > 2 else "",
+                    })
+                total += len(containers)
+            hosts_data.append({
+                "label": host.label,
+                "ip": host.ip,
+                "containers": containers,
+                "count": len(containers),
+                "reachable": r is not None and r.returncode == 0 if r else False,
+            })
+
+        self._json_response({
+            "hosts": hosts_data,
+            "total_containers": total,
+            "total_hosts": len(docker_hosts),
+        })
 
     # ── API Documentation ────────────────────────────────────────────────
 

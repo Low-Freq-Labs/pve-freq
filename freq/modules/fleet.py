@@ -641,6 +641,98 @@ def cmd_docker(cfg: FreqConfig, pack, args) -> int:
     return 0
 
 
+def cmd_docker_fleet(cfg: FreqConfig, pack, args) -> int:
+    """Fleet-wide Docker operations — ps/logs/stats across all docker hosts."""
+    action = getattr(args, "docker_action", "ps")
+
+    # Find all docker hosts
+    docker_hosts = resolve.by_type(cfg.hosts, "docker")
+    if not docker_hosts:
+        fmt.error("No docker-type hosts registered in hosts.toml")
+        return 1
+
+    fmt.header(f"Docker Fleet: {action}")
+    fmt.blank()
+    fmt.line(f"{fmt.C.BOLD}Hosts:{fmt.C.RESET} {len(docker_hosts)} docker host(s)")
+    fmt.blank()
+
+    if action == "ps":
+        cmd = "docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' 2>/dev/null"
+    elif action == "logs":
+        service = getattr(args, "service", "") or ""
+        lines = getattr(args, "lines", 20) or 20
+        if service:
+            cmd = f"docker logs --tail {lines} {service} 2>&1"
+        else:
+            cmd = f"docker ps --format '{{{{.Names}}}}' 2>/dev/null | head -5 | while read c; do echo \"=== $c ===\"; docker logs --tail 3 $c 2>&1; done"
+    elif action == "stats":
+        cmd = "docker stats --no-stream --format '{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}' 2>/dev/null"
+    else:
+        fmt.error(f"Unknown action: {action}")
+        return 1
+
+    results = ssh_run_many(
+        hosts=docker_hosts,
+        command=cmd,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=30,
+        max_parallel=cfg.ssh_max_parallel,
+        use_sudo=False,
+    )
+
+    total_containers = 0
+
+    for host in docker_hosts:
+        r = results.get(host.label)
+        if not r or r.returncode != 0:
+            fmt.line(f"  {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {host.label}: unreachable")
+            continue
+
+        if not r.stdout.strip():
+            fmt.line(f"  {fmt.C.DIM}{host.label}: no containers{fmt.C.RESET}")
+            continue
+
+        lines_out = r.stdout.strip().split("\n")
+
+        if action == "ps":
+            fmt.line(f"  {fmt.C.BOLD}{host.label}{fmt.C.RESET} ({len(lines_out)} containers)")
+            for line in lines_out:
+                parts = line.split("|")
+                name = parts[0] if len(parts) > 0 else "?"
+                image = parts[1] if len(parts) > 1 else ""
+                status = parts[2] if len(parts) > 2 else ""
+                if len(image) > 25:
+                    image = "..." + image[-22:]
+                status_c = f"{fmt.C.GREEN}{status}{fmt.C.RESET}" if "Up" in status else f"{fmt.C.RED}{status}{fmt.C.RESET}"
+                fmt.line(f"    {name:<20} {image:<25} {status_c}")
+            total_containers += len(lines_out)
+
+        elif action == "stats":
+            fmt.line(f"  {fmt.C.BOLD}{host.label}{fmt.C.RESET}")
+            for line in lines_out:
+                parts = line.split("|")
+                name = parts[0] if len(parts) > 0 else "?"
+                cpu = parts[1] if len(parts) > 1 else "?"
+                mem = parts[2] if len(parts) > 2 else "?"
+                fmt.line(f"    {name:<20} CPU: {cpu:<8} MEM: {mem}")
+            total_containers += len(lines_out)
+
+        elif action == "logs":
+            fmt.line(f"  {fmt.C.BOLD}{host.label}{fmt.C.RESET}")
+            for line in lines_out:
+                fmt.line(f"    {fmt.C.DIM}{line}{fmt.C.RESET}")
+
+        fmt.blank()
+
+    if action in ("ps", "stats"):
+        fmt.line(f"  {fmt.C.BOLD}Total:{fmt.C.RESET} {total_containers} container(s) across {len(docker_hosts)} host(s)")
+
+    fmt.blank()
+    fmt.footer()
+    return 0
+
+
 # --- Helpers ---
 
 def _resolve_targets(cfg: FreqConfig, target: str) -> list:

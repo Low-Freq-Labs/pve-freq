@@ -13,7 +13,7 @@ from typing import Optional
 
 from freq.core.types import (
     Host, VLAN, Distro, Container, ContainerVM,
-    FleetBoundaries, PhysicalDevice, PVENode,
+    FleetBoundaries, PhysicalDevice, PVENode, Monitor,
 )
 from freq import __version__
 
@@ -145,6 +145,9 @@ class FreqConfig:
 
     # Container registry (loaded from containers.toml)
     container_vms: dict = field(default_factory=dict)  # vm_id -> ContainerVM
+
+    # HTTP monitors (loaded from freq.toml [[monitor]])
+    monitors: list = field(default_factory=list)  # List of Monitor
 
     # Template profiles
     template_profiles: dict = field(default_factory=dict)
@@ -320,6 +323,7 @@ def load_config(install_dir: Optional[str] = None) -> FreqConfig:
     cfg.distros = load_distros(os.path.join(cfg.conf_dir, "distros.toml"))
     cfg.container_vms = load_containers(os.path.join(cfg.conf_dir, "containers.toml"))
     cfg.fleet_boundaries = load_fleet_boundaries(os.path.join(cfg.conf_dir, "fleet-boundaries.toml"))
+    cfg.monitors = _load_monitors(data if data else {})
 
     # Detect SSH keys
     cfg.ssh_key_path = _detect_ssh_key(cfg)
@@ -500,6 +504,34 @@ def load_hosts_toml(path: str) -> list:
             all_ips=all_ips,
         ))
     return hosts
+
+
+def _load_monitors(data: dict) -> list:
+    """Load HTTP monitor definitions from parsed TOML data.
+
+    Expected format in freq.toml:
+        [[monitor]]
+        name = "Dashboard"
+        url = "http://10.0.0.50:8888/healthz"
+        interval = 60
+        timeout = 10
+        expected_status = 200
+    """
+    monitors = []
+    for mon in data.get("monitor", []):
+        if not mon.get("url"):
+            continue
+        monitors.append(Monitor(
+            name=mon.get("name", mon["url"]),
+            url=mon["url"],
+            interval=int(mon.get("interval", 60)),
+            timeout=int(mon.get("timeout", 10)),
+            expected_status=int(mon.get("expected_status", 200)),
+            method=mon.get("method", "GET"),
+            keyword=mon.get("keyword", ""),
+            notify=mon.get("notify", True),
+        ))
+    return monitors
 
 
 def load_vlans(path: str) -> list:

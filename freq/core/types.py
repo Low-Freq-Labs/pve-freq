@@ -273,3 +273,16 @@ class FleetBoundaries:
         cat_name, _ = self.categorize(vmid)
         cat = self.categories.get(cat_name, {})
         return cat.get("description", "Unknown")
+
+
+@dataclass
+class Monitor:
+    """An HTTP endpoint to monitor."""
+    name: str
+    url: str
+    interval: int = 60           # Check interval in seconds
+    timeout: int = 10            # Request timeout in seconds
+    expected_status: int = 200   # Expected HTTP status code
+    method: str = "GET"          # HTTP method
+    keyword: str = ""            # Optional keyword to look for in response body
+    notify: bool = True          # Send notification on failure

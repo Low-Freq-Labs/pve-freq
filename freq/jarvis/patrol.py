@@ -1,7 +1,7 @@
 """Continuous monitoring with auto-remediation — FREQ patrol.
 
 Like freq watch but smarter: monitors fleet health and automatically
-triggers policy checks when drift is detected.
+triggers policy checks when drift is detected. Also monitors HTTP endpoints.
 
 Usage:
   freq patrol                  # start monitoring (30s intervals)
@@ -9,6 +9,8 @@ Usage:
   freq patrol --auto-fix       # auto-remediate drift (dangerous)
 """
 import time
+import urllib.request
+import urllib.error
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
@@ -19,6 +21,58 @@ from freq.core.types import Phase
 
 # Patrol timeouts
 PATROL_CHECK_TIMEOUT = 10
+
+
+def check_http_monitors(monitors: list) -> list:
+    """Check HTTP endpoints defined in [[monitor]] config.
+
+    Returns list of {name, url, status, ok, latency_ms, error} dicts.
+    """
+    results = []
+    for mon in monitors:
+        result = {
+            "name": mon.name,
+            "url": mon.url,
+            "expected": mon.expected_status,
+            "ok": False,
+            "status": 0,
+            "latency_ms": 0,
+            "error": "",
+        }
+
+        start = time.monotonic()
+        try:
+            req = urllib.request.Request(mon.url, method=mon.method)
+            req.add_header("User-Agent", "FREQ-Patrol/1.0")
+            resp = urllib.request.urlopen(req, timeout=mon.timeout)
+            result["status"] = resp.status
+            result["latency_ms"] = int((time.monotonic() - start) * 1000)
+
+            # Check status code
+            if resp.status == mon.expected_status:
+                result["ok"] = True
+
+            # Check keyword if configured
+            if mon.keyword and result["ok"]:
+                body = resp.read(8192).decode("utf-8", errors="replace")
+                if mon.keyword not in body:
+                    result["ok"] = False
+                    result["error"] = f"keyword '{mon.keyword}' not found"
+
+        except urllib.error.HTTPError as e:
+            result["status"] = e.code
+            result["latency_ms"] = int((time.monotonic() - start) * 1000)
+            result["error"] = str(e.reason)
+        except urllib.error.URLError as e:
+            result["latency_ms"] = int((time.monotonic() - start) * 1000)
+            result["error"] = str(e.reason)
+        except Exception as e:
+            result["latency_ms"] = int((time.monotonic() - start) * 1000)
+            result["error"] = str(e)
+
+        results.append(result)
+
+    return results
 
 
 def cmd_patrol(cfg: FreqConfig, pack, args) -> int:
@@ -66,7 +120,21 @@ def cmd_patrol(cfg: FreqConfig, pack, args) -> int:
             else:
                 print(f"  {fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET} {up}/{len(cfg.hosts)} hosts UP")
 
-            # 2. Policy drift check (every 3rd cycle to reduce load)
+            # 2. HTTP endpoint checks
+            if cfg.monitors:
+                mon_results = check_http_monitors(cfg.monitors)
+                mon_ok = sum(1 for r in mon_results if r["ok"])
+                mon_fail = len(mon_results) - mon_ok
+
+                if mon_fail > 0:
+                    for r in mon_results:
+                        if not r["ok"]:
+                            err = r["error"] or f"HTTP {r['status']}"
+                            print(f"  {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {r['name']}: {err} ({r['latency_ms']}ms)")
+                else:
+                    print(f"  {fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET} {mon_ok}/{len(mon_results)} HTTP endpoints OK")
+
+            # 3. Policy drift check (every 3rd cycle to reduce load)
             if cycle % 3 == 1:
                 total_drift = 0
                 for policy in ALL_POLICIES:

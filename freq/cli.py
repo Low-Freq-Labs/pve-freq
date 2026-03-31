@@ -582,6 +582,17 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cooldown", type=int, default=300, help="Seconds between re-alerts")
     p.set_defaults(func=_cmd_rules)
 
+    # --- Docker Fleet ---
+    p = sub.add_parser("docker-fleet", help="Fleet-wide Docker operations (ps/logs/stats)")
+    p.add_argument("docker_action", nargs="?", choices=["ps", "logs", "stats"], default="ps",
+                   help="Action: ps (default), logs, stats")
+    p.add_argument("service", nargs="?", help="Service name (for logs)")
+    p.add_argument("--lines", "-n", type=int, default=20, help="Log lines (for logs)")
+    p.set_defaults(func=_cmd_docker_fleet)
+
+    p = sub.add_parser("monitor", help="Check HTTP endpoints defined in config")
+    p.set_defaults(func=_cmd_monitor)
+
     # --- IPAM ---
     p = sub.add_parser("ip", help="IP address management (next/list/check)")
     p.add_argument("action", nargs="?", choices=["next", "list", "check"], default="next",
@@ -769,6 +780,10 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("agent list", "Show registered agents"),
             ("agent start/stop <name>", "Manage agent sessions"),
             ("agent destroy <name>", "Remove agent + VM"),
+        ]),
+        ("Docker Fleet & Monitoring", [
+            ("docker-fleet [ps|logs|stats]", "Fleet-wide container operations"),
+            ("monitor", "Check HTTP endpoints from config"),
         ]),
         ("IPAM", [
             ("ip next --vlan <name>", "Next available IP in VLAN"),
@@ -1258,6 +1273,40 @@ def _cmd_cost(cfg: FreqConfig, pack, args) -> int:
 def _cmd_rules(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.rules import cmd_rules
     return cmd_rules(cfg, pack, args)
+
+
+def _cmd_docker_fleet(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.fleet import cmd_docker_fleet
+    return cmd_docker_fleet(cfg, pack, args)
+
+
+def _cmd_monitor(cfg: FreqConfig, pack, args) -> int:
+    from freq.jarvis.patrol import check_http_monitors
+    fmt.header("HTTP Endpoint Checks")
+    fmt.blank()
+    if not cfg.monitors:
+        fmt.info("No [[monitor]] entries in freq.toml")
+        fmt.blank()
+        fmt.line(f"  {fmt.C.DIM}Add to freq.toml:{fmt.C.RESET}")
+        fmt.line(f'  {fmt.C.DIM}[[monitor]]{fmt.C.RESET}')
+        fmt.line(f'  {fmt.C.DIM}name = "Dashboard"{fmt.C.RESET}')
+        fmt.line(f'  {fmt.C.DIM}url = "http://10.0.0.50:8888/healthz"{fmt.C.RESET}')
+        fmt.blank()
+        fmt.footer()
+        return 0
+    results = check_http_monitors(cfg.monitors)
+    for r in results:
+        if r["ok"]:
+            print(f"  {fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET} {r['name']:<20} {r['status']} ({r['latency_ms']}ms)")
+        else:
+            err = r["error"] or f"HTTP {r['status']}"
+            print(f"  {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {r['name']:<20} {err} ({r['latency_ms']}ms)")
+    ok = sum(1 for r in results if r["ok"])
+    fmt.blank()
+    fmt.line(f"  {ok}/{len(results)} endpoints healthy")
+    fmt.blank()
+    fmt.footer()
+    return 0 if ok == len(results) else 1
 
 
 def _cmd_ip(cfg: FreqConfig, pack, args) -> int:
