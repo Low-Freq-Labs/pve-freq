@@ -3658,18 +3658,19 @@ def _init_dry_run(cfg):
     steps = [
         "1. Check prerequisites (ssh, ssh-keygen, openssl)",
         "2. Create data directories",
-        f"3. Create service account '{cfg.ssh_service_account}' with NOPASSWD sudo (group created automatically)",
-        f"4. Generate ed25519 + RSA-4096 SSH keypairs in {cfg.key_dir}/",
+        "3. Configure cluster settings (PVE nodes, gateway, SSH mode)",
+        f"4. Create service account '{cfg.ssh_service_account}' with NOPASSWD sudo",
+        f"5. Generate ed25519 + RSA-4096 SSH keypairs in {cfg.key_dir}/",
         "6. Deploy public key to local service account",
         "7. Initialize encrypted vault (AES-256-CBC)",
         "8. Store service account password in vault",
     ]
 
+    step_n = 9
     if cfg.pve_nodes:
         for ip in cfg.pve_nodes:
-            steps.append(f"9. Deploy to PVE node {ip}: useradd + sudo + ed25519 key")
-
-    step_n = 10
+            steps.append(f"{step_n}. Deploy to PVE node {ip}: useradd + sudo + ed25519 key")
+            step_n += 1
     if cfg.hosts:
         for h in cfg.hosts:
             if h.htype in ("linux", "pve", "docker", "truenas"):
