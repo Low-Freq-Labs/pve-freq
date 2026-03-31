@@ -183,7 +183,8 @@ var API={
   ZFS:'/api/zfs',BACKUP:'/api/backup',DISCOVER:'/api/discover',GWIPE:'/api/gwipe',
   VM_ADD_DISK:'/api/vm/add-disk',VM_TAG:'/api/vm/tag',VM_CLONE:'/api/vm/clone',VM_MIGRATE:'/api/vm/migrate',
   COMPOSE_UP:'/api/containers/compose-up',COMPOSE_DOWN:'/api/containers/compose-down',COMPOSE_VIEW:'/api/containers/compose-view',
-  BACKUP_LIST:'/api/backup/list',BACKUP_CREATE:'/api/backup/create',BACKUP_RESTORE:'/api/backup/restore'
+  BACKUP_LIST:'/api/backup/list',BACKUP_CREATE:'/api/backup/create',BACKUP_RESTORE:'/api/backup/restore',
+  EVENTS:'/api/events'
 };
 var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switch */
 
@@ -688,6 +689,59 @@ function _silentFleetRefresh(){
   }).catch(function(){_fleetInFlight=false;});
 }
 startSilentRefresh();
+
+/* === SSE Live Updates ===
+   EventSource connects to /api/events for push updates.
+   When connected, polling slows to fallback intervals.
+   On disconnect, original polling intervals are restored. */
+var _evtSource=null;
+function startSSE(){
+  if(typeof EventSource==='undefined')return;/* browser doesn't support SSE */
+  if(_evtSource)_evtSource.close();
+  _evtSource=new EventSource(API.EVENTS);
+
+  _evtSource.addEventListener('cache_update',function(e){
+    var d=JSON.parse(e.data);
+    if(d.key==='health')_silentHealthRefresh();
+    if(d.key==='fleet_overview')_silentFleetRefresh();
+    if(d.key==='infra_quick'&&_currentView==='infra')_safe(VIEW_LOADERS.infra||loadHome);
+  });
+
+  _evtSource.addEventListener('health_change',function(e){
+    var d=JSON.parse(e.data);
+    var label=d['new']==='healthy'?'ONLINE':'OFFLINE';
+    toast(d.host+' is now '+label,d['new']==='healthy'?'success':'error');
+  });
+
+  _evtSource.addEventListener('vm_state',function(e){
+    var d=JSON.parse(e.data);
+    var label=d.name||('VM '+d.vmid);
+    toast(label+': '+d.old+' \u2192 '+d['new'],'info');
+  });
+
+  _evtSource.addEventListener('alert',function(e){
+    var d=JSON.parse(e.data);
+    toast('Alert: '+d.message,'error');
+  });
+
+  _evtSource.onopen=function(){
+    /* SSE connected — slow down polling to safety fallback */
+    if(_healthTimer)clearInterval(_healthTimer);
+    if(_fleetTimer)clearInterval(_fleetTimer);
+    _healthTimer=setInterval(_silentHealthRefresh,60000);
+    _fleetTimer=setInterval(_silentFleetRefresh,120000);
+  };
+
+  _evtSource.onerror=function(){
+    /* SSE disconnected — restore fast polling until reconnect */
+    if(_healthTimer)clearInterval(_healthTimer);
+    if(_fleetTimer)clearInterval(_fleetTimer);
+    _healthTimer=setInterval(_silentHealthRefresh,15000);
+    _fleetTimer=setInterval(_silentFleetRefresh,60000);
+  };
+}
+startSSE();
+
 /* === Page composite loaders === */
 function renderGlobalSettings(){
   var s=_loadSettings();

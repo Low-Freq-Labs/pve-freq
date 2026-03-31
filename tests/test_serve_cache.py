@@ -538,5 +538,76 @@ class TestCacheConstants(unittest.TestCase):
         self.assertEqual(set(_bg_cache.keys()), set(_bg_cache_ts.keys()))
 
 
+# ═══════════════════════════════════════════════════════════════════
+# SSE Event Bus
+# ═══════════════════════════════════════════════════════════════════
+
+class TestSSEEventBus(unittest.TestCase):
+    """Tests for the SSE pub/sub mechanism."""
+
+    def setUp(self):
+        from freq.modules.serve import _sse_clients, _sse_lock
+        # Clear any leftover clients between tests
+        with _sse_lock:
+            _sse_clients.clear()
+
+    def tearDown(self):
+        from freq.modules.serve import _sse_clients, _sse_lock
+        with _sse_lock:
+            _sse_clients.clear()
+
+    def test_subscribe_adds_client(self):
+        from freq.modules.serve import _sse_subscribe, _sse_clients
+        q = _sse_subscribe()
+        self.assertIn(q, _sse_clients)
+
+    def test_unsubscribe_removes_client(self):
+        from freq.modules.serve import _sse_subscribe, _sse_unsubscribe, _sse_clients
+        q = _sse_subscribe()
+        _sse_unsubscribe(q)
+        self.assertNotIn(q, _sse_clients)
+
+    def test_unsubscribe_missing_is_safe(self):
+        import queue as _q
+        from freq.modules.serve import _sse_unsubscribe
+        _sse_unsubscribe(_q.Queue())  # Should not raise
+
+    def test_broadcast_delivers_to_all(self):
+        from freq.modules.serve import _sse_subscribe, _sse_broadcast
+        q1 = _sse_subscribe()
+        q2 = _sse_subscribe()
+        _sse_broadcast("cache_update", {"key": "health"})
+        self.assertFalse(q1.empty())
+        self.assertFalse(q2.empty())
+        msg1 = q1.get_nowait()
+        msg2 = q2.get_nowait()
+        self.assertEqual(msg1["type"], "cache_update")
+        self.assertEqual(msg2["data"]["key"], "health")
+
+    def test_broadcast_drops_slow_client(self):
+        import queue as _q
+        from freq.modules.serve import _sse_subscribe, _sse_broadcast, _sse_clients
+        q = _sse_subscribe()
+        # Fill the queue (maxsize=50)
+        for i in range(50):
+            q.put_nowait({"type": "filler", "data": {}})
+        # Next broadcast should drop this client
+        _sse_broadcast("cache_update", {"key": "test"})
+        self.assertNotIn(q, _sse_clients)
+
+    def test_broadcast_no_clients_is_safe(self):
+        from freq.modules.serve import _sse_broadcast
+        _sse_broadcast("test", {"foo": "bar"})  # Should not raise
+
+    def test_broadcast_event_structure(self):
+        from freq.modules.serve import _sse_subscribe, _sse_broadcast
+        q = _sse_subscribe()
+        _sse_broadcast("vm_state", {"vmid": 100, "old": "running", "new": "stopped"})
+        msg = q.get_nowait()
+        self.assertEqual(msg["type"], "vm_state")
+        self.assertEqual(msg["data"]["vmid"], 100)
+        self.assertEqual(msg["data"]["old"], "running")
+
+
 if __name__ == "__main__":
     unittest.main()

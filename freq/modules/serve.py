@@ -103,6 +103,53 @@ NODE_DISCOVERY_INTERVAL = 300     # 5 min — discover PVE cluster nodes
 VM_TAGS_INTERVAL = 300            # 5 min — refresh PVE VM tags
 _bg_lock = threading.Lock()
 
+# ── SSE EVENT BUS ────────────────────────────────────────────────────────
+# Lightweight pub/sub: each connected EventSource client gets a Queue.
+# Background probes broadcast events after cache updates.
+
+import queue
+
+_sse_clients: list = []          # list of queue.Queue, one per SSE client
+_sse_lock = threading.Lock()     # guards _sse_clients list
+
+
+def _sse_subscribe() -> queue.Queue:
+    """Register a new SSE client. Returns a Queue to read events from."""
+    q = queue.Queue(maxsize=50)
+    with _sse_lock:
+        _sse_clients.append(q)
+    return q
+
+
+def _sse_unsubscribe(q: queue.Queue):
+    """Remove an SSE client queue."""
+    with _sse_lock:
+        try:
+            _sse_clients.remove(q)
+        except ValueError:
+            pass
+
+
+def _sse_broadcast(event_type: str, data: dict):
+    """Push an event to all connected SSE clients.
+
+    Drops clients whose queue is full (slow/dead connections).
+    Must NOT be called while holding _bg_lock.
+    """
+    msg = {"type": event_type, "data": data}
+    dead = []
+    with _sse_lock:
+        for q in _sse_clients:
+            try:
+                q.put_nowait(msg)
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            try:
+                _sse_clients.remove(q)
+            except ValueError:
+                pass
+
 
 def _cache_path(name):
     global CACHE_DIR
@@ -275,6 +322,9 @@ def _bg_probe_infra():
         _bg_cache_ts["infra_quick"] = time.time()
     _save_disk_cache("infra_quick", result)
 
+    # SSE: broadcast infra cache update
+    _sse_broadcast("cache_update", {"key": "infra_quick", "ts": time.time()})
+
 
 def _bg_probe_health():
     """Probe all hosts for health — runs in background thread."""
@@ -390,10 +440,22 @@ def _bg_probe_health():
 
     result = {"duration": round(time.monotonic() - start, 1), "hosts": host_data,
               "probed_at": time.time(), "node_containers": node_containers}
+    # Snapshot old health for SSE diff
     with _bg_lock:
+        old_health = _bg_cache.get("health")
         _bg_cache["health"] = result
         _bg_cache_ts["health"] = time.time()
     _save_disk_cache("health", result)
+
+    # SSE: broadcast cache_update + per-host health_change events
+    _sse_broadcast("cache_update", {"key": "health", "ts": time.time()})
+    if old_health and isinstance(old_health, dict):
+        old_status = {h["label"]: h["status"] for h in old_health.get("hosts", [])}
+        for h in host_data:
+            prev = old_status.get(h["label"])
+            if prev and prev != h["status"]:
+                _sse_broadcast("health_change", {
+                    "host": h["label"], "old": prev, "new": h["status"]})
 
     # Evaluate alert rules against fresh health data
     _evaluate_alert_rules(cfg, result)
@@ -541,10 +603,23 @@ def _bg_probe_fleet_overview():
         "duration": duration,
     }
 
+    # Snapshot old fleet for SSE diff
     with _bg_lock:
+        old_fleet = _bg_cache.get("fleet_overview")
         _bg_cache["fleet_overview"] = result
         _bg_cache_ts["fleet_overview"] = time.time()
     _save_disk_cache("fleet_overview", result)
+
+    # SSE: broadcast cache_update + per-VM vm_state events
+    _sse_broadcast("cache_update", {"key": "fleet_overview", "ts": time.time()})
+    if old_fleet and isinstance(old_fleet, dict):
+        old_vm_status = {v["vmid"]: v["status"] for v in old_fleet.get("vms", [])}
+        for v in vm_list:
+            prev = old_vm_status.get(v["vmid"])
+            if prev and prev != v["status"]:
+                _sse_broadcast("vm_state", {
+                    "vmid": v["vmid"], "name": v.get("name", ""),
+                    "old": prev, "new": v["status"]})
 
 
 def _bg_discover_pve_nodes():
@@ -855,6 +930,10 @@ def _evaluate_alert_rules(cfg, health_data):
                 except Exception as e:
                     logger.warn(f"Alert notification failed: {e}")
                 history.append(alert_to_dict(alert))
+                # SSE: broadcast alert event
+                _sse_broadcast("alert", {
+                    "rule": alert.rule_name, "message": alert.message,
+                    "severity": alert.severity})
             save_alert_history(CACHE_DIR, history)
     except Exception as e:
         logger.warn(f"Alert rule evaluation failed: {e}")
@@ -1466,6 +1545,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         # Documentation
         "/api/docs": "_serve_api_docs",
         "/api/openapi.json": "_serve_openapi_json",
+        # Server-Sent Events (no auth — dashboard live updates)
+        "/api/events": "_serve_events",
         # Orchestration endpoints (no auth)
         "/healthz": "_serve_healthz",
         "/readyz": "_serve_readyz",
@@ -1508,6 +1589,43 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._proxy_watchdog()
         else:
             self.send_error(404)
+
+    # ── Server-Sent Events ────────────────────────────────────────────────
+
+    def _serve_events(self):
+        """SSE endpoint — streams live updates to the dashboard.
+
+        Keeps the connection open and pushes events as they arrive from
+        background cache probes. Each client gets its own Queue via the
+        SSE event bus. Sends keepalive comments every 15s.
+        """
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+        q = _sse_subscribe()
+        try:
+            # Initial keepalive so the client knows we're alive
+            self.wfile.write(b": connected\n\n")
+            self.wfile.flush()
+
+            while True:
+                try:
+                    event = q.get(timeout=15)
+                    line = f"event: {event['type']}\ndata: {json.dumps(event['data'])}\n\n"
+                    self.wfile.write(line.encode())
+                    self.wfile.flush()
+                except queue.Empty:
+                    # Keepalive — prevents proxies/browsers from closing idle connections
+                    self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass  # Client disconnected
+        finally:
+            _sse_unsubscribe(q)
 
     # ── Topology ─────────────────────────────────────────────────────────
 

@@ -850,3 +850,21 @@ class TestJsonResponse:
 
         data = _get_json(h)
         assert data == complex_data
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SSE Endpoint
+# ═══════════════════════════════════════════════════════════════════
+
+class TestSSEEndpoint:
+    """Tests for /api/events SSE route."""
+
+    def test_events_route_registered(self):
+        """The /api/events route is in the routing table."""
+        assert "/api/events" in FreqHandler._ROUTES
+        assert FreqHandler._ROUTES["/api/events"] == "_serve_events"
+
+    def test_serve_events_method_exists(self):
+        """FreqHandler has a _serve_events method."""
+        assert hasattr(FreqHandler, "_serve_events")
+        assert callable(getattr(FreqHandler, "_serve_events"))
