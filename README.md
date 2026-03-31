@@ -11,6 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-7B2FBE.svg)](#requirements)
 [![LOC](https://img.shields.io/badge/LOC-53%2C400-7B2FBE.svg)](ARCHITECTURE.md)
+[![API](https://img.shields.io/badge/API_endpoints-146-7B2FBE.svg)](docs/API-REFERENCE.md)
 
 *Drop the bass, not the uptime.*
 
@@ -150,12 +151,14 @@ freq status
 | Smart Commands | 4 | Knowledge base, risk analysis, sweep, patrol |
 | Deployment | 2 | 10-phase init wizard, configuration |
 
-Run `freq help` for the full command reference.
+Run `freq help` for a summary or see [docs/CLI-REFERENCE.md](docs/CLI-REFERENCE.md) for the full reference with examples.
 
 ### Web Dashboard
 
-100+ API endpoints. 7 views. Single-file SPA. Zero JavaScript dependencies.
-Start with `freq serve` — runs at `http://localhost:8888`.
+146 API endpoints. 7 views. Single-file SPA. Zero JavaScript dependencies.
+Live updates via Server-Sent Events. Start with `freq serve` — runs at `http://localhost:8888`.
+
+See [docs/API-REFERENCE.md](docs/API-REFERENCE.md) for the full endpoint list.
 
 ### Interactive TUI
 
@@ -206,18 +209,23 @@ FREQ runs on a single management host. It SSHs into your Proxmox nodes and fleet
 
 ## Configuration
 
-All config lives in `/opt/pve-freq/conf/`:
+All config lives in `/opt/pve-freq/conf/`. FREQ uses TOML format with legacy `.conf` fallback.
 
 | File | Purpose |
 |------|---------|
-| `freq.toml` | Main config — cluster, SSH, VM defaults, safety rules |
-| `hosts.conf` | Fleet host registry — IP, label, type, groups |
+| `freq.toml` | Main config — cluster, SSH, VM defaults, safety rules, services |
+| `hosts.toml` | Fleet host registry — IP, label, type, groups |
 | `fleet-boundaries.toml` | VM permission tiers (probe/operator/admin) |
 | `vlans.toml` | VLAN definitions |
 | `distros.toml` | Cloud image definitions for `freq import` |
 | `containers.toml` | Docker container registry |
+| `risk.toml` | Infrastructure dependency/risk map |
+| `rules.toml` | Alert rules for health monitoring |
+| `playbooks/` | Recovery playbooks (automated remediation) |
 | `personality/` | Personality packs — celebrations, vibes, branding |
 | `plugins/` | Custom command plugins (drop .py files here) |
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete reference with every key documented.
 
 ## Uninstall
 
@@ -229,13 +237,20 @@ sudo freq init --uninstall
 sudo bash install.sh --uninstall
 ```
 
+## Documentation
+
+| Doc | Description |
+|-----|-------------|
+| [CLI Reference](docs/CLI-REFERENCE.md) | All 88 commands with examples |
+| [API Reference](docs/API-REFERENCE.md) | All 146 REST endpoints |
+| [Configuration](docs/CONFIGURATION.md) | Every config key documented |
+| [Architecture](ARCHITECTURE.md) | Design philosophy and code structure |
+| [Quick Reference](docs/QUICK-REFERENCE.md) | Common commands cheat sheet |
+| [Break Glass](docs/BREAK-GLASS.md) | Emergency procedures |
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
-
-## Architecture
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the design philosophy and code structure.
 
 ## License
 
