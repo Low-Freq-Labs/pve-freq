@@ -533,6 +533,35 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--auto-fix", action="store_true", help="Auto-remediate drift")
     p.set_defaults(func=_cmd_patrol)
 
+    p = sub.add_parser("playbook", help="Incident playbook runner")
+    p.add_argument("action", nargs="?", choices=["list", "run"], default="list",
+                   help="List playbooks or run one")
+    p.add_argument("name", nargs="?", help="Playbook filename or name")
+    p.set_defaults(func=_cmd_playbook)
+
+    p = sub.add_parser("federation", help="Multi-site federation")
+    p.add_argument("action", nargs="?", choices=["list", "register", "remove", "poll"],
+                   default="list", help="Action to perform")
+    p.add_argument("--name", help="Site name")
+    p.add_argument("--url", help="Site URL")
+    p.add_argument("--secret", default="", help="Shared secret")
+    p.set_defaults(func=_cmd_federation)
+
+    p = sub.add_parser("gitops", help="GitOps config sync")
+    p.add_argument("action", nargs="?",
+                   choices=["status", "sync", "apply", "diff", "log"],
+                   default="status", help="Action to perform")
+    p.set_defaults(func=_cmd_gitops)
+
+    p = sub.add_parser("chaos", help="Chaos engineering experiments")
+    p.add_argument("action", nargs="?", choices=["list", "run", "log"],
+                   default="list", help="Action to perform")
+    p.add_argument("--type", help="Experiment type")
+    p.add_argument("--host", help="Target host label")
+    p.add_argument("--service", default="", help="Target service name")
+    p.add_argument("--duration", type=int, default=60, help="Duration in seconds (max 300)")
+    p.set_defaults(func=_cmd_chaos)
+
     p = sub.add_parser("capacity", help="Fleet capacity projections")
     p.add_argument("action", nargs="?", choices=["show", "snapshot"], default="show",
                    help="show projections or force a snapshot")
@@ -729,6 +758,10 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("capacity [show|snapshot]", "Fleet capacity projections"),
             ("cost", "Fleet power cost estimates"),
             ("rules [list|create|delete]", "Alert rule management"),
+            ("playbook [list|run]", "Incident playbook runner"),
+            ("federation [list|register|poll]", "Multi-site federation"),
+            ("gitops [status|sync|apply|diff]", "GitOps config sync"),
+            ("chaos [list|run|log]", "Chaos engineering experiments"),
         ]),
         ("Deployment", [
             ("init", "First-run setup wizard"),
@@ -1161,6 +1194,26 @@ def _cmd_sweep(cfg: FreqConfig, pack, args) -> int:
 def _cmd_patrol(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.patrol import cmd_patrol
     return cmd_patrol(cfg, pack, args)
+
+
+def _cmd_playbook(cfg: FreqConfig, pack, args) -> int:
+    from freq.jarvis.playbook import cmd_playbook
+    return cmd_playbook(cfg, pack, args)
+
+
+def _cmd_federation(cfg: FreqConfig, pack, args) -> int:
+    from freq.jarvis.federation import cmd_federation
+    return cmd_federation(cfg, pack, args)
+
+
+def _cmd_gitops(cfg: FreqConfig, pack, args) -> int:
+    from freq.jarvis.gitops import cmd_gitops
+    return cmd_gitops(cfg, pack, args)
+
+
+def _cmd_chaos(cfg: FreqConfig, pack, args) -> int:
+    from freq.jarvis.chaos import cmd_chaos
+    return cmd_chaos(cfg, pack, args)
 
 
 def _cmd_capacity(cfg: FreqConfig, pack, args) -> int:

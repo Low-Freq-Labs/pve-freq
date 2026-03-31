@@ -238,3 +238,78 @@ def federation_summary(sites: list) -> dict:
         "total_hosts": total_hosts,
         "total_healthy": total_healthy,
     }
+
+
+# ── CLI Command ────────────────────────────────────────────────────────
+
+def cmd_federation(cfg, pack, args) -> int:
+    """Manage multi-site federation."""
+    from freq.core import fmt
+
+    action = getattr(args, "action", "list")
+
+    if action == "list":
+        sites = load_sites(cfg.data_dir)
+        fmt.header("Federation")
+        fmt.blank()
+        if not sites:
+            fmt.line(f"  {fmt.C.DIM}No remote sites registered.{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.DIM}Register with: freq federation register --name <name> --url <url>{fmt.C.RESET}")
+        else:
+            fmt.line(f"  {'SITE':<20} {'URL':<35} {'STATUS':<10} {'HOSTS':>6} {'AGE':>8}")
+            fmt.line(f"  {'─' * 82}")
+            for s in sites_to_dicts(sites):
+                status_color = fmt.C.GREEN if s["last_status"] == "ok" else fmt.C.RED
+                age = f"{s['age']}s" if s["age"] >= 0 else "never"
+                enabled = "" if s.get("enabled", True) else f" {fmt.C.DIM}(disabled){fmt.C.RESET}"
+                fmt.line(f"  {s['name']:<20} {s['url']:<35} {status_color}{s['last_status']:<10}{fmt.C.RESET} {s['last_hosts']:>6} {age:>8}{enabled}")
+            fmt.blank()
+            summary = federation_summary(sites)
+            fmt.line(f"  {fmt.C.BOLD}{summary['reachable_sites']}/{summary['total_sites']} sites reachable{fmt.C.RESET}  |  {summary['total_hosts']} hosts  |  {summary['total_healthy']} healthy")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    elif action == "register":
+        name = getattr(args, "name", None)
+        url = getattr(args, "url", None)
+        secret = getattr(args, "secret", "")
+        if not name or not url:
+            fmt.error("Usage: freq federation register --name <name> --url <url> [--secret <secret>]")
+            return 1
+        ok, msg = register_site(cfg.data_dir, name, url, secret or "")
+        fmt.header("Federation")
+        if ok:
+            fmt.step_ok(msg)
+        else:
+            fmt.error(msg)
+        fmt.footer()
+        return 0 if ok else 1
+
+    elif action == "remove":
+        name = getattr(args, "name", None)
+        if not name:
+            fmt.error("Usage: freq federation remove --name <name>")
+            return 1
+        ok, msg = unregister_site(cfg.data_dir, name)
+        fmt.header("Federation")
+        if ok:
+            fmt.step_ok(msg)
+        else:
+            fmt.error(msg)
+        fmt.footer()
+        return 0 if ok else 1
+
+    elif action == "poll":
+        fmt.header("Federation Poll")
+        fmt.blank()
+        sites = poll_all_sites(cfg.data_dir)
+        for s in sites:
+            status_color = fmt.C.GREEN if s.last_status == "ok" else fmt.C.RED
+            fmt.line(f"  {s.name:<20} {status_color}{s.last_status}{fmt.C.RESET}  v{s.last_version}  {s.last_hosts} hosts")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    fmt.error(f"Unknown action: {action}")
+    return 1

@@ -208,3 +208,66 @@ def result_to_dict(result: StepResult) -> dict:
         "error": result.error[:200],
         "duration": round(result.duration, 2),
     }
+
+
+# ── CLI Command ────────────────────────────────────────────────────────
+
+def cmd_playbook(cfg, pack, args) -> int:
+    """List and run incident playbooks."""
+    from freq.core import fmt
+    from freq.core.ssh import run as ssh_run
+
+    action = getattr(args, "action", "list")
+    name = getattr(args, "name", None)
+
+    playbooks = load_playbooks(cfg.conf_dir)
+
+    if action == "list":
+        fmt.header("Playbooks")
+        fmt.blank()
+        if not playbooks:
+            fmt.line(f"  {fmt.C.DIM}No playbooks found in conf/playbooks/.{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.DIM}Create .toml files with [playbook] and [[step]] sections.{fmt.C.RESET}")
+        else:
+            for pb in playbooks:
+                trigger = f" → trigger: {pb.trigger}" if pb.trigger else ""
+                fmt.line(f"  {fmt.C.BOLD}{pb.name}{fmt.C.RESET}  {fmt.C.DIM}({pb.filename}){trigger}{fmt.C.RESET}")
+                if pb.description:
+                    fmt.line(f"    {pb.description}")
+                fmt.line(f"    {len(pb.steps)} steps: {', '.join(s.name for s in pb.steps)}")
+                fmt.blank()
+        fmt.footer()
+        return 0
+
+    elif action == "run":
+        if not name:
+            fmt.error("Usage: freq playbook run <filename>")
+            return 1
+        pb = next((p for p in playbooks if p.filename == name or p.name == name), None)
+        if not pb:
+            fmt.error(f"Playbook not found: {name}")
+            return 1
+
+        fmt.header(f"Playbook: {pb.name}")
+        fmt.blank()
+        ok = 0
+        fail = 0
+        for i, step in enumerate(pb.steps, 1):
+            if step.confirm:
+                fmt.line(f"  {fmt.C.YELLOW}Step {i} requires confirmation — skipping in CLI mode{fmt.C.RESET}")
+                continue
+            fmt.line(f"  {fmt.C.DIM}[{i}/{len(pb.steps)}]{fmt.C.RESET} {step.name} ({step.step_type}) → {step.target}")
+            result = run_step(step, ssh_run, cfg)
+            if result.status == "pass":
+                fmt.step_ok(f"{step.name}: {result.output[:80]}" if result.output else step.name)
+                ok += 1
+            else:
+                fmt.error(f"{step.name}: {result.error[:80]}")
+                fail += 1
+        fmt.blank()
+        fmt.line(f"  {fmt.C.BOLD}Results: {ok} passed, {fail} failed{fmt.C.RESET}")
+        fmt.footer()
+        return 0 if fail == 0 else 1
+
+    fmt.error(f"Unknown action: {action}")
+    return 1

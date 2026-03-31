@@ -298,3 +298,82 @@ def state_to_dict(state: SyncState) -> dict:
         "pending_changes": state.pending_changes,
         "status": state.status,
     }
+
+
+# ── CLI Command ────────────────────────────────────────────────────────
+
+def cmd_gitops(cfg, pack, args) -> int:
+    """GitOps config sync management."""
+    from freq.core import fmt
+
+    action = getattr(args, "action", "status")
+
+    if action == "status":
+        fmt.header("GitOps Config Sync")
+        fmt.blank()
+        gcfg = load_gitops_config(cfg.conf_dir)
+        if not gcfg.repo_url:
+            fmt.line(f"  {fmt.C.YELLOW}GitOps not configured.{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.DIM}Add [gitops] section to freq.toml with repo_url.{fmt.C.RESET}")
+            fmt.blank()
+            fmt.footer()
+            return 0
+        state = load_state(cfg.data_dir)
+        sd = state_to_dict(state)
+        fmt.line(f"  Repo:     {gcfg.repo_url}")
+        fmt.line(f"  Branch:   {gcfg.branch}")
+        fmt.line(f"  Status:   {sd['status']}")
+        fmt.line(f"  Commit:   {sd['last_commit'] or 'none'}")
+        if sd["last_message"]:
+            fmt.line(f"  Message:  {sd['last_message']}")
+        fmt.line(f"  Pending:  {sd['pending_changes']} changes")
+        if sd["last_error"]:
+            fmt.line(f"  {fmt.C.RED}Error: {sd['last_error']}{fmt.C.RESET}")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    elif action == "sync":
+        fmt.header("GitOps Sync")
+        state = sync(cfg.data_dir)
+        sd = state_to_dict(state)
+        if sd["last_error"]:
+            fmt.error(sd["last_error"])
+            return 1
+        fmt.step_ok(f"Synced — {sd['pending_changes']} pending changes, commit: {sd['last_commit']}")
+        fmt.footer()
+        return 0
+
+    elif action == "apply":
+        fmt.header("GitOps Apply")
+        ok, msg = apply_changes(cfg.data_dir)
+        if ok:
+            fmt.step_ok(msg)
+        else:
+            fmt.error(msg)
+        fmt.footer()
+        return 0 if ok else 1
+
+    elif action == "diff":
+        diff_text = get_diff(cfg.data_dir)
+        if diff_text:
+            print(diff_text)
+        else:
+            print("No changes.")
+        return 0
+
+    elif action == "log":
+        fmt.header("GitOps Log")
+        fmt.blank()
+        entries = get_log(cfg.data_dir, count=20)
+        if not entries:
+            fmt.line(f"  {fmt.C.DIM}No commits yet.{fmt.C.RESET}")
+        else:
+            for e in entries:
+                fmt.line(f"  {fmt.C.DIM}{e.get('date', '')}{fmt.C.RESET} {fmt.C.CYAN}{e.get('hash', '')[:8]}{fmt.C.RESET} {e.get('message', '')}")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    fmt.error(f"Unknown action: {action}")
+    return 1

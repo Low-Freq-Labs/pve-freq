@@ -904,6 +904,56 @@ def _menu_lab(cfg, pack):
         _pause()
 
 
+def _menu_jarvis(cfg, pack):
+    """JARVIS smart commands submenu."""
+    crumb = ["PVE FREQ", "JARVIS"]
+    while True:
+        _render_menu("JARVIS — Smart Commands", [
+            ("1", "playbook list", "List incident playbooks", ""),
+            ("2", "playbook run", "Run a playbook", Tag.RISKY),
+            ("3", "federation list", "Multi-site status", ""),
+            ("4", "federation poll", "Poll all remote sites", ""),
+            ("5", "gitops status", "Config sync status", ""),
+            ("6", "gitops sync", "Fetch from remote", ""),
+            ("7", "gitops diff", "Show pending changes", ""),
+            ("8", "chaos list", "Experiment types", ""),
+            ("9", "chaos run", "Run chaos experiment", Tag.DESTRUCTIVE),
+            ("0", "Back", "", ""),
+        ], crumb)
+
+        ch = _getch()
+        if ch in ("0", "b", "q", "\x1b"):
+            return
+        elif ch == "1":
+            _run_command(cfg, pack, "playbook")
+        elif ch == "2":
+            print()
+            name = _input("Playbook name/filename:")
+            if name:
+                _run_argv(cfg, pack, ["playbook", "run", name])
+        elif ch == "3":
+            _run_command(cfg, pack, "federation")
+        elif ch == "4":
+            _run_argv(cfg, pack, ["federation", "poll"])
+        elif ch == "5":
+            _run_command(cfg, pack, "gitops")
+        elif ch == "6":
+            _run_argv(cfg, pack, ["gitops", "sync"])
+        elif ch == "7":
+            _run_argv(cfg, pack, ["gitops", "diff"])
+        elif ch == "8":
+            _run_command(cfg, pack, "chaos")
+        elif ch == "9":
+            print()
+            etype = _input("Experiment type (service_kill/service_restart/cpu_stress/disk_fill/network_delay):")
+            host = _input("Target host:")
+            if etype and host:
+                _run_argv(cfg, pack, ["chaos", "run", "--type", etype, "--host", host])
+        else:
+            continue
+        _pause()
+
+
 def _menu_monitoring(cfg, pack):
     """Monitoring submenu."""
     crumb = ["PVE FREQ", "Monitoring"]
@@ -1206,6 +1256,7 @@ def run(cfg, pack) -> int:
             ("l", "Learn", "Search the knowledge base", ""),
             ("r", "Risk", "Kill-chain blast radius analysis", ""),
             ("w", "Sweep", "Full audit + policy pipeline", ""),
+            ("y", "JARVIS", "Playbooks, federation, gitops, chaos", ""),
             None,
             "Agent Platform",
             ("a", "Agents", "Create & manage AI specialists", ""),
@@ -1312,6 +1363,8 @@ def run(cfg, pack) -> int:
         elif ch_lower == "w":
             _run_command(cfg, pack, "sweep")
             _pause()
+        elif ch_lower == "y":
+            _menu_jarvis(cfg, pack)
         elif ch_lower == "a":
             _menu_agents(cfg, pack)
         elif ch_lower == "m":

@@ -343,3 +343,95 @@ def list_experiment_types() -> list:
         {"type": k, "description": v["description"]}
         for k, v in EXPERIMENTS.items()
     ]
+
+
+# ── CLI Command ────────────────────────────────────────────────────────
+
+def cmd_chaos(cfg, pack, args) -> int:
+    """Chaos engineering experiments."""
+    from freq.core import fmt
+    from freq.core.ssh import run as ssh_run
+
+    action = getattr(args, "action", "list")
+
+    if action == "list":
+        fmt.header("Chaos Engineering")
+        fmt.blank()
+        for et in list_experiment_types():
+            fmt.line(f"  {fmt.C.CYAN}{et['type']:<20}{fmt.C.RESET} {et['description']}")
+        fmt.blank()
+        fmt.line(f"  {fmt.C.DIM}Usage: freq chaos run --type <type> --host <host> [--service <svc>] [--duration <sec>]{fmt.C.RESET}")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    elif action == "run":
+        exp_type = getattr(args, "type", None)
+        host = getattr(args, "host", None)
+        service = getattr(args, "service", "")
+        duration = getattr(args, "duration", 60)
+
+        if not exp_type or not host:
+            fmt.error("Usage: freq chaos run --type <type> --host <host>")
+            return 1
+
+        # Safety check
+        safe, msg = check_safety(host, cfg)
+        if not safe:
+            fmt.error(f"Safety check failed: {msg}")
+            return 1
+
+        exp = Experiment(
+            name=f"cli-{exp_type}-{host}",
+            experiment_type=exp_type,
+            target_host=host,
+            target_service=service,
+            duration=min(duration, 300),  # cap at 5 minutes
+        )
+
+        ok, msg = validate_experiment(exp)
+        if not ok:
+            fmt.error(msg)
+            return 1
+
+        # Confirm
+        if not getattr(args, "yes", False):
+            fmt.warn(f"About to run {exp_type} on {host} for {exp.duration}s")
+            confirm = input(f"  Type YES to proceed: ")
+            if confirm.strip() != "YES":
+                fmt.line(f"  {fmt.C.DIM}Cancelled.{fmt.C.RESET}")
+                return 0
+
+        fmt.header(f"Chaos: {exp_type} → {host}")
+        fmt.blank()
+        result = run_experiment(exp, ssh_run, cfg)
+
+        if result.status == "pass":
+            fmt.step_ok(f"Experiment completed — recovered in {result.recovery_time:.1f}s")
+        elif result.status == "fail":
+            fmt.error(f"Experiment failed: {result.error}")
+        else:
+            fmt.warn(f"Status: {result.status}")
+
+        if result.inject_output:
+            fmt.line(f"  {fmt.C.DIM}Output: {result.inject_output[:100]}{fmt.C.RESET}")
+        fmt.blank()
+        fmt.footer()
+        return 0 if result.status == "pass" else 1
+
+    elif action == "log":
+        fmt.header("Chaos Experiment Log")
+        fmt.blank()
+        entries = load_experiment_log(cfg.data_dir, count=20)
+        if not entries:
+            fmt.line(f"  {fmt.C.DIM}No experiments recorded yet.{fmt.C.RESET}")
+        else:
+            for e in entries:
+                status_color = fmt.C.GREEN if e.get("status") == "pass" else fmt.C.RED
+                fmt.line(f"  {fmt.C.DIM}{e.get('experiment_name', '?')}{fmt.C.RESET} {status_color}{e.get('status', '?')}{fmt.C.RESET} {e.get('duration', 0):.1f}s → {e.get('target_host', '?')}")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    fmt.error(f"Unknown action: {action}")
+    return 1
