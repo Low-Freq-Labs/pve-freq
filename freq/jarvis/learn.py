@@ -199,7 +199,14 @@ def cmd_learn(cfg: FreqConfig, pack, args) -> int:
     lessons_data, gotchas_data = _load_knowledge(cfg)
 
     db_path = os.path.join(cfg.data_dir, "jarvis", "knowledge.db")
-    conn = _init_db(db_path)
+    try:
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        conn = _init_db(db_path)
+    except OSError:
+        # Fall back to user-local path if data dir is not writable
+        fallback = os.path.join(os.path.expanduser("~"), ".freq", "knowledge.db")
+        os.makedirs(os.path.dirname(fallback), exist_ok=True)
+        conn = _init_db(fallback)
     _seed_db(conn, lessons_data, gotchas_data)
 
     if not query:
