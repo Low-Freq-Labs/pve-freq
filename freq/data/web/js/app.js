@@ -6005,7 +6005,88 @@ function _loadMonitorsWidget(){
   }).catch(function(e){var el=document.getElementById('hw-monitors-list');if(el)el.innerHTML='<div class="empty-state"><p>Monitor check failed</p></div>';});
 }
 /* ═══════════════════════════════════════════════════════════════════
+   GLOBAL SEARCH (Ctrl+K)
+   ═══════════════════════════════════════════════════════════════════ */
+var _searchItems=[];var _searchIdx=-1;
+function openSearch(){
+  var ov=document.getElementById('search-overlay');if(!ov)return;
+  ov.style.display='block';
+  var inp=document.getElementById('search-input');if(inp){inp.value='';inp.focus();}
+  _buildSearchIndex();
+  _renderSearchResults(_searchItems.slice(0,15));
+}
+function closeSearch(){var ov=document.getElementById('search-overlay');if(ov)ov.style.display='none';_searchIdx=-1;}
+function _buildSearchIndex(){
+  _searchItems=[];
+  /* VMs from fleet cache */
+  if(_fleetCache.fo&&_fleetCache.fo.vms){
+    _fleetCache.fo.vms.forEach(function(v){
+      _searchItems.push({type:'vm',label:v.name||'VM '+v.vmid,detail:'VMID '+v.vmid+' \u2022 '+v.node+' \u2022 '+v.status,action:function(){openHost(v.name||('VM '+v.vmid));closeSearch();}});
+    });
+  }
+  /* Hosts */
+  if(_fleetCache.hd&&_fleetCache.hd.hosts){
+    _fleetCache.hd.hosts.forEach(function(h){
+      _searchItems.push({type:'host',label:h.label,detail:h.ip+' \u2022 '+h.type+' \u2022 '+h.status,action:function(){openHost(h.label);closeSearch();}});
+    });
+  }
+  /* Navigation views */
+  var views=[{label:'Home',view:'home'},{label:'Fleet',view:'fleet'},{label:'Docker',view:'docker'},{label:'Media',view:'media'},{label:'Security',view:'security'},{label:'Topology',view:'topology'},{label:'Capacity',view:'capacity'},{label:'Playbooks',view:'playbooks'}];
+  views.forEach(function(v){_searchItems.push({type:'nav',label:v.label,detail:'Navigate to '+v.label+' view',action:function(){showView(v.view);closeSearch();}});});
+}
+function _globalSearchFilter(query){
+  if(!query){_renderSearchResults(_searchItems.slice(0,15));_searchIdx=-1;return;}
+  var q=query.toLowerCase();
+  var matches=_searchItems.filter(function(item){return item.label.toLowerCase().indexOf(q)>=0||item.detail.toLowerCase().indexOf(q)>=0;});
+  _renderSearchResults(matches.slice(0,15));
+  _searchIdx=-1;
+}
+function _renderSearchResults(items){
+  var el=document.getElementById('search-results');if(!el)return;
+  if(!items.length){el.innerHTML='<div style="padding:16px;text-align:center;color:var(--text-dim)">No results</div>';return;}
+  var h='';items.forEach(function(item,i){
+    var icon=item.type==='vm'?'\u26a1':item.type==='host'?'\u2699':'\u2192';
+    h+='<div class="search-item" data-idx="'+i+'" style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;border-radius:6px" onmouseenter="this.style.background=\'var(--border)\'" onmouseleave="this.style.background=\'transparent\'" onclick="_searchItems._filtered['+i+'].action()">';
+    h+='<span>'+icon+'</span>';
+    h+='<div style="flex:1"><div style="font-weight:500">'+_esc(item.label)+'</div><div style="font-size:11px;color:var(--text-dim)">'+_esc(item.detail)+'</div></div>';
+    h+='<span style="font-size:10px;color:var(--text-dim);text-transform:uppercase">'+item.type+'</span>';
+    h+='</div>';
+  });
+  el.innerHTML=h;
+  _searchItems._filtered=items;
+}
+function _globalSearchKeydown(e){
+  var items=_searchItems._filtered||[];
+  if(e.key==='Escape'){closeSearch();return;}
+  if(e.key==='ArrowDown'){e.preventDefault();_searchIdx=Math.min(_searchIdx+1,items.length-1);_highlightSearchItem();return;}
+  if(e.key==='ArrowUp'){e.preventDefault();_searchIdx=Math.max(_searchIdx-1,0);_highlightSearchItem();return;}
+  if(e.key==='Enter'&&_searchIdx>=0&&items[_searchIdx]){items[_searchIdx].action();return;}
+}
+function _highlightSearchItem(){
+  var el=document.getElementById('search-results');if(!el)return;
+  var items=el.querySelectorAll('.search-item');
+  items.forEach(function(it,i){it.style.background=i===_searchIdx?'var(--border)':'transparent';});
+  if(items[_searchIdx])items[_searchIdx].scrollIntoView({block:'nearest'});
+}
+/* ═══════════════════════════════════════════════════════════════════
+   KEYBOARD SHORTCUTS
+   ═══════════════════════════════════════════════════════════════════ */
+var _NAV_KEYS={'1':'home','2':'fleet','3':'docker','4':'media','5':'security','6':'topology','7':'capacity','8':'playbooks'};
+/* ═══════════════════════════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════════════════════════ */
-document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeHost();closeModal();}});
+document.addEventListener('keydown',function(e){
+  /* Ctrl+K — global search */
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openSearch();return;}
+  /* ? — keyboard shortcuts help */
+  if(e.key==='?'&&!e.ctrlKey&&!e.metaKey&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'){
+    var m=document.getElementById('shortcuts-modal');if(m)m.style.display=m.style.display==='none'?'block':'none';return;
+  }
+  /* Escape — close everything */
+  if(e.key==='Escape'){closeSearch();closeHost();closeModal();var sm=document.getElementById('shortcuts-modal');if(sm)sm.style.display='none';return;}
+  /* 1-8 — navigate views (only when not in input) */
+  if(_NAV_KEYS[e.key]&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'&&!e.ctrlKey&&!e.metaKey){
+    showView(_NAV_KEYS[e.key]);return;
+  }
+});
 try{loadHome();renderGlobalSettings();}catch(e){console.error(e);}
