@@ -1600,6 +1600,10 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/storage/health": "_serve_storage_health",
         "/api/media/tdarr": "_serve_media_tdarr",
         "/api/media/downloads/detail": "_serve_media_downloads_detail",
+        # Config & Deploy
+        "/api/config/view": "_serve_config_view",
+        "/api/deploy/log": "_serve_deploy_log",
+        "/api/vm/wizard-defaults": "_serve_vm_wizard_defaults",
         # Activity Feed
         "/api/activity": "_serve_activity",
         # HTTP Monitors
@@ -2550,6 +2554,83 @@ class FreqHandler(BaseHTTPRequestHandler):
                 break
 
         self._json_response(downloads)
+
+    # ── Config & Deploy ────────────────────────────────────────────────
+
+    def _serve_config_view(self):
+        """GET /api/config/view — read-only view of freq.toml settings."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
+        cfg = load_config()
+        # Return safe config values (no secrets)
+        safe_config = {
+            "version": cfg.version,
+            "brand": cfg.brand,
+            "build": cfg.build,
+            "debug": cfg.debug,
+            "ssh_service_account": cfg.ssh_service_account,
+            "ssh_connect_timeout": cfg.ssh_connect_timeout,
+            "ssh_max_parallel": cfg.ssh_max_parallel,
+            "ssh_mode": getattr(cfg, "ssh_mode", "sudo"),
+            "pve_nodes": cfg.pve_node_names,
+            "vm_defaults": {
+                "cores": cfg.vm_default_cores,
+                "ram": cfg.vm_default_ram,
+                "disk": cfg.vm_default_disk,
+                "cpu": cfg.vm_cpu,
+                "machine": cfg.vm_machine,
+            },
+            "cluster_name": cfg.cluster_name,
+            "timezone": cfg.timezone,
+            "dashboard_port": cfg.dashboard_port,
+            "nic_bridge": cfg.nic_bridge,
+            "hosts_count": len(cfg.hosts),
+            "vlans_count": len(cfg.vlans),
+            "monitors_count": len(cfg.monitors),
+        }
+        self._json_response({"config": safe_config})
+
+    def _serve_deploy_log(self):
+        """GET /api/deploy/log — recent git commits from the install dir."""
+        cfg = load_config()
+        import subprocess
+        try:
+            r = subprocess.run(
+                ["git", "log", "--oneline", "-20", "--format=%H|%s|%ar"],
+                cwd=cfg.install_dir,
+                capture_output=True, text=True, timeout=10,
+            )
+            commits = []
+            if r.returncode == 0:
+                for line in r.stdout.strip().split("\n"):
+                    parts = line.split("|", 2)
+                    if len(parts) >= 3:
+                        commits.append({
+                            "hash": parts[0][:8],
+                            "message": parts[1],
+                            "ago": parts[2],
+                        })
+            self._json_response({"commits": commits, "count": len(commits)})
+        except Exception as e:
+            self._json_response({"commits": [], "count": 0, "error": str(e)})
+
+    def _serve_vm_wizard_defaults(self):
+        """GET /api/vm/wizard-defaults — defaults for VM creation wizard."""
+        cfg = load_config()
+        profiles = getattr(cfg, "template_profiles", {})
+        self._json_response({
+            "defaults": {
+                "cores": cfg.vm_default_cores,
+                "ram": cfg.vm_default_ram,
+                "disk": cfg.vm_default_disk,
+                "cpu": cfg.vm_cpu,
+            },
+            "profiles": profiles,
+            "nodes": cfg.pve_node_names,
+            "vlans": [{"name": v.name, "id": v.id, "subnet": v.subnet} for v in cfg.vlans],
+            "distros": [{"key": d.key, "name": d.name} for d in cfg.distros],
+        })
 
     # ── Activity Feed ──────────────────────────────────────────────────
 

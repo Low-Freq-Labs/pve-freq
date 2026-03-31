@@ -470,6 +470,56 @@ var WIDGET_REGISTRY=[
       t.innerHTML=h;
     }).catch(function(e){var t=document.getElementById('hw-tdarr');if(t)t.innerHTML='<div class="empty-state"><p>Tdarr unavailable</p></div>';});
   }},
+  {id:'w-deploy-log',page:'OPS',label:'Deploy Log',loader:function(el){
+    el.innerHTML='<div id="hw-deploy-log"><div class="skeleton"></div></div>';
+    fetch('/api/deploy/log').then(function(r){return r.json()}).then(function(d){
+      var t=document.getElementById('hw-deploy-log');if(!t)return;
+      if(!d.commits||!d.commits.length){t.innerHTML='<div class="empty-state"><p>No deploy history</p></div>';return;}
+      var h='';d.commits.forEach(function(c){
+        h+='<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">';
+        h+='<code style="color:var(--purple-light);flex-shrink:0">'+c.hash+'</code>';
+        h+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(c.message)+'</span>';
+        h+='<span style="flex-shrink:0;color:var(--text-dim)">'+_esc(c.ago)+'</span>';
+        h+='</div>';
+      });
+      t.innerHTML=h;
+    }).catch(function(e){var t=document.getElementById('hw-deploy-log');if(t)t.innerHTML='<div class="empty-state"><p>Deploy log unavailable</p></div>';});
+  }},
+  {id:'w-config-viewer',page:'OPS',label:'Config Viewer',loader:function(el){
+    el.innerHTML='<div id="hw-config-view"><div class="skeleton"></div></div>';
+    fetch('/api/config/view?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+      var t=document.getElementById('hw-config-view');if(!t)return;
+      if(d.error){t.innerHTML='<div class="empty-state"><p>'+_esc(d.error)+'</p></div>';return;}
+      var c=d.config;var h='';
+      var kv=function(k,v){return '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px"><span style="color:var(--text-dim)">'+k+'</span><span>'+_esc(String(v))+'</span></div>';};
+      h+=kv('Version',c.version);h+=kv('Brand',c.brand);h+=kv('Cluster',c.cluster_name||'(not set)');
+      h+=kv('SSH Mode',c.ssh_mode);h+=kv('SSH Account',c.ssh_service_account);
+      h+=kv('PVE Nodes',c.pve_nodes?c.pve_nodes.join(', '):'none');
+      h+=kv('VM Defaults',c.vm_defaults.cores+' cores / '+(c.vm_defaults.ram/1024)+'GB / '+c.vm_defaults.disk+'GB');
+      h+=kv('Hosts',c.hosts_count);h+=kv('VLANs',c.vlans_count);h+=kv('Monitors',c.monitors_count);
+      t.innerHTML=h;
+    }).catch(function(e){var t=document.getElementById('hw-config-view');if(t)t.innerHTML='<div class="empty-state"><p>Config unavailable</p></div>';});
+  }},
+  {id:'w-vm-wizard',page:'FLEET',label:'VM Wizard',loader:function(el){
+    el.innerHTML='<div id="hw-vm-wizard"><div class="skeleton"></div></div>';
+    fetch('/api/vm/wizard-defaults').then(function(r){return r.json()}).then(function(d){
+      var t=document.getElementById('hw-vm-wizard');if(!t)return;
+      var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Quick-create presets</div>';
+      if(d.profiles){
+        Object.keys(d.profiles).forEach(function(name){
+          var p=d.profiles[name];
+          h+='<div style="display:flex;justify-content:space-between;padding:6px 8px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;cursor:pointer" ';
+          h+='onclick="document.getElementById(\'hw-vm-wizard-sel\').textContent=\''+name+': '+p.cores+'C/'+Math.round(p.ram/1024)+'G/'+p.disk+'G\'">';
+          h+='<span style="font-weight:500;text-transform:capitalize">'+name+'</span>';
+          h+='<span style="font-size:12px;color:var(--text-dim)">'+p.cores+' cores \u2022 '+Math.round(p.ram/1024)+'GB \u2022 '+p.disk+'GB</span>';
+          h+='</div>';
+        });
+      }
+      h+='<div id="hw-vm-wizard-sel" style="margin-top:8px;font-size:12px;color:var(--purple-light)"></div>';
+      h+='<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Nodes: '+(d.nodes?d.nodes.join(', '):'?')+' \u2022 '+d.distros.length+' images available</div>';
+      t.innerHTML=h;
+    }).catch(function(e){var t=document.getElementById('hw-vm-wizard');if(t)t.innerHTML='<div class="empty-state"><p>Wizard unavailable</p></div>';});
+  }},
   {id:'w-monitors',page:'OPS',label:'HTTP Monitors',loader:function(el){
     el.innerHTML='<div id="hw-monitors-list"><div class="skeleton"></div></div>';
     _loadMonitorsWidget();
