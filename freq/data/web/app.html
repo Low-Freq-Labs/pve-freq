@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE FREQ</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%239B4FDE'/%3E%3Cstop offset='100%25' stop-color='%237B2FBE'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='6' fill='%230d1117'/%3E%3Cpath d='M7 8h18v3.5H11.5v4H20v3.5H11.5V24H7V8z' fill='url(%23g)'/%3E%3Cpath d='M3 21 Q8 15 13 21 Q18 27 23 21 Q28 15 32 21' stroke='%239B4FDE' stroke-width='1.5' fill='none' opacity='0.4'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+
+<!-- Login Overlay -->
+<div id="login-overlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
+  <div style="width:380px;text-align:center">
+    <pre style="font-family:'Courier New',monospace;font-size:10px;line-height:1.1;margin:0 auto 24px;color:var(--purple-light);display:inline-block;text-align:left"> ██████╗ ██╗   ██╗███████╗   ███████╗██████╗ ███████╗ ██████╗
+ ██╔══██╗██║   ██║██╔════╝   ██╔════╝██╔══██╗██╔════╝██╔═══██╗
+ ██████╔╝██║   ██║█████╗     █████╗  ██████╔╝█████╗  ██║   ██║
+ ██╔═══╝ ╚██╗ ██╔╝██╔══╝     ██╔══╝  ██╔══██╗██╔══╝  ██║▄▄ ██║
+ ██║      ╚████╔╝ ███████╗   ██║     ██║  ██║███████╗╚██████╔╝
+ ╚═╝       ╚═══╝  ╚══════╝   ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝</pre>
+    <div style="font-size:12px;color:var(--text-dim);letter-spacing:2px;margin-bottom:32px">DATACENTER MANAGEMENT</div>
+    <div style="background:var(--card);border:2px solid var(--input-border);border-radius:12px;padding:28px">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <input id="login-user" placeholder="Username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:12px 16px;border-radius:8px;font-size:13px;font-family:inherit;width:100%;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'">
+        <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:12px 16px;border-radius:8px;font-size:13px;font-family:inherit;width:100%;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'">
+        <button onclick="doLogin()" style="background:var(--purple);border:none;color:var(--text);padding:12px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;letter-spacing:1px;transition:opacity 0.2s" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">LOG IN</button>
+      </div>
+      <div id="login-error" style="margin-top:12px;font-size:12px;color:var(--red);display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<div class="mn">
+<div class="mn-header">
+  <div class="flex-gap-16-center">
+    <pre data-view="home" style="font-family:'Courier New',monospace;font-size:5px;line-height:1.1;margin:0;color:var(--purple-light);cursor:pointer;opacity:0.9"> ██████╗ ██╗   ██╗███████╗   ███████╗██████╗ ███████╗ ██████╗
+ ██╔══██╗██║   ██║██╔════╝   ██╔════╝██╔══██╗██╔════╝██╔═══██╗
+ ██████╔╝██║   ██║█████╗     █████╗  ██████╔╝█████╗  ██║   ██║
+ ██╔═══╝ ╚██╗ ██╔╝██╔══╝     ██╔══╝  ██╔══██╗██╔══╝  ██║▄▄ ██║
+ ██║      ╚████╔╝ ███████╗   ██║     ██║  ██║███████╗╚██████╔╝
+ ╚═╝       ╚═══╝  ╚══════╝   ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝</pre><span style="font-size:12px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase" id="nav-ver"></span>
+    <div style="width:1px;height:24px;background:var(--border)"></div>
+    <div><h1 id="page-title" style="font-size:16px">Home</h1><div class="tagline fs-11" id="header-tagline" ></div></div>
+  </div>
+  <div class="flex-gap-16-center">
+    <button id="header-user-btn" onclick="openUserMenu()" style="display:none;background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 14px;border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--input-border)'"><span id="header-user-icon" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></span><span id="header-user-name" style="font-weight:600;text-transform:uppercase;letter-spacing:0.5px"></span><span id="header-user-role" style="font-size:10px;color:var(--text-dim)"></span></button>
+    <span style="font-family:'Courier New',monospace;font-size:24px;font-weight:700;color:var(--purple-light);letter-spacing:2px;opacity:0.8" id="header-time"></span>
+  </div>
+</div>
+<div id="update-banner" style="display:none;background:linear-gradient(135deg,rgba(123,47,190,0.15),rgba(168,85,247,0.1));border-bottom:1px solid var(--purple);padding:10px 32px;font-size:13px;color:var(--text)">
+  <span id="update-banner-text"></span>
+  <button onclick="document.getElementById('update-banner').style.display='none';sessionStorage.setItem('freq_update_dismissed','1')" style="float:right;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button>
+</div>
+<div class="mn-body">
+
+<!-- ════════ HOME ════════ -->
+<div id="p-home" class="page active">
+<!-- Hero -->
+<div style="text-align:center;padding:8px 0 12px">
+  <pre style="font-family:'Courier New',monospace;font-size:12px;line-height:1.1;margin:0 auto;color:var(--purple-light);opacity:0.9;cursor:pointer;display:inline-block;text-align:left" data-view="home"> ██████╗ ██╗   ██╗███████╗   ███████╗██████╗ ███████╗ ██████╗
+ ██╔══██╗██║   ██║██╔════╝   ██╔════╝██╔══██╗██╔════╝██╔═══██╗
+ ██████╔╝██║   ██║█████╗     █████╗  ██████╔╝█████╗  ██║   ██║
+ ██╔═══╝ ╚██╗ ██╔╝██╔══╝     ██╔══╝  ██╔══██╗██╔══╝  ██║▄▄ ██║
+ ██║      ╚████╔╝ ███████╗   ██║     ██║  ██║███████╗╚██████╔╝
+ ╚═╝       ╚═══╝  ╚══════╝   ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝</pre>
+</div>
+<!-- Toolbar -->
+<div style="border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:12px">
+<div style="display:flex;gap:4px;align-items:center;min-height:32px;flex-wrap:wrap">
+  <button class="mobile-menu-btn" onclick="document.getElementById('nav-items').classList.toggle('open')" aria-label="Menu">&#9776;</button>
+  <div id="nav-items" class="nav-toolbar" style="display:contents">
+  <button class="fleet-btn view-btn active-view" data-view="home">HOME</button>
+  <button class="fleet-btn view-btn" data-view="fleet">FLEET</button>
+  <button class="fleet-btn view-btn" data-view="docker">DOCKER</button>
+  <button class="fleet-btn view-btn" data-view="media">MEDIA</button>
+  <button class="fleet-btn view-btn" data-view="security">SECURITY</button>
+  <button class="fleet-btn view-btn" data-view="tools">SYSTEM</button>
+  <button class="fleet-btn view-btn" data-view="lab">LAB</button>
+  <div class="flex-1"></div>
+  <button class="fleet-btn view-btn opacity-7" data-view="settings">&#9881; SETTINGS</button>
+  </div>
+</div></div>
+<!-- HOME VIEW -->
+<div id="home-view">
+<!-- Widget dashboard -->
+<div id="home-widgets"></div>
+<!-- Empty state -->
+<div id="home-empty" style="text-align:center;padding:40px 0;display:none">
+  <div style="font-size:36px;opacity:0.15;margin-bottom:16px">&#9776;</div>
+  <div style="font-size:16px;color:var(--text);margin-bottom:8px">Your Dashboard is Empty</div>
+  <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.6">Click LAYOUT to add widgets from Fleet, Docker, Security, and Lab Tools. Or hit Quick Start for a ready-made dashboard.</div>
+  <button class="fleet-btn c-purple-active" data-action="openLayoutConfig" >&#9776; CONFIGURE DASHBOARD</button>
+</div>
+<!-- Footer -->
+<div style="text-align:center;padding:32px 0 16px;border-top:1px solid var(--border);margin-top:24px">
+  <div id="home-subtitle" style="font-size:12px;letter-spacing:4px;color:var(--text-dim);text-transform:uppercase">PVE FREQ</div>
+  <div id="home-ver-footer" style="font-size:13px;color:var(--text);margin-top:4px;opacity:0.5"></div>
+  <div id="home-quote-footer" style="font-size:12px;color:var(--text-dim);font-style:italic;margin-top:6px;opacity:0.7"></div>
+</div>
+</div><!-- close home-view -->
+<!-- FLEET VIEW (hidden by default) -->
+<div id="fleet-view" class="d-none">
+<div class="sub-tabs" id="subtabs-fleet">
+  <button class="sub-tab active-sub" onclick="switchView('fleet')">Fleet</button>
+  <button class="sub-tab" onclick="switchView('topology')">Topology</button>
+  <button class="sub-tab" onclick="switchView('capacity')">Capacity</button>
+</div>
+<!-- Fleet Stats group -->
+<div class="section layout-section" id="fleet-sec-stats">
+  <div class="section-header"><h3>Fleet Stats</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="stats" id="metrics-summary"></div>
+  </div>
+</div>
+<!-- Hosts & VMs group -->
+<div class="section layout-section" id="fleet-sec-infra">
+  <div class="section-header"><h3 class="cursor-ptr">Hosts &amp; VMs</h3><div class="flex-1"></div><input id="fleet-filter" placeholder="&#128269; Filter..." oninput="filterFleetCards(this.value)" onclick="event.stopPropagation()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit;width:180px;outline:none;transition:border-color 0.25s ease" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'"><span class="chev" style="cursor:pointer;margin-left:8px">▾</span></div>
+  <div class="section-body"><div id="metrics-cards"></div></div>
+</div>
+<!-- Overview -->
+<div class="section layout-section" id="fleet-sec-overview">
+  <div class="section-header"><h3>Overview</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
+      <div id="overview-physical-cards"><!-- populated dynamically from fleet config --></div>
+      <div class="host-card">
+        <div class="host-head"><h3 class="c-purple">PVE<br>NODES</h3><div class="host-meta" id="pve-node-count"><span>HYPERVISOR</span></div></div>
+        <div class="divider-light"><div id="home-pve-summary"><div class="skeleton h-60" ></div></div></div>
+      </div>
+      <div class="host-card">
+        <div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PROXMOX</span></div></div>
+        <div class="divider-light"><div id="home-infra"><div class="skeleton h-60" ></div></div></div>
+      </div>
+      <div class="host-card">
+        <div class="host-head"><h3 class="c-green">MEDIA STACK</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div>
+        <div class="divider-light"><div id="home-media"><div class="skeleton h-60" ></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Lab Equipment (collapsed) -->
+<div class="section collapsed layout-section" id="fleet-lab-section" style="margin-top:20px;display:none">
+  <div class="section-header"><h3>Lab Equipment</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="fleet-lab-cards" class="cards grid-auto-240" ></div>
+  </div>
+</div>
+<!-- Agents -->
+<div class="section layout-section mt-20" id="fleet-sec-agents" >
+  <div class="section-header"><h3>Agents</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="stats" id="agent-stats"></div>
+    <h4 style="color:var(--purple-light);font-size:13px;margin:12px 0 8px">Templates</h4>
+    <div id="agent-templates" class="cards"></div>
+    <h4 style="color:var(--purple-light);font-size:13px;margin:12px 0 8px">Registered Agents</h4>
+    <div id="agent-list"></div>
+  </div>
+</div>
+<!-- Sandbox VMs -->
+<div class="section layout-section" id="fleet-sec-specialists">
+  <div class="section-header"><h3>Sandbox VMs</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="cards mb-12" >
+      <div class="crd"><h3>Create Specialist</h3><p><code>freq specialist create &lt;host&gt; --role dev</code></p></div>
+      <div class="crd"><h3>Check Health</h3><p><code>freq specialist health &lt;host&gt;</code></p></div>
+      <div class="crd"><h3>Roles</h3><p>sandbox, dev, infra, security, media</p></div>
+    </div>
+    <table><thead><tr><th>Name</th><th>Role</th><th>VMID</th><th>Status</th></tr></thead><tbody id="specialist-table"></tbody></table>
+  </div>
+</div>
+</div><!-- close fleet-view -->
+
+<!-- DOCKER VIEW -->
+<div id="docker-view" class="d-none">
+<div class="section layout-section" id="docker-sec-containers">
+  <div class="section-header"><h3>Containers</h3><div class="stats" id="container-stats" style="margin-bottom:0;flex:1;justify-content:center"></div><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-row-8-center" style="margin-bottom:8px">
+      <button class="fleet-btn docker-sub active-view" data-dsub="docker-services" data-action="switchDockerSub" data-arg="services">SERVICES</button>
+      <button class="fleet-btn docker-sub" data-dsub="docker-all" data-action="switchDockerSub" data-arg="all">ALL</button>
+      <button class="fleet-btn docker-sub" data-dsub="docker-registry" data-action="switchDockerSub" data-arg="registry">REGISTRY</button>
+      <button class="fleet-btn docker-sub" data-dsub="docker-compose" data-action="switchDockerSub" data-arg="compose">COMPOSE</button>
+    </div>
+    <!-- SERVICES sub-view (default) -->
+    <div id="docker-sub-services">
+      <div id="services-container-cards" class="cards"></div>
+    </div>
+    <!-- ALL containers sub-view -->
+    <div id="docker-sub-all" class="d-none">
+      <div id="container-cards" class="cards"></div>
+      <div class="exec-out" id="container-logs" style="margin-top:12px;min-height:100px;display:none">Select a container to view logs...</div>
+    </div>
+    <!-- REGISTRY sub-view -->
+    <div id="docker-sub-registry" class="d-none">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <button class="fleet-btn c-purple-active" onclick="rescanContainers()">RESCAN FLEET</button>
+        <button class="fleet-btn" onclick="loadContainerRegistry()">REFRESH</button>
+        <span id="registry-status" class="text-meta"></span>
+      </div>
+      <div id="rescan-results" style="display:none;margin-bottom:12px"></div>
+      <div id="registry-table"></div>
+      <div style="margin-top:12px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+        <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">ADD CONTAINER</h4>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input class="input" id="reg-name" placeholder="Container name" style="width:160px">
+          <select class="input" id="reg-vmid" style="width:160px"><option value="">Select VM...</option></select>
+          <input class="input" id="reg-port" placeholder="Port (optional)" style="width:100px" type="number">
+          <button class="fleet-btn" onclick="addContainer()">ADD</button>
+          <span id="reg-msg" class="text-meta"></span>
+        </div>
+      </div>
+    </div>
+    <!-- COMPOSE sub-view -->
+    <div id="docker-sub-compose" class="d-none">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Manage Docker Compose stacks per VM. Select a VM to bring stacks up/down or view compose files.</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <select id="compose-vm-select" class="input" style="width:240px"><option value="">Select Docker VM...</option></select>
+        <button class="fleet-btn" onclick="composeUp()">COMPOSE UP</button>
+        <button class="fleet-btn" onclick="composeDown()" style="color:var(--red);border-color:var(--red)">COMPOSE DOWN</button>
+        <button class="fleet-btn" onclick="composeView()">VIEW COMPOSE</button>
+      </div>
+      <div id="compose-out" class="exec-out" style="min-height:80px">Select a Docker VM and an action.</div>
+    </div>
+  </div>
+</div>
+</div><!-- close docker-view -->
+
+<!-- ============================================================
+     MEDIA VIEW — Top-level media dashboard
+     Services: Plex, Sonarr, Radarr, etc. status cards
+     Downloads: Active transfers with progress
+     Streams: Plex streams with user/quality info
+     ============================================================ -->
+<div id="media-view" class="d-none">
+  <!-- Media service status cards -->
+  <div id="media-container-cards" class="cards mb-16"></div>
+  <!-- Downloads -->
+  <div class="section">
+    <div class="section-header"><h3>Downloads</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div class="stats" id="dl-stats"></div>
+      <table><thead><tr><th>Name</th><th>Client</th><th>VM</th><th>Size</th><th>Progress</th><th>Speed</th></tr></thead><tbody id="dl-table"></tbody></table>
+    </div>
+  </div>
+  <!-- Streams -->
+  <div class="section">
+    <div class="section-header"><h3>Streams</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div class="stats" id="stream-stats"></div>
+      <table><thead><tr><th>User</th><th>Title</th><th>Type</th><th>Quality</th><th>State</th></tr></thead><tbody id="stream-table"></tbody></table>
+    </div>
+  </div>
+</div><!-- close media-view -->
+
+<!-- SECURITY VIEW — Overview -->
+<div id="security-view" class="d-none">
+<div class="sub-tabs" id="subtabs-security">
+  <button class="sub-tab active-sub" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+</div>
+<div class="section layout-section" id="sec-risk">
+  <div class="section-header"><h3>Risk Analysis</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="chain" id="risk-chain"></div>
+    <p class="c-dim-mb12-fs12">Break any link in the kill chain = no remote recovery.</p>
+    <table><thead><tr><th>Target</th><th>Risk Level</th><th>Primary Impact</th><th>Recovery</th></tr></thead><tbody id="risk-tbl"></tbody></table>
+  </div>
+</div>
+<div class="section layout-section" id="sec-policies">
+  <div class="section-header"><h3>Policies</h3><span class="chev">▾</span></div>
+  <div class="section-body"><div id="policies-c"></div></div>
+</div>
+</div><!-- close security-view -->
+
+<!-- SECURITY — Hardening -->
+<div id="sec-hardening-view" class="d-none">
+<div class="sub-tabs">
+  <button class="sub-tab" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab active-sub" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+</div>
+<div class="section layout-section" id="sec-audit">
+  <div class="section-header"><h3>Audit</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12-wrap">
+      <button class="fleet-btn c-purple-active" data-audit="all">FULL AUDIT</button>
+      <button class="fleet-btn" data-audit="ssh-root">SSH ROOT LOGIN</button>
+      <button class="fleet-btn" data-audit="ssh-pass">SSH PASSWORD AUTH</button>
+      <button class="fleet-btn" data-audit="ssh-empty">EMPTY PASSWORDS</button>
+      <button class="fleet-btn" data-audit="ports">OPEN PORTS</button>
+      <button class="fleet-btn" data-audit="failed">FAILED SERVICES</button>
+      <button class="fleet-btn" data-audit="firewall">FIREWALL STATUS</button>
+      <button class="fleet-btn" onclick="runSshSweep()">POLICY SWEEP</button>
+    </div>
+    <div id="audit-c"></div>
+    <div id="sweep-c" class="mt-12"></div>
+  </div>
+</div>
+<div class="section layout-section" id="sec-harden">
+  <div class="section-header"><h3>Hardening</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12-wrap">
+      <button class="fleet-btn c-purple-active" data-action="runHarden" >FULL HARDENING AUDIT</button>
+      <button class="fleet-btn" onclick="hardenAction('disable-root')">DISABLE ROOT SSH</button>
+      <button class="fleet-btn" onclick="hardenAction('key-only')">ENFORCE KEY-ONLY AUTH</button>
+      <button class="fleet-btn" onclick="hardenAction('disable-empty')">BLOCK EMPTY PASSWORDS</button>
+      <button class="fleet-btn" onclick="hardenAction('auto-updates')">ENABLE AUTO UPDATES</button>
+      <button class="fleet-btn" onclick="sshdPanel('harden-c')">RESTART SSHD</button>
+    </div>
+    <div id="harden-c"></div>
+  </div>
+</div>
+</div><!-- close sec-hardening-view -->
+
+<!-- SECURITY — Access -->
+<div id="sec-access-view" class="d-none">
+<div class="sub-tabs">
+  <button class="sub-tab" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab active-sub" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+</div>
+<div class="section layout-section" id="sec-users">
+  <div class="section-header"><h3>Users</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="exec-bar"><input id="u-name" placeholder="Username"><select id="u-role"><option>viewer</option><option selected>operator</option><option>admin</option></select><button data-action="userCreate">Create User</button></div>
+    <div id="users-c"></div>
+  </div>
+</div>
+<div class="section layout-section" id="sec-sshkeys">
+  <div class="section-header"><h3>SSH Keys</h3><span class="chev">▾</span></div>
+  <div class="section-body"><div id="keys-c"><div class="skeleton"></div><div class="skeleton"></div></div></div>
+</div>
+<div class="section layout-section" id="sec-apikeys">
+  <div class="section-header"><h3>API Keys</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="exec-bar"><input id="v-key" placeholder="Key name"><input id="v-val" placeholder="Value" type="password"><select id="v-host"><option>DEFAULT</option></select><button data-action="vaultSet">Store</button></div>
+    <div id="vault-c"></div>
+  </div>
+</div>
+</div><!-- close sec-access-view -->
+
+<!-- SECURITY — Vault -->
+<div id="sec-vault-view" class="d-none">
+<div class="sub-tabs">
+  <button class="sub-tab" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab active-sub" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+</div>
+<div class="section layout-section border-red" id="sec-vault-section">
+  <div class="section-header"><h3 style="background:rgba(248,81,73,0.15)">&#128274; Vault</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="vault-locked">
+      <div style="text-align:center;padding:24px 0">
+        <div style="font-size:32px;opacity:0.3;margin-bottom:12px">&#128274;</div>
+        <div style="font-size:14px;color:var(--text);margin-bottom:4px">Vault is Locked</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:16px">Admin credentials required to access sensitive data</div>
+        <div style="max-width:300px;margin:0 auto;display:flex;flex-direction:column;gap:8px">
+          <input id="vault-auth-user" placeholder="Admin username" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
+          <input id="vault-auth-pass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')unlockVault()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
+          <button class="fleet-btn" data-action="unlockVault" style="color:var(--red);border-color:var(--red)">UNLOCK VAULT</button>
+        </div>
+      </div>
+    </div>
+    <div id="vault-unlocked" class="d-none">
+      <div class="flex-row-8-center">
+        <span style="color:var(--green);font-size:12px;font-weight:600">&#128275; UNLOCKED</span>
+        <button class="fleet-btn vault-tab active-view" data-vtab="users" data-action="switchVaultTab" data-arg="users">USERS</button>
+        <button class="fleet-btn vault-tab" data-vtab="apikeys" data-action="switchVaultTab" data-arg="apikeys">API KEYS</button>
+        <button class="fleet-btn vault-tab" data-vtab="all" data-action="switchVaultTab" data-arg="all">ALL</button>
+        <div class="flex-1"></div>
+        <button class="fleet-btn" onclick="lockVault()" style="padding:3px 10px;font-size:12px;color:var(--red)">LOCK</button>
+      </div>
+      <div id="vault-sensitive-c"></div>
+    </div>
+  </div>
+</div>
+</div><!-- close sec-vault-view -->
+
+<!-- LAB TOOLS VIEW — REMOVED: merged into TOOLS > Lab Tools section -->
+
+<!-- SECURITY — Compliance -->
+<div id="sec-compliance-view" class="d-none">
+<div class="sub-tabs">
+  <button class="sub-tab" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab active-sub" onclick="switchView('sec-compliance')">Compliance</button>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Policy Compliance</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="policyAction('check')">CHECK COMPLIANCE</button>
+      <button class="fleet-btn" onclick="policyAction('diff')">SHOW DRIFT</button>
+      <button class="fleet-btn c-red" onclick="policyAction('fix')">APPLY FIX</button>
+    </div>
+    <div class="exec-out" id="policy-out">Run a compliance check to see policy status.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>Compliance Scan</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="runSweep(false)">DRY RUN</button>
+      <button class="fleet-btn c-red" onclick="runSweep(true)">SWEEP + FIX</button>
+    </div>
+    <div class="exec-out" id="sweep-out">Click to run a full audit sweep.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>Continuous Monitoring</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <button class="fleet-btn" onclick="loadPatrolStatus()">CHECK STATUS</button>
+    <div class="exec-out" id="patrol-out">Click to check current compliance status.</div>
+  </div>
+</div>
+</div><!-- close sec-compliance-view -->
+
+<!-- ============================================================
+     SYSTEM VIEW — Overview page with system utility tools
+     Sub-tabs: Overview | Playbooks | Config Sync | Chaos
+     Sections: Diagnostics, Logs, Storage, Network Scanner
+     ============================================================ -->
+<div id="tools-view" class="d-none">
+<div class="sub-tabs" id="subtabs-tools">
+  <button class="sub-tab active-sub" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+</div>
+<!-- Diagnostics — health checks and host diagnosis -->
+<div class="section">
+  <div class="section-header"><h3>Diagnostics</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="runDoctor()">RUN DOCTOR</button>
+      <select id="diag-host" class="input-field" style="width:180px"><option value="">Select host...</option></select>
+      <button class="fleet-btn" onclick="runDiagnose()">DIAGNOSE HOST</button>
+    </div>
+    <div class="exec-out" id="diag-out">Run self-diagnostic or diagnose a specific host.</div>
+  </div>
+</div>
+<!-- Logs — fleet-wide log viewer -->
+<div class="section">
+  <div class="section-header"><h3>Logs</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <select id="log-host" class="input-field" style="width:180px"><option value="">Select host...</option></select>
+      <input type="text" id="log-unit" placeholder="Unit (optional)..." class="input-field" style="width:180px">
+      <input type="number" id="log-lines" placeholder="Lines" value="50" class="input-field" style="width:80px">
+      <button class="fleet-btn" onclick="fetchLogs()">FETCH LOGS</button>
+    </div>
+    <div class="exec-out" id="log-out" style="max-height:400px;overflow-y:auto">Enter a host to view its logs.</div>
+  </div>
+</div>
+<!-- Storage — ZFS pools + backup status (grouped: disk health) -->
+<div class="section">
+  <div class="section-header"><h3>Storage</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div style="margin-bottom:16px">
+      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">ZFS POOLS</h4>
+      <button class="fleet-btn" onclick="loadZfs()">LOAD ZFS STATUS</button>
+      <div class="exec-out" id="zfs-out" style="margin-top:8px">Click to load ZFS pool status.</div>
+    </div>
+    <div>
+      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">BACKUPS</h4>
+      <div class="flex-wrap-8-mb12">
+        <button class="fleet-btn" onclick="loadBackups('list')">LIST</button>
+        <button class="fleet-btn" onclick="loadBackups('status')">STATUS</button>
+      </div>
+      <div class="exec-out" id="backup-out">Click to view backup status.</div>
+    </div>
+  </div>
+</div>
+<!-- Host Discovery & Onboarding -->
+<div class="section">
+  <div class="section-header"><h3>Host Discovery & Onboarding</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Discover hosts on your network, add them to the fleet, and onboard with SSH key deployment.</div>
+    <div class="flex-wrap-8-mb12">
+      <input type="text" id="discover-subnet" placeholder="Subnet (e.g. 192.168.1)" class="input-field" style="width:200px">
+      <button class="fleet-btn c-purple-active" onclick="runDiscover()">SCAN NETWORK</button>
+    </div>
+    <div class="exec-out" id="discover-out">Enter a subnet to discover hosts.</div>
+    <div style="margin-top:16px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">ADD HOST MANUALLY</h4>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input class="input" id="add-host-ip" placeholder="IP address" style="width:140px">
+        <input class="input" id="add-host-label" placeholder="Label (e.g. web-01)" style="width:140px">
+        <select class="input" id="add-host-type" style="width:120px">
+          <option value="vm">VM</option>
+          <option value="ct">Container</option>
+          <option value="physical">Physical</option>
+          <option value="firewall">Firewall</option>
+          <option value="switch">Switch</option>
+          <option value="storage">Storage</option>
+          <option value="bmc">BMC</option>
+        </select>
+        <input class="input" id="add-host-groups" placeholder="Groups (optional)" style="width:160px">
+        <button class="fleet-btn" onclick="addHostManual()">ADD HOST</button>
+        <span id="add-host-msg" class="text-meta"></span>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- close tools-view -->
+
+<!-- ============================================================
+     LAB VIEW — Lab Tools (plugin framework)
+     ============================================================ -->
+<div id="lab-view" class="d-none">
+<div class="sub-tabs" id="subtabs-lab">
+  <button class="sub-tab active-sub" onclick="switchView('lab')">Tools</button>
+  <button class="sub-tab" onclick="openManageTools()">Manage</button>
+  <button class="sub-tab" onclick="openAddTool()" style="color:var(--green)">+ Add Tool</button>
+</div>
+<div id="lab-tools-container"></div>
+</div><!-- close lab-view -->
+
+<!-- TOPOLOGY VIEW -->
+<div id="topology-view" class="d-none">
+<div class="sub-tabs" id="subtabs-topology">
+  <button class="sub-tab" onclick="switchView('fleet')">Fleet</button>
+  <button class="sub-tab active-sub" onclick="switchView('topology')">Topology</button>
+  <button class="sub-tab" onclick="switchView('capacity')">Capacity</button>
+</div>
+<div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">Network Topology</h3>
+    <span style="font-size:11px;color:var(--text-dim);margin-right:8px">Drag nodes to rearrange</span>
+    <button class="fleet-btn" onclick="resetTopoLayout()" style="margin-right:4px">RESET LAYOUT</button>
+    <button class="fleet-btn" onclick="loadTopology()">REFRESH</button>
+  </div>
+  <div id="topo-legend" style="font-size:11px;color:var(--text-dim);margin-bottom:8px">
+    <span style="color:var(--purple-light)">&#9632;</span> PVE Node &nbsp;
+    <span style="color:var(--green)">&#9632;</span> VM (running) &nbsp;
+    <span style="color:var(--text-dim)">&#9632;</span> VM (stopped) &nbsp;
+    <span style="color:var(--red)">&#9632;</span> Unreachable &nbsp;
+    <span style="color:var(--blue)">&#9632;</span> Device
+  </div>
+  <svg id="topo-svg" width="calc(100% + 32px)" height="700" style="margin:0 -16px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:visible"></svg>
+  <div id="topo-info" style="margin-top:8px;font-size:12px;color:var(--text-dim)"></div>
+</div>
+</div><!-- close topology-view -->
+
+<!-- CAPACITY VIEW -->
+<div id="capacity-view" class="d-none">
+<div class="sub-tabs" id="subtabs-capacity">
+  <button class="sub-tab" onclick="switchView('fleet')">Fleet</button>
+  <button class="sub-tab" onclick="switchView('topology')">Topology</button>
+  <button class="sub-tab active-sub" onclick="switchView('capacity')">Capacity</button>
+</div>
+<div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">Capacity Planner</h3>
+    <div style="display:flex;gap:8px">
+      <button class="fleet-btn" onclick="forceCapSnapshot()">TAKE SNAPSHOT</button>
+      <button class="fleet-btn" onclick="loadCapacity()">REFRESH</button>
+    </div>
+  </div>
+  <div id="cap-info" style="font-size:12px;color:var(--text-dim);margin-bottom:12px"></div>
+  <div id="cap-table"></div>
+</div>
+</div><!-- close capacity-view -->
+
+<!-- PLAYBOOKS VIEW -->
+<div id="playbooks-view" class="d-none">
+<div class="sub-tabs" id="subtabs-playbooks">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab active-sub" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+</div>
+<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">Incident Playbooks</h3>
+    <button class="fleet-btn" onclick="loadPlaybooks()">REFRESH</button>
+  </div>
+  <div id="pb-list"></div>
+  <div id="pb-runner" class="d-none" style="margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h4 id="pb-runner-title" style="font-size:13px;color:var(--text)"></h4>
+      <button class="fleet-btn" onclick="closePbRunner()">CLOSE</button>
+    </div>
+    <div id="pb-steps"></div>
+  </div>
+</div>
+</div><!-- close playbook-view -->
+
+<!-- GITOPS VIEW -->
+<div id="gitops-view" class="d-none">
+<div class="sub-tabs" id="subtabs-gitops">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab active-sub" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+</div>
+<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">GitOps Config Sync</h3>
+    <div style="display:flex;gap:8px">
+      <button class="fleet-btn" onclick="gitopsFetch()">SYNC</button>
+      <button class="fleet-btn" onclick="loadGitops()">REFRESH</button>
+    </div>
+  </div>
+  <div id="go-status" style="font-size:12px;color:var(--text-dim);margin-bottom:12px"></div>
+  <div id="go-actions" class="d-none" style="gap:8px;margin-bottom:12px">
+    <button class="fleet-btn" onclick="gitopsApply()">APPLY CHANGES</button>
+    <button class="fleet-btn" onclick="gitopsDiff()">VIEW DIFF</button>
+  </div>
+  <div id="go-diff" class="d-none" style="margin-bottom:12px">
+    <pre id="go-diff-content" style="font-size:11px;color:var(--text);background:rgba(0,0,0,0.3);padding:12px;border-radius:6px;white-space:pre-wrap;max-height:300px;overflow-y:auto"></pre>
+  </div>
+  <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">COMMIT HISTORY</h4>
+  <div id="go-log"></div>
+</div>
+</div><!-- close gitops-view -->
+
+<!-- COSTS VIEW — REMOVED: absorbed into SETTINGS > Fleet Costs -->
+<!-- FEDERATION VIEW — REMOVED: absorbed into SETTINGS > Sites -->
+
+<!-- CHAOS VIEW -->
+<div id="chaos-view" class="d-none">
+<div class="sub-tabs" id="subtabs-chaos">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab active-sub" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+</div>
+<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--red)">Chaos Engineering</h3>
+    <button class="fleet-btn" onclick="loadChaos()">REFRESH</button>
+  </div>
+  <div style="background:rgba(255,60,60,0.08);border:1px solid rgba(255,60,60,0.3);border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text-dim)">
+    Chaos experiments intentionally disrupt services to test recovery. Production hosts are blocked by safety gates. Use only on lab/dev infrastructure.
+  </div>
+  <div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--input-border)">
+    <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">NEW EXPERIMENT</h4>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <input id="chaos-name" placeholder="Experiment name" class="freq-input" style="flex:1;min-width:120px">
+      <select id="chaos-type" class="freq-input" style="flex:1;min-width:120px">
+        <option value="">Select type...</option>
+        <option value="service_kill">service_kill — Stop a Docker container</option>
+        <option value="service_restart">service_restart — Restart a systemd service</option>
+        <option value="network_delay">network_delay — Add network latency</option>
+        <option value="disk_fill">disk_fill — Simulate disk pressure</option>
+        <option value="cpu_stress">cpu_stress — Spike CPU load</option>
+      </select>
+      <select id="chaos-target" class="freq-input" style="flex:1;min-width:100px"><option value="">Select host...</option></select>
+      <input id="chaos-service" placeholder="Service/container" class="freq-input" style="flex:1;min-width:100px">
+      <input id="chaos-duration" placeholder="Duration (s)" type="number" value="60" class="freq-input" style="width:100px">
+      <button class="fleet-btn" style="background:var(--red);color:#fff" onclick="chaosRun()">INJECT</button>
+    </div>
+  </div>
+  <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">EXPERIMENT LOG</h4>
+  <div id="chaos-log"></div>
+</div>
+</div><!-- close chaos-view -->
+
+<!-- ============================================================
+     SETTINGS VIEW — Dashboard configuration and management
+     Sections: Dashboard Layout, Fleet Costs, Sites (Federation),
+               User Preferences
+     ============================================================ -->
+<div id="settings-view" class="d-none">
+  <!-- Dashboard Layout — widget and section configuration -->
+  <div class="section">
+    <div class="section-header"><h3>Dashboard Layout</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Configure which widgets appear on your HOME dashboard and reorder sections on any view.</div>
+      <div class="flex-wrap-8-mb12">
+        <button class="fleet-btn" onclick="openHomeWidgetConfig()">CONFIGURE HOME WIDGETS</button>
+        <button class="fleet-btn" onclick="openLayoutConfig()">CONFIGURE CURRENT VIEW</button>
+      </div>
+    </div>
+  </div>
+  <!-- Fleet Costs — cost tracking (moved from Planning) -->
+  <div class="section">
+    <div class="section-header"><h3>Fleet Costs</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--text-dim)">Track infrastructure costs across the fleet.</span>
+        <button class="fleet-btn" onclick="loadCosts()">REFRESH</button>
+      </div>
+      <div id="cost-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
+      <div id="cost-table"></div>
+    </div>
+  </div>
+  <!-- Sites — multi-site federation (moved from Planning) -->
+  <div class="section">
+    <div class="section-header"><h3>Sites</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--text-dim)">Connect and manage multiple FREQ instances.</span>
+        <div style="display:flex;gap:8px">
+          <button class="fleet-btn" onclick="fedPoll()">POLL ALL</button>
+          <button class="fleet-btn" onclick="loadFederation()">REFRESH</button>
+        </div>
+      </div>
+      <div id="fed-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
+      <div id="fed-sites"></div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--input-border)">
+        <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">REGISTER NEW SITE</h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="fed-name" placeholder="Site name" style="flex:1;min-width:100px" class="freq-input">
+          <input id="fed-url" placeholder="https://freq.dc02:8888" style="flex:2;min-width:200px" class="freq-input">
+          <input id="fed-secret" placeholder="Shared secret (optional)" type="password" style="flex:1;min-width:100px" class="freq-input">
+          <button class="fleet-btn" onclick="fedRegister()">REGISTER</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Lab Assignment — tag any fleet member as LAB -->
+  <div class="section">
+    <div class="section-header"><h3>Lab Assignment</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Tag any host or VM as Lab Equipment. Tagged items appear in the LAB EQUIPMENT section on the Fleet page.</div>
+      <div id="lab-assign-list"><div class="skeleton"></div></div>
+    </div>
+  </div>
+  <!-- User Preferences -->
+  <div class="section">
+    <div class="section-header"><h3>Preferences</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+        <div>
+          <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block">Auto-Refresh Interval</label>
+          <select id="pref-refresh" class="input-field" style="width:100%" onchange="updatePref('refresh',this.value)">
+            <option value="0">Disabled</option>
+            <option value="10">10 seconds</option>
+            <option value="30" selected>30 seconds</option>
+            <option value="60">60 seconds</option>
+            <option value="120">2 minutes</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block">UI Density</label>
+          <select id="pref-density" class="input-field" style="width:100%" onchange="updatePref('density',this.value)">
+            <option value="compact">Compact</option>
+            <option value="normal" selected>Normal</option>
+            <option value="comfortable">Comfortable</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- close settings-view -->
+
+</div><!-- close p-home -->
+
+<!-- ════════ INFRA ════════ -->
+<div id="p-infra" class="page">
+<div class="flex-row-8-mb16-center">
+  <button class="fleet-btn c-purple-active" data-view="home" >&#9664; HOME</button>
+  <button class="fleet-btn" onclick="loadInfraPage()">REFRESH</button>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Overview</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="stats" id="infra-stats"></div>
+    <table><thead><tr><th>Host</th><th>Type</th><th>OS</th><th>CPU</th><th>RAM</th><th>Disk</th><th>Containers</th><th>Services</th><th>Status</th></tr></thead><tbody id="infra-tbl"></tbody></table>
+    <div id="infra-vms" class="mt-8"></div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>pfSense <span id="pf-meta" class="fs-12-dim">FIREWALL</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12"><button class="fleet-btn" data-action="pfAction" data-arg="status">STATUS</button><button class="fleet-btn" data-action="pfAction" data-arg="rules">RULES</button><button class="fleet-btn" data-action="pfAction" data-arg="nat">NAT</button><button class="fleet-btn" onclick="pfAction('states')">STATES</button><button class="fleet-btn" onclick="pfAction('interfaces')">INTERFACES</button></div>
+    <div class="exec-out" id="pf-out">Click an action above.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>TrueNAS <span id="tn-meta" class="fs-12-dim">NETWORK STORAGE</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12"><button class="fleet-btn" data-action="tnAction" data-arg="status">SYSTEM</button><button class="fleet-btn" data-action="tnAction" data-arg="pools">POOLS</button><button class="fleet-btn" data-action="tnAction" data-arg="health">HEALTH</button><button class="fleet-btn" data-action="tnAction" data-arg="datasets">DATASETS</button><button class="fleet-btn" data-action="tnAction" data-arg="shares">SHARES</button><button class="fleet-btn" data-action="tnAction" data-arg="alerts">ALERTS</button></div>
+    <div class="exec-out" id="tn-out">Click an action above.</div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>iDRAC <span class="fs-12-dim">BMC Management</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12"><button class="fleet-btn" onclick="idracAction('status')">SYSTEM INFO</button><button class="fleet-btn" onclick="idracAction('sensors')">SENSORS</button><button class="fleet-btn" data-action="idracAction" data-arg="power">POWER</button><button class="fleet-btn" onclick="idracAction('sel')">EVENT LOG</button></div>
+    <div id="idrac-out"></div>
+  </div>
+</div>
+<div class="section collapsed">
+  <div class="section-header"><h3>Switch <span id="sw-meta" class="fs-12-dim">L3 SWITCH</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12"><button class="fleet-btn" data-action="swAction" data-arg="status">STATUS</button><button class="fleet-btn" data-action="swAction" data-arg="vlans">VLANS</button><button class="fleet-btn" onclick="swAction('interfaces')">INTERFACES</button><button class="fleet-btn" data-action="swAction" data-arg="mac">MAC TABLE</button></div>
+    <div class="exec-out" id="sw-out">Click an action above.</div>
+  </div>
+</div>
+</div>
+
+<!-- ════════ SYSTEM ════════ -->
+<div id="p-system" class="page">
+<div class="flex-row-8-mb16-center">
+  <button class="fleet-btn c-purple-active" data-view="home" >&#9664; HOME</button>
+  <button class="fleet-btn" onclick="loadSystemPage()">REFRESH</button>
+</div>
+<!-- Global Settings -->
+<div class="section" id="sys-settings-section">
+  <div class="section-header"><h3>Global Settings</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="global-settings-body"></div>
+  </div>
+</div>
+<!-- Fleet Admin — admin role only, root tax -->
+<div class="section d-none" id="fleet-admin-section" >
+  <div class="section-header"><h3>Fleet Admin <span style="font-size:11px;font-weight:400;color:var(--yellow);margin-left:8px">ADMIN ONLY</span></h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="fleet-admin-body"><div class="skeleton"></div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Configuration</h3><span class="chev">▾</span></div>
+  <div class="section-body"><div id="config-c"><div class="skeleton"></div><div class="skeleton"></div></div></div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Doctor</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div style="display:flex;gap:8px;margin-bottom:16px"><button class="fleet-btn c-purple-active" onclick="runSysInfo()" >RUN SELF-DIAGNOSTIC</button><button class="fleet-btn" onclick="runBackup()">EXPORT CONFIG BACKUP</button></div>
+    <div id="doctor-c"></div>
+    <div id="backup-c" class="mt-12"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Journal</h3><span class="chev">▾</span></div>
+  <div class="section-body"><div id="journal-c"><div class="skeleton"></div></div></div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Knowledge Base</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <input class="search" id="learn-q" placeholder="Search knowledge base — try: nfs stale, docker gluetun, pfsense reboot" onkeydown="if(event.key==='Enter')searchLearn()">
+    <div id="learn-r"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Distros</h3><span class="chev">▾</span></div>
+  <div class="section-body"><div id="distro-c"><div class="skeleton"></div></div></div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Groups</h3><span class="chev">▾</span></div>
+  <div class="section-body"><div id="groups-c"><div class="skeleton"></div></div></div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Alert Rules</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="rules-list"><div class="skeleton"></div></div>
+    <div style="margin-top:16px;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
+      <h4 style="font-size:13px;margin-bottom:12px;color:var(--purple-light)">Create Rule</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="label-sub-10">Name</label><input id="rule-name" class="input-sm" style="width:100%" placeholder="my-rule"></div>
+        <div><label class="label-sub-10">Condition</label><select id="rule-cond" class="input-sm" style="width:100%"><option value="host_unreachable">Host Unreachable</option><option value="cpu_above">CPU Above</option><option value="ram_above">RAM Above %</option><option value="disk_above">Disk Above %</option><option value="docker_down">Docker Down</option></select></div>
+        <div><label class="label-sub-10">Target</label><input id="rule-target" class="input-sm" style="width:100%" value="*" placeholder="* or hostname"></div>
+        <div><label class="label-sub-10">Threshold</label><input id="rule-threshold" class="input-sm" style="width:100%" value="0" type="number"></div>
+        <div><label class="label-sub-10">Duration (s)</label><input id="rule-duration" class="input-sm" style="width:100%" value="0" type="number"></div>
+        <div><label class="label-sub-10">Cooldown (s)</label><input id="rule-cooldown" class="input-sm" style="width:100%" value="300" type="number"></div>
+        <div><label class="label-sub-10">Severity</label><select id="rule-severity" class="input-sm" style="width:100%"><option value="warning">Warning</option><option value="critical">Critical</option><option value="info">Info</option></select></div>
+      </div>
+      <button class="fleet-btn mt-12" onclick="createRule()">CREATE RULE</button>
+      <div id="rule-create-msg" class="mt-8"></div>
+    </div>
+    <div style="margin-top:16px">
+      <h4 style="font-size:13px;margin-bottom:8px;color:var(--purple-light)">Recent Alerts</h4>
+      <div id="alert-history"><span class="c-dim-fs12">No alerts yet</span></div>
+    </div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Notifications</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div id="notify-status"></div>
+    <button class="fleet-btn mt-12" data-action="testNotify" >SEND TEST</button>
+    <div id="notify-result" class="mt-8"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>About</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="crd" style="margin-bottom:24px;border-left:3px solid var(--purple)">
+      <h3 style="font-size:16px">About PVE FREQ</h3>
+      <p class="mt-8">FREQ is a zero-dependency Proxmox fleet management tool. Pure Python stdlib. One binary. Every command you need to manage VMs, containers, networking, storage, and monitoring across your entire cluster.</p>
+      <p class="mt-8">Built from scratch — 16,000+ lines of bash rewritten into clean Python. SSH to 6 platform types. Personality system. Knowledge base. Risk analysis. Auto-audit pipeline. Agent platform for AI-driven infrastructure.</p>
+      <p style="margin-top:12px;color:var(--purple-light)"><em>"freq did not come to play."</em></p>
+    </div>
+    <h3 style="color:var(--purple-light);font-size:14px;margin-bottom:16px">Capabilities</h3>
+    <div class="timeline">
+      <div class="timeline-item"><h3>Fleet Management</h3><div class="meta">Core</div><p>Create, clone, destroy, resize, migrate, snapshot VMs across your entire cluster. Safety gates protect production. Fleet boundaries enforce VMID discipline.</p></div>
+      <div class="timeline-item"><h3>Smart Commands</h3><div class="meta">Intelligence</div><p>learn (knowledge base), risk (kill-chain blast radius), sweep (auto-audit pipeline), patrol (continuous monitoring). Your cluster's operational memory.</p></div>
+      <div class="timeline-item"><h3>Agent Platform</h3><div class="meta">AI-Powered</div><p>freq agent create security-ops — VM created, cloud image downloaded, CLAUDE.md generated. AI specialists on your infrastructure in 2 minutes.</p></div>
+      <div class="timeline-item"><h3>Web Dashboard</h3><div class="meta">This page</div><p>Real-time fleet overview, VM management, container ops, network tools, and monitoring. Zero external dependencies. Pure Python stdlib HTTP server.</p></div>
+      <div class="timeline-item" style="border-left-color:var(--purple)"><h3>Zero Dependencies</h3><div class="meta">Philosophy</div><p>No pip install. No node_modules. No Docker required. Just Python 3.7+ and SSH. Runs on any Linux host that can reach your PVE nodes.</p></div>
+    </div>
+    <div class="crd" style="margin-top:24px;text-align:center">
+      <p id="about-credits" style="font-size:13px;color:var(--text);margin-top:8px">PVE FREQ</p>
+      <p style="font-size:12px;color:var(--purple-light);margin-top:8px;font-style:italic">"things are gonna get easier"</p>
+    </div>
+  </div>
+</div>
+</div>
+
+</div></div><!-- close mn-body and mn -->
+
+<!-- ═══ HOST DETAIL OVERLAY ═══ -->
+<div id="host-overlay" class="host-overlay">
+  <div class="ho-header"><div class="ho-header-inner">
+    <div>
+      <h1 id="hd-title"></h1>
+      <div id="hd-subtitle" style="font-size:13px;color:var(--text);margin-top:2px"></div>
+    </div>
+    <button class="ho-close" onclick="closeCard()">&#10005;</button>
+  </div></div>
+  <div class="ho-body">
+    <div id="hd-loading" style="color:var(--text-dim);padding:60px 0;text-align:center">
+      <div style="font-size:28px;margin-bottom:12px;opacity:0.6">&#9881;</div>
+      <div style="font-size:13px">Loading Host Details...</div>
+    </div>
+    <div id="hd-content" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ═══ TOAST + MODAL ═══ -->
+<div id="toast-container" class="toast-container"></div>
+<div id="modal-container" class="modal-overlay" style="display:none"></div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVE FREQ — Setup</title>
+<link rel="stylesheet" href="/static/css/setup.css">
+</head>
+<body>
+<div class="setup">
+  <div class="logo">
+    <h1>PVE FREQ</h1>
+    <p>Datacenter management CLI for homelabbers</p>
+  </div>
+  <div class="steps">
+    <div class="step-dot active" id="dot-0"></div>
+    <div class="step-dot" id="dot-1"></div>
+    <div class="step-dot" id="dot-2"></div>
+    <div class="step-dot" id="dot-3"></div>
+  </div>
+
+  <!-- Step 0: Welcome + Admin -->
+  <div class="pane active" id="pane-0">
+    <h2>Create Admin Account</h2>
+    <p class="desc">This account controls your FREQ dashboard and fleet operations.</p>
+    <label>Username</label>
+    <input type="text" id="s-user" placeholder="admin" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="s-pass" placeholder="Choose a strong password" autocomplete="new-password">
+    <label>Confirm Password</label>
+    <input type="password" id="s-pass2" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')nextStep()">
+    <div class="err" id="err-0"></div>
+    <div class="btn-row"><button class="btn" onclick="nextStep()">Create Account</button></div>
+  </div>
+
+  <!-- Step 1: Cluster Basics -->
+  <div class="pane" id="pane-1">
+    <h2>Cluster Configuration</h2>
+    <p class="desc">Basic settings for your Proxmox cluster. All optional — you can change these later.</p>
+    <label>Cluster Name</label>
+    <input type="text" id="s-cluster" placeholder="homelab">
+    <label>Timezone</label>
+    <input type="text" id="s-tz" placeholder="UTC" value="UTC">
+    <label>PVE Node IPs (comma-separated, optional)</label>
+    <input type="text" id="s-nodes" placeholder="192.168.1.10, 192.168.1.11">
+    <div class="err" id="err-1"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="prevStep()">Back</button>
+      <button class="btn" onclick="nextStep()">Continue</button>
+    </div>
+  </div>
+
+  <!-- Step 2: SSH Key -->
+  <div class="pane" id="pane-2">
+    <h2>SSH Key Setup</h2>
+    <p class="desc">FREQ uses SSH to manage your fleet. Generate a new keypair or skip if you'll configure SSH later.</p>
+    <div id="key-status"></div>
+    <div class="err" id="err-2"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="prevStep()">Back</button>
+      <button class="btn" id="btn-keygen" onclick="genKey()">Generate SSH Key</button>
+      <button class="btn" onclick="nextStep()">Continue</button>
+    </div>
+    <div class="skip" onclick="nextStep()">Skip — I'll set up SSH later</div>
+  </div>
+
+  <!-- Step 3: Done -->
+  <div class="pane" id="pane-3">
+    <h2>Setup Complete</h2>
+    <p class="desc">Your FREQ instance is ready.</p>
+    <div class="result" id="summary"></div>
+    <div class="btn-row"><button class="btn" onclick="launch()">Launch Dashboard</button></div>
+  </div>
+</div>
+
+<script src="/static/js/setup.js"></script>
+</body>
+</html>

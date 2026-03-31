@@ -1502,6 +1502,8 @@ class FreqHandler(BaseHTTPRequestHandler):
                 except Exception as e2:
                     import sys
                     print(f"[FREQ] Failed to send error response for {path}: {e2}", file=sys.stderr)
+        elif path.startswith("/static/"):
+            self._serve_static(path)
         elif path.startswith("/api/comms/") or path.startswith("/api/watch/"):
             self._proxy_watchdog()
         else:
@@ -2821,6 +2823,41 @@ a:hover{{text-decoration:underline}}
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
         self.send_header("Pragma", "no-cache")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(body)
+
+    # ── Static assets ─────────────────────────────────────────────────
+
+    _STATIC_TYPES = {
+        ".css": "text/css; charset=utf-8",
+        ".js": "application/javascript; charset=utf-8",
+        ".html": "text/html; charset=utf-8",
+        ".svg": "image/svg+xml",
+        ".png": "image/png",
+        ".ico": "image/x-icon",
+    }
+
+    def _serve_static(self, path: str):
+        """Serve static web assets from freq/data/web/."""
+        # /static/css/app.css → css/app.css
+        rel = path[len("/static/"):]
+        # Block path traversal
+        if ".." in rel or rel.startswith("/"):
+            self.send_error(403)
+            return
+        try:
+            from freq.modules.web_ui import _read_asset
+            body = _read_asset(rel).encode("utf-8")
+        except (FileNotFoundError, TypeError):
+            self.send_error(404)
+            return
+        ext = os.path.splitext(rel)[1].lower()
+        content_type = self._STATIC_TYPES.get(ext, "application/octet-stream")
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "public, max-age=3600")
         self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(body)

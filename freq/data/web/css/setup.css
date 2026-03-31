@@ -1,0 +1,30 @@
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#c9d1d9;--dim:#8b949e;--purple:#7B2FBE;--purple-dim:#5a1f8e;--green:#3fb950;--red:#f85149;--input-bg:#0d1117;--input-border:#30363d}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center}
+.setup{max-width:520px;width:100%;padding:40px 32px;background:var(--card);border-radius:16px;border:1px solid var(--border);margin:20px}
+.logo{text-align:center;margin-bottom:32px}
+.logo h1{font-size:28px;background:linear-gradient(135deg,#7B2FBE,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.logo p{color:var(--dim);font-size:13px;margin-top:4px}
+.steps{display:flex;gap:8px;margin-bottom:28px;justify-content:center}
+.step-dot{width:10px;height:10px;border-radius:50%;background:var(--border);transition:background 0.3s}
+.step-dot.active{background:var(--purple)}
+.step-dot.done{background:var(--green)}
+.pane{display:none}
+.pane.active{display:block}
+h2{font-size:18px;margin-bottom:6px}
+.desc{color:var(--dim);font-size:13px;margin-bottom:20px}
+label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px;margin-top:14px}
+input[type=text],input[type=password]{width:100%;padding:10px 14px;background:var(--input-bg);border:2px solid var(--input-border);color:var(--text);border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s}
+input:focus{border-color:var(--purple)}
+.btn{display:inline-block;padding:10px 24px;background:var(--purple);color:#fff;border:none;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer;margin-top:20px;transition:background 0.2s}
+.btn:hover{background:var(--purple-dim)}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+.btn-row{display:flex;gap:10px;justify-content:flex-end;margin-top:24px}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-ghost:hover{background:var(--border)}
+.err{color:var(--red);font-size:12px;margin-top:8px;min-height:18px}
+.ok{color:var(--green);font-size:12px;margin-top:8px}
+.result{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-top:16px;font-size:12px;font-family:monospace;line-height:1.6}
+.result .check{color:var(--green)}
+.skip{color:var(--dim);font-size:12px;margin-top:8px;cursor:pointer;text-decoration:underline}
+.skip:hover{color:var(--text)}

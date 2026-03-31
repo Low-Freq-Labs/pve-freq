@@ -646,10 +646,11 @@ class TestServeGwipe:
 # ═══════════════════════════════════════════════════════════════════
 
 class TestWebUIApiConstants:
-    """Verify all new API constants are present in web_ui.py."""
+    """Verify all new API constants are present in app.js."""
 
     def test_api_constants_present(self):
-        from freq.modules.web_ui import APP_HTML
+        from freq.modules.web_ui import _read_asset
+        app_js = _read_asset("js/app.js")
         required = [
             "DOCTOR:'/api/doctor'",
             "DIAGNOSE:'/api/diagnose'",
@@ -665,7 +666,7 @@ class TestWebUIApiConstants:
             "GWIPE:'/api/gwipe'",
         ]
         for constant in required:
-            assert constant in APP_HTML, f"Missing API constant: {constant}"
+            assert constant in app_js, f"Missing API constant: {constant}"
 
 
 class TestWebUIViews:
@@ -688,24 +689,26 @@ class TestWebUIViews:
 
 
 class TestWebUIJsFunctions:
-    """Verify new JS functions exist."""
+    """Verify new JS functions exist in app.js."""
 
     def test_policy_functions(self):
-        from freq.modules.web_ui import APP_HTML
-        assert "function policyAction(" in APP_HTML
-        assert "function runSweep(" in APP_HTML
-        assert "function loadPatrolStatus(" in APP_HTML
-        assert "function loadPoliciesPage(" in APP_HTML
+        from freq.modules.web_ui import _read_asset
+        app_js = _read_asset("js/app.js")
+        assert "function policyAction(" in app_js
+        assert "function runSweep(" in app_js
+        assert "function loadPatrolStatus(" in app_js
+        assert "function loadPoliciesPage(" in app_js
 
     def test_ops_functions(self):
-        from freq.modules.web_ui import APP_HTML
-        assert "function runDoctor(" in APP_HTML
-        assert "function runDiagnose(" in APP_HTML
-        assert "function fetchLogs(" in APP_HTML
-        assert "function loadZfs(" in APP_HTML
-        assert "function loadBackups(" in APP_HTML
-        assert "function runDiscover(" in APP_HTML
-        assert "function loadGwipe(" in APP_HTML
+        from freq.modules.web_ui import _read_asset
+        app_js = _read_asset("js/app.js")
+        assert "function runDoctor(" in app_js
+        assert "function runDiagnose(" in app_js
+        assert "function fetchLogs(" in app_js
+        assert "function loadZfs(" in app_js
+        assert "function loadBackups(" in app_js
+        assert "function runDiscover(" in app_js
+        assert "function loadGwipe(" in app_js
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -44,6 +44,9 @@ include = ["freq*"]
     "conf-templates/personality/*.toml",
     "conf-templates/plugins/*.py",
     "knowledge/*.toml",
+    "web/*.html",
+    "web/css/*.css",
+    "web/js/*.js",
 ]
 
 [tool.setuptools.dynamic]
