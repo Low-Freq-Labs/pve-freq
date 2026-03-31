@@ -1642,7 +1642,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/setup/reset": "_serve_setup_reset",
     }
 
-    def do_GET(self):
+    def _dispatch(self):
+        """Route request to handler method by path."""
         path = self.path.split("?")[0]
         method_name = self._ROUTES.get(path)
         if method_name:
@@ -1662,6 +1663,12 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._proxy_watchdog()
         else:
             self.send_error(404)
+
+    def do_GET(self):
+        self._dispatch()
+
+    def do_POST(self):
+        self._dispatch()
 
     # ── Server-Sent Events ────────────────────────────────────────────────
 
