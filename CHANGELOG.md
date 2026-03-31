@@ -4,9 +4,18 @@ All notable changes to PVE FREQ will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [2.2.0] - 2026-03-27
+## [2.2.0] - 2026-03-31
 
 ### Added
+- **Web asset extraction** — HTML, CSS, JS moved from Python strings to `freq/data/web/` directory
+- **SSE live updates** — `GET /api/events` endpoint with `cache_update`, `health_change`, `vm_state`, `alert` event types; dashboard auto-updates via EventSource
+- **Config unification** — `hosts.toml` format alongside legacy `hosts.conf`; inline `[users]` section in `freq.toml`
+- **PVE REST API client** — Token-based auth with automatic SSH fallback when API is unreachable
+- **Documentation** — `docs/CLI-REFERENCE.md` (88 commands), `docs/API-REFERENCE.md` (146 endpoints), `docs/CONFIGURATION.md` (every config key)
+- **25 edge case tests** — SSH transport errors, PVE API fallback, zero-host fleet, dashboard error states, config corruption, validation boundaries
+- **TUI commands** — `ssh`, `test-connection`, `serve`, `update` added to interactive menu
+- **Dashboard empty states** — Keys, policies, distros, groups, config sections show helpful messages when no data
+- **Dashboard error handling** — 21 silent `.catch()` blocks replaced with user-visible error messages and loading skeletons
 - **Dashboard: VM Management** — ADD DISK and TAGS tabs, inline tag button in VM list
 - **Dashboard: Docker Compose** — COMPOSE sub-tab with Up/Down/View per Docker VM
 - **Dashboard: Host Discovery** — full onboarding UI with subnet scanner and manual host add form
@@ -23,6 +32,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Empty states with action hints for backup and risk tables
 
 ### Changed
+- README overhauled with documentation table, accurate endpoint counts (146 API endpoints), linked references
+- CONTRIBUTING expanded with project structure map, API endpoint guide, plugin writing guide
+- TUI back key standardized — all 15 submenus now accept `[b]` for back
+- Test suite expanded from 1,281 to 1,325 tests
 - `vmtClone()` rewired to dedicated `/api/vm/clone` endpoint (was `/api/vm/create?clone=X` workaround)
 - `vmtMigrate()` rewired to dedicated `/api/vm/migrate` endpoint (was raw `qm migrate` via `/api/exec`)
 - VM migrate UI now has live migration checkbox
@@ -32,6 +45,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - SSH health probes now include `last_error` field for debugging unreachable hosts
 
 ### Fixed
+- Missing `log.debug()` function — PVE API client called it but it didn't exist (would crash on any API error with a real token)
 - 10 bare `except: pass` blocks replaced with proper logging (agent_collector, serve, init_cmd)
 - 17 silent API exception handlers now log errors
 - `_resolve_container_vm_ip()` logs resolution failures

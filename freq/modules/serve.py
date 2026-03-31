@@ -6486,6 +6486,16 @@ def cmd_serve(cfg, pack, args) -> int:
     """Start the FREQ web dashboard."""
     port = getattr(args, "port", None) or cfg.dashboard_port
 
+    # Ensure data directories exist — pip installs don't create /opt/pve-freq
+    for d in (cfg.install_dir, cfg.conf_dir, cfg.data_dir,
+              os.path.join(cfg.data_dir, "log"),
+              os.path.join(cfg.data_dir, "cache")):
+        try:
+            os.makedirs(d, exist_ok=True)
+        except PermissionError:
+            fmt.error(f"Cannot create {d} — run with sudo or set FREQ_DIR to a writable path")
+            return 1
+
     fmt.header("Web Dashboard")
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}Starting dashboard on port {port}...{fmt.C.RESET}")
