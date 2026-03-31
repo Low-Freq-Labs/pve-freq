@@ -22,6 +22,11 @@ nodes = []
 node_names = []
 ssh_user = "freq-admin"
 
+# PVE API token auth (optional — uses REST API instead of SSH for VM ops)
+# api_token_id = "freq@pve!dashboard"
+# api_token_secret_path = "/etc/freq/credentials/pve-token"
+# api_verify_ssl = false
+
 # Per-node storage configuration (uncomment and edit for each node)
 # [pve.storage.node1]
 # pool = "local-lvm"
@@ -101,3 +106,12 @@ slack_webhook = ""
 # pushover_user = ""
 # pushover_token = ""
 # webhook_url = ""
+
+# Inline user definitions (optional — replaces users.conf)
+# [users.freq-admin]
+# role = "admin"
+# groups = ""
+#
+# [users.operator1]
+# role = "operator"
+# groups = "fleet"

@@ -130,6 +130,14 @@ class FreqConfig:
     pushover_token: str = ""
     webhook_url: str = ""
 
+    # PVE API (optional — token auth alternative to SSH)
+    pve_api_token_id: str = ""        # e.g. "freq@pve!dashboard"
+    pve_api_token_secret: str = ""    # loaded from credential file at runtime
+    pve_api_verify_ssl: bool = False  # homelab self-signed certs
+
+    # Users from TOML (populated by _apply_toml if [users] section exists)
+    _toml_users: list = field(default_factory=list)
+
     # Fleet data (loaded separately)
     hosts: list = field(default_factory=list)
     vlans: list = field(default_factory=list)
@@ -267,6 +275,19 @@ def bootstrap_conf(install_dir: str) -> bool:
     return True
 
 
+_deprecation_warned: set = set()
+
+
+def _deprecation_warn(old_name: str, new_name: str):
+    """Print a one-time deprecation warning for legacy config files."""
+    if old_name in _deprecation_warned:
+        return
+    _deprecation_warned.add(old_name)
+    import sys
+    print(f"[FREQ] DEPRECATION: {old_name} detected. "
+          f"Migrate to {new_name} for long-term support.", file=sys.stderr)
+
+
 def load_config(install_dir: Optional[str] = None) -> FreqConfig:
     """Load FREQ configuration with safe defaults.
 
@@ -287,8 +308,14 @@ def load_config(install_dir: Optional[str] = None) -> FreqConfig:
     if data:
         _apply_toml(cfg, data)
 
-    # Load fleet data
-    cfg.hosts = load_hosts(cfg.hosts_file)
+    # Load fleet data — prefer hosts.toml, fall back to hosts.conf
+    hosts_toml = os.path.join(cfg.conf_dir, "hosts.toml")
+    if os.path.isfile(hosts_toml):
+        cfg.hosts = load_hosts_toml(hosts_toml)
+    else:
+        cfg.hosts = load_hosts(cfg.hosts_file)
+        if os.path.isfile(cfg.hosts_file) and cfg.hosts:
+            _deprecation_warn("hosts.conf", "hosts.toml")
     cfg.vlans = load_vlans(os.path.join(cfg.conf_dir, "vlans.toml"))
     cfg.distros = load_distros(os.path.join(cfg.conf_dir, "distros.toml"))
     cfg.container_vms = load_containers(os.path.join(cfg.conf_dir, "containers.toml"))
@@ -393,6 +420,27 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.watchdog_port = _safe_int(services.get("watchdog_port"), cfg.watchdog_port)
     cfg.agent_port = _safe_int(services.get("agent_port"), cfg.agent_port)
 
+    # PVE API token auth (optional — alternative to SSH)
+    cfg.pve_api_token_id = pve.get("api_token_id", cfg.pve_api_token_id)
+    cfg.pve_api_verify_ssl = pve.get("api_verify_ssl", cfg.pve_api_verify_ssl)
+    token_secret_path = pve.get("api_token_secret_path", "")
+    if token_secret_path and os.path.isfile(token_secret_path):
+        try:
+            with open(token_secret_path) as f:
+                cfg.pve_api_token_secret = f.read().strip()
+        except OSError:
+            pass
+
+    # Inline users (optional — replaces users.conf)
+    users_section = data.get("users", {})
+    if users_section:
+        for username, info in users_section.items():
+            cfg._toml_users.append({
+                "username": username,
+                "role": info.get("role", "viewer") if isinstance(info, dict) else "viewer",
+                "groups": info.get("groups", "") if isinstance(info, dict) else "",
+            })
+
 
 # --- Fleet Loaders ---
 
@@ -424,6 +472,33 @@ def load_hosts(path: str) -> list:
                 ))
     except FileNotFoundError:
         pass
+    return hosts
+
+
+def load_hosts_toml(path: str) -> list:
+    """Load hosts from TOML format (preferred over hosts.conf).
+
+    Format:
+        [[host]]
+        ip = "10.0.0.10"
+        label = "node1"
+        type = "pve"
+        groups = "prod,cluster"
+        all_ips = ["10.0.0.10", "10.0.1.10"]
+    """
+    data = load_toml(path)
+    hosts = []
+    for entry in data.get("host", []):
+        all_ips = entry.get("all_ips", [])
+        if isinstance(all_ips, str):
+            all_ips = [ip for ip in all_ips.split(",") if ip]
+        hosts.append(Host(
+            ip=entry.get("ip", ""),
+            label=entry.get("label", ""),
+            htype=entry.get("type", "linux"),
+            groups=entry.get("groups", ""),
+            all_ips=all_ips,
+        ))
     return hosts
 
 

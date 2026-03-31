@@ -28,7 +28,11 @@ USER_CMD_TIMEOUT = 15
 # --- User Data ---
 
 def _load_users(cfg: FreqConfig) -> list:
-    """Load users from users.conf. Format: USERNAME ROLE [GROUPS]"""
+    """Load users. Prefers freq.toml [users] section, falls back to users.conf."""
+    # TOML users take priority if defined
+    if cfg._toml_users:
+        return list(cfg._toml_users)
+    # Legacy: load from users.conf
     users = []
     path = os.path.join(cfg.conf_dir, "users.conf")
     try:
