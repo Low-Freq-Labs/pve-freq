@@ -582,6 +582,15 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cooldown", type=int, default=300, help="Seconds between re-alerts")
     p.set_defaults(func=_cmd_rules)
 
+    # --- IPAM ---
+    p = sub.add_parser("ip", help="IP address management (next/list/check)")
+    p.add_argument("action", nargs="?", choices=["next", "list", "check"], default="next",
+                   help="Action: next (default), list, check")
+    p.add_argument("target", nargs="?", help="IP address (for check)")
+    p.add_argument("--vlan", help="VLAN name to search")
+    p.add_argument("--count", type=int, default=1, help="Number of IPs to find (for next)")
+    p.set_defaults(func=_cmd_ip)
+
     # --- Declarative Fleet ---
     p = sub.add_parser("plan", help="Show fleet plan diff (desired vs actual)")
     p.add_argument("--file", help="Path to fleet plan TOML (default: conf/fleet-plan.toml)")
@@ -760,6 +769,11 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("agent list", "Show registered agents"),
             ("agent start/stop <name>", "Manage agent sessions"),
             ("agent destroy <name>", "Remove agent + VM"),
+        ]),
+        ("IPAM", [
+            ("ip next --vlan <name>", "Next available IP in VLAN"),
+            ("ip list [--vlan <name>]", "List used IPs"),
+            ("ip check <ip>", "Check if IP is in use"),
         ]),
         ("Declarative Fleet", [
             ("plan [--file path]", "Show fleet plan diff (desired vs actual)"),
@@ -1244,6 +1258,11 @@ def _cmd_cost(cfg: FreqConfig, pack, args) -> int:
 def _cmd_rules(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.rules import cmd_rules
     return cmd_rules(cfg, pack, args)
+
+
+def _cmd_ip(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.ipam import cmd_ip
+    return cmd_ip(cfg, pack, args)
 
 
 def _cmd_plan(cfg: FreqConfig, pack, args) -> int:

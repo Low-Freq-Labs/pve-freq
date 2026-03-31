@@ -1022,6 +1022,11 @@ def _menu_infrastructure(cfg, pack):
             ("4", "iDRAC", "Server BMC management", ""),
             ("5", "VPN", "WireGuard tunnels", Tag.COMING),
             None,
+            "IPAM",
+            ("p", "IP Next", "Next available IP in a VLAN", ""),
+            ("l", "IP List", "List all used IPs", ""),
+            ("c", "IP Check", "Check if an IP is in use", ""),
+            None,
             "Fleet Operations",
             ("6", "NTP", "Fleet time sync check/fix", ""),
             ("7", "Updates", "Fleet OS updates", ""),
@@ -1047,6 +1052,16 @@ def _menu_infrastructure(cfg, pack):
             _run_command(cfg, pack, "idrac")
         elif ch == "5":
             _run_command(cfg, pack, "vpn")
+        elif ch == "p":
+            vlan = _input("VLAN name:")
+            if vlan:
+                _run_argv(cfg, pack, ["ip", "next", "--vlan", vlan])
+        elif ch == "l":
+            _run_argv(cfg, pack, ["ip", "list"])
+        elif ch == "c":
+            ip_addr = _input("IP address:")
+            if ip_addr:
+                _run_argv(cfg, pack, ["ip", "check", ip_addr])
         elif ch == "6":
             _run_command(cfg, pack, "ntp")
         elif ch == "7":

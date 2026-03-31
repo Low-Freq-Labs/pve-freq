@@ -50,8 +50,8 @@ class TestCLIDispatch(unittest.TestCase):
             # Operations
             "sandbox", "file", "specialist", "lab",
             "deploy-agent", "agent-status", "gwipe",
-            # Declarative fleet
-            "plan", "apply",
+            # IPAM + Declarative fleet
+            "ip", "plan", "apply",
         ]
         # Check parser's registered subcommands directly (avoids
         # required-arg issues with parse_args on commands like 'power')

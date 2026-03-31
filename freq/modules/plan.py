@@ -63,7 +63,7 @@ def _query_cluster_vms(cfg: FreqConfig) -> list:
 
     Returns list of dicts: {vmid, name, status, cores, ram, disk, node}
     """
-    from freq.core.ssh import ssh_run
+    from freq.core.ssh import run as ssh_run
 
     vms = []
     for i, node_ip in enumerate(cfg.pve_nodes):
@@ -359,7 +359,7 @@ def cmd_apply(cfg: FreqConfig, pack, args) -> int:
 
     fmt.blank()
 
-    from freq.core.ssh import ssh_run
+    from freq.core.ssh import run as ssh_run
 
     errors = 0
 
