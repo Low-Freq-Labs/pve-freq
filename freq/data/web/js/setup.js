@@ -23,7 +23,7 @@ function nextStep(){
     if(!p||p.length<8){err(0,'Password must be at least 8 characters');return}
     if(p!==p2){err(0,'Passwords do not match');return}
     var btn=document.querySelector('#pane-0 .btn');btn.disabled=true;btn.textContent='Creating...';
-    fetch('/api/setup/create-admin?username='+encodeURIComponent(u)+'&password='+encodeURIComponent(p))
+    fetch('/api/setup/create-admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})})
     .then(function(r){return r.json()}).then(function(d){
       btn.disabled=false;btn.textContent='Create Account';
       if(d.error){err(0,d.error);return}

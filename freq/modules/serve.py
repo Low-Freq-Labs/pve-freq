@@ -1381,21 +1381,25 @@ def _write_containers_toml(path: str, container_vms: dict):
 
 
 def _is_first_run():
-    """Detect if this is the first run (no admin exists, no setup-complete marker).
+    """Detect if this is the first run (no admin exists, no setup markers).
 
     Returns True if:
-      1. No data/setup-complete marker exists, AND
-      2. No users exist in users.conf (or file doesn't exist)
+      1. No data/setup-complete marker exists (Web UI), AND
+      2. No conf/.initialized marker exists (CLI init), AND
+      3. No users exist in users.conf (or file doesn't exist)
     """
-    # Check marker first (fast path — already set up)
     cfg = load_config()
-    data_dir = cfg.data_dir
-    if os.path.isfile(os.path.join(data_dir, "setup-complete")):
+
+    # Check Web UI marker (fast path)
+    if os.path.isfile(os.path.join(cfg.data_dir, "setup-complete")):
+        return False
+
+    # Check CLI init marker (so CLI-initialized systems skip the wizard)
+    if os.path.isfile(os.path.join(cfg.conf_dir, ".initialized")):
         return False
 
     # Check if any users exist
     try:
-        cfg = load_config()
         users = _load_users(cfg)
         if users:
             return False
@@ -3028,14 +3032,30 @@ a:hover{{text-decoration:underline}}
         })
 
     def _serve_setup_create_admin(self):
-        """Create admin account during first-run setup."""
+        """Create admin account during first-run setup.
+
+        Accepts POST with JSON body (preferred) or GET with query params (legacy).
+        POST body: {"username": "...", "password": "..."}
+        """
         if not _is_first_run():
             self._json_response({"error": "Setup already complete"}, 403)
             return
 
-        params = _parse_query(self)
-        username = params.get("username", [""])[0].strip().lower()
-        password = params.get("password", [""])[0]
+        # Prefer POST body (credentials should not be in URLs)
+        username = ""
+        password = ""
+        if self.command == "POST":
+            try:
+                body = self._request_body()
+                username = body.get("username", "").strip().lower()
+                password = body.get("password", "")
+            except Exception:
+                pass
+        if not username or not password:
+            # Fall back to query params for legacy compatibility
+            params = _parse_query(self)
+            username = username or params.get("username", [""])[0].strip().lower()
+            password = password or params.get("password", [""])[0]
 
         if not username or not password:
             self._json_response({"error": "Username and password required"})
@@ -3077,7 +3097,11 @@ a:hover{{text-decoration:underline}}
         self._json_response({"ok": True, "user": username, "role": "admin"})
 
     def _serve_setup_configure(self):
-        """Save cluster configuration during first-run setup."""
+        """Save cluster configuration during first-run setup.
+
+        Updates freq.toml in-place, preserving existing config sections.
+        Only modifies cluster_name, timezone, and pve.nodes.
+        """
         if not _is_first_run():
             self._json_response({"error": "Setup already complete"}, 403)
             return
@@ -3089,27 +3113,42 @@ a:hover{{text-decoration:underline}}
 
         cfg = load_config()
 
-        # Write/update freq.toml
         toml_path = os.path.join(cfg.conf_dir, "freq.toml")
         os.makedirs(cfg.conf_dir, exist_ok=True)
 
-        # Build config content
-        lines = ['[freq]']
-        if cluster_name:
-            lines.append(f'cluster_name = "{cluster_name}"')
-        lines.append(f'timezone = "{timezone}"')
-        lines.append('')
-
-        if pve_nodes:
-            node_ips = [ip.strip() for ip in pve_nodes.split(",") if ip.strip()]
-            if node_ips:
-                lines.append('[pve]')
-                lines.append(f'nodes = {json.dumps(node_ips)}')
-                lines.append('')
-
+        # Read existing config to preserve all sections
+        from freq.modules.init_cmd import _update_toml_value
         try:
+            content = ""
+            if os.path.isfile(toml_path):
+                with open(toml_path, "r") as f:
+                    content = f.read()
+
+            # If empty/missing, seed from template
+            if not content.strip():
+                template = os.path.join(
+                    os.path.dirname(os.path.dirname(__file__)),
+                    "data", "conf-templates", "freq.toml.example",
+                )
+                if os.path.isfile(template):
+                    with open(template, "r") as f:
+                        content = f.read()
+                else:
+                    content = "[freq]\n\n[pve]\nnodes = []\n"
+
+            # Update only the targeted keys (preserves everything else)
+            if cluster_name:
+                content = _update_toml_value(content, "cluster_name", cluster_name)
+            content = _update_toml_value(content, "timezone", timezone)
+
+            if pve_nodes:
+                node_ips = [ip.strip() for ip in pve_nodes.split(",") if ip.strip()]
+                if node_ips:
+                    content = _update_toml_value(content, "nodes", node_ips)
+
             with open(toml_path, "w") as f:
-                f.write("\n".join(lines) + "\n")
+                f.write(content)
+
             self._json_response({"ok": True, "cluster_name": cluster_name, "timezone": timezone})
         except OSError as e:
             self._json_response({"error": f"Failed to write config: {e}"}, 500)
@@ -3186,6 +3225,17 @@ a:hover{{text-decoration:underline}}
         try:
             with open(marker, "w") as f:
                 f.write(f"Setup completed: {datetime.datetime.now().isoformat()}\n")
+
+            # Also write CLI-compatible .initialized marker so freq init --check passes
+            try:
+                os.makedirs(cfg.conf_dir, exist_ok=True)
+                init_marker = os.path.join(cfg.conf_dir, ".initialized")
+                if not os.path.isfile(init_marker):
+                    from freq import __version__
+                    with open(init_marker, "w") as f:
+                        f.write(f"PVE FREQ {__version__} — web setup {datetime.datetime.now().isoformat()}\n")
+            except OSError:
+                pass  # Non-fatal — web marker is primary
 
             # Auto-trigger hosts sync so fleet populates immediately
             try:
