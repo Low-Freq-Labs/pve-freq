@@ -5,10 +5,12 @@ validation, SSH result edge cases, FleetBoundaries edge cases, validate.py
 boundary inputs.
 """
 import os
+import subprocess
 import sys
 import tempfile
 import shutil
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -697,6 +699,407 @@ class TestValidateEdgeCases(unittest.TestCase):
 
     def test_protected_vmid_none_input(self):
         self.assertFalse(validate.is_protected_vmid(None, [], []))
+
+
+# ---------------------------------------------------------------------------
+# 7. SSH Transport Edge Cases
+# ---------------------------------------------------------------------------
+
+class TestSSHTransportEdgeCases(unittest.TestCase):
+    """SSH transport must handle missing keys, timeouts, and failures."""
+
+    @patch("freq.core.ssh.subprocess.run")
+    def test_run_timeout_returns_code_124(self, mock_sub):
+        """SSH timeout returns CmdResult with returncode=124."""
+        from freq.core.ssh import run
+        mock_sub.side_effect = subprocess.TimeoutExpired("ssh", 30)
+        result = run("10.0.0.1", "uptime", command_timeout=30)
+        self.assertEqual(result.returncode, 124)
+        self.assertIn("Timeout", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    @patch("freq.core.ssh.subprocess.run")
+    def test_run_oserror_returns_code_1(self, mock_sub):
+        """SSH OSError (connection refused, etc.) returns CmdResult with returncode=1."""
+        from freq.core.ssh import run
+        mock_sub.side_effect = OSError("Connection refused")
+        result = run("10.0.0.1", "uptime")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Connection refused", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    @patch("freq.core.ssh.subprocess.run")
+    def test_run_nonexistent_key_path_still_builds_command(self, mock_sub):
+        """Missing key file doesn't crash run() — SSH itself will fail."""
+        from freq.core.ssh import run
+        mock_sub.return_value = MagicMock(
+            stdout="", stderr="No such file: /nonexistent/key",
+            returncode=255,
+        )
+        result = run("10.0.0.1", "uptime", key_path="/nonexistent/key")
+        self.assertEqual(result.returncode, 255)
+        # Verify the command was still attempted (SSH binary was called)
+        mock_sub.assert_called_once()
+
+    @patch("freq.core.ssh.subprocess.run")
+    def test_run_none_key_path_omits_dash_i(self, mock_sub):
+        """When key_path is None, SSH command has no -i flag."""
+        from freq.core.ssh import run
+        mock_sub.return_value = MagicMock(
+            stdout="ok", stderr="", returncode=0,
+        )
+        run("10.0.0.1", "uptime", key_path=None)
+        call_args = mock_sub.call_args[0][0]
+        self.assertNotIn("-i", call_args)
+
+    @patch("freq.core.ssh.subprocess.run")
+    def test_run_success_has_duration(self, mock_sub):
+        """Successful run populates duration field."""
+        from freq.core.ssh import run
+        mock_sub.return_value = MagicMock(
+            stdout="up 5 days", stderr="", returncode=0,
+        )
+        result = run("10.0.0.1", "uptime")
+        self.assertEqual(result.returncode, 0)
+        self.assertGreaterEqual(result.duration, 0)
+
+    def test_run_many_empty_hosts_returns_empty_dict(self):
+        """run_many with no hosts returns empty dict without error."""
+        from freq.core.ssh import run_many
+        result = run_many(hosts=[], command="uptime")
+        self.assertEqual(result, {})
+
+
+# ---------------------------------------------------------------------------
+# 8. PVE API Fallback Edge Cases
+# ---------------------------------------------------------------------------
+
+class TestPVEApiEdgeCases(unittest.TestCase):
+    """PVE API must fail gracefully and fall back to SSH."""
+
+    def test_api_call_no_token_returns_false(self):
+        """Missing API token returns ('', False) immediately."""
+        from freq.modules.pve import _pve_api_call
+        cfg = MagicMock()
+        cfg.pve_api_token_id = ""
+        cfg.pve_api_token_secret = ""
+        result, ok = _pve_api_call(cfg, "10.0.0.1", "/nodes")
+        self.assertFalse(ok)
+        self.assertEqual(result, "")
+
+    def test_api_call_missing_secret_returns_false(self):
+        """Token ID present but secret empty returns ('', False)."""
+        from freq.modules.pve import _pve_api_call
+        cfg = MagicMock()
+        cfg.pve_api_token_id = "freq@pve!dashboard"
+        cfg.pve_api_token_secret = ""
+        result, ok = _pve_api_call(cfg, "10.0.0.1", "/nodes")
+        self.assertFalse(ok)
+
+    @patch("freq.modules.pve.urllib.request.urlopen")
+    def test_api_call_unreachable_returns_false(self, mock_urlopen):
+        """Unreachable API returns error string and False."""
+        from freq.modules.pve import _pve_api_call
+        mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
+        cfg = MagicMock()
+        cfg.pve_api_token_id = "freq@pve!dashboard"
+        cfg.pve_api_token_secret = "secret-uuid"
+        cfg.pve_api_verify_ssl = False
+        result, ok = _pve_api_call(cfg, "10.0.0.1", "/nodes")
+        self.assertFalse(ok)
+        self.assertIn("Connection refused", str(result))
+
+    @patch("freq.modules.pve.urllib.request.urlopen")
+    def test_api_call_timeout_returns_false(self, mock_urlopen):
+        """API timeout returns error and False."""
+        from freq.modules.pve import _pve_api_call
+        mock_urlopen.side_effect = TimeoutError("timed out")
+        cfg = MagicMock()
+        cfg.pve_api_token_id = "freq@pve!dashboard"
+        cfg.pve_api_token_secret = "secret-uuid"
+        cfg.pve_api_verify_ssl = False
+        result, ok = _pve_api_call(cfg, "10.0.0.1", "/nodes")
+        self.assertFalse(ok)
+
+    @patch("freq.modules.pve._pve_cmd")
+    def test_pve_call_no_token_falls_back_to_ssh(self, mock_ssh):
+        """No API token configured → skip API, go straight to SSH."""
+        from freq.modules.pve import _pve_call
+        mock_ssh.return_value = ("qm list output", True)
+        cfg = MagicMock()
+        cfg.pve_api_token_id = ""
+        cfg.pve_api_token_secret = ""
+        result, ok = _pve_call(cfg, "10.0.0.1", "/nodes", "qm list")
+        self.assertTrue(ok)
+        mock_ssh.assert_called_once()
+
+    @patch("freq.modules.pve._pve_cmd")
+    @patch("freq.modules.pve._pve_api_call")
+    def test_pve_call_api_fail_falls_back_to_ssh(self, mock_api, mock_ssh):
+        """API fails → automatically falls back to SSH."""
+        from freq.modules.pve import _pve_call
+        mock_api.return_value = ("Connection refused", False)
+        mock_ssh.return_value = ("100 running", True)
+        cfg = MagicMock()
+        cfg.pve_api_token_id = "freq@pve!dashboard"
+        cfg.pve_api_token_secret = "secret-uuid"
+        result, ok = _pve_call(cfg, "10.0.0.1", "/nodes", "qm list")
+        self.assertTrue(ok)
+        self.assertEqual(result, "100 running")
+        mock_api.assert_called_once()
+        mock_ssh.assert_called_once()
+
+    @patch("freq.modules.pve._pve_cmd")
+    @patch("freq.modules.pve._pve_api_call")
+    def test_pve_call_both_fail(self, mock_api, mock_ssh):
+        """Both API and SSH fail → returns SSH failure."""
+        from freq.modules.pve import _pve_call
+        mock_api.return_value = ("timeout", False)
+        mock_ssh.return_value = ("", False)
+        cfg = MagicMock()
+        cfg.pve_api_token_id = "freq@pve!dashboard"
+        cfg.pve_api_token_secret = "secret-uuid"
+        result, ok = _pve_call(cfg, "10.0.0.1", "/nodes", "qm list")
+        self.assertFalse(ok)
+
+
+# ---------------------------------------------------------------------------
+# 9. Fleet Commands with Zero Hosts
+# ---------------------------------------------------------------------------
+
+class TestFleetZeroHosts(unittest.TestCase):
+    """Fleet commands must handle zero hosts gracefully."""
+
+    @patch("freq.core.fmt.footer")
+    @patch("freq.core.fmt.blank")
+    @patch("freq.core.fmt.line")
+    @patch("freq.core.fmt.header")
+    def test_cmd_status_zero_hosts_returns_zero(self, *_mocks):
+        """freq status with no hosts shows message, returns 0."""
+        from freq.modules.fleet import cmd_status
+        cfg = MagicMock()
+        cfg.hosts = []
+        pack = MagicMock()
+        args = MagicMock()
+        result = cmd_status(cfg, pack, args)
+        self.assertEqual(result, 0)
+
+    @patch("freq.core.fmt.info")
+    @patch("freq.core.fmt.error")
+    def test_cmd_exec_no_match_returns_one(self, mock_error, mock_info):
+        """freq exec with no matching hosts returns 1."""
+        from freq.modules.fleet import cmd_exec
+        cfg = MagicMock()
+        cfg.hosts = []
+        cfg.ssh_key_path = "/tmp/fake"
+        cfg.ssh_user = "freq-admin"
+        cfg.connect_timeout = 5
+        cfg.max_parallel = 5
+        pack = MagicMock()
+        args = MagicMock()
+        args.target = "nonexistent"
+        args.command = "uptime"
+        args.group = None
+        args.timeout = 30
+        result = cmd_exec(cfg, pack, args)
+        self.assertEqual(result, 1)
+        mock_error.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# 10. Dashboard API with Zero/Invalid State
+# ---------------------------------------------------------------------------
+
+class TestDashboardEdgeCases(unittest.TestCase):
+    """Dashboard API endpoints must handle edge cases gracefully."""
+
+    def _make_handler(self, path="/api/info"):
+        """Create a FreqHandler mock — minimal version."""
+        import io
+        import json
+        from freq.modules.serve import FreqHandler
+
+        h = FreqHandler.__new__(FreqHandler)
+        h.path = path
+        h.wfile = io.BytesIO()
+        h.rfile = io.BytesIO()
+        h.requestline = f"GET {path} HTTP/1.1"
+        h.client_address = ("127.0.0.1", 9999)
+        h.request_version = "HTTP/1.1"
+        h.headers = {}
+        h._headers_buffer = []
+        h.responses = {200: ("OK", ""), 404: ("Not Found", "")}
+        h._status_code = None
+        h._resp_headers = []
+        h.send_response = lambda code, msg=None: setattr(h, "_status_code", code)
+        h.send_header = lambda k, v: h._resp_headers.append((k, v))
+        h.end_headers = lambda: None
+        return h
+
+    def _get_json(self, handler):
+        import json
+        handler.wfile.seek(0)
+        body = handler.wfile.read()
+        if not body:
+            return None
+        return json.loads(body.decode())
+
+    @patch("freq.modules.serve.load_config")
+    def test_host_detail_invalid_host_returns_error(self, mock_cfg):
+        """GET /api/host/detail?host=bogus returns error JSON, not crash."""
+        cfg = MagicMock()
+        cfg.hosts = []
+        cfg.ssh_key_path = "/tmp/fake"
+        mock_cfg.return_value = cfg
+
+        h = self._make_handler("/api/host/detail?host=bogus")
+        h._serve_host_detail()
+        resp = self._get_json(h)
+        self.assertIn("error", resp)
+
+    @patch("freq.modules.serve.load_config")
+    def test_exec_no_command_returns_error(self, mock_cfg):
+        """GET /api/exec with no cmd parameter returns error."""
+        cfg = MagicMock()
+        cfg.hosts = []
+        mock_cfg.return_value = cfg
+
+        h = self._make_handler("/api/exec?target=all")
+        h._serve_exec()
+        resp = self._get_json(h)
+        self.assertIn("error", resp)
+
+    @patch("freq.modules.serve._bg_cache", {"fleet_overview": None})
+    @patch("freq.modules.serve._bg_lock", MagicMock())
+    def test_fleet_overview_no_cache_returns_skeleton(self):
+        """Fleet overview before cache is populated returns skeleton with _loading."""
+        h = self._make_handler("/api/fleet/overview")
+        h._serve_fleet_overview()
+        resp = self._get_json(h)
+        self.assertTrue(resp.get("_loading", False))
+        self.assertEqual(resp.get("vms"), [])
+
+    @patch("freq.modules.serve._bg_cache", {
+        "fleet_overview": {"vms": [], "summary": {"total_vms": 0}}
+    })
+    @patch("freq.modules.serve._bg_lock", MagicMock())
+    def test_fleet_overview_empty_fleet_returns_valid_json(self):
+        """Fleet overview with zero VMs returns valid response."""
+        h = self._make_handler("/api/fleet/overview")
+        h._serve_fleet_overview()
+        resp = self._get_json(h)
+        self.assertIsNotNone(resp)
+        self.assertEqual(resp["vms"], [])
+
+
+# ---------------------------------------------------------------------------
+# 11. Config Corruption and Recovery
+# ---------------------------------------------------------------------------
+
+class TestConfigCorruption(unittest.TestCase):
+    """Config must survive partial corruption and recover gracefully."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_freq_toml_with_only_ssh_section(self):
+        """Partial freq.toml with only [ssh] section still loads."""
+        path = os.path.join(self.tmpdir, "freq.toml")
+        with open(path, "w") as f:
+            f.write('[ssh]\nservice_account = "testuser"\nconnect_timeout = 10\n')
+        data = load_toml(path)
+        self.assertEqual(data["ssh"]["service_account"], "testuser")
+
+    def test_freq_toml_with_duplicate_sections(self):
+        """TOML with duplicate keys in different sections loads."""
+        path = os.path.join(self.tmpdir, "freq.toml")
+        with open(path, "w") as f:
+            f.write('[freq]\ndebug = true\n\n[ssh]\ndebug = false\n')
+        data = load_toml(path)
+        self.assertTrue(data["freq"]["debug"])
+        self.assertFalse(data["ssh"]["debug"])
+
+    def test_hosts_toml_with_missing_fields(self):
+        """hosts.toml entries with missing optional fields still load."""
+        path = os.path.join(self.tmpdir, "hosts.toml")
+        with open(path, "w") as f:
+            f.write('[[host]]\nip = "10.0.0.1"\nlabel = "test"\n')
+        from freq.core.config import load_hosts_toml
+        hosts = load_hosts_toml(path)
+        self.assertEqual(len(hosts), 1)
+        self.assertEqual(hosts[0].ip, "10.0.0.1")
+        # type should default to "linux"
+        self.assertEqual(hosts[0].htype, "linux")
+
+    def test_hosts_toml_with_empty_host_entries(self):
+        """hosts.toml with empty [[host]] blocks doesn't crash."""
+        path = os.path.join(self.tmpdir, "hosts.toml")
+        with open(path, "w") as f:
+            f.write('[[host]]\n\n[[host]]\nip = "10.0.0.1"\nlabel = "valid"\n')
+        from freq.core.config import load_hosts_toml
+        hosts = load_hosts_toml(path)
+        # Should get at least the valid entry
+        valid = [h for h in hosts if h.ip == "10.0.0.1"]
+        self.assertEqual(len(valid), 1)
+
+    def test_apply_toml_with_nested_unknown_keys(self):
+        """Unknown nested TOML keys don't crash _apply_toml."""
+        cfg = FreqConfig()
+        data = {"completely_unknown": {"nested": {"deep": True}}}
+        _apply_toml(cfg, data)
+        # Should not crash — unknown sections silently ignored
+
+    def test_vlans_toml_missing_gateway(self):
+        """vlans.toml with missing gateway field loads without error."""
+        path = os.path.join(self.tmpdir, "vlans.toml")
+        with open(path, "w") as f:
+            f.write('[vlan.storage]\nid = 25\nname = "Storage"\nsubnet = "10.0.25.0/24"\nprefix = "10.0.25"\n')
+        data = load_toml(path)
+        self.assertIn("vlan", data)
+        self.assertIn("storage", data["vlan"])
+        # No gateway key — should be fine
+        self.assertNotIn("gateway", data["vlan"]["storage"])
+
+
+# ---------------------------------------------------------------------------
+# 12. Validate Module Boundary Cases (extended)
+# ---------------------------------------------------------------------------
+
+class TestValidateExtended(unittest.TestCase):
+    """Extended boundary tests for validate module."""
+
+    def test_ip_with_leading_zeros(self):
+        """IPs with leading zeros like 010.0.0.1 — should not crash."""
+        result = validate.ip("010.0.0.1")
+        self.assertIsInstance(result, bool)
+
+    def test_hostname_with_unicode(self):
+        """Unicode hostnames should be rejected."""
+        self.assertFalse(validate.hostname("hôst-1"))
+
+    def test_vmid_max_value(self):
+        """VMID at maximum Proxmox value (999999999) should be valid."""
+        self.assertTrue(validate.vmid(999999999))
+
+    def test_vmid_float_rejected(self):
+        """Float VMID should be rejected or handled without crash."""
+        result = validate.vmid(100.5)
+        self.assertIsInstance(result, bool)
+
+    def test_label_with_only_hyphens(self):
+        """Label of only hyphens should be rejected."""
+        self.assertFalse(validate.label("---"))
+
+    def test_empty_string_inputs_dont_crash(self):
+        """All validators handle empty string without crashing."""
+        validate.ip("")
+        validate.hostname("")
+        validate.username("")
+        validate.label("")
+        # No assertion — just proving no crash
 
 
 if __name__ == "__main__":

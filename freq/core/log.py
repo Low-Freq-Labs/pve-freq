@@ -78,6 +78,10 @@ def _write(level: str, msg: str, **extra) -> None:
         pass  # Logging should never crash the tool
 
 
+def debug(msg: str, **extra) -> None:
+    _write("DEBUG", msg, **extra)
+
+
 def info(msg: str, **extra) -> None:
     _write("INFO", msg, **extra)
 
