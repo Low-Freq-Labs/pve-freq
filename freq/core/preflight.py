@@ -1,12 +1,24 @@
 """Pre-flight environment checks for FREQ.
 
-Reusable validation module used by:
-- freq doctor (self-diagnostic)
-- freq init (first-run wizard)
-- install.sh (via python3 -c "from freq.core.preflight import run_preflight; ...")
+Provides: check_python_version(), check_platform(), check_disk_space(),
+          check_required_binaries(), run_preflight(), get_install_hint()
 
-Every check returns (ok: bool, message: str) or (ok, message, extra).
-Zero external dependencies. Python 3.11+ required.
+Reusable validation module used by freq doctor, freq init, and install.sh.
+Every check returns (ok, message) or (ok, message, extra). Designed to be
+importable from install.sh via `python3 -c "from freq.core.preflight import ..."`.
+
+Replaces: Ad-hoc checks scattered across init scripts
+
+Architecture:
+    - Each check is an independent function returning a tuple
+    - run_preflight() orchestrates all checks and prints results
+    - get_install_hint() provides distro-aware install instructions
+    - Parses /etc/os-release for distro detection (shared with platform.py)
+
+Design decisions:
+    - Must work standalone — no freq.core imports except types.
+    - Python 3.11+ required. MIN_PYTHON enforced here and in compat.py.
+    - Install hints cover Debian, Ubuntu, RHEL, Rocky, Alma, openSUSE families.
 """
 import os
 import platform

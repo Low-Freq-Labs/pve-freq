@@ -1,18 +1,23 @@
-"""Plugin system for FREQ.
+"""Plugin discovery and registration for FREQ.
 
-Drop a .py file in conf/plugins/ and FREQ auto-loads it as a command.
+Provides: discover_plugins(plugin_dir) → list of plugin dicts
 
-Each plugin must define:
-  NAME = "my-command"          # command name
-  DESCRIPTION = "What it does"  # help text
-  def run(cfg, pack, args):     # handler function, returns exit code
+Drop a .py file in conf/plugins/ and FREQ auto-loads it as a CLI command.
+Each plugin must define NAME, DESCRIPTION, and run(cfg, pack, args) → int.
+Plugins are loaded after built-in commands and cannot override them.
 
-Usage:
-  mkdir -p conf/plugins/
-  # Create conf/plugins/my_plugin.py with NAME, DESCRIPTION, run()
-  freq my-command               # it just works
+Replaces: Custom scripting with no integration into the tool
 
-Plugins are loaded after built-in commands. They cannot override built-ins.
+Architecture:
+    - Scans conf/plugins/ for .py files at startup
+    - Uses importlib.util to load modules without polluting sys.modules
+    - Returns list of {name, description, handler} dicts for cli.py to register
+    - Invalid plugins are logged and skipped — never crash the CLI
+
+Design decisions:
+    - Plugins are top-level commands, not domain subcommands. Keep it simple.
+    - No hot-reload. Plugins are discovered once at startup.
+    - No dependency resolution between plugins. Each plugin is standalone.
 """
 import importlib
 import importlib.util

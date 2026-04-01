@@ -1,14 +1,31 @@
-"""Compatibility layer — Python version checks and support matrix.
+"""Compatibility layer — Python version gate.
 
-FREQ requires Python 3.11+ (for tomllib, modern typing, performance).
-Runs on 3.11-3.13 with zero external dependencies.
+Provides: check_python() → error message or None
 
-Support matrix (current + 1 version back):
-  Debian:     13, 12             — ships 3.13, 3.11    — all native
-  Ubuntu LTS: 24.04, 22.04       — ships 3.12, 3.10    — 22.04: deadsnakes PPA
-  Rocky/RHEL: 9                  — ships 3.9            — dnf install python3.11
-  AlmaLinux:  9                  — ships 3.9            — dnf install python3.11
-  openSUSE:   15.6               — ships 3.6            — zypper install python311
+FREQ requires Python 3.11+ for tomllib (TOML parsing), modern typing syntax,
+and performance improvements. Runs on 3.11-3.13 with zero external deps.
+
+Support matrix:
+    Debian 13/12:    3.13/3.11    native
+    Ubuntu 24.04:    3.12         native
+    Ubuntu 22.04:    3.10         needs deadsnakes PPA for 3.11+
+    Rocky/RHEL 9:    3.9          dnf install python3.11
+    AlmaLinux 9:     3.9          dnf install python3.11
+    Fedora 41:       3.13         native
+    Arch:            3.13         native
+    Alpine 3.21:     3.12         native
+    openSUSE 15.6:   3.6          zypper install python311
+
+Replaces: Nothing — this is a gate, not a feature.
+
+Architecture:
+    - Called once at startup by __main__.py before any imports
+    - Returns error string if Python is too old, None if OK
+    - Does NOT import any FREQ modules — must work on ancient Python
+
+Design decisions:
+    - 3.11 minimum, not 3.12. Debian 12 and Proxmox VE 8 ship 3.11.
+      Supporting them is non-negotiable for a Proxmox management tool.
 """
 import sys
 

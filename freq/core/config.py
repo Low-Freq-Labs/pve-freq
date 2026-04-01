@@ -1,8 +1,26 @@
 """Configuration loader for FREQ.
 
+Provides: load_config() → FreqConfig dataclass with ~40 fields.
+
 Reads freq.toml (primary) and legacy bash-style configs (hosts.conf, vlans.conf).
-Safe defaults are set BEFORE loading any config — if config is broken, FREQ still runs.
-This is Trap #4 from the 5 Traps: config vs code confusion.
+Hosts, VLANs, distros, fleet boundaries, monitors — everything the CLI and
+web dashboard need to operate. Safe defaults set BEFORE loading any config so
+FREQ runs even with a broken or missing config file.
+
+Replaces: Ansible inventory files + group_vars + host_vars ($0 but complex),
+          SaltStack pillar/grains ($0 but steeper learning curve)
+
+Architecture:
+    - TOML parsing via tomllib (stdlib 3.11+)
+    - Legacy hosts.conf/vlans.conf parsed as key=value for migration
+    - FreqConfig is a frozen-ish dataclass — loaded once, passed everywhere
+    - Config paths: /etc/freq/ (system) or ./conf/ (dev/local)
+    - Credentials NEVER in config — always vault paths or file references
+
+Design decisions:
+    - One load_config() call returns everything. No per-module config loading.
+    - Safe defaults mean a fresh install with empty freq.toml still boots.
+    - hosts.conf migration path: detected, warned, auto-read, eventually removed.
 """
 import os
 import shutil

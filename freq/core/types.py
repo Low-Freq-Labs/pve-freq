@@ -1,7 +1,25 @@
-"""Core data types for FREQ.
+"""Core data types for FREQ — the single source of truth for all structures.
 
-Every data structure lives here. No other file defines dataclasses.
-Adapted from the Convergence engine types — extended for full CLI scope.
+Provides: Host, VLAN, Distro, CmdResult, Finding, Severity, Policy,
+          FleetBoundaries, PhysicalDevice, PVENode, Monitor, Container, etc.
+
+Every data structure in FREQ is defined here. No other file creates
+dataclasses. This prevents circular imports and makes it trivial to find
+any type definition — grep this one file.
+
+Replaces: Scattered dicts and tuples across modules (error-prone, untyped)
+
+Architecture:
+    - All types are dataclasses with sensible defaults
+    - Enums for finite sets (Severity, HostType)
+    - FleetBoundaries is the nested config for VM categories and tiers
+    - CmdResult wraps SSH command output (rc, stdout, stderr)
+
+Design decisions:
+    - ONE file for ALL types. Yes it's long. But "where is the Host type?"
+      always has the same answer: freq/core/types.py. No hunting.
+    - Dataclasses, not TypedDicts. IDE autocomplete, type checking, defaults.
+    - Frozen where possible, mutable where SSH results need post-processing.
 """
 from dataclasses import dataclass, field
 from enum import Enum, auto

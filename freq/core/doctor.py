@@ -1,9 +1,24 @@
-"""FREQ Doctor — self-diagnostic.
+"""FREQ Doctor — 15-point self-diagnostic.
 
-Checks everything FREQ needs to run: Python version, paths, config,
-SSH key, connectivity, fleet data, PVE cluster, prerequisites.
+Domain: freq doctor
 
-Adapted from v1 doctor.sh (703 lines) — comprehensive and thorough.
+Checks everything FREQ needs to run: Python version, platform, paths,
+config, SSH key, fleet connectivity (parallel SSH), fleet data integrity,
+PVE cluster reachability, prerequisites, personality pack, VLANs, distros.
+Returns 0 if healthy, 1 if any critical check fails. Warnings don't fail.
+
+Replaces: Manual troubleshooting checklists, ad-hoc SSH connectivity tests
+
+Architecture:
+    - Each check is a function returning (ok, message) or (ok, message, extra)
+    - Uses freq/core/preflight.py for Python/platform/binary checks
+    - Uses freq/core/ssh.py for fleet connectivity probes
+    - Output through freq/core/fmt.py for consistent branding
+
+Design decisions:
+    - 15 checks, not 5. Thoroughness > speed for diagnostics.
+    - Fleet SSH is tested in parallel (ThreadPoolExecutor) — 14 hosts in <3s.
+    - Non-fatal warnings (missing personality pack) don't return exit code 1.
 """
 import os
 import platform

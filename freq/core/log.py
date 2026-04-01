@@ -1,6 +1,23 @@
 """Structured logging for FREQ.
 
-JSON lines to data/log/freq.log. Scrubs sensitive data before writing.
+Provides: init(), info(), warn(), error() — JSON-lines to data/log/freq.log.
+
+Every FREQ operation is logged as a JSON line with timestamp, level, message,
+and optional fields (user, command, host). Sensitive data (passwords, tokens,
+keys) is automatically redacted before writing.
+
+Replaces: Unstructured syslog or print-to-file logging
+
+Architecture:
+    - JSON lines format — one JSON object per line, grep/jq friendly
+    - File opened once via init(), appended to via info/warn/error
+    - Regex-based redaction of passwords, tokens, and key material
+    - No external dependencies — json + datetime from stdlib
+
+Design decisions:
+    - JSON lines, not Python logging module. Simpler, greppable, no config.
+    - Redaction is paranoid — any field matching password/token/secret/key
+      patterns gets replaced with [REDACTED]. False positives > leaks.
 """
 import json
 import os

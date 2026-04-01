@@ -1,7 +1,22 @@
-"""Host resolution for FREQ.
+"""Host resolution for FREQ — the address book.
 
-The address book. Name to IP, label to Host, group to hosts.
-Every command that targets a host goes through here first.
+Provides: by_label(), by_ip(), by_group(), resolve_target()
+
+The address book. Name to IP, label to Host, group to hosts, "all" to fleet.
+Every command that targets a host goes through here first. Fuzzy matching
+handles typos and partial labels.
+
+Replaces: Manual IP lookups, Ansible inventory group resolution
+
+Architecture:
+    - Pure functions operating on the cfg.hosts list — no state, no I/O
+    - Case-insensitive label matching, partial prefix matching
+    - Group resolution returns list of Host objects for fleet exec
+
+Design decisions:
+    - Resolution is strict by default. "lab" won't match "lab-pve1" unless
+      there's no exact match. Prevents accidental fleet-wide commands.
+    - "all" is a special keyword that returns every host. No group needed.
 """
 from typing import Optional
 

@@ -1,9 +1,26 @@
-"""Personality system for FREQ.
+"""Personality system for FREQ — celebrations, vibes, and branding.
 
-The personality isn't decoration — it's the product.
-Celebrations, vibes, taglines, quotes. What makes someone choose FREQ over Ansible.
+Provides: load_pack(), show_vibe(), splash(), celebrate()
 
-Packs live in conf/personality/<name>.toml. Loaded at startup based on freq.toml build setting.
+The personality isn't decoration — it's the product. Celebrations on success,
+vibes on random commands, splash screen at startup, taglines in headers.
+What makes someone choose FREQ over Ansible.
+
+Packs live in conf/personality/<name>.toml. Loaded at startup based on the
+`build` field in freq.toml. Default pack is built-in.
+
+Replaces: Nothing — no infrastructure tool has personality. That's the point.
+
+Architecture:
+    - PersonalityPack dataclass holds vibes, celebrations, taglines, quotes
+    - TOML files for custom packs, built-in defaults for out-of-box experience
+    - show_vibe() fires randomly (1/47 probability) after successful commands
+    - splash() renders the ASCII art banner with version info
+
+Design decisions:
+    - Vibes fire at 1/47 probability — frequent enough to notice, rare enough
+      to feel special. Empirically tuned.
+    - Pack is loaded once and passed through the call chain, not re-read.
 """
 import logging
 import os

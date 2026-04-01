@@ -1,7 +1,23 @@
-"""Input validation for FREQ.
+"""Input validation for FREQ — trust boundary enforcement.
 
-Gates for user input: IPs, hostnames, usernames, VMIDs, SSH keys.
-Every external input passes through here before reaching any module.
+Provides: is_valid_ip(), is_valid_hostname(), is_valid_vmid(),
+          is_valid_username(), is_valid_label(), is_valid_ssh_key()
+
+Gates for user input. Every external value (CLI args, config file entries,
+API request parameters) passes through here before reaching any module.
+Prevents command injection, path traversal, and invalid state.
+
+Replaces: Scattered regex checks and bare int() casts throughout modules
+
+Architecture:
+    - Pure validation functions returning bool — no side effects
+    - Regex-based for strings, range-based for numeric inputs
+    - Constants for limits (MAX_HOSTNAME_LEN, VMID range, etc.)
+
+Design decisions:
+    - Validation is strict. "Close enough" IPs are rejected, not corrected.
+    - VMID range 100-999999999 matches Proxmox's actual limits.
+    - Hostnames follow RFC 1123. No underscores (DNS doesn't allow them).
 """
 import re
 

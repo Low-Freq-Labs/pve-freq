@@ -1,9 +1,25 @@
-"""Display formatting for FREQ.
+"""Display formatting for FREQ — the visual identity layer.
 
-Every pixel on screen goes through here. Purple branding, Unicode borders,
-step indicators, tables, badges. The visual identity of the tool.
+Provides: header(), footer(), step_ok(), step_fail(), table(), badge(), and
+all ANSI color/Unicode symbol constants.
 
-Adapted from fmt.sh (315 lines) — reimagined in Python with full Unicode support.
+Every pixel on screen goes through here. Purple branding, Unicode box-drawing
+borders, step indicators, tables, badges, progress bars. The visual identity
+of the tool. Supports ASCII-only mode for PuTTY/legacy terminals.
+
+Replaces: Custom bash printf wrappers from v1 fmt.sh (315 lines)
+
+Architecture:
+    - C class: ANSI color constants (purple palette, green/red/yellow status)
+    - S class: Unicode symbols (tick/cross/arrow) with ASCII fallback
+    - Functions: header(), footer(), line(), blank(), step_ok/fail(), table()
+    - No external dependencies — pure ANSI escape sequences
+
+Design decisions:
+    - ASCII mode toggle (cfg.ascii_mode) replaces all Unicode with ASCII.
+      PuTTY on Windows can't render Unicode box-drawing — this handles it.
+    - Colors are always emitted. Pipe/NO_COLOR detection is a v3.0.0 TODO.
+    - Purple is THE brand color. Every header, every border. Consistency.
 """
 import re
 import shutil
