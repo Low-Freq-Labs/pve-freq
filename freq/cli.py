@@ -979,9 +979,56 @@ def _register_net(sub):
     _domain_help(net)
     net_sub = net.add_subparsers(dest="subcmd")
 
-    p = net_sub.add_parser("switch", help="Network switch management")
-    p.add_argument("action", nargs="?", help="Subcommand (status/vlans/interfaces/mac/trunk)")
-    p.set_defaults(func=_cmd_switch)
+    # freq net switch <action> — graduated to switch_orchestration module
+    sw = net_sub.add_parser("switch", help="Network switch management")
+    sw_sub = sw.add_subparsers(dest="action")
+
+    p = sw_sub.add_parser("show", help="Switch overview (facts + interface summary)")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.set_defaults(func=_cmd_switch_show)
+
+    p = sw_sub.add_parser("facts", help="Device facts: hostname, model, serial, OS, uptime")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.set_defaults(func=_cmd_switch_facts)
+
+    p = sw_sub.add_parser("interfaces", help="Interface table with status, speed, VLAN")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.set_defaults(func=_cmd_switch_interfaces)
+
+    p = sw_sub.add_parser("vlans", help="VLAN table with port membership")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.set_defaults(func=_cmd_switch_vlans)
+
+    p = sw_sub.add_parser("mac", help="MAC address table")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.add_argument("--vlan", help="Filter by VLAN ID")
+    p.set_defaults(func=_cmd_switch_mac)
+
+    p = sw_sub.add_parser("arp", help="ARP table")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.set_defaults(func=_cmd_switch_arp)
+
+    p = sw_sub.add_parser("neighbors", help="LLDP/CDP neighbor table")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.set_defaults(func=_cmd_switch_neighbors)
+
+    p = sw_sub.add_parser("config", help="Display or backup running configuration")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.add_argument("--backup", action="store_true", help="Save config to conf/switch-configs/")
+    p.set_defaults(func=_cmd_switch_config)
+
+    p = sw_sub.add_parser("environment", help="Temperature, fans, PSU, CPU, memory")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.set_defaults(func=_cmd_switch_environment)
+
+    p = sw_sub.add_parser("exec", help="Run arbitrary show command")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.add_argument("command", nargs="?", help="Command to execute")
+    p.add_argument("--all", action="store_true", help="Run on all switches")
+    p.set_defaults(func=_cmd_switch_exec)
+
+    # Default: freq net switch (no action) -> show
+    sw.set_defaults(func=_cmd_switch_show)
 
     p = net_sub.add_parser("netmon", help="Network monitoring and interface tracking")
     p.add_argument("action", nargs="?", choices=["interfaces", "poll", "bandwidth", "topology"],
@@ -1606,9 +1653,54 @@ def _cmd_zfs(cfg: FreqConfig, pack, args) -> int:
     return cmd_truenas(cfg, pack, args)
 
 
-def _cmd_switch(cfg: FreqConfig, pack, args) -> int:
-    from freq.modules.infrastructure import cmd_switch
-    return cmd_switch(cfg, pack, args)
+def _cmd_switch_show(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_switch_show
+    return cmd_switch_show(cfg, pack, args)
+
+
+def _cmd_switch_facts(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_switch_facts
+    return cmd_switch_facts(cfg, pack, args)
+
+
+def _cmd_switch_interfaces(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_switch_interfaces
+    return cmd_switch_interfaces(cfg, pack, args)
+
+
+def _cmd_switch_vlans(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_switch_vlans
+    return cmd_switch_vlans(cfg, pack, args)
+
+
+def _cmd_switch_mac(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_switch_mac
+    return cmd_switch_mac(cfg, pack, args)
+
+
+def _cmd_switch_arp(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_switch_arp
+    return cmd_switch_arp(cfg, pack, args)
+
+
+def _cmd_switch_neighbors(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_switch_neighbors
+    return cmd_switch_neighbors(cfg, pack, args)
+
+
+def _cmd_switch_config(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_switch_config
+    return cmd_switch_config(cfg, pack, args)
+
+
+def _cmd_switch_environment(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_switch_environment
+    return cmd_switch_environment(cfg, pack, args)
+
+
+def _cmd_switch_exec(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_switch_exec
+    return cmd_switch_exec(cfg, pack, args)
 
 
 def _cmd_idrac(cfg: FreqConfig, pack, args) -> int:
