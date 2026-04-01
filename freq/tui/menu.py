@@ -991,6 +991,13 @@ def _menu_monitoring(cfg, pack):
             ("e", "baseline list", "View saved baselines", ""),
             ("f", "baseline capture", "Capture config state", Tag.SAFE),
             ("g", "baseline compare", "Detect drift", ""),
+            None,
+            "Fleet Intelligence",
+            ("r", "report", "Full fleet health report", ""),
+            ("v", "trend", "Capacity trends (sparklines)", ""),
+            ("u", "sla", "Fleet uptime SLA tracking", ""),
+            ("k", "cert scan", "TLS certificate scan", ""),
+            ("n", "dns scan", "DNS record validation", ""),
             ("0", "Back", "", ""),
         ], crumb)
 
@@ -1053,6 +1060,16 @@ def _menu_monitoring(cfg, pack):
                 _run_argv(cfg, pack, ["baseline", "compare", name])
             else:
                 _run_argv(cfg, pack, ["baseline", "compare"])
+        elif ch == "r":
+            _run_command(cfg, pack, "report")
+        elif ch == "v":
+            _run_command(cfg, pack, "trend")
+        elif ch == "u":
+            _run_command(cfg, pack, "sla")
+        elif ch == "k":
+            _run_argv(cfg, pack, ["cert", "scan"])
+        elif ch == "n":
+            _run_argv(cfg, pack, ["dns", "scan"])
         else:
             continue
         _pause()

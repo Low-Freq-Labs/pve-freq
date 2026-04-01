@@ -654,6 +654,37 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("name", nargs="?", help="Baseline name")
     p.set_defaults(func=_cmd_baseline)
 
+    # --- Phase 2: Intelligence Layer ---
+    p = sub.add_parser("report", help="Generate fleet health report")
+    p.add_argument("action", nargs="?", choices=["generate"], default="generate",
+                   help="Action to perform")
+    p.add_argument("--markdown", action="store_true", help="Markdown output")
+    p.set_defaults(func=_cmd_report)
+
+    p = sub.add_parser("trend", help="Fleet capacity trends over time")
+    p.add_argument("action", nargs="?", choices=["show", "snapshot", "history"],
+                   default="show", help="Action to perform")
+    p.add_argument("--lines", type=int, default=20, help="History lines to show")
+    p.set_defaults(func=_cmd_trend)
+
+    p = sub.add_parser("sla", help="Fleet uptime SLA tracking")
+    p.add_argument("action", nargs="?", choices=["show", "check", "reset"],
+                   default="show", help="Action to perform")
+    p.add_argument("--days", type=int, default=30, help="SLA period in days (default: 30)")
+    p.set_defaults(func=_cmd_sla)
+
+    p = sub.add_parser("cert", help="TLS certificate inventory and monitoring")
+    p.add_argument("action", nargs="?", choices=["scan", "list", "check"],
+                   default="scan", help="Action to perform")
+    p.add_argument("target", nargs="?", help="Host:port for single check")
+    p.set_defaults(func=_cmd_cert)
+
+    p = sub.add_parser("dns", help="DNS record tracking and validation")
+    p.add_argument("action", nargs="?", choices=["scan", "check", "list"],
+                   default="scan", help="Action to perform")
+    p.add_argument("target", nargs="?", help="Hostname or IP for single check")
+    p.set_defaults(func=_cmd_dns)
+
     # --- Remaining ---
     p = sub.add_parser("distros", help="List available cloud images")
     p.set_defaults(func=_cmd_distros)
@@ -858,6 +889,17 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("compare <host-a> <host-b>", "Side-by-side host comparison"),
             ("baseline capture [name]", "Snapshot known-good config state"),
             ("baseline compare [name]", "Detect configuration drift"),
+        ]),
+        ("Fleet Intelligence", [
+            ("report [--markdown|--json]", "Full fleet health report"),
+            ("trend show", "Capacity trends with sparklines"),
+            ("trend snapshot", "Record a capacity data point"),
+            ("sla show [--days N]", "Fleet uptime SLA (7/30/90 day)"),
+            ("sla check", "Record SLA data point"),
+            ("cert scan", "Scan fleet for TLS certificates"),
+            ("cert check <host:port>", "Check a single TLS endpoint"),
+            ("dns scan", "Validate fleet DNS records"),
+            ("dns check <host-or-ip>", "Check a single DNS entry"),
         ]),
         ("Deployment", [
             ("init", "First-run setup wizard"),
@@ -1404,6 +1446,31 @@ def _cmd_compare(cfg: FreqConfig, pack, args) -> int:
 def _cmd_baseline(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.baseline import cmd_baseline
     return cmd_baseline(cfg, pack, args)
+
+
+def _cmd_report(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.report import cmd_report
+    return cmd_report(cfg, pack, args)
+
+
+def _cmd_trend(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.trend import cmd_trend
+    return cmd_trend(cfg, pack, args)
+
+
+def _cmd_sla(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.sla import cmd_sla
+    return cmd_sla(cfg, pack, args)
+
+
+def _cmd_cert(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert import cmd_cert
+    return cmd_cert(cfg, pack, args)
+
+
+def _cmd_dns(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dns import cmd_dns
+    return cmd_dns(cfg, pack, args)
 
 
 def _cmd_hosts(cfg: FreqConfig, pack, args) -> int:

@@ -1644,6 +1644,14 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/compare": "_serve_compare",
         "/api/baseline/list": "_serve_baseline_list",
         "/api/rollback": "_serve_rollback",
+        # Phase 2: Fleet Intelligence
+        "/api/report": "_serve_report",
+        "/api/trend/data": "_serve_trend_data",
+        "/api/trend/snapshot": "_serve_trend_snapshot",
+        "/api/sla": "_serve_sla",
+        "/api/sla/check": "_serve_sla_check",
+        "/api/cert/inventory": "_serve_cert_inventory",
+        "/api/dns/inventory": "_serve_dns_inventory",
         # Setup wizard (no auth — only works during first run)
         "/api/setup/status": "_serve_setup_status",
         "/api/setup/create-admin": "_serve_setup_create_admin",
@@ -7281,6 +7289,75 @@ a:hover{{text-decoration:underline}}
             "info": "VM rollback must be performed via CLI for safety",
             "usage": "freq rollback <vmid> [--name <snapshot>]",
         })
+
+    # --- Phase 2: Fleet Intelligence API Handlers ---
+
+    def _serve_report(self):
+        """Generate fleet report."""
+        from freq.modules.report import _generate_report
+        cfg = load_config()
+        report = _generate_report(cfg)
+        self._json_response(report)
+
+    def _serve_trend_data(self):
+        """Get trend data."""
+        from freq.modules.trend import _load_trend_data
+        cfg = load_config()
+        data = _load_trend_data(cfg)
+        params = _parse_query(self)
+        limit = int(params.get("limit", ["100"])[0])
+        self._json_response({"snapshots": data[-limit:], "total": len(data)})
+
+    def _serve_trend_snapshot(self):
+        """Take a trend snapshot."""
+        from freq.modules.trend import _take_snapshot, _load_trend_data, _save_trend_data
+        cfg = load_config()
+        snapshot = _take_snapshot(cfg)
+        if snapshot:
+            data = _load_trend_data(cfg)
+            data.append(snapshot)
+            _save_trend_data(cfg, data)
+        self._json_response({"ok": bool(snapshot), "snapshot": snapshot})
+
+    def _serve_sla(self):
+        """Get SLA data."""
+        from freq.modules.sla import _load_sla_data, _calculate_sla
+        cfg = load_config()
+        data = _load_sla_data(cfg)
+        params = _parse_query(self)
+        days = int(params.get("days", ["30"])[0])
+        all_hosts = set()
+        for c in data.get("checks", []):
+            all_hosts.update(c.get("results", {}).keys())
+        sla_results = {}
+        for label in sorted(all_hosts):
+            sla_results[label] = {
+                "7d": _calculate_sla(data, label, 7),
+                "30d": _calculate_sla(data, label, 30),
+                "90d": _calculate_sla(data, label, 90),
+            }
+        self._json_response({"hosts": sla_results, "total_checks": len(data.get("checks", []))})
+
+    def _serve_sla_check(self):
+        """Record an SLA check."""
+        from freq.modules.sla import _record_check
+        cfg = load_config()
+        _record_check(cfg)
+        self._json_response({"ok": True})
+
+    def _serve_cert_inventory(self):
+        """Get cert inventory."""
+        from freq.modules.cert import _load_cert_data
+        cfg = load_config()
+        data = _load_cert_data(cfg)
+        self._json_response(data)
+
+    def _serve_dns_inventory(self):
+        """Get DNS inventory."""
+        from freq.modules.dns import _load_dns_data
+        cfg = load_config()
+        data = _load_dns_data(cfg)
+        self._json_response(data)
 
 
 def cmd_serve(cfg, pack, args) -> int:
