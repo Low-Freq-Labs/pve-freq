@@ -752,6 +752,32 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lines", type=int, default=30, help="Log lines")
     p.set_defaults(func=_cmd_stack)
 
+    # --- Phase 5: Medium Kills ---
+    p = sub.add_parser("db", help="Fleet-wide database health (status/health/size)")
+    p.add_argument("action", nargs="?", choices=["status", "health", "size"],
+                   default="status", help="Action to perform")
+    p.set_defaults(func=_cmd_db)
+
+    p = sub.add_parser("proxy", help="Reverse proxy management (status/list/add/remove/certs)")
+    p.add_argument("action", nargs="?", choices=["status", "list", "add", "remove", "certs"],
+                   default="status", help="Action to perform")
+    p.add_argument("--domain", help="Domain name for proxy route")
+    p.add_argument("--upstream", help="Upstream target (host:port)")
+    p.add_argument("--host", dest="target_host", help="Target proxy host")
+    p.add_argument("--ssl", action="store_true", default=True, help="Enable SSL (default)")
+    p.set_defaults(func=_cmd_proxy)
+
+    p = sub.add_parser("secrets", help="Secret rotation, scanning, and lifecycle")
+    p.add_argument("action", nargs="?",
+                   choices=["list", "scan", "audit", "generate", "rotate", "lease"],
+                   default="list", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Secret/lease name")
+    p.add_argument("--secret-type", default="password", choices=["password", "token"],
+                   help="Type for generate")
+    p.add_argument("--length", type=int, default=32, help="Secret length (default: 32)")
+    p.add_argument("--expires", default="90d", help="Lease expiry (e.g., 90d, 24h)")
+    p.set_defaults(func=_cmd_secrets)
+
     p = sub.add_parser("docs", help="Auto-generated infrastructure documentation")
     p.add_argument("action", nargs="?",
                    choices=["generate", "export", "verify", "runbook"],
@@ -998,6 +1024,16 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("docs generate", "Auto-generate infra docs from live state"),
             ("docs verify", "Check if docs match reality"),
             ("docs runbook [name]", "List or run runbooks"),
+            ("db status", "Fleet-wide database health"),
+            ("db size", "Database sizes across fleet"),
+            ("proxy status", "Reverse proxy detection fleet-wide"),
+            ("proxy list", "Managed proxy routes"),
+            ("proxy add --domain --upstream", "Add a proxy route"),
+            ("proxy certs", "Certificate status for proxy routes"),
+            ("secrets scan", "Scan fleet for hardcoded secrets"),
+            ("secrets audit", "Secret health audit"),
+            ("secrets generate", "Generate secure password/token"),
+            ("secrets lease <name>", "Track secret expiry"),
         ]),
         ("Deployment", [
             ("init", "First-run setup wizard"),
@@ -1609,6 +1645,21 @@ def _cmd_stack(cfg: FreqConfig, pack, args) -> int:
 def _cmd_docs(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.docs import cmd_docs
     return cmd_docs(cfg, pack, args)
+
+
+def _cmd_db(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.db import cmd_db
+    return cmd_db(cfg, pack, args)
+
+
+def _cmd_proxy(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.proxy import cmd_proxy
+    return cmd_proxy(cfg, pack, args)
+
+
+def _cmd_secrets(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.secrets import cmd_secrets
+    return cmd_secrets(cfg, pack, args)
 
 
 def _cmd_hosts(cfg: FreqConfig, pack, args) -> int:

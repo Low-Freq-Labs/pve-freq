@@ -1669,6 +1669,13 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/stack/health": "_serve_stack_health",
         "/api/docs/generate": "_serve_docs_generate",
         "/api/docs/runbooks": "_serve_docs_runbooks",
+        # Phase 5: Medium Kills
+        "/api/db/status": "_serve_db_status",
+        "/api/proxy/list": "_serve_proxy_list",
+        "/api/proxy/status": "_serve_proxy_status_api",
+        "/api/secrets/audit": "_serve_secrets_audit",
+        "/api/secrets/leases": "_serve_secrets_leases",
+        "/api/secrets/scan": "_serve_secrets_scan_results",
         # Setup wizard (no auth — only works during first run)
         "/api/setup/status": "_serve_setup_status",
         "/api/setup/create-admin": "_serve_setup_create_admin",
@@ -7480,6 +7487,49 @@ a:hover{{text-decoration:underline}}
         runbooks = [f.replace(".json", "")
                     for f in os_mod.listdir(rdir) if f.endswith(".json")]
         self._json_response({"runbooks": runbooks, "count": len(runbooks)})
+
+    # --- Phase 5: Medium Kills API Handlers ---
+
+    def _serve_db_status(self):
+        """Database status."""
+        self._json_response({"info": "Run freq db status for live data", "usage": "freq db status"})
+
+    def _serve_proxy_list(self):
+        """List proxy routes."""
+        from freq.modules.proxy import _load_routes
+        cfg = load_config()
+        routes = _load_routes(cfg)
+        self._json_response({"routes": routes, "count": len(routes)})
+
+    def _serve_proxy_status_api(self):
+        """Proxy status."""
+        self._json_response({"info": "Run freq proxy status for live data", "usage": "freq proxy status"})
+
+    def _serve_secrets_audit(self):
+        """Secret audit summary."""
+        from freq.modules.secrets import _load_leases, _load_scan_results
+        cfg = load_config()
+        leases = _load_leases(cfg)
+        scan = _load_scan_results(cfg)
+        now = time.time()
+        expired = sum(1 for l in leases if 0 < l.get("expires_epoch", 0) < now)
+        self._json_response({
+            "leases": len(leases), "expired": expired,
+            "scan_findings": len(scan.get("findings", [])),
+            "last_scan": scan.get("scan_time", "never"),
+        })
+
+    def _serve_secrets_leases(self):
+        """List secret leases."""
+        from freq.modules.secrets import _load_leases
+        cfg = load_config()
+        self._json_response({"leases": _load_leases(cfg)})
+
+    def _serve_secrets_scan_results(self):
+        """Get last scan results."""
+        from freq.modules.secrets import _load_scan_results
+        cfg = load_config()
+        self._json_response(_load_scan_results(cfg))
 
 
 def cmd_serve(cfg, pack, args) -> int:
