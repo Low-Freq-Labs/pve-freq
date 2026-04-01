@@ -733,6 +733,25 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--storage", default="local-lvm", help="Target storage (default: local-lvm)")
     p.set_defaults(func=_cmd_migrate_vmware)
 
+    # --- Phase 7: Platform Kills ---
+    p = sub.add_parser("map", help="Dependency discovery and impact analysis")
+    p.add_argument("action", nargs="?", choices=["discover", "show", "impact", "export"],
+                   default="discover", help="Action to perform")
+    p.add_argument("target", nargs="?", help="Host label (for impact)")
+    p.add_argument("--format", default="json", choices=["json", "dot"], help="Export format")
+    p.set_defaults(func=_cmd_map)
+
+    p = sub.add_parser("netmon", help="Network monitoring and interface tracking")
+    p.add_argument("action", nargs="?", choices=["interfaces", "poll", "bandwidth", "topology"],
+                   default="interfaces", help="Action to perform")
+    p.set_defaults(func=_cmd_netmon)
+
+    p = sub.add_parser("cost-analysis", help="On-prem FinOps and cost optimization")
+    p.add_argument("action", nargs="?", choices=["waste", "density", "optimize", "compare"],
+                   default="waste", help="Action to perform")
+    p.add_argument("--rate", type=float, default=0.12, help="Electricity rate $/kWh (default: 0.12)")
+    p.set_defaults(func=_cmd_cost_analysis)
+
     # --- Phase 4: Easy Kills ---
     p = sub.add_parser("patch", help="Fleet patch management (status/check/apply/hold)")
     p.add_argument("action", nargs="?",
@@ -1073,6 +1092,16 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("oncall ack/resolve <ID>", "Manage incidents"),
             ("comply scan", "CIS Level 1 compliance scan"),
             ("comply report", "Compliance report"),
+            ("map discover", "Auto-discover service dependencies"),
+            ("map impact <host>", "What breaks if this host dies?"),
+            ("map export --format dot", "Export for Graphviz"),
+            ("netmon interfaces", "Network interfaces fleet-wide"),
+            ("netmon poll", "Bandwidth snapshot (poll counters)"),
+            ("netmon bandwidth", "Bandwidth rate from poll history"),
+            ("netmon topology", "LLDP/CDP topology discovery"),
+            ("cost-analysis waste", "Find overprovisioned VMs"),
+            ("cost-analysis density", "Host utilization density"),
+            ("cost-analysis compare", "On-prem vs AWS cost comparison"),
         ]),
         ("Deployment", [
             ("init", "First-run setup wizard"),
@@ -1714,6 +1743,21 @@ def _cmd_oncall(cfg: FreqConfig, pack, args) -> int:
 def _cmd_comply(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.comply import cmd_comply
     return cmd_comply(cfg, pack, args)
+
+
+def _cmd_map(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.depmap import cmd_map
+    return cmd_map(cfg, pack, args)
+
+
+def _cmd_netmon(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.netmon import cmd_netmon
+    return cmd_netmon(cfg, pack, args)
+
+
+def _cmd_cost_analysis(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cost_analysis import cmd_cost_analysis
+    return cmd_cost_analysis(cfg, pack, args)
 
 
 def _cmd_hosts(cfg: FreqConfig, pack, args) -> int:

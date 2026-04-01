@@ -1683,6 +1683,13 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/oncall/incidents": "_serve_oncall_incidents",
         "/api/comply/status": "_serve_comply_status",
         "/api/comply/results": "_serve_comply_results",
+        # Phase 7: Platform Kills
+        "/api/map/data": "_serve_map_data",
+        "/api/map/impact": "_serve_map_impact",
+        "/api/netmon/interfaces": "_serve_netmon_interfaces",
+        "/api/netmon/data": "_serve_netmon_data",
+        "/api/cost-analysis/waste": "_serve_cost_waste",
+        "/api/cost-analysis/compare": "_serve_cost_compare",
         # Setup wizard (no auth — only works during first run)
         "/api/setup/status": "_serve_setup_status",
         "/api/setup/create-admin": "_serve_setup_create_admin",
@@ -7585,6 +7592,46 @@ a:hover{{text-decoration:underline}}
         results = _load_results(cfg)
         scans = results.get("scans", [])
         self._json_response({"latest": scans[-1] if scans else None, "total_scans": len(scans)})
+
+    # --- Phase 7: Platform Kills API Handlers ---
+
+    def _serve_map_data(self):
+        """Get dependency map."""
+        from freq.modules.depmap import _load_map
+        cfg = load_config()
+        self._json_response(_load_map(cfg))
+
+    def _serve_map_impact(self):
+        """Impact analysis for a host."""
+        from freq.modules.depmap import _load_map, _get_impact
+        cfg = load_config()
+        params = _parse_query(self)
+        target = params.get("host", [""])[0].strip()
+        if not target:
+            self._json_response({"error": "host parameter required"}, 400); return
+        depmap = _load_map(cfg)
+        impact = _get_impact(depmap, target)
+        self._json_response(impact)
+
+    def _serve_netmon_interfaces(self):
+        """Network interfaces info."""
+        self._json_response({"info": "Run freq netmon interfaces for live data"})
+
+    def _serve_netmon_data(self):
+        """Get netmon poll data."""
+        from freq.modules.netmon import _load_data
+        cfg = load_config()
+        data = _load_data(cfg)
+        self._json_response({"snapshots": data.get("snapshots", [])[-20:],
+                             "total": len(data.get("snapshots", []))})
+
+    def _serve_cost_waste(self):
+        """Cost waste analysis."""
+        self._json_response({"info": "Run freq cost-analysis waste for live data"})
+
+    def _serve_cost_compare(self):
+        """Cost comparison."""
+        self._json_response({"info": "Run freq cost-analysis compare for live data"})
 
 
 def cmd_serve(cfg, pack, args) -> int:
