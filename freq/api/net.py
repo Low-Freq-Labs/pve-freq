@@ -200,6 +200,58 @@ def handle_netmon_data(handler):
                             "total": len(data.get("snapshots", []))})
 
 
+# -- V1 Config Endpoints ----------------------------------------------------
+
+def handle_config_history(handler):
+    """GET /api/v1/net/config/history -- config backup history."""
+    from freq.modules.config_management import _list_backups
+    import os
+    cfg = load_config()
+    target = get_param(handler, "target")
+
+    backups = _list_backups(cfg, target or None)
+    entries = []
+    for filepath, label, ts in backups:
+        formatted = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]} {ts[9:11]}:{ts[11:13]}:{ts[13:15]}"
+        entries.append({
+            "label": label, "timestamp": formatted,
+            "size": os.path.getsize(filepath),
+            "file": os.path.basename(filepath),
+        })
+    json_response(handler, {"backups": entries})
+
+
+def handle_config_search(handler):
+    """GET /api/v1/net/config/search -- search across stored configs."""
+    import re
+    from freq.modules.config_management import _list_backups
+    cfg = load_config()
+    pattern = get_param(handler, "pattern")
+    if not pattern:
+        json_response(handler, {"error": "pattern parameter required"}, 400)
+        return
+
+    try:
+        regex = re.compile(pattern, re.IGNORECASE)
+    except re.error as e:
+        json_response(handler, {"error": f"Invalid pattern: {e}"}, 400)
+        return
+
+    seen = set()
+    results = []
+    for filepath, label, ts in _list_backups(cfg):
+        if label in seen:
+            continue
+        seen.add(label)
+        with open(filepath) as f:
+            lines = f.readlines()
+        matches = [(i + 1, l.rstrip()) for i, l in enumerate(lines) if regex.search(l)]
+        if matches:
+            results.append({"device": label, "matches": [{"line": n, "text": t} for n, t in matches[:20]]})
+
+    json_response(handler, {"pattern": pattern, "results": results, "total_devices": len(results)})
+
+
 # -- Registration ------------------------------------------------------------
 
 
@@ -214,6 +266,10 @@ def register(routes: dict):
     routes["/api/v1/net/switch/arp"] = handle_switch_arp
     routes["/api/v1/net/switch/neighbors"] = handle_switch_neighbors
     routes["/api/v1/net/switch/environment"] = handle_switch_environment
+
+    # V1 config endpoints
+    routes["/api/v1/net/config/history"] = handle_config_history
+    routes["/api/v1/net/config/search"] = handle_config_search
 
     # Legacy (dashboard compat)
     routes["/api/switch"] = handle_switch

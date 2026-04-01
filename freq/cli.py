@@ -1103,6 +1103,35 @@ def _register_net(sub):
 
     port.set_defaults(func=_cmd_port_status)
 
+    # freq net config <action> — device configuration management
+    ncfg = net_sub.add_parser("config", help="Device config backup, diff, and restore")
+    ncfg_sub = ncfg.add_subparsers(dest="action")
+
+    p = ncfg_sub.add_parser("backup", help="Pull and store running-config")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.add_argument("--all", action="store_true", help="Backup all switches")
+    p.set_defaults(func=_cmd_config_backup)
+
+    p = ncfg_sub.add_parser("history", help="Config backup history")
+    p.add_argument("target", nargs="?", help="Device label (omit for all)")
+    p.set_defaults(func=_cmd_config_history)
+
+    p = ncfg_sub.add_parser("diff", help="Diff running config vs last backup")
+    p.add_argument("target", help="Switch IP or label")
+    p.add_argument("--version", type=int, help="Compare against version N")
+    p.set_defaults(func=_cmd_config_diff)
+
+    p = ncfg_sub.add_parser("search", help="Search across all stored configs")
+    p.add_argument("pattern", help="Search pattern (regex)")
+    p.set_defaults(func=_cmd_config_search)
+
+    p = ncfg_sub.add_parser("restore", help="Restore a previous config version")
+    p.add_argument("target", help="Switch IP or label")
+    p.add_argument("--version", type=int, help="Version number to restore")
+    p.set_defaults(func=_cmd_config_restore)
+
+    ncfg.set_defaults(func=_cmd_config_history)
+
     p = net_sub.add_parser("netmon", help="Network monitoring and interface tracking")
     p.add_argument("action", nargs="?", choices=["interfaces", "poll", "bandwidth", "topology"],
                    default="interfaces", help="Action to perform")
@@ -1833,6 +1862,33 @@ def _cmd_profile_create(cfg: FreqConfig, pack, args) -> int:
 def _cmd_profile_delete(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_profile_delete
     return cmd_profile_delete(cfg, pack, args)
+
+
+# --- Config Management ---
+
+def _cmd_config_backup(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.config_management import cmd_config_backup
+    return cmd_config_backup(cfg, pack, args)
+
+
+def _cmd_config_history(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.config_management import cmd_config_history
+    return cmd_config_history(cfg, pack, args)
+
+
+def _cmd_config_diff(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.config_management import cmd_config_diff
+    return cmd_config_diff(cfg, pack, args)
+
+
+def _cmd_config_search(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.config_management import cmd_config_search
+    return cmd_config_search(cfg, pack, args)
+
+
+def _cmd_config_restore(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.config_management import cmd_config_restore
+    return cmd_config_restore(cfg, pack, args)
 
 
 def _cmd_idrac(cfg: FreqConfig, pack, args) -> int:
