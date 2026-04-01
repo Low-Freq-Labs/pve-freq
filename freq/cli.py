@@ -158,6 +158,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _register_proxy(sub)
     _register_media(sub)
     _register_user(sub)
+    _register_event(sub)
 
     return parser
 
@@ -1266,6 +1267,56 @@ def _register_user(sub):
 
 
 # ---------------------------------------------------------------------------
+# freq event — Event Network Lifecycle
+# ---------------------------------------------------------------------------
+
+def _register_event(sub):
+    """Register freq event subcommands."""
+    ev = sub.add_parser("event", help="Event network lifecycle management")
+    _domain_help(ev)
+    ev_sub = ev.add_subparsers(dest="subcmd")
+
+    p = ev_sub.add_parser("create", help="Create a new event project")
+    p.add_argument("name", help="Event name")
+    p.set_defaults(func=_cmd_event_create)
+
+    p = ev_sub.add_parser("list", help="List all events")
+    p.set_defaults(func=_cmd_event_list)
+
+    p = ev_sub.add_parser("show", help="Show event details")
+    p.add_argument("name", help="Event name")
+    p.set_defaults(func=_cmd_event_show)
+
+    p = ev_sub.add_parser("plan", help="Generate IP plan and VLAN allocation")
+    p.add_argument("name", help="Event name")
+    p.set_defaults(func=_cmd_event_plan)
+
+    p = ev_sub.add_parser("deploy", help="Push configs to all event switches")
+    p.add_argument("name", help="Event name")
+    p.set_defaults(func=_cmd_event_deploy)
+
+    p = ev_sub.add_parser("verify", help="Verify deployed event matches template")
+    p.add_argument("name", help="Event name")
+    p.set_defaults(func=_cmd_event_verify)
+
+    p = ev_sub.add_parser("wipe", help="Reset switches to clean state")
+    p.add_argument("name", help="Event name")
+    p.add_argument("--confirm", action="store_true", help="Required — confirms destructive wipe")
+    p.set_defaults(func=_cmd_event_wipe)
+
+    p = ev_sub.add_parser("archive", help="Archive event configs and remove template")
+    p.add_argument("name", help="Event name")
+    p.set_defaults(func=_cmd_event_archive)
+
+    p = ev_sub.add_parser("delete", help="Delete event template")
+    p.add_argument("name", help="Event name")
+    p.add_argument("--confirm", action="store_true", help="Required — confirms deletion")
+    p.set_defaults(func=_cmd_event_delete)
+
+    ev.set_defaults(func=_cmd_event_list)
+
+
+# ---------------------------------------------------------------------------
 # Help command — domain-based reference
 # ---------------------------------------------------------------------------
 
@@ -1889,6 +1940,53 @@ def _cmd_config_search(cfg: FreqConfig, pack, args) -> int:
 def _cmd_config_restore(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.config_management import cmd_config_restore
     return cmd_config_restore(cfg, pack, args)
+
+
+# --- Event Network ---
+
+def _cmd_event_create(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.event_network import cmd_event_create
+    return cmd_event_create(cfg, pack, args)
+
+
+def _cmd_event_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.event_network import cmd_event_list
+    return cmd_event_list(cfg, pack, args)
+
+
+def _cmd_event_show(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.event_network import cmd_event_show
+    return cmd_event_show(cfg, pack, args)
+
+
+def _cmd_event_plan(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.event_network import cmd_event_plan
+    return cmd_event_plan(cfg, pack, args)
+
+
+def _cmd_event_deploy(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.event_network import cmd_event_deploy
+    return cmd_event_deploy(cfg, pack, args)
+
+
+def _cmd_event_verify(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.event_network import cmd_event_verify
+    return cmd_event_verify(cfg, pack, args)
+
+
+def _cmd_event_wipe(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.event_network import cmd_event_wipe
+    return cmd_event_wipe(cfg, pack, args)
+
+
+def _cmd_event_archive(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.event_network import cmd_event_archive
+    return cmd_event_archive(cfg, pack, args)
+
+
+def _cmd_event_delete(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.event_network import cmd_event_delete
+    return cmd_event_delete(cfg, pack, args)
 
 
 def _cmd_idrac(cfg: FreqConfig, pack, args) -> int:
