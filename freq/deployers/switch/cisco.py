@@ -187,6 +187,66 @@ def save_config(ip, cfg):
 
 
 # ---------------------------------------------------------------------------
+# Port Getters
+# ---------------------------------------------------------------------------
+
+def get_port_status(ip, cfg):
+    """Return per-port status: name, status, vlan, speed, duplex, description."""
+    return get_interfaces(ip, cfg)
+
+
+def get_poe_status(ip, cfg):
+    """Return PoE status per port: port, admin, oper, watts, device."""
+    out, ok = _ssh(ip, "show power inline", cfg)
+    if not ok:
+        return []
+    return _parse_power_inline(out)
+
+
+# ---------------------------------------------------------------------------
+# Port Setters
+# ---------------------------------------------------------------------------
+
+def set_port_vlan(ip, cfg, port, vlan, mode="access"):
+    """Set port VLAN and mode. Returns True on success."""
+    lines = [f"interface {port}"]
+    if mode == "access":
+        lines += [f"switchport mode access", f"switchport access vlan {vlan}"]
+    elif mode == "trunk":
+        lines += ["switchport mode trunk"]
+        if vlan:
+            lines.append(f"switchport trunk allowed vlan {vlan}")
+    return push_config(ip, cfg, lines)
+
+
+def set_port_shutdown(ip, cfg, port, shutdown=True):
+    """Shutdown or no-shutdown a port. Returns True on success."""
+    cmd = "shutdown" if shutdown else "no shutdown"
+    return push_config(ip, cfg, [f"interface {port}", cmd])
+
+
+def set_port_description(ip, cfg, port, description):
+    """Set port description. Returns True on success."""
+    return push_config(ip, cfg, [f"interface {port}", f"description {description}"])
+
+
+def set_port_poe(ip, cfg, port, enabled=True):
+    """Enable or disable PoE on a port. Returns True on success."""
+    cmd = "power inline auto" if enabled else "power inline never"
+    return push_config(ip, cfg, [f"interface {port}", cmd])
+
+
+def flap_port(ip, cfg, port):
+    """Bounce a port: shutdown then no-shutdown. Returns True on success."""
+    return push_config(ip, cfg, [f"interface {port}", "shutdown", "no shutdown"])
+
+
+def apply_profile_lines(ip, cfg, port, config_lines):
+    """Apply a list of config lines to a port. Returns True on success."""
+    return push_config(ip, cfg, [f"interface {port}"] + config_lines)
+
+
+# ---------------------------------------------------------------------------
 # Parsers — IOS show command output to structured data
 # ---------------------------------------------------------------------------
 
@@ -472,3 +532,109 @@ def _parse_environment(text):
                 })
 
     return result
+
+
+def _parse_power_inline(text):
+    """Parse 'show power inline' into list of PoE port dicts."""
+    entries = []
+    header_found = False
+
+    for line in text.splitlines():
+        # Header: "Interface Admin  Oper       Power   Device  Class Max"
+        if "Interface" in line and "Admin" in line:
+            header_found = True
+            continue
+        if line.startswith("---"):
+            continue
+        if not header_found or not line.strip():
+            continue
+        # Summary lines at the bottom
+        if "Available" in line or "Used" in line or "Remaining" in line or "Total" in line:
+            continue
+
+        # Format: "Gi1/0/1   auto   on         7.0     Ieee PD   3     30.0"
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+
+        port = parts[0]
+        if not (port.startswith("Gi") or port.startswith("Fa") or port.startswith("Te")):
+            continue
+
+        admin = parts[1] if len(parts) > 1 else ""
+        oper = parts[2] if len(parts) > 2 else ""
+        watts = ""
+        device = ""
+
+        if len(parts) > 3:
+            try:
+                watts = float(parts[3])
+            except ValueError:
+                watts = parts[3]
+
+        if len(parts) > 4:
+            device = parts[4]
+            if len(parts) > 5 and not parts[5].replace(".", "").isdigit():
+                device += " " + parts[5]
+
+        entries.append({
+            "port": port,
+            "admin": admin,
+            "oper": oper,
+            "watts": watts,
+            "device": device,
+        })
+
+    return entries
+
+
+def profile_to_config_lines(profile):
+    """Convert a switch profile dict to IOS config lines for an interface.
+
+    Takes a profile dict (from switch-profiles.toml) and returns a list
+    of IOS commands to apply to an interface (without 'interface X' prefix).
+    """
+    lines = []
+
+    if profile.get("description"):
+        lines.append(f"description {profile['description']}")
+
+    if profile.get("shutdown"):
+        lines.append("shutdown")
+        return lines
+
+    lines.append("no shutdown")
+
+    mode = profile.get("mode", "access")
+    lines.append(f"switchport mode {mode}")
+
+    if mode == "access":
+        if profile.get("vlan"):
+            lines.append(f"switchport access vlan {profile['vlan']}")
+    elif mode == "trunk":
+        if profile.get("allowed_vlans"):
+            vlan_str = ",".join(str(v) for v in profile["allowed_vlans"])
+            lines.append(f"switchport trunk allowed vlan {vlan_str}")
+        if profile.get("native_vlan"):
+            lines.append(f"switchport trunk native vlan {profile['native_vlan']}")
+
+    if profile.get("speed") and profile["speed"] != "auto":
+        lines.append(f"speed {profile['speed']}")
+
+    if profile.get("spanning_tree") == "portfast":
+        lines.append("spanning-tree portfast")
+
+    if profile.get("poe") is True:
+        lines.append("power inline auto")
+    elif profile.get("poe") is False:
+        lines.append("power inline never")
+
+    ps = profile.get("port_security")
+    if ps:
+        lines.append("switchport port-security")
+        if ps.get("max_mac"):
+            lines.append(f"switchport port-security maximum {ps['max_mac']}")
+        if ps.get("violation"):
+            lines.append(f"switchport port-security violation {ps['violation']}")
+
+    return lines

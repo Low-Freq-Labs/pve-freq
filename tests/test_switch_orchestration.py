@@ -474,6 +474,7 @@ class TestCiscoDeployerInterface(unittest.TestCase):
         required = [
             "get_facts", "get_interfaces", "get_vlans", "get_mac_table",
             "get_arp_table", "get_neighbors", "get_config", "get_environment",
+            "get_port_status", "get_poe_status",
         ]
         for fn in required:
             self.assertTrue(hasattr(cisco, fn), f"Missing getter: {fn}")
@@ -481,7 +482,9 @@ class TestCiscoDeployerInterface(unittest.TestCase):
 
     def test_has_setters(self):
         from freq.deployers.switch import cisco
-        for fn in ("push_config", "save_config"):
+        for fn in ("push_config", "save_config", "set_port_vlan",
+                    "set_port_shutdown", "set_port_description", "set_port_poe",
+                    "flap_port", "apply_profile_lines"):
             self.assertTrue(hasattr(cisco, fn), f"Missing setter: {fn}")
             self.assertTrue(callable(getattr(cisco, fn)), f"Not callable: {fn}")
 
@@ -522,6 +525,296 @@ class TestModuleImports(unittest.TestCase):
         )
         # All imports succeed
         self.assertTrue(callable(cmd_switch_show))
+
+    def test_port_commands_import(self):
+        from freq.modules.switch_orchestration import (
+            cmd_port_status, cmd_port_configure, cmd_port_desc,
+            cmd_port_poe, cmd_port_find, cmd_port_flap,
+        )
+        self.assertTrue(callable(cmd_port_status))
+
+    def test_profile_commands_import(self):
+        from freq.modules.switch_orchestration import (
+            cmd_profile_list, cmd_profile_show, cmd_profile_apply,
+            cmd_profile_create, cmd_profile_delete,
+        )
+        self.assertTrue(callable(cmd_profile_list))
+
+
+# ---------------------------------------------------------------------------
+# PoE Parser Tests
+# ---------------------------------------------------------------------------
+
+SHOW_POWER_INLINE = """
+Module   Available     Used     Remaining
+          (Watts)     (Watts)    (Watts)
+------   ---------   --------   ---------
+1          740.0       62.0       678.0
+
+Interface Admin  Oper       Power   Device              Class Max
+                            (Watts)
+--------- ------ ---------- ------- ------------------- ----- ----
+Gi1/0/1   auto   on         7.0     Ieee PD             3     30.0
+Gi1/0/2   auto   on         4.5     Ieee PD             2     30.0
+Gi1/0/3   auto   off        0.0     n/a                 n/a   30.0
+Gi1/0/4   auto   on         15.4    Ieee PD             4     30.0
+Gi1/0/5   auto   off        0.0     n/a                 n/a   30.0
+Gi1/0/6   auto   on         7.0     IP Phone            3     30.0
+"""
+
+
+class TestCiscoParsePowerInline(unittest.TestCase):
+    """Test _parse_power_inline parser."""
+
+    def setUp(self):
+        from freq.deployers.switch.cisco import _parse_power_inline
+        self.parse = _parse_power_inline
+
+    def test_count(self):
+        entries = self.parse(SHOW_POWER_INLINE)
+        self.assertEqual(len(entries), 6)
+
+    def test_powered_port(self):
+        entries = self.parse(SHOW_POWER_INLINE)
+        gi1 = next(e for e in entries if e["port"] == "Gi1/0/1")
+        self.assertEqual(gi1["admin"], "auto")
+        self.assertEqual(gi1["oper"], "on")
+        self.assertEqual(gi1["watts"], 7.0)
+
+    def test_unpowered_port(self):
+        entries = self.parse(SHOW_POWER_INLINE)
+        gi3 = next(e for e in entries if e["port"] == "Gi1/0/3")
+        self.assertEqual(gi3["oper"], "off")
+        self.assertEqual(gi3["watts"], 0.0)
+
+    def test_empty_input(self):
+        self.assertEqual(self.parse(""), [])
+
+
+# ---------------------------------------------------------------------------
+# Profile to Config Lines Tests
+# ---------------------------------------------------------------------------
+
+class TestProfileToConfigLines(unittest.TestCase):
+    """Test profile_to_config_lines conversion."""
+
+    def setUp(self):
+        from freq.deployers.switch.cisco import profile_to_config_lines
+        self.convert = profile_to_config_lines
+
+    def test_access_profile(self):
+        profile = {"mode": "access", "vlan": 50, "spanning_tree": "portfast"}
+        lines = self.convert(profile)
+        self.assertIn("switchport mode access", lines)
+        self.assertIn("switchport access vlan 50", lines)
+        self.assertIn("spanning-tree portfast", lines)
+        self.assertIn("no shutdown", lines)
+
+    def test_trunk_profile(self):
+        profile = {"mode": "trunk", "allowed_vlans": [1, 10, 25], "native_vlan": 1}
+        lines = self.convert(profile)
+        self.assertIn("switchport mode trunk", lines)
+        self.assertIn("switchport trunk allowed vlan 1,10,25", lines)
+        self.assertIn("switchport trunk native vlan 1", lines)
+
+    def test_shutdown_profile(self):
+        profile = {"description": "Unused port", "shutdown": True}
+        lines = self.convert(profile)
+        self.assertIn("shutdown", lines)
+        self.assertIn("description Unused port", lines)
+        self.assertNotIn("no shutdown", lines)
+        # Shutdown profile should be short — no mode/vlan config
+        self.assertNotIn("switchport mode access", lines)
+
+    def test_poe_enabled(self):
+        profile = {"mode": "access", "vlan": 50, "poe": True}
+        lines = self.convert(profile)
+        self.assertIn("power inline auto", lines)
+
+    def test_poe_disabled(self):
+        profile = {"mode": "access", "vlan": 50, "poe": False}
+        lines = self.convert(profile)
+        self.assertIn("power inline never", lines)
+
+    def test_port_security(self):
+        profile = {
+            "mode": "access", "vlan": 50,
+            "port_security": {"max_mac": 1, "violation": "restrict"},
+        }
+        lines = self.convert(profile)
+        self.assertIn("switchport port-security", lines)
+        self.assertIn("switchport port-security maximum 1", lines)
+        self.assertIn("switchport port-security violation restrict", lines)
+
+    def test_description_included(self):
+        profile = {"description": "Camera-Lobby", "mode": "access", "vlan": 50}
+        lines = self.convert(profile)
+        self.assertIn("description Camera-Lobby", lines)
+
+    def test_empty_profile(self):
+        lines = self.convert({})
+        # Should at least have no shutdown and mode
+        self.assertIn("no shutdown", lines)
+        self.assertIn("switchport mode access", lines)
+
+
+# ---------------------------------------------------------------------------
+# Port Range Expansion Tests
+# ---------------------------------------------------------------------------
+
+class TestExpandPortRange(unittest.TestCase):
+    """Test _expand_port_range utility."""
+
+    def setUp(self):
+        from freq.modules.switch_orchestration import _expand_port_range
+        self.expand = _expand_port_range
+
+    def test_single_port(self):
+        self.assertEqual(self.expand("Gi1/0/5"), ["Gi1/0/5"])
+
+    def test_range(self):
+        ports = self.expand("Gi1/0/1-4")
+        self.assertEqual(len(ports), 4)
+        self.assertEqual(ports[0], "Gi1/0/1")
+        self.assertEqual(ports[3], "Gi1/0/4")
+
+    def test_comma_separated(self):
+        ports = self.expand("Gi1/0/1,Gi1/0/5")
+        self.assertEqual(len(ports), 2)
+
+    def test_mixed(self):
+        ports = self.expand("Gi1/0/1-3,Gi1/0/10")
+        self.assertEqual(len(ports), 4)
+        self.assertEqual(ports[3], "Gi1/0/10")
+
+    def test_full_range_24(self):
+        ports = self.expand("Gi1/0/1-24")
+        self.assertEqual(len(ports), 24)
+
+
+# ---------------------------------------------------------------------------
+# CLI Port + Profile Registration Tests
+# ---------------------------------------------------------------------------
+
+class TestCLIPortRegistration(unittest.TestCase):
+    """Test that port subcommands are registered."""
+
+    def setUp(self):
+        from freq.cli import _build_parser
+        self.parser = _build_parser()
+
+    def _parse(self, args_str):
+        return self.parser.parse_args(args_str.split())
+
+    def test_port_status(self):
+        args = self._parse("net port status")
+        self.assertTrue(hasattr(args, "func"))
+
+    def test_port_configure(self):
+        args = self._parse("net port configure switch Gi1/0/5 --vlan 50")
+        self.assertTrue(hasattr(args, "func"))
+        self.assertEqual(args.port, "Gi1/0/5")
+        self.assertEqual(args.vlan, "50")
+
+    def test_port_desc(self):
+        args = self._parse('net port desc switch Gi1/0/5 --description Camera')
+        self.assertEqual(args.description, "Camera")
+
+    def test_port_poe(self):
+        args = self._parse("net port poe")
+        self.assertTrue(hasattr(args, "func"))
+
+    def test_port_poe_toggle(self):
+        args = self._parse("net port poe switch --port Gi1/0/1 --on")
+        self.assertTrue(args.on)
+
+    def test_port_find(self):
+        args = self._parse("net port find --mac aabb.ccdd.eeff")
+        self.assertEqual(args.mac, "aabb.ccdd.eeff")
+
+    def test_port_flap(self):
+        args = self._parse("net port flap --port Gi1/0/5")
+        self.assertEqual(args.port, "Gi1/0/5")
+
+
+class TestCLIProfileRegistration(unittest.TestCase):
+    """Test that profile subcommands are registered."""
+
+    def setUp(self):
+        from freq.cli import _build_parser
+        self.parser = _build_parser()
+
+    def _parse(self, args_str):
+        return self.parser.parse_args(args_str.split())
+
+    def test_profile_list(self):
+        args = self._parse("net switch profile list")
+        self.assertTrue(hasattr(args, "func"))
+
+    def test_profile_show(self):
+        args = self._parse("net switch profile show camera")
+        self.assertEqual(args.name, "camera")
+
+    def test_profile_create(self):
+        args = self._parse("net switch profile create test --mode access --vlan 50")
+        self.assertEqual(args.name, "test")
+        self.assertEqual(args.mode, "access")
+        self.assertEqual(args.vlan, "50")
+
+    def test_profile_apply(self):
+        args = self._parse("net switch profile apply camera switch --ports Gi1/0/1-24")
+        self.assertEqual(args.name, "camera")
+        self.assertEqual(args.target, "switch")
+        self.assertEqual(args.ports, "Gi1/0/1-24")
+
+    def test_profile_delete(self):
+        args = self._parse("net switch profile delete test")
+        self.assertEqual(args.name, "test")
+
+
+# ---------------------------------------------------------------------------
+# Profile Load Tests
+# ---------------------------------------------------------------------------
+
+class TestProfileLoading(unittest.TestCase):
+    """Test profile TOML loading from disk."""
+
+    def test_load_profiles_from_conf(self):
+        """Load the bundled switch-profiles.toml."""
+        import os
+        import sys
+
+        # Point cfg.conf_dir at our real conf directory
+        cfg = MockConfig()
+        cfg.conf_dir = os.path.join(os.path.dirname(__file__), "..", "conf")
+
+        from freq.modules.switch_orchestration import _load_profiles
+        profiles = _load_profiles(cfg)
+        self.assertIn("camera", profiles)
+        self.assertIn("dead", profiles)
+        self.assertIn("trunk-uplink", profiles)
+        self.assertIn("access-default", profiles)
+
+    def test_camera_profile_structure(self):
+        import os
+        cfg = MockConfig()
+        cfg.conf_dir = os.path.join(os.path.dirname(__file__), "..", "conf")
+
+        from freq.modules.switch_orchestration import _load_profiles
+        profiles = _load_profiles(cfg)
+        cam = profiles["camera"]
+        self.assertEqual(cam["mode"], "access")
+        self.assertEqual(cam["vlan"], 50)
+        self.assertTrue(cam["poe"])
+
+    def test_load_empty_dir(self):
+        """Missing profiles file returns empty dict."""
+        import tempfile
+        cfg = MockConfig()
+        cfg.conf_dir = tempfile.mkdtemp()
+        from freq.modules.switch_orchestration import _load_profiles
+        profiles = _load_profiles(cfg)
+        self.assertEqual(profiles, {})
 
 
 if __name__ == "__main__":

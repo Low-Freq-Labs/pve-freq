@@ -577,3 +577,588 @@ def _exec_all(cfg, command):
     logger.info("switch_exec_all", command=command, targets=len(switches), ok=ok_count)
     fmt.footer()
     return 0 if ok_count > 0 else 1
+
+
+# ---------------------------------------------------------------------------
+# Commands — Port Management
+# ---------------------------------------------------------------------------
+
+def cmd_port_status(cfg: FreqConfig, pack, args) -> int:
+    """Display per-port status: link, speed, VLAN, PoE, connected device."""
+    ip, label, vendor = _resolve_target(getattr(args, "target", None), cfg)
+    if not ip:
+        fmt.error("No switch target. Usage: freq net port status <target>")
+        return 1
+
+    deployer = _get_deployer(vendor)
+    if not deployer:
+        fmt.error(f"No deployer for switch vendor: {vendor}")
+        return 1
+
+    fmt.header(f"Port Status: {label}", breadcrumb="FREQ > Net > Port")
+    fmt.blank()
+
+    interfaces = deployer.get_interfaces(ip, cfg)
+    if not interfaces:
+        fmt.warn(f"Could not retrieve port status from {ip}")
+        fmt.footer()
+        return 1
+
+    # Merge PoE data if available
+    poe_map = {}
+    if hasattr(deployer, "get_poe_status"):
+        poe_entries = deployer.get_poe_status(ip, cfg)
+        poe_map = {e["port"]: e for e in poe_entries}
+
+    fmt.table_header(
+        ("Port", 14), ("Description", 18), ("Status", 12),
+        ("VLAN", 6), ("Speed", 8), ("PoE", 8),
+    )
+    for iface in interfaces:
+        name = iface.get("name", "")
+        status = iface.get("status", "")
+        color = fmt.C.GREEN if status == "connected" else fmt.C.RED if status in ("notconnect", "err-disabled") else fmt.C.DIM
+
+        poe_info = poe_map.get(name, {})
+        poe_str = ""
+        if poe_info:
+            watts = poe_info.get("watts", "")
+            if watts and watts != "n/a":
+                poe_str = f"{watts}W"
+            else:
+                poe_str = poe_info.get("oper", "")
+
+        fmt.table_row(
+            (name, 14),
+            (iface.get("description", ""), 18),
+            (f"{color}{status}{fmt.C.RESET}", 12),
+            (iface.get("vlan", ""), 6),
+            (iface.get("speed", ""), 8),
+            (poe_str, 8),
+        )
+
+    fmt.blank()
+    up = sum(1 for i in interfaces if i.get("status") == "connected")
+    fmt.info(f"{up}/{len(interfaces)} ports connected")
+    logger.info("port_status", target=label, ip=ip, count=len(interfaces))
+    fmt.footer()
+    return 0
+
+
+def cmd_port_configure(cfg: FreqConfig, pack, args) -> int:
+    """Configure a single port: VLAN, mode, shutdown state."""
+    ip, label, vendor = _resolve_target(getattr(args, "target", None), cfg)
+    port = getattr(args, "port", None)
+    if not ip or not port:
+        fmt.error("Usage: freq net port configure <target> <port> [--vlan N] [--mode access|trunk] [--shutdown|--no-shutdown]")
+        return 1
+
+    deployer = _get_deployer(vendor)
+    if not deployer:
+        fmt.error(f"No deployer for switch vendor: {vendor}")
+        return 1
+
+    fmt.header(f"Configure Port: {label} {port}", breadcrumb="FREQ > Net > Port")
+    fmt.blank()
+
+    vlan = getattr(args, "vlan", None)
+    mode = getattr(args, "mode", None)
+    shutdown = getattr(args, "shutdown", None)
+    no_shutdown = getattr(args, "no_shutdown", None)
+
+    changes = 0
+
+    if vlan is not None:
+        fmt.step_start(f"Setting VLAN {vlan} on {port}")
+        if deployer.set_port_vlan(ip, cfg, port, vlan, mode or "access"):
+            fmt.step_ok(f"VLAN {vlan} set")
+            changes += 1
+        else:
+            fmt.step_fail(f"Failed to set VLAN {vlan}")
+
+    elif mode is not None and vlan is None:
+        fmt.step_start(f"Setting mode {mode} on {port}")
+        if deployer.set_port_vlan(ip, cfg, port, None, mode):
+            fmt.step_ok(f"Mode {mode} set")
+            changes += 1
+        else:
+            fmt.step_fail(f"Failed to set mode {mode}")
+
+    if shutdown:
+        fmt.step_start(f"Shutting down {port}")
+        if deployer.set_port_shutdown(ip, cfg, port, shutdown=True):
+            fmt.step_ok("Port shut down")
+            changes += 1
+        else:
+            fmt.step_fail("Failed to shutdown port")
+
+    elif no_shutdown:
+        fmt.step_start(f"Enabling {port}")
+        if deployer.set_port_shutdown(ip, cfg, port, shutdown=False):
+            fmt.step_ok("Port enabled")
+            changes += 1
+        else:
+            fmt.step_fail("Failed to enable port")
+
+    if changes > 0:
+        fmt.step_start("Saving config")
+        if deployer.save_config(ip, cfg):
+            fmt.step_ok("Config saved")
+        else:
+            fmt.step_warn("Save failed — changes may not persist across reboot")
+
+    if changes == 0 and not vlan and not mode and not shutdown and not no_shutdown:
+        fmt.warn("No changes specified. Use --vlan, --mode, --shutdown, or --no-shutdown")
+
+    fmt.blank()
+    logger.info("port_configure", target=label, ip=ip, port=port, changes=changes)
+    fmt.footer()
+    return 0
+
+
+def cmd_port_desc(cfg: FreqConfig, pack, args) -> int:
+    """Set port description."""
+    ip, label, vendor = _resolve_target(getattr(args, "target", None), cfg)
+    port = getattr(args, "port", None)
+    description = getattr(args, "description", None)
+    if not ip or not port or not description:
+        fmt.error("Usage: freq net port desc <target> <port> --description \"text\"")
+        return 1
+
+    deployer = _get_deployer(vendor)
+    if not deployer:
+        fmt.error(f"No deployer for switch vendor: {vendor}")
+        return 1
+
+    fmt.header(f"Set Description: {label} {port}", breadcrumb="FREQ > Net > Port")
+    fmt.blank()
+
+    fmt.step_start(f"Setting description on {port}")
+    if deployer.set_port_description(ip, cfg, port, description):
+        fmt.step_ok(f"Description: {description}")
+        deployer.save_config(ip, cfg)
+    else:
+        fmt.step_fail("Failed to set description")
+
+    fmt.blank()
+    logger.info("port_desc", target=label, ip=ip, port=port, description=description)
+    fmt.footer()
+    return 0
+
+
+def cmd_port_poe(cfg: FreqConfig, pack, args) -> int:
+    """Display PoE status or toggle PoE on a port."""
+    ip, label, vendor = _resolve_target(getattr(args, "target", None), cfg)
+    if not ip:
+        fmt.error("No switch target. Usage: freq net port poe <target>")
+        return 1
+
+    deployer = _get_deployer(vendor)
+    if not deployer:
+        fmt.error(f"No deployer for switch vendor: {vendor}")
+        return 1
+
+    port = getattr(args, "port", None)
+    poe_on = getattr(args, "on", False)
+    poe_off = getattr(args, "off", False)
+
+    # Toggle mode
+    if port and (poe_on or poe_off):
+        fmt.header(f"PoE Toggle: {label} {port}", breadcrumb="FREQ > Net > Port")
+        fmt.blank()
+        action = "Enabling" if poe_on else "Disabling"
+        fmt.step_start(f"{action} PoE on {port}")
+        if deployer.set_port_poe(ip, cfg, port, enabled=poe_on):
+            fmt.step_ok(f"PoE {'enabled' if poe_on else 'disabled'}")
+            deployer.save_config(ip, cfg)
+        else:
+            fmt.step_fail(f"Failed to {'enable' if poe_on else 'disable'} PoE")
+        fmt.blank()
+        fmt.footer()
+        return 0
+
+    # Status mode
+    fmt.header(f"PoE Status: {label}", breadcrumb="FREQ > Net > Port")
+    fmt.blank()
+
+    if not hasattr(deployer, "get_poe_status"):
+        fmt.warn("PoE status not supported for this vendor")
+        fmt.footer()
+        return 1
+
+    entries = deployer.get_poe_status(ip, cfg)
+    if not entries:
+        fmt.warn(f"Could not retrieve PoE status from {ip}")
+        fmt.footer()
+        return 1
+
+    fmt.table_header(("Port", 14), ("Admin", 8), ("Oper", 8), ("Watts", 8), ("Device", 20))
+    total_watts = 0
+    for e in entries:
+        watts = e.get("watts", "")
+        if isinstance(watts, (int, float)):
+            total_watts += watts
+        fmt.table_row(
+            (e.get("port", ""), 14),
+            (e.get("admin", ""), 8),
+            (e.get("oper", ""), 8),
+            (str(watts), 8),
+            (e.get("device", ""), 20),
+        )
+
+    fmt.blank()
+    fmt.info(f"Total power draw: {total_watts:.1f}W")
+    logger.info("port_poe", target=label, ip=ip, entries=len(entries))
+    fmt.footer()
+    return 0
+
+
+def cmd_port_find(cfg: FreqConfig, pack, args) -> int:
+    """Find which port a MAC address is on."""
+    ip, label, vendor = _resolve_target(getattr(args, "target", None), cfg)
+    mac_query = getattr(args, "mac", None)
+    if not ip or not mac_query:
+        fmt.error("Usage: freq net port find <target> --mac XX:XX:XX:XX:XX:XX")
+        return 1
+
+    deployer = _get_deployer(vendor)
+    if not deployer:
+        fmt.error(f"No deployer for switch vendor: {vendor}")
+        return 1
+
+    fmt.header(f"Find MAC: {label}", breadcrumb="FREQ > Net > Port")
+    fmt.blank()
+
+    # Normalize query — support colon, dash, and dot formats
+    mac_clean = mac_query.lower().replace(":", "").replace("-", "").replace(".", "")
+
+    entries = deployer.get_mac_table(ip, cfg)
+    if not entries:
+        fmt.warn(f"Could not retrieve MAC table from {ip}")
+        fmt.footer()
+        return 1
+
+    matches = []
+    for e in entries:
+        entry_clean = e.get("mac", "").replace(".", "")
+        if mac_clean in entry_clean:
+            matches.append(e)
+
+    if matches:
+        fmt.table_header(("VLAN", 6), ("MAC Address", 16), ("Port", 16), ("Type", 10))
+        for m in matches:
+            fmt.table_row(
+                (str(m.get("vlan", "")), 6),
+                (m.get("mac", ""), 16),
+                (m.get("port", ""), 16),
+                (m.get("type", ""), 10),
+            )
+        fmt.blank()
+        fmt.success(f"Found {len(matches)} match(es) for {mac_query}")
+    else:
+        fmt.warn(f"MAC {mac_query} not found in {len(entries)} table entries")
+
+    logger.info("port_find", target=label, ip=ip, mac=mac_query, found=len(matches))
+    fmt.footer()
+    return 0
+
+
+def cmd_port_flap(cfg: FreqConfig, pack, args) -> int:
+    """Bounce a port (shut/no shut)."""
+    ip, label, vendor = _resolve_target(getattr(args, "target", None), cfg)
+    port = getattr(args, "port", None)
+    if not ip or not port:
+        fmt.error("Usage: freq net port flap <target> --port Gi1/0/5")
+        return 1
+
+    deployer = _get_deployer(vendor)
+    if not deployer:
+        fmt.error(f"No deployer for switch vendor: {vendor}")
+        return 1
+
+    fmt.header(f"Port Flap: {label} {port}", breadcrumb="FREQ > Net > Port")
+    fmt.blank()
+
+    fmt.step_start(f"Bouncing {port} (shut/no shut)")
+    if deployer.flap_port(ip, cfg, port):
+        fmt.step_ok(f"{port} bounced")
+    else:
+        fmt.step_fail(f"Failed to flap {port}")
+
+    fmt.blank()
+    logger.info("port_flap", target=label, ip=ip, port=port)
+    fmt.footer()
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Commands — Port Profiles
+# ---------------------------------------------------------------------------
+
+PROFILES_FILE = "switch-profiles.toml"
+
+
+def _load_profiles(cfg):
+    """Load switch profiles from conf/switch-profiles.toml."""
+    import os
+    filepath = os.path.join(cfg.conf_dir, PROFILES_FILE)
+    if not os.path.exists(filepath):
+        return {}
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib
+    with open(filepath, "rb") as f:
+        data = tomllib.load(f)
+    return data.get("profile", {})
+
+
+def _save_profiles(cfg, profiles):
+    """Save switch profiles to conf/switch-profiles.toml."""
+    import os
+    filepath = os.path.join(cfg.conf_dir, PROFILES_FILE)
+    lines = ["# FREQ Switch Port Profiles", "# Apply with: freq net switch profile apply <name> <target> <port-range>", ""]
+    for name, profile in sorted(profiles.items()):
+        lines.append(f"[profile.{name}]")
+        for key, val in profile.items():
+            if isinstance(val, str):
+                lines.append(f'{key} = "{val}"')
+            elif isinstance(val, bool):
+                lines.append(f"{key} = {'true' if val else 'false'}")
+            elif isinstance(val, list):
+                items = ", ".join(str(v) for v in val)
+                lines.append(f"{key} = [{items}]")
+            elif isinstance(val, dict):
+                inner = ", ".join(f'{k} = {_toml_val(v)}' for k, v in val.items())
+                lines.append(f"{key} = {{ {inner} }}")
+            else:
+                lines.append(f"{key} = {val}")
+        lines.append("")
+    with open(filepath, "w") as f:
+        f.write("\n".join(lines))
+
+
+def _toml_val(v):
+    """Format a value for inline TOML."""
+    if isinstance(v, str):
+        return f'"{v}"'
+    elif isinstance(v, bool):
+        return "true" if v else "false"
+    return str(v)
+
+
+def _expand_port_range(port_range):
+    """Expand a port range like Gi1/0/1-24 into individual port names.
+
+    Supports: Gi1/0/1-24, Gi1/0/1,Gi1/0/5, Gi1/0/1-4,Gi1/0/10
+    """
+    import re as _re
+    ports = []
+    for segment in port_range.split(","):
+        segment = segment.strip()
+        m = _re.match(r"^(.+/)(\d+)-(\d+)$", segment)
+        if m:
+            prefix = m.group(1)
+            start = int(m.group(2))
+            end = int(m.group(3))
+            for i in range(start, end + 1):
+                ports.append(f"{prefix}{i}")
+        else:
+            ports.append(segment)
+    return ports
+
+
+def cmd_profile_list(cfg: FreqConfig, pack, args) -> int:
+    """List available port profiles."""
+    profiles = _load_profiles(cfg)
+
+    fmt.header("Switch Port Profiles", breadcrumb="FREQ > Net > Switch")
+    fmt.blank()
+
+    if not profiles:
+        fmt.warn("No profiles defined")
+        fmt.info(f"Create one: freq net switch profile create <name>")
+        fmt.footer()
+        return 0
+
+    fmt.table_header(("Name", 20), ("Mode", 8), ("VLAN", 8), ("Description", 40))
+    for name, p in sorted(profiles.items()):
+        fmt.table_row(
+            (name, 20),
+            (p.get("mode", "—"), 8),
+            (str(p.get("vlan", p.get("native_vlan", "—"))), 8),
+            (p.get("description", ""), 40),
+        )
+
+    fmt.blank()
+    fmt.info(f"{len(profiles)} profile(s)")
+    fmt.footer()
+    return 0
+
+
+def cmd_profile_show(cfg: FreqConfig, pack, args) -> int:
+    """Show details of a specific profile."""
+    name = getattr(args, "name", None)
+    if not name:
+        fmt.error("Usage: freq net switch profile show <name>")
+        return 1
+
+    profiles = _load_profiles(cfg)
+    profile = profiles.get(name)
+    if not profile:
+        fmt.error(f"Profile '{name}' not found")
+        return 1
+
+    fmt.header(f"Profile: {name}", breadcrumb="FREQ > Net > Switch")
+    fmt.blank()
+
+    for key, val in profile.items():
+        fmt.line(f"  {fmt.C.CYAN}{key:<20}{fmt.C.RESET} {val}")
+
+    # Show what config lines this would generate (Cisco)
+    from freq.deployers.switch.cisco import profile_to_config_lines
+    lines = profile_to_config_lines(profile)
+    if lines:
+        fmt.blank()
+        fmt.line(f"{fmt.C.BOLD}Generated IOS Config:{fmt.C.RESET}")
+        for line in lines:
+            fmt.line(f"  {fmt.C.DIM}{line}{fmt.C.RESET}")
+
+    fmt.blank()
+    fmt.footer()
+    return 0
+
+
+def cmd_profile_apply(cfg: FreqConfig, pack, args) -> int:
+    """Apply a profile to a port or port range on a switch."""
+    profile_name = getattr(args, "name", None)
+    target = getattr(args, "target", None)
+    port_range = getattr(args, "ports", None)
+
+    if not profile_name or not port_range:
+        fmt.error("Usage: freq net switch profile apply <name> <target> --ports Gi1/0/1-24")
+        return 1
+
+    profiles = _load_profiles(cfg)
+    profile = profiles.get(profile_name)
+    if not profile:
+        fmt.error(f"Profile '{profile_name}' not found")
+        return 1
+
+    ip, label, vendor = _resolve_target(target, cfg)
+    if not ip:
+        fmt.error("No switch target specified")
+        return 1
+
+    deployer = _get_deployer(vendor)
+    if not deployer:
+        fmt.error(f"No deployer for switch vendor: {vendor}")
+        return 1
+
+    # Generate vendor-specific config lines
+    if hasattr(deployer, "profile_to_config_lines"):
+        config_lines = deployer.profile_to_config_lines(profile)
+    else:
+        from freq.deployers.switch.cisco import profile_to_config_lines
+        config_lines = profile_to_config_lines(profile)
+
+    ports = _expand_port_range(port_range)
+
+    fmt.header(f"Apply Profile: {profile_name}", breadcrumb="FREQ > Net > Switch")
+    fmt.blank()
+    fmt.line(f"{fmt.C.BOLD}Profile:{fmt.C.RESET} {profile_name}")
+    fmt.line(f"{fmt.C.BOLD}Target:{fmt.C.RESET}  {label} ({ip})")
+    fmt.line(f"{fmt.C.BOLD}Ports:{fmt.C.RESET}   {', '.join(ports)} ({len(ports)} port(s))")
+    fmt.blank()
+    fmt.line(f"{fmt.C.BOLD}Config per port:{fmt.C.RESET}")
+    for line in config_lines:
+        fmt.line(f"  {fmt.C.DIM}{line}{fmt.C.RESET}")
+    fmt.blank()
+
+    ok_count = 0
+    for port in ports:
+        fmt.step_start(f"Configuring {port}")
+        if deployer.apply_profile_lines(ip, cfg, port, config_lines):
+            fmt.step_ok(port)
+            ok_count += 1
+        else:
+            fmt.step_fail(port)
+
+    fmt.blank()
+    if ok_count > 0:
+        fmt.step_start("Saving config")
+        if deployer.save_config(ip, cfg):
+            fmt.step_ok("Config saved")
+        else:
+            fmt.step_warn("Save failed — changes may not persist")
+
+    fmt.blank()
+    fmt.info(f"{ok_count}/{len(ports)} ports configured")
+    logger.info("profile_apply", profile=profile_name, target=label, ports=len(ports), ok=ok_count)
+    fmt.footer()
+    return 0
+
+
+def cmd_profile_create(cfg: FreqConfig, pack, args) -> int:
+    """Create a new port profile interactively or with flags."""
+    name = getattr(args, "name", None)
+    if not name:
+        fmt.error("Usage: freq net switch profile create <name> [--mode access|trunk] [--vlan N] [--description text]")
+        return 1
+
+    profiles = _load_profiles(cfg)
+    if name in profiles:
+        fmt.error(f"Profile '{name}' already exists. Delete it first or use a different name.")
+        return 1
+
+    profile = {}
+    desc = getattr(args, "description", None)
+    mode = getattr(args, "mode", None)
+    vlan = getattr(args, "vlan", None)
+    shutdown = getattr(args, "shutdown", False)
+
+    if desc:
+        profile["description"] = desc
+    if mode:
+        profile["mode"] = mode
+    if vlan:
+        profile["vlan"] = int(vlan)
+    if shutdown:
+        profile["shutdown"] = True
+
+    if not profile:
+        fmt.error("Specify at least one option: --mode, --vlan, --description, --shutdown")
+        return 1
+
+    profiles[name] = profile
+    _save_profiles(cfg, profiles)
+
+    fmt.header(f"Profile Created: {name}", breadcrumb="FREQ > Net > Switch")
+    fmt.blank()
+    for key, val in profile.items():
+        fmt.line(f"  {fmt.C.CYAN}{key:<20}{fmt.C.RESET} {val}")
+    fmt.blank()
+    fmt.success(f"Profile '{name}' saved to {PROFILES_FILE}")
+    logger.info("profile_create", name=name)
+    fmt.footer()
+    return 0
+
+
+def cmd_profile_delete(cfg: FreqConfig, pack, args) -> int:
+    """Delete a port profile."""
+    name = getattr(args, "name", None)
+    if not name:
+        fmt.error("Usage: freq net switch profile delete <name>")
+        return 1
+
+    profiles = _load_profiles(cfg)
+    if name not in profiles:
+        fmt.error(f"Profile '{name}' not found")
+        return 1
+
+    del profiles[name]
+    _save_profiles(cfg, profiles)
+
+    fmt.success(f"Profile '{name}' deleted")
+    logger.info("profile_delete", name=name)
+    return 0

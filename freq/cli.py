@@ -1027,8 +1027,81 @@ def _register_net(sub):
     p.add_argument("--all", action="store_true", help="Run on all switches")
     p.set_defaults(func=_cmd_switch_exec)
 
+    # freq net switch profile <action>
+    prof = sw_sub.add_parser("profile", help="Port profile management")
+    prof_sub = prof.add_subparsers(dest="profile_action")
+
+    p = prof_sub.add_parser("list", help="List all port profiles")
+    p.set_defaults(func=_cmd_profile_list)
+
+    p = prof_sub.add_parser("show", help="Show profile details")
+    p.add_argument("name", help="Profile name")
+    p.set_defaults(func=_cmd_profile_show)
+
+    p = prof_sub.add_parser("apply", help="Apply profile to port(s)")
+    p.add_argument("name", help="Profile name")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.add_argument("--ports", required=True, help="Port range (e.g. Gi1/0/1-24)")
+    p.set_defaults(func=_cmd_profile_apply)
+
+    p = prof_sub.add_parser("create", help="Create a new profile")
+    p.add_argument("name", help="Profile name")
+    p.add_argument("--description", help="Profile description")
+    p.add_argument("--mode", choices=["access", "trunk"], help="Port mode")
+    p.add_argument("--vlan", help="VLAN ID")
+    p.add_argument("--shutdown", action="store_true", help="Shutdown port")
+    p.set_defaults(func=_cmd_profile_create)
+
+    p = prof_sub.add_parser("delete", help="Delete a profile")
+    p.add_argument("name", help="Profile name")
+    p.set_defaults(func=_cmd_profile_delete)
+
+    prof.set_defaults(func=_cmd_profile_list)
+
     # Default: freq net switch (no action) -> show
     sw.set_defaults(func=_cmd_switch_show)
+
+    # freq net port <action> — port management
+    port = net_sub.add_parser("port", help="Switch port management")
+    port_sub = port.add_subparsers(dest="action")
+
+    p = port_sub.add_parser("status", help="Per-port status with PoE info")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.set_defaults(func=_cmd_port_status)
+
+    p = port_sub.add_parser("configure", help="Configure a port")
+    p.add_argument("target", help="Switch IP or label")
+    p.add_argument("port", help="Port name (e.g. Gi1/0/5)")
+    p.add_argument("--vlan", help="Set VLAN ID")
+    p.add_argument("--mode", choices=["access", "trunk"], help="Port mode")
+    p.add_argument("--shutdown", action="store_true", help="Shutdown port")
+    p.add_argument("--no-shutdown", action="store_true", help="Enable port")
+    p.set_defaults(func=_cmd_port_configure)
+
+    p = port_sub.add_parser("desc", help="Set port description")
+    p.add_argument("target", help="Switch IP or label")
+    p.add_argument("port", help="Port name (e.g. Gi1/0/5)")
+    p.add_argument("--description", required=True, help="Description text")
+    p.set_defaults(func=_cmd_port_desc)
+
+    p = port_sub.add_parser("poe", help="PoE status or toggle")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.add_argument("--port", help="Port name for toggle")
+    p.add_argument("--on", action="store_true", help="Enable PoE")
+    p.add_argument("--off", action="store_true", help="Disable PoE")
+    p.set_defaults(func=_cmd_port_poe)
+
+    p = port_sub.add_parser("find", help="Find which port a MAC is on")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.add_argument("--mac", required=True, help="MAC address to find")
+    p.set_defaults(func=_cmd_port_find)
+
+    p = port_sub.add_parser("flap", help="Bounce a port (shut/no shut)")
+    p.add_argument("target", nargs="?", help="Switch IP or label")
+    p.add_argument("--port", required=True, help="Port name (e.g. Gi1/0/5)")
+    p.set_defaults(func=_cmd_port_flap)
+
+    port.set_defaults(func=_cmd_port_status)
 
     p = net_sub.add_parser("netmon", help="Network monitoring and interface tracking")
     p.add_argument("action", nargs="?", choices=["interfaces", "poll", "bandwidth", "topology"],
@@ -1701,6 +1774,65 @@ def _cmd_switch_environment(cfg: FreqConfig, pack, args) -> int:
 def _cmd_switch_exec(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_switch_exec
     return cmd_switch_exec(cfg, pack, args)
+
+
+# --- Port Management ---
+
+def _cmd_port_status(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_port_status
+    return cmd_port_status(cfg, pack, args)
+
+
+def _cmd_port_configure(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_port_configure
+    return cmd_port_configure(cfg, pack, args)
+
+
+def _cmd_port_desc(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_port_desc
+    return cmd_port_desc(cfg, pack, args)
+
+
+def _cmd_port_poe(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_port_poe
+    return cmd_port_poe(cfg, pack, args)
+
+
+def _cmd_port_find(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_port_find
+    return cmd_port_find(cfg, pack, args)
+
+
+def _cmd_port_flap(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_port_flap
+    return cmd_port_flap(cfg, pack, args)
+
+
+# --- Port Profiles ---
+
+def _cmd_profile_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_profile_list
+    return cmd_profile_list(cfg, pack, args)
+
+
+def _cmd_profile_show(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_profile_show
+    return cmd_profile_show(cfg, pack, args)
+
+
+def _cmd_profile_apply(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_profile_apply
+    return cmd_profile_apply(cfg, pack, args)
+
+
+def _cmd_profile_create(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_profile_create
+    return cmd_profile_create(cfg, pack, args)
+
+
+def _cmd_profile_delete(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.switch_orchestration import cmd_profile_delete
+    return cmd_profile_delete(cfg, pack, args)
 
 
 def _cmd_idrac(cfg: FreqConfig, pack, args) -> int:
