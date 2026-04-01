@@ -614,6 +614,47 @@ def _build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_cmd_apply)
 
     # --- Remaining ---
+    # --- Phase 1: Killer Commands ---
+    p = sub.add_parser("alert", help="Alert management (create/list/delete/history/test/silence/check)")
+    p.add_argument("action", nargs="?",
+                   choices=["list", "create", "delete", "history", "test", "silence", "check"],
+                   default="list", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Alert rule name (for create/delete/silence)")
+    p.add_argument("--condition", help="Alert condition (host_down, cpu_above, ram_above, disk_above, docker_down, load_spike)")
+    p.add_argument("--threshold", type=float, default=0, help="Threshold value")
+    p.add_argument("--alert-severity", default="warning", choices=["info", "warning", "critical"],
+                   help="Alert severity")
+    p.add_argument("--target-host", default="*", help="Target host pattern (* for all)")
+    p.add_argument("--cooldown", type=int, default=300, help="Seconds between re-alerts (default: 300)")
+    p.add_argument("--duration", type=int, default=60, help="Silence duration in minutes (default: 60)")
+    p.add_argument("--reason", default="", help="Silence reason")
+    p.add_argument("--lines", type=int, default=20, help="History lines to show")
+    p.set_defaults(func=_cmd_alert)
+
+    p = sub.add_parser("rollback", help="Roll back a VM to its latest snapshot")
+    p.add_argument("target", nargs="?", help="VMID")
+    p.add_argument("--name", help="Specific snapshot name (default: most recent)")
+    p.add_argument("--no-start", action="store_true", help="Don't start VM after rollback")
+    p.set_defaults(func=_cmd_rollback)
+
+    p = sub.add_parser("inventory", help="Full fleet inventory export (hosts/VMs/containers)")
+    p.add_argument("section", nargs="?", choices=["all", "hosts", "vms", "containers"],
+                   default="all", help="Section to export (default: all)")
+    p.add_argument("--csv", action="store_true", help="CSV output")
+    p.set_defaults(func=_cmd_inventory)
+
+    p = sub.add_parser("compare", help="Compare two hosts side-by-side")
+    p.add_argument("target_a", nargs="?", help="First host label or IP")
+    p.add_argument("target_b", nargs="?", help="Second host label or IP")
+    p.set_defaults(func=_cmd_compare)
+
+    p = sub.add_parser("baseline", help="Configuration baseline and drift detection")
+    p.add_argument("action", nargs="?", choices=["capture", "compare", "list", "delete"],
+                   default="list", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Baseline name")
+    p.set_defaults(func=_cmd_baseline)
+
+    # --- Remaining ---
     p = sub.add_parser("distros", help="List available cloud images")
     p.set_defaults(func=_cmd_distros)
 
@@ -806,6 +847,17 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("federation [list|register|poll]", "Multi-site federation"),
             ("gitops [status|sync|apply|diff]", "GitOps config sync"),
             ("chaos [list|run|log]", "Chaos engineering experiments"),
+        ]),
+        ("Alerting & Intelligence", [
+            ("alert [list|create|delete|check]", "Alert rules with notification delivery"),
+            ("alert test", "Test alert delivery to all channels"),
+            ("alert silence <pattern>", "Silence alerts temporarily"),
+            ("alert history", "View fired alert history"),
+            ("rollback <vmid>", "Roll back VM to latest snapshot"),
+            ("inventory [hosts|vms|containers]", "Full fleet CMDB export (JSON/CSV/table)"),
+            ("compare <host-a> <host-b>", "Side-by-side host comparison"),
+            ("baseline capture [name]", "Snapshot known-good config state"),
+            ("baseline compare [name]", "Detect configuration drift"),
         ]),
         ("Deployment", [
             ("init", "First-run setup wizard"),
@@ -1322,6 +1374,36 @@ def _cmd_plan(cfg: FreqConfig, pack, args) -> int:
 def _cmd_apply(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plan import cmd_apply
     return cmd_apply(cfg, pack, args)
+
+
+def _cmd_alert(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.alert import cmd_alert
+    return cmd_alert(cfg, pack, args)
+
+
+def _cmd_rollback(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.rollback import cmd_rollback
+    # Handle --no-start flag
+    if getattr(args, "no_start", False):
+        args.start = False
+    else:
+        args.start = True
+    return cmd_rollback(cfg, pack, args)
+
+
+def _cmd_inventory(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.inventory import cmd_inventory
+    return cmd_inventory(cfg, pack, args)
+
+
+def _cmd_compare(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.compare import cmd_compare
+    return cmd_compare(cfg, pack, args)
+
+
+def _cmd_baseline(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.baseline import cmd_baseline
+    return cmd_baseline(cfg, pack, args)
 
 
 def _cmd_hosts(cfg: FreqConfig, pack, args) -> int:

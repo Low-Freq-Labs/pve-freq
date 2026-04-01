@@ -284,6 +284,7 @@ def _menu_vm_lifecycle(cfg, pack):
             ("w", "power", "Start/stop/reboot a VM", Tag.CHANGES),
             ("s", "snapshot list", "List VM snapshots", ""),
             ("x", "snapshot delete", "Delete a snapshot", Tag.DESTRUCTIVE),
+            ("o", "rollback", "Roll back VM to latest snapshot", Tag.RISKY),
             ("n", "nic", "NIC management submenu", Tag.CHANGES),
             ("0", "Back", "", ""),
         ], crumb)
@@ -350,6 +351,9 @@ def _menu_vm_lifecycle(cfg, pack):
                 name = _input("Snapshot name:")
                 if name:
                     _run_argv(cfg, pack, ["snapshot", "delete", vmid, "--name", name])
+        elif ch == "o":
+            print()
+            _run_with_target(cfg, pack, "rollback", "VMID:")
         elif ch == "n":
             _menu_nic(cfg, pack)
             continue
@@ -976,6 +980,17 @@ def _menu_monitoring(cfg, pack):
             ("7", "capacity", "Fleet capacity projections", ""),
             ("8", "cost", "Fleet power cost estimates", ""),
             ("9", "rules", "Alert rule management", ""),
+            None,
+            "Alerting & Intelligence",
+            ("a", "alert list", "View alert rules", ""),
+            ("c", "alert check", "Evaluate alerts NOW", Tag.CHANGES),
+            ("t", "alert test", "Test notification delivery", ""),
+            ("h", "alert history", "Fired alert history", ""),
+            ("i", "inventory", "Full fleet CMDB export", ""),
+            ("d", "compare", "Diff two hosts side-by-side", ""),
+            ("e", "baseline list", "View saved baselines", ""),
+            ("f", "baseline capture", "Capture config state", Tag.SAFE),
+            ("g", "baseline compare", "Detect drift", ""),
             ("0", "Back", "", ""),
         ], crumb)
 
@@ -1006,6 +1021,38 @@ def _menu_monitoring(cfg, pack):
             _run_command(cfg, pack, "cost")
         elif ch == "9":
             _run_command(cfg, pack, "rules")
+        elif ch == "a":
+            _run_command(cfg, pack, "alert")
+        elif ch == "c":
+            _run_argv(cfg, pack, ["alert", "check"])
+        elif ch == "t":
+            _run_argv(cfg, pack, ["alert", "test"])
+        elif ch == "h":
+            _run_argv(cfg, pack, ["alert", "history"])
+        elif ch == "i":
+            _run_command(cfg, pack, "inventory")
+        elif ch == "d":
+            print()
+            host_a = _input("Host A:")
+            host_b = _input("Host B:")
+            if host_a and host_b:
+                _run_argv(cfg, pack, ["compare", host_a, host_b])
+        elif ch == "e":
+            _run_command(cfg, pack, "baseline")
+        elif ch == "f":
+            print()
+            name = _input("Baseline name (Enter=auto):")
+            if name:
+                _run_argv(cfg, pack, ["baseline", "capture", name])
+            else:
+                _run_argv(cfg, pack, ["baseline", "capture"])
+        elif ch == "g":
+            print()
+            name = _input("Baseline to compare (Enter=latest):")
+            if name:
+                _run_argv(cfg, pack, ["baseline", "compare", name])
+            else:
+                _run_argv(cfg, pack, ["baseline", "compare"])
         else:
             continue
         _pause()

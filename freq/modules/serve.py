@@ -1632,6 +1632,18 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/rules/update": "_serve_rules_update",
         "/api/rules/delete": "_serve_rules_delete",
         "/api/rules/history": "_serve_rules_history",
+        # Alerting & Intelligence (Phase 1)
+        "/api/alert/rules": "_serve_alert_rules",
+        "/api/alert/history": "_serve_alert_history",
+        "/api/alert/check": "_serve_alert_check",
+        "/api/alert/silences": "_serve_alert_silences",
+        "/api/inventory": "_serve_inventory",
+        "/api/inventory/hosts": "_serve_inventory_hosts",
+        "/api/inventory/vms": "_serve_inventory_vms",
+        "/api/inventory/containers": "_serve_inventory_containers",
+        "/api/compare": "_serve_compare",
+        "/api/baseline/list": "_serve_baseline_list",
+        "/api/rollback": "_serve_rollback",
         # Setup wizard (no auth — only works during first run)
         "/api/setup/status": "_serve_setup_status",
         "/api/setup/create-admin": "_serve_setup_create_admin",
@@ -7161,6 +7173,114 @@ a:hover{{text-decoration:underline}}
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
+
+    # --- Phase 1: Alerting & Intelligence API Handlers ---
+
+    def _serve_alert_rules(self):
+        """List alert rules."""
+        from freq.modules.alert import _load_rules, _load_silences
+        cfg = load_config()
+        rules = _load_rules(cfg)
+        silences = [s for s in _load_silences(cfg) if s.get("expires", 0) > time.time()]
+        self._json_response({"rules": rules, "count": len(rules), "silences": silences})
+
+    def _serve_alert_history(self):
+        """Get alert history."""
+        from freq.modules.alert import _load_history
+        cfg = load_config()
+        history = _load_history(cfg)
+        params = _parse_query(self)
+        limit = int(params.get("limit", ["50"])[0])
+        self._json_response({"history": history[-limit:], "total": len(history)})
+
+    def _serve_alert_check(self):
+        """Evaluate alert rules against current fleet state."""
+        from freq.modules.alert import _load_rules, _evaluate_fleet
+        cfg = load_config()
+        rules = [r for r in _load_rules(cfg) if r.get("enabled", True)]
+        triggered = _evaluate_fleet(cfg, rules)
+        alerts = []
+        for a in triggered:
+            alerts.append({
+                "rule": a["rule"]["name"],
+                "host": a["host"],
+                "value": a["value"],
+                "message": a["message"],
+                "severity": a["rule"].get("severity", "warning"),
+            })
+        self._json_response({"alerts": alerts, "count": len(alerts), "rules_checked": len(rules)})
+
+    def _serve_alert_silences(self):
+        """List active silences."""
+        from freq.modules.alert import _load_silences
+        cfg = load_config()
+        silences = [s for s in _load_silences(cfg) if s.get("expires", 0) > time.time()]
+        self._json_response({"silences": silences, "count": len(silences)})
+
+    def _serve_inventory(self):
+        """Full fleet inventory."""
+        from freq.modules.inventory import _gather_hosts, _gather_vms, _gather_containers
+        cfg = load_config()
+        hosts = _gather_hosts(cfg)
+        vms = _gather_vms(cfg)
+        containers = _gather_containers(cfg)
+        self._json_response({
+            "hosts": hosts, "vms": vms, "containers": containers,
+            "meta": {"host_count": len(hosts), "vm_count": len(vms), "container_count": len(containers)},
+        })
+
+    def _serve_inventory_hosts(self):
+        """Host inventory only."""
+        from freq.modules.inventory import _gather_hosts
+        cfg = load_config()
+        hosts = _gather_hosts(cfg)
+        self._json_response({"hosts": hosts, "count": len(hosts)})
+
+    def _serve_inventory_vms(self):
+        """VM inventory only."""
+        from freq.modules.inventory import _gather_vms
+        cfg = load_config()
+        vms = _gather_vms(cfg)
+        self._json_response({"vms": vms, "count": len(vms)})
+
+    def _serve_inventory_containers(self):
+        """Container inventory only."""
+        from freq.modules.inventory import _gather_containers
+        cfg = load_config()
+        containers = _gather_containers(cfg)
+        self._json_response({"containers": containers, "count": len(containers)})
+
+    def _serve_compare(self):
+        """Compare two hosts."""
+        from freq.modules.compare import _gather_host_info
+        from freq.core.resolve import host as resolve_host
+        cfg = load_config()
+        params = _parse_query(self)
+        a = params.get("a", [""])[0].strip()
+        b = params.get("b", [""])[0].strip()
+        if not a or not b:
+            self._json_response({"error": "Parameters 'a' and 'b' required"}, 400); return
+        host_a = resolve_host(cfg.hosts, a)
+        host_b = resolve_host(cfg.hosts, b)
+        if not host_a or not host_b:
+            self._json_response({"error": "Host not found"}, 404); return
+        info_a = _gather_host_info(cfg, host_a)
+        info_b = _gather_host_info(cfg, host_b)
+        self._json_response({"host_a": info_a, "host_b": info_b})
+
+    def _serve_baseline_list(self):
+        """List saved baselines."""
+        from freq.modules.baseline import _list_baselines
+        cfg = load_config()
+        baselines = _list_baselines(cfg)
+        self._json_response({"baselines": baselines, "count": len(baselines)})
+
+    def _serve_rollback(self):
+        """Rollback endpoint info (actual rollback requires CLI for safety)."""
+        self._json_response({
+            "info": "VM rollback must be performed via CLI for safety",
+            "usage": "freq rollback <vmid> [--name <snapshot>]",
+        })
 
 
 def cmd_serve(cfg, pack, args) -> int:
