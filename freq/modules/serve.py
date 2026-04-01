@@ -1493,11 +1493,11 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/exec": "_serve_exec",
         "/api/learn": "_serve_learn",
         "/api/risk": "_serve_risk",
-        "/api/metrics": "_serve_metrics",
+        # "/api/metrics" — moved to freq/api/observe.py
         # /api/vm/* routes — moved to freq/api/vm.py
-        "/api/vault": "_serve_vault",
-        "/api/vault/set": "_serve_vault_set",
-        "/api/vault/delete": "_serve_vault_delete",
+        # "/api/vault" — moved to freq/api/secure.py
+        # "/api/vault/set" — moved to freq/api/secure.py
+        # "/api/vault/delete" — moved to freq/api/secure.py
         "/api/users": "_serve_users",
         "/api/users/create": "_serve_user_create",
         "/api/users/promote": "_serve_user_promote",
@@ -1507,7 +1507,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/config": "_serve_config",
         "/api/distros": "_serve_distros",
         "/api/groups": "_serve_groups",
-        "/api/harden": "_serve_harden",
+        # "/api/harden" — moved to freq/api/secure.py
         "/api/agent/create": "_serve_agent_create",
         "/api/agent/destroy": "_serve_agent_destroy",
         "/api/deploy-agent": "_serve_deploy_agent",
@@ -1554,8 +1554,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/policy/check": "_serve_policy_check",
         "/api/policy/fix": "_serve_policy_fix",
         "/api/policy/diff": "_serve_policy_diff",
-        "/api/sweep": "_serve_sweep",
-        "/api/patrol/status": "_serve_patrol_status",
+        # "/api/sweep" — moved to freq/api/secure.py
+        # "/api/patrol/status" — moved to freq/api/auto.py
         "/api/zfs": "_serve_zfs",
         "/api/backup": "_serve_backup",
         "/api/backup/list": "_serve_backup_list",
@@ -1565,13 +1565,10 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/gwipe": "_serve_gwipe",
         # Topology & Capacity
         "/api/topology": "_serve_topology",
-        "/api/capacity": "_serve_capacity",
-        "/api/capacity/snapshot": "_serve_capacity_snapshot",
-        "/api/capacity/recommend": "_serve_capacity_recommend",
-        # Chaos engineering
-        "/api/chaos/types": "_serve_chaos_types",
-        "/api/chaos/run": "_serve_chaos_run",
-        "/api/chaos/log": "_serve_chaos_log",
+        # "/api/capacity" — moved to freq/api/observe.py
+        # "/api/capacity/snapshot" — moved to freq/api/observe.py
+        # "/api/capacity/recommend" — moved to freq/api/observe.py
+        # /api/chaos/* routes — moved to freq/api/auto.py
         # Federation
         "/api/federation/status": "_serve_federation_status",
         "/api/federation/register": "_serve_federation_register",
@@ -1589,11 +1586,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/gitops/log": "_serve_gitops_log",
         "/api/gitops/rollback": "_serve_gitops_rollback",
         "/api/gitops/init": "_serve_gitops_init",
-        # Playbook runner
-        "/api/playbooks": "_serve_playbooks",
-        "/api/playbooks/run": "_serve_playbooks_run",
-        "/api/playbooks/step": "_serve_playbooks_step",
-        "/api/playbooks/create": "_serve_playbooks_create",
+        # /api/playbooks/* routes — moved to freq/api/auto.py
         # Fleet Intelligence
         "/api/fleet/health-score": "_serve_fleet_health_score",
         "/api/fleet/topology-enhanced": "_serve_topology_enhanced",
@@ -1609,9 +1602,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         # "/api/vm/wizard-defaults" — moved to freq/api/vm.py
         # Activity Feed
         "/api/activity": "_serve_activity",
-        # HTTP Monitors
-        "/api/monitors": "_serve_monitors",
-        "/api/monitors/check": "_serve_monitors_check",
+        # /api/monitors/* routes — moved to freq/api/observe.py
         # Docker Fleet
         "/api/docker-fleet": "_serve_docker_fleet",
         # Documentation
@@ -1622,20 +1613,11 @@ class FreqHandler(BaseHTTPRequestHandler):
         # Orchestration endpoints (no auth)
         "/healthz": "_serve_healthz",
         "/readyz": "_serve_readyz",
-        "/api/metrics/prometheus": "_serve_metrics_prometheus",
+        # "/api/metrics/prometheus" — moved to freq/api/observe.py
         # Update check
         "/api/update/check": "_serve_update_check",
-        # Alert rules
-        "/api/rules": "_serve_rules",
-        "/api/rules/create": "_serve_rules_create",
-        "/api/rules/update": "_serve_rules_update",
-        "/api/rules/delete": "_serve_rules_delete",
-        "/api/rules/history": "_serve_rules_history",
-        # Alerting & Intelligence (Phase 1)
-        "/api/alert/rules": "_serve_alert_rules",
-        "/api/alert/history": "_serve_alert_history",
-        "/api/alert/check": "_serve_alert_check",
-        "/api/alert/silences": "_serve_alert_silences",
+        # /api/rules/* routes — moved to freq/api/auto.py
+        # /api/alert/* routes — moved to freq/api/observe.py
         "/api/inventory": "_serve_inventory",
         "/api/inventory/hosts": "_serve_inventory_hosts",
         "/api/inventory/vms": "_serve_inventory_vms",
@@ -1645,43 +1627,34 @@ class FreqHandler(BaseHTTPRequestHandler):
         # "/api/rollback" — moved to freq/api/vm.py
         # Phase 2: Fleet Intelligence
         "/api/report": "_serve_report",
-        "/api/trend/data": "_serve_trend_data",
-        "/api/trend/snapshot": "_serve_trend_snapshot",
-        "/api/sla": "_serve_sla",
-        "/api/sla/check": "_serve_sla_check",
-        "/api/cert/inventory": "_serve_cert_inventory",
-        "/api/dns/inventory": "_serve_dns_inventory",
-        # Phase 3: Platform
-        "/api/schedule/jobs": "_serve_schedule_jobs",
-        "/api/schedule/log": "_serve_schedule_log",
-        "/api/schedule/templates": "_serve_schedule_templates",
+        # "/api/trend/data" — moved to freq/api/observe.py
+        # "/api/trend/snapshot" — moved to freq/api/observe.py
+        # "/api/sla" — moved to freq/api/observe.py
+        # "/api/sla/check" — moved to freq/api/observe.py
+        # "/api/cert/inventory" — moved to freq/api/secure.py
+        # "/api/dns/inventory" — moved to freq/api/secure.py
+        # /api/schedule/* routes — moved to freq/api/auto.py
         "/api/backup-policy/list": "_serve_backup_policy_list",
         "/api/backup-policy/status": "_serve_backup_policy_status",
-        "/api/webhook/list": "_serve_webhook_list",
-        "/api/webhook/log": "_serve_webhook_log",
+        # "/api/webhook/list" — moved to freq/api/auto.py
+        # "/api/webhook/log" — moved to freq/api/auto.py
         "/api/migrate-plan": "_serve_migrate_plan",
         "/api/migrate-vmware/status": "_serve_migrate_vmware_status",
-        # Phase 4: Operations
-        "/api/patch/status": "_serve_patch_status",
-        "/api/patch/compliance": "_serve_patch_compliance",
+        # "/api/patch/status" — moved to freq/api/secure.py
+        # "/api/patch/compliance" — moved to freq/api/secure.py
         "/api/stack/status": "_serve_stack_status",
         "/api/stack/health": "_serve_stack_health",
         "/api/docs/generate": "_serve_docs_generate",
         "/api/docs/runbooks": "_serve_docs_runbooks",
-        # Phase 5: Medium Kills
-        "/api/db/status": "_serve_db_status",
-        "/api/proxy/list": "_serve_proxy_list",
-        "/api/proxy/status": "_serve_proxy_status_api",
-        "/api/secrets/audit": "_serve_secrets_audit",
-        "/api/secrets/leases": "_serve_secrets_leases",
-        "/api/secrets/scan": "_serve_secrets_scan_results",
-        # Phase 6: Intelligence Kills
-        "/api/logs/stats": "_serve_logs_stats",
+        # "/api/db/status" — moved to freq/api/observe.py
+        # /api/proxy/* routes — moved to freq/api/secure.py
+        # /api/secrets/* routes — moved to freq/api/secure.py
+        # "/api/logs/stats" — moved to freq/api/observe.py
         "/api/oncall/whoami": "_serve_oncall_whoami",
         "/api/oncall/schedule": "_serve_oncall_schedule",
         "/api/oncall/incidents": "_serve_oncall_incidents",
-        "/api/comply/status": "_serve_comply_status",
-        "/api/comply/results": "_serve_comply_results",
+        # "/api/comply/status" — moved to freq/api/secure.py
+        # "/api/comply/results" — moved to freq/api/secure.py
         # Phase 7: Platform Kills
         "/api/map/data": "_serve_map_data",
         "/api/map/impact": "_serve_map_impact",

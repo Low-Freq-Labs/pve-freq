@@ -534,7 +534,9 @@ class TestRouteTable(unittest.TestCase):
         self.assertIn("/api/auth/login", self.handler_cls._ROUTES)
 
     def test_api_vault_exists(self):
-        self.assertIn("/api/vault", self.handler_cls._ROUTES)
+        from freq.api import build_routes
+        v1_routes = build_routes()
+        self.assertIn("/api/vault", v1_routes)
 
     def test_api_fleet_overview_exists(self):
         self.assertIn("/api/fleet/overview", self.handler_cls._ROUTES)
