@@ -1,10 +1,21 @@
-"""Cloud image management for FREQ.
+"""Cloud image catalog for FREQ.
 
-Commands: distros
+Domain: freq distros
 
-Lists available cloud images for VM provisioning with `freq create --image`.
+Lists available cloud images for VM provisioning with freq vm create --image.
 Images are defined in conf/distros.toml with download URLs, checksums, and
-family/tier classifications.
+family/tier classifications (priority, supported, rolling, best-effort).
+
+Replaces: Manual image downloads, bookmarked cloud-image URLs per distro
+
+Architecture:
+    - Image definitions loaded from conf/distros.toml via FreqConfig
+    - Grouped display by tier (priority → supported → rolling → best-effort)
+    - Table rendering via freq/core/fmt.py
+
+Design decisions:
+    - Images are config, not code. Adding a new distro means one TOML entry,
+      not a code change. Keeps the image catalog user-extensible.
 """
 from freq.core import fmt
 from freq.core.config import FreqConfig

@@ -1,13 +1,23 @@
 """Inbound webhook receiver for FREQ.
 
-Commands: webhook (list/create/delete/test/log)
+Domain: freq auto <webhook-list|webhook-create|webhook-delete|webhook-test|webhook-log>
 
-External systems talk TO freq. GitHub push → auto-deploy.
-PVE event → trigger playbook. Monitoring alert → escalate.
+External systems talk TO FREQ. GitHub push triggers auto-deploy. PVE event
+triggers a playbook. Monitoring alert triggers escalation. Define webhooks
+that map inbound HTTP POSTs to freq commands with HMAC signature validation.
 
-Define webhooks that map inbound HTTP POSTs to freq commands.
+Replaces: Ansible Tower webhook integrations ($$$), custom Flask webhook apps,
+          n8n/Zapier ($20+/mo for self-hosted automation)
 
-Kills: Ansible Tower ($$$) webhook integrations.
+Architecture:
+    - Webhook definitions stored in conf/webhooks/hooks.json
+    - Each hook: name, secret, allowed sources, freq command template
+    - HMAC-SHA256 signature validation for GitHub/GitLab/generic webhooks
+    - Execution log capped at 200 entries in conf/webhooks/webhook-log.json
+
+Design decisions:
+    - Webhooks execute freq commands, not arbitrary shell. The blast radius
+      of a compromised webhook is limited to what freq can do.
 """
 import hashlib
 import hmac

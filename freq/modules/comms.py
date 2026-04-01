@@ -1,9 +1,23 @@
-"""Inter-VM communication for FREQ.
+"""Inter-VM communication mailbox for FREQ.
 
-Commands: comms setup, comms send, comms check
+Domain: freq fleet <comms-setup|comms-send|comms-check|comms-read>
 
-Simple file-based mailbox system between VMs.
-Messages are stored in /opt/freq-comms/ on a designated relay host.
+Simple file-based messaging between VMs via a relay host. Messages are
+base64-encoded JSON stored in /opt/freq-comms/ inbox/outbox directories.
+No message broker, no external deps. SSH is the transport.
+
+Replaces: RabbitMQ ($0 but heavyweight), Redis pub/sub (requires Redis),
+          manual SSH file copies between VMs
+
+Architecture:
+    - Relay host holds /opt/freq-comms/{inbox,outbox} directories
+    - Messages are JSON envelopes (sender, timestamp, payload) base64-encoded
+    - SSH transport via freq/core/ssh.py for send/check/read operations
+    - Host resolution via freq/core/resolve.py
+
+Design decisions:
+    - File-based, not socket-based. Works even if the relay is a minimal
+      Linux box with nothing installed. SSH is the only requirement.
 """
 import base64
 import json

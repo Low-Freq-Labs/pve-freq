@@ -1,7 +1,23 @@
-"""Security hardening for FREQ.
+"""Fleet-wide security hardening for FREQ.
 
-freq harden = freq audit --fix. Runs audit checks and applies fixes.
-Also provides targeted hardening: SSH, firewall, packages.
+Domain: freq secure <harden>
+
+Runs security audit checks and applies fixes. Disables password auth,
+enables UFW, removes unnecessary packages, hardens SSH config, and more.
+The action counterpart to freq secure audit (which is read-only).
+
+Replaces: Ansible hardening roles ($0 but 200+ lines of YAML),
+          CIS hardening scripts (manual per-host), DevSec.io baselines
+
+Architecture:
+    - Each hardening check is a (name, detect_command, fix_command) tuple
+    - Detection via SSH; if DRIFT detected, fix_command is applied
+    - Parallel SSH via ssh_run_many for fleet-wide hardening
+    - Host targeting via freq/core/resolve.py (single host or all)
+
+Design decisions:
+    - Harden is audit + fix in one pass. Separate from audit.py so you
+      can audit without risk and harden with intent. Never silent fixes.
 """
 from freq.core import fmt
 from freq.core import resolve

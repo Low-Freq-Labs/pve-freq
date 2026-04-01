@@ -1,15 +1,22 @@
-"""Fleet health monitoring for FREQ.
+"""Fleet-wide health monitoring for FREQ.
 
-Commands: health
+Domain: freq fleet <health>
 
-Comprehensive health check across the fleet:
-- CPU load vs core count
-- Memory pressure
-- Disk space
-- System uptime
-- Service status (docker, ssh)
+Comprehensive health check across every fleet host. Measures CPU load ratio,
+memory pressure, disk usage, uptime, and key service status (docker, sshd).
+Color-coded output: green healthy, yellow warning, red critical.
 
-Color-coded thresholds: green (healthy), yellow (warning), red (critical).
+Replaces: Nagios ($2K+), Zabbix (complex setup), Datadog ($15/host/mo)
+
+Architecture:
+    - Single compound SSH command gathers all metrics in one round-trip
+    - Parallel execution via ssh_run_many across entire fleet
+    - Threshold-based grading: load ratio, RAM %, disk % with configurable limits
+    - Output via freq/core/fmt.py with color-coded status indicators
+
+Design decisions:
+    - One SSH call per host, not five. All health metrics gathered in a
+      single command to minimize latency on large fleets.
 """
 import time
 

@@ -1,9 +1,23 @@
 """VM lifecycle management for FREQ.
 
-Commands: create, clone, destroy, resize, snapshot, migrate
+Domain: freq vm <create|clone|destroy|resize|snapshot|migrate>
 
-Every operation goes through the PVE API via SSH + qm/pvesh commands.
-Safety gates enforce protected VMID ranges and confirmation prompts.
+Full VM lifecycle: create from cloud images, clone from templates, resize
+CPU/RAM/disk, snapshot for rollback, migrate between nodes, and destroy
+with safety gates. Every operation goes through PVE via SSH + qm/pvesh.
+
+Replaces: PVE GUI (slow for bulk ops), Terraform proxmox provider ($0 but HCL),
+          manual qm commands
+
+Architecture:
+    - PVE operations via SSH to cluster nodes (qm, pvesh, qemu-img)
+    - Cloud-init support for automated first-boot configuration
+    - Safety gates via freq/core/validate.py (protected VMID ranges)
+    - Progress ticker for long operations (clone, migrate, create)
+
+Design decisions:
+    - Safety gates are non-negotiable. Protected VMIDs cannot be destroyed
+      without explicit override. Production VMs require confirmation prompts.
 """
 import json
 import os

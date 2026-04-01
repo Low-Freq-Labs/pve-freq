@@ -1,14 +1,23 @@
 """VMware ESXi to Proxmox migration tool for FREQ.
 
-Commands: migrate-vmware (scan/import/status)
+Domain: freq dr <migrate-vmware-scan|migrate-vmware-import|migrate-vmware-status>
 
-THE killer feature for the post-Broadcom exodus. 86% of VMware customers
-are actively reducing their footprint. Proxmox is the #1 target.
+The killer feature for the post-Broadcom exodus. Scans ESXi hosts for VMs,
+imports OVA/VMDK files into Proxmox, handles disk conversion (vmdk to qcow2),
+network mapping, and storage placement. End-to-end VMware escape path.
 
-Scan ESXi hosts for VMs, import OVA/VMDK files into Proxmox, handle
-disk conversion, network mapping, and storage placement.
+Replaces: VMware/Broadcom ($$$$$, 200-1050% price hikes), manual qm importovf,
+          V2V conversion scripts
 
-Kills: VMware/Broadcom ($$$$$, 200-1050% price increases)
+Architecture:
+    - ESXi scan via SSH (vim-cmd vmsvc/getallvms) or govc CLI
+    - Disk import via qm importdisk on target PVE node
+    - Format conversion: vmdk/ova/ovf to qcow2/raw
+    - Migration state tracked in conf/vmware-migration/ as JSON
+
+Design decisions:
+    - State machine approach: scan → plan → import → verify. Each step is
+      idempotent and resumable. Large disk imports can take 30+ minutes.
 """
 import json
 import os

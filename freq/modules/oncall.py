@@ -1,11 +1,22 @@
 """On-call rotation and incident management for FREQ.
 
-Commands: oncall (schedule/whoami/ack/escalate/resolve/history)
+Domain: freq ops <oncall-schedule|oncall-whoami|oncall-ack|oncall-escalate|oncall-resolve|oncall-history>
 
-On-call rotation, incident tracking, escalation chains.
-A config file replaces $41/user/month.
+On-call rotation with weekly/biweekly schedules, incident tracking with
+acknowledgment and escalation, and a full incident history. A JSON config
+file replaces $41/user/month SaaS pricing.
 
-Kills: PagerDuty ($21-41/user/mo), OpsGenie (dying April 2027)
+Replaces: PagerDuty ($21-41/user/mo), OpsGenie (sunsetting April 2027)
+
+Architecture:
+    - Schedule and incidents stored as JSON in conf/oncall/
+    - Rotation calculated from start date + user list + rotation period
+    - Escalation timer triggers if incident is not acknowledged
+    - Incident history capped at 500 entries with automatic pruning
+
+Design decisions:
+    - File-based, not a service. On-call schedule is a config file you
+      version control. No SaaS dependency for knowing who is on call.
 """
 import json
 import os

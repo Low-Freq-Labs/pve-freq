@@ -1,11 +1,22 @@
 """Fleet-wide log aggregation and search for FREQ.
 
-Commands: logs (tail/search/stats/export)
+Domain: freq fleet <logs-tail|logs-search|logs-stats|logs-export>
 
-No agents. No ingestion fees. No separate infrastructure.
-SSH + journalctl + docker logs. Search across the entire fleet.
+Tail, search, and aggregate logs across every fleet host. No agents, no
+ingestion fees, no separate infrastructure. SSH + journalctl + docker logs.
+Search the entire fleet from one terminal.
 
-Kills: Splunk ($1M+/yr), ELK (resource monster), Papertrail ($230/mo)
+Replaces: Splunk ($1M+/yr), ELK stack (resource monster), Papertrail ($230/mo)
+
+Architecture:
+    - Tail via SSH + journalctl --lines on each host (parallel)
+    - Search via SSH + journalctl --grep across fleet
+    - Docker logs via SSH + docker logs on container hosts
+    - Stats aggregates error/warning counts per host
+
+Design decisions:
+    - No log shipping, no central store. Logs stay where they are; FREQ
+      queries them on demand via SSH. Zero storage cost, zero ingestion lag.
 """
 import json
 import re

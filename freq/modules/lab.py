@@ -1,9 +1,22 @@
 """Lab environment management for FREQ.
 
-Commands: lab status, lab media deploy, lab resize, lab rebuild
+Domain: freq lab <status|media|resize|rebuild|deploy>
 
-Manages lab hosts — sandbox VMs, docker-dev, test media stacks, and lab PVE nodes.
-Lab hosts are identified by the 'lab' group in hosts.conf.
+Manages lab hosts: sandbox VMs, docker-dev instances, test media stacks,
+and lab PVE nodes. Lab hosts are identified by the 'lab' group in hosts.conf.
+Provides media stack deployment, VM resizing, and full lab rebuilds.
+
+Replaces: Manual SSH-and-script lab management, Vagrant ($0 but heavy)
+
+Architecture:
+    - Lab hosts filtered from fleet by group membership ('lab' in groups)
+    - SSH operations via freq/core/ssh.py with lab-specific timeouts
+    - Media deploy pushes Docker Compose stacks to lab media hosts
+    - Rebuild tears down and re-provisions lab VMs from scratch
+
+Design decisions:
+    - Lab is a group filter, not a separate inventory. Lab hosts are normal
+      fleet hosts with a 'lab' group tag. No duplicate management.
 """
 from freq.core import fmt
 from freq.core import log as logger

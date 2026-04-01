@@ -1,7 +1,23 @@
 """Fleet operations for FREQ.
 
-Commands: status, exec, info, diagnose, docker, keys, dashboard, test-connection
-The core of fleet management — every command talks to real hosts via SSH.
+Domain: freq fleet <status|exec|info|diagnose|docker|keys|dashboard|test-connection>
+
+The core of fleet management. Every command talks to real hosts via SSH.
+Status pings the entire fleet. Exec runs arbitrary commands fleet-wide.
+Info shows detailed host specs. Diagnose runs health checks on a single host.
+
+Replaces: Ansible ad-hoc commands ($0 but slow), ClusterSSH (no structure),
+          manual SSH loops in bash
+
+Architecture:
+    - Parallel SSH via ssh_run_many for fleet-wide operations
+    - Single-host SSH via ssh_run for targeted commands
+    - Host resolution via freq/core/resolve.py (label, IP, or group)
+    - Output formatting via freq/core/fmt.py (tables, status indicators)
+
+Design decisions:
+    - Status checks use a non-privileged command (uptime) so it works even
+      if sudo is broken on a host. Diagnose uses sudo for deeper checks.
 """
 import socket
 import subprocess

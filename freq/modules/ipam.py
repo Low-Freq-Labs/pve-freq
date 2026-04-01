@@ -1,7 +1,23 @@
-"""IPAM — IP Address Management for FREQ.
+"""IP Address Management (IPAM) for FREQ.
 
-Scans hosts, VMs, and VLAN configs to track used IPs and find available ones.
-Pure arithmetic on existing data — no external IPAM service needed.
+Domain: freq net <ip-list|ip-find|ip-scan>
+
+Scans hosts, VMs, and VLAN configs to track used IPs and find available
+addresses. Pure arithmetic on existing fleet data — no external IPAM service,
+no database, no phpIPAM instance to maintain.
+
+Replaces: phpIPAM ($0 but PHP + MySQL), NetBox IPAM ($7.5K/yr),
+          spreadsheet-based IP tracking
+
+Architecture:
+    - Collects used IPs from hosts.conf + PVE VM network configs via SSH
+    - VLAN subnet definitions from vlans.toml
+    - Available IP calculation via ipaddress (stdlib) set arithmetic
+    - No persistent state — computed fresh on every query
+
+Design decisions:
+    - No IPAM database. Used IPs are derived from fleet state that already
+      exists (hosts.conf + PVE configs). One source of truth, not two.
 """
 import ipaddress
 import os

@@ -1,7 +1,22 @@
-"""Bootstrap and onboard for FREQ.
+"""Host bootstrap and onboarding for FREQ.
 
-bootstrap: Deploy SSH keys + service account to a new host
-onboard: Add host to fleet registry + bootstrap + verify
+Domain: freq host <bootstrap|onboard>
+
+Deploys SSH keys and the FREQ service account to a new host, verifies
+connectivity, and optionally registers it in the fleet. Bootstrap is the
+single-host key push; onboard wraps bootstrap + fleet registration + verify.
+
+Replaces: Manual ssh-copy-id scripts, Ansible bootstrap playbooks ($0 but YAML)
+
+Architecture:
+    - SSH connectivity test via freq/core/ssh.py
+    - Key deployment via ssh-copy-id subprocess
+    - Host resolution through freq/core/resolve.py (label or IP)
+    - Onboard calls bootstrap then writes to hosts.conf
+
+Design decisions:
+    - Bootstrap only tests and reports; it does not force key deployment.
+      If the host is unreachable, it tells you the manual step. No magic.
 """
 import os
 

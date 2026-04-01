@@ -1,7 +1,22 @@
 """Self-update mechanism for FREQ.
 
-freq update — checks for newer version and upgrades in place.
-Supports: git pull (dev), tarball download (production), dpkg (packages).
+Domain: freq update
+
+Checks for a newer version and upgrades FREQ in place. Auto-detects
+install method (git, tarball, dpkg, rpm) and uses the appropriate upgrade
+path. One command to stay current across any installation type.
+
+Replaces: Manual git pull + restart, package manager update scripts
+
+Architecture:
+    - Install method detection: .git dir, .install-method marker, dpkg/rpm query
+    - Git update: git fetch + merge with conflict detection
+    - Tarball update: download from GitHub releases via urllib
+    - Package update: dpkg -i or rpm -U with downloaded .deb/.rpm
+
+Design decisions:
+    - Detect, don't assume. FREQ can be installed four different ways;
+      the updater figures out which one and acts accordingly.
 """
 import os
 import subprocess

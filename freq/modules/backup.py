@@ -1,7 +1,21 @@
-"""Backup operations for FREQ.
+"""VM backup and config export for FREQ.
 
-Commands: backup list, backup create, backup restore
-Manages VM snapshots and FREQ config exports.
+Domain: freq dr <backup-list|backup-create|backup-export|backup-status|backup-prune>
+
+Lists PVE backups and snapshots, creates new backups with retention awareness,
+exports FREQ config state, and prunes expired backup artifacts. One command
+to see every backup across every node.
+
+Replaces: Veeam Backup ($$$), manual vzdump scripts, PVE GUI backup tab
+
+Architecture:
+    - PVE operations via SSH to cluster nodes (pvesh/vzdump)
+    - Config export serializes freq.toml + hosts.conf to portable archive
+    - Reuses freq/modules/pve.py helpers for node discovery
+
+Design decisions:
+    - Backup list aggregates across all PVE nodes, not just one.
+      Single-node backup views are what the PVE GUI already does.
 """
 import os
 import time

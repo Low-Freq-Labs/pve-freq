@@ -1,7 +1,23 @@
-"""Engine CLI commands for FREQ.
+"""Declarative policy engine CLI commands for FREQ.
 
-Commands: check, fix, diff, policies
-These connect the declarative policy engine to the CLI.
+Domain: freq state <check|fix|diff|policies>
+
+Connects the declarative policy engine to the CLI. Check evaluates policies
+against live host state and reports drift. Fix applies remediation. Diff
+shows what would change. Policies lists all registered policy definitions.
+
+Replaces: Ansible --check + --diff ($0 but YAML), Puppet dry-run,
+          SaltStack state.highstate
+
+Architecture:
+    - PolicyStore loads all built-in policies from freq/engine/policies.py
+    - PolicyExecutor runs check/fix phases via freq/engine/runner.py
+    - Host resolution via freq/core/resolve.py for targeted runs
+    - Phase enum (CHECK/FIX) controls whether remediation is applied
+
+Design decisions:
+    - Engine is a separate layer (freq/engine/), CLI commands are thin
+      wrappers. This keeps the engine testable without CLI dependencies.
 """
 from freq.core import fmt
 from freq.core import resolve

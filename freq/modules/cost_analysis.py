@@ -1,12 +1,23 @@
 """On-prem FinOps and cost optimization for FREQ.
 
-Commands: cost-analysis (waste/density/optimize/compare)
+Domain: freq hw <cost-waste|cost-density|cost-optimize|cost-compare>
 
-Per-VM cost attribution, waste detection, density analysis.
-Cloud cost comparison: "What would this cost in AWS?"
+Per-VM cost attribution based on power draw estimates, waste detection for
+oversized VMs, host density analysis, and cloud cost comparison ("what would
+this fleet cost in AWS?"). Nobody does on-prem FinOps. Now FREQ does.
 
-Kills: CloudHealth ($50K+/yr), Kubecost ($30K/yr, K8s-only)
-Nobody does on-prem FinOps. Now FREQ does.
+Replaces: CloudHealth ($50K+/yr), Kubecost ($30K/yr, K8s-only),
+          spreadsheet-based capacity planning
+
+Architecture:
+    - Power cost model: watts-per-vCPU + watts-per-GB-RAM * PUE * kWh rate
+    - AWS pricing table for side-by-side cloud comparison (t3/m5 instances)
+    - PVE API queries for VM resource allocation across cluster
+    - Fleet SSH for live resource utilization metrics
+
+Design decisions:
+    - Cost model uses power consumption, not license fees. On-prem cost is
+      electricity, not per-seat pricing. This is the honest comparison.
 """
 import json
 import time

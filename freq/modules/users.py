@@ -1,14 +1,24 @@
-"""User management for FREQ.
+"""User and RBAC management for FREQ.
 
-Commands: users, new-user, passwd, roles, promote, demote, install-user
+Domain: freq user <list|new-user|passwd|roles|promote|demote|install-user>
 
-FREQ RBAC model:
-  viewer   — can see, not touch
-  operator — can operate fleet, not change config
-  admin    — full access
-  protected — system accounts (cannot be demoted)
+Fleet-wide user management with role-based access control. Four roles:
+viewer (read-only), operator (run commands), admin (full access), protected
+(system accounts, cannot be demoted). Users defined centrally, deployed
+across the fleet via SSH.
 
-Users are stored in conf/users.conf and deployed across the fleet via SSH.
+Replaces: Manual useradd scripts, Ansible user playbooks,
+          FreeIPA ($0 but massive infrastructure overhead)
+
+Architecture:
+    - User definitions in freq.toml [users] or legacy conf/users.conf
+    - Fleet deployment via parallel SSH (useradd, usermod, passwd)
+    - Role enforcement at CLI dispatch level (checked before command exec)
+    - Validation via freq/core/validate.py (username format, role validity)
+
+Design decisions:
+    - Central definition, fleet deployment. Users are defined once in FREQ
+      config and pushed to hosts. No per-host user management.
 """
 import getpass
 import os

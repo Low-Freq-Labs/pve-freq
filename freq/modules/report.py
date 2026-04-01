@@ -1,13 +1,23 @@
 """Fleet report generator for FREQ.
 
-Commands: report (generate/schedule/list)
+Domain: freq observe <report-generate|report-schedule|report-list>
 
 Auto-generated fleet digest. Aggregates health, alerts, capacity, and
-changes into a single report. Terminal, JSON, or markdown output
-for Discord/email/Obsidian.
+changes into a single report. Terminal, JSON, or Markdown output for
+Discord, email, or Obsidian. Cron it and forget it.
 
-Kills: Datadog ($15/host/month) reports, New Relic digest emails.
-Zero effort. Cron it and forget it.
+Replaces: Datadog reports ($15/host/mo), New Relic digest emails,
+          hand-written weekly status updates
+
+Architecture:
+    - Health metrics gathered via parallel SSH across fleet
+    - PVE cluster data via pvesh for VM counts and resource totals
+    - Alert and change data pulled from freq journal and alert history
+    - Reports persisted in conf/reports/ as timestamped JSON/Markdown
+
+Design decisions:
+    - Reports are snapshots, not live dashboards. Generated once, stored,
+      and shareable. Designed for async consumption (Discord, email).
 """
 import json
 import os

@@ -1,11 +1,23 @@
 """Built-in job scheduler for FREQ.
 
-Commands: schedule (list/create/delete/run/enable/disable)
+Domain: freq auto <schedule-list|schedule-create|schedule-delete|schedule-run|schedule-enable|schedule-disable>
 
-"Snapshot prod VMs at 2am." "Run patrol every 6 hours." "Take a trend
-snapshot every 2 hours." No more hand-writing systemd timers or crontabs.
+"Snapshot prod VMs at 2am." "Run patrol every 6 hours." "Trend snapshot
+every 2 hours." Define recurring freq commands as scheduled jobs. No more
+hand-writing systemd timers or crontabs.
 
-Schedules are stored as JSON and evaluated by a lightweight scheduler.
+Replaces: Crontab management ($0 but fragile), Ansible Tower scheduling ($$$),
+          systemd timer units (verbose)
+
+Architecture:
+    - Jobs stored as JSON in conf/schedules/jobs.json
+    - Each job: name, freq command, cron expression, enabled flag
+    - Execution log stored separately with timestamps and exit codes
+    - Run triggers invoke the freq command via subprocess
+
+Design decisions:
+    - JSON config, not crontab. Jobs are version-controllable, inspectable,
+      and portable. The scheduler reads JSON, not /var/spool/cron.
 """
 import json
 import os

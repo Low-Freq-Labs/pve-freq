@@ -1,6 +1,23 @@
-"""Host management for FREQ.
+"""Fleet host registry management for FREQ.
 
-Commands: hosts list, hosts add, hosts remove, hosts sync, discover, groups
+Domain: freq host <list|add|remove|sync|groups-list|groups-add|groups-remove>
+
+Manages the fleet host registry (hosts.conf). Add, remove, list, and group
+hosts. Sync auto-discovers hosts from PVE cluster API and agent endpoints.
+Groups enable targeted operations (e.g., freq fleet exec --group prod).
+
+Replaces: Ansible inventory files ($0 but hand-maintained YAML/INI),
+          /etc/hosts management scripts
+
+Architecture:
+    - Host registry stored in conf/hosts.conf (label|ip|type|groups format)
+    - PVE sync queries pvesh for VM/container IPs on cluster nodes
+    - Agent sync polls freq-agent endpoints for self-reported hosts
+    - Validation via freq/core/validate.py (IP format, label uniqueness)
+
+Design decisions:
+    - hosts.conf is a flat file, not TOML/YAML. Easy to grep, easy to edit
+      by hand, easy to version control. Structured formats add no value here.
 """
 import json
 import os

@@ -1,12 +1,22 @@
 """DNS record tracking and validation for FREQ.
 
-Commands: dns (scan/check/list)
+Domain: freq dns <scan|check|list>
 
-Forward/reverse DNS validation across the fleet. Find mismatches,
-missing PTR records, stale entries. Catch DNS problems before
-they cause mysterious failures.
+Forward and reverse DNS validation across the fleet. Finds mismatches,
+missing PTR records, and stale entries. Catches DNS problems before they
+cause mysterious authentication failures or broken services.
 
-Kills: NetBox DNS tracking ($7.5K/yr). Auto-discovered, not hand-typed.
+Replaces: NetBox DNS tracking ($7.5K/yr), manual dig commands, spreadsheets
+
+Architecture:
+    - Forward lookups via socket.getaddrinfo (stdlib, no dig dependency)
+    - Reverse lookups via socket.gethostbyaddr for PTR validation
+    - Fleet host IPs cross-referenced against DNS for completeness
+    - Inventory persisted in conf/dns/dns-inventory.json
+
+Design decisions:
+    - Uses stdlib socket, not dig/nslookup. Works on any platform without
+      bind-utils installed. DNS resolution uses the host's resolver config.
 """
 import json
 import os

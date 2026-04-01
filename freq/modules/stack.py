@@ -1,11 +1,23 @@
 """Docker Compose stack lifecycle management for FREQ.
 
-Commands: stack (status/deploy/update/health/logs/backup/rollback/restart/template)
+Domain: freq docker <stack-status|stack-deploy|stack-update|stack-health|stack-logs|stack-backup|stack-rollback|stack-restart|stack-template>
 
-Fleet-wide Docker Compose management. Deploy, update, rollback stacks
-with volume backup and health checks. Template system for quick deploys.
+Fleet-wide Docker Compose management. Deploy stacks from built-in templates,
+update with pre-pull, rollback on failure, backup volumes before changes.
+Health checks verify containers are actually serving, not just running.
 
-Kills: Portainer (3-node paywall), Rancher (overkill for Compose stacks)
+Replaces: Portainer ($0 but 3-node paywall), Rancher (overkill for Compose),
+          manual docker-compose scripts per host
+
+Architecture:
+    - Stack registry persisted in conf/stacks/stack-registry.json
+    - Built-in templates for common stacks (arr-stack, monitoring, etc.)
+    - Deploy/update via SSH + docker compose commands on target hosts
+    - Volume backup via SSH + tar before destructive operations
+
+Design decisions:
+    - Templates are starting points, not locked configs. Users can deploy
+      a template then customize. FREQ tracks the stack, not the template.
 """
 import json
 import os

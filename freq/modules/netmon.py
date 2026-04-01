@@ -1,11 +1,23 @@
 """Network monitoring and interface tracking for FREQ.
 
-Commands: netmon (poll/interfaces/bandwidth/discover/topology)
+Domain: freq net <netmon-poll|netmon-interfaces|netmon-bandwidth|netmon-discover|netmon-topology>
 
-SNMP polling, interface monitoring, bandwidth trending.
-Topology discovery via LLDP/CDP.
+SNMP polling, interface monitoring, bandwidth trending, and topology
+discovery via LLDP/CDP. Tracks interface state changes, bandwidth usage
+over time, and builds a live network topology map.
 
-Kills: SolarWinds ($2K+/node, hacked), LibreNMS (complex)
+Replaces: SolarWinds ($2K+/node, hacked in 2020), LibreNMS (complex setup),
+          PRTG ($17K, Windows-only)
+
+Architecture:
+    - Interface data gathered via SSH (ip link, /proc/net/dev, lldpctl)
+    - Bandwidth calculated from delta between polling snapshots
+    - Topology built from LLDP/CDP neighbor tables
+    - Data persisted in conf/netmon/ with rolling window (500 datapoints)
+
+Design decisions:
+    - SSH-based, not SNMP agent. Most Linux hosts have SSH; many lack
+      SNMP. SNMP is supported where available, SSH is the fallback.
 """
 import json
 import os

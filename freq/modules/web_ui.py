@@ -1,10 +1,22 @@
-"""FREQ Web UI — Diamond Standard.
+"""Web UI asset loader for FREQ.
 
-Web assets live in freq/data/web/ as separate HTML, CSS, and JS files.
-This module loads them at runtime via importlib.resources and exposes
-SETUP_HTML and APP_HTML as assembled strings for backward compatibility.
+Domain: (internal — used by freq serve, not a user command)
 
-"the bass is the foundation. so is this tool. so is this friendship."
+Loads HTML, CSS, and JS assets from freq/data/web/ at runtime via
+importlib.resources. Exposes SETUP_HTML and APP_HTML as lazy-loaded
+module-level constants for backward compatibility with serve.py.
+
+Replaces: Inline HTML string constants (unmaintainable at scale)
+
+Architecture:
+    - Assets stored as separate files in freq/data/web/ package
+    - importlib.resources.files() for reliable path resolution
+    - Lazy descriptor (_LazyHTML) defers file I/O until first access
+    - Module-level SETUP_HTML/APP_HTML for backward compat imports
+
+Design decisions:
+    - Lazy loading, not eager. Importing web_ui should not trigger file I/O.
+      Only the serve module actually needs the HTML; other importers skip it.
 """
 
 import importlib.resources

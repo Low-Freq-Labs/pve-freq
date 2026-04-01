@@ -1,11 +1,24 @@
-"""Infrastructure modules for FREQ.
+"""Infrastructure appliance management for FREQ.
 
-Commands: pfsense, truenas, switch, idrac, watch, rescue
-These connect to infrastructure appliances via SSH.
+Domain: freq fw <status|rules|aliases|...>, freq store <truenas-status|...>,
+        freq net <switch-status|...>, freq hw <idrac-status|...>
 
-Note: pfSense and TrueNAS are not reachable from VLAN 10 (dev).
-These modules are implemented but will show connectivity errors
-until deployed to production or lab equivalents are available.
+Shared handler for SSH-based infrastructure appliances: pfSense firewalls,
+TrueNAS storage, managed switches, and iDRAC/BMC controllers. Each device
+type defines its own action map; the shared _device_cmd handles dispatch.
+
+Replaces: Vendor-specific GUIs (pfSense WebGUI, TrueNAS WebUI, iDRAC web),
+          manual SSH sessions to each appliance
+
+Architecture:
+    - Shared _device_cmd() handles action lookup, SSH exec, output formatting
+    - Device IPs read from freq.toml [infrastructure] section
+    - SSH via freq/core/ssh.py with device-specific htype (pfsense, truenas)
+    - Per-device action dicts map action names to (description, command) tuples
+
+Design decisions:
+    - One shared handler, not four separate files. Appliance commands follow
+      the same pattern (SSH + action dict), so the code is shared.
 """
 import json
 import time

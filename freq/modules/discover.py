@@ -1,9 +1,22 @@
-"""Network discovery for FREQ.
+"""Network discovery and host classification for FREQ.
 
-Commands: discover
+Domain: freq host <discover>
 
-Scans a subnet for SSH-reachable hosts and identifies their platform type.
-Uses parallel ping + SSH fingerprinting to find and classify hosts.
+Scans a subnet for live hosts via parallel ICMP ping, then SSH-fingerprints
+each responder to classify it (Linux, PVE, pfSense, TrueNAS, switch, iDRAC).
+Finds every device on a VLAN in seconds.
+
+Replaces: Nmap scripts + manual inventory, Angry IP Scanner, subnet spreadsheets
+
+Architecture:
+    - Async ping sweep via asyncio subprocess (up to 50 parallel)
+    - SSH fingerprinting via freq/core/ssh.py async_run for platform ID
+    - Platform classification by OS release, hostname patterns, CLI probes
+    - Returns structured list of (ip, platform_type, hostname)
+
+Design decisions:
+    - Ping first, SSH second. No point SSH-probing 254 hosts when only 30
+      are alive. Two-phase scan keeps discovery fast on large subnets.
 """
 import asyncio
 import time

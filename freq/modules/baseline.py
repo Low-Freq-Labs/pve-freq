@@ -1,13 +1,23 @@
 """Configuration baseline and drift detection for FREQ.
 
-Commands: baseline (capture/compare/list/delete)
+Domain: freq state <baseline-capture|baseline-compare|baseline-list|baseline-delete>
 
-Capture a known-good config state. Compare later to detect drift.
-Packages added? Services changed? Users modified? Network reconfigured?
-Baseline catches it all.
+Captures a known-good state of every fleet host (packages, services, users,
+network, kernel, Docker containers, listening ports). Compare later to detect
+drift. One command to know exactly what changed and when.
 
-Kills: Puppet (dead), Chef (dying), SaltStack (abandoned).
-One command, not a DSL nobody understands.
+Replaces: Puppet ($$$, dead), Chef ($$$, dying), SaltStack ($$$, abandoned),
+          AIDE (complex, single-host only)
+
+Architecture:
+    - Single compound SSH command gathers 8 categories in one round-trip
+    - Baselines stored as JSON snapshots in conf/baselines/
+    - Comparison diffs each category independently (added/removed/changed)
+    - Parallel SSH via ssh_run_many for fleet-wide capture
+
+Design decisions:
+    - Capture everything in one SSH call, not 8. Minimizes round trips
+      and ensures all categories reflect the same point in time.
 """
 import json
 import os

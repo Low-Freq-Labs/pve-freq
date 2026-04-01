@@ -1,7 +1,23 @@
-"""Deploy FREQ metrics agent to fleet hosts.
+"""FREQ metrics agent deployment for fleet hosts.
 
-freq deploy-agent <host|all> — copies agent_collector.py, creates systemd service, starts it.
-freq agent-status — check which hosts have the agent running.
+Domain: freq fleet <deploy-agent|agent-status>
+
+Copies the lightweight Python metrics collector to fleet hosts, creates a
+systemd service unit, enables and starts it. Agent exposes host metrics on
+a configurable port (default 9990) for the dashboard to poll.
+
+Replaces: Prometheus node_exporter + Ansible deploy playbook,
+          Telegraf ($0 but heavy config), manual agent installs
+
+Architecture:
+    - Agent binary is agent_collector.py, copied via SSH (SCP)
+    - Systemd unit generated dynamically with configurable port
+    - Agent serves JSON metrics over HTTP on localhost
+    - Status check polls agent HTTP endpoint from Nexus
+
+Design decisions:
+    - Agent is a single Python file, not a package. SCP one file, create
+      one service, done. No pip, no venv, no package manager on the target.
 """
 import json
 import os

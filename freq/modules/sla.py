@@ -1,12 +1,23 @@
 """Uptime SLA tracking for FREQ.
 
-Commands: sla (show/check/reset)
+Domain: freq observe <sla-show|sla-check|sla-reset>
 
-Real SLA numbers from real data. Track uptime per host over 7/30/90 days.
-Every health check records whether each host was reachable.
-No guessing. No estimates. Hard numbers.
+Real SLA numbers from real data. Tracks uptime per host over 7, 30, and 90
+day windows. Every health check records whether each host was reachable.
+No guessing, no estimates — hard numbers from actual probe results.
 
-Kills: Enterprise monitoring SLA dashboards ($$$).
+Replaces: Enterprise monitoring SLA dashboards ($$$), uptime robot ($7+/mo),
+          manual uptime spreadsheets
+
+Architecture:
+    - SLA data stored in conf/sla/sla-data.json (check history per host)
+    - Each check records epoch timestamp + reachability boolean per host
+    - Uptime percentage calculated from check pass/fail ratio per window
+    - Auto-prune: checks older than 90 days are dropped on save
+
+Design decisions:
+    - SLA is calculated from actual check results, not inferred from logs.
+      If FREQ could not reach the host, it was down. Period.
 """
 import json
 import os

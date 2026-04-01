@@ -1,11 +1,22 @@
-"""Fleet-wide reverse proxy and certificate management for FREQ.
+"""Fleet-wide reverse proxy management for FREQ.
 
-Commands: proxy (status/list/add/remove/certs/test)
+Domain: freq proxy <status|list|add|remove|certs|test>
 
-One command to add a proxy route. Fleet-wide cert renewal. No more
-SSHing into boxes to edit nginx configs manually.
+One command to add a proxy route. Fleet-wide cert status. No more SSHing
+into boxes to edit nginx configs manually. Detects which proxy backend is
+running and uses the correct API or config format.
 
-Kills: Nginx Proxy Manager (GUI-only), Traefik Enterprise ($2K/instance/yr)
+Replaces: Nginx Proxy Manager ($0 but GUI-only), Traefik Enterprise ($2K/yr)
+
+Architecture:
+    - Route definitions stored in conf/proxy/routes.json
+    - Backend detection via SSH (process scan for nginx/caddy/traefik)
+    - Route manipulation via SSH + config file edit or API call
+    - Cert status integrated with freq/modules/cert.py inventory
+
+Design decisions:
+    - Routes stored locally even if the proxy has its own state. FREQ is
+      the source of truth. Drift between FREQ and backend is detectable.
 """
 import json
 import os

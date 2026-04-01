@@ -1,9 +1,24 @@
 """Encrypted credential vault for FREQ.
 
-AES-256-CBC encryption via OpenSSL. Key derived from /etc/machine-id.
-Format: HOST|KEY|VALUE (pipe-delimited), encrypted at rest.
+Domain: freq secure <vault-get|vault-set|vault-list|vault-delete|vault-export>
 
-Compatible with v1.0.0 vault files — same algorithm, same key derivation.
+AES-256-CBC encrypted credential store. Secrets stored as HOST|KEY|VALUE
+pipe-delimited entries, encrypted at rest via OpenSSL. Key derived from
+/etc/machine-id so the vault is machine-bound. v1.0.0 compatible.
+
+Replaces: HashiCorp Vault ($1,152/mo+ post-IBM), plaintext .env files,
+          password managers for infrastructure secrets
+
+Architecture:
+    - Encryption: OpenSSL aes-256-cbc with PBKDF2 key derivation
+    - Key source: SHA256 of /etc/machine-id (machine-bound, no master password)
+    - Storage: single encrypted file in conf/vault.enc
+    - Format: pipe-delimited HOST|KEY|VALUE, one entry per line (pre-encryption)
+
+Design decisions:
+    - Machine-bound key, not user-bound. The vault belongs to the FREQ
+      installation, not a person. Any FREQ user on this machine can access it.
+      This is intentional — FREQ is a shared infrastructure tool.
 """
 import getpass
 import hashlib

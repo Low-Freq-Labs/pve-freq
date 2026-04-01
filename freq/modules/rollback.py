@@ -1,12 +1,22 @@
 """One-command VM rollback for FREQ.
 
-Commands: rollback
+Domain: freq vm <rollback>
 
-One command: freq rollback <vmid>
-Finds the latest snapshot for a VM and restores it. No fumbling with
-snapshot names. Just roll it back.
-
+One command: freq vm rollback <vmid>. Finds the latest snapshot for a VM
+and restores it. No fumbling with snapshot names, no PVE GUI navigation.
 For when things go sideways and you need to undo. Fast.
+
+Replaces: PVE GUI snapshot restore (slow, multi-click), manual qm rollback
+
+Architecture:
+    - Snapshot listing via pvesh on reachable PVE node
+    - Selects most recent freq-created snapshot (freq-snap-* naming)
+    - Rollback via qm rollback with extended timeout (180s)
+    - PVE node discovery shared with freq/modules/pve.py pattern
+
+Design decisions:
+    - Auto-selects latest snapshot, no user input needed. In an emergency,
+      fewer decisions means faster recovery. Override with --snapshot flag.
 """
 import re
 import time

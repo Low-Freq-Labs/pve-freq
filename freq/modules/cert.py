@@ -1,11 +1,23 @@
-"""TLS certificate inventory and monitoring for FREQ.
+"""Fleet-wide TLS certificate inventory and lifecycle for FREQ.
 
-Commands: cert (scan/list/check)
+Domain: freq cert <scan|list|check>
 
-Scan the fleet for TLS certificates. What's expiring? What's self-signed?
-What's missing? Fleet-wide cert health in one command.
+Scans every fleet host for TLS certificates on common ports (443, 8006,
+8443, 9090, etc.). Tracks expiry, issuer, subject, and self-signed status.
+One command to know every cert in your infrastructure and when it dies.
 
-No more surprise cert expirations at 3 AM.
+Replaces: Manual cert tracking in spreadsheets, certbot cron scripts,
+          Let's Encrypt GUIs ($0 but no fleet awareness)
+
+Architecture:
+    - Scanning uses ssl + socket (stdlib) to connect and read certs
+    - Parallel SSH probes via ssh_run_many for fleet-wide port checks
+    - Inventory persisted in conf/certs/cert-inventory.json
+    - Expiry thresholds: 7d critical, 30d warning
+
+Design decisions:
+    - Scans real TLS handshakes, not config files. What the network sees
+      is what matters, not what you think is deployed.
 """
 import json
 import os

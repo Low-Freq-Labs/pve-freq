@@ -1,11 +1,22 @@
 """Automatic dependency discovery and impact mapping for FREQ.
 
-Commands: map (discover/show/impact/export)
+Domain: freq net <map-discover|map-show|map-impact|map-export>
 
-Auto-discover service dependencies via socket connections, Docker networks,
-NFS mounts, DNS resolutions. Answer "what breaks if this host dies?"
+Auto-discovers service dependencies via socket connections, Docker networks,
+NFS mounts, and DNS resolutions. Answers "what breaks if this host dies?"
+with a real dependency graph, not a hand-drawn diagram.
 
-Kills: ServiceNow CMDB ($270K+/yr), Datadog service maps ($31/host/mo)
+Replaces: ServiceNow CMDB ($270K+/yr), Datadog service maps ($31/host/mo)
+
+Architecture:
+    - Discovery via parallel SSH: ss, mount, docker network ls, dig
+    - Dependency graph stored as nodes + edges in conf/depmap/
+    - Impact analysis walks the graph from a given node outward
+    - Export produces JSON for visualization tools
+
+Design decisions:
+    - Discovered from live state, not manually entered. If a dependency
+      exists on the network, FREQ finds it. No stale CMDB entries.
 """
 import json
 import os

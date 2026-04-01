@@ -1,12 +1,23 @@
-"""Alert engine for FREQ.
+"""Fleet-wide alert engine for FREQ.
 
-Commands: alert (create/list/delete/history/test/silence)
+Domain: freq observe <alert-create|alert-list|alert-delete|alert-history|alert-test|alert-silence>
 
-Real alerting that comes to YOU. Evaluates conditions against fleet health
-data and fires notifications via Discord/Slack/webhook/ntfy/etc.
-Supports escalation, silence windows, and persistent alert history.
+Evaluates conditions against fleet health data and fires notifications via
+Discord, Slack, webhook, or ntfy. Supports escalation chains, silence
+windows, and persistent alert history. Real alerting that comes to you.
 
-Kills: Zabbix ($0 but looks like 2004), Nagios ($2K+), PRTG ($17K, Windows-only)
+Replaces: Zabbix ($0 but looks like 2004), Nagios ($2K+), PRTG ($17K, Windows-only)
+
+Architecture:
+    - Conditions evaluated via SSH health probes (cpu, ram, disk, service, http)
+    - Alert state persisted in conf/alerts/ as JSON
+    - Notification dispatch via urllib.request to webhook endpoints
+    - Silence windows suppress firing without deleting rules
+
+Design decisions:
+    - Condition evaluators are data-driven (dict of name→description), not
+      subclasses. Simple to add new conditions without new files.
+    - Alert history kept on disk so trends survive restarts.
 """
 import json
 import os

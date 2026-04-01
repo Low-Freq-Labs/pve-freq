@@ -1,12 +1,23 @@
-"""Load-aware migration recommendations for FREQ.
+"""Load-aware VM migration planning for FREQ.
 
-Commands: migrate-plan (show/apply)
+Domain: freq dr <migrate-plan-show|migrate-plan-apply>
 
-Analyze fleet resource usage and recommend VM migrations for balance.
-"pve02 is at 90% RAM — move VM 302 to pve03." Not just showing the
-data — proposing the action with one-click execution.
+Analyzes PVE cluster resource usage and recommends VM migrations to balance
+load across nodes. "pve02 is at 90% RAM, move VM 302 to pve03." Not just
+data — actionable proposals with one-command execution.
 
-Kills: Nutanix ($$$), Scale Computing ($$$) auto-balancing.
+Replaces: Nutanix ($$$) auto-balancing, Scale Computing ($$$),
+          manual spreadsheet capacity planning
+
+Architecture:
+    - Resource gathering via PVE API (pvesh /cluster/resources)
+    - Per-node CPU/RAM/disk utilization calculated from cluster data
+    - Migration candidates selected by resource pressure delta
+    - Apply executes qm migrate via SSH on the source PVE node
+
+Design decisions:
+    - Plan is advisory by default; apply requires explicit confirmation.
+      Migrations move live VMs — never auto-execute without human intent.
 """
 import json
 import time

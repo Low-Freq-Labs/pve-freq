@@ -1,11 +1,22 @@
 """Full fleet inventory export for FREQ.
 
-Commands: inventory
+Domain: freq fleet <inventory>
 
-Auto-discovered CMDB. Every VM, every host, every IP, every container —
-one structured output. JSON, CSV, or table. Feed it to anything.
+Auto-discovered CMDB. Every VM, every host, every IP, every container in
+one structured output. Export as terminal table, JSON, or CSV. Feed it to
+anything — scripts, dashboards, compliance tools.
 
-Kills: ServiceNow ($50K/yr), Device42 ($1.5K/yr), Snipe-IT (manual entry)
+Replaces: ServiceNow ($50K/yr), Device42 ($1.5K/yr), Snipe-IT (manual entry)
+
+Architecture:
+    - Host inventory via parallel SSH (hostname, OS, cores, RAM, disk, IPs)
+    - VM inventory via PVE API (pvesh) across all cluster nodes
+    - Container inventory via docker ps on fleet hosts
+    - Output formats: table (default), JSON (--json), CSV (--csv)
+
+Design decisions:
+    - Inventory is read-only and ephemeral. No local state file. Every run
+      queries live data, so the output is always current, never stale.
 """
 import csv
 import io

@@ -1,12 +1,24 @@
 """Media stack management for FREQ.
 
-Commands: media <action> [service] [--flags]
+Domain: freq media <status|restart|update|logs|backup|health|config>
 
 Manages Docker containers across multiple VMs: Plex, Sonarr, Radarr,
-Prowlarr, qBittorrent, SABnzbd, Tdarr, Bazarr, Overseerr, Tautulli, etc.
+Prowlarr, qBittorrent, SABnzbd, Tdarr, Bazarr, Overseerr, Tautulli, and
+more. Container registry maps every container to its VM. API access via SSH
+tunnel to localhost — no direct port exposure.
 
-Container registry in conf/containers.toml maps every container to its VM.
-API access via SSH tunnel — SSH to VM, curl localhost. No direct exposure.
+Replaces: Portainer ($0 but 3-node paywall), manual docker-compose per VM,
+          SSH-and-pray container management
+
+Architecture:
+    - Container registry loaded from conf/containers.toml
+    - API calls via SSH tunnel: SSH to VM, curl localhost:port
+    - Docker operations (restart, update, logs) via SSH + docker CLI
+    - Vault integration for API keys (Sonarr, Radarr, etc.)
+
+Design decisions:
+    - SSH tunnel for API access, not direct exposure. Media containers stay
+      on localhost. FREQ reaches them through the fleet SSH transport.
 """
 import json
 import os

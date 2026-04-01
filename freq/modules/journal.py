@@ -1,12 +1,22 @@
-"""Operation journal for FREQ.
+"""Operation journal and audit trail for FREQ.
 
-Maintains a log of all significant operations — creates, destroys,
-config changes, audit results, policy fixes. Queryable history.
+Domain: freq dr <journal|journal --lines N|journal --search TERM>
 
-Usage:
-  freq journal              # show recent operations
-  freq journal --lines 50   # show last 50 entries
-  freq journal --search vm  # search for VM operations
+Append-only log of every significant FREQ operation: VM creates, destroys,
+config changes, audit results, policy fixes. Queryable by recency or keyword.
+The answer to "who did what and when" without grepping syslog.
+
+Replaces: Manual change logs, syslog grep sessions, "who touched that VM?" meetings
+
+Architecture:
+    - Journal stored as JSONL (one JSON object per line) in data/log/journal.jsonl
+    - Entries written by other modules via journal_append() helper
+    - Query supports --lines (tail) and --search (keyword filter)
+    - No rotation needed — JSONL is append-only and grep-friendly
+
+Design decisions:
+    - JSONL, not a database. One file, one format, zero dependencies.
+      Survives backup/restore, works with standard Unix tools.
 """
 import json
 import os

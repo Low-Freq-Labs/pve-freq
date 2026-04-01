@@ -1,12 +1,21 @@
-"""Side-by-side host/VM comparison for FREQ.
+"""Side-by-side host and VM comparison for FREQ.
 
-Commands: compare
+Domain: freq fleet <compare>
 
-Diff two hosts or two VMs. Shows what's different: CPU, RAM, disk,
-packages, services, uptime, kernel, networking. Find why one is
-broken and the other isn't.
+Diffs two hosts or two VMs across every dimension: CPU, RAM, disk,
+packages, services, uptime, kernel, networking, Docker, swap. Find why
+one host is broken and the other is not. Color-coded delta output.
 
-Nobody else does this well. Now FREQ does.
+Replaces: Manual SSH-and-eyeball comparison, spreadsheet diffs
+
+Architecture:
+    - Single compound SSH command gathers 17 metrics per host in one call
+    - PVE API queries for VM-level comparison (cores, RAM, disk, status)
+    - Side-by-side table rendering with delta highlighting via freq/core/fmt
+
+Design decisions:
+    - Everything in one SSH round-trip per host. Two hosts = two calls,
+      not thirty-four. Fast enough to run ad-hoc during incidents.
 """
 import json
 import time

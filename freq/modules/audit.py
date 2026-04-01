@@ -1,17 +1,22 @@
-"""Security audit for FREQ.
+"""Fleet-wide security audit for FREQ.
 
-Commands: audit
+Domain: freq secure <audit>
 
-Scans fleet hosts for common security issues:
-- SSH configuration (root login, password auth, key-only)
-- Open ports (listening services)
-- Sudoers configuration
-- Package updates available
-- Firewall status
-- Failed login attempts
+Read-only security scan across every fleet host. Checks SSH config, open
+ports, sudoers, pending updates, firewall status, and failed logins.
+Returns findings with severity (INFO/WARN/CRIT). Never modifies anything.
 
-Each check returns findings with severity (INFO/WARN/CRIT).
-No changes are made — this is read-only.
+Replaces: Nessus ($4,390/yr per scanner), OpenVAS (complex setup), manual checklists
+
+Architecture:
+    - Each check is a standalone function returning Finding objects
+    - SSH transport via freq/core/ssh.py to each host
+    - Findings use freq/core/types.py Severity enum for consistent grading
+    - Designed as the read-only counterpart to freq secure harden
+
+Design decisions:
+    - Audit is strictly read-only; remediation lives in harden.py.
+      Separation means you can audit in prod without fear of side effects.
 """
 from freq.core import fmt
 from freq.core.config import FreqConfig

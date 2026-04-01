@@ -1,7 +1,22 @@
-"""FREQ WIPE — drive sanitization station client.
+"""Drive sanitization station client for FREQ.
 
-Connects to a GWIPE station API (port 7980) for drive wiping ops.
-Credentials stored in vault under 'gwipe' section.
+Domain: freq hw <gwipe-status|gwipe-start|gwipe-list|gwipe-verify>
+
+Connects to a GWIPE station REST API (port 7980) to manage secure drive
+wipe operations. Supports DoD 5220.22-M and NIST 800-88 wipe standards.
+Credentials resolved from FREQ vault or CLI flags.
+
+Replaces: DBAN (no remote management), Blancco ($18/drive license)
+
+Architecture:
+    - REST client using urllib.request (stdlib) to GWIPE API
+    - API key auth via X-API-Key header
+    - Credential resolution: CLI flags first, vault fallback
+    - Vault integration via freq/modules/vault.py
+
+Design decisions:
+    - Client-only, not the wipe engine. GWIPE station is a separate
+      appliance. FREQ just talks to its API for fleet-integrated control.
 """
 import json
 import logging

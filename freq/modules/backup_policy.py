@@ -1,12 +1,22 @@
 """Declarative backup policies for FREQ.
 
-Commands: backup-policy (list/create/delete/apply/status)
+Domain: freq dr <backup-policy-list|backup-policy-create|backup-policy-delete|backup-policy-apply|backup-policy-status>
 
-"All VMs tagged 'prod': daily snapshot, 7-day retention."
-Define it once, FREQ enforces it. No more forgetting to snapshot.
-No more manual cleanup of old backups.
+Define backup policies once, FREQ enforces them forever. Tag-based targeting
+("all VMs tagged prod: daily snapshot, 7-day retention"), automatic cleanup
+of expired backups, and compliance reporting per policy.
 
-Kills: Veeam ($$$), manual cron scripts, hope-based backup strategies.
+Replaces: Veeam ($$$), manual cron scripts, hope-based backup strategies
+
+Architecture:
+    - Policies stored as JSON in conf/backup-policies/
+    - Policy evaluation matches VM tags/names against policy selectors
+    - Snapshot creation via PVE SSH (pvesh/qm) on matched VMs
+    - State tracking records last run, next due, retention compliance
+
+Design decisions:
+    - Policies are declarative (what, not how). The scheduler decides when
+      to evaluate; the policy engine decides what to snapshot and prune.
 """
 import json
 import os

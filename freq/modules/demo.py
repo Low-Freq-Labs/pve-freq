@@ -1,8 +1,22 @@
 """Interactive demo mode for FREQ.
 
-freq demo — experience FREQ without a fleet.
-Shows splash, simulated doctor, mock fleet status, personality showcase.
-Zero SSH calls, zero subprocess, zero external deps. Works anywhere.
+Domain: freq demo
+
+Experience FREQ without a fleet. Shows splash screen, simulated 13-point
+diagnostic, mock fleet status, and personality showcase. Zero SSH calls,
+zero subprocess, zero external deps. Works on any machine with Python.
+
+Replaces: Nothing — this is the "try before you deploy" experience
+
+Architecture:
+    - Pure in-process rendering, no SSH or subprocess calls
+    - Uses freq/core/personality.py for splash, taglines, celebrations
+    - Simulated data demonstrates real output formatting
+    - Timed delays for visual pacing (configurable step/section delays)
+
+Design decisions:
+    - Demo must work with zero config. No freq.toml, no hosts, no SSH keys.
+      If someone clones the repo and runs freq demo, it must work instantly.
 """
 import platform
 import random

@@ -1,10 +1,23 @@
-"""Proxmox VE management for FREQ.
+"""Proxmox VE cluster operations for FREQ.
 
-Commands: list, vm-overview, vmconfig, create, clone, destroy, resize,
-          snapshot, migrate, rescue
+Domain: freq vm <list|overview|config|create|clone|destroy|resize|snapshot|migrate|rescue>
 
-PVE operations try the REST API first (token auth) and fall back to SSH
-when the API is unreachable or no token is configured.
+Core PVE management: VM listing, creation, cloning, destruction, resizing,
+snapshots, and live migration. Operations prefer the PVE REST API (token
+auth) and fall back to SSH + pvesh/qm when the API is unreachable.
+
+Replaces: PVE web GUI (limited to one cluster), manual qm/pvesh commands,
+          Terraform proxmox provider ($0 but HCL overhead)
+
+Architecture:
+    - Dual transport: REST API (urllib, token auth) with SSH fallback
+    - PVE API client uses PVEAPIToken header for authentication
+    - SSH operations via freq/core/ssh.py with htype="pve" + sudo
+    - Safety gates via freq/core/validate.py (protected VMID ranges)
+
+Design decisions:
+    - API-first, SSH-fallback. API is faster and structured; SSH works when
+      the API is down or no token is configured. Graceful degradation.
 """
 import json
 import ssl

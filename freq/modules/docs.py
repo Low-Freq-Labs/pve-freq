@@ -1,12 +1,23 @@
 """Auto-generated infrastructure documentation for FREQ.
 
-Commands: docs (generate/diff/export/verify/runbook)
+Domain: freq docs <generate|diff|export|verify|runbook>
 
-Documentation that cannot go stale because it's generated from reality.
-Every VM, host, IP, service — documented automatically from live state.
-Runbooks = named sequences of freq commands in YAML.
+Documentation that cannot go stale because it is generated from live fleet
+state. Every VM, host, IP, and service documented automatically. Runbooks
+are named sequences of freq commands stored as YAML for repeatable ops.
 
-Kills: Confluence ($6-12/user/mo, "where info goes to die"), Notion ($10-20/user/mo)
+Replaces: Confluence ($6-12/user/mo), Notion ($10-20/user/mo),
+          hand-written runbooks that rot on day two
+
+Architecture:
+    - Fleet data gathered via parallel SSH (hostname, OS, resources, IPs)
+    - Output formats: terminal table, JSON, Markdown (for Obsidian/Discord)
+    - Runbooks loaded from conf/runbooks/*.yaml, executed sequentially
+    - Diff mode compares current state against last generated doc
+
+Design decisions:
+    - Generate from reality, not from memory. If a human wrote it, it is
+      already wrong. If FREQ generates it, it matches what is deployed.
 """
 import json
 import os

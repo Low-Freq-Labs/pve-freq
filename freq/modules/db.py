@@ -1,11 +1,22 @@
 """Fleet-wide database health monitoring for FREQ.
 
-Commands: db (status/health/backups/replication/size/connections)
+Domain: freq fleet <db-status|db-health|db-backups|db-replication|db-size|db-connections>
 
-Every database across every host. One command. PostgreSQL, MySQL, MariaDB.
-Connection pools, replication lag, slow queries, backup freshness.
+Detects PostgreSQL, MySQL, and MariaDB (native and Docker) across every fleet
+host. Reports active connections, database sizes, replication status, and
+backup freshness. One command for every database on every host.
 
-Kills: pgAdmin (single-DB), DBeaver (slow GUI), DataGrip ($229/yr)
+Replaces: pgAdmin (single-DB only), DBeaver (slow GUI), DataGrip ($229/yr)
+
+Architecture:
+    - Auto-detection via systemctl + docker ps on each host
+    - PostgreSQL metrics via sudo -u postgres psql system catalogs
+    - MySQL/MariaDB metrics via mysqladmin or docker exec
+    - Parallel SSH via ssh_run_many for fleet-wide sweep
+
+Design decisions:
+    - Detection runs first, metrics second. No point querying PostgreSQL
+      catalogs on a host that only runs MariaDB in Docker.
 """
 import json
 import time

@@ -1,21 +1,28 @@
-"""FREQ init — first-run setup wizard.
+"""FREQ init — first-run setup wizard and fleet deployment engine.
 
-10-phase deployment pipeline:
-1. Welcome + prerequisites check
-2. Cluster configuration (PVE nodes, gateway, nameserver → freq.toml)
-3. Service account creation (configurable, NOPASSWD sudo)
-4. SSH key generation
-5. PVE node deployment (create account + deploy key on each node)
-6. PDM setup (detect/install Proxmox Datacenter Manager, configure remote)
-7. Fleet host deployment (create account + deploy key on each host)
-8. Admin account setup (RBAC roles)
-9. Configuration + verification
-10. Summary
+Domain: freq init [--headless] [--check] [--fix] [--uninstall]
+        freq configure
 
-Must run as root. Creates a service account (default: from freq.toml) with
-NOPASSWD sudo on this host and all managed nodes.
+10-phase deployment pipeline that takes a bare machine to a fully managed
+fleet in one command: prerequisites → config → service account → SSH keys →
+PVE node deployment → PDM setup → fleet host deployment → device deployment →
+admin account → verification. Supports headless mode for automation.
 
-"the genesis. everything starts here." — freq init
+Replaces: Ansible playbooks for initial setup ($0 but 100+ lines of YAML),
+          manual SSH key distribution, hand-edited config files
+
+Architecture:
+    - Sequential phase execution with rollback awareness
+    - SSH via subprocess (sshpass for initial auth, key auth after)
+    - Config generation writes freq.toml, hosts.conf, vlans.toml
+    - Device deployment dispatches to freq/deployers/ per device type
+    - Headless mode reads all params from CLI flags, no prompts
+
+Design decisions:
+    - Must run as root. Creates service account with NOPASSWD sudo.
+    - Interactive by default, --headless for CI/automation.
+    - --check validates existing install, --fix repairs broken hosts.
+    - --uninstall removes FREQ service account from all hosts.
 """
 import base64
 import datetime

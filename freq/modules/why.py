@@ -1,7 +1,22 @@
-"""FREQ WHY — explain what FREQ can do to a VM and why.
+"""VM permission explainer for FREQ.
 
-Shows: category, tier, production status, protected status,
-allowed actions, blocked actions. Answers "why can't I destroy VM 100?"
+Domain: freq vm <why>
+
+Answers "why can I not destroy VM 100?" Shows category, tier, production
+status, protected status, allowed actions, and blocked actions for any
+VMID. The safety gate debugger — never wonder why a command was refused.
+
+Replaces: Reading source code to understand VMID protection rules
+
+Architecture:
+    - Fleet boundaries loaded from FreqConfig (VMID ranges, tiers, categories)
+    - Permission calculation via fleet_boundaries.allowed_actions()
+    - Output shows category, tier, prod flag, protected flag, action lists
+    - Color-coded: green for allowed, red for blocked
+
+Design decisions:
+    - Why is read-only and instant. No SSH, no API calls. All permission
+      data is local config. Designed for quick answers during incidents.
 """
 from freq.core import fmt
 from freq.core.config import FreqConfig

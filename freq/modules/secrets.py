@@ -1,11 +1,22 @@
 """Secret rotation, scanning, and lifecycle management for FREQ.
 
-Commands: secrets (rotate/scan/audit/generate/list/lease)
+Domain: freq secure <secrets-rotate|secrets-scan|secrets-audit|secrets-generate|secrets-list|secrets-lease>
 
-SSH key rotation fleet-wide. Secret scanning for hardcoded passwords.
-Credential lease tracking with expiry alerts. Extends vault.
+Fleet-wide SSH key rotation, secret scanning for hardcoded passwords in
+config files, credential lease tracking with expiry alerts, and secure
+password generation. Extends the vault module with active management.
 
-Kills: HashiCorp Vault ($1,152/mo+ post-IBM), CyberArk ($$$)
+Replaces: HashiCorp Vault ($1,152/mo+ post-IBM acquisition), CyberArk ($$$)
+
+Architecture:
+    - Secret scanning via regex patterns across fleet config files (SSH)
+    - SSH key rotation: generate new keypair, distribute, verify, remove old
+    - Lease tracking stored in conf/secrets/leases.json with expiry dates
+    - Password generation via stdlib secrets module (cryptographic RNG)
+
+Design decisions:
+    - Scanning is pattern-based, not AST-based. Catches passwords in any
+      file format (TOML, YAML, env, ini) without format-specific parsers.
 """
 import hashlib
 import json

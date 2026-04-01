@@ -1,11 +1,23 @@
 """CIS/STIG compliance scanning for FREQ.
 
-Commands: comply (scan/status/report/exceptions)
+Domain: freq secure <comply-scan|comply-status|comply-report|comply-exceptions>
 
-Automated compliance checks against CIS Level 1 benchmarks.
-Scored results. Auto-remediation for safe fixes. No per-asset fees.
+Automated compliance checks against CIS Level 1 benchmarks for Linux hosts.
+Scored pass/fail results per check, exception management for accepted risks,
+and optional auto-remediation for safe fixes. No per-asset licensing fees.
 
-Kills: Nessus ($4,390/yr), Qualys ($20K+/yr for 100 assets)
+Replaces: Nessus ($4,390/yr), Qualys ($20K+/yr for 100 assets),
+          CIS-CAT Pro ($12K/yr)
+
+Architecture:
+    - CIS checks defined as data (id, title, command, remediation, severity)
+    - Parallel SSH execution via ssh_run_many across fleet
+    - Results and exceptions stored in conf/compliance/ as JSON
+    - Remediation commands are cross-distro (uses platform install hints)
+
+Design decisions:
+    - Checks are data, not code. Adding a new CIS control means adding a
+      dict entry, not writing a new function. Keeps the check library flat.
 """
 import json
 import os

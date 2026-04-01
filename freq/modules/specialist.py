@@ -1,9 +1,23 @@
 """Specialist VM workspace deployment for FREQ.
 
-Commands: specialist create, specialist health, specialist status, specialist list
+Domain: freq specialist <create|health|status|list>
 
-Deploys complete Claude Code workspaces: CLAUDE.md, settings, tmux, dev scripts,
-mailbox structure. Each specialist gets a role-specific configuration.
+Deploys complete Claude Code agent workspaces to fleet VMs: CLAUDE.md,
+settings, tmux config, dev scripts, and mailbox structure. Each specialist
+gets a role-specific configuration (dev, infra, security, media, etc.).
+
+Replaces: Manual VM setup scripts, Ansible workspace playbooks,
+          hand-configured dev environments
+
+Architecture:
+    - Role templates define per-specialist config (tmux color, model, session)
+    - Deployment via SSH: creates directories, writes config files, starts tmux
+    - Health check verifies SSH connectivity + tmux session + Claude process
+    - Host resolution via freq/core/resolve.py
+
+Design decisions:
+    - Roles are data (dict), not code. Adding a new specialist role means
+      one dict entry in ROLE_TEMPLATES, not a new deployment function.
 """
 import json
 import time

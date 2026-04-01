@@ -1,13 +1,23 @@
 """Historical capacity trending for FREQ.
 
-Commands: trend (show/snapshot/history)
+Domain: freq observe <trend-show|trend-snapshot|trend-history>
 
-Not just "where is it now" — "where is it GOING."
-Stores periodic snapshots of CPU, RAM, disk across the fleet.
-Shows trends over time so you can plan before you're in trouble.
+Not just "where is it now" but "where is it going." Stores periodic
+snapshots of CPU, RAM, and disk usage across the fleet. Shows trends over
+time so you can plan capacity before you are in trouble.
 
-Kills: New Relic (bill shock), Datadog (surprise invoices).
-Self-hosted, zero cost, predictable.
+Replaces: New Relic (bill shock), Datadog (surprise invoices),
+          Prometheus + Grafana ($0 but complex multi-component stack)
+
+Architecture:
+    - Snapshots gathered via parallel SSH (nproc, free, df per host)
+    - Data stored in conf/trends/trend-data.json, rolling window (1000 max)
+    - Trend display calculates deltas between snapshots over time
+    - At 2-hour intervals, 1000 snapshots covers ~83 days of history
+
+Design decisions:
+    - Snapshots, not continuous streams. Trend data is sampled, not
+      real-time. Keeps storage flat and queries instant.
 """
 import json
 import os

@@ -1,11 +1,22 @@
-"""Fleet patch management for FREQ.
+"""Fleet-wide patch management for FREQ.
 
-Commands: patch (status/check/apply/rollback/hold/history/compliance)
+Domain: freq secure <patch-status|patch-check|patch-apply|patch-rollback|patch-hold|patch-history|patch-compliance>
 
-Automated fleet patching with snapshot-before-patch rollback.
-Group-based rollout (staging → prod). Package holds. Compliance reporting.
+Automated fleet patching with snapshot-before-patch safety net, group-based
+rollout (staging then prod), package hold lists, and compliance reporting.
+One command to patch the fleet with rollback if anything breaks.
 
-Kills: Automox ($1/endpoint/mo), WSUS (deprecated Sept 2024), Ivanti ($$$)
+Replaces: Automox ($1/endpoint/mo), WSUS (deprecated Sept 2024), Ivanti ($$$)
+
+Architecture:
+    - Patch check via SSH (apt/dnf/yum list upgrades) across fleet
+    - Apply creates PVE snapshot first, then runs package upgrade
+    - Rollback restores the pre-patch snapshot if issues detected
+    - History and holds persisted in conf/patches/ as JSON
+
+Design decisions:
+    - Snapshot before patch, always. Rollback is one command, not a prayer.
+      This is the entire value proposition over raw apt upgrade.
 """
 import json
 import os

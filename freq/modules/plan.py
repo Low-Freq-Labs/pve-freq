@@ -1,7 +1,23 @@
-"""Declarative fleet management — freq plan / freq apply.
+"""Declarative fleet management for FREQ.
 
-Reads a TOML fleet plan, compares against PVE cluster state,
-and generates a terraform-style diff. Apply executes the changes.
+Domain: freq state <plan|apply>
+
+Reads a TOML fleet plan (desired VM definitions), compares against live PVE
+cluster state, and generates a Terraform-style diff. Apply executes the
+changes: create missing VMs, resize drifted ones, flag unexpected extras.
+
+Replaces: Terraform ($0 but HCL learning curve), Pulumi ($$$),
+          manual PVE GUI provisioning
+
+Architecture:
+    - Plan file parsed from conf/plan.toml via tomllib (stdlib)
+    - Live state queried from PVE API (pvesh) across cluster nodes
+    - Diff engine compares desired vs actual (name, cores, RAM, disk)
+    - Apply dispatches to freq/modules/vm.py for create/resize operations
+
+Design decisions:
+    - TOML, not HCL or YAML. Python has tomllib in stdlib since 3.11.
+      No DSL to learn, no templating language, just a config file.
 """
 import os
 import tomllib

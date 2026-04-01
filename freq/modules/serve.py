@@ -1,12 +1,29 @@
-"""FREQ Web Dashboard — lightweight fleet status in a browser.
+"""FREQ Web Dashboard — fleet management in a browser.
 
-freq serve — starts a local HTTP server with a fleet dashboard.
-Pure Python stdlib (http.server), no Flask/Django/FastAPI needed.
-Serves a single-page dashboard with live fleet data via JSON API.
+Domain: freq serve [--port N]
 
-Usage:
-  freq serve                  # start on port 8888
-  freq serve --port 9090      # custom port
+Starts a local HTTP server with a full fleet dashboard: live host health,
+VM inventory, container status, VLAN topology, capacity trends, NTP sync,
+storage health, media stack, alerting, and 100+ REST API endpoints. Pure
+Python stdlib (http.server + json + threading), zero external dependencies.
+
+Replaces: Grafana dashboards ($0 but requires Prometheus + exporters),
+          Proxmox web UI (limited to PVE, no fleet view), Netbox ($0 but
+          heavy setup), custom Flask/Django dashboards
+
+Architecture:
+    - http.server.HTTPServer with threaded request handler
+    - Background cache probes (ThreadPoolExecutor) refresh fleet data
+    - Server-Sent Events (SSE) for real-time dashboard updates
+    - Static file serving for embedded SPA (web_ui.py)
+    - Route table (_ROUTES dict) maps paths to handler methods
+    - v1 API routes delegated to freq/api/ domain modules
+
+Design decisions:
+    - stdlib http.server, not Flask. Zero dependencies is sacred.
+    - Background probes, not on-demand. Dashboard loads instantly.
+    - SSE, not WebSocket. Simpler, no upgrade handshake, works through proxies.
+    - Auth via session cookies + RBAC. Setup wizard creates first admin.
 """
 import concurrent.futures
 import datetime
