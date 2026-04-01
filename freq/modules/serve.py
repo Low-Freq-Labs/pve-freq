@@ -1700,10 +1700,27 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/setup/reset": "_serve_setup_reset",
     }
 
+    # v1 API routes from freq/api/ domain modules (built once, cached)
+    _V1_ROUTES = None
+
+    @classmethod
+    def _load_v1_routes(cls):
+        """Load domain API routes from freq/api/ modules (once at first request)."""
+        if cls._V1_ROUTES is None:
+            try:
+                from freq.api import build_routes
+                cls._V1_ROUTES = build_routes()
+            except Exception:
+                cls._V1_ROUTES = {}
+
     def _dispatch(self):
         """Route request to handler method by path."""
         path = self.path.split("?")[0]
+        # Check legacy routes first, then v1 domain routes
         method_name = self._ROUTES.get(path)
+        if not method_name:
+            self._load_v1_routes()
+            method_name = self._V1_ROUTES.get(path)
         if method_name:
             try:
                 getattr(self, method_name)()
