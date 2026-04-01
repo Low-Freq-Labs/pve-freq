@@ -126,8 +126,8 @@ def _run_command(cfg, pack, cmd_name: str, args_override: dict = None):
 
     print()
 
-    # Build args
-    argv = [cmd_name]
+    # Build args — cmd_name may contain spaces for domain dispatch (e.g. "fleet status")
+    argv = cmd_name.split()
     if args_override:
         for k, v in args_override.items():
             if v is True:
@@ -183,7 +183,8 @@ def _run_with_target(cfg, pack, cmd_name: str, prompt: str = "Target:"):
     from freq.cli import _build_parser
 
     print()
-    argv = [cmd_name, target]
+    # cmd_name may contain spaces for domain dispatch (e.g. "fleet info")
+    argv = cmd_name.split() + [target]
     parser = _build_parser()
     try:
         args = parser.parse_args(argv)
@@ -221,14 +222,14 @@ def _menu_quick_actions(cfg, pack):
         if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
-            _run_command(cfg, pack, "dashboard")
+            _run_command(cfg, pack, "fleet dashboard")
         elif ch == "2":
-            _run_command(cfg, pack, "health")
+            _run_command(cfg, pack, "fleet health")
         elif ch == "3":
-            _run_command(cfg, pack, "list")
+            _run_command(cfg, pack, "vm list")
         elif ch == "4":
             print()
-            _run_with_target(cfg, pack, "docker", "Host (Enter=auto):")
+            _run_with_target(cfg, pack, "fleet docker", "Host (Enter=auto):")
         elif ch == "5":
             print()
             target = _input("Target (host/group/all):")
@@ -236,19 +237,19 @@ def _menu_quick_actions(cfg, pack):
                 cmd = _input("Command:")
                 if cmd:
                     from freq.cli import _build_parser
-                    argv = ["exec", target] + shlex.split(cmd)
+                    argv = ["fleet", "exec", target] + shlex.split(cmd)
                     parser = _build_parser()
                     args = parser.parse_args(argv)
                     if hasattr(args, "func"):
                         args.func(cfg, pack, args)
         elif ch == "6":
             print()
-            _run_with_target(cfg, pack, "info", "Host:")
+            _run_with_target(cfg, pack, "fleet info", "Host:")
         elif ch == "7":
             print()
-            _run_with_target(cfg, pack, "diagnose", "Host:")
+            _run_with_target(cfg, pack, "fleet diagnose", "Host:")
         elif ch == "8":
-            _run_command(cfg, pack, "audit")
+            _run_command(cfg, pack, "secure audit")
         else:
             continue
         _pause()
@@ -293,67 +294,67 @@ def _menu_vm_lifecycle(cfg, pack):
         if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
-            _run_command(cfg, pack, "create")
+            _run_command(cfg, pack, "vm create")
         elif ch == "2":
             print()
-            _run_with_target(cfg, pack, "clone", "Source VMID:")
+            _run_with_target(cfg, pack, "vm clone", "Source VMID:")
         elif ch == "3":
             print()
-            _run_with_target(cfg, pack, "resize", "VMID:")
+            _run_with_target(cfg, pack, "vm resize", "VMID:")
         elif ch == "4":
-            _run_command(cfg, pack, "list")
+            _run_command(cfg, pack, "vm list")
         elif ch == "5":
             print()
-            _run_with_target(cfg, pack, "vmconfig", "VMID:")
+            _run_with_target(cfg, pack, "vm config", "VMID:")
         elif ch == "6":
             print()
-            _run_with_target(cfg, pack, "snapshot", "VMID:")
+            _run_with_target(cfg, pack, "vm snapshot", "VMID:")
         elif ch == "7":
             print()
-            _run_with_target(cfg, pack, "migrate", "VMID:")
+            _run_with_target(cfg, pack, "vm migrate", "VMID:")
         elif ch == "8":
             print()
-            _run_with_target(cfg, pack, "destroy", "VMID:")
+            _run_with_target(cfg, pack, "vm destroy", "VMID:")
         elif ch == "f":
-            _run_command(cfg, pack, "plan")
+            _run_command(cfg, pack, "state plan")
         elif ch == "a":
-            _run_command(cfg, pack, "apply")
+            _run_command(cfg, pack, "state apply")
         elif ch == "t":
             print()
-            _run_with_target(cfg, pack, "template", "VMID:")
+            _run_with_target(cfg, pack, "vm template", "VMID:")
         elif ch == "r":
             print()
-            _run_with_target(cfg, pack, "rename", "VMID:")
+            _run_with_target(cfg, pack, "vm rename", "VMID:")
         elif ch == "d":
             print()
-            _run_with_target(cfg, pack, "add-disk", "VMID:")
+            _run_with_target(cfg, pack, "vm disk", "VMID:")
         elif ch == "g":
             print()
-            _run_with_target(cfg, pack, "tag", "VMID:")
+            _run_with_target(cfg, pack, "vm tag", "VMID:")
         elif ch == "p":
-            _run_command(cfg, pack, "pool")
+            _run_command(cfg, pack, "vm pool")
         elif ch == "w":
             print()
             action = _input("Action (start/stop/reboot/shutdown/status):")
             if action:
                 vmid = _input("VMID:")
                 if vmid:
-                    _run_argv(cfg, pack, ["power", action, vmid])
+                    _run_argv(cfg, pack, ["vm", "power", action, vmid])
         elif ch == "s":
             print()
             vmid = _input("VMID:")
             if vmid:
-                _run_argv(cfg, pack, ["snapshot", "list", vmid])
+                _run_argv(cfg, pack, ["vm", "snapshot", "list", vmid])
         elif ch == "x":
             print()
             vmid = _input("VMID:")
             if vmid:
                 name = _input("Snapshot name:")
                 if name:
-                    _run_argv(cfg, pack, ["snapshot", "delete", vmid, "--name", name])
+                    _run_argv(cfg, pack, ["vm", "snapshot", "delete", vmid, "--name", name])
         elif ch == "o":
             print()
-            _run_with_target(cfg, pack, "rollback", "VMID:")
+            _run_with_target(cfg, pack, "vm rollback", "VMID:")
         elif ch == "n":
             _menu_nic(cfg, pack)
             continue
@@ -386,7 +387,7 @@ def _menu_nic(cfg, pack):
                 if ip:
                     gw = _input("Gateway (optional):")
                     vlan = _input("VLAN (optional):")
-                    argv = ["nic", "add", vmid, "--ip", ip]
+                    argv = ["vm", "nic", "add", vmid, "--ip", ip]
                     if gw:
                         argv += ["--gw", gw]
                     if vlan:
@@ -396,7 +397,7 @@ def _menu_nic(cfg, pack):
             print()
             vmid = _input("VMID:")
             if vmid:
-                _run_argv(cfg, pack, ["nic", "clear", vmid])
+                _run_argv(cfg, pack, ["vm", "nic", "clear", vmid])
         elif ch == "3":
             print()
             vmid = _input("VMID:")
@@ -404,7 +405,7 @@ def _menu_nic(cfg, pack):
                 ip = _input("New IP address:")
                 if ip:
                     gw = _input("Gateway (optional):")
-                    argv = ["nic", "change-ip", vmid, "--ip", ip]
+                    argv = ["vm", "nic", "change-ip", vmid, "--ip", ip]
                     if gw:
                         argv += ["--gw", gw]
                     _run_argv(cfg, pack, argv)
@@ -414,12 +415,12 @@ def _menu_nic(cfg, pack):
             if vmid:
                 newid = _input("New VMID:")
                 if newid:
-                    _run_argv(cfg, pack, ["nic", "change-id", vmid, "--new-id", newid])
+                    _run_argv(cfg, pack, ["vm", "nic", "change-id", vmid, "--new-id", newid])
         elif ch == "5":
             print()
             ip = _input("IP to check:")
             if ip:
-                _run_argv(cfg, pack, ["nic", "check-ip", "--ip", ip])
+                _run_argv(cfg, pack, ["vm", "nic", "check-ip", "--ip", ip])
         else:
             continue
         _pause()
@@ -447,32 +448,32 @@ def _menu_fleet_info(cfg, pack):
         if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
-            _run_command(cfg, pack, "dashboard")
+            _run_command(cfg, pack, "fleet dashboard")
         elif ch == "2":
-            _run_command(cfg, pack, "status")
+            _run_command(cfg, pack, "fleet status")
         elif ch == "3":
             print()
-            _run_with_target(cfg, pack, "info", "Host:")
+            _run_with_target(cfg, pack, "fleet info", "Host:")
         elif ch == "4":
             print()
-            _run_with_target(cfg, pack, "diagnose", "Host:")
+            _run_with_target(cfg, pack, "fleet diagnose", "Host:")
         elif ch == "5":
             print()
-            _run_with_target(cfg, pack, "docker", "Host (Enter=auto):")
+            _run_with_target(cfg, pack, "fleet docker", "Host (Enter=auto):")
         elif ch == "6":
             print()
-            _run_with_target(cfg, pack, "log", "Host:")
+            _run_with_target(cfg, pack, "fleet log", "Host:")
         elif ch == "7":
-            _run_command(cfg, pack, "keys")
+            _run_command(cfg, pack, "host keys")
         elif ch == "8":
             print()
-            _run_with_target(cfg, pack, "detail", "Host:")
+            _run_with_target(cfg, pack, "fleet detail", "Host:")
         elif ch == "9":
             print()
-            _run_with_target(cfg, pack, "ssh", "Host:")
+            _run_with_target(cfg, pack, "fleet ssh", "Host:")
         elif ch == "t":
             print()
-            _run_with_target(cfg, pack, "test-connection", "Host:")
+            _run_with_target(cfg, pack, "fleet test", "Host:")
         else:
             continue
         _pause()
@@ -495,15 +496,15 @@ def _menu_host_setup(cfg, pack):
         if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
-            _run_command(cfg, pack, "discover")
+            _run_command(cfg, pack, "host discover")
         elif ch == "2":
-            _run_command(cfg, pack, "bootstrap")
+            _run_command(cfg, pack, "host bootstrap")
         elif ch == "3":
-            _run_command(cfg, pack, "onboard")
+            _run_command(cfg, pack, "host onboard")
         elif ch == "4":
-            _run_command(cfg, pack, "hosts")
+            _run_command(cfg, pack, "host list")
         elif ch == "5":
-            _run_command(cfg, pack, "groups")
+            _run_command(cfg, pack, "host groups")
         else:
             continue
         _pause()
@@ -528,24 +529,24 @@ def _menu_user_mgmt(cfg, pack):
         if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
-            _run_command(cfg, pack, "users")
+            _run_command(cfg, pack, "user list")
         elif ch == "2":
             print()
-            _run_with_target(cfg, pack, "new-user", "Username:")
+            _run_with_target(cfg, pack, "user create", "Username:")
         elif ch == "3":
             print()
-            _run_with_target(cfg, pack, "passwd", "Username:")
+            _run_with_target(cfg, pack, "user passwd", "Username:")
         elif ch == "4":
-            _run_command(cfg, pack, "roles")
+            _run_command(cfg, pack, "user roles")
         elif ch == "5":
             print()
-            _run_with_target(cfg, pack, "promote", "Username:")
+            _run_with_target(cfg, pack, "user promote", "Username:")
         elif ch == "6":
             print()
-            _run_with_target(cfg, pack, "demote", "Username:")
+            _run_with_target(cfg, pack, "user demote", "Username:")
         elif ch == "7":
             print()
-            _run_with_target(cfg, pack, "install-user", "Username:")
+            _run_with_target(cfg, pack, "user install", "Username:")
         else:
             continue
         _pause()
@@ -571,7 +572,7 @@ def _menu_run_commands(cfg, pack):
             cmd = _input("Command:")
             if cmd:
                 from freq.cli import _build_parser
-                argv = ["exec", "all"] + shlex.split(cmd)
+                argv = ["fleet", "exec", "all"] + shlex.split(cmd)
                 parser = _build_parser()
                 args = parser.parse_args(argv)
                 if hasattr(args, "func"):
@@ -583,15 +584,15 @@ def _menu_run_commands(cfg, pack):
                 cmd = _input("Command:")
                 if cmd:
                     from freq.cli import _build_parser
-                    argv = ["exec", host] + shlex.split(cmd)
+                    argv = ["fleet", "exec", host] + shlex.split(cmd)
                     parser = _build_parser()
                     args = parser.parse_args(argv)
                     if hasattr(args, "func"):
                         args.func(cfg, pack, args)
         elif ch == "3":
-            _run_command(cfg, pack, "keys")
+            _run_command(cfg, pack, "host keys")
         elif ch == "4":
-            _run_command(cfg, pack, "keys")
+            _run_command(cfg, pack, "host keys")
         else:
             continue
         _pause()
@@ -614,15 +615,15 @@ def _menu_proxmox(cfg, pack):
         if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
-            _run_command(cfg, pack, "list")
+            _run_command(cfg, pack, "vm list")
         elif ch == "2":
             print()
-            _run_with_target(cfg, pack, "vmconfig", "VMID:")
+            _run_with_target(cfg, pack, "vm config", "VMID:")
         elif ch == "3":
             print()
-            _run_with_target(cfg, pack, "migrate", "VMID:")
+            _run_with_target(cfg, pack, "vm migrate", "VMID:")
         elif ch == "4":
-            _run_command(cfg, pack, "rescue")
+            _run_command(cfg, pack, "vm rescue")
         elif ch == "5":
             _run_command(cfg, pack, "distros")
         else:
@@ -655,13 +656,13 @@ def _menu_security(cfg, pack):
         if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
-            _run_command(cfg, pack, "audit")
+            _run_command(cfg, pack, "secure audit")
         elif ch == "2":
-            _run_command(cfg, pack, "harden")
+            _run_command(cfg, pack, "secure harden")
         elif ch == "3":
             from freq.cli import _build_parser
             parser = _build_parser()
-            args = parser.parse_args(["vault", "list"])
+            args = parser.parse_args(["secure", "vault", "list"])
             args.func(cfg, pack, args)
         elif ch == "4":
             from freq.cli import _build_parser
@@ -669,7 +670,7 @@ def _menu_security(cfg, pack):
             key = _input("Key name:")
             if key:
                 parser = _build_parser()
-                args = parser.parse_args(["vault", "set", key])
+                args = parser.parse_args(["secure", "vault", "set", key])
                 args.func(cfg, pack, args)
         elif ch == "5":
             from freq.cli import _build_parser
@@ -677,21 +678,21 @@ def _menu_security(cfg, pack):
             key = _input("Key name:")
             if key:
                 parser = _build_parser()
-                args = parser.parse_args(["vault", "get", key])
+                args = parser.parse_args(["secure", "vault", "get", key])
                 args.func(cfg, pack, args)
         elif ch == "6":
             from freq.cli import _build_parser
             parser = _build_parser()
-            args = parser.parse_args(["vault", "init"])
+            args = parser.parse_args(["secure", "vault", "init"])
             args.func(cfg, pack, args)
         elif ch == "7":
-            _run_command(cfg, pack, "check")
+            _run_command(cfg, pack, "state check")
         elif ch == "8":
-            _run_command(cfg, pack, "fix")
+            _run_command(cfg, pack, "state fix")
         elif ch == "9":
-            _run_command(cfg, pack, "diff")
+            _run_command(cfg, pack, "state diff")
         elif ch == "c":
-            _run_command(cfg, pack, "policies")
+            _run_command(cfg, pack, "state policies")
         else:
             continue
         _pause()
@@ -871,11 +872,11 @@ def _menu_lab(cfg, pack):
             if tmpl:
                 from freq.cli import _build_parser
                 parser = _build_parser()
-                args = parser.parse_args(["sandbox", tmpl])
+                args = parser.parse_args(["vm", "sandbox", tmpl])
                 args.func(cfg, pack, args)
         elif ch == "3":
             print()
-            _run_with_target(cfg, pack, "template", "VMID:")
+            _run_with_target(cfg, pack, "vm template", "VMID:")
         elif ch == "4":
             from freq.cli import _build_parser
             parser = _build_parser()
@@ -908,9 +909,9 @@ def _menu_lab(cfg, pack):
             args = parser.parse_args(["specialist", "roles"])
             args.func(cfg, pack, args)
         elif ch == "9":
-            _run_command(cfg, pack, "ntp")
+            _run_command(cfg, pack, "fleet ntp")
         elif ch == "a":
-            _run_command(cfg, pack, "fleet-update")
+            _run_command(cfg, pack, "fleet update")
         else:
             continue
         _pause()
@@ -937,30 +938,30 @@ def _menu_jarvis(cfg, pack):
         if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
-            _run_command(cfg, pack, "playbook")
+            _run_command(cfg, pack, "auto playbook")
         elif ch == "2":
             print()
             name = _input("Playbook name/filename:")
             if name:
-                _run_argv(cfg, pack, ["playbook", "run", name])
+                _run_argv(cfg, pack, ["auto", "playbook", "run", name])
         elif ch == "3":
-            _run_command(cfg, pack, "federation")
+            _run_command(cfg, pack, "fleet federation")
         elif ch == "4":
-            _run_argv(cfg, pack, ["federation", "poll"])
+            _run_argv(cfg, pack, ["fleet", "federation", "poll"])
         elif ch == "5":
-            _run_command(cfg, pack, "gitops")
+            _run_command(cfg, pack, "state gitops")
         elif ch == "6":
-            _run_argv(cfg, pack, ["gitops", "sync"])
+            _run_argv(cfg, pack, ["state", "gitops", "sync"])
         elif ch == "7":
-            _run_argv(cfg, pack, ["gitops", "diff"])
+            _run_argv(cfg, pack, ["state", "gitops", "diff"])
         elif ch == "8":
-            _run_command(cfg, pack, "chaos")
+            _run_command(cfg, pack, "auto chaos")
         elif ch == "9":
             print()
             etype = _input("Experiment type (service_kill/service_restart/cpu_stress/disk_fill/network_delay):")
             host = _input("Target host:")
             if etype and host:
-                _run_argv(cfg, pack, ["chaos", "run", "--type", etype, "--host", host])
+                _run_argv(cfg, pack, ["auto", "chaos", "run", "--type", etype, "--host", host])
         else:
             continue
         _pause()
@@ -1005,14 +1006,14 @@ def _menu_monitoring(cfg, pack):
         if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
-            _run_command(cfg, pack, "health")
+            _run_command(cfg, pack, "fleet health")
         elif ch == "2":
             from freq.cli import _build_parser
             parser = _build_parser()
             args = parser.parse_args(["media", "dashboard"])
             args.func(cfg, pack, args)
         elif ch == "3":
-            _run_command(cfg, pack, "watch")
+            _run_command(cfg, pack, "observe watch")
         elif ch == "4":
             _run_command(cfg, pack, "doctor")
         elif ch == "5":
@@ -1021,51 +1022,51 @@ def _menu_monitoring(cfg, pack):
             args = parser.parse_args(["media", "compose", "audit"])
             args.func(cfg, pack, args)
         elif ch == "6":
-            _run_command(cfg, pack, "ntp")
+            _run_command(cfg, pack, "fleet ntp")
         elif ch == "7":
-            _run_command(cfg, pack, "capacity")
+            _run_command(cfg, pack, "observe capacity")
         elif ch == "8":
-            _run_command(cfg, pack, "cost")
+            _run_command(cfg, pack, "hw cost")
         elif ch == "9":
-            _run_command(cfg, pack, "rules")
+            _run_command(cfg, pack, "auto rules")
         elif ch == "a":
-            _run_command(cfg, pack, "alert")
+            _run_command(cfg, pack, "observe alert")
         elif ch == "c":
-            _run_argv(cfg, pack, ["alert", "check"])
+            _run_argv(cfg, pack, ["observe", "alert", "check"])
         elif ch == "t":
-            _run_argv(cfg, pack, ["alert", "test"])
+            _run_argv(cfg, pack, ["observe", "alert", "test"])
         elif ch == "h":
-            _run_argv(cfg, pack, ["alert", "history"])
+            _run_argv(cfg, pack, ["observe", "alert", "history"])
         elif ch == "i":
-            _run_command(cfg, pack, "inventory")
+            _run_command(cfg, pack, "fleet inventory")
         elif ch == "d":
             print()
             host_a = _input("Host A:")
             host_b = _input("Host B:")
             if host_a and host_b:
-                _run_argv(cfg, pack, ["compare", host_a, host_b])
+                _run_argv(cfg, pack, ["fleet", "compare", host_a, host_b])
         elif ch == "e":
-            _run_command(cfg, pack, "baseline")
+            _run_command(cfg, pack, "state baseline")
         elif ch == "f":
             print()
             name = _input("Baseline name (Enter=auto):")
             if name:
-                _run_argv(cfg, pack, ["baseline", "capture", name])
+                _run_argv(cfg, pack, ["state", "baseline", "capture", name])
             else:
-                _run_argv(cfg, pack, ["baseline", "capture"])
+                _run_argv(cfg, pack, ["state", "baseline", "capture"])
         elif ch == "g":
             print()
             name = _input("Baseline to compare (Enter=latest):")
             if name:
-                _run_argv(cfg, pack, ["baseline", "compare", name])
+                _run_argv(cfg, pack, ["state", "baseline", "compare", name])
             else:
-                _run_argv(cfg, pack, ["baseline", "compare"])
+                _run_argv(cfg, pack, ["state", "baseline", "compare"])
         elif ch == "r":
-            _run_command(cfg, pack, "report")
+            _run_command(cfg, pack, "fleet report")
         elif ch == "v":
-            _run_command(cfg, pack, "trend")
+            _run_command(cfg, pack, "observe trend")
         elif ch == "u":
-            _run_command(cfg, pack, "sla")
+            _run_command(cfg, pack, "observe sla")
         elif ch == "k":
             _run_argv(cfg, pack, ["cert", "scan"])
         elif ch == "n":
@@ -1120,57 +1121,57 @@ def _menu_infrastructure(cfg, pack):
         if ch in ("0", "b", "q", "\x1b"):
             return
         elif ch == "1":
-            _run_command(cfg, pack, "pfsense")
+            _run_command(cfg, pack, "fw")
         elif ch == "2":
-            _run_command(cfg, pack, "truenas")
+            _run_command(cfg, pack, "store nas")
         elif ch == "3":
-            _run_command(cfg, pack, "switch")
+            _run_command(cfg, pack, "net switch")
         elif ch == "4":
-            _run_command(cfg, pack, "idrac")
+            _run_command(cfg, pack, "hw idrac")
         elif ch == "5":
-            _run_command(cfg, pack, "vpn")
+            fmt.info("VPN management coming soon")
         elif ch == "p":
             vlan = _input("VLAN name:")
             if vlan:
-                _run_argv(cfg, pack, ["ip", "next", "--vlan", vlan])
+                _run_argv(cfg, pack, ["net", "ip", "next", "--vlan", vlan])
         elif ch == "l":
-            _run_argv(cfg, pack, ["ip", "list"])
+            _run_argv(cfg, pack, ["net", "ip", "list"])
         elif ch == "c":
             ip_addr = _input("IP address:")
             if ip_addr:
-                _run_argv(cfg, pack, ["ip", "check", ip_addr])
+                _run_argv(cfg, pack, ["net", "ip", "check", ip_addr])
         elif ch == "6":
-            _run_command(cfg, pack, "ntp")
+            _run_command(cfg, pack, "fleet ntp")
         elif ch == "7":
-            _run_command(cfg, pack, "fleet-update")
+            _run_command(cfg, pack, "fleet update")
         elif ch == "8":
-            _run_command(cfg, pack, "comms")
+            _run_command(cfg, pack, "fleet comms")
         elif ch == "9":
-            _run_command(cfg, pack, "zfs")
+            _run_command(cfg, pack, "store zfs")
         elif ch == "a":
-            _run_command(cfg, pack, "backup")
+            _run_command(cfg, pack, "dr backup")
         elif ch == "j":
-            _run_command(cfg, pack, "journal")
+            _run_command(cfg, pack, "dr journal")
         elif ch == "n":
             _run_command(cfg, pack, "notify")
         elif ch == "b":
-            _run_command(cfg, pack, "boundaries")
+            _run_command(cfg, pack, "fleet boundaries")
         elif ch == "s":
-            _run_command(cfg, pack, "schedule")
+            _run_command(cfg, pack, "auto schedule")
         elif ch == "w":
-            _run_command(cfg, pack, "webhook")
+            _run_command(cfg, pack, "auto webhook")
         elif ch == "d":
-            _run_command(cfg, pack, "backup-policy")
+            _run_command(cfg, pack, "dr policy")
         elif ch == "m":
-            _run_command(cfg, pack, "migrate-plan")
+            _run_command(cfg, pack, "dr migrate-plan")
         elif ch == "v":
-            _run_command(cfg, pack, "migrate-vmware")
+            _run_command(cfg, pack, "dr migrate-vmware")
         elif ch == "p":
-            _run_command(cfg, pack, "patch")
+            _run_command(cfg, pack, "secure patch")
         elif ch == "t":
-            _run_command(cfg, pack, "stack")
+            _run_command(cfg, pack, "docker stack")
         elif ch == "k":
-            _run_argv(cfg, pack, ["stack", "health"])
+            _run_argv(cfg, pack, ["docker", "stack", "health"])
         elif ch == "o":
             _run_argv(cfg, pack, ["docs", "generate"])
         else:
@@ -1254,7 +1255,7 @@ def _gwipe_cmd(cfg, pack, *argv):
     print()
     try:
         parser = _build_parser()
-        args = parser.parse_args(["gwipe"] + list(argv))
+        args = parser.parse_args(["hw", "gwipe"] + list(argv))
         if hasattr(args, "func"):
             args.func(cfg, pack, args)
     except Exception as e:
@@ -1453,7 +1454,7 @@ def run(cfg, pack) -> int:
         elif ch_lower == "p":
             _menu_proxmox(cfg, pack)
         elif ch_lower == "n":
-            _run_command(cfg, pack, "hosts")
+            _run_command(cfg, pack, "host list")
             _pause()
         elif ch_lower == "i":
             _menu_infrastructure(cfg, pack)

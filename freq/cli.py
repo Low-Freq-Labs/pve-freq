@@ -1,7 +1,7 @@
-"""FREQ CLI dispatcher.
+"""FREQ CLI dispatcher — v3.0.0 Domain Architecture.
 
-Routes all 55+ commands through argparse. This is the entry point.
-Every command that FREQ supports is registered here.
+Routes commands through `freq <domain> <action>` two-level dispatch.
+25 domains, ~88 existing actions, room for 810+.
 
 Architecture: Python is primary. Modules are imported on demand.
 If a module is missing, the command reports the error and FREQ keeps running.
@@ -16,6 +16,27 @@ from freq.core import fmt
 from freq.core import log as logger
 from freq.core.personality import load_pack, show_vibe, splash
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _set_action(handler, action_value):
+    """Wrap a handler to inject args.action before calling."""
+    def wrapper(cfg, pack, args):
+        args.action = action_value
+        return handler(cfg, pack, args)
+    return wrapper
+
+
+def _domain_help(parser):
+    """Set default func to print help when domain is invoked without action."""
+    parser.set_defaults(func=lambda cfg, pack, args: parser.print_help() or 0)
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
 
 def main(argv: list = None) -> int:
     """Main entry point for FREQ CLI."""
@@ -70,7 +91,9 @@ def main(argv: list = None) -> int:
         return cmd_menu(cfg, pack, args)
 
     # Dispatch to command handler
-    logger.info(f"command: {args.command}", user=os.environ.get("USER", "unknown"))
+    domain = getattr(args, "domain", "?")
+    subcmd = getattr(args, "subcmd", "")
+    logger.info(f"command: {domain} {subcmd}".strip(), user=os.environ.get("USER", "unknown"))
 
     try:
         result = args.func(cfg, pack, args)
@@ -80,7 +103,7 @@ def main(argv: list = None) -> int:
         return 130
     except Exception as e:
         fmt.error(f"Command failed: {e}")
-        logger.error(f"command failed: {e}", command=getattr(args, "command", "unknown"))
+        logger.error(f"command failed: {e}", command=f"{domain} {subcmd}".strip())
         if cfg.debug:
             import traceback
             traceback.print_exc()
@@ -93,8 +116,12 @@ def main(argv: list = None) -> int:
     return result or 0
 
 
+# ---------------------------------------------------------------------------
+# Parser builder
+# ---------------------------------------------------------------------------
+
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser with all commands."""
+    """Build the argument parser with domain-based command dispatch."""
     parser = argparse.ArgumentParser(
         prog="freq",
         description="PVE FREQ — Datacenter management CLI for homelabbers",
@@ -106,9 +133,41 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true", help="JSON output mode")
     parser.add_argument("--dry-run", action="store_true", help="Preview without changes")
 
-    sub = parser.add_subparsers(dest="command")
+    sub = parser.add_subparsers(dest="domain")
 
-    # --- Utilities ---
+    # Top-level utilities (not under a domain)
+    _register_utilities(sub)
+
+    # Domains
+    _register_vm(sub)
+    _register_fleet(sub)
+    _register_host(sub)
+    _register_docker(sub)
+    _register_secure(sub)
+    _register_observe(sub)
+    _register_state(sub)
+    _register_auto(sub)
+    _register_ops(sub)
+    _register_hw(sub)
+    _register_store(sub)
+    _register_dr(sub)
+    _register_net(sub)
+    _register_fw(sub)
+    _register_cert(sub)
+    _register_dns(sub)
+    _register_proxy(sub)
+    _register_media(sub)
+    _register_user(sub)
+
+    return parser
+
+
+# ---------------------------------------------------------------------------
+# Top-level utilities (no domain prefix)
+# ---------------------------------------------------------------------------
+
+def _register_utilities(sub):
+    """Register commands that stay top-level: freq <cmd>."""
     p = sub.add_parser("version", help="Show version and branding")
     p.set_defaults(func=cmd_version)
 
@@ -118,364 +177,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("doctor", help="Self-diagnostic")
     p.set_defaults(func=cmd_doctor)
 
-    p = sub.add_parser("why", help="Explain VM permissions and protections")
-    p.add_argument("target", nargs="?", help="VMID to explain")
-    p.set_defaults(func=_cmd_why)
-
-    p = sub.add_parser("test-connection", help="Test host connectivity (TCP + SSH + sudo)")
-    p.add_argument("target", nargs="?", help="Host IP or label")
-    p.set_defaults(func=_cmd_test_connection)
-
     p = sub.add_parser("menu", help="Interactive TUI menu")
     p.set_defaults(func=cmd_menu)
 
     p = sub.add_parser("demo", help="Interactive demo — no fleet required")
     p.set_defaults(func=_cmd_demo)
 
-    # --- Fleet Operations ---
-    p = sub.add_parser("status", help="Fleet health summary")
-    p.set_defaults(func=_cmd_status)
-
-    p = sub.add_parser("dashboard", help="Fleet dashboard overview")
-    p.set_defaults(func=_cmd_dashboard)
-
-    p = sub.add_parser("exec", help="Run command across fleet")
-    p.add_argument("target", nargs="?", help="Host label, group, or 'all'")
-    p.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
-    p.set_defaults(func=_cmd_exec)
-
-    p = sub.add_parser("info", help="System info for a host")
-    p.add_argument("target", nargs="?", help="Host label or IP")
-    p.set_defaults(func=_cmd_info)
-
-    p = sub.add_parser("detail", help="Deep host inventory (full system detail)")
-    p.add_argument("target", nargs="?", help="Host label or IP")
-    p.set_defaults(func=_cmd_detail)
-
-    p = sub.add_parser("boundaries", help="Fleet boundary tiers and VM categories")
-    p.add_argument("action", nargs="?", default="show", choices=["show", "lookup"],
-                   help="Action (default: show)")
-    p.add_argument("target", nargs="?", help="VMID (for lookup)")
-    p.set_defaults(func=_cmd_boundaries)
-
-    p = sub.add_parser("diagnose", help="Deep diagnostic for a host")
-    p.add_argument("target", nargs="?", help="Host label or IP")
-    p.set_defaults(func=_cmd_diagnose)
-
-    p = sub.add_parser("ssh", help="SSH to a fleet host")
-    p.add_argument("target", nargs="?", help="Host label or IP")
-    p.set_defaults(func=_cmd_ssh)
-
-    p = sub.add_parser("docker", help="Container discovery and management")
-    p.add_argument("target", nargs="?", help="Host label or IP")
-    p.set_defaults(func=_cmd_docker)
-
-    p = sub.add_parser("log", help="View logs for a host")
-    p.add_argument("target", nargs="?", help="Host label or IP")
-    p.add_argument("--lines", "-n", type=int, default=30, help="Number of log lines")
-    p.add_argument("--unit", "-u", help="Systemd unit to filter")
-    p.set_defaults(func=_cmd_log)
-
-    p = sub.add_parser("keys", help="SSH key management")
-    p.add_argument("action", nargs="?", choices=["deploy", "list", "rotate"], help="Key action")
-    p.add_argument("--target", help="Host label for deploy")
-    p.set_defaults(func=_cmd_keys)
-
-    # --- Host Management ---
-    p = sub.add_parser("hosts", help="List and manage hosts")
-    p.add_argument("action", nargs="?", choices=["list", "add", "remove", "edit", "sync"], default="list")
-    p.add_argument("--dry-run", action="store_true", help="Show what sync would change without writing")
-    p.set_defaults(func=_cmd_hosts)
-
-    p = sub.add_parser("discover", help="Discover hosts on the network")
-    p.add_argument("subnet", nargs="?", help="Subnet to scan (e.g. 192.168.1 or 192.168.1.0/24)")
-    p.set_defaults(func=_cmd_discover)
-
-    p = sub.add_parser("groups", help="Manage host groups")
-    p.add_argument("action", nargs="?", choices=["list", "add", "remove"], default="list")
-    p.set_defaults(func=_cmd_groups)
-
-    p = sub.add_parser("bootstrap", help="Bootstrap a new host")
-    p.add_argument("target", nargs="?", help="Host label or IP")
-    p.set_defaults(func=_cmd_bootstrap)
-
-    p = sub.add_parser("onboard", help="Onboard a host to the fleet")
-    p.add_argument("target", nargs="?", help="Host label or IP")
-    p.set_defaults(func=_cmd_onboard)
-
-    # --- VM Management ---
-    p = sub.add_parser("list", help="List VMs across PVE cluster")
-    p.add_argument("--node", help="Filter by PVE node")
-    p.add_argument("--status", help="Filter by status (running/stopped)")
-    p.set_defaults(func=_cmd_list)
-
-    p = sub.add_parser("create", help="Create a new VM")
-    p.add_argument("--name", help="VM hostname")
-    p.add_argument("--image", help="Cloud image (e.g., debian-13, ubuntu-2404)")
-    p.add_argument("--node", help="PVE node to create on")
-    p.add_argument("--cores", type=int, help="CPU cores")
-    p.add_argument("--ram", type=int, help="RAM in MB")
-    p.add_argument("--disk", type=int, help="Disk in GB")
-    p.add_argument("--vmid", type=int, help="Specific VMID")
-    p.add_argument("--nic", action="append", help="NIC profile or VLAN (repeatable)")
-    p.add_argument("--ip", action="append", help="Static IP per NIC (repeatable)")
-    p.set_defaults(func=_cmd_create)
-
-    p = sub.add_parser("clone", help="Clone a VM with optional network config")
-    p.add_argument("source", nargs="?", help="Source VMID or name")
-    p.add_argument("--name", help="New VM hostname")
-    p.add_argument("--vmid", type=int, help="New VMID")
-    p.add_argument("--node", help="Target PVE node")
-    p.add_argument("--ip", help="Static IP (triggers disk mount network config)")
-    p.add_argument("--vlan", help="VLAN name (dirty/clean/dev/mgmt)")
-    p.add_argument("--start", action="store_true", help="Start VM after clone")
-    p.set_defaults(func=_cmd_clone)
-
-    p = sub.add_parser("destroy", help="Destroy a VM")
-    p.add_argument("target", nargs="?", help="VMID or name")
-    p.add_argument("--dry-run", action="store_true", help="Show what would be destroyed without executing")
-    p.set_defaults(func=_cmd_destroy)
-
-    p = sub.add_parser("resize", help="Resize a VM")
-    p.add_argument("target", nargs="?", help="VMID or name")
-    p.add_argument("--cores", type=int, help="New CPU cores")
-    p.add_argument("--ram", type=int, help="New RAM in MB")
-    p.add_argument("--disk", type=int, help="Add disk in GB")
-    p.set_defaults(func=_cmd_resize)
-
-    p = sub.add_parser("snapshot", help="Snapshot management (create/list/delete)")
-    p.add_argument("snap_action", nargs="?", choices=["create", "list", "delete"], default="create",
-                   help="Action: create (default), list, delete")
-    p.add_argument("target", nargs="?", help="VMID or name")
-    p.add_argument("--name", help="Snapshot name (for create/delete)")
-    p.set_defaults(func=_cmd_snapshot)
-
-    p = sub.add_parser("power", help="VM power control (start/stop/reboot/shutdown/status)")
-    p.add_argument("action", choices=["start", "stop", "reboot", "shutdown", "status"],
-                   help="Power action")
-    p.add_argument("target", help="VMID")
-    p.set_defaults(func=_cmd_power)
-
-    p = sub.add_parser("nic", help="VM NIC management (add/clear/change-ip/change-id/check-ip)")
-    p.add_argument("action", choices=["add", "clear", "change-ip", "change-id", "check-ip"],
-                   help="NIC action")
-    p.add_argument("target", nargs="?", help="VMID")
-    p.add_argument("--ip", help="IP address (CIDR or bare)")
-    p.add_argument("--gw", help="Gateway IP")
-    p.add_argument("--vlan", help="VLAN ID")
-    p.add_argument("--nic-index", type=int, default=0, help="NIC index (default: 0)")
-    p.add_argument("--new-id", help="New VMID (for change-id)")
-    p.set_defaults(func=_cmd_nic)
-
-    p = sub.add_parser("import", help="Import a cloud image as a VM")
-    p.add_argument("--image", help="Cloud image (debian-13, ubuntu-2404, etc.)")
-    p.add_argument("--name", help="VM hostname")
-    p.add_argument("--vmid", type=int, help="Specific VMID")
-    p.set_defaults(func=_cmd_import)
-
-    p = sub.add_parser("migrate", help="Migrate a VM between nodes")
-    p.add_argument("target", nargs="?", help="VMID or name")
-    p.add_argument("--node", help="Target PVE node")
-    p.add_argument("--storage", help="Target storage pool (auto-detected if omitted)")
-    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmations (auto-delete snapshots)")
-    p.add_argument("--dry-run", action="store_true", help="Show migration plan without executing")
-    p.set_defaults(func=_cmd_migrate)
-
-    p = sub.add_parser("template", help="Convert a VM to a template")
-    p.add_argument("target", nargs="?", help="VMID")
-    p.set_defaults(func=_cmd_template)
-
-    p = sub.add_parser("rename", help="Rename a VM")
-    p.add_argument("target", nargs="?", help="VMID")
-    p.add_argument("--name", help="New hostname")
-    p.set_defaults(func=_cmd_rename)
-
-    p = sub.add_parser("add-disk", help="Add disk(s) to a VM")
-    p.add_argument("target", nargs="?", help="VMID")
-    p.add_argument("--size", type=int, help="Disk size in GB")
-    p.add_argument("--count", type=int, default=1, help="Number of disks")
-    p.set_defaults(func=_cmd_add_disk)
-
-    p = sub.add_parser("tag", help="Set/view PVE tags on a VM")
-    p.add_argument("target", nargs="?", help="VMID")
-    p.add_argument("tags", nargs="?", help="Tags (comma-separated)")
-    p.set_defaults(func=_cmd_tag)
-
-    p = sub.add_parser("pool", help="PVE pool management")
-    p.add_argument("action", nargs="?", choices=["list", "create", "add"], default="list")
-    p.add_argument("--name", help="Pool name")
-    p.add_argument("--target", help="VMID to add to pool")
-    p.set_defaults(func=_cmd_pool)
-
-    p = sub.add_parser("sandbox", help="Spawn a VM from template")
-    p.add_argument("source", nargs="?", help="Template VMID")
-    p.add_argument("--name", help="New VM hostname")
-    p.add_argument("--vmid", type=int, help="New VMID")
-    p.add_argument("--ip", help="Static IP address")
-    p.set_defaults(func=_cmd_sandbox)
-
-    p = sub.add_parser("file", help="Send files to fleet hosts")
-    p.add_argument("file_action", nargs="?", choices=["send"], default="send")
-    p.add_argument("source", nargs="?", help="Local file path")
-    p.add_argument("destination", nargs="?", help="host:remote_path")
-    p.set_defaults(func=_cmd_file_send)
-
-    # --- Proxmox ---
-    p = sub.add_parser("vm-overview", help="VM inventory across cluster")
-    p.set_defaults(func=_cmd_vm_overview)
-
-    p = sub.add_parser("vmconfig", help="View/edit VM configuration")
-    p.add_argument("target", nargs="?", help="VMID or name")
-    p.set_defaults(func=_cmd_vmconfig)
-
-    p = sub.add_parser("rescue", help="Rescue a stuck VM")
-    p.add_argument("target", nargs="?", help="VMID or name")
-    p.set_defaults(func=_cmd_rescue)
-
-    # --- User Management ---
-    p = sub.add_parser("users", help="List users")
-    p.set_defaults(func=_cmd_users)
-
-    p = sub.add_parser("new-user", help="Create a new user")
-    p.add_argument("username", nargs="?", help="Username")
-    p.add_argument("--role", choices=["viewer", "operator", "admin"], help="Initial role")
-    p.set_defaults(func=_cmd_new_user)
-
-    p = sub.add_parser("passwd", help="Change user password")
-    p.add_argument("username", nargs="?", help="Username")
-    p.set_defaults(func=_cmd_passwd)
-
-    p = sub.add_parser("roles", help="View role assignments")
-    p.set_defaults(func=_cmd_roles)
-
-    p = sub.add_parser("promote", help="Promote user to higher role")
-    p.add_argument("username", nargs="?", help="Username")
-    p.set_defaults(func=_cmd_promote)
-
-    p = sub.add_parser("demote", help="Demote user to lower role")
-    p.add_argument("username", nargs="?", help="Username")
-    p.set_defaults(func=_cmd_demote)
-
-    p = sub.add_parser("install-user", help="Install user across fleet")
-    p.add_argument("username", nargs="?", help="Username")
-    p.set_defaults(func=_cmd_install_user)
-
-    # --- Security ---
-    p = sub.add_parser("vault", help="Encrypted credential store")
-    p.add_argument("action", nargs="?", choices=["init", "set", "get", "delete", "list", "import"])
-    p.add_argument("key", nargs="?", help="Vault key name")
-    p.add_argument("value", nargs="?", help="Vault value (for set)")
-    p.add_argument("--host", help="Host scope (default: DEFAULT)")
-    p.set_defaults(func=_cmd_vault)
-
-    p = sub.add_parser("audit", help="Security audit")
-    p.add_argument("--fix", action="store_true", help="Auto-fix findings")
-    p.set_defaults(func=_cmd_audit)
-
-    p = sub.add_parser("harden", help="Apply security hardening")
-    p.add_argument("target", nargs="?", help="Host label or 'all'")
-    p.set_defaults(func=_cmd_harden)
-
-    # --- Infrastructure ---
-    p = sub.add_parser("pfsense", help="pfSense management")
-    p.add_argument("action", nargs="?", help="Subcommand (status/rules/nat/states/interfaces)")
-    p.set_defaults(func=_cmd_pfsense)
-
-    p = sub.add_parser("truenas", help="TrueNAS management")
-    p.add_argument("action", nargs="?", help="Subcommand (status/pools/health/datasets/shares/alerts)")
-    p.set_defaults(func=_cmd_truenas)
-
-    p = sub.add_parser("zfs", help="ZFS operations")
-    p.add_argument("action", nargs="?", help="Subcommand")
-    p.set_defaults(func=_cmd_zfs)
-
-    p = sub.add_parser("switch", help="Network switch management")
-    p.add_argument("action", nargs="?", help="Subcommand (status/vlans/interfaces/mac/trunk)")
-    p.set_defaults(func=_cmd_switch)
-
-    p = sub.add_parser("idrac", help="Dell iDRAC management")
-    p.add_argument("action", nargs="?", help="Subcommand (status/sensors/power/sel/info)")
-    p.set_defaults(func=_cmd_idrac)
-
-    p = sub.add_parser("media", help="Media stack management")
-    p.add_argument("action", nargs="?", help="Subcommand (status/restart/stop/start/logs/stats/"
-                   "update/prune/backup/restore/health/doctor/queue/streams/vpn/disk/"
-                   "missing/search/scan/activity/wanted/indexers/downloads/"
-                   "transcode/subtitles/requests/nuke/export/dashboard/report/"
-                   "compose/mounts/cleanup/gpu)")
-    p.add_argument("service", nargs="?", help="Service name or sub-action")
-    p.add_argument("--check", action="store_true", help="Check mode (for update)")
-    p.add_argument("--list", action="store_true", help="List mode (for backup)")
-    p.add_argument("--lines", "-n", type=int, default=50, help="Number of log lines")
-    p.add_argument("--errors", action="store_true", help="Show only errors/warnings (for logs)")
-    p.add_argument("--since", help="Show logs since duration (e.g., 1h, 30m, 2d)")
-    p.set_defaults(func=_cmd_media)
-
-    # --- Specialist ---
-    p = sub.add_parser("specialist", help="Specialist VM workspace deployment")
-    p.add_argument("action", nargs="?", choices=["create", "health", "status", "list", "roles"],
-                   default="list")
-    p.add_argument("target", nargs="?", help="Host IP or label")
-    p.add_argument("--role", choices=["sandbox", "dev", "infra", "security", "media"],
-                   help="Specialist role")
-    p.add_argument("--name", help="Specialist name")
-    p.set_defaults(func=_cmd_specialist)
-
-    # --- Lab ---
-    p = sub.add_parser("lab", help="Lab environment management")
-    p.add_argument("action", nargs="?", choices=["status", "media", "deploy", "resize", "rebuild"],
-                   default="status")
-    p.add_argument("service", nargs="?", help="Sub-action (deploy/status for media)")
-    p.add_argument("target", nargs="?", help="VMID (for resize/rebuild)")
-    p.add_argument("--min", action="store_true", help="Set minimum viable specs")
-    p.add_argument("--template", type=int, help="Template VMID for rebuild")
-    p.add_argument("--cores", type=int, default=2, help="CPU cores")
-    p.add_argument("--ram", type=int, default=2048, help="RAM in MB")
-    p.set_defaults(func=_cmd_lab)
-
-    # --- Fleet Extended ---
-    p = sub.add_parser("ntp", help="Fleet NTP check/fix")
-    p.add_argument("action", nargs="?", choices=["check", "fix"], default="check")
-    p.set_defaults(func=_cmd_ntp)
-
-    p = sub.add_parser("fleet-update", help="Fleet OS update check/apply")
-    p.add_argument("action", nargs="?", choices=["check", "apply"], default="check")
-    p.set_defaults(func=_cmd_fleet_update)
-
-    p = sub.add_parser("comms", help="Inter-VM communication")
-    p.add_argument("action", nargs="?", choices=["setup", "send", "check", "read"],
-                   default="check")
-    p.add_argument("--target", help="Destination host")
-    p.add_argument("--message", "-m", help="Message text")
-    p.set_defaults(func=_cmd_comms)
-
-    # --- Monitoring ---
-    p = sub.add_parser("health", help="Comprehensive fleet health")
-    p.set_defaults(func=_cmd_health)
-
-    p = sub.add_parser("watch", help="Monitoring daemon")
-    p.set_defaults(func=_cmd_watch)
-
-    # --- Engine ---
-    p = sub.add_parser("check", help="Check policy compliance (dry run)")
-    p.add_argument("policy", nargs="?", help="Policy name")
-    p.add_argument("--hosts", help="Comma-separated host labels")
-    p.set_defaults(func=_cmd_check)
-
-    p = sub.add_parser("fix", help="Apply policy remediation")
-    p.add_argument("policy", nargs="?", help="Policy name")
-    p.add_argument("--hosts", help="Comma-separated host labels")
-    p.set_defaults(func=_cmd_fix)
-
-    p = sub.add_parser("diff", help="Show policy drift as git-style diff")
-    p.add_argument("policy", nargs="?", help="Policy name")
-    p.add_argument("--hosts", help="Comma-separated host labels")
-    p.set_defaults(func=_cmd_diff)
-
-    p = sub.add_parser("policies", help="List available policies")
-    p.set_defaults(func=_cmd_policies)
-
-    # --- Deployment ---
     p = sub.add_parser("init", help="First-run setup wizard")
     p.add_argument("--check", action="store_true", help="Validate init state — local files + remote host SSH")
     p.add_argument("--fix", action="store_true", help="Scan fleet, find broken hosts, redeploy freq-admin")
@@ -487,26 +194,51 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bootstrap-user", default="root", help="SSH user for initial auth — root or sudo account (default: root)")
     p.add_argument("--bootstrap-password-file", help="Password file for initial auth to PVE nodes (via sshpass, when no bootstrap key)")
     p.add_argument("--password-file", help="Read service account password from file")
-    p.add_argument("--pve-nodes", help="PVE node IPs (comma or space-separated, e.g. '10.0.0.1,10.0.0.2,10.0.0.3')")
+    p.add_argument("--pve-nodes", help="PVE node IPs (comma or space-separated)")
     p.add_argument("--pve-node-names", help="PVE node names (comma or space-separated, same order as --pve-nodes)")
     p.add_argument("--gateway", help="Network gateway IP for VM networking")
     p.add_argument("--nameserver", help="DNS nameserver IP (default: 1.1.1.1)")
     p.add_argument("--cluster-name", help="Cluster name (e.g. dc01, homelab)")
     p.add_argument("--ssh-mode", choices=["sudo", "root"], help="SSH mode: sudo (recommended) or root")
     p.add_argument("--hosts-file", help="Path to hosts.conf to import fleet hosts from")
-    p.add_argument("--device-credentials", help="TOML file with per-device-type auth (user + password_file per section)")
-    p.add_argument("--device-password-file", help="(deprecated) Single password file for all devices — use --device-credentials instead")
-    p.add_argument("--device-user", default="root", help="(deprecated) Single SSH user for all devices — use --device-credentials instead")
-    p.add_argument("--install-pdm", action="store_true", help="Install Proxmox Datacenter Manager (headless: skip by default)")
-    p.add_argument("--pdm-pass", help="Password file for PDM root@pam auth (headless remote config)")
-    p.add_argument("--pdm-remote-name", help="PDM remote name for PVE cluster (default: cluster name from freq.toml)")
+    p.add_argument("--device-credentials", help="TOML file with per-device-type auth")
+    p.add_argument("--device-password-file", help="(deprecated) Single password file for all devices")
+    p.add_argument("--device-user", default="root", help="(deprecated) Single SSH user for all devices")
+    p.add_argument("--install-pdm", action="store_true", help="Install Proxmox Datacenter Manager")
+    p.add_argument("--pdm-pass", help="Password file for PDM root@pam auth")
+    p.add_argument("--pdm-remote-name", help="PDM remote name for PVE cluster")
     p.add_argument("--skip-pdm", action="store_true", help="Skip PDM detection and setup entirely")
     p.set_defaults(func=_cmd_init)
 
     p = sub.add_parser("configure", help="Reconfigure FREQ settings")
     p.set_defaults(func=_cmd_configure)
 
-    # --- Agent Platform ---
+    p = sub.add_parser("serve", help="Start web dashboard")
+    p.add_argument("--port", type=int, default=None, help="Port number (default: from freq.toml or 8888)")
+    p.set_defaults(func=_cmd_serve)
+
+    p = sub.add_parser("update", help="Check for updates and upgrade FREQ")
+    p.set_defaults(func=_cmd_update)
+
+    p = sub.add_parser("learn", help="Search Proxmox operational knowledge base")
+    p.add_argument("query", nargs="*", help="Search terms")
+    p.set_defaults(func=_cmd_learn)
+
+    p = sub.add_parser("docs", help="Auto-generated infrastructure documentation")
+    p.add_argument("action", nargs="?",
+                   choices=["generate", "export", "verify", "runbook"],
+                   default="generate", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Runbook name (for runbook action)")
+    p.add_argument("--format", default="md", choices=["md", "html"], help="Export format")
+    p.set_defaults(func=_cmd_docs)
+
+    p = sub.add_parser("distros", help="List available cloud images")
+    p.set_defaults(func=_cmd_distros)
+
+    p = sub.add_parser("notify", help="Send notifications to Discord/Slack")
+    p.add_argument("message", nargs="*", help="Notification message")
+    p.set_defaults(func=_cmd_notify)
+
     p = sub.add_parser("agent", help="AI specialist management")
     p.add_argument("action", nargs="?", choices=["templates", "create", "list", "start", "stop", "destroy", "status", "ssh"])
     p.add_argument("name", nargs="?", help="Agent name or template")
@@ -515,31 +247,267 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-cloud-init", action="store_true", help="Create empty VM without cloud-init")
     p.set_defaults(func=_cmd_agent)
 
-    # --- JARVIS (Smart Commands) ---
-    p = sub.add_parser("learn", help="Search Proxmox operational knowledge base")
-    p.add_argument("query", nargs="*", help="Search terms")
-    p.set_defaults(func=_cmd_learn)
+    p = sub.add_parser("specialist", help="Specialist VM workspace deployment")
+    p.add_argument("action", nargs="?", choices=["create", "health", "status", "list", "roles"],
+                   default="list")
+    p.add_argument("target", nargs="?", help="Host IP or label")
+    p.add_argument("--role", choices=["sandbox", "dev", "infra", "security", "media"],
+                   help="Specialist role")
+    p.add_argument("--name", help="Specialist name")
+    p.set_defaults(func=_cmd_specialist)
 
-    p = sub.add_parser("risk", help="Kill-chain blast radius analysis")
-    p.add_argument("target", nargs="?", help="Infrastructure target (pfsense/truenas/switch/all)")
-    p.set_defaults(func=_cmd_risk)
+    p = sub.add_parser("lab", help="Lab environment management")
+    p.add_argument("action", nargs="?", choices=["status", "media", "deploy", "resize", "rebuild"],
+                   default="status")
+    p.add_argument("service", nargs="?", help="Sub-action (deploy/status for media)")
+    p.add_argument("target", nargs="?", help="VMID (for resize/rebuild)")
+    p.add_argument("--min", action="store_true", help="Set minimum viable specs")
+    p.add_argument("--template", type=int, help="Template VMID for rebuild")
+    p.add_argument("--cores", type=int, default=2, help="CPU cores")
+    p.add_argument("--ram", type=int, default=2048, help="RAM in MB")
+    p.set_defaults(func=_cmd_lab)
 
-    p = sub.add_parser("sweep", help="Full audit + policy check pipeline")
-    p.add_argument("--fix", action="store_true", help="Apply fixes (default: dry run)")
-    p.set_defaults(func=_cmd_sweep)
 
-    p = sub.add_parser("patrol", help="Continuous monitoring + drift detection")
-    p.add_argument("--interval", type=int, default=30, help="Check interval in seconds")
-    p.add_argument("--auto-fix", action="store_true", help="Auto-remediate drift")
-    p.set_defaults(func=_cmd_patrol)
+# ---------------------------------------------------------------------------
+# freq vm — Virtual Machine Lifecycle
+# ---------------------------------------------------------------------------
 
-    p = sub.add_parser("playbook", help="Incident playbook runner")
-    p.add_argument("action", nargs="?", choices=["list", "run"], default="list",
-                   help="List playbooks or run one")
-    p.add_argument("name", nargs="?", help="Playbook filename or name")
-    p.set_defaults(func=_cmd_playbook)
+def _register_vm(sub):
+    """Register freq vm subcommands."""
+    vm = sub.add_parser("vm", help="Virtual machine lifecycle")
+    _domain_help(vm)
+    vm_sub = vm.add_subparsers(dest="subcmd")
 
-    p = sub.add_parser("federation", help="Multi-site federation")
+    p = vm_sub.add_parser("list", help="List VMs across PVE cluster")
+    p.add_argument("--node", help="Filter by PVE node")
+    p.add_argument("--status", help="Filter by status (running/stopped)")
+    p.set_defaults(func=_cmd_list)
+
+    p = vm_sub.add_parser("create", help="Create a new VM")
+    p.add_argument("--name", help="VM hostname")
+    p.add_argument("--image", help="Cloud image (e.g., debian-13, ubuntu-2404)")
+    p.add_argument("--node", help="PVE node to create on")
+    p.add_argument("--cores", type=int, help="CPU cores")
+    p.add_argument("--ram", type=int, help="RAM in MB")
+    p.add_argument("--disk", type=int, help="Disk in GB")
+    p.add_argument("--vmid", type=int, help="Specific VMID")
+    p.add_argument("--nic", action="append", help="NIC profile or VLAN (repeatable)")
+    p.add_argument("--ip", action="append", help="Static IP per NIC (repeatable)")
+    p.set_defaults(func=_cmd_create)
+
+    p = vm_sub.add_parser("clone", help="Clone a VM with optional network config")
+    p.add_argument("source", nargs="?", help="Source VMID or name")
+    p.add_argument("--name", help="New VM hostname")
+    p.add_argument("--vmid", type=int, help="New VMID")
+    p.add_argument("--node", help="Target PVE node")
+    p.add_argument("--ip", help="Static IP (triggers disk mount network config)")
+    p.add_argument("--vlan", help="VLAN name (dirty/clean/dev/mgmt)")
+    p.add_argument("--start", action="store_true", help="Start VM after clone")
+    p.set_defaults(func=_cmd_clone)
+
+    p = vm_sub.add_parser("destroy", help="Destroy a VM")
+    p.add_argument("target", nargs="?", help="VMID or name")
+    p.add_argument("--dry-run", action="store_true", help="Show what would be destroyed without executing")
+    p.set_defaults(func=_cmd_destroy)
+
+    p = vm_sub.add_parser("resize", help="Resize a VM")
+    p.add_argument("target", nargs="?", help="VMID or name")
+    p.add_argument("--cores", type=int, help="New CPU cores")
+    p.add_argument("--ram", type=int, help="New RAM in MB")
+    p.add_argument("--disk", type=int, help="Add disk in GB")
+    p.set_defaults(func=_cmd_resize)
+
+    p = vm_sub.add_parser("snapshot", help="Snapshot management (create/list/delete)")
+    p.add_argument("snap_action", nargs="?", choices=["create", "list", "delete"], default="create",
+                   help="Action: create (default), list, delete")
+    p.add_argument("target", nargs="?", help="VMID or name")
+    p.add_argument("--name", help="Snapshot name (for create/delete)")
+    p.set_defaults(func=_cmd_snapshot)
+
+    p = vm_sub.add_parser("power", help="VM power control (start/stop/reboot/shutdown/status)")
+    p.add_argument("action", choices=["start", "stop", "reboot", "shutdown", "status"],
+                   help="Power action")
+    p.add_argument("target", help="VMID")
+    p.set_defaults(func=_cmd_power)
+
+    p = vm_sub.add_parser("nic", help="VM NIC management (add/clear/change-ip/change-id/check-ip)")
+    p.add_argument("action", choices=["add", "clear", "change-ip", "change-id", "check-ip"],
+                   help="NIC action")
+    p.add_argument("target", nargs="?", help="VMID")
+    p.add_argument("--ip", help="IP address (CIDR or bare)")
+    p.add_argument("--gw", help="Gateway IP")
+    p.add_argument("--vlan", help="VLAN ID")
+    p.add_argument("--nic-index", type=int, default=0, help="NIC index (default: 0)")
+    p.add_argument("--new-id", help="New VMID (for change-id)")
+    p.set_defaults(func=_cmd_nic)
+
+    p = vm_sub.add_parser("import", help="Import a cloud image as a VM")
+    p.add_argument("--image", help="Cloud image (debian-13, ubuntu-2404, etc.)")
+    p.add_argument("--name", help="VM hostname")
+    p.add_argument("--vmid", type=int, help="Specific VMID")
+    p.set_defaults(func=_cmd_import)
+
+    p = vm_sub.add_parser("migrate", help="Migrate a VM between nodes")
+    p.add_argument("target", nargs="?", help="VMID or name")
+    p.add_argument("--node", help="Target PVE node")
+    p.add_argument("--storage", help="Target storage pool (auto-detected if omitted)")
+    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmations (auto-delete snapshots)")
+    p.add_argument("--dry-run", action="store_true", help="Show migration plan without executing")
+    p.set_defaults(func=_cmd_migrate)
+
+    p = vm_sub.add_parser("template", help="Convert a VM to a template")
+    p.add_argument("target", nargs="?", help="VMID")
+    p.set_defaults(func=_cmd_template)
+
+    p = vm_sub.add_parser("rename", help="Rename a VM")
+    p.add_argument("target", nargs="?", help="VMID")
+    p.add_argument("--name", help="New hostname")
+    p.set_defaults(func=_cmd_rename)
+
+    p = vm_sub.add_parser("disk", help="Add disk(s) to a VM")
+    p.add_argument("target", nargs="?", help="VMID")
+    p.add_argument("--size", type=int, help="Disk size in GB")
+    p.add_argument("--count", type=int, default=1, help="Number of disks")
+    p.set_defaults(func=_cmd_add_disk)
+
+    p = vm_sub.add_parser("tag", help="Set/view PVE tags on a VM")
+    p.add_argument("target", nargs="?", help="VMID")
+    p.add_argument("tags", nargs="?", help="Tags (comma-separated)")
+    p.set_defaults(func=_cmd_tag)
+
+    p = vm_sub.add_parser("pool", help="PVE pool management")
+    p.add_argument("action", nargs="?", choices=["list", "create", "add"], default="list")
+    p.add_argument("--name", help="Pool name")
+    p.add_argument("--target", help="VMID to add to pool")
+    p.set_defaults(func=_cmd_pool)
+
+    p = vm_sub.add_parser("sandbox", help="Spawn a VM from template")
+    p.add_argument("source", nargs="?", help="Template VMID")
+    p.add_argument("--name", help="New VM hostname")
+    p.add_argument("--vmid", type=int, help="New VMID")
+    p.add_argument("--ip", help="Static IP address")
+    p.set_defaults(func=_cmd_sandbox)
+
+    p = vm_sub.add_parser("overview", help="VM inventory across cluster")
+    p.set_defaults(func=_cmd_vm_overview)
+
+    p = vm_sub.add_parser("config", help="View/edit VM configuration")
+    p.add_argument("target", nargs="?", help="VMID or name")
+    p.set_defaults(func=_cmd_vmconfig)
+
+    p = vm_sub.add_parser("rescue", help="Rescue a stuck VM")
+    p.add_argument("target", nargs="?", help="VMID or name")
+    p.set_defaults(func=_cmd_rescue)
+
+    p = vm_sub.add_parser("why", help="Explain VM permissions and protections")
+    p.add_argument("target", nargs="?", help="VMID to explain")
+    p.set_defaults(func=_cmd_why)
+
+    p = vm_sub.add_parser("rollback", help="Roll back a VM to its latest snapshot")
+    p.add_argument("target", nargs="?", help="VMID")
+    p.add_argument("--name", help="Specific snapshot name (default: most recent)")
+    p.add_argument("--no-start", action="store_true", help="Don't start VM after rollback")
+    p.set_defaults(func=_cmd_rollback)
+
+    p = vm_sub.add_parser("provision", help="Cloud-init VM provisioning")
+    p.set_defaults(func=_cmd_provision)
+
+    p = vm_sub.add_parser("file", help="Send files to fleet hosts")
+    p.add_argument("file_action", nargs="?", choices=["send"], default="send")
+    p.add_argument("source", nargs="?", help="Local file path")
+    p.add_argument("destination", nargs="?", help="host:remote_path")
+    p.set_defaults(func=_cmd_file_send)
+
+
+# ---------------------------------------------------------------------------
+# freq fleet — Fleet Operations
+# ---------------------------------------------------------------------------
+
+def _register_fleet(sub):
+    """Register freq fleet subcommands."""
+    fleet = sub.add_parser("fleet", help="Fleet-wide operations and diagnostics")
+    _domain_help(fleet)
+    fleet_sub = fleet.add_subparsers(dest="subcmd")
+
+    p = fleet_sub.add_parser("status", help="Fleet health summary")
+    p.set_defaults(func=_cmd_status)
+
+    p = fleet_sub.add_parser("dashboard", help="Fleet dashboard overview")
+    p.set_defaults(func=_cmd_dashboard)
+
+    p = fleet_sub.add_parser("exec", help="Run command across fleet")
+    p.add_argument("target", nargs="?", help="Host label, group, or 'all'")
+    p.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute")
+    p.set_defaults(func=_cmd_exec)
+
+    p = fleet_sub.add_parser("info", help="System info for a host")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_info)
+
+    p = fleet_sub.add_parser("detail", help="Deep host inventory (full system detail)")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_detail)
+
+    p = fleet_sub.add_parser("boundaries", help="Fleet boundary tiers and VM categories")
+    p.add_argument("action", nargs="?", default="show", choices=["show", "lookup"],
+                   help="Action (default: show)")
+    p.add_argument("target", nargs="?", help="VMID (for lookup)")
+    p.set_defaults(func=_cmd_boundaries)
+
+    p = fleet_sub.add_parser("diagnose", help="Deep diagnostic for a host")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_diagnose)
+
+    p = fleet_sub.add_parser("ssh", help="SSH to a fleet host")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_ssh)
+
+    p = fleet_sub.add_parser("docker", help="Container discovery and management")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_docker)
+
+    p = fleet_sub.add_parser("log", help="View logs for a host")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.add_argument("--lines", "-n", type=int, default=30, help="Number of log lines")
+    p.add_argument("--unit", "-u", help="Systemd unit to filter")
+    p.set_defaults(func=_cmd_log)
+
+    p = fleet_sub.add_parser("compare", help="Compare two hosts side-by-side")
+    p.add_argument("target_a", nargs="?", help="First host label or IP")
+    p.add_argument("target_b", nargs="?", help="Second host label or IP")
+    p.set_defaults(func=_cmd_compare)
+
+    p = fleet_sub.add_parser("health", help="Comprehensive fleet health")
+    p.set_defaults(func=_cmd_health)
+
+    p = fleet_sub.add_parser("report", help="Generate fleet health report")
+    p.add_argument("action", nargs="?", choices=["generate"], default="generate",
+                   help="Action to perform")
+    p.add_argument("--markdown", action="store_true", help="Markdown output")
+    p.set_defaults(func=_cmd_report)
+
+    p = fleet_sub.add_parser("ntp", help="Fleet NTP check/fix")
+    p.add_argument("action", nargs="?", choices=["check", "fix"], default="check")
+    p.set_defaults(func=_cmd_ntp)
+
+    p = fleet_sub.add_parser("update", help="Fleet OS update check/apply")
+    p.add_argument("action", nargs="?", choices=["check", "apply"], default="check")
+    p.set_defaults(func=_cmd_fleet_update)
+
+    p = fleet_sub.add_parser("comms", help="Inter-VM communication")
+    p.add_argument("action", nargs="?", choices=["setup", "send", "check", "read"],
+                   default="check")
+    p.add_argument("--target", help="Destination host")
+    p.add_argument("--message", "-m", help="Message text")
+    p.set_defaults(func=_cmd_comms)
+
+    p = fleet_sub.add_parser("inventory", help="Full fleet inventory export (hosts/VMs/containers)")
+    p.add_argument("section", nargs="?", choices=["all", "hosts", "vms", "containers"],
+                   default="all", help="Section to export (default: all)")
+    p.add_argument("--csv", action="store_true", help="CSV output")
+    p.set_defaults(func=_cmd_inventory)
+
+    p = fleet_sub.add_parser("federation", help="Multi-site federation")
     p.add_argument("action", nargs="?", choices=["list", "register", "remove", "poll"],
                    default="list", help="Action to perform")
     p.add_argument("--name", help="Site name")
@@ -547,75 +515,166 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--secret", default="", help="Shared secret")
     p.set_defaults(func=_cmd_federation)
 
-    p = sub.add_parser("gitops", help="GitOps config sync")
-    p.add_argument("action", nargs="?",
-                   choices=["status", "sync", "apply", "diff", "log"],
-                   default="status", help="Action to perform")
-    p.set_defaults(func=_cmd_gitops)
+    p = fleet_sub.add_parser("deploy-agent", help="Deploy metrics collector to fleet")
+    p.add_argument("target", nargs="?", help="Host label or 'all'")
+    p.set_defaults(func=_cmd_deploy_agent)
 
-    p = sub.add_parser("chaos", help="Chaos engineering experiments")
-    p.add_argument("action", nargs="?", choices=["list", "run", "log"],
-                   default="list", help="Action to perform")
-    p.add_argument("--type", help="Experiment type")
-    p.add_argument("--host", help="Target host label")
-    p.add_argument("--service", default="", help="Target service name")
-    p.add_argument("--duration", type=int, default=60, help="Duration in seconds (max 300)")
-    p.set_defaults(func=_cmd_chaos)
+    p = fleet_sub.add_parser("agent-status", help="Check metrics agent status across fleet")
+    p.set_defaults(func=_cmd_agent_status)
 
-    p = sub.add_parser("capacity", help="Fleet capacity projections")
-    p.add_argument("action", nargs="?", choices=["show", "snapshot"], default="show",
-                   help="show projections or force a snapshot")
-    p.set_defaults(func=_cmd_capacity)
+    p = fleet_sub.add_parser("test", help="Test host connectivity (TCP + SSH + sudo)")
+    p.add_argument("target", nargs="?", help="Host IP or label")
+    p.set_defaults(func=_cmd_test_connection)
 
-    p = sub.add_parser("cost", help="Fleet power cost estimates")
-    p.set_defaults(func=_cmd_cost)
 
-    p = sub.add_parser("rules", help="Alert rule management")
-    p.add_argument("action", nargs="?", choices=["list", "create", "delete", "history"],
-                   default="list", help="Action to perform")
-    p.add_argument("name", nargs="?", help="Rule name (for create/delete)")
-    p.add_argument("--condition", help="Rule condition (host_unreachable, cpu_above, ram_above, disk_above, docker_down)")
-    p.add_argument("--threshold", type=float, default=0, help="Threshold value")
-    p.add_argument("--severity", default="warning", help="Alert severity (info/warning/critical)")
-    p.add_argument("--target-host", default="*", help="Target host pattern")
-    p.add_argument("--duration", type=int, default=0, help="Seconds before alerting")
-    p.add_argument("--cooldown", type=int, default=300, help="Seconds between re-alerts")
-    p.set_defaults(func=_cmd_rules)
+# ---------------------------------------------------------------------------
+# freq host — Host Registry
+# ---------------------------------------------------------------------------
 
-    # --- Docker Fleet ---
-    p = sub.add_parser("docker-fleet", help="Fleet-wide Docker operations (ps/logs/stats)")
+def _register_host(sub):
+    """Register freq host subcommands."""
+    host = sub.add_parser("host", help="Host registry and management")
+    _domain_help(host)
+    host_sub = host.add_subparsers(dest="subcmd")
+
+    p = host_sub.add_parser("list", help="List fleet hosts")
+    p.set_defaults(func=_set_action(_cmd_hosts, "list"))
+
+    p = host_sub.add_parser("add", help="Add a host to the fleet")
+    p.set_defaults(func=_set_action(_cmd_hosts, "add"))
+
+    p = host_sub.add_parser("remove", help="Remove a host from the fleet")
+    p.set_defaults(func=_set_action(_cmd_hosts, "remove"))
+
+    p = host_sub.add_parser("edit", help="Edit host configuration")
+    p.set_defaults(func=_set_action(_cmd_hosts, "edit"))
+
+    p = host_sub.add_parser("sync", help="Sync host list from PVE cluster")
+    p.add_argument("--dry-run", action="store_true", help="Show what sync would change without writing")
+    p.set_defaults(func=_set_action(_cmd_hosts, "sync"))
+
+    p = host_sub.add_parser("discover", help="Discover hosts on the network")
+    p.add_argument("subnet", nargs="?", help="Subnet to scan (e.g. 192.168.1 or 192.168.1.0/24)")
+    p.set_defaults(func=_cmd_discover)
+
+    p = host_sub.add_parser("groups", help="Manage host groups")
+    p.add_argument("action", nargs="?", choices=["list", "add", "remove"], default="list")
+    p.set_defaults(func=_cmd_groups)
+
+    p = host_sub.add_parser("bootstrap", help="Bootstrap a new host")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_bootstrap)
+
+    p = host_sub.add_parser("onboard", help="Onboard a host to the fleet")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_onboard)
+
+    p = host_sub.add_parser("keys", help="SSH key management")
+    p.add_argument("action", nargs="?", choices=["deploy", "list", "rotate"], help="Key action")
+    p.add_argument("--target", help="Host label for deploy")
+    p.set_defaults(func=_cmd_keys)
+
+
+# ---------------------------------------------------------------------------
+# freq docker — Container Management
+# ---------------------------------------------------------------------------
+
+def _register_docker(sub):
+    """Register freq docker subcommands."""
+    docker = sub.add_parser("docker", help="Container and stack management")
+    _domain_help(docker)
+    docker_sub = docker.add_subparsers(dest="subcmd")
+
+    p = docker_sub.add_parser("containers", help="Container discovery on a host")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_docker)
+
+    p = docker_sub.add_parser("fleet", help="Fleet-wide Docker operations (ps/logs/stats)")
     p.add_argument("docker_action", nargs="?", choices=["ps", "logs", "stats"], default="ps",
                    help="Action: ps (default), logs, stats")
     p.add_argument("service", nargs="?", help="Service name (for logs)")
     p.add_argument("--lines", "-n", type=int, default=20, help="Log lines (for logs)")
     p.set_defaults(func=_cmd_docker_fleet)
 
-    p = sub.add_parser("monitor", help="Check HTTP endpoints defined in config")
+    p = docker_sub.add_parser("stack", help="Docker Compose stack management")
+    p.add_argument("action", nargs="?",
+                   choices=["status", "update", "health", "logs", "restart", "template"],
+                   default="status", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Stack name")
+    p.add_argument("--host", dest="target_host", help="Target host")
+    p.add_argument("--lines", type=int, default=30, help="Log lines")
+    p.set_defaults(func=_cmd_stack)
+
+    p = docker_sub.add_parser("monitor", help="Check HTTP endpoints defined in config")
     p.set_defaults(func=_cmd_monitor)
 
-    # --- IPAM ---
-    p = sub.add_parser("ip", help="IP address management (next/list/check)")
-    p.add_argument("action", nargs="?", choices=["next", "list", "check"], default="next",
-                   help="Action: next (default), list, check")
-    p.add_argument("target", nargs="?", help="IP address (for check)")
-    p.add_argument("--vlan", help="VLAN name to search")
-    p.add_argument("--count", type=int, default=1, help="Number of IPs to find (for next)")
-    p.set_defaults(func=_cmd_ip)
 
-    # --- Declarative Fleet ---
-    p = sub.add_parser("plan", help="Show fleet plan diff (desired vs actual)")
-    p.add_argument("--file", help="Path to fleet plan TOML (default: conf/fleet-plan.toml)")
-    p.set_defaults(func=_cmd_plan)
+# ---------------------------------------------------------------------------
+# freq secure — Security & Compliance
+# ---------------------------------------------------------------------------
 
-    p = sub.add_parser("apply", help="Apply fleet plan (execute creates/resizes)")
-    p.add_argument("--file", help="Path to fleet plan TOML (default: conf/fleet-plan.toml)")
-    p.add_argument("--dry-run", action="store_true", help="Show what would change without executing")
-    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmations")
-    p.set_defaults(func=_cmd_apply)
+def _register_secure(sub):
+    """Register freq secure subcommands."""
+    secure = sub.add_parser("secure", help="Security auditing, compliance, and hardening")
+    _domain_help(secure)
+    secure_sub = secure.add_subparsers(dest="subcmd")
 
-    # --- Remaining ---
-    # --- Phase 1: Killer Commands ---
-    p = sub.add_parser("alert", help="Alert management (create/list/delete/history/test/silence/check)")
+    p = secure_sub.add_parser("vault", help="Encrypted credential store")
+    p.add_argument("action", nargs="?", choices=["init", "set", "get", "delete", "list", "import"])
+    p.add_argument("key", nargs="?", help="Vault key name")
+    p.add_argument("value", nargs="?", help="Vault value (for set)")
+    p.add_argument("--host", help="Host scope (default: DEFAULT)")
+    p.set_defaults(func=_cmd_vault)
+
+    p = secure_sub.add_parser("audit", help="Security audit")
+    p.add_argument("--fix", action="store_true", help="Auto-fix findings")
+    p.set_defaults(func=_cmd_audit)
+
+    p = secure_sub.add_parser("harden", help="Apply security hardening")
+    p.add_argument("target", nargs="?", help="Host label or 'all'")
+    p.set_defaults(func=_cmd_harden)
+
+    p = secure_sub.add_parser("comply", help="CIS/STIG compliance scanning")
+    p.add_argument("action", nargs="?", choices=["scan", "status", "report", "exceptions"],
+                   default="scan", help="Action to perform")
+    p.set_defaults(func=_cmd_comply)
+
+    p = secure_sub.add_parser("patch", help="Fleet patch management (status/check/apply/hold)")
+    p.add_argument("action", nargs="?",
+                   choices=["status", "check", "apply", "hold", "history", "compliance"],
+                   default="status", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Package name (for hold)")
+    p.add_argument("--target-host", help="Target specific host")
+    p.add_argument("--lines", type=int, default=20, help="History lines")
+    p.set_defaults(func=_cmd_patch)
+
+    p = secure_sub.add_parser("secrets", help="Secret rotation, scanning, and lifecycle")
+    p.add_argument("action", nargs="?",
+                   choices=["list", "scan", "audit", "generate", "rotate", "lease"],
+                   default="list", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Secret/lease name")
+    p.add_argument("--secret-type", default="password", choices=["password", "token"],
+                   help="Type for generate")
+    p.add_argument("--length", type=int, default=32, help="Secret length (default: 32)")
+    p.add_argument("--expires", default="90d", help="Lease expiry (e.g., 90d, 24h)")
+    p.set_defaults(func=_cmd_secrets)
+
+    p = secure_sub.add_parser("sweep", help="Full audit + policy check pipeline")
+    p.add_argument("--fix", action="store_true", help="Apply fixes (default: dry run)")
+    p.set_defaults(func=_cmd_sweep)
+
+
+# ---------------------------------------------------------------------------
+# freq observe — Observability Platform
+# ---------------------------------------------------------------------------
+
+def _register_observe(sub):
+    """Register freq observe subcommands."""
+    observe = sub.add_parser("observe", help="Monitoring, alerting, logs, and trends")
+    _domain_help(observe)
+    observe_sub = observe.add_subparsers(dest="subcmd")
+
+    p = observe_sub.add_parser("alert", help="Alert management (create/list/delete/history/test/silence/check)")
     p.add_argument("action", nargs="?",
                    choices=["list", "create", "delete", "history", "test", "silence", "check"],
                    default="list", help="Action to perform")
@@ -631,62 +690,116 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lines", type=int, default=20, help="History lines to show")
     p.set_defaults(func=_cmd_alert)
 
-    p = sub.add_parser("rollback", help="Roll back a VM to its latest snapshot")
-    p.add_argument("target", nargs="?", help="VMID")
-    p.add_argument("--name", help="Specific snapshot name (default: most recent)")
-    p.add_argument("--no-start", action="store_true", help="Don't start VM after rollback")
-    p.set_defaults(func=_cmd_rollback)
+    p = observe_sub.add_parser("logs", help="Fleet-wide log search and aggregation")
+    p.add_argument("action", nargs="?", choices=["tail", "search", "stats", "export"],
+                   default="tail", help="Action to perform")
+    p.add_argument("pattern", nargs="?", help="Search pattern (for search)")
+    p.add_argument("--host", dest="target_host", help="Target specific host")
+    p.add_argument("--since", default="1h", help="Time range (default: 1h)")
+    p.add_argument("--lines", type=int, default=20, help="Lines to show")
+    p.add_argument("--unit", help="Systemd unit filter")
+    p.set_defaults(func=_cmd_logs)
 
-    p = sub.add_parser("inventory", help="Full fleet inventory export (hosts/VMs/containers)")
-    p.add_argument("section", nargs="?", choices=["all", "hosts", "vms", "containers"],
-                   default="all", help="Section to export (default: all)")
-    p.add_argument("--csv", action="store_true", help="CSV output")
-    p.set_defaults(func=_cmd_inventory)
-
-    p = sub.add_parser("compare", help="Compare two hosts side-by-side")
-    p.add_argument("target_a", nargs="?", help="First host label or IP")
-    p.add_argument("target_b", nargs="?", help="Second host label or IP")
-    p.set_defaults(func=_cmd_compare)
-
-    p = sub.add_parser("baseline", help="Configuration baseline and drift detection")
-    p.add_argument("action", nargs="?", choices=["capture", "compare", "list", "delete"],
-                   default="list", help="Action to perform")
-    p.add_argument("name", nargs="?", help="Baseline name")
-    p.set_defaults(func=_cmd_baseline)
-
-    # --- Phase 2: Intelligence Layer ---
-    p = sub.add_parser("report", help="Generate fleet health report")
-    p.add_argument("action", nargs="?", choices=["generate"], default="generate",
-                   help="Action to perform")
-    p.add_argument("--markdown", action="store_true", help="Markdown output")
-    p.set_defaults(func=_cmd_report)
-
-    p = sub.add_parser("trend", help="Fleet capacity trends over time")
+    p = observe_sub.add_parser("trend", help="Fleet capacity trends over time")
     p.add_argument("action", nargs="?", choices=["show", "snapshot", "history"],
                    default="show", help="Action to perform")
     p.add_argument("--lines", type=int, default=20, help="History lines to show")
     p.set_defaults(func=_cmd_trend)
 
-    p = sub.add_parser("sla", help="Fleet uptime SLA tracking")
+    p = observe_sub.add_parser("capacity", help="Fleet capacity projections")
+    p.add_argument("action", nargs="?", choices=["show", "snapshot"], default="show",
+                   help="show projections or force a snapshot")
+    p.set_defaults(func=_cmd_capacity)
+
+    p = observe_sub.add_parser("sla", help="Fleet uptime SLA tracking")
     p.add_argument("action", nargs="?", choices=["show", "check", "reset"],
                    default="show", help="Action to perform")
     p.add_argument("--days", type=int, default=30, help="SLA period in days (default: 30)")
     p.set_defaults(func=_cmd_sla)
 
-    p = sub.add_parser("cert", help="TLS certificate inventory and monitoring")
-    p.add_argument("action", nargs="?", choices=["scan", "list", "check"],
-                   default="scan", help="Action to perform")
-    p.add_argument("target", nargs="?", help="Host:port for single check")
-    p.set_defaults(func=_cmd_cert)
+    p = observe_sub.add_parser("watch", help="Monitoring daemon")
+    p.set_defaults(func=_cmd_watch)
 
-    p = sub.add_parser("dns", help="DNS record tracking and validation")
-    p.add_argument("action", nargs="?", choices=["scan", "check", "list"],
-                   default="scan", help="Action to perform")
-    p.add_argument("target", nargs="?", help="Hostname or IP for single check")
-    p.set_defaults(func=_cmd_dns)
+    p = observe_sub.add_parser("db", help="Fleet-wide database health (status/health/size)")
+    p.add_argument("action", nargs="?", choices=["status", "health", "size"],
+                   default="status", help="Action to perform")
+    p.set_defaults(func=_cmd_db)
 
-    # --- Phase 3: Platform Play ---
-    p = sub.add_parser("schedule", help="Job scheduler (create/list/delete/run/templates)")
+
+# ---------------------------------------------------------------------------
+# freq state — Desired State & Drift Management
+# ---------------------------------------------------------------------------
+
+def _register_state(sub):
+    """Register freq state subcommands."""
+    state = sub.add_parser("state", help="Baselines, plans, policies, drift detection")
+    _domain_help(state)
+    state_sub = state.add_subparsers(dest="subcmd")
+
+    p = state_sub.add_parser("baseline", help="Configuration baseline and drift detection")
+    p.add_argument("action", nargs="?", choices=["capture", "compare", "list", "delete"],
+                   default="list", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Baseline name")
+    p.set_defaults(func=_cmd_baseline)
+
+    p = state_sub.add_parser("plan", help="Show fleet plan diff (desired vs actual)")
+    p.add_argument("--file", help="Path to fleet plan TOML (default: conf/fleet-plan.toml)")
+    p.set_defaults(func=_cmd_plan)
+
+    p = state_sub.add_parser("apply", help="Apply fleet plan (execute creates/resizes)")
+    p.add_argument("--file", help="Path to fleet plan TOML (default: conf/fleet-plan.toml)")
+    p.add_argument("--dry-run", action="store_true", help="Show what would change without executing")
+    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmations")
+    p.set_defaults(func=_cmd_apply)
+
+    p = state_sub.add_parser("check", help="Check policy compliance (dry run)")
+    p.add_argument("policy", nargs="?", help="Policy name")
+    p.add_argument("--hosts", help="Comma-separated host labels")
+    p.set_defaults(func=_cmd_check)
+
+    p = state_sub.add_parser("fix", help="Apply policy remediation")
+    p.add_argument("policy", nargs="?", help="Policy name")
+    p.add_argument("--hosts", help="Comma-separated host labels")
+    p.set_defaults(func=_cmd_fix)
+
+    p = state_sub.add_parser("diff", help="Show policy drift as git-style diff")
+    p.add_argument("policy", nargs="?", help="Policy name")
+    p.add_argument("--hosts", help="Comma-separated host labels")
+    p.set_defaults(func=_cmd_diff)
+
+    p = state_sub.add_parser("policies", help="List available policies")
+    p.set_defaults(func=_cmd_policies)
+
+    p = state_sub.add_parser("gitops", help="GitOps config sync")
+    p.add_argument("action", nargs="?",
+                   choices=["status", "sync", "apply", "diff", "log"],
+                   default="status", help="Action to perform")
+    p.set_defaults(func=_cmd_gitops)
+
+
+# ---------------------------------------------------------------------------
+# freq auto — Automation & Scheduling
+# ---------------------------------------------------------------------------
+
+def _register_auto(sub):
+    """Register freq auto subcommands."""
+    auto = sub.add_parser("auto", help="Rules, scheduling, playbooks, webhooks, automation")
+    _domain_help(auto)
+    auto_sub = auto.add_subparsers(dest="subcmd")
+
+    p = auto_sub.add_parser("rules", help="Alert rule management")
+    p.add_argument("action", nargs="?", choices=["list", "create", "delete", "history"],
+                   default="list", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Rule name (for create/delete)")
+    p.add_argument("--condition", help="Rule condition (host_unreachable, cpu_above, ram_above, disk_above, docker_down)")
+    p.add_argument("--threshold", type=float, default=0, help="Threshold value")
+    p.add_argument("--severity", default="warning", help="Alert severity (info/warning/critical)")
+    p.add_argument("--target-host", default="*", help="Target host pattern")
+    p.add_argument("--duration", type=int, default=0, help="Seconds before alerting")
+    p.add_argument("--cooldown", type=int, default=300, help="Seconds between re-alerts")
+    p.set_defaults(func=_cmd_rules)
+
+    p = auto_sub.add_parser("schedule", help="Job scheduler (create/list/delete/run/templates)")
     p.add_argument("action", nargs="?",
                    choices=["list", "create", "delete", "run", "enable", "disable",
                             "log", "templates", "install"],
@@ -697,19 +810,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lines", type=int, default=20, help="Log lines to show")
     p.set_defaults(func=_cmd_schedule)
 
-    p = sub.add_parser("backup-policy", help="Declarative backup rules (create/list/apply)")
-    p.add_argument("action", nargs="?",
-                   choices=["list", "create", "delete", "apply", "status"],
-                   default="list", help="Action to perform")
-    p.add_argument("name", nargs="?", help="Policy name")
-    p.add_argument("--target", help="Target selector (tag name, vmid range, or *)")
-    p.add_argument("--target-type", default="tag", choices=["tag", "vmid_range", "all"],
-                   help="Target type")
-    p.add_argument("--interval", default="24h", help="Snapshot interval (default: 24h)")
-    p.add_argument("--retention", type=int, default=7, help="Days to retain (default: 7)")
-    p.set_defaults(func=_cmd_backup_policy)
+    p = auto_sub.add_parser("playbook", help="Incident playbook runner")
+    p.add_argument("action", nargs="?", choices=["list", "run"], default="list",
+                   help="List playbooks or run one")
+    p.add_argument("name", nargs="?", help="Playbook filename or name")
+    p.set_defaults(func=_cmd_playbook)
 
-    p = sub.add_parser("webhook", help="Inbound webhook management (create/list/test)")
+    p = auto_sub.add_parser("webhook", help="Inbound webhook management (create/list/test)")
     p.add_argument("action", nargs="?",
                    choices=["list", "create", "delete", "test", "log"],
                    default="list", help="Action to perform")
@@ -719,96 +826,32 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lines", type=int, default=20, help="Log lines to show")
     p.set_defaults(func=_cmd_webhook)
 
-    p = sub.add_parser("migrate-plan", help="Load-aware migration recommendations")
-    p.add_argument("action", nargs="?", choices=["show"], default="show",
-                   help="Action to perform")
-    p.set_defaults(func=_cmd_migrate_plan)
-
-    p = sub.add_parser("migrate-vmware", help="VMware ESXi to Proxmox migration")
-    p.add_argument("action", nargs="?", choices=["scan", "import", "convert", "status"],
-                   default="scan", help="Action to perform")
-    p.add_argument("target", nargs="?", help="OVA/VMDK file or directory path")
-    p.add_argument("--vmid", type=int, help="Target VMID for import")
-    p.add_argument("--node", help="Target PVE node")
-    p.add_argument("--storage", default="local-lvm", help="Target storage (default: local-lvm)")
-    p.set_defaults(func=_cmd_migrate_vmware)
-
-    # --- Phase 7: Platform Kills ---
-    p = sub.add_parser("map", help="Dependency discovery and impact analysis")
-    p.add_argument("action", nargs="?", choices=["discover", "show", "impact", "export"],
-                   default="discover", help="Action to perform")
-    p.add_argument("target", nargs="?", help="Host label (for impact)")
-    p.add_argument("--format", default="json", choices=["json", "dot"], help="Export format")
-    p.set_defaults(func=_cmd_map)
-
-    p = sub.add_parser("netmon", help="Network monitoring and interface tracking")
-    p.add_argument("action", nargs="?", choices=["interfaces", "poll", "bandwidth", "topology"],
-                   default="interfaces", help="Action to perform")
-    p.set_defaults(func=_cmd_netmon)
-
-    p = sub.add_parser("cost-analysis", help="On-prem FinOps and cost optimization")
-    p.add_argument("action", nargs="?", choices=["waste", "density", "optimize", "compare"],
-                   default="waste", help="Action to perform")
-    p.add_argument("--rate", type=float, default=0.12, help="Electricity rate $/kWh (default: 0.12)")
-    p.set_defaults(func=_cmd_cost_analysis)
-
-    # --- Phase 4: Easy Kills ---
-    p = sub.add_parser("patch", help="Fleet patch management (status/check/apply/hold)")
-    p.add_argument("action", nargs="?",
-                   choices=["status", "check", "apply", "hold", "history", "compliance"],
-                   default="status", help="Action to perform")
-    p.add_argument("name", nargs="?", help="Package name (for hold)")
-    p.add_argument("--target-host", help="Target specific host")
-    p.add_argument("--lines", type=int, default=20, help="History lines")
-    p.set_defaults(func=_cmd_patch)
-
-    p = sub.add_parser("stack", help="Docker Compose stack management")
-    p.add_argument("action", nargs="?",
-                   choices=["status", "update", "health", "logs", "restart", "template"],
-                   default="status", help="Action to perform")
-    p.add_argument("name", nargs="?", help="Stack name")
-    p.add_argument("--host", dest="target_host", help="Target host")
-    p.add_argument("--lines", type=int, default=30, help="Log lines")
-    p.set_defaults(func=_cmd_stack)
-
-    # --- Phase 5: Medium Kills ---
-    p = sub.add_parser("db", help="Fleet-wide database health (status/health/size)")
-    p.add_argument("action", nargs="?", choices=["status", "health", "size"],
-                   default="status", help="Action to perform")
-    p.set_defaults(func=_cmd_db)
-
-    p = sub.add_parser("proxy", help="Reverse proxy management (status/list/add/remove/certs)")
-    p.add_argument("action", nargs="?", choices=["status", "list", "add", "remove", "certs"],
-                   default="status", help="Action to perform")
-    p.add_argument("--domain", help="Domain name for proxy route")
-    p.add_argument("--upstream", help="Upstream target (host:port)")
-    p.add_argument("--host", dest="target_host", help="Target proxy host")
-    p.add_argument("--ssl", action="store_true", default=True, help="Enable SSL (default)")
-    p.set_defaults(func=_cmd_proxy)
-
-    p = sub.add_parser("secrets", help="Secret rotation, scanning, and lifecycle")
-    p.add_argument("action", nargs="?",
-                   choices=["list", "scan", "audit", "generate", "rotate", "lease"],
+    p = auto_sub.add_parser("chaos", help="Chaos engineering experiments")
+    p.add_argument("action", nargs="?", choices=["list", "run", "log"],
                    default="list", help="Action to perform")
-    p.add_argument("name", nargs="?", help="Secret/lease name")
-    p.add_argument("--secret-type", default="password", choices=["password", "token"],
-                   help="Type for generate")
-    p.add_argument("--length", type=int, default=32, help="Secret length (default: 32)")
-    p.add_argument("--expires", default="90d", help="Lease expiry (e.g., 90d, 24h)")
-    p.set_defaults(func=_cmd_secrets)
+    p.add_argument("--type", help="Experiment type")
+    p.add_argument("--host", help="Target host label")
+    p.add_argument("--service", default="", help="Target service name")
+    p.add_argument("--duration", type=int, default=60, help="Duration in seconds (max 300)")
+    p.set_defaults(func=_cmd_chaos)
 
-    # --- Phase 6: Intelligence Kills ---
-    p = sub.add_parser("logs", help="Fleet-wide log search and aggregation")
-    p.add_argument("action", nargs="?", choices=["tail", "search", "stats", "export"],
-                   default="tail", help="Action to perform")
-    p.add_argument("pattern", nargs="?", help="Search pattern (for search)")
-    p.add_argument("--host", dest="target_host", help="Target specific host")
-    p.add_argument("--since", default="1h", help="Time range (default: 1h)")
-    p.add_argument("--lines", type=int, default=20, help="Lines to show")
-    p.add_argument("--unit", help="Systemd unit filter")
-    p.set_defaults(func=_cmd_logs)
+    p = auto_sub.add_parser("patrol", help="Continuous monitoring + drift detection")
+    p.add_argument("--interval", type=int, default=30, help="Check interval in seconds")
+    p.add_argument("--auto-fix", action="store_true", help="Auto-remediate drift")
+    p.set_defaults(func=_cmd_patrol)
 
-    p = sub.add_parser("oncall", help="On-call rotation and incident management")
+
+# ---------------------------------------------------------------------------
+# freq ops — Operations
+# ---------------------------------------------------------------------------
+
+def _register_ops(sub):
+    """Register freq ops subcommands."""
+    ops = sub.add_parser("ops", help="On-call rotation and risk analysis")
+    _domain_help(ops)
+    ops_sub = ops.add_subparsers(dest="subcmd")
+
+    p = ops_sub.add_parser("oncall", help="On-call rotation and incident management")
     p.add_argument("action", nargs="?",
                    choices=["whoami", "schedule", "alert", "ack", "escalate", "resolve", "history"],
                    default="whoami", help="Action to perform")
@@ -822,49 +865,35 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lines", type=int, default=20, help="History lines")
     p.set_defaults(func=_cmd_oncall)
 
-    p = sub.add_parser("comply", help="CIS/STIG compliance scanning")
-    p.add_argument("action", nargs="?", choices=["scan", "status", "report", "exceptions"],
-                   default="scan", help="Action to perform")
-    p.set_defaults(func=_cmd_comply)
+    p = ops_sub.add_parser("risk", help="Kill-chain blast radius analysis")
+    p.add_argument("target", nargs="?", help="Infrastructure target (pfsense/truenas/switch/all)")
+    p.set_defaults(func=_cmd_risk)
 
-    p = sub.add_parser("docs", help="Auto-generated infrastructure documentation")
-    p.add_argument("action", nargs="?",
-                   choices=["generate", "export", "verify", "runbook"],
-                   default="generate", help="Action to perform")
-    p.add_argument("name", nargs="?", help="Runbook name (for runbook action)")
-    p.add_argument("--format", default="md", choices=["md", "html"], help="Export format")
-    p.set_defaults(func=_cmd_docs)
 
-    # --- Remaining ---
-    p = sub.add_parser("distros", help="List available cloud images")
-    p.set_defaults(func=_cmd_distros)
+# ---------------------------------------------------------------------------
+# freq hw — Hardware & Cost
+# ---------------------------------------------------------------------------
 
-    p = sub.add_parser("provision", help="Cloud-init VM provisioning")
-    p.set_defaults(func=_cmd_provision)
+def _register_hw(sub):
+    """Register freq hw subcommands."""
+    hw = sub.add_parser("hw", help="Hardware management and cost analysis")
+    _domain_help(hw)
+    hw_sub = hw.add_subparsers(dest="subcmd")
 
-    p = sub.add_parser("notify", help="Send notifications to Discord/Slack")
-    p.add_argument("message", nargs="*", help="Notification message")
-    p.set_defaults(func=_cmd_notify)
+    p = hw_sub.add_parser("idrac", help="Dell iDRAC management")
+    p.add_argument("action", nargs="?", help="Subcommand (status/sensors/power/sel/info)")
+    p.set_defaults(func=_cmd_idrac)
 
-    p = sub.add_parser("backup", help="VM snapshots, config export, retention")
-    p.add_argument("action", nargs="?", choices=["list", "create", "export", "status", "prune"],
-                   default="list")
-    p.add_argument("target", nargs="?", help="VMID (for create)")
-    p.set_defaults(func=_cmd_backup)
+    p = hw_sub.add_parser("cost", help="Fleet power cost estimates")
+    p.set_defaults(func=_cmd_cost)
 
-    p = sub.add_parser("journal", help="Operation history")
-    p.add_argument("--lines", "-n", type=int, default=20, help="Number of entries")
-    p.add_argument("--search", "-s", help="Search filter")
-    p.set_defaults(func=_cmd_journal)
+    p = hw_sub.add_parser("cost-analysis", help="On-prem FinOps and cost optimization")
+    p.add_argument("action", nargs="?", choices=["waste", "density", "optimize", "compare"],
+                   default="waste", help="Action to perform")
+    p.add_argument("--rate", type=float, default=0.12, help="Electricity rate $/kWh (default: 0.12)")
+    p.set_defaults(func=_cmd_cost_analysis)
 
-    p = sub.add_parser("deploy-agent", help="Deploy metrics collector to fleet")
-    p.add_argument("target", nargs="?", help="Host label or 'all'")
-    p.set_defaults(func=_cmd_deploy_agent)
-
-    p = sub.add_parser("agent-status", help="Check metrics agent status across fleet")
-    p.set_defaults(func=_cmd_agent_status)
-
-    p = sub.add_parser("gwipe", help="FREQ WIPE — drive sanitization station")
+    p = hw_sub.add_parser("gwipe", help="FREQ WIPE — drive sanitization station")
     p.add_argument("action", nargs="?", default="status",
                    help="Subcommand (status/bays/history/test/wipe/full-send/pause/resume/connect)")
     p.add_argument("target", nargs="?", help="Bay device (e.g. sdb) for per-bay actions")
@@ -872,250 +901,407 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--key", help="API key (overrides vault)")
     p.set_defaults(func=_cmd_gwipe)
 
-    p = sub.add_parser("serve", help="Start web dashboard")
-    p.add_argument("--port", type=int, default=None, help="Port number (default: from freq.toml or 8888)")
-    p.set_defaults(func=_cmd_serve)
 
-    p = sub.add_parser("update", help="Check for updates and upgrade FREQ")
-    p.set_defaults(func=_cmd_update)
+# ---------------------------------------------------------------------------
+# freq store — Storage Management
+# ---------------------------------------------------------------------------
 
-    return parser
+def _register_store(sub):
+    """Register freq store subcommands."""
+    store = sub.add_parser("store", help="TrueNAS, ZFS, and storage management")
+    _domain_help(store)
+    store_sub = store.add_subparsers(dest="subcmd")
+
+    p = store_sub.add_parser("nas", help="TrueNAS management")
+    p.add_argument("action", nargs="?", help="Subcommand (status/pools/health/datasets/shares/alerts)")
+    p.set_defaults(func=_cmd_truenas)
+
+    p = store_sub.add_parser("zfs", help="ZFS operations")
+    p.add_argument("action", nargs="?", help="Subcommand")
+    p.set_defaults(func=_cmd_zfs)
 
 
-# --- Built-in Commands ---
+# ---------------------------------------------------------------------------
+# freq dr — Disaster Recovery & Backup
+# ---------------------------------------------------------------------------
 
-def cmd_version(cfg: FreqConfig, pack, args) -> int:
-    """Show version with branding."""
-    from freq.core.personality import splash
-    splash(pack, cfg.version)
-    return 0
+def _register_dr(sub):
+    """Register freq dr subcommands."""
+    dr = sub.add_parser("dr", help="Backup, recovery, and SLA")
+    _domain_help(dr)
+    dr_sub = dr.add_subparsers(dest="subcmd")
 
+    p = dr_sub.add_parser("backup", help="VM snapshots, config export, retention")
+    p.add_argument("action", nargs="?", choices=["list", "create", "export", "status", "prune"],
+                   default="list")
+    p.add_argument("target", nargs="?", help="VMID (for create)")
+    p.set_defaults(func=_cmd_backup)
+
+    p = dr_sub.add_parser("policy", help="Declarative backup rules (create/list/apply)")
+    p.add_argument("action", nargs="?",
+                   choices=["list", "create", "delete", "apply", "status"],
+                   default="list", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Policy name")
+    p.add_argument("--target", help="Target selector (tag name, vmid range, or *)")
+    p.add_argument("--target-type", default="tag", choices=["tag", "vmid_range", "all"],
+                   help="Target type")
+    p.add_argument("--interval", default="24h", help="Snapshot interval (default: 24h)")
+    p.add_argument("--retention", type=int, default=7, help="Days to retain (default: 7)")
+    p.set_defaults(func=_cmd_backup_policy)
+
+    p = dr_sub.add_parser("journal", help="Operation history")
+    p.add_argument("--lines", "-n", type=int, default=20, help="Number of entries")
+    p.add_argument("--search", "-s", help="Search filter")
+    p.set_defaults(func=_cmd_journal)
+
+    p = dr_sub.add_parser("migrate-plan", help="Load-aware migration recommendations")
+    p.add_argument("action", nargs="?", choices=["show"], default="show",
+                   help="Action to perform")
+    p.set_defaults(func=_cmd_migrate_plan)
+
+    p = dr_sub.add_parser("migrate-vmware", help="VMware ESXi to Proxmox migration")
+    p.add_argument("action", nargs="?", choices=["scan", "import", "convert", "status"],
+                   default="scan", help="Action to perform")
+    p.add_argument("target", nargs="?", help="OVA/VMDK file or directory path")
+    p.add_argument("--vmid", type=int, help="Target VMID for import")
+    p.add_argument("--node", help="Target PVE node")
+    p.add_argument("--storage", default="local-lvm", help="Target storage (default: local-lvm)")
+    p.set_defaults(func=_cmd_migrate_vmware)
+
+
+# ---------------------------------------------------------------------------
+# freq net — Network Intelligence & Switch Management
+# ---------------------------------------------------------------------------
+
+def _register_net(sub):
+    """Register freq net subcommands."""
+    net = sub.add_parser("net", help="Network monitoring, switches, and IPAM")
+    _domain_help(net)
+    net_sub = net.add_subparsers(dest="subcmd")
+
+    p = net_sub.add_parser("switch", help="Network switch management")
+    p.add_argument("action", nargs="?", help="Subcommand (status/vlans/interfaces/mac/trunk)")
+    p.set_defaults(func=_cmd_switch)
+
+    p = net_sub.add_parser("netmon", help="Network monitoring and interface tracking")
+    p.add_argument("action", nargs="?", choices=["interfaces", "poll", "bandwidth", "topology"],
+                   default="interfaces", help="Action to perform")
+    p.set_defaults(func=_cmd_netmon)
+
+    p = net_sub.add_parser("map", help="Dependency discovery and impact analysis")
+    p.add_argument("action", nargs="?", choices=["discover", "show", "impact", "export"],
+                   default="discover", help="Action to perform")
+    p.add_argument("target", nargs="?", help="Host label (for impact)")
+    p.add_argument("--format", default="json", choices=["json", "dot"], help="Export format")
+    p.set_defaults(func=_cmd_map)
+
+    p = net_sub.add_parser("ip", help="IP address management (next/list/check)")
+    p.add_argument("action", nargs="?", choices=["next", "list", "check"], default="next",
+                   help="Action: next (default), list, check")
+    p.add_argument("target", nargs="?", help="IP address (for check)")
+    p.add_argument("--vlan", help="VLAN name to search")
+    p.add_argument("--count", type=int, default=1, help="Number of IPs to find (for next)")
+    p.set_defaults(func=_cmd_ip)
+
+
+# ---------------------------------------------------------------------------
+# freq fw — Firewall & Gateway
+# ---------------------------------------------------------------------------
+
+def _register_fw(sub):
+    """Register freq fw subcommands."""
+    fw = sub.add_parser("fw", help="Firewall management (pfSense/OPNsense)")
+    fw.add_argument("action", nargs="?", help="status/rules/nat/states/interfaces/gateways/services")
+    fw.set_defaults(func=_cmd_pfsense)
+
+
+# ---------------------------------------------------------------------------
+# freq cert — Certificate & PKI
+# ---------------------------------------------------------------------------
+
+def _register_cert(sub):
+    """Register freq cert subcommands."""
+    cert = sub.add_parser("cert", help="TLS certificate inventory and monitoring")
+    cert.add_argument("action", nargs="?", choices=["scan", "list", "check"],
+                      default="scan", help="Action to perform")
+    cert.add_argument("target", nargs="?", help="Host:port for single check")
+    cert.set_defaults(func=_cmd_cert)
+
+
+# ---------------------------------------------------------------------------
+# freq dns — DNS Management
+# ---------------------------------------------------------------------------
+
+def _register_dns(sub):
+    """Register freq dns subcommands."""
+    dns = sub.add_parser("dns", help="DNS record tracking and validation")
+    dns.add_argument("action", nargs="?", choices=["scan", "check", "list"],
+                     default="scan", help="Action to perform")
+    dns.add_argument("target", nargs="?", help="Hostname or IP for single check")
+    dns.set_defaults(func=_cmd_dns)
+
+
+# ---------------------------------------------------------------------------
+# freq proxy — Reverse Proxy
+# ---------------------------------------------------------------------------
+
+def _register_proxy(sub):
+    """Register freq proxy subcommands."""
+    proxy = sub.add_parser("proxy", help="Reverse proxy management")
+    proxy.add_argument("action", nargs="?", choices=["status", "list", "add", "remove", "certs"],
+                       default="status", help="Action to perform")
+    proxy.add_argument("--domain", help="Domain name for proxy route")
+    proxy.add_argument("--upstream", help="Upstream target (host:port)")
+    proxy.add_argument("--host", dest="target_host", help="Target proxy host")
+    proxy.add_argument("--ssl", action="store_true", default=True, help="Enable SSL (default)")
+    proxy.set_defaults(func=_cmd_proxy)
+
+
+# ---------------------------------------------------------------------------
+# freq media — Media Stack
+# ---------------------------------------------------------------------------
+
+def _register_media(sub):
+    """Register freq media subcommands."""
+    media = sub.add_parser("media", help="Media stack management (Plex/Sonarr/Radarr/Tdarr)")
+    media.add_argument("action", nargs="?", help="Subcommand (status/restart/stop/start/logs/stats/"
+                       "update/prune/backup/restore/health/doctor/queue/streams/vpn/disk/"
+                       "missing/search/scan/activity/wanted/indexers/downloads/"
+                       "transcode/subtitles/requests/nuke/export/dashboard/report/"
+                       "compose/mounts/cleanup/gpu)")
+    media.add_argument("service", nargs="?", help="Service name or sub-action")
+    media.add_argument("--check", action="store_true", help="Check mode (for update)")
+    media.add_argument("--list", action="store_true", help="List mode (for backup)")
+    media.add_argument("--lines", "-n", type=int, default=50, help="Number of log lines")
+    media.add_argument("--errors", action="store_true", help="Show only errors/warnings (for logs)")
+    media.add_argument("--since", help="Show logs since duration (e.g., 1h, 30m, 2d)")
+    media.set_defaults(func=_cmd_media)
+
+
+# ---------------------------------------------------------------------------
+# freq user — User Management
+# ---------------------------------------------------------------------------
+
+def _register_user(sub):
+    """Register freq user subcommands."""
+    user = sub.add_parser("user", help="User accounts, roles, and RBAC")
+    _domain_help(user)
+    user_sub = user.add_subparsers(dest="subcmd")
+
+    p = user_sub.add_parser("list", help="List users")
+    p.set_defaults(func=_cmd_users)
+
+    p = user_sub.add_parser("create", help="Create a new user")
+    p.add_argument("username", nargs="?", help="Username")
+    p.add_argument("--role", choices=["viewer", "operator", "admin"], help="Initial role")
+    p.set_defaults(func=_cmd_new_user)
+
+    p = user_sub.add_parser("passwd", help="Change user password")
+    p.add_argument("username", nargs="?", help="Username")
+    p.set_defaults(func=_cmd_passwd)
+
+    p = user_sub.add_parser("roles", help="View role assignments")
+    p.set_defaults(func=_cmd_roles)
+
+    p = user_sub.add_parser("promote", help="Promote user to higher role")
+    p.add_argument("username", nargs="?", help="Username")
+    p.set_defaults(func=_cmd_promote)
+
+    p = user_sub.add_parser("demote", help="Demote user to lower role")
+    p.add_argument("username", nargs="?", help="Username")
+    p.set_defaults(func=_cmd_demote)
+
+    p = user_sub.add_parser("install", help="Install user across fleet")
+    p.add_argument("username", nargs="?", help="Username")
+    p.set_defaults(func=_cmd_install_user)
+
+
+# ---------------------------------------------------------------------------
+# Help command — domain-based reference
+# ---------------------------------------------------------------------------
 
 def cmd_help(cfg: FreqConfig, pack, args) -> int:
-    """Show all commands organized by category."""
-    fmt.header("Command Reference")
+    """Show all commands organized by domain."""
+    fmt.header("Command Reference — freq <domain> <action>")
     fmt.blank()
 
     categories = [
-        ("Utilities", [
+        ("Utilities (top-level)", [
             ("version", "Show version and branding"),
             ("help", "This command reference"),
             ("doctor", "Self-diagnostic"),
-            ("why <vmid>", "Explain VM permissions and protections"),
-            ("test-connection <host>", "Test host connectivity (TCP + SSH + sudo)"),
             ("menu", "Interactive TUI menu"),
             ("demo", "Interactive demo (no fleet required)"),
-        ]),
-        ("Fleet Operations", [
-            ("status", "Fleet health summary"),
-            ("dashboard", "Fleet dashboard overview"),
-            ("exec <target> <cmd>", "Run command across fleet"),
-            ("info <host>", "System info for a host"),
-            ("diagnose <host>", "Deep diagnostic"),
-            ("ssh <host>", "SSH to a fleet host"),
-            ("docker <host>", "Container management"),
-            ("log <host>", "View host logs"),
-            ("keys <action>", "SSH key management"),
-        ]),
-        ("Host Management", [
-            ("hosts [list|add|remove]", "Manage fleet hosts"),
-            ("discover", "Discover hosts on network"),
-            ("groups [list|add|remove]", "Manage host groups"),
-            ("bootstrap <host>", "Bootstrap a new host"),
-            ("onboard <host>", "Onboard to fleet"),
-        ]),
-        ("VM Management", [
-            ("list [--node] [--status]", "List VMs across cluster"),
-            ("create [--name --image ...]", "Create a new VM"),
-            ("clone <source> [--name]", "Clone an existing VM"),
-            ("destroy <target>", "Destroy a VM"),
-            ("resize <target> [--cores --ram]", "Resize a VM"),
-            ("power <action> <vmid>", "Power control (start/stop/reboot/shutdown)"),
-            ("snapshot [create|list|delete]", "Snapshot management"),
-            ("nic <action> <vmid>", "NIC management (add/clear/change-ip/change-id)"),
-            ("migrate <target> --node", "Migrate between nodes"),
-            ("import", "Import VM from backup"),
-            ("template <vmid>", "Convert VM to template"),
-            ("rename <vmid> --name", "Rename a VM"),
-            ("add-disk <vmid> --size", "Add disk(s) to a VM"),
-            ("tag <vmid> [tags]", "Set/view PVE tags"),
-            ("pool [list|create|add]", "Pool management"),
-            ("sandbox <template>", "Spawn from template"),
-            ("file send <src> <host:dst>", "SCP file to host"),
-        ]),
-        ("Proxmox", [
-            ("vm-overview", "VM inventory across cluster"),
-            ("vmconfig <target>", "View/edit VM configuration"),
-            ("rescue <target>", "Rescue a stuck VM"),
-        ]),
-        ("User Management", [
-            ("users", "List users"),
-            ("new-user <username>", "Create user"),
-            ("passwd <username>", "Change password"),
-            ("roles", "View role assignments"),
-            ("promote <user>", "Promote to higher role"),
-            ("demote <user>", "Demote to lower role"),
-            ("install-user <user>", "Install user across fleet"),
-        ]),
-        ("Security", [
-            ("vault <action> [key]", "Encrypted credential store"),
-            ("audit [--fix]", "Security audit"),
-            ("harden <target>", "Apply hardening"),
-        ]),
-        ("Infrastructure", [
-            ("pfsense <action>", "pfSense management"),
-            ("truenas <action>", "TrueNAS management"),
-            ("zfs <action>", "ZFS operations"),
-            ("switch <action>", "Network switch"),
-            ("idrac <action>", "Dell iDRAC"),
-            ("media <action> [svc]", "Media stack (40+ subcommands)"),
-        ]),
-        ("Specialist & Lab", [
-            ("specialist create <host>", "Deploy Claude Code workspace"),
-            ("specialist health <host>", "Check specialist VM health"),
-            ("specialist roles", "List available roles"),
-            ("lab status", "Lab fleet overview"),
-            ("lab media deploy", "Deploy test media stack"),
-            ("lab resize <vmid> --min", "Set minimum specs"),
-            ("lab rebuild <vmid>", "Destroy and recreate from template"),
-        ]),
-        ("Fleet Extended", [
-            ("ntp [check|fix]", "Fleet NTP check/fix"),
-            ("fleet-update [check|apply]", "Fleet OS updates"),
-            ("comms [setup|send|check]", "Inter-VM mailbox"),
-            ("backup status", "Backup retention status"),
-            ("backup prune", "Remove old backups"),
-        ]),
-        ("Monitoring", [
-            ("health", "Comprehensive fleet health"),
-            ("watch", "Monitoring daemon"),
-        ]),
-        ("Engine", [
-            ("check <policy>", "Check compliance (dry run)"),
-            ("fix <policy>", "Apply remediation"),
-            ("diff <policy>", "Show drift as git diff"),
-            ("policies", "List available policies"),
-        ]),
-        ("Agent Platform", [
-            ("agent templates", "List specialist templates"),
-            ("agent create <template>", "Create a new AI specialist"),
-            ("agent list", "Show registered agents"),
-            ("agent start/stop <name>", "Manage agent sessions"),
-            ("agent destroy <name>", "Remove agent + VM"),
-        ]),
-        ("Docker Fleet & Monitoring", [
-            ("docker-fleet [ps|logs|stats]", "Fleet-wide container operations"),
-            ("monitor", "Check HTTP endpoints from config"),
-        ]),
-        ("IPAM", [
-            ("ip next --vlan <name>", "Next available IP in VLAN"),
-            ("ip list [--vlan <name>]", "List used IPs"),
-            ("ip check <ip>", "Check if IP is in use"),
-        ]),
-        ("Declarative Fleet", [
-            ("plan [--file path]", "Show fleet plan diff (desired vs actual)"),
-            ("apply [--file path]", "Apply fleet plan (create/resize VMs)"),
-        ]),
-        ("Smart Commands", [
-            ("learn <query>", "Search Proxmox operational knowledge"),
-            ("risk <target>", "Kill-chain blast radius analysis"),
-            ("sweep [--fix]", "Full audit + policy sweep pipeline"),
-            ("patrol [--interval N]", "Continuous monitoring + drift detection"),
-            ("capacity [show|snapshot]", "Fleet capacity projections"),
-            ("cost", "Fleet power cost estimates"),
-            ("rules [list|create|delete]", "Alert rule management"),
-            ("playbook [list|run]", "Incident playbook runner"),
-            ("federation [list|register|poll]", "Multi-site federation"),
-            ("gitops [status|sync|apply|diff]", "GitOps config sync"),
-            ("chaos [list|run|log]", "Chaos engineering experiments"),
-        ]),
-        ("Alerting & Intelligence", [
-            ("alert [list|create|delete|check]", "Alert rules with notification delivery"),
-            ("alert test", "Test alert delivery to all channels"),
-            ("alert silence <pattern>", "Silence alerts temporarily"),
-            ("alert history", "View fired alert history"),
-            ("rollback <vmid>", "Roll back VM to latest snapshot"),
-            ("inventory [hosts|vms|containers]", "Full fleet CMDB export (JSON/CSV/table)"),
-            ("compare <host-a> <host-b>", "Side-by-side host comparison"),
-            ("baseline capture [name]", "Snapshot known-good config state"),
-            ("baseline compare [name]", "Detect configuration drift"),
-        ]),
-        ("Fleet Intelligence", [
-            ("report [--markdown|--json]", "Full fleet health report"),
-            ("trend show", "Capacity trends with sparklines"),
-            ("trend snapshot", "Record a capacity data point"),
-            ("sla show [--days N]", "Fleet uptime SLA (7/30/90 day)"),
-            ("sla check", "Record SLA data point"),
-            ("cert scan", "Scan fleet for TLS certificates"),
-            ("cert check <host:port>", "Check a single TLS endpoint"),
-            ("dns scan", "Validate fleet DNS records"),
-            ("dns check <host-or-ip>", "Check a single DNS entry"),
-        ]),
-        ("Platform", [
-            ("schedule [list|create|delete|run]", "Built-in job scheduler"),
-            ("schedule templates", "Pre-built job templates"),
-            ("schedule install", "Install jobs to system cron"),
-            ("backup-policy [list|create|apply]", "Declarative backup rules"),
-            ("backup-policy apply", "Enforce snapshot + retention"),
-            ("webhook [list|create|delete|test]", "Inbound webhook triggers"),
-            ("migrate-plan", "Load-aware migration recommendations"),
-            ("migrate-vmware scan <path>", "Scan for VMware VM files"),
-            ("migrate-vmware import <ova>", "Import VMware VM to Proxmox"),
-        ]),
-        ("Operations", [
-            ("patch status", "Fleet patch status"),
-            ("patch check", "Check for available updates"),
-            ("patch apply [--host]", "Apply patches with snapshot rollback"),
-            ("patch compliance", "Fleet patch compliance %"),
-            ("stack status", "Docker Compose stacks fleet-wide"),
-            ("stack update <name>", "Pull + recreate stack containers"),
-            ("stack health", "Container health across fleet"),
-            ("docs generate", "Auto-generate infra docs from live state"),
-            ("docs verify", "Check if docs match reality"),
-            ("docs runbook [name]", "List or run runbooks"),
-            ("db status", "Fleet-wide database health"),
-            ("db size", "Database sizes across fleet"),
-            ("proxy status", "Reverse proxy detection fleet-wide"),
-            ("proxy list", "Managed proxy routes"),
-            ("proxy add --domain --upstream", "Add a proxy route"),
-            ("proxy certs", "Certificate status for proxy routes"),
-            ("secrets scan", "Scan fleet for hardcoded secrets"),
-            ("secrets audit", "Secret health audit"),
-            ("secrets generate", "Generate secure password/token"),
-            ("secrets lease <name>", "Track secret expiry"),
-            ("logs tail [--host]", "Tail logs across fleet"),
-            ("logs search <pattern>", "Search logs fleet-wide"),
-            ("logs stats", "Top error patterns fleet-wide"),
-            ("oncall whoami", "Who is on call right now"),
-            ("oncall schedule --users", "Set on-call rotation"),
-            ("oncall alert --message", "Create incident"),
-            ("oncall ack/resolve <ID>", "Manage incidents"),
-            ("comply scan", "CIS Level 1 compliance scan"),
-            ("comply report", "Compliance report"),
-            ("map discover", "Auto-discover service dependencies"),
-            ("map impact <host>", "What breaks if this host dies?"),
-            ("map export --format dot", "Export for Graphviz"),
-            ("netmon interfaces", "Network interfaces fleet-wide"),
-            ("netmon poll", "Bandwidth snapshot (poll counters)"),
-            ("netmon bandwidth", "Bandwidth rate from poll history"),
-            ("netmon topology", "LLDP/CDP topology discovery"),
-            ("cost-analysis waste", "Find overprovisioned VMs"),
-            ("cost-analysis density", "Host utilization density"),
-            ("cost-analysis compare", "On-prem vs AWS cost comparison"),
-        ]),
-        ("Deployment", [
             ("init", "First-run setup wizard"),
             ("configure", "Reconfigure settings"),
+            ("serve", "Start web dashboard"),
+            ("update", "Check for updates"),
+            ("learn <query>", "Search operational knowledge"),
+            ("docs [generate|verify|runbook]", "Auto-generated docs"),
+            ("distros", "List cloud images"),
+            ("notify <message>", "Send notification"),
+            ("agent <action>", "AI specialist management"),
+        ]),
+        ("freq vm — Virtual Machine Lifecycle", [
+            ("vm list [--node] [--status]", "List VMs across cluster"),
+            ("vm create [--name --image ...]", "Create a new VM"),
+            ("vm clone <source> [--name]", "Clone an existing VM"),
+            ("vm destroy <target>", "Destroy a VM"),
+            ("vm resize <target> [--cores --ram]", "Resize a VM"),
+            ("vm power <start/stop/reboot> <vmid>", "Power control"),
+            ("vm snapshot [create|list|delete]", "Snapshot management"),
+            ("vm rollback <vmid>", "Roll back to snapshot"),
+            ("vm nic <action> <vmid>", "NIC management"),
+            ("vm migrate <target> --node", "Migrate between nodes"),
+            ("vm import --image", "Import cloud image"),
+            ("vm template <vmid>", "Convert to template"),
+            ("vm rename <vmid> --name", "Rename a VM"),
+            ("vm disk <vmid> --size", "Add disk(s)"),
+            ("vm tag <vmid> [tags]", "PVE tags"),
+            ("vm pool [list|create|add]", "Pool management"),
+            ("vm sandbox <template>", "Spawn from template"),
+            ("vm overview", "VM inventory across cluster"),
+            ("vm config <target>", "View/edit VM configuration"),
+            ("vm rescue <target>", "Rescue a stuck VM"),
+            ("vm why <vmid>", "Explain protections"),
+            ("vm provision", "Cloud-init provisioning"),
+            ("vm file send <src> <host:dst>", "SCP file to host"),
+        ]),
+        ("freq fleet — Fleet Operations", [
+            ("fleet status", "Fleet health summary"),
+            ("fleet dashboard", "Dashboard overview"),
+            ("fleet exec <target> <cmd>", "Run command across fleet"),
+            ("fleet info <host>", "System info"),
+            ("fleet detail <host>", "Deep host inventory"),
+            ("fleet diagnose <host>", "Deep diagnostic"),
+            ("fleet ssh <host>", "SSH to host"),
+            ("fleet docker <host>", "Container discovery"),
+            ("fleet log <host>", "View host logs"),
+            ("fleet compare <a> <b>", "Side-by-side compare"),
+            ("fleet health", "Comprehensive health"),
+            ("fleet report [--markdown]", "Fleet health report"),
+            ("fleet ntp [check|fix]", "NTP management"),
+            ("fleet update [check|apply]", "OS updates"),
+            ("fleet comms [setup|send|check]", "Inter-VM mailbox"),
+            ("fleet inventory [hosts|vms|containers]", "CMDB export"),
+            ("fleet federation [list|register|poll]", "Multi-site"),
+            ("fleet test <host>", "Test connectivity"),
+        ]),
+        ("freq host — Host Registry", [
+            ("host list", "List fleet hosts"),
+            ("host add", "Add a host"),
+            ("host remove", "Remove a host"),
+            ("host discover", "Discover on network"),
+            ("host groups [list|add|remove]", "Manage groups"),
+            ("host bootstrap <host>", "Bootstrap new host"),
+            ("host onboard <host>", "Onboard to fleet"),
+            ("host keys [deploy|list|rotate]", "SSH key management"),
+        ]),
+        ("freq docker — Container Management", [
+            ("docker containers <host>", "Container discovery"),
+            ("docker fleet [ps|logs|stats]", "Fleet-wide operations"),
+            ("docker stack [status|update|health]", "Compose stacks"),
+            ("docker monitor", "HTTP endpoint checks"),
+        ]),
+        ("freq secure — Security & Compliance", [
+            ("secure vault <action> [key]", "Encrypted credential store"),
+            ("secure audit [--fix]", "Security audit"),
+            ("secure harden <target>", "Apply hardening"),
+            ("secure comply [scan|report]", "CIS/STIG compliance"),
+            ("secure patch [status|check|apply]", "Patch management"),
+            ("secure secrets [scan|audit|generate]", "Secret lifecycle"),
+            ("secure sweep [--fix]", "Full audit pipeline"),
+        ]),
+        ("freq observe — Observability", [
+            ("observe alert [list|create|check|test]", "Alert management"),
+            ("observe logs [tail|search|stats]", "Fleet log aggregation"),
+            ("observe trend [show|snapshot]", "Capacity trends"),
+            ("observe capacity [show|snapshot]", "Capacity projections"),
+            ("observe sla [show|check]", "Uptime SLA tracking"),
+            ("observe watch", "Monitoring daemon"),
+            ("observe db [status|health|size]", "Database health"),
+        ]),
+        ("freq state — Desired State", [
+            ("state baseline [capture|compare|list]", "Config baselines"),
+            ("state plan [--file]", "Fleet plan diff"),
+            ("state apply [--file]", "Apply fleet plan"),
+            ("state check <policy>", "Check compliance"),
+            ("state fix <policy>", "Apply remediation"),
+            ("state diff <policy>", "Show drift"),
+            ("state policies", "List policies"),
+            ("state gitops [status|sync|diff]", "GitOps config sync"),
+        ]),
+        ("freq auto — Automation", [
+            ("auto rules [list|create|delete]", "Alert rules"),
+            ("auto schedule [list|create|run]", "Job scheduler"),
+            ("auto playbook [list|run]", "Incident playbooks"),
+            ("auto webhook [list|create|test]", "Inbound webhooks"),
+            ("auto chaos [list|run|log]", "Chaos engineering"),
+            ("auto patrol [--interval N]", "Continuous monitoring"),
+        ]),
+        ("freq ops — Operations", [
+            ("ops oncall [whoami|schedule|alert|ack]", "On-call rotation"),
+            ("ops risk <target>", "Blast radius analysis"),
+        ]),
+        ("freq hw — Hardware & Cost", [
+            ("hw idrac <action>", "Dell iDRAC management"),
+            ("hw cost", "Power cost estimates"),
+            ("hw cost-analysis [waste|density|compare]", "FinOps analysis"),
+            ("hw gwipe [status|bays|wipe]", "Drive sanitization"),
+        ]),
+        ("freq store — Storage", [
+            ("store nas <action>", "TrueNAS management"),
+            ("store zfs <action>", "ZFS operations"),
+        ]),
+        ("freq dr — Disaster Recovery", [
+            ("dr backup [list|create|export|prune]", "Backup management"),
+            ("dr policy [list|create|apply]", "Backup policies"),
+            ("dr journal [--lines N]", "Operation history"),
+            ("dr migrate-plan", "Migration recommendations"),
+            ("dr migrate-vmware [scan|import]", "VMware migration"),
+        ]),
+        ("freq net — Network", [
+            ("net switch <action>", "Switch management"),
+            ("net netmon [interfaces|poll|bandwidth]", "Network monitoring"),
+            ("net map [discover|impact|export]", "Dependency mapping"),
+            ("net ip [next|list|check]", "IPAM"),
+        ]),
+        ("Standalone Domains", [
+            ("fw <action>", "Firewall (pfSense/OPNsense)"),
+            ("cert [scan|list|check]", "TLS certificates"),
+            ("dns [scan|check|list]", "DNS validation"),
+            ("proxy [status|list|add|remove]", "Reverse proxy"),
+            ("media <action> [service]", "Media stack (40+ subcommands)"),
+        ]),
+        ("freq user — User Management", [
+            ("user list", "List users"),
+            ("user create <username>", "Create user"),
+            ("user passwd <username>", "Change password"),
+            ("user roles", "View role assignments"),
+            ("user promote <username>", "Promote to higher role"),
+            ("user demote <username>", "Demote to lower role"),
+            ("user install <username>", "Install across fleet"),
         ]),
     ]
 
     for category, commands in categories:
         fmt.line(f"{fmt.C.PURPLE_BOLD}{category}{fmt.C.RESET}")
         for cmd_name, desc in commands:
-            fmt.line(f"  {fmt.C.CYAN}freq {cmd_name:<30}{fmt.C.RESET} {desc}")
+            fmt.line(f"  {fmt.C.CYAN}freq {cmd_name:<40}{fmt.C.RESET} {desc}")
         fmt.blank()
 
     fmt.footer()
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Built-in commands (no lazy loading needed)
+# ---------------------------------------------------------------------------
+
+def cmd_version(cfg: FreqConfig, pack, args) -> int:
+    """Show version with branding."""
+    from freq.core.personality import splash
+    splash(pack, cfg.version)
     return 0
 
 
@@ -1130,6 +1316,10 @@ def cmd_menu(cfg: FreqConfig, pack, args) -> int:
     from freq.tui.menu import run as tui_run
     return tui_run(cfg, pack)
 
+
+# ---------------------------------------------------------------------------
+# Command wrappers — lazy module loading
+# ---------------------------------------------------------------------------
 
 def _cmd_demo(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.demo import run
@@ -1770,5 +1960,3 @@ def _cmd_groups(cfg: FreqConfig, pack, args) -> int:
     """Route to groups module."""
     from freq.modules.hosts import cmd_groups
     return cmd_groups(cfg, pack, args)
-
-
