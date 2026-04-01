@@ -1662,6 +1662,13 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/webhook/log": "_serve_webhook_log",
         "/api/migrate-plan": "_serve_migrate_plan",
         "/api/migrate-vmware/status": "_serve_migrate_vmware_status",
+        # Phase 4: Operations
+        "/api/patch/status": "_serve_patch_status",
+        "/api/patch/compliance": "_serve_patch_compliance",
+        "/api/stack/status": "_serve_stack_status",
+        "/api/stack/health": "_serve_stack_health",
+        "/api/docs/generate": "_serve_docs_generate",
+        "/api/docs/runbooks": "_serve_docs_runbooks",
         # Setup wizard (no auth — only works during first run)
         "/api/setup/status": "_serve_setup_status",
         "/api/setup/create-admin": "_serve_setup_create_admin",
@@ -7436,6 +7443,43 @@ a:hover{{text-decoration:underline}}
         cfg = load_config()
         state = _load_state(cfg)
         self._json_response(state)
+
+    # --- Phase 4: Operations API Handlers ---
+
+    def _serve_patch_status(self):
+        """Get patch status (history only — live check requires SSH)."""
+        from freq.modules.patch import _load_history, _load_holds
+        cfg = load_config()
+        self._json_response({"history": _load_history(cfg)[-20:], "holds": _load_holds(cfg)})
+
+    def _serve_patch_compliance(self):
+        """Patch compliance info."""
+        self._json_response({"info": "Run freq patch compliance for live data", "usage": "freq patch compliance"})
+
+    def _serve_stack_status(self):
+        """Stack status info."""
+        self._json_response({"info": "Run freq stack status for live data", "usage": "freq stack status"})
+
+    def _serve_stack_health(self):
+        """Stack health info."""
+        self._json_response({"info": "Run freq stack health for live data", "usage": "freq stack health"})
+
+    def _serve_docs_generate(self):
+        """Generate docs data."""
+        from freq.modules.docs import _gather_fleet_data
+        cfg = load_config()
+        data = _gather_fleet_data(cfg)
+        self._json_response(data)
+
+    def _serve_docs_runbooks(self):
+        """List runbooks."""
+        from freq.modules.docs import _runbook_dir
+        cfg = load_config()
+        import os as os_mod
+        rdir = _runbook_dir(cfg)
+        runbooks = [f.replace(".json", "")
+                    for f in os_mod.listdir(rdir) if f.endswith(".json")]
+        self._json_response({"runbooks": runbooks, "count": len(runbooks)})
 
 
 def cmd_serve(cfg, pack, args) -> int:

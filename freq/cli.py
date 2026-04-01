@@ -733,6 +733,33 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--storage", default="local-lvm", help="Target storage (default: local-lvm)")
     p.set_defaults(func=_cmd_migrate_vmware)
 
+    # --- Phase 4: Easy Kills ---
+    p = sub.add_parser("patch", help="Fleet patch management (status/check/apply/hold)")
+    p.add_argument("action", nargs="?",
+                   choices=["status", "check", "apply", "hold", "history", "compliance"],
+                   default="status", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Package name (for hold)")
+    p.add_argument("--target-host", help="Target specific host")
+    p.add_argument("--lines", type=int, default=20, help="History lines")
+    p.set_defaults(func=_cmd_patch)
+
+    p = sub.add_parser("stack", help="Docker Compose stack management")
+    p.add_argument("action", nargs="?",
+                   choices=["status", "update", "health", "logs", "restart", "template"],
+                   default="status", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Stack name")
+    p.add_argument("--host", dest="target_host", help="Target host")
+    p.add_argument("--lines", type=int, default=30, help="Log lines")
+    p.set_defaults(func=_cmd_stack)
+
+    p = sub.add_parser("docs", help="Auto-generated infrastructure documentation")
+    p.add_argument("action", nargs="?",
+                   choices=["generate", "export", "verify", "runbook"],
+                   default="generate", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Runbook name (for runbook action)")
+    p.add_argument("--format", default="md", choices=["md", "html"], help="Export format")
+    p.set_defaults(func=_cmd_docs)
+
     # --- Remaining ---
     p = sub.add_parser("distros", help="List available cloud images")
     p.set_defaults(func=_cmd_distros)
@@ -959,6 +986,18 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("migrate-plan", "Load-aware migration recommendations"),
             ("migrate-vmware scan <path>", "Scan for VMware VM files"),
             ("migrate-vmware import <ova>", "Import VMware VM to Proxmox"),
+        ]),
+        ("Operations", [
+            ("patch status", "Fleet patch status"),
+            ("patch check", "Check for available updates"),
+            ("patch apply [--host]", "Apply patches with snapshot rollback"),
+            ("patch compliance", "Fleet patch compliance %"),
+            ("stack status", "Docker Compose stacks fleet-wide"),
+            ("stack update <name>", "Pull + recreate stack containers"),
+            ("stack health", "Container health across fleet"),
+            ("docs generate", "Auto-generate infra docs from live state"),
+            ("docs verify", "Check if docs match reality"),
+            ("docs runbook [name]", "List or run runbooks"),
         ]),
         ("Deployment", [
             ("init", "First-run setup wizard"),
@@ -1555,6 +1594,21 @@ def _cmd_migrate_plan(cfg: FreqConfig, pack, args) -> int:
 def _cmd_migrate_vmware(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.migrate_vmware import cmd_migrate_vmware
     return cmd_migrate_vmware(cfg, pack, args)
+
+
+def _cmd_patch(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.patch import cmd_patch
+    return cmd_patch(cfg, pack, args)
+
+
+def _cmd_stack(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.stack import cmd_stack
+    return cmd_stack(cfg, pack, args)
+
+
+def _cmd_docs(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.docs import cmd_docs
+    return cmd_docs(cfg, pack, args)
 
 
 def _cmd_hosts(cfg: FreqConfig, pack, args) -> int:

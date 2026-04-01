@@ -1107,6 +1107,12 @@ def _menu_infrastructure(cfg, pack):
             ("d", "Backup Policy", "View backup policies", ""),
             ("m", "Migrate Plan", "Load-aware migration recommendations", ""),
             ("v", "VMware Import", "VMware → Proxmox migration", Tag.CHANGES),
+            None,
+            "Operations",
+            ("p", "Patch Status", "Fleet patch status", ""),
+            ("t", "Stack Status", "Docker Compose stacks", ""),
+            ("k", "Stack Health", "Container health fleet-wide", ""),
+            ("o", "Docs Generate", "Auto-generate infra docs", Tag.SAFE),
             ("0", "Back", "", ""),
         ], crumb)
 
@@ -1159,6 +1165,14 @@ def _menu_infrastructure(cfg, pack):
             _run_command(cfg, pack, "migrate-plan")
         elif ch == "v":
             _run_command(cfg, pack, "migrate-vmware")
+        elif ch == "p":
+            _run_command(cfg, pack, "patch")
+        elif ch == "t":
+            _run_command(cfg, pack, "stack")
+        elif ch == "k":
+            _run_argv(cfg, pack, ["stack", "health"])
+        elif ch == "o":
+            _run_argv(cfg, pack, ["docs", "generate"])
         else:
             continue
         _pause()
