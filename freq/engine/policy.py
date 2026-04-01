@@ -1,9 +1,19 @@
-"""Policy engine for FREQ.
+"""Declarative policy executor for FREQ.
 
-Policies are declarative data — dicts, not code. A 25-line policy dict
-replaces 200 lines of bash. The Convergence architecture proved this.
+Domain: freq state <check|fix|diff>
 
-PolicyExecutor handles: discover → desired → compare → fix → activate → verify
+Evaluates declarative policy dicts against live host state. A 25-line policy
+dict replaces 200 lines of bash — discover, compare, fix, activate, verify.
+
+Replaces: Ansible playbooks + Chef InSpec ($50k+/yr enterprise)
+
+Architecture:
+    - PolicyExecutor runs one policy against one host (6-phase pipeline)
+    - PolicyStore is the in-memory registry of all loaded policy dicts
+
+Design decisions:
+    - Policies are dicts, not classes — keeps them human-editable TOML
+    - Platform-aware overrides via nested dicts in entries
 """
 import difflib
 import re as re_mod

@@ -1,21 +1,22 @@
-"""Chaos engineering for FREQ.
+"""Chaos engineering experiments for FREQ.
 
-Simulate failures in the fleet to test recovery processes. All chaos
-experiments have safety gates that prevent targeting production-critical
-infrastructure.
+Domain: freq auto chaos
 
-Experiment types:
-  - service_kill: Stop a Docker container
-  - service_restart: Restart a systemd service
-  - network_delay: Inject latency with tc
-  - disk_fill: Create a temp file to simulate disk pressure
-  - cpu_stress: Spike CPU with yes > /dev/null
+Injects controlled failures into fleet hosts to test recovery. Five experiment
+types (service_kill, service_restart, network_delay, disk_fill, cpu_stress)
+with safety gates, auto-rollback, and recovery time measurement.
 
-Safety rules:
-  - VMIDs 800-899 are OFF LIMITS (always)
-  - Production categories from fleet-boundaries.toml are blocked by default
-  - All experiments have a max duration and auto-rollback
-  - Experiments are logged to data/chaos/
+Replaces: Gremlin / LitmusChaos ($10k+/yr SaaS)
+
+Architecture:
+    - Experiments are template-based: inject command, rollback, verify
+    - Safety layer blocks production VMIDs and fleet-boundaries categories
+    - All results logged to data/chaos/ as JSON for post-mortem analysis
+
+Design decisions:
+    - 5-minute max duration hard cap prevents runaway experiments
+    - VMIDs 800-899 are always off-limits regardless of config
+    - Auto-rollback fires even on failure to prevent lingering damage
 """
 import json
 import os

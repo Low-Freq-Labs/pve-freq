@@ -1,9 +1,21 @@
-"""Interactive TUI menu for FREQ.
+"""Interactive terminal menu for FREQ.
 
-Renders menus with ANSI colors, reads single keystrokes, dispatches commands.
-No external dependencies — works in PuTTY, xterm, any terminal.
+Domain: freq menu
 
-Design: reimagined from v1.0.0 menu.sh (890 lines, 14 submenus).
+Full-screen TUI with ANSI colors, single-keystroke navigation, and command
+dispatch. Renders nested submenus for all FREQ domains without curses or
+any external dependency.
+
+Replaces: Webmin / Cockpit web UI ($0 — pure terminal, works over SSH)
+
+Architecture:
+    - _getch() reads raw terminal input via termios (no curses needed)
+    - Menu items map keystroke -> label -> freq CLI command string
+    - Dispatches commands through the same CLI entrypoint as freq <domain>
+
+Design decisions:
+    - Zero-dependency TUI — works in PuTTY, xterm, any POSIX terminal
+    - Reimagined from v1.0.0 menu.sh (890 lines) as structured Python
 """
 import os
 import shlex

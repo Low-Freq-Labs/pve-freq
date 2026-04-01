@@ -1,7 +1,19 @@
-"""RPC bind security policy.
+"""RPC bind security policy for FREQ.
 
-Disables rpcbind on hosts that don't need NFS.
-PVE nodes keep rpcbind for HA/corosync.
+Domain: freq state <check|fix|diff> (loaded by engine as individual policy)
+
+Disables rpcbind on hosts that do not need NFS. PVE nodes are excluded because
+rpcbind is required for HA/corosync cluster communication.
+
+Replaces: Manual systemctl audits + CIS benchmark scripts
+
+Architecture:
+    - command_check type policy — uses systemctl to detect and disable
+    - Scoped to linux and docker only (PVE intentionally excluded)
+
+Design decisions:
+    - Exclusion of PVE prevents breaking Proxmox HA clusters
+    - Uses disable + stop to survive reboots
 """
 POLICY = {
     "name": "rpcbind-disable",

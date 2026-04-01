@@ -1,15 +1,21 @@
-"""Notification rules engine for FREQ.
+"""Alert rules engine for FREQ.
 
-Evaluates alert rules against health data from the background cache.
-Fires notifications when conditions are met, with cooldown tracking
-to prevent alert storms.
+Domain: freq auto rules <list|create|delete|history>
 
-Rule types:
-  host_unreachable — host down for N seconds
-  cpu_above        — load average exceeds threshold
-  ram_above        — RAM usage exceeds threshold %
-  disk_above       — disk usage exceeds threshold %
-  docker_down      — Docker container count drops to 0
+Evaluates threshold-based alert rules against live health data. Supports five
+condition types (host_unreachable, cpu_above, ram_above, disk_above, docker_down)
+with duration gates and per-rule cooldowns to prevent alert storms.
+
+Replaces: Prometheus Alertmanager + Grafana alerting ($15k+/yr hosted)
+
+Architecture:
+    - Rules loaded from conf/rules.toml; defaults ship built-in
+    - evaluate_rules() checks conditions, enforces duration + cooldown gates
+    - Alert history persisted to data/cache/alert_history.json (capped at 100)
+
+Design decisions:
+    - Cooldown per rule+host pair prevents duplicate alerts during outages
+    - Duration gate requires sustained condition before firing (no flapping)
 """
 import json
 import os

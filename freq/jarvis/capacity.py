@@ -1,10 +1,21 @@
-"""Fleet capacity planner for FREQ.
+"""Fleet capacity planning and trend projection for FREQ.
 
-Stores weekly health snapshots in data/capacity/. After 4+ weeks of data,
-projects trend lines for RAM, disk, and CPU. Helps predict when hosts
-will hit capacity limits.
+Domain: freq observe capacity
 
-"At current growth, pve01 hits 80% RAM in 23 days."
+Collects weekly health snapshots and projects trend lines for RAM, disk, and
+CPU. Predicts when hosts will breach capacity thresholds and recommends
+migrations to hosts with more headroom.
+
+Replaces: Grafana + Prometheus capacity dashboards ($15k+/yr hosted)
+
+Architecture:
+    - Snapshots stored as JSON in data/capacity/ (weekly cadence)
+    - Linear regression on time-series data produces per-host projections
+    - recommend_migrations() cross-references projections with cost data
+
+Design decisions:
+    - File-based snapshots, not a time-series DB — zero dependencies
+    - 2-week minimum before projections to avoid noisy short-term data
 """
 import json
 import os

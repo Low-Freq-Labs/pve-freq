@@ -1,12 +1,21 @@
-"""Continuous monitoring with auto-remediation — FREQ patrol.
+"""Continuous fleet monitoring with auto-remediation for FREQ.
 
-Like freq watch but smarter: monitors fleet health and automatically
-triggers policy checks when drift is detected. Also monitors HTTP endpoints.
+Domain: freq auto patrol
 
-Usage:
-  freq patrol                  # start monitoring (30s intervals)
-  freq patrol --interval 60    # custom interval
-  freq patrol --auto-fix       # auto-remediate drift (dangerous)
+Runs an infinite monitoring loop: connectivity checks, HTTP endpoint probes,
+and policy drift detection every N seconds. Optionally auto-fixes drift when
+--auto-fix is set.
+
+Replaces: Nagios / Zabbix monitoring + cron-based remediation ($15k+/yr)
+
+Architecture:
+    - Main loop: SSH ping all hosts, check HTTP monitors, run policy engine
+    - Policy drift checked every 3rd cycle to reduce SSH load
+    - Uses run_sync() from engine.runner for fleet-wide policy evaluation
+
+Design decisions:
+    - Drift checks every 3rd cycle balances detection speed vs SSH overhead
+    - auto-fix is opt-in and requires explicit flag — safety first
 """
 import time
 import urllib.request

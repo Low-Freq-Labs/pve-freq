@@ -1,15 +1,21 @@
-"""GitOps config sync for FREQ.
+"""GitOps configuration sync for FREQ.
 
-Point FREQ at a git repo containing configuration files (freq.toml, hosts.conf,
-rules.toml, playbooks/, etc.). FREQ will auto-pull on a schedule, show diffs
-in the UI, and allow rollback to any commit.
+Domain: freq state gitops
 
-Configuration in freq.toml:
-  [gitops]
-  repo_url = "git@github.com:org/freq-config.git"
-  branch = "main"
-  sync_interval = 300   # seconds (default: 5 min)
-  auto_apply = false    # auto-apply pulled changes (default: false, require manual)
+Points FREQ at a git repo holding config files (freq.toml, hosts.conf,
+rules.toml, playbooks/). Auto-pulls on a schedule, shows diffs, and supports
+rollback to any commit.
+
+Replaces: ArgoCD / Flux for infrastructure config ($0 — git-native)
+
+Architecture:
+    - Repo cloned into data/gitops/, synced via fetch + rev-list count
+    - SyncState persisted to data/gitops_state.json between restarts
+    - apply_changes() does git pull; rollback() does git checkout <hash>
+
+Design decisions:
+    - Fetch-then-count before pull lets operators review diffs first
+    - auto_apply defaults to false — changes require explicit approval
 """
 import json
 import os

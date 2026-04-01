@@ -1,14 +1,21 @@
 """Multi-site federation for FREQ.
 
-FREQ instances register with each other for cross-site visibility.
-Each site has a name, URL, and shared secret for authenticated API calls.
+Domain: freq fleet federation
 
-Configuration in freq.toml:
-  [federation]
-  site_name = "homelab"
+Connects independent FREQ instances across sites for cross-site visibility.
+Each site registers with a name, URL, and HMAC shared secret, then polls
+peers periodically for health and fleet status.
 
-Sites are registered via the API and stored in data/federation.json.
-Each site periodically polls the others' /healthz and /api/health endpoints.
+Replaces: Zabbix distributed monitoring + VPN mesh dashboards ($20k+/yr)
+
+Architecture:
+    - Sites stored in data/federation.json with HMAC auth headers
+    - poll_site() checks /healthz then /api/health on each remote
+    - Federation summary aggregates host counts across all reachable sites
+
+Design decisions:
+    - HMAC-SHA256 auth with 5-minute timestamp window prevents replay attacks
+    - Secrets never serialized to API responses (sites_to_dicts strips them)
 """
 import hashlib
 import hmac

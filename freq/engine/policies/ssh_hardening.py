@@ -1,7 +1,20 @@
-"""SSH hardening policy.
+"""SSH hardening policy for FREQ.
 
-Enforces secure SSH configuration across fleet.
-Platform-aware: PVE needs different MaxAuthTries for cluster operations.
+Domain: freq state <check|fix|diff> (loaded by engine as individual policy)
+
+Enforces secure sshd_config across all fleet host types. Platform-aware: PVE
+gets MaxAuthTries=5 for cluster auth, Linux/Docker get MaxAuthTries=3.
+
+Replaces: CIS Benchmark SSH audit scripts + manual sshd_config management
+
+Architecture:
+    - file_line type policy — sed-based in-place edits to sshd_config
+    - Platform overrides via nested dicts (PVE vs Linux vs Docker)
+    - after_change restarts sshd to apply immediately
+
+Design decisions:
+    - PVE MaxAuthTries=5 prevents cluster join failures
+    - PermitRootLogin=prohibit-password allows key-only root (PVE requirement)
 """
 POLICY = {
     "name": "ssh-hardening",

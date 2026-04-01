@@ -1,12 +1,20 @@
-"""Knowledge base for FREQ — operational wisdom from real infrastructure.
+"""Operational knowledge base for FREQ.
 
-SQLite FTS5 full-text search across lessons and gotchas.
-Knowledge is loaded from TOML files in data/knowledge/, not hardcoded.
+Domain: freq learn <query>
 
-Usage:
-  freq learn nfs stale        # search for NFS stale mount lessons
-  freq learn docker gluetun   # search for Docker/Gluetun gotchas
-  freq learn pfsense reboot   # search for pfSense reboot issues
+SQLite FTS5 full-text search across lessons learned and platform gotchas.
+Knowledge is loaded from TOML files in data/knowledge/ and indexed at runtime.
+
+Replaces: Confluence / wiki knowledge bases ($10+/user/mo enterprise)
+
+Architecture:
+    - TOML files are the source of truth; SQLite is the search index
+    - FTS5 virtual tables for fast ranked search; LIKE fallback if unavailable
+    - Lessons have severity/platform/session; gotchas have trigger/fix pairs
+
+Design decisions:
+    - TOML over SQLite as source — human-editable, git-trackable
+    - Reseed on count mismatch keeps index fresh without manual rebuilds
 """
 import logging
 import os

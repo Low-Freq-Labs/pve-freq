@@ -1,15 +1,21 @@
-"""Notification system for FREQ.
+"""Multi-channel notification dispatch for FREQ.
 
-Provider-based notification dispatch. Each provider is a function:
-  (cfg, message, title, severity) → bool
+Domain: freq notify <message>
 
-Supported providers:
-  Discord, Slack, Telegram, Email (SMTP), ntfy, Gotify, Pushover, Generic Webhook
+Sends alerts to all configured channels in one call. Eight providers supported:
+Discord, Slack, Telegram, Email (SMTP), ntfy, Gotify, Pushover, and generic
+webhook. Each provider is a function: (cfg, message, title, severity) -> bool.
 
-Usage:
-  freq notify "Fleet health check passed"              # send to all configured channels
-  freq notify --discord "VM 5010 created"               # Discord only
-  freq notify --slack "Drift detected on lab-pve1"      # Slack only
+Replaces: PagerDuty / Opsgenie alert routing ($20+/user/mo)
+
+Architecture:
+    - Provider registry maps name -> config check -> send function
+    - notify() iterates configured providers and dispatches in parallel
+    - Severity maps to provider-native priority levels and embed colors
+
+Design decisions:
+    - All providers use stdlib urllib — zero external dependencies
+    - Provider config checked at dispatch time, not at import
 """
 import json
 import urllib.parse

@@ -1,10 +1,21 @@
-"""Async pipeline runner for FREQ engine.
+"""Async fleet pipeline runner for FREQ policy engine.
 
-Semaphore-bounded async pipeline: 10 hosts in 2.7s vs 30s serial.
-The Convergence proved this architecture — 4x speedup with 5-parallel SSH.
+Domain: freq state <check|fix|diff>
 
-Pipeline per host:
-  PING → DISCOVER → COMPARE → [DRY-RUN stops] → FIX → ACTIVATE → VERIFY → DONE
+Semaphore-bounded async pipeline runs policies across entire fleets in parallel.
+10 hosts in 2.7s vs 30s serial. Each host traverses: PING, DISCOVER, COMPARE,
+FIX, ACTIVATE, VERIFY.
+
+Replaces: Ansible Tower AWX ($100k+/yr) + custom parallel SSH scripts
+
+Architecture:
+    - run_pipeline() fans out _run_host() tasks bounded by asyncio.Semaphore
+    - Dry-run (check/diff) stops after COMPARE; fix mode continues to VERIFY
+    - FleetResult aggregates per-host outcomes into fleet-wide summary
+
+Design decisions:
+    - asyncio over threads — single event loop, no GIL contention
+    - Semaphore cap prevents SSH connection exhaustion on large fleets
 """
 import asyncio
 import logging

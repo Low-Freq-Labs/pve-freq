@@ -1,34 +1,21 @@
 """Incident playbook runner for FREQ.
 
-Playbooks are TOML files in conf/playbooks/. Each playbook defines a
-sequence of steps (checks + actions) with optional confirm gates.
+Domain: freq auto playbook <list|run>
 
-Example playbook (conf/playbooks/plex-down.toml):
-  [playbook]
-  name = "Plex Down Recovery"
-  description = "Restart Plex container and verify"
-  trigger = "docker_down"
+Loads TOML-defined playbooks from conf/playbooks/ and executes them step by
+step via SSH. Each step is a check (verify state) or action (change state)
+with optional confirmation gates.
 
-  [[step]]
-  name = "Check container status"
-  type = "check"
-  command = "docker ps -a --filter name=plex --format '{{.Status}}'"
-  target = "docker-media"
-  expect = "Up"
+Replaces: Rundeck / PagerDuty runbooks ($10k+/yr)
 
-  [[step]]
-  name = "Restart Plex container"
-  type = "action"
-  command = "docker restart plex"
-  target = "docker-media"
-  confirm = true
+Architecture:
+    - Playbooks loaded from TOML with [playbook] metadata and [[step]] list
+    - run_step() resolves target host, SSHes command, checks expected output
+    - Confirmation steps skip in CLI mode (designed for interactive UI use)
 
-  [[step]]
-  name = "Verify Plex is responding"
-  type = "check"
-  command = "curl -sf http://localhost:32400/web/index.html -o /dev/null && echo ok"
-  target = "docker-media"
-  expect = "ok"
+Design decisions:
+    - TOML playbooks are git-trackable and human-editable, not stored in a DB
+    - Steps run sequentially, not in parallel — incident response needs order
 """
 import json
 import os

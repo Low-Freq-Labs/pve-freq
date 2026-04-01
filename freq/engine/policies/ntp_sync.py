@@ -1,6 +1,19 @@
-"""NTP time synchronization policy.
+"""NTP time synchronization policy for FREQ.
 
-Ensures all hosts use consistent NTP servers for clock sync.
+Domain: freq state <check|fix|diff> (loaded by engine as individual policy)
+
+Ensures all fleet hosts use consistent NTP servers. Targets systemd-timesyncd
+on Linux and Docker hosts, restarts the service after any change.
+
+Replaces: Manual NTP audits + Ansible ntp role
+
+Architecture:
+    - Pure data dict consumed by PolicyExecutor — no executable code
+    - Scoped to linux and docker host types (PVE uses chrony separately)
+
+Design decisions:
+    - Declarative dict, not a class — human-editable, testable as data
+    - after_change restarts timesyncd to apply immediately
 """
 POLICY = {
     "name": "ntp-sync",

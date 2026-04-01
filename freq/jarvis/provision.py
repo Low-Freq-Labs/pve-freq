@@ -1,13 +1,21 @@
-"""Cloud-init provisioning for FREQ agent VMs.
+"""Cloud-init VM provisioning for FREQ.
 
-Downloads cloud images, creates templates, provisions VMs with:
-- OS installed and booted
-- SSH keys deployed
-- FREQ installed
-- CLAUDE.md in place
-- Service account configured
+Domain: freq vm provision / freq vm import
 
-Supports: Debian 12/13, Ubuntu 22.04/24.04, Rocky 9, AlmaLinux 9
+Downloads cloud images, creates PVE VMs with cloud-init, deploys SSH keys,
+and boots ready-to-use instances. Supports Debian 12/13, Ubuntu 22.04/24.04,
+Rocky 9, and AlmaLinux 9.
+
+Replaces: Terraform + Packer image pipelines ($0 — Proxmox-native)
+
+Architecture:
+    - Cloud images cached on PVE node at /var/lib/vz/template/qcow2/
+    - provision_agent_vm() creates VM, imports disk, configures cloud-init, starts
+    - ZFS-aware: uses raw format on ZFS storage to avoid double copy-on-write
+
+Design decisions:
+    - Image cache avoids re-downloading on every provision
+    - Node-aware storage selection reads pve_storage map from freq.toml
 """
 import os
 

@@ -1,14 +1,21 @@
 """Kill-chain blast radius analysis for FREQ.
 
-"What breaks if X dies?" — visualizes infrastructure dependencies
-and gates dangerous operations with risk-aware confirmations.
+Domain: freq ops risk <target|all>
 
-Usage:
-  freq risk pfsense     # what happens if pfSense goes down?
-  freq risk truenas      # what happens if TrueNAS goes down?
-  freq risk all          # full infrastructure risk map
+Answers "what breaks if X dies?" by mapping infrastructure dependencies
+from conf/risk.toml. Shows kill chains, impact lists, recovery procedures,
+and upstream/downstream dependency graphs.
 
-Risk map is loaded from conf/risk.toml. Customize it for your cluster.
+Replaces: ServiceNow CMDB dependency maps ($50k+/yr enterprise)
+
+Architecture:
+    - Risk map loaded from conf/risk.toml (targets with depends_on/depended_by)
+    - Kill chain visualizes the remote access path (Operator -> VPN -> ... -> Target)
+    - Partial name matching for quick lookups (freq risk pf matches pfsense)
+
+Design decisions:
+    - TOML config over auto-discovery — operators know their dependencies best
+    - Risk levels (CRITICAL/HIGH/MEDIUM/LOW) are human-assigned, not computed
 """
 import os
 

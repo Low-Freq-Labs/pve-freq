@@ -1,11 +1,20 @@
-"""Automated sweep — audit → check → diff → fix → verify pipeline.
+"""Full security and compliance sweep for FREQ.
 
-Chains existing FREQ commands into a single automated flow.
-The "I want everything checked and fixed" command.
+Domain: freq secure sweep
 
-Usage:
-  freq sweep              # dry-run: audit + check all policies
-  freq sweep --fix        # apply: audit + fix all policies + verify
+Chains audit + all policy checks into one command. Dry-run mode shows drift
+across the entire fleet; fix mode applies remediation and verifies results.
+
+Replaces: Qualys / Nessus compliance scans ($25k+/yr)
+
+Architecture:
+    - Step 1: runs security audit (cmd_audit) for host-level findings
+    - Step 2: iterates ALL_POLICIES through run_sync() in check or fix mode
+    - Aggregates fleet-wide compliant/drift/fixed/failed counts
+
+Design decisions:
+    - Fix mode requires explicit --fix flag and interactive confirmation
+    - Audit always runs in check mode even when sweep is in fix mode
 """
 import time
 

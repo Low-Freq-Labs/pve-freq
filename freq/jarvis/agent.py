@@ -1,20 +1,20 @@
-"""Agent orchestration for FREQ.
+"""AI agent orchestration for FREQ.
 
-Create, manage, and run AI specialist agents on your infrastructure.
-Each agent gets: a VM, a CLAUDE.md, a tmux workspace, and a mission.
+Domain: freq agent <templates|create|list|start|stop|destroy>
 
-Usage:
-  freq agent templates               # list available specialist templates
-  freq agent create infra-manager    # spin up a new specialist
-  freq agent list                    # show running agents
-  freq agent start <name>            # start an agent's tmux session
-  freq agent stop <name>             # stop an agent
-  freq agent destroy <name>          # remove agent + VM
+Provisions and manages AI specialist agents on dedicated VMs. Each agent gets
+a VM, a CLAUDE.md mission file, a tmux workspace, and fleet SSH access.
+
+Replaces: Manual VM setup + Claude Code configuration ($0 — novel capability)
 
 Architecture:
-  Each agent = VM + user account + workspace + CLAUDE.md + tmux session
-  FREQ handles: VM creation, user setup, workspace scaffolding, session management
-  The user handles: API keys, customizing the CLAUDE.md, talking to the agent
+    - Templates define agent archetypes (infra-manager, security-ops, dev, etc.)
+    - Registry (agents.json) tracks agent state, VMID, and IP
+    - Lifecycle: create VM via PVE API, deploy cloud-init, register, start tmux
+
+Design decisions:
+    - Template-based to make agent creation one command, not twenty
+    - tmux sessions decouple agent lifetime from SSH sessions
 """
 import json
 import os

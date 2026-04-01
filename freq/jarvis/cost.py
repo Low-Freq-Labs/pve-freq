@@ -1,15 +1,21 @@
-"""Fleet cost tracking for FREQ.
+"""Fleet power cost estimation for FREQ.
 
-Calculates estimated monthly costs per host based on:
-- Power draw from iDRAC sensors (actual watts)
-- Resource allocation (vCPUs, RAM) for VMs without direct power data
-- User-configured electricity rate ($/kWh)
+Domain: freq hw cost
 
-Configuration in freq.toml:
-  [cost]
-  rate_per_kwh = 0.12    # electricity cost in $/kWh
-  currency = "USD"
-  pue = 1.2              # Power Usage Effectiveness (datacenter overhead)
+Calculates per-host and fleet-wide monthly electricity costs using iDRAC
+sensor data (actual watts) or resource-based estimates (vCPU, RAM, disk)
+with user-configured rate and PUE.
+
+Replaces: Spreadsheet cost tracking + iDRAC manual readings ($0 — time savings)
+
+Architecture:
+    - iDRAC sensor data preferred; falls back to resource-based estimation
+    - PUE multiplier accounts for cooling/overhead in real datacenter costs
+    - Integrates with capacity planner for cost-aware migration recommendations
+
+Design decisions:
+    - Clamped watts (5W-2000W) and rates prevent nonsensical estimates
+    - iDRAC vs estimate flagged per-host so operators know data quality
 """
 import json
 import math
