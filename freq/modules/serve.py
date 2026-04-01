@@ -1676,6 +1676,13 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/secrets/audit": "_serve_secrets_audit",
         "/api/secrets/leases": "_serve_secrets_leases",
         "/api/secrets/scan": "_serve_secrets_scan_results",
+        # Phase 6: Intelligence Kills
+        "/api/logs/stats": "_serve_logs_stats",
+        "/api/oncall/whoami": "_serve_oncall_whoami",
+        "/api/oncall/schedule": "_serve_oncall_schedule",
+        "/api/oncall/incidents": "_serve_oncall_incidents",
+        "/api/comply/status": "_serve_comply_status",
+        "/api/comply/results": "_serve_comply_results",
         # Setup wizard (no auth — only works during first run)
         "/api/setup/status": "_serve_setup_status",
         "/api/setup/create-admin": "_serve_setup_create_admin",
@@ -7530,6 +7537,54 @@ a:hover{{text-decoration:underline}}
         from freq.modules.secrets import _load_scan_results
         cfg = load_config()
         self._json_response(_load_scan_results(cfg))
+
+    # --- Phase 6: Intelligence Kills API Handlers ---
+
+    def _serve_logs_stats(self):
+        """Log stats info."""
+        self._json_response({"info": "Run freq logs stats for live data", "usage": "freq logs stats"})
+
+    def _serve_oncall_whoami(self):
+        """Who is on call."""
+        from freq.modules.oncall import _load_schedule, _get_current_oncall
+        cfg = load_config()
+        schedule = _load_schedule(cfg)
+        current = _get_current_oncall(schedule)
+        self._json_response({"oncall": current, "rotation": schedule.get("rotation", "weekly"),
+                             "users": schedule.get("users", [])})
+
+    def _serve_oncall_schedule(self):
+        """Get on-call schedule."""
+        from freq.modules.oncall import _load_schedule
+        cfg = load_config()
+        self._json_response(_load_schedule(cfg))
+
+    def _serve_oncall_incidents(self):
+        """List incidents."""
+        from freq.modules.oncall import _load_incidents
+        cfg = load_config()
+        incidents = _load_incidents(cfg)
+        open_count = sum(1 for i in incidents if i.get("status") in ("open", "acknowledged"))
+        self._json_response({"incidents": incidents[-50:], "total": len(incidents), "open": open_count})
+
+    def _serve_comply_status(self):
+        """Compliance status."""
+        from freq.modules.comply import _load_results, CIS_CHECKS
+        cfg = load_config()
+        results = _load_results(cfg)
+        self._json_response({
+            "last_scan": results.get("last_scan", "never"),
+            "total_checks": len(CIS_CHECKS),
+            "scan_count": len(results.get("scans", [])),
+        })
+
+    def _serve_comply_results(self):
+        """Get compliance scan results."""
+        from freq.modules.comply import _load_results
+        cfg = load_config()
+        results = _load_results(cfg)
+        scans = results.get("scans", [])
+        self._json_response({"latest": scans[-1] if scans else None, "total_scans": len(scans)})
 
 
 def cmd_serve(cfg, pack, args) -> int:

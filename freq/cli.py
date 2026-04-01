@@ -778,6 +778,36 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--expires", default="90d", help="Lease expiry (e.g., 90d, 24h)")
     p.set_defaults(func=_cmd_secrets)
 
+    # --- Phase 6: Intelligence Kills ---
+    p = sub.add_parser("logs", help="Fleet-wide log search and aggregation")
+    p.add_argument("action", nargs="?", choices=["tail", "search", "stats", "export"],
+                   default="tail", help="Action to perform")
+    p.add_argument("pattern", nargs="?", help="Search pattern (for search)")
+    p.add_argument("--host", dest="target_host", help="Target specific host")
+    p.add_argument("--since", default="1h", help="Time range (default: 1h)")
+    p.add_argument("--lines", type=int, default=20, help="Lines to show")
+    p.add_argument("--unit", help="Systemd unit filter")
+    p.set_defaults(func=_cmd_logs)
+
+    p = sub.add_parser("oncall", help="On-call rotation and incident management")
+    p.add_argument("action", nargs="?",
+                   choices=["whoami", "schedule", "alert", "ack", "escalate", "resolve", "history"],
+                   default="whoami", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Incident ID (for ack/escalate/resolve)")
+    p.add_argument("--users", help="Comma-separated user list (for schedule)")
+    p.add_argument("--rotation", choices=["daily", "weekly", "biweekly"], help="Rotation period")
+    p.add_argument("--message", default="", help="Incident message (for alert)")
+    p.add_argument("--alert-severity", default="warning", choices=["info", "warning", "critical"])
+    p.add_argument("--host", dest="target_host", help="Affected host")
+    p.add_argument("--note", default="", help="Resolution note")
+    p.add_argument("--lines", type=int, default=20, help="History lines")
+    p.set_defaults(func=_cmd_oncall)
+
+    p = sub.add_parser("comply", help="CIS/STIG compliance scanning")
+    p.add_argument("action", nargs="?", choices=["scan", "status", "report", "exceptions"],
+                   default="scan", help="Action to perform")
+    p.set_defaults(func=_cmd_comply)
+
     p = sub.add_parser("docs", help="Auto-generated infrastructure documentation")
     p.add_argument("action", nargs="?",
                    choices=["generate", "export", "verify", "runbook"],
@@ -1034,6 +1064,15 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("secrets audit", "Secret health audit"),
             ("secrets generate", "Generate secure password/token"),
             ("secrets lease <name>", "Track secret expiry"),
+            ("logs tail [--host]", "Tail logs across fleet"),
+            ("logs search <pattern>", "Search logs fleet-wide"),
+            ("logs stats", "Top error patterns fleet-wide"),
+            ("oncall whoami", "Who is on call right now"),
+            ("oncall schedule --users", "Set on-call rotation"),
+            ("oncall alert --message", "Create incident"),
+            ("oncall ack/resolve <ID>", "Manage incidents"),
+            ("comply scan", "CIS Level 1 compliance scan"),
+            ("comply report", "Compliance report"),
         ]),
         ("Deployment", [
             ("init", "First-run setup wizard"),
@@ -1660,6 +1699,21 @@ def _cmd_proxy(cfg: FreqConfig, pack, args) -> int:
 def _cmd_secrets(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.secrets import cmd_secrets
     return cmd_secrets(cfg, pack, args)
+
+
+def _cmd_logs(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.logs import cmd_logs
+    return cmd_logs(cfg, pack, args)
+
+
+def _cmd_oncall(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.oncall import cmd_oncall
+    return cmd_oncall(cfg, pack, args)
+
+
+def _cmd_comply(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.comply import cmd_comply
+    return cmd_comply(cfg, pack, args)
 
 
 def _cmd_hosts(cfg: FreqConfig, pack, args) -> int:
