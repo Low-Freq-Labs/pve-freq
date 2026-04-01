@@ -1478,46 +1478,54 @@ class FreqHandler(BaseHTTPRequestHandler):
 
     # Route dispatch table — path → method name (resolved at call time via getattr)
     _ROUTES = {
+        # ── Infrastructure routes (stay in serve.py) ──────────────────
         "/": "_serve_app",
         "/dashboard": "_serve_app",
         "/old": "_serve_html",
-        "/api/status": "_serve_status",
-        "/api/health": "_serve_health_api",
-        # "/api/vms" — moved to freq/api/vm.py
-        "/api/fleet/overview": "_serve_fleet_overview",
-        "/api/fleet/ntp": "_serve_fleet_ntp",
-        "/api/fleet/updates": "_serve_fleet_updates",
-        "/api/agents": "_serve_agents",
-        "/api/policies": "_serve_policies",
-        "/api/info": "_serve_info",
-        "/api/exec": "_serve_exec",
-        "/api/learn": "_serve_learn",
-        "/api/risk": "_serve_risk",
-        # "/api/metrics" — moved to freq/api/observe.py
-        # /api/vm/* routes — moved to freq/api/vm.py
-        # "/api/vault" — moved to freq/api/secure.py
-        # "/api/vault/set" — moved to freq/api/secure.py
-        # "/api/vault/delete" — moved to freq/api/secure.py
-        "/api/users": "_serve_users",
-        "/api/users/create": "_serve_user_create",
-        "/api/users/promote": "_serve_user_promote",
-        "/api/users/demote": "_serve_user_demote",
-        "/api/keys": "_serve_keys",
-        "/api/journal": "_serve_journal",
+        # ── Auth (stays in serve.py) ──────────────────────────────────
+        "/api/auth/login": "_serve_auth_login",
+        "/api/auth/verify": "_serve_auth_verify",
+        "/api/auth/change-password": "_serve_auth_change_password",
+        # ── Admin (stays in serve.py) ─────────────────────────────────
+        "/api/admin/fleet-boundaries": "_serve_admin_fleet_boundaries",
+        "/api/admin/fleet-boundaries/update": "_serve_admin_fleet_boundaries_update",
+        "/api/admin/hosts/update": "_serve_admin_hosts_update",
+        # ── Setup wizard (stays in serve.py) ──────────────────────────
+        "/api/setup/status": "_serve_setup_status",
+        "/api/setup/create-admin": "_serve_setup_create_admin",
+        "/api/setup/configure": "_serve_setup_configure",
+        "/api/setup/generate-key": "_serve_setup_generate_key",
+        "/api/setup/complete": "_serve_setup_complete",
+        "/api/setup/test-ssh": "_serve_setup_test_ssh",
+        "/api/setup/reset": "_serve_setup_reset",
+        # ── SSE / orchestration (stays in serve.py) ───────────────────
+        "/api/events": "_serve_events",
+        "/healthz": "_serve_healthz",
+        "/readyz": "_serve_readyz",
+        # ── Docs (stays in serve.py) ──────────────────────────────────
+        "/api/docs": "_serve_api_docs",
+        "/api/openapi.json": "_serve_openapi_json",
+        "/api/docs/generate": "_serve_docs_generate",
+        "/api/docs/runbooks": "_serve_docs_runbooks",
+        # ── Config & misc (stays in serve.py) ─────────────────────────
         "/api/config": "_serve_config",
+        "/api/config/view": "_serve_config_view",
+        "/api/update/check": "_serve_update_check",
+        "/api/learn": "_serve_learn",
         "/api/distros": "_serve_distros",
-        "/api/groups": "_serve_groups",
-        # "/api/harden" — moved to freq/api/secure.py
+        "/api/notify/test": "_serve_notify_test",
+        "/api/doctor": "_serve_doctor",
+        "/api/deploy/log": "_serve_deploy_log",
+        # ── Agent lifecycle (stays in serve.py) ───────────────────────
         "/api/agent/create": "_serve_agent_create",
         "/api/agent/destroy": "_serve_agent_destroy",
-        "/api/deploy-agent": "_serve_deploy_agent",
-        "/api/switch": "_serve_switch",
-        "/api/notify/test": "_serve_notify_test",
-        "/api/infra/pfsense": "_serve_pfsense",
-        "/api/infra/truenas": "_serve_truenas",
-        "/api/infra/idrac": "_serve_idrac",
-        "/api/infra/overview": "_serve_infra_overview",
-        "/api/infra/quick": "_serve_infra_quick",
+        # ── Lab / specialist (stays in serve.py) ──────────────────────
+        "/api/lab/status": "_serve_lab_status",
+        "/api/specialists": "_serve_specialists",
+        "/api/lab-tool/proxy": "_serve_lab_tool_proxy",
+        "/api/lab-tool/config": "_serve_lab_tool_config",
+        "/api/lab-tool/save-config": "_serve_lab_tool_save_config",
+        # ── Media (stays in serve.py — complex container proxy) ───────
         "/api/media/status": "_serve_media_status",
         "/api/media/health": "_serve_media_health",
         "/api/media/downloads": "_serve_media_downloads",
@@ -1526,107 +1534,117 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/media/restart": "_serve_media_restart",
         "/api/media/logs": "_serve_media_logs",
         "/api/media/update": "_serve_media_update",
-        "/api/containers/registry": "_serve_containers_registry",
-        "/api/containers/rescan": "_serve_containers_rescan",
-        "/api/containers/delete": "_serve_containers_delete",
-        "/api/containers/add": "_serve_containers_add",
-        "/api/containers/edit": "_serve_containers_edit",
-        "/api/containers/compose-up": "_serve_containers_compose_up",
-        "/api/containers/compose-down": "_serve_containers_compose_down",
-        "/api/containers/compose-view": "_serve_containers_compose_view",
-        # "/api/pool" — moved to freq/api/vm.py
-        "/api/host/detail": "_serve_host_detail",
-        "/api/lab/status": "_serve_lab_status",
-        "/api/specialists": "_serve_specialists",
-        "/api/lab-tool/proxy": "_serve_lab_tool_proxy",
-        "/api/lab-tool/config": "_serve_lab_tool_config",
-        "/api/lab-tool/save-config": "_serve_lab_tool_save_config",
-        "/api/auth/login": "_serve_auth_login",
-        "/api/auth/verify": "_serve_auth_verify",
-        "/api/auth/change-password": "_serve_auth_change_password",
-        "/api/admin/fleet-boundaries": "_serve_admin_fleet_boundaries",
-        "/api/admin/fleet-boundaries/update": "_serve_admin_fleet_boundaries_update",
-        "/api/admin/hosts/update": "_serve_admin_hosts_update",
-        "/api/watchdog/health": "_proxy_watchdog",
-        "/api/doctor": "_serve_doctor",
-        "/api/diagnose": "_serve_diagnose",
-        "/api/log": "_serve_log",
-        "/api/policy/check": "_serve_policy_check",
-        "/api/policy/fix": "_serve_policy_fix",
-        "/api/policy/diff": "_serve_policy_diff",
+        "/api/media/tdarr": "_serve_media_tdarr",
+        "/api/media/downloads/detail": "_serve_media_downloads_detail",
+        # ── Infrastructure device (stays — pfsense goes to fw later) ──
+        "/api/infra/pfsense": "_serve_pfsense",
+        #
+        # ── EXTRACTED — routes below moved to freq/api/ domain modules ─
+        #
+        # "/api/status" — moved to freq/api/fleet.py
+        # "/api/health" — moved to freq/api/fleet.py
+        # "/api/vms" — moved to freq/api/vm.py
+        # "/api/fleet/overview" — moved to freq/api/fleet.py
+        # "/api/fleet/ntp" — moved to freq/api/fleet.py
+        # "/api/fleet/updates" — moved to freq/api/fleet.py
+        # "/api/agents" — moved to freq/api/fleet.py
+        # "/api/info" — moved to freq/api/fleet.py
+        # "/api/exec" — moved to freq/api/fleet.py
+        # "/api/deploy-agent" — moved to freq/api/fleet.py
+        # "/api/infra/overview" — moved to freq/api/fleet.py
+        # "/api/infra/quick" — moved to freq/api/fleet.py
+        # "/api/diagnose" — moved to freq/api/fleet.py
+        # "/api/log" — moved to freq/api/fleet.py
+        # "/api/fleet/health-score" — moved to freq/api/fleet.py
+        # "/api/fleet/topology-enhanced" — moved to freq/api/fleet.py
+        # "/api/fleet/heatmap" — moved to freq/api/fleet.py
+        # "/api/topology" — moved to freq/api/fleet.py
+        # "/api/activity" — moved to freq/api/fleet.py
+        # "/api/docker-fleet" — moved to freq/api/fleet.py
+        # "/api/inventory" — moved to freq/api/fleet.py
+        # "/api/inventory/hosts" — moved to freq/api/fleet.py
+        # "/api/inventory/vms" — moved to freq/api/fleet.py
+        # "/api/inventory/containers" — moved to freq/api/fleet.py
+        # "/api/compare" — moved to freq/api/fleet.py
+        # "/api/report" — moved to freq/api/fleet.py
+        # "/api/discover" — moved to freq/api/fleet.py
+        # "/api/watchdog/health" — moved to freq/api/fleet.py
+        # "/api/federation/status" — moved to freq/api/fleet.py
+        # "/api/federation/register" — moved to freq/api/fleet.py
+        # "/api/federation/unregister" — moved to freq/api/fleet.py
+        # "/api/federation/poll" — moved to freq/api/fleet.py
+        # "/api/federation/toggle" — moved to freq/api/fleet.py
+        # "/api/host/detail" — moved to freq/api/fleet.py
+        # "/api/risk" — moved to freq/api/ops.py
+        # "/api/oncall/whoami" — moved to freq/api/ops.py
+        # "/api/oncall/schedule" — moved to freq/api/ops.py
+        # "/api/oncall/incidents" — moved to freq/api/ops.py
+        # "/api/policies" — moved to freq/api/state.py
+        # "/api/policy/check" — moved to freq/api/state.py
+        # "/api/policy/fix" — moved to freq/api/state.py
+        # "/api/policy/diff" — moved to freq/api/state.py
+        # "/api/baseline/list" — moved to freq/api/state.py
+        # "/api/gitops/*" — moved to freq/api/state.py
+        # "/api/users" — moved to freq/api/user.py
+        # "/api/users/create" — moved to freq/api/user.py
+        # "/api/users/promote" — moved to freq/api/user.py
+        # "/api/users/demote" — moved to freq/api/user.py
+        # "/api/keys" — moved to freq/api/host.py
+        # "/api/groups" — moved to freq/api/host.py
+        # "/api/journal" — moved to freq/api/dr.py
+        # "/api/backup" — moved to freq/api/dr.py
+        # "/api/backup/list" — moved to freq/api/dr.py
+        # "/api/backup/create" — moved to freq/api/dr.py
+        # "/api/backup/restore" — moved to freq/api/dr.py
+        # "/api/backup-policy/list" — moved to freq/api/dr.py
+        # "/api/backup-policy/status" — moved to freq/api/dr.py
+        # "/api/migrate-plan" — moved to freq/api/dr.py
+        # "/api/migrate-vmware/status" — moved to freq/api/dr.py
+        # "/api/zfs" — moved to freq/api/dr.py
+        # "/api/switch" — moved to freq/api/net.py
+        # "/api/map/data" — moved to freq/api/net.py
+        # "/api/map/impact" — moved to freq/api/net.py
+        # "/api/netmon/interfaces" — moved to freq/api/net.py
+        # "/api/netmon/data" — moved to freq/api/net.py
+        # "/api/infra/idrac" — moved to freq/api/hw.py
+        # "/api/cost" — moved to freq/api/hw.py
+        # "/api/cost/config" — moved to freq/api/hw.py
+        # "/api/cost-analysis/waste" — moved to freq/api/hw.py
+        # "/api/cost-analysis/compare" — moved to freq/api/hw.py
+        # "/api/gwipe" — moved to freq/api/hw.py
+        # "/api/infra/truenas" — moved to freq/api/store.py
+        # "/api/storage/health" — moved to freq/api/store.py
+        # "/api/containers/registry" — moved to freq/api/docker_api.py
+        # "/api/containers/rescan" — moved to freq/api/docker_api.py
+        # "/api/containers/delete" — moved to freq/api/docker_api.py
+        # "/api/containers/add" — moved to freq/api/docker_api.py
+        # "/api/containers/edit" — moved to freq/api/docker_api.py
+        # "/api/containers/compose-up" — moved to freq/api/docker_api.py
+        # "/api/containers/compose-down" — moved to freq/api/docker_api.py
+        # "/api/containers/compose-view" — moved to freq/api/docker_api.py
+        # "/api/stack/status" — moved to freq/api/docker_api.py
+        # "/api/stack/health" — moved to freq/api/docker_api.py
+        # /api/vm/* routes — moved to freq/api/vm.py
+        # "/api/metrics" — moved to freq/api/observe.py
+        # "/api/vault" — moved to freq/api/secure.py
+        # "/api/vault/set" — moved to freq/api/secure.py
+        # "/api/vault/delete" — moved to freq/api/secure.py
+        # "/api/harden" — moved to freq/api/secure.py
         # "/api/sweep" — moved to freq/api/secure.py
         # "/api/patrol/status" — moved to freq/api/auto.py
-        "/api/zfs": "_serve_zfs",
-        "/api/backup": "_serve_backup",
-        "/api/backup/list": "_serve_backup_list",
-        "/api/backup/create": "_serve_backup_create",
-        "/api/backup/restore": "_serve_backup_restore",
-        "/api/discover": "_serve_discover",
-        "/api/gwipe": "_serve_gwipe",
-        # Topology & Capacity
-        "/api/topology": "_serve_topology",
         # "/api/capacity" — moved to freq/api/observe.py
         # "/api/capacity/snapshot" — moved to freq/api/observe.py
         # "/api/capacity/recommend" — moved to freq/api/observe.py
         # /api/chaos/* routes — moved to freq/api/auto.py
-        # Federation
-        "/api/federation/status": "_serve_federation_status",
-        "/api/federation/register": "_serve_federation_register",
-        "/api/federation/unregister": "_serve_federation_unregister",
-        "/api/federation/poll": "_serve_federation_poll",
-        "/api/federation/toggle": "_serve_federation_toggle",
-        # Cost tracking
-        "/api/cost": "_serve_cost",
-        "/api/cost/config": "_serve_cost_config",
-        # GitOps config sync
-        "/api/gitops/status": "_serve_gitops_status",
-        "/api/gitops/sync": "_serve_gitops_sync",
-        "/api/gitops/apply": "_serve_gitops_apply",
-        "/api/gitops/diff": "_serve_gitops_diff",
-        "/api/gitops/log": "_serve_gitops_log",
-        "/api/gitops/rollback": "_serve_gitops_rollback",
-        "/api/gitops/init": "_serve_gitops_init",
         # /api/playbooks/* routes — moved to freq/api/auto.py
-        # Fleet Intelligence
-        "/api/fleet/health-score": "_serve_fleet_health_score",
-        "/api/fleet/topology-enhanced": "_serve_topology_enhanced",
-        "/api/fleet/heatmap": "_serve_fleet_heatmap",
         # "/api/snapshots/stale" — moved to freq/api/vm.py
-        # Storage & Media Extended
-        "/api/storage/health": "_serve_storage_health",
-        "/api/media/tdarr": "_serve_media_tdarr",
-        "/api/media/downloads/detail": "_serve_media_downloads_detail",
-        # Config & Deploy
-        "/api/config/view": "_serve_config_view",
-        "/api/deploy/log": "_serve_deploy_log",
+        # "/api/pool" — moved to freq/api/vm.py
+        # "/api/rollback" — moved to freq/api/vm.py
         # "/api/vm/wizard-defaults" — moved to freq/api/vm.py
-        # Activity Feed
-        "/api/activity": "_serve_activity",
         # /api/monitors/* routes — moved to freq/api/observe.py
-        # Docker Fleet
-        "/api/docker-fleet": "_serve_docker_fleet",
-        # Documentation
-        "/api/docs": "_serve_api_docs",
-        "/api/openapi.json": "_serve_openapi_json",
-        # Server-Sent Events (no auth — dashboard live updates)
-        "/api/events": "_serve_events",
-        # Orchestration endpoints (no auth)
-        "/healthz": "_serve_healthz",
-        "/readyz": "_serve_readyz",
         # "/api/metrics/prometheus" — moved to freq/api/observe.py
-        # Update check
-        "/api/update/check": "_serve_update_check",
         # /api/rules/* routes — moved to freq/api/auto.py
         # /api/alert/* routes — moved to freq/api/observe.py
-        "/api/inventory": "_serve_inventory",
-        "/api/inventory/hosts": "_serve_inventory_hosts",
-        "/api/inventory/vms": "_serve_inventory_vms",
-        "/api/inventory/containers": "_serve_inventory_containers",
-        "/api/compare": "_serve_compare",
-        "/api/baseline/list": "_serve_baseline_list",
-        # "/api/rollback" — moved to freq/api/vm.py
-        # Phase 2: Fleet Intelligence
-        "/api/report": "_serve_report",
         # "/api/trend/data" — moved to freq/api/observe.py
         # "/api/trend/snapshot" — moved to freq/api/observe.py
         # "/api/sla" — moved to freq/api/observe.py
@@ -1634,42 +1652,16 @@ class FreqHandler(BaseHTTPRequestHandler):
         # "/api/cert/inventory" — moved to freq/api/secure.py
         # "/api/dns/inventory" — moved to freq/api/secure.py
         # /api/schedule/* routes — moved to freq/api/auto.py
-        "/api/backup-policy/list": "_serve_backup_policy_list",
-        "/api/backup-policy/status": "_serve_backup_policy_status",
         # "/api/webhook/list" — moved to freq/api/auto.py
         # "/api/webhook/log" — moved to freq/api/auto.py
-        "/api/migrate-plan": "_serve_migrate_plan",
-        "/api/migrate-vmware/status": "_serve_migrate_vmware_status",
         # "/api/patch/status" — moved to freq/api/secure.py
         # "/api/patch/compliance" — moved to freq/api/secure.py
-        "/api/stack/status": "_serve_stack_status",
-        "/api/stack/health": "_serve_stack_health",
-        "/api/docs/generate": "_serve_docs_generate",
-        "/api/docs/runbooks": "_serve_docs_runbooks",
         # "/api/db/status" — moved to freq/api/observe.py
         # /api/proxy/* routes — moved to freq/api/secure.py
         # /api/secrets/* routes — moved to freq/api/secure.py
         # "/api/logs/stats" — moved to freq/api/observe.py
-        "/api/oncall/whoami": "_serve_oncall_whoami",
-        "/api/oncall/schedule": "_serve_oncall_schedule",
-        "/api/oncall/incidents": "_serve_oncall_incidents",
         # "/api/comply/status" — moved to freq/api/secure.py
         # "/api/comply/results" — moved to freq/api/secure.py
-        # Phase 7: Platform Kills
-        "/api/map/data": "_serve_map_data",
-        "/api/map/impact": "_serve_map_impact",
-        "/api/netmon/interfaces": "_serve_netmon_interfaces",
-        "/api/netmon/data": "_serve_netmon_data",
-        "/api/cost-analysis/waste": "_serve_cost_waste",
-        "/api/cost-analysis/compare": "_serve_cost_compare",
-        # Setup wizard (no auth — only works during first run)
-        "/api/setup/status": "_serve_setup_status",
-        "/api/setup/create-admin": "_serve_setup_create_admin",
-        "/api/setup/configure": "_serve_setup_configure",
-        "/api/setup/generate-key": "_serve_setup_generate_key",
-        "/api/setup/complete": "_serve_setup_complete",
-        "/api/setup/test-ssh": "_serve_setup_test_ssh",
-        "/api/setup/reset": "_serve_setup_reset",
     }
 
     # v1 API routes from freq/api/ domain modules (built once, cached)

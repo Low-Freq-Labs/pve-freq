@@ -708,10 +708,10 @@ class TestDoGetRouting:
     """Test do_GET route dispatch."""
 
     def test_known_route_dispatches(self):
-        h = _make_handler("/api/info")
-        # Patch _serve_info to just track it was called
+        h = _make_handler("/api/config")
+        # Patch _serve_config to just track it was called
         called = []
-        h._serve_info = lambda: called.append(True)
+        h._serve_config = lambda: called.append(True)
         h.do_GET()
         assert called == [True]
 

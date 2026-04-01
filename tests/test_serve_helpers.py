@@ -528,7 +528,9 @@ class TestRouteTable(unittest.TestCase):
         self.assertIn("/dashboard", self.handler_cls._ROUTES)
 
     def test_api_info_route_exists(self):
-        self.assertIn("/api/info", self.handler_cls._ROUTES)
+        from freq.api import build_routes
+        v1_routes = build_routes()
+        self.assertIn("/api/info", v1_routes)
 
     def test_api_auth_login_exists(self):
         self.assertIn("/api/auth/login", self.handler_cls._ROUTES)
@@ -539,7 +541,9 @@ class TestRouteTable(unittest.TestCase):
         self.assertIn("/api/vault", v1_routes)
 
     def test_api_fleet_overview_exists(self):
-        self.assertIn("/api/fleet/overview", self.handler_cls._ROUTES)
+        from freq.api import build_routes
+        v1_routes = build_routes()
+        self.assertIn("/api/fleet/overview", v1_routes)
 
     def test_api_media_status_exists(self):
         self.assertIn("/api/media/status", self.handler_cls._ROUTES)
