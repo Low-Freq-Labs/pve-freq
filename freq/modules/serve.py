@@ -1652,6 +1652,16 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/sla/check": "_serve_sla_check",
         "/api/cert/inventory": "_serve_cert_inventory",
         "/api/dns/inventory": "_serve_dns_inventory",
+        # Phase 3: Platform
+        "/api/schedule/jobs": "_serve_schedule_jobs",
+        "/api/schedule/log": "_serve_schedule_log",
+        "/api/schedule/templates": "_serve_schedule_templates",
+        "/api/backup-policy/list": "_serve_backup_policy_list",
+        "/api/backup-policy/status": "_serve_backup_policy_status",
+        "/api/webhook/list": "_serve_webhook_list",
+        "/api/webhook/log": "_serve_webhook_log",
+        "/api/migrate-plan": "_serve_migrate_plan",
+        "/api/migrate-vmware/status": "_serve_migrate_vmware_status",
         # Setup wizard (no auth — only works during first run)
         "/api/setup/status": "_serve_setup_status",
         "/api/setup/create-admin": "_serve_setup_create_admin",
@@ -7358,6 +7368,74 @@ a:hover{{text-decoration:underline}}
         cfg = load_config()
         data = _load_dns_data(cfg)
         self._json_response(data)
+
+    # --- Phase 3: Platform API Handlers ---
+
+    def _serve_schedule_jobs(self):
+        """List scheduled jobs."""
+        from freq.modules.schedule import _load_jobs
+        cfg = load_config()
+        jobs = _load_jobs(cfg)
+        self._json_response({"jobs": jobs, "count": len(jobs)})
+
+    def _serve_schedule_log(self):
+        """Get schedule execution log."""
+        from freq.modules.schedule import _load_log
+        cfg = load_config()
+        log = _load_log(cfg)
+        self._json_response({"log": log[-50:], "total": len(log)})
+
+    def _serve_schedule_templates(self):
+        """List job templates."""
+        from freq.modules.schedule import JOB_TEMPLATES
+        self._json_response({"templates": JOB_TEMPLATES})
+
+    def _serve_backup_policy_list(self):
+        """List backup policies."""
+        from freq.modules.backup_policy import _load_policies
+        cfg = load_config()
+        policies = _load_policies(cfg)
+        self._json_response({"policies": policies, "count": len(policies)})
+
+    def _serve_backup_policy_status(self):
+        """Get backup policy enforcement status."""
+        from freq.modules.backup_policy import _load_state, _load_policies
+        cfg = load_config()
+        state = _load_state(cfg)
+        policies = _load_policies(cfg)
+        state["policy_count"] = len(policies)
+        self._json_response(state)
+
+    def _serve_webhook_list(self):
+        """List webhooks (tokens redacted)."""
+        from freq.modules.webhook import _load_hooks
+        cfg = load_config()
+        hooks = _load_hooks(cfg)
+        safe = []
+        for h in hooks:
+            safe.append({k: v for k, v in h.items() if k not in ("token", "secret")})
+        self._json_response({"webhooks": safe, "count": len(safe)})
+
+    def _serve_webhook_log(self):
+        """Get webhook execution log."""
+        from freq.modules.webhook import _load_log
+        cfg = load_config()
+        log = _load_log(cfg)
+        self._json_response({"log": log[-50:], "total": len(log)})
+
+    def _serve_migrate_plan(self):
+        """Get migration recommendations (requires PVE access)."""
+        self._json_response({
+            "info": "Migration planning requires live PVE access. Use CLI.",
+            "usage": "freq migrate-plan",
+        })
+
+    def _serve_migrate_vmware_status(self):
+        """Get VMware migration status."""
+        from freq.modules.migrate_vmware import _load_state
+        cfg = load_config()
+        state = _load_state(cfg)
+        self._json_response(state)
 
 
 def cmd_serve(cfg, pack, args) -> int:

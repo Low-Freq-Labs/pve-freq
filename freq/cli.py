@@ -685,6 +685,54 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("target", nargs="?", help="Hostname or IP for single check")
     p.set_defaults(func=_cmd_dns)
 
+    # --- Phase 3: Platform Play ---
+    p = sub.add_parser("schedule", help="Job scheduler (create/list/delete/run/templates)")
+    p.add_argument("action", nargs="?",
+                   choices=["list", "create", "delete", "run", "enable", "disable",
+                            "log", "templates", "install"],
+                   default="list", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Job name")
+    p.add_argument("--command", help="Command to schedule")
+    p.add_argument("--interval", help="Run interval (5m, 2h, 1d)")
+    p.add_argument("--lines", type=int, default=20, help="Log lines to show")
+    p.set_defaults(func=_cmd_schedule)
+
+    p = sub.add_parser("backup-policy", help="Declarative backup rules (create/list/apply)")
+    p.add_argument("action", nargs="?",
+                   choices=["list", "create", "delete", "apply", "status"],
+                   default="list", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Policy name")
+    p.add_argument("--target", help="Target selector (tag name, vmid range, or *)")
+    p.add_argument("--target-type", default="tag", choices=["tag", "vmid_range", "all"],
+                   help="Target type")
+    p.add_argument("--interval", default="24h", help="Snapshot interval (default: 24h)")
+    p.add_argument("--retention", type=int, default=7, help="Days to retain (default: 7)")
+    p.set_defaults(func=_cmd_backup_policy)
+
+    p = sub.add_parser("webhook", help="Inbound webhook management (create/list/test)")
+    p.add_argument("action", nargs="?",
+                   choices=["list", "create", "delete", "test", "log"],
+                   default="list", help="Action to perform")
+    p.add_argument("name", nargs="?", help="Webhook name")
+    p.add_argument("--command", help="Command to execute on trigger")
+    p.add_argument("--secret", help="HMAC secret for signature verification")
+    p.add_argument("--lines", type=int, default=20, help="Log lines to show")
+    p.set_defaults(func=_cmd_webhook)
+
+    p = sub.add_parser("migrate-plan", help="Load-aware migration recommendations")
+    p.add_argument("action", nargs="?", choices=["show"], default="show",
+                   help="Action to perform")
+    p.set_defaults(func=_cmd_migrate_plan)
+
+    p = sub.add_parser("migrate-vmware", help="VMware ESXi to Proxmox migration")
+    p.add_argument("action", nargs="?", choices=["scan", "import", "convert", "status"],
+                   default="scan", help="Action to perform")
+    p.add_argument("target", nargs="?", help="OVA/VMDK file or directory path")
+    p.add_argument("--vmid", type=int, help="Target VMID for import")
+    p.add_argument("--node", help="Target PVE node")
+    p.add_argument("--storage", default="local-lvm", help="Target storage (default: local-lvm)")
+    p.set_defaults(func=_cmd_migrate_vmware)
+
     # --- Remaining ---
     p = sub.add_parser("distros", help="List available cloud images")
     p.set_defaults(func=_cmd_distros)
@@ -900,6 +948,17 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("cert check <host:port>", "Check a single TLS endpoint"),
             ("dns scan", "Validate fleet DNS records"),
             ("dns check <host-or-ip>", "Check a single DNS entry"),
+        ]),
+        ("Platform", [
+            ("schedule [list|create|delete|run]", "Built-in job scheduler"),
+            ("schedule templates", "Pre-built job templates"),
+            ("schedule install", "Install jobs to system cron"),
+            ("backup-policy [list|create|apply]", "Declarative backup rules"),
+            ("backup-policy apply", "Enforce snapshot + retention"),
+            ("webhook [list|create|delete|test]", "Inbound webhook triggers"),
+            ("migrate-plan", "Load-aware migration recommendations"),
+            ("migrate-vmware scan <path>", "Scan for VMware VM files"),
+            ("migrate-vmware import <ova>", "Import VMware VM to Proxmox"),
         ]),
         ("Deployment", [
             ("init", "First-run setup wizard"),
@@ -1471,6 +1530,31 @@ def _cmd_cert(cfg: FreqConfig, pack, args) -> int:
 def _cmd_dns(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dns import cmd_dns
     return cmd_dns(cfg, pack, args)
+
+
+def _cmd_schedule(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.schedule import cmd_schedule
+    return cmd_schedule(cfg, pack, args)
+
+
+def _cmd_backup_policy(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.backup_policy import cmd_backup_policy
+    return cmd_backup_policy(cfg, pack, args)
+
+
+def _cmd_webhook(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.webhook import cmd_webhook
+    return cmd_webhook(cfg, pack, args)
+
+
+def _cmd_migrate_plan(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.migrate_plan import cmd_migrate_plan
+    return cmd_migrate_plan(cfg, pack, args)
+
+
+def _cmd_migrate_vmware(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.migrate_vmware import cmd_migrate_vmware
+    return cmd_migrate_vmware(cfg, pack, args)
 
 
 def _cmd_hosts(cfg: FreqConfig, pack, args) -> int:

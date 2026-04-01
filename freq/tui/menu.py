@@ -1100,6 +1100,13 @@ def _menu_infrastructure(cfg, pack):
             ("j", "Journal", "Operation history", ""),
             ("n", "Notify", "Send notification", Tag.CHANGES),
             ("b", "Boundaries", "Fleet permission tiers", ""),
+            None,
+            "Platform",
+            ("s", "Schedule", "View scheduled jobs", ""),
+            ("w", "Webhook", "View inbound webhooks", ""),
+            ("d", "Backup Policy", "View backup policies", ""),
+            ("m", "Migrate Plan", "Load-aware migration recommendations", ""),
+            ("v", "VMware Import", "VMware → Proxmox migration", Tag.CHANGES),
             ("0", "Back", "", ""),
         ], crumb)
 
@@ -1142,6 +1149,16 @@ def _menu_infrastructure(cfg, pack):
             _run_command(cfg, pack, "notify")
         elif ch == "b":
             _run_command(cfg, pack, "boundaries")
+        elif ch == "s":
+            _run_command(cfg, pack, "schedule")
+        elif ch == "w":
+            _run_command(cfg, pack, "webhook")
+        elif ch == "d":
+            _run_command(cfg, pack, "backup-policy")
+        elif ch == "m":
+            _run_command(cfg, pack, "migrate-plan")
+        elif ch == "v":
+            _run_command(cfg, pack, "migrate-vmware")
         else:
             continue
         _pause()
