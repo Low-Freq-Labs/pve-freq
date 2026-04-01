@@ -1483,7 +1483,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/old": "_serve_html",
         "/api/status": "_serve_status",
         "/api/health": "_serve_health_api",
-        "/api/vms": "_serve_vms",
+        # "/api/vms" — moved to freq/api/vm.py
         "/api/fleet/overview": "_serve_fleet_overview",
         "/api/fleet/ntp": "_serve_fleet_ntp",
         "/api/fleet/updates": "_serve_fleet_updates",
@@ -1494,25 +1494,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/learn": "_serve_learn",
         "/api/risk": "_serve_risk",
         "/api/metrics": "_serve_metrics",
-        "/api/vm/create": "_serve_vm_create",
-        "/api/vm/destroy": "_serve_vm_destroy",
-        "/api/vm/snapshot": "_serve_vm_snapshot",
-        "/api/vm/resize": "_serve_vm_resize",
-        "/api/vm/power": "_serve_vm_power",
-        "/api/vm/template": "_serve_vm_template",
-        "/api/vm/rename": "_serve_vm_rename",
-        "/api/vm/snapshots": "_serve_vm_snapshots",
-        "/api/vm/delete-snapshot": "_serve_vm_delete_snapshot",
-        "/api/vm/change-id": "_serve_vm_change_id",
-        "/api/vm/check-ip": "_serve_vm_check_ip",
-        "/api/vm/add-nic": "_serve_vm_add_nic",
-        "/api/vm/clear-nics": "_serve_vm_clear_nics",
-        "/api/vm/change-ip": "_serve_vm_change_ip",
-        "/api/vm/push-key": "_serve_vm_push_key",
-        "/api/vm/add-disk": "_serve_vm_add_disk",
-        "/api/vm/tag": "_serve_vm_tag",
-        "/api/vm/clone": "_serve_vm_clone",
-        "/api/vm/migrate": "_serve_vm_migrate",
+        # /api/vm/* routes — moved to freq/api/vm.py
         "/api/vault": "_serve_vault",
         "/api/vault/set": "_serve_vault_set",
         "/api/vault/delete": "_serve_vault_delete",
@@ -1552,7 +1534,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/containers/compose-up": "_serve_containers_compose_up",
         "/api/containers/compose-down": "_serve_containers_compose_down",
         "/api/containers/compose-view": "_serve_containers_compose_view",
-        "/api/pool": "_serve_pool",
+        # "/api/pool" — moved to freq/api/vm.py
         "/api/host/detail": "_serve_host_detail",
         "/api/lab/status": "_serve_lab_status",
         "/api/specialists": "_serve_specialists",
@@ -1616,7 +1598,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/fleet/health-score": "_serve_fleet_health_score",
         "/api/fleet/topology-enhanced": "_serve_topology_enhanced",
         "/api/fleet/heatmap": "_serve_fleet_heatmap",
-        "/api/snapshots/stale": "_serve_snapshots_stale",
+        # "/api/snapshots/stale" — moved to freq/api/vm.py
         # Storage & Media Extended
         "/api/storage/health": "_serve_storage_health",
         "/api/media/tdarr": "_serve_media_tdarr",
@@ -1624,7 +1606,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         # Config & Deploy
         "/api/config/view": "_serve_config_view",
         "/api/deploy/log": "_serve_deploy_log",
-        "/api/vm/wizard-defaults": "_serve_vm_wizard_defaults",
+        # "/api/vm/wizard-defaults" — moved to freq/api/vm.py
         # Activity Feed
         "/api/activity": "_serve_activity",
         # HTTP Monitors
@@ -1660,7 +1642,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/inventory/containers": "_serve_inventory_containers",
         "/api/compare": "_serve_compare",
         "/api/baseline/list": "_serve_baseline_list",
-        "/api/rollback": "_serve_rollback",
+        # "/api/rollback" — moved to freq/api/vm.py
         # Phase 2: Fleet Intelligence
         "/api/report": "_serve_report",
         "/api/trend/data": "_serve_trend_data",
@@ -1731,16 +1713,23 @@ class FreqHandler(BaseHTTPRequestHandler):
                 cls._V1_ROUTES = {}
 
     def _dispatch(self):
-        """Route request to handler method by path."""
+        """Route request to handler method or callable by path.
+
+        Legacy routes use string method names (getattr dispatch).
+        v1 domain routes use callables: function(handler) from freq/api/.
+        """
         path = self.path.split("?")[0]
         # Check legacy routes first, then v1 domain routes
-        method_name = self._ROUTES.get(path)
-        if not method_name:
+        handler_ref = self._ROUTES.get(path)
+        if not handler_ref:
             self._load_v1_routes()
-            method_name = self._V1_ROUTES.get(path)
-        if method_name:
+            handler_ref = self._V1_ROUTES.get(path)
+        if handler_ref:
             try:
-                getattr(self, method_name)()
+                if callable(handler_ref):
+                    handler_ref(self)
+                else:
+                    getattr(self, handler_ref)()
             except Exception as e:
                 import traceback
                 traceback.print_exc()
