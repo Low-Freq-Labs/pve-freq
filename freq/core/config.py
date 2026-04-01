@@ -6,7 +6,11 @@ This is Trap #4 from the 5 Traps: config vs code confusion.
 """
 import os
 import shutil
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    # Python < 3.11 — should not happen (MIN_PYTHON = 3.11) but fail gracefully
+    tomllib = None
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional

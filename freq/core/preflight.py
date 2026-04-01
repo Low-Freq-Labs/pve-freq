@@ -6,7 +6,7 @@ Reusable validation module used by:
 - install.sh (via python3 -c "from freq.core.preflight import run_preflight; ...")
 
 Every check returns (ok: bool, message: str) or (ok, message, extra).
-Zero external dependencies. Python 3.7+ compatible.
+Zero external dependencies. Python 3.11+ required.
 """
 import os
 import platform
@@ -15,7 +15,7 @@ import sys
 
 from typing import Dict, List, Optional, Tuple
 
-MIN_PYTHON = (3, 7)
+MIN_PYTHON = (3, 11)
 
 # Required system binaries — FREQ cannot function without these
 REQUIRED_BINARIES = ["ssh", "ssh-keygen"]

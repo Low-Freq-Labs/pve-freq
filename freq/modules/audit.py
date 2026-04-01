@@ -272,7 +272,7 @@ def _check_updates(cfg: FreqConfig, host) -> list:
     """Check for available package updates."""
     findings = []
 
-    # Try apt (Debian/Ubuntu)
+    # Try apt (Debian/Ubuntu) — other package managers tried below
     r = ssh_run(
         host=host.ip,
         command="apt list --upgradable 2>/dev/null | grep -c upgradable || echo 0",

@@ -340,7 +340,8 @@ def _cmd_topology(cfg: FreqConfig, args) -> int:
     if not has_data:
         fmt.line(f"  {fmt.C.DIM}No LLDP data found. Install lldpd on hosts for topology discovery.{fmt.C.RESET}")
         fmt.blank()
-        fmt.line(f"  {fmt.C.DIM}  apt install lldpd && systemctl enable --now lldpd{fmt.C.RESET}")
+        from freq.core.packages import install_hint
+        fmt.line(f"  {fmt.C.DIM}  {install_hint('lldpd')}, then enable the lldpd service{fmt.C.RESET}")
 
     fmt.blank()
     fmt.footer()

@@ -1111,7 +1111,8 @@ def _phase_pve_deploy(cfg, ctx, args=None):
         rc, _, _ = _run(["which", "sshpass"])
         if rc != 0:
             fmt.step_fail("'sshpass' not installed — required for --bootstrap-password-file")
-            fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
+            from freq.core.packages import install_hint
+            fmt.line(f"  {fmt.C.DIM}Install with: {install_hint('sshpass')}{fmt.C.RESET}")
             return
         fmt.step_ok(f"Using bootstrap password auth: {pve_user} via sshpass")
     else:
@@ -1137,7 +1138,8 @@ def _phase_pve_deploy(cfg, ctx, args=None):
             rc, _, _ = _run(["which", "sshpass"])
             if rc != 0:
                 fmt.step_fail("'sshpass' not installed — required for password-based SSH")
-                fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
+                from freq.core.packages import install_hint
+                fmt.line(f"  {fmt.C.DIM}Install with: {install_hint('sshpass')}{fmt.C.RESET}")
                 fmt.line(f"  {fmt.C.DIM}Or choose option B (SSH key) instead.{fmt.C.RESET}")
                 return
             auth_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for '{pve_user}' on PVE nodes: ")
@@ -1956,7 +1958,8 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     rc, _, _ = _run(["which", "sshpass"])
                     if rc != 0:
                         fmt.step_fail("'sshpass' not installed — required for device auth")
-                        fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
+                        from freq.core.packages import install_hint
+                        fmt.line(f"  {fmt.C.DIM}Install with: {install_hint('sshpass')}{fmt.C.RESET}")
                     else:
                         dev_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for device admin ({dev_user}): ")
                         for h in dev_without_creds:
@@ -2008,7 +2011,8 @@ def _get_auth_creds(choice, label):
         rc, _, _ = _run(["which", "sshpass"])
         if rc != 0:
             fmt.step_fail("'sshpass' not installed — required for password-based SSH")
-            fmt.line(f"  {fmt.C.DIM}Install with: apt install sshpass{fmt.C.RESET}")
+            from freq.core.packages import install_hint
+            fmt.line(f"  {fmt.C.DIM}Install with: {install_hint('sshpass')}{fmt.C.RESET}")
             return "", ""
         auth_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Root password for {label}: ")
     return auth_pass, auth_key

@@ -45,7 +45,7 @@ CIS_CHECKS = [
         "command": "systemctl is-active chronyd >/dev/null 2>&1 || systemctl is-active systemd-timesyncd >/dev/null 2>&1 || systemctl is-active ntp >/dev/null 2>&1 && echo PASS || echo FAIL",
         "category": "services",
         "severity": "medium",
-        "remediation": "apt install -y chrony && systemctl enable --now chronyd",
+        "remediation": "Install chrony: apt/dnf/pacman/apk install chrony, then enable chronyd",
     },
     {
         "id": "3.1.1",
@@ -69,7 +69,7 @@ CIS_CHECKS = [
         "command": "dpkg -s auditd >/dev/null 2>&1 || rpm -q audit >/dev/null 2>&1 && echo PASS || echo FAIL",
         "category": "logging",
         "severity": "high",
-        "remediation": "apt install -y auditd",
+        "remediation": "Install auditd: apt install auditd / dnf install audit / pacman -S audit",
     },
     {
         "id": "5.1.1",
