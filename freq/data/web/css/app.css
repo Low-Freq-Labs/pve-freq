@@ -1277,3 +1277,24 @@ body.compact .btn { font-size: 11px; padding: 4px 12px; }
   outline: 2px solid var(--purple);
   outline-offset: 2px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   UTILITY CLASSES — replace inline styles in JS
+   ═══════════════════════════════════════════════════════════════════ */
+.sparkline-row { display: flex; gap: 8px; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); }
+.spark-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+.form-label { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+.form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.form-section { margin-top: 12px; padding: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; }
+.grid-auto-280 { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--gap-md); }
+.text-center { text-align: center; }
+.text-dim { color: var(--text-dim); }
+.text-xs { font-size: 10px; }
+.text-sm { font-size: 12px; }
+.w-full { width: 100%; }
+.mt-sm { margin-top: 8px; }
+.mb-sm { margin-bottom: 8px; }
+.mb-md { margin-bottom: 12px; }
+.flex-center { display: flex; align-items: center; gap: 8px; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.mono { font-family: 'JetBrains Mono', monospace; }

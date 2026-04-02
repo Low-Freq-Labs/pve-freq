@@ -375,16 +375,16 @@ var WIDGET_REGISTRY=[
     fetch('/api/fleet/health-score').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-health-score');if(!t)return;
       var color=d.score>=90?'var(--green)':d.score>=75?'var(--blue)':d.score>=60?'var(--orange)':'var(--red)';
-      var h='<div style="text-align:center;padding:12px 0">';
+      var h='<div class="text-center" style="padding:12px 0">';
       h+='<div style="font-size:48px;font-weight:700;color:'+color+'">'+d.score+'</div>';
       h+='<div style="font-size:24px;font-weight:600;color:'+color+';margin-top:-4px">'+d.grade+'</div>';
-      h+='<div style="font-size:12px;color:var(--text-dim);margin-top:8px">Fleet Health Score</div>';
+      h+='<div class="text-sm text-dim mt-sm">Fleet Health Score</div>';
       h+='</div>';
       if(d.factors&&d.factors.length>0){
         h+='<div style="border-top:1px solid var(--border);padding-top:8px">';
         d.factors.forEach(function(f){
-          h+='<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0">';
-          h+='<span style="color:var(--text-dim)">'+_esc(f.detail)+'</span>';
+          h+='<div class="text-sm" style="display:flex;justify-content:space-between;padding:2px 0">';
+          h+='<span class="text-dim">'+_esc(f.detail)+'</span>';
           h+='<span style="color:var(--red)">-'+f.penalty+'</span>';
           h+='</div>';
         });
@@ -402,8 +402,8 @@ var WIDGET_REGISTRY=[
       d.vlans.forEach(function(v){
         if(!v.hosts||!v.hosts.length)return;
         var color=v.id===0?'var(--text-dim)':'var(--purple-light)';
-        h+='<div style="margin-bottom:12px">';
-        h+='<div style="font-weight:600;font-size:13px;color:'+color+'">'+_esc(v.name)+' <span style="font-size:11px;color:var(--text-dim)">VLAN '+v.id+(v.subnet?' \u2022 '+v.subnet:'')+'</span></div>';
+        h+='<div class="mb-md">';
+        h+='<div style="font-weight:600;font-size:13px;color:'+color+'">'+_esc(v.name)+' <span style="font-size:11px" class="text-dim">VLAN '+v.id+(v.subnet?' \u2022 '+v.subnet:'')+'</span></div>';
         h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">';
         v.hosts.forEach(function(host){
           var bg=host.status==='healthy'?'rgba(50,255,50,0.1)':'rgba(255,50,50,0.1)';
@@ -433,12 +433,12 @@ var WIDGET_REGISTRY=[
       d.hosts.forEach(function(host){
         var ok=host.synced||host.status==='synced';if(ok)synced++;
         var icon=ok?'\u2705':'\u274c';
-        h+='<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">';
+        h+='<div class="text-sm" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">';
         h+='<span>'+icon+' '+_esc(host.label)+'</span>';
-        h+='<span style="color:var(--text-dim)">'+(host.offset||host.server||'')+'</span>';
+        h+='<span class="text-dim">'+(host.offset||host.server||'')+'</span>';
         h+='</div>';
       });
-      h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+synced+'/'+d.hosts.length+' synced</div>'+h;
+      h='<div class="text-sm text-dim mb-sm">'+synced+'/'+d.hosts.length+' synced</div>'+h;
       t.innerHTML=h;
     }).catch(function(e){var t=document.getElementById('hw-ntp');if(t)t.innerHTML='<div class="empty-state"><p>NTP check failed</p></div>';});
   }},
@@ -454,9 +454,9 @@ var WIDGET_REGISTRY=[
         var border=maxPct>=80?'var(--red)':maxPct>=60?'var(--orange)':'var(--green)';
         h+='<div style="padding:8px;border:1px solid '+border+';border-radius:6px;background:'+bg+';text-align:center">';
         h+='<div style="font-size:11px;font-weight:600;margin-bottom:4px">'+_esc(host.label)+'</div>';
-        h+='<div style="font-size:10px;color:var(--text-dim)">RAM '+host.ram_pct+'%</div>';
-        h+='<div style="font-size:10px;color:var(--text-dim)">Disk '+host.disk_pct+'%</div>';
-        if(host.containers>0)h+='<div style="font-size:10px;color:var(--text-dim)">'+host.containers+' ctr</div>';
+        h+='<div class="text-xs text-dim">RAM '+host.ram_pct+'%</div>';
+        h+='<div class="text-xs text-dim">Disk '+host.disk_pct+'%</div>';
+        if(host.containers>0)h+='<div class="text-xs text-dim">'+host.containers+' ctr</div>';
         h+='</div>';
       });
       h+='</div>';
@@ -468,11 +468,11 @@ var WIDGET_REGISTRY=[
     fetch('/api/snapshots/stale?days=30').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-stale-snaps');if(!t)return;
       if(!d.stale||!d.stale.length){t.innerHTML='<div style="color:var(--green);padding:8px 0">\u2705 No stale snapshots</div>';return;}
-      var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+d.count+' snapshot(s) found</div>';
+      var h='<div class="text-sm text-dim mb-sm">'+d.count+' snapshot(s) found</div>';
       d.stale.slice(0,20).forEach(function(s){
-        h+='<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">';
-        h+='<span><span style="font-weight:500">'+_esc(s.vm_name)+'</span> <span style="color:var(--text-dim)">VM '+s.vmid+'</span></span>';
-        h+='<span style="color:var(--text-dim)">'+_esc(s.snapshot)+'</span>';
+        h+='<div class="text-sm" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">';
+        h+='<span><span style="font-weight:500">'+_esc(s.vm_name)+'</span> <span class="text-dim">VM '+s.vmid+'</span></span>';
+        h+='<span class="text-dim">'+_esc(s.snapshot)+'</span>';
         h+='</div>';
       });
       if(d.count>20)h+='<div style="font-size:11px;color:var(--text-dim);margin-top:4px">+'+(d.count-20)+' more</div>';
@@ -484,12 +484,12 @@ var WIDGET_REGISTRY=[
     fetch('/api/storage/health').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-storage-pools');if(!t)return;
       if(!d.pools||!d.pools.length){t.innerHTML='<div class="empty-state"><p>No storage pools detected</p></div>';return;}
-      var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+d.total_tb+'TB total \u2022 '+d.used_tb+'TB used</div>';
+      var h='<div class="text-sm text-dim mb-sm">'+d.total_tb+'TB total \u2022 '+d.used_tb+'TB used</div>';
       d.pools.forEach(function(p){
         var color=p.used_pct>=80?'var(--red)':p.used_pct>=60?'var(--orange)':'var(--green)';
         h+='<div style="padding:6px 0;border-bottom:1px solid var(--border)">';
-        h+='<div style="display:flex;justify-content:space-between"><span style="font-weight:500">'+_esc(p.name)+'</span><span style="font-size:12px;color:var(--text-dim)">'+p.node+'</span></div>';
-        h+='<div style="display:flex;align-items:center;gap:8px;margin-top:4px">';
+        h+='<div style="display:flex;justify-content:space-between"><span style="font-weight:500">'+_esc(p.name)+'</span><span class="text-sm text-dim">'+p.node+'</span></div>';
+        h+='<div class="flex-center" style="margin-top:4px">';
         h+='<div style="flex:1;height:6px;background:var(--border);border-radius:3px"><div style="height:100%;width:'+p.used_pct+'%;background:'+color+';border-radius:3px"></div></div>';
         h+='<span style="font-size:12px;color:'+color+'">'+p.used_pct+'%</span>';
         h+='</div>';
@@ -507,7 +507,7 @@ var WIDGET_REGISTRY=[
       var h='<div style="display:flex;align-items:center;gap:8px;padding:8px 0">';
       h+='<span style="color:var(--green)">\u2705</span>';
       h+='<span style="font-weight:500">Tdarr Running</span>';
-      if(d.host)h+='<span style="font-size:12px;color:var(--text-dim)">on '+_esc(d.host)+'</span>';
+      if(d.host)h+='<span class="text-sm text-dim">on '+_esc(d.host)+'</span>';
       h+='</div>';
       if(d.queue>0)h+='<div>Queue: '+d.queue+' files</div>';
       if(d.processed>0)h+='<div>Processed: '+d.processed+'</div>';
@@ -535,7 +535,7 @@ var WIDGET_REGISTRY=[
       var t=document.getElementById('hw-config-view');if(!t)return;
       if(d.error){t.innerHTML='<div class="empty-state"><p>'+_esc(d.error)+'</p></div>';return;}
       var c=d.config;var h='';
-      var kv=function(k,v){return '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px"><span style="color:var(--text-dim)">'+k+'</span><span>'+_esc(String(v))+'</span></div>';};
+      var kv=function(k,v){return '<div style="display:flex;justify-content:space-between;padding:3px 0" class="text-sm"><span class="text-dim">'+k+'</span><span>'+_esc(String(v))+'</span></div>';};
       h+=kv('Version',c.version);h+=kv('Brand',c.brand);h+=kv('Cluster',c.cluster_name||'(not set)');
       h+=kv('SSH Mode',c.ssh_mode);h+=kv('SSH Account',c.ssh_service_account);
       h+=kv('PVE Nodes',c.pve_nodes?c.pve_nodes.join(', '):'none');
@@ -548,14 +548,14 @@ var WIDGET_REGISTRY=[
     el.innerHTML='<div id="hw-vm-wizard"><div class="skeleton"></div></div>';
     fetch('/api/vm/wizard-defaults').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-vm-wizard');if(!t)return;
-      var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Quick-create presets</div>';
+      var h='<div class="text-sm text-dim mb-sm">Quick-create presets</div>';
       if(d.profiles){
         Object.keys(d.profiles).forEach(function(name){
           var p=d.profiles[name];
           h+='<div style="display:flex;justify-content:space-between;padding:6px 8px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;cursor:pointer" ';
           h+='onclick="document.getElementById(\'hw-vm-wizard-sel\').textContent=\''+name+': '+p.cores+'C/'+Math.round(p.ram/1024)+'G/'+p.disk+'G\'">';
           h+='<span style="font-weight:500;text-transform:capitalize">'+name+'</span>';
-          h+='<span style="font-size:12px;color:var(--text-dim)">'+p.cores+' cores \u2022 '+Math.round(p.ram/1024)+'GB \u2022 '+p.disk+'GB</span>';
+          h+='<span class="text-sm text-dim">'+p.cores+' cores \u2022 '+Math.round(p.ram/1024)+'GB \u2022 '+p.disk+'GB</span>';
           h+='</div>';
         });
       }
@@ -738,7 +738,7 @@ function openHomeWidgetConfig(){
   }
   /* Available widgets by page */
   Object.keys(pages).forEach(function(page){
-    h+='<div style="font-size:12px;color:var(--text-dim);margin:12px 0 6px;font-weight:600">'+page+'</div>';
+    h+='<div class="text-sm text-dim" style="margin:12px 0 6px;font-weight:600">'+page+'</div>';
     pages[page].forEach(function(w){
       var active=cfg.indexOf(w.id)>=0;
       h+='<div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid var(--border)">';
@@ -1115,11 +1115,11 @@ function _renderSparklines(){
         if(!metricParent)return;
         sparkDiv=document.createElement('div');
         sparkDiv.className='sparkline-row';
-        sparkDiv.style.cssText='display:flex;gap:8px;margin-top:8px;padding-top:6px;border-top:1px solid var(--border)';
+        /* sparkline-row class handles flex/gap/margin/padding/border */
         sparkDiv.innerHTML=
-          '<div style="flex:1;min-width:0"><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">CPU 1H</div><canvas class="spark-cpu" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>'+
-          '<div style="flex:1;min-width:0"><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">RAM 1H</div><canvas class="spark-ram" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>'+
-          '<div style="flex:1;min-width:0"><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">IO 1H</div><canvas class="spark-io" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>';
+          '<div style="flex:1;min-width:0"><div class="spark-label">CPU 1H</div><canvas class="spark-cpu" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>'+
+          '<div style="flex:1;min-width:0"><div class="spark-label">RAM 1H</div><canvas class="spark-ram" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>'+
+          '<div style="flex:1;min-width:0"><div class="spark-label">IO 1H</div><canvas class="spark-io" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>';
         metricParent.appendChild(sparkDiv);
       }
       /* Render each sparkline */
@@ -1235,7 +1235,7 @@ function renderGlobalSettings(){
   var hoverOn=s.hoverFx!==false;
   var _toggle=function(id,label,desc,checked,onchange){
     var on=checked;
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">'+
+    return '<div class="flex-between" style="padding:12px 0;border-bottom:1px solid var(--border)">'+
       '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+label+'</div><div class="text-meta">'+desc+'</div></div>'+
       '<label style="position:relative;width:44px;height:24px;cursor:pointer;display:block;flex-shrink:0">'+
       '<input type="checkbox" id="'+id+'" '+(on?'checked':'')+' onchange="'+onchange+'" class="d-none">'+
@@ -1605,7 +1605,7 @@ function rescanContainers(){
     if(!res)return;
     var h='';
     if(d.stale&&d.stale.length>0){
-      h+='<div style="margin-bottom:8px"><strong style="color:var(--red)">Stale (not found on VM):</strong></div>';
+      h+='<div class="mb-sm"><strong style="color:var(--red)">Stale (not found on VM):</strong></div>';
       h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
       d.stale.forEach(function(s){
         h+='<button class="fleet-btn" style="font-size:11px;border-color:var(--red);color:var(--red)" onclick="deleteContainer(\''+_esc(s.name)+'\','+s.vm_id+');rescanContainers()">Remove '+_esc(s.name)+' from '+_esc(s.vm_label)+'</button>';
@@ -1613,14 +1613,14 @@ function rescanContainers(){
       h+='</div>';
     }
     if(d.new&&d.new.length>0){
-      h+='<div style="margin-bottom:8px"><strong style="color:var(--green)">New (found but not registered):</strong></div>';
+      h+='<div class="mb-sm"><strong style="color:var(--green)">New (found but not registered):</strong></div>';
       h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
       d.new.forEach(function(n){
         h+='<button class="fleet-btn" style="font-size:11px;border-color:var(--green);color:var(--green)" onclick="addContainerQuick(\''+_esc(n.name)+'\','+n.vm_id+')">Add '+_esc(n.name)+' to '+_esc(n.vm_label)+'</button>';
       });
       h+='</div>';
     }
-    if(!d.stale.length&&!d.new.length){h='<span class="c-green" style="font-size:12px">Registry is in sync with fleet</span>';}
+    if(!d.stale.length&&!d.new.length){h='<span class="c-green text-sm">Registry is in sync with fleet</span>';}
     res.innerHTML=h;res.style.display='block';
   }).catch(function(e){if(st)st.textContent='Scan failed: '+e;});
 }
@@ -1906,7 +1906,7 @@ function _loadLabAssignments(){
       if(aLab&&!bLab)return -1;if(!aLab&&bLab)return 1;
       return a.label<b.label?-1:1;
     });
-    var h='<table><thead><tr><th>Name</th><th>Type</th><th>Node</th><th>Status</th><th style="text-align:center">LAB</th></tr></thead><tbody>';
+    var h='<table><thead><tr><th>Name</th><th>Type</th><th>Node</th><th>Status</th><th class="text-center">LAB</th></tr></thead><tbody>';
     items.forEach(function(it){
       var isLab=_labAssignments[it.label]!==undefined?_labAssignments[it.label]:it.serverLab;
       var statusColor=it.status==='online'||it.status==='running'?'var(--green)':'var(--text-dim)';
@@ -1914,7 +1914,7 @@ function _loadLabAssignments(){
       h+='<td class="mono-11">'+it.type.toUpperCase()+'</td>';
       h+='<td class="mono-11">'+(it.node||'-')+'</td>';
       h+='<td><span style="color:'+statusColor+'">'+it.status.toUpperCase()+'</span></td>';
-      h+='<td style="text-align:center"><span onclick="toggleLabAssign(\''+it.label+'\','+!isLab+')" style="cursor:pointer;display:inline-block;padding:2px 10px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid '+(isLab?'var(--green)':'var(--border-light)')+';background:'+(isLab?'rgba(63,185,80,0.15)':'transparent')+';color:'+(isLab?'var(--green)':'var(--text-dim)')+'">'+(isLab?'LAB':'—')+'</span></td>';
+      h+='<td class="text-center"><span onclick="toggleLabAssign(\''+it.label+'\','+!isLab+')" style="cursor:pointer;display:inline-block;padding:2px 10px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid '+(isLab?'var(--green)':'var(--border-light)')+';background:'+(isLab?'rgba(63,185,80,0.15)':'transparent')+';color:'+(isLab?'var(--green)':'var(--text-dim)')+'">'+(isLab?'LAB':'—')+'</span></td>';
       h+='</tr>';
     });
     h+='</tbody></table>';
@@ -2043,7 +2043,7 @@ function renderFleetAdmin(d){
     h+='</div>';
     /* VMIDs or range */
     if(info.range_start!==undefined){
-      h+='<div style="display:flex;gap:8px;align-items:center;margin-top:8px">';
+      h+='<div class="flex-center mt-sm">';
       h+='<span class="text-sub">VMID Range:</span>';
       h+='<input id="rs-'+cat+'" type="number" value="'+info.range_start+'" class="input-sm">';
       h+='<span class="c-dim">—</span>';
@@ -2053,7 +2053,7 @@ function renderFleetAdmin(d){
     } else {
       var vmids=(info.vmids||[]).join(', ');
       h+='<div class="mt-8">';
-      h+='<div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">VMIDs: <span style="color:var(--text)">'+vmids+'</span></div>';
+      h+='<div class="text-sm text-dim" style="margin-bottom:4px">VMIDs: <span style="color:var(--text)">'+vmids+'</span></div>';
       h+='<div style="display:flex;gap:6px;align-items:center;margin-top:4px">';
       h+='<input id="vmid-add-'+cat+'" type="number" placeholder="VMID" class="input-sm">';
       h+='<button class="fleet-btn pill-ok-sm" onclick="addVmidToCategory(\''+cat+'\')" >+ ADD</button>';
@@ -2849,7 +2849,7 @@ function switchFleetOps(tab){
   var foForm=document.getElementById('fo-form');if(!foForm)return;
   if(tab==='deepscan'){
     foForm.innerHTML='<div class="flex-col-10-500">'+
-      '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Run a comprehensive scan across all fleet hosts — CPU, RAM, disk, services, uptime.</div>'+
+      '<div class="text-sm text-dim mb-sm">Run a comprehensive scan across all fleet hosts — CPU, RAM, disk, services, uptime.</div>'+
       '<button class="fleet-btn pill-active-self" onclick="loadMetrics()" >RUN DEEP SCAN</button>'+
       '</div>';
     return;
@@ -2926,7 +2926,7 @@ function switchVmMgmt(tab){
   } else if(tab==='vmadddisk'){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM</label><select id="vmt-ad-source" class="input-primary"><option value="">Loading...</option></select></div>'+
-      '<div><label class="label-sub">DISK SIZE</label><div style="display:flex;gap:8px;align-items:center"><input id="vmt-ad-size" placeholder="e.g. 32" class="input-primary" style="width:100px" type="number" min="1"><select id="vmt-ad-unit" class="input-primary" style="width:80px"><option value="G" selected>GB</option><option value="T">TB</option></select></div></div>'+
+      '<div><label class="label-sub">DISK SIZE</label><div class="flex-center"><input id="vmt-ad-size" placeholder="e.g. 32" class="input-primary" style="width:100px" type="number" min="1"><select id="vmt-ad-unit" class="input-primary" style="width:80px"><option value="G" selected>GB</option><option value="T">TB</option></select></div></div>'+
       '<div><label class="label-sub">STORAGE POOL</label><input id="vmt-ad-storage" placeholder="local-lvm" class="input-primary" value="local-lvm"></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtAddDisk" >ADD DISK</button></div>'+
       '</div><div id="vmt-ad-out" class="mt-12"></div>';
@@ -3209,13 +3209,13 @@ function switchBackup(tab){
       var h='<div class="desc-line">Snapshots and backup exports across the cluster.</div>';
       var snaps=d.snapshots||[];var exports=d.exports||[];
       if(snaps.length){
-        h+='<h4 style="font-size:12px;color:var(--text-dim);margin:12px 0 8px">VM SNAPSHOTS</h4>';
+        h+='<h4 class="text-sm text-dim" style="margin:12px 0 8px">VM SNAPSHOTS</h4>';
         h+='<table class="w-full"><thead><tr><th>VMID</th><th>VM NAME</th><th>SNAPSHOT</th><th>ACTION</th></tr></thead><tbody>';
         snaps.forEach(function(s){h+='<tr><td><strong>'+s.vmid+'</strong></td><td>'+_esc(s.vm_name)+'</td><td>'+_esc(s.snapshot)+'</td><td><button class="fleet-btn pill-xs" onclick="bkRestoreSnap('+s.vmid+',\''+_esc(s.snapshot)+'\')">RESTORE</button></td></tr>';});
         h+='</tbody></table>';
       } else {h+='<div class="empty-state"><div class="es-icon">&#128230;</div><p>No VM snapshots found. Create one from the VM SNAPSHOTS tab.</p></div>';}
       if(exports.length){
-        h+='<h4 style="font-size:12px;color:var(--text-dim);margin:12px 0 8px">BACKUP EXPORTS</h4>';
+        h+='<h4 class="text-sm text-dim" style="margin:12px 0 8px">BACKUP EXPORTS</h4>';
         h+='<table class="w-full"><thead><tr><th>FILENAME</th><th>SIZE</th></tr></thead><tbody>';
         exports.forEach(function(e){h+='<tr><td>'+_esc(e.filename)+'</td><td>'+(e.size_kb>1024?Math.round(e.size_kb/1024)+'MB':e.size_kb+'KB')+'</td></tr>';});
         h+='</tbody></table>';
@@ -3351,7 +3351,7 @@ function _renderUserDropdown(prefix,items){
     h+='<div class="flex-between"><span style="font-size:12px;font-weight:600;color:var(--text)">'+item.label+'</span><span style="font-size:12px;color:'+item.color+';font-weight:600">'+item.detail+'</span></div>';
     h+='</div>';
   });
-  if(!items.length)h='<div style="padding:14px;color:var(--text-dim);font-size:11px;text-align:center">No users found</div>';
+  if(!items.length)h='<div class="text-dim text-center" style="padding:14px;font-size:11px">No users found</div>';
   dd.innerHTML=h;
 }
 function showUserDropdown(prefix){
@@ -3379,7 +3379,7 @@ function selectUserDropdown(prefix,value){
 function openNewTool(){
   var ov=document.getElementById('modal-container');
   var h='<div class="modal" style="max-width:500px"><div class="flex-between-mb16"><h3 class="m-0">Lab Tools</h3><span class="close-x">&times;</span></div>';
-  h+='<div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">Registered tools appear in LAB view and are available as HOME widgets.</div>';
+  h+='<div class="text-sm text-dim" style="margin-bottom:16px">Registered tools appear in LAB view and are available as HOME widgets.</div>';
   if(typeof LAB_TOOLS!=='undefined'&&LAB_TOOLS.length){
     LAB_TOOLS.forEach(function(t){
       var connected=false;for(var k in _ltState){if(k.indexOf(t.id)>=0&&_ltState[k])connected=true;}
@@ -3391,9 +3391,9 @@ function openNewTool(){
       h+='</div>';
     });
   } else {
-    h+='<div style="text-align:center;padding:24px;color:var(--text-dim)">No tools registered</div>';
+    h+='<div class="text-center text-dim" style="padding:24px">No tools registered</div>';
   }
-  h+='<div style="margin-top:16px;font-size:11px;color:var(--text-dim)">To add a new tool, register it in the <code>LAB_TOOLS</code> array (JS) and <code>LAB_TOOL_REGISTRY</code> dict (Python).</div>';
+  h+='<div class="text-dim" style="margin-top:16px;font-size:11px">To add a new tool, register it in the <code>LAB_TOOLS</code> array (JS) and <code>LAB_TOOL_REGISTRY</code> dict (Python).</div>';
   h+='</div>';
   ov.innerHTML=h;ov.style.display='flex';
 }
@@ -4266,7 +4266,7 @@ function runSysInfo(){
 function runBackup(){
   fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent('echo ok')).then(function(r){return r.json()}).then(function(d){
     var reachable=d.results.filter(function(r){return r.ok}).length;
-    document.getElementById('backup-c').innerHTML='<div class="crd"><h3>Config Export</h3><p>Fleet snapshot: '+reachable+'/'+d.results.length+' hosts reachable</p><p style="margin-top:8px;color:var(--text-dim)">Run from CLI: <code class="c-purple">freq backup export</code></p></div>';
+    document.getElementById('backup-c').innerHTML='<div class="crd"><h3>Config Export</h3><p>Fleet snapshot: '+reachable+'/'+d.results.length+' hosts reachable</p><p class="text-dim mt-sm">Run from CLI: <code class="c-purple">freq backup export</code></p></div>';
     toast('Backup snapshot complete','success');
   });
 }
@@ -4333,7 +4333,7 @@ function loadNotify(){
       html+='<tr><td>'+p.name+'</td><td>'+(ok?badge('ok')+' Configured':badge('down')+' Not configured')+'</td></tr>';
     });
     html+='</table>';
-    html+='<p style="margin-top:8px;font-size:11px;color:var(--text-dim)">Configure in freq.toml under [notifications]</p>';
+    html+='<p class="text-dim mt-sm" style="font-size:11px">Configure in freq.toml under [notifications]</p>';
     document.getElementById('notify-status').innerHTML=html;
   });
 }
@@ -4361,7 +4361,7 @@ function vmPower(vmid,action){
 }
 function vmPushKey(ip){
   if(!ip){toast('No IP available for this VM','error');return;}
-  confirmAction('Push freq SSH key to <strong>'+ip+'</strong>?<br><span style="font-size:12px;color:var(--text-dim)">Deploys the freq-admin authorized_keys so FREQ can manage this host.</span>',function(){
+  confirmAction('Push freq SSH key to <strong>'+ip+'</strong>?<br><span class="text-sm text-dim">Deploys the freq-admin authorized_keys so FREQ can manage this host.</span>',function(){
     toast('Pushing key to '+ip+'...','info');
     _authFetch('/api/vm/push-key?ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
       if(d.error){toast('Key push failed: '+d.error,'error');return;}
@@ -4789,7 +4789,7 @@ function renderHostCard(config){
       /* Container header */
       html+='<div class="flex-between-mb12">';
       html+='<h3 style="font-size:15px;color:var(--purple-light);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin:0">CONTAINERS</h3>';
-      html+='<div style="display:flex;gap:8px;align-items:center">';
+      html+='<div class="flex-center">';
       html+='<span style="font-size:11px;font-weight:600;color:var(--green)">'+upCount+' UP</span>';
       if(downCount>0)html+='<span style="font-size:11px;font-weight:600;color:var(--red)">'+downCount+' DOWN</span>';
       html+='</div></div>';
@@ -4802,7 +4802,7 @@ function renderHostCard(config){
         var borderColor=isUp?'#1a3a2a':'#3a1a1a';
         var imgShort=(c.image||'').replace(/^.*\//,'').replace(/:latest$/,'');
         html+='<div style="background:var(--card);border:1px solid '+borderColor+';border-left:4px solid '+statusColor+';border-radius:8px;padding:12px 14px">';
-        html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+        html+='<div class="flex-between" style="margin-bottom:6px">';
         html+='<span style="font-size:13px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.5px">'+c.name+'</span>';
         html+=badge(isUp?'up':'down');
         html+='</div>';
@@ -4920,7 +4920,7 @@ function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip){
   if(acts.indexOf('resize')>=0)ctrl+='<button class="fleet-btn pad-v8-fs11" onclick="_vmToggleResize('+vmid+')" >RESIZE</button>';
   if(acts.indexOf('migrate')>=0)ctrl+='<button class="fleet-btn pad-v8-fs11" onclick="_vmToggleMigrate('+vmid+',\''+(vm?vm.node:'')+'\')" >MIGRATE</button>';
   if(acts.indexOf('destroy')>=0)ctrl+='<button class="fleet-btn btn-red pad-v8-fs11" data-action="vmDestroy" data-vmid="'+vmid+'" >DESTROY</button>';
-  if(acts.length<=1)ctrl+='<span style="font-size:12px;color:var(--text-dim);grid-column:1/-1">View only \u2014 no actions for '+catLabel+'</span>';
+  if(acts.length<=1)ctrl+='<span class="text-sm text-dim" style="grid-column:1/-1">View only \u2014 no actions for '+catLabel+'</span>';
   ctrl+='<div style="grid-column:1/-1;border-top:1px solid var(--input-border);margin-top:6px;padding-top:8px;font-size:11px;color:var(--text-dim);letter-spacing:0.5px">HOST TOOLS</div>';
   ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdExec" >RUN CMD</button>';
   ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdLogs" >LOGS</button>';
@@ -5203,7 +5203,7 @@ function _ltGenerateHTML(toolId,pfx,hideBtn){
     '<div id="'+pfx+'lt-controls" style="display:none;margin-bottom:16px"><div style="display:flex;gap:8px;flex-wrap:wrap">'+(t.renderControls?t.renderControls(pfx):'')+'</div></div>'+
     '<div id="'+pfx+'lt-content"></div>'+
     '<div id="'+pfx+'lt-extra"></div>'+
-    '<div id="'+pfx+'lt-offline" style="text-align:center;padding:60px 0"><div style="font-size:48px;opacity:0.15;margin-bottom:16px;font-weight:900;letter-spacing:4px;background:linear-gradient(135deg,var(--purple-light),var(--purple-dark));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">'+t.name+'</div><div style="font-size:15px;color:var(--text);margin-bottom:8px">Station Offline</div><div style="font-size:12px;color:var(--text-dim);max-width:420px;margin:0 auto;line-height:1.7">'+(t.offlineHint||'Enter the IP and API key above to connect.')+'</div></div>';
+    '<div id="'+pfx+'lt-offline" class="text-center" style="padding:60px 0"><div style="font-size:48px;opacity:0.15;margin-bottom:16px;font-weight:900;letter-spacing:4px;background:linear-gradient(135deg,var(--purple-light),var(--purple-dark));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">'+t.name+'</div><div class="mb-sm" style="font-size:15px;color:var(--text)">Station Offline</div><div class="text-sm text-dim" style="max-width:420px;margin:0 auto;line-height:1.7">'+(t.offlineHint||'Enter the IP and API key above to connect.')+'</div></div>';
 }
 
 function ltLoad(toolId,pfx){
@@ -5338,11 +5338,11 @@ function openAddTool(){
   h+='<div><label class="c-dim-fs12">Description</label><input class="input" id="at-subtitle" placeholder="Short description of what this tool does" style="width:100%;margin-top:4px"></div>';
   h+='<div><label class="c-dim-fs12">Default Port</label><input class="input" id="at-port" type="number" placeholder="8080" style="width:100%;margin-top:4px"></div>';
   h+='<div id="at-freq-fields">';
-  h+='<div style="margin-bottom:12px"><label class="c-dim-fs12">Vault Namespace</label><input class="input" id="at-vault-ns" placeholder="tool-name (for freq vault set)" style="width:100%;margin-top:4px"></div>';
+  h+='<div class="mb-md"><label class="c-dim-fs12">Vault Namespace</label><input class="input" id="at-vault-ns" placeholder="tool-name (for freq vault set)" style="width:100%;margin-top:4px"></div>';
   h+='<div><label class="c-dim-fs12">Vault Keys</label><div class="fs-11-dim-mt2">Auto-generated: <code style="color:var(--purple-light)">&lt;namespace&gt;_host</code>, <code style="color:var(--purple-light)">&lt;namespace&gt;_api_key</code></div></div>';
   h+='</div>';
   h+='<div id="at-custom-fields" style="display:none">';
-  h+='<div style="margin-bottom:12px"><label class="c-dim-fs12">Connect Endpoint</label><input class="input" id="at-endpoint" value="status" placeholder="status, health, api/v1/ping..." style="width:100%;margin-top:4px"></div>';
+  h+='<div class="mb-md"><label class="c-dim-fs12">Connect Endpoint</label><input class="input" id="at-endpoint" value="status" placeholder="status, health, api/v1/ping..." style="width:100%;margin-top:4px"></div>';
   h+='<div><label class="c-dim-fs12">Refresh Interval (ms)</label><input class="input" id="at-refresh" type="number" value="5000" style="width:100%;margin-top:4px"></div>';
   h+='</div>';
   h+='<div style="display:flex;gap:8px;margin-top:8px">';
@@ -5430,7 +5430,7 @@ function gwipeBayCard(dev,b,idx,pfx){
   h+='<div style="font-size:13px;font-weight:600;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+(b.model||'Unknown')+'">'+(b.model||'Unknown')+'</div>';
   h+='<div style="display:flex;gap:12px;margin-top:4px;font-size:11px;color:var(--text-dim)"><span>'+(b.size||'?')+'</span><span>'+(b.type||'?')+'</span><span>/dev/'+dev+'</span></div>';
   h+='<div style="margin-top:10px;padding:10px 12px;background:var(--bg);border:2px solid var(--input-border);border-radius:8px">';
-  h+='<div style="font-size:12px;color:var(--text-dim);letter-spacing:1px;margin-bottom:6px">DRIVE IDENTITY</div>';
+  h+='<div class="text-sm text-dim" style="letter-spacing:1px;margin-bottom:6px">DRIVE IDENTITY</div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">';
   h+='<div>Serial: <strong style="font-size:14px;font-family:monospace;color:var(--text);letter-spacing:1px">'+(b.serial||'N/A')+'</strong></div>';
   h+='<div>Model: <strong>'+(b.model||'Unknown')+'</strong></div>';
@@ -5455,7 +5455,7 @@ function gwipeBayCard(dev,b,idx,pfx){
   if(state==='WIPING'&&b.wipe){var pct=b.wipe.percent||0;
     h+='<div class="mt-10"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span class="c-yellow">'+(b.wipe.method||'')+'</span><span style="color:var(--text-bright);font-weight:600">'+pct.toFixed(1)+'%</span></div>';
     h+='<div style="background:rgba(255,255,255,0.06);border-radius:3px;height:6px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,var(--yellow),var(--orange));border-radius:3px;transition:width 0.5s"></div></div>';
-    h+='<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:3px;color:var(--text-dim)"><span>'+(b.wipe.speed||'')+'</span><span>ETA: '+(b.wipe.eta||'')+'</span></div></div>';
+    h+='<div class="text-sm text-dim" style="display:flex;justify-content:space-between;margin-top:3px"><span>'+(b.wipe.speed||'')+'</span><span>ETA: '+(b.wipe.eta||'')+'</span></div></div>';
   }
   if(state==='WIPED'&&b.wipe)h+='<div style="margin-top:8px;padding:6px 10px;background:rgba(63,185,80,0.08);border-radius:6px;font-size:11px;color:var(--green);font-weight:600;text-align:center">CLEAN — '+(b.wipe.method||'')+(b.wipe.duration?' ('+b.wipe.duration+')':'')+'</div>';
   if(b.present){
@@ -5520,7 +5520,7 @@ function loadPoliciesPage(){
 }
 function policyAction(action){
   var out=document.getElementById('policy-out');if(!out)return;
-  out.innerHTML='<span style="color:var(--text-dim)">Running policy '+action+'...</span>';
+  out.innerHTML='<span class="text-dim">Running policy '+action+'...</span>';
   var url=action==='check'?API.POLICY_CHECK:action==='diff'?API.POLICY_DIFF:API.POLICY_FIX;
   _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
@@ -5529,7 +5529,7 @@ function policyAction(action){
 }
 function runSweep(doFix){
   var out=document.getElementById('sweep-out');if(!out)return;
-  out.innerHTML='<span style="color:var(--text-dim)">Running sweep'+(doFix?' with fixes':'...')+'</span>';
+  out.innerHTML='<span class="text-dim">Running sweep'+(doFix?' with fixes':'...')+'</span>';
   _authFetch(API.SWEEP+'?fix='+doFix).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No output')+'</pre>';
@@ -5537,7 +5537,7 @@ function runSweep(doFix){
 }
 function loadPatrolStatus(){
   var out=document.getElementById('patrol-out');if(!out)return;
-  out.innerHTML='<span style="color:var(--text-dim)">Checking compliance...</span>';
+  out.innerHTML='<span class="text-dim">Checking compliance...</span>';
   fetch(API.PATROL_STATUS).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No output')+'</pre>';
@@ -6180,7 +6180,7 @@ function loadCosts(){
           '<div class="c-dim-fs12">RATE</div><div style="font-size:16px;font-weight:700;color:var(--text-dim)">'+cur+' '+s.rate_per_kwh+'/kWh &middot; PUE '+s.pue+'</div></div>';
     }
     var hosts=d.hosts||[];
-    if(hosts.length===0){tbl.innerHTML='<div class="c-dim-fs12" style="text-align:center;padding:20px">No host data.</div>';return;}
+    if(hosts.length===0){tbl.innerHTML='<div class="c-dim-fs12 text-center" style="padding:20px">No host data.</div>';return;}
     var h='<table><tr><th>Host</th><th>Watts</th><th>Source</th><th>kWh/mo</th><th>Cost/mo</th><th>RAM</th><th>Containers</th></tr>';
     hosts.forEach(function(c){
       var srcColor=c.watts_source==='idrac'?'var(--green)':'var(--text-dim)';
@@ -6217,7 +6217,7 @@ function loadFederation(){
           '<div class="c-dim-fs12">HEALTHY</div><div style="font-size:18px;font-weight:700;color:var(--green)">'+s.total_healthy+'</div></div>';
     }
     var sl=d.sites||[];
-    if(sl.length===0){sites.innerHTML='<div class="c-dim-fs12" style="text-align:center;padding:20px">No sites registered. Add a remote FREQ instance below.</div>';return;}
+    if(sl.length===0){sites.innerHTML='<div class="c-dim-fs12 text-center" style="padding:20px">No sites registered. Add a remote FREQ instance below.</div>';return;}
     var h='<table><tr><th>Site</th><th>URL</th><th>Status</th><th>Version</th><th>Hosts</th><th>Healthy</th><th>Last Seen</th><th>Actions</th></tr>';
     sl.forEach(function(site){
       var sc=site.last_status==='ok'?'var(--green)':site.last_status==='unreachable'?'var(--red)':'var(--text-dim)';
@@ -6292,7 +6292,7 @@ function loadChaos(){
   log.innerHTML='<div class="skeleton"></div>';
   _authFetch('/api/chaos/log').then(function(r){return r.json()}).then(function(d){
     var exps=d.experiments||[];
-    if(exps.length===0){log.innerHTML='<div class="c-dim-fs12" style="text-align:center;padding:20px">No experiments run yet.</div>';return;}
+    if(exps.length===0){log.innerHTML='<div class="c-dim-fs12 text-center" style="padding:20px">No experiments run yet.</div>';return;}
     var h='<table><tr><th>Name</th><th>Type</th><th>Target</th><th>Status</th><th>Duration</th><th>Recovery</th><th>Error</th></tr>';
     exps.forEach(function(e){
       var sc=e.status==='completed'?'var(--green)':e.status==='blocked'?'var(--yellow)':'var(--red)';
@@ -6332,7 +6332,7 @@ function chaosRun(){
 
 function runDoctor(){
   var out=document.getElementById('diag-out');if(!out)return;
-  out.innerHTML='<span style="color:var(--text-dim)">Running self-diagnostic...</span>';
+  out.innerHTML='<span class="text-dim">Running self-diagnostic...</span>';
   fetch(API.DOCTOR).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'OK')+'</pre>';
@@ -6342,13 +6342,13 @@ function runDiagnose(){
   var host=document.getElementById('diag-host').value.trim();
   if(!host){toast('Select a host','error');return;}
   var out=document.getElementById('diag-out');if(!out)return;
-  out.innerHTML='<span style="color:var(--text-dim)">Diagnosing '+_esc(host)+'...</span>';
+  out.innerHTML='<span class="text-dim">Diagnosing '+_esc(host)+'...</span>';
   fetch(API.DIAGNOSE+'?target='+encodeURIComponent(host)).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     var h='<div style="font-size:14px;font-weight:700;color:var(--purple-light);margin-bottom:8px">'+_esc(d.host)+' ('+_esc(d.ip)+')</div>';
     var checks=d.checks||{};
     Object.keys(checks).forEach(function(k){
-      h+='<div style="margin-bottom:8px"><div style="font-size:11px;letter-spacing:1px;color:var(--text-dim);text-transform:uppercase">'+_esc(k)+'</div>';
+      h+='<div class="mb-sm"><div class="text-dim" style="font-size:11px;letter-spacing:1px;text-transform:uppercase">'+_esc(k)+'</div>';
       h+='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text);margin:2px 0 0 0">'+_esc(checks[k])+'</pre></div>';
     });
     out.innerHTML=h;
@@ -6360,7 +6360,7 @@ function fetchLogs(){
   var unit=document.getElementById('log-unit').value.trim();
   var lines=document.getElementById('log-lines').value||50;
   var out=document.getElementById('log-out');if(!out)return;
-  out.innerHTML='<span style="color:var(--text-dim)">Fetching logs from '+_esc(host)+'...</span>';
+  out.innerHTML='<span class="text-dim">Fetching logs from '+_esc(host)+'...</span>';
   var url=API.LOG+'?target='+encodeURIComponent(host)+'&lines='+lines;
   if(unit)url+='&unit='+encodeURIComponent(unit);
   fetch(url).then(function(r){return r.json()}).then(function(d){
@@ -6371,7 +6371,7 @@ function fetchLogs(){
 }
 function loadZfs(){
   var out=document.getElementById('zfs-out');if(!out)return;
-  out.innerHTML='<span style="color:var(--text-dim)">Loading ZFS status...</span>';
+  out.innerHTML='<span class="text-dim">Loading ZFS status...</span>';
   fetch(API.ZFS).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No ZFS data')+'</pre>';
@@ -6379,7 +6379,7 @@ function loadZfs(){
 }
 function loadBackups(action){
   var out=document.getElementById('backup-out');if(!out)return;
-  out.innerHTML='<span style="color:var(--text-dim)">Loading backups...</span>';
+  out.innerHTML='<span class="text-dim">Loading backups...</span>';
   fetch(API.BACKUP+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No backup data')+'</pre>';
@@ -6388,7 +6388,7 @@ function loadBackups(action){
 function runDiscover(){
   var subnet=document.getElementById('discover-subnet').value.trim();
   var out=document.getElementById('discover-out');if(!out)return;
-  out.innerHTML='<span style="color:var(--text-dim)">Scanning network...</span>';
+  out.innerHTML='<span class="text-dim">Scanning network...</span>';
   var url=API.DISCOVER;
   if(subnet)url+='?subnet='+encodeURIComponent(subnet);
   _authFetch(url).then(function(r){return r.json()}).then(function(d){
@@ -6415,7 +6415,7 @@ function addHostManual(){
 }
 function loadGwipe(action){
   var out=document.getElementById('gwipe-out');if(!out)return;
-  out.innerHTML='<span style="color:var(--text-dim)">Loading GWIPE '+action+'...</span>';
+  out.innerHTML='<span class="text-dim">Loading GWIPE '+action+'...</span>';
   _authFetch(API.GWIPE+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     var data=d.data||{};
@@ -6466,7 +6466,7 @@ function _loadMonitorsWidget(){
       h+='<span style="font-size:11px;color:var(--text-dim)">'+r.latency_ms+'ms</span>';
       h+='</div>';
     });
-    h+='<div style="margin-top:8px;font-size:12px;color:var(--text-dim)">'+d.healthy+'/'+d.count+' healthy</div>';
+    h+='<div class="text-sm text-dim mt-sm">'+d.healthy+'/'+d.count+' healthy</div>';
     el.innerHTML=h;
   }).catch(function(e){var el=document.getElementById('hw-monitors-list');if(el)el.innerHTML='<div class="empty-state"><p>Monitor check failed</p></div>';});
 }
@@ -6578,7 +6578,7 @@ function _globalSearchFilter(query){
 }
 function _renderSearchResults(items){
   var el=document.getElementById('search-results');if(!el)return;
-  if(!items.length){el.innerHTML='<div style="padding:16px;text-align:center;color:var(--text-dim)">No results</div>';return;}
+  if(!items.length){el.innerHTML='<div class="text-center text-dim" style="padding:16px">No results</div>';return;}
   /* Group by category */
   var groups={};var order=['nav','action','tool','vm','host'];
   var labels={nav:'NAVIGATE',action:'ACTIONS',tool:'TOOLS',vm:'VIRTUAL MACHINES',host:'HOSTS'};
