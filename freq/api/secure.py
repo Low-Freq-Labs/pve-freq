@@ -27,6 +27,9 @@ from freq.modules.serve import _check_session_role
 
 def handle_vault(handler):
     """GET /api/vault — list vault entries (values masked)."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     if not os.path.exists(cfg.vault_file):
         json_response(handler, {"entries": [], "initialized": False}); return
@@ -37,7 +40,10 @@ def handle_vault(handler):
 
 
 def handle_vault_set(handler):
-    """GET /api/vault/set — set a vault entry."""
+    """POST /api/vault/set — set a vault entry."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     key = params.get("key", [""])[0]
@@ -52,7 +58,10 @@ def handle_vault_set(handler):
 
 
 def handle_vault_delete(handler):
-    """GET /api/vault/delete — delete a vault entry."""
+    """POST /api/vault/delete — delete a vault entry."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     key = params.get("key", [""])[0]
