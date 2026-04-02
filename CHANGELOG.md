@@ -4,6 +4,100 @@ All notable changes to PVE FREQ will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.0] - Unreleased
+
+### The Conquest — Complete Platform Rewrite
+
+**156 files changed, +23,622 / -1,973 lines across 26 commits on v3-rewrite.**
+
+### Added
+
+#### Phase 0 — Foundation
+- **Domain dispatch CLI** — `freq <domain> <action>` replaces 126 flat commands with 25 organized domains
+- **Platform abstraction layer** — `freq/core/platform.py`, `remote_platform.py`, `packages.py`, `services.py` for multi-distro support
+- **Domain-based API router** — `freq/api/` with 15 domain modules, 163+ routes extracted from serve.py
+- **SOURCE-CODE-STANDARDS** — 5-question header docstrings applied to all 91 .py files
+
+#### Phase 1 — The Network (WS1-2)
+- `freq net switch` — 10 switch management commands (facts, interfaces, vlans, mac, arp, neighbors, config, environment, exec, save)
+- `freq net port` — port management with TOML-based profiles (status, configure, find, poe)
+- `freq net config` — Oxidized-style config backup, diff, search, restore
+- `freq event` — full event network lifecycle (create, plan, deploy, verify, wipe, archive, delete)
+- `freq net snmp/topology/find-mac/find-ip/troubleshoot/ip-util/ip-conflict` — 15 network intelligence commands
+- Cisco IOS/IOS-XE deployer with 20+ getter/setter functions
+- `conf/switch-profiles.toml` — 4 default port profiles
+
+#### Phase 2 — The Gateway (WS3-7)
+- `freq fw` — 7 firewall management commands (rules, nat, states, interfaces, aliases, logs, backup)
+- `freq dns` — internal DNS management (scan, check, list, add, remove)
+- `freq vpn` — WireGuard and OpenVPN management (wg status/peers/audit, ovpn status)
+- `freq cert` — TLS certificate lifecycle (scan, list, check, renew, inventory)
+- `freq proxy` — reverse proxy management (status, list, add, remove, health, drain)
+
+#### Phase 3 — The Foundation (WS8-9)
+- `freq store` — 7 storage management commands (nas status, zfs pool/snapshot/scrub, capacity, health, volumes)
+- `freq dr` — disaster recovery with SLA tracking and runbooks (backup, policy, sla, runbook, journal, test)
+
+#### Phase 4 — The Eyes (WS10-11)
+- `freq observe metrics` — fleet-wide metrics collection (top, history, export, alerts)
+- `freq observe monitor` — synthetic HTTP/TCP endpoint monitoring (list, add, check, status)
+- `freq secure vuln` — vulnerability scanning (scan, report, track, fix)
+- `freq secure fim` — file integrity monitoring (baseline, check, report, watch)
+
+#### Phase 5 — The Brain (WS12, 15-16)
+- `freq ops incident` — incident management (create, list, update, resolve, timeline)
+- `freq state export/drift` — IaC state management (export, drift, reconcile)
+- `freq auto react/workflow/job` — automation engine with reactors, workflows, scheduled jobs
+
+#### Phase 6 — The Fleet (WS13-14)
+- `freq docker` — fleet-wide Docker management (list, images, prune, update-check)
+- `freq hw` — hardware monitoring (smart, ups, power, inventory)
+
+#### Phase 7 — The Ecosystem (WS19)
+- `freq plugin` — 8 plugin management commands (list, info, install, remove, create, search, update, types)
+- 7 plugin types: command, deployer, importer, exporter, notification, widget, policy
+- Plugin scaffold templates with correct interfaces per type
+- Plugin registry in `conf/plugins/registry.json`
+
+#### Phase 8 — The Face (WS20)
+- 11 new dashboard views: Network, Firewall, Certificates, DNS, VPN, DR, Incidents, Metrics, Automation, Plugins
+- Sub-tab navigation under Fleet (Network), Security (Firewall, Certs, VPN), System (DNS, DR, Incidents, Metrics, Automation, Plugins)
+- Shared JS helpers: `_fetchAndRender`, `_statCards`, `_statusBadge`, `_esc`
+- Every view has stat cards, tables, and API-driven data loading
+
+#### Phase 9 — The Proof (WS21)
+- E2E test framework with 75 tests covering all 22 domains
+- Domain --help smoke tests, dispatch verification, convergence checks
+- Module import validation for all 23 new modules
+- API route completeness verification
+- Read-only safe command catalog for live fleet testing
+
+#### Phase 10 — GIT-READY
+- 16-test codebase audit: credential scrubbing, DC01 IP scan, distro assumption detection
+- SOURCE-CODE-STANDARDS compliance verification
+- Deployer registry completeness checks
+- Python 3.11+ syntax validation across all files
+- Clean file inventory (no .env, .sqlite, .pem)
+
+### Changed
+- CLI grammar: `freq create` → `freq vm create`, `freq status` → `freq fleet status`, etc.
+- All 126 flat commands reorganized into 25 domains
+- serve.py: 163/209 API routes extracted to domain modules
+- cert_management.py, hardware.py: distro-specific install hints replaced with generic guidance
+- Test suite expanded from ~1,670 to ~2,100+ tests
+
+### Fixed
+- 6 hardcoded Debian/apt assumptions in core modules (P0 ship blockers)
+- MIN_PYTHON mismatch (3.7 → 3.11) aligned across all files
+- 2 distro-assumption violations in Phase 1-7 modules
+
+### Architecture
+- **Zero external dependencies** — pure Python stdlib, as always
+- **Python 3.11+ minimum** — tomllib, modern asyncio, all stdlib features
+- **Plugin ecosystem** — formalized interface for community extensions
+- **Universal distro support** — platform detection, package manager abstraction, init system detection
+- **License: AGPL v3** — same as Proxmox, proven by Grafana at $6B valuation
+
 ## [2.2.0] - 2026-03-31
 
 ### Added
