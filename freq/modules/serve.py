@@ -1460,7 +1460,7 @@ def _get_fleet_vms(cfg):
                         "cpu_pct": cpu_pct,
                         "ram_mb": mem_max // (1024 * 1024) if mem_max else 0,
                         "ram_used_mb": mem_used // (1024 * 1024) if mem_used else 0,
-                        "ram_pct": round(mem_used / mem_max * 100, 1) if mem_max else 0,
+                        "ram_pct": min(round(mem_used / mem_max * 100, 1), 100.0) if mem_max else 0,
                         "type": v.get("type", ""),
                         "category": cat_name,
                         "tier": tier,
