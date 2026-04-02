@@ -28,6 +28,7 @@ Design decisions:
 import concurrent.futures
 import datetime
 import hashlib
+import secrets
 import json
 import os
 import re
@@ -1277,6 +1278,23 @@ def _check_vm_permission(cfg, vmid, action):
     if fb.can_action(vmid, action):
         return True, ""
     return False, f"Action '{action}' blocked on VMID {vmid} ({cat_name}/{tier})"
+
+
+def _hash_password(password: str, salt: str = None) -> str:
+    """Hash password with PBKDF2-SHA256 + per-user salt."""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100_000)
+    return f"{salt}${dk.hex()}"
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    """Verify password against stored hash. Supports legacy SHA256 for migration."""
+    if '$' not in stored:
+        # Legacy unsalted SHA256 hash
+        return hashlib.sha256(password.encode()).hexdigest() == stored
+    salt, _ = stored.split('$', 1)
+    return _hash_password(password, salt) == stored
 
 
 def _check_session_role(handler, min_role="operator"):
@@ -3146,7 +3164,7 @@ a:hover{{text-decoration:underline}}
             return
 
         # Store password hash in vault
-        pw_hash = hashlib.sha256(password.encode()).hexdigest()
+        pw_hash = _hash_password(password)
         try:
             if not os.path.exists(cfg.vault_file):
                 vault_init(cfg)
@@ -6565,13 +6583,14 @@ a:hover{{text-decoration:underline}}
         except Exception as e:
             logger.warn(f"vault read failed for auth: {e}")
 
-        pw_hash = hashlib.sha256(password.encode()).hexdigest()
-        if stored_hash and stored_hash != pw_hash:
+        if stored_hash and not _verify_password(password, stored_hash):
             self._json_response({"error": "Invalid password"})
             return
 
         # If no password stored yet, save this one (first login sets password)
-        if not stored_hash:
+        # Also migrate legacy SHA256 hashes to PBKDF2 on successful login
+        if not stored_hash or ('$' not in stored_hash):
+            pw_hash = _hash_password(password)
             try:
                 if not os.path.exists(cfg.vault_file):
                     vault_init(cfg)
@@ -6626,7 +6645,7 @@ a:hover{{text-decoration:underline}}
 
         username = session["user"]
         cfg = load_config()
-        pw_hash = hashlib.sha256(new_password.encode()).hexdigest()
+        pw_hash = _hash_password(new_password)
         try:
             if not os.path.exists(cfg.vault_file):
                 vault_init(cfg)
