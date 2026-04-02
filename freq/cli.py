@@ -160,6 +160,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _register_user(sub)
     _register_event(sub)
     _register_vpn(sub)
+    _register_plugin(sub)
 
     return parser
 
@@ -1729,6 +1730,53 @@ def _register_event(sub):
 
 
 # ---------------------------------------------------------------------------
+# freq plugin — Plugin Ecosystem
+# ---------------------------------------------------------------------------
+
+def _register_plugin(sub):
+    """Register freq plugin subcommands."""
+    pl = sub.add_parser("plugin", help="Plugin management (install, create, remove)")
+    _domain_help(pl)
+    pl_sub = pl.add_subparsers(dest="subcmd")
+
+    p = pl_sub.add_parser("list", help="List installed plugins")
+    p.set_defaults(func=_cmd_plugin_list)
+
+    p = pl_sub.add_parser("info", help="Show plugin details")
+    p.add_argument("name", help="Plugin name")
+    p.set_defaults(func=_cmd_plugin_info)
+
+    p = pl_sub.add_parser("install", help="Install a plugin from URL or path")
+    p.add_argument("source", help="URL or local path to plugin file")
+    p.set_defaults(func=_cmd_plugin_install)
+
+    p = pl_sub.add_parser("remove", help="Remove an installed plugin")
+    p.add_argument("name", help="Plugin name")
+    p.set_defaults(func=_cmd_plugin_remove)
+
+    p = pl_sub.add_parser("create", help="Scaffold a new plugin from template")
+    p.add_argument("--name", required=True, help="Plugin name")
+    p.add_argument("--type", dest="type", default="command",
+                   help="Plugin type (command, deployer, notification, policy, etc.)")
+    p.add_argument("--description", help="Short description")
+    p.add_argument("--category", help="Deployer category (for deployer type)")
+    p.set_defaults(func=_cmd_plugin_create)
+
+    p = pl_sub.add_parser("search", help="Search community plugin index")
+    p.add_argument("query", nargs="?", default="", help="Search query")
+    p.set_defaults(func=_cmd_plugin_search)
+
+    p = pl_sub.add_parser("update", help="Update plugins from original source")
+    p.add_argument("name", nargs="?", help="Plugin name (or all if omitted)")
+    p.set_defaults(func=_cmd_plugin_update)
+
+    p = pl_sub.add_parser("types", help="List available plugin types")
+    p.set_defaults(func=_cmd_plugin_types)
+
+    pl.set_defaults(func=_cmd_plugin_list)
+
+
+# ---------------------------------------------------------------------------
 # Help command — domain-based reference
 # ---------------------------------------------------------------------------
 
@@ -1893,6 +1941,16 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("user promote <username>", "Promote to higher role"),
             ("user demote <username>", "Demote to lower role"),
             ("user install <username>", "Install across fleet"),
+        ]),
+        ("freq plugin — Plugin Ecosystem", [
+            ("plugin list", "List installed plugins"),
+            ("plugin info <name>", "Show plugin details"),
+            ("plugin install <url-or-path>", "Install a plugin"),
+            ("plugin remove <name>", "Remove a plugin"),
+            ("plugin create --name <n> --type <t>", "Scaffold new plugin"),
+            ("plugin search [query]", "Search community index"),
+            ("plugin update [name]", "Update from source"),
+            ("plugin types", "List plugin types"),
         ]),
     ]
 
@@ -3171,3 +3229,47 @@ def _cmd_groups(cfg: FreqConfig, pack, args) -> int:
     """Route to groups module."""
     from freq.modules.hosts import cmd_groups
     return cmd_groups(cfg, pack, args)
+
+
+# ---------------------------------------------------------------------------
+# Plugin commands
+# ---------------------------------------------------------------------------
+
+def _cmd_plugin_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.plugin_manager import cmd_plugin_list
+    return cmd_plugin_list(cfg, pack, args)
+
+
+def _cmd_plugin_info(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.plugin_manager import cmd_plugin_info
+    return cmd_plugin_info(cfg, pack, args)
+
+
+def _cmd_plugin_install(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.plugin_manager import cmd_plugin_install
+    return cmd_plugin_install(cfg, pack, args)
+
+
+def _cmd_plugin_remove(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.plugin_manager import cmd_plugin_remove
+    return cmd_plugin_remove(cfg, pack, args)
+
+
+def _cmd_plugin_create(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.plugin_manager import cmd_plugin_create
+    return cmd_plugin_create(cfg, pack, args)
+
+
+def _cmd_plugin_search(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.plugin_manager import cmd_plugin_search
+    return cmd_plugin_search(cfg, pack, args)
+
+
+def _cmd_plugin_update(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.plugin_manager import cmd_plugin_update
+    return cmd_plugin_update(cfg, pack, args)
+
+
+def _cmd_plugin_types(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.plugin_manager import cmd_plugin_types
+    return cmd_plugin_types(cfg, pack, args)
