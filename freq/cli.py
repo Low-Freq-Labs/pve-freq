@@ -828,6 +828,16 @@ def _register_state(sub):
                    default="status", help="Action to perform")
     p.set_defaults(func=_cmd_gitops)
 
+    # IaC extensions (WS15)
+    p = state_sub.add_parser("export", help="Export infrastructure state snapshot")
+    p.set_defaults(func=_cmd_state_export)
+
+    p = state_sub.add_parser("drift", help="Detect configuration drift")
+    p.set_defaults(func=_cmd_state_drift)
+
+    p = state_sub.add_parser("history", help="State snapshot history")
+    p.set_defaults(func=_cmd_state_history)
+
 
 # ---------------------------------------------------------------------------
 # freq auto — Automation & Scheduling
@@ -892,6 +902,37 @@ def _register_auto(sub):
     p.add_argument("--auto-fix", action="store_true", help="Auto-remediate drift")
     p.set_defaults(func=_cmd_patrol)
 
+    # Reactor (WS16)
+    react = auto_sub.add_parser("react", help="Event-driven automation reactors")
+    react_sub = react.add_subparsers(dest="action")
+    p = react_sub.add_parser("list", help="List reactors")
+    p.set_defaults(func=_cmd_react_list)
+    p = react_sub.add_parser("add", help="Add a reactor")
+    p.add_argument("--name", required=True, help="Reactor name")
+    p.add_argument("--trigger", required=True, help="Trigger event")
+    p.add_argument("--action", required=True, dest="react_action", help="Action command")
+    p.add_argument("--cooldown", type=int, default=300, help="Cooldown seconds")
+    p.set_defaults(func=_cmd_react_add)
+    p = react_sub.add_parser("disable", help="Disable a reactor")
+    p.add_argument("name", help="Reactor name")
+    p.set_defaults(func=_cmd_react_disable)
+    react.set_defaults(func=_cmd_react_list)
+
+    # Workflow (WS16)
+    wf = auto_sub.add_parser("workflow", help="Automation workflows")
+    wf_sub = wf.add_subparsers(dest="action")
+    p = wf_sub.add_parser("list", help="List workflows")
+    p.set_defaults(func=_cmd_workflow_list)
+    p = wf_sub.add_parser("create", help="Create a workflow")
+    p.add_argument("name", help="Workflow name")
+    p.add_argument("--description", default="", help="Description")
+    p.set_defaults(func=_cmd_workflow_create)
+    wf.set_defaults(func=_cmd_workflow_list)
+
+    # Job (WS16)
+    p = auto_sub.add_parser("job", help="Named job operations")
+    p.set_defaults(func=_cmd_job_list)
+
 
 # ---------------------------------------------------------------------------
 # freq ops — Operations
@@ -920,6 +961,33 @@ def _register_ops(sub):
     p = ops_sub.add_parser("risk", help="Kill-chain blast radius analysis")
     p.add_argument("target", nargs="?", help="Infrastructure target (pfsense/truenas/switch/all)")
     p.set_defaults(func=_cmd_risk)
+
+    # Incident management (WS12)
+    inc = ops_sub.add_parser("incident", help="Incident tracking")
+    inc_sub = inc.add_subparsers(dest="action")
+    p = inc_sub.add_parser("create", help="Create incident")
+    p.add_argument("title", help="Incident title")
+    p.add_argument("--severity", default="warning", choices=["info", "warning", "critical"])
+    p.set_defaults(func=_cmd_incident_create)
+    p = inc_sub.add_parser("list", help="List incidents")
+    p.set_defaults(func=_cmd_incident_list)
+    p = inc_sub.add_parser("update", help="Update incident")
+    p.add_argument("id", help="Incident ID (e.g. INC-1)")
+    p.add_argument("--status", required=True, choices=["investigating", "resolved", "closed"])
+    p.add_argument("--note", default="")
+    p.set_defaults(func=_cmd_incident_update)
+    inc.set_defaults(func=_cmd_incident_list)
+
+    # Change management (WS12)
+    chg = ops_sub.add_parser("change", help="Change request management")
+    chg_sub = chg.add_subparsers(dest="action")
+    p = chg_sub.add_parser("create", help="Create change request")
+    p.add_argument("title", help="Change title")
+    p.add_argument("--risk", default="low", choices=["low", "medium", "high", "critical"])
+    p.set_defaults(func=_cmd_change_create)
+    p = chg_sub.add_parser("list", help="List changes")
+    p.set_defaults(func=_cmd_change_list)
+    chg.set_defaults(func=_cmd_change_list)
 
 
 # ---------------------------------------------------------------------------
@@ -2336,6 +2404,69 @@ def _cmd_ip_conflict(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.net_intelligence import cmd_ip_conflict
     return cmd_ip_conflict(cfg, pack, args)
 
+
+# --- Incident/Change (WS12) ---
+
+def _cmd_incident_create(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.incident import cmd_incident_create
+    return cmd_incident_create(cfg, pack, args)
+
+def _cmd_incident_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.incident import cmd_incident_list
+    return cmd_incident_list(cfg, pack, args)
+
+def _cmd_incident_update(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.incident import cmd_incident_update
+    return cmd_incident_update(cfg, pack, args)
+
+def _cmd_change_create(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.incident import cmd_change_create
+    return cmd_change_create(cfg, pack, args)
+
+def _cmd_change_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.incident import cmd_change_list
+    return cmd_change_list(cfg, pack, args)
+
+# --- IaC (WS15) ---
+
+def _cmd_state_export(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.iac import cmd_state_export
+    return cmd_state_export(cfg, pack, args)
+
+def _cmd_state_drift(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.iac import cmd_state_drift
+    return cmd_state_drift(cfg, pack, args)
+
+def _cmd_state_history(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.iac import cmd_state_history
+    return cmd_state_history(cfg, pack, args)
+
+# --- Automation (WS16) ---
+
+def _cmd_react_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.automation import cmd_react_list
+    return cmd_react_list(cfg, pack, args)
+
+def _cmd_react_add(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.automation import cmd_react_add
+    args.action = getattr(args, "react_action", None)
+    return cmd_react_add(cfg, pack, args)
+
+def _cmd_react_disable(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.automation import cmd_react_disable
+    return cmd_react_disable(cfg, pack, args)
+
+def _cmd_workflow_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.automation import cmd_workflow_list
+    return cmd_workflow_list(cfg, pack, args)
+
+def _cmd_workflow_create(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.automation import cmd_workflow_create
+    return cmd_workflow_create(cfg, pack, args)
+
+def _cmd_job_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.automation import cmd_job_list
+    return cmd_job_list(cfg, pack, args)
 
 # --- Metrics + Monitors (WS10) ---
 
