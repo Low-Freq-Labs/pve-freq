@@ -1,0 +1,171 @@
+[38;5;93m╭──────────────────────────────────────────────────────────────────────────────╮[0m
+[38;5;93m│[0m[1;38;5;93m PVE FREQ → Command Reference — freq <domain> <action> [0m                       [38;5;93m│[0m
+[38;5;93m├──────────────────────────────────────────────────────────────────────────────┤[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mUtilities (top-level)[0m                                                       [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq version                                 [0m Show version and branding   [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq help                                    [0m This command reference      [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq doctor                                  [0m Self-diagnostic             [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq menu                                    [0m Interactive TUI menu        [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq demo                                    [0m Interactive demo (no fleet r[0m[38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq init                                    [0m First-run setup wizard      [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq configure                               [0m Reconfigure settings        [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq serve                                   [0m Start web dashboard         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq update                                  [0m Check for updates           [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq learn <query>                           [0m Search operational knowledge[38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq docs [generate|verify|runbook]          [0m Auto-generated docs         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq distros                                 [0m List cloud images           [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq notify <message>                        [0m Send notification           [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq agent <action>                          [0m AI specialist management    [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq vm — Virtual Machine Lifecycle[0m                                         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm list [--node] [--status]             [0m List VMs across cluster     [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm create [--name --image ...]          [0m Create a new VM             [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm clone <source> [--name]              [0m Clone an existing VM        [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm destroy <target>                     [0m Destroy a VM                [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm resize <target> [--cores --ram]      [0m Resize a VM                 [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm power <start/stop/reboot> <vmid>     [0m Power control               [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm snapshot [create|list|delete]        [0m Snapshot management         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm rollback <vmid>                      [0m Roll back to snapshot       [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm nic <action> <vmid>                  [0m NIC management              [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm migrate <target> --node              [0m Migrate between nodes       [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm import --image                       [0m Import cloud image          [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm template <vmid>                      [0m Convert to template         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm rename <vmid> --name                 [0m Rename a VM                 [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm disk <vmid> --size                   [0m Add disk(s)                 [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm tag <vmid> [tags]                    [0m PVE tags                    [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm pool [list|create|add]               [0m Pool management             [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm sandbox <template>                   [0m Spawn from template         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm overview                             [0m VM inventory across cluster [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm config <target>                      [0m View/edit VM configuration  [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm rescue <target>                      [0m Rescue a stuck VM           [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm why <vmid>                           [0m Explain protections         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm provision                            [0m Cloud-init provisioning     [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq vm file send <src> <host:dst>           [0m SCP file to host            [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq fleet — Fleet Operations[0m                                               [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet status                            [0m Fleet health summary        [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet dashboard                         [0m Dashboard overview          [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet exec <target> <cmd>               [0m Run command across fleet    [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet info <host>                       [0m System info                 [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet detail <host>                     [0m Deep host inventory         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet diagnose <host>                   [0m Deep diagnostic             [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet ssh <host>                        [0m SSH to host                 [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet docker <host>                     [0m Container discovery         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet log <host>                        [0m View host logs              [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet compare <a> <b>                   [0m Side-by-side compare        [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet health                            [0m Comprehensive health        [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet report [--markdown]               [0m Fleet health report         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet ntp [check|fix]                   [0m NTP management              [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet update [check|apply]              [0m OS updates                  [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet comms [setup|send|check]          [0m Inter-VM mailbox            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet inventory [hosts|vms|containers]  [0m CMDB export                 [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet federation [list|register|poll]   [0m Multi-site                  [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fleet test <host>                       [0m Test connectivity           [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq host — Host Registry[0m                                                   [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq host list                               [0m List fleet hosts            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq host add                                [0m Add a host                  [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq host remove                             [0m Remove a host               [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq host discover                           [0m Discover on network         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq host groups [list|add|remove]           [0m Manage groups               [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq host bootstrap <host>                   [0m Bootstrap new host          [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq host onboard <host>                     [0m Onboard to fleet            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq host keys [deploy|list|rotate]          [0m SSH key management          [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq docker — Container Management[0m                                          [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq docker containers <host>                [0m Container discovery         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq docker fleet [ps|logs|stats]            [0m Fleet-wide operations       [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq docker stack [status|update|health]     [0m Compose stacks              [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq docker monitor                          [0m HTTP endpoint checks        [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq secure — Security & Compliance[0m                                         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq secure vault <action> [key]             [0m Encrypted credential store  [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq secure audit [--fix]                    [0m Security audit              [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq secure harden <target>                  [0m Apply hardening             [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq secure comply [scan|report]             [0m CIS/STIG compliance         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq secure patch [status|check|apply]       [0m Patch management            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq secure secrets [scan|audit|generate]    [0m Secret lifecycle            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq secure sweep [--fix]                    [0m Full audit pipeline         [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq observe — Observability[0m                                                [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq observe alert [list|create|check|test]  [0m Alert management            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq observe logs [tail|search|stats]        [0m Fleet log aggregation       [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq observe trend [show|snapshot]           [0m Capacity trends             [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq observe capacity [show|snapshot]        [0m Capacity projections        [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq observe sla [show|check]                [0m Uptime SLA tracking         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq observe watch                           [0m Monitoring daemon           [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq observe db [status|health|size]         [0m Database health             [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq state — Desired State[0m                                                  [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq state baseline [capture|compare|list]   [0m Config baselines            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq state plan [--file]                     [0m Fleet plan diff             [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq state apply [--file]                    [0m Apply fleet plan            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq state check <policy>                    [0m Check compliance            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq state fix <policy>                      [0m Apply remediation           [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq state diff <policy>                     [0m Show drift                  [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq state policies                          [0m List policies               [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq state gitops [status|sync|diff]         [0m GitOps config sync          [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq auto — Automation[0m                                                      [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq auto rules [list|create|delete]         [0m Alert rules                 [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq auto schedule [list|create|run]         [0m Job scheduler               [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq auto playbook [list|run]                [0m Incident playbooks          [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq auto webhook [list|create|test]         [0m Inbound webhooks            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq auto chaos [list|run|log]               [0m Chaos engineering           [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq auto patrol [--interval N]              [0m Continuous monitoring       [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq ops — Operations[0m                                                       [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq ops oncall [whoami|schedule|alert|ack]  [0m On-call rotation            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq ops risk <target>                       [0m Blast radius analysis       [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq hw — Hardware & Cost[0m                                                   [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq hw idrac <action>                       [0m Dell iDRAC management       [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq hw cost                                 [0m Power cost estimates        [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq hw cost-analysis [waste|density|compare][0m FinOps analysis             [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq hw gwipe [status|bays|wipe]             [0m Drive sanitization          [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq store — Storage[0m                                                        [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq store nas <action>                      [0m TrueNAS management          [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq store zfs <action>                      [0m ZFS operations              [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq dr — Disaster Recovery[0m                                                 [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq dr backup [list|create|export|prune]    [0m Backup management           [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq dr policy [list|create|apply]           [0m Backup policies             [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq dr journal [--lines N]                  [0m Operation history           [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq dr migrate-plan                         [0m Migration recommendations   [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq dr migrate-vmware [scan|import]         [0m VMware migration            [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq net — Network[0m                                                          [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq net switch <action>                     [0m Switch management           [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq net netmon [interfaces|poll|bandwidth]  [0m Network monitoring          [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq net map [discover|impact|export]        [0m Dependency mapping          [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq net ip [next|list|check]                [0m IPAM                        [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mStandalone Domains[0m                                                          [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq fw <action>                             [0m Firewall (pfSense/OPNsense) [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq cert [scan|list|check]                  [0m TLS certificates            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq dns [scan|check|list]                   [0m DNS validation              [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq proxy [status|list|add|remove]          [0m Reverse proxy               [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq media <action> [service]                [0m Media stack (40+ subcommands[0m[38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq user — User Management[0m                                                 [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq user list                               [0m List users                  [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq user create <username>                  [0m Create user                 [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq user passwd <username>                  [0m Change password             [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq user roles                              [0m View role assignments       [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq user promote <username>                 [0m Promote to higher role      [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq user demote <username>                  [0m Demote to lower role        [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq user install <username>                 [0m Install across fleet        [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m│[0m  [1;38;5;93mfreq plugin — Plugin Ecosystem[0m                                              [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq plugin list                             [0m List installed plugins      [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq plugin info <name>                      [0m Show plugin details         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq plugin install <url-or-path>            [0m Install a plugin            [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq plugin remove <name>                    [0m Remove a plugin             [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq plugin create --name <n> --type <t>     [0m Scaffold new plugin         [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq plugin search [query]                   [0m Search community index      [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq plugin update [name]                    [0m Update from source          [38;5;93m│[0m
+[38;5;93m│[0m    [38;5;87mfreq plugin types                            [0m List plugin types           [38;5;93m│[0m
+[38;5;93m│[0m                                                                              [38;5;93m│[0m
+[38;5;93m╰──────────────────────────────────────────────────────────────────────────────╯[0m
