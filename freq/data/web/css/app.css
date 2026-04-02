@@ -118,7 +118,7 @@ body::before {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--bg2);
+  background: #0C0E14;
   position: sticky;
   top: 0;
   z-index: 50;
@@ -499,8 +499,7 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 .host-overlay .ho-header {
   padding: 14px 0;
   border-bottom: 1px solid var(--border);
-  background: var(--glass);
-  backdrop-filter: blur(20px);
+  background: #0C0E14;
   position: sticky;
   top: 0;
   z-index: 1;

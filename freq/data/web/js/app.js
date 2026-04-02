@@ -842,6 +842,9 @@ function _silentHealthRefresh(){
             else{last.style.color='var(--red)';last.textContent='OFFLINE';}}}
         /* Update metrics in-place */
         if(h.status!=='healthy')return;
+        /* Skip PVE nodes — their metrics come from the PVE API poller which
+           gives real CPU%. The SSH health data uses load_average which is wrong. */
+        if(h.type==='pve')return;
         var cores=parseInt(h.cores)||1;var loadVal=parseFloat(h.load)||0;
         var loadPct=cores>0?Math.min(Math.round(loadVal/cores*100),100):0;
         var ramParts=(h.ram||'').match(/(\d+)\/(\d+)/);
@@ -851,8 +854,8 @@ function _silentHealthRefresh(){
         card.querySelectorAll('.metric-row').forEach(function(m){
           var lbl=m.querySelector('.metric-label');var val=m.querySelector('.metric-val');var bar=m.querySelector('.pbar-fill');
           if(!lbl||!val)return;var lt=lbl.textContent.trim();
-          if(lt==='CPU'){val.textContent=cores+(cores>1?' Cores':' Core')+' \u00b7 '+loadPct+'%';if(bar){bar.style.width=loadPct+'%';bar.style.background=loadPct>=80?'var(--red)':loadPct>=50?'var(--yellow)':'var(--purple-light)';}}
-          if(lt==='RAM'){val.textContent=_ramGB(ramUsed)+' / '+_ramGB(ramTotal);if(bar){bar.style.width=ramPct+'%';var isStorage=h.type==='truenas';bar.style.background=isStorage?'var(--blue)':ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';}}
+          if(lt==='CPU'){val.textContent=loadPct+'% \u00b7 '+cores+(cores>1?' Cores':' Core');if(bar){bar.style.width=loadPct+'%';bar.style.background=loadPct>=80?'var(--red)':loadPct>=50?'var(--yellow)':'var(--green)';}}
+          if(lt==='RAM'){val.textContent=ramPct+'% \u00b7 '+_ramGB(ramUsed)+' / '+_ramGB(ramTotal);if(bar){bar.style.width=ramPct+'%';var isStorage=h.type==='truenas';bar.style.background=isStorage?'var(--blue)':ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';}}
           if(lt==='DISK'){val.textContent=h.disk||'?';if(bar){bar.style.width=diskPct+'%';bar.style.background=diskPct>=90?'var(--red)':diskPct>=75?'var(--yellow)':'var(--green)';}}
         });
       });
