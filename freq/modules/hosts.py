@@ -28,9 +28,17 @@ from freq.core.config import FreqConfig
 from freq.core import resolve
 from freq.core import validate
 
-# Hosts sync timeouts
+# ─────────────────────────────────────────────────────────────
+# CONSTANTS — Timeouts for PVE and agent sync operations
+# ─────────────────────────────────────────────────────────────
+
 HOSTS_PVE_TIMEOUT = 15
 HOSTS_AGENT_TIMEOUT = 10
+
+
+# ─────────────────────────────────────────────────────────────
+# HOST REGISTRY — List, add, remove fleet hosts
+# ─────────────────────────────────────────────────────────────
 
 
 def cmd_hosts(cfg: FreqConfig, pack, args) -> int:
@@ -255,6 +263,11 @@ def _hosts_remove(cfg: FreqConfig) -> int:
 
     fmt.success(f"Host '{host.label}' removed from fleet.")
     return 0
+
+
+# ─────────────────────────────────────────────────────────────
+# HOST SYNC — Auto-discover hosts from PVE API and fleet-boundaries
+# ─────────────────────────────────────────────────────────────
 
 
 def _is_docker_bridge_ip(ip):
@@ -618,6 +631,11 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
     return 0
 
 
+# ─────────────────────────────────────────────────────────────
+# HOST HELPERS — Label updates, IP resolution utilities
+# ─────────────────────────────────────────────────────────────
+
+
 def update_host_label(cfg: FreqConfig, target_ip: str, new_label: str) -> bool:
     """Update a single host's label in hosts.conf by IP match.
 
@@ -673,6 +691,11 @@ def resolve_host_ip(cfg: FreqConfig, label: str) -> str:
         if h.label == label:
             return h.ip
     return ""
+
+
+# ─────────────────────────────────────────────────────────────
+# GROUP MANAGEMENT — List, add, remove host group memberships
+# ─────────────────────────────────────────────────────────────
 
 
 def _groups_list(cfg: FreqConfig) -> int:

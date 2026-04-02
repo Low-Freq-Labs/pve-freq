@@ -32,6 +32,11 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 
+# ─────────────────────────────────────────────────────────────
+# UTILITIES — Progress ticker, timeouts, PVE SSH helpers
+# ─────────────────────────────────────────────────────────────
+
+
 class _ProgressTicker:
     """Prints elapsed time every N seconds during long operations."""
 
@@ -211,6 +216,11 @@ def _safety_check(cfg: FreqConfig, vmid: int, operation: str) -> bool:
             fmt.info(f"Protected ranges: {cfg.protected_ranges}")
         return False
     return True
+
+
+# ─────────────────────────────────────────────────────────────
+# VM LIFECYCLE — Create, clone, destroy with safety gates
+# ─────────────────────────────────────────────────────────────
 
 
 def cmd_create(cfg: FreqConfig, pack, args) -> int:
@@ -544,6 +554,11 @@ def cmd_destroy(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
     fmt.footer()
     return 0 if ok else 1
+
+
+# ─────────────────────────────────────────────────────────────
+# VM CONFIGURATION — Resize, template, rename, tag, disk, pool
+# ─────────────────────────────────────────────────────────────
 
 
 def cmd_resize(cfg: FreqConfig, pack, args) -> int:
@@ -965,6 +980,11 @@ def cmd_pool(cfg: FreqConfig, pack, args) -> int:
     return 0
 
 
+# ─────────────────────────────────────────────────────────────
+# SANDBOX & FILE OPS — Quick sandbox spawn, SCP file transfer
+# ─────────────────────────────────────────────────────────────
+
+
 def cmd_sandbox(cfg: FreqConfig, pack, args) -> int:
     """Clone from template, configure IPs, set hostname, start."""
     source = getattr(args, "source", None)
@@ -1099,6 +1119,11 @@ def cmd_file_send(cfg: FreqConfig, pack, args) -> int:
     else:
         fmt.step_fail(f"SCP failed: {r.stderr}")
     return r.returncode
+
+
+# ─────────────────────────────────────────────────────────────
+# MIGRATION — Live/offline VM migration between PVE nodes
+# ─────────────────────────────────────────────────────────────
 
 
 def _find_best_local_storage(cfg: FreqConfig, node_ip: str, target_node: str) -> str:
@@ -1329,6 +1354,11 @@ def cmd_migrate(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
     fmt.footer()
     return 0 if ok else 1
+
+
+# ─────────────────────────────────────────────────────────────
+# NIC MANAGEMENT — Add, clear, change IP/VLAN, check availability
+# ─────────────────────────────────────────────────────────────
 
 
 def cmd_nic(cfg: FreqConfig, pack, args) -> int:

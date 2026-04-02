@@ -29,17 +29,17 @@ from freq.core.config import FreqConfig
 from freq.core import log as logger
 
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────
+# CONSTANTS — Directory names for templates and archives
+# ─────────────────────────────────────────────────────────────
 
 TEMPLATES_DIR = "event-templates"
 ARCHIVES_DIR = "event-archives"
 
 
-# ---------------------------------------------------------------------------
-# Template Storage
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────
+# TEMPLATE STORAGE — Load, save, list event templates as TOML
+# ─────────────────────────────────────────────────────────────
 
 def _templates_dir(cfg):
     """Return path to event templates directory, creating if needed."""
@@ -119,9 +119,9 @@ def _toml_val(v):
     return str(v)
 
 
-# ---------------------------------------------------------------------------
-# Commands
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────
+# COMMANDS — Event lifecycle: create, list, show, plan, deploy, verify, wipe
+# ─────────────────────────────────────────────────────────────
 
 def cmd_event_create(cfg: FreqConfig, pack, args) -> int:
     """Create a new event project with a template."""
@@ -588,6 +588,10 @@ def cmd_event_wipe(cfg: FreqConfig, pack, args) -> int:
     fmt.footer()
     return 0
 
+
+# ─────────────────────────────────────────────────────────────
+# ARCHIVE & CLEANUP — Archive completed events, delete templates
+# ─────────────────────────────────────────────────────────────
 
 def cmd_event_archive(cfg: FreqConfig, pack, args) -> int:
     """Archive an event — save configs and reports, then remove template."""

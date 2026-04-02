@@ -29,7 +29,10 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run_many as ssh_run_many
 
-# Alert state directory
+# ─────────────────────────────────────────────────────────────
+# CONSTANTS — File paths, timeouts, severity levels, condition types
+# ─────────────────────────────────────────────────────────────
+
 ALERT_DIR = "alerts"
 ALERT_RULES_FILE = "alert-rules.json"
 ALERT_HISTORY_FILE = "alert-history.json"
@@ -54,6 +57,11 @@ CONDITIONS = {
     "uptime_below": "Host uptime below threshold (minutes)",
     "load_spike": "Load average spike (5min > 15min by ratio)",
 }
+
+
+# ─────────────────────────────────────────────────────────────
+# STATE PERSISTENCE — Load/save rules, history, silences as JSON
+# ─────────────────────────────────────────────────────────────
 
 
 def _alert_dir(cfg: FreqConfig) -> str:
@@ -157,6 +165,11 @@ def _check_cooldown(cfg: FreqConfig, rule: dict, host: str) -> bool:
                 return True
             break
     return False
+
+
+# ─────────────────────────────────────────────────────────────
+# EVALUATION ENGINE — Gather metrics, evaluate conditions, detect alerts
+# ─────────────────────────────────────────────────────────────
 
 
 def _evaluate_fleet(cfg: FreqConfig, rules: list) -> list:
@@ -313,7 +326,10 @@ def _evaluate_condition(condition: str, threshold: float, m: dict, rule: dict) -
     return None
 
 
-# --- CLI Command ---
+# ─────────────────────────────────────────────────────────────
+# CLI COMMANDS — Create, list, delete, history, test, silence, check
+# ─────────────────────────────────────────────────────────────
+
 
 def cmd_alert(cfg: FreqConfig, pack, args) -> int:
     """Alert management dispatch."""

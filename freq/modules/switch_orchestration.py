@@ -23,9 +23,9 @@ from freq.core.config import FreqConfig
 from freq.core import log as logger
 
 
-# ---------------------------------------------------------------------------
-# Target Resolution
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────
+# TARGET RESOLUTION — Resolve switch targets to IP/label/vendor
+# ─────────────────────────────────────────────────────────────
 
 def _get_switch_hosts(cfg):
     """Return all hosts with htype=switch from hosts.conf."""
@@ -79,9 +79,9 @@ def _get_deployer(vendor):
     return get_deployer("switch", vendor)
 
 
-# ---------------------------------------------------------------------------
-# Commands — Core Switch Getters
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────
+# COMMANDS — CORE SWITCH GETTERS — Show, facts, interfaces, VLANs, etc.
+# ─────────────────────────────────────────────────────────────
 
 def cmd_switch_show(cfg: FreqConfig, pack, args) -> int:
     """Show switch overview: facts + interface summary."""
@@ -579,9 +579,9 @@ def _exec_all(cfg, command):
     return 0 if ok_count > 0 else 1
 
 
-# ---------------------------------------------------------------------------
-# Commands — Port Management
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────
+# COMMANDS — PORT MANAGEMENT — Status, configure, PoE, find, flap
+# ─────────────────────────────────────────────────────────────
 
 def cmd_port_status(cfg: FreqConfig, pack, args) -> int:
     """Display per-port status: link, speed, VLAN, PoE, connected device."""
@@ -891,9 +891,9 @@ def cmd_port_flap(cfg: FreqConfig, pack, args) -> int:
     return 0
 
 
-# ---------------------------------------------------------------------------
-# Commands — Port Profiles
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────
+# COMMANDS — PORT PROFILES — Create, list, apply, delete profiles
+# ─────────────────────────────────────────────────────────────
 
 PROFILES_FILE = "switch-profiles.toml"
 

@@ -29,11 +29,19 @@ from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
 from freq.core.types import Host
 
-# Fleet operation timeouts
+# ─────────────────────────────────────────────────────────────
+# CONSTANTS — Timeouts for fleet SSH operations
+# ─────────────────────────────────────────────────────────────
+
 FLEET_QUICK_TIMEOUT = 10
 FLEET_CMD_TIMEOUT = 15
 FLEET_SLOW_TIMEOUT = 30
 FLEET_EXEC_TIMEOUT = 600
+
+
+# ─────────────────────────────────────────────────────────────
+# FLEET STATUS — Health check and dashboard overview
+# ─────────────────────────────────────────────────────────────
 
 
 def cmd_status(cfg: FreqConfig, pack, args) -> int:
@@ -109,6 +117,11 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
     fmt.footer()
 
     return 0 if down == 0 else 1
+
+
+# ─────────────────────────────────────────────────────────────
+# FLEET EXEC — Run commands across multiple hosts in parallel
+# ─────────────────────────────────────────────────────────────
 
 
 def cmd_exec(cfg: FreqConfig, pack, args) -> int:
@@ -212,6 +225,11 @@ def cmd_exec(cfg: FreqConfig, pack, args) -> int:
     print()
 
     return 0
+
+
+# ─────────────────────────────────────────────────────────────
+# HOST INFO & DETAIL — Single-host system inventory and diagnostics
+# ─────────────────────────────────────────────────────────────
 
 
 def cmd_info(cfg: FreqConfig, pack, args) -> int:
@@ -574,6 +592,11 @@ def cmd_dashboard(cfg: FreqConfig, pack, args) -> int:
     return 0 if down == 0 else 1
 
 
+# ─────────────────────────────────────────────────────────────
+# DOCKER OPERATIONS — Container discovery and fleet-wide Docker management
+# ─────────────────────────────────────────────────────────────
+
+
 def cmd_docker(cfg: FreqConfig, pack, args) -> int:
     """Docker container discovery on a host."""
     target = getattr(args, "target", None)
@@ -749,7 +772,10 @@ def cmd_docker_fleet(cfg: FreqConfig, pack, args) -> int:
     return 0
 
 
-# --- Helpers ---
+# ─────────────────────────────────────────────────────────────
+# HELPERS — Target resolution and info formatting
+# ─────────────────────────────────────────────────────────────
+
 
 def _resolve_targets(cfg: FreqConfig, target: str) -> list:
     """Resolve a target string to a list of hosts."""
@@ -925,6 +951,11 @@ def cmd_log(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
     fmt.footer()
     return 0
+
+
+# ─────────────────────────────────────────────────────────────
+# SSH & KEYS — Interactive SSH, key deployment, key rotation
+# ─────────────────────────────────────────────────────────────
 
 
 def cmd_ssh_host(cfg: FreqConfig, pack, args) -> int:
@@ -1221,6 +1252,11 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
     fmt.blank()
     fmt.footer()
     return 0 if failures == 0 else 1
+
+
+# ─────────────────────────────────────────────────────────────
+# FLEET MAINTENANCE — NTP sync, OS updates, logging
+# ─────────────────────────────────────────────────────────────
 
 
 def cmd_ntp(cfg: FreqConfig, pack, args) -> int:
