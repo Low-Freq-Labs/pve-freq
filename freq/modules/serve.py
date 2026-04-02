@@ -1313,12 +1313,13 @@ def _check_session_role(handler, min_role="operator"):
         token = params.get("token", [""])[0]
     if not token:
         return None, "Authentication required"
-    session = FreqHandler._auth_tokens.get(token)
-    if not session:
-        return None, "Session expired or invalid"
-    if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
-        del FreqHandler._auth_tokens[token]
-        return None, "Session expired"
+    with FreqHandler._auth_lock:
+        session = FreqHandler._auth_tokens.get(token)
+        if not session:
+            return None, "Session expired or invalid"
+        if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
+            del FreqHandler._auth_tokens[token]
+            return None, "Session expired"
     role_order = {"viewer": 0, "operator": 1, "admin": 2, "protected": 3}
     if role_order.get(session["role"], 0) < role_order.get(min_role, 1):
         return None, f"Requires {min_role} role (you are {session['role']})"
@@ -6553,6 +6554,7 @@ a:hover{{text-decoration:underline}}
 
     # Simple token store (in-memory, cleared on restart)
     _auth_tokens = {}  # token -> {user, role, ts}
+    _auth_lock = threading.Lock()
 
     # Login rate limiting
     _login_attempts = {}  # {ip: [(timestamp, success_bool), ...]}
@@ -6637,12 +6639,13 @@ a:hover{{text-decoration:underline}}
         FreqHandler._record_login_attempt(client_ip, True)
 
         # Generate session token
-        token = hashlib.sha256(f"{username}{time.time()}{os.getpid()}".encode()).hexdigest()[:32]
-        FreqHandler._auth_tokens[token] = {
-            "user": username,
-            "role": user["role"],
-            "ts": time.time(),
-        }
+        token = secrets.token_urlsafe(32)
+        with FreqHandler._auth_lock:
+            FreqHandler._auth_tokens[token] = {
+                "user": username,
+                "role": user["role"],
+                "ts": time.time(),
+            }
         self._json_response({
             "ok": True, "token": token,
             "user": username, "role": user["role"],
@@ -6658,15 +6661,16 @@ a:hover{{text-decoration:underline}}
         if not token:
             params = _parse_query(self)
             token = params.get("token", [""])[0]
-        session = FreqHandler._auth_tokens.get(token)
-        if not session:
-            self._json_response({"valid": False})
-            return
-        # Sessions expire after 8 hours
-        if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
-            del FreqHandler._auth_tokens[token]
-            self._json_response({"valid": False})
-            return
+        with FreqHandler._auth_lock:
+            session = FreqHandler._auth_tokens.get(token)
+            if not session:
+                self._json_response({"valid": False})
+                return
+            # Sessions expire after 8 hours
+            if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
+                del FreqHandler._auth_tokens[token]
+                self._json_response({"valid": False})
+                return
         self._json_response({
             "valid": True, "user": session["user"], "role": session["role"],
         })
@@ -6691,7 +6695,8 @@ a:hover{{text-decoration:underline}}
             params = _parse_query(self)
             new_password = params.get("password", [""])[0]
 
-        session = FreqHandler._auth_tokens.get(token)
+        with FreqHandler._auth_lock:
+            session = FreqHandler._auth_tokens.get(token)
         if not session:
             self._json_response({"error": "Not authenticated"})
             return
