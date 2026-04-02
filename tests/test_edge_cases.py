@@ -291,7 +291,7 @@ class TestConfigMissingFields(unittest.TestCase):
         _resolve_paths(cfg)
         # Paths are set relative to empty string (current dir)
         self.assertTrue(cfg.conf_dir.endswith("conf"))
-        self.assertTrue(cfg.hosts_file.endswith("hosts.conf"))
+        self.assertTrue(cfg.hosts_file.endswith("hosts.toml"))
 
     def test_load_containers_missing_file(self):
         """load_containers returns empty dict for missing file."""

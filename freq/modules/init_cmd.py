@@ -569,7 +569,7 @@ def _phase_configure(cfg, args=None):
 
     Asks for PVE nodes, network settings, and cluster name. Skips values
     that are already configured (non-empty, non-default) unless user opts to
-    reconfigure.
+    reconfigure. In headless mode, uses CLI flags and defaults — no prompts.
     """
     toml_path = os.path.join(cfg.conf_dir, "freq.toml")
     if not os.path.isfile(toml_path):
@@ -581,6 +581,7 @@ def _phase_configure(cfg, args=None):
 
     changed = False
     yes_flag = getattr(args, "yes", False) if args else False
+    headless = getattr(args, "headless", False) if args else False
 
     # Extract CLI overrides
     cli_pve_nodes = getattr(args, "pve_nodes", None) if args else None
@@ -607,7 +608,7 @@ def _phase_configure(cfg, args=None):
         fmt.step_ok(f"PVE nodes (from CLI): {', '.join(nodes)}")
     elif cfg.pve_nodes:
         fmt.step_ok(f"PVE nodes already configured: {', '.join(cfg.pve_nodes)}")
-        if not yes_flag and _confirm("Reconfigure PVE nodes?"):
+        if not headless and not yes_flag and _confirm("Reconfigure PVE nodes?"):
             cfg.pve_nodes = []  # force re-prompt below
         # else keep existing
 
@@ -699,6 +700,9 @@ def _phase_configure(cfg, args=None):
         fmt.step_ok(f"Nameserver (from CLI): {cli_nameserver}")
     elif cfg.vm_nameserver and cfg.vm_nameserver != "1.1.1.1":
         fmt.step_ok(f"Nameserver: {cfg.vm_nameserver}")
+    elif headless:
+        ns = cfg.vm_nameserver or "1.1.1.1"
+        fmt.step_ok(f"Nameserver: {ns} (default)")
     else:
         ns = _input("DNS nameserver", cfg.vm_nameserver or "1.1.1.1")
         if ns != (cfg.vm_nameserver or "1.1.1.1"):
@@ -717,7 +721,7 @@ def _phase_configure(cfg, args=None):
         fmt.step_ok(f"Cluster (from CLI): {cli_cluster_name}")
     elif cfg.cluster_name:
         fmt.step_ok(f"Cluster: {cfg.cluster_name}")
-    else:
+    elif not headless:
         name = _input("Cluster name (optional, e.g. dc01, homelab)")
         if name:
             content = _update_toml_value(content, "cluster_name", name)
@@ -732,6 +736,9 @@ def _phase_configure(cfg, args=None):
             cfg.ssh_mode = cli_ssh_mode
             changed = True
         fmt.step_ok(f"SSH mode (from CLI): {cli_ssh_mode}")
+    elif headless:
+        mode = cfg.ssh_mode or "sudo"
+        fmt.step_ok(f"SSH mode: {mode}")
     else:
         fmt.blank()
         fmt.line(f"  {fmt.C.DIM}SSH mode: 'sudo' = SSH as service account + sudo (recommended){fmt.C.RESET}")

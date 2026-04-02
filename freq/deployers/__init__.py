@@ -20,7 +20,7 @@ HTYPE_COMPAT = {
     "linux": ("server", "linux"),
     "pve": ("server", "linux"),
     "docker": ("server", "linux"),
-    "truenas": ("server", "linux"),
+    "truenas": ("nas", "truenas"),
     "pfsense": ("firewall", "pfsense"),
     "idrac": ("bmc", "idrac"),
     "switch": ("switch", "cisco"),

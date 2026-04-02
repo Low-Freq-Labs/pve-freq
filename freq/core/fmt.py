@@ -21,6 +21,7 @@ Design decisions:
     - Colors are always emitted. Pipe/NO_COLOR detection is a v3.0.0 TODO.
     - Purple is THE brand color. Every header, every border. Consistency.
 """
+import os
 import re
 import shutil
 
@@ -257,8 +258,13 @@ def _bordered_line(content: str, end: str = "\n") -> None:
 
 
 def step_start(msg: str) -> None:
-    """Print a step-in-progress indicator (bordered)."""
-    _bordered_line(f"  {C.CYAN}{S.ARROW}{C.RESET} {msg}...", end="")
+    """Print a step-in-progress indicator (bordered).
+
+    Only emits the in-progress line when stdout is a TTY so that \r
+    overwrite works. Over SSH/pipes the step_ok/fail line is sufficient.
+    """
+    if os.isatty(1):
+        _bordered_line(f"  {C.CYAN}{S.ARROW}{C.RESET} {msg}...", end="")
 
 
 def step_ok(msg: str = "done") -> None:
@@ -271,7 +277,8 @@ def step_ok(msg: str = "done") -> None:
         content = truncate(content, inner)
         content_vis = inner
     pad = max(0, inner - content_vis)
-    print(f"\r{C.PURPLE}{B_V()}{C.RESET}{content}{' ' * pad}{C.PURPLE}{B_V()}{C.RESET}")
+    cr = "\r" if os.isatty(1) else ""
+    print(f"{cr}{C.PURPLE}{B_V()}{C.RESET}{content}{' ' * pad}{C.PURPLE}{B_V()}{C.RESET}")
 
 
 def step_fail(msg: str = "failed") -> None:
@@ -284,7 +291,8 @@ def step_fail(msg: str = "failed") -> None:
         content = truncate(content, inner)
         content_vis = inner
     pad = max(0, inner - content_vis)
-    print(f"\r{C.PURPLE}{B_V()}{C.RESET}{content}{' ' * pad}{C.PURPLE}{B_V()}{C.RESET}")
+    cr = "\r" if os.isatty(1) else ""
+    print(f"{cr}{C.PURPLE}{B_V()}{C.RESET}{content}{' ' * pad}{C.PURPLE}{B_V()}{C.RESET}")
 
 
 def step_warn(msg: str) -> None:

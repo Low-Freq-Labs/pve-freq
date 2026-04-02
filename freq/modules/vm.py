@@ -228,18 +228,34 @@ def cmd_create(cfg: FreqConfig, pack, args) -> int:
     fmt.header("Create VM")
     fmt.blank()
 
-    node_ip = _find_node(cfg)
+    # Get parameters
+    name = getattr(args, "name", None)
+    image = getattr(args, "image", None)
+    node = getattr(args, "node", None)
+
+    # Resolve --node name to IP, or find first reachable
+    node_ip = ""
+    if node:
+        for i, n in enumerate(cfg.pve_node_names):
+            if n == node and i < len(cfg.pve_nodes):
+                node_ip = cfg.pve_nodes[i]
+                break
+        if not node_ip:
+            # Try as IP directly
+            if node in cfg.pve_nodes:
+                node_ip = node
+            else:
+                fmt.error(f"Unknown node: {node}")
+                fmt.info(f"Available: {', '.join(cfg.pve_node_names)}")
+                return 1
+    else:
+        node_ip = _find_node(cfg)
     if not node_ip:
         fmt.step_fail("Cannot reach any PVE node")
         _pve_unreachable_hint(cfg)
         fmt.blank()
         fmt.footer()
         return 1
-
-    # Get parameters
-    name = getattr(args, "name", None)
-    image = getattr(args, "image", None)
-    node = getattr(args, "node", None)
     cores = getattr(args, "cores", None) or cfg.vm_default_cores
     ram = getattr(args, "ram", None) or cfg.vm_default_ram
     disk = getattr(args, "disk", None) or cfg.vm_default_disk

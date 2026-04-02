@@ -134,6 +134,9 @@ def _check_tls_cert(host: str, port: int, timeout: int = CERT_CONNECT_TIMEOUT) -
     except ssl.SSLError as e:
         result["error"] = str(e)[:60]
         result["status"] = "ssl_error"
+    except ValueError as e:
+        result["error"] = str(e)[:60]
+        result["status"] = "error"
     except (ConnectionRefusedError, ConnectionResetError):
         result["error"] = "connection refused"
         result["status"] = "refused"

@@ -54,3 +54,4 @@ templates/
 *.key
 *.bak
 credentials/
+MagicMock/

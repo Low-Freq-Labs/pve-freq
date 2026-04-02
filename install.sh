@@ -122,9 +122,14 @@ step() { echo -e "  ${C_PURPLE}>>>${C_RESET}   $1"; }
 
 banner() {
     echo ""
-    echo -e "${C_PURPLE}${C_BOLD}╔══════════════════════════════════════════╗${C_RESET}"
-    echo -e "${C_PURPLE}${C_BOLD}║         PVE FREQ v${FREQ_VERSION} Installer         ║${C_RESET}"
-    echo -e "${C_PURPLE}${C_BOLD}╚══════════════════════════════════════════╝${C_RESET}"
+    local title="PVE FREQ v${FREQ_VERSION} Installer"
+    local width=42
+    local pad=$(( (width - ${#title}) / 2 ))
+    local lpad=$(printf '%*s' "$pad" '')
+    local rpad=$(printf '%*s' "$((width - ${#title} - pad))" '')
+    echo -e "${C_PURPLE}${C_BOLD}╔$(printf '═%.0s' $(seq 1 $width))╗${C_RESET}"
+    echo -e "${C_PURPLE}${C_BOLD}║${lpad}${title}${rpad}║${C_RESET}"
+    echo -e "${C_PURPLE}${C_BOLD}╚$(printf '═%.0s' $(seq 1 $width))╝${C_RESET}"
     echo ""
 }
 

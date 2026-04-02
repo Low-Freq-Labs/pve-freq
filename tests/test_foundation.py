@@ -83,7 +83,7 @@ class TestConfig(unittest.TestCase):
         """Hosts file path is resolved correctly."""
         from freq.core.config import load_config
         cfg = load_config()
-        self.assertTrue(cfg.hosts_file.endswith("hosts.conf"))
+        self.assertTrue(cfg.hosts_file.endswith("hosts.toml"))
 
     def test_load_hosts_empty(self):
         """Loading an empty hosts.conf returns empty list."""

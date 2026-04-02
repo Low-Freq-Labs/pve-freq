@@ -40,7 +40,7 @@ def cmd_docker_containers(cfg: FreqConfig, pack, args) -> int:
 
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in hosts]
     results = run_many(hosts=hosts_data,
-                       command="docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null",
+                       command="docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null || sudo docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null",
                        key_path=cfg.ssh_key_path,
                        connect_timeout=cfg.ssh_connect_timeout, command_timeout=10)
 

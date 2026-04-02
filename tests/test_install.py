@@ -321,4 +321,4 @@ class TestProjectFiles:
     def test_example_configs_exist(self):
         conf_dir = os.path.join(PROJECT_ROOT, "conf")
         assert os.path.isfile(os.path.join(conf_dir, "freq.toml.example"))
-        assert os.path.isfile(os.path.join(conf_dir, "hosts.conf.example"))
+        assert os.path.isfile(os.path.join(conf_dir, "hosts.toml.example"))
