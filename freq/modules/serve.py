@@ -3476,12 +3476,19 @@ a:hover{{text-decoration:underline}}
         self.end_headers()
         self.wfile.write(response.encode())
 
-    def _serve_pve_metrics(self):
-        """Real-time PVE node metrics via PVE API — no SSH, no cache.
+    _pve_metrics_cache = None
+    _pve_metrics_ts = 0
 
-        Returns CPU%, RAM, disk, uptime for each PVE node, updated live
-        on every call. This is what makes the dashboard bars move.
+    def _serve_pve_metrics(self):
+        """Real-time PVE node metrics via PVE API.
+
+        Cached for 4 seconds to prevent hammering PVE when multiple
+        JS poll calls arrive near-simultaneously (login burst).
         """
+        now = time.time()
+        if FreqHandler._pve_metrics_cache and (now - FreqHandler._pve_metrics_ts) < 4:
+            self._json_response(FreqHandler._pve_metrics_cache)
+            return
         cfg = load_config()
         nodes = []
         for i, ip in enumerate(cfg.pve_nodes):
@@ -3535,7 +3542,10 @@ a:hover{{text-decoration:underline}}
                 })
             else:
                 nodes.append({"name": name, "ip": ip, "online": False})
-        self._json_response({"nodes": nodes, "ts": time.time()})
+        result = {"nodes": nodes, "ts": time.time()}
+        FreqHandler._pve_metrics_cache = result
+        FreqHandler._pve_metrics_ts = time.time()
+        self._json_response(result)
 
     def _serve_health_api(self):
         """Fleet health — served from background cache, always instant."""

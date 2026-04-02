@@ -957,9 +957,12 @@ function _pveMetricsRefresh(){
   }).catch(function(){});
 }
 function startPveMetrics(){
-  _pveMetricsRefresh();/* first call immediately */
-  if(_pveMetricsTimer)clearInterval(_pveMetricsTimer);
-  _pveMetricsTimer=setInterval(_pveMetricsRefresh,5000);
+  /* Delay first call 2s to avoid login burst — let page render first */
+  setTimeout(function(){
+    _pveMetricsRefresh();
+    if(_pveMetricsTimer)clearInterval(_pveMetricsTimer);
+    _pveMetricsTimer=setInterval(_pveMetricsRefresh,5000);
+  },2000);
 }
 startPveMetrics();
 
