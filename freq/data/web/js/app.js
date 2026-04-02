@@ -800,6 +800,9 @@ document.getElementById('header-tagline').textContent=rt('home');
 var qf=document.getElementById('home-quote-footer');if(qf)qf.textContent=rq();
 
 var _currentView='home';
+var _viewCleanup=[];
+function _onViewCleanup(fn){_viewCleanup.push(fn);}
+function _runViewCleanup(){_viewCleanup.forEach(function(fn){try{fn();}catch(e){}});_viewCleanup=[];}
 var VIEW_IDS=['home','fleet','topology','capacity','network','docker','media','security','sec-hardening','sec-access','sec-vault','sec-compliance','firewall','certs','vpn','tools','playbooks','gitops','chaos','dns','dr','incidents','metrics','automation','plugins','lab','settings'];
 var VIEW_TITLES={home:'HOME',fleet:'FLEET',topology:'TOPOLOGY',capacity:'CAPACITY',network:'NETWORK',docker:'DOCKER',media:'MEDIA',security:'SECURITY','sec-hardening':'HARDENING','sec-access':'ACCESS','sec-vault':'VAULT','sec-compliance':'COMPLIANCE',firewall:'FIREWALL',certs:'CERTIFICATES',vpn:'VPN',tools:'SYSTEM',playbooks:'PLAYBOOKS',gitops:'CONFIG SYNC',chaos:'CHAOS',dns:'DNS',dr:'DISASTER RECOVERY',incidents:'INCIDENTS',metrics:'METRICS',automation:'AUTOMATION',plugins:'PLUGINS',lab:'LAB',settings:'SETTINGS'};
 var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},topology:function(){loadTopology()},capacity:function(){loadCapacity()},network:function(){loadNetworkPage()},docker:function(){loadDockerPage()},media:function(){loadMediaPage()},security:function(){loadSecurityOverview()},'sec-hardening':function(){loadSecHardening()},'sec-access':function(){loadSecAccess()},'sec-vault':function(){loadSecVault()},'sec-compliance':function(){loadSecCompliance()},firewall:function(){loadFirewallPage()},certs:function(){loadCertsPage()},vpn:function(){loadVpnPage()},tools:function(){loadToolsPage()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},chaos:function(){loadChaos()},dns:function(){loadDnsPage()},dr:function(){loadDrPage()},incidents:function(){loadIncidentsPage()},metrics:function(){loadMetricsPage()},automation:function(){loadAutomationPage()},plugins:function(){loadPluginsPage()},lab:function(){loadLabPage()},settings:function(){loadSettingsPage()}};
@@ -836,6 +839,7 @@ function load(p){
   }catch(e){console.error('load error:',e);}
 }
 function switchView(view, skipPush){
+  _runViewCleanup();
   _currentView=view;
   /* Hide all views */
   VIEW_IDS.forEach(function(v){var el=document.getElementById(v+'-view');if(el)el.style.display='none';});
