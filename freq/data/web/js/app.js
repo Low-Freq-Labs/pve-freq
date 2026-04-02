@@ -993,7 +993,7 @@ function _pveMetricsRefresh(){
             var io=n.iowait||0;
             var ioColor=io>=50?'var(--red)':io>=20?'var(--yellow)':io>=5?'var(--orange)':'var(--cyan)';
             val.textContent=io+'% IO WAIT';
-            if(bar){bar.style.width=Math.min(io*2,100)+'%';bar.style.background=ioColor;}
+            if(bar){bar.style.width=io+'%';bar.style.background=ioColor;}
           }
           if(lt==='STORAGE'){
             var sPct=0;var sLabel='...';
