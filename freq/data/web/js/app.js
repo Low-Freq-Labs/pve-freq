@@ -13,15 +13,52 @@ var quotes=[
   '"the goal every single time: clean." — freq doctor',
   '"no matter where life takes me, find me with a smile." — mac miller'
 ];
-var taglines=[
-  'Drop the bass, not the uptime','Low frequency. High efficiency.',
-  'Bass-boosted infrastructure','Feel the rumble. Deploy the fleet.',
-  'Built different. Built heavy.','Headphones on. VMs deployed.',
-  'Sub-zero latency, sub-bass energy','Where the subs hit and the servers sit'
-];
-
-function rq(){return quotes[Math.floor(Math.random()*quotes.length)];}
-function rt(){return taglines[Math.floor(Math.random()*taglines.length)];}
+var taglines={
+  home:[
+    'Drop the bass, not the uptime.','Low frequency. High efficiency.',
+    'Bass-boosted infrastructure.','Feel the rumble. Deploy the fleet.',
+    'Built different. Built heavy.','Headphones on. VMs deployed.',
+    'Sub-zero latency, sub-bass energy.','Where the subs hit and the servers sit.'
+  ],
+  fleet:[
+    'Eyes on every node.','Fleet-wide. Real-time. No exceptions.',
+    'One dashboard. Every host.','The fleet is alive.',
+    'Cluster heartbeat: strong.','Monitor everything. Miss nothing.'
+  ],
+  docker:[
+    'Containers up. Worries down.','Stack healthy. Coffee ready.',
+    'Compose, deploy, forget.','Every container accounted for.',
+    'Docker fleet at your fingertips.','Containers are cattle, not pets.'
+  ],
+  media:[
+    'Streams flowing. Library growing.','Plex is happy. You should be too.',
+    'The media never stops.','Transcode. Organize. Enjoy.',
+    'Entertainment infrastructure.','Content delivery: operational.'
+  ],
+  security:[
+    'Trust nothing. Verify everything.','Locked down. Eyes open.',
+    'Security is not optional.','Audit. Harden. Sleep better.',
+    'Your firewall thanks you.','Compliance is a lifestyle.'
+  ],
+  tools:[
+    'The right tool for the right job.','Automate the boring stuff.',
+    'Playbooks loaded. Standing by.','Chaos is a feature, not a bug.',
+    'Incident response: ready.','Measure twice. Deploy once.'
+  ],
+  lab:[
+    'Break things here, not in prod.','The lab is where magic happens.',
+    'Experiment. Learn. Iterate.','Sandbox mode: engaged.',
+    'Test in lab. Deploy with confidence.','Every prod fix started in a lab.'
+  ],
+  settings:[
+    'Fine-tune the machine.','Preferences saved. Moving on.',
+    'Configuration is power.','Dial it in.',
+    'Your dashboard, your rules.','Customize everything.'
+  ]
+};
+var _lastTagline='',_lastQuote='';
+function rq(){var q;do{q=quotes[Math.floor(Math.random()*quotes.length)];}while(q===_lastQuote&&quotes.length>1);_lastQuote=q;return q;}
+function rt(view){var pool=taglines[view]||taglines.home;var t;do{t=pool[Math.floor(Math.random()*pool.length)];}while(t===_lastTagline&&pool.length>1);_lastTagline=t;return t;}
 function badge(s){var c={up:'up',running:'up',online:'up',ok:'ok',healthy:'ok',down:'down',stopped:'down',unreachable:'down',CRITICAL:'CRITICAL',HIGH:'HIGH',MEDIUM:'MEDIUM',created:'created',remote:'remote',paused:'paused',unknown:'unknown'}[s]||'warn';return '<span class="badge '+c+'">'+s.toUpperCase()+'</span>';}
 function s(l,v,c){return '<div class="st"><div class="lb">'+l+'</div><div class="vl '+c+'">'+v+'</div></div>';}
 var st=s;
@@ -752,7 +789,7 @@ function filterFleetCards(q){
 }
 
 /* === Navigation === */
-document.getElementById('header-tagline').textContent=rt();
+document.getElementById('header-tagline').textContent=rt('home');
 var qf=document.getElementById('home-quote-footer');if(qf)qf.textContent=rq();
 
 var _currentView='home';
@@ -775,12 +812,12 @@ function nav(p){
     var el=document.getElementById('p-'+p);if(el)el.classList.add('active');
     if(p==='home'){
       document.getElementById('page-title').textContent=VIEW_TITLES[_currentView]||'HOME';
-      document.getElementById('header-tagline').textContent=rt();
+      document.getElementById('header-tagline').textContent=rt(VIEW_TO_NAV[_currentView]||'home');
       _safe(VIEW_LOADERS[_currentView]||loadHome);
     }else{
       var titles={infra:'INFRASTRUCTURE',system:'SYSTEM'};
       document.getElementById('page-title').textContent=titles[p]||p;
-      document.getElementById('header-tagline').textContent=rt();
+      document.getElementById('header-tagline').textContent=rt(p);
       load(p);
     }
   }catch(e){console.error('nav error:',e);}
@@ -804,6 +841,12 @@ function switchView(view){
   if(activeBtn)activeBtn.classList.add('active-view');
   /* Update title */
   document.getElementById('page-title').textContent=NAV_TITLES[navGroup]||VIEW_TITLES[view]||view;
+  /* Update quotes — header gets tab-specific tagline, footer gets random quote.
+     They never show the same text because they pull from different pools. */
+  var tl=document.getElementById('header-tagline');
+  if(tl)tl.textContent=rt(navGroup);
+  var qf=document.getElementById('home-quote-footer');
+  if(qf)qf.textContent=rq();
   /* Make sure we're on p-home */
   document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active')});
   document.getElementById('p-home').classList.add('active');
