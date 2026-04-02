@@ -105,6 +105,7 @@
   <button class="sub-tab active-sub" onclick="switchView('fleet')">Fleet</button>
   <button class="sub-tab" onclick="switchView('topology')">Topology</button>
   <button class="sub-tab" onclick="switchView('capacity')">Capacity</button>
+  <button class="sub-tab" onclick="switchView('network')">Network</button>
 </div>
 <!-- Fleet Stats group -->
 <div class="section layout-section" id="fleet-sec-stats">
@@ -261,6 +262,9 @@
   <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
   <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
   <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
+  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
+  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
 </div>
 <div class="section layout-section" id="sec-risk">
   <div class="section-header"><h3>Risk Analysis</h3><span class="chev">▾</span></div>
@@ -284,6 +288,9 @@
   <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
   <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
   <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
+  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
+  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
 </div>
 <div class="section layout-section" id="sec-audit">
   <div class="section-header"><h3>Audit</h3><span class="chev">▾</span></div>
@@ -326,6 +333,9 @@
   <button class="sub-tab active-sub" onclick="switchView('sec-access')">Access</button>
   <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
   <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
+  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
+  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
 </div>
 <div class="section layout-section" id="sec-users">
   <div class="section-header"><h3>Users</h3><span class="chev">▾</span></div>
@@ -355,6 +365,9 @@
   <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
   <button class="sub-tab active-sub" onclick="switchView('sec-vault')">Vault</button>
   <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
+  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
+  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
 </div>
 <div class="section layout-section border-red" id="sec-vault-section">
   <div class="section-header"><h3 style="background:rgba(248,81,73,0.15)">&#128274; Vault</h3><span class="chev">▾</span></div>
@@ -438,6 +451,12 @@
   <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
   <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
   <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
+  <button class="sub-tab" onclick="switchView('dr')">DR</button>
+  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
+  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
+  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
+  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
 </div>
 <!-- Diagnostics — health checks and host diagnosis -->
 <div class="section">
@@ -757,6 +776,210 @@
     </div>
   </div>
 </div><!-- close settings-view -->
+
+<!-- ============================================================
+     NETWORK VIEW — Switch management, SNMP, topology intelligence
+     ============================================================ -->
+<div id="network-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>Switch Fleet</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadNetworkPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="net-switch-stats"></div>
+    <table><thead><tr><th>Switch</th><th>Model</th><th>Firmware</th><th>Ports</th><th>Uptime</th><th>Status</th></tr></thead><tbody id="net-switch-tbl"></tbody></table>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Port Profiles</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body"><div id="net-profiles"></div></div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>SNMP Discovery</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="runNetScan('snmp')">SCAN SNMP</button>
+      <button class="fleet-btn" onclick="runNetScan('mac')">FIND MAC</button>
+      <button class="fleet-btn" onclick="runNetScan('arp')">ARP TABLE</button>
+    </div>
+    <div class="exec-out" id="net-snmp-out">Click a scan button to query network devices.</div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     FIREWALL VIEW — Rules, NAT, states, interfaces
+     ============================================================ -->
+<div id="firewall-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>Firewall Overview</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadFirewallPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="fw-stats"></div>
+    <div id="fw-interfaces"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Filter Rules</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="loadFwRules()">LOAD RULES</button>
+      <button class="fleet-btn" onclick="loadFwNat()">NAT RULES</button>
+      <button class="fleet-btn" onclick="loadFwStates()">ACTIVE STATES</button>
+    </div>
+    <div id="fw-rules-content"><div class="exec-out">Click to load firewall rules.</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     CERTIFICATES VIEW — TLS inventory, expiry tracking
+     ============================================================ -->
+<div id="certs-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>TLS Certificate Inventory</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadCertsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="cert-stats"></div>
+    <table><thead><tr><th>Domain</th><th>Issuer</th><th>Expires</th><th>Days Left</th><th>Status</th></tr></thead><tbody id="cert-tbl"></tbody></table>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     DNS VIEW — Records, health checks, resolution
+     ============================================================ -->
+<div id="dns-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>DNS Health</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadDnsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="dns-stats"></div>
+    <div id="dns-records"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Internal DNS</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <input type="text" id="dns-query-input" placeholder="Domain to check..." class="input-field" style="width:240px">
+      <button class="fleet-btn" onclick="runDnsCheck()">CHECK</button>
+    </div>
+    <div class="exec-out" id="dns-check-out">Enter a domain to check DNS resolution.</div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     VPN VIEW — WireGuard and OpenVPN tunnel status
+     ============================================================ -->
+<div id="vpn-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>VPN Tunnels</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadVpnPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="vpn-stats"></div>
+    <h4 style="font-size:12px;color:var(--text-dim);margin:12px 0 8px">WIREGUARD</h4>
+    <div id="vpn-wg-content"><div class="exec-out">Loading WireGuard status...</div></div>
+    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">OPENVPN</h4>
+    <div id="vpn-ovpn-content"><div class="exec-out">Loading OpenVPN status...</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     DR VIEW — Disaster recovery, backup policies, runbooks
+     ============================================================ -->
+<div id="dr-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>Backup Status</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadDrPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="dr-stats"></div>
+    <table><thead><tr><th>Host</th><th>Last Backup</th><th>Size</th><th>Policy</th><th>Status</th></tr></thead><tbody id="dr-backup-tbl"></tbody></table>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Recovery Policies</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="dr-policies"><div class="exec-out">Click REFRESH to load backup policies.</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Runbooks</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="dr-runbooks"><div class="exec-out">Runbooks loaded from conf/playbooks/dr/</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     INCIDENTS VIEW — Incident management, change tracking
+     ============================================================ -->
+<div id="incidents-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>Active Incidents</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadIncidentsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="incident-stats"></div>
+    <table><thead><tr><th>ID</th><th>Severity</th><th>Summary</th><th>Opened</th><th>Status</th></tr></thead><tbody id="incident-tbl"></tbody></table>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Change Log</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="change-log"><div class="exec-out">Recent infrastructure changes will appear here.</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     METRICS VIEW — Observability metrics, synthetic monitors
+     ============================================================ -->
+<div id="metrics-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>Fleet Metrics</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadMetricsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="metrics-top-stats"></div>
+    <div id="metrics-charts"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Synthetic Monitors</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="synth-monitors"><div class="exec-out">HTTP/TCP endpoint monitors will display here.</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     AUTOMATION VIEW — Reactors, workflows, scheduled jobs
+     ============================================================ -->
+<div id="automation-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>Automation Engine</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadAutomationPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="auto-stats"></div>
+    <h4 style="font-size:12px;color:var(--text-dim);margin:12px 0 8px">ACTIVE REACTORS</h4>
+    <div id="auto-reactors"><div class="exec-out">Reactors respond to fleet events automatically.</div></div>
+    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">WORKFLOWS</h4>
+    <div id="auto-workflows"></div>
+    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">SCHEDULED JOBS</h4>
+    <div id="auto-jobs"></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================
+     PLUGIN VIEW — Installed plugins, management
+     ============================================================ -->
+<div id="plugins-view" class="d-none">
+<div class="section">
+  <div class="section-header"><h3>Installed Plugins</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadPluginsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="stats" id="plugin-stats"></div>
+    <div id="plugin-list"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Plugin Types</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="plugin-types"></div>
+  </div>
+</div>
+</div>
 
 </div><!-- close p-home -->
 
