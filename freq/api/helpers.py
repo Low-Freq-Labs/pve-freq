@@ -16,7 +16,13 @@ def json_response(handler, data, status=200):
     body = json.dumps(data).encode()
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    origin = handler.headers.get("Origin", "")
+    if origin:
+        handler.send_header("Access-Control-Allow-Origin", origin)
+        handler.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        handler.send_header("Vary", "Origin")
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -43,6 +49,36 @@ def get_json_body(handler) -> dict:
         return json.loads(raw)
     except (ValueError, json.JSONDecodeError):
         return {}
+
+
+def get_param_int(handler, key, default=0, min_val=None, max_val=None):
+    """Get integer query parameter with bounds checking."""
+    raw = get_param(handler, key, str(default))
+    try:
+        val = int(raw)
+    except (ValueError, TypeError):
+        return default
+    if min_val is not None and val < min_val:
+        return default
+    if max_val is not None and val > max_val:
+        return default
+    return val
+
+
+def require_role(min_role="operator"):
+    """Decorator for API handlers that require authentication."""
+    def decorator(handler_func):
+        def wrapper(handler):
+            from freq.modules.serve import _check_session_role
+            role, err = _check_session_role(handler, min_role)
+            if err:
+                json_response(handler, {"error": err}, 403)
+                return
+            handler_func(handler)
+        wrapper.__name__ = handler_func.__name__
+        wrapper.__doc__ = handler_func.__doc__
+        return wrapper
+    return decorator
 
 
 def get_cfg():
