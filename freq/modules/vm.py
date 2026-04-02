@@ -766,7 +766,7 @@ def cmd_rename(cfg: FreqConfig, pack, args) -> int:
         fmt.step_ok(f"VM {vmid} renamed to {new_name}")
         logger.info(f"VM renamed: {vmid} -> {new_name}")
 
-        # Auto-sync hosts.conf — resolve VM IP via guest agent, update label
+        # Auto-sync hosts.toml — resolve VM IP via guest agent, update label
         safe_label = validate.sanitize_label(new_name)
         r = ssh_run(
             host=node_ip,
@@ -786,7 +786,7 @@ def cmd_rename(cfg: FreqConfig, pack, args) -> int:
                             if ip and not ip.startswith("127."):
                                 from freq.modules.hosts import update_host_label
                                 if update_host_label(cfg, ip, safe_label):
-                                    fmt.step_ok(f"hosts.conf updated: {ip} → {safe_label}")
+                                    fmt.step_ok(f"Fleet registry updated: {ip} → {safe_label}")
                                     break
                     else:
                         continue

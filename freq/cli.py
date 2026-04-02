@@ -203,7 +203,7 @@ def _register_utilities(sub):
     p.add_argument("--nameserver", help="DNS nameserver IP (default: 1.1.1.1)")
     p.add_argument("--cluster-name", help="Cluster name (e.g. dc01, homelab)")
     p.add_argument("--ssh-mode", choices=["sudo", "root"], help="SSH mode: sudo (recommended) or root")
-    p.add_argument("--hosts-file", help="Path to hosts.conf to import fleet hosts from")
+    p.add_argument("--hosts-file", help="Path to hosts file to import fleet hosts from")
     p.add_argument("--device-credentials", help="TOML file with per-device-type auth")
     p.add_argument("--device-password-file", help="(deprecated) Single password file for all devices")
     p.add_argument("--device-user", default="root", help="(deprecated) Single SSH user for all devices")

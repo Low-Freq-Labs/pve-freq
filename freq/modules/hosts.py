@@ -206,13 +206,11 @@ def _hosts_add(cfg: FreqConfig) -> int:
         print()
         return 1
 
-    # Write to hosts.conf
-    line = f"{ip}  {label}  {htype}"
-    if groups:
-        line += f"  {groups}"
-
-    with open(cfg.hosts_file, "a") as f:
-        f.write(f"{line}\n")
+    # Write to fleet registry
+    from freq.core.config import Host, append_host_toml
+    host = Host(ip=ip, label=label, htype=htype, groups=groups)
+    append_host_toml(cfg.hosts_file, host)
+    cfg.hosts.append(host)
 
     fmt.success(f"Host '{label}' ({ip}) added to fleet as {htype}")
     return 0
@@ -245,21 +243,10 @@ def _hosts_remove(cfg: FreqConfig) -> int:
         fmt.info("Cancelled.")
         return 0
 
-    # Rewrite hosts.conf without this host
-    lines = []
-    with open(cfg.hosts_file) as f:
-        for line in f:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                lines.append(line)
-                continue
-            parts = stripped.split()
-            if len(parts) >= 2 and (parts[0] == host.ip or parts[1] == host.label):
-                continue  # Skip this host
-            lines.append(line)
-
-    with open(cfg.hosts_file, "w") as f:
-        f.writelines(lines)
+    # Remove from hosts list and rewrite
+    from freq.core.config import save_hosts_toml
+    cfg.hosts = [h for h in cfg.hosts if h.ip != host.ip and h.label != host.label]
+    save_hosts_toml(cfg.hosts_file, cfg.hosts)
 
     fmt.success(f"Host '{host.label}' removed from fleet.")
     return 0
@@ -573,48 +560,26 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
         fmt.footer()
         return 0
 
-    # ── Step 8: Write updated hosts.conf ──
-    # Preserve comments from original file, then write all hosts
-    lines = []
-    lines.append("# FREQ Fleet Registry — auto-synced from PVE + fleet-boundaries\n")
-    lines.append("# Format: IP  LABEL  TYPE  [GROUPS]  [ALL_IPS]\n")
-    lines.append("# Types: linux, pve, truenas, pfsense, docker, idrac, switch\n")
-    lines.append("#\n")
-    lines.append("# Synced by: freq hosts sync\n")
-    lines.append("# Manual edits preserved on next sync.\n")
-    lines.append("\n")
+    # ── Step 8: Write updated hosts.toml ──
+    from freq.core.config import Host, save_hosts_toml
 
-    # Group by VLAN/category
-    prod_hosts = [(ip, d) for ip, d in discovered.items() if "prod" in d.get("groups", "")]
-    lab_hosts = [(ip, d) for ip, d in discovered.items() if "lab" in d.get("groups", "")]
-    other_hosts = [(ip, d) for ip, d in discovered.items()
-                   if "prod" not in d.get("groups", "") and "lab" not in d.get("groups", "")]
-
-    def _write_section(section_hosts, header):
-        if not section_hosts:
-            return
-        lines.append(f"# {header}\n")
-        # Sort: PVE nodes first, then by IP
-        section_hosts.sort(key=lambda x: (
-            0 if x[1]["htype"] == "pve" else
-            1 if x[1]["htype"] == "docker" else
-            2 if x[1]["htype"] == "truenas" else
-            3 if x[1]["htype"] in ("pfsense", "switch") else
-            4 if x[1]["htype"] == "idrac" else 5,
-            x[0],
+    # Build Host list from discovered data, sorted by type then IP
+    all_hosts = []
+    for ip, d in sorted(discovered.items(), key=lambda x: (
+        0 if x[1]["htype"] == "pve" else
+        1 if x[1]["htype"] == "docker" else
+        2 if x[1]["htype"] == "truenas" else
+        3 if x[1]["htype"] in ("pfsense", "switch") else
+        4 if x[1]["htype"] == "idrac" else 5,
+        x[0],
+    )):
+        all_ips = d.get("all_ips", [])
+        if isinstance(all_ips, str):
+            all_ips = [a for a in all_ips.split(",") if a]
+        all_hosts.append(Host(
+            ip=ip, label=d["label"], htype=d["htype"],
+            groups=d.get("groups", ""), all_ips=all_ips,
         ))
-        for ip, d in section_hosts:
-            parts = [f"{ip:<16}", f"{d['label']:<15}", f"{d['htype']:<10}"]
-            if d["groups"] or d.get("all_ips"):
-                parts.append(f"{d['groups']:<20}" if d.get("all_ips") else d["groups"])
-            if d.get("all_ips"):
-                parts.append(",".join(d["all_ips"]))
-            lines.append("  ".join(parts).rstrip() + "\n")
-        lines.append("\n")
-
-    _write_section(prod_hosts, "Production Fleet")
-    _write_section(lab_hosts, "Lab Fleet")
-    _write_section(other_hosts, "Other Hosts")
 
     # Backup existing
     if os.path.isfile(cfg.hosts_file):
@@ -622,10 +587,10 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
         shutil.copy2(cfg.hosts_file, backup)
         fmt.step_ok(f"Backed up to {backup}")
 
-    with open(cfg.hosts_file, "w") as f:
-        f.writelines(lines)
+    save_hosts_toml(cfg.hosts_file, all_hosts)
+    cfg.hosts = all_hosts
 
-    fmt.step_ok(f"hosts.conf updated: {len(discovered)} hosts ({len(new_hosts)} new)")
+    fmt.step_ok(f"Fleet registry updated: {len(discovered)} hosts ({len(new_hosts)} new)")
     fmt.blank()
     fmt.footer()
     return 0
@@ -637,45 +602,22 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
 
 
 def update_host_label(cfg: FreqConfig, target_ip: str, new_label: str) -> bool:
-    """Update a single host's label in hosts.conf by IP match.
+    """Update a single host's label in hosts.toml by IP match.
 
     Used by cmd_rename() to immediately sync the label after a PVE rename,
     instead of waiting for the hourly background sync.
     Returns True if the entry was found and updated.
     """
-    if not os.path.isfile(cfg.hosts_file):
-        return False
-
-    with open(cfg.hosts_file) as f:
-        lines = f.readlines()
-
     updated = False
-    new_lines = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            new_lines.append(line)
-            continue
-        parts = stripped.split()
-        if len(parts) >= 3 and parts[0] == target_ip:
-            # Reconstruct line with new label, preserving type/groups/all_ips
-            ip = parts[0]
-            htype = parts[2]
-            groups = parts[3] if len(parts) > 3 else ""
-            all_ips = parts[4] if len(parts) > 4 else ""
-            rebuilt = [f"{ip:<16}", f"{new_label:<15}", f"{htype:<10}"]
-            if groups or all_ips:
-                rebuilt.append(f"{groups:<20}" if all_ips else groups)
-            if all_ips:
-                rebuilt.append(all_ips)
-            new_lines.append("  ".join(rebuilt).rstrip() + "\n")
+    for h in cfg.hosts:
+        if h.ip == target_ip:
+            h.label = new_label
             updated = True
-        else:
-            new_lines.append(line)
+            break
 
     if updated:
-        with open(cfg.hosts_file, "w") as f:
-            f.writelines(new_lines)
+        from freq.core.config import save_hosts_toml
+        save_hosts_toml(cfg.hosts_file, cfg.hosts)
 
     return updated
 
@@ -743,42 +685,11 @@ def _groups_add(cfg: FreqConfig, args) -> int:
     existing.append(group)
     new_groups = ",".join(existing)
 
-    if not os.path.isfile(cfg.hosts_file):
-        fmt.error("hosts.conf not found.")
-        return 1
-
-    with open(cfg.hosts_file) as f:
-        lines = f.readlines()
-
-    updated = False
-    new_lines = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            new_lines.append(line)
-            continue
-        parts = stripped.split()
-        if len(parts) >= 3 and parts[0] == host.ip:
-            ip = parts[0]
-            label_val = parts[1]
-            htype = parts[2]
-            all_ips = parts[4] if len(parts) > 4 else ""
-            rebuilt = [f"{ip:<16}", f"{label_val:<15}", f"{htype:<10}"]
-            rebuilt.append(f"{new_groups:<20}" if all_ips else new_groups)
-            if all_ips:
-                rebuilt.append(all_ips)
-            new_lines.append("  ".join(rebuilt).rstrip() + "\n")
-            updated = True
-        else:
-            new_lines.append(line)
-
-    if updated:
-        with open(cfg.hosts_file, "w") as f:
-            f.writelines(new_lines)
-        fmt.info(f"Added {host.label} to group '{group}'.")
-    else:
-        fmt.error(f"Could not find {host.ip} in hosts.conf.")
-        return 1
+    # Update in-memory and rewrite
+    host.groups = new_groups
+    from freq.core.config import save_hosts_toml
+    save_hosts_toml(cfg.hosts_file, cfg.hosts)
+    fmt.info(f"Added {host.label} to group '{group}'.")
 
     return 0
 
@@ -805,42 +716,10 @@ def _groups_remove(cfg: FreqConfig, args) -> int:
     existing.remove(group)
     new_groups = ",".join(existing)
 
-    if not os.path.isfile(cfg.hosts_file):
-        fmt.error("hosts.conf not found.")
-        return 1
-
-    with open(cfg.hosts_file) as f:
-        lines = f.readlines()
-
-    updated = False
-    new_lines = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            new_lines.append(line)
-            continue
-        parts = stripped.split()
-        if len(parts) >= 3 and parts[0] == host.ip:
-            ip = parts[0]
-            label_val = parts[1]
-            htype = parts[2]
-            all_ips = parts[4] if len(parts) > 4 else ""
-            rebuilt = [f"{ip:<16}", f"{label_val:<15}", f"{htype:<10}"]
-            if new_groups or all_ips:
-                rebuilt.append(f"{new_groups:<20}" if all_ips else new_groups)
-            if all_ips:
-                rebuilt.append(all_ips)
-            new_lines.append("  ".join(rebuilt).rstrip() + "\n")
-            updated = True
-        else:
-            new_lines.append(line)
-
-    if updated:
-        with open(cfg.hosts_file, "w") as f:
-            f.writelines(new_lines)
-        fmt.info(f"Removed {host.label} from group '{group}'.")
-    else:
-        fmt.error(f"Could not find {host.ip} in hosts.conf.")
-        return 1
+    # Update in-memory and rewrite
+    host.groups = new_groups
+    from freq.core.config import save_hosts_toml
+    save_hosts_toml(cfg.hosts_file, cfg.hosts)
+    fmt.info(f"Removed {host.label} from group '{group}'.")
 
     return 0

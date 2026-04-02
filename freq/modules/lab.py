@@ -3,7 +3,7 @@
 Domain: freq lab <status|media|resize|rebuild|deploy>
 
 Manages lab hosts: sandbox VMs, docker-dev instances, test media stacks,
-and lab PVE nodes. Lab hosts are identified by the 'lab' group in hosts.conf.
+and lab PVE nodes. Lab hosts are identified by the 'lab' group in hosts.toml.
 Provides media stack deployment, VM resizing, and full lab rebuilds.
 
 Replaces: Manual SSH-and-script lab management, Vagrant ($0 but heavy)
@@ -79,7 +79,7 @@ def _cmd_status(cfg, args) -> int:
     if not lab_hosts:
         fmt.line(f"{fmt.C.YELLOW}No lab hosts found.{fmt.C.RESET}")
         fmt.blank()
-        fmt.info("Add hosts with group 'lab' to hosts.conf.")
+        fmt.info("Add hosts with group 'lab' to hosts.toml.")
         fmt.info("Example: 192.168.1.50  my-lab-vm  linux  lab")
         fmt.blank()
         fmt.footer()

@@ -14,7 +14,7 @@ Replaces: Ansible playbooks for initial setup ($0 but 100+ lines of YAML),
 Architecture:
     - Sequential phase execution with rollback awareness
     - SSH via subprocess (sshpass for initial auth, key auth after)
-    - Config generation writes freq.toml, hosts.conf, vlans.toml
+    - Config generation writes freq.toml, hosts.toml, vlans.toml
     - Device deployment dispatches to freq/deployers/ per device type
     - Headless mode reads all params from CLI flags, no prompts
 
@@ -491,7 +491,7 @@ def _seed_config_files(cfg):
     """
     examples = [
         "freq.toml",
-        "hosts.conf",
+        "hosts.toml",
         "vlans.toml",
         "fleet-boundaries.toml",
         "risk.toml",
@@ -1219,16 +1219,10 @@ def _register_host_interactive(cfg):
 
     groups = _input("  Groups (comma-separated, optional)", "")
 
-    line = f"{ip}  {label}  {htype}"
-    if groups:
-        line += f"  {groups}"
-
-    with open(cfg.hosts_file, "a") as f:
-        f.write(f"{line}\n")
-
-    # Reload hosts list
-    from freq.core.config import Host
-    cfg.hosts.append(Host(ip=ip, label=label, htype=htype, groups=groups))
+    from freq.core.config import Host, append_host_toml
+    host = Host(ip=ip, label=label, htype=htype, groups=groups)
+    append_host_toml(cfg.hosts_file, host)
+    cfg.hosts.append(host)
 
     fmt.step_ok(f"Registered: {label} ({ip}) [{htype}]")
     return True
@@ -1296,14 +1290,10 @@ def _discover_and_register(cfg, ctx):
         htype = _input(f"    Type", detected_type)
         groups = _input(f"    Groups (optional)", "")
 
-        line = f"{h['ip']}  {label}  {htype}"
-        if groups:
-            line += f"  {groups}"
-
-        with open(cfg.hosts_file, "a") as f:
-            f.write(f"{line}\n")
-
-        cfg.hosts.append(Host(ip=h["ip"], label=label, htype=htype, groups=groups))
+        from freq.core.config import append_host_toml
+        host = Host(ip=h["ip"], label=label, htype=htype, groups=groups)
+        append_host_toml(cfg.hosts_file, host)
+        cfg.hosts.append(host)
         known_ips.add(h["ip"])
         fmt.step_ok(f"Registered: {label} ({h['ip']}) [{htype}]")
 
@@ -2802,9 +2792,9 @@ def _phase_verify(cfg, ctx):
 
     # Hosts
     if cfg.hosts:
-        _check(f"hosts.conf: {len(cfg.hosts)} hosts", True)
+        _check(f"hosts.toml: {len(cfg.hosts)} hosts", True)
     else:
-        fmt.step_warn("hosts.conf is empty — use 'freq hosts add' or 'freq discover'")
+        fmt.step_warn("hosts.toml is empty — use 'freq hosts add' or 'freq discover'")
 
     # Timezone
     tz = "unknown"
@@ -3016,9 +3006,9 @@ def _init_check(cfg):
     _chk("freq.toml exists", "pass" if os.path.isfile(toml_path) else "fail")
 
     if cfg.hosts:
-        _chk(f"hosts.conf: {len(cfg.hosts)} hosts", "pass")
+        _chk(f"hosts.toml: {len(cfg.hosts)} hosts", "pass")
     else:
-        _chk("hosts.conf is empty", "warn")
+        _chk("hosts.toml is empty", "warn")
 
     roles_file = os.path.join(cfg.conf_dir, "roles.conf")
     _chk("roles.conf exists", "pass" if os.path.isfile(roles_file) else "warn")

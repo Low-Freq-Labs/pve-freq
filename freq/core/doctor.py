@@ -280,15 +280,15 @@ def _check_hosts(cfg: FreqConfig) -> int:
         fmt.step_ok(f"Fleet: {len(cfg.hosts)} hosts ({type_str})")
         return 0
     elif os.path.isfile(cfg.hosts_file):
-        fmt.step_warn("Fleet: hosts.conf exists but is empty")
+        fmt.step_warn("Fleet: hosts.toml exists but is empty")
         return 2
     else:
-        fmt.step_warn("Fleet: no hosts.conf (run freq init)")
+        fmt.step_warn("Fleet: no hosts.toml (run freq init)")
         return 2
 
 
 def _check_hosts_validity(cfg: FreqConfig) -> int:
-    """Check for duplicate IPs or labels in hosts.conf."""
+    """Check for duplicate IPs or labels in fleet registry."""
     if not cfg.hosts:
         return 0  # Nothing to validate
 

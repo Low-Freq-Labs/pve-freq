@@ -4,6 +4,7 @@
 
 freq.toml
 hosts.conf
+hosts.toml
 vlans.toml
 fleet-boundaries.toml
 risk.toml

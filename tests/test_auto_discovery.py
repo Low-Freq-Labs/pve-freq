@@ -138,28 +138,29 @@ class TestIsProtectedVmid(unittest.TestCase):
 # ── update_host_label ───────────────────────────────────────────────
 
 class TestUpdateHostLabel(unittest.TestCase):
-    """Test updating a host's label in hosts.conf by IP match."""
+    """Test updating a host's label in hosts.toml by IP match."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self.hosts_file = os.path.join(self.tmpdir, "hosts.conf")
+        self.hosts_file = os.path.join(self.tmpdir, "hosts.toml")
 
     def tearDown(self):
         import shutil
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def _make_cfg(self, lines):
-        with open(self.hosts_file, "w") as f:
-            f.write("\n".join(lines) + "\n")
+    def _make_cfg(self, hosts):
+        from freq.core.config import Host, save_hosts_toml
+        host_objs = [Host(**h) for h in hosts]
+        save_hosts_toml(self.hosts_file, host_objs)
         cfg = MagicMock()
         cfg.hosts_file = self.hosts_file
+        cfg.hosts = host_objs
         return cfg
 
     def test_ip_match_updates_label(self):
         from freq.modules.hosts import update_host_label
         cfg = self._make_cfg([
-            "# FREQ Fleet Registry",
-            "192.168.10.1  old-name  linux  cluster",
+            {"ip": "192.168.10.1", "label": "old-name", "htype": "linux", "groups": "cluster"},
         ])
         result = update_host_label(cfg, "192.168.10.1", "new-name")
         self.assertTrue(result)
@@ -171,7 +172,7 @@ class TestUpdateHostLabel(unittest.TestCase):
     def test_no_match_returns_false(self):
         from freq.modules.hosts import update_host_label
         cfg = self._make_cfg([
-            "192.168.10.1  server  linux",
+            {"ip": "192.168.10.1", "label": "server", "htype": "linux"},
         ])
         result = update_host_label(cfg, "192.168.10.99", "new-name")
         self.assertFalse(result)
@@ -179,21 +180,10 @@ class TestUpdateHostLabel(unittest.TestCase):
             content = f.read()
         self.assertIn("server", content)
 
-    def test_preserves_comments(self):
-        from freq.modules.hosts import update_host_label
-        cfg = self._make_cfg([
-            "# This is a comment",
-            "192.168.10.1  server  linux",
-        ])
-        update_host_label(cfg, "192.168.10.1", "renamed")
-        with open(self.hosts_file) as f:
-            lines = f.readlines()
-        self.assertTrue(lines[0].startswith("#"))
-
     def test_preserves_type_and_groups(self):
         from freq.modules.hosts import update_host_label
         cfg = self._make_cfg([
-            "192.168.10.1  server  docker  media,prod",
+            {"ip": "192.168.10.1", "label": "server", "htype": "docker", "groups": "media,prod"},
         ])
         update_host_label(cfg, "192.168.10.1", "new-server")
         with open(self.hosts_file) as f:
@@ -201,10 +191,11 @@ class TestUpdateHostLabel(unittest.TestCase):
         self.assertIn("docker", content)
         self.assertIn("media,prod", content)
 
-    def test_missing_file_returns_false(self):
+    def test_missing_hosts_returns_false(self):
         from freq.modules.hosts import update_host_label
         cfg = MagicMock()
-        cfg.hosts_file = os.path.join(self.tmpdir, "nonexistent.conf")
+        cfg.hosts = []
+        cfg.hosts_file = os.path.join(self.tmpdir, "nonexistent.toml")
         result = update_host_label(cfg, "10.0.0.1", "test")
         self.assertFalse(result)
 

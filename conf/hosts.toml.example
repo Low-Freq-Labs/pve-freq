@@ -1,5 +1,5 @@
 # FREQ Fleet Registry (TOML format)
-# Preferred format — replaces hosts.toml
+# Preferred format — replaces hosts.conf
 #
 # Add hosts with: freq hosts add
 # Discover hosts: freq discover

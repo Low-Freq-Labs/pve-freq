@@ -1753,7 +1753,7 @@ function renderFleetAdmin(d){
   /* ── Host Properties Editor ── */
   h+='<div class="mb-24">';
   h+='<h4 class="section-label-pl-ls">HOST PROPERTIES</h4>';
-  h+='<p class="desc-line">Change host type or groups. Updates hosts.conf immediately.</p>';
+  h+='<p class="desc-line">Change host type or groups. Updates hosts.toml immediately.</p>';
   h+='<table><thead><tr><th>Label</th><th>IP</th><th>Type</th><th>Groups</th><th>Actions</th></tr></thead><tbody>';
   var validTypes=['linux','pve','truenas','pfsense','docker','idrac','switch','unknown'];
   (d.hosts||[]).forEach(function(host){
@@ -2081,7 +2081,7 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
     c+='</div></div>';
     if(isLab)labCards+=c;
   });
-  /* Also show lab-tagged or lab-category VMs from PVE that aren't in hosts.conf */
+  /* Also show lab-tagged or lab-category VMs from PVE that aren't in hosts.toml */
   var hostSet={};if(hosts)hosts.forEach(function(h){hostSet[h.label]=true;});
   PROD_VMS.forEach(function(v){
     if(hostSet[v.label])return;

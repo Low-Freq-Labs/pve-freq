@@ -215,7 +215,7 @@ def _resolve_paths(cfg: FreqConfig) -> None:
     cfg.conf_dir = str(base / "conf")
     cfg.data_dir = str(base / "data")
     cfg.log_file = str(base / "data" / "log" / "freq.log")
-    cfg.hosts_file = str(base / "conf" / "hosts.conf")
+    cfg.hosts_file = str(base / "conf" / "hosts.toml")
     cfg.vault_dir = str(base / "data" / "vault")
     cfg.vault_file = str(base / "data" / "vault" / "freq-vault.enc")
     cfg.key_dir = str(base / "data" / "keys")
@@ -333,14 +333,19 @@ def load_config(install_dir: Optional[str] = None) -> FreqConfig:
     if data:
         _apply_toml(cfg, data)
 
-    # Load fleet data — prefer hosts.toml, fall back to hosts.conf
-    hosts_toml = os.path.join(cfg.conf_dir, "hosts.toml")
-    if os.path.isfile(hosts_toml):
-        cfg.hosts = load_hosts_toml(hosts_toml)
+    # Load fleet data — hosts.toml is the primary format
+    if os.path.isfile(cfg.hosts_file):
+        cfg.hosts = load_hosts_toml(cfg.hosts_file)
     else:
-        cfg.hosts = load_hosts(cfg.hosts_file)
-        if os.path.isfile(cfg.hosts_file) and cfg.hosts:
-            _deprecation_warn("hosts.conf", "hosts.toml")
+        # Migration fallback: read legacy hosts.conf if it exists
+        legacy = os.path.join(cfg.conf_dir, "hosts.conf")
+        if os.path.isfile(legacy):
+            cfg.hosts = load_hosts(legacy)
+            if cfg.hosts:
+                _deprecation_warn("hosts.conf", "hosts.toml")
+                # Auto-migrate: write hosts.toml and stop reading hosts.conf
+                save_hosts_toml(cfg.hosts_file, cfg.hosts)
+                fmt.line(f"  {fmt.C.GREEN}Auto-migrated hosts.conf → hosts.toml{fmt.C.RESET}")
     cfg.vlans = load_vlans(os.path.join(cfg.conf_dir, "vlans.toml"))
     cfg.distros = load_distros(os.path.join(cfg.conf_dir, "distros.toml"))
     cfg.container_vms = load_containers(os.path.join(cfg.conf_dir, "containers.toml"))
@@ -526,6 +531,46 @@ def load_hosts_toml(path: str) -> list:
             all_ips=all_ips,
         ))
     return hosts
+
+
+def save_hosts_toml(path: str, hosts: list) -> None:
+    """Write all hosts to TOML format.
+
+    Overwrites the file. Each host becomes a [[host]] entry.
+    """
+    lines = ["# FREQ Fleet Registry\n", "# Managed by freq — do not edit while freq is running\n\n"]
+    for h in hosts:
+        lines.append("[[host]]\n")
+        lines.append(f'ip = "{h.ip}"\n')
+        lines.append(f'label = "{h.label}"\n')
+        lines.append(f'type = "{h.htype}"\n')
+        if h.groups:
+            lines.append(f'groups = "{h.groups}"\n')
+        if h.all_ips:
+            ips_str = ", ".join(f'"{ip}"' for ip in h.all_ips)
+            lines.append(f"all_ips = [{ips_str}]\n")
+        lines.append("\n")
+    with open(path, "w") as f:
+        f.writelines(lines)
+
+
+def append_host_toml(path: str, host) -> None:
+    """Append a single host entry to the TOML hosts file."""
+    lines = []
+    if not os.path.isfile(path):
+        lines.append("# FREQ Fleet Registry\n\n")
+    lines.append("[[host]]\n")
+    lines.append(f'ip = "{host.ip}"\n')
+    lines.append(f'label = "{host.label}"\n')
+    lines.append(f'type = "{host.htype}"\n')
+    if host.groups:
+        lines.append(f'groups = "{host.groups}"\n')
+    if host.all_ips:
+        ips_str = ", ".join(f'"{ip}"' for ip in host.all_ips)
+        lines.append(f"all_ips = [{ips_str}]\n")
+    lines.append("\n")
+    with open(path, "a") as f:
+        f.writelines(lines)
 
 
 def _load_monitors(data: dict) -> list:

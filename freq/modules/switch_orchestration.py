@@ -6,7 +6,7 @@ What: Query and manage network switches across vendors (Cisco, Juniper,
 Replaces: Manual SSH sessions to each switch, vendor-specific GUIs,
           the old infrastructure.py _device_cmd() pattern for switches
 Architecture:
-    - Resolves target to Host from hosts.conf (type=switch)
+    - Resolves target to Host from hosts.toml (type=switch)
     - Picks vendor deployer via deployers/__init__.py resolve_htype()
     - Calls deployer getter (get_facts, get_interfaces, etc.)
     - Formats output via freq/core/fmt.py
@@ -14,7 +14,7 @@ Architecture:
 Design decisions:
     - Vendor-agnostic: CLI commands are the same regardless of switch vendor.
       The deployer handles vendor-specific SSH commands and output parsing.
-    - Target resolution: --all flag hits every switch in hosts.conf in parallel.
+    - Target resolution: --all flag hits every switch in hosts.toml in parallel.
     - Graduated from infrastructure.py: the 6 old switch actions are replaced
       by richer, deployer-backed commands.
 """
@@ -28,7 +28,7 @@ from freq.core import log as logger
 # ─────────────────────────────────────────────────────────────
 
 def _get_switch_hosts(cfg):
-    """Return all hosts with htype=switch from hosts.conf."""
+    """Return all hosts with htype=switch from hosts.toml."""
     return [h for h in cfg.hosts if h.htype == "switch"]
 
 
@@ -542,7 +542,7 @@ def _exec_all(cfg, command):
 
     switches = _get_switch_hosts(cfg)
     if not switches:
-        fmt.error("No switches found in hosts.conf (type=switch)")
+        fmt.error("No switches found in hosts.toml (type=switch)")
         return 1
 
     fmt.header("Exec All Switches", breadcrumb="FREQ > Net > Switch")

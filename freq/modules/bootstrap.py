@@ -167,18 +167,15 @@ def cmd_onboard(cfg: FreqConfig, pack, args) -> int:
 
     fmt.blank()
 
-    # Add to hosts.conf
+    # Add to fleet registry
     fmt.step_start("Adding to fleet registry")
-    line = f"{target} {label} {htype}"
-    if groups:
-        line += f" {groups}"
-
     try:
-        with open(cfg.hosts_file, "a") as f:
-            f.write(f"{line}\n")
+        from freq.core.config import Host, append_host_toml
+        host = Host(ip=target, label=label, htype=htype, groups=groups)
+        append_host_toml(cfg.hosts_file, host)
         fmt.step_ok(f"Added: {label} ({target})")
     except OSError as e:
-        fmt.step_fail(f"Failed to write hosts.conf: {e}")
+        fmt.step_fail(f"Failed to write fleet registry: {e}")
         fmt.blank()
         fmt.footer()
         return 1

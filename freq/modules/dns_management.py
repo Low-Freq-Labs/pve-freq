@@ -6,12 +6,12 @@ What: Manage internal DNS records, sync from fleet inventory, query backends
 Replaces: Manual Pi-hole/AdGuard admin panels, editing /etc/hosts,
           Unbound conf edits via SSH
 Architecture:
-    - Internal DNS: A/PTR records derived from hosts.conf inventory
+    - Internal DNS: A/PTR records derived from hosts.toml inventory
     - Backend detection: Pi-hole (REST API), AdGuard (REST API), Unbound (SSH)
     - Uses urllib.request for HTTP APIs — zero dependencies
     - DNS data stored in conf/dns/
 Design decisions:
-    - Backends are optional. Internal DNS sync works with just hosts.conf.
+    - Backends are optional. Internal DNS sync works with just hosts.toml.
     - Pi-hole v6 API via session auth. AdGuard via basic auth.
     - Unbound via SSH to pfSense — edit local-data entries.
 """
@@ -69,7 +69,7 @@ def cmd_dns_internal_list(cfg: FreqConfig, pack, args) -> int:
 
     if not records:
         fmt.warn("No internal DNS records")
-        fmt.info("Run: freq dns internal sync — to generate from hosts.conf")
+        fmt.info("Run: freq dns internal sync — to generate from hosts.toml")
         fmt.footer()
         return 0
 
@@ -145,7 +145,7 @@ def cmd_dns_internal_remove(cfg: FreqConfig, pack, args) -> int:
 
 
 def cmd_dns_internal_sync(cfg: FreqConfig, pack, args) -> int:
-    """Sync DNS records from hosts.conf inventory."""
+    """Sync DNS records from hosts.toml inventory."""
     fmt.header("DNS Sync from Fleet", breadcrumb="FREQ > DNS")
     fmt.blank()
 
@@ -153,16 +153,16 @@ def cmd_dns_internal_sync(cfg: FreqConfig, pack, args) -> int:
     records = data.get("records", [])
 
     # Remove old auto-generated records
-    records = [r for r in records if r.get("source") != "hosts.conf"]
+    records = [r for r in records if r.get("source") != "hosts.toml"]
 
-    # Generate from hosts.conf
+    # Generate from hosts.toml
     added = 0
     for h in cfg.hosts:
         records.append({
             "hostname": f"{h.label}.freq.local",
             "ip": h.ip,
             "type": "A",
-            "source": "hosts.conf",
+            "source": "hosts.toml",
             "added": time.strftime("%Y-%m-%d"),
         })
         added += 1
@@ -170,7 +170,7 @@ def cmd_dns_internal_sync(cfg: FreqConfig, pack, args) -> int:
     data["records"] = records
     _save_dns_inventory(cfg, data)
 
-    fmt.step_ok(f"Synced {added} hosts from hosts.conf")
+    fmt.step_ok(f"Synced {added} hosts from hosts.toml")
     fmt.info(f"Total records: {len(records)}")
 
     fmt.blank()
