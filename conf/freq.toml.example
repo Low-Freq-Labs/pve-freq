@@ -21,6 +21,8 @@ mode = "sudo"               # "root" = SSH as root, "sudo" = SSH as service acco
 nodes = []
 node_names = []
 ssh_user = "freq-admin"
+# api_token_id = "freq-ops@pam!freq-rw"         # PVE API token for real-time metrics
+# api_token_secret_path = "/etc/freq/credentials/pve-token-rw"
 
 # Per-node storage configuration (uncomment and edit for each node)
 # [pve.storage.node1]
