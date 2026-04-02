@@ -665,6 +665,26 @@ def _register_secure(sub):
     p.add_argument("--fix", action="store_true", help="Apply fixes (default: dry run)")
     p.set_defaults(func=_cmd_sweep)
 
+    # Vulnerability scanning (WS11)
+    vuln = secure_sub.add_parser("vuln", help="Vulnerability scanning")
+    vuln_sub = vuln.add_subparsers(dest="action")
+    p = vuln_sub.add_parser("scan", help="Scan fleet for vulnerabilities")
+    p.set_defaults(func=_cmd_vuln_scan)
+    p = vuln_sub.add_parser("results", help="Show last scan results")
+    p.set_defaults(func=_cmd_vuln_results)
+    vuln.set_defaults(func=_cmd_vuln_scan)
+
+    # File integrity monitoring (WS11)
+    fim = secure_sub.add_parser("fim", help="File integrity monitoring")
+    fim_sub = fim.add_subparsers(dest="action")
+    p = fim_sub.add_parser("baseline", help="Create file integrity baseline")
+    p.set_defaults(func=_cmd_fim_baseline)
+    p = fim_sub.add_parser("check", help="Check against baseline")
+    p.set_defaults(func=_cmd_fim_check)
+    p = fim_sub.add_parser("status", help="Show baseline status")
+    p.set_defaults(func=_cmd_fim_status)
+    fim.set_defaults(func=_cmd_fim_status)
+
 
 # ---------------------------------------------------------------------------
 # freq observe — Observability Platform
@@ -726,6 +746,36 @@ def _register_observe(sub):
     p.add_argument("action", nargs="?", choices=["status", "health", "size"],
                    default="status", help="Action to perform")
     p.set_defaults(func=_cmd_db)
+
+    # Metrics (WS10)
+    met = observe_sub.add_parser("metrics", help="Time-series metrics collection")
+    met_sub = met.add_subparsers(dest="action")
+    p = met_sub.add_parser("collect", help="Collect metrics from fleet")
+    p.set_defaults(func=_cmd_metrics_collect)
+    p = met_sub.add_parser("show", help="Show latest metrics")
+    p.add_argument("target", nargs="?", help="Host label")
+    p.set_defaults(func=_cmd_metrics_show)
+    p = met_sub.add_parser("top", help="Top resource consumers")
+    p.set_defaults(func=_cmd_metrics_top)
+    met.set_defaults(func=_cmd_metrics_show)
+
+    # Monitors (WS10)
+    mon = observe_sub.add_parser("monitor", help="Synthetic endpoint monitoring")
+    mon_sub = mon.add_subparsers(dest="action")
+    p = mon_sub.add_parser("list", help="List monitors")
+    p.set_defaults(func=_cmd_monitor_list)
+    p = mon_sub.add_parser("add", help="Add a monitor")
+    p.add_argument("--name", required=True, help="Monitor name")
+    p.add_argument("--type", required=True, choices=["http", "tcp", "dns", "ssl"], help="Check type")
+    p.add_argument("--target", required=True, help="URL or host:port")
+    p.add_argument("--interval", default="5m", help="Check interval")
+    p.set_defaults(func=_cmd_monitor_add)
+    p = mon_sub.add_parser("run", help="Execute all checks")
+    p.set_defaults(func=_cmd_monitor_run)
+    p = mon_sub.add_parser("remove", help="Remove a monitor")
+    p.add_argument("--name", required=True, help="Monitor name")
+    p.set_defaults(func=_cmd_monitor_remove)
+    mon.set_defaults(func=_cmd_monitor_list)
 
 
 # ---------------------------------------------------------------------------
@@ -2286,6 +2336,58 @@ def _cmd_ip_conflict(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.net_intelligence import cmd_ip_conflict
     return cmd_ip_conflict(cfg, pack, args)
 
+
+# --- Metrics + Monitors (WS10) ---
+
+def _cmd_metrics_collect(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.metrics import cmd_metrics_collect
+    return cmd_metrics_collect(cfg, pack, args)
+
+def _cmd_metrics_show(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.metrics import cmd_metrics_show
+    return cmd_metrics_show(cfg, pack, args)
+
+def _cmd_metrics_top(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.metrics import cmd_metrics_top
+    return cmd_metrics_top(cfg, pack, args)
+
+def _cmd_monitor_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.synthetic_monitors import cmd_monitor_list
+    return cmd_monitor_list(cfg, pack, args)
+
+def _cmd_monitor_add(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.synthetic_monitors import cmd_monitor_add
+    return cmd_monitor_add(cfg, pack, args)
+
+def _cmd_monitor_run(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.synthetic_monitors import cmd_monitor_run
+    return cmd_monitor_run(cfg, pack, args)
+
+def _cmd_monitor_remove(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.synthetic_monitors import cmd_monitor_remove
+    return cmd_monitor_remove(cfg, pack, args)
+
+# --- Vuln + FIM (WS11) ---
+
+def _cmd_vuln_scan(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.vuln import cmd_vuln_scan
+    return cmd_vuln_scan(cfg, pack, args)
+
+def _cmd_vuln_results(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.vuln import cmd_vuln_results
+    return cmd_vuln_results(cfg, pack, args)
+
+def _cmd_fim_baseline(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.fim import cmd_fim_baseline
+    return cmd_fim_baseline(cfg, pack, args)
+
+def _cmd_fim_check(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.fim import cmd_fim_check
+    return cmd_fim_check(cfg, pack, args)
+
+def _cmd_fim_status(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.fim import cmd_fim_status
+    return cmd_fim_status(cfg, pack, args)
 
 # --- Storage (new) ---
 
