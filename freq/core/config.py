@@ -356,7 +356,39 @@ def load_config(install_dir: Optional[str] = None) -> FreqConfig:
     cfg.ssh_key_path = _detect_ssh_key(cfg)
     cfg.ssh_rsa_key_path = _detect_rsa_key(cfg)
 
+    # Validate loaded config
+    from freq.core import log as logger
+    for w in _validate_config(cfg):
+        logger.warn(f"config: {w}")
+
     return cfg
+
+
+def _validate_config(cfg: FreqConfig) -> list:
+    """Validate config. Returns list of warning strings."""
+    warnings = []
+    from freq.core.validate import ip as valid_ip, port as valid_port
+
+    for host in cfg.hosts:
+        if host.ip and not valid_ip(host.ip):
+            warnings.append(f"Host {host.label}: invalid IP '{host.ip}'")
+        if hasattr(host, 'htype') and host.htype:
+            try:
+                from freq.deployers import resolve_htype
+                cat, vendor = resolve_htype(host.htype)
+                if cat == "unknown":
+                    warnings.append(f"Host {host.label}: unknown type '{host.htype}'")
+            except Exception:
+                pass
+
+    if cfg.dashboard_port and not valid_port(cfg.dashboard_port):
+        warnings.append(f"Invalid dashboard port: {cfg.dashboard_port}")
+    if cfg.ssh_connect_timeout <= 0:
+        warnings.append(f"SSH connect timeout must be positive: {cfg.ssh_connect_timeout}")
+    if cfg.ssh_max_parallel <= 0:
+        warnings.append(f"SSH max parallel must be positive: {cfg.ssh_max_parallel}")
+
+    return warnings
 
 
 def _safe_int(value, default):
@@ -366,6 +398,8 @@ def _safe_int(value, default):
     try:
         return int(value)
     except (ValueError, TypeError):
+        from freq.core import log as logger
+        logger.warn(f"config: expected int, got {type(value).__name__}: {value!r}, using default {default}")
         return default
 
 
