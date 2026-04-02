@@ -1133,6 +1133,73 @@ def _register_net(sub):
 
     ncfg.set_defaults(func=_cmd_config_history)
 
+    # freq net snmp <action> — SNMP polling
+    snmp = net_sub.add_parser("snmp", help="SNMP device polling")
+    snmp_sub = snmp.add_subparsers(dest="action")
+
+    p = snmp_sub.add_parser("poll", help="Full SNMP poll (system, interfaces, CPU)")
+    p.add_argument("target", nargs="?", help="Device IP or label")
+    p.add_argument("--all", action="store_true", help="Poll all switches")
+    p.add_argument("--community", help="SNMP community string")
+    p.set_defaults(func=_cmd_snmp_poll)
+
+    p = snmp_sub.add_parser("interfaces", help="SNMP interface table with counters")
+    p.add_argument("target", help="Device IP or label")
+    p.add_argument("--community", help="SNMP community string")
+    p.set_defaults(func=_cmd_snmp_interfaces)
+
+    p = snmp_sub.add_parser("errors", help="Interfaces with errors")
+    p.add_argument("target", help="Device IP or label")
+    p.add_argument("--community", help="SNMP community string")
+    p.set_defaults(func=_cmd_snmp_errors)
+
+    p = snmp_sub.add_parser("cpu", help="CPU utilization via SNMP")
+    p.add_argument("target", help="Device IP or label")
+    p.add_argument("--community", help="SNMP community string")
+    p.set_defaults(func=_cmd_snmp_cpu)
+
+    snmp.set_defaults(func=_cmd_snmp_poll)
+
+    # freq net topology <action> — LLDP/CDP topology
+    topo = net_sub.add_parser("topology", help="Network topology via LLDP/CDP")
+    topo_sub = topo.add_subparsers(dest="action")
+
+    p = topo_sub.add_parser("discover", help="Crawl switches for neighbors")
+    p.set_defaults(func=_cmd_topology_discover)
+
+    p = topo_sub.add_parser("show", help="Show latest topology")
+    p.set_defaults(func=_cmd_topology_show)
+
+    p = topo_sub.add_parser("export", help="Export as DOT or JSON")
+    p.add_argument("--format", default="dot", choices=["dot", "json"], help="Export format")
+    p.add_argument("--output", "-o", help="Output file path")
+    p.set_defaults(func=_cmd_topology_export)
+
+    p = topo_sub.add_parser("diff", help="Compare against previous snapshot")
+    p.set_defaults(func=_cmd_topology_diff)
+
+    topo.set_defaults(func=_cmd_topology_show)
+
+    # freq net find-mac / find-ip / troubleshoot
+    p = net_sub.add_parser("find-mac", help="Find MAC across all switches")
+    p.add_argument("mac", help="MAC address to find")
+    p.set_defaults(func=_cmd_find_mac)
+
+    p = net_sub.add_parser("find-ip", help="Find IP in ARP tables across switches")
+    p.add_argument("ip", help="IP address to find")
+    p.set_defaults(func=_cmd_find_ip)
+
+    p = net_sub.add_parser("troubleshoot", help="Automated network troubleshooting")
+    p.add_argument("target", help="IP, MAC, or hostname to trace")
+    p.set_defaults(func=_cmd_troubleshoot)
+
+    # freq net ip-util / ip-conflict
+    p = net_sub.add_parser("ip-util", help="Subnet utilization per VLAN")
+    p.set_defaults(func=_cmd_ip_utilization)
+
+    p = net_sub.add_parser("ip-conflict", help="Detect duplicate IP addresses")
+    p.set_defaults(func=_cmd_ip_conflict)
+
     p = net_sub.add_parser("netmon", help="Network monitoring and interface tracking")
     p.add_argument("action", nargs="?", choices=["interfaces", "poll", "bandwidth", "topology"],
                    default="interfaces", help="Action to perform")
@@ -1940,6 +2007,77 @@ def _cmd_config_search(cfg: FreqConfig, pack, args) -> int:
 def _cmd_config_restore(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.config_management import cmd_config_restore
     return cmd_config_restore(cfg, pack, args)
+
+
+# --- SNMP ---
+
+def _cmd_snmp_poll(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.snmp import cmd_snmp_poll
+    return cmd_snmp_poll(cfg, pack, args)
+
+
+def _cmd_snmp_interfaces(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.snmp import cmd_snmp_interfaces
+    return cmd_snmp_interfaces(cfg, pack, args)
+
+
+def _cmd_snmp_errors(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.snmp import cmd_snmp_errors
+    return cmd_snmp_errors(cfg, pack, args)
+
+
+def _cmd_snmp_cpu(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.snmp import cmd_snmp_cpu
+    return cmd_snmp_cpu(cfg, pack, args)
+
+
+# --- Topology ---
+
+def _cmd_topology_discover(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.topology import cmd_topology_discover
+    return cmd_topology_discover(cfg, pack, args)
+
+
+def _cmd_topology_show(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.topology import cmd_topology_show
+    return cmd_topology_show(cfg, pack, args)
+
+
+def _cmd_topology_export(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.topology import cmd_topology_export
+    return cmd_topology_export(cfg, pack, args)
+
+
+def _cmd_topology_diff(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.topology import cmd_topology_diff
+    return cmd_topology_diff(cfg, pack, args)
+
+
+# --- Network Intelligence ---
+
+def _cmd_find_mac(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.net_intelligence import cmd_find_mac
+    return cmd_find_mac(cfg, pack, args)
+
+
+def _cmd_find_ip(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.net_intelligence import cmd_find_ip
+    return cmd_find_ip(cfg, pack, args)
+
+
+def _cmd_troubleshoot(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.net_intelligence import cmd_troubleshoot
+    return cmd_troubleshoot(cfg, pack, args)
+
+
+def _cmd_ip_utilization(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.net_intelligence import cmd_ip_utilization
+    return cmd_ip_utilization(cfg, pack, args)
+
+
+def _cmd_ip_conflict(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.net_intelligence import cmd_ip_conflict
+    return cmd_ip_conflict(cfg, pack, args)
 
 
 # --- Event Network ---
