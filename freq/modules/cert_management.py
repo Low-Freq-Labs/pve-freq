@@ -202,7 +202,7 @@ def cmd_cert_acme_status(cfg: FreqConfig, pack, args) -> int:
                 fmt.line(f"  {fmt.C.DIM}{r.stderr[:200]}{fmt.C.RESET}")
     except FileNotFoundError:
         fmt.warn("certbot not installed")
-        fmt.info("Install: sudo apt install certbot")
+        fmt.info("Install certbot using your package manager (apt, dnf, pacman, etc.)")
 
     fmt.blank()
     fmt.footer()

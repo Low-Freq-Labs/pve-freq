@@ -120,7 +120,7 @@ def cmd_hw_ups(cfg: FreqConfig, pack, args) -> int:
 
     if not found:
         fmt.warn("No UPS found (NUT not running or upsc not available)")
-        fmt.info("Install NUT: apt install nut")
+        fmt.info("Install NUT using your package manager (apt, dnf, pacman, etc.)")
 
     fmt.footer()
     return 0
