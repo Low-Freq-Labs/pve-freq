@@ -50,7 +50,7 @@
   </div>
   <div class="flex-gap-16-center">
     <button id="header-user-btn" onclick="openUserMenu()" style="display:none;background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 14px;border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--input-border)'"><span id="header-user-icon" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></span><span id="header-user-name" style="font-weight:600;text-transform:uppercase;letter-spacing:0.5px"></span><span id="header-user-role" style="font-size:10px;color:var(--text-dim)"></span></button>
-    <span style="font-family:'Courier New',monospace;font-size:24px;font-weight:700;color:var(--purple-light);letter-spacing:2px;opacity:0.8" id="header-time"></span>
+    <span style="font-family:'Courier New',monospace;font-size:24px;font-weight:700;color:var(--purple-light);letter-spacing:2px;opacity:0.7;animation:none;text-shadow:none" id="header-time"></span>
   </div>
 </div>
 <div id="update-banner" style="display:none;background:linear-gradient(135deg,rgba(123,47,190,0.15),rgba(168,85,247,0.1));border-bottom:1px solid var(--purple);padding:10px 32px;font-size:13px;color:var(--text)">
@@ -558,6 +558,7 @@
   <button class="sub-tab" onclick="switchView('fleet')">Fleet</button>
   <button class="sub-tab active-sub" onclick="switchView('topology')">Topology</button>
   <button class="sub-tab" onclick="switchView('capacity')">Capacity</button>
+  <button class="sub-tab" onclick="switchView('network')">Network</button>
 </div>
 <div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -584,6 +585,7 @@
   <button class="sub-tab" onclick="switchView('fleet')">Fleet</button>
   <button class="sub-tab" onclick="switchView('topology')">Topology</button>
   <button class="sub-tab active-sub" onclick="switchView('capacity')">Capacity</button>
+  <button class="sub-tab" onclick="switchView('network')">Network</button>
 </div>
 <div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -804,6 +806,12 @@
      NETWORK VIEW — Switch management, SNMP, topology intelligence
      ============================================================ -->
 <div id="network-view" class="d-none">
+<div class="sub-tabs" id="subtabs-network">
+  <button class="sub-tab" onclick="switchView('fleet')">Fleet</button>
+  <button class="sub-tab" onclick="switchView('topology')">Topology</button>
+  <button class="sub-tab" onclick="switchView('capacity')">Capacity</button>
+  <button class="sub-tab active-sub" onclick="switchView('network')">Network</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>Switch Fleet</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadNetworkPage()">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -832,6 +840,16 @@
      FIREWALL VIEW — Rules, NAT, states, interfaces
      ============================================================ -->
 <div id="firewall-view" class="d-none">
+<div class="sub-tabs" id="subtabs-firewall">
+  <button class="sub-tab" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+  <button class="sub-tab active-sub" onclick="switchView('firewall')">Firewall</button>
+  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
+  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>Firewall Overview</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadFirewallPage()">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -856,6 +874,16 @@
      CERTIFICATES VIEW — TLS inventory, expiry tracking
      ============================================================ -->
 <div id="certs-view" class="d-none">
+<div class="sub-tabs" id="subtabs-certs">
+  <button class="sub-tab" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
+  <button class="sub-tab active-sub" onclick="switchView('certs')">Certs</button>
+  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>TLS Certificate Inventory</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadCertsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -904,6 +932,16 @@
      VPN VIEW — WireGuard and OpenVPN tunnel status
      ============================================================ -->
 <div id="vpn-view" class="d-none">
+<div class="sub-tabs" id="subtabs-vpn">
+  <button class="sub-tab" onclick="switchView('security')">Overview</button>
+  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
+  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
+  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
+  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
+  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
+  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
+  <button class="sub-tab active-sub" onclick="switchView('vpn')">VPN</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>VPN Tunnels</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadVpnPage()">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
