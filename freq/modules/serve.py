@@ -1707,8 +1707,10 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._serve_static(path)
         elif path.startswith("/api/comms/") or path.startswith("/api/watch/"):
             self._proxy_watchdog()
+        elif path.startswith("/api/"):
+            self._json_response({"error": "not found", "path": path}, 404)
         else:
-            self.send_error(404)
+            self._serve_app()
 
     def do_GET(self):
         self._dispatch()

@@ -605,6 +605,12 @@
   <button class="sub-tab active-sub" onclick="switchView('playbooks')">Playbooks</button>
   <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
   <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
+  <button class="sub-tab" onclick="switchView('dr')">DR</button>
+  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
+  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
+  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
+  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
 </div>
 <div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -629,6 +635,12 @@
   <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
   <button class="sub-tab active-sub" onclick="switchView('gitops')">Config Sync</button>
   <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
+  <button class="sub-tab" onclick="switchView('dr')">DR</button>
+  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
+  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
+  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
+  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
 </div>
 <div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -661,6 +673,12 @@
   <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
   <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
   <button class="sub-tab active-sub" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
+  <button class="sub-tab" onclick="switchView('dr')">DR</button>
+  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
+  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
+  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
+  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
 </div>
 <div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -851,6 +869,18 @@
      DNS VIEW — Records, health checks, resolution
      ============================================================ -->
 <div id="dns-view" class="d-none">
+<div class="sub-tabs" id="subtabs-dns">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab active-sub" onclick="switchView('dns')">DNS</button>
+  <button class="sub-tab" onclick="switchView('dr')">DR</button>
+  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
+  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
+  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
+  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>DNS Health</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadDnsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -890,6 +920,18 @@
      DR VIEW — Disaster recovery, backup policies, runbooks
      ============================================================ -->
 <div id="dr-view" class="d-none">
+<div class="sub-tabs" id="subtabs-dr">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
+  <button class="sub-tab active-sub" onclick="switchView('dr')">DR</button>
+  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
+  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
+  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
+  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>Backup Status</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadDrPage()">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -915,6 +957,18 @@
      INCIDENTS VIEW — Incident management, change tracking
      ============================================================ -->
 <div id="incidents-view" class="d-none">
+<div class="sub-tabs" id="subtabs-incidents">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
+  <button class="sub-tab" onclick="switchView('dr')">DR</button>
+  <button class="sub-tab active-sub" onclick="switchView('incidents')">Incidents</button>
+  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
+  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
+  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>Active Incidents</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadIncidentsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -934,6 +988,18 @@
      METRICS VIEW — Observability metrics, synthetic monitors
      ============================================================ -->
 <div id="metrics-view" class="d-none">
+<div class="sub-tabs" id="subtabs-metrics">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
+  <button class="sub-tab" onclick="switchView('dr')">DR</button>
+  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
+  <button class="sub-tab active-sub" onclick="switchView('metrics')">Metrics</button>
+  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
+  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>Fleet Metrics</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadMetricsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -953,6 +1019,18 @@
      AUTOMATION VIEW — Reactors, workflows, scheduled jobs
      ============================================================ -->
 <div id="automation-view" class="d-none">
+<div class="sub-tabs" id="subtabs-automation">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
+  <button class="sub-tab" onclick="switchView('dr')">DR</button>
+  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
+  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
+  <button class="sub-tab active-sub" onclick="switchView('automation')">Automation</button>
+  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>Automation Engine</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadAutomationPage()">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -971,6 +1049,18 @@
      PLUGIN VIEW — Installed plugins, management
      ============================================================ -->
 <div id="plugins-view" class="d-none">
+<div class="sub-tabs" id="subtabs-plugins">
+  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
+  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
+  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
+  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
+  <button class="sub-tab" onclick="switchView('dr')">DR</button>
+  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
+  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
+  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
+  <button class="sub-tab active-sub" onclick="switchView('plugins')">Plugins</button>
+</div>
 <div class="section">
   <div class="section-header"><h3>Installed Plugins</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadPluginsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
