@@ -19,7 +19,7 @@ from freq.core.config import load_config
 from freq.core import resolve as res
 from freq.core.ssh import run_many as ssh_run_many
 from freq.modules.vault import vault_get, vault_set, vault_init, vault_list, vault_delete
-from freq.modules.serve import _check_session_role
+from freq.api.auth import check_session_role as _check_session_role
 
 
 # ── Handlers ────────────────────────────────────────────────────────────

@@ -28,7 +28,6 @@ Design decisions:
 import concurrent.futures
 import datetime
 import hashlib
-import secrets
 import json
 import os
 import re
@@ -69,9 +68,7 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 BG_CACHE_REFRESH_INTERVAL = 15   # seconds between background cache refreshes
 DASHBOARD_AUTO_REFRESH_MS = 30000  # milliseconds between frontend auto-refreshes
-SESSION_TIMEOUT_HOURS = 8
 _SERVER_START_TIME = time.monotonic()
-SESSION_TIMEOUT_SECONDS = SESSION_TIMEOUT_HOURS * 3600
 DEFAULT_LOG_LINES = 50
 
 # ── BACKGROUND CACHE ENGINE ──────────────────────────────────────────────
@@ -1280,50 +1277,15 @@ def _check_vm_permission(cfg, vmid, action):
     return False, f"Action '{action}' blocked on VMID {vmid} ({cat_name}/{tier})"
 
 
-def _hash_password(password: str, salt: str = None) -> str:
-    """Hash password with PBKDF2-SHA256 + per-user salt."""
-    if salt is None:
-        salt = secrets.token_hex(16)
-    dk = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100_000)
-    return f"{salt}${dk.hex()}"
-
-
-def _verify_password(password: str, stored: str) -> bool:
-    """Verify password against stored hash. Supports legacy SHA256 for migration."""
-    if '$' not in stored:
-        # Legacy unsalted SHA256 hash
-        return hashlib.sha256(password.encode()).hexdigest() == stored
-    salt, _ = stored.split('$', 1)
-    return _hash_password(password, salt) == stored
-
-
-def _check_session_role(handler, min_role="operator"):
-    """Check if the request has a valid session with sufficient role. Returns (role, error_msg).
-
-    Role hierarchy: viewer < operator < admin.
-    Returns (role_str, None) if ok, or (None, error_str) if blocked.
-    """
-    # Prefer Authorization: Bearer header, fall back to query param
-    token = ""
-    auth_header = handler.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-    if not token:
-        params = parse_qs(urlparse(handler.path).query)
-        token = params.get("token", [""])[0]
-    if not token:
-        return None, "Authentication required"
-    with FreqHandler._auth_lock:
-        session = FreqHandler._auth_tokens.get(token)
-        if not session:
-            return None, "Session expired or invalid"
-        if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
-            del FreqHandler._auth_tokens[token]
-            return None, "Session expired"
-    role_order = {"viewer": 0, "operator": 1, "admin": 2, "protected": 3}
-    if role_order.get(session["role"], 0) < role_order.get(min_role, 1):
-        return None, f"Requires {min_role} role (you are {session['role']})"
-    return session["role"], None
+# Auth functions delegated to freq.api.auth
+from freq.api.auth import (
+    hash_password as _hash_password,
+    verify_password as _verify_password,
+    check_session_role as _check_session_role,
+    handle_auth_login,
+    handle_auth_verify,
+    handle_auth_change_password,
+)
 
 
 def _find_reachable_pve_node(cfg):
@@ -6550,170 +6512,16 @@ a:hover{{text-decoration:underline}}
         except Exception as e:
             self._json_response({"error": str(e)})
 
-    # ── Auth ────────────────────────────────────────────────────────
-
-    # Simple token store (in-memory, cleared on restart)
-    _auth_tokens = {}  # token -> {user, role, ts}
-    _auth_lock = threading.Lock()
-
-    # Login rate limiting
-    _login_attempts = {}  # {ip: [(timestamp, success_bool), ...]}
-    _login_lock = threading.Lock()
-
-    @staticmethod
-    def _check_rate_limit(ip: str) -> bool:
-        """Return True if login allowed, False if rate-limited."""
-        now = time.time()
-        window = 300  # 5 minutes
-        max_failures = 10
-        with FreqHandler._login_lock:
-            attempts = FreqHandler._login_attempts.get(ip, [])
-            attempts = [(t, s) for t, s in attempts if now - t < window]
-            FreqHandler._login_attempts[ip] = attempts
-            failures = sum(1 for t, s in attempts if not s)
-            return failures < max_failures
-
-    @staticmethod
-    def _record_login_attempt(ip: str, success: bool):
-        with FreqHandler._login_lock:
-            if ip not in FreqHandler._login_attempts:
-                FreqHandler._login_attempts[ip] = []
-            FreqHandler._login_attempts[ip].append((time.time(), success))
+    # ── Auth (delegated to freq.api.auth) ────────────────────────────
 
     def _serve_auth_login(self):
-        """Authenticate user against FREQ users list + vault password."""
-
-        client_ip = self.client_address[0]
-        if not FreqHandler._check_rate_limit(client_ip):
-            self._json_response({"error": "Too many login attempts. Try again in 5 minutes."}, 429)
-            return
-
-        if self.command != "POST":
-            self._json_response({"error": "Use POST with JSON body for login"}, 405)
-            return
-        try:
-            body = self._request_body()
-            username = body.get("username", "").strip().lower()
-            password = body.get("password", "")
-        except Exception:
-            self._json_response({"error": "Invalid request body"}, 400)
-            return
-
-        if not username or not password:
-            self._json_response({"error": "Username and password required"})
-            return
-
-        # Load FREQ users to verify the user exists and get role
-        cfg = load_config()
-        users = _load_users(cfg)
-        user = next((u for u in users if u["username"] == username), None)
-        if not user:
-            FreqHandler._record_login_attempt(client_ip, False)
-            self._json_response({"error": "Unknown user"})
-            return
-
-        # Verify password against vault-stored hash
-        stored_hash = ""
-        try:
-            stored_hash = vault_get(cfg, "auth", f"password_{username}") or ""
-        except Exception as e:
-            logger.warn(f"vault read failed for auth: {e}")
-
-        if stored_hash and not _verify_password(password, stored_hash):
-            FreqHandler._record_login_attempt(client_ip, False)
-            self._json_response({"error": "Invalid password"})
-            return
-
-        # If no password stored yet, save this one (first login sets password)
-        # Also migrate legacy SHA256 hashes to PBKDF2 on successful login
-        if not stored_hash or ('$' not in stored_hash):
-            pw_hash = _hash_password(password)
-            try:
-                if not os.path.exists(cfg.vault_file):
-                    vault_init(cfg)
-                vault_set(cfg, "auth", f"password_{username}", pw_hash)
-            except Exception as e:
-                logger.warn(f"vault write failed for auth: {e}")
-
-        # Record successful login
-        FreqHandler._record_login_attempt(client_ip, True)
-
-        # Generate session token
-        token = secrets.token_urlsafe(32)
-        with FreqHandler._auth_lock:
-            FreqHandler._auth_tokens[token] = {
-                "user": username,
-                "role": user["role"],
-                "ts": time.time(),
-            }
-        self._json_response({
-            "ok": True, "token": token,
-            "user": username, "role": user["role"],
-        })
+        handle_auth_login(self)
 
     def _serve_auth_verify(self):
-        """Verify a session token is still valid."""
-
-        token = ""
-        auth_header = self.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-        if not token:
-            params = _parse_query(self)
-            token = params.get("token", [""])[0]
-        with FreqHandler._auth_lock:
-            session = FreqHandler._auth_tokens.get(token)
-            if not session:
-                self._json_response({"valid": False})
-                return
-            # Sessions expire after 8 hours
-            if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
-                del FreqHandler._auth_tokens[token]
-                self._json_response({"valid": False})
-                return
-        self._json_response({
-            "valid": True, "user": session["user"], "role": session["role"],
-        })
+        handle_auth_verify(self)
 
     def _serve_auth_change_password(self):
-        """Change password for authenticated user."""
-
-        token = ""
-        auth_header = self.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-        if not token:
-            params = _parse_query(self)
-            token = params.get("token", [""])[0]
-        if self.command == "POST":
-            try:
-                body = self._request_body()
-                new_password = body.get("password", "")
-            except Exception:
-                new_password = ""
-        else:
-            params = _parse_query(self)
-            new_password = params.get("password", [""])[0]
-
-        with FreqHandler._auth_lock:
-            session = FreqHandler._auth_tokens.get(token)
-        if not session:
-            self._json_response({"error": "Not authenticated"})
-            return
-        if not new_password or len(new_password) < 6:
-            self._json_response({"error": "Password must be at least 6 characters"})
-            return
-
-        username = session["user"]
-        cfg = load_config()
-        pw_hash = _hash_password(new_password)
-        try:
-            if not os.path.exists(cfg.vault_file):
-                vault_init(cfg)
-            vault_set(cfg, "auth", f"password_{username}", pw_hash)
-            self._json_response({"ok": True, "user": username})
-        except Exception as e:
-            self._json_response({"error": f"Failed to update password: {e}"})
+        handle_auth_change_password(self)
 
     def _proxy_watchdog(self):
         """Proxy requests to FREQ WATCHDOG daemon."""

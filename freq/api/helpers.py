@@ -69,8 +69,8 @@ def require_role(min_role="operator"):
     """Decorator for API handlers that require authentication."""
     def decorator(handler_func):
         def wrapper(handler):
-            from freq.modules.serve import _check_session_role
-            role, err = _check_session_role(handler, min_role)
+            from freq.api.auth import check_session_role
+            role, err = check_session_role(handler, min_role)
             if err:
                 json_response(handler, {"error": err}, 403)
                 return
