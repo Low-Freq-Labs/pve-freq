@@ -66,7 +66,7 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 # ── CONSTANTS ────────────────────────────────────────────────────────────
 
-BG_CACHE_REFRESH_INTERVAL = 60   # seconds between background cache refreshes
+BG_CACHE_REFRESH_INTERVAL = 15   # seconds between background cache refreshes
 DASHBOARD_AUTO_REFRESH_MS = 30000  # milliseconds between frontend auto-refreshes
 SESSION_TIMEOUT_HOURS = 8
 _SERVER_START_TIME = time.monotonic()

@@ -2126,15 +2126,17 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
       var ramParts=(live.ram||'0/0MB').match(/(\d+)\/(\d+)/);
       var ramUsed=ramParts?parseInt(ramParts[1]):0;var ramTotal=ramParts?parseInt(ramParts[2]):1;
       var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
+      var cpuColor=loadPct>=80?'var(--red)':loadPct>=50?'var(--yellow)':'var(--green)';
+      var ramColor=ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';
       nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
-      nodeCard+=_fGrp('PVE NODE',2,_fStat(nCores+'<span class="fs-12-fade">/'+cores+'</span>','CPU ALLOC','var(--purple-light)')+_fStat(nRamGb+'<span class="fs-12-fade">GB/'+nodeRamStr+'</span>','RAM ALLOC','var(--purple-light)'));
+      nodeCard+=_fGrp('UTILIZATION',2,_fStat(loadPct+'%','CPU LOAD',cpuColor)+_fStat(ramPct+'%','RAM USED',ramColor));
       nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'ONLINE','var(--green)')+_fStat(nOffline,'OFFLINE','var(--red)'));
       nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
       nodeCard+='</div>';
       nodeCard+='<div style="margin:6px 0">';
-      nodeCard+=_mrow('CPU',cores+(cores>1?' Cores':' Core')+' \u00b7 '+loadPct+'%',loadPct,'var(--purple-light)');
-      nodeCard+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,'var(--blue)');
-      nodeCard+=_mrow('DISK',(live.disk||'?'),diskPct,'var(--green)');
+      nodeCard+=_mrow('CPU',loadPct+'% \u00b7 '+cores+(cores>1?' Cores':' Core'),loadPct,cpuColor);
+      nodeCard+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,ramColor);
+      nodeCard+=_mrow('DISK',(live.disk||'?'),diskPct,diskPct>=90?'var(--red)':diskPct>=75?'var(--yellow)':'var(--green)');
       nodeCard+='</div>';
     } else {
       nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
