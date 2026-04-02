@@ -1,3 +1,5 @@
+<!-- INTERNAL — Not for public distribution -->
+
 # FREQ ATOMIC AUDIT — April 2, 2026
 
 **Audited by:** Morty (20 parallel agents, 14+ hours of analysis)

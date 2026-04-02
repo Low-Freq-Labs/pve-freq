@@ -1,3 +1,5 @@
+<!-- INTERNAL — Not for public distribution -->
+
 # ULTIMATE ATOMIC AUDIT — v3.0.0 Overhaul Execution Plan
 
 **Date:** April 2, 2026
@@ -869,3 +871,21 @@ After each phase, on VM 5005:
 6. Verify fleet data loads
 7. Check browser console for errors
 8. Run `freq doctor` on VM 5005
+
+---
+
+## POST-EXECUTION: E2E PLAN UPDATE
+
+After all phases are complete, update **`docs/freqconcourstheworld/E2E-TEST-PLAN.md`** (the real E2E plan — 781 lines, 26 phases, all 7 device types) to reflect every change made here:
+- New auth flow (POST-only login, Bearer tokens, rate limiting)
+- Password hashing migration (PBKDF2 + salt)
+- Vault auth requirements
+- CORS changes
+- Security headers
+- Config validation warnings
+- `_authFetch` in frontend
+- Any new CLI flags, config fields, or API behaviors
+
+`docs/E2E-EXECUTION-PLAN.md` is the old skeleton — ignore it.
+The E2E plan must test what actually ships, not what existed before this audit.
+**Added:** 2026-04-02 by Morty before Phase 0 execution.

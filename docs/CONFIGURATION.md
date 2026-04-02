@@ -219,17 +219,17 @@ FREQ reads `hosts.toml` first. If not found, falls back to `hosts.conf`.
 
 ```toml
 [vlan.mgmt]
-id = 2550
+id = 100
 name = "Management"
-subnet = "10.25.255.0/24"
-prefix = "10.25.255"
-gateway = "10.25.255.1"
+subnet = "192.168.10.0/24"
+prefix = "192.168.10"
+gateway = "192.168.10.1"
 
 [vlan.storage]
-id = 25
+id = 30
 name = "Storage"
-subnet = "10.25.25.0/24"
-prefix = "10.25.25"
+subnet = "192.168.30.0/24"
+prefix = "192.168.30"
 # No gateway — storage-only VLAN
 ```
 
