@@ -313,12 +313,23 @@ def _deprecation_warn(old_name: str, new_name: str):
           f"Migrate to {new_name} for long-term support.", file=sys.stderr)
 
 
-def load_config(install_dir: Optional[str] = None) -> FreqConfig:
+import time as _time
+_config_cache = None
+_config_cache_ts = 0
+_CONFIG_TTL = 5  # seconds
+
+
+def load_config(install_dir: Optional[str] = None, force: bool = False) -> FreqConfig:
     """Load FREQ configuration with safe defaults.
 
     Safe defaults are set first. Config file overrides what it can.
     If config is broken or missing, FREQ runs on defaults.
+    Caches result for 5 seconds to avoid redundant disk reads.
     """
+    global _config_cache, _config_cache_ts
+    now = _time.time()
+    if not force and _config_cache and (now - _config_cache_ts) < _CONFIG_TTL and install_dir is None:
+        return _config_cache
     cfg = FreqConfig()
     cfg.install_dir = install_dir or resolve_install_dir()
     _resolve_paths(cfg)
@@ -361,6 +372,8 @@ def load_config(install_dir: Optional[str] = None) -> FreqConfig:
     for w in _validate_config(cfg):
         logger.warn(f"config: {w}")
 
+    _config_cache = cfg
+    _config_cache_ts = _time.time()
     return cfg
 
 
