@@ -6544,8 +6544,37 @@ a:hover{{text-decoration:underline}}
     # Simple token store (in-memory, cleared on restart)
     _auth_tokens = {}  # token -> {user, role, ts}
 
+    # Login rate limiting
+    _login_attempts = {}  # {ip: [(timestamp, success_bool), ...]}
+    _login_lock = threading.Lock()
+
+    @staticmethod
+    def _check_rate_limit(ip: str) -> bool:
+        """Return True if login allowed, False if rate-limited."""
+        now = time.time()
+        window = 300  # 5 minutes
+        max_failures = 10
+        with FreqHandler._login_lock:
+            attempts = FreqHandler._login_attempts.get(ip, [])
+            attempts = [(t, s) for t, s in attempts if now - t < window]
+            FreqHandler._login_attempts[ip] = attempts
+            failures = sum(1 for t, s in attempts if not s)
+            return failures < max_failures
+
+    @staticmethod
+    def _record_login_attempt(ip: str, success: bool):
+        with FreqHandler._login_lock:
+            if ip not in FreqHandler._login_attempts:
+                FreqHandler._login_attempts[ip] = []
+            FreqHandler._login_attempts[ip].append((time.time(), success))
+
     def _serve_auth_login(self):
         """Authenticate user against FREQ users list + vault password."""
+
+        client_ip = self.client_address[0]
+        if not FreqHandler._check_rate_limit(client_ip):
+            self._json_response({"error": "Too many login attempts. Try again in 5 minutes."}, 429)
+            return
 
         if self.command != "POST":
             self._json_response({"error": "Use POST with JSON body for login"}, 405)
@@ -6567,6 +6596,7 @@ a:hover{{text-decoration:underline}}
         users = _load_users(cfg)
         user = next((u for u in users if u["username"] == username), None)
         if not user:
+            FreqHandler._record_login_attempt(client_ip, False)
             self._json_response({"error": "Unknown user"})
             return
 
@@ -6578,6 +6608,7 @@ a:hover{{text-decoration:underline}}
             logger.warn(f"vault read failed for auth: {e}")
 
         if stored_hash and not _verify_password(password, stored_hash):
+            FreqHandler._record_login_attempt(client_ip, False)
             self._json_response({"error": "Invalid password"})
             return
 
@@ -6591,6 +6622,9 @@ a:hover{{text-decoration:underline}}
                 vault_set(cfg, "auth", f"password_{username}", pw_hash)
             except Exception as e:
                 logger.warn(f"vault write failed for auth: {e}")
+
+        # Record successful login
+        FreqHandler._record_login_attempt(client_ip, True)
 
         # Generate session token
         token = hashlib.sha256(f"{username}{time.time()}{os.getpid()}".encode()).hexdigest()[:32]
