@@ -46,10 +46,10 @@ CIS_CHECKS = [
     {
         "id": "1.4.1",
         "title": "Ensure permissions on bootloader config are configured",
-        "command": "stat -c '%a' /boot/grub/grub.cfg 2>/dev/null | grep -q '^[0-6][0-4][0-4]$' && echo PASS || echo FAIL",
+        "command": "GRUB=$(test -f /boot/grub2/grub.cfg && echo /boot/grub2/grub.cfg || echo /boot/grub/grub.cfg); test -f $GRUB && stat -c '%a' $GRUB 2>/dev/null | grep -q '^[0-6][0-4][0-4]$' && echo PASS || echo FAIL",
         "category": "boot",
         "severity": "high",
-        "remediation": "chmod 600 /boot/grub/grub.cfg",
+        "remediation": "GRUB=$(test -f /boot/grub2/grub.cfg && echo /boot/grub2/grub.cfg || echo /boot/grub/grub.cfg); chmod 600 $GRUB",
     },
     {
         "id": "2.2.1",

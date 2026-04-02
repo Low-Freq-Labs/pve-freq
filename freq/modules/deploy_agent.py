@@ -48,7 +48,7 @@ After=network.target
 [Service]
 Type=simple
 Environment=FREQ_AGENT_PORT={port}
-ExecStart=/usr/bin/python3 {AGENT_REMOTE_PATH}
+ExecStart=/usr/bin/env python3 {AGENT_REMOTE_PATH}
 Restart=always
 RestartSec=10
 

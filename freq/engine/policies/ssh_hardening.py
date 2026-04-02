@@ -43,9 +43,9 @@ POLICY = {
                 "ClientAliveCountMax": "2",
             },
             "after_change": {
-                "linux": "systemctl restart sshd",
-                "pve": "systemctl restart sshd",
-                "docker": "systemctl restart sshd",
+                "linux": "systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null",
+                "pve": "systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null",
+                "docker": "systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null",
             },
         },
     ],

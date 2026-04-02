@@ -25,8 +25,8 @@ POLICY = {
             "path": "/etc/systemd/timesyncd.conf",
             "applies_to": ["linux", "docker"],
             "entries": {
-                "NTP": "2.debian.pool.ntp.org",
-                "FallbackNTP": "ntp.ubuntu.com",
+                "NTP": "pool.ntp.org",
+                "FallbackNTP": "time.cloudflare.com",
             },
             "after_change": {
                 "linux": "systemctl restart systemd-timesyncd",

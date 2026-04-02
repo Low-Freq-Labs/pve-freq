@@ -175,7 +175,7 @@ def build_commands(exp: Experiment) -> dict:
     params = {
         "service": exp.target_service,
         "duration": str(exp.duration),
-        "interface": exp.parameters.get("interface", "eth0"),
+        "interface": exp.parameters.get("interface", "$(ip route show default 2>/dev/null | awk '{print $5}' | head -1 || echo eth0)"),
         "size_mb": str(exp.parameters.get("size_mb", 100)),
     }
 

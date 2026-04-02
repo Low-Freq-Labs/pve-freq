@@ -131,7 +131,7 @@ def cmd_harden(cfg: FreqConfig, pack, args) -> int:
         restart_hosts = [h for h in hosts if h.label in ssh_restart_needed]
         results = ssh_run_many(
             hosts=restart_hosts,
-            command="systemctl restart sshd",
+            command="systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null",
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=HARDEN_FIX_TIMEOUT,

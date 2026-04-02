@@ -116,16 +116,24 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
     command = (
         'PKG="unknown"; '
         'if command -v apt-get >/dev/null 2>&1; then PKG="apt"; '
+        'elif command -v dnf >/dev/null 2>&1; then PKG="dnf"; '
         'elif command -v yum >/dev/null 2>&1; then PKG="yum"; '
-        'elif command -v dnf >/dev/null 2>&1; then PKG="dnf"; fi; '
+        'elif command -v pacman >/dev/null 2>&1; then PKG="pacman"; '
+        'elif command -v zypper >/dev/null 2>&1; then PKG="zypper"; '
+        'elif command -v apk >/dev/null 2>&1; then PKG="apk"; fi; '
         'LAST="never"; '
         'if [ -f /var/log/apt/history.log ]; then '
         "  LAST=$(stat -c %Y /var/log/apt/history.log 2>/dev/null || echo 0); "
+        'elif [ -f /var/log/dnf.log ]; then '
+        "  LAST=$(stat -c %Y /var/log/dnf.log 2>/dev/null || echo 0); "
         'elif [ -f /var/log/yum.log ]; then '
         "  LAST=$(stat -c %Y /var/log/yum.log 2>/dev/null || echo 0); "
+        'elif [ -f /var/log/pacman.log ]; then '
+        "  LAST=$(stat -c %Y /var/log/pacman.log 2>/dev/null || echo 0); "
         "fi; "
         'REBOOT="no"; '
-        "if [ -f /var/run/reboot-required ]; then REBOOT=\"yes\"; fi; "
+        "if [ -f /var/run/reboot-required ]; then REBOOT=\"yes\"; "
+        "elif command -v needs-restarting >/dev/null 2>&1 && ! needs-restarting -r >/dev/null 2>&1; then REBOOT=\"yes\"; fi; "
         'echo "${PKG}|${LAST}|${REBOOT}"'
     )
 
