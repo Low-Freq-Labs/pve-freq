@@ -1479,6 +1479,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/dashboard": "_serve_app",
         "/old": "_serve_html",
         # ── Auth (stays in serve.py) ──────────────────────────────────
+        "/api/pve/metrics": "_serve_pve_metrics",
         "/api/auth/login": "_serve_auth_login",
         "/api/auth/verify": "_serve_auth_verify",
         "/api/auth/change-password": "_serve_auth_change_password",
@@ -3474,6 +3475,48 @@ a:hover{{text-decoration:underline}}
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(response.encode())
+
+    def _serve_pve_metrics(self):
+        """Real-time PVE node metrics via PVE API — no SSH, no cache.
+
+        Returns CPU%, RAM, disk, uptime for each PVE node, updated live
+        on every call. This is what makes the dashboard bars move.
+        """
+        cfg = load_config()
+        nodes = []
+        for i, ip in enumerate(cfg.pve_nodes):
+            name = cfg.pve_node_names[i] if i < len(cfg.pve_node_names) else f"pve{i+1:02d}"
+            from freq.modules.pve import _pve_api_call
+            data, ok = _pve_api_call(cfg, ip, f"/nodes/{name}/status", timeout=5)
+            if ok and isinstance(data, dict):
+                cpu_pct = round((data.get("cpu", 0)) * 100, 1)
+                mem = data.get("memory", {})
+                mem_used = mem.get("used", 0)
+                mem_total = mem.get("total", 1)
+                mem_pct = round(mem_used / mem_total * 100, 1) if mem_total else 0
+                root = data.get("rootfs", {})
+                disk_used = root.get("used", 0)
+                disk_total = root.get("total", 1)
+                disk_pct = round(disk_used / disk_total * 100, 1) if disk_total else 0
+                cpuinfo = data.get("cpuinfo", {})
+                load = data.get("loadavg", ["0", "0", "0"])
+                nodes.append({
+                    "name": name, "ip": ip, "online": True,
+                    "cpu_pct": cpu_pct,
+                    "cores": cpuinfo.get("cpus", 0),
+                    "model": cpuinfo.get("model", ""),
+                    "ram_used_gb": round(mem_used / 1024**3, 1),
+                    "ram_total_gb": round(mem_total / 1024**3, 1),
+                    "ram_pct": mem_pct,
+                    "disk_pct": disk_pct,
+                    "disk_used_gb": round(disk_used / 1024**3, 1),
+                    "disk_total_gb": round(disk_total / 1024**3, 1),
+                    "uptime": data.get("uptime", 0),
+                    "load": load,
+                })
+            else:
+                nodes.append({"name": name, "ip": ip, "online": False})
+        self._json_response({"nodes": nodes, "ts": time.time()})
 
     def _serve_health_api(self):
         """Fleet health — served from background cache, always instant."""

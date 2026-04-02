@@ -892,6 +892,71 @@ function _silentFleetRefresh(){
 }
 startSilentRefresh();
 
+/* === PVE Node Real-Time Metrics ===
+   Polls /api/pve/metrics every 5s for live CPU/RAM/DISK from PVE API.
+   Updates node card progress bars in-place — smooth, no flicker. */
+var _pveMetricsTimer=null;
+function _pveMetricsRefresh(){
+  fetch('/api/pve/metrics').then(function(r){return r.json()}).then(function(d){
+    if(!d.nodes)return;
+    d.nodes.forEach(function(n){
+      if(!n.online)return;
+      /* Find the host card for this PVE node */
+      var cards=document.querySelectorAll('.host-card');
+      cards.forEach(function(card){
+        var title=card.querySelector('.host-head h3');
+        if(!title)return;
+        if(title.textContent.trim().toLowerCase()!==n.name.toLowerCase())return;
+        /* Update metric rows in-place */
+        card.querySelectorAll('.metric-row').forEach(function(m){
+          var lbl=m.querySelector('.metric-label');
+          var val=m.querySelector('.metric-val');
+          var bar=m.querySelector('.pbar-fill');
+          if(!lbl||!val)return;
+          var lt=lbl.textContent.trim();
+          if(lt==='CPU'){
+            var cpuColor=n.cpu_pct>=80?'var(--red)':n.cpu_pct>=50?'var(--yellow)':'var(--green)';
+            val.textContent=n.cpu_pct+'% \u00b7 '+n.cores+(n.cores>1?' Cores':' Core');
+            if(bar){bar.style.width=n.cpu_pct+'%';bar.style.background=cpuColor;}
+          }
+          if(lt==='RAM'){
+            var ramColor=n.ram_pct>=80?'var(--red)':n.ram_pct>=50?'var(--yellow)':'var(--blue)';
+            val.textContent=n.ram_used_gb+'G / '+n.ram_total_gb+'G';
+            if(bar){bar.style.width=n.ram_pct+'%';bar.style.background=ramColor;}
+          }
+          if(lt==='DISK'){
+            var diskColor=n.disk_pct>=90?'var(--red)':n.disk_pct>=75?'var(--yellow)':'var(--green)';
+            val.textContent=n.disk_pct+'%';
+            if(bar){bar.style.width=n.disk_pct+'%';bar.style.background=diskColor;}
+          }
+        });
+        /* Update the utilization stats in the grid above the bars */
+        var statSpans=card.querySelectorAll('.text-center');
+        statSpans.forEach(function(s){
+          var label=s.querySelector('div:last-child');
+          var value=s.querySelector('div:first-child');
+          if(!label||!value)return;
+          var lt=label.textContent.trim();
+          if(lt==='CPU LOAD'){
+            var cpuColor=n.cpu_pct>=80?'var(--red)':n.cpu_pct>=50?'var(--yellow)':'var(--green)';
+            value.textContent=n.cpu_pct+'%';value.style.color=cpuColor;
+          }
+          if(lt==='RAM USED'){
+            var ramColor=n.ram_pct>=80?'var(--red)':n.ram_pct>=50?'var(--yellow)':'var(--blue)';
+            value.textContent=n.ram_pct+'%';value.style.color=ramColor;
+          }
+        });
+      });
+    });
+  }).catch(function(){});
+}
+function startPveMetrics(){
+  _pveMetricsRefresh();/* first call immediately */
+  if(_pveMetricsTimer)clearInterval(_pveMetricsTimer);
+  _pveMetricsTimer=setInterval(_pveMetricsRefresh,5000);
+}
+startPveMetrics();
+
 /* === SSE Live Updates ===
    EventSource connects to /api/events for push updates.
    When connected, polling slows to fallback intervals.
@@ -2126,15 +2191,17 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
       var ramParts=(live.ram||'0/0MB').match(/(\d+)\/(\d+)/);
       var ramUsed=ramParts?parseInt(ramParts[1]):0;var ramTotal=ramParts?parseInt(ramParts[2]):1;
       var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
+      /* Initial render uses SSH health data. PVE API poller (_pveMetricsRefresh)
+         overwrites these with real CPU% within 5 seconds of page load. */
       var cpuColor=loadPct>=80?'var(--red)':loadPct>=50?'var(--yellow)':'var(--green)';
       var ramColor=ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';
       nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
-      nodeCard+=_fGrp('UTILIZATION',2,_fStat(loadPct+'%','CPU LOAD',cpuColor)+_fStat(ramPct+'%','RAM USED',ramColor));
+      nodeCard+=_fGrp('UTILIZATION',2,_fStat('...','CPU LOAD','var(--text-dim)')+_fStat(ramPct+'%','RAM USED',ramColor));
       nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'ONLINE','var(--green)')+_fStat(nOffline,'OFFLINE','var(--red)'));
       nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
       nodeCard+='</div>';
       nodeCard+='<div style="margin:6px 0">';
-      nodeCard+=_mrow('CPU',loadPct+'% \u00b7 '+cores+(cores>1?' Cores':' Core'),loadPct,cpuColor);
+      nodeCard+=_mrow('CPU','...',0,'var(--text-dim)');
       nodeCard+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,ramColor);
       nodeCard+=_mrow('DISK',(live.disk||'?'),diskPct,diskPct>=90?'var(--red)':diskPct>=75?'var(--yellow)':'var(--green)');
       nodeCard+='</div>';
