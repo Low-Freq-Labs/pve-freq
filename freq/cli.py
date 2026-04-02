@@ -914,13 +914,36 @@ def _register_store(sub):
     _domain_help(store)
     store_sub = store.add_subparsers(dest="subcmd")
 
-    p = store_sub.add_parser("nas", help="TrueNAS management")
-    p.add_argument("action", nargs="?", help="Subcommand (status/pools/health/datasets/shares/alerts)")
+    p = store_sub.add_parser("status", help="TrueNAS system status")
+    p.set_defaults(func=_cmd_store_status)
+
+    p = store_sub.add_parser("pools", help="ZFS pool details")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_store_pools)
+
+    p = store_sub.add_parser("datasets", help="ZFS datasets")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_store_datasets)
+
+    p = store_sub.add_parser("snapshots", help="ZFS snapshots")
+    p.add_argument("target", nargs="?", help="Host label or IP")
+    p.set_defaults(func=_cmd_store_snapshots)
+
+    p = store_sub.add_parser("smart", help="SMART drive health")
+    p.set_defaults(func=_cmd_store_smart)
+
+    p = store_sub.add_parser("shares", help="NFS/SMB shares")
+    p.set_defaults(func=_cmd_store_shares)
+
+    p = store_sub.add_parser("alerts", help="TrueNAS alerts")
+    p.set_defaults(func=_cmd_store_alerts)
+
+    # Legacy
+    p = store_sub.add_parser("nas", help="TrueNAS management (legacy)")
+    p.add_argument("action", nargs="?", help="Subcommand")
     p.set_defaults(func=_cmd_truenas)
 
-    p = store_sub.add_parser("zfs", help="ZFS operations")
-    p.add_argument("action", nargs="?", help="Subcommand")
-    p.set_defaults(func=_cmd_zfs)
+    store.set_defaults(func=_cmd_store_status)
 
 
 # ---------------------------------------------------------------------------
@@ -969,6 +992,49 @@ def _register_dr(sub):
     p.add_argument("--node", help="Target PVE node")
     p.add_argument("--storage", default="local-lvm", help="Target storage (default: local-lvm)")
     p.set_defaults(func=_cmd_migrate_vmware)
+
+    # DR orchestration (new)
+    p = dr_sub.add_parser("status", help="DR readiness overview")
+    p.set_defaults(func=_cmd_dr_status)
+
+    p = dr_sub.add_parser("verify", help="Verify backup coverage against SLA")
+    p.set_defaults(func=_cmd_dr_backup_verify)
+
+    # SLA subcommands
+    sla = dr_sub.add_parser("sla", help="SLA target management")
+    sla_sub = sla.add_subparsers(dest="sla_action")
+
+    p = sla_sub.add_parser("list", help="List SLA targets")
+    p.set_defaults(func=_cmd_dr_sla_list)
+
+    p = sla_sub.add_parser("set", help="Set SLA target for a VM")
+    p.add_argument("vmid", help="VM ID")
+    p.add_argument("--rpo", type=int, default=24, help="RPO in hours")
+    p.add_argument("--rto", type=int, default=4, help="RTO in hours")
+    p.add_argument("--name", help="VM name")
+    p.add_argument("--tier", default="standard", help="Service tier")
+    p.add_argument("--priority", type=int, default=50, help="Recovery priority (1=highest)")
+    p.set_defaults(func=_cmd_dr_sla_set)
+
+    sla.set_defaults(func=_cmd_dr_sla_list)
+
+    # Runbook subcommands
+    rb = dr_sub.add_parser("runbook", help="DR runbook management")
+    rb_sub = rb.add_subparsers(dest="rb_action")
+
+    p = rb_sub.add_parser("list", help="List runbooks")
+    p.set_defaults(func=_cmd_dr_runbook_list)
+
+    p = rb_sub.add_parser("create", help="Create a runbook")
+    p.add_argument("name", help="Runbook name")
+    p.add_argument("--description", default="", help="Description")
+    p.set_defaults(func=_cmd_dr_runbook_create)
+
+    p = rb_sub.add_parser("show", help="Show runbook steps")
+    p.add_argument("name", help="Runbook name")
+    p.set_defaults(func=_cmd_dr_runbook_show)
+
+    rb.set_defaults(func=_cmd_dr_runbook_list)
 
 
 # ---------------------------------------------------------------------------
@@ -2219,6 +2285,80 @@ def _cmd_ip_utilization(cfg: FreqConfig, pack, args) -> int:
 def _cmd_ip_conflict(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.net_intelligence import cmd_ip_conflict
     return cmd_ip_conflict(cfg, pack, args)
+
+
+# --- Storage (new) ---
+
+def _cmd_store_status(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.storage import cmd_store_status
+    return cmd_store_status(cfg, pack, args)
+
+
+def _cmd_store_pools(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.storage import cmd_store_pools
+    return cmd_store_pools(cfg, pack, args)
+
+
+def _cmd_store_datasets(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.storage import cmd_store_datasets
+    return cmd_store_datasets(cfg, pack, args)
+
+
+def _cmd_store_snapshots(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.storage import cmd_store_snapshots
+    return cmd_store_snapshots(cfg, pack, args)
+
+
+def _cmd_store_smart(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.storage import cmd_store_smart
+    return cmd_store_smart(cfg, pack, args)
+
+
+def _cmd_store_shares(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.storage import cmd_store_shares
+    return cmd_store_shares(cfg, pack, args)
+
+
+def _cmd_store_alerts(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.storage import cmd_store_alerts
+    return cmd_store_alerts(cfg, pack, args)
+
+
+# --- DR (new) ---
+
+def _cmd_dr_status(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dr import cmd_dr_status
+    return cmd_dr_status(cfg, pack, args)
+
+
+def _cmd_dr_backup_verify(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dr import cmd_dr_backup_verify
+    return cmd_dr_backup_verify(cfg, pack, args)
+
+
+def _cmd_dr_sla_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dr import cmd_dr_sla_list
+    return cmd_dr_sla_list(cfg, pack, args)
+
+
+def _cmd_dr_sla_set(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dr import cmd_dr_sla_set
+    return cmd_dr_sla_set(cfg, pack, args)
+
+
+def _cmd_dr_runbook_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dr import cmd_dr_runbook_list
+    return cmd_dr_runbook_list(cfg, pack, args)
+
+
+def _cmd_dr_runbook_create(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dr import cmd_dr_runbook_create
+    return cmd_dr_runbook_create(cfg, pack, args)
+
+
+def _cmd_dr_runbook_show(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dr import cmd_dr_runbook_show
+    return cmd_dr_runbook_show(cfg, pack, args)
 
 
 # --- Firewall ---
