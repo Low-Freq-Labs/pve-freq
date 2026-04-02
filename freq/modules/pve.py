@@ -147,7 +147,7 @@ def _find_vm_node(cfg: FreqConfig, vmid: int, fallback_ip: str = "") -> str:
             key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=5, htype="pve", use_sudo=True,
         )
-        if r.returncode == 0 and "FOUND" in r.stdout:
+        if r.returncode == 0 and r.stdout.strip() == "FOUND":
             return nip
     return fallback_ip
 
