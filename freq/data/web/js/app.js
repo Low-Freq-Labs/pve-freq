@@ -818,8 +818,8 @@ var _healthTimer=null,_fleetTimer=null,_healthInFlight=false,_fleetInFlight=fals
 function startSilentRefresh(){
   if(_healthTimer)clearInterval(_healthTimer);
   if(_fleetTimer)clearInterval(_fleetTimer);
-  _healthTimer=setInterval(_silentHealthRefresh,15000);
-  _fleetTimer=setInterval(_silentFleetRefresh,60000);
+  _healthTimer=setInterval(_silentHealthRefresh,10000);
+  _fleetTimer=setInterval(_silentFleetRefresh,45000);
 }
 function _silentHealthRefresh(){
   if(_healthInFlight)return;/* skip if previous call still running */
@@ -957,16 +957,16 @@ function startSSE(){
     /* SSE connected — slow down polling to safety fallback */
     if(_healthTimer)clearInterval(_healthTimer);
     if(_fleetTimer)clearInterval(_fleetTimer);
-    _healthTimer=setInterval(_silentHealthRefresh,60000);
-    _fleetTimer=setInterval(_silentFleetRefresh,120000);
+    _healthTimer=setInterval(_silentHealthRefresh,30000);
+    _fleetTimer=setInterval(_silentFleetRefresh,90000);
   };
 
   _evtSource.onerror=function(){
     /* SSE disconnected — restore fast polling until reconnect */
     if(_healthTimer)clearInterval(_healthTimer);
     if(_fleetTimer)clearInterval(_fleetTimer);
-    _healthTimer=setInterval(_silentHealthRefresh,15000);
-    _fleetTimer=setInterval(_silentFleetRefresh,60000);
+    _healthTimer=setInterval(_silentHealthRefresh,10000);
+    _fleetTimer=setInterval(_silentFleetRefresh,45000);
   };
 }
 startSSE();

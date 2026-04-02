@@ -612,12 +612,12 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   overflow: hidden;
   margin-top: 4px;
 }
-.pbar-fill { height: 100%; border-radius: 3px; transition: width 0.5s var(--ease-out); }
+.pbar-fill { height: 100%; border-radius: 3px; transition: width 1.2s var(--ease-out), background-color 0.8s var(--ease-out); }
 .metric-row { padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 11px; }
 .metric-row:last-child { border-bottom: none; }
 .metric-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; gap: 8px; min-width: 0; }
 .metric-label { color: var(--text); font-size: 11px; white-space: nowrap; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-.metric-val { font-weight: 700; color: var(--text); font-size: 11px; text-align: right; white-space: nowrap; font-family: var(--font-mono); }
+.metric-val { font-weight: 700; color: var(--text); font-size: 11px; text-align: right; white-space: nowrap; font-family: var(--font-mono); transition: color 0.8s var(--ease-out); }
 
 /* ── Host Cards ── */
 .host-card {
