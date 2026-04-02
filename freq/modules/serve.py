@@ -3500,6 +3500,24 @@ a:hover{{text-decoration:underline}}
                 disk_pct = round(disk_used / disk_total * 100, 1) if disk_total else 0
                 cpuinfo = data.get("cpuinfo", {})
                 load = data.get("loadavg", ["0", "0", "0"])
+                # Storage pools — query per-node storage for the real disk picture
+                storage_pools = []
+                st_data, st_ok = _pve_api_call(cfg, ip, f"/nodes/{name}/storage", timeout=3)
+                if st_ok and isinstance(st_data, list):
+                    for pool in st_data:
+                        if not pool.get("active"):
+                            continue
+                        p_total = pool.get("total", 0)
+                        p_used = pool.get("used", 0)
+                        p_pct = round(p_used / p_total * 100, 1) if p_total else 0
+                        storage_pools.append({
+                            "name": pool.get("storage", ""),
+                            "type": pool.get("type", ""),
+                            "used_gb": round(p_used / 1024**3, 1),
+                            "total_gb": round(p_total / 1024**3, 1),
+                            "pct": p_pct,
+                        })
+
                 nodes.append({
                     "name": name, "ip": ip, "online": True,
                     "cpu_pct": cpu_pct,
@@ -3513,6 +3531,7 @@ a:hover{{text-decoration:underline}}
                     "disk_total_gb": round(disk_total / 1024**3, 1),
                     "uptime": data.get("uptime", 0),
                     "load": load,
+                    "storage": storage_pools,
                 })
             else:
                 nodes.append({"name": name, "ip": ip, "online": False})

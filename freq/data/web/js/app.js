@@ -907,7 +907,7 @@ function _pveMetricsRefresh(){
         var title=card.querySelector('.host-head h3');
         if(!title)return;
         if(title.textContent.trim().toLowerCase()!==n.name.toLowerCase())return;
-        /* Update metric rows in-place */
+        /* Update metric rows in-place — all from PVE API, same as PVE web UI */
         card.querySelectorAll('.metric-row').forEach(function(m){
           var lbl=m.querySelector('.metric-label');
           var val=m.querySelector('.metric-val');
@@ -921,13 +921,19 @@ function _pveMetricsRefresh(){
           }
           if(lt==='RAM'){
             var ramColor=n.ram_pct>=80?'var(--red)':n.ram_pct>=50?'var(--yellow)':'var(--blue)';
-            val.textContent=n.ram_used_gb+'G / '+n.ram_total_gb+'G';
+            val.textContent=n.ram_pct+'% \u00b7 '+n.ram_used_gb+'G / '+n.ram_total_gb+'G';
             if(bar){bar.style.width=n.ram_pct+'%';bar.style.background=ramColor;}
           }
           if(lt==='DISK'){
-            var diskColor=n.disk_pct>=90?'var(--red)':n.disk_pct>=75?'var(--yellow)':'var(--green)';
-            val.textContent=n.disk_pct+'%';
-            if(bar){bar.style.width=n.disk_pct+'%';bar.style.background=diskColor;}
+            /* Use main storage pool if available, fallback to rootfs */
+            var dPct=n.disk_pct;var dLabel=n.disk_pct+'%';
+            if(n.storage&&n.storage.length){
+              var main=n.storage.find(function(s){return s.type==='lvmthin'||s.type==='zfspool'||s.type==='lvm'})||n.storage[0];
+              dPct=main.pct;dLabel=main.pct+'% \u00b7 '+main.used_gb+'G / '+main.total_gb+'G \u00b7 '+main.name;
+            }
+            var diskColor=dPct>=90?'var(--red)':dPct>=75?'var(--yellow)':'var(--green)';
+            val.textContent=dLabel;
+            if(bar){bar.style.width=dPct+'%';bar.style.background=diskColor;}
           }
         });
         /* Update the utilization stats in the grid above the bars */
