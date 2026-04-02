@@ -987,46 +987,42 @@ def _evaluate_alert_rules(cfg, health_data):
         logger.warn(f"Alert rule evaluation failed: {e}")
 
 
-def _bg_refresh_loop(interval=BG_CACHE_REFRESH_INTERVAL):
-    """Continuous background refresh — runs forever as a daemon thread."""
+def _bg_health_loop():
+    """Fast health-only loop — runs every 15s for live dashboard bars."""
     while True:
-        try:
-            _bg_discover_pve_nodes()
-        except Exception as e:
-            logger.error(f"bg node discovery failed: {e}")
-        try:
-            _bg_fetch_vm_tags()
-        except Exception as e:
-            logger.error(f"bg tag fetch failed: {e}")
         try:
             _bg_probe_health()
         except Exception as e:
             logger.error(f"bg health probe failed: {e}")
-        try:
-            _bg_probe_infra()
-        except Exception as e:
-            logger.error(f"bg infra probe failed: {e}")
-        try:
-            _bg_probe_fleet_overview()
-        except Exception as e:
-            logger.error(f"bg fleet overview probe failed: {e}")
-        try:
-            _bg_check_update()
-        except Exception as e:
-            logger.error(f"bg update check failed: {e}")
-        try:
-            _bg_sync_hosts()
-        except Exception as e:
-            logger.error(f"bg hosts sync failed: {e}")
-        time.sleep(interval)
+        time.sleep(BG_CACHE_REFRESH_INTERVAL)
+
+
+def _bg_slow_loop():
+    """Slower loop for fleet overview, infra, tags, updates — runs every 60s."""
+    while True:
+        for fn, label in [
+            (_bg_discover_pve_nodes, "node discovery"),
+            (_bg_fetch_vm_tags, "tag fetch"),
+            (_bg_probe_infra, "infra probe"),
+            (_bg_probe_fleet_overview, "fleet overview"),
+            (_bg_check_update, "update check"),
+            (_bg_sync_hosts, "hosts sync"),
+        ]:
+            try:
+                fn()
+            except Exception as e:
+                logger.error(f"bg {label} failed: {e}")
+        time.sleep(60)
 
 
 def start_background_cache():
-    """Load disk cache, then start the background refresh loop."""
+    """Load disk cache, then start background refresh threads."""
     _init_cache_dir()
     _load_disk_cache()
-    t = threading.Thread(target=_bg_refresh_loop, args=(BG_CACHE_REFRESH_INTERVAL,), daemon=True)
-    t.start()
+    t1 = threading.Thread(target=_bg_health_loop, daemon=True, name="freq-health")
+    t2 = threading.Thread(target=_bg_slow_loop, daemon=True, name="freq-slow")
+    t1.start()
+    t2.start()
 
 
 # --- Dashboard HTML ---
