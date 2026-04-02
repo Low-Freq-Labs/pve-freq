@@ -916,7 +916,7 @@ function _silentFleetRefresh(){
     _fleetInFlight=false;
     _fleetCache.fo=fo;/* keep cache fresh */
     if(!fo||!fo.vms)return;
-    /* Update VM status badges in PVE node sections */
+    /* Update VM status badges + resource bars in PVE node sections */
     fo.vms.forEach(function(v){
       var cards=document.querySelectorAll('.host-card');
       cards.forEach(function(card){
@@ -926,10 +926,29 @@ function _silentFleetRefresh(){
         var meta=card.querySelector('.host-meta');
         if(!meta)return;
         var spans=meta.querySelectorAll('span');
+        var running=v.status==='running';
         spans.forEach(function(sp){
           if(sp.textContent==='RUNNING'||sp.textContent==='STOPPED'){
-            if(v.status==='running'){sp.textContent='RUNNING';sp.style.color='var(--green)';}
-            else if(v.status==='stopped'){sp.textContent='STOPPED';sp.style.color='var(--red)';}
+            if(running){sp.textContent='RUNNING';sp.style.color='var(--green)';}
+            else{sp.textContent=v.status.toUpperCase();sp.style.color='var(--red)';}
+          }
+        });
+        /* Update CPU/RAM bars in-place — smooth, no flicker */
+        var cpuPct=running?Math.round(v.cpu_pct||0):0;
+        var ramPct=running?Math.round(v.ram_pct||0):0;
+        card.querySelectorAll('.metric-row').forEach(function(m){
+          var lbl=m.querySelector('.metric-label');
+          var val=m.querySelector('.metric-val');
+          var bar=m.querySelector('.pbar-fill');
+          if(!lbl||!val)return;
+          var lt=lbl.textContent.trim();
+          if(lt==='CPU'){
+            val.textContent=running?cpuPct+'% \u00b7 '+(v.cpu||0)+' Cores':(v.cpu||0)+' Cores';
+            if(bar){bar.style.width=cpuPct+'%';bar.style.background=cpuPct>=90?'var(--red)':cpuPct>=75?'var(--yellow)':'var(--green)';}
+          }
+          if(lt==='RAM'){
+            val.textContent=running?ramPct+'% \u00b7 '+_ramGB(v.ram_used_mb||0)+' / '+_ramGB(v.ram_mb||0):_ramGB(v.ram_mb||0);
+            if(bar){bar.style.width=ramPct+'%';bar.style.background=ramPct>=90?'var(--red)':ramPct>=75?'var(--yellow)':'var(--blue)';}
           }
         });
       });
@@ -1016,6 +1035,122 @@ function startPveMetrics(){
   },2000);
 }
 startPveMetrics();
+
+/* === Sparkline Mini-Charts ===
+   Canvas-based sparklines for PVE node cards.
+   Fetches /api/pve/rrd every 60s — 1 hour of CPU/RAM/IO history.
+   Renders inline on node cards next to the metric bars. */
+function _sparkline(canvas,points,color,fillColor){
+  if(!canvas||!points||points.length<2)return;
+  var ctx=canvas.getContext('2d');
+  var w=canvas.width;var h=canvas.height;
+  var dpr=window.devicePixelRatio||1;
+  canvas.width=w*dpr;canvas.height=h*dpr;
+  canvas.style.width=w+'px';canvas.style.height=h+'px';
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+  var vals=points.map(function(p){return p.v;});
+  var mn=Math.min.apply(null,vals);
+  var mx=Math.max.apply(null,vals);
+  if(mx===mn)mx=mn+1;/* avoid division by zero */
+  var pad=1;/* 1px padding */
+  var range=mx-mn;
+  var stepX=(w-pad*2)/(vals.length-1);
+  /* Draw fill */
+  ctx.beginPath();
+  ctx.moveTo(pad,h-pad);
+  vals.forEach(function(v,i){
+    var x=pad+i*stepX;
+    var y=h-pad-(v-mn)/range*(h-pad*2);
+    if(i===0)ctx.lineTo(x,y);else ctx.lineTo(x,y);
+  });
+  ctx.lineTo(pad+(vals.length-1)*stepX,h-pad);
+  ctx.closePath();
+  ctx.fillStyle=fillColor||'rgba(168,85,247,0.08)';
+  ctx.fill();
+  /* Draw line */
+  ctx.beginPath();
+  vals.forEach(function(v,i){
+    var x=pad+i*stepX;
+    var y=h-pad-(v-mn)/range*(h-pad*2);
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle=color||'var(--purple-light)';
+  ctx.lineWidth=1.5;
+  ctx.lineJoin='round';
+  ctx.stroke();
+  /* Draw current value dot */
+  var lastX=pad+(vals.length-1)*stepX;
+  var lastY=h-pad-(vals[vals.length-1]-mn)/range*(h-pad*2);
+  ctx.beginPath();
+  ctx.arc(lastX,lastY,2,0,Math.PI*2);
+  ctx.fillStyle=color;
+  ctx.fill();
+}
+var _rrdCache={};var _rrdTimer=null;
+function _fetchRrdData(){
+  fetch('/api/pve/rrd').then(function(r){return r.json()}).then(function(d){
+    if(!d.nodes)return;
+    d.nodes.forEach(function(n){_rrdCache[n.name]=n;});
+    _renderSparklines();
+  }).catch(function(){});
+}
+function _renderSparklines(){
+  Object.keys(_rrdCache).forEach(function(nodeName){
+    var nd=_rrdCache[nodeName];
+    /* Find the node card */
+    var cards=document.querySelectorAll('.host-card');
+    cards.forEach(function(card){
+      var title=card.querySelector('.host-head h3');
+      if(!title||title.textContent.trim().toLowerCase()!==nodeName.toLowerCase())return;
+      /* Find or create sparkline container */
+      var sparkDiv=card.querySelector('.sparkline-row');
+      if(!sparkDiv){
+        /* Insert after the metric rows */
+        var metricParent=card.querySelector('.divider-light');
+        if(!metricParent){
+          /* Try the margin container for metric rows */
+          var mRows=card.querySelectorAll('.metric-row');
+          if(mRows.length)metricParent=mRows[mRows.length-1].parentElement;
+        }
+        if(!metricParent)return;
+        sparkDiv=document.createElement('div');
+        sparkDiv.className='sparkline-row';
+        sparkDiv.style.cssText='display:flex;gap:8px;margin-top:8px;padding-top:6px;border-top:1px solid var(--border)';
+        sparkDiv.innerHTML=
+          '<div style="flex:1;min-width:0"><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">CPU 1H</div><canvas class="spark-cpu" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>'+
+          '<div style="flex:1;min-width:0"><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">RAM 1H</div><canvas class="spark-ram" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>'+
+          '<div style="flex:1;min-width:0"><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">IO 1H</div><canvas class="spark-io" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>';
+        metricParent.appendChild(sparkDiv);
+      }
+      /* Render each sparkline */
+      var cpuCanvas=sparkDiv.querySelector('.spark-cpu');
+      var ramCanvas=sparkDiv.querySelector('.spark-ram');
+      var ioCanvas=sparkDiv.querySelector('.spark-io');
+      if(cpuCanvas&&nd.cpu&&nd.cpu.length>1){
+        cpuCanvas.width=cpuCanvas.parentElement.offsetWidth||120;
+        _sparkline(cpuCanvas,nd.cpu,'#22C55E','rgba(34,197,94,0.08)');
+      }
+      if(ramCanvas&&nd.ram&&nd.ram.length>1){
+        ramCanvas.width=ramCanvas.parentElement.offsetWidth||120;
+        _sparkline(ramCanvas,nd.ram,'#3B82F6','rgba(59,130,246,0.08)');
+      }
+      if(ioCanvas&&nd.iowait&&nd.iowait.length>1){
+        ioCanvas.width=ioCanvas.parentElement.offsetWidth||120;
+        _sparkline(ioCanvas,nd.iowait,'#F97316','rgba(249,115,22,0.08)');
+      }
+    });
+  });
+}
+function startSparklines(){
+  /* Delay 5s — let node cards render first */
+  setTimeout(function(){
+    _fetchRrdData();
+    if(_rrdTimer)clearInterval(_rrdTimer);
+    _rrdTimer=setInterval(_fetchRrdData,60000);/* refresh every 60s */
+  },5000);
+}
+startSparklines();
 
 /* === SSE Live Updates ===
    EventSource connects to /api/events for push updates.
@@ -1290,7 +1425,8 @@ function _containerCard(c,extra){
   var shortUrl=c.vm_ip&&c.port&&c.port!=='-'?proto+'://'+c.vm_ip+':'+c.port:'';
   var url=shortUrl?shortUrl+wp:'';
   var pubUrl=_publicUrls[c.name]||'';
-  var h='<div class="crd" style="display:flex;flex-direction:column"><div class="flex-between"><h3 style="text-transform:uppercase">'+c.name+'</h3>'+badge(c.status)+'</div>';
+  var crdCls='crd'+(c.status==='up'?' crd-up':c.status==='down'?' crd-down':'');
+  var h='<div class="'+crdCls+'" style="display:flex;flex-direction:column"><div class="flex-between"><h3 style="text-transform:uppercase">'+c.name+'</h3>'+badge(c.status)+'</div>';
   if(url||pubUrl){
     if(url){
       h+='<div style="display:flex;align-items:center;gap:6px;margin:4px 0">';
@@ -2414,11 +2550,16 @@ function _renderFleetData(fo,hd,md){
       var cl=_hostColor(v.name,'vm',nodeName);
       var running=v.status==='running';
       var ramGb=_ramGB(v.ram_mb);
+      var cpuPct=running?Math.round(v.cpu_pct||0):0;
+      var ramPct=running?Math.round(v.ram_pct||0):0;
+      var ramUsedGb=_ramGB(v.ram_used_mb||0);
+      var cpuLabel=running?cpuPct+'% \u00b7 '+(v.cpu||0)+' Cores':(v.cpu||0)+' Cores';
+      var ramLabel=running?ramPct+'% \u00b7 '+ramUsedGb+' / '+ramGb:ramGb;
       var c='<div class="host-card" style="cursor:pointer;" data-action="openVmInfo" data-label="'+v.name+'" data-vmid="'+v.vmid+'">';
       c+='<div class="host-head"><h3 style="color:'+cl+'">'+v.name+'</h3><div class="host-meta"><span>VM '+v.vmid+'</span><span>\u00b7</span>'+(running?'<span class="c-green">RUNNING</span>':'<span class="c-red">'+v.status.toUpperCase()+'</span>')+'</div></div>';
       c+='<div class="divider-light">';
-      c+=_mrow('CPU',(v.cpu||0)+' Cores',0,'var(--purple-light)');
-      c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM</span><span class="metric-val">'+ramGb+'</span></div></div>';
+      c+=_mrow('CPU',cpuLabel,running?cpuPct:0,'var(--green)');
+      c+=_mrow('RAM',ramLabel,running?ramPct:0,'var(--blue)');
       if(v.category&&v.category!=='unknown')c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">CATEGORY</span><span class="metric-val fs-11" >'+v.category+'</span></div></div>';
       if(v.tier)c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">TIER</span><span class="metric-val fs-11" >'+v.tier+'</span></div></div>';
       c+='</div></div>';
@@ -2427,6 +2568,8 @@ function _renderFleetData(fo,hd,md){
     /* Assemble and render */
     document.getElementById('metrics-cards').innerHTML=_assembleFleetOutput(infraCards,nodeData,pveNodes);
     _enrichFleetNtpUpdates();
+    /* Re-render sparklines after card rebuild */
+    if(Object.keys(_rrdCache).length)setTimeout(_renderSparklines,200);
     /* Lab hosts section */
     var labSection=document.getElementById('fleet-lab-section');
     if(labSection){
@@ -3761,7 +3904,9 @@ function loadDownloads(){
     var h='';d.downloads.forEach(function(dl){
       var sz=dl.size>1073741824?(dl.size/1073741824).toFixed(1)+'GB':(dl.size/1048576).toFixed(0)+'MB';
       var sp=dl.speed>1048576?(dl.speed/1048576).toFixed(1)+'MB/s':(dl.speed/1024).toFixed(0)+'KB/s';
-      h+='<tr><td>'+dl.name.substring(0,50)+'</td><td>'+dl.client+'</td><td>'+dl.vm+'</td><td>'+sz+'</td><td>'+dl.progress+'%</td><td>'+sp+'</td></tr>';
+      var pPct=Math.round(dl.progress||0);
+      var pColor=pPct>=100?'var(--green)':pPct>=50?'var(--blue)':'var(--yellow)';
+      h+='<tr><td>'+dl.name.substring(0,50)+'</td><td>'+dl.client+'</td><td>'+dl.vm+'</td><td class="mono-11">'+sz+'</td><td style="min-width:120px"><div style="display:flex;align-items:center;gap:6px"><span class="mono-11">'+pPct+'%</span>'+_pbar(pPct,pColor)+'</div></td><td class="mono-11">'+sp+'</td></tr>';
     });document.getElementById('dl-table').innerHTML=h||'<tr><td colspan="6" class="c-dim">No active downloads</td></tr>';
   }).catch(function(){toast('Failed to load downloads','error');if(tbl)tbl.innerHTML='<tr><td colspan="6" class="c-red">Failed to load</td></tr>';});
 }
@@ -3769,7 +3914,10 @@ function loadStreams(){
   var tbl=document.getElementById('stream-table');if(tbl)tbl.innerHTML='<tr><td colspan="5"><div class="skeleton"></div></td></tr>';
   fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).then(function(d){
     document.getElementById('stream-stats').innerHTML=st('Active Streams',d.count,d.count>0?'g':'p');
-    var h='';d.sessions.forEach(function(ss){h+='<tr><td><strong>'+ss.user+'</strong></td><td>'+ss.title+'</td><td>'+ss.type+'</td><td>'+ss.quality+'</td><td>'+ss.state+'</td></tr>';});
+    var h='';d.sessions.forEach(function(ss){
+      var stateB=ss.state==='playing'?'<span class="badge up">PLAYING</span>':ss.state==='paused'?'<span class="badge paused">PAUSED</span>':badge(ss.state);
+      h+='<tr><td><strong>'+ss.user+'</strong></td><td>'+ss.title+'</td><td>'+ss.type+'</td><td class="mono-11">'+ss.quality+'</td><td>'+stateB+'</td></tr>';
+    });
     document.getElementById('stream-table').innerHTML=h||'<tr><td colspan="5" class="c-dim">No active streams</td></tr>';
   }).catch(function(){toast('Failed to load streams','error');if(tbl)tbl.innerHTML='<tr><td colspan="5" class="c-red">Failed to load</td></tr>';});
 }
@@ -6325,52 +6473,132 @@ function _loadMonitorsWidget(){
   }).catch(function(e){var el=document.getElementById('hw-monitors-list');if(el)el.innerHTML='<div class="empty-state"><p>Monitor check failed</p></div>';});
 }
 /* ═══════════════════════════════════════════════════════════════════
-   GLOBAL SEARCH (Ctrl+K)
+   COMMAND PALETTE (Ctrl+K)
+   VSCode-style: search VMs/hosts, navigate views, run actions.
+   Categories: vm, host, nav, action, tool
    ═══════════════════════════════════════════════════════════════════ */
 var _searchItems=[];var _searchIdx=-1;
+var _cmdIcons={vm:'\u26a1',host:'\u2699',nav:'\u2192',action:'\u25b6',tool:'\u2692'};
+var _cmdColors={vm:'var(--cyan)',host:'var(--green)',nav:'var(--purple-light)',action:'var(--yellow)',tool:'var(--orange)'};
 function openSearch(){
   var ov=document.getElementById('search-overlay');if(!ov)return;
   ov.style.display='block';
   var inp=document.getElementById('search-input');if(inp){inp.value='';inp.focus();}
   _buildSearchIndex();
-  _renderSearchResults(_searchItems.slice(0,15));
+  _renderSearchResults(_searchItems.slice(0,20));
 }
 function closeSearch(){var ov=document.getElementById('search-overlay');if(ov)ov.style.display='none';_searchIdx=-1;}
 function _buildSearchIndex(){
   _searchItems=[];
-  /* VMs from fleet cache */
+  /* ── Navigation ── */
+  var views=[
+    {label:'Home',view:'home',keys:'dashboard home overview'},
+    {label:'Fleet',view:'fleet',keys:'fleet hosts vms nodes'},
+    {label:'Docker',view:'docker',keys:'docker containers services'},
+    {label:'Media',view:'media',keys:'media plex streams downloads'},
+    {label:'Security',view:'security',keys:'security audit hardening'},
+    {label:'System',view:'tools',keys:'system settings config'},
+    {label:'Lab',view:'lab',keys:'lab sandbox test'},
+    {label:'Settings',view:'settings',keys:'settings preferences config'},
+    {label:'Topology',view:'topology',keys:'topology map network'},
+    {label:'Capacity',view:'capacity',keys:'capacity planning resources'},
+    {label:'Playbooks',view:'playbooks',keys:'playbooks automation runbooks'}
+  ];
+  views.forEach(function(v){_searchItems.push({type:'nav',label:'Go to '+v.label,detail:v.keys,action:function(){showView(v.view);closeSearch();}});});
+  /* ── Security sub-views ── */
+  var secViews=[
+    {label:'Hardening',view:'sec-hardening'},{label:'Access Control',view:'sec-access'},
+    {label:'Vault',view:'sec-vault'},{label:'Compliance',view:'sec-compliance'},
+    {label:'Firewall',view:'firewall'},{label:'Certificates',view:'certs'},{label:'VPN',view:'vpn'}
+  ];
+  secViews.forEach(function(v){_searchItems.push({type:'nav',label:'Security \u203a '+v.label,detail:'security '+v.label.toLowerCase(),action:function(){switchView(v.view);closeSearch();}});});
+  /* ── System sub-views ── */
+  var sysViews=[
+    {label:'Config',view:'sys-config'},{label:'Doctor',view:'sys-doctor'},
+    {label:'Journal',view:'sys-journal'},{label:'Groups',view:'sys-groups'},
+    {label:'Alert Rules',view:'sys-alerts'},{label:'Notifications',view:'sys-notify'},
+    {label:'About',view:'sys-about'}
+  ];
+  sysViews.forEach(function(v){_searchItems.push({type:'nav',label:'System \u203a '+v.label,detail:'system '+v.label.toLowerCase(),action:function(){switchView(v.view);closeSearch();}});});
+  /* ── Actions ── */
+  _searchItems.push({type:'action',label:'Deep Scan',detail:'Run deep metrics scan on all hosts',action:function(){closeSearch();showView('fleet');loadMetrics();}});
+  _searchItems.push({type:'action',label:'Rescan Containers',detail:'Discover containers across fleet',action:function(){closeSearch();showView('docker');rescanContainers();}});
+  _searchItems.push({type:'action',label:'Full Security Audit',detail:'Run all security audit checks',action:function(){closeSearch();switchView('sec-hardening');runAuditCheck('all');}});
+  _searchItems.push({type:'action',label:'Run Hardening Audit',detail:'Check hardening status across fleet',action:function(){closeSearch();switchView('sec-hardening');if(typeof runHarden==='function')runHarden();}});
+  _searchItems.push({type:'action',label:'Check NTP Sync',detail:'View NTP sync status for all hosts',action:function(){closeSearch();showView('fleet');fleetTool('ntp');}});
+  _searchItems.push({type:'action',label:'Check OS Updates',detail:'View pending updates across fleet',action:function(){closeSearch();showView('fleet');fleetTool('updates');}});
+  _searchItems.push({type:'action',label:'Fleet Exec',detail:'Run a command across all hosts',action:function(){closeSearch();showView('fleet');fleetTool('exec');}});
+  /* ── Tools ── */
+  _searchItems.push({type:'tool',label:'pfSense Status',detail:'Query pfSense firewall',action:function(){closeSearch();showView('fleet');if(typeof pfAction==='function')pfAction('status');}});
+  _searchItems.push({type:'tool',label:'TrueNAS Status',detail:'Query TrueNAS storage',action:function(){closeSearch();showView('fleet');if(typeof tnAction==='function')tnAction('status');}});
+  _searchItems.push({type:'tool',label:'Reload Dashboard',detail:'Force refresh all dashboard data',action:function(){closeSearch();location.reload();}});
+  /* ── VMs from fleet cache ── */
   if(_fleetCache.fo&&_fleetCache.fo.vms){
     _fleetCache.fo.vms.forEach(function(v){
-      _searchItems.push({type:'vm',label:v.name||'VM '+v.vmid,detail:'VMID '+v.vmid+' \u2022 '+v.node+' \u2022 '+v.status,action:function(){openHost(v.name||('VM '+v.vmid));closeSearch();}});
+      var vmName=v.name||'VM '+v.vmid;
+      _searchItems.push({type:'vm',label:vmName,detail:'VMID '+v.vmid+' \u2022 '+v.node+' \u2022 '+v.status,action:function(){openHost(vmName);closeSearch();}});
+      /* VM power actions for running VMs */
+      if(v.status==='running'){
+        _searchItems.push({type:'action',label:'Stop '+vmName,detail:'Power off VM '+v.vmid,action:function(){closeSearch();confirmAction('Stop <strong>'+vmName+'</strong>?',function(){vmPower(v.vmid,'stop');});}});
+        _searchItems.push({type:'action',label:'Reboot '+vmName,detail:'Reboot VM '+v.vmid,action:function(){closeSearch();confirmAction('Reboot <strong>'+vmName+'</strong>?',function(){vmPower(v.vmid,'reboot');});}});
+      } else if(v.status==='stopped'){
+        _searchItems.push({type:'action',label:'Start '+vmName,detail:'Start VM '+v.vmid,action:function(){closeSearch();vmPower(v.vmid,'start');}});
+      }
     });
   }
-  /* Hosts */
+  /* ── Hosts from health cache ── */
   if(_fleetCache.hd&&_fleetCache.hd.hosts){
     _fleetCache.hd.hosts.forEach(function(h){
       _searchItems.push({type:'host',label:h.label,detail:h.ip+' \u2022 '+h.type+' \u2022 '+h.status,action:function(){openHost(h.label);closeSearch();}});
     });
   }
-  /* Navigation views */
-  var views=[{label:'Home',view:'home'},{label:'Fleet',view:'fleet'},{label:'Docker',view:'docker'},{label:'Media',view:'media'},{label:'Security',view:'security'},{label:'Topology',view:'topology'},{label:'Capacity',view:'capacity'},{label:'Playbooks',view:'playbooks'}];
-  views.forEach(function(v){_searchItems.push({type:'nav',label:v.label,detail:'Navigate to '+v.label+' view',action:function(){showView(v.view);closeSearch();}});});
 }
 function _globalSearchFilter(query){
-  if(!query){_renderSearchResults(_searchItems.slice(0,15));_searchIdx=-1;return;}
+  if(!query){_renderSearchResults(_searchItems.slice(0,20));_searchIdx=-1;return;}
   var q=query.toLowerCase();
-  var matches=_searchItems.filter(function(item){return item.label.toLowerCase().indexOf(q)>=0||item.detail.toLowerCase().indexOf(q)>=0;});
-  _renderSearchResults(matches.slice(0,15));
+  /* Score-based ranking: label match > detail match, prefix > substring */
+  var scored=[];
+  _searchItems.forEach(function(item){
+    var ll=item.label.toLowerCase();var dl=item.detail.toLowerCase();
+    var score=0;
+    if(ll===q)score=100;
+    else if(ll.indexOf(q)===0)score=80;
+    else if(ll.indexOf(q)>=0)score=60;
+    else if(dl.indexOf(q)>=0)score=40;
+    /* Boost actions when query starts with > */
+    if(q.charAt(0)==='>'&&(item.type==='action'||item.type==='tool')){
+      var aq=q.substring(1).trim();
+      if(!aq)score=70;
+      else if(ll.indexOf(aq)>=0)score+=20;
+    }
+    if(score>0)scored.push({item:item,score:score});
+  });
+  scored.sort(function(a,b){return b.score-a.score;});
+  var matches=scored.map(function(s){return s.item;});
+  _renderSearchResults(matches.slice(0,20));
   _searchIdx=-1;
 }
 function _renderSearchResults(items){
   var el=document.getElementById('search-results');if(!el)return;
   if(!items.length){el.innerHTML='<div style="padding:16px;text-align:center;color:var(--text-dim)">No results</div>';return;}
-  var h='';items.forEach(function(item,i){
-    var icon=item.type==='vm'?'\u26a1':item.type==='host'?'\u2699':'\u2192';
-    h+='<div class="search-item" data-idx="'+i+'" style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;border-radius:6px" onmouseenter="this.style.background=\'var(--border)\'" onmouseleave="this.style.background=\'transparent\'" onclick="_searchItems._filtered['+i+'].action()">';
-    h+='<span>'+icon+'</span>';
-    h+='<div style="flex:1"><div style="font-weight:500">'+_esc(item.label)+'</div><div style="font-size:11px;color:var(--text-dim)">'+_esc(item.detail)+'</div></div>';
-    h+='<span style="font-size:10px;color:var(--text-dim);text-transform:uppercase">'+item.type+'</span>';
-    h+='</div>';
+  /* Group by category */
+  var groups={};var order=['nav','action','tool','vm','host'];
+  var labels={nav:'NAVIGATE',action:'ACTIONS',tool:'TOOLS',vm:'VIRTUAL MACHINES',host:'HOSTS'};
+  items.forEach(function(item){if(!groups[item.type])groups[item.type]=[];groups[item.type].push(item);});
+  var h='';var idx=0;
+  order.forEach(function(cat){
+    if(!groups[cat])return;
+    h+='<div style="padding:4px 12px;font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-top:4px">'+(labels[cat]||cat)+'</div>';
+    groups[cat].forEach(function(item){
+      var icon=_cmdIcons[item.type]||'\u2022';
+      var color=_cmdColors[item.type]||'var(--text-dim)';
+      h+='<div class="search-item" data-idx="'+idx+'" style="display:flex;align-items:center;gap:10px;padding:7px 12px;cursor:pointer;border-radius:6px;transition:background 0.1s" onmouseenter="this.style.background=\'rgba(168,85,247,0.08)\'" onmouseleave="this.style.background=\'transparent\'" onclick="_searchItems._filtered['+idx+'].action()">';
+      h+='<span style="color:'+color+';font-size:14px;width:20px;text-align:center">'+icon+'</span>';
+      h+='<div style="flex:1;min-width:0"><div style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_esc(item.label)+'</div></div>';
+      h+='<span style="font-size:10px;color:var(--text-dim);white-space:nowrap;flex-shrink:0">'+_esc(item.detail.length>40?item.detail.substring(0,40)+'\u2026':item.detail)+'</span>';
+      h+='</div>';
+      idx++;
+    });
   });
   el.innerHTML=h;
   _searchItems._filtered=items;
@@ -6385,7 +6613,7 @@ function _globalSearchKeydown(e){
 function _highlightSearchItem(){
   var el=document.getElementById('search-results');if(!el)return;
   var items=el.querySelectorAll('.search-item');
-  items.forEach(function(it,i){it.style.background=i===_searchIdx?'var(--border)':'transparent';});
+  items.forEach(function(it,i){it.style.background=i===_searchIdx?'rgba(168,85,247,0.12)':'transparent';});
   if(items[_searchIdx])items[_searchIdx].scrollIntoView({block:'nearest'});
 }
 /* ═══════════════════════════════════════════════════════════════════

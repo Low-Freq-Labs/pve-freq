@@ -1489,6 +1489,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/old": "_serve_html",
         # ── Auth (stays in serve.py) ──────────────────────────────────
         "/api/pve/metrics": "_serve_pve_metrics",
+        "/api/pve/rrd": "_serve_pve_rrd",
         "/api/auth/login": "_serve_auth_login",
         "/api/auth/verify": "_serve_auth_verify",
         "/api/auth/change-password": "_serve_auth_change_password",
@@ -3557,6 +3558,56 @@ a:hover{{text-decoration:underline}}
         result = {"nodes": nodes, "ts": time.time()}
         FreqHandler._pve_metrics_cache = result
         FreqHandler._pve_metrics_ts = time.time()
+        self._json_response(result)
+
+    _pve_rrd_cache = None
+    _pve_rrd_ts = 0
+
+    def _serve_pve_rrd(self):
+        """PVE RRD time-series data for sparkline charts.
+
+        Returns 1 hour of data (~60 points) per node: CPU%, RAM%, IO wait.
+        Cached for 60 seconds — sparklines don't need real-time updates.
+        """
+        now = time.time()
+        if FreqHandler._pve_rrd_cache and (now - FreqHandler._pve_rrd_ts) < 60:
+            self._json_response(FreqHandler._pve_rrd_cache)
+            return
+        cfg = load_config()
+        nodes = []
+        for i, ip in enumerate(cfg.pve_nodes):
+            name = cfg.pve_node_names[i] if i < len(cfg.pve_node_names) else f"pve{i+1:02d}"
+            from freq.modules.pve import _pve_api_call
+            data, ok = _pve_api_call(cfg, ip, f"/nodes/{name}/rrddata?timeframe=hour", timeout=5)
+            if ok and isinstance(data, list):
+                cpu = []
+                ram = []
+                iowait = []
+                for pt in data:
+                    if not isinstance(pt, dict):
+                        continue
+                    t = pt.get("time", 0)
+                    c = pt.get("cpu")
+                    m_used = pt.get("memused")
+                    m_total = pt.get("memtotal")
+                    io = pt.get("iowait")
+                    if c is not None:
+                        cpu.append({"t": t, "v": round(c * 100, 1)})
+                    if m_used is not None and m_total and m_total > 0:
+                        ram.append({"t": t, "v": round(m_used / m_total * 100, 1)})
+                    if io is not None:
+                        iowait.append({"t": t, "v": round(io * 100, 1)})
+                nodes.append({
+                    "name": name,
+                    "cpu": cpu[-70:],   # Last ~70 points (just over 1 hour)
+                    "ram": ram[-70:],
+                    "iowait": iowait[-70:],
+                })
+            else:
+                nodes.append({"name": name, "cpu": [], "ram": [], "iowait": []})
+        result = {"nodes": nodes, "ts": time.time()}
+        FreqHandler._pve_rrd_cache = result
+        FreqHandler._pve_rrd_ts = time.time()
         self._json_response(result)
 
     def _serve_health_api(self):

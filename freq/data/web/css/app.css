@@ -285,6 +285,11 @@ tr:hover td { background: var(--card-hover); }
   transform: translateY(-2px);
 }
 .crd:hover::before { opacity: 1; }
+/* Container status-aware borders */
+.crd.crd-up { border-left: 2px solid var(--green); }
+.crd.crd-up:hover { border-color: var(--green); box-shadow: var(--shadow-md), 0 0 8px var(--green-glow); }
+.crd.crd-down { border-left: 2px solid var(--red); }
+.crd.crd-down:hover { border-color: var(--red); box-shadow: var(--shadow-md), 0 0 8px var(--red-glow); }
 .no-hover-fx .crd { transition: none; }
 .no-hover-fx .crd:hover { box-shadow: var(--shadow-sm); transform: none; }
 .crd h3 { font-size: 13px; color: var(--purple-light); margin-bottom: 6px; font-weight: 700; }
@@ -833,7 +838,10 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* ── Empty State ── */
-.empty-state { text-align: center; padding: 48px 24px; color: var(--text-dim); grid-column: 1 / -1; }
+.empty-state {
+  text-align: center; padding: 48px 24px; color: var(--text-dim); grid-column: 1 / -1;
+  background: var(--glass); border: 1px dashed var(--border-light); border-radius: var(--radius-md);
+}
 .empty-state .es-icon { font-size: 40px; opacity: 0.2; margin-bottom: 16px; }
 .empty-state p { font-size: 13px; line-height: 1.6; }
 
@@ -999,6 +1007,24 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 .mt-8 { margin-top: 8px; }
 .mt-12 { margin-top: 12px; }
 .d-none { display: none; }
+/* Generic input — matches exec-bar inputs, used throughout Docker/Security/System forms */
+.input {
+  background: var(--card-solid);
+  border: 1px solid var(--input-border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: var(--font-ui);
+  transition: border-color var(--duration-fast);
+}
+.input:focus {
+  outline: none;
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px var(--purple-glow);
+}
+/* Inline progress bar inside table cells */
+td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 .input-primary {
   background: var(--card-solid);
   border: 2px solid var(--input-border);
