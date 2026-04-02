@@ -1288,8 +1288,7 @@ def _check_session_role(handler, min_role="operator"):
     params = parse_qs(urlparse(handler.path).query)
     token = params.get("token", [""])[0]
     if not token:
-        # No auth required if no token system active (backwards compat)
-        return "admin", None
+        return None, "Authentication required"
     session = FreqHandler._auth_tokens.get(token)
     if not session:
         return None, "Session expired or invalid"
