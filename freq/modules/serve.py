@@ -3525,6 +3525,8 @@ a:hover{{text-decoration:underline}}
                             "pct": p_pct,
                         })
 
+                iowait = round(data.get("wait", 0) * 100, 1)
+
                 nodes.append({
                     "name": name, "ip": ip, "online": True,
                     "cpu_pct": cpu_pct,
@@ -3533,6 +3535,7 @@ a:hover{{text-decoration:underline}}
                     "ram_used_gb": round(mem_used / 1024**3, 1),
                     "ram_total_gb": round(mem_total / 1024**3, 1),
                     "ram_pct": mem_pct,
+                    "iowait": iowait,
                     "disk_pct": disk_pct,
                     "disk_used_gb": round(disk_used / 1024**3, 1),
                     "disk_total_gb": round(disk_total / 1024**3, 1),

@@ -927,16 +927,21 @@ function _pveMetricsRefresh(){
             val.textContent=n.ram_pct+'% \u00b7 '+n.ram_used_gb+'G / '+n.ram_total_gb+'G';
             if(bar){bar.style.width=n.ram_pct+'%';bar.style.background=ramColor;}
           }
-          if(lt==='DISK'){
-            /* Use main storage pool if available, fallback to rootfs */
-            var dPct=n.disk_pct;var dLabel=n.disk_pct+'%';
+          if(lt==='DISK IO'){
+            var io=n.iowait||0;
+            var ioColor=io>=50?'var(--red)':io>=20?'var(--yellow)':io>=5?'var(--orange)':'var(--cyan)';
+            val.textContent=io+'% IO WAIT';
+            if(bar){bar.style.width=Math.min(io*2,100)+'%';bar.style.background=ioColor;}
+          }
+          if(lt==='STORAGE'){
+            var sPct=0;var sLabel='...';
             if(n.storage&&n.storage.length){
               var main=n.storage.find(function(s){return s.type==='lvmthin'||s.type==='zfspool'||s.type==='lvm'})||n.storage[0];
-              dPct=main.pct;dLabel=main.pct+'% \u00b7 '+main.used_gb+'G / '+main.total_gb+'G \u00b7 '+main.name;
+              sPct=main.pct;sLabel=main.pct+'% \u00b7 '+main.used_gb+'G / '+main.total_gb+'G \u00b7 '+main.name;
             }
-            var diskColor=dPct>=90?'var(--red)':dPct>=75?'var(--yellow)':'var(--green)';
-            val.textContent=dLabel;
-            if(bar){bar.style.width=dPct+'%';bar.style.background=diskColor;}
+            var sColor=sPct>=90?'var(--red)':sPct>=75?'var(--yellow)':'var(--green)';
+            val.textContent=sLabel;
+            if(bar){bar.style.width=sPct+'%';bar.style.background=sColor;}
           }
         });
         /* Update the utilization stats in the grid above the bars */
@@ -2203,9 +2208,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
       var ramParts=(live.ram||'0/0MB').match(/(\d+)\/(\d+)/);
       var ramUsed=ramParts?parseInt(ramParts[1]):0;var ramTotal=ramParts?parseInt(ramParts[2]):1;
       var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
-      /* Initial render uses SSH health data. PVE API poller (_pveMetricsRefresh)
-         overwrites these with real CPU% within 5 seconds of page load. */
-      var cpuColor=loadPct>=80?'var(--red)':loadPct>=50?'var(--yellow)':'var(--green)';
+      /* Initial render — PVE API poller fills real values within 2 seconds */
       var ramColor=ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';
       nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
       nodeCard+=_fGrp('UTILIZATION',2,_fStat('...','CPU LOAD','var(--text-dim)')+_fStat(ramPct+'%','RAM USED',ramColor));
@@ -2215,7 +2218,8 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
       nodeCard+='<div style="margin:6px 0">';
       nodeCard+=_mrow('CPU','...',0,'var(--text-dim)');
       nodeCard+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,ramColor);
-      nodeCard+=_mrow('DISK',(live.disk||'?'),diskPct,diskPct>=90?'var(--red)':diskPct>=75?'var(--yellow)':'var(--green)');
+      nodeCard+=_mrow('DISK IO','...',0,'var(--text-dim)');
+      nodeCard+=_mrow('STORAGE','...',0,'var(--text-dim)');
       nodeCard+='</div>';
     } else {
       nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
