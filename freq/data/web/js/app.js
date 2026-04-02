@@ -76,6 +76,13 @@ setInterval(upTime,1000);upTime();
 
 /* === Utility === */
 function _esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+/* Authenticated fetch — sends token via Authorization header instead of query string */
+function _authFetch(url, opts) {
+    opts = opts || {};
+    if (!opts.headers) opts.headers = {};
+    if (_authToken) opts.headers['Authorization'] = 'Bearer ' + _authToken;
+    return fetch(url, opts);
+}
 
 /* === Toast === */
 function toast(msg,type){
@@ -524,7 +531,7 @@ var WIDGET_REGISTRY=[
   }},
   {id:'w-config-viewer',page:'OPS',label:'Config Viewer',loader:function(el){
     el.innerHTML='<div id="hw-config-view"><div class="skeleton"></div></div>';
-    fetch('/api/config/view?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/config/view').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-config-view');if(!t)return;
       if(d.error){t.innerHTML='<div class="empty-state"><p>'+_esc(d.error)+'</p></div>';return;}
       var c=d.config;var h='';
@@ -1500,7 +1507,7 @@ function loadContainerRegistry(){
   var tbl=document.getElementById('registry-table');
   if(!tbl)return;
   tbl.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/containers/registry?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/containers/registry').then(function(r){return r.json()}).then(function(d){
     if(!d.containers||d.containers.length===0){tbl.innerHTML='<span class="c-dim-fs12">No containers registered</span>';return;}
     /* Build unique VM list for dropdowns */
     var seen={};_regVMs=[];
@@ -1555,7 +1562,7 @@ function saveContainerEdit(name,oldVmId){
   var pu=(document.getElementById('edit-public-url').value||'').trim();
   if(pu){_publicUrls[name]=pu;}else{delete _publicUrls[name];}
   localStorage.setItem('freq_public_urls',JSON.stringify(_publicUrls));
-  fetch('/api/containers/edit?token='+_authToken+'&name='+encodeURIComponent(name)+'&old_vm_id='+oldVmId+'&new_vm_id='+newVmId+'&port='+port+'&api_path='+encodeURIComponent(apiPath))
+  _authFetch('/api/containers/edit?name='+encodeURIComponent(name)+'&old_vm_id='+oldVmId+'&new_vm_id='+newVmId+'&port='+port+'&api_path='+encodeURIComponent(apiPath))
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){toast(d.error,'error');return;}
     toast(name+' updated','success');closeModal();_mediaCache=null;loadContainerRegistry();loadContainerSection();
@@ -1602,7 +1609,7 @@ function rescanContainers(){
   var st=document.getElementById('registry-status');
   var res=document.getElementById('rescan-results');
   if(st)st.textContent='Scanning fleet...';
-  fetch('/api/containers/rescan?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/containers/rescan').then(function(r){return r.json()}).then(function(d){
     if(st)st.textContent='Scan complete';
     if(!res)return;
     var h='';
@@ -1628,7 +1635,7 @@ function rescanContainers(){
 }
 function deleteContainer(name,vmId){
   if(!confirm('Remove "'+name+'" from registry?'))return;
-  fetch('/api/containers/delete?token='+_authToken+'&name='+encodeURIComponent(name)+'&vm_id='+vmId)
+  _authFetch('/api/containers/delete?name='+encodeURIComponent(name)+'&vm_id='+vmId)
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){toast(d.error,'error');return;}
     toast(name+' removed','success');_mediaCache=null;loadContainerRegistry();loadContainerSection();
@@ -1640,7 +1647,7 @@ function addContainer(){
   var port=document.getElementById('reg-port').value||'0';
   var msg=document.getElementById('reg-msg');
   if(!name||!vmId){if(msg)msg.innerHTML='<span class="c-red">Name and VM required</span>';return;}
-  fetch('/api/containers/add?token='+_authToken+'&name='+encodeURIComponent(name)+'&vm_id='+vmId+'&port='+port)
+  _authFetch('/api/containers/add?name='+encodeURIComponent(name)+'&vm_id='+vmId+'&port='+port)
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){if(msg)msg.innerHTML='<span class="c-red">'+d.error+'</span>';return;}
     if(msg)msg.innerHTML='<span class="c-green">Added</span>';
@@ -1649,7 +1656,7 @@ function addContainer(){
   });
 }
 function addContainerQuick(name,vmId){
-  fetch('/api/containers/add?token='+_authToken+'&name='+encodeURIComponent(name)+'&vm_id='+vmId+'&port=0')
+  _authFetch('/api/containers/add?name='+encodeURIComponent(name)+'&vm_id='+vmId+'&port=0')
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){toast(d.error,'error');return;}
     toast(name+' registered','success');_mediaCache=null;loadContainerRegistry();rescanContainers();
@@ -1932,7 +1939,7 @@ function toggleLabAssign(label,isLab){
 function loadSystemPage(){renderGlobalSettings();loadFleetAdmin();loadConfig();loadJournal();loadDistros();loadGroups();loadNotify();loadRules();loadAlertHistory();}
 
 function loadRules(){
-  fetch('/api/rules?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/rules').then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('rules-list');if(!el)return;
     if(!d.rules||d.rules.length===0){el.innerHTML='<span class="c-dim-fs12">No rules configured</span>';return;}
     var h='<table><tr><th>Name</th><th>Condition</th><th>Target</th><th>Threshold</th><th>Severity</th><th>Enabled</th><th>Actions</th></tr>';
@@ -1957,7 +1964,7 @@ function createRule(){
   var sev=document.getElementById('rule-severity').value;
   var msg=document.getElementById('rule-create-msg');
   if(!n){msg.innerHTML='<span class="c-red">Name required</span>';return;}
-  fetch('/api/rules/create?token='+_authToken+'&name='+encodeURIComponent(n)+'&condition='+c+'&target='+encodeURIComponent(t)+'&threshold='+th+'&duration='+dur+'&cooldown='+cd+'&severity='+sev)
+  _authFetch('/api/rules/create?name='+encodeURIComponent(n)+'&condition='+c+'&target='+encodeURIComponent(t)+'&threshold='+th+'&duration='+dur+'&cooldown='+cd+'&severity='+sev)
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){msg.innerHTML='<span class="c-red">'+d.error+'</span>';return;}
     msg.innerHTML='<span class="c-green">Rule created</span>';loadRules();
@@ -1965,16 +1972,16 @@ function createRule(){
   }).catch(function(e){msg.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
 }
 function toggleRule(name,enabled){
-  fetch('/api/rules/update?token='+_authToken+'&name='+encodeURIComponent(name)+'&enabled='+enabled)
+  _authFetch('/api/rules/update?name='+encodeURIComponent(name)+'&enabled='+enabled)
   .then(function(r){return r.json()}).then(function(d){loadRules();});
 }
 function deleteRule(name){
   if(!confirm('Delete rule "'+name+'"?'))return;
-  fetch('/api/rules/delete?token='+_authToken+'&name='+encodeURIComponent(name))
+  _authFetch('/api/rules/delete?name='+encodeURIComponent(name))
   .then(function(r){return r.json()}).then(function(d){loadRules();});
 }
 function loadAlertHistory(){
-  fetch('/api/rules/history?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/rules/history').then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('alert-history');if(!el)return;
     if(!d.alerts||d.alerts.length===0){el.innerHTML='<span class="c-dim-fs12">No alerts yet</span>';return;}
     var h='<table><tr><th>Time</th><th>Rule</th><th>Host</th><th>Message</th><th>Severity</th></tr>';
@@ -2001,7 +2008,7 @@ function loadFleetAdmin(){
   var body=document.getElementById('fleet-admin-body');
   if(!body)return;
   body.innerHTML='<div class="skeleton"></div>';
-  fetch(API.ADMIN_BOUNDARIES+'?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.ADMIN_BOUNDARIES).then(function(r){return r.json()}).then(function(d){
     if(d.error){body.innerHTML='<p class="c-red">'+d.error+'</p>';return;}
     _fleetAdminData=d;
     renderFleetAdmin(d);
@@ -2094,14 +2101,14 @@ function saveHostProps(label){
   var typeEl=document.getElementById('ht-'+label);
   var groupEl=document.getElementById('hg-'+label);
   if(!typeEl||!groupEl)return;
-  var url='/api/admin/hosts/update?token='+_authToken+'&label='+encodeURIComponent(label)+'&type='+encodeURIComponent(typeEl.value)+'&groups='+encodeURIComponent(groupEl.value);
-  fetch(url).then(function(r){return r.json()}).then(function(d){
+  var url='/api/admin/hosts/update?label='+encodeURIComponent(label)+'&type='+encodeURIComponent(typeEl.value)+'&groups='+encodeURIComponent(groupEl.value);
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast('Error: '+d.error,'error');return;}
     toast(label+' updated','success');
   }).catch(function(e){toast('Failed: '+e,'error');});
 }
 function updateCategoryTier(cat,tier){
-  fetch(API.ADMIN_BOUNDARIES_UPDATE+'?token='+_authToken+'&action=update_category_tier&category='+encodeURIComponent(cat)+'&tier='+encodeURIComponent(tier)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.ADMIN_BOUNDARIES_UPDATE+'?action=update_category_tier&category='+encodeURIComponent(cat)+'&tier='+encodeURIComponent(tier)).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast('Error: '+d.error,'error');return;}
     toast(cat+' tier \u2192 '+tier,'success');loadFleetAdmin();
   }).catch(function(e){toast('Failed: '+e,'error');});
@@ -2110,7 +2117,7 @@ function updateCategoryRange(cat){
   var rs=document.getElementById('rs-'+cat);
   var re=document.getElementById('re-'+cat);
   if(!rs||!re)return;
-  fetch(API.ADMIN_BOUNDARIES_UPDATE+'?token='+_authToken+'&action=update_range&category='+encodeURIComponent(cat)+'&range_start='+rs.value+'&range_end='+re.value).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.ADMIN_BOUNDARIES_UPDATE+'?action=update_range&category='+encodeURIComponent(cat)+'&range_start='+rs.value+'&range_end='+re.value).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast('Error: '+d.error,'error');return;}
     toast(cat+' range updated','success');loadFleetAdmin();
   }).catch(function(e){toast('Failed: '+e,'error');});
@@ -2118,14 +2125,14 @@ function updateCategoryRange(cat){
 function addVmidToCategory(cat){
   var el=document.getElementById('vmid-add-'+cat);
   if(!el||!el.value)return;
-  fetch(API.ADMIN_BOUNDARIES_UPDATE+'?token='+_authToken+'&action=add_vmid&category='+encodeURIComponent(cat)+'&vmid='+el.value).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.ADMIN_BOUNDARIES_UPDATE+'?action=add_vmid&category='+encodeURIComponent(cat)+'&vmid='+el.value).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast('Error: '+d.error,'error');return;}
     toast('VMID '+el.value+' added to '+cat,'success');loadFleetAdmin();
   }).catch(function(e){toast('Failed: '+e,'error');});
 }
 function removeVmidFromCategory(cat,vmid){
   confirmAction('Remove VMID '+vmid+' from '+cat+'?',function(){
-    fetch(API.ADMIN_BOUNDARIES_UPDATE+'?token='+_authToken+'&action=remove_vmid&category='+encodeURIComponent(cat)+'&vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.ADMIN_BOUNDARIES_UPDATE+'?action=remove_vmid&category='+encodeURIComponent(cat)+'&vmid='+vmid).then(function(r){return r.json()}).then(function(d){
       if(d.error){toast('Error: '+d.error,'error');return;}
       toast('VMID '+vmid+' removed from '+cat,'success');loadFleetAdmin();
     }).catch(function(e){toast('Failed: '+e,'error');});
@@ -4365,7 +4372,7 @@ function vmPushKey(ip){
   if(!ip){toast('No IP available for this VM','error');return;}
   confirmAction('Push freq SSH key to <strong>'+ip+'</strong>?<br><span style="font-size:12px;color:var(--text-dim)">Deploys the freq-admin authorized_keys so FREQ can manage this host.</span>',function(){
     toast('Pushing key to '+ip+'...','info');
-    fetch('/api/vm/push-key?token='+_authToken+'&ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/vm/push-key?ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
       if(d.error){toast('Key push failed: '+d.error,'error');return;}
       toast('Key deployed to '+ip+(d.verified?' — verified':''),'success');
     }).catch(function(e){toast('Key push failed: '+e,'error');});
@@ -5068,7 +5075,7 @@ function renderVmCard(config){
   /* Snapshot info section */
   html+='<div class="ho-section mt-10"><h3>SNAPSHOTS</h3><div id="hd-snap-list"><span class="text-meta">Loading...</span></div></div>';
   setTimeout(function(){
-    fetch('/api/vm/snapshots?vmid='+vmid+'&token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/vm/snapshots?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
       var el=document.getElementById('hd-snap-list');if(!el)return;
       if(!d.snapshots||!d.snapshots.length){el.innerHTML='<span class="text-meta">No snapshots</span>';return;}
       var h='';d.snapshots.forEach(function(s){
@@ -5524,7 +5531,7 @@ function policyAction(action){
   var out=document.getElementById('policy-out');if(!out)return;
   out.innerHTML='<span style="color:var(--text-dim)">Running policy '+action+'...</span>';
   var url=action==='check'?API.POLICY_CHECK:action==='diff'?API.POLICY_DIFF:API.POLICY_FIX;
-  fetch(url+'?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No output')+'</pre>';
   }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
@@ -5532,7 +5539,7 @@ function policyAction(action){
 function runSweep(doFix){
   var out=document.getElementById('sweep-out');if(!out)return;
   out.innerHTML='<span style="color:var(--text-dim)">Running sweep'+(doFix?' with fixes':'...')+'</span>';
-  fetch(API.SWEEP+'?fix='+doFix+'&token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.SWEEP+'?fix='+doFix).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No output')+'</pre>';
   }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
@@ -5575,7 +5582,7 @@ function loadTopology(){
   var svg=document.getElementById('topo-svg');if(!svg)return;
   var info=document.getElementById('topo-info');
   if(info)info.textContent='Loading topology...';
-  fetch('/api/topology?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/topology').then(function(r){return r.json()}).then(function(d){
     var showTpl=_loadSettings().showTemplates===true;
     var nodes=d.nodes,links=d.links;
     if(!showTpl){
@@ -5946,7 +5953,7 @@ function loadCapacity(){
   var tbl=document.getElementById('cap-table');
   if(!tbl)return;
   tbl.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/capacity?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/capacity').then(function(r){return r.json()}).then(function(d){
     if(info)info.textContent=d.snapshot_count+' snapshots, '+d.hosts+' hosts tracked';
     if(!d.projections||d.hosts===0){
       tbl.innerHTML='<div class="c-dim-fs12" style="padding:20px;text-align:center">'+
@@ -5983,7 +5990,7 @@ function _miniSparkline(data){
   return'<svg width="'+w+'" height="'+ht+'" style="vertical-align:middle"><polyline points="'+pts+'" fill="none" stroke="#9B4FDE" stroke-width="1.5"/></svg>';
 }
 function forceCapSnapshot(){
-  fetch('/api/capacity/snapshot?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/capacity/snapshot').then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast('Snapshot saved: '+d.snapshot,'success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadCapacity();
@@ -5995,7 +6002,7 @@ function loadPlaybooks(){
   var list=document.getElementById('pb-list');
   if(!list)return;
   list.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/playbooks?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/playbooks').then(function(r){return r.json()}).then(function(d){
     var pbs=d.playbooks||[];
     if(pbs.length===0){
       list.innerHTML='<div class="c-dim-fs12" style="padding:20px;text-align:center">No playbooks found. Add TOML files to conf/playbooks/.</div>';
@@ -6021,7 +6028,7 @@ function openPbRunner(filename,name){
   var stepsEl=document.getElementById('pb-steps');
   stepsEl.innerHTML='<div class="skeleton"></div>';
   // Load playbook details to show step list
-  fetch('/api/playbooks?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/playbooks').then(function(r){return r.json()}).then(function(d){
     var pb=(d.playbooks||[]).find(function(p){return p.filename===filename});
     if(!pb){stepsEl.innerHTML='<span class="c-red">Playbook not found</span>';return;}
     _pbSteps=pb.steps;_pbCurrentStep=0;
@@ -6067,7 +6074,7 @@ function _renderPbSteps(){
 function runPbStep(idx){
   _pbSteps[idx]._status='running';
   _renderPbSteps();
-  fetch('/api/playbooks/step?token='+_authToken+'&filename='+encodeURIComponent(_pbFilename)+'&step='+idx)
+  _authFetch('/api/playbooks/step?filename='+encodeURIComponent(_pbFilename)+'&step='+idx)
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){_pbSteps[idx]._status='fail';_pbSteps[idx]._error=d.error;_renderPbSteps();return;}
     var r=d.result;
@@ -6086,7 +6093,7 @@ function loadGitops(){
   var acts=document.getElementById('go-actions');
   if(!st||!log)return;
   st.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/gitops/status?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/gitops/status').then(function(r){return r.json()}).then(function(d){
     if(!d.enabled){
       st.innerHTML='<div class="c-dim-fs12">GitOps not configured. Add <code>[gitops]</code> section with <code>repo_url</code> to freq.toml.</div>';
       if(acts)acts.classList.add('d-none');
@@ -6107,7 +6114,7 @@ function loadGitops(){
     st.innerHTML=h;
     if(acts){if(s.pending_changes>0){acts.classList.remove('d-none');acts.style.display='flex';}else{acts.classList.add('d-none');acts.style.display='';}}
     // Load commit log
-    fetch('/api/gitops/log?token='+_authToken).then(function(r){return r.json()}).then(function(ld){
+    _authFetch('/api/gitops/log').then(function(r){return r.json()}).then(function(ld){
       var commits=ld.commits||[];
       if(commits.length===0){log.innerHTML='<div class="c-dim-fs12">No commit history.</div>';return;}
       var t='<table><tr><th>Hash</th><th>Message</th><th>Date</th><th>Author</th><th></th></tr>';
@@ -6123,7 +6130,7 @@ function loadGitops(){
 }
 function gitopsFetch(){
   toast('Syncing...','info');
-  fetch('/api/gitops/sync?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/gitops/sync').then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast('Sync complete','success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadGitops();
@@ -6131,7 +6138,7 @@ function gitopsFetch(){
 }
 function gitopsApply(){
   toast('Applying changes...','info');
-  fetch('/api/gitops/apply?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/gitops/apply').then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast(d.message||'Applied','success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadGitops();
@@ -6144,14 +6151,14 @@ function gitopsDiff(){
   el.classList.toggle('d-none');
   if(!el.classList.contains('d-none')){
     content.textContent='Loading diff...';
-    fetch('/api/gitops/diff?token='+_authToken+'&full=1').then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/gitops/diff?full=1').then(function(r){return r.json()}).then(function(d){
       content.textContent=d.diff||'No differences.';
     }).catch(function(e){content.textContent='Error: '+e;});
   }
 }
 function gitopsRollback(hash){
   if(!confirm('Roll back config to commit '+hash+'?'))return;
-  fetch('/api/gitops/rollback?token='+_authToken+'&commit='+encodeURIComponent(hash)).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/gitops/rollback?commit='+encodeURIComponent(hash)).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast(d.message||'Rolled back','success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadGitops();
@@ -6164,7 +6171,7 @@ function loadCosts(){
   var tbl=document.getElementById('cost-table');
   if(!tbl)return;
   tbl.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/cost?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/cost').then(function(r){return r.json()}).then(function(d){
     if(d.error){tbl.innerHTML='<span class="c-red">'+_esc(d.error)+'</span>';return;}
     var s=d.summary||{};
     if(sum){
@@ -6205,7 +6212,7 @@ function loadFederation(){
   var sites=document.getElementById('fed-sites');
   if(!sites)return;
   sites.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/federation/status?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/federation/status').then(function(r){return r.json()}).then(function(d){
     var s=d.summary||{};
     if(sum){
       sum.innerHTML=
@@ -6241,7 +6248,7 @@ function loadFederation(){
 }
 function fedPoll(){
   toast('Polling all sites...','info');
-  fetch('/api/federation/poll?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/federation/poll').then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast('Poll complete','success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadFederation();
@@ -6252,16 +6259,16 @@ function fedRegister(){
   var url=document.getElementById('fed-url').value.trim();
   var secret=document.getElementById('fed-secret').value;
   if(!name||!url){toast('Name and URL required','error');return;}
-  var q='/api/federation/register?token='+_authToken+'&name='+encodeURIComponent(name)+'&url='+encodeURIComponent(url);
+  var q='/api/federation/register?name='+encodeURIComponent(name)+'&url='+encodeURIComponent(url);
   if(secret)q+='&secret='+encodeURIComponent(secret);
-  fetch(q).then(function(r){return r.json()}).then(function(d){
+  _authFetch(q).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast(d.message||'Registered','success');document.getElementById('fed-name').value='';document.getElementById('fed-url').value='';document.getElementById('fed-secret').value='';}
     else toast('Error: '+(d.error||'unknown'),'error');
     loadFederation();
   }).catch(function(e){toast('Failed: '+e,'error');});
 }
 function fedToggle(name){
-  fetch('/api/federation/toggle?token='+_authToken+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/federation/toggle?name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast(name+' '+(d.enabled?'enabled':'disabled'),'success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadFederation();
@@ -6269,7 +6276,7 @@ function fedToggle(name){
 }
 function fedRemove(name){
   if(!confirm('Remove site "'+name+'"?'))return;
-  fetch('/api/federation/unregister?token='+_authToken+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/federation/unregister?name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast(d.message||'Removed','success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadFederation();
@@ -6283,7 +6290,7 @@ function loadChaos(){
   if(!log)return;
   // Load experiment types into dropdown
   if(sel&&sel.options.length<=1){
-    fetch('/api/chaos/types?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/chaos/types').then(function(r){return r.json()}).then(function(d){
       (d.types||[]).forEach(function(t){
         var o=document.createElement('option');o.value=t.type;o.textContent=t.type+' — '+t.description;
         sel.appendChild(o);
@@ -6292,7 +6299,7 @@ function loadChaos(){
   }
   // Load experiment log
   log.innerHTML='<div class="skeleton"></div>';
-  fetch('/api/chaos/log?token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/chaos/log').then(function(r){return r.json()}).then(function(d){
     var exps=d.experiments||[];
     if(exps.length===0){log.innerHTML='<div class="c-dim-fs12" style="text-align:center;padding:20px">No experiments run yet.</div>';return;}
     var h='<table><tr><th>Name</th><th>Type</th><th>Target</th><th>Status</th><th>Duration</th><th>Recovery</th><th>Error</th></tr>';
@@ -6320,9 +6327,9 @@ function chaosRun(){
   if(!name||!type||!target){toast('Name, type, and target are required','error');return;}
   if(!confirm('Run chaos experiment "'+name+'" ('+type+') on '+target+'? This will intentionally disrupt the service.')){return;}
   toast('Running experiment...','info');
-  var q='/api/chaos/run?token='+_authToken+'&name='+encodeURIComponent(name)+'&type='+encodeURIComponent(type);
+  var q='/api/chaos/run?name='+encodeURIComponent(name)+'&type='+encodeURIComponent(type);
   q+='&target='+encodeURIComponent(target)+'&service='+encodeURIComponent(service)+'&duration='+duration;
-  fetch(q).then(function(r){return r.json()}).then(function(d){
+  _authFetch(q).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast('Error: '+d.error,'error');return;}
     var r=d.result||{};
     if(r.status==='completed')toast('Experiment completed — recovery: '+(r.recovery_time||0)+'s','success');
@@ -6391,9 +6398,9 @@ function runDiscover(){
   var subnet=document.getElementById('discover-subnet').value.trim();
   var out=document.getElementById('discover-out');if(!out)return;
   out.innerHTML='<span style="color:var(--text-dim)">Scanning network...</span>';
-  var url=API.DISCOVER+'?token='+_authToken;
-  if(subnet)url+='&subnet='+encodeURIComponent(subnet);
-  fetch(url).then(function(r){return r.json()}).then(function(d){
+  var url=API.DISCOVER;
+  if(subnet)url+='?subnet='+encodeURIComponent(subnet);
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No hosts discovered')+'</pre>';
   }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
@@ -6406,7 +6413,7 @@ function addHostManual(){
   var msg=document.getElementById('add-host-msg');
   if(!ip||!label){toast('IP and label are required','error');return;}
   if(msg)msg.textContent='Adding host...';msg.style.color='var(--text-dim)';
-  fetch(API.ADMIN_HOSTS_UPDATE+'?label='+encodeURIComponent(label)+'&type='+encodeURIComponent(htype)+(groups?'&groups='+encodeURIComponent(groups):'')+'&ip='+encodeURIComponent(ip)+'&token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.ADMIN_HOSTS_UPDATE+'?label='+encodeURIComponent(label)+'&type='+encodeURIComponent(htype)+(groups?'&groups='+encodeURIComponent(groups):'')+'&ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast(d.error,'error');if(msg){msg.textContent=d.error;msg.style.color='var(--red)';}return;}
     toast('Host '+label+' added','success');
     if(msg){msg.textContent='Added '+label+' ('+ip+')';msg.style.color='var(--green)';}
@@ -6418,7 +6425,7 @@ function addHostManual(){
 function loadGwipe(action){
   var out=document.getElementById('gwipe-out');if(!out)return;
   out.innerHTML='<span style="color:var(--text-dim)">Loading GWIPE '+action+'...</span>';
-  fetch(API.GWIPE+'?action='+action+'&token='+_authToken).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.GWIPE+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     var data=d.data||{};
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(JSON.stringify(data,null,2))+'</pre>';

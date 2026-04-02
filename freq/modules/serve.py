@@ -1303,8 +1303,14 @@ def _check_session_role(handler, min_role="operator"):
     Role hierarchy: viewer < operator < admin.
     Returns (role_str, None) if ok, or (None, error_str) if blocked.
     """
-    params = parse_qs(urlparse(handler.path).query)
-    token = params.get("token", [""])[0]
+    # Prefer Authorization: Bearer header, fall back to query param
+    token = ""
+    auth_header = handler.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+    if not token:
+        params = parse_qs(urlparse(handler.path).query)
+        token = params.get("token", [""])[0]
     if not token:
         return None, "Authentication required"
     session = FreqHandler._auth_tokens.get(token)
@@ -6645,8 +6651,13 @@ a:hover{{text-decoration:underline}}
     def _serve_auth_verify(self):
         """Verify a session token is still valid."""
 
-        params = _parse_query(self)
-        token = params.get("token", [""])[0]
+        token = ""
+        auth_header = self.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+        if not token:
+            params = _parse_query(self)
+            token = params.get("token", [""])[0]
         session = FreqHandler._auth_tokens.get(token)
         if not session:
             self._json_response({"valid": False})
@@ -6663,9 +6674,22 @@ a:hover{{text-decoration:underline}}
     def _serve_auth_change_password(self):
         """Change password for authenticated user."""
 
-        params = _parse_query(self)
-        token = params.get("token", [""])[0]
-        new_password = params.get("password", [""])[0]
+        token = ""
+        auth_header = self.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+        if not token:
+            params = _parse_query(self)
+            token = params.get("token", [""])[0]
+        if self.command == "POST":
+            try:
+                body = self._request_body()
+                new_password = body.get("password", "")
+            except Exception:
+                new_password = ""
+        else:
+            params = _parse_query(self)
+            new_password = params.get("password", [""])[0]
 
         session = FreqHandler._auth_tokens.get(token)
         if not session:
