@@ -51,3 +51,27 @@ include = ["freq*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "freq.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=freq --cov-report=term-missing --cov-fail-under=50"
+
+[tool.coverage.run]
+branch = true
+source = ["freq"]
+omit = ["freq/data/*", "freq/tui/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]

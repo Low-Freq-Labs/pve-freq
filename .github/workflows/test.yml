@@ -117,9 +117,15 @@ jobs:
         env:
           FREQ_DIR: ${{ github.workspace }}
 
-      - name: Run tests
+      - name: Lint
         shell: sh
-        run: python3 -m pytest tests/ -v --tb=short
+        run: pip3 install ruff && ruff check freq/ --exit-zero
+
+      - name: Run tests with coverage
+        shell: sh
+        run: |
+          pip3 install pytest-cov
+          python3 -m pytest tests/ -v --tb=short --cov=freq --cov-report=term-missing --cov-fail-under=50
         env:
           FREQ_DIR: ${{ github.workspace }}
 
