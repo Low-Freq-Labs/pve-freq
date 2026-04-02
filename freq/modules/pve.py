@@ -138,6 +138,20 @@ def _find_reachable_node(cfg: FreqConfig) -> str:
     return ""
 
 
+def _find_vm_node(cfg: FreqConfig, vmid: int, fallback_ip: str = "") -> str:
+    """Find which PVE node owns a specific VM. Returns node IP."""
+    for nip in cfg.pve_nodes:
+        r = ssh_run(
+            host=nip,
+            command=f"test -f /etc/pve/qemu-server/{vmid}.conf && echo FOUND || echo NOTFOUND",
+            key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
+            command_timeout=5, htype="pve", use_sudo=True,
+        )
+        if r.returncode == 0 and "FOUND" in r.stdout:
+            return nip
+    return fallback_ip
+
+
 def cmd_list(cfg: FreqConfig, pack, args) -> int:
     """List all VMs across the PVE cluster."""
     fmt.header("VM Inventory")
@@ -356,8 +370,9 @@ def cmd_snapshot(cfg: FreqConfig, pack, args) -> int:
         fmt.footer()
         return 1
 
+    vm_node_ip = _find_vm_node(cfg, vmid, node_ip)
     fmt.step_start(f"Creating snapshot '{snap_name}' for VM {vmid}")
-    stdout, ok = _pve_cmd(cfg, node_ip, f"qm snapshot {vmid} {snap_name} --description 'Created by FREQ'", timeout=PVE_SNAPSHOT_TIMEOUT)
+    stdout, ok = _pve_cmd(cfg, vm_node_ip, f"qm snapshot {vmid} {snap_name} --description 'Created by FREQ'", timeout=PVE_SNAPSHOT_TIMEOUT)
 
     if ok:
         fmt.step_ok(f"Snapshot '{snap_name}' created for VM {vmid}")
@@ -562,9 +577,10 @@ def cmd_power(cfg: FreqConfig, pack, args) -> int:
                         f"/nodes/{node_name}/qemu/{vmid}/status/{api_action}",
                         method=api_method, timeout=60)
 
-    # Fallback to SSH
+    # Fallback to SSH — find which node owns the VM
     if not ok:
-        result, ok = _pve_cmd(cfg, node_ip, ssh_cmd, timeout=60)
+        vm_node_ip = _find_vm_node(cfg, vmid, node_ip)
+        result, ok = _pve_cmd(cfg, vm_node_ip, ssh_cmd, timeout=60)
 
     if ok:
         if action == "status":

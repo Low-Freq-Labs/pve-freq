@@ -517,6 +517,10 @@ def cmd_destroy(cfg: FreqConfig, pack, args) -> int:
         fmt.footer()
         return 1
 
+    # Find which node owns this VM
+    from freq.modules.pve import _find_vm_node
+    node_ip = _find_vm_node(cfg, vmid, node_ip)
+
     # Get VM info first
     stdout, ok = _pve_cmd(cfg, node_ip, f"qm config {vmid}")
     if not ok:
