@@ -835,7 +835,7 @@ function load(p){
     else if(p==='system')_safe(loadSystemPage);
   }catch(e){console.error('load error:',e);}
 }
-function switchView(view){
+function switchView(view, skipPush){
   _currentView=view;
   /* Hide all views */
   VIEW_IDS.forEach(function(v){var el=document.getElementById(v+'-view');if(el)el.style.display='none';});
@@ -857,9 +857,12 @@ function switchView(view){
   /* Make sure we're on p-home */
   document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active')});
   document.getElementById('p-home').classList.add('active');
+  /* URL routing — push state for bookmarkable views */
+  if(!skipPush){try{window.history.pushState({view:view},'','/dashboard/'+view);}catch(e){}}
   /* Load data */
   _safe(VIEW_LOADERS[view]||loadHome);
 }
+var showView=switchView;
 function refreshCurrentView(){_safe(VIEW_LOADERS[_currentView]||loadHome);}
 /* Silent background refresh — updates values in-place without rebuilding DOM.
    Health (CPU/RAM/disk): every 10s — lightweight SSH.
@@ -6644,4 +6647,13 @@ document.addEventListener('keydown',function(e){
     showView(_NAV_KEYS[e.key]);return;
   }
 });
-try{loadHome();renderGlobalSettings();}catch(e){console.error(e);}
+/* URL routing: popstate for back/forward, initial route on load */
+window.addEventListener('popstate',function(e){
+  if(e.state&&e.state.view&&VIEW_LOADERS[e.state.view])switchView(e.state.view,true);
+});
+try{
+  var _initPath=window.location.pathname.replace('/dashboard/','').replace('/','');
+  if(_initPath&&VIEW_LOADERS[_initPath])switchView(_initPath);
+  else loadHome();
+  renderGlobalSettings();
+}catch(e){console.error(e);}
