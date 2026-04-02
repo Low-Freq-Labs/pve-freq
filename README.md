@@ -65,7 +65,7 @@ freq observe metrics top   # What's using the most resources?
 
 ## Features
 
-### 25 Command Domains — 290 Actions
+### 25 Domains, 301 Commands
 
 | Domain | What It Manages | Example |
 |--------|----------------|---------|
@@ -268,7 +268,7 @@ sudo bash install.sh --uninstall   # Remove from management host
 
 | Doc | Description |
 |-----|-------------|
-| [CLI Reference](docs/CLI-REFERENCE.md) | All 290 commands with examples |
+| [CLI Reference](docs/CLI-REFERENCE.md) | All 301 commands with examples |
 | [API Reference](docs/API-REFERENCE.md) | REST API endpoints |
 | [Configuration](docs/CONFIGURATION.md) | Every config key documented |
 | [Architecture](ARCHITECTURE.md) | Design philosophy and code structure |
