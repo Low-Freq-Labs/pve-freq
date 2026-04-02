@@ -170,7 +170,7 @@ function doLogin(){
   if(!user||!pass){if(errEl){errEl.textContent='Enter username and password (got user=['+user+'] pass_len='+pass.length+')';errEl.style.display='block';}return;}
   if(errEl)errEl.style.display='none';
   var btn=document.querySelector('#login-overlay button');if(btn){btn.textContent='LOGGING IN...';btn.disabled=true;}
-  fetch(API.AUTH_LOGIN+'?username='+encodeURIComponent(user)+'&password='+encodeURIComponent(pass)).then(function(r){return r.json()}).then(function(d){
+  fetch(API.AUTH_LOGIN,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})}).then(function(r){return r.json()}).then(function(d){
     if(btn){btn.textContent='LOG IN';btn.disabled=false;}
     if(d.error){if(errEl){errEl.textContent=d.error;errEl.style.display='block';}passEl.value='';return;}
     _authToken=d.token;_currentUser=d.user;_currentRole=d.role;

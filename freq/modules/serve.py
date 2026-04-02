@@ -6535,9 +6535,16 @@ a:hover{{text-decoration:underline}}
     def _serve_auth_login(self):
         """Authenticate user against FREQ users list + vault password."""
 
-        params = _parse_query(self)
-        username = params.get("username", [""])[0].strip()
-        password = params.get("password", [""])[0]
+        if self.command != "POST":
+            self._json_response({"error": "Use POST with JSON body for login"}, 405)
+            return
+        try:
+            body = self._request_body()
+            username = body.get("username", "").strip().lower()
+            password = body.get("password", "")
+        except Exception:
+            self._json_response({"error": "Invalid request body"}, 400)
+            return
 
         if not username or not password:
             self._json_response({"error": "Username and password required"})
@@ -7330,6 +7337,16 @@ a:hover{{text-decoration:underline}}
             self._json_response({"ok": True, "action": action, "data": data})
         except Exception as e:
             self._json_response({"error": f"GWIPE operation failed: {e}"}, 500)
+
+    def _request_body(self):
+        """Read and parse JSON request body."""
+        length = int(self.headers.get("Content-Length", 0))
+        if length <= 0:
+            return {}
+        if length > 1_000_000:  # 1MB limit
+            return {}
+        raw = self.rfile.read(length)
+        return json.loads(raw)
 
     def _json_response(self, data, status=200):
         """Send a JSON response."""
