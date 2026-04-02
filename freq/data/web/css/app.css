@@ -310,6 +310,25 @@ tr:hover td { background: var(--card-hover); }
   .host-meta { flex-direction: column; }
 }
 
+/* ── Numeric Data — ALL numbers use monospace for consistent zeros ── */
+/* This catches inline-styled numbers from JS that don't specify font-family */
+.st .vl, .stat-pair span:first-child, .metric-val, .rm-val,
+.stat-big-red, .stat-big-green, .stat-big-orange, .stat-big-blue,
+.ho-row .v, code, pre, .exec-out, .exec-line,
+td, .mono-11, #header-time,
+[style*="font-weight:700"], [style*="font-weight: 700"] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+/* Labels and headings stay in UI font */
+.st .lb, .lb, th, .metric-label, .rm-lbl, .label-hint, .label-sub,
+h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
+.fleet-btn, .btn, .cat-badge, .device-sub, .desc-line, .prefs-label,
+.tagline, .text-meta, .text-sub {
+  font-family: var(--font-ui);
+  font-variant-numeric: normal;
+}
+
 /* ── Exec ── */
 .exec-bar { display: flex; gap: var(--gap-sm); margin-bottom: var(--gap-md); }
 .exec-bar select, .exec-bar input {
