@@ -2966,7 +2966,7 @@ a:hover{{text-decoration:underline}}
         body = "\n".join(lines) + "\n"
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body.encode())
 
@@ -3492,16 +3492,10 @@ a:hover{{text-decoration:underline}}
                     "status": "down", "uptime": "",
                 })
 
-        response = json.dumps({
+        self._json_response({
             "total": len(hosts), "up": up, "down": down,
             "duration": duration, "hosts": host_data,
         })
-
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        self.wfile.write(response.encode())
 
     _pve_metrics_cache = None
     _pve_metrics_ts = 0
@@ -6666,12 +6660,8 @@ a:hover{{text-decoration:underline}}
             req = urllib.request.Request(target_url, method=self.command)
             req.add_header("Accept", "application/json")
             with urllib.request.urlopen(req, timeout=10) as resp:
-                body = resp.read()
-                self.send_response(resp.status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(body)
+                data = json.loads(resp.read().decode())
+                self._json_response(data, resp.status)
         except urllib.error.URLError:
             self._json_response({"error": f"WATCHDOG daemon not reachable at localhost:{wd_port}", "watchdog_down": True})
         except Exception as e:
@@ -7372,7 +7362,13 @@ a:hover{{text-decoration:underline}}
         body = json.dumps(data).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        origin = self.headers.get("Origin", "")
+        if origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.send_header("Vary", "Origin")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
         self.end_headers()
         self.wfile.write(body)
 
