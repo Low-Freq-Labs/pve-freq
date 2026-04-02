@@ -342,7 +342,7 @@ var WIDGET_REGISTRY=[
     g+='<div id="hw-physical-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px"></div>';
     el.innerHTML=g;
     /* Populate physical device cards as individual grid items */
-    var pc='';PROD_HOSTS.filter(function(h){return h.type!=='pve'}).forEach(function(h){var tc={pfsense:'var(--text)',truenas:'var(--blue)',switch:'var(--cyan)',idrac:'var(--orange)'}; pc+='<div class="host-card"><div class="host-head"><h3 style="color:'+(tc[h.type]||'var(--text)')+'">'+h.label.toUpperCase()+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>·</span><span>'+h.role+'</span></div></div><div class="divider-light"><div id="hw-'+h.label.toLowerCase().replace(/[^a-z0-9]/g,'-')+'"><div class="skeleton h-60" ></div></div></div></div>';});
+    var pc='';PROD_HOSTS.filter(function(h){return h.type!=='pve'}).forEach(function(h){var tc={pfsense:'var(--text)',truenas:'var(--blue)',switch:'var(--cyan)',idrac:'var(--orange)'}; pc+='<div class="host-card" data-host-id="'+h.label.toLowerCase()+'"><div class="host-head"><h3 style="color:'+(tc[h.type]||'var(--text)')+'">'+h.label.toUpperCase()+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>·</span><span>'+h.role+'</span></div></div><div class="divider-light"><div id="hw-'+h.label.toLowerCase().replace(/[^a-z0-9]/g,'-')+'"><div class="skeleton h-60" ></div></div></div></div>';});
     var pcd=document.getElementById('hw-physical-cards');if(pcd)pcd.innerHTML=pc;
     _loadWidgetOverview();
   }},
@@ -881,12 +881,8 @@ function _silentHealthRefresh(){
     _healthInFlight=false;
     _fleetCache.hd=hd;/* keep cache fresh */
     hd.hosts.forEach(function(h){
-      var cards=document.querySelectorAll('.host-card');
-      cards.forEach(function(card){
-        var title=card.querySelector('.host-head h3');
-        if(!title)return;
-        var label=title.textContent.trim().toLowerCase();
-        if(label!==h.label.toLowerCase()&&label!==h.label)return;
+      var card=document.querySelector('.host-card[data-host-id="'+h.label.toLowerCase()+'"]');
+      if(!card)return;
         /* Update status */
         var meta=card.querySelector('.host-meta');
         if(meta){var spans=meta.querySelectorAll('span');var last=spans[spans.length-1];
@@ -911,7 +907,6 @@ function _silentHealthRefresh(){
           if(lt==='RAM'){val.textContent=ramPct+'% \u00b7 '+_ramGB(ramUsed)+' / '+_ramGB(ramTotal);if(bar){bar.style.width=ramPct+'%';var isStorage=h.type==='truenas';bar.style.background=isStorage?'var(--blue)':ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';}}
           if(lt==='DISK'){val.textContent=h.disk||'?';if(bar){bar.style.width=diskPct+'%';bar.style.background=diskPct>=90?'var(--red)':diskPct>=75?'var(--yellow)':'var(--green)';}}
         });
-      });
     });
     /* Update fleet stats online/offline counts */
     var up=0,down=0;hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;});
@@ -928,11 +923,8 @@ function _silentFleetRefresh(){
     if(!fo||!fo.vms)return;
     /* Update VM status badges + resource bars in PVE node sections */
     fo.vms.forEach(function(v){
-      var cards=document.querySelectorAll('.host-card');
-      cards.forEach(function(card){
-        var title=card.querySelector('.host-head h3');
-        if(!title)return;
-        if(title.textContent.trim().toLowerCase()!==v.name.toLowerCase())return;
+      var card=document.querySelector('.host-card[data-host-id="'+v.name.toLowerCase()+'"]');
+      if(!card)return;
         var meta=card.querySelector('.host-meta');
         if(!meta)return;
         var spans=meta.querySelectorAll('span');
@@ -961,7 +953,6 @@ function _silentFleetRefresh(){
             if(bar){bar.style.width=ramPct+'%';bar.style.background=ramPct>=90?'var(--red)':ramPct>=75?'var(--yellow)':'var(--blue)';}
           }
         });
-      });
     });
   }).catch(function(){_fleetInFlight=false;});
 }
@@ -976,12 +967,9 @@ function _pveMetricsRefresh(){
     if(!d.nodes)return;
     d.nodes.forEach(function(n){
       if(!n.online)return;
-      /* Find the host card for this PVE node */
-      var cards=document.querySelectorAll('.host-card');
-      cards.forEach(function(card){
-        var title=card.querySelector('.host-head h3');
-        if(!title)return;
-        if(title.textContent.trim().toLowerCase()!==n.name.toLowerCase())return;
+      /* Find the host card for this PVE node by data attribute */
+      var card=document.querySelector('.host-card[data-host-id="'+n.name.toLowerCase()+'"]');
+      if(!card)return;
         /* Update metric rows in-place — all from PVE API, same as PVE web UI */
         card.querySelectorAll('.metric-row').forEach(function(m){
           var lbl=m.querySelector('.metric-label');
@@ -1032,7 +1020,6 @@ function _pveMetricsRefresh(){
             value.textContent=n.ram_pct+'%';value.style.color=ramColor;
           }
         });
-      });
     });
   }).catch(function(){});
 }
@@ -1108,11 +1095,9 @@ function _fetchRrdData(){
 function _renderSparklines(){
   Object.keys(_rrdCache).forEach(function(nodeName){
     var nd=_rrdCache[nodeName];
-    /* Find the node card */
-    var cards=document.querySelectorAll('.host-card');
-    cards.forEach(function(card){
-      var title=card.querySelector('.host-head h3');
-      if(!title||title.textContent.trim().toLowerCase()!==nodeName.toLowerCase())return;
+    /* Find the node card by data attribute */
+    var card=document.querySelector('.host-card[data-host-id="'+nodeName.toLowerCase()+'"]');
+    if(!card)return;
       /* Find or create sparkline container */
       var sparkDiv=card.querySelector('.sparkline-row');
       if(!sparkDiv){
@@ -1149,7 +1134,6 @@ function _renderSparklines(){
         ioCanvas.width=ioCanvas.parentElement.offsetWidth||120;
         _sparkline(ioCanvas,nd.iowait,'#F97316','rgba(249,115,22,0.08)');
       }
-    });
   });
 }
 function startSparklines(){
@@ -2335,7 +2319,7 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
     var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
     var loadVal=parseFloat(h.load)||0;var cores=parseInt(h.cores)||1;
     var loadPct=cores>0?Math.round(loadVal/cores*100):0;
-    var c='<div class="host-card cursor-ptr" onclick="openHost(\''+h.label+'\')" >';
+    var c='<div class="host-card cursor-ptr" data-host-id="'+h.label.toLowerCase()+'" onclick="openHost(\''+h.label+'\')" >';
     c+='<div class="host-head"><h3 style="color:'+cl+'">'+h.label+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>\u00b7</span><span>'+(h.type||'Linux').toUpperCase()+'</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div>';
     c+='<div class="divider-light">';
     if(up){
@@ -2359,7 +2343,7 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
     if(!labLabels[v.label]&&v.category!=='lab')return;
     var isRunning=v.status==='running';
     var cl=_hostColor(v.label,'vm',v.node);
-    var c='<div class="host-card">';
+    var c='<div class="host-card" data-host-id="'+v.label.toLowerCase()+'">';
     c+='<div class="host-head"><h3 style="color:'+cl+'">'+v.label+'</h3><div class="host-meta"><span>VM '+v.vmid+'</span><span>\u00b7</span><span>'+(v.node||'?')+'</span><span>\u00b7</span>'+(isRunning?'<span class="c-green">RUNNING</span>':'<span class="c-dim">STOPPED</span>')+'</div></div>';
     c+='<div class="divider-light"><p style="color:var(--text-dim);font-size:12px;padding:8px 0">'+(isRunning?v.cores+' cores \u00b7 '+v.ram:'No SSH entry \u00b7 PVE data only')+'</p></div></div>';
     labCards+=c;
@@ -2387,7 +2371,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
     });
     var nRamGb=Math.round(nRamMb/1024);
     var detailRam=pn.detail.match(/(\d+)GB/);var nodeRamStr=detailRam?detailRam[1]+'GB':'?';
-    var nodeCard='<div class="host-card" style="cursor:pointer;" onclick="openVmInfo(\''+nodeName+'\',\''+pn.ip+'\',0)">';
+    var nodeCard='<div class="host-card" data-host-id="'+nodeName.toLowerCase()+'" style="cursor:pointer;" onclick="openVmInfo(\''+nodeName+'\',\''+pn.ip+'\',0)">';
     nodeCard+='<div class="mb-8"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
     nodeCard+='<div class="divider-light">';
     if(up&&live){
@@ -2565,7 +2549,7 @@ function _renderFleetData(fo,hd,md){
       var ramUsedGb=_ramGB(v.ram_used_mb||0);
       var cpuLabel=running?cpuPct+'% \u00b7 '+(v.cpu||0)+' Cores':(v.cpu||0)+' Cores';
       var ramLabel=running?ramPct+'% \u00b7 '+ramUsedGb+' / '+ramGb:ramGb;
-      var c='<div class="host-card" style="cursor:pointer;" data-action="openVmInfo" data-label="'+v.name+'" data-vmid="'+v.vmid+'">';
+      var c='<div class="host-card" data-host-id="'+v.name.toLowerCase()+'" style="cursor:pointer;" data-action="openVmInfo" data-label="'+v.name+'" data-vmid="'+v.vmid+'">';
       c+='<div class="host-head"><h3 style="color:'+cl+'">'+v.name+'</h3><div class="host-meta"><span>VM '+v.vmid+'</span><span>\u00b7</span>'+(running?'<span class="c-green">RUNNING</span>':'<span class="c-red">'+v.status.toUpperCase()+'</span>')+'</div></div>';
       c+='<div class="divider-light">';
       c+=_mrow('CPU',cpuLabel,running?cpuPct:0,'var(--green)');
@@ -3874,7 +3858,7 @@ function loadVMs(){
       var acts=v.allowed_actions||['view'];
       var catLabel=(v.category||'unknown').replace(/_/g,' ');
       var displayStatus=v.status;
-      html+='<div class="host-card cursor-ptr" data-action="openVmInfo" data-label="'+v.name+'" data-vmid="'+v.vmid+'" >';
+      html+='<div class="host-card cursor-ptr" data-host-id="'+v.name.toLowerCase()+'" data-action="openVmInfo" data-label="'+v.name+'" data-vmid="'+v.vmid+'" >';
       html+='<div class="host-head"><h3 style="color:'+cl+'">'+v.name+'</h3><div style="display:flex;align-items:center;gap:6px">'+
         '<span class="cat-badge cat-'+(v.category||'unknown')+'">'+catLabel+'</span>'+badge(displayStatus)+'</div></div>';
       html+='<div class="divider-light">';
