@@ -2,76 +2,216 @@
 
 # PVE FREQ
 
-**Datacenter management CLI for Proxmox homelabbers.**
+**One CLI to manage your entire infrastructure.**
 
-88 commands. Zero dependencies. Pure Python. Works offline.
+Proxmox VMs. Docker stacks. Network switches. Firewalls. Storage. DNS. VPN. Certificates. Security. Monitoring. All from one tool. Zero dependencies. Works on every Linux distro.
 
 [![Tests](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml/badge.svg)](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-7B2FBE.svg)](#requirements)
-[![LOC](https://img.shields.io/badge/LOC-53%2C400-7B2FBE.svg)](ARCHITECTURE.md)
-[![API](https://img.shields.io/badge/API_endpoints-146-7B2FBE.svg)](docs/API-REFERENCE.md)
 
-*Drop the bass, not the uptime.*
+<!-- ![freq fleet status](docs/screenshots/fleet-status.png) -->
 
 </div>
 
-## Try It Now
+## What FREQ Does
 
-No fleet needed. See what FREQ looks like in 10 seconds:
+**See your entire fleet in one command:**
+```bash
+$ freq fleet status
+```
+<!-- ![Fleet Status](docs/screenshots/fleet-status.png) -->
+
+**Deploy an event network to your switches:**
+```bash
+$ freq event deploy --site stadium-a --template superbowl.toml
+```
+
+**Know every certificate in your infrastructure:**
+```bash
+$ freq cert scan --expiring 30
+```
+
+## Quick Start
+
+### Install
 
 ```bash
-git clone https://github.com/Low-Freq-Labs/pve-freq.git
-cd pve-freq && python3 -m freq demo
+curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq/main/install.sh | sudo bash
 ```
 
-## What It Does
+Or with Docker:
+```bash
+docker run -v ~/.ssh:/home/freq/.ssh:ro ghcr.io/lowfreqlabs/pve-freq freq version
+```
 
-- **Fleet Operations** — SSH into any host, run commands across your fleet in parallel, view system info, diagnose issues
-- **VM Management** — Create, clone, destroy, resize, snapshot, migrate, power control, NIC management — all from one CLI
-- **Security** — Automated auditing, SSH hardening, encrypted credential vault, RBAC, policy engine with drift detection
-- **Infrastructure** — pfSense, TrueNAS, Dell iDRAC, network switches, ZFS — unified interface
-- **Monitoring** — Real-time fleet health, web dashboard at `http://localhost:8888`, continuous patrol with auto-remediation
-- **Media Stack** — Plex, Sonarr, Radarr, Tdarr, qBittorrent, SABnzbd, Prowlarr — status, health, actions
+### Initialize
 
-<details>
-<summary>Screenshots</summary>
+```bash
+freq init
+```
 
-> Screenshots go in `docs/screenshots/`. See the [capture guide](docs/screenshots/README.md) for instructions.
+This deploys FREQ's service account to your fleet, configures Proxmox API access, and discovers your hosts. Takes about 2 minutes.
+
+### Explore
+
+```bash
+freq fleet status          # What's in my fleet?
+freq vm list               # What VMs do I have?
+freq net switch facts sw1  # What's on my switch?
+freq secure audit host1    # How secure is this host?
+freq observe metrics top   # What's using the most resources?
+```
+
+## Features
+
+### 25 Command Domains — 290 Actions
+
+| Domain | What It Manages | Example |
+|--------|----------------|---------|
+| `freq vm` | Virtual machine lifecycle | `freq vm create --name myvm --cores 4 --ram 8192` |
+| `freq fleet` | Fleet operations and health | `freq fleet status` |
+| `freq host` | Fleet host registry and discovery | `freq host discover` |
+| `freq net` | Switches, SNMP, topology, IPAM | `freq net switch vlans sw1` |
+| `freq fw` | Firewall rules, NAT, states | `freq fw rules list` |
+| `freq dns` | Internal DNS management | `freq dns scan` |
+| `freq vpn` | WireGuard and OpenVPN | `freq vpn wg peers` |
+| `freq cert` | TLS certificates and expiry tracking | `freq cert scan --expiring 30` |
+| `freq proxy` | Reverse proxy management | `freq proxy status` |
+| `freq store` | TrueNAS, ZFS, storage health | `freq store nas status` |
+| `freq dr` | Backup, policies, SLA, runbooks | `freq dr sla status` |
+| `freq observe` | Metrics, logs, monitors, alerts | `freq observe alert list` |
+| `freq secure` | Vuln scanning, CIS, FIM, hardening | `freq secure comply scan` |
+| `freq ops` | Incidents, changes, on-call | `freq ops incident create "Disk failure on pve01"` |
+| `freq docker` | Stacks, containers, fleet-wide | `freq docker fleet ps` |
+| `freq hw` | iDRAC, SMART, UPS, power | `freq hw smart` |
+| `freq state` | IaC, plan/apply, drift detection | `freq state drift` |
+| `freq auto` | Reactors, workflows, chaos | `freq auto rules list` |
+| `freq event` | Live event network lifecycle | `freq event deploy --site stadium-a` |
+| `freq user` | User and role management | `freq user list` |
+| `freq media` | Media stack (40+ subcommands) | `freq media status` |
+| `freq plugin` | Plugin ecosystem management | `freq plugin list` |
+| `freq lab` | Lab fleet management | `freq lab status` |
+| `freq agent` | AI specialist VMs | `freq agent create infra-manager` |
+
+Run `freq help` for a complete reference organized by domain.
+
+### What FREQ Replaces
+
+| You Currently Use | FREQ Equivalent | Annual Cost Saved |
+|-------------------|----------------|-------------------|
+| Ansible + Terraform | `freq state plan/apply` | $0–15K |
+| SolarWinds NCM | `freq net config backup` | $2.5K+ |
+| Datadog | `freq observe metrics` | $15/host/mo |
+| PagerDuty | `freq ops oncall` | $21/user/mo |
+| Nessus | `freq secure vuln scan` | $3.5K |
+| Cisco DNA Center | `freq net switch/topology` | $15K+ |
+| Veeam | `freq dr backup/policy` | $$$$ |
+| CertBot + manual tracking | `freq cert scan/renew` | Hours/month |
+| 12 more tools... | One `freq` command | [See docs](docs/CLI-REFERENCE.md) |
+
+### Zero Dependencies
+
+FREQ uses only the Python standard library. No pip packages. No node_modules. No Docker required (but supported). Install it and it works.
+
+### Every Linux Distro
+
+Tested on Debian, Ubuntu, RHEL, Rocky, Fedora, Arch, Alpine, openSUSE, and more. Platform abstraction detects your package manager, init system, and shell. If Python 3.11 runs on it, FREQ runs on it.
+
+### Web Dashboard
+
+Start with `freq serve` — runs at `http://localhost:8888`.
+
+- 7 navigation groups with sub-tab views for every domain
+- Live updates via Server-Sent Events
+- Fleet health, VM management, Docker stacks, security posture, storage, network topology
+- Single-file SPA. Zero JavaScript dependencies. Pure Python HTTP server.
 
 <!-- ![Dashboard](docs/screenshots/dashboard-home.png) -->
-<!-- ![TUI Menu](docs/screenshots/tui-menu.png) -->
-<!-- ![Fleet Status](docs/screenshots/cli-status.png) -->
-<!-- ![Doctor](docs/screenshots/cli-doctor.png) -->
-<!-- ![Demo Mode](docs/screenshots/cli-demo.png) -->
 
-</details>
+### Interactive TUI
 
-## The Personality System
+168 menu entries. Risk-tagged operations. Color-coded categories. 15 submenus. Launch with `freq menu` or just `freq`.
 
-FREQ isn't just a tool. It has vibes.
+### Plugin Ecosystem
 
-Every successful operation gets a random celebration:
-> "The bass just hit different."
-> "808s and server states."
-> "Holy shit, first try."
+7 plugin types: command, deployer, importer, exporter, notification, widget, policy. Drop a `.py` file in `conf/plugins/` or install via `freq plugin install <url>`. Create scaffolds with `freq plugin create --name my-plugin --type deployer`.
 
-Random vibe drops appear at 1/47 probability:
-> `# tip: freq doctor is free. run it more than you think you need to.`
-> `# zeds dead has been making bass music since 2009. consistency is the move.`
+### Multi-Vendor Device Support
 
-Legendary vibe drops tell stories:
+Built-in deployers for Cisco IOS/IOS-XE, pfSense, OPNsense, Dell iDRAC, TrueNAS, and Linux servers. Community deployers installable as plugins — MikroTik, Juniper, Aruba, and more.
+
+## Architecture
+
 ```
-+-----------------------------------------------+
-|  the first version of this was 300 lines       |
-|  and only did 'qm list'                        |
-|  now it runs a cluster, a NAS,                 |
-|  a firewall, a switch, and a dream             |
-+-----------------------------------------------+
+freq/
+├── core/           # SSH transport, config, platform detection, abstractions
+├── modules/        # 81 CLI command modules (one per feature area)
+├── deployers/      # Device-specific drivers (switch/cisco.py, firewall/pfsense.py, ...)
+├── engine/         # Declarative policy compliance engine
+├── jarvis/         # Smart operations (chaos, capacity, federation, ...)
+├── api/            # 16 REST API domain handlers
+├── tui/            # Interactive terminal menu system
+└── data/web/       # Dashboard SPA (HTML + CSS + JS)
 ```
 
-Customize everything in `conf/personality/`. Ship your own pack.
+- **CLI:** argparse with domain-based dispatch. 25 domains, 290 actions.
+- **Transport:** All remote operations over SSH. Platform-aware for Linux, FreeBSD, network appliances.
+- **API:** Every CLI domain has matching REST endpoints at `/api/v1/<domain>/<action>`.
+- **Dashboard:** Pure Python stdlib web server. SPA with Server-Sent Events for live updates.
+- **Config:** TOML-based. Safe defaults — missing config never crashes.
+- **Plugins:** Drop a `.py` file in `conf/plugins/` or install via `freq plugin install`.
+
+```
+                          ┌─────────────┐
+                     ┌───>│  PVE Node 1  │
+                     │    └─────────────┘
+┌──────────────┐     │    ┌─────────────┐
+│  Management  │─SSH─┼───>│  PVE Node 2  │
+│    Host      │     │    └─────────────┘
+│   (freq)     │     │    ┌─────────────┐
+└──────────────┘     ├───>│  Docker VM   │
+                     │    └─────────────┘
+                     │    ┌─────────────┐
+                     ├───>│  pfSense     │
+                     │    └─────────────┘
+                     │    ┌─────────────┐
+                     ├───>│  Cisco SW    │
+                     │    └─────────────┘
+                     │    ┌─────────────┐
+                     └───>│  TrueNAS     │
+                          └─────────────┘
+```
+
+## Configuration
+
+All config lives in `conf/`. FREQ uses TOML format with safe defaults.
+
+| File | Purpose |
+|------|---------|
+| `freq.toml` | Main config — cluster, SSH, VM defaults, safety rules, services |
+| `hosts.conf` | Fleet host registry — IP, label, type, groups |
+| `vlans.toml` | VLAN definitions |
+| `switch-profiles.toml` | Switch port profiles |
+| `fleet-boundaries.toml` | VM permission tiers (probe/operator/admin) |
+| `rules.toml` | Alert rules for health monitoring |
+| `risk.toml` | Infrastructure dependency/risk map |
+| `playbooks/` | Recovery playbooks (automated remediation) |
+| `personality/` | Personality packs — celebrations, vibes, branding |
+| `plugins/` | Custom command plugins |
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete reference.
+
+## Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **OS** | Debian 12–13, Ubuntu 24.04+, RHEL/Rocky/Alma 9+, Fedora, Arch, Alpine, openSUSE |
+| **Python** | 3.11+ |
+| **SSH** | openssh-client (pre-installed on all Linux) |
+| **Optional** | sshpass (for initial fleet deployment with password auth) |
+
+Zero external Python packages. Every import is stdlib. No pip dependencies. No compiled extensions.
 
 ## Install
 
@@ -89,168 +229,67 @@ pip install --no-deps pve-freq
 
 ### Docker Compose
 
-See [pve-freq-docker](https://github.com/Low-Freq-Labs/pve-freq-docker) for the recommended Docker deployment with build scripts, volume management, and a CLI wrapper.
-
-Quick start from source:
+See [pve-freq-docker](https://github.com/Low-Freq-Labs/pve-freq-docker) for the recommended Docker deployment.
 
 ```bash
 git clone https://github.com/Low-Freq-Labs/pve-freq.git
-cd pve-freq
-docker compose up -d
+cd pve-freq && docker compose up -d
 ```
 
-Dashboard runs at `http://localhost:8888`. Config and data persist in `./conf/` and `./data/`.
+Dashboard at `http://localhost:8888`. Config and data persist in `./conf/` and `./data/`.
 
 ### From source
 
 ```bash
 git clone https://github.com/Low-Freq-Labs/pve-freq.git /opt/pve-freq
-cd /opt/pve-freq
-sudo bash install.sh --from-local . --yes
-```
-
-### Systemd (bare-metal daemon)
-
-```bash
-sudo bash install.sh --from-local . --yes --with-systemd
-systemctl start freq-serve
+cd /opt/pve-freq && sudo bash install.sh --from-local . --yes
 ```
 
 ## First Run
 
 ```bash
-# Try the demo (no fleet needed)
-freq demo
-
-# Check your system
-freq doctor
-
-# Edit your cluster config
-sudo nano /opt/pve-freq/conf/freq.toml
-
-# Deploy to your fleet
-sudo freq init
-
-# See your fleet
-freq status
+freq version     # Branding, version — feels polished
+freq doctor      # Self-diagnostic — checks everything
+freq init        # Interactive wizard — discovers your fleet
+freq fleet status   # See your entire fleet
+freq vm list     # Every VM across every node
 ```
 
-## Features
-
-### 88 CLI Commands
-
-| Category | Count | Highlights |
-|----------|-------|------------|
-| Fleet Operations | 11 | Parallel SSH, fleet-wide exec, deep host inventory |
-| VM Management | 18 | Create, clone, migrate, snapshot, NIC, resize, power, tags, disks |
-| Host Management | 7 | Discovery, bootstrap, onboard, groups, key rotation |
-| Security & Policy | 7 | AES-256 vault, policy engine, drift detection |
-| Infrastructure | 6 | pfSense, TrueNAS, iDRAC, Cisco switch, ZFS |
-| Media Stack | 40+ | Plex, Sonarr, Radarr, Tdarr, qBit, SABnzbd |
-| Monitoring | 5 | Health checks, patrol mode, NTP, OS updates |
-| Smart Commands | 4 | Knowledge base, risk analysis, sweep, patrol |
-| Deployment | 2 | 10-phase init wizard, configuration |
-
-Run `freq help` for a summary or see [docs/CLI-REFERENCE.md](docs/CLI-REFERENCE.md) for the full reference with examples.
-
-### Web Dashboard
-
-146 API endpoints. 7 views. Single-file SPA. Zero JavaScript dependencies.
-Live updates via Server-Sent Events. Start with `freq serve` — runs at `http://localhost:8888`.
-
-See [docs/API-REFERENCE.md](docs/API-REFERENCE.md) for the full endpoint list.
-
-### Interactive TUI
-
-168 menu entries. Risk-tagged operations. Color-coded categories. 15 submenus.
-Launch with `freq menu` or just `freq`.
-
-### Policy Engine
-
-Declarative policies (dicts, not code). Async pipeline runner.
-`freq check ssh-hardening` → `freq diff ssh-hardening` → `freq fix ssh-hardening`
-
-### 15-Point Self-Diagnostic
-
-`freq doctor` checks Python, platform, prerequisites, install directory, config, data directories, personality pack, SSH binary, SSH key, fleet connectivity, fleet data, fleet validity, VLANs, distros, and PVE cluster.
-
-## Requirements
-
-| Requirement | Details |
-|-------------|---------|
-| **OS** | Debian 12-13, Ubuntu 24.04+, Rocky/RHEL/AlmaLinux 9+ |
-| **Python** | 3.11+ (ships with all supported distros) |
-| **SSH** | openssh-client (pre-installed on all Linux) |
-| **Optional** | sshpass (for initial fleet deployment with password auth) |
-
-Zero external Python packages. Every import is stdlib. No pip dependencies. No compiled extensions.
-
-## How It Works
-
-FREQ runs on a single management host. It SSHs into your Proxmox nodes and fleet VMs to manage them. No agents on managed hosts — just SSH access.
-
-```
-                          ┌─────────────┐
-                     ┌───>│  PVE Node 1  │
-                     │    └─────────────┘
-┌──────────────┐     │    ┌─────────────┐
-│  Management  │─SSH─┼───>│  PVE Node 2  │
-│    Host      │     │    └─────────────┘
-│   (freq)     │     │    ┌─────────────┐
-└──────────────┘     ├───>│  Docker VM   │
-                     │    └─────────────┘
-                     │    ┌─────────────┐
-                     ├───>│  pfSense     │
-                     │    └─────────────┘
-                     │    ┌─────────────┐
-                     └───>│  TrueNAS     │
-                          └─────────────┘
-```
-
-## Configuration
-
-All config lives in `/opt/pve-freq/conf/`. FREQ uses TOML format with legacy `.conf` fallback.
-
-| File | Purpose |
-|------|---------|
-| `freq.toml` | Main config — cluster, SSH, VM defaults, safety rules, services |
-| `hosts.toml` | Fleet host registry — IP, label, type, groups |
-| `fleet-boundaries.toml` | VM permission tiers (probe/operator/admin) |
-| `vlans.toml` | VLAN definitions |
-| `distros.toml` | Cloud image definitions for `freq import` |
-| `containers.toml` | Docker container registry |
-| `risk.toml` | Infrastructure dependency/risk map |
-| `rules.toml` | Alert rules for health monitoring |
-| `playbooks/` | Recovery playbooks (automated remediation) |
-| `personality/` | Personality packs — celebrations, vibes, branding |
-| `plugins/` | Custom command plugins (drop .py files here) |
-
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete reference with every key documented.
+By minute 5, you've seen your entire infrastructure without editing a single config file.
 
 ## Uninstall
 
 ```bash
-# Remove FREQ from fleet hosts first
-sudo freq init --uninstall
-
-# Remove FREQ from management host
-sudo bash install.sh --uninstall
+sudo freq init --uninstall   # Remove from fleet hosts
+sudo bash install.sh --uninstall   # Remove from management host
 ```
 
 ## Documentation
 
 | Doc | Description |
 |-----|-------------|
-| [CLI Reference](docs/CLI-REFERENCE.md) | All 88 commands with examples |
-| [API Reference](docs/API-REFERENCE.md) | All 146 REST endpoints |
+| [CLI Reference](docs/CLI-REFERENCE.md) | All 290 commands with examples |
+| [API Reference](docs/API-REFERENCE.md) | REST API endpoints |
 | [Configuration](docs/CONFIGURATION.md) | Every config key documented |
 | [Architecture](ARCHITECTURE.md) | Design philosophy and code structure |
 | [Quick Reference](docs/QUICK-REFERENCE.md) | Common commands cheat sheet |
-| [Break Glass](docs/BREAK-GLASS.md) | Emergency procedures |
+| [Changelog](CHANGELOG.md) | Version history |
+| [Contributing](CONTRIBUTING.md) | Development setup and guidelines |
+| [Security Policy](SECURITY.md) | Vulnerability reporting |
+
+## The Personality System
+
+FREQ isn't just a tool. It has vibes.
+
+Every successful operation gets a random celebration:
+> "The bass just hit different."
+> "808s and server states."
+
+Customize everything in `conf/personality/`. Ship your own pack.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, and PR process.
 
 ## License
 
