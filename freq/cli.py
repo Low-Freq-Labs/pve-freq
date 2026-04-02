@@ -610,6 +610,16 @@ def _register_docker(sub):
     p = docker_sub.add_parser("monitor", help="Check HTTP endpoints defined in config")
     p.set_defaults(func=_cmd_monitor)
 
+    # Fleet Docker management (WS13)
+    p = docker_sub.add_parser("list", help="List containers across fleet")
+    p.set_defaults(func=_cmd_docker_containers)
+    p = docker_sub.add_parser("images", help="List images across fleet")
+    p.set_defaults(func=_cmd_docker_images)
+    p = docker_sub.add_parser("prune", help="Clean up unused resources fleet-wide")
+    p.set_defaults(func=_cmd_docker_prune)
+    p = docker_sub.add_parser("update-check", help="Check for image updates")
+    p.set_defaults(func=_cmd_docker_update_check)
+
 
 # ---------------------------------------------------------------------------
 # freq secure — Security & Compliance
@@ -1020,6 +1030,16 @@ def _register_hw(sub):
     p.add_argument("--host", help="GWIPE station IP (overrides vault)")
     p.add_argument("--key", help="API key (overrides vault)")
     p.set_defaults(func=_cmd_gwipe)
+
+    # Hardware monitoring (WS14)
+    p = hw_sub.add_parser("smart", help="Fleet-wide SMART health check")
+    p.set_defaults(func=_cmd_hw_smart)
+    p = hw_sub.add_parser("ups", help="UPS status via NUT")
+    p.set_defaults(func=_cmd_hw_ups)
+    p = hw_sub.add_parser("power", help="Fleet power consumption estimates")
+    p.set_defaults(func=_cmd_hw_power)
+    p = hw_sub.add_parser("inventory", help="Hardware inventory across fleet")
+    p.set_defaults(func=_cmd_hw_inventory)
 
 
 # ---------------------------------------------------------------------------
@@ -2404,6 +2424,42 @@ def _cmd_ip_conflict(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.net_intelligence import cmd_ip_conflict
     return cmd_ip_conflict(cfg, pack, args)
 
+
+# --- Docker Fleet (WS13) ---
+
+def _cmd_docker_containers(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.docker_mgmt import cmd_docker_containers
+    return cmd_docker_containers(cfg, pack, args)
+
+def _cmd_docker_images(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.docker_mgmt import cmd_docker_images
+    return cmd_docker_images(cfg, pack, args)
+
+def _cmd_docker_prune(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.docker_mgmt import cmd_docker_prune
+    return cmd_docker_prune(cfg, pack, args)
+
+def _cmd_docker_update_check(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.docker_mgmt import cmd_docker_update_check
+    return cmd_docker_update_check(cfg, pack, args)
+
+# --- Hardware (WS14) ---
+
+def _cmd_hw_smart(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.hardware import cmd_hw_smart
+    return cmd_hw_smart(cfg, pack, args)
+
+def _cmd_hw_ups(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.hardware import cmd_hw_ups
+    return cmd_hw_ups(cfg, pack, args)
+
+def _cmd_hw_power(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.hardware import cmd_hw_power
+    return cmd_hw_power(cfg, pack, args)
+
+def _cmd_hw_inventory(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.hardware import cmd_hw_inventory
+    return cmd_hw_inventory(cfg, pack, args)
 
 # --- Incident/Change (WS12) ---
 
