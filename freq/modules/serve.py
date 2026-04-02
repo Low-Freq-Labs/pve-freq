@@ -1445,13 +1445,22 @@ def _get_fleet_vms(cfg):
                     vmid = v.get("vmid", 0)
                     cat_name, tier = fb.categorize(vmid)
                     tags = get_vm_tags(vmid)
+                    # cpu field: real utilization (0.0-1.0), maxcpu: allocated cores
+                    # mem field: real used bytes, maxmem: allocated bytes
+                    cpu_real = v.get("cpu", 0)
+                    cpu_pct = round(cpu_real * 100, 1) if isinstance(cpu_real, (int, float)) else 0
+                    mem_used = v.get("mem", 0) or 0
+                    mem_max = v.get("maxmem", 0) or 0
                     vm_list.append({
                         "vmid": vmid,
                         "name": v.get("name", ""),
                         "node": v.get("node", ""),
                         "status": v.get("status", ""),
                         "cpu": v.get("maxcpu", 0),
-                        "ram_mb": v.get("maxmem", 0) // (1024 * 1024) if v.get("maxmem") else 0,
+                        "cpu_pct": cpu_pct,
+                        "ram_mb": mem_max // (1024 * 1024) if mem_max else 0,
+                        "ram_used_mb": mem_used // (1024 * 1024) if mem_used else 0,
+                        "ram_pct": round(mem_used / mem_max * 100, 1) if mem_max else 0,
                         "type": v.get("type", ""),
                         "category": cat_name,
                         "tier": tier,
