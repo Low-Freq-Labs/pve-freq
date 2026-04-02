@@ -2390,13 +2390,13 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
       /* Initial render — PVE API poller fills real values within 2 seconds */
       var ramColor=ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';
       nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
-      nodeCard+=_fGrp('UTILIZATION',2,_fStat('...','CPU LOAD','var(--text-dim)')+_fStat(ramPct+'%','RAM USED',ramColor));
+      nodeCard+=_fGrp('UTILIZATION',2,_fStat('...','CPU LOAD','var(--text-dim)')+_fStat('...','RAM USED','var(--text-dim)'));
       nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'ONLINE','var(--green)')+_fStat(nOffline,'OFFLINE','var(--red)'));
       nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
       nodeCard+='</div>';
       nodeCard+='<div style="margin:6px 0">';
       nodeCard+=_mrow('CPU','...',0,'var(--text-dim)');
-      nodeCard+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,ramColor);
+      nodeCard+=_mrow('RAM','...',0,'var(--text-dim)');
       nodeCard+=_mrow('DISK IO','...',0,'var(--text-dim)');
       nodeCard+=_mrow('STORAGE','...',0,'var(--text-dim)');
       nodeCard+='</div>';
