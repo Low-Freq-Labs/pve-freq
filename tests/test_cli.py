@@ -41,7 +41,7 @@ class TestCLIDispatch(unittest.TestCase):
             # Domains
             "vm", "fleet", "host", "docker", "secure", "observe",
             "state", "auto", "ops", "hw", "store", "dr", "net",
-            "fw", "cert", "dns", "proxy", "media", "user", "event",
+            "fw", "cert", "dns", "proxy", "media", "user", "event", "vpn",
         ]
         registered = self._get_registered()
         for domain in expected_domains:

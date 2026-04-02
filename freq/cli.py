@@ -159,6 +159,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _register_media(sub)
     _register_user(sub)
     _register_event(sub)
+    _register_vpn(sub)
 
     return parser
 
@@ -1228,8 +1229,35 @@ def _register_net(sub):
 def _register_fw(sub):
     """Register freq fw subcommands."""
     fw = sub.add_parser("fw", help="Firewall management (pfSense/OPNsense)")
-    fw.add_argument("action", nargs="?", help="status/rules/nat/states/interfaces/gateways/services")
-    fw.set_defaults(func=_cmd_pfsense)
+    _domain_help(fw)
+    fw_sub = fw.add_subparsers(dest="subcmd")
+
+    p = fw_sub.add_parser("status", help="Firewall system status")
+    p.set_defaults(func=_cmd_fw_status)
+
+    p = fw_sub.add_parser("rules", help="List, export, or audit firewall rules")
+    p.add_argument("action", nargs="?", default="list", choices=["list", "export", "audit"],
+                   help="Action: list (default), export, audit")
+    p.set_defaults(func=_cmd_fw_rules)
+
+    p = fw_sub.add_parser("nat", help="NAT/port forward rules")
+    p.set_defaults(func=_cmd_fw_nat)
+
+    p = fw_sub.add_parser("states", help="Active connection states")
+    p.add_argument("--limit", type=int, default=20, help="Number of states to show")
+    p.set_defaults(func=_cmd_fw_states)
+
+    p = fw_sub.add_parser("interfaces", help="Firewall network interfaces")
+    p.set_defaults(func=_cmd_fw_interfaces)
+
+    p = fw_sub.add_parser("gateways", help="Gateway status and routing")
+    p.set_defaults(func=_cmd_fw_gateways)
+
+    p = fw_sub.add_parser("dhcp", help="DHCP lease management")
+    p.add_argument("action", nargs="?", default="leases", help="Action: leases")
+    p.set_defaults(func=_cmd_fw_dhcp)
+
+    fw.set_defaults(func=_cmd_fw_status)
 
 
 # ---------------------------------------------------------------------------
@@ -1239,9 +1267,32 @@ def _register_fw(sub):
 def _register_cert(sub):
     """Register freq cert subcommands."""
     cert = sub.add_parser("cert", help="TLS certificate inventory and monitoring")
-    cert.add_argument("action", nargs="?", choices=["scan", "list", "check"],
-                      default="scan", help="Action to perform")
-    cert.add_argument("target", nargs="?", help="Host:port for single check")
+    _domain_help(cert)
+    cert_sub = cert.add_subparsers(dest="subcmd")
+
+    p = cert_sub.add_parser("scan", help="Scan fleet for TLS certificates")
+    p.set_defaults(func=_cmd_cert)
+
+    p = cert_sub.add_parser("list", help="List certificate inventory")
+    p.set_defaults(func=_cmd_cert)
+
+    p = cert_sub.add_parser("check", help="Check a single endpoint")
+    p.add_argument("target", nargs="?", help="Host:port")
+    p.set_defaults(func=_cmd_cert)
+
+    p = cert_sub.add_parser("inspect", help="Inspect TLS certificate details")
+    p.add_argument("target", help="Host:port to inspect")
+    p.set_defaults(func=_cmd_cert_inspect)
+
+    p = cert_sub.add_parser("fleet-check", help="Check certs across all fleet hosts")
+    p.set_defaults(func=_cmd_cert_fleet_check)
+
+    p = cert_sub.add_parser("acme", help="ACME (Let's Encrypt) status")
+    p.set_defaults(func=_cmd_cert_acme_status)
+
+    p = cert_sub.add_parser("issued", help="List tracked issued certificates")
+    p.set_defaults(func=_cmd_cert_issued_list)
+
     cert.set_defaults(func=_cmd_cert)
 
 
@@ -1252,9 +1303,43 @@ def _register_cert(sub):
 def _register_dns(sub):
     """Register freq dns subcommands."""
     dns = sub.add_parser("dns", help="DNS record tracking and validation")
-    dns.add_argument("action", nargs="?", choices=["scan", "check", "list"],
-                     default="scan", help="Action to perform")
-    dns.add_argument("target", nargs="?", help="Hostname or IP for single check")
+    _domain_help(dns)
+    dns_sub = dns.add_subparsers(dest="subcmd")
+
+    p = dns_sub.add_parser("scan", help="Fleet-wide DNS validation")
+    p.set_defaults(func=_cmd_dns)
+
+    p = dns_sub.add_parser("check", help="Check a single host's DNS")
+    p.add_argument("target", nargs="?", help="Hostname or IP")
+    p.set_defaults(func=_cmd_dns)
+
+    p = dns_sub.add_parser("list", help="DNS inventory")
+    p.set_defaults(func=_cmd_dns)
+
+    # Internal DNS management
+    int_dns = dns_sub.add_parser("internal", help="Internal DNS record management")
+    int_sub = int_dns.add_subparsers(dest="action")
+
+    p = int_sub.add_parser("list", help="List internal DNS records")
+    p.set_defaults(func=_cmd_dns_internal_list)
+
+    p = int_sub.add_parser("add", help="Add a DNS record")
+    p.add_argument("hostname", help="Hostname")
+    p.add_argument("ip", help="IP address")
+    p.set_defaults(func=_cmd_dns_internal_add)
+
+    p = int_sub.add_parser("remove", help="Remove a DNS record")
+    p.add_argument("hostname", help="Hostname to remove")
+    p.set_defaults(func=_cmd_dns_internal_remove)
+
+    p = int_sub.add_parser("sync", help="Sync DNS from hosts.conf")
+    p.set_defaults(func=_cmd_dns_internal_sync)
+
+    p = int_sub.add_parser("audit", help="Audit DNS resolution")
+    p.set_defaults(func=_cmd_dns_internal_audit)
+
+    int_dns.set_defaults(func=_cmd_dns_internal_list)
+
     dns.set_defaults(func=_cmd_dns)
 
 
@@ -1265,13 +1350,32 @@ def _register_dns(sub):
 def _register_proxy(sub):
     """Register freq proxy subcommands."""
     proxy = sub.add_parser("proxy", help="Reverse proxy management")
-    proxy.add_argument("action", nargs="?", choices=["status", "list", "add", "remove", "certs"],
-                       default="status", help="Action to perform")
-    proxy.add_argument("--domain", help="Domain name for proxy route")
-    proxy.add_argument("--upstream", help="Upstream target (host:port)")
-    proxy.add_argument("--host", dest="target_host", help="Target proxy host")
-    proxy.add_argument("--ssl", action="store_true", default=True, help="Enable SSL (default)")
-    proxy.set_defaults(func=_cmd_proxy)
+    _domain_help(proxy)
+    proxy_sub = proxy.add_subparsers(dest="subcmd")
+
+    p = proxy_sub.add_parser("status", help="Detect and show proxy status")
+    p.set_defaults(func=_cmd_proxy_status)
+
+    p = proxy_sub.add_parser("hosts", help="List proxy hosts from backend")
+    p.set_defaults(func=_cmd_proxy_hosts)
+
+    p = proxy_sub.add_parser("health", help="Health check proxy backends")
+    p.set_defaults(func=_cmd_proxy_health)
+
+    # Legacy commands
+    p = proxy_sub.add_parser("list", help="List managed routes")
+    p.set_defaults(func=_cmd_proxy)
+
+    p = proxy_sub.add_parser("add", help="Add a proxy route")
+    p.add_argument("--domain", help="Domain name")
+    p.add_argument("--upstream", help="Upstream target (host:port)")
+    p.set_defaults(func=_cmd_proxy)
+
+    p = proxy_sub.add_parser("remove", help="Remove a proxy route")
+    p.add_argument("--domain", help="Domain to remove")
+    p.set_defaults(func=_cmd_proxy)
+
+    proxy.set_defaults(func=_cmd_proxy_status)
 
 
 # ---------------------------------------------------------------------------
@@ -1331,6 +1435,43 @@ def _register_user(sub):
     p = user_sub.add_parser("install", help="Install user across fleet")
     p.add_argument("username", nargs="?", help="Username")
     p.set_defaults(func=_cmd_install_user)
+
+
+# ---------------------------------------------------------------------------
+# freq vpn — VPN Management
+# ---------------------------------------------------------------------------
+
+def _register_vpn(sub):
+    """Register freq vpn subcommands."""
+    vpn = sub.add_parser("vpn", help="VPN tunnel management (WireGuard/OpenVPN)")
+    _domain_help(vpn)
+    vpn_sub = vpn.add_subparsers(dest="subcmd")
+
+    # WireGuard
+    wg = vpn_sub.add_parser("wg", help="WireGuard management")
+    wg_sub = wg.add_subparsers(dest="action")
+
+    p = wg_sub.add_parser("status", help="WireGuard tunnel status")
+    p.set_defaults(func=_cmd_vpn_wg_status)
+
+    p = wg_sub.add_parser("peers", help="List peers with details")
+    p.set_defaults(func=_cmd_vpn_wg_peers)
+
+    p = wg_sub.add_parser("audit", help="Find stale/inactive peers")
+    p.set_defaults(func=_cmd_vpn_wg_audit)
+
+    wg.set_defaults(func=_cmd_vpn_wg_status)
+
+    # OpenVPN
+    ovpn = vpn_sub.add_parser("ovpn", help="OpenVPN management")
+    ovpn_sub = ovpn.add_subparsers(dest="action")
+
+    p = ovpn_sub.add_parser("status", help="OpenVPN server status")
+    p.set_defaults(func=_cmd_vpn_ovpn_status)
+
+    ovpn.set_defaults(func=_cmd_vpn_ovpn_status)
+
+    vpn.set_defaults(func=_cmd_vpn_wg_status)
 
 
 # ---------------------------------------------------------------------------
@@ -2078,6 +2219,131 @@ def _cmd_ip_utilization(cfg: FreqConfig, pack, args) -> int:
 def _cmd_ip_conflict(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.net_intelligence import cmd_ip_conflict
     return cmd_ip_conflict(cfg, pack, args)
+
+
+# --- Firewall ---
+
+def _cmd_fw_status(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.firewall import cmd_fw_status
+    return cmd_fw_status(cfg, pack, args)
+
+
+def _cmd_fw_rules(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.firewall import cmd_fw_rules
+    return cmd_fw_rules(cfg, pack, args)
+
+
+def _cmd_fw_nat(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.firewall import cmd_fw_nat
+    return cmd_fw_nat(cfg, pack, args)
+
+
+def _cmd_fw_states(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.firewall import cmd_fw_states
+    return cmd_fw_states(cfg, pack, args)
+
+
+def _cmd_fw_interfaces(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.firewall import cmd_fw_interfaces
+    return cmd_fw_interfaces(cfg, pack, args)
+
+
+def _cmd_fw_gateways(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.firewall import cmd_fw_gateways
+    return cmd_fw_gateways(cfg, pack, args)
+
+
+def _cmd_fw_dhcp(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.firewall import cmd_fw_dhcp
+    return cmd_fw_dhcp(cfg, pack, args)
+
+
+# --- DNS Internal ---
+
+def _cmd_dns_internal_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dns_management import cmd_dns_internal_list
+    return cmd_dns_internal_list(cfg, pack, args)
+
+
+def _cmd_dns_internal_add(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dns_management import cmd_dns_internal_add
+    return cmd_dns_internal_add(cfg, pack, args)
+
+
+def _cmd_dns_internal_remove(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dns_management import cmd_dns_internal_remove
+    return cmd_dns_internal_remove(cfg, pack, args)
+
+
+def _cmd_dns_internal_sync(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dns_management import cmd_dns_internal_sync
+    return cmd_dns_internal_sync(cfg, pack, args)
+
+
+def _cmd_dns_internal_audit(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.dns_management import cmd_dns_internal_audit
+    return cmd_dns_internal_audit(cfg, pack, args)
+
+
+# --- VPN ---
+
+def _cmd_vpn_wg_status(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.vpn import cmd_vpn_wg_status
+    return cmd_vpn_wg_status(cfg, pack, args)
+
+
+def _cmd_vpn_wg_peers(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.vpn import cmd_vpn_wg_peers
+    return cmd_vpn_wg_peers(cfg, pack, args)
+
+
+def _cmd_vpn_wg_audit(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.vpn import cmd_vpn_wg_audit
+    return cmd_vpn_wg_audit(cfg, pack, args)
+
+
+def _cmd_vpn_ovpn_status(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.vpn import cmd_vpn_ovpn_status
+    return cmd_vpn_ovpn_status(cfg, pack, args)
+
+
+# --- Cert Management ---
+
+def _cmd_cert_inspect(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert_management import cmd_cert_inspect
+    return cmd_cert_inspect(cfg, pack, args)
+
+
+def _cmd_cert_fleet_check(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert_management import cmd_cert_fleet_check
+    return cmd_cert_fleet_check(cfg, pack, args)
+
+
+def _cmd_cert_acme_status(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert_management import cmd_cert_acme_status
+    return cmd_cert_acme_status(cfg, pack, args)
+
+
+def _cmd_cert_issued_list(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert_management import cmd_cert_issued_list
+    return cmd_cert_issued_list(cfg, pack, args)
+
+
+# --- Proxy Management ---
+
+def _cmd_proxy_status(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.proxy_management import cmd_proxy_status
+    return cmd_proxy_status(cfg, pack, args)
+
+
+def _cmd_proxy_hosts(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.proxy_management import cmd_proxy_hosts
+    return cmd_proxy_hosts(cfg, pack, args)
+
+
+def _cmd_proxy_health(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.proxy_management import cmd_proxy_health
+    return cmd_proxy_health(cfg, pack, args)
 
 
 # --- Event Network ---
