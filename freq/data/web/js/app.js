@@ -130,7 +130,7 @@ document.addEventListener('click',function(e){
     if(a==='hdDiagnose'){hdDiagnose(da);return;}
     if(a==='togglePveGroup'){togglePveGroup(da);return;}
     if(a==='clearHarden'){document.getElementById('harden-c').innerHTML='';return;}
-    var fns={sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll};
+    var fns={sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,vmtRollback:vmtRollback,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll};
     if(fns[a]){fns[a]();return;}
     var argFns={tnAction:tnAction,swAction:swAction,pfAction:pfAction,idracAction:idracAction,switchVaultTab:switchVaultTab,switchDockerSub:switchDockerSub,toggleMediaTag:toggleMediaTag,runHostUpdate:runHostUpdate,sshdRestartHost:sshdRestartHost,ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart};
     if(argFns[a]){argFns[a](g);return;}
@@ -3688,7 +3688,7 @@ function _fleetToolInner(tool,panel,content){
   } else if(tool==='fleetops'){
     _buildToolTabs('FLEET OPS',[{id:'deepscan',label:'DEEP SCAN'},{id:'ntp',label:'NTP SYNC'},{id:'updates',label:'OS UPDATES'},{id:'sshd',label:'RESTART SSHD'},{id:'exec',label:'FLEET EXEC'}],'fo-tab','switchFleetOps','fo-subtitle','fo-form',content);return;
   } else if(tool==='vmmgmt'){
-    _buildToolTabs('VM MANAGEMENT',[{id:'vmlist',label:'VM LIST'},{id:'vmcreate',label:'CREATE VM'},{id:'vmclone',label:'CLONE VM'},{id:'vmmigrate',label:'MIGRATE'},{id:'vmresize',label:'RESIZE'},{id:'vmadddisk',label:'ADD DISK'},{id:'vmtag',label:'TAGS'}],'vm-tab','switchVmMgmt','vm-subtitle','vm-form',content);return;
+    _buildToolTabs('VM MANAGEMENT',[{id:'vmlist',label:'VM LIST'},{id:'vmcreate',label:'CREATE VM'},{id:'vmclone',label:'CLONE VM'},{id:'vmmigrate',label:'MIGRATE'},{id:'vmresize',label:'RESIZE'},{id:'vmadddisk',label:'ADD DISK'},{id:'vmtag',label:'TAGS'},{id:'vmrollback',label:'ROLLBACK'}],'vm-tab','switchVmMgmt','vm-subtitle','vm-form',content);return;
   } else if(tool==='newuser'){
     content.innerHTML='<h3 class="section-label-pl">NEW FLEET USER</h3>'+
       '<div class="form-vertical">'+
@@ -3801,7 +3801,7 @@ function switchFleetOps(tab){
   _fleetToolInner(tab,fakePanel,foForm);
   var innerH3=foForm.querySelector('h3');if(innerH3)innerH3.remove();
 }
-var _vmLabels={vmlist:'VM LIST',vmcreate:'CREATE VM',vmclone:'CLONE VM',vmmigrate:'MIGRATE',vmsnapshot:'SNAPSHOTS',vmresize:'RESIZE',vmadddisk:'ADD DISK',vmtag:'TAGS'};
+var _vmLabels={vmlist:'VM LIST',vmcreate:'CREATE VM',vmclone:'CLONE VM',vmmigrate:'MIGRATE',vmsnapshot:'SNAPSHOTS',vmresize:'RESIZE',vmadddisk:'ADD DISK',vmtag:'TAGS',vmrollback:'ROLLBACK'};
 function switchVmMgmt(tab){
   document.querySelectorAll('.vm-tab').forEach(function(b){b.classList.remove('active-view');});
   var active=document.querySelector('.vm-tab[data-vmtab="'+tab+'"]');if(active)active.classList.add('active-view');
@@ -3890,6 +3890,8 @@ function switchVmMgmt(tab){
         sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+tagInfo+'</option>';
       });
     }).catch(function(e){console.error('API error:',e);});
+  } else if(tab==='vmrollback'){
+    vmtRollback();
   }
 }
 /* VM Management action handlers */
@@ -3991,6 +3993,57 @@ function vmtSnapshot(){
   _authFetch(API.VM_SNAPSHOT+'?vmid='+src).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Snapshot "'+d.snapshot+'" created','success');if(out)out.innerHTML='<div class="c-green">Snapshot "'+d.snapshot+'" created for VM '+src+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
+  });
+}
+function vmtRollback(){
+  var vmForm=document.getElementById('vm-tools-form');if(!vmForm)return;
+  vmForm.innerHTML='<div class="form-vertical">'+
+    '<div><label class="label-sub">VM</label><select id="vmt-rb-source" class="input-primary"><option value="">Loading...</option></select></div>'+
+    '<div><label class="label-sub">SNAPSHOT (blank = latest)</label><input id="vmt-rb-snap" class="input-primary" placeholder="Snapshot name (optional)"></div>'+
+    '<div><label class="label-sub" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="vmt-rb-start" checked> START AFTER ROLLBACK</label></div>'+
+    '<div class="btn-row"><button class="fleet-btn c-purple-active" onclick="doRollback()">ROLLBACK</button></div>'+
+    '</div><div id="vmt-rb-out" class="mt-12"></div>';
+  _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+    var sel=document.getElementById('vmt-rb-source');if(!sel)return;
+    sel.innerHTML='<option value="">Select VM...</option>';
+    (d.vms||[]).forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+_esc(v.name)+'</option>';});
+  });
+}
+function doRollback(){
+  var vmid=(document.getElementById('vmt-rb-source')||{}).value;
+  var snap=(document.getElementById('vmt-rb-snap')||{}).value.trim();
+  var startAfter=document.getElementById('vmt-rb-start')?.checked!==false;
+  if(!vmid){toast('Select a VM','error');return;}
+  var out=document.getElementById('vmt-rb-out');
+  confirmAction('Roll back VM <strong>'+vmid+'</strong>'+(snap?' to snapshot <strong>'+_esc(snap)+'</strong>':' to latest snapshot')+'?<br>The VM will be stopped during rollback.',function(){
+    if(out)out.innerHTML='<div class="c-yellow">Rolling back VM '+vmid+'...</div>';
+    var url=API.ROLLBACK+'?vmid='+vmid+'&start='+startAfter;
+    if(snap)url+='&name='+encodeURIComponent(snap);
+    _authFetch(url).then(function(r){return r.json()}).then(function(d){
+      if(d.ok){toast('VM '+vmid+' rolled back to '+d.snapshot,'success');if(out)out.innerHTML='<div class="c-green">Rolled back to "'+_esc(d.snapshot)+'"'+(d.started?' — VM is running':' — VM stopped')+'</div>';}
+      else{toast(d.error||'Rollback failed','error');if(out)out.innerHTML='<div class="c-red">'+(d.error||'Rollback failed')+'</div>';}
+    }).catch(function(e){toast('Rollback failed','error');if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
+  });
+}
+function deployAgent(target){
+  target=target||'all';
+  confirmAction('Deploy FREQ metrics agent to <strong>'+_esc(target)+'</strong>?<br>Requires sudo on target hosts.',function(){
+    toast('Deploying agent to '+target+'...','info');
+    _authFetch(API.DEPLOY_AGENT+'?target='+encodeURIComponent(target)).then(function(r){return r.json()}).then(function(d){
+      if(d.error){toast(d.error,'error');return;}
+      toast(d.deployed+'/'+d.total+' deployed, '+d.failed+' failed','success');
+      /* Show results in sysinfo panel if available */
+      var el=document.getElementById('sysinfo-out');if(!el)return;
+      var h=_statCards([{l:'Deployed',v:d.deployed,c:'green'},{l:'Failed',v:d.failed,c:d.failed>0?'red':'green'},{l:'Port',v:d.agent_port}]);
+      h+='<table style="margin-top:8px"><thead><tr><th>Host</th><th>Status</th><th>Steps</th></tr></thead><tbody>';
+      (d.results||[]).forEach(function(r){
+        var color=r.status==='deployed'?'green':r.status==='failed'?'red':'yellow';
+        var steps=(r.steps||[]).map(function(s){return (s.ok?'<span class="c-green">'+_esc(s.step)+'</span>':'<span class="c-red">'+_esc(s.step)+'</span>');}).join(' → ');
+        h+='<tr><td><strong>'+_esc(r.host)+'</strong></td><td>'+_statusBadge(r.status)+'</td><td>'+steps+'</td></tr>';
+      });
+      h+='</tbody></table>';
+      el.innerHTML=h;
+    }).catch(function(e){toast('Deploy failed: '+e,'error');});
   });
 }
 function vmtResize(){

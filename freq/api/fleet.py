@@ -344,9 +344,106 @@ def handle_exec(handler):
 
 
 def handle_deploy_agent(handler):
-    """GET /api/deploy-agent -- deploy agent info."""
-    json_response(handler, {"message": "Run from CLI: freq deploy-agent <host|all>",
-                            "note": "Requires sudo on target hosts"})
+    """POST /api/deploy-agent -- deploy FREQ metrics agent to fleet hosts (admin only)."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
+
+    params = get_params(handler)
+    target = params.get("target", ["all"])[0]
+    cfg = load_config()
+
+    # Resolve hosts
+    if target.lower() == "all":
+        hosts = cfg.hosts
+    else:
+        h = res.by_target(cfg.hosts, target)
+        if not h:
+            json_response(handler, {"error": f"Host not found: {target}"}); return
+        hosts = [h]
+
+    # Read agent source
+    agent_src = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent_collector.py")
+    try:
+        with open(agent_src) as f:
+            agent_code = f.read()
+    except FileNotFoundError:
+        json_response(handler, {"error": f"Agent source not found: {agent_src}"}, 500); return
+
+    agent_port = cfg.agent_port
+    remote_path = "/opt/freq-agent/collector.py"
+    service_name = "freq-agent"
+
+    results = []
+    for h in hosts:
+        host_result = {"host": h.label, "ip": h.ip, "steps": []}
+
+        # Step 1: Create directory
+        r = ssh_single(host=h.ip, command="mkdir -p /opt/freq-agent",
+                       key_path=cfg.ssh_key_path, connect_timeout=3,
+                       command_timeout=10, htype=h.htype, use_sudo=True)
+        if r.returncode != 0:
+            host_result["status"] = "failed"
+            host_result["error"] = "Cannot create directory"
+            host_result["steps"].append({"step": "mkdir", "ok": False})
+            results.append(host_result)
+            continue
+        host_result["steps"].append({"step": "mkdir", "ok": True})
+
+        # Step 2: Upload agent
+        upload_cmd = f"cat > {remote_path} << 'FREQAGENTEOF'\n{agent_code}\nFREQAGENTEOF"
+        r = ssh_single(host=h.ip, command=upload_cmd,
+                       key_path=cfg.ssh_key_path, connect_timeout=3,
+                       command_timeout=30, htype=h.htype, use_sudo=True)
+        if r.returncode != 0:
+            host_result["status"] = "failed"
+            host_result["error"] = "Cannot upload agent"
+            host_result["steps"].append({"step": "upload", "ok": False})
+            results.append(host_result)
+            continue
+        host_result["steps"].append({"step": "upload", "ok": True})
+
+        # Step 3: chmod + systemd unit
+        ssh_single(host=h.ip, command=f"chmod +x {remote_path}",
+                   key_path=cfg.ssh_key_path, connect_timeout=3,
+                   command_timeout=5, htype=h.htype, use_sudo=True)
+        host_result["steps"].append({"step": "chmod", "ok": True})
+
+        unit = (
+            f"[Unit]\nDescription=FREQ Metrics Agent\nAfter=network.target\n\n"
+            f"[Service]\nExecStart=/usr/bin/python3 {remote_path} --port {agent_port}\n"
+            f"Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=multi-user.target\n"
+        )
+        svc_cmd = f"cat > /etc/systemd/system/{service_name}.service << 'FREQSVCEOF'\n{unit}\nFREQSVCEOF"
+        ssh_single(host=h.ip, command=svc_cmd,
+                   key_path=cfg.ssh_key_path, connect_timeout=3,
+                   command_timeout=10, htype=h.htype, use_sudo=True)
+        host_result["steps"].append({"step": "systemd_unit", "ok": True})
+
+        # Step 4: Enable and start
+        ssh_single(host=h.ip,
+                   command=f"systemctl daemon-reload && systemctl enable {service_name} && systemctl restart {service_name}",
+                   key_path=cfg.ssh_key_path, connect_timeout=3,
+                   command_timeout=30, htype=h.htype, use_sudo=True)
+        host_result["steps"].append({"step": "start", "ok": True})
+
+        # Step 5: Verify
+        time.sleep(1)
+        r = ssh_single(host=h.ip, command=f"curl -s http://localhost:{agent_port}/health 2>/dev/null",
+                       key_path=cfg.ssh_key_path, connect_timeout=3,
+                       command_timeout=5, htype=h.htype, use_sudo=False)
+        healthy = r.returncode == 0 and "ok" in r.stdout
+        host_result["steps"].append({"step": "verify", "ok": healthy})
+        host_result["status"] = "deployed" if healthy else "deployed_unverified"
+        host_result["agent_port"] = agent_port
+        results.append(host_result)
+
+    deployed = sum(1 for r in results if "deployed" in r.get("status", ""))
+    failed = sum(1 for r in results if r.get("status") == "failed")
+    json_response(handler, {
+        "results": results, "deployed": deployed, "failed": failed,
+        "total": len(results), "agent_port": agent_port,
+    })
 
 
 def handle_infra_overview(handler):

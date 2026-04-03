@@ -895,10 +895,81 @@ def handle_pool(handler):
 
 
 def handle_rollback(handler):
-    """GET /api/rollback — rollback endpoint info (actual rollback requires CLI)."""
+    """POST /api/rollback — roll back a VM to a snapshot (admin only)."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
+
+    params = get_params(handler)
+    vmid_str = params.get("vmid", [""])[0]
+    snap_name = params.get("name", [""])[0]
+    start_after = params.get("start", ["true"])[0].lower() != "false"
+
+    if not vmid_str:
+        json_response(handler, {"error": "vmid parameter required"}, 400); return
+    try:
+        vmid = int(vmid_str)
+    except ValueError:
+        json_response(handler, {"error": f"Invalid VMID: {vmid_str}"}, 400); return
+
+    if is_protected_vmid(vmid):
+        json_response(handler, {"error": f"VMID {vmid} is protected"}, 403); return
+
+    cfg = load_config()
+    node_ip = _find_reachable_node(cfg)
+    if not node_ip:
+        json_response(handler, {"error": "Cannot reach any PVE node"}, 503); return
+
+    # Get snapshots
+    snap_out, snap_ok = _pve_cmd(cfg, node_ip, f"qm listsnapshot {vmid}", timeout=10)
+    if not snap_ok:
+        json_response(handler, {"error": f"Cannot list snapshots for VM {vmid}"}, 500); return
+
+    snaps = []
+    for line in snap_out.strip().split("\n"):
+        line = line.strip().lstrip("`->").strip()
+        if line and "current" not in line.lower():
+            parts = line.split()
+            if parts:
+                snaps.append(parts[0])
+
+    if not snaps:
+        json_response(handler, {"error": f"No snapshots found for VM {vmid}"}); return
+
+    if not snap_name:
+        snap_name = snaps[-1]
+    elif snap_name not in snaps:
+        json_response(handler, {"error": f"Snapshot '{snap_name}' not found", "available": snaps}); return
+
+    # Get current status
+    status_out, _ = _pve_cmd(cfg, node_ip, f"qm status {vmid}", timeout=5)
+    was_running = "running" in (status_out or "").lower()
+
+    # Stop if running
+    if was_running:
+        _pve_cmd(cfg, node_ip, f"qm stop {vmid}", timeout=60)
+        import time
+        for _ in range(30):
+            time.sleep(1)
+            s_out, _ = _pve_cmd(cfg, node_ip, f"qm status {vmid}", timeout=5)
+            if "stopped" in (s_out or "").lower():
+                break
+
+    # Rollback
+    rb_out, rb_ok = _pve_cmd(cfg, node_ip, f"qm rollback {vmid} {snap_name}", timeout=120)
+    if not rb_ok:
+        json_response(handler, {"error": f"Rollback failed: {rb_out}", "snapshot": snap_name}, 500); return
+
+    # Start back up if requested
+    started = False
+    if start_after:
+        st_out, st_ok = _pve_cmd(cfg, node_ip, f"qm start {vmid}", timeout=60)
+        started = st_ok
+
     json_response(handler, {
-        "info": "VM rollback must be performed via CLI for safety",
-        "usage": "freq rollback <vmid> [--name <snapshot>]",
+        "ok": True, "vmid": vmid, "snapshot": snap_name,
+        "was_running": was_running, "started": started,
+        "available_snapshots": snaps,
     })
 
 
