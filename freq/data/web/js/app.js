@@ -4485,11 +4485,21 @@ function _vmDoMigrate(vmid){
   var target=(document.getElementById('vm-mig-target')||{}).value;
   if(!target){toast('Select a target node','error');return;}
   var out=document.getElementById('vm-ctrl-out');
-  confirmAction('Migrate VM <strong>'+vmid+'</strong> to <strong>'+target+'</strong>?<br><span class="c-dim">This may take several minutes.</span>',function(){
-    if(out)out.innerHTML='<span class="c-yellow">Migrating to '+target+'...</span>';
-    _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm migrate '+vmid+' '+target+' --online')).then(function(r){return r.json()}).then(function(d){
-      var txt=d.results?d.results.map(function(r){return r.output;}).join(''):'';
-      if(out)out.innerHTML='<span class="c-green">'+txt+'</span>';toast('Migration started','success');
+  confirmAction('Live migrate VM <strong>'+vmid+'</strong> to <strong>'+target+'</strong>?<br><span class="c-dim">Uses direct node-to-node transfer with local disks. May take several minutes.</span>',function(){
+    if(out)out.innerHTML='<span class="c-yellow">Live migrating to '+target+'... (this may take several minutes)</span>';
+    _authFetch(API.VM_MIGRATE+'?vmid='+vmid+'&target_node='+target).then(function(r){return r.json()}).then(function(d){
+      if(d.error==='snapshots_block_migration'){
+        confirmAction('VM has <strong>'+d.count+'</strong> snapshot(s) blocking live migration:<br><strong>'+d.snapshots.join(', ')+'</strong><br><br>Delete snapshots and migrate?',function(){
+          if(out)out.innerHTML='<span class="c-yellow">Deleting snapshots and migrating...</span>';
+          _authFetch(API.VM_MIGRATE+'?vmid='+vmid+'&target_node='+target+'&delete_snapshots=1').then(function(r2){return r2.json()}).then(function(d2){
+            if(d2.ok){if(out)out.innerHTML='<span class="c-green">VM '+vmid+' migrated to '+target+' ('+d2.target_storage+', '+d2.snapshots_deleted+' snapshots deleted)</span>';toast('Migration complete','success');}
+            else{if(out)out.innerHTML='<span class="c-red">'+d2.error+'</span>';toast('Migration failed','error');}
+          }).catch(function(e){if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
+        });
+        return;
+      }
+      if(d.ok){if(out)out.innerHTML='<span class="c-green">VM '+vmid+' migrated to '+target+' (storage: '+d.target_storage+')</span>';toast('Migration complete','success');}
+      else{if(out)out.innerHTML='<span class="c-red">'+(d.error||'Migration failed')+'</span>';toast('Migration failed','error');}
     }).catch(function(e){if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
   });
 }

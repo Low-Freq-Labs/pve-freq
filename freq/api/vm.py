@@ -776,12 +776,17 @@ def handle_vm_clone(handler):
 
 
 def handle_vm_migrate(handler):
-    """GET /api/vm/migrate — migrate a VM to another node."""
+    """GET /api/vm/migrate — live migrate a VM to another node.
+
+    Uses --with-local-disks for direct node-to-node transfer.
+    Auto-detects best local storage on target. Checks for snapshots
+    that would block live migration.
+    """
     cfg = load_config()
     params = get_params(handler)
     vmid = int(params.get("vmid", ["0"])[0])
     target_node = params.get("target_node", [""])[0]
-    online = params.get("online", ["0"])[0] == "1"
+    delete_snaps = params.get("delete_snapshots", ["0"])[0] == "1"
 
     if not vmid or not target_node:
         json_response(handler, {"error": "vmid and target_node required"}); return
@@ -794,18 +799,60 @@ def handle_vm_migrate(handler):
         json_response(handler, {"error": f"Invalid node name: {target_node}"}); return
 
     try:
-        node_ip = _find_reachable_node(cfg)
-        if not node_ip:
-            json_response(handler, {"error": "No PVE node reachable"}); return
+        from freq.modules.vm import _find_vm_node, _find_best_local_storage, _check_snapshots, _delete_snapshots
 
-        parts = [f"qm migrate {vmid} {target_node}"]
-        if online:
-            parts.append("--online")
-        cmd = " ".join(parts)
-        stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=600)
+        # Find source node
+        source_ip = _find_vm_node(cfg, vmid)
+        if not source_ip:
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}); return
+
+        # Resolve source node name
+        source_node = "unknown"
+        for i, ip in enumerate(cfg.pve_nodes):
+            if ip == source_ip and i < len(cfg.pve_node_names):
+                source_node = cfg.pve_node_names[i]
+                break
+
+        if source_node == target_node:
+            json_response(handler, {"error": f"VM {vmid} is already on {target_node}"}); return
+
+        # Check snapshots — they block live migration
+        snapshots = _check_snapshots(cfg, source_ip, vmid)
+        if snapshots and not delete_snaps:
+            json_response(handler, {
+                "error": "snapshots_block_migration",
+                "snapshots": snapshots,
+                "count": len(snapshots),
+                "message": f"VM has {len(snapshots)} snapshot(s) that block live migration. Resend with delete_snapshots=1 to remove them.",
+            }); return
+
+        if snapshots and delete_snaps:
+            _delete_snapshots(cfg, source_ip, vmid, snapshots)
+
+        # Auto-detect best local storage on target
+        target_storage = _find_best_local_storage(cfg, source_ip, target_node)
+
+        # Build migration command — direct node-to-node, no NFS middleman
+        migrate_cmd = f"qm migrate {vmid} {target_node} --with-local-disks --online"
+        if target_storage:
+            migrate_cmd += f" --targetstorage {target_storage}"
+
+        stdout, ok = _pve_cmd(cfg, source_ip, migrate_cmd, timeout=600)
+
+        # Fall back to offline if VM is stopped
+        if not ok and "not running" in (stdout or "").lower():
+            migrate_cmd = f"qm migrate {vmid} {target_node} --with-local-disks"
+            if target_storage:
+                migrate_cmd += f" --targetstorage {target_storage}"
+            stdout, ok = _pve_cmd(cfg, source_ip, migrate_cmd, timeout=600)
+
         json_response(handler, {
-            "ok": ok, "vmid": vmid, "target_node": target_node,
-            "online": online, "error": stdout if not ok else "",
+            "ok": ok, "vmid": vmid,
+            "source_node": source_node, "target_node": target_node,
+            "target_storage": target_storage or "default",
+            "online": True, "with_local_disks": True,
+            "snapshots_deleted": len(snapshots) if delete_snaps and snapshots else 0,
+            "error": stdout if not ok else "",
         })
     except Exception as e:
         json_response(handler, {"error": f"Migration failed: {e}"})

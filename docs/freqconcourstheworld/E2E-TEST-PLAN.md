@@ -197,17 +197,24 @@ Create, start, stop, destroy. VMIDs 5010-5020 on pve02 ONLY.
 | 4.2 | `freq vm list --node pve02` | 5010 appears |
 | 4.3 | `freq vm power start 5010` | VM starts |
 | 4.4 | `freq vm power status 5010` | Shows running |
-| 4.5 | `freq vm snapshot create 5010 --name test-snap` | Snapshot created |
-| 4.6 | `freq vm power stop 5010` | VM stops |
-| 4.7 | `freq vm destroy 5010 --yes` | VM destroyed |
-| 4.8 | `freq vm list --node pve02` | 5010 gone |
+| 4.5 | `freq vm migrate 5010 --node pve01` | VM live migrates to pve01 — auto-detects storage, uses --with-local-disks |
+| 4.6 | `freq vm list` | 5010 now on pve01 (not pve02) |
+| 4.7 | `freq vm migrate 5010 --node pve02` | VM migrates back to pve02 |
+| 4.8 | `freq vm snapshot create 5010 --name test-snap` | Snapshot created — WARNS that live migration is now blocked |
+| 4.9 | `freq vm migrate 5010 --node pve01 --yes` | Detects snapshot, auto-deletes it, then migrates |
+| 4.10 | `freq vm power stop 5010` | VM stops |
+| 4.11 | `freq vm destroy 5010 --yes` | VM destroyed |
+| 4.12 | `freq vm list --node pve02` | 5010 gone |
+
+**Migration is first-class.** It gets tested BEFORE snapshots because snapshots break it. If migration doesn't work, nothing else in VM lifecycle matters.
 
 **CLEANUP:** Verify no orphan VMs in 5010-5020 range when done.
 
 **WHAT I WILL NOT DO:**
 - Use any VMID outside 5010-5020
-- Create VMs on any node other than pve02
+- Create VMs on any node other than pve02 (except for migration targets)
 - Touch any existing VM
+- Leave snapshots on test VMs (they block live migration on the cluster)
 
 ---
 
