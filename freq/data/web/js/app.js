@@ -119,7 +119,7 @@ document.addEventListener('click',function(e){
     if(a==='vmPower'){vmPower(+da.dataset.vmid,g);return;}
     if(a==='vmDestroy'){vmDestroy(+da.dataset.vmid);return;}
     if(a==='vmSnap'){vmSnap(+da.dataset.vmid);return;}
-    if(a==='vmQuickTag'){var tags=prompt('Enter tags for VM '+da.dataset.vmid+' (comma-separated):');if(tags!==null)fetch(API.VM_TAG+'?vmid='+da.dataset.vmid+'&tags='+encodeURIComponent(tags)).then(function(r){return r.json()}).then(function(d){if(d.ok)toast('Tags updated','success');else toast(d.error,'error');});return;}
+    if(a==='vmQuickTag'){var tags=prompt('Enter tags for VM '+da.dataset.vmid+' (comma-separated):');if(tags!==null)_authFetch(API.VM_TAG+'?vmid='+da.dataset.vmid+'&tags='+encodeURIComponent(tags)).then(function(r){return r.json()}).then(function(d){if(d.ok)toast('Tags updated','success');else toast(d.error,'error');});return;}
     if(a==='openVmInfo'){openVmInfo(da.dataset.label,'',+da.dataset.vmid);return;}
     if(a==='vaultReveal'){vaultReveal(da.dataset.uid,da.dataset.host,da.dataset.key);return;}
     if(a==='vaultCopy'){vaultCopy(da.dataset.host,da.dataset.key);return;}
@@ -177,7 +177,7 @@ function doLogin(){
   if(!user||!pass){if(errEl){errEl.textContent='Enter username and password (got user=['+user+'] pass_len='+pass.length+')';errEl.style.display='block';}return;}
   if(errEl)errEl.style.display='none';
   var btn=document.querySelector('#login-overlay button');if(btn){btn.textContent='LOGGING IN...';btn.disabled=true;}
-  fetch(API.AUTH_LOGIN,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})}).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.AUTH_LOGIN,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})}).then(function(r){return r.json()}).then(function(d){
     if(btn){btn.textContent='LOG IN';btn.disabled=false;}
     if(d.error){if(errEl){errEl.textContent=d.error;errEl.style.display='block';}passEl.value='';return;}
     _authToken=d.token;_currentUser=d.user;_currentRole=d.role;
@@ -246,19 +246,19 @@ function _showApp(){
   var _p=function(pct,s,d){bar.style.width=pct+'%';status.textContent=s;detail.textContent=d;};
 
   _p(10,'CONNECTING','Fetching fleet data...');
-  var p1=fetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
+  var p1=_authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
     _fleetCache.fo=fo;_initFleetData(fo);_p(40,'FLEET ONLINE',fo.summary.total_vms+' VMs across '+fo.pve_nodes.length+' nodes');
     return fo;
   }).catch(function(){_p(40,'FLEET','Fleet overview unavailable');return null;});
 
-  var p2=fetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
+  var p2=_authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
     _fleetCache.hd=hd;
     var up=0;hd.hosts.forEach(function(h){if(h.status==='healthy')up++;});
     _p(70,'HEALTH CHECK',up+' of '+hd.hosts.length+' hosts online');
     return hd;
   }).catch(function(){_p(70,'HEALTH','Health check unavailable');return null;});
 
-  var p3=fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
+  var p3=_authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
     _p(85,'MEDIA STACK',md.containers_running+' containers running');
     return md;
   }).catch(function(){return null;});
@@ -282,7 +282,7 @@ function _showApp(){
 
 function _checkForUpdate(){
   if(sessionStorage.getItem('freq_update_dismissed'))return;
-  fetch('/api/update/check').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/update/check').then(function(r){return r.json()}).then(function(d){
     if(d.update_available&&d.latest){
       var banner=document.getElementById('update-banner');
       var text=document.getElementById('update-banner-text');
@@ -350,10 +350,10 @@ var WIDGET_REGISTRY=[
   {id:'w-fleet-specialists',page:'FLEET',label:'Sandbox VMs',ref:'fleet-sec-specialists',preload:function(){loadSpecialists();}},
   {id:'w-docker-containers',page:'DOCKER',label:'Containers',loader:function(el){
     el.innerHTML='<div class="stats" id="hw-ctr-stats"></div><div id="hw-ctr-cards" class="cards"><div class="skeleton"></div></div>';
-    fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
       var _coff2=Math.max(0,d.containers_down||0);var s=document.getElementById('hw-ctr-stats');if(s)s.innerHTML=st('Total',d.containers_total,'p')+st('Online',d.containers_running,'g')+st('Offline',_coff2,_coff2>0?'r':'g')+st('VMs',d.vm_count,'b');
     });
-    fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
       var h='';d.containers.forEach(function(c){h+=_containerCard(c,'');});
       var el2=document.getElementById('hw-ctr-cards');if(el2)el2.innerHTML=h||'<div class="empty-state"><p>No containers.</p></div>';
     });
@@ -372,7 +372,7 @@ var WIDGET_REGISTRY=[
   }},
   {id:'w-fleet-health-score',page:'FLEET',label:'Health Score',loader:function(el){
     el.innerHTML='<div id="hw-health-score"><div class="skeleton"></div></div>';
-    fetch('/api/fleet/health-score').then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/fleet/health-score').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-health-score');if(!t)return;
       var color=d.score>=90?'var(--green)':d.score>=75?'var(--blue)':d.score>=60?'var(--orange)':'var(--red)';
       var h='<div class="text-center" style="padding:12px 0">';
@@ -395,7 +395,7 @@ var WIDGET_REGISTRY=[
   }},
   {id:'w-vlan-topology',page:'NETWORK',label:'VLAN Topology',loader:function(el){
     el.innerHTML='<div id="hw-vlan-topo"><div class="skeleton"></div></div>';
-    fetch('/api/fleet/topology-enhanced').then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/fleet/topology-enhanced').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-vlan-topo');if(!t)return;
       if(!d.vlans||!d.vlans.length){t.innerHTML='<div class="empty-state"><p>No VLANs configured</p></div>';return;}
       var h='';
@@ -426,7 +426,7 @@ var WIDGET_REGISTRY=[
   }},
   {id:'w-ntp-status',page:'NETWORK',label:'NTP Sync Status',loader:function(el){
     el.innerHTML='<div id="hw-ntp"><div class="skeleton"></div></div>';
-    fetch('/api/fleet/ntp').then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/fleet/ntp').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-ntp');if(!t)return;
       if(!d.hosts||!d.hosts.length){t.innerHTML='<div class="empty-state"><p>No NTP data</p></div>';return;}
       var h='';var synced=0;
@@ -444,7 +444,7 @@ var WIDGET_REGISTRY=[
   }},
   {id:'w-resource-heatmap',page:'FLEET',label:'Resource Heatmap',loader:function(el){
     el.innerHTML='<div id="hw-heatmap"><div class="skeleton"></div></div>';
-    fetch('/api/fleet/heatmap').then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/fleet/heatmap').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-heatmap');if(!t)return;
       if(!d.hosts||!d.hosts.length){t.innerHTML='<div class="empty-state"><p>No data</p></div>';return;}
       var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px">';
@@ -465,7 +465,7 @@ var WIDGET_REGISTRY=[
   }},
   {id:'w-stale-snapshots',page:'FLEET',label:'Stale Snapshots',loader:function(el){
     el.innerHTML='<div id="hw-stale-snaps"><div class="skeleton"></div></div>';
-    fetch('/api/snapshots/stale?days=30').then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/snapshots/stale?days=30').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-stale-snaps');if(!t)return;
       if(!d.stale||!d.stale.length){t.innerHTML='<div style="color:var(--green);padding:8px 0">\u2705 No stale snapshots</div>';return;}
       var h='<div class="text-sm text-dim mb-sm">'+d.count+' snapshot(s) found</div>';
@@ -481,7 +481,7 @@ var WIDGET_REGISTRY=[
   }},
   {id:'w-storage-health',page:'STORAGE',label:'Storage Health',loader:function(el){
     el.innerHTML='<div id="hw-storage-pools"><div class="skeleton"></div></div>';
-    fetch('/api/storage/health').then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/storage/health').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-storage-pools');if(!t)return;
       if(!d.pools||!d.pools.length){t.innerHTML='<div class="empty-state"><p>No storage pools detected</p></div>';return;}
       var h='<div class="text-sm text-dim mb-sm">'+d.total_tb+'TB total \u2022 '+d.used_tb+'TB used</div>';
@@ -501,7 +501,7 @@ var WIDGET_REGISTRY=[
   }},
   {id:'w-tdarr',page:'MEDIA',label:'Tdarr Transcode',loader:function(el){
     el.innerHTML='<div id="hw-tdarr"><div class="skeleton"></div></div>';
-    fetch('/api/media/tdarr').then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/media/tdarr').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-tdarr');if(!t)return;
       if(d.status==='not_configured'){t.innerHTML='<div class="empty-state"><p>Tdarr not detected</p></div>';return;}
       var h='<div style="display:flex;align-items:center;gap:8px;padding:8px 0">';
@@ -516,7 +516,7 @@ var WIDGET_REGISTRY=[
   }},
   {id:'w-deploy-log',page:'OPS',label:'Deploy Log',loader:function(el){
     el.innerHTML='<div id="hw-deploy-log"><div class="skeleton"></div></div>';
-    fetch('/api/deploy/log').then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/deploy/log').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-deploy-log');if(!t)return;
       if(!d.commits||!d.commits.length){t.innerHTML='<div class="empty-state"><p>No deploy history</p></div>';return;}
       var h='';d.commits.forEach(function(c){
@@ -546,7 +546,7 @@ var WIDGET_REGISTRY=[
   }},
   {id:'w-vm-wizard',page:'FLEET',label:'VM Wizard',loader:function(el){
     el.innerHTML='<div id="hw-vm-wizard"><div class="skeleton"></div></div>';
-    fetch('/api/vm/wizard-defaults').then(function(r){return r.json()}).then(function(d){
+    _authFetch('/api/vm/wizard-defaults').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-vm-wizard');if(!t)return;
       var h='<div class="text-sm text-dim mb-sm">Quick-create presets</div>';
       if(d.profiles){
@@ -600,7 +600,7 @@ function _renderHomeWidgets(){
   });
 }
 function _loadHomeFleetStats(){
-  fetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
+  _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
     var up=0,down=0,pve=0;var _homeLabLabels=_getLabLabels(hd.hosts);var lab=Object.keys(_homeLabLabels).length;
     hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;if(h.type==='pve')pve++;});
     var totalAll=hd.hosts.length;
@@ -608,11 +608,11 @@ function _loadHomeFleetStats(){
     var _d=function(l,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+l+'</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'</span><span class="label-hint">'+l1+'</span></span><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'</span><span class="label-hint">'+l2+'</span></span></div></div>';};
     var el=document.getElementById('hw-fleet-stats');if(!el)return;
     el.innerHTML=_d('STATUS',up,'ONLINE','var(--green)',totalOff,'OFFLINE','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'ONLINE','var(--cyan)')+_d('RESPONSE',hd.duration+'s','','var(--blue)','','','var(--text-dim)')+st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
-    fetch(API.VMS).then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
+    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
       var c=el.querySelector('.st:nth-child(5)');if(c)c.innerHTML='<div class="lb">VMs</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+run+'</span><span class="label-hint">RUN</span></span><span class="stat-pair"><span class="stat-big-red">'+stop+'</span><span class="label-hint">STOP</span></span></div>';}).catch(function(e){console.error('API error:',e);});
-    fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
+    _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
       var _cdn=Math.max(0,md.containers_down||0);var c=el.querySelector('.st:nth-child(6)');if(c)c.innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+(md.containers_running||0)+'</span><span class="label-hint">UP</span></span><span class="stat-pair"><span class="stat-big-red">'+_cdn+'</span><span class="label-hint">DOWN</span></span></div>';}).catch(function(e){console.error('API error:',e);});
-    Promise.all([fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return{count:0}}),fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return{count:0}})]).then(function(res){
+    Promise.all([_authFetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return{count:0}}),_authFetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return{count:0}})]).then(function(res){
       var c=el.querySelector('.st:nth-child(7)');if(c)c.innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-orange">'+(res[0].count||0)+'</span><span class="label-hint">DL</span></span><span class="stat-pair"><span class="stat-big-blue">'+(res[1].count||0)+'</span><span class="label-hint">STREAM</span></span></div>';});
   });
 }
@@ -633,13 +633,13 @@ function _loadWidgetOverview(){
   var ps='';ps+=_mrow('TOTAL CPU',tc+' Cores',0,'var(--purple-light)');ps+=_mrow('TOTAL RAM',tr+'GB',0,'var(--blue)');ps+=_mrow('VMs',tv,0,'var(--green)');ps+=_mrow('CONTAINERS',tctr,0,'var(--cyan)');
   var pse=document.getElementById('hw-pve-sum');if(pse)pse.innerHTML=ps;
   /* VMs — exclude templates from counts */
-  fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
     var _st=_loadSettings();var run=0,stop=0,total=0;d.vms.forEach(function(v){if(!_st.showTemplates&&v.category==='templates')return;total++;if(v.status==='running')run++;else stop++;});
     var h='';h+=_mrow('TOTAL',total+' VMs',0,'var(--purple-light)');h+=_mrow('RUNNING',run,0,'var(--green)');h+=_mrow('STOPPED',stop,0,stop>0?'var(--red)':'var(--green)');
     var ve=document.getElementById('hw-vms');if(ve)ve.innerHTML=h;
   }).catch(function(e){console.error('API error:',e);});
   /* Media */
-  fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
     var run=d.containers_running||0,tot=d.containers_total||0,dn=Math.max(0,tot-run);
     var h='';h+=_mrow('ONLINE',run+' / '+tot,0,'var(--green)');h+=_mrow('OFFLINE',dn,0,dn>0?'var(--red)':'var(--green)');h+=_mrow('VMs',d.vm_count,0,'var(--blue)');
     var me=document.getElementById('hw-media');if(me)me.innerHTML=h;
@@ -881,7 +881,7 @@ function startSilentRefresh(){
 function _silentHealthRefresh(){
   if(_healthInFlight)return;/* skip if previous call still running */
   _healthInFlight=true;
-  fetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
+  _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
     _healthInFlight=false;
     _fleetCache.hd=hd;/* keep cache fresh */
     hd.hosts.forEach(function(h){
@@ -921,7 +921,7 @@ function _silentHealthRefresh(){
 function _silentFleetRefresh(){
   if(_fleetInFlight)return;
   _fleetInFlight=true;
-  fetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
+  _authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
     _fleetInFlight=false;
     _fleetCache.fo=fo;/* keep cache fresh */
     if(!fo||!fo.vms)return;
@@ -967,7 +967,7 @@ startSilentRefresh();
    Updates node card progress bars in-place — smooth, no flicker. */
 var _pveMetricsTimer=null;
 function _pveMetricsRefresh(){
-  fetch('/api/pve/metrics').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/pve/metrics').then(function(r){return r.json()}).then(function(d){
     if(!d.nodes)return;
     d.nodes.forEach(function(n){
       if(!n.online)return;
@@ -1090,7 +1090,7 @@ function _sparkline(canvas,points,color,fillColor){
 }
 var _rrdCache={};var _rrdTimer=null;
 function _fetchRrdData(){
-  fetch('/api/pve/rrd').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/pve/rrd').then(function(r){return r.json()}).then(function(d){
     if(!d.nodes)return;
     d.nodes.forEach(function(n){_rrdCache[n.name]=n;});
     _renderSparklines();
@@ -1267,11 +1267,11 @@ function loadFleetPage(){
   /* Overview cards — wait for cache or fetch independently */
   setTimeout(function(){
     if(_fleetCache.fo){_renderFleetOverview(_fleetCache.fo);_loadFleetOverviewMedia();}
-    else{fetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(){toast('Failed to load fleet overview','error');});}
+    else{_authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(){toast('Failed to load fleet overview','error');});}
   },4000);
 }
 function _loadFleetOverviewMedia(){
-  fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
     var h='';
     var _dn=Math.max(0,d.containers_total-d.containers_running);
     h+=_mrow('ONLINE',d.containers_running+' / '+d.containers_total,0,'var(--green)');
@@ -1403,13 +1403,13 @@ function _renderAllFromCache(){
 }
 function loadMediaContainers(){
   if(_mediaCache){_renderMediaFromCache();return;}
-  fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
     _mediaCache=d;_renderMediaFromCache();
   });
 }
 function loadServiceContainers(){
   if(_mediaCache){_renderServicesFromCache();return;}
-  fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
     _mediaCache=d;_renderServicesFromCache();
   });
 }
@@ -1563,7 +1563,7 @@ function saveContainerEdit(name,oldVmId){
 function loadComposeVMs(){
   var sel=document.getElementById('compose-vm-select');if(!sel)return;
   sel.innerHTML='<option value="">Loading...</option>';
-  fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
     var seen={};sel.innerHTML='<option value="">Select Docker VM...</option>';
     d.containers.forEach(function(c){if(!seen[c.vm_id]){seen[c.vm_id]=true;sel.innerHTML+='<option value="'+c.vm_id+'">'+_esc(c.vm_label)+' ('+c.vm_id+')</option>';}});
     if(!Object.keys(seen).length)sel.innerHTML='<option value="">No Docker VMs found</option>';
@@ -1573,7 +1573,7 @@ function _getComposeVmId(){var v=(document.getElementById('compose-vm-select')||
 function composeUp(){
   var vmid=_getComposeVmId();if(!vmid)return;
   var out=document.getElementById('compose-out');if(out)out.innerHTML='<span class="c-yellow">Running compose up on VM '+vmid+'...</span>';
-  fetch(API.COMPOSE_UP+'?vm_id='+vmid).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.COMPOSE_UP+'?vm_id='+vmid).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Compose up complete on '+d.vm,'success');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--green);white-space:pre-wrap;margin:0">'+_esc(d.output||'Compose up complete')+'</pre>';}
     else{toast('Compose up failed','error');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--red);white-space:pre-wrap;margin:0">'+_esc(d.error||'Unknown error')+'</pre>';}
   }).catch(function(e){toast('Compose up failed','error');if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
@@ -1582,7 +1582,7 @@ function composeDown(){
   var vmid=_getComposeVmId();if(!vmid)return;
   confirmAction('Bring down all compose services on VM <strong>'+vmid+'</strong>?',function(){
     var out=document.getElementById('compose-out');if(out)out.innerHTML='<span class="c-yellow">Running compose down on VM '+vmid+'...</span>';
-    fetch(API.COMPOSE_DOWN+'?vm_id='+vmid).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.COMPOSE_DOWN+'?vm_id='+vmid).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('Compose down complete on '+d.vm,'success');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--green);white-space:pre-wrap;margin:0">'+_esc(d.output||'Compose down complete')+'</pre>';}
       else{toast('Compose down failed','error');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--red);white-space:pre-wrap;margin:0">'+_esc(d.error||'Unknown error')+'</pre>';}
     }).catch(function(e){toast('Compose down failed','error');if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
@@ -1591,7 +1591,7 @@ function composeDown(){
 function composeView(){
   var vmid=_getComposeVmId();if(!vmid)return;
   var out=document.getElementById('compose-out');if(out)out.innerHTML='<span class="c-yellow">Loading compose file from VM '+vmid+'...</span>';
-  fetch(API.COMPOSE_VIEW+'?vm_id='+vmid).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.COMPOSE_VIEW+'?vm_id='+vmid).then(function(r){return r.json()}).then(function(d){
     if(d.ok){if(out)out.innerHTML='<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">'+_esc(d.vm)+' — docker-compose.yml</div><pre style="font-size:11px;color:var(--text);white-space:pre-wrap;margin:0;background:var(--bg2);padding:12px;border-radius:6px;border:1px solid var(--border);max-height:500px;overflow:auto">'+_esc(d.content)+'</pre>';}
     else{toast(d.error||'Failed to load compose file','error');if(out)out.innerHTML='<span class="c-red">'+(d.error||'Compose file not found')+'</span>';}
   }).catch(function(e){toast('Failed to load compose file','error');if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
@@ -1680,7 +1680,7 @@ function loadNetworkPage(){
 function runNetScan(type){
   var out=document.getElementById('net-snmp-out');
   if(out)out.innerHTML='<div class="skeleton h-60"></div>';
-  fetch('/api/v1/net/scan?type='+type).then(function(r){return r.json();}).then(function(d){
+  _authFetch('/api/v1/net/scan?type='+type).then(function(r){return r.json();}).then(function(d){
     if(out)out.innerHTML='<pre>'+_esc(JSON.stringify(d.results||d,null,2))+'</pre>';
   }).catch(function(e){if(out)out.textContent='Scan failed: '+e;});
 }
@@ -1696,21 +1696,21 @@ function loadFirewallPage(){
 function loadFwRules(){
   var c=document.getElementById('fw-rules-content');
   if(c)c.innerHTML='<div class="skeleton h-60"></div>';
-  fetch('/api/v1/fw/rules').then(function(r){return r.json();}).then(function(d){
+  _authFetch('/api/v1/fw/rules').then(function(r){return r.json();}).then(function(d){
     if(c&&d.rules)c.innerHTML='<table><thead><tr><th>#</th><th>Action</th><th>Proto</th><th>Source</th><th>Dest</th><th>Port</th></tr></thead><tbody>'+d.rules.map(function(r,i){return '<tr><td>'+(i+1)+'</td><td>'+_esc(r.action)+'</td><td>'+_esc(r.proto||'*')+'</td><td>'+_esc(r.src||'*')+'</td><td>'+_esc(r.dst||'*')+'</td><td>'+_esc(r.port||'*')+'</td></tr>';}).join('')+'</tbody></table>';
   }).catch(function(e){if(c)c.innerHTML='<div class="exec-out">Failed to load rules: '+_esc(e.toString())+'</div>';});
 }
 function loadFwNat(){
   var c=document.getElementById('fw-rules-content');
   if(c)c.innerHTML='<div class="skeleton h-60"></div>';
-  fetch('/api/v1/fw/nat').then(function(r){return r.json();}).then(function(d){
+  _authFetch('/api/v1/fw/nat').then(function(r){return r.json();}).then(function(d){
     if(c)c.innerHTML='<pre>'+_esc(JSON.stringify(d.rules||d,null,2))+'</pre>';
   }).catch(function(e){if(c)c.innerHTML='<div class="exec-out">Failed: '+_esc(e.toString())+'</div>';});
 }
 function loadFwStates(){
   var c=document.getElementById('fw-rules-content');
   if(c)c.innerHTML='<div class="skeleton h-60"></div>';
-  fetch('/api/v1/fw/states').then(function(r){return r.json();}).then(function(d){
+  _authFetch('/api/v1/fw/states').then(function(r){return r.json();}).then(function(d){
     if(c)c.innerHTML='<pre>'+_esc(JSON.stringify(d.states||d,null,2))+'</pre>';
   }).catch(function(e){if(c)c.innerHTML='<div class="exec-out">Failed: '+_esc(e.toString())+'</div>';});
 }
@@ -1740,7 +1740,7 @@ function runDnsCheck(){
   var out=document.getElementById('dns-check-out');
   if(!domain){if(out)out.textContent='Enter a domain.';return;}
   if(out)out.innerHTML='<div class="skeleton h-40"></div>';
-  fetch('/api/v1/dns/check?domain='+encodeURIComponent(domain)).then(function(r){return r.json();}).then(function(d){
+  _authFetch('/api/v1/dns/check?domain='+encodeURIComponent(domain)).then(function(r){return r.json();}).then(function(d){
     if(out)out.innerHTML='<pre>'+_esc(JSON.stringify(d,null,2))+'</pre>';
   }).catch(function(e){if(out)out.textContent='Check failed: '+e;});
 }
@@ -1819,7 +1819,7 @@ function loadPluginsPage(){
     var list=document.getElementById('plugin-list');
     if(list)list.innerHTML=plugins.length?'<table><thead><tr><th>Name</th><th>Type</th><th>Version</th><th>Description</th></tr></thead><tbody>'+plugins.map(function(p){return '<tr><td>'+_esc(p.name)+'</td><td><span style="color:var(--purple)">'+_esc(p.type)+'</span></td><td>'+_esc(p.version||'local')+'</td><td>'+_esc(p.description)+'</td></tr>';}).join('')+'</tbody></table>':'<div class="exec-out">No plugins installed. Use <code>freq plugin install</code> or <code>freq plugin create</code>.</div>';
     var pt=document.getElementById('plugin-types');
-    if(pt)fetch('/api/v1/plugin/types').then(function(r){return r.json();}).then(function(t){
+    if(pt)_authFetch('/api/v1/plugin/types').then(function(r){return r.json();}).then(function(t){
       var types=t.types||{};
       pt.innerHTML='<div class="cards">'+Object.keys(types).map(function(k){return '<div class="crd"><h3>'+_esc(k)+'</h3><p>'+_esc(types[k])+'</p></div>';}).join('')+'</div>';
     });
@@ -1883,8 +1883,8 @@ function _loadLabAssignments(){
   var el=document.getElementById('lab-assign-list');if(!el)return;
   /* Need both fleet overview (for VMs) and health (for hosts) */
   Promise.all([
-    fetch(API.FLEET_OVERVIEW).then(function(r){return r.json();}),
-    fetch(API.HEALTH).then(function(r){return r.json();})
+    _authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json();}),
+    _authFetch(API.HEALTH).then(function(r){return r.json();})
   ]).then(function(results){
     var fo=results[0],hd=results[1];
     var items=[];
@@ -2135,7 +2135,7 @@ function removeVmidFromCategory(cat,vmid){
    ═══════════════════════════════════════════════════════════════════ */
 function loadHome(){
   _renderHomeWidgets();
-  fetch(API.INFO).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.INFO).then(function(r){return r.json()}).then(function(d){
     document.getElementById('nav-ver').textContent='V'+d.version;
     var vf=document.getElementById('home-ver-footer');if(vf)vf.textContent='V'+d.version;
     var st=document.getElementById('home-subtitle');if(st&&d.brand)st.textContent=d.brand;
@@ -2221,7 +2221,7 @@ function _roleOfflineMetrics(type,roleInfo){
   return m;
 }
 function _enrichInfraCards(){
-  fetch(API.INFRA_QUICK).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.INFRA_QUICK).then(function(r){return r.json()}).then(function(d){
     if(d.warming){
       /* Cache still warming — retry in 3s */
       setTimeout(_enrichInfraCards,3000);
@@ -2296,9 +2296,9 @@ function loadMetricsQuick(){
   }
   /* Fetch fresh data in background and re-render */
   Promise.all([
-    fetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).catch(function(){return null;}),
-    fetch(API.HEALTH).then(function(r){return r.json()}).catch(function(){return null;}),
-    fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).catch(function(){return null;})
+    _authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).catch(function(){return null;}),
+    _authFetch(API.HEALTH).then(function(r){return r.json()}).catch(function(){return null;}),
+    _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).catch(function(){return null;})
   ]).then(function(results){
     var fo=results[0];var hd=results[1];var md=results[2];
     if(fo)_fleetCache.fo=fo;
@@ -2468,25 +2468,25 @@ function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDur
     _fDual('VMs',vmRunning,'RUN','var(--green)',vmStopped,'STOP','var(--red)')+
     st('CONTAINERS','...','p')+
     st('ACTIVITY','...','p');
-  fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
+  _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
     var _cdn2=Math.max(0,md.containers_down||0);var c=sumEl.querySelector('.st:nth-child(7)');if(c)c.innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+(md.containers_running||0)+'</span><span class="label-hint">UP</span></span><span class="stat-pair"><span class="stat-big-red">'+_cdn2+'</span><span class="label-hint">DOWN</span></span></div>';
   }).catch(function(e){console.error('API error:',e);});
   Promise.all([
-    fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return {count:0}}),
-    fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return {count:0}})
+    _authFetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return {count:0}}),
+    _authFetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return {count:0}})
   ]).then(function(res){
     var dl=res[0].count||0;var str=res[1].count||0;
     var a=sumEl.querySelector('.st:nth-child(8)');if(a)a.innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-orange">'+dl+'</span><span class="label-hint">DL</span></span><span class="stat-pair"><span class="stat-big-blue">'+str+'</span><span class="label-hint">STREAM</span></span></div>';
   });
 }
 function _enrichFleetNtpUpdates(){
-  fetch(API.FLEET_NTP).then(function(r){return r.json()}).then(function(nd){
+  _authFetch(API.FLEET_NTP).then(function(r){return r.json()}).then(function(nd){
     nd.hosts.forEach(function(x){
       var el=document.getElementById('ntp-'+x.label.replace(/[^a-z0-9]/gi,''));
       if(el){var synced=x.synced;el.innerHTML='<div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val" style="font-size:11px;color:'+(synced?'var(--green)':'var(--red)')+'">'+(synced?'SYNCED':'NOT SYNCED')+' <span style="color:var(--text-dim);font-weight:400">'+x.time+'</span></span></div>';}
     });
   }).catch(function(e){console.error('API error:',e);});
-  fetch(API.FLEET_UPDATES).then(function(r){return r.json()}).then(function(ud){
+  _authFetch(API.FLEET_UPDATES).then(function(r){return r.json()}).then(function(ud){
     ud.hosts.forEach(function(x){
       var el=document.getElementById('upd-'+x.label.replace(/[^a-z0-9]/gi,''));
       if(el){
@@ -2587,7 +2587,7 @@ function loadMetrics(){
   var content=document.getElementById('fleet-tool-content');
   panel.style.display='block';
   content.innerHTML='<h3 class="section-label-pl">DEEP SCAN</h3><div class="skeleton"></div><div class="skeleton"></div><p class="c-dim-fs11-mt8">Collecting deep metrics from all reachable hosts...</p>';
-  fetch(API.METRICS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.METRICS).then(function(r){return r.json()}).then(function(d){
     var html='<h3 class="section-label-pl">DEEP SCAN — '+d.hosts.length+' HOSTS</h3>';
     if(!d.hosts.length){html+='<div class="empty-state"><div class="es-icon">&#9881;</div><p>No hosts returned deep metrics. Deploy agents or check connectivity.</p></div>';}
     d.hosts.forEach(function(m,i){
@@ -2643,7 +2643,7 @@ function _toolExec(content){
     '</div>'+
     '<div class="exec-out" id="ft-exec-out" style="min-height:120px">Pick a target and enter a command.</div>';
   var _execHosts=[];
-  fetch(API.STATUS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.STATUS).then(function(r){return r.json()}).then(function(d){
     _execHosts=[{value:'all',label:'ALL HOSTS',detail:'Run on every host'}];
     d.hosts.forEach(function(h){_execHosts.push({value:h.label,label:h.label.toUpperCase(),detail:h.ip+' · '+(h.type||'linux').toUpperCase()+(h.status==='up'?' · ONLINE':' · OFFLINE')});});
     PROD_HOSTS.forEach(function(h){_execHosts.push({value:h.label,label:h.label.toUpperCase(),detail:h.ip+' · '+h.role});});
@@ -2654,7 +2654,7 @@ function _toolExec(content){
 }
 function _toolNtp(content){
   content.innerHTML='<h3 class="section-label-pl">NTP SYNC STATUS</h3><div id="ft-ntp-c" class="c-dim"><div class="skeleton"></div></div>';
-  fetch(API.FLEET_NTP).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.FLEET_NTP).then(function(r){return r.json()}).then(function(d){
     var unsynced=d.hosts.filter(function(x){return !x.synced;});
     var h='';
     if(unsynced.length>0){
@@ -2678,7 +2678,7 @@ function _toolNtp(content){
 }
 function _toolUpdates(content){
   content.innerHTML='<h3 class="section-label-pl">OS UPDATE STATUS</h3><div id="ft-updates-c" class="c-dim"><div class="skeleton"></div></div>';
-  fetch(API.FLEET_UPDATES).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.FLEET_UPDATES).then(function(r){return r.json()}).then(function(d){
     var pending=d.hosts.filter(function(x){return x.updates>0;});
     var h='';
     h+='<div class="flex-row-8-center">';
@@ -2704,7 +2704,7 @@ function _toolUpdates(content){
 }
 function _toolLabCtrl(content){
   content.innerHTML='<h3 class="section-label-pl">LAB CONTROL</h3><div id="ft-lab-c" class="c-dim"><div class="skeleton"></div></div>';
-  fetch(API.LAB_STATUS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.LAB_STATUS).then(function(r){return r.json()}).then(function(d){
     var up=0,dn=0;d.hosts.forEach(function(x){if(x.status==='up')up++;else dn++;});
     var h='<div class="stats mb-12" >'+st('HOSTS',d.hosts.length,'p')+st('ONLINE',up,'g')+st('OFFLINE',dn,dn>0?'r':'g');
     if(d.docker)h+=st('CONTAINERS',d.docker.length,'b');
@@ -2770,7 +2770,7 @@ function _fleetToolInner(tool,panel,content){
     _loadUserDropdown('pw');
   } else if(tool==='promote'){
     content.innerHTML='<h3 class="section-label-pl">PROMOTE / DEMOTE USER</h3><div id="ft-prom-c"><div class="skeleton"></div></div>';
-    fetch(API.USERS).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.USERS).then(function(r){return r.json()}).then(function(d){
       var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)',protected:'var(--purple-light)'};
       var h='<table class="w-full"><thead><tr><th>USER</th><th>CURRENT ROLE</th><th>ACTIONS</th></tr></thead><tbody>';
       d.users.forEach(function(u,i){
@@ -2797,7 +2797,7 @@ function _fleetToolInner(tool,panel,content){
     _loadUserDropdown('sk');
   } else if(tool==='sshd'){
     content.innerHTML='<h3 class="section-label-pl">RESTART SSHD</h3><div id="ft-sshd-c"><div class="skeleton"></div></div>';
-    fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
       var h='<div class="flex-row-8-center">';
       h+='<button class="fleet-btn c-purple-active" data-action="sshdRestartSelected" >RESTART SELECTED</button>';
       h+='<button class="fleet-btn" data-action="sshdRestartAll">RESTART ALL ('+d.hosts.length+')</button>';
@@ -2875,7 +2875,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">TARGET NODE</label><select id="vmt-c-node" class="input-primary"><option value="auto">Auto (least loaded)</option></select></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtCreate" >CREATE VM</button></div>'+
       '</div><div id="vmt-c-out" class="mt-12"></div>';
-    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var nodes={};d.vms.forEach(function(v){nodes[v.node]=true;});
       var sel=document.getElementById('vmt-c-node');if(!sel)return;
       Object.keys(nodes).sort().forEach(function(n){sel.innerHTML+='<option value="'+n+'">'+n+'</option>';});
@@ -2886,7 +2886,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">NEW NAME</label><input id="vmt-cl-name" placeholder="e.g. clone-of-myvm" class="input-primary-lg"></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtClone" >CLONE VM</button></div>'+
       '</div><div id="vmt-cl-out" class="mt-12"></div>';
-    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-cl-source');if(!sel)return;sel.innerHTML='';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
     }).catch(function(e){console.error('API error:',e);});
@@ -2897,7 +2897,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="vmt-m-online"> LIVE MIGRATION (online)</label></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtMigrate" >MIGRATE</button></div>'+
       '</div><div id="vmt-m-out" class="mt-12"></div>';
-    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-m-source');var tgt=document.getElementById('vmt-m-target');
       if(!sel||!tgt)return;sel.innerHTML='';var nodes={};
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';nodes[v.node]=true;});
@@ -2908,7 +2908,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">VM</label><select id="vmt-s-source" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtSnapshot" >CREATE SNAPSHOT</button></div>'+
       '</div><div id="vmt-s-out" class="mt-12"></div>';
-    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-s-source');if(!sel)return;sel.innerHTML='';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
     }).catch(function(e){console.error('API error:',e);});
@@ -2919,7 +2919,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">NEW RAM</label><select id="vmt-r-ram" class="input-primary"><option value="">Keep current</option><option value="512">512MB</option><option value="1024">1GB</option><option value="2048">2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtResize" >RESIZE VM</button></div>'+
       '</div><div id="vmt-r-out" class="mt-12"></div>';
-    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-r-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.cpu+' cores, '+_ramGB(v.ram_mb)+')</option>';});
     }).catch(function(e){console.error('API error:',e);});
@@ -2930,7 +2930,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">STORAGE POOL</label><input id="vmt-ad-storage" placeholder="local-lvm" class="input-primary" value="local-lvm"></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtAddDisk" >ADD DISK</button></div>'+
       '</div><div id="vmt-ad-out" class="mt-12"></div>';
-    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-ad-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
     }).catch(function(e){console.error('API error:',e);});
@@ -2940,7 +2940,7 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">TAGS</label><input id="vmt-tag-tags" placeholder="e.g. prod,critical,backup" class="input-primary-lg"><div class="text-sub" style="margin-top:4px">Comma-separated. Allowed: letters, numbers, hyphens, underscores.</div></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtTag" >SET TAGS</button></div>'+
       '</div><div id="vmt-tag-out" class="mt-12"></div>';
-    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-tag-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){
         var tagInfo=v.tags?' ['+v.tags+']':'';
@@ -2953,7 +2953,7 @@ function switchVmMgmt(tab){
 function vmtLoadList(){
   var el=document.getElementById('vmt-list');if(!el)return;
   el.innerHTML='<div class="skeleton"></div>';
-  fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
     if(!d.count){el.innerHTML='<div class="text-dim-pad12">No VMs found.</div>';document.getElementById('vmt-stats').innerHTML='';return;}
     var running=0,stopped=0;d.vms.forEach(function(v){if(v.status==='running')running++;else stopped++;});
     var se=document.getElementById('vmt-stats');
@@ -2990,7 +2990,7 @@ function vmtCreate(){
   var r=(document.getElementById('vmt-c-ram')||{}).value;
   if(!n){toast('Enter a VM name','error');return;}
   var out=document.getElementById('vmt-c-out');if(out)out.innerHTML='<div class="c-yellow">Creating VM...</div>';
-  fetch(API.VM_CREATE+'?name='+encodeURIComponent(n)+'&cores='+c+'&ram='+r).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_CREATE+'?name='+encodeURIComponent(n)+'&cores='+c+'&ram='+r).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('VM '+d.vmid+' "'+d.name+'" created!','success');if(out)out.innerHTML='<div class="c-green">VM '+d.vmid+' created successfully.</div>';document.getElementById('vmt-c-name').value='';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
@@ -3001,7 +3001,7 @@ function vmtClone(){
   if(!src){toast('Select a source VM','error');return;}
   if(!name){toast('Enter a name for the clone','error');return;}
   var out=document.getElementById('vmt-cl-out');if(out)out.innerHTML='<div class="c-yellow">Cloning VM '+src+'...</div>';
-  fetch(API.VM_CLONE+'?vmid='+src+'&name='+encodeURIComponent(name)+'&full=1').then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_CLONE+'?vmid='+src+'&name='+encodeURIComponent(name)+'&full=1').then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Clone created as VM '+d.new_vmid+'!','success');if(out)out.innerHTML='<div class="c-green">Clone "'+name+'" created as VM '+d.new_vmid+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   }).catch(function(e){toast('Clone failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -3013,7 +3013,7 @@ function vmtMigrate(){
   if(!src||!tgt){toast('Select VM and target node','error');return;}
   var out=document.getElementById('vmt-m-out');if(out)out.innerHTML='<div class="c-yellow">Migrating VM '+src+' to '+tgt+'...</div>';
   confirmAction('Migrate VM <strong>'+src+'</strong> to <strong>'+tgt+'</strong>?',function(){
-    fetch(API.VM_MIGRATE+'?vmid='+src+'&target_node='+encodeURIComponent(tgt)+'&online='+online).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_MIGRATE+'?vmid='+src+'&target_node='+encodeURIComponent(tgt)+'&online='+online).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('Migration started','success');if(out)out.innerHTML='<div class="c-green">VM '+src+' migrating to '+tgt+(d.online?' (live)':' (offline)')+'</div>';}
       else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
     }).catch(function(e){toast('Migration failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -3027,7 +3027,7 @@ function vmtAddDisk(){
   if(!vmid){toast('Select a VM','error');return;}
   if(!size||+size<1){toast('Enter a valid disk size','error');return;}
   var out=document.getElementById('vmt-ad-out');if(out)out.innerHTML='<div class="c-yellow">Adding '+size+unit+' disk to VM '+vmid+'...</div>';
-  fetch(API.VM_ADD_DISK+'?vmid='+vmid+'&size='+size+unit+'&storage='+encodeURIComponent(storage)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_ADD_DISK+'?vmid='+vmid+'&size='+size+unit+'&storage='+encodeURIComponent(storage)).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Disk '+d.disk+' added to VM '+vmid,'success');if(out)out.innerHTML='<div class="c-green">Added '+d.size+' disk as '+d.disk+' on '+d.storage+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   }).catch(function(e){toast('Add disk failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -3037,7 +3037,7 @@ function vmtTag(){
   var tags=(document.getElementById('vmt-tag-tags')||{}).value;
   if(!vmid){toast('Select a VM','error');return;}
   var out=document.getElementById('vmt-tag-out');if(out)out.innerHTML='<div class="c-yellow">Setting tags on VM '+vmid+'...</div>';
-  fetch(API.VM_TAG+'?vmid='+vmid+'&tags='+encodeURIComponent(tags||'')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_TAG+'?vmid='+vmid+'&tags='+encodeURIComponent(tags||'')).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Tags updated on VM '+vmid,'success');if(out)out.innerHTML='<div class="c-green">VM '+vmid+' tags set to: '+(d.tags||'(cleared)')+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   }).catch(function(e){toast('Tag update failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -3046,7 +3046,7 @@ function vmtSnapshot(){
   var src=(document.getElementById('vmt-s-source')||{}).value;
   if(!src){toast('Select a VM','error');return;}
   var out=document.getElementById('vmt-s-out');if(out)out.innerHTML='<div class="c-yellow">Creating snapshot...</div>';
-  fetch(API.VM_SNAPSHOT+'?vmid='+src).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_SNAPSHOT+'?vmid='+src).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Snapshot "'+d.snapshot+'" created','success');if(out)out.innerHTML='<div class="c-green">Snapshot "'+d.snapshot+'" created for VM '+src+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
@@ -3075,7 +3075,7 @@ function switchMonitoring(tab){
   var f=document.getElementById('mon-form');if(!f)return;
   if(tab==='monhealth'){
     f.innerHTML='<div id="mon-h-out"><div class="skeleton"></div></div>';
-    fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
       var up=0,dn=0;d.hosts.forEach(function(h){if(h.status==='healthy')up++;else dn++;});
       var h='<div class="stats mb-12" >'+st('HOSTS',d.hosts.length,'p')+st('HEALTHY',up,'g')+st('UNHEALTHY',dn,dn>0?'r':'g')+st('RESPONSE',d.duration+'s','b')+'</div>';
       h+='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>TYPE</th><th>STATUS</th><th>UPTIME</th></tr></thead><tbody>';
@@ -3091,7 +3091,7 @@ function switchMonitoring(tab){
       '<div id="mon-doc-out" class="exec-out" style="min-height:80px;display:none"></div>';
   } else if(tab==='monjournal'){
     f.innerHTML='<div id="mon-j-out"><div class="skeleton"></div></div>';
-    fetch(API.JOURNAL).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.JOURNAL).then(function(r){return r.json()}).then(function(d){
       if(!d.entries||!d.entries.length){document.getElementById('mon-j-out').innerHTML='<div class="text-dim-pad12">No journal entries.</div>';return;}
       var h='<table class="w-full"><thead><tr><th>TIME</th><th>TYPE</th><th>MESSAGE</th></tr></thead><tbody>';
       d.entries.slice(-50).reverse().forEach(function(e){
@@ -3112,21 +3112,21 @@ function switchMonitoring(tab){
 function monRunDoctor(){
   var out=document.getElementById('mon-doc-out');if(!out)return;
   out.style.display='block';out.textContent='Running diagnostics...';
-  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq doctor 2>&1 || echo "doctor not available"')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq doctor 2>&1 || echo "doctor not available"')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     out.textContent=txt||'(no output)';
   }).catch(function(){out.textContent='Failed to run doctor';});
 }
 function monWatchStart(){
   var out=document.getElementById('mon-w-out');if(out)out.textContent='Starting watch daemon...';
-  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq watch start 2>&1 || echo "watch not available"')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq watch start 2>&1 || echo "watch not available"')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.textContent=txt||'Watch started.';
   });
 }
 function monWatchStop(){
   var out=document.getElementById('mon-w-out');if(out)out.textContent='Stopping watch daemon...';
-  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq watch stop 2>&1 || echo "watch not available"')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq watch stop 2>&1 || echo "watch not available"')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.textContent=txt||'Watch stopped.';
   });
@@ -3168,14 +3168,14 @@ function switchNetwork(tab){
 function netDnsCheck(){
   var host=(document.getElementById('net-dns-host')||{}).value.trim();if(!host){toast('Enter a hostname','error');return;}
   var out=document.getElementById('net-dns-out');if(out){out.style.display='block';out.textContent='Resolving '+host+'...';}
-  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('dig +short '+host+' 2>&1 || nslookup '+host+' 2>&1')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('dig +short '+host+' 2>&1 || nslookup '+host+' 2>&1')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.textContent=txt||'(no results)';
   });
 }
 function netPingAll(){
   var out=document.getElementById('net-ping-out');if(out)out.innerHTML='<div class="skeleton"></div>';
-  fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
     var h='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>PING</th><th>LATENCY</th></tr></thead><tbody>';
     d.hosts.forEach(function(x){
       var ok=x.status==='healthy';
@@ -3190,7 +3190,7 @@ function netPortScan(){
   if(!host){toast('Enter a target host','error');return;}
   var out=document.getElementById('net-port-out');if(out){out.style.display='block';out.textContent='Scanning '+host+'...';}
   var cmd='for p in '+ports.replace(/,/g,' ')+'; do (echo >/dev/tcp/'+host+'/$p) 2>/dev/null && echo "PORT $p OPEN" || echo "PORT $p CLOSED"; done';
-  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.textContent=txt||'(no results)';
   });
@@ -3205,7 +3205,7 @@ function switchBackup(tab){
   var f=document.getElementById('bk-form');if(!f)return;
   if(tab==='bkstatus'){
     f.innerHTML='<div id="bk-s-out"><div class="skeleton"></div></div>';
-    fetch(API.BACKUP_LIST).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.BACKUP_LIST).then(function(r){return r.json()}).then(function(d){
       var h='<div class="desc-line">Snapshots and backup exports across the cluster.</div>';
       var snaps=d.snapshots||[];var exports=d.exports||[];
       if(snaps.length){
@@ -3232,7 +3232,7 @@ function switchBackup(tab){
       '<div><label class="label-sub">SNAPSHOT NAME (optional)</label><input id="bk-snap-name" placeholder="auto-generated if empty" class="input-primary"></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" onclick="bkTakeSnap()" >CREATE SNAPSHOT</button><button class="fleet-btn" onclick="bkListSnaps()">LIST SNAPSHOTS</button></div>'+
       '</div><div id="bk-snap-out" class="mt-12"></div>';
-    fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('bk-snap-vm');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+'</option>';});
     }).catch(function(e){console.error('API error:',e);});
@@ -3248,7 +3248,7 @@ function switchBackup(tab){
       '<div><label class="label-sub">SNAPSHOT NAME</label><input id="bk-rest-name" placeholder="Snapshot name to restore" class="input-primary"></div>'+
       '<button class="fleet-btn" onclick="bkRestore()" style="color:var(--red);border-color:var(--red);align-self:flex-start;padding:10px 20px">RESTORE SNAPSHOT</button>'+
       '</div><div id="bk-rest-out" class="mt-12"></div>';
-    fetch(API.BACKUP_LIST).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.BACKUP_LIST).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('bk-rest-vm');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       var seen={};(d.snapshots||[]).forEach(function(s){if(!seen[s.vmid]){seen[s.vmid]=true;sel.innerHTML+='<option value="'+s.vmid+'">'+s.vmid+' — '+_esc(s.vm_name)+'</option>';}});
     }).catch(function(e){console.error('API error:',e);});
@@ -3256,7 +3256,7 @@ function switchBackup(tab){
 }
 function bkCheckSchedules(){
   var out=document.getElementById('bk-sched-out');if(out){out.style.display='block';out.textContent='Checking schedules...';}
-  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('cat /etc/pve/jobs.cfg 2>/dev/null || echo "No backup schedules found"')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('cat /etc/pve/jobs.cfg 2>/dev/null || echo "No backup schedules found"')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.textContent=txt||'(no schedules)';
   });
@@ -3275,14 +3275,14 @@ function bkTakeSnap(){
 function bkListSnaps(){
   var vmid=(document.getElementById('bk-snap-vm')||{}).value;if(!vmid){toast('Select a VM','error');return;}
   var out=document.getElementById('bk-snap-out');if(out)out.innerHTML='<div class="skeleton"></div>';
-  fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm listsnapshot '+vmid+' 2>&1')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm listsnapshot '+vmid+' 2>&1')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--text);white-space:pre-wrap;margin:0">'+(txt||'No snapshots')+'</pre>';
   });
 }
 function bkExportConfig(){
   var out=document.getElementById('bk-exp-out');if(out){out.style.display='block';out.textContent='Exporting configuration...';}
-  fetch(API.CONFIG).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.CONFIG).then(function(r){return r.json()}).then(function(d){
     if(out)out.textContent=JSON.stringify(d,null,2);
   });
 }
@@ -3291,7 +3291,7 @@ function bkRestore(){
   var name=(document.getElementById('bk-rest-name')||{}).value.trim();if(!name){toast('Enter a snapshot name','error');return;}
   confirmAction('Restore VM <strong>'+vmid+'</strong> from snapshot <strong>'+_esc(name)+'</strong>? This will revert the VM.',function(){
     var out=document.getElementById('bk-rest-out');if(out)out.innerHTML='<div class="c-yellow">Restoring VM '+vmid+' from "'+_esc(name)+'"...</div>';
-    fetch(API.BACKUP_RESTORE+'?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.BACKUP_RESTORE+'?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('Restore complete','success');if(out)out.innerHTML='<div class="c-green">VM '+vmid+' restored from snapshot "'+_esc(d.snapshot)+'"</div>';}
       else{toast(d.error||'Restore failed','error');if(out)out.innerHTML='<div class="c-red">'+(d.error||'Failed')+'</div>';}
     }).catch(function(e){toast('Restore failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -3313,7 +3313,7 @@ function labExec(host,cmd){
 function _labExecRun(host,cmd){
   var out=document.getElementById('ft-lab-out');
   if(out)out.innerHTML='<div class="c-yellow">Running on '+host+'...</div>';
-  fetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--text);white-space:pre-wrap;margin:0">'+host.toUpperCase()+': '+(txt||'OK')+'</pre>';
   });
@@ -3326,7 +3326,7 @@ function labDockerAction(name,action){
 function _labDockerRun(name,action){
   var out=document.getElementById('ft-lab-out');
   if(out)out.innerHTML='<div class="c-yellow">'+action.toUpperCase()+' '+name+'...</div>';
-  fetch(API.EXEC+'?target=docker-dev&cmd='+encodeURIComponent('docker '+action+' '+name)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target=docker-dev&cmd='+encodeURIComponent('docker '+action+' '+name)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--green);white-space:pre-wrap;margin:0">'+name+': '+(txt||action+' OK')+'</pre>';
     toast(name+' '+action+' complete','success');
@@ -3336,7 +3336,7 @@ function _labDockerRun(name,action){
 /* User dropdown (reusable for passwd/sshkey) */
 var _userDropdownData={};
 function _loadUserDropdown(prefix){
-  fetch(API.USERS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.USERS).then(function(r){return r.json()}).then(function(d){
     var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)'};
     var users=d.users.map(function(u){return {value:u.username,label:u.username.toUpperCase(),detail:u.role.toUpperCase(),color:rc[u.role]||'var(--text-dim)'};});
     _userDropdownData[prefix]=users;
@@ -3405,9 +3405,9 @@ function unlockVault(){
   if(!user||!pass){toast('Enter admin credentials','error');return;}
   /* Verify credentials by attempting SSH auth to localhost */
   toast('Verifying credentials...','info');
-  fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent('whoami')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent('whoami')).then(function(r){return r.json()}).then(function(d){
     /* Check if the user is an admin in FREQ */
-    fetch(API.USERS).then(function(r){return r.json()}).then(function(ud){
+    _authFetch(API.USERS).then(function(r){return r.json()}).then(function(ud){
       var isAdmin=ud.users.some(function(u){return u.username===user&&u.role==='admin';});
       if(!isAdmin){toast('Access denied — admin role required','error');document.getElementById('vault-auth-pass').value='';return;}
       _vaultUnlocked=true;
@@ -3435,10 +3435,10 @@ function switchVaultTab(tab){
   renderVaultTab();
 }
 function loadSensitiveVault(){
-  fetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
     _vaultData=d;
     /* Also load FREQ users for the users tab */
-    fetch(API.USERS).then(function(r2){return r2.json()}).then(function(ud){
+    _authFetch(API.USERS).then(function(r2){return r2.json()}).then(function(ud){
       _vaultData._users=ud.users;
       renderVaultTab();
     }).catch(function(){renderVaultTab();});
@@ -3552,14 +3552,14 @@ function vaultCopy(host,key){
 /* Promote/demote functions */
 function promoteUser(username){
   confirmAction('Promote <strong>'+username.toUpperCase()+'</strong> to the next role level?',function(){
-    fetch(API.USERS_PROMOTE+'?username='+username).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.USERS_PROMOTE+'?username='+username).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast(username+' promoted','success');fleetTool('promote');}else toast(d.error||'Failed','error');
     });
   });
 }
 function demoteUser(username){
   confirmAction('Demote <strong>'+username.toUpperCase()+'</strong> to a lower role level?',function(){
-    fetch(API.USERS_DEMOTE+'?username='+username).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.USERS_DEMOTE+'?username='+username).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast(username+' demoted','success');fleetTool('promote');}else toast(d.error||'Failed','error');
     });
   });
@@ -3580,13 +3580,13 @@ function fleetNewUser(){
     if(sudoLine)cmd+='; echo "'+sudoLine+'" > /etc/sudoers.d/'+user+'; chmod 440 /etc/sudoers.d/'+user;
     if(key)cmd+='; mkdir -p /home/'+user+'/.ssh; echo "'+key+'" >> /home/'+user+'/.ssh/authorized_keys; chmod 700 /home/'+user+'/.ssh; chmod 600 /home/'+user+'/.ssh/authorized_keys; chown -R '+user+':'+user+' /home/'+user+'/.ssh';
     var out=document.getElementById('ft-nu-out');out.innerHTML='<div class="skeleton"></div>';
-    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       d.results.forEach(function(r,i){h+='<tr><td><strong>'+r.host.toUpperCase()+'</strong></td><td>'+(r.ok?'<span class="c-green">DEPLOYED</span>':'<span class="c-red">'+r.error+'</span>')+'</td></tr>';});
       h+='</tbody></table>';out.innerHTML=h;
       toast('User '+user+' deployed to '+d.results.length+' hosts','success');
       /* Also register in FREQ */
-      fetch(API.USERS_CREATE+'?username='+encodeURIComponent(user)+'&role='+role).catch(function(){});
+      _authFetch(API.USERS_CREATE+'?username='+encodeURIComponent(user)+'&role='+role).catch(function(){});
     });
   });
 }
@@ -3602,7 +3602,7 @@ function fleetPasswdUpdate(){
     toast('Updating password for '+user+'...','info');
     var cmd='echo "'+user+':'+pass+'" | chpasswd && echo OK || echo FAIL';
     var out=document.getElementById('ft-pw-out');out.innerHTML='<div class="skeleton"></div>';
-    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
@@ -3624,7 +3624,7 @@ function fleetSshKeyDeploy(){
     toast('Deploying SSH key for '+user+'...','info');
     var cmd='mkdir -p /home/'+user+'/.ssh; echo "'+key+'" >> /home/'+user+'/.ssh/authorized_keys; chmod 700 /home/'+user+'/.ssh; chmod 600 /home/'+user+'/.ssh/authorized_keys; chown -R '+user+':'+user+' /home/'+user+'/.ssh && echo OK || echo FAIL';
     var out=document.getElementById('ft-sk-out');out.innerHTML='<div class="skeleton"></div>';
-    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
@@ -3640,7 +3640,7 @@ function fleetSshKeyDeploy(){
 function sshdPanel(targetId){
   var out=document.getElementById(targetId);if(!out)return;
   out.innerHTML='<div class="skeleton"></div>';
-  fetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
     var h='<h3 style="color:var(--purple-light);font-size:13px;margin-bottom:8px">RESTART SSHD</h3>';
     h+='<div class="flex-row-8-center">';
     h+='<button class="fleet-btn c-purple-active" data-action="sshdRestartSelected" >RESTART SELECTED</button>';
@@ -3666,7 +3666,7 @@ function _sshdRestart(hosts){
   var out=document.getElementById('ft-sshd-out');out.innerHTML='<div class="skeleton"></div>';
   var done=0,total=hosts.length,html='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
   hosts.forEach(function(h){
-    fetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var ok=d.results&&d.results[0]&&d.results[0].ok&&d.results[0].output.trim()==='OK';
       html+='<tr><td><strong>'+h.toUpperCase()+'</strong></td><td>'+(ok?'<span class="c-green">RESTARTED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       done++;if(done===total){html+='</tbody></table>';var cb='<button class="fleet-btn my-8" onclick="document.getElementById(\'ft-sshd-out\').innerHTML=\'\'" >CLOSE RESULTS</button>';out.innerHTML=cb+html+cb;toast('SSHD restarted on '+done+' hosts','success');}
@@ -3697,7 +3697,7 @@ function ntpFixHost(label){
   confirmAction('Fix NTP sync on <strong>'+label.toUpperCase()+'</strong>?',function(){
     toast('Fixing NTP on '+label+'...','info');
     var cmd='timedatectl set-ntp true 2>/dev/null; systemctl restart systemd-timesyncd 2>/dev/null || systemctl restart chronyd 2>/dev/null || ntpd -gq 2>/dev/null; sleep 2; timedatectl status 2>&1 | head -5';
-    fetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var ok=d.results&&d.results[0]&&d.results[0].ok;
       toast(label.toUpperCase()+': '+(ok?'NTP sync restored':'Fix failed — check manually'),ok?'success':'error');
       fleetTool('ntp');
@@ -3712,7 +3712,7 @@ function ntpFixSelected(){
     hosts.forEach(function(h){ntpFixHost.__skip_confirm=true;
       toast('Fixing NTP on '+h+'...','info');
       var cmd='timedatectl set-ntp true 2>/dev/null; systemctl restart systemd-timesyncd 2>/dev/null || systemctl restart chronyd 2>/dev/null; sleep 2; timedatectl status 2>&1 | head -3';
-      fetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+      _authFetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
         var ok=d.results&&d.results[0]&&d.results[0].ok;
         toast(h.toUpperCase()+': '+(ok?'NTP fixed':'Failed'),ok?'success':'error');
       });
@@ -3727,7 +3727,7 @@ function ntpFixAll(){
   confirmAction('Fix NTP on ALL <strong>'+hosts.length+'</strong> unsynced hosts?',function(){
     hosts.forEach(function(h){
       var cmd='timedatectl set-ntp true 2>/dev/null; systemctl restart systemd-timesyncd 2>/dev/null || systemctl restart chronyd 2>/dev/null; sleep 2; timedatectl status 2>&1 | head -3';
-      fetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+      _authFetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
         var ok=d.results&&d.results[0]&&d.results[0].ok;
         toast(h.toUpperCase()+': '+(ok?'NTP fixed':'Failed'),ok?'success':'error');
       });
@@ -3786,7 +3786,7 @@ function ftRunExec(){
   hideExecDropdown();
   var cmd=document.getElementById('ft-exec-cmd').value;if(!cmd){toast('Enter a command','error');return;}
   document.getElementById('ft-exec-out').textContent='Running: '+cmd+' ...';
-  fetch(API.EXEC+'?target='+encodeURIComponent(target)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(target)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results){d.results.forEach(function(r){txt+=(r.host?r.host.toUpperCase()+': ':'')+r.output+'\n';});}
     document.getElementById('ft-exec-out').textContent=txt||'(No Output)';
   }).catch(function(e){document.getElementById('ft-exec-out').textContent='Error: '+e;});
@@ -3814,7 +3814,7 @@ function runHostUpdate(label){
   confirmAction('Run OS updates on <strong>'+label+'</strong>? This may take several minutes.',function(){
     toast('Updating '+label+'...','info');
     var cmd='apt-get update -qq && apt-get upgrade -y -qq 2>&1 | tail -5 || dnf update -y -q 2>&1 | tail -5 || zypper update -y 2>&1 | tail -5';
-    fetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var out=d.results&&d.results[0]?d.results[0].output:'no output';
       toast(label+': '+out.substring(0,80),d.results&&d.results[0]&&d.results[0].ok?'success':'error');
       loadFleetPage();
@@ -3822,7 +3822,7 @@ function runHostUpdate(label){
   });
 }
 function loadAgents(){
-  fetch(API.AGENTS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.AGENTS).then(function(r){return r.json()}).then(function(d){
     document.getElementById('agent-stats').innerHTML=s('Agents',d.count,'p');
     if(d.count>0){var h='<table><thead><tr><th>Name</th><th>Template</th><th>VMID</th><th>Status</th><th>Created</th></tr></thead><tbody>';
       d.agents.forEach(function(a){h+='<tr><td><strong>'+a.name+'</strong></td><td>'+a.template+'</td><td>'+a.vmid+'</td><td>'+badge(a.status)+'</td><td>'+(a.created||'')+'</td></tr>';});
@@ -3834,7 +3834,7 @@ function loadAgents(){
   document.getElementById('agent-templates').innerHTML=h;
 }
 function loadSpecialists(){
-  fetch(API.SPECIALISTS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.SPECIALISTS).then(function(r){return r.json()}).then(function(d){
     var h='';d.agents.forEach(function(a){h+='<tr><td><strong>'+a.name+'</strong></td><td>'+a.template+'</td><td>'+(a.vmid||'-')+'</td><td>'+a.status+'</td></tr>';});
     document.getElementById('specialist-table').innerHTML=h||'<tr><td colspan="4" class="c-dim">No specialists registered.</td></tr>';
   });
@@ -3845,7 +3845,7 @@ function loadSpecialists(){
    ═══════════════════════════════════════════════════════════════════ */
 function loadVMs(){
   document.getElementById('vms-c').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
-  fetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
     if(!d.count){document.getElementById('vms-c').innerHTML='<div class="empty-state"><div class="es-icon">▣</div><p>No VMs found on cluster.</p></div>';document.getElementById('vm-stats').innerHTML='';return;}
     var running=0,stopped=0;d.vms.forEach(function(v){if(v.status==='running')running++;else stopped++;});
     document.getElementById('vm-stats').innerHTML=
@@ -3888,16 +3888,16 @@ function loadVMs(){
    ═══════════════════════════════════════════════════════════════════ */
 function loadContainerSection(){
   var cards=document.getElementById('container-cards');if(cards&&!cards.innerHTML.trim())cards.innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
-  fetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
     var _coff=Math.max(0,d.containers_down||0);document.getElementById('container-stats').innerHTML=st('Total',d.containers_total,'p')+st('Online',d.containers_running,'g')+st('Offline',_coff,_coff>0?'r':'g')+st('VMs',d.vm_count,'b');
   }).catch(function(){document.getElementById('container-stats').innerHTML='<span class="c-red">Failed to load stats</span>';});
-  fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
     _mediaCache=d;_renderAllFromCache();
   }).catch(function(){toast('Failed to load containers','error');});
 }
 function loadDownloads(){
   var tbl=document.getElementById('dl-table');if(tbl)tbl.innerHTML='<tr><td colspan="6"><div class="skeleton"></div></td></tr>';
-  fetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).then(function(d){
     document.getElementById('dl-stats').innerHTML=st('Active',d.count,d.count>0?'y':'g');
     var h='';d.downloads.forEach(function(dl){
       var sz=dl.size>1073741824?(dl.size/1073741824).toFixed(1)+'GB':(dl.size/1048576).toFixed(0)+'MB';
@@ -3910,7 +3910,7 @@ function loadDownloads(){
 }
 function loadStreams(){
   var tbl=document.getElementById('stream-table');if(tbl)tbl.innerHTML='<tr><td colspan="5"><div class="skeleton"></div></td></tr>';
-  fetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).then(function(d){
     document.getElementById('stream-stats').innerHTML=st('Active Streams',d.count,d.count>0?'g':'p');
     var h='';d.sessions.forEach(function(ss){
       var stateB=ss.state==='playing'?'<span class="badge up">PLAYING</span>':ss.state==='paused'?'<span class="badge paused">PAUSED</span>':badge(ss.state);
@@ -3921,7 +3921,7 @@ function loadStreams(){
 }
 function mediaRestart(name){
   confirmAction('Restart container <strong>'+name+'</strong>?',function(){
-    fetch(API.MEDIA_RESTART+'?name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.MEDIA_RESTART+'?name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
       toast(d.ok?name+' restarted':'Restart failed: '+(d.error||'unknown'),d.ok?'success':'error');loadContainerSection();
     });
   });
@@ -3929,14 +3929,14 @@ function mediaRestart(name){
 function mediaLogs(name){
   var el=document.getElementById('container-logs');el.style.display='block';
   el.textContent='Loading logs for '+name+'...';
-  fetch(API.MEDIA_LOGS+'?name='+encodeURIComponent(name)+'&lines=50').then(function(r){return r.json()}).then(function(d){el.textContent=d.logs||'No logs available.';}).catch(function(e){el.textContent='Failed to load logs: '+e;toast('Failed to load logs','error');});
+  _authFetch(API.MEDIA_LOGS+'?name='+encodeURIComponent(name)+'&lines=50').then(function(r){return r.json()}).then(function(d){el.textContent=d.logs||'No logs available.';}).catch(function(e){el.textContent='Failed to load logs: '+e;toast('Failed to load logs','error');});
 }
 
 /* ═══════════════════════════════════════════════════════════════════
    INFRA
    ═══════════════════════════════════════════════════════════════════ */
 function loadInfra(){
-  fetch(API.INFRA_OVERVIEW).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.INFRA_OVERVIEW).then(function(r){return r.json()}).then(function(d){
     var up=d.hosts.filter(function(h){return h.status==='up'}).length;
     document.getElementById('infra-stats').innerHTML=s('Cluster',d.cluster,'p')+s('Hosts',d.hosts.length,'p')+s('Online',up,'g')+s('VMs',d.pve.vms.length,'b')+s('pfSense',d.infra.pfsense.ip||'N/A','y')+s('TrueNAS',d.infra.truenas.ip||'N/A','y');
     var t=document.getElementById('infra-tbl');t.innerHTML='';
@@ -3963,7 +3963,7 @@ function _infraPre(title,output){
 function pfAction(action){
   var o=_infraOut('pf-out');if(!o)return;
   o.innerHTML='<span class="c-dim">Querying pfSense ('+action+')...</span>';
-  fetch(API.INFRA_PFSENSE+'?action='+action).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.INFRA_PFSENSE+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable){o.innerHTML=_infraPre('PFSENSE \u2014 '+action.toUpperCase(),d.output);}
     else{o.innerHTML='<div class="c-red">Cannot reach pfSense at '+d.host+'</div><div class="c-dim-mt8">'+d.error+'</div>';}
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
@@ -3971,7 +3971,7 @@ function pfAction(action){
 function tnAction(action){
   var o=_infraOut('tn-out');if(!o)return;
   o.innerHTML='<span class="c-dim">Querying TrueNAS ('+action+')...</span>';
-  fetch(API.INFRA_TRUENAS+'?action='+action).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.INFRA_TRUENAS+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output);}
     else{o.innerHTML='<div class="c-red">Cannot reach TrueNAS at '+d.host+'</div><div class="c-dim-mt8">'+d.error+'</div>';}
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
@@ -3979,7 +3979,7 @@ function tnAction(action){
 function idracAction(action){
   var o=_infraOut('idrac-out');if(!o)return;
   o.innerHTML='<div class="skeleton"></div>';
-  fetch(API.INFRA_IDRAC+'?action='+action).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.INFRA_IDRAC+'?action='+action).then(function(r){return r.json()}).then(function(d){
     var html='';
     d.targets.forEach(function(t){
       if(t.reachable){html+=_infraPre(t.name.toUpperCase()+' ('+t.ip+') \u2014 '+action.toUpperCase(),t.output);}
@@ -3991,7 +3991,7 @@ function idracAction(action){
 function swAction(action){
   var o=_infraOut('sw-out');if(!o)return;
   o.innerHTML='<span class="c-dim">Querying switch ('+action+')...</span>';
-  fetch(API.SWITCH+'?action='+action).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.SWITCH+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.reachable)o.innerHTML=_infraPre('SWITCH \u2014 '+action.toUpperCase(),d.output);
     else o.innerHTML='<div class="c-red">Cannot reach switch at '+d.host+'</div><div class="c-dim-mt8">'+d.error+'</div>';
   });
@@ -4001,7 +4001,7 @@ function swAction(action){
    SECURITY
    ═══════════════════════════════════════════════════════════════════ */
 function loadVault(){
-  fetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
     if(!d.initialized){document.getElementById('vault-c').innerHTML='<p class="c-yellow">Vault not initialized. Store a credential to auto-initialize.</p>';return;}
     var groups={};
     d.entries.forEach(function(e){if(!groups[e.host])groups[e.host]=[];groups[e.host].push(e);});
@@ -4024,22 +4024,22 @@ function loadVault(){
 function vaultSet(){
   var k=document.getElementById('v-key').value;var v=document.getElementById('v-val').value;var h=document.getElementById('v-host').value;
   if(!k||!v){toast('Key and value required','error');return;}
-  fetch(API.VAULT_SET+'?key='+encodeURIComponent(k)+'&value='+encodeURIComponent(v)+'&host='+h).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VAULT_SET+'?key='+encodeURIComponent(k)+'&value='+encodeURIComponent(v)+'&host='+h).then(function(r){return r.json()}).then(function(d){
     if(d.ok){document.getElementById('v-key').value='';document.getElementById('v-val').value='';toast('Credential stored','success');loadVault();}else toast(d.error,'error');
   });
 }
 function vaultDelGroup(host){
   confirmAction('Delete ALL credentials for <strong>'+host.toUpperCase()+'</strong>?',function(){
-    fetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
       var promises=d.entries.filter(function(e){return e.host===host;}).map(function(e){
-        return fetch(API.VAULT_DELETE+'?host='+e.host+'&key='+encodeURIComponent(e.key));
+        return _authFetch(API.VAULT_DELETE+'?host='+e.host+'&key='+encodeURIComponent(e.key));
       });
       Promise.all(promises).then(function(){toast(host.toUpperCase()+' credentials deleted','success');loadVault();});
     });
   });
 }
 function loadUsers(){
-  fetch(API.USERS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.USERS).then(function(r){return r.json()}).then(function(d){
     var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)',protected:'var(--purple-light)'};
     /* Filter buttons */
     var html='<div class="flex-row-8-center">';
@@ -4081,23 +4081,23 @@ function filterUsers(role,btn){
 function userCreate(){
   var n=document.getElementById('u-name').value;var r=document.getElementById('u-role').value;
   if(!n){toast('Username required','error');return;}
-  fetch(API.USERS_CREATE+'?username='+n+'&role='+r).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.USERS_CREATE+'?username='+n+'&role='+r).then(function(r){return r.json()}).then(function(d){
     if(d.ok){document.getElementById('u-name').value='';toast('User created','success');loadUsers();}else toast(d.error,'error');
   });
 }
 function userPromote(u){
   confirmAction('Promote <strong>'+u+'</strong>?',function(){
-    fetch(API.USERS_PROMOTE+'?username='+u).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' promoted','success');loadUsers();}else toast(d.error,'error');});
+    _authFetch(API.USERS_PROMOTE+'?username='+u).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' promoted','success');loadUsers();}else toast(d.error,'error');});
   });
 }
 function userDemote(u){
   confirmAction('Demote <strong>'+u+'</strong>?',function(){
-    fetch(API.USERS_DEMOTE+'?username='+u).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' demoted','success');loadUsers();}else toast(d.error,'error');});
+    _authFetch(API.USERS_DEMOTE+'?username='+u).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' demoted','success');loadUsers();}else toast(d.error,'error');});
   });
 }
 function loadKeys(){
   document.getElementById('keys-c').innerHTML='<div class="skeleton"></div>';
-  fetch(API.KEYS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.KEYS).then(function(r){return r.json()}).then(function(d){
     if(!d.hosts||!d.hosts.length){document.getElementById('keys-c').innerHTML='<p class="c-dim-fs12">No hosts registered. Add hosts with <code>freq hosts add</code>.</p>';return;}
     var html='<p class="c-dim-mb12-fs12">SSH key: <code>'+d.ssh_key+'</code></p>';
     html+='<table><thead><tr><th>Host</th><th>IP</th><th>Reachable</th><th>Auth Keys</th></tr></thead><tbody>';
@@ -4126,7 +4126,7 @@ function runAuditCheck(type){
   var html='';var done=0;
   checks.forEach(function(key){
     var chk=AUDIT_CHECKS[key];if(!chk)return;
-    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(chk.cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(chk.cmd)).then(function(r){return r.json()}).then(function(d){
       html+='<h3 style="color:var(--purple-light);margin:12px 0 8px">'+chk.name+'</h3><table><thead><tr><th>HOST</th><th>VALUE</th><th>STATUS</th></tr></thead><tbody>';
       d.results.forEach(function(r,i){
         var val=r.ok?r.output.trim():'error';
@@ -4153,7 +4153,7 @@ function hardenAction(action){
   confirmAction('Run <strong>'+c.name+'</strong> on ALL fleet hosts?<br><br>This modifies system configuration.',function(){
     toast('Running '+c.name+'...','info');
     var out=document.getElementById('harden-c');out.innerHTML='<div class="skeleton"></div>';
-    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(c.cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(c.cmd)).then(function(r){return r.json()}).then(function(d){
       var html='<h3 style="color:var(--purple-light);margin-bottom:8px">'+c.name+'</h3><table><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
@@ -4172,7 +4172,7 @@ function runSshSweep(){
   var checks=[{name:'SSH: Password Auth',cmd:"grep -c '^PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null||echo 0"},{name:'SSH: Root Login',cmd:"grep -c '^PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null||echo 0"},{name:'SSH: Empty Passwords',cmd:"grep -c '^PermitEmptyPasswords no' /etc/ssh/sshd_config 2>/dev/null||echo 0"}];
   var html='';var done=0;
   checks.forEach(function(chk){
-    fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(chk.cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(chk.cmd)).then(function(r){return r.json()}).then(function(d){
       html+='<h3 style="color:var(--purple-light);margin:12px 0 8px">'+chk.name+'</h3><table><thead><tr><th>Host</th><th>Result</th><th>Status</th></tr></thead><tbody>';
       d.results.forEach(function(r,i){
         var val=r.ok?r.output.trim():'error';
@@ -4185,7 +4185,7 @@ function runSshSweep(){
 }
 function runHarden(){
   document.getElementById('harden-c').innerHTML='<div class="skeleton"></div>';
-  fetch(API.HARDEN).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.HARDEN).then(function(r){return r.json()}).then(function(d){
     var html='<table><thead><tr><th>Host</th><th>Check</th><th>Status</th></tr></thead><tbody>';
     d.results.forEach(function(r,i){html+='<tr><td><strong>'+r.host+'</strong></td><td>'+r.check+'</td><td>'+badge(r.ok?'ok':'CRITICAL')+'</td></tr>';});
     html+='</tbody></table>';var cb2='<button class="fleet-btn my-8" onclick="document.getElementById(\'harden-c\').innerHTML=\'\'" >CLOSE RESULTS</button>';document.getElementById('harden-c').innerHTML=cb2+html+cb2;
@@ -4194,7 +4194,7 @@ function runHarden(){
 }
 function loadRisk(){
   var rc=document.getElementById('risk-chain');rc.innerHTML='';
-  fetch(API.RISK).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.RISK).then(function(r){return r.json()}).then(function(d){
     /* Kill chain from API — no hardcoded nodes */
     var ch=d.chain||['Operator','VPN','Firewall','Switch','VLAN','Target'];
     ch.forEach(function(n,i){
@@ -4210,7 +4210,7 @@ function loadRisk(){
 }
 function loadPolicies(){
   document.getElementById('policies-c').innerHTML='<div class="skeleton"></div>';
-  fetch(API.POLICIES).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.POLICIES).then(function(r){return r.json()}).then(function(d){
     if(!d.policies||!d.policies.length){document.getElementById('policies-c').innerHTML='<p class="c-dim-fs12">No policies configured.</p>';return;}
     var h='<div class="cards">';
     d.policies.forEach(function(p){h+='<div class="crd"><h3>'+p.name+'</h3><p>'+p.description+'</p><div class="mt-8">';p.scope.forEach(function(ss){h+='<span class="tag">'+ss+'</span>';});h+='</div></div>';});
@@ -4222,7 +4222,7 @@ function loadPolicies(){
    SYSTEM
    ═══════════════════════════════════════════════════════════════════ */
 function loadConfig(){
-  fetch(API.CONFIG).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.CONFIG).then(function(r){return r.json()}).then(function(d){
     var html='<div class="two"><div class="crd"><h3>Identity</h3><table>';
     html+='<tr><td class="c-dim">Version</td><td>v'+d.version+'</td></tr>';
     html+='<tr><td class="c-dim">Brand</td><td>'+d.brand+'</td></tr>';
@@ -4249,7 +4249,7 @@ function loadConfig(){
 }
 function runSysInfo(){
   document.getElementById('doctor-c').innerHTML='<div class="skeleton"></div>';
-  fetch(API.INFO).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.INFO).then(function(r){return r.json()}).then(function(d){
     var html='<div class="cards"><div class="crd"><h3>Installation</h3><table>';
     html+='<tr><td class="c-dim">Version</td><td>v'+d.version+'</td></tr>';
     html+='<tr><td class="c-dim">Brand</td><td>'+d.brand+'</td></tr>';
@@ -4264,14 +4264,14 @@ function runSysInfo(){
   });
 }
 function runBackup(){
-  fetch(API.EXEC+'?target=all&cmd='+encodeURIComponent('echo ok')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent('echo ok')).then(function(r){return r.json()}).then(function(d){
     var reachable=d.results.filter(function(r){return r.ok}).length;
     document.getElementById('backup-c').innerHTML='<div class="crd"><h3>Config Export</h3><p>Fleet snapshot: '+reachable+'/'+d.results.length+' hosts reachable</p><p class="text-dim mt-sm">Run from CLI: <code class="c-purple">freq backup export</code></p></div>';
     toast('Backup snapshot complete','success');
   });
 }
 function loadJournal(){
-  fetch(API.JOURNAL).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.JOURNAL).then(function(r){return r.json()}).then(function(d){
     if(!d.entries.length){document.getElementById('journal-c').innerHTML='<div class="empty-state"><div class="es-icon">&#128221;</div><p>No journal entries yet.</p></div>';return;}
     var html='<table><thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Status</th><th>Detail</th></tr></thead><tbody>';
     d.entries.reverse().forEach(function(e){
@@ -4283,7 +4283,7 @@ function loadJournal(){
 }
 function searchLearn(){
   var q=document.getElementById('learn-q').value;if(!q)return;
-  fetch(API.LEARN+'?q='+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.LEARN+'?q='+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){
     var h='';
     if(d.lessons&&d.lessons.length){h+='<h3 style="color:var(--purple-light);margin:12px 0">Lessons ('+d.lessons.length+')</h3><div class="cards">';
       d.lessons.forEach(function(l){h+='<div class="crd"><h3>#'+l.number+' '+l.title+'</h3><p>'+l.description+'</p><div class="mt-8"><span class="sev-'+l.severity+'">'+l.severity.toUpperCase()+'</span> <span class="tag">'+l.platform+'</span>'+(l.commands?' <span class="tag">'+l.commands+'</span>':'')+'</div></div>';});
@@ -4296,7 +4296,7 @@ function searchLearn(){
 }
 function loadDistros(){
   document.getElementById('distro-c').innerHTML='<div class="skeleton"></div>';
-  fetch(API.DISTROS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.DISTROS).then(function(r){return r.json()}).then(function(d){
     if(!d.distros||!d.distros.length){document.getElementById('distro-c').innerHTML='<p class="c-dim-fs12">No cloud images available.</p>';return;}
     var html='<div class="cards">';
     d.distros.forEach(function(i){html+='<div class="crd"><h3>'+i.name+'</h3><div class="mt-4"><span class="tag">'+i.family+'</span><span class="tag">'+i.tier+'</span></div><p style="margin-top:8px;font-size:13px;color:var(--text);word-break:break-all">'+i.url+'</p></div>';});
@@ -4305,7 +4305,7 @@ function loadDistros(){
 }
 function loadGroups(){
   document.getElementById('groups-c').innerHTML='<div class="skeleton"></div>';
-  fetch(API.GROUPS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.GROUPS).then(function(r){return r.json()}).then(function(d){
     var keys=Object.keys(d.groups||{});
     if(!keys.length){document.getElementById('groups-c').innerHTML='<p class="c-dim-fs12">No groups configured. Create groups with <code>freq groups add</code>.</p>';return;}
     var html='<div class="cards">';
@@ -4315,7 +4315,7 @@ function loadGroups(){
 }
 function loadNotify(){
   document.getElementById('notify-status').innerHTML='<div class="skeleton" style="height:40px"></div>';
-  fetch(API.CONFIG).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.CONFIG).then(function(r){return r.json()}).then(function(d){
     var providers=[
       {name:'Discord',key:'discord_webhook'},{name:'Slack',key:'slack_webhook'},
       {name:'Telegram',keys:['telegram_bot_token','telegram_chat_id']},
@@ -4337,25 +4337,25 @@ function loadNotify(){
     document.getElementById('notify-status').innerHTML=html;
   });
 }
-function testNotify(){fetch(API.NOTIFY_TEST).then(function(r){return r.json()}).then(function(d){document.getElementById('notify-result').innerHTML='<p class="c-dim">'+JSON.stringify(d)+'</p>';toast('Test notification sent','info');});}
+function testNotify(){_authFetch(API.NOTIFY_TEST).then(function(r){return r.json()}).then(function(d){document.getElementById('notify-result').innerHTML='<p class="c-dim">'+JSON.stringify(d)+'</p>';toast('Test notification sent','info');});}
 
 /* ═══════════════════════════════════════════════════════════════════
    VM ACTIONS (toast + modal)
    ═══════════════════════════════════════════════════════════════════ */
 function vmDestroy(vmid){
   confirmAction('Destroy VM <strong>'+vmid+'</strong>? This cannot be undone.',function(){
-    fetch(API.VM_DESTROY+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_DESTROY+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
       if(d.ok)toast('VM '+vmid+' destroyed','success');else toast('Error: '+d.error,'error');refreshCurrentView();
     });
   });
 }
 function vmSnap(vmid){
-  fetch(API.VM_SNAPSHOT+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_SNAPSHOT+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast('Snapshot "'+d.snapshot+'" created','success');else toast('Error: '+d.error,'error');
   });
 }
 function vmPower(vmid,action){
-  fetch(API.VM_POWER+'?vmid='+vmid+'&action='+action).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_POWER+'?vmid='+vmid+'&action='+action).then(function(r){return r.json()}).then(function(d){
     toast(d.action+': '+(d.ok?d.output:d.error),d.ok?'success':'error');refreshCurrentView();
   });
 }
@@ -4375,7 +4375,7 @@ function _vmRename(vmid){
   if(!name){toast('Enter a name','error');return;}
   var out=document.getElementById('vm-ctrl-out');if(out)out.innerHTML='<span class="c-yellow">Renaming...</span>';
   confirmAction('Rename VM <strong>'+vmid+'</strong> to <strong>'+name+'</strong>?',function(){
-    fetch(API.VM_RENAME+'?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_RENAME+'?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('VM '+vmid+' renamed to '+name,'success');if(out)out.innerHTML='<span class="c-green">Renamed to '+name+'</span>';document.getElementById('hd-title').textContent=name.toUpperCase();}
       else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
@@ -4386,7 +4386,7 @@ function _vmChangeId(vmid){
   if(!newid){toast('Enter a new VMID','error');return;}
   var out=document.getElementById('vm-ctrl-out');if(out)out.innerHTML='<span class="c-yellow">Changing VMID...</span>';
   confirmAction('Change VMID <strong>'+vmid+'</strong> to <strong>'+newid+'</strong>?<br><span class="c-yellow">VM must be stopped. This clones to the new ID and destroys the old one.</span>',function(){
-    fetch(API.VM_CHANGE_ID+'?vmid='+vmid+'&newid='+newid).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_CHANGE_ID+'?vmid='+vmid+'&newid='+newid).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('VMID changed: '+vmid+' \u2192 '+newid,'success');if(out)out.innerHTML='<span class="c-green">VMID changed to '+newid+'</span>';closeHost();}
       else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
@@ -4399,7 +4399,7 @@ function _vmSnapWarn(vmid,isRunning){
     '<span class="c-dim">Live migration requires zero snapshots. If you need to migrate this VM later, you will need to delete all snapshots first.</span><br><br>'+
     'Continue?',
     function(){
-      fetch(API.VM_SNAPSHOT+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+      _authFetch(API.VM_SNAPSHOT+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
         if(d.ok){toast('Snapshot "'+d.snapshot+'" created — live migration DISABLED until deleted','success');}
         else{toast('Error: '+d.error,'error');}
       });
@@ -4409,7 +4409,7 @@ function _vmSnapWarn(vmid,isRunning){
 function _vmListSnaps(vmid){
   var out=document.getElementById('vm-ctrl-out');if(!out)return;
   out.innerHTML='<span class="c-dim">Loading snapshots...</span>';
-  fetch(API.VM_SNAPSHOTS+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_SNAPSHOTS+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
     if(!d.count){
       out.innerHTML='<div class="mt-8"><span style="color:var(--green);font-size:12px;font-weight:600">NO SNAPSHOTS</span><span style="color:var(--text-dim);font-size:12px;margin-left:8px">\u2014 live migration eligible</span></div>';
       return;
@@ -4427,7 +4427,7 @@ function _vmListSnaps(vmid){
 function _vmDelSnap(vmid,name){
   confirmAction('Delete snapshot <strong>'+name+'</strong> from VM '+vmid+'?',function(){
     toast('Deleting snapshot '+name+'...','info');
-    fetch(API.VM_DELETE_SNAP+'?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_DELETE_SNAP+'?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('Snapshot '+name+' deleted','success');_vmListSnaps(vmid);}
       else{toast('Error: '+d.error,'error');}
     });
@@ -4436,10 +4436,10 @@ function _vmDelSnap(vmid,name){
 function _vmDelAllSnaps(vmid){
   confirmAction('Delete <strong>ALL</strong> snapshots from VM '+vmid+'?<br><span class="c-green">This will restore live migration eligibility.</span>',function(){
     toast('Deleting all snapshots...','info');
-    fetch(API.VM_SNAPSHOTS+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_SNAPSHOTS+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
       var chain=Promise.resolve();
       d.snapshots.forEach(function(s){
-        chain=chain.then(function(){return fetch(API.VM_DELETE_SNAP+'?vmid='+vmid+'&name='+encodeURIComponent(s)).then(function(r){return r.json()});});
+        chain=chain.then(function(){return _authFetch(API.VM_DELETE_SNAP+'?vmid='+vmid+'&name='+encodeURIComponent(s)).then(function(r){return r.json()});});
       });
       chain.then(function(){toast('All snapshots deleted \u2014 live migration restored','success');_vmListSnaps(vmid);});
     });
@@ -4464,7 +4464,7 @@ function _vmDoResize(vmid){
   var out=document.getElementById('vm-ctrl-out');
   confirmAction('Resize VM <strong>'+vmid+'</strong> to '+desc.join(', ')+'?',function(){
     if(out)out.innerHTML='<span class="c-yellow">Resizing...</span>';
-    fetch(API.VM_RESIZE+'?vmid='+vmid+(cores?'&cores='+cores:'')+(ram?'&ram='+ram:'')).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_RESIZE+'?vmid='+vmid+(cores?'&cores='+cores:'')+(ram?'&ram='+ram:'')).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('VM '+vmid+' resized','success');if(out)out.innerHTML='<span class="c-green">Resized \u2014 reboot to apply</span>';}
       else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
@@ -4487,7 +4487,7 @@ function _vmDoMigrate(vmid){
   var out=document.getElementById('vm-ctrl-out');
   confirmAction('Migrate VM <strong>'+vmid+'</strong> to <strong>'+target+'</strong>?<br><span class="c-dim">This may take several minutes.</span>',function(){
     if(out)out.innerHTML='<span class="c-yellow">Migrating to '+target+'...</span>';
-    fetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm migrate '+vmid+' '+target+' --online')).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm migrate '+vmid+' '+target+' --online')).then(function(r){return r.json()}).then(function(d){
       var txt=d.results?d.results.map(function(r){return r.output;}).join(''):'';
       if(out)out.innerHTML='<span class="c-green">'+txt+'</span>';toast('Migration started','success');
     }).catch(function(e){if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
@@ -4523,7 +4523,7 @@ function _vmCheckAndAddNic(vmid){
   var vlan=sel.value;
   var ip=prefix+'.'+octet;
   if(status)status.innerHTML='<span class="c-yellow">Checking '+ip+'...</span>';
-  fetch(API.VM_CHECK_IP+'?ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_CHECK_IP+'?ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
     if(d.in_use){
       if(status)status.innerHTML='<span class="c-red">'+ip+' is IN USE \u2014 pick another</span>';
       toast(ip+' is already in use','error');
@@ -4533,7 +4533,7 @@ function _vmCheckAndAddNic(vmid){
     var cidr=opt.getAttribute('data-cidr')||'24';
     confirmAction('Add NIC to VM <strong>'+vmid+'</strong>:<br><span style="font-family:monospace">'+opt.textContent+' \u2192 '+ip+'/'+cidr+'</span>'+(gw?'<br><span style="font-family:monospace;color:var(--text-dim)">gw '+gw+'</span>':'')+'<br><br><span class="c-dim">This adds a new NIC without touching existing ones. Reboot to activate.</span>',function(){
       if(status)status.innerHTML='<span class="c-yellow">Adding NIC...</span>';
-      fetch(API.VM_ADD_NIC+'?vmid='+vmid+'&ip='+encodeURIComponent(ip+'/'+cidr)+'&gw='+encodeURIComponent(gw)+'&vlan='+vlan).then(function(r){return r.json()}).then(function(d2){
+      _authFetch(API.VM_ADD_NIC+'?vmid='+vmid+'&ip='+encodeURIComponent(ip+'/'+cidr)+'&gw='+encodeURIComponent(gw)+'&vlan='+vlan).then(function(r){return r.json()}).then(function(d2){
         if(d2.ok){
           toast(d2.nic+' added: '+ip,'success');
           if(status)status.innerHTML='<span class="c-green">'+d2.nic+' added \u2014 reboot to activate</span>';
@@ -4560,12 +4560,12 @@ function _vmApplyNicCombo(vmid){
   var out=document.getElementById('vm-ctrl-out');
   confirmAction('<strong>Set VM '+vmid+' network ('+configs.length+' NIC'+(configs.length>1?'s':'')+')</strong><br><br><span style="font-family:monospace;line-height:1.8">'+desc+'</span><br><br><span class="c-yellow">All existing NICs will be CLEARED first.</span><br><span class="c-dim">Reboot required to activate.</span>',function(){
     if(out)out.innerHTML='<span class="c-yellow">Clearing existing NICs...</span>';
-    fetch(API.VM_CLEAR_NICS+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_CLEAR_NICS+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
       if(out)out.innerHTML='<span class="c-yellow">Applying '+configs.length+' NICs...</span>';
       var chain=Promise.resolve();
       configs.forEach(function(c){
         chain=chain.then(function(){
-          return fetch(API.VM_CHANGE_IP+'?vmid='+vmid+'&ip='+encodeURIComponent(c.ip)+'&gw='+encodeURIComponent(c.gw)+'&nic='+c.nic+'&vlan='+c.vlan).then(function(r){return r.json();});
+          return _authFetch(API.VM_CHANGE_IP+'?vmid='+vmid+'&ip='+encodeURIComponent(c.ip)+'&gw='+encodeURIComponent(c.gw)+'&nic='+c.nic+'&vlan='+c.vlan).then(function(r){return r.json();});
         });
       });
       return chain;
@@ -4736,7 +4736,7 @@ function renderInfraCard(config){
 /* ── Renderer: Host (async SSH probe) — adaptive layout ── */
 function renderHostCard(config){
   var label=config.label;
-  fetch(API.HOST_DETAIL+'?host='+encodeURIComponent(label)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.HOST_DETAIL+'?host='+encodeURIComponent(label)).then(function(r){return r.json()}).then(function(d){
     if(d.error){_cardReady('<p class="c-red">'+d.error+'</p>');return;}
     document.getElementById('hd-subtitle').textContent=d.ip+' \u00b7 '+(d.type||'linux')+' \u00b7 '+(d.os||'unknown');
     var kv=_kvRow;
@@ -4837,14 +4837,14 @@ function renderHostCard(config){
 function hdDockerRestart(name){
   if(!confirm('Restart container: '+name+'?'))return;
   var host=_cardState.host;
-  fetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent('docker restart '+name))
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent('docker restart '+name))
     .then(function(r){return r.json()}).then(function(d){var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}toast(txt||'Restarted '+name,'success');}).catch(function(e){toast('Error: '+e,'error');});
 }
 function hdDockerLogs(name){
   var host=_cardState.host;
   var panel=document.getElementById('hd-tool-panel');if(panel)panel.style.display='block';
   var out=document.getElementById('hd-exec-out');if(out)out.textContent='Loading logs for '+name+'...';
-  fetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent('docker logs --tail 50 '+name+' 2>&1'))
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent('docker logs --tail 50 '+name+' 2>&1'))
     .then(function(r){return r.json()}).then(function(d){var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}if(out)out.textContent=txt||'(no output)';}).catch(function(e){if(out)out.textContent='Error: '+e;});
 }
 
@@ -4952,7 +4952,7 @@ function _resolveVmIps(vmid,ip,liveHost){
   return {allIps:allIps,subtitleIp:subtitleIp};
 }
 function _vmDockerFetch(vmid){
-  fetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
     var myContainers=[];
     d.containers.forEach(function(c){if(c.vm_id==vmid)myContainers.push(c);});
     if(!myContainers.length)return;
@@ -5099,7 +5099,7 @@ function _runPveNodeCmd(label,ip,cmd){
   var o=document.getElementById('hd-infra-out');
   o.style.display='block';
   o.innerHTML='<span class="c-dim">Querying '+label.toUpperCase()+'...</span>';
-  fetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var out='';
     if(d.results){d.results.forEach(function(r){out+=r.output+'\n';});}
     o.innerHTML=_infraPre(label.toUpperCase(),out||'No output');
@@ -5118,14 +5118,14 @@ function hdExec(btn){_hdBtn(btn);document.getElementById('hd-tool-panel').style.
 function hdLogs(btn){
   _hdBtn(btn);document.getElementById('hd-tool-panel').style.display='block';
   document.getElementById('hd-exec-out').textContent='Loading logs for '+_cardState.host+'...';
-  fetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent('journalctl --no-pager -n 50 --output=short-iso 2>/dev/null || tail -50 /var/log/syslog 2>/dev/null')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent('journalctl --no-pager -n 50 --output=short-iso 2>/dev/null || tail -50 /var/log/syslog 2>/dev/null')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}document.getElementById('hd-exec-out').textContent=txt||'No logs available.';
   }).catch(function(e){document.getElementById('hd-exec-out').textContent='Error: '+e;});
 }
 function hdDiagnose(btn){
   _hdBtn(btn);document.getElementById('hd-tool-panel').style.display='block';
   document.getElementById('hd-exec-out').textContent='Running full diagnostic on '+_cardState.host+'...';
-  fetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent('echo "=== SYSTEM ===" && hostname -f && cat /etc/os-release 2>/dev/null | grep PRETTY && uname -r && echo "=== RESOURCES ===" && nproc && free -h | head -2 && df -h / && cat /proc/loadavg && echo "=== NETWORK ===" && ip -4 addr show | grep inet | grep -v 127 && ip route show default && echo "=== DOCKER ===" && docker ps --format "{{.Names}}: {{.Status}}" 2>/dev/null || echo "not installed" && echo "=== SECURITY ===" && systemctl --failed --no-legend 2>/dev/null | head -5 || echo "ok" && echo "=== LISTENING ===" && ss -tlnp 2>/dev/null | grep LISTEN | head -10')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent('echo "=== SYSTEM ===" && hostname -f && cat /etc/os-release 2>/dev/null | grep PRETTY && uname -r && echo "=== RESOURCES ===" && nproc && free -h | head -2 && df -h / && cat /proc/loadavg && echo "=== NETWORK ===" && ip -4 addr show | grep inet | grep -v 127 && ip route show default && echo "=== DOCKER ===" && docker ps --format "{{.Names}}: {{.Status}}" 2>/dev/null || echo "not installed" && echo "=== SECURITY ===" && systemctl --failed --no-legend 2>/dev/null | head -5 || echo "ok" && echo "=== LISTENING ===" && ss -tlnp 2>/dev/null | grep LISTEN | head -10')).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}document.getElementById('hd-exec-out').textContent=txt||'No output.';
   }).catch(function(e){document.getElementById('hd-exec-out').textContent='Error: '+e;});
 }
@@ -5139,7 +5139,7 @@ function hdRestart(){
 function hdRunCmd(){
   var cmd=document.getElementById('hd-cmd').value;if(!cmd)return;
   document.getElementById('hd-exec-out').textContent='Running: '+cmd+' ...';
-  fetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}document.getElementById('hd-exec-out').textContent=txt||'(no output)';
   }).catch(function(e){document.getElementById('hd-exec-out').textContent='Error: '+e;});
 }
@@ -5208,7 +5208,7 @@ function _ltGenerateHTML(toolId,pfx,hideBtn){
 
 function ltLoad(toolId,pfx){
   pfx=pfx||'';
-  fetch(API.LAB_TOOL_CONFIG+'?tool='+encodeURIComponent(toolId)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.LAB_TOOL_CONFIG+'?tool='+encodeURIComponent(toolId)).then(function(r){return r.json()}).then(function(d){
     var hEl=_ltEl(pfx,'lt-host');var kEl=_ltEl(pfx,'lt-key');
     if(d.host&&hEl)hEl.value=d.host;
     if(d.key&&kEl)kEl.value=d.key;
@@ -5260,13 +5260,13 @@ function ltRefresh(toolId,host,key,pfx){
 }
 
 function _ltProxy(toolId,method,endpoint,host,key,callback){
-  fetch(API.LAB_TOOL_PROXY+'?tool='+encodeURIComponent(toolId)+'&method='+method+'&endpoint='+encodeURIComponent(endpoint)+'&host='+encodeURIComponent(host)+'&key='+encodeURIComponent(key)).then(function(r){return r.json()}).then(callback).catch(function(e){callback({error:String(e)});});
+  _authFetch(API.LAB_TOOL_PROXY+'?tool='+encodeURIComponent(toolId)+'&method='+method+'&endpoint='+encodeURIComponent(endpoint)+'&host='+encodeURIComponent(host)+'&key='+encodeURIComponent(key)).then(function(r){return r.json()}).then(callback).catch(function(e){callback({error:String(e)});});
 }
 
 function ltSaveConfig(toolId,pfx){
   pfx=pfx||'';
   var host=((_ltEl(pfx,'lt-host')||{}).value||'').trim();var key=((_ltEl(pfx,'lt-key')||{}).value||'').trim();if(!host||!key)return;
-  fetch(API.LAB_TOOL_SAVE+'?tool='+encodeURIComponent(toolId)+'&host='+encodeURIComponent(host)+'&key='+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(){toast('Config saved to vault','success');});
+  _authFetch(API.LAB_TOOL_SAVE+'?tool='+encodeURIComponent(toolId)+'&host='+encodeURIComponent(host)+'&key='+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(){toast('Config saved to vault','success');});
 }
 
 function ltAction(toolId,action,pfx,confirm){
@@ -5506,7 +5506,7 @@ function gwipeBayClear(dev,pfx){
 function gwipeBayWipe(dev,pfx){
   confirmAction('WIPE /dev/'+dev+'? <strong>This destroys all data on the drive.</strong>',function(){
     var c=_ltHostKey('gwipe',pfx);
-    fetch(API.LAB_TOOL_PROXY+'?tool=gwipe&method=POST&endpoint='+encodeURIComponent('bays/'+dev+'/wipe')+'&host='+encodeURIComponent(c.host)+'&key='+encodeURIComponent(c.key)+'&confirm=YES').then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.LAB_TOOL_PROXY+'?tool=gwipe&method=POST&endpoint='+encodeURIComponent('bays/'+dev+'/wipe')+'&host='+encodeURIComponent(c.host)+'&key='+encodeURIComponent(c.key)+'&confirm=YES').then(function(r){return r.json()}).then(function(d){
       if(d.message)toast(d.message,'info');if(d.error)toast(d.error,'error');
     });
   });
@@ -5538,7 +5538,7 @@ function runSweep(doFix){
 function loadPatrolStatus(){
   var out=document.getElementById('patrol-out');if(!out)return;
   out.innerHTML='<span class="text-dim">Checking compliance...</span>';
-  fetch(API.PATROL_STATUS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.PATROL_STATUS).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No output')+'</pre>';
   }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
@@ -5550,7 +5550,7 @@ function loadOpsPage(){
   _populateHostDropdowns();
 }
 function _populateHostDropdowns(){
-  fetch(API.STATUS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.STATUS).then(function(r){return r.json()}).then(function(d){
     var hosts=d.hosts||[];
     var selects=['diag-host','log-host','chaos-target'];
     selects.forEach(function(id){
@@ -6333,7 +6333,7 @@ function chaosRun(){
 function runDoctor(){
   var out=document.getElementById('diag-out');if(!out)return;
   out.innerHTML='<span class="text-dim">Running self-diagnostic...</span>';
-  fetch(API.DOCTOR).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.DOCTOR).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'OK')+'</pre>';
   }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
@@ -6343,7 +6343,7 @@ function runDiagnose(){
   if(!host){toast('Select a host','error');return;}
   var out=document.getElementById('diag-out');if(!out)return;
   out.innerHTML='<span class="text-dim">Diagnosing '+_esc(host)+'...</span>';
-  fetch(API.DIAGNOSE+'?target='+encodeURIComponent(host)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.DIAGNOSE+'?target='+encodeURIComponent(host)).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     var h='<div style="font-size:14px;font-weight:700;color:var(--purple-light);margin-bottom:8px">'+_esc(d.host)+' ('+_esc(d.ip)+')</div>';
     var checks=d.checks||{};
@@ -6372,7 +6372,7 @@ function fetchLogs(){
 function loadZfs(){
   var out=document.getElementById('zfs-out');if(!out)return;
   out.innerHTML='<span class="text-dim">Loading ZFS status...</span>';
-  fetch(API.ZFS).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.ZFS).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No ZFS data')+'</pre>';
   }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
@@ -6380,7 +6380,7 @@ function loadZfs(){
 function loadBackups(action){
   var out=document.getElementById('backup-out');if(!out)return;
   out.innerHTML='<span class="text-dim">Loading backups...</span>';
-  fetch(API.BACKUP+'?action='+action).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.BACKUP+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No backup data')+'</pre>';
   }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
@@ -6426,7 +6426,7 @@ function loadGwipe(action){
    ACTIVITY FEED + MONITORS WIDGETS
    ═══════════════════════════════════════════════════════════════════ */
 function _loadActivityFeed(){
-  fetch('/api/activity?limit=20').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/activity?limit=20').then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('hw-activity-list');if(!el)return;
     if(!d.events||!d.events.length){el.innerHTML='<div class="empty-state"><p>No recent activity</p></div>';return;}
     var h='';d.events.forEach(function(ev){
@@ -6453,7 +6453,7 @@ function _updateActivityWidget(ev){
   while(el.children.length>20)el.removeChild(el.lastChild);
 }
 function _loadMonitorsWidget(){
-  fetch('/api/monitors/check').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/monitors/check').then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('hw-monitors-list');if(!el)return;
     if(!d.results||!d.results.length){el.innerHTML='<div class="empty-state"><p>No monitors configured</p></div>';return;}
     var h='';d.results.forEach(function(r){
