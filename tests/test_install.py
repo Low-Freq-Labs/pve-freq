@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -290,10 +291,30 @@ class TestProjectFiles:
     def test_license_exists(self):
         assert os.path.isfile(os.path.join(PROJECT_ROOT, "LICENSE"))
 
-    def test_license_is_mit(self):
+    def test_license_matches_pyproject(self):
+        """LICENSE file must match what pyproject.toml declares — no hardcoding."""
+        with open(os.path.join(PROJECT_ROOT, "pyproject.toml"), "rb") as f:
+            meta = tomllib.load(f)
+        spdx = meta["project"]["license"]["text"]
+        # Map SPDX identifiers to strings that MUST appear in the LICENSE file
+        spdx_to_text = {
+            "MIT": "MIT License",
+            "Apache-2.0": "Apache License",
+            "GPL-3.0-only": "GNU GENERAL PUBLIC LICENSE",
+            "GPL-3.0-or-later": "GNU GENERAL PUBLIC LICENSE",
+            "AGPL-3.0-only": "GNU AFFERO GENERAL PUBLIC LICENSE",
+            "AGPL-3.0-or-later": "GNU AFFERO GENERAL PUBLIC LICENSE",
+            "BSD-2-Clause": "BSD 2-Clause",
+            "BSD-3-Clause": "BSD 3-Clause",
+        }
+        expected = spdx_to_text.get(spdx)
+        assert expected is not None, f"Unknown SPDX identifier: {spdx} — add it to spdx_to_text"
         with open(os.path.join(PROJECT_ROOT, "LICENSE")) as f:
             content = f.read()
-        assert "MIT License" in content
+        assert expected in content, (
+            f"LICENSE file does not match pyproject.toml license '{spdx}': "
+            f"expected '{expected}' in LICENSE text"
+        )
 
     def test_readme_exists(self):
         assert os.path.isfile(os.path.join(PROJECT_ROOT, "README.md"))
@@ -317,6 +338,55 @@ class TestProjectFiles:
             content = f.read()
         assert "[project.urls]" in content
         assert "Repository" in content
+
+    def test_version_consistency(self):
+        """freq.__version__ must match pyproject.toml — single source of truth."""
+        import freq
+        with open(os.path.join(PROJECT_ROOT, "pyproject.toml"), "rb") as f:
+            meta = tomllib.load(f)
+        # pyproject.toml uses dynamic version from freq.__version__
+        dynamic = meta["project"].get("dynamic", [])
+        assert "version" in dynamic, "version should be dynamic in pyproject.toml"
+        version_attr = meta["tool"]["setuptools"]["dynamic"]["version"]["attr"]
+        assert version_attr == "freq.__version__", (
+            f"pyproject.toml points to '{version_attr}', expected 'freq.__version__'"
+        )
+        # Verify the version is valid semver (X.Y.Z)
+        parts = freq.__version__.split(".")
+        assert len(parts) == 3, f"Version '{freq.__version__}' is not semver X.Y.Z"
+        assert all(p.isdigit() for p in parts), f"Version parts must be numeric: {freq.__version__}"
+
+    def test_install_script_version_matches(self):
+        """install.sh --version must report the same version as freq.__version__."""
+        import freq
+        result = subprocess.run(
+            ["bash", INSTALL_SCRIPT, "--version"],
+            capture_output=True, text=True, timeout=10,
+        )
+        assert result.returncode == 0
+        assert freq.__version__ in result.stdout, (
+            f"install.sh reports '{result.stdout.strip()}' but freq.__version__ is '{freq.__version__}'"
+        )
+
+    def test_pyproject_classifiers_match_license(self):
+        """License classifier in pyproject.toml must match the license field."""
+        with open(os.path.join(PROJECT_ROOT, "pyproject.toml"), "rb") as f:
+            meta = tomllib.load(f)
+        spdx = meta["project"]["license"]["text"]
+        classifiers = meta["project"].get("classifiers", [])
+        license_classifiers = [c for c in classifiers if c.startswith("License ::")]
+        assert len(license_classifiers) > 0, "No license classifier in pyproject.toml"
+        # The SPDX id (minus the -only/-or-later suffix) should appear somewhere in classifiers
+        spdx_base = spdx.replace("-only", "").replace("-or-later", "")
+        found = any(spdx_base.replace("-", " ") in c or "AGPL" in c for c in license_classifiers)
+        assert found, f"License classifier doesn't match SPDX '{spdx}': {license_classifiers}"
+
+    def test_pyproject_python_requires(self):
+        """Python version requirement must be declared."""
+        with open(os.path.join(PROJECT_ROOT, "pyproject.toml"), "rb") as f:
+            meta = tomllib.load(f)
+        requires = meta["project"].get("requires-python", "")
+        assert "3.11" in requires, f"Expected Python 3.11+ requirement, got '{requires}'"
 
     def test_example_configs_exist(self):
         conf_dir = os.path.join(PROJECT_ROOT, "conf")

@@ -7,7 +7,7 @@
 Proxmox VMs. Docker stacks. Network switches. Firewalls. Storage. DNS. VPN. Certificates. Security. Monitoring. All from one tool. Zero dependencies. Works on every Linux distro.
 
 [![Tests](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml/badge.svg)](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-8b5cf6.svg)](https://www.python.org/downloads/)
 [![LOC](https://img.shields.io/badge/lines_of_code-82K-8b5cf6.svg)](#)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL_v3-8b5cf6.svg)](LICENSE)
 

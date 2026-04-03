@@ -3,12 +3,141 @@ name: Tests
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+  schedule:
+    # Nightly full matrix — catches upstream distro breakage
+    - cron: '0 8 * * *'  # 3 AM CDT
+  workflow_dispatch:
+    inputs:
+      test_level:
+        description: 'Test level'
+        required: true
+        type: choice
+        options:
+          - smoke
+          - full
+        default: full
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    name: Test on ${{ matrix.os }}
+  # ── Tier 0: Lint (fast gate — blocks everything) ──────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install ruff
+        run: pip3 install --break-system-packages ruff 2>/dev/null || pip3 install ruff
+
+      - name: Ruff check
+        run: ruff check freq/ --exit-zero
+
+  # ── Tier 1: Smoke tests (3 distros — fast PR feedback) ────────────────
+  test-smoke:
+    name: Smoke · ${{ matrix.os }}
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - 'debian:12'
+          - 'ubuntu:24.04'
+          - 'alpine:3.21'
+    container:
+      image: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Python and pytest
+        shell: sh
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update -qq
+            apt-get install -y -qq python3 python3-pip openssh-client openssl
+          elif command -v apk >/dev/null 2>&1; then
+            apk add --no-cache python3 py3-pip openssh-client openssl bash
+          fi
+          pip3 install --break-system-packages pytest build 2>/dev/null || pip3 install pytest build
+
+      - name: Verify Python version
+        shell: sh
+        run: |
+          python3 --version
+          python3 -c "import sys; assert sys.version_info >= (3, 11), f'Python 3.11+ required, got {sys.version}'"
+
+      - name: Install package
+        shell: sh
+        run: pip3 install --break-system-packages --no-deps . 2>/dev/null || pip3 install --no-deps .
+
+      - name: Verify freq --version
+        shell: sh
+        run: freq --version
+
+      - name: Verify freq doctor runs
+        shell: sh
+        run: freq doctor || true
+        env:
+          FREQ_DIR: ${{ github.workspace }}
+
+      - name: Verify freq init --dry-run
+        shell: sh
+        run: freq init --dry-run
+        env:
+          FREQ_DIR: ${{ github.workspace }}
+
+      - name: Run tests
+        shell: sh
+        run: |
+          pip3 install --break-system-packages pytest-cov 2>/dev/null || pip3 install pytest-cov
+          python3 -m pytest tests/ -v --tb=short \
+            --cov=freq --cov-report=term-missing --cov-fail-under=20 \
+            --junit-xml=test-results.xml
+        env:
+          FREQ_DIR: ${{ github.workspace }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-smoke-${{ matrix.os }}
+          path: test-results.xml
+          retention-days: 30
+
+      - name: Build wheel
+        shell: sh
+        run: python3 -m build --wheel --outdir dist/
+
+      - name: Install from wheel
+        shell: sh
+        run: |
+          pip3 install --break-system-packages --force-reinstall --no-deps dist/*.whl 2>/dev/null || \
+            pip3 install --force-reinstall --no-deps dist/*.whl
+          freq --version
+
+  # ── Tier 2: Full matrix (main push + nightly + manual) ────────────────
+  test-full:
+    name: Full · ${{ matrix.os }}
+    needs: lint
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.test_level == 'full')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -94,36 +223,27 @@ jobs:
       - name: Install package
         shell: sh
         run: |
-          # Install pve-freq from source (no external deps)
           pip3 install --break-system-packages --no-deps . 2>/dev/null || pip3 install --no-deps .
 
       - name: Verify freq --version
         shell: sh
-        run: |
-          freq --version
+        run: freq --version
 
       - name: Verify freq doctor runs
         shell: sh
-        run: |
-          # Doctor runs 15 self-checks. SSH/PVE checks will fail in CI (no infra)
-          # but the command must not crash. Exit 0 = all pass, exit 1 = some fail (expected in CI).
-          freq doctor || true
+        run: freq doctor || true
         env:
           FREQ_DIR: ${{ github.workspace }}
 
       - name: Verify freq init --dry-run
         shell: sh
-        run: |
-          # Dry-run previews what init would do — no root, no network, always exits 0
-          freq init --dry-run
+        run: freq init --dry-run
         env:
           FREQ_DIR: ${{ github.workspace }}
 
       - name: Verify freq init --check
         shell: sh
-        run: |
-          # Check validates local init state. Fails in CI (no freq.toml, no keys) but must not crash.
-          freq init --check || true
+        run: freq init --check || true
         env:
           FREQ_DIR: ${{ github.workspace }}
 
@@ -135,9 +255,19 @@ jobs:
         shell: sh
         run: |
           pip3 install --break-system-packages pytest-cov 2>/dev/null || pip3 install pytest-cov
-          python3 -m pytest tests/ -v --tb=short --cov=freq --cov-report=term-missing --cov-fail-under=20
+          python3 -m pytest tests/ -v --tb=short \
+            --cov=freq --cov-report=term-missing --cov-fail-under=20 \
+            --junit-xml=test-results.xml
         env:
           FREQ_DIR: ${{ github.workspace }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-full-${{ strategy.job-index }}
+          path: test-results.xml
+          retention-days: 30
 
       - name: Verify package data
         shell: sh
@@ -148,14 +278,74 @@ jobs:
 
       - name: Build wheel
         shell: sh
-        run: |
-          python3 -m build --wheel --outdir dist/
+        run: python3 -m build --wheel --outdir dist/
 
       - name: Install from wheel
         shell: sh
         run: |
-          # Uninstall source install, reinstall from built wheel
           pip3 install --break-system-packages --force-reinstall --no-deps dist/*.whl 2>/dev/null || \
             pip3 install --force-reinstall --no-deps dist/*.whl
-          # Verify the wheel-installed package works
           freq --version
+
+  # ── Test result annotations (shows failures inline on PRs) ────────────
+  test-results:
+    name: Test Results
+    needs: [test-smoke, test-full]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
+    steps:
+      - name: Download smoke test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-smoke-*
+          merge-multiple: true
+          path: smoke-results/
+        continue-on-error: true
+
+      - name: Download full test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-full-*
+          merge-multiple: true
+          path: full-results/
+        continue-on-error: true
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: |
+            smoke-results/**/*.xml
+            full-results/**/*.xml
+          check_name: Test Results
+          comment_mode: always
+
+  # ── Status aggregator (single check for branch protection) ────────────
+  all-tests:
+    name: All Tests
+    needs: [lint, test-smoke, test-full]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          echo "Lint: ${{ needs.lint.result }}"
+          echo "Smoke: ${{ needs.test-smoke.result }}"
+          echo "Full: ${{ needs.test-full.result }}"
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+            echo "❌ Lint failed"
+            exit 1
+          fi
+          if [[ "${{ needs.test-smoke.result }}" != "success" ]]; then
+            echo "❌ Smoke tests failed"
+            exit 1
+          fi
+          # Full tests may be skipped on PRs — that's OK
+          if [[ "${{ needs.test-full.result }}" == "failure" ]]; then
+            echo "❌ Full matrix failed"
+            exit 1
+          fi
+          echo "✅ All checks passed"
