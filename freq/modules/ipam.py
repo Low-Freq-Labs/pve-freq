@@ -19,6 +19,7 @@ Design decisions:
     - No IPAM database. Used IPs are derived from fleet state that already
       exists (hosts.conf + PVE configs). One source of truth, not two.
 """
+
 import ipaddress
 
 from freq.core.config import FreqConfig
@@ -58,6 +59,7 @@ def _collect_used_ips(cfg: FreqConfig, vlan_name: str = "") -> set:
 
     # 2. From PVE VM configs (network interfaces)
     from freq.core.ssh import run as ssh_run
+
     for node_ip in cfg.pve_nodes:
         r = ssh_run(
             host=node_ip,
@@ -98,8 +100,7 @@ def _collect_used_ips(cfg: FreqConfig, vlan_name: str = "") -> set:
                     pass
 
     # 3. Infrastructure IPs from config
-    for attr in ("vm_gateway", "vm_nameserver", "truenas_ip", "pfsense_ip",
-                 "switch_ip", "docker_dev_ip"):
+    for attr in ("vm_gateway", "vm_nameserver", "truenas_ip", "pfsense_ip", "switch_ip", "docker_dev_ip"):
         val = getattr(cfg, attr, "")
         if val:
             try:
@@ -191,8 +192,12 @@ def _check_ip(cfg: FreqConfig, ip_str: str) -> dict:
             pass
 
     # Check infrastructure
-    for attr, label in [("vm_gateway", "gateway"), ("truenas_ip", "truenas"),
-                        ("pfsense_ip", "pfsense"), ("switch_ip", "switch")]:
+    for attr, label in [
+        ("vm_gateway", "gateway"),
+        ("truenas_ip", "truenas"),
+        ("pfsense_ip", "pfsense"),
+        ("switch_ip", "switch"),
+    ]:
         val = getattr(cfg, attr, "")
         if val:
             try:
@@ -275,14 +280,19 @@ def _cmd_ip_next(cfg: FreqConfig, vlan_name: str, json_mode: bool, args) -> int:
 
     if json_mode:
         import json
-        print(json.dumps({
-            "vlan": vlan.name,
-            "subnet": vlan.subnet,
-            "next": [str(ip) for ip in available],
-            "used": len(used_in_subnet),
-            "free": free_count,
-            "total": total_hosts,
-        }))
+
+        print(
+            json.dumps(
+                {
+                    "vlan": vlan.name,
+                    "subnet": vlan.subnet,
+                    "next": [str(ip) for ip in available],
+                    "used": len(used_in_subnet),
+                    "free": free_count,
+                    "total": total_hosts,
+                }
+            )
+        )
     else:
         for ip in available:
             prefix_len = subnet.prefixlen
@@ -347,8 +357,7 @@ def _cmd_ip_list(cfg: FreqConfig, vlan_name: str, json_mode: bool) -> int:
                 if not subnet:
                     continue
                 count = sum(1 for ip in used if ip in subnet)
-                fmt.line(f"  {fmt.C.BOLD}{vlan.name:<12}{fmt.C.RESET} "
-                         f"{vlan.subnet:<20} {count} used")
+                fmt.line(f"  {fmt.C.BOLD}{vlan.name:<12}{fmt.C.RESET} {vlan.subnet:<20} {count} used")
         fmt.blank()
         fmt.line(f"  Total: {len(used)} IP(s) tracked")
 
@@ -372,16 +381,15 @@ def _cmd_ip_check(cfg: FreqConfig, args, json_mode: bool) -> int:
 
     if json_mode:
         import json
+
         print(json.dumps(result))
     else:
         if result.get("error"):
             fmt.error(result["error"])
         elif result["in_use"]:
-            fmt.line(f"  {fmt.C.RED}{result['ip']}{fmt.C.RESET} — "
-                     f"{fmt.C.BOLD}IN USE{fmt.C.RESET} by {result['owner']}")
+            fmt.line(f"  {fmt.C.RED}{result['ip']}{fmt.C.RESET} — {fmt.C.BOLD}IN USE{fmt.C.RESET} by {result['owner']}")
         else:
-            fmt.line(f"  {fmt.C.GREEN}{result['ip']}{fmt.C.RESET} — "
-                     f"{fmt.C.GREEN}AVAILABLE{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.GREEN}{result['ip']}{fmt.C.RESET} — {fmt.C.GREEN}AVAILABLE{fmt.C.RESET}")
 
     fmt.blank()
     fmt.footer()

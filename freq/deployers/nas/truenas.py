@@ -6,6 +6,7 @@ across reboots or updates on either platform.
 
 This deployer detects which platform and uses the right tool.
 """
+
 import base64
 import os
 
@@ -115,12 +116,22 @@ echo DEPLOY_OK
     # Verify FREQ key SSH access
     success = True
     if ctx.get("key_path") and os.path.isfile(ctx["key_path"]):
-        rc2, _, _ = _run([
-            "ssh", "-n", "-i", ctx["key_path"],
-            "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
-            "-o", "StrictHostKeyChecking=accept-new",
-            f"{svc_name}@{ip}", "echo OK",
-        ])
+        rc2, _, _ = _run(
+            [
+                "ssh",
+                "-n",
+                "-i",
+                ctx["key_path"],
+                "-o",
+                "ConnectTimeout=3",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "StrictHostKeyChecking=accept-new",
+                f"{svc_name}@{ip}",
+                "echo OK",
+            ]
+        )
         if rc2 == 0:
             fmt.step_ok(f"Verified: FREQ key SSH as {svc_name}")
         else:
@@ -129,12 +140,22 @@ echo DEPLOY_OK
 
         # Verify sudo
         if rc2 == 0:
-            rc3, _, _ = _run([
-                "ssh", "-n", "-i", ctx["key_path"],
-                "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
-                "-o", "StrictHostKeyChecking=accept-new",
-                f"{svc_name}@{ip}", "sudo -n true",
-            ])
+            rc3, _, _ = _run(
+                [
+                    "ssh",
+                    "-n",
+                    "-i",
+                    ctx["key_path"],
+                    "-o",
+                    "ConnectTimeout=3",
+                    "-o",
+                    "BatchMode=yes",
+                    "-o",
+                    "StrictHostKeyChecking=accept-new",
+                    f"{svc_name}@{ip}",
+                    "sudo -n true",
+                ]
+            )
             if rc3 == 0:
                 fmt.step_ok(f"Verified: NOPASSWD sudo as {svc_name}")
             else:
@@ -171,9 +192,13 @@ fi
 rm -f /etc/sudoers.d/freq-{svc_name} /usr/local/etc/sudoers.d/freq-{svc_name} 2>/dev/null
 """
     r = ssh_run(
-        host=ip, command=remove_script, key_path=key_path,
-        connect_timeout=5, command_timeout=30,
-        htype="truenas", use_sudo=True,
+        host=ip,
+        command=remove_script,
+        key_path=key_path,
+        connect_timeout=5,
+        command_timeout=30,
+        htype="truenas",
+        use_sudo=True,
     )
     if r.returncode == 0 and "REMOVE_OK" in (r.stdout or ""):
         return True, "Account removed"

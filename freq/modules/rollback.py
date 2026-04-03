@@ -18,6 +18,7 @@ Design decisions:
     - Auto-selects latest snapshot, no user input needed. In an emergency,
       fewer decisions means faster recovery. Override with --snapshot flag.
 """
+
 import time
 
 from freq.core import fmt
@@ -35,9 +36,13 @@ def _find_reachable_node(cfg: FreqConfig) -> str:
     """Find the first reachable PVE node."""
     for ip in cfg.pve_nodes:
         r = ssh_run(
-            host=ip, command="pvesh get /version --output-format json",
-            key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=PVE_QUICK_TIMEOUT, htype="pve", use_sudo=True,
+            host=ip,
+            command="pvesh get /version --output-format json",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=cfg.ssh_connect_timeout,
+            command_timeout=PVE_QUICK_TIMEOUT,
+            htype="pve",
+            use_sudo=True,
         )
         if r.returncode == 0:
             return ip
@@ -47,9 +52,13 @@ def _find_reachable_node(cfg: FreqConfig) -> str:
 def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = PVE_CMD_TIMEOUT) -> tuple:
     """Execute a command on a PVE node via SSH + sudo."""
     r = ssh_run(
-        host=node_ip, command=command,
-        key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=timeout, htype="pve", use_sudo=True,
+        host=node_ip,
+        command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=timeout,
+        htype="pve",
+        use_sudo=True,
     )
     return r.stdout, r.returncode == 0
 
@@ -176,8 +185,7 @@ def cmd_rollback(cfg: FreqConfig, pack, args) -> int:
 
     # Perform rollback
     fmt.step_start(f"Rolling back to '{snap_name}'")
-    stdout, ok = _pve_cmd(cfg, node_ip, f"qm rollback {vmid} {snap_name}",
-                          timeout=PVE_ROLLBACK_TIMEOUT)
+    stdout, ok = _pve_cmd(cfg, node_ip, f"qm rollback {vmid} {snap_name}", timeout=PVE_ROLLBACK_TIMEOUT)
 
     if not ok:
         fmt.step_fail(f"Rollback failed: {stdout}")

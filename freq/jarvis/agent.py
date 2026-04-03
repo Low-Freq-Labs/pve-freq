@@ -16,6 +16,7 @@ Design decisions:
     - Template-based to make agent creation one command, not twenty
     - tmux sessions decouple agent lifetime from SSH sessions
 """
+
 import json
 import os
 import shutil
@@ -189,6 +190,7 @@ Define your mission here.
 
 # --- Agent Registry ---
 
+
 def _agents_file(cfg: FreqConfig) -> str:
     """Path to the agents registry file."""
     return os.path.join(cfg.data_dir, "jarvis", "agents.json")
@@ -217,6 +219,7 @@ def _save_agents(cfg: FreqConfig, agents: dict) -> bool:
 
 
 # --- Commands ---
+
 
 def cmd_agent(cfg: FreqConfig, pack, args) -> int:
     """Agent management dispatcher."""
@@ -309,7 +312,9 @@ def _cmd_create(cfg: FreqConfig, args) -> int:
     # Show plan
     fmt.line(f"  {fmt.C.BOLD}Agent:{fmt.C.RESET}     {agent_name}")
     fmt.line(f"  {fmt.C.BOLD}Template:{fmt.C.RESET}  {template['name']}")
-    fmt.line(f"  {fmt.C.BOLD}Resources:{fmt.C.RESET} {template['cores']} cores, {template['ram']}MB RAM, {template['disk']}GB disk")
+    fmt.line(
+        f"  {fmt.C.BOLD}Resources:{fmt.C.RESET} {template['cores']} cores, {template['ram']}MB RAM, {template['disk']}GB disk"
+    )
     fmt.line(f"  {fmt.C.BOLD}Image:{fmt.C.RESET}     {image}")
     fmt.line(f"  {fmt.C.BOLD}Cloud-init:{fmt.C.RESET} {'Yes (auto-provision)' if use_cloud_init else 'No (empty VM)'}")
     fmt.line(f"  {fmt.C.BOLD}Packages:{fmt.C.RESET}  {', '.join(template['packages'])}")
@@ -329,6 +334,7 @@ def _cmd_create(cfg: FreqConfig, args) -> int:
     # Step 1: Find PVE node
     fmt.step_start("Finding PVE node")
     from freq.modules.pve import _find_reachable_node, _pve_cmd
+
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
         fmt.step_fail("No PVE node reachable")
@@ -356,8 +362,12 @@ def _cmd_create(cfg: FreqConfig, args) -> int:
     # Step 3: Create VM (with cloud-init if available)
     if use_cloud_init:
         from freq.jarvis.provision import provision_agent_vm
+
         ok = provision_agent_vm(
-            cfg, node_ip, vmid, agent_name,
+            cfg,
+            node_ip,
+            vmid,
+            agent_name,
             image_key=image,
             cores=template["cores"],
             ram=template["ram"],
@@ -498,9 +508,9 @@ def _cmd_start(cfg: FreqConfig, args) -> int:
 
     # Check if tmux session already exists
     import subprocess
+
     session_name = f"FREQ-{name.upper()}"
-    r = subprocess.run(["tmux", "has-session", "-t", session_name],
-                       capture_output=True, timeout=AGENT_CMD_TIMEOUT)
+    r = subprocess.run(["tmux", "has-session", "-t", session_name], capture_output=True, timeout=AGENT_CMD_TIMEOUT)
 
     if r.returncode == 0:
         fmt.line(f"{fmt.C.YELLOW}Session '{session_name}' already running.{fmt.C.RESET}")
@@ -508,10 +518,21 @@ def _cmd_start(cfg: FreqConfig, args) -> int:
     else:
         fmt.step_start(f"Creating tmux session '{session_name}'")
         claude_md_dir = os.path.join(cfg.data_dir, "jarvis", "agents", name)
-        subprocess.run([
-            "tmux", "new-session", "-d", "-s", session_name,
-            "-x", "200", "-y", "50",
-        ], capture_output=True, timeout=AGENT_CMD_TIMEOUT)
+        subprocess.run(
+            [
+                "tmux",
+                "new-session",
+                "-d",
+                "-s",
+                session_name,
+                "-x",
+                "200",
+                "-y",
+                "50",
+            ],
+            capture_output=True,
+            timeout=AGENT_CMD_TIMEOUT,
+        )
         fmt.step_ok(f"Session '{session_name}' created")
 
         # Update status
@@ -539,8 +560,8 @@ def _cmd_stop(cfg: FreqConfig, args) -> int:
 
     session_name = f"FREQ-{name.upper()}"
     import subprocess
-    subprocess.run(["tmux", "kill-session", "-t", session_name],
-                   capture_output=True, timeout=AGENT_CMD_TIMEOUT)
+
+    subprocess.run(["tmux", "kill-session", "-t", session_name], capture_output=True, timeout=AGENT_CMD_TIMEOUT)
 
     agents[name]["status"] = "stopped"
     _save_agents(cfg, agents)
@@ -582,13 +603,14 @@ def _cmd_destroy(cfg: FreqConfig, args) -> int:
     # Stop tmux session
     session_name = f"FREQ-{name.upper()}"
     import subprocess
-    subprocess.run(["tmux", "kill-session", "-t", session_name],
-                   capture_output=True, timeout=AGENT_CMD_TIMEOUT)
+
+    subprocess.run(["tmux", "kill-session", "-t", session_name], capture_output=True, timeout=AGENT_CMD_TIMEOUT)
 
     # Destroy VM
     if vmid:
         fmt.step_start(f"Destroying VM {vmid}")
         from freq.modules.pve import _find_reachable_node, _pve_cmd
+
         node_ip = _find_reachable_node(cfg)
         if node_ip:
             _pve_cmd(cfg, node_ip, f"qm stop {vmid} --skiplock", timeout=AGENT_STOP_TIMEOUT)
@@ -637,8 +659,7 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
     # Get live VM status from PVE
     vm_status = {}
     if node_ip:
-        stdout, ok = _pve_cmd(cfg, node_ip,
-                              "pvesh get /cluster/resources --type vm --output-format json")
+        stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/resources --type vm --output-format json")
         if ok and stdout:
             try:
                 for vm in json_mod.loads(stdout):
@@ -671,19 +692,28 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
         ssh_badge = fmt.badge("skip")
         if vm_state == "running":
             # Try to find IP from PVE agent
-            r = ssh_run(host=node_ip,
-                        command=f"qm agent {vmid} network-get-interfaces 2>/dev/null | python3 -c \"import json,sys; data=json.load(sys.stdin); [print(a['ip-address']) for i in data.get('result',[]) for a in i.get('ip-addresses',[]) if a.get('ip-address-type')=='ipv4' and not a['ip-address'].startswith('127.')]\" 2>/dev/null || echo ''",
-                        key_path=cfg.ssh_key_path,
-                        command_timeout=AGENT_DEPLOY_TIMEOUT,
-                        htype="pve", use_sudo=True, cfg=cfg)
+            r = ssh_run(
+                host=node_ip,
+                command=f"qm agent {vmid} network-get-interfaces 2>/dev/null | python3 -c \"import json,sys; data=json.load(sys.stdin); [print(a['ip-address']) for i in data.get('result',[]) for a in i.get('ip-addresses',[]) if a.get('ip-address-type')=='ipv4' and not a['ip-address'].startswith('127.')]\" 2>/dev/null || echo ''",
+                key_path=cfg.ssh_key_path,
+                command_timeout=AGENT_DEPLOY_TIMEOUT,
+                htype="pve",
+                use_sudo=True,
+                cfg=cfg,
+            )
             if r.returncode == 0 and r.stdout.strip():
-                ip = r.stdout.strip().split('\n')[0]
+                ip = r.stdout.strip().split("\n")[0]
                 agent["ip"] = ip
                 # Quick SSH test
-                ssh_result = ssh_run(host=ip, command="echo ok",
-                                     key_path=cfg.ssh_key_path,
-                                     connect_timeout=3, command_timeout=AGENT_CMD_TIMEOUT,
-                                     htype="linux", use_sudo=False)
+                ssh_result = ssh_run(
+                    host=ip,
+                    command="echo ok",
+                    key_path=cfg.ssh_key_path,
+                    connect_timeout=3,
+                    command_timeout=AGENT_CMD_TIMEOUT,
+                    htype="linux",
+                    use_sudo=False,
+                )
                 ssh_badge = fmt.badge("ok") if ssh_result.returncode == 0 else fmt.badge("fail")
             else:
                 ssh_badge = fmt.badge("pending")
@@ -728,6 +758,7 @@ def _cmd_ssh_agent(cfg: FreqConfig, args) -> int:
     print()
 
     import os as _os
+
     ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=accept-new"]
     if cfg.ssh_key_path:
         ssh_cmd.extend(["-i", cfg.ssh_key_path])

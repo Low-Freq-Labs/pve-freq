@@ -20,6 +20,7 @@ Design decisions:
     - Port 9 is the de facto standard. Port 7 (echo) also works but 9 is
       more widely supported by NICs and BIOS implementations.
 """
+
 import re
 import socket
 
@@ -49,19 +50,16 @@ def parse_mac(mac_str: str) -> bytes:
     cleaned = mac_str.strip()
 
     # Remove all common separators to get bare hex
-    bare = re.sub(r'[:\-.]', '', cleaned)
+    bare = re.sub(r"[:\-.]", "", cleaned)
 
     # Validate: must be exactly 12 hex characters
     if len(bare) != 12:
         raise ValueError(
-            f"Invalid MAC address: {mac_str!r} "
-            f"(expected 12 hex digits, got {len(bare)} after stripping separators)"
+            f"Invalid MAC address: {mac_str!r} (expected 12 hex digits, got {len(bare)} after stripping separators)"
         )
 
-    if not re.match(r'^[0-9a-fA-F]{12}$', bare):
-        raise ValueError(
-            f"Invalid MAC address: {mac_str!r} (contains non-hex characters)"
-        )
+    if not re.match(r"^[0-9a-fA-F]{12}$", bare):
+        raise ValueError(f"Invalid MAC address: {mac_str!r} (contains non-hex characters)")
 
     return bytes.fromhex(bare)
 
@@ -87,7 +85,7 @@ def build_magic_packet(mac_bytes: bytes) -> bytes:
         raise ValueError(f"MAC must be 6 bytes, got {len(mac_bytes)}")
 
     # 6 bytes 0xFF + 16 repetitions of target MAC
-    return b'\xff' * 6 + mac_bytes * 16
+    return b"\xff" * 6 + mac_bytes * 16
 
 
 def send_wol(mac_address: str, broadcast: str = "255.255.255.255", port: int = 9) -> bool:

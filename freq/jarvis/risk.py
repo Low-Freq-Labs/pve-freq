@@ -17,6 +17,7 @@ Design decisions:
     - TOML config over auto-discovery — operators know their dependencies best
     - Risk levels (CRITICAL/HIGH/MEDIUM/LOW) are human-assigned, not computed
 """
+
 import os
 
 from freq.core import fmt
@@ -95,9 +96,7 @@ def _risk_map(cfg: FreqConfig, dependencies: dict) -> int:
     fmt.line(f"{fmt.C.BOLD}Kill Chain (remote access path):{fmt.C.RESET}")
     fmt.blank()
     chain = _load_kill_chain(cfg) or ["Operator", "VPN", "Firewall", "Switch", "Network", "Target"]
-    chain_str = f" {fmt.C.RED}\u2192{fmt.C.RESET} ".join(
-        f"{fmt.C.BOLD}{c}{fmt.C.RESET}" for c in chain
-    )
+    chain_str = f" {fmt.C.RED}\u2192{fmt.C.RESET} ".join(f"{fmt.C.BOLD}{c}{fmt.C.RESET}" for c in chain)
     print(f"    {chain_str}")
     print(f"    {fmt.C.DIM}Break any link = no remote recovery{fmt.C.RESET}")
     fmt.blank()

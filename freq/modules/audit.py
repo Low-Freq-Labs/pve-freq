@@ -18,6 +18,7 @@ Design decisions:
     - Audit is strictly read-only; remediation lives in harden.py.
       Separation means you can audit in prod without fear of side effects.
 """
+
 from freq.core import fmt
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
@@ -134,6 +135,7 @@ def cmd_audit(cfg: FreqConfig, pack, args) -> int:
 
 # --- Individual Checks ---
 
+
 def _check_ssh_config(cfg: FreqConfig, host) -> list:
     """Check SSH daemon configuration."""
     findings = []
@@ -147,11 +149,15 @@ def _check_ssh_config(cfg: FreqConfig, host) -> list:
         use_sudo=False,
     )
     if r.returncode != 0:
-        findings.append(Finding(
-            resource_type="ssh", key="sshd_config",
-            current="Cannot read SSH config", desired="readable",
-            severity=Severity.WARN,
-        ))
+        findings.append(
+            Finding(
+                resource_type="ssh",
+                key="sshd_config",
+                current="Cannot read SSH config",
+                desired="readable",
+                severity=Severity.WARN,
+            )
+        )
     return findings
 
 
@@ -170,17 +176,25 @@ def _check_password_auth(cfg: FreqConfig, host) -> list:
     if r.returncode == 0:
         value = r.stdout.strip().lower()
         if "yes" in value:
-            findings.append(Finding(
-                resource_type="ssh", key="PasswordAuthentication",
-                current="yes (enabled)", desired="no",
-                severity=Severity.WARN,
-            ))
+            findings.append(
+                Finding(
+                    resource_type="ssh",
+                    key="PasswordAuthentication",
+                    current="yes (enabled)",
+                    desired="no",
+                    severity=Severity.WARN,
+                )
+            )
         elif "not_set" in value:
-            findings.append(Finding(
-                resource_type="ssh", key="PasswordAuthentication",
-                current="not explicitly set (default varies)", desired="no",
-                severity=Severity.INFO,
-            ))
+            findings.append(
+                Finding(
+                    resource_type="ssh",
+                    key="PasswordAuthentication",
+                    current="not explicitly set (default varies)",
+                    desired="no",
+                    severity=Severity.INFO,
+                )
+            )
     return findings
 
 
@@ -199,11 +213,15 @@ def _check_root_login(cfg: FreqConfig, host) -> list:
     if r.returncode == 0:
         value = r.stdout.strip().lower()
         if "yes" in value and "prohibit" not in value:
-            findings.append(Finding(
-                resource_type="ssh", key="PermitRootLogin",
-                current="yes (unrestricted)", desired="prohibit-password or no",
-                severity=Severity.CRIT,
-            ))
+            findings.append(
+                Finding(
+                    resource_type="ssh",
+                    key="PermitRootLogin",
+                    current="yes (unrestricted)",
+                    desired="prohibit-password or no",
+                    severity=Severity.CRIT,
+                )
+            )
     return findings
 
 
@@ -223,19 +241,25 @@ def _check_open_ports(cfg: FreqConfig, host) -> list:
         ports = r.stdout.strip().split("\n")
         port_count = len(ports)
         if port_count > OPEN_PORTS_WARNING:
-            findings.append(Finding(
-                resource_type="network", key="Listening ports",
-                current=f"{port_count} ports open",
-                desired="review needed",
-                severity=Severity.WARN,
-            ))
+            findings.append(
+                Finding(
+                    resource_type="network",
+                    key="Listening ports",
+                    current=f"{port_count} ports open",
+                    desired="review needed",
+                    severity=Severity.WARN,
+                )
+            )
         else:
-            findings.append(Finding(
-                resource_type="network", key="Listening ports",
-                current=f"{port_count} ports",
-                desired="ok",
-                severity=Severity.INFO,
-            ))
+            findings.append(
+                Finding(
+                    resource_type="network",
+                    key="Listening ports",
+                    current=f"{port_count} ports",
+                    desired="ok",
+                    severity=Severity.INFO,
+                )
+            )
     return findings
 
 
@@ -255,19 +279,25 @@ def _check_failed_logins(cfg: FreqConfig, host) -> list:
         try:
             count = int(r.stdout.strip())
             if count > FAILED_LOGIN_CRITICAL:
-                findings.append(Finding(
-                    resource_type="auth", key="Failed SSH logins (24h)",
-                    current=f"{count} attempts",
-                    desired="< 50",
-                    severity=Severity.CRIT,
-                ))
+                findings.append(
+                    Finding(
+                        resource_type="auth",
+                        key="Failed SSH logins (24h)",
+                        current=f"{count} attempts",
+                        desired="< 50",
+                        severity=Severity.CRIT,
+                    )
+                )
             elif count > FAILED_LOGIN_WARNING:
-                findings.append(Finding(
-                    resource_type="auth", key="Failed SSH logins (24h)",
-                    current=f"{count} attempts",
-                    desired="< 10",
-                    severity=Severity.WARN,
-                ))
+                findings.append(
+                    Finding(
+                        resource_type="auth",
+                        key="Failed SSH logins (24h)",
+                        current=f"{count} attempts",
+                        desired="< 10",
+                        severity=Severity.WARN,
+                    )
+                )
         except ValueError:
             pass
     return findings
@@ -291,19 +321,25 @@ def _check_updates(cfg: FreqConfig, host) -> list:
         try:
             count = int(r.stdout.strip())
             if count > UPDATES_WARNING:
-                findings.append(Finding(
-                    resource_type="packages", key="Updates available",
-                    current=f"{count} packages",
-                    desired="up to date",
-                    severity=Severity.WARN,
-                ))
+                findings.append(
+                    Finding(
+                        resource_type="packages",
+                        key="Updates available",
+                        current=f"{count} packages",
+                        desired="up to date",
+                        severity=Severity.WARN,
+                    )
+                )
             elif count > 0:
-                findings.append(Finding(
-                    resource_type="packages", key="Updates available",
-                    current=f"{count} packages",
-                    desired="up to date",
-                    severity=Severity.INFO,
-                ))
+                findings.append(
+                    Finding(
+                        resource_type="packages",
+                        key="Updates available",
+                        current=f"{count} packages",
+                        desired="up to date",
+                        severity=Severity.INFO,
+                    )
+                )
             return findings
         except ValueError:
             pass
@@ -322,12 +358,15 @@ def _check_updates(cfg: FreqConfig, host) -> list:
         try:
             count = int(r.stdout.strip())
             if count > 0:
-                findings.append(Finding(
-                    resource_type="packages", key="Updates available",
-                    current=f"{count} packages",
-                    desired="up to date",
-                    severity=Severity.INFO if count < 20 else Severity.WARN,
-                ))
+                findings.append(
+                    Finding(
+                        resource_type="packages",
+                        key="Updates available",
+                        current=f"{count} packages",
+                        desired="up to date",
+                        severity=Severity.INFO if count < 20 else Severity.WARN,
+                    )
+                )
         except ValueError:
             pass
 

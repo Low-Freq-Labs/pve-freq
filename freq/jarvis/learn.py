@@ -16,6 +16,7 @@ Design decisions:
     - TOML over SQLite as source — human-editable, git-trackable
     - Reseed on count mismatch keeps index fresh without manual rebuilds
 """
+
 import logging
 import os
 import sqlite3
@@ -28,6 +29,7 @@ _logger = logging.getLogger(__name__)
 
 # --- Knowledge Loader ---
 
+
 def _load_knowledge(cfg: FreqConfig) -> tuple:
     """Load lessons and gotchas from TOML files in data/knowledge/.
 
@@ -39,25 +41,29 @@ def _load_knowledge(cfg: FreqConfig) -> tuple:
     lessons = []
     lessons_data = load_toml(os.path.join(knowledge_dir, "lessons.toml"))
     for entry in lessons_data.get("lesson", []):
-        lessons.append((
-            entry.get("number", 0),
-            entry.get("session", ""),
-            entry.get("platform", ""),
-            entry.get("severity", "info"),
-            entry.get("title", ""),
-            entry.get("description", ""),
-            entry.get("related_commands", ""),
-        ))
+        lessons.append(
+            (
+                entry.get("number", 0),
+                entry.get("session", ""),
+                entry.get("platform", ""),
+                entry.get("severity", "info"),
+                entry.get("title", ""),
+                entry.get("description", ""),
+                entry.get("related_commands", ""),
+            )
+        )
 
     gotchas = []
     gotchas_data = load_toml(os.path.join(knowledge_dir, "gotchas.toml"))
     for entry in gotchas_data.get("gotcha", []):
-        gotchas.append((
-            entry.get("platform", ""),
-            entry.get("trigger", ""),
-            entry.get("description", ""),
-            entry.get("fix", ""),
-        ))
+        gotchas.append(
+            (
+                entry.get("platform", ""),
+                entry.get("trigger", ""),
+                entry.get("description", ""),
+                entry.get("fix", ""),
+            )
+        )
 
     return lessons, gotchas
 
@@ -131,13 +137,11 @@ def _seed_db(conn: sqlite3.Connection, lessons: list, gotchas: list):
     for entry in lessons:
         conn.execute(
             "INSERT OR IGNORE INTO lessons (number, session, platform, severity, title, description, related_commands) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)", entry
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            entry,
         )
     for entry in gotchas:
-        conn.execute(
-            "INSERT INTO gotchas (platform, trigger_pattern, description, fix) "
-            "VALUES (?, ?, ?, ?)", entry
-        )
+        conn.execute("INSERT INTO gotchas (platform, trigger_pattern, description, fix) VALUES (?, ?, ?, ?)", entry)
 
     # Rebuild FTS indexes
     try:
@@ -157,21 +161,21 @@ def _search(conn: sqlite3.Connection, query: str) -> tuple:
     # Try FTS5 first
     try:
         # Sanitize query for FTS5
-        terms = query.replace('"', '').replace("'", '').split()
+        terms = query.replace('"', "").replace("'", "").split()
         fts_query = " ".join(f'"{t}"' for t in terms if t)
 
         lessons = conn.execute(
             "SELECT l.number, l.session, l.platform, l.severity, l.title, l.description, l.related_commands "
             "FROM lessons_fts f JOIN lessons l ON f.rowid = l.id "
             "WHERE lessons_fts MATCH ? ORDER BY rank LIMIT 15",
-            (fts_query,)
+            (fts_query,),
         ).fetchall()
 
         gotchas = conn.execute(
             "SELECT g.platform, g.trigger_pattern, g.description, g.fix "
             "FROM gotchas_fts f JOIN gotchas g ON f.rowid = g.id "
             "WHERE gotchas_fts MATCH ? ORDER BY rank LIMIT 10",
-            (fts_query,)
+            (fts_query,),
         ).fetchall()
     except sqlite3.OperationalError:
         pass
@@ -184,19 +188,20 @@ def _search(conn: sqlite3.Connection, query: str) -> tuple:
             "FROM lessons WHERE title LIKE ? OR description LIKE ? OR platform LIKE ? "
             "ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'important' THEN 1 WHEN 'info' THEN 2 ELSE 3 END "
             "LIMIT 15",
-            (like_pattern, like_pattern, like_pattern)
+            (like_pattern, like_pattern, like_pattern),
         ).fetchall()
         gotchas = conn.execute(
             "SELECT platform, trigger_pattern, description, fix "
             "FROM gotchas WHERE description LIKE ? OR trigger_pattern LIKE ? OR fix LIKE ? "
             "LIMIT 10",
-            (like_pattern, like_pattern, like_pattern)
+            (like_pattern, like_pattern, like_pattern),
         ).fetchall()
 
     return lessons, gotchas
 
 
 # --- Command ---
+
 
 def cmd_learn(cfg: FreqConfig, pack, args) -> int:
     """Search the FREQ knowledge base."""

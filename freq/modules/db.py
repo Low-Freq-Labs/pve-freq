@@ -49,7 +49,8 @@ def _detect_and_report(cfg: FreqConfig) -> list:
     )
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=DB_CMD_TIMEOUT,
@@ -75,9 +76,13 @@ def _detect_and_report(cfg: FreqConfig) -> list:
             continue
 
         entry = {
-            "label": h.label, "ip": h.ip,
-            "postgres": pg, "mysql": my,
-            "active_connections": 0, "db_size_bytes": 0, "replicas": 0,
+            "label": h.label,
+            "ip": h.ip,
+            "postgres": pg,
+            "mysql": my,
+            "active_connections": 0,
+            "db_size_bytes": 0,
+            "replicas": 0,
         }
 
         if len(lines) > 1:
@@ -134,11 +139,18 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
         return 0
 
     fmt.table_header(
-        ("HOST", 14), ("PG", 8), ("MYSQL", 8), ("CONNS", 8), ("SIZE", 10), ("REPLICAS", 8),
+        ("HOST", 14),
+        ("PG", 8),
+        ("MYSQL", 8),
+        ("CONNS", 8),
+        ("SIZE", 10),
+        ("REPLICAS", 8),
     )
 
     for db in db_hosts:
-        pg_str = f"{fmt.C.GREEN}{db['postgres']}{fmt.C.RESET}" if db["postgres"] != "no" else f"{fmt.C.DIM}no{fmt.C.RESET}"
+        pg_str = (
+            f"{fmt.C.GREEN}{db['postgres']}{fmt.C.RESET}" if db["postgres"] != "no" else f"{fmt.C.DIM}no{fmt.C.RESET}"
+        )
         my_str = f"{fmt.C.GREEN}{db['mysql']}{fmt.C.RESET}" if db["mysql"] != "no" else f"{fmt.C.DIM}no{fmt.C.RESET}"
 
         size_mb = db.get("db_size_bytes", 0) / 1048576

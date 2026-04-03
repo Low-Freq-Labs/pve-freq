@@ -18,6 +18,7 @@ Design decisions:
     - JSONL, not a database. One file, one format, zero dependencies.
       Survives backup/restore, works with standard Unix tools.
 """
+
 import json
 import os
 
@@ -64,10 +65,13 @@ def cmd_journal(cfg: FreqConfig, pack, args) -> int:
     # Filter
     if search:
         search_lower = search.lower()
-        entries = [e for e in entries if
-                   search_lower in e.get("action", "").lower() or
-                   search_lower in e.get("target", "").lower() or
-                   search_lower in e.get("detail", "").lower()]
+        entries = [
+            e
+            for e in entries
+            if search_lower in e.get("action", "").lower()
+            or search_lower in e.get("target", "").lower()
+            or search_lower in e.get("detail", "").lower()
+        ]
 
     # Show last N
     entries = entries[-lines:]

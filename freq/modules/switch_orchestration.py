@@ -18,6 +18,7 @@ Design decisions:
     - Graduated from infrastructure.py: the 6 old switch actions are replaced
       by richer, deployer-backed commands.
 """
+
 from freq.core import fmt
 from freq.core.config import FreqConfig
 from freq.core import log as logger
@@ -26,6 +27,7 @@ from freq.core import log as logger
 # ─────────────────────────────────────────────────────────────
 # TARGET RESOLUTION — Resolve switch targets to IP/label/vendor
 # ─────────────────────────────────────────────────────────────
+
 
 def _get_switch_hosts(cfg):
     """Return all hosts with htype=switch from hosts.toml."""
@@ -69,6 +71,7 @@ def _vendor_for_host(host):
     Supports 'switch' (default cisco), 'switch:juniper', 'switch:aruba', etc.
     """
     from freq.deployers import resolve_htype
+
     _, vendor = resolve_htype(host.htype)
     return vendor
 
@@ -76,12 +79,14 @@ def _vendor_for_host(host):
 def _get_deployer(vendor):
     """Load the deployer module for a switch vendor."""
     from freq.deployers import get_deployer
+
     return get_deployer("switch", vendor)
 
 
 # ─────────────────────────────────────────────────────────────
 # COMMANDS — CORE SWITCH GETTERS — Show, facts, interfaces, VLANs, etc.
 # ─────────────────────────────────────────────────────────────
+
 
 def cmd_switch_show(cfg: FreqConfig, pack, args) -> int:
     """Show switch overview: facts + interface summary."""
@@ -121,10 +126,12 @@ def cmd_switch_show(cfg: FreqConfig, pack, args) -> int:
         down = sum(1 for i in interfaces if i.get("status") == "notconnect")
         other = len(interfaces) - up - down
         fmt.line(f"{fmt.C.BOLD}Interfaces{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.GREEN}{up} up{fmt.C.RESET}  "
-                 f"{fmt.C.RED}{down} down{fmt.C.RESET}  "
-                 f"{fmt.C.DIM}{other} other{fmt.C.RESET}  "
-                 f"({len(interfaces)} total)")
+        fmt.line(
+            f"  {fmt.C.GREEN}{up} up{fmt.C.RESET}  "
+            f"{fmt.C.RED}{down} down{fmt.C.RESET}  "
+            f"{fmt.C.DIM}{other} other{fmt.C.RESET}  "
+            f"({len(interfaces)} total)"
+        )
         fmt.blank()
 
     # VLAN count
@@ -192,12 +199,22 @@ def cmd_switch_interfaces(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     fmt.table_header(
-        ("Port", 18), ("Description", 20), ("Status", 12),
-        ("VLAN", 6), ("Duplex", 8), ("Speed", 8),
+        ("Port", 18),
+        ("Description", 20),
+        ("Status", 12),
+        ("VLAN", 6),
+        ("Duplex", 8),
+        ("Speed", 8),
     )
     for iface in interfaces:
         status = iface.get("status", "")
-        color = fmt.C.GREEN if status == "connected" else fmt.C.RED if status in ("notconnect", "err-disabled") else fmt.C.DIM
+        color = (
+            fmt.C.GREEN
+            if status == "connected"
+            else fmt.C.RED
+            if status in ("notconnect", "err-disabled")
+            else fmt.C.DIM
+        )
         fmt.table_row(
             (iface.get("name", ""), 18),
             (iface.get("description", ""), 20),
@@ -355,8 +372,11 @@ def cmd_switch_neighbors(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     fmt.table_header(
-        ("Device", 20), ("Local Port", 16), ("Remote Port", 16),
-        ("Platform", 20), ("IP", 16),
+        ("Device", 20),
+        ("Local Port", 16),
+        ("Remote Port", 16),
+        ("Platform", 20),
+        ("IP", 16),
     )
     for n in neighbors:
         fmt.table_row(
@@ -399,6 +419,7 @@ def cmd_switch_config(cfg: FreqConfig, pack, args) -> int:
     if getattr(args, "backup", False):
         import os
         import time as _time
+
         config_dir = os.path.join(cfg.conf_dir, "switch-configs")
         os.makedirs(config_dir, exist_ok=True)
         ts = _time.strftime("%Y%m%d-%H%M%S")
@@ -493,7 +514,7 @@ def cmd_switch_exec(cfg: FreqConfig, pack, args) -> int:
     command = getattr(args, "command", None)
 
     if not command:
-        fmt.error("No command specified. Usage: freq net switch exec <target> \"<command>\"")
+        fmt.error('No command specified. Usage: freq net switch exec <target> "<command>"')
         return 1
 
     run_all = getattr(args, "all", False)
@@ -504,7 +525,7 @@ def cmd_switch_exec(cfg: FreqConfig, pack, args) -> int:
 
     ip, label, vendor = _resolve_target(target, cfg)
     if not ip:
-        fmt.error("No switch target. Usage: freq net switch exec <target> \"<command>\"")
+        fmt.error('No switch target. Usage: freq net switch exec <target> "<command>"')
         return 1
 
     fmt.header(f"Exec: {label}", breadcrumb="FREQ > Net > Switch")
@@ -513,13 +534,16 @@ def cmd_switch_exec(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     from freq.core.ssh import run as ssh_run
+
     key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
     r = ssh_run(
-        host=ip, command=f"terminal length 0 ; {command}",
+        host=ip,
+        command=f"terminal length 0 ; {command}",
         key_path=key,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=30,
-        htype="switch", use_sudo=False,
+        htype="switch",
+        use_sudo=False,
     )
 
     if r.returncode == 0 and r.stdout:
@@ -583,6 +607,7 @@ def _exec_all(cfg, command):
 # COMMANDS — PORT MANAGEMENT — Status, configure, PoE, find, flap
 # ─────────────────────────────────────────────────────────────
 
+
 def cmd_port_status(cfg: FreqConfig, pack, args) -> int:
     """Display per-port status: link, speed, VLAN, PoE, connected device."""
     ip, label, vendor = _resolve_target(getattr(args, "target", None), cfg)
@@ -611,13 +636,23 @@ def cmd_port_status(cfg: FreqConfig, pack, args) -> int:
         poe_map = {e["port"]: e for e in poe_entries}
 
     fmt.table_header(
-        ("Port", 14), ("Description", 18), ("Status", 12),
-        ("VLAN", 6), ("Speed", 8), ("PoE", 8),
+        ("Port", 14),
+        ("Description", 18),
+        ("Status", 12),
+        ("VLAN", 6),
+        ("Speed", 8),
+        ("PoE", 8),
     )
     for iface in interfaces:
         name = iface.get("name", "")
         status = iface.get("status", "")
-        color = fmt.C.GREEN if status == "connected" else fmt.C.RED if status in ("notconnect", "err-disabled") else fmt.C.DIM
+        color = (
+            fmt.C.GREEN
+            if status == "connected"
+            else fmt.C.RED
+            if status in ("notconnect", "err-disabled")
+            else fmt.C.DIM
+        )
 
         poe_info = poe_map.get(name, {})
         poe_str = ""
@@ -650,7 +685,9 @@ def cmd_port_configure(cfg: FreqConfig, pack, args) -> int:
     ip, label, vendor = _resolve_target(getattr(args, "target", None), cfg)
     port = getattr(args, "port", None)
     if not ip or not port:
-        fmt.error("Usage: freq net port configure <target> <port> [--vlan N] [--mode access|trunk] [--shutdown|--no-shutdown]")
+        fmt.error(
+            "Usage: freq net port configure <target> <port> [--vlan N] [--mode access|trunk] [--shutdown|--no-shutdown]"
+        )
         return 1
 
     deployer = _get_deployer(vendor)
@@ -722,7 +759,7 @@ def cmd_port_desc(cfg: FreqConfig, pack, args) -> int:
     port = getattr(args, "port", None)
     description = getattr(args, "description", None)
     if not ip or not port or not description:
-        fmt.error("Usage: freq net port desc <target> <port> --description \"text\"")
+        fmt.error('Usage: freq net port desc <target> <port> --description "text"')
         return 1
 
     deployer = _get_deployer(vendor)
@@ -901,6 +938,7 @@ PROFILES_FILE = "switch-profiles.toml"
 def _load_profiles(cfg):
     """Load switch profiles from conf/switch-profiles.toml."""
     import os
+
     filepath = os.path.join(cfg.conf_dir, PROFILES_FILE)
     if not os.path.exists(filepath):
         return {}
@@ -916,8 +954,13 @@ def _load_profiles(cfg):
 def _save_profiles(cfg, profiles):
     """Save switch profiles to conf/switch-profiles.toml."""
     import os
+
     filepath = os.path.join(cfg.conf_dir, PROFILES_FILE)
-    lines = ["# FREQ Switch Port Profiles", "# Apply with: freq net switch profile apply <name> <target> <port-range>", ""]
+    lines = [
+        "# FREQ Switch Port Profiles",
+        "# Apply with: freq net switch profile apply <name> <target> <port-range>",
+        "",
+    ]
     for name, profile in sorted(profiles.items()):
         lines.append(f"[profile.{name}]")
         for key, val in profile.items():
@@ -929,7 +972,7 @@ def _save_profiles(cfg, profiles):
                 items = ", ".join(str(v) for v in val)
                 lines.append(f"{key} = [{items}]")
             elif isinstance(val, dict):
-                inner = ", ".join(f'{k} = {_toml_val(v)}' for k, v in val.items())
+                inner = ", ".join(f"{k} = {_toml_val(v)}" for k, v in val.items())
                 lines.append(f"{key} = {{ {inner} }}")
             else:
                 lines.append(f"{key} = {val}")
@@ -953,6 +996,7 @@ def _expand_port_range(port_range):
     Supports: Gi1/0/1-24, Gi1/0/1,Gi1/0/5, Gi1/0/1-4,Gi1/0/10
     """
     import re as _re
+
     ports = []
     for segment in port_range.split(","):
         segment = segment.strip()
@@ -1017,6 +1061,7 @@ def cmd_profile_show(cfg: FreqConfig, pack, args) -> int:
 
     # Show what config lines this would generate (Cisco)
     from freq.deployers.switch.cisco import profile_to_config_lines
+
     lines = profile_to_config_lines(profile)
     if lines:
         fmt.blank()
@@ -1060,6 +1105,7 @@ def cmd_profile_apply(cfg: FreqConfig, pack, args) -> int:
         config_lines = deployer.profile_to_config_lines(profile)
     else:
         from freq.deployers.switch.cisco import profile_to_config_lines
+
         config_lines = profile_to_config_lines(profile)
 
     ports = _expand_port_range(port_range)

@@ -22,31 +22,36 @@ def handle_risk(handler):
     chain = _load_kill_chain(cfg)
     targets = []
     for key, info in dependencies.items():
-        targets.append({
-            "name": key,
-            "label": info["label"],
-            "risk": info["risk"],
-            "impact": info["impact"][0] if info["impact"] else "",
-            "recovery": info["recovery"],
-            "depends_on": info.get("depends_on", []),
-            "depended_by": info.get("depended_by", []),
-        })
+        targets.append(
+            {
+                "name": key,
+                "label": info["label"],
+                "risk": info["risk"],
+                "impact": info["impact"][0] if info["impact"] else "",
+                "recovery": info["recovery"],
+                "depends_on": info.get("depends_on", []),
+                "depended_by": info.get("depended_by", []),
+            }
+        )
     json_response(handler, {"targets": targets, "chain": chain})
 
 
 def handle_oncall_whoami(handler):
     """GET /api/oncall/whoami -- who is on call."""
     from freq.modules.oncall import _load_schedule, _get_current_oncall
+
     cfg = load_config()
     schedule = _load_schedule(cfg)
     current = _get_current_oncall(schedule)
-    json_response(handler, {"oncall": current, "rotation": schedule.get("rotation", "weekly"),
-                            "users": schedule.get("users", [])})
+    json_response(
+        handler, {"oncall": current, "rotation": schedule.get("rotation", "weekly"), "users": schedule.get("users", [])}
+    )
 
 
 def handle_oncall_schedule(handler):
     """GET /api/oncall/schedule -- get on-call schedule."""
     from freq.modules.oncall import _load_schedule
+
     cfg = load_config()
     json_response(handler, _load_schedule(cfg))
 
@@ -54,6 +59,7 @@ def handle_oncall_schedule(handler):
 def handle_oncall_incidents(handler):
     """GET /api/oncall/incidents -- list incidents."""
     from freq.modules.oncall import _load_incidents
+
     cfg = load_config()
     incidents = _load_incidents(cfg)
     open_count = sum(1 for i in incidents if i.get("status") in ("open", "acknowledged"))

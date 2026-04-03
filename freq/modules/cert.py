@@ -19,6 +19,7 @@ Design decisions:
     - Scans real TLS handshakes, not config files. What the network sees
       is what matters, not what you think is deployed.
 """
+
 import json
 import os
 import ssl
@@ -70,9 +71,15 @@ def _save_cert_data(cfg: FreqConfig, data: dict):
 def _check_tls_cert(host: str, port: int, timeout: int = CERT_CONNECT_TIMEOUT) -> dict:
     """Check a TLS certificate on host:port."""
     result = {
-        "host": host, "port": port, "status": "error",
-        "subject": "", "issuer": "", "not_after": "",
-        "days_remaining": -1, "self_signed": False, "error": "",
+        "host": host,
+        "port": port,
+        "status": "error",
+        "subject": "",
+        "issuer": "",
+        "not_after": "",
+        "days_remaining": -1,
+        "self_signed": False,
+        "error": "",
     }
 
     try:
@@ -88,7 +95,10 @@ def _check_tls_cert(host: str, port: int, timeout: int = CERT_CONNECT_TIMEOUT) -
                 if not cert and cert_der:
                     # Decode DER cert manually for basic info
                     import ssl as ssl_mod
-                    cert = ssl_mod._ssl._test_decode_cert(cert_der) if hasattr(ssl_mod._ssl, '_test_decode_cert') else {}
+
+                    cert = (
+                        ssl_mod._ssl._test_decode_cert(cert_der) if hasattr(ssl_mod._ssl, "_test_decode_cert") else {}
+                    )
 
                 if cert:
                     # Extract subject
@@ -119,9 +129,7 @@ def _check_tls_cert(host: str, port: int, timeout: int = CERT_CONNECT_TIMEOUT) -
                             pass
 
                     # Check self-signed
-                    result["self_signed"] = (
-                        cert.get("subject") == cert.get("issuer")
-                    )
+                    result["self_signed"] = cert.get("subject") == cert.get("issuer")
 
                     result["status"] = "ok"
                 else:
@@ -174,12 +182,13 @@ def _scan_fleet_certs_via_ssh(cfg: FreqConfig) -> list:
         "  exp=$(openssl x509 -enddate -noout -in \"$f\" 2>/dev/null | sed 's/notAfter=//'); "
         "  sub=$(openssl x509 -subject -noout -in \"$f\" 2>/dev/null | sed 's/subject=//'); "
         "  iss=$(openssl x509 -issuer -noout -in \"$f\" 2>/dev/null | sed 's/issuer=//'); "
-        "  if [ -n \"$exp\" ]; then echo \"$f|$sub|$iss|$exp\"; fi; "
+        '  if [ -n "$exp" ]; then echo "$f|$sub|$iss|$exp"; fi; '
         "done"
     )
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=CERT_CMD_TIMEOUT,
@@ -208,13 +217,20 @@ def _scan_fleet_certs_via_ssh(cfg: FreqConfig) -> list:
 
                 self_signed = subject.strip() == issuer.strip()
 
-                certs.append({
-                    "label": h.label, "host": h.ip, "port": 0,
-                    "path": filepath.strip(), "subject": subject.strip()[:60],
-                    "issuer": issuer.strip()[:60], "not_after": expiry.strip(),
-                    "days_remaining": days_remaining, "self_signed": self_signed,
-                    "status": "ok",
-                })
+                certs.append(
+                    {
+                        "label": h.label,
+                        "host": h.ip,
+                        "port": 0,
+                        "path": filepath.strip(),
+                        "subject": subject.strip()[:60],
+                        "issuer": issuer.strip()[:60],
+                        "not_after": expiry.strip(),
+                        "days_remaining": days_remaining,
+                        "self_signed": self_signed,
+                        "status": "ok",
+                    }
+                )
 
     return certs
 
@@ -277,8 +293,11 @@ def _cmd_scan(cfg: FreqConfig, args) -> int:
     all_certs.sort(key=lambda c: c.get("days_remaining", 9999))
 
     fmt.table_header(
-        ("HOST", 14), ("PORT/PATH", 20), ("SUBJECT", 20),
-        ("EXPIRES", 12), ("STATUS", 12),
+        ("HOST", 14),
+        ("PORT/PATH", 20),
+        ("SUBJECT", 20),
+        ("EXPIRES", 12),
+        ("STATUS", 12),
     )
 
     expiring = 0

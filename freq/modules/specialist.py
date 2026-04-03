@@ -19,6 +19,7 @@ Design decisions:
     - Roles are data (dict), not code. Adding a new specialist role means
       one dict entry in ROLE_TEMPLATES, not a new deployment function.
 """
+
 import json
 import time
 
@@ -103,9 +104,13 @@ def cmd_specialist(cfg: FreqConfig, pack, args) -> int:
 def _ssh_cmd(cfg, ip, command, timeout=SPECIALIST_CMD_TIMEOUT):
     """Run command on a specialist VM."""
     return ssh_run(
-        host=ip, command=command, key_path=cfg.ssh_key_path,
-        connect_timeout=cfg.ssh_connect_timeout, command_timeout=timeout,
-        htype="linux", use_sudo=False,
+        host=ip,
+        command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=timeout,
+        htype="linux",
+        use_sudo=False,
     )
 
 
@@ -184,54 +189,61 @@ def _cmd_create(cfg, args) -> int:
     # Step 2: Deploy CLAUDE.md
     fmt.step_start("Deploying CLAUDE.md")
     claude_md = _generate_claude_md(specialist_name, role, tmpl, ip, cfg.ssh_service_account)
-    r = _ssh_cmd(cfg, ip,
-                  f"cat > {workspace}/CLAUDE.md << 'FREQEOF'\n{claude_md}\nFREQEOF",
-                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
+    r = _ssh_cmd(
+        cfg, ip, f"cat > {workspace}/CLAUDE.md << 'FREQEOF'\n{claude_md}\nFREQEOF", timeout=SPECIALIST_DEPLOY_TIMEOUT
+    )
     fmt.step_ok("CLAUDE.md deployed") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Step 3: Deploy Claude Code settings
     fmt.step_start("Deploying Claude settings")
     settings = _generate_settings(tmpl)
     settings_dir = f"{home_dir}/.claude"
-    r = _ssh_cmd(cfg, ip,
-                  f"mkdir -p {settings_dir} && "
-                  f"cat > {settings_dir}/settings.json << 'FREQEOF'\n{settings}\nFREQEOF",
-                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
+    r = _ssh_cmd(
+        cfg,
+        ip,
+        f"mkdir -p {settings_dir} && cat > {settings_dir}/settings.json << 'FREQEOF'\n{settings}\nFREQEOF",
+        timeout=SPECIALIST_DEPLOY_TIMEOUT,
+    )
     fmt.step_ok("Settings deployed") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Step 4: Deploy tmux config
     fmt.step_start("Deploying tmux configuration")
     tmux_conf = _generate_tmux_conf(tmpl, specialist_name)
-    r = _ssh_cmd(cfg, ip,
-                  f"sudo tee /etc/tmux.conf > /dev/null << 'FREQEOF'\n{tmux_conf}\nFREQEOF",
-                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
+    r = _ssh_cmd(
+        cfg,
+        ip,
+        f"sudo tee /etc/tmux.conf > /dev/null << 'FREQEOF'\n{tmux_conf}\nFREQEOF",
+        timeout=SPECIALIST_DEPLOY_TIMEOUT,
+    )
     fmt.step_ok("tmux.conf deployed") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Step 5: Deploy dev-start/dev-stop scripts
     fmt.step_start("Deploying dev scripts")
     dev_start = _generate_dev_start(tmpl, workspace, specialist_name)
     dev_stop = _generate_dev_stop(tmpl)
-    r = _ssh_cmd(cfg, ip,
-                  f"cat > {home_dir}/dev-start << 'FREQEOF'\n{dev_start}\nFREQEOF\n"
-                  f"cat > {home_dir}/dev-stop << 'FREQEOF'\n{dev_stop}\nFREQEOF\n"
-                  f"chmod +x {home_dir}/dev-start {home_dir}/dev-stop",
-                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
+    r = _ssh_cmd(
+        cfg,
+        ip,
+        f"cat > {home_dir}/dev-start << 'FREQEOF'\n{dev_start}\nFREQEOF\n"
+        f"cat > {home_dir}/dev-stop << 'FREQEOF'\n{dev_stop}\nFREQEOF\n"
+        f"chmod +x {home_dir}/dev-start {home_dir}/dev-stop",
+        timeout=SPECIALIST_DEPLOY_TIMEOUT,
+    )
     fmt.step_ok("dev-start/dev-stop deployed") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Step 6: Create mailbox structure
     fmt.step_start("Creating mailbox")
-    r = _ssh_cmd(cfg, ip,
-                  f"sudo mkdir -p /opt/jarvis-mailbox/{{inbox,outbox,archive}} && "
-                  f"sudo chmod -R 777 /opt/jarvis-mailbox",
-                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
+    r = _ssh_cmd(
+        cfg,
+        ip,
+        f"sudo mkdir -p /opt/jarvis-mailbox/{{inbox,outbox,archive}} && sudo chmod -R 777 /opt/jarvis-mailbox",
+        timeout=SPECIALIST_DEPLOY_TIMEOUT,
+    )
     fmt.step_ok("Mailbox created") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Step 7: Set permissions
     fmt.step_start("Setting permissions")
-    r = _ssh_cmd(cfg, ip,
-                  f"chmod -R g+w {workspace} && "
-                  f"chmod 700 {settings_dir}",
-                  timeout=SPECIALIST_DEPLOY_TIMEOUT)
+    r = _ssh_cmd(cfg, ip, f"chmod -R g+w {workspace} && chmod 700 {settings_dir}", timeout=SPECIALIST_DEPLOY_TIMEOUT)
     fmt.step_ok("Permissions set") if r.returncode == 0 else fmt.step_fail("Failed")
 
     fmt.blank()
@@ -266,7 +278,7 @@ def _cmd_health(cfg, args) -> int:
         "Disk usage": "df -h / | awk 'NR==2 {print $5}'",
         "Uptime": "uptime -p 2>/dev/null || uptime",
         "Last code change": f"find /home/{cfg.ssh_service_account} -name '*.py' -newer /tmp/.freq-marker 2>/dev/null | wc -l; "
-                            "touch /tmp/.freq-marker 2>/dev/null",
+        "touch /tmp/.freq-marker 2>/dev/null",
     }
 
     for check_name, cmd in checks.items():
@@ -281,8 +293,10 @@ def _cmd_health(cfg, args) -> int:
                 sym = fmt.C.GREEN + fmt.S.TICK + fmt.C.RESET
             print(f"    {sym} {fmt.C.GRAY}{check_name:>20}:{fmt.C.RESET}  {value}")
         else:
-            print(f"    {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {fmt.C.GRAY}{check_name:>20}:{fmt.C.RESET}  "
-                  f"{fmt.C.RED}error{fmt.C.RESET}")
+            print(
+                f"    {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {fmt.C.GRAY}{check_name:>20}:{fmt.C.RESET}  "
+                f"{fmt.C.RED}error{fmt.C.RESET}"
+            )
 
     fmt.blank()
     fmt.footer()
@@ -302,6 +316,7 @@ def _cmd_list(cfg, args) -> int:
     # Try the agent registry first
     try:
         from freq.jarvis.agent import _load_agents
+
         agents = _load_agents(cfg)
         if agents:
             fmt.table_header(("NAME", 16), ("ROLE", 10), ("VMID", 6), ("STATUS", 10))
@@ -327,11 +342,12 @@ def _cmd_list(cfg, args) -> int:
 
 # --- Generators ---
 
+
 def _generate_claude_md(name, role, tmpl, ip, svc_account="admin"):
     """Generate CLAUDE.md for a specialist."""
-    return f"""# {name} - {tmpl['description']}
+    return f"""# {name} - {tmpl["description"]}
 
-> **Role:** {role} | **VM IP:** {ip} | **Created:** {time.strftime('%Y-%m-%d')}
+> **Role:** {role} | **VM IP:** {ip} | **Created:** {time.strftime("%Y-%m-%d")}
 
 ## Identity
 This agent is `{name}`. A {role} specialist deployed by FREQ.
@@ -351,14 +367,14 @@ This agent is `{name}`. A {role} specialist deployed by FREQ.
 
 def _generate_settings(tmpl):
     """Generate Claude Code settings.json."""
-    return json.dumps({
-        "model": tmpl["model"],
-        "effortLevel": "high",
-        "permissions": {
-            "allow": ["Read", "Glob", "Grep", "Bash(*)"],
-            "deny": []
+    return json.dumps(
+        {
+            "model": tmpl["model"],
+            "effortLevel": "high",
+            "permissions": {"allow": ["Read", "Glob", "Grep", "Bash(*)"], "deny": []},
         },
-    }, indent=2)
+        indent=2,
+    )
 
 
 def _generate_tmux_conf(tmpl, name):

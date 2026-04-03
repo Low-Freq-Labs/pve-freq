@@ -2,6 +2,7 @@
 
 Drop this in conf/plugins/ and it's automatically available as: freq ping <host>
 """
+
 import subprocess
 
 NAME = "ping"
@@ -21,6 +22,7 @@ def run(cfg, pack, args):
 
     # Resolve label to IP
     from freq.core.resolve import by_target
+
     host = by_target(cfg.hosts, target)
     ip = host.ip if host else target
     label = host.label if host else target
@@ -30,7 +32,9 @@ def run(cfg, pack, args):
 
     r = subprocess.run(
         ["ping", "-c", "3", "-W", "2", ip],
-        capture_output=True, text=True, timeout=15,
+        capture_output=True,
+        text=True,
+        timeout=15,
     )
 
     if r.returncode == 0:

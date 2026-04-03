@@ -15,6 +15,7 @@ Design decisions:
     - ZFS commands work on any host — not TrueNAS-specific.
     - Share audit discovers what's exported, not just what's mounted.
 """
+
 import json
 import os
 
@@ -34,11 +35,13 @@ TRUENAS_TIMEOUT = 30
 def _nas_ssh(ip, cmd, cfg, timeout=TRUENAS_TIMEOUT):
     """Run a command on TrueNAS via SSH."""
     r = ssh_run(
-        host=ip, command=cmd,
+        host=ip,
+        command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
-        htype="truenas", use_sudo=True,
+        htype="truenas",
+        use_sudo=True,
     )
     return r.stdout or "", r.returncode == 0
 
@@ -46,11 +49,13 @@ def _nas_ssh(ip, cmd, cfg, timeout=TRUENAS_TIMEOUT):
 def _zfs_ssh(ip, cmd, cfg, timeout=15):
     """Run a ZFS command on any fleet host."""
     r = ssh_run(
-        host=ip, command=cmd,
+        host=ip,
+        command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
-        htype="linux", use_sudo=True,
+        htype="linux",
+        use_sudo=True,
     )
     return r.stdout or "", r.returncode == 0
 
@@ -75,6 +80,7 @@ def _storage_dir(cfg):
 # ---------------------------------------------------------------------------
 # Commands — TrueNAS
 # ---------------------------------------------------------------------------
+
 
 def cmd_store_status(cfg: FreqConfig, pack, args) -> int:
     """Show TrueNAS system status."""
@@ -233,8 +239,11 @@ def cmd_store_smart(cfg: FreqConfig, pack, args) -> int:
                 temp = d.get("temperature", "")
                 temp_str = f"{temp}°" if temp else "—"
                 fmt.table_row(
-                    (name, 8), (serial, 22), (size_gb, 10),
-                    (dtype, 8), (temp_str, 6),
+                    (name, 8),
+                    (serial, 22),
+                    (size_gb, 10),
+                    (dtype, 8),
+                    (temp_str, 6),
                 )
             fmt.blank()
             fmt.info(f"{len(disks)} drive(s)")
@@ -268,8 +277,7 @@ def cmd_store_shares(cfg: FreqConfig, pack, args) -> int:
                 for s in shares:
                     enabled = "enabled" if s.get("enabled") else "disabled"
                     color = fmt.C.GREEN if s.get("enabled") else fmt.C.DIM
-                    fmt.line(f"  {color}{s.get('name', '?'):<20}{fmt.C.RESET} "
-                             f"{s.get('path', '?'):<30} {enabled}")
+                    fmt.line(f"  {color}{s.get('name', '?'):<20}{fmt.C.RESET} {s.get('path', '?'):<30} {enabled}")
                 fmt.blank()
         except json.JSONDecodeError:
             pass
@@ -311,7 +319,13 @@ def cmd_store_alerts(cfg: FreqConfig, pack, args) -> int:
             if alerts:
                 for a in alerts:
                     level = a.get("level", "INFO")
-                    color = fmt.C.RED if level in ("CRITICAL", "ERROR") else fmt.C.YELLOW if level == "WARNING" else fmt.C.DIM
+                    color = (
+                        fmt.C.RED
+                        if level in ("CRITICAL", "ERROR")
+                        else fmt.C.YELLOW
+                        if level == "WARNING"
+                        else fmt.C.DIM
+                    )
                     fmt.line(f"  {color}[{level}]{fmt.C.RESET} {a.get('formatted', a.get('text', '?'))}")
                 fmt.blank()
                 fmt.info(f"{len(alerts)} alert(s)")
@@ -330,6 +344,7 @@ def cmd_store_alerts(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _resolve_storage_target(target, cfg):
     """Resolve target to IP — defaults to TrueNAS."""

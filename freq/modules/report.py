@@ -19,6 +19,7 @@ Design decisions:
     - Reports are snapshots, not live dashboards. Generated once, stored,
       and shareable. Designed for async consumption (Discord, email).
 """
+
 import json
 import os
 import time
@@ -48,22 +49,23 @@ def _gather_fleet_health(cfg: FreqConfig) -> dict:
 
     command = (
         'echo "$('
-        'nproc'
-        ')|$('
+        "nproc"
+        ")|$("
         "cat /proc/loadavg | awk '{print $1}'"
-        ')|$('
+        ")|$("
         "free -m | awk '/Mem:/ {printf \"%d|%d\", $3, $2}'"
-        ')|$('
+        ")|$("
         "df -h / | awk 'NR==2 {print $5}' | tr -d '%'"
-        ')|$('
+        ")|$("
         "cat /proc/uptime | awk '{d=int($1/86400); printf \"%d\", d}'"
-        ')|$('
+        ")|$("
         "docker ps -q 2>/dev/null | wc -l || echo 0"
         ')"'
     )
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=REPORT_CMD_TIMEOUT,
@@ -107,8 +109,12 @@ def _gather_fleet_health(cfg: FreqConfig) -> dict:
         host_data.append(entry)
 
     return {
-        "hosts": host_data, "up": up, "down": down, "total": len(hosts),
-        "total_cores": total_cores, "total_ram_mb": total_ram,
+        "hosts": host_data,
+        "up": up,
+        "down": down,
+        "total": len(hosts),
+        "total_cores": total_cores,
+        "total_ram_mb": total_ram,
         "total_containers": total_containers,
     }
 
@@ -125,7 +131,8 @@ def _gather_vm_summary(cfg: FreqConfig) -> dict:
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=REPORT_PVE_TIMEOUT,
-            htype="pve", use_sudo=True,
+            htype="pve",
+            use_sudo=True,
         )
         if r.returncode == 0:
             try:
@@ -143,6 +150,7 @@ def _gather_alert_summary(cfg: FreqConfig) -> dict:
     """Gather alert history summary."""
     try:
         from freq.modules.alert import _load_history, _load_rules
+
         history = _load_history(cfg)
         rules = _load_rules(cfg)
 
@@ -172,22 +180,19 @@ def _find_issues(health: dict) -> list:
             issues.append({"host": h["label"], "type": "critical", "message": "Host DOWN"})
             continue
         if h.get("disk_pct", 0) >= 90:
-            issues.append({"host": h["label"], "type": "critical",
-                          "message": f"Disk at {h['disk_pct']}%"})
+            issues.append({"host": h["label"], "type": "critical", "message": f"Disk at {h['disk_pct']}%"})
         elif h.get("disk_pct", 0) >= 80:
-            issues.append({"host": h["label"], "type": "warning",
-                          "message": f"Disk at {h['disk_pct']}%"})
+            issues.append({"host": h["label"], "type": "warning", "message": f"Disk at {h['disk_pct']}%"})
         if h.get("ram_pct", 0) >= 95:
-            issues.append({"host": h["label"], "type": "critical",
-                          "message": f"RAM at {h['ram_pct']}%"})
+            issues.append({"host": h["label"], "type": "critical", "message": f"RAM at {h['ram_pct']}%"})
         elif h.get("ram_pct", 0) >= 85:
-            issues.append({"host": h["label"], "type": "warning",
-                          "message": f"RAM at {h['ram_pct']}%"})
+            issues.append({"host": h["label"], "type": "warning", "message": f"RAM at {h['ram_pct']}%"})
         cores = h.get("cores", 1)
         load = h.get("load", 0)
         if cores and load > cores * 2:
-            issues.append({"host": h["label"], "type": "warning",
-                          "message": f"Load {load:.1f} ({load/cores:.1f}x cores)"})
+            issues.append(
+                {"host": h["label"], "type": "warning", "message": f"Load {load:.1f} ({load / cores:.1f}x cores)"}
+            )
     return issues
 
 
@@ -274,8 +279,7 @@ def _cmd_generate(cfg: FreqConfig, args, output_format: str) -> int:
     fmt.blank()
 
     # Save report
-    report_path = os.path.join(_report_dir(cfg),
-                                f"report-{time.strftime('%Y%m%d-%H%M%S')}.json")
+    report_path = os.path.join(_report_dir(cfg), f"report-{time.strftime('%Y%m%d-%H%M%S')}.json")
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
 
@@ -330,15 +334,24 @@ def _cmd_generate(cfg: FreqConfig, args, output_format: str) -> int:
     fmt.divider("Host Health")
     fmt.blank()
     fmt.table_header(
-        ("HOST", 14), ("STATUS", 8), ("LOAD", 8),
-        ("RAM", 8), ("DISK", 8), ("UPTIME", 10), ("DOCKER", 8),
+        ("HOST", 14),
+        ("STATUS", 8),
+        ("LOAD", 8),
+        ("RAM", 8),
+        ("DISK", 8),
+        ("UPTIME", 10),
+        ("DOCKER", 8),
     )
     for host in h["hosts"]:
         if host["status"] == "down":
             fmt.table_row(
                 (f"{fmt.C.BOLD}{host['label']}{fmt.C.RESET}", 14),
                 (fmt.badge("down"), 8),
-                ("-", 8), ("-", 8), ("-", 8), ("-", 10), ("-", 8),
+                ("-", 8),
+                ("-", 8),
+                ("-", 8),
+                ("-", 10),
+                ("-", 8),
             )
             continue
 

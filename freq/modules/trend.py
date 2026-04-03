@@ -19,6 +19,7 @@ Design decisions:
     - Snapshots, not continuous streams. Trend data is sampled, not
       real-time. Keeps storage flat and queries instant.
 """
+
 import json
 import os
 import time
@@ -66,18 +67,19 @@ def _take_snapshot(cfg: FreqConfig) -> dict:
 
     command = (
         'echo "$('
-        'nproc'
-        ')|$('
+        "nproc"
+        ")|$("
         "cat /proc/loadavg | awk '{print $1}'"
-        ')|$('
+        ")|$("
         "free -m | awk '/Mem:/ {printf \"%d|%d\", $3, $2}'"
-        ')|$('
+        ")|$("
         "df -BG / | awk 'NR==2 {printf \"%d|%d\", $3, $2}' | tr -d 'G'"
         ')"'
     )
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=TREND_CMD_TIMEOUT,
@@ -89,8 +91,14 @@ def _take_snapshot(cfg: FreqConfig) -> dict:
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "epoch": int(time.time()),
         "hosts": {},
-        "fleet": {"total_cores": 0, "total_ram_mb": 0, "used_ram_mb": 0,
-                  "total_disk_gb": 0, "used_disk_gb": 0, "avg_load_ratio": 0},
+        "fleet": {
+            "total_cores": 0,
+            "total_ram_mb": 0,
+            "used_ram_mb": 0,
+            "total_disk_gb": 0,
+            "used_disk_gb": 0,
+            "avg_load_ratio": 0,
+        },
     }
 
     load_ratios = []
@@ -110,9 +118,12 @@ def _take_snapshot(cfg: FreqConfig) -> dict:
                 disk_total = int(parts[5]) if len(parts) > 5 else 0
 
                 snapshot["hosts"][h.label] = {
-                    "cores": cores, "load": load,
-                    "ram_used": ram_used, "ram_total": ram_total,
-                    "disk_used": disk_used, "disk_total": disk_total,
+                    "cores": cores,
+                    "load": load,
+                    "ram_used": ram_used,
+                    "ram_total": ram_total,
+                    "disk_used": disk_used,
+                    "disk_total": disk_total,
                 }
 
                 snapshot["fleet"]["total_cores"] += cores
@@ -234,12 +245,16 @@ def _cmd_show(cfg: FreqConfig, args) -> int:
     if ram_pcts:
         spark = _render_sparkline(ram_pcts, 30)
         delta = ram_pcts[-1] - ram_pcts[0]
-        direction = f"{fmt.C.RED}↑ +{delta:.1f}%{fmt.C.RESET}" if delta > 1 else (
-            f"{fmt.C.GREEN}↓ {delta:.1f}%{fmt.C.RESET}" if delta < -1 else
-            f"{fmt.C.GREEN}→ stable{fmt.C.RESET}")
+        direction = (
+            f"{fmt.C.RED}↑ +{delta:.1f}%{fmt.C.RESET}"
+            if delta > 1
+            else (f"{fmt.C.GREEN}↓ {delta:.1f}%{fmt.C.RESET}" if delta < -1 else f"{fmt.C.GREEN}→ stable{fmt.C.RESET}")
+        )
         fmt.line(f"  {spark}  {ram_pcts[-1]:.1f}%  {direction}")
-        fmt.line(f"  {fmt.C.DIM}Min: {min(ram_pcts):.1f}%  Max: {max(ram_pcts):.1f}%  "
-                 f"Avg: {sum(ram_pcts)/len(ram_pcts):.1f}%{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.DIM}Min: {min(ram_pcts):.1f}%  Max: {max(ram_pcts):.1f}%  "
+            f"Avg: {sum(ram_pcts) / len(ram_pcts):.1f}%{fmt.C.RESET}"
+        )
     fmt.blank()
 
     # Disk trend
@@ -248,12 +263,16 @@ def _cmd_show(cfg: FreqConfig, args) -> int:
     if disk_pcts:
         spark = _render_sparkline(disk_pcts, 30)
         delta = disk_pcts[-1] - disk_pcts[0]
-        direction = f"{fmt.C.RED}↑ +{delta:.1f}%{fmt.C.RESET}" if delta > 1 else (
-            f"{fmt.C.GREEN}↓ {delta:.1f}%{fmt.C.RESET}" if delta < -1 else
-            f"{fmt.C.GREEN}→ stable{fmt.C.RESET}")
+        direction = (
+            f"{fmt.C.RED}↑ +{delta:.1f}%{fmt.C.RESET}"
+            if delta > 1
+            else (f"{fmt.C.GREEN}↓ {delta:.1f}%{fmt.C.RESET}" if delta < -1 else f"{fmt.C.GREEN}→ stable{fmt.C.RESET}")
+        )
         fmt.line(f"  {spark}  {disk_pcts[-1]:.1f}%  {direction}")
-        fmt.line(f"  {fmt.C.DIM}Min: {min(disk_pcts):.1f}%  Max: {max(disk_pcts):.1f}%  "
-                 f"Avg: {sum(disk_pcts)/len(disk_pcts):.1f}%{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.DIM}Min: {min(disk_pcts):.1f}%  Max: {max(disk_pcts):.1f}%  "
+            f"Avg: {sum(disk_pcts) / len(disk_pcts):.1f}%{fmt.C.RESET}"
+        )
 
         # Projection: if disk is growing, when does it hit 90%?
         if delta > 0 and disk_pcts[-1] < 90 and span_days > 0:
@@ -261,8 +280,10 @@ def _cmd_show(cfg: FreqConfig, args) -> int:
             remaining = 90 - disk_pcts[-1]
             days_to_90 = remaining / rate_per_day if rate_per_day > 0 else 999
             if days_to_90 < 365:
-                fmt.line(f"  {fmt.C.YELLOW}{fmt.S.WARN} At current rate, "
-                         f"disk hits 90% in ~{days_to_90:.0f} days{fmt.C.RESET}")
+                fmt.line(
+                    f"  {fmt.C.YELLOW}{fmt.S.WARN} At current rate, "
+                    f"disk hits 90% in ~{days_to_90:.0f} days{fmt.C.RESET}"
+                )
     fmt.blank()
 
     # Load trend
@@ -271,8 +292,10 @@ def _cmd_show(cfg: FreqConfig, args) -> int:
     if load_ratios:
         spark = _render_sparkline(load_ratios, 30)
         fmt.line(f"  {spark}  {load_ratios[-1]:.2f}x")
-        fmt.line(f"  {fmt.C.DIM}Min: {min(load_ratios):.2f}x  Max: {max(load_ratios):.2f}x  "
-                 f"Avg: {sum(load_ratios)/len(load_ratios):.2f}x{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.DIM}Min: {min(load_ratios):.2f}x  Max: {max(load_ratios):.2f}x  "
+            f"Avg: {sum(load_ratios) / len(load_ratios):.2f}x{fmt.C.RESET}"
+        )
     fmt.blank()
 
     # Per-host current state
@@ -315,7 +338,11 @@ def _cmd_history(cfg: FreqConfig, args) -> int:
     recent = data[-lines:]
 
     fmt.table_header(
-        ("TIME", 20), ("HOSTS", 6), ("RAM %", 8), ("DISK %", 8), ("LOAD", 8),
+        ("TIME", 20),
+        ("HOSTS", 6),
+        ("RAM %", 8),
+        ("DISK %", 8),
+        ("LOAD", 8),
     )
 
     for snap in recent:

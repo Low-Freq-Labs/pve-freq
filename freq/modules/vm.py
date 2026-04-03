@@ -19,6 +19,7 @@ Design decisions:
     - Safety gates are non-negotiable. Protected VMIDs cannot be destroyed
       without explicit override. Production VMs require confirmation prompts.
 """
+
 import json
 import os
 import shlex
@@ -60,8 +61,7 @@ class _ProgressTicker:
     def _tick(self):
         while not self._stop.wait(self._interval):
             elapsed = int(time.monotonic() - self._start)
-            fmt.line("  {d}{l} ({e}s elapsed){z}".format(
-                d=fmt.C.DIM, l=self._label, e=elapsed, z=fmt.C.RESET))
+            fmt.line("  {d}{l} ({e}s elapsed){z}".format(d=fmt.C.DIM, l=self._label, e=elapsed, z=fmt.C.RESET))
 
 
 # VM operation timeouts
@@ -76,11 +76,13 @@ VM_MIGRATE_TIMEOUT = 1800  # 30 min — large disks over 1Gbps need time
 def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = VM_CMD_TIMEOUT) -> tuple:
     """Execute command on PVE node via SSH + sudo."""
     r = ssh_run(
-        host=node_ip, command=command,
+        host=node_ip,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
-        htype="pve", use_sudo=True,
+        htype="pve",
+        use_sudo=True,
     )
     return r.stdout, r.returncode == 0
 
@@ -98,9 +100,13 @@ def _find_node(cfg: FreqConfig) -> str:
     """Find first reachable PVE node."""
     for ip in cfg.pve_nodes:
         r = ssh_run(
-            host=ip, command="sudo pvesh get /version --output-format json",
-            key_path=cfg.ssh_key_path, connect_timeout=3, command_timeout=VM_QUICK_TIMEOUT,
-            htype="pve", use_sudo=False,
+            host=ip,
+            command="sudo pvesh get /version --output-format json",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=VM_QUICK_TIMEOUT,
+            htype="pve",
+            use_sudo=False,
         )
         if r.returncode == 0:
             return ip
@@ -176,8 +182,9 @@ def _apply_cloudinit(cfg: FreqConfig, node_ip: str, vmid: int, ip_addr: str = No
     if errors:
         fmt.step_warn(f"Cloud-init partially configured (failed: {', '.join(errors)})")
     else:
-        fmt.step_ok(f"Cloud-init configured: user={cfg.ssh_service_account}" +
-                    (f", ip={ip_addr}" if ip_addr else ", ip=dhcp"))
+        fmt.step_ok(
+            f"Cloud-init configured: user={cfg.ssh_service_account}" + (f", ip={ip_addr}" if ip_addr else ", ip=dhcp")
+        )
 
 
 def _find_vm_node(cfg: FreqConfig, vmid: int) -> str:
@@ -186,8 +193,7 @@ def _find_vm_node(cfg: FreqConfig, vmid: int) -> str:
     if not node_ip:
         return ""
 
-    stdout, ok = _pve_cmd(cfg, node_ip,
-        f"pvesh get /cluster/resources --type vm --output-format json")
+    stdout, ok = _pve_cmd(cfg, node_ip, f"pvesh get /cluster/resources --type vm --output-format json")
     if not ok:
         return ""
 
@@ -221,11 +227,11 @@ def _safety_check(cfg: FreqConfig, vmid: int, operation: str) -> bool:
     vm_tags = None
     try:
         from freq.modules.serve import get_vm_tags
+
         vm_tags = get_vm_tags(vmid)
     except ImportError:
         pass
-    if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges,
-                                  vm_tags=vm_tags):
+    if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges, vm_tags=vm_tags):
         fmt.error(f"VM {vmid} is PROTECTED. Cannot {operation}.")
         if vm_tags and ("prod" in vm_tags or "protected" in vm_tags):
             fmt.info(f"Protected by PVE tag: {', '.join(vm_tags)}")
@@ -425,8 +431,9 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
     # Step 1: Full clone
     fmt.step_start(f"Cloning VM {src_vmid} to {new_vmid}")
     with _ProgressTicker("Cloning"):
-        stdout, ok = _pve_cmd(cfg, node_ip,
-            f"qm clone {src_vmid} {new_vmid} --name {new_name} --full", timeout=VM_CLONE_TIMEOUT)
+        stdout, ok = _pve_cmd(
+            cfg, node_ip, f"qm clone {src_vmid} {new_vmid} --name {new_name} --full", timeout=VM_CLONE_TIMEOUT
+        )
 
     if not ok:
         fmt.step_fail(f"Clone failed: {stdout}")
@@ -460,24 +467,22 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
             if ok:
                 # Configure hostname (validated name + printf for safety)
                 safe_name = shlex.quote(new_name)
-                _pve_cmd(cfg, node_ip,
-                         f"printf '%s\\n' {safe_name} > /mnt/vm{new_vmid}/etc/hostname")
+                _pve_cmd(cfg, node_ip, f"printf '%s\\n' {safe_name} > /mnt/vm{new_vmid}/etc/hostname")
                 # Clear machine-id for regen
-                _pve_cmd(cfg, node_ip,
-                         f"truncate -s 0 /mnt/vm{new_vmid}/etc/machine-id")
+                _pve_cmd(cfg, node_ip, f"truncate -s 0 /mnt/vm{new_vmid}/etc/machine-id")
                 # Remove SSH host keys for regen
-                _pve_cmd(cfg, node_ip,
-                         f"rm -f /mnt/vm{new_vmid}/etc/ssh/ssh_host_*")
+                _pve_cmd(cfg, node_ip, f"rm -f /mnt/vm{new_vmid}/etc/ssh/ssh_host_*")
                 # Update /etc/hosts
-                _pve_cmd(cfg, node_ip,
-                         f"sed -i 's/127.0.1.1.*/127.0.1.1\\t'{safe_name}'/' "
-                         f"/mnt/vm{new_vmid}/etc/hosts")
+                _pve_cmd(cfg, node_ip, f"sed -i 's/127.0.1.1.*/127.0.1.1\\t'{safe_name}'/' /mnt/vm{new_vmid}/etc/hosts")
 
                 # Set static IP if interfaces file exists
-                _pve_cmd(cfg, node_ip,
-                         f"if [ -f /mnt/vm{new_vmid}/etc/network/interfaces ]; then "
-                         f"  sed -i 's/address .*/address {ip_addr}/' "
-                         f"  /mnt/vm{new_vmid}/etc/network/interfaces; fi")
+                _pve_cmd(
+                    cfg,
+                    node_ip,
+                    f"if [ -f /mnt/vm{new_vmid}/etc/network/interfaces ]; then "
+                    f"  sed -i 's/address .*/address {ip_addr}/' "
+                    f"  /mnt/vm{new_vmid}/etc/network/interfaces; fi",
+                )
 
                 # Unmount
                 _pve_cmd(cfg, node_ip, f"umount /mnt/vm{new_vmid}")
@@ -537,6 +542,7 @@ def cmd_destroy(cfg: FreqConfig, pack, args) -> int:
 
     # Find which node owns this VM
     from freq.modules.pve import _find_vm_node
+
     node_ip = _find_vm_node(cfg, vmid, node_ip)
 
     # Get VM info first
@@ -741,12 +747,16 @@ def cmd_template(cfg: FreqConfig, pack, args) -> int:
 
     # Clean machine-id and SSH host keys for template
     fmt.step_start("Cleaning template (machine-id, SSH keys)")
-    _pve_cmd(cfg, node_ip,
-             f"qm guest exec {vmid} -- bash -c '"
-             f"truncate -s 0 /etc/machine-id; "
-             f"rm -f /etc/ssh/ssh_host_*; "
-             f"echo CHANGEME > /etc/hostname"
-             f"' 2>/dev/null", timeout=VM_CONFIG_TIMEOUT)
+    _pve_cmd(
+        cfg,
+        node_ip,
+        f"qm guest exec {vmid} -- bash -c '"
+        f"truncate -s 0 /etc/machine-id; "
+        f"rm -f /etc/ssh/ssh_host_*; "
+        f"echo CHANGEME > /etc/hostname"
+        f"' 2>/dev/null",
+        timeout=VM_CONFIG_TIMEOUT,
+    )
     fmt.step_ok("Cleaned (or VM was off)")
 
     # Convert to template
@@ -820,8 +830,10 @@ def cmd_rename(cfg: FreqConfig, pack, args) -> int:
             host=node_ip,
             command=f"qm agent {vmid} network-get-interfaces 2>/dev/null",
             key_path=cfg.ssh_key_path,
-            connect_timeout=3, command_timeout=10,
-            htype="pve", use_sudo=True,
+            connect_timeout=3,
+            command_timeout=10,
+            htype="pve",
+            use_sudo=True,
         )
         if r.returncode == 0 and r.stdout.strip():
             try:
@@ -833,6 +845,7 @@ def cmd_rename(cfg: FreqConfig, pack, args) -> int:
                             ip = addr.get("ip-address", "")
                             if ip and not ip.startswith("127."):
                                 from freq.modules.hosts import update_host_label
+
                                 if update_host_label(cfg, ip, safe_label):
                                     fmt.step_ok(f"Fleet registry updated: {ip} → {safe_label}")
                                     break
@@ -900,8 +913,7 @@ def cmd_add_disk(cfg: FreqConfig, pack, args) -> int:
     for i in range(count):
         slot = next_slot + i
         fmt.step_start(f"Adding {size}GB disk as scsi{slot}")
-        stdout, ok = _pve_cmd(cfg, node_ip,
-                               f"qm set {vmid} --scsi{slot} {storage}:{size}")
+        stdout, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} --scsi{slot} {storage}:{size}")
         if ok:
             fmt.step_ok(f"scsi{slot} ({size}GB) added")
             added += 1
@@ -992,8 +1004,7 @@ def cmd_pool(cfg: FreqConfig, pack, args) -> int:
             fmt.error("Usage: freq pool add --name <pool> --target <vmid>")
             return 1
         fmt.step_start(f"Adding VM {vmid} to pool {pool_name}")
-        stdout, ok = _pve_cmd(cfg, node_ip,
-                               f"pvesh set /pools/{pool_name} --vms {vmid}")
+        stdout, ok = _pve_cmd(cfg, node_ip, f"pvesh set /pools/{pool_name} --vms {vmid}")
         if ok:
             fmt.step_ok(f"VM {vmid} added to {pool_name}")
         else:
@@ -1004,8 +1015,7 @@ def cmd_pool(cfg: FreqConfig, pack, args) -> int:
     fmt.header("PVE Pools")
     fmt.blank()
 
-    stdout, ok = _pve_cmd(cfg, node_ip,
-                           "pvesh get /pools --output-format json 2>/dev/null")
+    stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /pools --output-format json 2>/dev/null")
     if ok:
         try:
             pools = json.loads(stdout)
@@ -1094,9 +1104,9 @@ def cmd_sandbox(cfg: FreqConfig, pack, args) -> int:
 
     # Clone
     fmt.step_start(f"Cloning VM {src_vmid} to {new_vmid}")
-    stdout, ok = _pve_cmd(cfg, node_ip,
-                           f"qm clone {src_vmid} {new_vmid} --name {new_name} --full",
-                           timeout=VM_CLONE_TIMEOUT)
+    stdout, ok = _pve_cmd(
+        cfg, node_ip, f"qm clone {src_vmid} {new_vmid} --name {new_name} --full", timeout=VM_CLONE_TIMEOUT
+    )
     if not ok:
         fmt.step_fail(f"Clone failed: {stdout}")
         return 1
@@ -1105,8 +1115,11 @@ def cmd_sandbox(cfg: FreqConfig, pack, args) -> int:
     # Set hostname via cloud-init if IP provided
     if ip_addr:
         fmt.step_start(f"Setting IP to {ip_addr}")
-        stdout, ok = _pve_cmd(cfg, node_ip,
-                               f"qm set {new_vmid} --ipconfig0 ip={ip_addr if '/' in ip_addr else ip_addr + '/24'},gw={cfg.vm_gateway}")
+        stdout, ok = _pve_cmd(
+            cfg,
+            node_ip,
+            f"qm set {new_vmid} --ipconfig0 ip={ip_addr if '/' in ip_addr else ip_addr + '/24'},gw={cfg.vm_gateway}",
+        )
         if "/" not in ip_addr:
             logger.warn(f"no CIDR prefix on IP {ip_addr} — assuming /24")
         if ok:
@@ -1145,12 +1158,14 @@ def cmd_file_send(cfg: FreqConfig, pack, args) -> int:
     host_label, remote_path = dst.split(":", 1)
 
     from freq.core import resolve as res
+
     host = res.by_target(cfg.hosts, host_label)
     if not host:
         fmt.error(f"Host not found: {host_label}")
         return 1
 
     from freq.core.ssh import PLATFORM_SSH
+
     platform = PLATFORM_SSH.get(host.htype, PLATFORM_SSH["linux"])
     user = platform["user"]
 
@@ -1180,8 +1195,7 @@ def _find_best_local_storage(cfg: FreqConfig, node_ip: str, target_node: str) ->
     Prefers local SSD/ZFS over NFS. Never picks shared NFS for permanent
     VM placement — NFS is a transit layer, not a home.
     """
-    stdout, ok = _pve_cmd(cfg, node_ip,
-                           f"pvesh get /nodes/{target_node}/storage --output-format json 2>/dev/null")
+    stdout, ok = _pve_cmd(cfg, node_ip, f"pvesh get /nodes/{target_node}/storage --output-format json 2>/dev/null")
     if not ok:
         return ""
 
@@ -1244,8 +1258,7 @@ def _delete_snapshots(cfg: FreqConfig, source_ip: str, vmid: int, snapshots: lis
     """Delete all snapshots from a VM."""
     for snap in snapshots:
         fmt.step_start(f"Deleting snapshot '{snap}'")
-        stdout, ok = _pve_cmd(cfg, source_ip, f"qm delsnapshot {vmid} {snap}",
-                               timeout=VM_CLONE_TIMEOUT)
+        stdout, ok = _pve_cmd(cfg, source_ip, f"qm delsnapshot {vmid} {snap}", timeout=VM_CLONE_TIMEOUT)
         if ok:
             fmt.step_ok(f"Deleted '{snap}'")
         else:
@@ -1324,9 +1337,11 @@ def cmd_migrate(cfg: FreqConfig, pack, args) -> int:
 
         if not skip_confirm:
             try:
-                confirm = input(
-                    f"  {fmt.C.YELLOW}Delete snapshots to enable live migration? [y/N]:{fmt.C.RESET} "
-                ).strip().lower()
+                confirm = (
+                    input(f"  {fmt.C.YELLOW}Delete snapshots to enable live migration? [y/N]:{fmt.C.RESET} ")
+                    .strip()
+                    .lower()
+                )
             except (EOFError, KeyboardInterrupt):
                 print()
                 return 1
@@ -1490,14 +1505,17 @@ def _nic_add(cfg: FreqConfig, args) -> int:
 
     # Create NIC
     fmt.step_start(f"Adding net{next_nic} to VM {vmid}")
-    stdout1, ok1 = _pve_cmd(cfg, node_ip,
+    stdout1, ok1 = _pve_cmd(
+        cfg,
+        node_ip,
         f"qm set {vmid} --net{next_nic} virtio,bridge={cfg.nic_bridge}{tag_part}",
-        timeout=VM_CONFIG_TIMEOUT)
+        timeout=VM_CONFIG_TIMEOUT,
+    )
 
     # Set IP config
-    stdout2, ok2 = _pve_cmd(cfg, node_ip,
-        f"qm set {vmid} --ipconfig{next_nic} ip={cidr}{gw_part}",
-        timeout=VM_CONFIG_TIMEOUT)
+    stdout2, ok2 = _pve_cmd(
+        cfg, node_ip, f"qm set {vmid} --ipconfig{next_nic} ip={cidr}{gw_part}", timeout=VM_CONFIG_TIMEOUT
+    )
 
     if ok1 and ok2:
         fmt.step_ok(f"net{next_nic} added: {ip}" + (f" VLAN {vlan}" if vlan else ""))
@@ -1619,15 +1637,18 @@ def _nic_change_ip(cfg: FreqConfig, args) -> int:
 
     # Set NIC
     fmt.step_start(f"Updating net{nic_idx}")
-    stdout1, ok1 = _pve_cmd(cfg, node_ip,
+    stdout1, ok1 = _pve_cmd(
+        cfg,
+        node_ip,
         f"qm set {vmid} --net{nic_idx} virtio,bridge={cfg.nic_bridge}{tag_part}",
-        timeout=VM_CONFIG_TIMEOUT)
+        timeout=VM_CONFIG_TIMEOUT,
+    )
 
     # Set IP config
     fmt.step_start(f"Setting ipconfig{nic_idx} to {ip}")
-    stdout2, ok2 = _pve_cmd(cfg, node_ip,
-        f"qm set {vmid} --ipconfig{nic_idx} ip={cidr}{gw_part}",
-        timeout=VM_CONFIG_TIMEOUT)
+    stdout2, ok2 = _pve_cmd(
+        cfg, node_ip, f"qm set {vmid} --ipconfig{nic_idx} ip={cidr}{gw_part}", timeout=VM_CONFIG_TIMEOUT
+    )
 
     if ok1 and ok2:
         fmt.step_ok(f"VM {vmid} net{nic_idx} → {ip}")
@@ -1723,10 +1744,7 @@ def _nic_check_ip(cfg: FreqConfig, args) -> int:
 
     fmt.step_start(f"Pinging {ip}")
     try:
-        result = subprocess.run(
-            ["ping", "-c", "1", "-W", "2", ip],
-            capture_output=True, text=True, timeout=5
-        )
+        result = subprocess.run(["ping", "-c", "1", "-W", "2", ip], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             fmt.step_ok(f"{ip} is REACHABLE (in use)")
             fmt.line(f"  {fmt.C.YELLOW}This IP is already taken.{fmt.C.RESET}")

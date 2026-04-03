@@ -30,6 +30,7 @@ from freq.modules.serve import (
 def handle_alert_rules(handler):
     """GET /api/alert/rules — list alert rules and active silences."""
     from freq.modules.alert import _load_rules, _load_silences
+
     cfg = load_config()
     rules = _load_rules(cfg)
     silences = [s for s in _load_silences(cfg) if s.get("expires", 0) > time.time()]
@@ -39,6 +40,7 @@ def handle_alert_rules(handler):
 def handle_alert_history(handler):
     """GET /api/alert/history — get alert history."""
     from freq.modules.alert import _load_history
+
     cfg = load_config()
     history = _load_history(cfg)
     params = get_params(handler)
@@ -49,24 +51,28 @@ def handle_alert_history(handler):
 def handle_alert_check(handler):
     """GET /api/alert/check — evaluate alert rules against current fleet state."""
     from freq.modules.alert import _load_rules, _evaluate_fleet
+
     cfg = load_config()
     rules = [r for r in _load_rules(cfg) if r.get("enabled", True)]
     triggered = _evaluate_fleet(cfg, rules)
     alerts = []
     for a in triggered:
-        alerts.append({
-            "rule": a["rule"]["name"],
-            "host": a["host"],
-            "value": a["value"],
-            "message": a["message"],
-            "severity": a["rule"].get("severity", "warning"),
-        })
+        alerts.append(
+            {
+                "rule": a["rule"]["name"],
+                "host": a["host"],
+                "value": a["value"],
+                "message": a["message"],
+                "severity": a["rule"].get("severity", "warning"),
+            }
+        )
     json_response(handler, {"alerts": alerts, "count": len(alerts), "rules_checked": len(rules)})
 
 
 def handle_alert_silences(handler):
     """GET /api/alert/silences — list active silences."""
     from freq.modules.alert import _load_silences
+
     cfg = load_config()
     silences = [s for s in _load_silences(cfg) if s.get("expires", 0) > time.time()]
     json_response(handler, {"silences": silences, "count": len(silences)})
@@ -75,6 +81,7 @@ def handle_alert_silences(handler):
 def handle_trend_data(handler):
     """GET /api/trend/data — get trend data."""
     from freq.modules.trend import _load_trend_data
+
     cfg = load_config()
     data = _load_trend_data(cfg)
     params = get_params(handler)
@@ -86,8 +93,10 @@ def handle_trend_snapshot(handler):
     """GET /api/trend/snapshot — take a trend snapshot."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
     from freq.modules.trend import _take_snapshot, _load_trend_data, _save_trend_data
+
     cfg = load_config()
     snapshot = _take_snapshot(cfg)
     if snapshot:
@@ -100,6 +109,7 @@ def handle_trend_snapshot(handler):
 def handle_sla(handler):
     """GET /api/sla — get SLA data."""
     from freq.modules.sla import _load_sla_data, _calculate_sla
+
     cfg = load_config()
     data = _load_sla_data(cfg)
     params = get_params(handler)
@@ -121,8 +131,10 @@ def handle_sla_check(handler):
     """GET /api/sla/check — record an SLA check."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
     from freq.modules.sla import _record_check
+
     cfg = load_config()
     _record_check(cfg)
     json_response(handler, {"ok": True})
@@ -131,27 +143,34 @@ def handle_sla_check(handler):
 def handle_capacity(handler):
     """GET /api/capacity — return capacity projections and trend data."""
     from freq.jarvis.capacity import load_snapshots, compute_projections
+
     cfg = load_config()
     snapshots = load_snapshots(cfg.data_dir)
     projections = compute_projections(snapshots)
-    json_response(handler, {
-        "projections": projections,
-        "snapshot_count": len(snapshots),
-        "hosts": len(projections),
-    })
+    json_response(
+        handler,
+        {
+            "projections": projections,
+            "snapshot_count": len(snapshots),
+            "hosts": len(projections),
+        },
+    )
 
 
 def handle_capacity_snapshot(handler):
     """GET /api/capacity/snapshot — force a capacity snapshot now (admin only)."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.capacity import save_snapshot
+
     cfg = load_config()
     with _bg_lock:
         health = _bg_cache.get("health")
     if not health:
-        json_response(handler, {"error": "No health data available yet"}, 503); return
+        json_response(handler, {"error": "No health data available yet"}, 503)
+        return
     fname = save_snapshot(cfg.data_dir, health)
     if fname:
         json_response(handler, {"ok": True, "snapshot": fname})
@@ -162,6 +181,7 @@ def handle_capacity_snapshot(handler):
 def handle_capacity_recommend(handler):
     """GET /api/capacity/recommend — migration + optimization suggestions."""
     from freq.jarvis.capacity import load_snapshots, compute_projections, recommend_migrations
+
     cfg = load_config()
     snapshots = load_snapshots(cfg.data_dir)
     projections = compute_projections(snapshots)
@@ -170,6 +190,7 @@ def handle_capacity_recommend(handler):
     costs = []
     try:
         from freq.jarvis.cost import load_cost_config, compute_costs
+
         cost_cfg = load_cost_config(cfg.conf_dir)
         with _bg_lock:
             health = _bg_cache.get("health")
@@ -179,12 +200,15 @@ def handle_capacity_recommend(handler):
         pass
 
     recs = recommend_migrations(projections, costs)
-    json_response(handler, {
-        "recommendations": recs,
-        "count": len(recs),
-        "critical": sum(1 for r in recs if r["urgency"] == "critical"),
-        "warning": sum(1 for r in recs if r["urgency"] == "warning"),
-    })
+    json_response(
+        handler,
+        {
+            "recommendations": recs,
+            "count": len(recs),
+            "critical": sum(1 for r in recs if r["urgency"] == "critical"),
+            "warning": sum(1 for r in recs if r["urgency"] == "warning"),
+        },
+    )
 
 
 def handle_monitors(handler):
@@ -192,14 +216,16 @@ def handle_monitors(handler):
     cfg = load_config()
     monitors = []
     for m in cfg.monitors:
-        monitors.append({
-            "name": m.name,
-            "url": m.url,
-            "interval": m.interval,
-            "timeout": m.timeout,
-            "expected_status": m.expected_status,
-            "method": m.method,
-        })
+        monitors.append(
+            {
+                "name": m.name,
+                "url": m.url,
+                "interval": m.interval,
+                "timeout": m.timeout,
+                "expected_status": m.expected_status,
+                "method": m.method,
+            }
+        )
     json_response(handler, {"monitors": monitors, "count": len(monitors)})
 
 
@@ -207,25 +233,31 @@ def handle_monitors_check(handler):
     """GET /api/monitors/check — run all HTTP checks now."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
     cfg = load_config()
     if not cfg.monitors:
         json_response(handler, {"results": [], "count": 0})
         return
     from freq.jarvis.patrol import check_http_monitors
+
     results = check_http_monitors(cfg.monitors)
     ok = sum(1 for r in results if r["ok"])
-    json_response(handler, {
-        "results": results,
-        "count": len(results),
-        "healthy": ok,
-        "unhealthy": len(results) - ok,
-    })
+    json_response(
+        handler,
+        {
+            "results": results,
+            "count": len(results),
+            "healthy": ok,
+            "unhealthy": len(results) - ok,
+        },
+    )
 
 
 def handle_metrics_prometheus(handler):
     """GET /api/metrics/prometheus — Prometheus-format metrics from background health cache."""
     from freq import __version__
+
     uptime = round(time.monotonic() - _SERVER_START_TIME)
     lines = [
         "# HELP freq_info FREQ server info",
@@ -243,20 +275,22 @@ def handle_metrics_prometheus(handler):
         healthy = sum(1 for h in hosts if h.get("reachable"))
         unreachable = total - healthy
         total_vms = sum(h.get("vm_count", 0) for h in hosts if isinstance(h.get("vm_count"), int))
-        lines.extend([
-            "# HELP freq_hosts_total Total fleet hosts",
-            "# TYPE freq_hosts_total gauge",
-            f"freq_hosts_total {total}",
-            "# HELP freq_hosts_healthy Reachable fleet hosts",
-            "# TYPE freq_hosts_healthy gauge",
-            f"freq_hosts_healthy {healthy}",
-            "# HELP freq_hosts_unreachable Unreachable fleet hosts",
-            "# TYPE freq_hosts_unreachable gauge",
-            f"freq_hosts_unreachable {unreachable}",
-            "# HELP freq_vms_total Total VMs across fleet",
-            "# TYPE freq_vms_total gauge",
-            f"freq_vms_total {total_vms}",
-        ])
+        lines.extend(
+            [
+                "# HELP freq_hosts_total Total fleet hosts",
+                "# TYPE freq_hosts_total gauge",
+                f"freq_hosts_total {total}",
+                "# HELP freq_hosts_healthy Reachable fleet hosts",
+                "# TYPE freq_hosts_healthy gauge",
+                f"freq_hosts_healthy {healthy}",
+                "# HELP freq_hosts_unreachable Unreachable fleet hosts",
+                "# TYPE freq_hosts_unreachable gauge",
+                f"freq_hosts_unreachable {unreachable}",
+                "# HELP freq_vms_total Total VMs across fleet",
+                "# TYPE freq_vms_total gauge",
+                f"freq_vms_total {total_vms}",
+            ]
+        )
     body = "\n".join(lines) + "\n"
     handler.send_response(200)
     handler.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
@@ -284,8 +318,10 @@ def handle_db_status(handler):
         'echo "${PG}|${MY}|${CONNS}|${SIZE}"'
     )
     from freq.core.ssh import run_many as ssh_run_many
+
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=15,
@@ -312,11 +348,16 @@ def handle_db_status(handler):
             size = int(parts[3].strip())
         except ValueError:
             size = 0
-        databases.append({
-            "host": h.label, "postgres": pg, "mysql": my,
-            "active_connections": conns, "db_size_bytes": size,
-            "db_size_mb": round(size / 1048576, 1) if size > 0 else 0,
-        })
+        databases.append(
+            {
+                "host": h.label,
+                "postgres": pg,
+                "mysql": my,
+                "active_connections": conns,
+                "db_size_bytes": size,
+                "db_size_mb": round(size / 1048576, 1) if size > 0 else 0,
+            }
+        )
 
     json_response(handler, {"databases": databases, "total": len(databases)})
 
@@ -336,8 +377,10 @@ def handle_logs_stats(handler):
         "sort | uniq -c | sort -rn | head -15"
     )
     from freq.core.ssh import run_many as ssh_run_many
+
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=20,
@@ -367,10 +410,15 @@ def handle_logs_stats(handler):
     patterns = [{"pattern": msg, "count": count} for msg, count in sorted_patterns[:20]]
     total = sum(count for _, count in sorted_patterns)
 
-    json_response(handler, {
-        "patterns": patterns, "total_errors": total,
-        "period": since, "hosts_scanned": len(hosts),
-    })
+    json_response(
+        handler,
+        {
+            "patterns": patterns,
+            "total_errors": total,
+            "period": since,
+            "hosts_scanned": len(hosts),
+        },
+    )
 
 
 def handle_metrics(handler):
@@ -402,11 +450,19 @@ def handle_metrics(handler):
         cmd = (
             "echo '{\"cpu\":{\"cores\":'$(nproc)',\"load_1m\":'$(awk '{print $1}' /proc/loadavg)'},"
             "\"memory\":{\"total_mb\":'$(free -m|awk '/Mem:/{print $2}')','\"used_mb\":'$(free -m|awk '/Mem:/{print $3}')','\"usage_pct\":'$(free|awk '/Mem:/{printf \"%.1f\",$3/$2*100}')'}',"
-            "\"system\":{\"hostname\":\"'$(hostname)'\",\"uptime_human\":\"'$(uptime -p 2>/dev/null|sed 's/up //'||echo unknown)'\"},"
-            "\"source\":\"ssh\"}'"
+            '"system":{"hostname":"\'$(hostname)\'","uptime_human":"\'$(uptime -p 2>/dev/null|sed \'s/up //\'||echo unknown)\'"},'
+            '"source":"ssh"}\''
         )
-        r = ssh_single(host=h.ip, command=cmd, key_path=cfg.ssh_key_path,
-                       connect_timeout=3, command_timeout=5, htype=h.htype, use_sudo=False, cfg=cfg)
+        r = ssh_single(
+            host=h.ip,
+            command=cmd,
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=5,
+            htype=h.htype,
+            use_sudo=False,
+            cfg=cfg,
+        )
         if r.returncode == 0:
             try:
                 data = json.loads(r.stdout)

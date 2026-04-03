@@ -19,6 +19,7 @@ Design decisions:
     - TOML, not HCL or YAML. Python has tomllib in stdlib since 3.11.
       No DSL to learn, no templating language, just a config file.
 """
+
 import os
 import tomllib
 
@@ -28,6 +29,7 @@ from freq.core import log as logger
 
 
 # --- Plan Data Structures ---
+
 
 def _load_plan(plan_path: str) -> list:
     """Load VM definitions from a TOML plan file.
@@ -137,21 +139,24 @@ def _query_cluster_vms(cfg: FreqConfig) -> list:
                     elif cline.startswith("scsi0:"):
                         # Extract disk size from scsi0 line
                         import re
+
                         m = re.search(r"size=(\d+)([GT])", cline)
                         if m:
                             disk = int(m.group(1))
                             if m.group(2) == "T":
                                 disk *= 1024
 
-            vms.append({
-                "vmid": vmid,
-                "name": name,
-                "status": status,
-                "cores": cores,
-                "ram": ram,
-                "disk": disk,
-                "node": node_name,
-            })
+            vms.append(
+                {
+                    "vmid": vmid,
+                    "name": name,
+                    "status": status,
+                    "cores": cores,
+                    "ram": ram,
+                    "disk": disk,
+                    "node": node_name,
+                }
+            )
 
     return vms
 
@@ -253,11 +258,13 @@ def _render_plan(diff: dict, dry_run: bool = True) -> None:
         fmt.blank()
 
     # Summary
-    fmt.line(f"  {fmt.C.BOLD}Plan:{fmt.C.RESET} "
-             f"{fmt.C.GREEN}{len(creates)} to create{fmt.C.RESET}, "
-             f"{fmt.C.YELLOW}{len(resizes)} to resize{fmt.C.RESET}, "
-             f"{len(unchanged)} unchanged, "
-             f"{len(unmanaged)} unmanaged")
+    fmt.line(
+        f"  {fmt.C.BOLD}Plan:{fmt.C.RESET} "
+        f"{fmt.C.GREEN}{len(creates)} to create{fmt.C.RESET}, "
+        f"{fmt.C.YELLOW}{len(resizes)} to resize{fmt.C.RESET}, "
+        f"{len(unchanged)} unchanged, "
+        f"{len(unmanaged)} unmanaged"
+    )
 
 
 def cmd_plan(cfg: FreqConfig, pack, args) -> int:

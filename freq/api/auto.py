@@ -28,6 +28,7 @@ from freq.modules.serve import (
 def _get_params_flat(handler):
     """Parse query params into a flat {key: str} dict."""
     from urllib.parse import urlparse, parse_qs
+
     raw = parse_qs(urlparse(handler.path).query)
     return {k: v[0] if v else "" for k, v in raw.items()}
 
@@ -38,6 +39,7 @@ def _get_params_flat(handler):
 def handle_rules(handler):
     """GET /api/rules — list all alert rules and their current state."""
     from freq.jarvis.rules import load_rules, rules_to_dicts, load_rule_state
+
     cfg = load_config()
     rules = load_rules(cfg.conf_dir)
     state = load_rule_state(CACHE_DIR)
@@ -53,30 +55,37 @@ def handle_rules_create(handler):
     """GET /api/rules/create — create a new alert rule."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.rules import Rule, load_rules, save_rules
+
     cfg = load_config()
     params = get_params(handler)
     name = params.get("name", [""])[0].strip()
     condition = params.get("condition", [""])[0].strip()
     if not name or not condition:
-        json_response(handler, {"error": "name and condition required"}); return
+        json_response(handler, {"error": "name and condition required"})
+        return
     valid_conditions = ("host_unreachable", "cpu_above", "ram_above", "disk_above", "docker_down")
     if condition not in valid_conditions:
-        json_response(handler, {"error": f"Invalid condition. Valid: {', '.join(valid_conditions)}"}); return
+        json_response(handler, {"error": f"Invalid condition. Valid: {', '.join(valid_conditions)}"})
+        return
     rules = load_rules(cfg.conf_dir)
     if any(r.name == name for r in rules):
-        json_response(handler, {"error": f"Rule '{name}' already exists"}); return
-    rules.append(Rule(
-        name=name,
-        condition=condition,
-        target=params.get("target", ["*"])[0].strip(),
-        threshold=float(params.get("threshold", ["0"])[0]),
-        duration=int(params.get("duration", ["0"])[0]),
-        severity=params.get("severity", ["warning"])[0].strip(),
-        cooldown=int(params.get("cooldown", ["300"])[0]),
-        enabled=params.get("enabled", ["true"])[0].lower() == "true",
-    ))
+        json_response(handler, {"error": f"Rule '{name}' already exists"})
+        return
+    rules.append(
+        Rule(
+            name=name,
+            condition=condition,
+            target=params.get("target", ["*"])[0].strip(),
+            threshold=float(params.get("threshold", ["0"])[0]),
+            duration=int(params.get("duration", ["0"])[0]),
+            severity=params.get("severity", ["warning"])[0].strip(),
+            cooldown=int(params.get("cooldown", ["300"])[0]),
+            enabled=params.get("enabled", ["true"])[0].lower() == "true",
+        )
+    )
     if save_rules(cfg.conf_dir, rules):
         json_response(handler, {"ok": True, "name": name})
     else:
@@ -87,17 +96,21 @@ def handle_rules_update(handler):
     """GET /api/rules/update — update an existing alert rule (enable/disable/modify)."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.rules import load_rules, save_rules
+
     cfg = load_config()
     params = get_params(handler)
     name = params.get("name", [""])[0].strip()
     if not name:
-        json_response(handler, {"error": "name required"}); return
+        json_response(handler, {"error": "name required"})
+        return
     rules = load_rules(cfg.conf_dir)
     rule = next((r for r in rules if r.name == name), None)
     if not rule:
-        json_response(handler, {"error": f"Rule '{name}' not found"}); return
+        json_response(handler, {"error": f"Rule '{name}' not found"})
+        return
     # Update fields if provided
     if "enabled" in params:
         rule.enabled = params["enabled"][0].lower() == "true"
@@ -121,18 +134,22 @@ def handle_rules_delete(handler):
     """GET /api/rules/delete — delete an alert rule."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.rules import load_rules, save_rules
+
     cfg = load_config()
     params = get_params(handler)
     name = params.get("name", [""])[0].strip()
     if not name:
-        json_response(handler, {"error": "name required"}); return
+        json_response(handler, {"error": "name required"})
+        return
     rules = load_rules(cfg.conf_dir)
     before = len(rules)
     rules = [r for r in rules if r.name != name]
     if len(rules) == before:
-        json_response(handler, {"error": f"Rule '{name}' not found"}); return
+        json_response(handler, {"error": f"Rule '{name}' not found"})
+        return
     if save_rules(cfg.conf_dir, rules):
         json_response(handler, {"ok": True, "deleted": name})
     else:
@@ -142,6 +159,7 @@ def handle_rules_delete(handler):
 def handle_rules_history(handler):
     """GET /api/rules/history — return recent alert history."""
     from freq.jarvis.rules import load_alert_history
+
     history = load_alert_history(CACHE_DIR)
     json_response(handler, {"alerts": history, "count": len(history)})
 
@@ -149,6 +167,7 @@ def handle_rules_history(handler):
 def handle_schedule_jobs(handler):
     """GET /api/schedule/jobs — list scheduled jobs."""
     from freq.modules.schedule import _load_jobs
+
     cfg = load_config()
     jobs = _load_jobs(cfg)
     json_response(handler, {"jobs": jobs, "count": len(jobs)})
@@ -157,6 +176,7 @@ def handle_schedule_jobs(handler):
 def handle_schedule_log(handler):
     """GET /api/schedule/log — get schedule execution log."""
     from freq.modules.schedule import _load_log
+
     cfg = load_config()
     log = _load_log(cfg)
     json_response(handler, {"log": log[-50:], "total": len(log)})
@@ -165,12 +185,14 @@ def handle_schedule_log(handler):
 def handle_schedule_templates(handler):
     """GET /api/schedule/templates — list job templates."""
     from freq.modules.schedule import JOB_TEMPLATES
+
     json_response(handler, {"templates": JOB_TEMPLATES})
 
 
 def handle_webhook_list(handler):
     """GET /api/webhook/list — list webhooks (tokens redacted)."""
     from freq.modules.webhook import _load_hooks
+
     cfg = load_config()
     hooks = _load_hooks(cfg)
     safe = []
@@ -182,6 +204,7 @@ def handle_webhook_list(handler):
 def handle_webhook_log(handler):
     """GET /api/webhook/log — get webhook execution log."""
     from freq.modules.webhook import _load_log
+
     cfg = load_config()
     log = _load_log(cfg)
     json_response(handler, {"log": log[-50:], "total": len(log)})
@@ -190,6 +213,7 @@ def handle_webhook_log(handler):
 def handle_playbooks(handler):
     """GET /api/playbooks — list all available playbooks."""
     from freq.jarvis.playbook import load_playbooks, playbooks_to_dicts
+
     cfg = load_config()
     playbooks = load_playbooks(cfg.conf_dir)
     json_response(handler, {"playbooks": playbooks_to_dicts(playbooks)})
@@ -199,102 +223,125 @@ def handle_playbooks_run(handler):
     """GET /api/playbooks/run — run all steps of a playbook (non-confirm steps only)."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     params = _get_params_flat(handler)
     filename = params.get("filename", "")
-    if not filename or '/' in filename or '\\' in filename or '..' in filename:
-        json_response(handler, {"error": "Invalid or missing filename"}); return
+    if not filename or "/" in filename or "\\" in filename or ".." in filename:
+        json_response(handler, {"error": "Invalid or missing filename"})
+        return
 
     from freq.jarvis.playbook import load_playbooks, run_step, result_to_dict
     from freq.core.ssh import run as ssh_run
+
     cfg = load_config()
     playbooks = load_playbooks(cfg.conf_dir)
     pb = next((p for p in playbooks if p.filename == filename), None)
     if not pb:
-        json_response(handler, {"error": f"Playbook '{filename}' not found"}); return
+        json_response(handler, {"error": f"Playbook '{filename}' not found"})
+        return
 
     results = []
     for step in pb.steps:
         if step.confirm:
-            results.append({
-                "step_name": step.name, "step_type": step.step_type,
-                "status": "pending_confirm", "output": "",
-                "error": "Requires confirmation", "duration": 0,
-            })
+            results.append(
+                {
+                    "step_name": step.name,
+                    "step_type": step.step_type,
+                    "status": "pending_confirm",
+                    "output": "",
+                    "error": "Requires confirmation",
+                    "duration": 0,
+                }
+            )
             break
         r = run_step(step, ssh_run, cfg)
         results.append(result_to_dict(r))
         if r.status == "fail":
             break
 
-    json_response(handler, {
-        "playbook": pb.name,
-        "filename": pb.filename,
-        "results": results,
-        "completed": len(results) == len(pb.steps) and all(
-            r["status"] == "pass" for r in results
-        ),
-    })
+    json_response(
+        handler,
+        {
+            "playbook": pb.name,
+            "filename": pb.filename,
+            "results": results,
+            "completed": len(results) == len(pb.steps) and all(r["status"] == "pass" for r in results),
+        },
+    )
 
 
 def handle_playbooks_step(handler):
     """GET /api/playbooks/step — run a single step of a playbook by index."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     params = _get_params_flat(handler)
     filename = params.get("filename", "")
     step_idx = params.get("step", "")
-    if not filename or '/' in filename or '\\' in filename or '..' in filename:
-        json_response(handler, {"error": "Invalid or missing filename"}); return
+    if not filename or "/" in filename or "\\" in filename or ".." in filename:
+        json_response(handler, {"error": "Invalid or missing filename"})
+        return
     if step_idx == "":
-        json_response(handler, {"error": "Missing step parameter"}); return
+        json_response(handler, {"error": "Missing step parameter"})
+        return
 
     try:
         step_idx = int(step_idx)
     except ValueError:
-        json_response(handler, {"error": "step must be an integer"}); return
+        json_response(handler, {"error": "step must be an integer"})
+        return
 
     from freq.jarvis.playbook import load_playbooks, run_step, result_to_dict
     from freq.core.ssh import run as ssh_run
+
     cfg = load_config()
     playbooks = load_playbooks(cfg.conf_dir)
     pb = next((p for p in playbooks if p.filename == filename), None)
     if not pb:
-        json_response(handler, {"error": f"Playbook '{filename}' not found"}); return
+        json_response(handler, {"error": f"Playbook '{filename}' not found"})
+        return
     if step_idx < 0 or step_idx >= len(pb.steps):
-        json_response(handler, {"error": f"Step index {step_idx} out of range"}); return
+        json_response(handler, {"error": f"Step index {step_idx} out of range"})
+        return
 
     r = run_step(pb.steps[step_idx], ssh_run, cfg)
-    json_response(handler, {
-        "playbook": pb.name,
-        "step_index": step_idx,
-        "total_steps": len(pb.steps),
-        "result": result_to_dict(r),
-    })
+    json_response(
+        handler,
+        {
+            "playbook": pb.name,
+            "step_index": step_idx,
+            "total_steps": len(pb.steps),
+            "result": result_to_dict(r),
+        },
+    )
 
 
 def handle_playbooks_create(handler):
     """GET /api/playbooks/create — create a new playbook from parameters."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     params = _get_params_flat(handler)
     name = params.get("name", "").strip()
     if not name:
-        json_response(handler, {"error": "Missing playbook name"}); return
+        json_response(handler, {"error": "Missing playbook name"})
+        return
 
-    filename = re.sub(r'[^a-z0-9_-]', '-', name.lower()) + ".toml"
+    filename = re.sub(r"[^a-z0-9_-]", "-", name.lower()) + ".toml"
     cfg = load_config()
     pb_dir = os.path.join(cfg.conf_dir, "playbooks")
     os.makedirs(pb_dir, exist_ok=True)
     path = os.path.join(pb_dir, filename)
     if os.path.exists(path):
-        json_response(handler, {"error": f"Playbook '{filename}' already exists"}); return
+        json_response(handler, {"error": f"Playbook '{filename}' already exists"})
+        return
 
     description = params.get("description", "")
     trigger = params.get("trigger", "")
-    _te = lambda s: s.replace('\\', '\\\\').replace('"', '\\"')
+    _te = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')
     content = f'[playbook]\nname = "{_te(name)}"\ndescription = "{_te(description)}"\ntrigger = "{_te(trigger)}"\n'
     try:
         with open(path, "w") as f:
@@ -308,8 +355,10 @@ def handle_chaos_types(handler):
     """GET /api/chaos/types — list available chaos experiment types."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.chaos import list_experiment_types
+
     json_response(handler, {"types": list_experiment_types()})
 
 
@@ -317,9 +366,11 @@ def handle_chaos_run(handler):
     """GET /api/chaos/run — run a chaos experiment (admin only)."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.chaos import Experiment, run_experiment, result_to_dict
     from freq.core.ssh import run as ssh_run
+
     cfg = load_config()
     params = _get_params_flat(handler)
     name = params.get("name", "").strip()
@@ -329,14 +380,19 @@ def handle_chaos_run(handler):
     try:
         duration = int(params.get("duration", "60"))
     except (ValueError, TypeError):
-        json_response(handler, {"error": "duration must be an integer"}); return
+        json_response(handler, {"error": "duration must be an integer"})
+        return
 
     if not name or not exp_type or not target:
-        json_response(handler, {"error": "Missing name, type, or target parameter"}); return
+        json_response(handler, {"error": "Missing name, type, or target parameter"})
+        return
 
     exp = Experiment(
-        name=name, experiment_type=exp_type, target_host=target,
-        target_service=service, duration=duration,
+        name=name,
+        experiment_type=exp_type,
+        target_host=target,
+        target_service=service,
+        duration=duration,
     )
     result = run_experiment(exp, ssh_run, cfg)
     json_response(handler, {"result": result_to_dict(result)})
@@ -345,6 +401,7 @@ def handle_chaos_run(handler):
 def handle_chaos_log(handler):
     """GET /api/chaos/log — return recent chaos experiment log."""
     from freq.jarvis.chaos import load_experiment_log
+
     cfg = load_config()
     params = _get_params_flat(handler)
     try:
@@ -361,19 +418,27 @@ def handle_patrol_status(handler):
     try:
         import io
         import contextlib
+
         # Patrol is a long-running process — we return a one-shot status check
         from freq.modules.engine_cmds import cmd_check
 
         class Args:
             pass
+
         args = Args()
         args.policy = None
         args.hosts = None
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             result = cmd_check(cfg, None, args)
-        json_response(handler, {"ok": result == 0, "output": buf.getvalue(),
-                                "note": "One-shot compliance check (patrol is a long-running CLI process)"})
+        json_response(
+            handler,
+            {
+                "ok": result == 0,
+                "output": buf.getvalue(),
+                "note": "One-shot compliance check (patrol is a long-running CLI process)",
+            },
+        )
     except Exception as e:
         json_response(handler, {"error": f"Patrol status failed: {e}"}, 500)
 

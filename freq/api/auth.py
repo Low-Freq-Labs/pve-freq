@@ -58,23 +58,25 @@ def record_login_attempt(ip: str, success: bool):
 
 # ── Password Hashing ─────────────────────────────────────────────────────
 
+
 def hash_password(password: str, salt: str = None) -> str:
     """Hash password with PBKDF2-SHA256 + per-user salt."""
     if salt is None:
         salt = secrets.token_hex(16)
-    dk = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100_000)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000)
     return f"{salt}${dk.hex()}"
 
 
 def verify_password(password: str, stored: str) -> bool:
     """Verify password against stored hash. Supports legacy SHA256 for migration."""
-    if '$' not in stored:
+    if "$" not in stored:
         return hashlib.sha256(password.encode()).hexdigest() == stored
-    salt, _ = stored.split('$', 1)
+    salt, _ = stored.split("$", 1)
     return hash_password(password, salt) == stored
 
 
 # ── Session Check ─────────────────────────────────────────────────────────
+
 
 def check_session_role(handler, min_role="operator"):
     """Check if the request has a valid session with sufficient role.
@@ -105,6 +107,7 @@ def check_session_role(handler, min_role="operator"):
 
 
 # ── Handler Functions (called from serve.py route dispatch) ───────────────
+
 
 def handle_auth_login(handler):
     """POST /api/auth/login — authenticate user."""
@@ -150,7 +153,7 @@ def handle_auth_login(handler):
         return
 
     # First login sets password / migrate legacy SHA256 to PBKDF2
-    if not stored_hash or ('$' not in stored_hash):
+    if not stored_hash or ("$" not in stored_hash):
         pw_hash = hash_password(password)
         try:
             if not os.path.exists(cfg.vault_file):
@@ -168,10 +171,14 @@ def handle_auth_login(handler):
             "role": user["role"],
             "ts": time.time(),
         }
-    handler._json_response({
-        "ok": True, "token": token,
-        "user": username, "role": user["role"],
-    })
+    handler._json_response(
+        {
+            "ok": True,
+            "token": token,
+            "user": username,
+            "role": user["role"],
+        }
+    )
 
 
 def handle_auth_verify(handler):
@@ -192,9 +199,13 @@ def handle_auth_verify(handler):
             del _auth_tokens[token]
             handler._json_response({"valid": False})
             return
-    handler._json_response({
-        "valid": True, "user": session["user"], "role": session["role"],
-    })
+    handler._json_response(
+        {
+            "valid": True,
+            "user": session["user"],
+            "role": session["role"],
+        }
+    )
 
 
 def handle_auth_change_password(handler):

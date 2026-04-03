@@ -16,6 +16,7 @@ Design decisions:
     - Store poll snapshots for trending — same pattern as netmon.py.
     - OID constants defined here, not in config. Standard MIBs only.
 """
+
 import json
 import os
 import re
@@ -38,22 +39,22 @@ OID_SYS_CONTACT = "1.3.6.1.2.1.1.4.0"
 OID_SYS_LOCATION = "1.3.6.1.2.1.1.6.0"
 
 # IF-MIB interface table
-OID_IF_DESCR = "1.3.6.1.2.1.2.2.1.2"       # ifDescr
-OID_IF_TYPE = "1.3.6.1.2.1.2.2.1.3"         # ifType
-OID_IF_SPEED = "1.3.6.1.2.1.2.2.1.5"        # ifSpeed
-OID_IF_ADMIN = "1.3.6.1.2.1.2.2.1.7"        # ifAdminStatus
-OID_IF_OPER = "1.3.6.1.2.1.2.2.1.8"         # ifOperStatus
-OID_IF_IN_OCTETS = "1.3.6.1.2.1.2.2.1.10"   # ifInOctets
+OID_IF_DESCR = "1.3.6.1.2.1.2.2.1.2"  # ifDescr
+OID_IF_TYPE = "1.3.6.1.2.1.2.2.1.3"  # ifType
+OID_IF_SPEED = "1.3.6.1.2.1.2.2.1.5"  # ifSpeed
+OID_IF_ADMIN = "1.3.6.1.2.1.2.2.1.7"  # ifAdminStatus
+OID_IF_OPER = "1.3.6.1.2.1.2.2.1.8"  # ifOperStatus
+OID_IF_IN_OCTETS = "1.3.6.1.2.1.2.2.1.10"  # ifInOctets
 OID_IF_OUT_OCTETS = "1.3.6.1.2.1.2.2.1.16"  # ifOutOctets
-OID_IF_IN_ERRORS = "1.3.6.1.2.1.2.2.1.14"   # ifInErrors
+OID_IF_IN_ERRORS = "1.3.6.1.2.1.2.2.1.14"  # ifInErrors
 OID_IF_OUT_ERRORS = "1.3.6.1.2.1.2.2.1.20"  # ifOutErrors
 
 # HOST-RESOURCES-MIB (for Linux/network device CPU/memory)
-OID_HR_PROC_LOAD = "1.3.6.1.2.1.25.3.3.1.2" # hrProcessorLoad
+OID_HR_PROC_LOAD = "1.3.6.1.2.1.25.3.3.1.2"  # hrProcessorLoad
 OID_HR_STORAGE_DESCR = "1.3.6.1.2.1.25.2.3.1.3"  # hrStorageDescr
-OID_HR_STORAGE_SIZE = "1.3.6.1.2.1.25.2.3.1.5"    # hrStorageSize
-OID_HR_STORAGE_USED = "1.3.6.1.2.1.25.2.3.1.6"    # hrStorageUsed
-OID_HR_STORAGE_UNITS = "1.3.6.1.2.1.25.2.3.1.4"   # hrStorageAllocationUnits
+OID_HR_STORAGE_SIZE = "1.3.6.1.2.1.25.2.3.1.5"  # hrStorageSize
+OID_HR_STORAGE_USED = "1.3.6.1.2.1.25.2.3.1.6"  # hrStorageUsed
+OID_HR_STORAGE_UNITS = "1.3.6.1.2.1.25.2.3.1.4"  # hrStorageAllocationUnits
 
 SNMP_DATA_DIR = "snmp"
 DEFAULT_COMMUNITY = "public"
@@ -63,10 +64,10 @@ DEFAULT_COMMUNITY = "public"
 # SNMP Transport — shell to snmpget/snmpwalk
 # ---------------------------------------------------------------------------
 
+
 def _snmp_get(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=5):
     """Run snmpget and return the value string, or None on failure."""
-    cmd = ["snmpget", "-v", version, "-c", community,
-           "-Ovq", "-t", str(timeout), ip, oid]
+    cmd = ["snmpget", "-v", version, "-c", community, "-Ovq", "-t", str(timeout), ip, oid]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 5)
         if r.returncode == 0 and r.stdout.strip():
@@ -78,8 +79,7 @@ def _snmp_get(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=5):
 
 def _snmp_walk(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=10):
     """Run snmpwalk and return list of (index, value) tuples."""
-    cmd = ["snmpwalk", "-v", version, "-c", community,
-           "-Ovq", "-t", str(timeout), ip, oid]
+    cmd = ["snmpwalk", "-v", version, "-c", community, "-Ovq", "-t", str(timeout), ip, oid]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 10)
         if r.returncode != 0:
@@ -96,8 +96,7 @@ def _snmp_walk(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=10):
 
 def _snmp_walk_indexed(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=10):
     """Run snmpwalk with OID output to get (oid_suffix, value) pairs."""
-    cmd = ["snmpwalk", "-v", version, "-c", community,
-           "-OQn", "-t", str(timeout), ip, oid]
+    cmd = ["snmpwalk", "-v", version, "-c", community, "-OQn", "-t", str(timeout), ip, oid]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 10)
         if r.returncode != 0:
@@ -139,6 +138,7 @@ def _get_community(cfg, args=None):
 # Data Storage
 # ---------------------------------------------------------------------------
 
+
 def _data_dir(cfg):
     """Return the SNMP data directory, creating if needed."""
     path = os.path.join(cfg.conf_dir, SNMP_DATA_DIR)
@@ -166,6 +166,7 @@ def _save_poll(cfg, target, data):
 # ---------------------------------------------------------------------------
 # High-Level Getters (combine multiple SNMP walks)
 # ---------------------------------------------------------------------------
+
 
 def get_system_info(ip, community=DEFAULT_COMMUNITY):
     """Get system info via SNMP: sysDescr, sysUptime, sysName."""
@@ -195,8 +196,9 @@ def get_interfaces(ip, community=DEFAULT_COMMUNITY):
         oper_val = oper.get(idx, "")
         # Map SNMP status codes
         admin_str = {"1": "up", "2": "down", "3": "testing"}.get(str(admin_val), str(admin_val))
-        oper_str = {"1": "up", "2": "down", "3": "testing", "4": "unknown",
-                    "5": "dormant", "6": "notPresent"}.get(str(oper_val), str(oper_val))
+        oper_str = {"1": "up", "2": "down", "3": "testing", "4": "unknown", "5": "dormant", "6": "notPresent"}.get(
+            str(oper_val), str(oper_val)
+        )
 
         speed_raw = speeds.get(idx, "0")
         try:
@@ -205,17 +207,19 @@ def get_interfaces(ip, community=DEFAULT_COMMUNITY):
         except (ValueError, TypeError):
             speed_str = str(speed_raw)
 
-        interfaces.append({
-            "index": idx,
-            "name": name,
-            "admin": admin_str,
-            "oper": oper_str,
-            "speed": speed_str,
-            "in_octets": _safe_int(in_oct.get(idx)),
-            "out_octets": _safe_int(out_oct.get(idx)),
-            "in_errors": _safe_int(in_err.get(idx)),
-            "out_errors": _safe_int(out_err.get(idx)),
-        })
+        interfaces.append(
+            {
+                "index": idx,
+                "name": name,
+                "admin": admin_str,
+                "oper": oper_str,
+                "speed": speed_str,
+                "in_octets": _safe_int(in_oct.get(idx)),
+                "out_octets": _safe_int(out_oct.get(idx)),
+                "in_errors": _safe_int(in_err.get(idx)),
+                "out_errors": _safe_int(out_err.get(idx)),
+            }
+        )
 
     return interfaces
 
@@ -253,6 +257,7 @@ def _safe_int(val):
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
+
 
 def cmd_snmp_poll(cfg: FreqConfig, pack, args) -> int:
     """Poll a device via SNMP — system info, interfaces, CPU."""
@@ -298,8 +303,7 @@ def cmd_snmp_poll(cfg: FreqConfig, pack, args) -> int:
         # Filter to physical/interesting interfaces
         shown = [i for i in interfaces if i["oper"] == "up" or i["in_errors"] > 0]
         fmt.line(f"{fmt.C.BOLD}Interfaces ({len(shown)} up / {len(interfaces)} total){fmt.C.RESET}")
-        fmt.table_header(("Name", 18), ("Status", 8), ("Speed", 8),
-                         ("In", 12), ("Out", 12), ("Errors", 8))
+        fmt.table_header(("Name", 18), ("Status", 8), ("Speed", 8), ("In", 12), ("Out", 12), ("Errors", 8))
         for iface in shown[:30]:
             oper = iface["oper"]
             color = fmt.C.GREEN if oper == "up" else fmt.C.RED
@@ -342,6 +346,7 @@ def cmd_snmp_poll(cfg: FreqConfig, pack, args) -> int:
 def _poll_all(cfg, community):
     """Poll all switch-type hosts via SNMP."""
     from freq.modules.switch_orchestration import _get_switch_hosts
+
     switches = _get_switch_hosts(cfg)
     if not switches:
         fmt.error("No switches in hosts.conf")
@@ -387,9 +392,17 @@ def cmd_snmp_interfaces(cfg: FreqConfig, pack, args) -> int:
         fmt.footer()
         return 1
 
-    fmt.table_header(("Idx", 4), ("Name", 20), ("Admin", 6), ("Oper", 6),
-                     ("Speed", 8), ("In Octets", 14), ("Out Octets", 14),
-                     ("In Err", 8), ("Out Err", 8))
+    fmt.table_header(
+        ("Idx", 4),
+        ("Name", 20),
+        ("Admin", 6),
+        ("Oper", 6),
+        ("Speed", 8),
+        ("In Octets", 14),
+        ("Out Octets", 14),
+        ("In Err", 8),
+        ("Out Err", 8),
+    )
     for iface in interfaces:
         oper_color = fmt.C.GREEN if iface["oper"] == "up" else fmt.C.RED
         fmt.table_row(
@@ -490,6 +503,7 @@ def cmd_snmp_cpu(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _resolve_ip(target, cfg):
     """Resolve target to IP address."""

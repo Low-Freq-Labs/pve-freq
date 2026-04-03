@@ -18,6 +18,7 @@ Design decisions:
     - Inventory is read-only and ephemeral. No local state file. Every run
       queries live data, so the output is always current, never stale.
 """
+
 import csv
 import io
 import json
@@ -42,23 +43,23 @@ def _gather_hosts(cfg: FreqConfig) -> list:
     # Single compound SSH command to get everything
     command = (
         'echo "$('
-        'hostname -f 2>/dev/null || hostname'
-        ')|$('
-        'cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d \'"\\"\''
-        ')|$('
-        'nproc'
-        ')|$('
+        "hostname -f 2>/dev/null || hostname"
+        ")|$("
+        "cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"\\\"'"
+        ")|$("
+        "nproc"
+        ")|$("
         "free -m | awk '/Mem:/ {print $2}'"
-        ')|$('
+        ")|$("
         "df -BG / | awk 'NR==2 {print $2}' | tr -d 'G'"
-        ')|$('
-        'cat /proc/uptime | awk \'{d=int($1/86400); h=int(($1%86400)/3600); printf "%dd %dh", d, h}\''
-        ')|$('
+        ")|$("
+        "cat /proc/uptime | awk '{d=int($1/86400); h=int(($1%86400)/3600); printf \"%dd %dh\", d, h}'"
+        ")|$("
         'ip -4 addr show | grep "inet " | grep -v "127.0.0.1" | awk \'{print $2}\' | tr "\\n" "," | sed "s/,$//"'
-        ')|$('
-        'docker ps -q 2>/dev/null | wc -l || echo 0'
-        ')|$('
-        'uname -r'
+        ")|$("
+        "docker ps -q 2>/dev/null | wc -l || echo 0"
+        ")|$("
+        "uname -r"
         ')"'
     )
 
@@ -131,9 +132,13 @@ def _gather_vms(cfg: FreqConfig) -> list:
     node_ip = ""
     for ip in cfg.pve_nodes:
         r = ssh_run(
-            host=ip, command="pvesh get /version --output-format json",
-            key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=INV_QUICK_TIMEOUT, htype="pve", use_sudo=True,
+            host=ip,
+            command="pvesh get /version --output-format json",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=cfg.ssh_connect_timeout,
+            command_timeout=INV_QUICK_TIMEOUT,
+            htype="pve",
+            use_sudo=True,
         )
         if r.returncode == 0:
             node_ip = ip
@@ -149,7 +154,8 @@ def _gather_vms(cfg: FreqConfig) -> list:
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=INV_PVE_TIMEOUT,
-        htype="pve", use_sudo=True,
+        htype="pve",
+        use_sudo=True,
     )
 
     if r.returncode != 0:
@@ -162,18 +168,20 @@ def _gather_vms(cfg: FreqConfig) -> list:
 
     vms = []
     for vm in data:
-        vms.append({
-            "vmid": vm.get("vmid", 0),
-            "name": vm.get("name", ""),
-            "status": vm.get("status", "unknown"),
-            "node": vm.get("node", ""),
-            "type": vm.get("type", "qemu"),
-            "cores": vm.get("maxcpu", 0),
-            "ram_mb": round(vm.get("maxmem", 0) / 1048576),
-            "disk_gb": round(vm.get("maxdisk", 0) / 1073741824),
-            "uptime": vm.get("uptime", 0),
-            "tags": vm.get("tags", ""),
-        })
+        vms.append(
+            {
+                "vmid": vm.get("vmid", 0),
+                "name": vm.get("name", ""),
+                "status": vm.get("status", "unknown"),
+                "node": vm.get("node", ""),
+                "type": vm.get("type", "qemu"),
+                "cores": vm.get("maxcpu", 0),
+                "ram_mb": round(vm.get("maxmem", 0) / 1048576),
+                "disk_gb": round(vm.get("maxdisk", 0) / 1073741824),
+                "uptime": vm.get("uptime", 0),
+                "tags": vm.get("tags", ""),
+            }
+        )
 
     return sorted(vms, key=lambda v: v.get("vmid", 0))
 
@@ -184,9 +192,7 @@ def _gather_containers(cfg: FreqConfig) -> list:
     if not hosts:
         return []
 
-    command = (
-        "docker ps -a --format '{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}' 2>/dev/null || true"
-    )
+    command = "docker ps -a --format '{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}' 2>/dev/null || true"
 
     results = ssh_run_many(
         hosts=hosts,
@@ -205,13 +211,15 @@ def _gather_containers(cfg: FreqConfig) -> list:
             for line in r.stdout.strip().split("\n"):
                 parts = line.split("|", 3)
                 if len(parts) >= 3:
-                    containers.append({
-                        "host": h.label,
-                        "name": parts[0],
-                        "image": parts[1],
-                        "status": parts[2],
-                        "ports": parts[3] if len(parts) > 3 else "",
-                    })
+                    containers.append(
+                        {
+                            "host": h.label,
+                            "name": parts[0],
+                            "image": parts[1],
+                            "status": parts[2],
+                            "ports": parts[3] if len(parts) > 3 else "",
+                        }
+                    )
 
     return containers
 
@@ -381,8 +389,10 @@ def cmd_inventory(cfg: FreqConfig, pack, args) -> int:
     fmt.divider("Summary")
     fmt.blank()
     total = len(host_data) + len(vm_data) + len(container_data)
-    fmt.line(f"  {fmt.C.BOLD}{total}{fmt.C.RESET} total assets  "
-             f"({len(host_data)} hosts, {len(vm_data)} VMs, {len(container_data)} containers)")
+    fmt.line(
+        f"  {fmt.C.BOLD}{total}{fmt.C.RESET} total assets  "
+        f"({len(host_data)} hosts, {len(vm_data)} VMs, {len(container_data)} containers)"
+    )
     fmt.line(f"  Scanned in {duration:.1f}s")
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}Export: freq inventory --json | freq inventory --csv{fmt.C.RESET}")

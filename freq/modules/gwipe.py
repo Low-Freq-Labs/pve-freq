@@ -18,6 +18,7 @@ Design decisions:
     - Client-only, not the wipe engine. GWIPE station is a separate
       appliance. FREQ just talks to its API for fleet-integrated control.
 """
+
 import json
 import logging
 import urllib.request
@@ -56,6 +57,7 @@ def _resolve_creds(cfg, args):
     if not host or not key:
         try:
             from freq.modules.vault import vault_get
+
             if not host:
                 host = vault_get(cfg, "gwipe", "gwipe_host") or ""
             if not key:
@@ -70,21 +72,24 @@ def _show_status(host, key):
     if err:
         fmt.line("  {r}Error: {e}{z}".format(r=fmt.C.RED, e=err, z=fmt.C.RESET))
         return 1
-    fmt.line("  {p}Station:{z} {h}:7980  {g}v{v}{z}".format(
-        p=fmt.C.PURPLE, z=fmt.C.RESET, h=host, g=fmt.C.GREEN,
-        v=d.get("version", "?")))
-    fmt.line("  {p}Bays:{z}    {t} total, {o} occupied".format(
-        p=fmt.C.PURPLE, z=fmt.C.RESET,
-        t=d.get("bays_total", 0), o=d.get("bays_occupied", 0)))
-    fmt.line("  {p}Wiping:{z}  {y}{w}{z}".format(
-        p=fmt.C.PURPLE, z=fmt.C.RESET, y=fmt.C.YELLOW, w=d.get("wiping", 0)))
-    fmt.line("  {p}Wiped:{z}   {g}{w}{z}".format(
-        p=fmt.C.PURPLE, z=fmt.C.RESET, g=fmt.C.GREEN, w=d.get("wiped", 0)))
-    fmt.line("  {p}Failed:{z}  {r}{f}{z}".format(
-        p=fmt.C.PURPLE, z=fmt.C.RESET, r=fmt.C.RED, f=d.get("failed", 0)))
-    fmt.line("  {p}Session:{z} {s}  |  Lifetime: {l}".format(
-        p=fmt.C.PURPLE, z=fmt.C.RESET,
-        s=d.get("session_counter", 0), l=d.get("lifetime_counter", 0)))
+    fmt.line(
+        "  {p}Station:{z} {h}:7980  {g}v{v}{z}".format(
+            p=fmt.C.PURPLE, z=fmt.C.RESET, h=host, g=fmt.C.GREEN, v=d.get("version", "?")
+        )
+    )
+    fmt.line(
+        "  {p}Bays:{z}    {t} total, {o} occupied".format(
+            p=fmt.C.PURPLE, z=fmt.C.RESET, t=d.get("bays_total", 0), o=d.get("bays_occupied", 0)
+        )
+    )
+    fmt.line("  {p}Wiping:{z}  {y}{w}{z}".format(p=fmt.C.PURPLE, z=fmt.C.RESET, y=fmt.C.YELLOW, w=d.get("wiping", 0)))
+    fmt.line("  {p}Wiped:{z}   {g}{w}{z}".format(p=fmt.C.PURPLE, z=fmt.C.RESET, g=fmt.C.GREEN, w=d.get("wiped", 0)))
+    fmt.line("  {p}Failed:{z}  {r}{f}{z}".format(p=fmt.C.PURPLE, z=fmt.C.RESET, r=fmt.C.RED, f=d.get("failed", 0)))
+    fmt.line(
+        "  {p}Session:{z} {s}  |  Lifetime: {l}".format(
+            p=fmt.C.PURPLE, z=fmt.C.RESET, s=d.get("session_counter", 0), l=d.get("lifetime_counter", 0)
+        )
+    )
     fmt.blank()
     return 0
 
@@ -96,8 +101,12 @@ def _show_bays(host, key):
         return 1
     bays = d.get("bays", {})
     state_colors = {
-        "WIPING": fmt.C.YELLOW, "WIPED": fmt.C.GREEN, "TESTED": fmt.C.GREEN,
-        "SMART_FAILED": fmt.C.RED, "TESTING": fmt.C.CYAN, "DETECTED": fmt.C.BLUE,
+        "WIPING": fmt.C.YELLOW,
+        "WIPED": fmt.C.GREEN,
+        "TESTED": fmt.C.GREEN,
+        "SMART_FAILED": fmt.C.RED,
+        "TESTING": fmt.C.CYAN,
+        "DETECTED": fmt.C.BLUE,
     }
     for dev in sorted(bays.keys()):
         b = bays[dev]
@@ -106,8 +115,11 @@ def _show_bays(host, key):
         size = b.get("size", "") or "-"
         serial = b.get("serial", "") or "-"
         sc = state_colors.get(state, fmt.C.DIM)
-        fmt.line("  /dev/{d}  {sc}{s:15}{z}  {m:30}  {sz:10}  {sr}".format(
-            d=dev, sc=sc, s=state, z=fmt.C.RESET, m=model, sz=size, sr=serial))
+        fmt.line(
+            "  /dev/{d}  {sc}{s:15}{z}  {m:30}  {sz:10}  {sr}".format(
+                d=dev, sc=sc, s=state, z=fmt.C.RESET, m=model, sz=size, sr=serial
+            )
+        )
         if state == "WIPING":
             pct = b.get("wipe", {}).get("percent", 0)
             speed = b.get("wipe", {}).get("speed", "")
@@ -115,8 +127,7 @@ def _show_bays(host, key):
             bar_len = 30
             filled = int(pct / 100 * bar_len)
             bar = "{f}{e}".format(f="#" * filled, e="-" * (bar_len - filled))
-            fmt.line("           [{b}] {p:.1f}%  {sp}  ETA: {et}".format(
-                b=bar, p=pct, sp=speed, et=eta))
+            fmt.line("           [{b}] {p:.1f}%  {sp}  ETA: {et}".format(b=bar, p=pct, sp=speed, et=eta))
     fmt.blank()
     return 0
 
@@ -128,11 +139,18 @@ def _show_history(host, key):
         return 1
     for entry in d.get("history", []):
         rc = fmt.C.GREEN if entry.get("result") == "WIPED" else fmt.C.RED
-        fmt.line("  {ts:20}  {bay:5}  {model:25}  {sz:10}  {rc}{res:8}{z}  {dur}".format(
-            ts=entry.get("timestamp", "?"), bay=entry.get("bay", "?"),
-            model=entry.get("model", "?")[:25], sz=entry.get("size", "?"),
-            rc=rc, res=entry.get("result", "?"), z=fmt.C.RESET,
-            dur=entry.get("duration", "?")))
+        fmt.line(
+            "  {ts:20}  {bay:5}  {model:25}  {sz:10}  {rc}{res:8}{z}  {dur}".format(
+                ts=entry.get("timestamp", "?"),
+                bay=entry.get("bay", "?"),
+                model=entry.get("model", "?")[:25],
+                sz=entry.get("size", "?"),
+                rc=rc,
+                res=entry.get("result", "?"),
+                z=fmt.C.RESET,
+                dur=entry.get("duration", "?"),
+            )
+        )
     if not d.get("history"):
         fmt.line("  {d}No wipe history{z}".format(d=fmt.C.DIM, z=fmt.C.RESET))
     fmt.blank()
@@ -164,36 +182,30 @@ def cmd_gwipe(cfg, pack, args):
     # Connect: save credentials to vault
     if action == "connect":
         if not host or not key:
-            fmt.line("  {r}Usage: freq gwipe connect --host <ip> --key <apikey>{z}".format(
-                r=fmt.C.RED, z=fmt.C.RESET))
+            fmt.line("  {r}Usage: freq gwipe connect --host <ip> --key <apikey>{z}".format(r=fmt.C.RED, z=fmt.C.RESET))
             return 1
         try:
             import os
             from freq.modules.vault import vault_set, vault_init
+
             if not os.path.exists(cfg.vault_file):
                 vault_init(cfg)
             vault_set(cfg, "gwipe", "gwipe_host", host)
             vault_set(cfg, "gwipe", "gwipe_api_key", key)
-            fmt.line("  {g}GWIPE station saved: {h}{z}".format(
-                g=fmt.C.GREEN, h=host, z=fmt.C.RESET))
+            fmt.line("  {g}GWIPE station saved: {h}{z}".format(g=fmt.C.GREEN, h=host, z=fmt.C.RESET))
         except Exception as e:
-            fmt.line("  {r}Failed to save: {e}{z}".format(
-                r=fmt.C.RED, e=e, z=fmt.C.RESET))
+            fmt.line("  {r}Failed to save: {e}{z}".format(r=fmt.C.RED, e=e, z=fmt.C.RESET))
         return 0
 
     # No station configured
     if not host or not key:
         fmt.header("FREQ WIPE")
         fmt.blank()
-        fmt.line("  {r}No wipe station configured.{z}".format(
-            r=fmt.C.RED, z=fmt.C.RESET))
-        fmt.line("  {d}Connect: freq gwipe connect --host <ip> --key <apikey>{z}".format(
-            d=fmt.C.DIM, z=fmt.C.RESET))
+        fmt.line("  {r}No wipe station configured.{z}".format(r=fmt.C.RED, z=fmt.C.RESET))
+        fmt.line("  {d}Connect: freq gwipe connect --host <ip> --key <apikey>{z}".format(d=fmt.C.DIM, z=fmt.C.RESET))
         fmt.line("  {d}Or set via vault:{z}".format(d=fmt.C.DIM, z=fmt.C.RESET))
-        fmt.line("  {d}  freq vault set gwipe gwipe_host <ip>{z}".format(
-            d=fmt.C.DIM, z=fmt.C.RESET))
-        fmt.line("  {d}  freq vault set gwipe gwipe_api_key <key>{z}".format(
-            d=fmt.C.DIM, z=fmt.C.RESET))
+        fmt.line("  {d}  freq vault set gwipe gwipe_host <ip>{z}".format(d=fmt.C.DIM, z=fmt.C.RESET))
+        fmt.line("  {d}  freq vault set gwipe gwipe_api_key <key>{z}".format(d=fmt.C.DIM, z=fmt.C.RESET))
         fmt.blank()
         return 1
 
@@ -215,11 +227,11 @@ def cmd_gwipe(cfg, pack, args):
 
     if action == "wipe":
         if not target:
-            fmt.line("  {r}Usage: freq gwipe wipe <bay>  (e.g. freq gwipe wipe sdb){z}".format(
-                r=fmt.C.RED, z=fmt.C.RESET))
+            fmt.line(
+                "  {r}Usage: freq gwipe wipe <bay>  (e.g. freq gwipe wipe sdb){z}".format(r=fmt.C.RED, z=fmt.C.RESET)
+            )
             return 1
-        d, err = _gwipe_api(host, key, "POST", "bays/{}/wipe".format(target),
-                            body={"confirm": "YES"}, timeout=30)
+        d, err = _gwipe_api(host, key, "POST", "bays/{}/wipe".format(target), body={"confirm": "YES"}, timeout=30)
         if err:
             fmt.line("  {r}Error: {e}{z}".format(r=fmt.C.RED, e=err, z=fmt.C.RESET))
             return 1
@@ -239,8 +251,9 @@ def cmd_gwipe(cfg, pack, args):
         return _post_action(host, key, endpoint, fmt.C.GREEN)
 
     # Unknown action — show help
-    fmt.line("  {d}Actions: status | bays | history | test [bay] | wipe <bay> | "
-             "full-send | pause [bay] | resume [bay] | connect{z}".format(
-                 d=fmt.C.DIM, z=fmt.C.RESET))
+    fmt.line(
+        "  {d}Actions: status | bays | history | test [bay] | wipe <bay> | "
+        "full-send | pause [bay] | resume [bay] | connect{z}".format(d=fmt.C.DIM, z=fmt.C.RESET)
+    )
     fmt.blank()
     return 0

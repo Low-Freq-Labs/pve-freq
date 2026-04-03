@@ -59,6 +59,7 @@ def build_routes() -> dict:
     for module_path in _domains:
         try:
             import importlib
+
             mod = importlib.import_module(module_path)
             if hasattr(mod, "register"):
                 mod.register(routes)

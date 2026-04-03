@@ -17,6 +17,7 @@ Metrics collected:
   - Docker: container count (if available)
   - Optional: fan speeds (lm-sensors), SMART (smartmontools)
 """
+
 import json
 import os
 import socket
@@ -95,20 +96,23 @@ def collect_disk():
     """Disk usage and I/O stats."""
     mounts = []
     try:
-        r = subprocess.run(["df", "-h", "--output=source,size,used,avail,pcent,target"],
-                           capture_output=True, text=True, timeout=5)
+        r = subprocess.run(
+            ["df", "-h", "--output=source,size,used,avail,pcent,target"], capture_output=True, text=True, timeout=5
+        )
         if r.returncode == 0:
             for line in r.stdout.strip().split("\n")[1:]:
                 parts = line.split()
                 if len(parts) >= 6 and parts[0].startswith("/"):
-                    mounts.append({
-                        "device": parts[0],
-                        "size": parts[1],
-                        "used": parts[2],
-                        "avail": parts[3],
-                        "usage_pct": parts[4],
-                        "mount": parts[5],
-                    })
+                    mounts.append(
+                        {
+                            "device": parts[0],
+                            "size": parts[1],
+                            "used": parts[2],
+                            "avail": parts[3],
+                            "usage_pct": parts[4],
+                            "mount": parts[5],
+                        }
+                    )
     except (OSError, subprocess.TimeoutExpired):
         pass
 
@@ -170,11 +174,13 @@ def collect_temps():
                             temp_mc = int(f.read().strip())
                         with open(type_file) as f:
                             sensor_type = f.read().strip()
-                        temps.append({
-                            "zone": zone,
-                            "type": sensor_type,
-                            "temp_c": round(temp_mc / 1000, 1),
-                        })
+                        temps.append(
+                            {
+                                "zone": zone,
+                                "type": sensor_type,
+                                "temp_c": round(temp_mc / 1000, 1),
+                            }
+                        )
                     except (OSError, ValueError):
                         pass
     except (OSError, ValueError):
@@ -191,11 +197,13 @@ def collect_temps():
                         if isinstance(val, dict):
                             for metric, reading in val.items():
                                 if "input" in metric and isinstance(reading, (int, float)):
-                                    temps.append({
-                                        "zone": chip,
-                                        "type": key,
-                                        "temp_c": round(reading, 1),
-                                    })
+                                    temps.append(
+                                        {
+                                            "zone": chip,
+                                            "type": key,
+                                            "temp_c": round(reading, 1),
+                                        }
+                                    )
     except (FileNotFoundError, json.JSONDecodeError, subprocess.TimeoutExpired):
         pass
 

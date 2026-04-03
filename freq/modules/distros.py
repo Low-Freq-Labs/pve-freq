@@ -17,6 +17,7 @@ Design decisions:
     - Images are config, not code. Adding a new distro means one TOML entry,
       not a code change. Keeps the image catalog user-extensible.
 """
+
 from freq.core import fmt
 from freq.core.config import FreqConfig
 

@@ -18,6 +18,7 @@ Design decisions:
     - One SSH call per host, not five. All health metrics gathered in a
       single command to minimize latency on large fleets.
 """
+
 import time
 
 from freq.core import fmt
@@ -49,7 +50,7 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
     # Gather health metrics from all hosts
     # Single compound command to minimize SSH round trips
     command = (
-        "echo \"$("
+        'echo "$('
         "nproc"
         ")|$("
         "cat /proc/loadavg | awk '{print $1}'"
@@ -63,7 +64,7 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
         "systemctl is-active sshd 2>/dev/null || echo '?'"
         ")|$("
         "docker ps -q 2>/dev/null | wc -l || echo '0'"
-        ")\""
+        ')"'
     )
 
     fmt.line(f"{fmt.C.BOLD}Scanning {len(hosts)} hosts...{fmt.C.RESET}")

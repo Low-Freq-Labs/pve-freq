@@ -18,6 +18,7 @@ Design decisions:
     - File-based, not a service. On-call schedule is a config file you
       version control. No SaaS dependency for knowing who is on call.
 """
+
 import json
 import os
 import time
@@ -81,6 +82,7 @@ def _get_current_oncall(schedule: dict) -> str:
 
     try:
         import datetime
+
         start = datetime.datetime.fromisoformat(start_date)
         now = datetime.datetime.now()
         delta = (now - start).days
@@ -142,7 +144,9 @@ def _cmd_whoami(cfg: FreqConfig, args) -> int:
     if not current:
         fmt.line(f"  {fmt.C.YELLOW}No on-call schedule configured.{fmt.C.RESET}")
         fmt.blank()
-        fmt.line(f"  {fmt.C.DIM}Set up: freq oncall schedule --users 'alice,bob,charlie' --rotation weekly{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.DIM}Set up: freq oncall schedule --users 'alice,bob,charlie' --rotation weekly{fmt.C.RESET}"
+        )
     else:
         fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}{current}{fmt.C.RESET} is on call")
         fmt.blank()
@@ -186,7 +190,7 @@ def _cmd_schedule(cfg: FreqConfig, args) -> int:
             current = _get_current_oncall(schedule)
             for i, user in enumerate(users):
                 marker = f" {fmt.C.GREEN}← ON CALL{fmt.C.RESET}" if user == current else ""
-                fmt.line(f"  {i+1}. {fmt.C.BOLD}{user}{fmt.C.RESET}{marker}")
+                fmt.line(f"  {i + 1}. {fmt.C.BOLD}{user}{fmt.C.RESET}{marker}")
             fmt.blank()
             fmt.line(f"  Rotation: {schedule.get('rotation', 'weekly')}")
             fmt.line(f"  Escalation: {schedule.get('escalation_mins', 15)} minutes")
@@ -199,6 +203,7 @@ def _cmd_schedule(cfg: FreqConfig, args) -> int:
     rotation = getattr(args, "rotation", None) or schedule.get("rotation", "weekly")
 
     import datetime
+
     schedule["users"] = users
     schedule["rotation"] = rotation
     schedule["start_date"] = datetime.datetime.now().isoformat()
@@ -255,12 +260,15 @@ def _cmd_alert(cfg: FreqConfig, args) -> int:
     # Try to notify
     try:
         from freq.jarvis.notify import notify, configured_providers
+
         providers = configured_providers(cfg)
         if providers:
-            notify(cfg,
-                   message=f"[{inc_id}] {severity.upper()}: {message}" + (f" (host: {host})" if host else ""),
-                   title=f"FREQ Incident: {inc_id}",
-                   severity=severity)
+            notify(
+                cfg,
+                message=f"[{inc_id}] {severity.upper()}: {message}" + (f" (host: {host})" if host else ""),
+                title=f"FREQ Incident: {inc_id}",
+                severity=severity,
+            )
             fmt.step_ok(f"Notified via {', '.join(providers)}")
     except ImportError:
         pass
@@ -317,10 +325,12 @@ def _cmd_escalate(cfg: FreqConfig, args) -> int:
     else:
         next_user = users[0] if users else "nobody"
 
-    inc["notes"].append({
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "text": f"Escalated from {current} to {next_user}",
-    })
+    inc["notes"].append(
+        {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "text": f"Escalated from {current} to {next_user}",
+        }
+    )
     _save_incidents(cfg, incidents)
 
     fmt.step_ok(f"{inc_id} escalated to {next_user}")

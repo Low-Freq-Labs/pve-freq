@@ -18,6 +18,7 @@ Design decisions:
     - Ping first, SSH second. No point SSH-probing 254 hosts when only 30
       are alive. Two-phase scan keeps discovery fast on large subnets.
 """
+
 import asyncio
 import time
 
@@ -37,7 +38,12 @@ IDENTIFY_CMD_TIMEOUT = 5
 async def _ping_host(ip: str, timeout: float = PING_TIMEOUT) -> bool:
     """Check if a host responds to ping."""
     proc = await asyncio.create_subprocess_exec(
-        "ping", "-c", "1", "-W", str(int(timeout)), ip,
+        "ping",
+        "-c",
+        "1",
+        "-W",
+        str(int(timeout)),
+        ip,
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.DEVNULL,
     )
@@ -45,7 +51,9 @@ async def _ping_host(ip: str, timeout: float = PING_TIMEOUT) -> bool:
     return proc.returncode == 0
 
 
-async def _scan_subnet(prefix: str, start: int = SCAN_HOST_START, end: int = SCAN_HOST_END, max_parallel: int = SCAN_MAX_PARALLEL) -> list:
+async def _scan_subnet(
+    prefix: str, start: int = SCAN_HOST_START, end: int = SCAN_HOST_END, max_parallel: int = SCAN_MAX_PARALLEL
+) -> list:
     """Ping sweep a subnet, return list of responding IPs."""
     semaphore = asyncio.Semaphore(max_parallel)
     alive = []
@@ -94,18 +102,28 @@ async def _identify_host(ip: str, key_path: str, cfg=None) -> dict:
     if os_id in ("debian", "ubuntu"):
         # Check if it's a PVE node
         r2 = await async_run(
-            host=ip, command="which pvesh 2>/dev/null",
-            key_path=key_path, connect_timeout=IDENTIFY_CONNECT_TIMEOUT, command_timeout=IDENTIFY_CMD_TIMEOUT,
-            htype="linux", use_sudo=False, cfg=cfg,
+            host=ip,
+            command="which pvesh 2>/dev/null",
+            key_path=key_path,
+            connect_timeout=IDENTIFY_CONNECT_TIMEOUT,
+            command_timeout=IDENTIFY_CMD_TIMEOUT,
+            htype="linux",
+            use_sudo=False,
+            cfg=cfg,
         )
         if r2.returncode == 0 and r2.stdout.strip():
             info["type"] = "pve"
         else:
             # Check if Docker is running
             r3 = await async_run(
-                host=ip, command="docker --version 2>/dev/null",
-                key_path=key_path, connect_timeout=IDENTIFY_CONNECT_TIMEOUT, command_timeout=IDENTIFY_CMD_TIMEOUT,
-                htype="linux", use_sudo=False, cfg=cfg,
+                host=ip,
+                command="docker --version 2>/dev/null",
+                key_path=key_path,
+                connect_timeout=IDENTIFY_CONNECT_TIMEOUT,
+                command_timeout=IDENTIFY_CMD_TIMEOUT,
+                htype="linux",
+                use_sudo=False,
+                cfg=cfg,
             )
             if r3.returncode == 0 and "Docker" in r3.stdout:
                 info["type"] = "docker"

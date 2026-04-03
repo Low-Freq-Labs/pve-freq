@@ -20,6 +20,7 @@ Design decisions:
     - Fleet SSH is tested in parallel (ThreadPoolExecutor) — 14 hosts in <3s.
     - Non-fatal warnings (missing personality pack) don't return exit code 1.
 """
+
 import os
 import shutil
 import subprocess
@@ -45,31 +46,46 @@ def run(cfg: FreqConfig) -> int:
     warnings = 0
 
     sections = [
-        ("System", [
-            _check_python,
-            _check_platform,
-            _check_prerequisites,
-        ]),
-        ("Installation", [
-            _check_install_dir,
-            _check_config,
-            _check_data_dirs,
-            _check_personality,
-        ]),
-        ("SSH & Connectivity", [
-            _check_ssh_binary,
-            _check_ssh_key,
-            _check_fleet_connectivity,
-        ]),
-        ("Fleet Data", [
-            _check_hosts,
-            _check_hosts_validity,
-            _check_vlans,
-            _check_distros,
-        ]),
-        ("PVE Cluster", [
-            _check_pve_nodes,
-        ]),
+        (
+            "System",
+            [
+                _check_python,
+                _check_platform,
+                _check_prerequisites,
+            ],
+        ),
+        (
+            "Installation",
+            [
+                _check_install_dir,
+                _check_config,
+                _check_data_dirs,
+                _check_personality,
+            ],
+        ),
+        (
+            "SSH & Connectivity",
+            [
+                _check_ssh_binary,
+                _check_ssh_key,
+                _check_fleet_connectivity,
+            ],
+        ),
+        (
+            "Fleet Data",
+            [
+                _check_hosts,
+                _check_hosts_validity,
+                _check_vlans,
+                _check_distros,
+            ],
+        ),
+        (
+            "PVE Cluster",
+            [
+                _check_pve_nodes,
+            ],
+        ),
     ]
 
     for section_name, checks in sections:
@@ -88,10 +104,12 @@ def run(cfg: FreqConfig) -> int:
     fmt.blank()
 
     total = passed + failed + warnings
-    fmt.line(f"  {fmt.C.GREEN}{passed}{fmt.C.RESET} passed  "
-             f"{fmt.C.YELLOW}{warnings}{fmt.C.RESET} warnings  "
-             f"{fmt.C.RED}{failed}{fmt.C.RESET} failed  "
-             f"({total} total)")
+    fmt.line(
+        f"  {fmt.C.GREEN}{passed}{fmt.C.RESET} passed  "
+        f"{fmt.C.YELLOW}{warnings}{fmt.C.RESET} warnings  "
+        f"{fmt.C.RED}{failed}{fmt.C.RESET} failed  "
+        f"({total} total)"
+    )
     fmt.blank()
 
     if failed == 0 and warnings == 0:
@@ -109,8 +127,10 @@ def run(cfg: FreqConfig) -> int:
 
 # --- System ---
 
+
 def _check_python(cfg: FreqConfig) -> int:
     from freq.core.preflight import check_python_version
+
     ok, msg = check_python_version()
     if ok:
         fmt.step_ok(msg)
@@ -122,6 +142,7 @@ def _check_python(cfg: FreqConfig) -> int:
 
 def _check_platform(cfg: FreqConfig) -> int:
     from freq.core.preflight import check_platform
+
     ok, msg, _info = check_platform()
     if ok:
         fmt.step_ok(msg)
@@ -134,6 +155,7 @@ def _check_platform(cfg: FreqConfig) -> int:
 def _check_prerequisites(cfg: FreqConfig) -> int:
     """Check required and optional system tools."""
     from freq.core.preflight import check_required_binaries, check_optional_binaries
+
     ok_req, msg_req, _ = check_required_binaries()
     if not ok_req:
         fmt.step_fail(msg_req)
@@ -149,6 +171,7 @@ def _check_prerequisites(cfg: FreqConfig) -> int:
 
 
 # --- Installation ---
+
 
 def _check_install_dir(cfg: FreqConfig) -> int:
     if os.path.isdir(cfg.install_dir):
@@ -206,12 +229,11 @@ def _check_personality(cfg: FreqConfig) -> int:
 
 # --- SSH & Connectivity ---
 
+
 def _check_ssh_binary(cfg: FreqConfig) -> int:
     if shutil.which("ssh"):
         try:
-            result = subprocess.run(
-                ["ssh", "-V"], capture_output=True, text=True, timeout=DOCTOR_CMD_TIMEOUT
-            )
+            result = subprocess.run(["ssh", "-V"], capture_output=True, text=True, timeout=DOCTOR_CMD_TIMEOUT)
             ver = (result.stderr or result.stdout).strip()
             fmt.step_ok(f"SSH: {ver.split(',')[0] if ver else 'available'}")
             return 0
@@ -249,10 +271,13 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     reachable = 0
     for h in sample:
         r = ssh_run(
-            host=h.ip, command="echo ok",
+            host=h.ip,
+            command="echo ok",
             key_path=cfg.ssh_key_path,
-            connect_timeout=3, command_timeout=DOCTOR_CMD_TIMEOUT,
-            htype=h.htype, use_sudo=False,
+            connect_timeout=3,
+            command_timeout=DOCTOR_CMD_TIMEOUT,
+            htype=h.htype,
+            use_sudo=False,
         )
         if r.returncode == 0:
             reachable += 1
@@ -270,9 +295,11 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
 
 # --- Fleet Data ---
 
+
 def _check_hosts(cfg: FreqConfig) -> int:
     if cfg.hosts:
         from freq.core.resolve import all_types
+
         types = all_types(cfg.hosts)
         type_str = ", ".join(f"{c} {t}" for t, c in sorted(types.items()))
         fmt.step_ok(f"Fleet: {len(cfg.hosts)} hosts ({type_str})")
@@ -291,6 +318,7 @@ def _check_hosts_validity(cfg: FreqConfig) -> int:
         return 0  # Nothing to validate
 
     from freq.core import validate
+
     ips = set()
     labels = set()
     issues = []
@@ -342,6 +370,7 @@ def _check_distros(cfg: FreqConfig) -> int:
 
 # --- PVE Cluster ---
 
+
 def _check_pve_nodes(cfg: FreqConfig) -> int:
     if not cfg.pve_nodes:
         fmt.step_info("PVE: no nodes configured")
@@ -351,15 +380,19 @@ def _check_pve_nodes(cfg: FreqConfig) -> int:
     pve_version = ""
     for ip in cfg.pve_nodes:
         r = ssh_run(
-            host=ip, command="sudo pvesh get /version --output-format json 2>/dev/null || echo '{}'",
+            host=ip,
+            command="sudo pvesh get /version --output-format json 2>/dev/null || echo '{}'",
             key_path=cfg.ssh_key_path,
-            connect_timeout=3, command_timeout=DOCTOR_PVE_TIMEOUT,
-            htype="pve", use_sudo=False,
+            connect_timeout=3,
+            command_timeout=DOCTOR_PVE_TIMEOUT,
+            htype="pve",
+            use_sudo=False,
         )
         if r.returncode == 0 and "version" in r.stdout:
             reachable += 1
             if not pve_version:
                 import json
+
                 try:
                     data = json.loads(r.stdout)
                     pve_version = data.get("version", "")

@@ -19,6 +19,7 @@ Design decisions:
     - Status checks use a non-privileged command (uptime) so it works even
       if sudo is broken on a host. Diagnose uses sudo for deeper checks.
 """
+
 import socket
 import subprocess
 import time
@@ -139,8 +140,16 @@ def cmd_exec(cfg: FreqConfig, pack, args) -> int:
 
     # Safety gate: dangerous commands on "all" require YES confirmation
     DANGEROUS_PATTERNS = [
-        "rm ", "dd ", "mkfs", "reboot", "shutdown", "halt",
-        "systemctl stop", "wipefs", "fdisk", "parted",
+        "rm ",
+        "dd ",
+        "mkfs",
+        "reboot",
+        "shutdown",
+        "halt",
+        "systemctl stop",
+        "wipefs",
+        "fdisk",
+        "parted",
     ]
     if target and target.lower() == "all":
         cmd_lower = command.lower()
@@ -149,9 +158,7 @@ def cmd_exec(cfg: FreqConfig, pack, args) -> int:
                 fmt.warn("Dangerous command detected: {}".format(command[:60]))
                 fmt.line("  Target: ALL hosts")
                 try:
-                    confirm = input(
-                        "  {}Type YES to confirm:{} ".format(fmt.C.RED, fmt.C.RESET)
-                    ).strip()
+                    confirm = input("  {}Type YES to confirm:{} ".format(fmt.C.RED, fmt.C.RESET)).strip()
                 except (EOFError, KeyboardInterrupt):
                     print()
                     return 1
@@ -191,8 +198,15 @@ def cmd_exec(cfg: FreqConfig, pack, args) -> int:
 
     # Color rotation for host prefixes
     host_colors = [
-        fmt.C.CYAN, fmt.C.GREEN, fmt.C.YELLOW, fmt.C.MAGENTA,
-        fmt.C.BLUE, fmt.C.ORANGE, fmt.C.PURPLE, fmt.C.WHITE, fmt.C.RED,
+        fmt.C.CYAN,
+        fmt.C.GREEN,
+        fmt.C.YELLOW,
+        fmt.C.MAGENTA,
+        fmt.C.BLUE,
+        fmt.C.ORANGE,
+        fmt.C.PURPLE,
+        fmt.C.WHITE,
+        fmt.C.RED,
     ]
 
     # Display results with colored host prefixes
@@ -255,7 +269,7 @@ def cmd_info(cfg: FreqConfig, pack, args) -> int:
         "cpu": "nproc",
         "ram_total": "free -m | awk '/Mem:/ {print $2}'",
         "ram_used": "free -m | awk '/Mem:/ {print $3}'",
-        "disk": "df -h / | awk 'NR==2 {print $3\"/\"$2\" (\"$5\" used)\"}'",
+        "disk": 'df -h / | awk \'NR==2 {print $3"/"$2" ("$5" used)"}\'',
         "ip_addrs": "ip -4 addr show | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $2}' | tr '\\n' ' '",
         "load": "cat /proc/loadavg | awk '{print $1, $2, $3}'",
         "docker": "docker ps --format '{{.Names}}' 2>/dev/null | wc -l",
@@ -264,7 +278,8 @@ def cmd_info(cfg: FreqConfig, pack, args) -> int:
     info = {}
     for key, cmd in commands.items():
         r = ssh_run(
-            host=host.ip, command=cmd,
+            host=host.ip,
+            command=cmd,
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             htype=host.htype,
@@ -322,10 +337,14 @@ def cmd_detail(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     def _cmd(command, timeout=10):
-        r = ssh_run(host=host.ip, command=command,
-                    key_path=cfg.ssh_key_path,
-                    connect_timeout=cfg.ssh_connect_timeout,
-                    htype=host.htype, use_sudo=False)
+        r = ssh_run(
+            host=host.ip,
+            command=command,
+            key_path=cfg.ssh_key_path,
+            connect_timeout=cfg.ssh_connect_timeout,
+            htype=host.htype,
+            use_sudo=False,
+        )
         return r.stdout.strip() if r.returncode == 0 else "—"
 
     # Identity
@@ -347,40 +366,53 @@ def cmd_detail(cfg: FreqConfig, pack, args) -> int:
     _info_field("Cores", _cmd("nproc"))
     _info_field("RAM", _cmd("free -m | awk '/Mem:/ {printf \"%d/%dMB (%d%%)\", $3, $2, $3/$2*100}'"))
     _info_field("Load Avg", _cmd("cat /proc/loadavg | awk '{print $1, $2, $3}'"))
-    _info_field("Disk (/)", _cmd("df -h / | awk 'NR==2 {print $3\"/\"$2\" (\"$5\" used)\"}'"))
+    _info_field("Disk (/)", _cmd('df -h / | awk \'NR==2 {print $3"/"$2" ("$5" used)"}\''))
     fmt.blank()
 
     # Network
     _info_field("IPs", _cmd("ip -4 addr show | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $NF\": \"$2}'"))
     _info_field("Gateway", _cmd("ip route show default 2>/dev/null | awk '{print $3}' | head -1"))
     _info_field("DNS", _cmd("grep nameserver /etc/resolv.conf 2>/dev/null | awk '{print $2}' | tr '\\n' ' '"))
-    _info_field("Listening", _cmd("ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | sed 's/.*://' | sort -un | tr '\\n' ' '"))
+    _info_field(
+        "Listening",
+        _cmd("ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | sed 's/.*://' | sort -un | tr '\\n' ' '"),
+    )
     fmt.blank()
 
     # Security
     _info_field("SSH Root", _cmd("grep -i '^PermitRootLogin' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}'"))
-    _info_field("SSH PwAuth", _cmd("grep -i '^PasswordAuthentication' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}'"))
+    _info_field(
+        "SSH PwAuth", _cmd("grep -i '^PasswordAuthentication' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}'")
+    )
     _info_field("Last Login", _cmd("last -1 --time-format iso 2>/dev/null | head -1"))
     fmt.blank()
 
     # Services
     _info_field("NTP Synced", _cmd("timedatectl show --property=NTPSynchronized --value 2>/dev/null"))
     _info_field("NTP Service", _cmd("systemctl is-active systemd-timesyncd 2>/dev/null"))
-    _info_field("Running Svcs", _cmd("systemctl list-units --type=service --state=running --no-legend 2>/dev/null | wc -l"))
+    _info_field(
+        "Running Svcs", _cmd("systemctl list-units --type=service --state=running --no-legend 2>/dev/null | wc -l")
+    )
     _info_field("Failed Svcs", _cmd("systemctl --failed --no-legend 2>/dev/null | head -5 || echo none"))
-    _info_field("Pkg Manager", _cmd(
-        "if command -v apt >/dev/null 2>&1; then echo APT; "
-        "elif command -v dnf >/dev/null 2>&1; then echo DNF; "
-        "elif command -v zypper >/dev/null 2>&1; then echo ZYPPER; "
-        "else echo UNKNOWN; fi"
-    ))
-    _info_field("Updates", _cmd(
-        "if command -v apt >/dev/null 2>&1; then "
-        "  apt list --upgradable 2>/dev/null | grep -c upgradable; "
-        "elif command -v dnf >/dev/null 2>&1; then "
-        "  dnf check-update 2>/dev/null | grep -c '^[a-zA-Z]'; "
-        "else echo 0; fi"
-    ))
+    _info_field(
+        "Pkg Manager",
+        _cmd(
+            "if command -v apt >/dev/null 2>&1; then echo APT; "
+            "elif command -v dnf >/dev/null 2>&1; then echo DNF; "
+            "elif command -v zypper >/dev/null 2>&1; then echo ZYPPER; "
+            "else echo UNKNOWN; fi"
+        ),
+    )
+    _info_field(
+        "Updates",
+        _cmd(
+            "if command -v apt >/dev/null 2>&1; then "
+            "  apt list --upgradable 2>/dev/null | grep -c upgradable; "
+            "elif command -v dnf >/dev/null 2>&1; then "
+            "  dnf check-update 2>/dev/null | grep -c '^[a-zA-Z]'; "
+            "else echo 0; fi"
+        ),
+    )
     fmt.blank()
 
     # Docker
@@ -423,7 +455,7 @@ def cmd_boundaries(cfg: FreqConfig, pack, args) -> int:
             vmids = cat.get("vmids", [])
             vmid_str = ", ".join(str(v) for v in vmids[:5])
             if len(vmids) > 5:
-                vmid_str += f" (+{len(vmids)-5})"
+                vmid_str += f" (+{len(vmids) - 5})"
             rs = cat.get("range_start")
             re = cat.get("range_end")
             range_str = f"{rs}-{re}" if rs is not None and re is not None else "—"
@@ -440,7 +472,9 @@ def cmd_boundaries(cfg: FreqConfig, pack, args) -> int:
             fmt.line(f"{fmt.C.BOLD}Physical Devices{fmt.C.RESET}")
             fmt.blank()
             for key, dev in fb.physical.items():
-                fmt.line(f"  {fmt.C.CYAN}{dev.label:<16}{fmt.C.RESET} {dev.ip:<16} {dev.device_type:<10} tier={dev.tier}")
+                fmt.line(
+                    f"  {fmt.C.CYAN}{dev.label:<16}{fmt.C.RESET} {dev.ip:<16} {dev.device_type:<10} tier={dev.tier}"
+                )
             fmt.blank()
 
         # PVE nodes
@@ -503,13 +537,13 @@ def cmd_dashboard(cfg: FreqConfig, pack, args) -> int:
 
     # Gather key metrics from all hosts in parallel
     command = (
-        "echo \"$(hostname)|"
+        'echo "$(hostname)|'
         "$(cat /etc/os-release 2>/dev/null | grep -oP '(?<=PRETTY_NAME=\\\").*(?=\\\")' || echo unknown)|"
         "$(nproc)|"
         "$(free -m | awk '/Mem:/ {printf \\\"%d/%dMB\\\", $3, $2}')|"
         "$(df -h / | awk 'NR==2 {print $5}')|"
         "$(uptime -p 2>/dev/null | sed 's/up //' || echo unknown)|"
-        "$(docker ps -q 2>/dev/null | wc -l)\""
+        '$(docker ps -q 2>/dev/null | wc -l)"'
     )
 
     start = time.monotonic()
@@ -742,7 +776,9 @@ def cmd_docker_fleet(cfg: FreqConfig, pack, args) -> int:
                 status = parts[2] if len(parts) > 2 else ""
                 if len(image) > 25:
                     image = "..." + image[-22:]
-                status_c = f"{fmt.C.GREEN}{status}{fmt.C.RESET}" if "Up" in status else f"{fmt.C.RED}{status}{fmt.C.RESET}"
+                status_c = (
+                    f"{fmt.C.GREEN}{status}{fmt.C.RESET}" if "Up" in status else f"{fmt.C.RED}{status}{fmt.C.RESET}"
+                )
                 fmt.line(f"    {name:<20} {image:<25} {status_c}")
             total_containers += len(lines_out)
 
@@ -764,7 +800,9 @@ def cmd_docker_fleet(cfg: FreqConfig, pack, args) -> int:
         fmt.blank()
 
     if action in ("ps", "stats"):
-        fmt.line(f"  {fmt.C.BOLD}Total:{fmt.C.RESET} {total_containers} container(s) across {len(docker_hosts)} host(s)")
+        fmt.line(
+            f"  {fmt.C.BOLD}Total:{fmt.C.RESET} {total_containers} container(s) across {len(docker_hosts)} host(s)"
+        )
 
     fmt.blank()
     fmt.footer()
@@ -865,7 +903,8 @@ def cmd_diagnose(cfg: FreqConfig, pack, args) -> int:
 
         for check_name, cmd in checks.items():
             r = ssh_run(
-                host=host.ip, command=cmd,
+                host=host.ip,
+                command=cmd,
                 key_path=cfg.ssh_key_path,
                 connect_timeout=cfg.ssh_connect_timeout,
                 command_timeout=FLEET_QUICK_TIMEOUT,
@@ -913,7 +952,8 @@ def cmd_log(cfg: FreqConfig, pack, args) -> int:
 
     # Try without sudo first (works on most hosts), fall back to sudo
     r = ssh_run(
-        host=host.ip, command=cmd,
+        host=host.ip,
+        command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=FLEET_CMD_TIMEOUT,
@@ -923,7 +963,8 @@ def cmd_log(cfg: FreqConfig, pack, args) -> int:
     if r.returncode != 0 and "password" not in r.stderr:
         # Try with sudo
         r = ssh_run(
-            host=host.ip, command=cmd,
+            host=host.ip,
+            command=cmd,
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=FLEET_CMD_TIMEOUT,
@@ -972,6 +1013,7 @@ def cmd_ssh_host(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     from freq.core.ssh import PLATFORM_SSH
+
     platform = PLATFORM_SSH.get(host.htype, PLATFORM_SSH["linux"])
     user = platform["user"]
 
@@ -1019,7 +1061,8 @@ def _keys_list(cfg: FreqConfig) -> int:
     # Show local key info
     r = subprocess.run(
         ["ssh-keygen", "-l", "-f", cfg.ssh_key_path],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if r.returncode == 0:
         fmt.line(f"{fmt.C.BOLD}Local key:{fmt.C.RESET}  {r.stdout.strip()}")
@@ -1116,12 +1159,15 @@ def _keys_deploy(cfg: FreqConfig, args) -> int:
     fmt.step_start(f"Deploying key to {host.label}")
 
     from freq.core.ssh import PLATFORM_SSH
+
     platform = PLATFORM_SSH.get(host.htype, PLATFORM_SSH["linux"])
     user = platform["user"]
 
     r = subprocess.run(
         ["ssh-copy-id", "-i", pub_key_path, f"{user}@{host.ip}"],
-        capture_output=True, text=True, timeout=FLEET_SLOW_TIMEOUT,
+        capture_output=True,
+        text=True,
+        timeout=FLEET_SLOW_TIMEOUT,
     )
 
     if r.returncode == 0:
@@ -1186,18 +1232,32 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
     fmt.step_start("Generating new ed25519 key")
     hostname = os.uname().nodename
     r = subprocess.run(
-        ["ssh-keygen", "-t", "ed25519", "-C", f"freq-rotated@{hostname}",
-         "-f", old_key, "-N", "", "-q", "-y" if False else ""],
-        capture_output=True, text=True, timeout=30,
+        [
+            "ssh-keygen",
+            "-t",
+            "ed25519",
+            "-C",
+            f"freq-rotated@{hostname}",
+            "-f",
+            old_key,
+            "-N",
+            "",
+            "-q",
+            "-y" if False else "",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     # ssh-keygen won't overwrite — remove old first, then generate
     os.remove(old_key)
     if os.path.isfile(old_pub):
         os.remove(old_pub)
     r = subprocess.run(
-        ["ssh-keygen", "-t", "ed25519", "-C", f"freq-rotated@{hostname}",
-         "-f", old_key, "-N", "", "-q"],
-        capture_output=True, text=True, timeout=30,
+        ["ssh-keygen", "-t", "ed25519", "-C", f"freq-rotated@{hostname}", "-f", old_key, "-N", "", "-q"],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     if r.returncode != 0:
         fmt.step_fail(f"Key generation failed: {r.stderr}")
@@ -1223,17 +1283,22 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
             continue  # Skip non-Linux hosts
         fmt.step_start(f"Deploying to {h.label} ({h.ip})")
         from freq.core.ssh import run as ssh_run
+
         # Use the backup key to add the new key
         escaped = new_pubkey.replace('"', '\\"')
         cmd = (
-            f'mkdir -p ~/.ssh && '
+            f"mkdir -p ~/.ssh && "
             f'grep -qF "{escaped}" ~/.ssh/authorized_keys 2>/dev/null || '
             f'echo "{escaped}" >> ~/.ssh/authorized_keys'
         )
         result = ssh_run(
-            host=h.ip, command=cmd, key_path=backup_path,
+            host=h.ip,
+            command=cmd,
+            key_path=backup_path,
             connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=15, htype=h.htype, use_sudo=False,
+            command_timeout=15,
+            htype=h.htype,
+            use_sudo=False,
         )
         if result.returncode == 0:
             fmt.step_ok(f"Deployed to {h.label}")
@@ -1254,12 +1319,17 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
                 if h.htype in ("switch", "idrac"):
                     continue
                 from freq.core.ssh import run as ssh_run
+
                 old_escaped = old_pubkey.replace("/", "\\/").replace(".", "\\.")
                 rm_cmd = f"sed -i '/{old_escaped}/d' ~/.ssh/authorized_keys 2>/dev/null; echo OK"
                 result = ssh_run(
-                    host=h.ip, command=rm_cmd, key_path=old_key,
+                    host=h.ip,
+                    command=rm_cmd,
+                    key_path=old_key,
                     connect_timeout=cfg.ssh_connect_timeout,
-                    command_timeout=15, htype=h.htype, use_sudo=False,
+                    command_timeout=15,
+                    htype=h.htype,
+                    use_sudo=False,
                 )
                 if result.returncode == 0:
                     fmt.step_ok(f"Old key removed from {h.label}")
@@ -1304,8 +1374,8 @@ def cmd_ntp(cfg: FreqConfig, pack, args) -> int:
     results = ssh_run_many(
         hosts=hosts,
         command="timedatectl show --property=NTPSynchronized --value 2>/dev/null; "
-                "systemctl is-active systemd-timesyncd 2>/dev/null; "
-                "date '+%Y-%m-%d %H:%M:%S %Z'",
+        "systemctl is-active systemd-timesyncd 2>/dev/null; "
+        "date '+%Y-%m-%d %H:%M:%S %Z'",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=FLEET_QUICK_TIMEOUT,
@@ -1361,8 +1431,8 @@ def _ntp_fix(cfg, hosts) -> int:
     results = ssh_run_many(
         hosts=hosts,
         command="sudo systemctl enable --now systemd-timesyncd 2>/dev/null && "
-                "sudo timedatectl set-ntp true 2>/dev/null && "
-                "echo NTP_FIXED",
+        "sudo timedatectl set-ntp true 2>/dev/null && "
+        "echo NTP_FIXED",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=FLEET_CMD_TIMEOUT,
@@ -1407,12 +1477,12 @@ def cmd_fleet_update(cfg: FreqConfig, pack, args) -> int:
     results = ssh_run_many(
         hosts=hosts,
         command="if command -v apt >/dev/null 2>&1; then "
-                "  apt list --upgradable 2>/dev/null | grep -c upgradable; echo apt; "
-                "elif command -v dnf >/dev/null 2>&1; then "
-                "  dnf check-update 2>/dev/null | grep -c '^[a-zA-Z]'; echo dnf; "
-                "elif command -v zypper >/dev/null 2>&1; then "
-                "  zypper list-updates 2>/dev/null | grep -c '|'; echo zypper; "
-                "else echo 0; echo unknown; fi",
+        "  apt list --upgradable 2>/dev/null | grep -c upgradable; echo apt; "
+        "elif command -v dnf >/dev/null 2>&1; then "
+        "  dnf check-update 2>/dev/null | grep -c '^[a-zA-Z]'; echo dnf; "
+        "elif command -v zypper >/dev/null 2>&1; then "
+        "  zypper list-updates 2>/dev/null | grep -c '|'; echo zypper; "
+        "else echo 0; echo unknown; fi",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=FLEET_SLOW_TIMEOUT,
@@ -1464,13 +1534,13 @@ def _fleet_update_apply(cfg, hosts) -> int:
     results = ssh_run_many(
         hosts=hosts,
         command="if command -v apt >/dev/null 2>&1; then "
-                "  sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq && "
-                "  sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq && echo UPDATE_OK; "
-                "elif command -v dnf >/dev/null 2>&1; then "
-                "  sudo dnf upgrade -y --quiet && echo UPDATE_OK; "
-                "elif command -v zypper >/dev/null 2>&1; then "
-                "  sudo zypper update -y --no-confirm && echo UPDATE_OK; "
-                "else echo UPDATE_UNKNOWN; fi",
+        "  sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq && "
+        "  sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq && echo UPDATE_OK; "
+        "elif command -v dnf >/dev/null 2>&1; then "
+        "  sudo dnf upgrade -y --quiet && echo UPDATE_OK; "
+        "elif command -v zypper >/dev/null 2>&1; then "
+        "  sudo zypper update -y --no-confirm && echo UPDATE_OK; "
+        "else echo UPDATE_UNKNOWN; fi",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=FLEET_EXEC_TIMEOUT,
@@ -1536,9 +1606,13 @@ def cmd_test_connection(cfg: FreqConfig, pack, args) -> int:
     # Step 2: SSH auth
     fmt.step_start("SSH authentication")
     r = ssh_run(
-        host=ip, command="echo FREQ_AUTH_OK",
+        host=ip,
+        command="echo FREQ_AUTH_OK",
         key_path=cfg.ssh_key_path,
-        command_timeout=10, htype="linux", use_sudo=False, cfg=cfg,
+        command_timeout=10,
+        htype="linux",
+        use_sudo=False,
+        cfg=cfg,
     )
     if r.returncode == 0 and "FREQ_AUTH_OK" in r.stdout:
         fmt.step_ok("SSH auth succeeded as {}".format(cfg.ssh_service_account))
@@ -1554,9 +1628,13 @@ def cmd_test_connection(cfg: FreqConfig, pack, args) -> int:
     # Step 3: sudo access
     fmt.step_start("Sudo access")
     r = ssh_run(
-        host=ip, command="echo FREQ_SUDO_OK",
+        host=ip,
+        command="echo FREQ_SUDO_OK",
         key_path=cfg.ssh_key_path,
-        command_timeout=10, htype="linux", use_sudo=True, cfg=cfg,
+        command_timeout=10,
+        htype="linux",
+        use_sudo=True,
+        cfg=cfg,
     )
     if r.returncode == 0 and "FREQ_SUDO_OK" in r.stdout:
         fmt.step_ok("Sudo access confirmed (NOPASSWD)")
@@ -1568,8 +1646,7 @@ def cmd_test_connection(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     fmt.blank()
-    fmt.line("  {g}All checks passed — host is FREQ-ready{r}".format(
-        g=fmt.C.GREEN, r=fmt.C.RESET))
+    fmt.line("  {g}All checks passed — host is FREQ-ready{r}".format(g=fmt.C.GREEN, r=fmt.C.RESET))
     fmt.blank()
     fmt.footer()
     return 0

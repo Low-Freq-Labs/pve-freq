@@ -20,6 +20,7 @@ Design decisions:
     - Python 3.11+ required. MIN_PYTHON enforced here and in compat.py.
     - Install hints cover Debian, Ubuntu, RHEL, Rocky, Alma, openSUSE families.
 """
+
 import os
 import platform
 import shutil
@@ -56,8 +57,7 @@ def check_python_version() -> Tuple[bool, str]:
             extra = " (fallback TOML parser)"
         return (True, "Python {}{}".format(ver_str, extra))
     else:
-        return (False, "Python {} — need >= {}.{}".format(
-            ver_str, MIN_PYTHON[0], MIN_PYTHON[1]))
+        return (False, "Python {} — need >= {}.{}".format(ver_str, MIN_PYTHON[0], MIN_PYTHON[1]))
 
 
 def check_platform() -> Tuple[bool, str, Dict[str, str]]:
@@ -81,8 +81,7 @@ def check_platform() -> Tuple[bool, str, Dict[str, str]]:
                 elif line.startswith("ID_LIKE="):
                     info["family"] = line.split("=", 1)[1].strip('"')
     except FileNotFoundError:
-        return (True, "Platform: Linux {} (no /etc/os-release)".format(
-            platform.release()), info)
+        return (True, "Platform: Linux {} (no /etc/os-release)".format(platform.release()), info)
 
     # Normalize family
     distro = info["distro"].lower()
@@ -105,8 +104,7 @@ def check_disk_space(path: str, min_mb: int = 50) -> Tuple[bool, str]:
         if free_mb >= min_mb:
             return (True, "Disk: {}MB free at {}".format(free_mb, path))
         else:
-            return (False, "Disk: only {}MB free at {} (need {}MB)".format(
-                free_mb, path, min_mb))
+            return (False, "Disk: only {}MB free at {} (need {}MB)".format(free_mb, path, min_mb))
     except OSError as e:
         return (False, "Disk: cannot check {} — {}".format(path, e))
 

@@ -19,6 +19,7 @@ Design decisions:
     - Checks are data, not code. Adding a new CIS control means adding a
       dict entry, not writing a new function. Keeps the check library flat.
 """
+
 import json
 import os
 import time
@@ -232,7 +233,8 @@ def _cmd_scan(cfg: FreqConfig, args) -> int:
 
     fmt.step_start(f"Scanning {len(hosts)} hosts against {len(CIS_CHECKS)} checks")
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=COMPLY_CMD_TIMEOUT,
@@ -285,8 +287,10 @@ def _cmd_scan(cfg: FreqConfig, args) -> int:
         score = round(host_pass / max(host_total, 1) * 100, 1)
         color = fmt.C.GREEN if score >= 90 else (fmt.C.YELLOW if score >= 70 else fmt.C.RED)
 
-        fmt.line(f"  {color}{score:5.1f}%{fmt.C.RESET} {fmt.C.BOLD}{h.label}{fmt.C.RESET} "
-                 f"({host_pass}/{host_total} pass, {host_fail} fail)")
+        fmt.line(
+            f"  {color}{score:5.1f}%{fmt.C.RESET} {fmt.C.BOLD}{h.label}{fmt.C.RESET} "
+            f"({host_pass}/{host_total} pass, {host_fail} fail)"
+        )
 
     # Save results
     all_results = _load_results(cfg)

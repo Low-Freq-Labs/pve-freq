@@ -15,6 +15,7 @@ Design decisions:
     - Policies are dicts, not classes — keeps them human-editable TOML
     - Platform-aware overrides via nested dicts in entries
 """
+
 import difflib
 
 from freq.core.types import Finding, Severity
@@ -22,8 +23,8 @@ from freq.core.types import Finding, Severity
 
 def _escape_sed(text):
     """Escape regex metacharacters for safe use in sed patterns."""
-    for ch in r'\.^$*+?{}[]|()':
-        text = text.replace(ch, '\\' + ch)
+    for ch in r"\.^$*+?{}[]|()":
+        text = text.replace(ch, "\\" + ch)
     return text
 
 
@@ -74,13 +75,15 @@ class PolicyExecutor:
             got_str = str(got).strip() if got is not None else ""
 
             if got_str != want_str:
-                findings.append(Finding(
-                    resource_type="config",
-                    key=key,
-                    current=got_str or "(not set)",
-                    desired=want_str,
-                    severity=Severity.WARN,
-                ))
+                findings.append(
+                    Finding(
+                        resource_type="config",
+                        key=key,
+                        current=got_str or "(not set)",
+                        desired=want_str,
+                        severity=Severity.WARN,
+                    )
+                )
         return findings
 
     def diff_text(self, current: dict, desired: dict) -> str:
@@ -89,8 +92,10 @@ class PolicyExecutor:
         desired_lines = [f"{k} = {v}" for k, v in sorted(desired.items())]
 
         diff = difflib.unified_diff(
-            current_lines, desired_lines,
-            fromfile="current", tofile="desired",
+            current_lines,
+            desired_lines,
+            fromfile="current",
+            tofile="desired",
             lineterm="",
         )
         return "\n".join(diff)

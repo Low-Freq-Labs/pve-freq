@@ -13,6 +13,7 @@ Design decisions:
     - Collection is pull-based via SSH — no agents to install.
     - Keep last 1000 snapshots per host (~7 days at 10-min intervals).
 """
+
 import json
 import os
 import time
@@ -79,8 +80,13 @@ def cmd_metrics_collect(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in linux_hosts]
-    results = run_many(hosts=hosts_data, command=cmd, key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=10)
+    results = run_many(
+        hosts=hosts_data,
+        command=cmd,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=10,
+    )
 
     ok_count = 0
     for h in linux_hosts:
@@ -94,7 +100,13 @@ def cmd_metrics_collect(cfg: FreqConfig, pack, args) -> int:
             cpu = parsed.get("cpu", "?")
             mem = parsed.get("memory", "?")
             disk = parsed.get("disk", "?")
-            cpu_color = fmt.C.GREEN if isinstance(cpu, int) and cpu < 60 else fmt.C.YELLOW if isinstance(cpu, int) and cpu < 85 else fmt.C.RED
+            cpu_color = (
+                fmt.C.GREEN
+                if isinstance(cpu, int) and cpu < 60
+                else fmt.C.YELLOW
+                if isinstance(cpu, int) and cpu < 85
+                else fmt.C.RED
+            )
             fmt.step_ok(f"{h.label:<14} CPU:{cpu_color}{cpu}%{fmt.C.RESET}  MEM:{mem}  DISK:{disk}")
             ok_count += 1
         else:
@@ -172,7 +184,13 @@ def cmd_metrics_top(cfg: FreqConfig, pack, args) -> int:
     fmt.line(f"{fmt.C.BOLD}By CPU:{fmt.C.RESET}")
     for h in by_cpu[:5]:
         cpu = h.get("cpu", "?")
-        color = fmt.C.RED if isinstance(cpu, int) and cpu > 80 else fmt.C.YELLOW if isinstance(cpu, int) and cpu > 60 else fmt.C.GREEN
+        color = (
+            fmt.C.RED
+            if isinstance(cpu, int) and cpu > 80
+            else fmt.C.YELLOW
+            if isinstance(cpu, int) and cpu > 60
+            else fmt.C.GREEN
+        )
         fmt.line(f"  {h.get('host', '?'):<14} {color}{cpu}%{fmt.C.RESET}")
 
     fmt.blank()

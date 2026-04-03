@@ -17,6 +17,7 @@ Design decisions:
     - TOML playbooks are git-trackable and human-editable, not stored in a DB
     - Steps run sequentially, not in parallel — incident response needs order
 """
+
 import os
 import time
 from dataclasses import dataclass, field
@@ -27,6 +28,7 @@ from freq.core import log as logger
 @dataclass
 class PlaybookStep:
     """A single step in a playbook."""
+
     name: str
     step_type: str  # "check" or "action"
     command: str
@@ -39,6 +41,7 @@ class PlaybookStep:
 @dataclass
 class Playbook:
     """A complete incident playbook."""
+
     filename: str
     name: str
     description: str = ""
@@ -49,6 +52,7 @@ class Playbook:
 @dataclass
 class StepResult:
     """Result of executing a single step."""
+
     step_name: str
     step_type: str
     status: str  # "pass", "fail", "skipped", "pending_confirm"
@@ -70,27 +74,32 @@ def load_playbooks(conf_dir: str) -> list:
         path = os.path.join(pb_dir, fname)
         try:
             import tomllib
+
             with open(path, "rb") as f:
                 data = tomllib.load(f)
             pb_meta = data.get("playbook", {})
             steps = []
             for s in data.get("step", []):
-                steps.append(PlaybookStep(
-                    name=s.get("name", ""),
-                    step_type=s.get("type", "check"),
-                    command=s.get("command", ""),
-                    target=s.get("target", ""),
-                    expect=s.get("expect", ""),
-                    confirm=s.get("confirm", False),
-                    timeout=int(s.get("timeout", 30)),
-                ))
-            playbooks.append(Playbook(
-                filename=fname,
-                name=pb_meta.get("name", fname),
-                description=pb_meta.get("description", ""),
-                trigger=pb_meta.get("trigger", ""),
-                steps=steps,
-            ))
+                steps.append(
+                    PlaybookStep(
+                        name=s.get("name", ""),
+                        step_type=s.get("type", "check"),
+                        command=s.get("command", ""),
+                        target=s.get("target", ""),
+                        expect=s.get("expect", ""),
+                        confirm=s.get("confirm", False),
+                        timeout=int(s.get("timeout", 30)),
+                    )
+                )
+            playbooks.append(
+                Playbook(
+                    filename=fname,
+                    name=pb_meta.get("name", fname),
+                    description=pb_meta.get("description", ""),
+                    trigger=pb_meta.get("trigger", ""),
+                    steps=steps,
+                )
+            )
         except Exception as e:
             logger.warn(f"Failed to load playbook {fname}: {e}")
 
@@ -136,25 +145,32 @@ def run_step(step: PlaybookStep, ssh_func, cfg) -> StepResult:
     host = res.by_target(cfg.hosts, step.target) if step.target else None
     if not host and step.target:
         return StepResult(
-            step_name=step.name, step_type=step.step_type, status="fail",
+            step_name=step.name,
+            step_type=step.step_type,
+            status="fail",
             error=f"Host '{step.target}' not found",
             duration=time.monotonic() - start,
         )
 
     if not host:
         return StepResult(
-            step_name=step.name, step_type=step.step_type, status="fail",
+            step_name=step.name,
+            step_type=step.step_type,
+            status="fail",
             error="No target host specified",
             duration=time.monotonic() - start,
         )
 
     # Execute command
     r = ssh_func(
-        host=host.ip, command=step.command,
+        host=host.ip,
+        command=step.command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=step.timeout,
-        htype=host.htype, use_sudo=True, cfg=cfg,
+        htype=host.htype,
+        use_sudo=True,
+        cfg=cfg,
     )
 
     duration = time.monotonic() - start
@@ -163,8 +179,11 @@ def run_step(step: PlaybookStep, ssh_func, cfg) -> StepResult:
 
     if r.returncode != 0:
         return StepResult(
-            step_name=step.name, step_type=step.step_type, status="fail",
-            output=output, error=error or f"exit code {r.returncode}",
+            step_name=step.name,
+            step_type=step.step_type,
+            status="fail",
+            output=output,
+            error=error or f"exit code {r.returncode}",
             duration=duration,
         )
 
@@ -179,8 +198,12 @@ def run_step(step: PlaybookStep, ssh_func, cfg) -> StepResult:
         status = "pass"
 
     return StepResult(
-        step_name=step.name, step_type=step.step_type, status=status,
-        output=output, error=error, duration=duration,
+        step_name=step.name,
+        step_type=step.step_type,
+        status=status,
+        output=output,
+        error=error,
+        duration=duration,
     )
 
 
@@ -197,6 +220,7 @@ def result_to_dict(result: StepResult) -> dict:
 
 
 # ── CLI Command ────────────────────────────────────────────────────────
+
 
 def cmd_playbook(cfg, pack, args) -> int:
     """List and run incident playbooks."""

@@ -149,6 +149,7 @@ def install_hint(package: str, os_family: str = "") -> str:
     """Return a user-friendly install instruction string."""
     if not os_family:
         from freq.core.platform import Platform
+
         os_family = Platform.detect().os_family
 
     template = _FAMILY_HINTS.get(os_family, "Install '{pkg}' using your package manager")

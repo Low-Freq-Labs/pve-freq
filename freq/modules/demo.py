@@ -18,6 +18,7 @@ Design decisions:
     - Demo must work with zero config. No freq.toml, no hosts, no SSH keys.
       If someone clones the repo and runs freq demo, it must work instantly.
 """
+
 import platform
 import random
 import sys
@@ -50,16 +51,14 @@ def _demo_doctor():
     """Simulated 13-point diagnostic — all passing."""
     fmt.header("Doctor", "PVE FREQ")
     fmt.blank()
-    fmt.line("{bold}Self-Diagnostic{reset}".format(
-        bold=fmt.C.BOLD, reset=fmt.C.RESET))
+    fmt.line("{bold}Self-Diagnostic{reset}".format(bold=fmt.C.BOLD, reset=fmt.C.RESET))
     fmt.blank()
 
     # System
     fmt.line("  {p}System{r}".format(p=fmt.C.PURPLE_BOLD, r=fmt.C.RESET))
     _pause()
 
-    py_ver = "{}.{}.{}".format(
-        sys.version_info.major, sys.version_info.minor, sys.version_info.micro)
+    py_ver = "{}.{}.{}".format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro)
     fmt.step_ok("Python {} ({})".format(py_ver, platform.python_implementation()))
     _pause()
 
@@ -67,6 +66,7 @@ def _demo_doctor():
     if plat == "Linux":
         try:
             import distro_detect
+
             plat_str = plat
         except ImportError:
             plat_str = plat
@@ -102,8 +102,7 @@ def _demo_doctor():
     print()
 
     # SSH & Connectivity
-    fmt.line("  {p}SSH & Connectivity{r}".format(
-        p=fmt.C.PURPLE_BOLD, r=fmt.C.RESET))
+    fmt.line("  {p}SSH & Connectivity{r}".format(p=fmt.C.PURPLE_BOLD, r=fmt.C.RESET))
     _pause()
     fmt.step_ok("SSH: OpenSSH_9.7p1")
     _pause()
@@ -136,11 +135,13 @@ def _demo_doctor():
     # Summary
     fmt.divider("Summary")
     fmt.blank()
-    fmt.line("  {g}16{r} passed  {y}0{r} warnings  {red}0{r} failed  (16 total)".format(
-        g=fmt.C.GREEN, y=fmt.C.YELLOW, red=fmt.C.RED, r=fmt.C.RESET))
+    fmt.line(
+        "  {g}16{r} passed  {y}0{r} warnings  {red}0{r} failed  (16 total)".format(
+            g=fmt.C.GREEN, y=fmt.C.YELLOW, red=fmt.C.RED, r=fmt.C.RESET
+        )
+    )
     fmt.blank()
-    fmt.line("{g}FREQ is healthy. All systems nominal.{r}".format(
-        g=fmt.C.GREEN, r=fmt.C.RESET))
+    fmt.line("{g}FREQ is healthy. All systems nominal.{r}".format(g=fmt.C.GREEN, r=fmt.C.RESET))
     fmt.blank()
     fmt.footer()
     _pause(_SECTION_DELAY)
@@ -160,8 +161,7 @@ def _demo_fleet_status():
         ("pfsense", "pfsense", "up 120 days, 18:47"),
     ]
 
-    fmt.line("{b}Checking {n} hosts...{r}".format(
-        b=fmt.C.BOLD, n=len(mock_hosts), r=fmt.C.RESET))
+    fmt.line("{b}Checking {n} hosts...{r}".format(b=fmt.C.BOLD, n=len(mock_hosts), r=fmt.C.RESET))
     fmt.blank()
 
     fmt.table_header(
@@ -181,8 +181,11 @@ def _demo_fleet_status():
         )
 
     print()
-    fmt.line("  {g}6{r} up  {red}0{r} down  |  {dim}6 hosts in 0.4s{r}".format(
-        g=fmt.C.GREEN, red=fmt.C.RED, dim=fmt.C.DIM, r=fmt.C.RESET))
+    fmt.line(
+        "  {g}6{r} up  {red}0{r} down  |  {dim}6 hosts in 0.4s{r}".format(
+            g=fmt.C.GREEN, red=fmt.C.RED, dim=fmt.C.DIM, r=fmt.C.RESET
+        )
+    )
     fmt.blank()
     fmt.footer()
     _pause(_SECTION_DELAY)
@@ -205,19 +208,19 @@ def _demo_commands():
         ("Deployment", 2),
     ]
 
-    fmt.line("{b}65+ commands across {n} categories{r}".format(
-        b=fmt.C.BOLD, n=len(categories), r=fmt.C.RESET))
+    fmt.line("{b}65+ commands across {n} categories{r}".format(b=fmt.C.BOLD, n=len(categories), r=fmt.C.RESET))
     fmt.blank()
 
     for name, count in categories:
-        fmt.line("  {p}{name:<24}{r} {dim}{count} commands{r}".format(
-            p=fmt.C.PURPLE, name=name, dim=fmt.C.DIM,
-            count=count, r=fmt.C.RESET))
+        fmt.line(
+            "  {p}{name:<24}{r} {dim}{count} commands{r}".format(
+                p=fmt.C.PURPLE, name=name, dim=fmt.C.DIM, count=count, r=fmt.C.RESET
+            )
+        )
         _pause(0.03)
 
     fmt.blank()
-    fmt.line("{dim}Run 'freq help' for the full command reference.{r}".format(
-        dim=fmt.C.DIM, r=fmt.C.RESET))
+    fmt.line("{dim}Run 'freq help' for the full command reference.{r}".format(dim=fmt.C.DIM, r=fmt.C.RESET))
     fmt.blank()
     fmt.footer()
     _pause(_SECTION_DELAY)
@@ -227,13 +230,15 @@ def _demo_personality(pack):
     """Showcase the personality system — the secret weapon."""
     fmt.header("Personality System")
     fmt.blank()
-    fmt.line("{b}What makes FREQ different{r}".format(
-        b=fmt.C.BOLD, r=fmt.C.RESET))
+    fmt.line("{b}What makes FREQ different{r}".format(b=fmt.C.BOLD, r=fmt.C.RESET))
     fmt.blank()
 
     # Celebrations
-    fmt.line("  {p}Celebrations{r} {dim}(after every successful command){r}".format(
-        p=fmt.C.PURPLE_BOLD, dim=fmt.C.DIM, r=fmt.C.RESET))
+    fmt.line(
+        "  {p}Celebrations{r} {dim}(after every successful command){r}".format(
+            p=fmt.C.PURPLE_BOLD, dim=fmt.C.DIM, r=fmt.C.RESET
+        )
+    )
     if pack.celebrations:
         shown = random.sample(pack.celebrations, min(3, len(pack.celebrations)))
         for msg in shown:
@@ -244,57 +249,50 @@ def _demo_personality(pack):
     fmt.blank()
 
     # Taglines
-    fmt.line("  {p}Taglines{r} {dim}(splash screen){r}".format(
-        p=fmt.C.PURPLE_BOLD, dim=fmt.C.DIM, r=fmt.C.RESET))
+    fmt.line("  {p}Taglines{r} {dim}(splash screen){r}".format(p=fmt.C.PURPLE_BOLD, dim=fmt.C.DIM, r=fmt.C.RESET))
     if pack.taglines:
         tl = random.choice(pack.taglines)
-        fmt.line("    {gray}{tl}{r}".format(
-            gray=fmt.C.GRAY, tl=tl, r=fmt.C.RESET))
+        fmt.line("    {gray}{tl}{r}".format(gray=fmt.C.GRAY, tl=tl, r=fmt.C.RESET))
     else:
-        fmt.line("    {gray}Full frequency. Full efficiency.{r}".format(
-            gray=fmt.C.GRAY, r=fmt.C.RESET))
+        fmt.line("    {gray}Full frequency. Full efficiency.{r}".format(gray=fmt.C.GRAY, r=fmt.C.RESET))
     _pause(0.15)
     fmt.blank()
 
     # Vibe drops
-    fmt.line("  {p}Vibe Drops{r} {dim}(1/{prob} chance per command){r}".format(
-        p=fmt.C.PURPLE_BOLD, dim=fmt.C.DIM,
-        prob=pack.vibe_probability, r=fmt.C.RESET))
+    fmt.line(
+        "  {p}Vibe Drops{r} {dim}(1/{prob} chance per command){r}".format(
+            p=fmt.C.PURPLE_BOLD, dim=fmt.C.DIM, prob=pack.vibe_probability, r=fmt.C.RESET
+        )
+    )
     fmt.blank()
 
     if pack.vibe_common:
-        fmt.line("    {cyan}Common (60%):{r}".format(
-            cyan=fmt.C.CYAN, r=fmt.C.RESET))
+        fmt.line("    {cyan}Common (60%):{r}".format(cyan=fmt.C.CYAN, r=fmt.C.RESET))
         vibe = random.choice(pack.vibe_common)
         fmt.line("      {dim}{v}{r}".format(dim=fmt.C.DIM, v=vibe, r=fmt.C.RESET))
         _pause(0.15)
 
     if pack.vibe_rare:
-        fmt.line("    {yellow}Rare (25%):{r}".format(
-            yellow=fmt.C.YELLOW, r=fmt.C.RESET))
+        fmt.line("    {yellow}Rare (25%):{r}".format(yellow=fmt.C.YELLOW, r=fmt.C.RESET))
         vibe = random.choice(pack.vibe_rare)
         fmt.line("      {dim}{v}{r}".format(dim=fmt.C.DIM, v=vibe, r=fmt.C.RESET))
         _pause(0.15)
 
     if pack.vibe_legendary:
-        fmt.line("    {mag}Legendary (15%):{r}".format(
-            mag=fmt.C.MAGENTA, r=fmt.C.RESET))
+        fmt.line("    {mag}Legendary (15%):{r}".format(mag=fmt.C.MAGENTA, r=fmt.C.RESET))
         vibe = random.choice(pack.vibe_legendary)
         # Legendary vibes can be multi-line
         for vl in vibe.split("\n"):
-            fmt.line("      {dim}{v}{r}".format(
-                dim=fmt.C.DIM, v=vl, r=fmt.C.RESET))
+            fmt.line("      {dim}{v}{r}".format(dim=fmt.C.DIM, v=vl, r=fmt.C.RESET))
         _pause(0.2)
 
     fmt.blank()
 
     # Quotes
     if pack.quotes:
-        fmt.line("  {p}Quotes{r}".format(
-            p=fmt.C.PURPLE_BOLD, r=fmt.C.RESET))
+        fmt.line("  {p}Quotes{r}".format(p=fmt.C.PURPLE_BOLD, r=fmt.C.RESET))
         qt = random.choice(pack.quotes)
-        fmt.line("    {dim}{qt}{r}".format(
-            dim=fmt.C.DIM, qt=qt, r=fmt.C.RESET))
+        fmt.line("    {dim}{qt}{r}".format(dim=fmt.C.DIM, qt=qt, r=fmt.C.RESET))
         fmt.blank()
 
     fmt.footer()
@@ -304,18 +302,15 @@ def _demo_personality(pack):
 def _demo_dashboard():
     """Tease the web dashboard."""
     print()
-    fmt.line("{p}Web Dashboard{r}".format(
-        p=fmt.C.PURPLE_BOLD, r=fmt.C.RESET))
+    fmt.line("{p}Web Dashboard{r}".format(p=fmt.C.PURPLE_BOLD, r=fmt.C.RESET))
     print()
-    fmt.line("  {b}89 API endpoints{r}  |  {b}7 views{r}  |  {b}Zero JS dependencies{r}".format(
-        b=fmt.C.BOLD, r=fmt.C.RESET))
-    fmt.line("  {dim}Single-file SPA served by Python's http.server{r}".format(
-        dim=fmt.C.DIM, r=fmt.C.RESET))
+    fmt.line(
+        "  {b}89 API endpoints{r}  |  {b}7 views{r}  |  {b}Zero JS dependencies{r}".format(b=fmt.C.BOLD, r=fmt.C.RESET)
+    )
+    fmt.line("  {dim}Single-file SPA served by Python's http.server{r}".format(dim=fmt.C.DIM, r=fmt.C.RESET))
     print()
-    fmt.line("  {cyan}Start it:{r}  freq serve".format(
-        cyan=fmt.C.CYAN, r=fmt.C.RESET))
-    fmt.line("  {cyan}Open:{r}      http://localhost:8888".format(
-        cyan=fmt.C.CYAN, r=fmt.C.RESET))
+    fmt.line("  {cyan}Start it:{r}  freq serve".format(cyan=fmt.C.CYAN, r=fmt.C.RESET))
+    fmt.line("  {cyan}Open:{r}      http://localhost:8888".format(cyan=fmt.C.CYAN, r=fmt.C.RESET))
     print()
     _pause(_SECTION_DELAY)
 
@@ -326,10 +321,12 @@ def _demo_closing(pack):
     qt = quote(pack)
     print("  {dim}{qt}{r}".format(dim=fmt.C.DIM, qt=qt, r=fmt.C.RESET))
     print()
-    print("  {p}PVE FREQ{r} {dim}— full frequency, full efficiency.{r}".format(
-        p=fmt.C.PURPLE_BOLD, dim=fmt.C.DIM, r=fmt.C.RESET))
-    print("  {dim}https://github.com/Low-Freq-Labs/pve-freq{r}".format(
-        dim=fmt.C.DIM, r=fmt.C.RESET))
+    print(
+        "  {p}PVE FREQ{r} {dim}— full frequency, full efficiency.{r}".format(
+            p=fmt.C.PURPLE_BOLD, dim=fmt.C.DIM, r=fmt.C.RESET
+        )
+    )
+    print("  {dim}https://github.com/Low-Freq-Labs/pve-freq{r}".format(dim=fmt.C.DIM, r=fmt.C.RESET))
     print()
 
 

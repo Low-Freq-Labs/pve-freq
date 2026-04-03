@@ -21,6 +21,7 @@ Design decisions:
     - Dataclasses, not TypedDicts. IDE autocomplete, type checking, defaults.
     - Frozen where possible, mutable where SSH results need post-processing.
 """
+
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
@@ -28,8 +29,10 @@ from typing import Any
 
 # --- Enums ---
 
+
 class Phase(Enum):
     """Host remediation phase (engine pipeline)."""
+
     PENDING = auto()
     REACHABLE = auto()
     DISCOVERED = auto()
@@ -45,6 +48,7 @@ class Phase(Enum):
 
 class Severity(Enum):
     """Finding severity."""
+
     INFO = "info"
     WARN = "warn"
     CRIT = "crit"
@@ -52,6 +56,7 @@ class Severity(Enum):
 
 class HostType(Enum):
     """Known host platform types."""
+
     LINUX = "linux"
     PVE = "pve"
     TRUENAS = "truenas"
@@ -64,6 +69,7 @@ class HostType(Enum):
 
 class Role(Enum):
     """RBAC roles — viewer < operator < admin < protected."""
+
     VIEWER = "viewer"
     OPERATOR = "operator"
     ADMIN = "admin"
@@ -72,6 +78,7 @@ class Role(Enum):
 
 class VMCategory(Enum):
     """VM fleet categories — determines what FREQ can do to each VM."""
+
     PERSONAL = "personal"
     INFRASTRUCTURE = "infrastructure"
     PROD_MEDIA = "prod_media"
@@ -84,6 +91,7 @@ class VMCategory(Enum):
 
 class PermissionTier(Enum):
     """Permission tiers — what actions each tier allows."""
+
     PROBE = "probe"
     OPERATOR = "operator"
     ADMIN = "admin"
@@ -91,9 +99,11 @@ class PermissionTier(Enum):
 
 # --- Core Data ---
 
+
 @dataclass
 class Host:
     """A fleet host."""
+
     ip: str
     label: str
     htype: str
@@ -111,18 +121,21 @@ class Host:
     def category(self):
         """Device category (server, firewall, switch, bmc, nas)."""
         from freq.deployers import resolve_htype
+
         return resolve_htype(self.htype)[0]
 
     @property
     def vendor(self):
         """Device vendor (linux, pfsense, cisco, idrac, etc.)."""
         from freq.deployers import resolve_htype
+
         return resolve_htype(self.htype)[1]
 
 
 @dataclass
 class CmdResult:
     """Result of a command execution (SSH or local)."""
+
     stdout: str
     stderr: str
     returncode: int
@@ -132,6 +145,7 @@ class CmdResult:
 @dataclass
 class Finding:
     """A single configuration drift finding."""
+
     resource_type: str
     key: str
     current: Any
@@ -144,6 +158,7 @@ class Finding:
 @dataclass
 class Resource:
     """A policy resource definition."""
+
     type: str
     path: str = ""
     applies_to: list = field(default_factory=list)
@@ -158,6 +173,7 @@ class Resource:
 @dataclass
 class Policy:
     """A declarative remediation policy."""
+
     name: str
     description: str
     scope: list
@@ -167,6 +183,7 @@ class Policy:
 @dataclass
 class FleetResult:
     """Result of running a policy across the fleet."""
+
     policy: str
     mode: str
     duration: float
@@ -182,6 +199,7 @@ class FleetResult:
 @dataclass
 class VLAN:
     """A VLAN definition."""
+
     id: int
     name: str
     subnet: str
@@ -192,6 +210,7 @@ class VLAN:
 @dataclass
 class Distro:
     """A cloud image definition."""
+
     key: str
     name: str
     url: str
@@ -205,19 +224,21 @@ class Distro:
 @dataclass
 class Container:
     """A Docker container in the fleet."""
+
     name: str
     vm_id: int
     port: int = 0
     api_path: str = ""
-    auth_type: str = ""        # "header", "param", "cookie", ""
-    auth_header: str = ""      # e.g. "X-Api-Key", "X-Plex-Token"
-    auth_param: str = ""       # e.g. "apikey"
-    vault_key: str = ""        # Key in FREQ vault for auth credential
+    auth_type: str = ""  # "header", "param", "cookie", ""
+    auth_header: str = ""  # e.g. "X-Api-Key", "X-Plex-Token"
+    auth_param: str = ""  # e.g. "apikey"
+    vault_key: str = ""  # Key in FREQ vault for auth credential
 
 
 @dataclass
 class ContainerVM:
     """A VM hosting Docker containers."""
+
     vm_id: int
     ip: str
     label: str
@@ -228,6 +249,7 @@ class ContainerVM:
 @dataclass
 class PhysicalDevice:
     """A physical infrastructure device (switch, iDRAC, firewall, NAS)."""
+
     key: str
     ip: str
     label: str
@@ -239,6 +261,7 @@ class PhysicalDevice:
 @dataclass
 class PVENode:
     """A Proxmox VE hypervisor node."""
+
     name: str
     ip: str
     detail: str = ""
@@ -251,10 +274,11 @@ class FleetBoundaries:
     Loaded from conf/fleet-boundaries.toml. Determines what FREQ can do
     to each VM based on its category and permission tier.
     """
-    tiers: dict = field(default_factory=dict)          # tier_name -> [allowed_actions]
-    categories: dict = field(default_factory=dict)      # cat_name -> {description, tier, vmids?, range_start?, range_end?}
-    physical: dict = field(default_factory=dict)         # device_key -> PhysicalDevice
-    pve_nodes: dict = field(default_factory=dict)        # node_name -> PVENode
+
+    tiers: dict = field(default_factory=dict)  # tier_name -> [allowed_actions]
+    categories: dict = field(default_factory=dict)  # cat_name -> {description, tier, vmids?, range_start?, range_end?}
+    physical: dict = field(default_factory=dict)  # device_key -> PhysicalDevice
+    pve_nodes: dict = field(default_factory=dict)  # node_name -> PVENode
 
     def categorize(self, vmid: int) -> tuple:
         """Return (category_name, tier_name) for a VMID."""
@@ -275,14 +299,17 @@ class FleetBoundaries:
     def is_prod(self, vmid: int) -> bool:
         """True if this VMID belongs to a production category."""
         cat, _ = self.categorize(vmid)
-        return cat in (VMCategory.INFRASTRUCTURE.value, VMCategory.PROD_MEDIA.value,
-                       VMCategory.PROD_OTHER.value)
+        return cat in (VMCategory.INFRASTRUCTURE.value, VMCategory.PROD_MEDIA.value, VMCategory.PROD_OTHER.value)
 
     def is_protected(self, vmid: int) -> bool:
         """True if this VMID belongs to a category that should not be casually modified."""
         cat, _ = self.categorize(vmid)
-        return cat in (VMCategory.PERSONAL.value, VMCategory.INFRASTRUCTURE.value,
-                       VMCategory.PROD_MEDIA.value, VMCategory.PROD_OTHER.value)
+        return cat in (
+            VMCategory.PERSONAL.value,
+            VMCategory.INFRASTRUCTURE.value,
+            VMCategory.PROD_MEDIA.value,
+            VMCategory.PROD_OTHER.value,
+        )
 
     def can_action(self, vmid: int, action: str) -> bool:
         """Check if a specific action is allowed for a VMID."""
@@ -298,11 +325,12 @@ class FleetBoundaries:
 @dataclass
 class Monitor:
     """An HTTP endpoint to monitor."""
+
     name: str
     url: str
-    interval: int = 60           # Check interval in seconds
-    timeout: int = 10            # Request timeout in seconds
-    expected_status: int = 200   # Expected HTTP status code
-    method: str = "GET"          # HTTP method
-    keyword: str = ""            # Optional keyword to look for in response body
-    notify: bool = True          # Send notification on failure
+    interval: int = 60  # Check interval in seconds
+    timeout: int = 10  # Request timeout in seconds
+    expected_status: int = 200  # Expected HTTP status code
+    method: str = "GET"  # HTTP method
+    keyword: str = ""  # Optional keyword to look for in response body
+    notify: bool = True  # Send notification on failure

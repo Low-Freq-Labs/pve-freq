@@ -6,6 +6,7 @@ EdgeSwitch uses CLI similar to Cisco.
 To contribute: implement deploy() for UniFi or EdgeSwitch.
 Reference: freq/deployers/switch/cisco.py
 """
+
 CATEGORY = "switch"
 VENDOR = "ubiquiti"
 NEEDS_PASSWORD = True
@@ -16,6 +17,7 @@ STUB = True
 def deploy(ip, ctx, auth_pass, auth_key, auth_user):
     """Deploy FREQ service account to Ubiquiti device. (Not implemented — community plugin.)"""
     from freq.core import fmt
+
     fmt.step_warn("Ubiquiti deployer is a community plugin — not included in PVE FREQ base")
     fmt.info("  To contribute: https://github.com/sonnet-io/pve-freq")
     return False

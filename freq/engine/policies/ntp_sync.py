@@ -15,6 +15,7 @@ Design decisions:
     - Declarative dict, not a class — human-editable, testable as data
     - after_change restarts timesyncd to apply immediately
 """
+
 POLICY = {
     "name": "ntp-sync",
     "description": "Ensure consistent NTP time synchronization",

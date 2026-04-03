@@ -20,6 +20,7 @@ Design decisions:
     - Central definition, fleet deployment. Users are defined once in FREQ
       config and pushed to hosts. No per-host user management.
 """
+
 import getpass
 import os
 import re
@@ -37,6 +38,7 @@ USER_CMD_TIMEOUT = 15
 
 # --- User Data ---
 
+
 def _load_users(cfg: FreqConfig) -> list:
     """Load users. Prefers freq.toml [users] section, falls back to users.conf."""
     # TOML users take priority if defined
@@ -53,11 +55,13 @@ def _load_users(cfg: FreqConfig) -> list:
                     continue
                 parts = line.split()
                 if len(parts) >= 2:
-                    users.append({
-                        "username": parts[0],
-                        "role": parts[1],
-                        "groups": parts[2] if len(parts) > 2 else "",
-                    })
+                    users.append(
+                        {
+                            "username": parts[0],
+                            "role": parts[1],
+                            "groups": parts[2] if len(parts) > 2 else "",
+                        }
+                    )
     except FileNotFoundError:
         pass
     return users
@@ -82,7 +86,7 @@ def _save_users(cfg: FreqConfig, users: list) -> bool:
 
 def _valid_username(username: str) -> bool:
     """Check if a username is valid (alphanumeric, hyphens, underscores, 1-32 chars)."""
-    return bool(re.match(r'^[a-z_][a-z0-9_-]{0,31}$', username))
+    return bool(re.match(r"^[a-z_][a-z0-9_-]{0,31}$", username))
 
 
 ROLE_HIERARCHY = ["viewer", "operator", "admin", "protected"]
@@ -97,6 +101,7 @@ def _role_level(role: str) -> int:
 
 
 # --- Commands ---
+
 
 def cmd_users(cfg: FreqConfig, pack, args) -> int:
     """List all FREQ users."""

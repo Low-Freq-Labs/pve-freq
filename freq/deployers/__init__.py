@@ -12,6 +12,7 @@ Usage:
     if deployer:
         deployer.deploy(ip, ctx, auth_pass, auth_key, auth_user)
 """
+
 import importlib
 
 
@@ -71,6 +72,7 @@ def get_deployer(category, vendor):
 def list_deployers():
     """Return list of available (category, vendor) pairs."""
     import pkgutil
+
     result = []
     for category in CATEGORIES:
         try:

@@ -27,6 +27,7 @@ Design decisions:
     - 3.11 minimum, not 3.12. Debian 12 and Proxmox VE 8 ship 3.11.
       Supporting them is non-negotiable for a Proxmox management tool.
 """
+
 import sys
 
 MIN_PYTHON = (3, 11)

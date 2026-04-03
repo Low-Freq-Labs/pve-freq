@@ -19,6 +19,7 @@ Design decisions:
     - No hot-reload. Plugins are discovered once at startup.
     - No dependency resolution between plugins. Each plugin is standalone.
 """
+
 import importlib
 import importlib.util
 import os
@@ -60,18 +61,18 @@ def discover_plugins(plugin_dir: str) -> list:
                 logger.warn(f"Plugin {filename} missing NAME or run()", plugin=filename)
                 continue
 
-            plugins.append({
-                "name": name,
-                "description": description,
-                "module": module,
-                "handler": handler,
-                "file": filename,
-            })
+            plugins.append(
+                {
+                    "name": name,
+                    "description": description,
+                    "module": module,
+                    "handler": handler,
+                    "file": filename,
+                }
+            )
 
         except Exception as e:
             logger.error(f"Plugin load error: {filename}: {e}", plugin=filename)
             continue
 
     return plugins
-
-

@@ -15,6 +15,7 @@ Design decisions:
     - Exclusion of PVE prevents breaking Proxmox HA clusters
     - Uses disable + stop to survive reboots
 """
+
 POLICY = {
     "name": "rpcbind-disable",
     "description": "Disable rpcbind on hosts that don't need it",

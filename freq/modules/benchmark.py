@@ -20,6 +20,7 @@ Design decisions:
     - Each function is standalone — call one or all, no ordering dependency.
     - Timeouts are generous (120s) because benchmarks are inherently slow.
 """
+
 import json
 import re
 import time
@@ -103,13 +104,13 @@ def bench_cpu(host_ip: str, cfg=None, threads: int = 0, duration: int = 10) -> d
     # Parse "events per second" from sysbench output
     # Example line: "    events per second:  1234.56"
     eps = 0.0
-    eps_match = re.search(r'events per second:\s+([\d.]+)', result.stdout)
+    eps_match = re.search(r"events per second:\s+([\d.]+)", result.stdout)
     if eps_match:
         eps = float(eps_match.group(1))
 
     # Parse actual thread count used
     actual_threads = threads
-    threads_match = re.search(r'Number of threads:\s+(\d+)', result.stdout)
+    threads_match = re.search(r"Number of threads:\s+(\d+)", result.stdout)
     if threads_match:
         actual_threads = int(threads_match.group(1))
 
@@ -161,7 +162,7 @@ def bench_memory(host_ip: str, cfg=None, total_size: str = "4G") -> dict:
     # Parse MiB/sec from sysbench output
     # Example: "4096.00 MiB transferred (12345.67 MiB/sec)"
     mib = 0.0
-    mib_match = re.search(r'([\d.]+)\s+MiB/sec', result.stdout)
+    mib_match = re.search(r"([\d.]+)\s+MiB/sec", result.stdout)
     if mib_match:
         mib = float(mib_match.group(1))
 
@@ -302,8 +303,7 @@ def bench_network(source_ip: str, target_ip: str, cfg=None, duration: int = 10) 
 
     if client_result.returncode != 0:
         # Clean up: kill server if client failed
-        ssh_single(host=target_ip, command="pkill -f 'iperf3 -s' 2>/dev/null",
-                   command_timeout=5, cfg=cfg)
+        ssh_single(host=target_ip, command="pkill -f 'iperf3 -s' 2>/dev/null", command_timeout=5, cfg=cfg)
         return {
             "ok": False,
             "bits_per_second": 0,

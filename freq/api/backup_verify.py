@@ -17,14 +17,17 @@ from freq.modules.serve import _check_session_role
 
 # -- Helpers -----------------------------------------------------------------
 
+
 def _pve_ssh(cfg, node_ip, cmd, timeout=60):
     """SSH to a PVE node and run a command."""
     return ssh_single(
-        host=node_ip, command=cmd,
+        host=node_ip,
+        command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
-        htype="pve", use_sudo=True,
+        htype="pve",
+        use_sudo=True,
     )
 
 
@@ -73,7 +76,7 @@ def handle_backup_verify(handler):
 
     if file_path:
         # Validate file_path: only allow safe characters (alphanumeric, /, -, _, .)
-        if not re.match(r'^[a-zA-Z0-9/_\-. ]+$', file_path):
+        if not re.match(r"^[a-zA-Z0-9/_\-. ]+$", file_path):
             json_response(handler, {"error": "Invalid file path characters"}, 400)
             return
         if ".." in file_path:
@@ -85,20 +88,23 @@ def handle_backup_verify(handler):
         cmd = (
             f"LATEST=$(ls -t /var/lib/vz/dump/vzdump-qemu-{vmid}-*.vma* 2>/dev/null | head -1); "
             f"[ -z \"$LATEST\" ] && echo 'NO_BACKUP_FOUND' && exit 1; "
-            f"echo \"Verifying: $LATEST\"; "
-            f"qmrestore \"$LATEST\" --verify 2>&1 | tail -10"
+            f'echo "Verifying: $LATEST"; '
+            f'qmrestore "$LATEST" --verify 2>&1 | tail -10'
         )
 
     r = _pve_ssh(cfg, node_ip, cmd, timeout=120)
     ok = r.returncode == 0 and "NO_BACKUP_FOUND" not in (r.stdout or "")
 
-    json_response(handler, {
-        "ok": ok,
-        "vmid": vmid,
-        "node": node or "auto",
-        "output": r.stdout[:2000] if r.stdout else "",
-        "error": r.stderr[:500] if not ok and r.stderr else "",
-    })
+    json_response(
+        handler,
+        {
+            "ok": ok,
+            "vmid": vmid,
+            "node": node or "auto",
+            "output": r.stdout[:2000] if r.stdout else "",
+            "error": r.stderr[:500] if not ok and r.stderr else "",
+        },
+    )
 
 
 def handle_backup_verify_status(handler):
@@ -115,13 +121,13 @@ def handle_backup_verify_status(handler):
     # List all backups with VMID, timestamp, size
     cmd = (
         "for f in /var/lib/vz/dump/vzdump-qemu-*.vma* /var/lib/vz/dump/vzdump-lxc-*.tar* 2>/dev/null; do "
-        "  [ -f \"$f\" ] || continue; "
-        "  base=$(basename \"$f\"); "
+        '  [ -f "$f" ] || continue; '
+        '  base=$(basename "$f"); '
         "  vmid=$(echo \"$base\" | grep -oP '(?<=vzdump-(qemu|lxc)-)\\d+'); "
         "  ts=$(echo \"$base\" | grep -oP '\\d{4}_\\d{2}_\\d{2}-\\d{2}_\\d{2}_\\d{2}'); "
-        "  size=$(stat -c%s \"$f\" 2>/dev/null || echo 0); "
+        '  size=$(stat -c%s "$f" 2>/dev/null || echo 0); '
         "  type=$(echo \"$base\" | grep -oP '(qemu|lxc)'); "
-        "  echo \"$vmid|$ts|$size|$type|$base\"; "
+        '  echo "$vmid|$ts|$size|$type|$base"; '
         "done | sort -t'|' -k1,1n -k2,2r"
     )
     r = _pve_ssh(cfg, node_ip, cmd, timeout=30)
@@ -150,11 +156,14 @@ def handle_backup_verify_status(handler):
                     "file": filename,
                 }
 
-    json_response(handler, {
-        "ok": True,
-        "backups": list(backups.values()),
-        "total_vms_with_backups": len(backups),
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "backups": list(backups.values()),
+            "total_vms_with_backups": len(backups),
+        },
+    )
 
 
 def handle_cert_expiry(handler):
@@ -188,16 +197,18 @@ def handle_cert_expiry(handler):
                             # Get binary cert for self-signed
                             der = ssock.getpeercert(binary_form=True)
                             if der:
-                                certs.append({
-                                    "host": h.label,
-                                    "ip": h.ip,
-                                    "port": port,
-                                    "subject": "self-signed (binary only)",
-                                    "issuer": "",
-                                    "expires": "",
-                                    "days_remaining": -1,
-                                    "status": "unknown",
-                                })
+                                certs.append(
+                                    {
+                                        "host": h.label,
+                                        "ip": h.ip,
+                                        "port": port,
+                                        "subject": "self-signed (binary only)",
+                                        "issuer": "",
+                                        "expires": "",
+                                        "days_remaining": -1,
+                                        "status": "unknown",
+                                    }
+                                )
                             continue
                         not_after = cert.get("notAfter", "")
                         if not_after:
@@ -221,30 +232,35 @@ def handle_cert_expiry(handler):
                         elif days < 30:
                             status = "warning"
 
-                        certs.append({
-                            "host": h.label,
-                            "ip": h.ip,
-                            "port": port,
-                            "subject": subject.get("commonName", ""),
-                            "issuer": issuer.get("organizationName", issuer.get("commonName", "")),
-                            "expires": not_after,
-                            "days_remaining": days,
-                            "status": status,
-                        })
+                        certs.append(
+                            {
+                                "host": h.label,
+                                "ip": h.ip,
+                                "port": port,
+                                "subject": subject.get("commonName", ""),
+                                "issuer": issuer.get("organizationName", issuer.get("commonName", "")),
+                                "expires": not_after,
+                                "days_remaining": days,
+                                "status": status,
+                            }
+                        )
             except (socket.timeout, ConnectionRefusedError, OSError):
                 continue
 
     # Sort by days remaining (soonest expiry first)
     certs.sort(key=lambda c: c["days_remaining"] if c["days_remaining"] >= 0 else 99999)
 
-    json_response(handler, {
-        "ok": True,
-        "certs": certs,
-        "total": len(certs),
-        "critical": sum(1 for c in certs if c["status"] == "critical"),
-        "warning": sum(1 for c in certs if c["status"] == "warning"),
-        "expired": sum(1 for c in certs if c["status"] == "expired"),
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "certs": certs,
+            "total": len(certs),
+            "critical": sum(1 for c in certs if c["status"] == "critical"),
+            "warning": sum(1 for c in certs if c["status"] == "warning"),
+            "expired": sum(1 for c in certs if c["status"] == "expired"),
+        },
+    )
 
 
 # -- Registration ------------------------------------------------------------

@@ -162,16 +162,23 @@ def handle_wol(handler):
 
     try:
         send_wol(mac, broadcast=broadcast)
-        json_response(handler, {
-            "ok": True,
-            "mac": mac,
-            "broadcast": broadcast,
-            "message": f"Magic packet sent to {mac}",
-        })
+        json_response(
+            handler,
+            {
+                "ok": True,
+                "mac": mac,
+                "broadcast": broadcast,
+                "message": f"Magic packet sent to {mac}",
+            },
+        )
     except OSError as e:
-        json_response(handler, {
-            "error": f"Failed to send WoL packet: {e}",
-        }, 500)
+        json_response(
+            handler,
+            {
+                "error": f"Failed to send WoL packet: {e}",
+            },
+            500,
+        )
 
 
 # -- Benchmark Handlers -----------------------------------------------------
@@ -207,13 +214,20 @@ def handle_bench_run(handler):
 
     valid_types = ("cpu", "memory", "disk", "all")
     if bench_type not in valid_types:
-        json_response(handler, {
-            "error": f"Invalid benchmark type: {bench_type}. Valid: {', '.join(valid_types)}",
-        }, 400)
+        json_response(
+            handler,
+            {
+                "error": f"Invalid benchmark type: {bench_type}. Valid: {', '.join(valid_types)}",
+            },
+            400,
+        )
         return
 
     from freq.modules.benchmark import (
-        bench_cpu, bench_memory, bench_disk, bench_all,
+        bench_cpu,
+        bench_memory,
+        bench_disk,
+        bench_all,
     )
 
     try:
@@ -230,16 +244,23 @@ def handle_bench_run(handler):
             result = bench_disk(host_ip, cfg=cfg)
             _save_bench_result(cfg, host_ip, "disk", result)
 
-        json_response(handler, {
-            "ok": True,
-            "host": host_ip,
-            "type": bench_type,
-            "result": result,
-        })
+        json_response(
+            handler,
+            {
+                "ok": True,
+                "host": host_ip,
+                "type": bench_type,
+                "result": result,
+            },
+        )
     except Exception as e:
-        json_response(handler, {
-            "error": f"Benchmark failed on {host_ip}: {e}",
-        }, 500)
+        json_response(
+            handler,
+            {
+                "error": f"Benchmark failed on {host_ip}: {e}",
+            },
+            500,
+        )
 
 
 def handle_bench_results(handler):
@@ -263,14 +284,17 @@ def handle_bench_results(handler):
 
     results = _load_bench_results(cfg, host_filter=host_filter, type_filter=type_filter)
 
-    json_response(handler, {
-        "results": results[:limit],
-        "total": len(results),
-        "filters": {
-            "host": host_filter or None,
-            "type": type_filter or None,
+    json_response(
+        handler,
+        {
+            "results": results[:limit],
+            "total": len(results),
+            "filters": {
+                "host": host_filter or None,
+                "type": type_filter or None,
+            },
         },
-    })
+    )
 
 
 def handle_bench_netspeed(handler):
@@ -315,16 +339,23 @@ def handle_bench_netspeed(handler):
     try:
         result = bench_network(source_ip, target_ip, cfg=cfg)
         _save_bench_result(cfg, f"{source_ip}_to_{target_ip}", "network", result)
-        json_response(handler, {
-            "ok": result.get("ok", False),
-            "source": source_ip,
-            "target": target_ip,
-            "result": result,
-        })
+        json_response(
+            handler,
+            {
+                "ok": result.get("ok", False),
+                "source": source_ip,
+                "target": target_ip,
+                "result": result,
+            },
+        )
     except Exception as e:
-        json_response(handler, {
-            "error": f"Network benchmark failed: {e}",
-        }, 500)
+        json_response(
+            handler,
+            {
+                "error": f"Network benchmark failed: {e}",
+            },
+            500,
+        )
 
 
 def handle_bench_tools(handler):
@@ -354,17 +385,24 @@ def handle_bench_tools(handler):
         available = [name for name, path in tools.items() if path]
         missing = [name for name, path in tools.items() if not path]
 
-        json_response(handler, {
-            "host": host_ip,
-            "tools": tools,
-            "available": available,
-            "missing": missing,
-            "ready": len(missing) == 0,
-        })
+        json_response(
+            handler,
+            {
+                "host": host_ip,
+                "tools": tools,
+                "available": available,
+                "missing": missing,
+                "ready": len(missing) == 0,
+            },
+        )
     except Exception as e:
-        json_response(handler, {
-            "error": f"Tool check failed on {host_ip}: {e}",
-        }, 500)
+        json_response(
+            handler,
+            {
+                "error": f"Tool check failed on {host_ip}: {e}",
+            },
+            500,
+        )
 
 
 # -- Registration ------------------------------------------------------------

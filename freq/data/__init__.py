@@ -1,4 +1,5 @@
 """Package data — config templates, personality packs, knowledge base."""
+
 from importlib import resources
 from pathlib import Path
 

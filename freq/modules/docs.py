@@ -19,6 +19,7 @@ Design decisions:
     - Generate from reality, not from memory. If a human wrote it, it is
       already wrong. If FREQ generates it, it matches what is deployed.
 """
+
 import json
 import os
 import time
@@ -63,7 +64,8 @@ def _gather_fleet_data(cfg: FreqConfig) -> dict:
     )
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=DOCS_CMD_TIMEOUT,
@@ -308,7 +310,9 @@ def _cmd_verify(cfg: FreqConfig, args) -> int:
     if drifts == 0:
         fmt.line(f"  {fmt.C.GREEN}{fmt.S.TICK} Documentation matches live state.{fmt.C.RESET}")
     else:
-        fmt.line(f"  {fmt.C.YELLOW}{fmt.S.WARN} {drifts} drift(s) detected. Regenerate: freq docs generate{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.YELLOW}{fmt.S.WARN} {drifts} drift(s) detected. Regenerate: freq docs generate{fmt.C.RESET}"
+        )
 
     fmt.blank()
     fmt.footer()
@@ -321,9 +325,7 @@ def _cmd_runbook(cfg: FreqConfig, args) -> int:
 
     # List runbooks
     rdir = _runbook_dir(cfg)
-    runbooks = [f.replace(".json", "")
-                for f in os.listdir(rdir)
-                if f.endswith(".json")]
+    runbooks = [f.replace(".json", "") for f in os.listdir(rdir) if f.endswith(".json")]
 
     if not name:
         fmt.header("Runbooks")
@@ -337,7 +339,7 @@ def _cmd_runbook(cfg: FreqConfig, args) -> int:
             fmt.line(f'  {fmt.C.DIM} "description": "Clean up disk space",{fmt.C.RESET}')
             fmt.line(f'  {fmt.C.DIM} "steps": [{{"command": "freq health"}},{fmt.C.RESET}')
             fmt.line(f'  {fmt.C.DIM}           {{"command": "freq exec all \'apt clean\'"}}]{fmt.C.RESET}')
-            fmt.line(f'  {fmt.C.DIM}}}{fmt.C.RESET}')
+            fmt.line(f"  {fmt.C.DIM}}}{fmt.C.RESET}")
         else:
             for rb in runbooks:
                 fpath = os.path.join(rdir, rb + ".json")

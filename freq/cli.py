@@ -7,6 +7,7 @@ Architecture: Python is primary. Modules are imported on demand.
 If a module is missing, the command reports the error and FREQ keeps running.
 This is the "muscles can be missing" principle from the Convergence.
 """
+
 import argparse
 import os
 
@@ -21,11 +22,14 @@ from freq.core.personality import load_pack, show_vibe
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _set_action(handler, action_value):
     """Wrap a handler to inject args.action before calling."""
+
     def wrapper(cfg, pack, args):
         args.action = action_value
         return handler(cfg, pack, args)
+
     return wrapper
 
 
@@ -37,6 +41,7 @@ def _domain_help(parser):
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
+
 
 def main(argv: list = None) -> int:
     """Main entry point for FREQ CLI."""
@@ -54,6 +59,7 @@ def main(argv: list = None) -> int:
 
     # Discover and register plugins before parsing
     from freq.core.plugins import discover_plugins
+
     plugin_dir = os.path.join(cfg.conf_dir, "plugins")
     plugins = discover_plugins(plugin_dir)
     if plugins:
@@ -61,8 +67,7 @@ def main(argv: list = None) -> int:
         if sub:
             for plugin in plugins:
                 try:
-                    p = sub.add_parser(plugin["name"],
-                                       help=f"[plugin] {plugin['description']}")
+                    p = sub.add_parser(plugin["name"], help=f"[plugin] {plugin['description']}")
                     p.add_argument("plugin_args", nargs="*", help="Plugin arguments")
                     h = plugin["handler"]
                     p.set_defaults(func=lambda c, pk, a, _h=h: _h(c, pk, a))
@@ -106,6 +111,7 @@ def main(argv: list = None) -> int:
         logger.error(f"command failed: {e}", command=f"{domain} {subcmd}".strip())
         if cfg.debug:
             import traceback
+
             traceback.print_exc()
         return 1
 
@@ -119,6 +125,7 @@ def main(argv: list = None) -> int:
 # ---------------------------------------------------------------------------
 # Parser builder
 # ---------------------------------------------------------------------------
+
 
 def _build_parser() -> argparse.ArgumentParser:
     """Build the argument parser with domain-based command dispatch."""
@@ -168,6 +175,7 @@ def _build_parser() -> argparse.ArgumentParser:
 # Top-level utilities (no domain prefix)
 # ---------------------------------------------------------------------------
 
+
 def _register_utilities(sub):
     """Register commands that stay top-level: freq <cmd>."""
     p = sub.add_parser("version", help="Show version and branding")
@@ -193,8 +201,13 @@ def _register_utilities(sub):
     p.add_argument("--dry-run", action="store_true", help="Show what init would do (or would remove with --uninstall)")
     p.add_argument("--headless", action="store_true", help="Non-interactive mode (no prompts)")
     p.add_argument("--bootstrap-key", help="SSH key for initial auth to fleet hosts")
-    p.add_argument("--bootstrap-user", default="root", help="SSH user for initial auth — root or sudo account (default: root)")
-    p.add_argument("--bootstrap-password-file", help="Password file for initial auth to PVE nodes (via sshpass, when no bootstrap key)")
+    p.add_argument(
+        "--bootstrap-user", default="root", help="SSH user for initial auth — root or sudo account (default: root)"
+    )
+    p.add_argument(
+        "--bootstrap-password-file",
+        help="Password file for initial auth to PVE nodes (via sshpass, when no bootstrap key)",
+    )
     p.add_argument("--password-file", help="Read service account password from file")
     p.add_argument("--pve-nodes", help="PVE node IPs (comma or space-separated)")
     p.add_argument("--pve-node-names", help="PVE node names (comma or space-separated, same order as --pve-nodes)")
@@ -227,9 +240,13 @@ def _register_utilities(sub):
     p.set_defaults(func=_cmd_learn)
 
     p = sub.add_parser("docs", help="Auto-generated infrastructure documentation")
-    p.add_argument("action", nargs="?",
-                   choices=["generate", "export", "verify", "runbook"],
-                   default="generate", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["generate", "export", "verify", "runbook"],
+        default="generate",
+        help="Action to perform",
+    )
     p.add_argument("name", nargs="?", help="Runbook name (for runbook action)")
     p.add_argument("--format", default="md", choices=["md", "html"], help="Export format")
     p.set_defaults(func=_cmd_docs)
@@ -242,7 +259,9 @@ def _register_utilities(sub):
     p.set_defaults(func=_cmd_notify)
 
     p = sub.add_parser("agent", help="AI specialist management")
-    p.add_argument("action", nargs="?", choices=["templates", "create", "list", "start", "stop", "destroy", "status", "ssh"])
+    p.add_argument(
+        "action", nargs="?", choices=["templates", "create", "list", "start", "stop", "destroy", "status", "ssh"]
+    )
     p.add_argument("name", nargs="?", help="Agent name or template")
     p.add_argument("--agent-name", help="Custom agent name (for create)")
     p.add_argument("--image", help="Cloud image (debian-13, ubuntu-2404, rocky-9, etc.)")
@@ -250,17 +269,14 @@ def _register_utilities(sub):
     p.set_defaults(func=_cmd_agent)
 
     p = sub.add_parser("specialist", help="Specialist VM workspace deployment")
-    p.add_argument("action", nargs="?", choices=["create", "health", "status", "list", "roles"],
-                   default="list")
+    p.add_argument("action", nargs="?", choices=["create", "health", "status", "list", "roles"], default="list")
     p.add_argument("target", nargs="?", help="Host IP or label")
-    p.add_argument("--role", choices=["sandbox", "dev", "infra", "security", "media"],
-                   help="Specialist role")
+    p.add_argument("--role", choices=["sandbox", "dev", "infra", "security", "media"], help="Specialist role")
     p.add_argument("--name", help="Specialist name")
     p.set_defaults(func=_cmd_specialist)
 
     p = sub.add_parser("lab", help="Lab environment management")
-    p.add_argument("action", nargs="?", choices=["status", "media", "deploy", "resize", "rebuild"],
-                   default="status")
+    p.add_argument("action", nargs="?", choices=["status", "media", "deploy", "resize", "rebuild"], default="status")
     p.add_argument("service", nargs="?", help="Sub-action (deploy/status for media)")
     p.add_argument("target", nargs="?", help="VMID (for resize/rebuild)")
     p.add_argument("--min", action="store_true", help="Set minimum viable specs")
@@ -273,6 +289,7 @@ def _register_utilities(sub):
 # ---------------------------------------------------------------------------
 # freq vm — Virtual Machine Lifecycle
 # ---------------------------------------------------------------------------
+
 
 def _register_vm(sub):
     """Register freq vm subcommands."""
@@ -320,21 +337,24 @@ def _register_vm(sub):
     p.set_defaults(func=_cmd_resize)
 
     p = vm_sub.add_parser("snapshot", help="Snapshot management (create/list/delete)")
-    p.add_argument("snap_action", nargs="?", choices=["create", "list", "delete"], default="create",
-                   help="Action: create (default), list, delete")
+    p.add_argument(
+        "snap_action",
+        nargs="?",
+        choices=["create", "list", "delete"],
+        default="create",
+        help="Action: create (default), list, delete",
+    )
     p.add_argument("target", nargs="?", help="VMID or name")
     p.add_argument("--name", help="Snapshot name (for create/delete)")
     p.set_defaults(func=_cmd_snapshot)
 
     p = vm_sub.add_parser("power", help="VM power control (start/stop/reboot/shutdown/status)")
-    p.add_argument("action", choices=["start", "stop", "reboot", "shutdown", "status"],
-                   help="Power action")
+    p.add_argument("action", choices=["start", "stop", "reboot", "shutdown", "status"], help="Power action")
     p.add_argument("target", help="VMID")
     p.set_defaults(func=_cmd_power)
 
     p = vm_sub.add_parser("nic", help="VM NIC management (add/clear/change-ip/change-id/check-ip)")
-    p.add_argument("action", choices=["add", "clear", "change-ip", "change-id", "check-ip"],
-                   help="NIC action")
+    p.add_argument("action", choices=["add", "clear", "change-ip", "change-id", "check-ip"], help="NIC action")
     p.add_argument("target", nargs="?", help="VMID")
     p.add_argument("--ip", help="IP address (CIDR or bare)")
     p.add_argument("--gw", help="Gateway IP")
@@ -425,6 +445,7 @@ def _register_vm(sub):
 # freq fleet — Fleet Operations
 # ---------------------------------------------------------------------------
 
+
 def _register_fleet(sub):
     """Register freq fleet subcommands."""
     fleet = sub.add_parser("fleet", help="Fleet-wide operations and diagnostics")
@@ -451,8 +472,7 @@ def _register_fleet(sub):
     p.set_defaults(func=_cmd_detail)
 
     p = fleet_sub.add_parser("boundaries", help="Fleet boundary tiers and VM categories")
-    p.add_argument("action", nargs="?", default="show", choices=["show", "lookup"],
-                   help="Action (default: show)")
+    p.add_argument("action", nargs="?", default="show", choices=["show", "lookup"], help="Action (default: show)")
     p.add_argument("target", nargs="?", help="VMID (for lookup)")
     p.set_defaults(func=_cmd_boundaries)
 
@@ -483,8 +503,7 @@ def _register_fleet(sub):
     p.set_defaults(func=_cmd_health)
 
     p = fleet_sub.add_parser("report", help="Generate fleet health report")
-    p.add_argument("action", nargs="?", choices=["generate"], default="generate",
-                   help="Action to perform")
+    p.add_argument("action", nargs="?", choices=["generate"], default="generate", help="Action to perform")
     p.add_argument("--markdown", action="store_true", help="Markdown output")
     p.set_defaults(func=_cmd_report)
 
@@ -497,21 +516,26 @@ def _register_fleet(sub):
     p.set_defaults(func=_cmd_fleet_update)
 
     p = fleet_sub.add_parser("comms", help="Inter-VM communication")
-    p.add_argument("action", nargs="?", choices=["setup", "send", "check", "read"],
-                   default="check")
+    p.add_argument("action", nargs="?", choices=["setup", "send", "check", "read"], default="check")
     p.add_argument("--target", help="Destination host")
     p.add_argument("--message", "-m", help="Message text")
     p.set_defaults(func=_cmd_comms)
 
     p = fleet_sub.add_parser("inventory", help="Full fleet inventory export (hosts/VMs/containers)")
-    p.add_argument("section", nargs="?", choices=["all", "hosts", "vms", "containers"],
-                   default="all", help="Section to export (default: all)")
+    p.add_argument(
+        "section",
+        nargs="?",
+        choices=["all", "hosts", "vms", "containers"],
+        default="all",
+        help="Section to export (default: all)",
+    )
     p.add_argument("--csv", action="store_true", help="CSV output")
     p.set_defaults(func=_cmd_inventory)
 
     p = fleet_sub.add_parser("federation", help="Multi-site federation")
-    p.add_argument("action", nargs="?", choices=["list", "register", "remove", "poll"],
-                   default="list", help="Action to perform")
+    p.add_argument(
+        "action", nargs="?", choices=["list", "register", "remove", "poll"], default="list", help="Action to perform"
+    )
     p.add_argument("--name", help="Site name")
     p.add_argument("--url", help="Site URL")
     p.add_argument("--secret", default="", help="Shared secret")
@@ -532,6 +556,7 @@ def _register_fleet(sub):
 # ---------------------------------------------------------------------------
 # freq host — Host Registry
 # ---------------------------------------------------------------------------
+
 
 def _register_host(sub):
     """Register freq host subcommands."""
@@ -581,6 +606,7 @@ def _register_host(sub):
 # freq docker — Container Management
 # ---------------------------------------------------------------------------
 
+
 def _register_docker(sub):
     """Register freq docker subcommands."""
     docker = sub.add_parser("docker", help="Container and stack management")
@@ -592,16 +618,25 @@ def _register_docker(sub):
     p.set_defaults(func=_cmd_docker)
 
     p = docker_sub.add_parser("fleet", help="Fleet-wide Docker operations (ps/logs/stats)")
-    p.add_argument("docker_action", nargs="?", choices=["ps", "logs", "stats"], default="ps",
-                   help="Action: ps (default), logs, stats")
+    p.add_argument(
+        "docker_action",
+        nargs="?",
+        choices=["ps", "logs", "stats"],
+        default="ps",
+        help="Action: ps (default), logs, stats",
+    )
     p.add_argument("service", nargs="?", help="Service name (for logs)")
     p.add_argument("--lines", "-n", type=int, default=20, help="Log lines (for logs)")
     p.set_defaults(func=_cmd_docker_fleet)
 
     p = docker_sub.add_parser("stack", help="Docker Compose stack management")
-    p.add_argument("action", nargs="?",
-                   choices=["status", "update", "health", "logs", "restart", "template"],
-                   default="status", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["status", "update", "health", "logs", "restart", "template"],
+        default="status",
+        help="Action to perform",
+    )
     p.add_argument("name", nargs="?", help="Stack name")
     p.add_argument("--host", dest="target_host", help="Target host")
     p.add_argument("--lines", type=int, default=30, help="Log lines")
@@ -625,6 +660,7 @@ def _register_docker(sub):
 # freq secure — Security & Compliance
 # ---------------------------------------------------------------------------
 
+
 def _register_secure(sub):
     """Register freq secure subcommands."""
     secure = sub.add_parser("secure", help="Security auditing, compliance, and hardening")
@@ -647,26 +683,38 @@ def _register_secure(sub):
     p.set_defaults(func=_cmd_harden)
 
     p = secure_sub.add_parser("comply", help="CIS/STIG compliance scanning")
-    p.add_argument("action", nargs="?", choices=["scan", "status", "report", "exceptions"],
-                   default="scan", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["scan", "status", "report", "exceptions"],
+        default="scan",
+        help="Action to perform",
+    )
     p.set_defaults(func=_cmd_comply)
 
     p = secure_sub.add_parser("patch", help="Fleet patch management (status/check/apply/hold)")
-    p.add_argument("action", nargs="?",
-                   choices=["status", "check", "apply", "hold", "history", "compliance"],
-                   default="status", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["status", "check", "apply", "hold", "history", "compliance"],
+        default="status",
+        help="Action to perform",
+    )
     p.add_argument("name", nargs="?", help="Package name (for hold)")
     p.add_argument("--target-host", help="Target specific host")
     p.add_argument("--lines", type=int, default=20, help="History lines")
     p.set_defaults(func=_cmd_patch)
 
     p = secure_sub.add_parser("secrets", help="Secret rotation, scanning, and lifecycle")
-    p.add_argument("action", nargs="?",
-                   choices=["list", "scan", "audit", "generate", "rotate", "lease"],
-                   default="list", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["list", "scan", "audit", "generate", "rotate", "lease"],
+        default="list",
+        help="Action to perform",
+    )
     p.add_argument("name", nargs="?", help="Secret/lease name")
-    p.add_argument("--secret-type", default="password", choices=["password", "token"],
-                   help="Type for generate")
+    p.add_argument("--secret-type", default="password", choices=["password", "token"], help="Type for generate")
     p.add_argument("--length", type=int, default=32, help="Secret length (default: 32)")
     p.add_argument("--expires", default="90d", help="Lease expiry (e.g., 90d, 24h)")
     p.set_defaults(func=_cmd_secrets)
@@ -700,6 +748,7 @@ def _register_secure(sub):
 # freq observe — Observability Platform
 # ---------------------------------------------------------------------------
 
+
 def _register_observe(sub):
     """Register freq observe subcommands."""
     observe = sub.add_parser("observe", help="Monitoring, alerting, logs, and trends")
@@ -707,14 +756,21 @@ def _register_observe(sub):
     observe_sub = observe.add_subparsers(dest="subcmd")
 
     p = observe_sub.add_parser("alert", help="Alert management (create/list/delete/history/test/silence/check)")
-    p.add_argument("action", nargs="?",
-                   choices=["list", "create", "delete", "history", "test", "silence", "check"],
-                   default="list", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["list", "create", "delete", "history", "test", "silence", "check"],
+        default="list",
+        help="Action to perform",
+    )
     p.add_argument("name", nargs="?", help="Alert rule name (for create/delete/silence)")
-    p.add_argument("--condition", help="Alert condition (host_down, cpu_above, ram_above, disk_above, docker_down, load_spike)")
+    p.add_argument(
+        "--condition", help="Alert condition (host_down, cpu_above, ram_above, disk_above, docker_down, load_spike)"
+    )
     p.add_argument("--threshold", type=float, default=0, help="Threshold value")
-    p.add_argument("--alert-severity", default="warning", choices=["info", "warning", "critical"],
-                   help="Alert severity")
+    p.add_argument(
+        "--alert-severity", default="warning", choices=["info", "warning", "critical"], help="Alert severity"
+    )
     p.add_argument("--target-host", default="*", help="Target host pattern (* for all)")
     p.add_argument("--cooldown", type=int, default=300, help="Seconds between re-alerts (default: 300)")
     p.add_argument("--duration", type=int, default=60, help="Silence duration in minutes (default: 60)")
@@ -723,8 +779,9 @@ def _register_observe(sub):
     p.set_defaults(func=_cmd_alert)
 
     p = observe_sub.add_parser("logs", help="Fleet-wide log search and aggregation")
-    p.add_argument("action", nargs="?", choices=["tail", "search", "stats", "export"],
-                   default="tail", help="Action to perform")
+    p.add_argument(
+        "action", nargs="?", choices=["tail", "search", "stats", "export"], default="tail", help="Action to perform"
+    )
     p.add_argument("pattern", nargs="?", help="Search pattern (for search)")
     p.add_argument("--host", dest="target_host", help="Target specific host")
     p.add_argument("--since", default="1h", help="Time range (default: 1h)")
@@ -733,19 +790,20 @@ def _register_observe(sub):
     p.set_defaults(func=_cmd_logs)
 
     p = observe_sub.add_parser("trend", help="Fleet capacity trends over time")
-    p.add_argument("action", nargs="?", choices=["show", "snapshot", "history"],
-                   default="show", help="Action to perform")
+    p.add_argument(
+        "action", nargs="?", choices=["show", "snapshot", "history"], default="show", help="Action to perform"
+    )
     p.add_argument("--lines", type=int, default=20, help="History lines to show")
     p.set_defaults(func=_cmd_trend)
 
     p = observe_sub.add_parser("capacity", help="Fleet capacity projections")
-    p.add_argument("action", nargs="?", choices=["show", "snapshot"], default="show",
-                   help="show projections or force a snapshot")
+    p.add_argument(
+        "action", nargs="?", choices=["show", "snapshot"], default="show", help="show projections or force a snapshot"
+    )
     p.set_defaults(func=_cmd_capacity)
 
     p = observe_sub.add_parser("sla", help="Fleet uptime SLA tracking")
-    p.add_argument("action", nargs="?", choices=["show", "check", "reset"],
-                   default="show", help="Action to perform")
+    p.add_argument("action", nargs="?", choices=["show", "check", "reset"], default="show", help="Action to perform")
     p.add_argument("--days", type=int, default=30, help="SLA period in days (default: 30)")
     p.set_defaults(func=_cmd_sla)
 
@@ -753,8 +811,9 @@ def _register_observe(sub):
     p.set_defaults(func=_cmd_watch)
 
     p = observe_sub.add_parser("db", help="Fleet-wide database health (status/health/size)")
-    p.add_argument("action", nargs="?", choices=["status", "health", "size"],
-                   default="status", help="Action to perform")
+    p.add_argument(
+        "action", nargs="?", choices=["status", "health", "size"], default="status", help="Action to perform"
+    )
     p.set_defaults(func=_cmd_db)
 
     # Metrics (WS10)
@@ -792,6 +851,7 @@ def _register_observe(sub):
 # freq state — Desired State & Drift Management
 # ---------------------------------------------------------------------------
 
+
 def _register_state(sub):
     """Register freq state subcommands."""
     state = sub.add_parser("state", help="Baselines, plans, policies, drift detection")
@@ -799,8 +859,9 @@ def _register_state(sub):
     state_sub = state.add_subparsers(dest="subcmd")
 
     p = state_sub.add_parser("baseline", help="Configuration baseline and drift detection")
-    p.add_argument("action", nargs="?", choices=["capture", "compare", "list", "delete"],
-                   default="list", help="Action to perform")
+    p.add_argument(
+        "action", nargs="?", choices=["capture", "compare", "list", "delete"], default="list", help="Action to perform"
+    )
     p.add_argument("name", nargs="?", help="Baseline name")
     p.set_defaults(func=_cmd_baseline)
 
@@ -833,9 +894,13 @@ def _register_state(sub):
     p.set_defaults(func=_cmd_policies)
 
     p = state_sub.add_parser("gitops", help="GitOps config sync")
-    p.add_argument("action", nargs="?",
-                   choices=["status", "sync", "apply", "diff", "log"],
-                   default="status", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["status", "sync", "apply", "diff", "log"],
+        default="status",
+        help="Action to perform",
+    )
     p.set_defaults(func=_cmd_gitops)
 
     # IaC extensions (WS15)
@@ -853,6 +918,7 @@ def _register_state(sub):
 # freq auto — Automation & Scheduling
 # ---------------------------------------------------------------------------
 
+
 def _register_auto(sub):
     """Register freq auto subcommands."""
     auto = sub.add_parser("auto", help="Rules, scheduling, playbooks, webhooks, automation")
@@ -860,10 +926,13 @@ def _register_auto(sub):
     auto_sub = auto.add_subparsers(dest="subcmd")
 
     p = auto_sub.add_parser("rules", help="Alert rule management")
-    p.add_argument("action", nargs="?", choices=["list", "create", "delete", "history"],
-                   default="list", help="Action to perform")
+    p.add_argument(
+        "action", nargs="?", choices=["list", "create", "delete", "history"], default="list", help="Action to perform"
+    )
     p.add_argument("name", nargs="?", help="Rule name (for create/delete)")
-    p.add_argument("--condition", help="Rule condition (host_unreachable, cpu_above, ram_above, disk_above, docker_down)")
+    p.add_argument(
+        "--condition", help="Rule condition (host_unreachable, cpu_above, ram_above, disk_above, docker_down)"
+    )
     p.add_argument("--threshold", type=float, default=0, help="Threshold value")
     p.add_argument("--severity", default="warning", help="Alert severity (info/warning/critical)")
     p.add_argument("--target-host", default="*", help="Target host pattern")
@@ -872,10 +941,13 @@ def _register_auto(sub):
     p.set_defaults(func=_cmd_rules)
 
     p = auto_sub.add_parser("schedule", help="Job scheduler (create/list/delete/run/templates)")
-    p.add_argument("action", nargs="?",
-                   choices=["list", "create", "delete", "run", "enable", "disable",
-                            "log", "templates", "install"],
-                   default="list", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["list", "create", "delete", "run", "enable", "disable", "log", "templates", "install"],
+        default="list",
+        help="Action to perform",
+    )
     p.add_argument("name", nargs="?", help="Job name")
     p.add_argument("--command", help="Command to schedule")
     p.add_argument("--interval", help="Run interval (5m, 2h, 1d)")
@@ -883,15 +955,18 @@ def _register_auto(sub):
     p.set_defaults(func=_cmd_schedule)
 
     p = auto_sub.add_parser("playbook", help="Incident playbook runner")
-    p.add_argument("action", nargs="?", choices=["list", "run"], default="list",
-                   help="List playbooks or run one")
+    p.add_argument("action", nargs="?", choices=["list", "run"], default="list", help="List playbooks or run one")
     p.add_argument("name", nargs="?", help="Playbook filename or name")
     p.set_defaults(func=_cmd_playbook)
 
     p = auto_sub.add_parser("webhook", help="Inbound webhook management (create/list/test)")
-    p.add_argument("action", nargs="?",
-                   choices=["list", "create", "delete", "test", "log"],
-                   default="list", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["list", "create", "delete", "test", "log"],
+        default="list",
+        help="Action to perform",
+    )
     p.add_argument("name", nargs="?", help="Webhook name")
     p.add_argument("--command", help="Command to execute on trigger")
     p.add_argument("--secret", help="HMAC secret for signature verification")
@@ -899,8 +974,7 @@ def _register_auto(sub):
     p.set_defaults(func=_cmd_webhook)
 
     p = auto_sub.add_parser("chaos", help="Chaos engineering experiments")
-    p.add_argument("action", nargs="?", choices=["list", "run", "log"],
-                   default="list", help="Action to perform")
+    p.add_argument("action", nargs="?", choices=["list", "run", "log"], default="list", help="Action to perform")
     p.add_argument("--type", help="Experiment type")
     p.add_argument("--host", help="Target host label")
     p.add_argument("--service", default="", help="Target service name")
@@ -948,6 +1022,7 @@ def _register_auto(sub):
 # freq ops — Operations
 # ---------------------------------------------------------------------------
 
+
 def _register_ops(sub):
     """Register freq ops subcommands."""
     ops = sub.add_parser("ops", help="On-call rotation and risk analysis")
@@ -955,9 +1030,13 @@ def _register_ops(sub):
     ops_sub = ops.add_subparsers(dest="subcmd")
 
     p = ops_sub.add_parser("oncall", help="On-call rotation and incident management")
-    p.add_argument("action", nargs="?",
-                   choices=["whoami", "schedule", "alert", "ack", "escalate", "resolve", "history"],
-                   default="whoami", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["whoami", "schedule", "alert", "ack", "escalate", "resolve", "history"],
+        default="whoami",
+        help="Action to perform",
+    )
     p.add_argument("name", nargs="?", help="Incident ID (for ack/escalate/resolve)")
     p.add_argument("--users", help="Comma-separated user list (for schedule)")
     p.add_argument("--rotation", choices=["daily", "weekly", "biweekly"], help="Rotation period")
@@ -1004,6 +1083,7 @@ def _register_ops(sub):
 # freq hw — Hardware & Cost
 # ---------------------------------------------------------------------------
 
+
 def _register_hw(sub):
     """Register freq hw subcommands."""
     hw = sub.add_parser("hw", help="Hardware management and cost analysis")
@@ -1018,14 +1098,23 @@ def _register_hw(sub):
     p.set_defaults(func=_cmd_cost)
 
     p = hw_sub.add_parser("cost-analysis", help="On-prem FinOps and cost optimization")
-    p.add_argument("action", nargs="?", choices=["waste", "density", "optimize", "compare"],
-                   default="waste", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["waste", "density", "optimize", "compare"],
+        default="waste",
+        help="Action to perform",
+    )
     p.add_argument("--rate", type=float, default=0.12, help="Electricity rate $/kWh (default: 0.12)")
     p.set_defaults(func=_cmd_cost_analysis)
 
     p = hw_sub.add_parser("gwipe", help="FREQ WIPE — drive sanitization station")
-    p.add_argument("action", nargs="?", default="status",
-                   help="Subcommand (status/bays/history/test/wipe/full-send/pause/resume/connect)")
+    p.add_argument(
+        "action",
+        nargs="?",
+        default="status",
+        help="Subcommand (status/bays/history/test/wipe/full-send/pause/resume/connect)",
+    )
     p.add_argument("target", nargs="?", help="Bay device (e.g. sdb) for per-bay actions")
     p.add_argument("--host", help="GWIPE station IP (overrides vault)")
     p.add_argument("--key", help="API key (overrides vault)")
@@ -1045,6 +1134,7 @@ def _register_hw(sub):
 # ---------------------------------------------------------------------------
 # freq store — Storage Management
 # ---------------------------------------------------------------------------
+
 
 def _register_store(sub):
     """Register freq store subcommands."""
@@ -1088,6 +1178,7 @@ def _register_store(sub):
 # freq dr — Disaster Recovery & Backup
 # ---------------------------------------------------------------------------
 
+
 def _register_dr(sub):
     """Register freq dr subcommands."""
     dr = sub.add_parser("dr", help="Backup, recovery, and SLA")
@@ -1095,19 +1186,21 @@ def _register_dr(sub):
     dr_sub = dr.add_subparsers(dest="subcmd")
 
     p = dr_sub.add_parser("backup", help="VM snapshots, config export, retention")
-    p.add_argument("action", nargs="?", choices=["list", "create", "export", "status", "prune"],
-                   default="list")
+    p.add_argument("action", nargs="?", choices=["list", "create", "export", "status", "prune"], default="list")
     p.add_argument("target", nargs="?", help="VMID (for create)")
     p.set_defaults(func=_cmd_backup)
 
     p = dr_sub.add_parser("policy", help="Declarative backup rules (create/list/apply)")
-    p.add_argument("action", nargs="?",
-                   choices=["list", "create", "delete", "apply", "status"],
-                   default="list", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["list", "create", "delete", "apply", "status"],
+        default="list",
+        help="Action to perform",
+    )
     p.add_argument("name", nargs="?", help="Policy name")
     p.add_argument("--target", help="Target selector (tag name, vmid range, or *)")
-    p.add_argument("--target-type", default="tag", choices=["tag", "vmid_range", "all"],
-                   help="Target type")
+    p.add_argument("--target-type", default="tag", choices=["tag", "vmid_range", "all"], help="Target type")
     p.add_argument("--interval", default="24h", help="Snapshot interval (default: 24h)")
     p.add_argument("--retention", type=int, default=7, help="Days to retain (default: 7)")
     p.set_defaults(func=_cmd_backup_policy)
@@ -1118,13 +1211,13 @@ def _register_dr(sub):
     p.set_defaults(func=_cmd_journal)
 
     p = dr_sub.add_parser("migrate-plan", help="Load-aware migration recommendations")
-    p.add_argument("action", nargs="?", choices=["show"], default="show",
-                   help="Action to perform")
+    p.add_argument("action", nargs="?", choices=["show"], default="show", help="Action to perform")
     p.set_defaults(func=_cmd_migrate_plan)
 
     p = dr_sub.add_parser("migrate-vmware", help="VMware ESXi to Proxmox migration")
-    p.add_argument("action", nargs="?", choices=["scan", "import", "convert", "status"],
-                   default="scan", help="Action to perform")
+    p.add_argument(
+        "action", nargs="?", choices=["scan", "import", "convert", "status"], default="scan", help="Action to perform"
+    )
     p.add_argument("target", nargs="?", help="OVA/VMDK file or directory path")
     p.add_argument("--vmid", type=int, help="Target VMID for import")
     p.add_argument("--node", help="Target PVE node")
@@ -1178,6 +1271,7 @@ def _register_dr(sub):
 # ---------------------------------------------------------------------------
 # freq net — Network Intelligence & Switch Management
 # ---------------------------------------------------------------------------
+
 
 def _register_net(sub):
     """Register freq net subcommands."""
@@ -1406,20 +1500,35 @@ def _register_net(sub):
     p.set_defaults(func=_cmd_ip_conflict)
 
     p = net_sub.add_parser("netmon", help="Network monitoring and interface tracking")
-    p.add_argument("action", nargs="?", choices=["interfaces", "poll", "bandwidth", "topology"],
-                   default="interfaces", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["interfaces", "poll", "bandwidth", "topology"],
+        default="interfaces",
+        help="Action to perform",
+    )
     p.set_defaults(func=_cmd_netmon)
 
     p = net_sub.add_parser("map", help="Dependency discovery and impact analysis")
-    p.add_argument("action", nargs="?", choices=["discover", "show", "impact", "export"],
-                   default="discover", help="Action to perform")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["discover", "show", "impact", "export"],
+        default="discover",
+        help="Action to perform",
+    )
     p.add_argument("target", nargs="?", help="Host label (for impact)")
     p.add_argument("--format", default="json", choices=["json", "dot"], help="Export format")
     p.set_defaults(func=_cmd_map)
 
     p = net_sub.add_parser("ip", help="IP address management (next/list/check)")
-    p.add_argument("action", nargs="?", choices=["next", "list", "check"], default="next",
-                   help="Action: next (default), list, check")
+    p.add_argument(
+        "action",
+        nargs="?",
+        choices=["next", "list", "check"],
+        default="next",
+        help="Action: next (default), list, check",
+    )
     p.add_argument("target", nargs="?", help="IP address (for check)")
     p.add_argument("--vlan", help="VLAN name to search")
     p.add_argument("--count", type=int, default=1, help="Number of IPs to find (for next)")
@@ -1429,6 +1538,7 @@ def _register_net(sub):
 # ---------------------------------------------------------------------------
 # freq fw — Firewall & Gateway
 # ---------------------------------------------------------------------------
+
 
 def _register_fw(sub):
     """Register freq fw subcommands."""
@@ -1440,8 +1550,13 @@ def _register_fw(sub):
     p.set_defaults(func=_cmd_fw_status)
 
     p = fw_sub.add_parser("rules", help="List, export, or audit firewall rules")
-    p.add_argument("action", nargs="?", default="list", choices=["list", "export", "audit"],
-                   help="Action: list (default), export, audit")
+    p.add_argument(
+        "action",
+        nargs="?",
+        default="list",
+        choices=["list", "export", "audit"],
+        help="Action: list (default), export, audit",
+    )
     p.set_defaults(func=_cmd_fw_rules)
 
     p = fw_sub.add_parser("nat", help="NAT/port forward rules")
@@ -1467,6 +1582,7 @@ def _register_fw(sub):
 # ---------------------------------------------------------------------------
 # freq cert — Certificate & PKI
 # ---------------------------------------------------------------------------
+
 
 def _register_cert(sub):
     """Register freq cert subcommands."""
@@ -1503,6 +1619,7 @@ def _register_cert(sub):
 # ---------------------------------------------------------------------------
 # freq dns — DNS Management
 # ---------------------------------------------------------------------------
+
 
 def _register_dns(sub):
     """Register freq dns subcommands."""
@@ -1551,6 +1668,7 @@ def _register_dns(sub):
 # freq proxy — Reverse Proxy
 # ---------------------------------------------------------------------------
 
+
 def _register_proxy(sub):
     """Register freq proxy subcommands."""
     proxy = sub.add_parser("proxy", help="Reverse proxy management")
@@ -1586,14 +1704,19 @@ def _register_proxy(sub):
 # freq media — Media Stack
 # ---------------------------------------------------------------------------
 
+
 def _register_media(sub):
     """Register freq media subcommands."""
     media = sub.add_parser("media", help="Media stack management (Plex/Sonarr/Radarr/Tdarr)")
-    media.add_argument("action", nargs="?", help="Subcommand (status/restart/stop/start/logs/stats/"
-                       "update/prune/backup/restore/health/doctor/queue/streams/vpn/disk/"
-                       "missing/search/scan/activity/wanted/indexers/downloads/"
-                       "transcode/subtitles/requests/nuke/export/dashboard/report/"
-                       "compose/mounts/cleanup/gpu)")
+    media.add_argument(
+        "action",
+        nargs="?",
+        help="Subcommand (status/restart/stop/start/logs/stats/"
+        "update/prune/backup/restore/health/doctor/queue/streams/vpn/disk/"
+        "missing/search/scan/activity/wanted/indexers/downloads/"
+        "transcode/subtitles/requests/nuke/export/dashboard/report/"
+        "compose/mounts/cleanup/gpu)",
+    )
     media.add_argument("service", nargs="?", help="Service name or sub-action")
     media.add_argument("--check", action="store_true", help="Check mode (for update)")
     media.add_argument("--list", action="store_true", help="List mode (for backup)")
@@ -1606,6 +1729,7 @@ def _register_media(sub):
 # ---------------------------------------------------------------------------
 # freq user — User Management
 # ---------------------------------------------------------------------------
+
 
 def _register_user(sub):
     """Register freq user subcommands."""
@@ -1645,6 +1769,7 @@ def _register_user(sub):
 # freq vpn — VPN Management
 # ---------------------------------------------------------------------------
 
+
 def _register_vpn(sub):
     """Register freq vpn subcommands."""
     vpn = sub.add_parser("vpn", help="VPN tunnel management (WireGuard/OpenVPN)")
@@ -1681,6 +1806,7 @@ def _register_vpn(sub):
 # ---------------------------------------------------------------------------
 # freq event — Event Network Lifecycle
 # ---------------------------------------------------------------------------
+
 
 def _register_event(sub):
     """Register freq event subcommands."""
@@ -1732,6 +1858,7 @@ def _register_event(sub):
 # freq plugin — Plugin Ecosystem
 # ---------------------------------------------------------------------------
 
+
 def _register_plugin(sub):
     """Register freq plugin subcommands."""
     pl = sub.add_parser("plugin", help="Plugin management (install, create, remove)")
@@ -1755,8 +1882,9 @@ def _register_plugin(sub):
 
     p = pl_sub.add_parser("create", help="Scaffold a new plugin from template")
     p.add_argument("--name", required=True, help="Plugin name")
-    p.add_argument("--type", dest="type", default="command",
-                   help="Plugin type (command, deployer, notification, policy, etc.)")
+    p.add_argument(
+        "--type", dest="type", default="command", help="Plugin type (command, deployer, notification, policy, etc.)"
+    )
     p.add_argument("--description", help="Short description")
     p.add_argument("--category", help="Deployer category (for deployer type)")
     p.set_defaults(func=_cmd_plugin_create)
@@ -1779,198 +1907,265 @@ def _register_plugin(sub):
 # Help command — domain-based reference
 # ---------------------------------------------------------------------------
 
+
 def cmd_help(cfg: FreqConfig, pack, args) -> int:
     """Show all commands organized by domain."""
     fmt.header("Command Reference — freq <domain> <action>")
     fmt.blank()
 
     categories = [
-        ("Utilities (top-level)", [
-            ("version", "Show version and branding"),
-            ("help", "This command reference"),
-            ("doctor", "Self-diagnostic"),
-            ("menu", "Interactive TUI menu"),
-            ("demo", "Interactive demo (no fleet required)"),
-            ("init", "First-run setup wizard"),
-            ("configure", "Reconfigure settings"),
-            ("serve", "Start web dashboard"),
-            ("update", "Check for updates"),
-            ("learn <query>", "Search operational knowledge"),
-            ("docs [generate|verify|runbook]", "Auto-generated docs"),
-            ("distros", "List cloud images"),
-            ("notify <message>", "Send notification"),
-            ("agent <action>", "AI specialist management"),
-        ]),
-        ("freq vm — Virtual Machine Lifecycle", [
-            ("vm list [--node] [--status]", "List VMs across cluster"),
-            ("vm create [--name --image ...]", "Create a new VM"),
-            ("vm clone <source> [--name]", "Clone an existing VM"),
-            ("vm destroy <target>", "Destroy a VM"),
-            ("vm resize <target> [--cores --ram]", "Resize a VM"),
-            ("vm power <start/stop/reboot> <vmid>", "Power control"),
-            ("vm snapshot [create|list|delete]", "Snapshot management"),
-            ("vm rollback <vmid>", "Roll back to snapshot"),
-            ("vm nic <action> <vmid>", "NIC management"),
-            ("vm migrate <target> --node", "Migrate between nodes"),
-            ("vm import --image", "Import cloud image"),
-            ("vm template <vmid>", "Convert to template"),
-            ("vm rename <vmid> --name", "Rename a VM"),
-            ("vm disk <vmid> --size", "Add disk(s)"),
-            ("vm tag <vmid> [tags]", "PVE tags"),
-            ("vm pool [list|create|add]", "Pool management"),
-            ("vm sandbox <template>", "Spawn from template"),
-            ("vm overview", "VM inventory across cluster"),
-            ("vm config <target>", "View/edit VM configuration"),
-            ("vm rescue <target>", "Rescue a stuck VM"),
-            ("vm why <vmid>", "Explain protections"),
-            ("vm provision", "Cloud-init provisioning"),
-            ("vm file send <src> <host:dst>", "SCP file to host"),
-        ]),
-        ("freq fleet — Fleet Operations", [
-            ("fleet status", "Fleet health summary"),
-            ("fleet dashboard", "Dashboard overview"),
-            ("fleet exec <target> <cmd>", "Run command across fleet"),
-            ("fleet info <host>", "System info"),
-            ("fleet detail <host>", "Deep host inventory"),
-            ("fleet diagnose <host>", "Deep diagnostic"),
-            ("fleet ssh <host>", "SSH to host"),
-            ("fleet docker <host>", "Container discovery"),
-            ("fleet log <host>", "View host logs"),
-            ("fleet compare <a> <b>", "Side-by-side compare"),
-            ("fleet health", "Comprehensive health"),
-            ("fleet report [--markdown]", "Fleet health report"),
-            ("fleet ntp [check|fix]", "NTP management"),
-            ("fleet update [check|apply]", "OS updates"),
-            ("fleet comms [setup|send|check]", "Inter-VM mailbox"),
-            ("fleet inventory [hosts|vms|containers]", "CMDB export"),
-            ("fleet federation [list|register|poll]", "Multi-site"),
-            ("fleet test <host>", "Test connectivity"),
-        ]),
-        ("freq host — Host Registry", [
-            ("host list", "List fleet hosts"),
-            ("host add", "Add a host"),
-            ("host remove", "Remove a host"),
-            ("host discover", "Discover on network"),
-            ("host groups [list|add|remove]", "Manage groups"),
-            ("host bootstrap <host>", "Bootstrap new host"),
-            ("host onboard <host>", "Onboard to fleet"),
-            ("host keys [deploy|list|rotate]", "SSH key management"),
-        ]),
-        ("freq docker — Container Management", [
-            ("docker containers <host>", "Container discovery"),
-            ("docker fleet [ps|logs|stats]", "Fleet-wide operations"),
-            ("docker stack [status|update|health]", "Compose stacks"),
-            ("docker monitor", "HTTP endpoint checks"),
-        ]),
-        ("freq secure — Security & Compliance", [
-            ("secure vault <action> [key]", "Encrypted credential store"),
-            ("secure audit [--fix]", "Security audit"),
-            ("secure harden <target>", "Apply hardening"),
-            ("secure comply [scan|report]", "CIS/STIG compliance"),
-            ("secure patch [status|check|apply]", "Patch management"),
-            ("secure secrets [scan|audit|generate]", "Secret lifecycle"),
-            ("secure sweep [--fix]", "Full audit pipeline"),
-        ]),
-        ("freq observe — Observability", [
-            ("observe alert [list|create|check|test]", "Alert management"),
-            ("observe logs [tail|search|stats]", "Fleet log aggregation"),
-            ("observe trend [show|snapshot]", "Capacity trends"),
-            ("observe capacity [show|snapshot]", "Capacity projections"),
-            ("observe sla [show|check]", "Uptime SLA tracking"),
-            ("observe watch", "Monitoring daemon"),
-            ("observe db [status|health|size]", "Database health"),
-        ]),
-        ("freq state — Desired State", [
-            ("state baseline [capture|compare|list]", "Config baselines"),
-            ("state plan [--file]", "Fleet plan diff"),
-            ("state apply [--file]", "Apply fleet plan"),
-            ("state check <policy>", "Check compliance"),
-            ("state fix <policy>", "Apply remediation"),
-            ("state diff <policy>", "Show drift"),
-            ("state policies", "List policies"),
-            ("state gitops [status|sync|diff]", "GitOps config sync"),
-        ]),
-        ("freq auto — Automation", [
-            ("auto rules [list|create|delete]", "Alert rules"),
-            ("auto schedule [list|create|run]", "Job scheduler"),
-            ("auto playbook [list|run]", "Incident playbooks"),
-            ("auto webhook [list|create|test]", "Inbound webhooks"),
-            ("auto chaos [list|run|log]", "Chaos engineering"),
-            ("auto patrol [--interval N]", "Continuous monitoring"),
-        ]),
-        ("freq ops — Operations", [
-            ("ops oncall [whoami|schedule|alert|ack]", "On-call rotation"),
-            ("ops risk <target>", "Blast radius analysis"),
-        ]),
-        ("freq hw — Hardware & Cost", [
-            ("hw idrac <action>", "Dell iDRAC management"),
-            ("hw cost", "Power cost estimates"),
-            ("hw cost-analysis [waste|density|compare]", "FinOps analysis"),
-            ("hw gwipe [status|bays|wipe]", "Drive sanitization"),
-        ]),
-        ("freq store — Storage", [
-            ("store nas <action>", "TrueNAS management"),
-        ]),
-        ("freq dr — Disaster Recovery", [
-            ("dr backup [list|create|export|prune]", "Backup management"),
-            ("dr policy [list|create|apply]", "Backup policies"),
-            ("dr journal [--lines N]", "Operation history"),
-            ("dr migrate-plan", "Migration recommendations"),
-            ("dr migrate-vmware [scan|import]", "VMware migration"),
-        ]),
-        ("freq net — Network", [
-            ("net switch <action>", "Switch management"),
-            ("net netmon [interfaces|poll|bandwidth]", "Network monitoring"),
-            ("net map [discover|impact|export]", "Dependency mapping"),
-            ("net ip [next|list|check]", "IPAM"),
-        ]),
-        ("Standalone Domains", [
-            ("fw <action>", "Firewall (pfSense/OPNsense)"),
-            ("cert [scan|list|check]", "TLS certificates"),
-            ("dns [scan|check|list]", "DNS validation"),
-            ("proxy [status|list|add|remove]", "Reverse proxy"),
-            ("media <action> [service]", "Media stack (40+ subcommands)"),
-        ]),
-        ("freq user — User Management", [
-            ("user list", "List users"),
-            ("user create <username>", "Create user"),
-            ("user passwd <username>", "Change password"),
-            ("user roles", "View role assignments"),
-            ("user promote <username>", "Promote to higher role"),
-            ("user demote <username>", "Demote to lower role"),
-            ("user install <username>", "Install across fleet"),
-        ]),
-        ("freq vpn — VPN Management", [
-            ("vpn list", "List VPN peers"),
-            ("vpn add <name>", "Add VPN peer"),
-            ("vpn remove <name>", "Remove VPN peer"),
-        ]),
-        ("freq event — Event Network", [
-            ("event list", "List event networks"),
-            ("event create <name>", "Create event network"),
-            ("event remove <name>", "Remove event network"),
-        ]),
-        ("freq specialist — Specialist Ops", [
-            ("specialist <action>", "Specialist operations"),
-        ]),
-        ("freq lab — Lab Management", [
-            ("lab list", "List lab environments"),
-            ("lab tool <action>", "Lab tool management"),
-        ]),
-        ("freq engine — Policy Engine", [
-            ("engine run", "Run policy checks"),
-            ("engine list", "List available policies"),
-        ]),
-        ("freq plugin — Plugin Ecosystem", [
-            ("plugin list", "List installed plugins"),
-            ("plugin info <name>", "Show plugin details"),
-            ("plugin install <url-or-path>", "Install a plugin"),
-            ("plugin remove <name>", "Remove a plugin"),
-            ("plugin create --name <n> --type <t>", "Scaffold new plugin"),
-            ("plugin search [query]", "Search community index"),
-            ("plugin update [name]", "Update from source"),
-            ("plugin types", "List plugin types"),
-        ]),
+        (
+            "Utilities (top-level)",
+            [
+                ("version", "Show version and branding"),
+                ("help", "This command reference"),
+                ("doctor", "Self-diagnostic"),
+                ("menu", "Interactive TUI menu"),
+                ("demo", "Interactive demo (no fleet required)"),
+                ("init", "First-run setup wizard"),
+                ("configure", "Reconfigure settings"),
+                ("serve", "Start web dashboard"),
+                ("update", "Check for updates"),
+                ("learn <query>", "Search operational knowledge"),
+                ("docs [generate|verify|runbook]", "Auto-generated docs"),
+                ("distros", "List cloud images"),
+                ("notify <message>", "Send notification"),
+                ("agent <action>", "AI specialist management"),
+            ],
+        ),
+        (
+            "freq vm — Virtual Machine Lifecycle",
+            [
+                ("vm list [--node] [--status]", "List VMs across cluster"),
+                ("vm create [--name --image ...]", "Create a new VM"),
+                ("vm clone <source> [--name]", "Clone an existing VM"),
+                ("vm destroy <target>", "Destroy a VM"),
+                ("vm resize <target> [--cores --ram]", "Resize a VM"),
+                ("vm power <start/stop/reboot> <vmid>", "Power control"),
+                ("vm snapshot [create|list|delete]", "Snapshot management"),
+                ("vm rollback <vmid>", "Roll back to snapshot"),
+                ("vm nic <action> <vmid>", "NIC management"),
+                ("vm migrate <target> --node", "Migrate between nodes"),
+                ("vm import --image", "Import cloud image"),
+                ("vm template <vmid>", "Convert to template"),
+                ("vm rename <vmid> --name", "Rename a VM"),
+                ("vm disk <vmid> --size", "Add disk(s)"),
+                ("vm tag <vmid> [tags]", "PVE tags"),
+                ("vm pool [list|create|add]", "Pool management"),
+                ("vm sandbox <template>", "Spawn from template"),
+                ("vm overview", "VM inventory across cluster"),
+                ("vm config <target>", "View/edit VM configuration"),
+                ("vm rescue <target>", "Rescue a stuck VM"),
+                ("vm why <vmid>", "Explain protections"),
+                ("vm provision", "Cloud-init provisioning"),
+                ("vm file send <src> <host:dst>", "SCP file to host"),
+            ],
+        ),
+        (
+            "freq fleet — Fleet Operations",
+            [
+                ("fleet status", "Fleet health summary"),
+                ("fleet dashboard", "Dashboard overview"),
+                ("fleet exec <target> <cmd>", "Run command across fleet"),
+                ("fleet info <host>", "System info"),
+                ("fleet detail <host>", "Deep host inventory"),
+                ("fleet diagnose <host>", "Deep diagnostic"),
+                ("fleet ssh <host>", "SSH to host"),
+                ("fleet docker <host>", "Container discovery"),
+                ("fleet log <host>", "View host logs"),
+                ("fleet compare <a> <b>", "Side-by-side compare"),
+                ("fleet health", "Comprehensive health"),
+                ("fleet report [--markdown]", "Fleet health report"),
+                ("fleet ntp [check|fix]", "NTP management"),
+                ("fleet update [check|apply]", "OS updates"),
+                ("fleet comms [setup|send|check]", "Inter-VM mailbox"),
+                ("fleet inventory [hosts|vms|containers]", "CMDB export"),
+                ("fleet federation [list|register|poll]", "Multi-site"),
+                ("fleet test <host>", "Test connectivity"),
+            ],
+        ),
+        (
+            "freq host — Host Registry",
+            [
+                ("host list", "List fleet hosts"),
+                ("host add", "Add a host"),
+                ("host remove", "Remove a host"),
+                ("host discover", "Discover on network"),
+                ("host groups [list|add|remove]", "Manage groups"),
+                ("host bootstrap <host>", "Bootstrap new host"),
+                ("host onboard <host>", "Onboard to fleet"),
+                ("host keys [deploy|list|rotate]", "SSH key management"),
+            ],
+        ),
+        (
+            "freq docker — Container Management",
+            [
+                ("docker containers <host>", "Container discovery"),
+                ("docker fleet [ps|logs|stats]", "Fleet-wide operations"),
+                ("docker stack [status|update|health]", "Compose stacks"),
+                ("docker monitor", "HTTP endpoint checks"),
+            ],
+        ),
+        (
+            "freq secure — Security & Compliance",
+            [
+                ("secure vault <action> [key]", "Encrypted credential store"),
+                ("secure audit [--fix]", "Security audit"),
+                ("secure harden <target>", "Apply hardening"),
+                ("secure comply [scan|report]", "CIS/STIG compliance"),
+                ("secure patch [status|check|apply]", "Patch management"),
+                ("secure secrets [scan|audit|generate]", "Secret lifecycle"),
+                ("secure sweep [--fix]", "Full audit pipeline"),
+            ],
+        ),
+        (
+            "freq observe — Observability",
+            [
+                ("observe alert [list|create|check|test]", "Alert management"),
+                ("observe logs [tail|search|stats]", "Fleet log aggregation"),
+                ("observe trend [show|snapshot]", "Capacity trends"),
+                ("observe capacity [show|snapshot]", "Capacity projections"),
+                ("observe sla [show|check]", "Uptime SLA tracking"),
+                ("observe watch", "Monitoring daemon"),
+                ("observe db [status|health|size]", "Database health"),
+            ],
+        ),
+        (
+            "freq state — Desired State",
+            [
+                ("state baseline [capture|compare|list]", "Config baselines"),
+                ("state plan [--file]", "Fleet plan diff"),
+                ("state apply [--file]", "Apply fleet plan"),
+                ("state check <policy>", "Check compliance"),
+                ("state fix <policy>", "Apply remediation"),
+                ("state diff <policy>", "Show drift"),
+                ("state policies", "List policies"),
+                ("state gitops [status|sync|diff]", "GitOps config sync"),
+            ],
+        ),
+        (
+            "freq auto — Automation",
+            [
+                ("auto rules [list|create|delete]", "Alert rules"),
+                ("auto schedule [list|create|run]", "Job scheduler"),
+                ("auto playbook [list|run]", "Incident playbooks"),
+                ("auto webhook [list|create|test]", "Inbound webhooks"),
+                ("auto chaos [list|run|log]", "Chaos engineering"),
+                ("auto patrol [--interval N]", "Continuous monitoring"),
+            ],
+        ),
+        (
+            "freq ops — Operations",
+            [
+                ("ops oncall [whoami|schedule|alert|ack]", "On-call rotation"),
+                ("ops risk <target>", "Blast radius analysis"),
+            ],
+        ),
+        (
+            "freq hw — Hardware & Cost",
+            [
+                ("hw idrac <action>", "Dell iDRAC management"),
+                ("hw cost", "Power cost estimates"),
+                ("hw cost-analysis [waste|density|compare]", "FinOps analysis"),
+                ("hw gwipe [status|bays|wipe]", "Drive sanitization"),
+            ],
+        ),
+        (
+            "freq store — Storage",
+            [
+                ("store nas <action>", "TrueNAS management"),
+            ],
+        ),
+        (
+            "freq dr — Disaster Recovery",
+            [
+                ("dr backup [list|create|export|prune]", "Backup management"),
+                ("dr policy [list|create|apply]", "Backup policies"),
+                ("dr journal [--lines N]", "Operation history"),
+                ("dr migrate-plan", "Migration recommendations"),
+                ("dr migrate-vmware [scan|import]", "VMware migration"),
+            ],
+        ),
+        (
+            "freq net — Network",
+            [
+                ("net switch <action>", "Switch management"),
+                ("net netmon [interfaces|poll|bandwidth]", "Network monitoring"),
+                ("net map [discover|impact|export]", "Dependency mapping"),
+                ("net ip [next|list|check]", "IPAM"),
+            ],
+        ),
+        (
+            "Standalone Domains",
+            [
+                ("fw <action>", "Firewall (pfSense/OPNsense)"),
+                ("cert [scan|list|check]", "TLS certificates"),
+                ("dns [scan|check|list]", "DNS validation"),
+                ("proxy [status|list|add|remove]", "Reverse proxy"),
+                ("media <action> [service]", "Media stack (40+ subcommands)"),
+            ],
+        ),
+        (
+            "freq user — User Management",
+            [
+                ("user list", "List users"),
+                ("user create <username>", "Create user"),
+                ("user passwd <username>", "Change password"),
+                ("user roles", "View role assignments"),
+                ("user promote <username>", "Promote to higher role"),
+                ("user demote <username>", "Demote to lower role"),
+                ("user install <username>", "Install across fleet"),
+            ],
+        ),
+        (
+            "freq vpn — VPN Management",
+            [
+                ("vpn list", "List VPN peers"),
+                ("vpn add <name>", "Add VPN peer"),
+                ("vpn remove <name>", "Remove VPN peer"),
+            ],
+        ),
+        (
+            "freq event — Event Network",
+            [
+                ("event list", "List event networks"),
+                ("event create <name>", "Create event network"),
+                ("event remove <name>", "Remove event network"),
+            ],
+        ),
+        (
+            "freq specialist — Specialist Ops",
+            [
+                ("specialist <action>", "Specialist operations"),
+            ],
+        ),
+        (
+            "freq lab — Lab Management",
+            [
+                ("lab list", "List lab environments"),
+                ("lab tool <action>", "Lab tool management"),
+            ],
+        ),
+        (
+            "freq engine — Policy Engine",
+            [
+                ("engine run", "Run policy checks"),
+                ("engine list", "List available policies"),
+            ],
+        ),
+        (
+            "freq plugin — Plugin Ecosystem",
+            [
+                ("plugin list", "List installed plugins"),
+                ("plugin info <name>", "Show plugin details"),
+                ("plugin install <url-or-path>", "Install a plugin"),
+                ("plugin remove <name>", "Remove a plugin"),
+                ("plugin create --name <n> --type <t>", "Scaffold new plugin"),
+                ("plugin search [query]", "Search community index"),
+                ("plugin update [name]", "Update from source"),
+                ("plugin types", "List plugin types"),
+            ],
+        ),
     ]
 
     for category, commands in categories:
@@ -1987,9 +2182,11 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
 # Built-in commands (no lazy loading needed)
 # ---------------------------------------------------------------------------
 
+
 def cmd_version(cfg: FreqConfig, pack, args) -> int:
     """Show version with branding."""
     from freq.core.personality import splash
+
     splash(pack, cfg.version)
     return 0
 
@@ -1997,12 +2194,14 @@ def cmd_version(cfg: FreqConfig, pack, args) -> int:
 def cmd_doctor(cfg: FreqConfig, pack, args) -> int:
     """Run self-diagnostic."""
     from freq.core.doctor import run
+
     return run(cfg)
 
 
 def cmd_menu(cfg: FreqConfig, pack, args) -> int:
     """Launch interactive TUI menu."""
     from freq.tui.menu import run as tui_run
+
     return tui_run(cfg, pack)
 
 
@@ -2010,1059 +2209,1323 @@ def cmd_menu(cfg: FreqConfig, pack, args) -> int:
 # Command wrappers — lazy module loading
 # ---------------------------------------------------------------------------
 
+
 def _cmd_demo(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.demo import run
+
     return run(cfg, pack, args)
 
 
 def _cmd_why(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.why import cmd_why
+
     return cmd_why(cfg, pack, args)
 
 
 def _cmd_test_connection(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_test_connection
+
     return cmd_test_connection(cfg, pack, args)
 
 
 def _cmd_status(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_status
+
     return cmd_status(cfg, pack, args)
 
 
 def _cmd_dashboard(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_dashboard
+
     return cmd_dashboard(cfg, pack, args)
 
 
 def _cmd_exec(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_exec
+
     return cmd_exec(cfg, pack, args)
 
 
 def _cmd_info(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_info
+
     return cmd_info(cfg, pack, args)
 
 
 def _cmd_detail(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_detail
+
     return cmd_detail(cfg, pack, args)
 
 
 def _cmd_boundaries(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_boundaries
+
     return cmd_boundaries(cfg, pack, args)
 
 
 def _cmd_diagnose(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_diagnose
+
     return cmd_diagnose(cfg, pack, args)
 
 
 def _cmd_ssh(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_ssh_host
+
     return cmd_ssh_host(cfg, pack, args)
 
 
 def _cmd_docker(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_docker
+
     return cmd_docker(cfg, pack, args)
 
 
 def _cmd_log(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_log
+
     return cmd_log(cfg, pack, args)
 
 
 def _cmd_keys(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_keys
+
     return cmd_keys(cfg, pack, args)
 
 
 def _cmd_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.pve import cmd_list
+
     return cmd_list(cfg, pack, args)
 
 
 def _cmd_vm_overview(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.pve import cmd_vm_overview
+
     return cmd_vm_overview(cfg, pack, args)
 
 
 def _cmd_vmconfig(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.pve import cmd_vmconfig
+
     return cmd_vmconfig(cfg, pack, args)
 
 
 def _cmd_snapshot(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.pve import cmd_snapshot
+
     return cmd_snapshot(cfg, pack, args)
 
 
 def _cmd_power(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.pve import cmd_power
+
     return cmd_power(cfg, pack, args)
 
 
 def _cmd_nic(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_nic
+
     return cmd_nic(cfg, pack, args)
 
 
 def _cmd_create(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_create
+
     return cmd_create(cfg, pack, args)
 
 
 def _cmd_clone(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_clone
+
     return cmd_clone(cfg, pack, args)
 
 
 def _cmd_destroy(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_destroy
+
     return cmd_destroy(cfg, pack, args)
 
 
 def _cmd_resize(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_resize
+
     return cmd_resize(cfg, pack, args)
 
 
 def _cmd_migrate(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_migrate
+
     return cmd_migrate(cfg, pack, args)
 
 
 def _cmd_template(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_template
+
     return cmd_template(cfg, pack, args)
 
 
 def _cmd_rename(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_rename
+
     return cmd_rename(cfg, pack, args)
 
 
 def _cmd_add_disk(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_add_disk
+
     return cmd_add_disk(cfg, pack, args)
 
 
 def _cmd_tag(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_tag
+
     return cmd_tag(cfg, pack, args)
 
 
 def _cmd_pool(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_pool
+
     return cmd_pool(cfg, pack, args)
 
 
 def _cmd_sandbox(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_sandbox
+
     return cmd_sandbox(cfg, pack, args)
 
 
 def _cmd_file_send(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vm import cmd_file_send
+
     return cmd_file_send(cfg, pack, args)
 
 
 def _cmd_specialist(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.specialist import cmd_specialist
+
     return cmd_specialist(cfg, pack, args)
 
 
 def _cmd_lab(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.lab import cmd_lab
+
     return cmd_lab(cfg, pack, args)
 
 
 def _cmd_ntp(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_ntp
+
     return cmd_ntp(cfg, pack, args)
 
 
 def _cmd_fleet_update(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_fleet_update
+
     return cmd_fleet_update(cfg, pack, args)
 
 
 def _cmd_comms(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.comms import cmd_comms
+
     return cmd_comms(cfg, pack, args)
 
 
 def _cmd_discover(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.discover import cmd_discover
+
     return cmd_discover(cfg, pack, args)
 
 
 def _cmd_distros(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.distros import cmd_distros
+
     return cmd_distros(cfg, pack, args)
 
 
 def _cmd_media(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.media import cmd_media
+
     return cmd_media(cfg, pack, args)
 
 
 def _cmd_health(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.health import cmd_health
+
     return cmd_health(cfg, pack, args)
 
 
 def _cmd_users(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.users import cmd_users
+
     return cmd_users(cfg, pack, args)
 
 
 def _cmd_new_user(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.users import cmd_new_user
+
     return cmd_new_user(cfg, pack, args)
 
 
 def _cmd_passwd(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.users import cmd_passwd
+
     return cmd_passwd(cfg, pack, args)
 
 
 def _cmd_roles(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.users import cmd_roles
+
     return cmd_roles(cfg, pack, args)
 
 
 def _cmd_promote(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.users import cmd_promote
+
     return cmd_promote(cfg, pack, args)
 
 
 def _cmd_demote(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.users import cmd_demote
+
     return cmd_demote(cfg, pack, args)
 
 
 def _cmd_install_user(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.users import cmd_install_user
+
     return cmd_install_user(cfg, pack, args)
 
 
 def _cmd_vault(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vault import cmd_vault
+
     return cmd_vault(cfg, pack, args)
 
 
 def _cmd_audit(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.audit import cmd_audit
+
     return cmd_audit(cfg, pack, args)
 
 
 def _cmd_bootstrap(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.bootstrap import cmd_bootstrap
+
     return cmd_bootstrap(cfg, pack, args)
 
 
 def _cmd_onboard(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.bootstrap import cmd_onboard
+
     return cmd_onboard(cfg, pack, args)
 
 
 def _cmd_rescue(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.infrastructure import cmd_rescue
+
     return cmd_rescue(cfg, pack, args)
 
 
 def _cmd_harden(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.harden import cmd_harden
+
     return cmd_harden(cfg, pack, args)
 
 
 def _cmd_pfsense(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.infrastructure import cmd_pfsense
+
     return cmd_pfsense(cfg, pack, args)
 
 
 def _cmd_truenas(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.infrastructure import cmd_truenas
+
     return cmd_truenas(cfg, pack, args)
 
 
 def _cmd_zfs(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.infrastructure import cmd_truenas
+
     return cmd_truenas(cfg, pack, args)
 
 
 def _cmd_switch_show(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_switch_show
+
     return cmd_switch_show(cfg, pack, args)
 
 
 def _cmd_switch_facts(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_switch_facts
+
     return cmd_switch_facts(cfg, pack, args)
 
 
 def _cmd_switch_interfaces(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_switch_interfaces
+
     return cmd_switch_interfaces(cfg, pack, args)
 
 
 def _cmd_switch_vlans(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_switch_vlans
+
     return cmd_switch_vlans(cfg, pack, args)
 
 
 def _cmd_switch_mac(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_switch_mac
+
     return cmd_switch_mac(cfg, pack, args)
 
 
 def _cmd_switch_arp(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_switch_arp
+
     return cmd_switch_arp(cfg, pack, args)
 
 
 def _cmd_switch_neighbors(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_switch_neighbors
+
     return cmd_switch_neighbors(cfg, pack, args)
 
 
 def _cmd_switch_config(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_switch_config
+
     return cmd_switch_config(cfg, pack, args)
 
 
 def _cmd_switch_environment(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_switch_environment
+
     return cmd_switch_environment(cfg, pack, args)
 
 
 def _cmd_switch_exec(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_switch_exec
+
     return cmd_switch_exec(cfg, pack, args)
 
 
 # --- Port Management ---
 
+
 def _cmd_port_status(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_port_status
+
     return cmd_port_status(cfg, pack, args)
 
 
 def _cmd_port_configure(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_port_configure
+
     return cmd_port_configure(cfg, pack, args)
 
 
 def _cmd_port_desc(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_port_desc
+
     return cmd_port_desc(cfg, pack, args)
 
 
 def _cmd_port_poe(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_port_poe
+
     return cmd_port_poe(cfg, pack, args)
 
 
 def _cmd_port_find(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_port_find
+
     return cmd_port_find(cfg, pack, args)
 
 
 def _cmd_port_flap(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_port_flap
+
     return cmd_port_flap(cfg, pack, args)
 
 
 # --- Port Profiles ---
 
+
 def _cmd_profile_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_profile_list
+
     return cmd_profile_list(cfg, pack, args)
 
 
 def _cmd_profile_show(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_profile_show
+
     return cmd_profile_show(cfg, pack, args)
 
 
 def _cmd_profile_apply(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_profile_apply
+
     return cmd_profile_apply(cfg, pack, args)
 
 
 def _cmd_profile_create(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_profile_create
+
     return cmd_profile_create(cfg, pack, args)
 
 
 def _cmd_profile_delete(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.switch_orchestration import cmd_profile_delete
+
     return cmd_profile_delete(cfg, pack, args)
 
 
 # --- Config Management ---
 
+
 def _cmd_config_backup(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.config_management import cmd_config_backup
+
     return cmd_config_backup(cfg, pack, args)
 
 
 def _cmd_config_history(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.config_management import cmd_config_history
+
     return cmd_config_history(cfg, pack, args)
 
 
 def _cmd_config_diff(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.config_management import cmd_config_diff
+
     return cmd_config_diff(cfg, pack, args)
 
 
 def _cmd_config_search(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.config_management import cmd_config_search
+
     return cmd_config_search(cfg, pack, args)
 
 
 def _cmd_config_restore(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.config_management import cmd_config_restore
+
     return cmd_config_restore(cfg, pack, args)
 
 
 # --- SNMP ---
 
+
 def _cmd_snmp_poll(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.snmp import cmd_snmp_poll
+
     return cmd_snmp_poll(cfg, pack, args)
 
 
 def _cmd_snmp_interfaces(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.snmp import cmd_snmp_interfaces
+
     return cmd_snmp_interfaces(cfg, pack, args)
 
 
 def _cmd_snmp_errors(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.snmp import cmd_snmp_errors
+
     return cmd_snmp_errors(cfg, pack, args)
 
 
 def _cmd_snmp_cpu(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.snmp import cmd_snmp_cpu
+
     return cmd_snmp_cpu(cfg, pack, args)
 
 
 # --- Topology ---
 
+
 def _cmd_topology_discover(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.topology import cmd_topology_discover
+
     return cmd_topology_discover(cfg, pack, args)
 
 
 def _cmd_topology_show(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.topology import cmd_topology_show
+
     return cmd_topology_show(cfg, pack, args)
 
 
 def _cmd_topology_export(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.topology import cmd_topology_export
+
     return cmd_topology_export(cfg, pack, args)
 
 
 def _cmd_topology_diff(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.topology import cmd_topology_diff
+
     return cmd_topology_diff(cfg, pack, args)
 
 
 # --- Network Intelligence ---
 
+
 def _cmd_find_mac(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.net_intelligence import cmd_find_mac
+
     return cmd_find_mac(cfg, pack, args)
 
 
 def _cmd_find_ip(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.net_intelligence import cmd_find_ip
+
     return cmd_find_ip(cfg, pack, args)
 
 
 def _cmd_troubleshoot(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.net_intelligence import cmd_troubleshoot
+
     return cmd_troubleshoot(cfg, pack, args)
 
 
 def _cmd_ip_utilization(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.net_intelligence import cmd_ip_utilization
+
     return cmd_ip_utilization(cfg, pack, args)
 
 
 def _cmd_ip_conflict(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.net_intelligence import cmd_ip_conflict
+
     return cmd_ip_conflict(cfg, pack, args)
 
 
 # --- Docker Fleet (WS13) ---
 
+
 def _cmd_docker_containers(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.docker_mgmt import cmd_docker_containers
+
     return cmd_docker_containers(cfg, pack, args)
+
 
 def _cmd_docker_images(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.docker_mgmt import cmd_docker_images
+
     return cmd_docker_images(cfg, pack, args)
+
 
 def _cmd_docker_prune(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.docker_mgmt import cmd_docker_prune
+
     return cmd_docker_prune(cfg, pack, args)
+
 
 def _cmd_docker_update_check(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.docker_mgmt import cmd_docker_update_check
+
     return cmd_docker_update_check(cfg, pack, args)
+
 
 # --- Hardware (WS14) ---
 
+
 def _cmd_hw_smart(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.hardware import cmd_hw_smart
+
     return cmd_hw_smart(cfg, pack, args)
+
 
 def _cmd_hw_ups(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.hardware import cmd_hw_ups
+
     return cmd_hw_ups(cfg, pack, args)
+
 
 def _cmd_hw_power(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.hardware import cmd_hw_power
+
     return cmd_hw_power(cfg, pack, args)
+
 
 def _cmd_hw_inventory(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.hardware import cmd_hw_inventory
+
     return cmd_hw_inventory(cfg, pack, args)
+
 
 # --- Incident/Change (WS12) ---
 
+
 def _cmd_incident_create(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.incident import cmd_incident_create
+
     return cmd_incident_create(cfg, pack, args)
+
 
 def _cmd_incident_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.incident import cmd_incident_list
+
     return cmd_incident_list(cfg, pack, args)
+
 
 def _cmd_incident_update(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.incident import cmd_incident_update
+
     return cmd_incident_update(cfg, pack, args)
+
 
 def _cmd_change_create(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.incident import cmd_change_create
+
     return cmd_change_create(cfg, pack, args)
+
 
 def _cmd_change_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.incident import cmd_change_list
+
     return cmd_change_list(cfg, pack, args)
+
 
 # --- IaC (WS15) ---
 
+
 def _cmd_state_export(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.iac import cmd_state_export
+
     return cmd_state_export(cfg, pack, args)
+
 
 def _cmd_state_drift(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.iac import cmd_state_drift
+
     return cmd_state_drift(cfg, pack, args)
+
 
 def _cmd_state_history(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.iac import cmd_state_history
+
     return cmd_state_history(cfg, pack, args)
+
 
 # --- Automation (WS16) ---
 
+
 def _cmd_react_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.automation import cmd_react_list
+
     return cmd_react_list(cfg, pack, args)
+
 
 def _cmd_react_add(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.automation import cmd_react_add
+
     args.action = getattr(args, "react_action", None)
     return cmd_react_add(cfg, pack, args)
 
+
 def _cmd_react_disable(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.automation import cmd_react_disable
+
     return cmd_react_disable(cfg, pack, args)
+
 
 def _cmd_workflow_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.automation import cmd_workflow_list
+
     return cmd_workflow_list(cfg, pack, args)
+
 
 def _cmd_workflow_create(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.automation import cmd_workflow_create
+
     return cmd_workflow_create(cfg, pack, args)
+
 
 def _cmd_job_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.automation import cmd_job_list
+
     return cmd_job_list(cfg, pack, args)
+
 
 # --- Metrics + Monitors (WS10) ---
 
+
 def _cmd_metrics_collect(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.metrics import cmd_metrics_collect
+
     return cmd_metrics_collect(cfg, pack, args)
+
 
 def _cmd_metrics_show(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.metrics import cmd_metrics_show
+
     return cmd_metrics_show(cfg, pack, args)
+
 
 def _cmd_metrics_top(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.metrics import cmd_metrics_top
+
     return cmd_metrics_top(cfg, pack, args)
+
 
 def _cmd_monitor_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.synthetic_monitors import cmd_monitor_list
+
     return cmd_monitor_list(cfg, pack, args)
+
 
 def _cmd_monitor_add(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.synthetic_monitors import cmd_monitor_add
+
     return cmd_monitor_add(cfg, pack, args)
+
 
 def _cmd_monitor_run(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.synthetic_monitors import cmd_monitor_run
+
     return cmd_monitor_run(cfg, pack, args)
+
 
 def _cmd_monitor_remove(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.synthetic_monitors import cmd_monitor_remove
+
     return cmd_monitor_remove(cfg, pack, args)
+
 
 # --- Vuln + FIM (WS11) ---
 
+
 def _cmd_vuln_scan(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vuln import cmd_vuln_scan
+
     return cmd_vuln_scan(cfg, pack, args)
+
 
 def _cmd_vuln_results(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vuln import cmd_vuln_results
+
     return cmd_vuln_results(cfg, pack, args)
+
 
 def _cmd_fim_baseline(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fim import cmd_fim_baseline
+
     return cmd_fim_baseline(cfg, pack, args)
+
 
 def _cmd_fim_check(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fim import cmd_fim_check
+
     return cmd_fim_check(cfg, pack, args)
+
 
 def _cmd_fim_status(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fim import cmd_fim_status
+
     return cmd_fim_status(cfg, pack, args)
+
 
 # --- Storage (new) ---
 
+
 def _cmd_store_status(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.storage import cmd_store_status
+
     return cmd_store_status(cfg, pack, args)
 
 
 def _cmd_store_pools(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.storage import cmd_store_pools
+
     return cmd_store_pools(cfg, pack, args)
 
 
 def _cmd_store_datasets(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.storage import cmd_store_datasets
+
     return cmd_store_datasets(cfg, pack, args)
 
 
 def _cmd_store_snapshots(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.storage import cmd_store_snapshots
+
     return cmd_store_snapshots(cfg, pack, args)
 
 
 def _cmd_store_smart(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.storage import cmd_store_smart
+
     return cmd_store_smart(cfg, pack, args)
 
 
 def _cmd_store_shares(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.storage import cmd_store_shares
+
     return cmd_store_shares(cfg, pack, args)
 
 
 def _cmd_store_alerts(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.storage import cmd_store_alerts
+
     return cmd_store_alerts(cfg, pack, args)
 
 
 # --- DR (new) ---
 
+
 def _cmd_dr_status(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dr import cmd_dr_status
+
     return cmd_dr_status(cfg, pack, args)
 
 
 def _cmd_dr_backup_verify(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dr import cmd_dr_backup_verify
+
     return cmd_dr_backup_verify(cfg, pack, args)
 
 
 def _cmd_dr_sla_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dr import cmd_dr_sla_list
+
     return cmd_dr_sla_list(cfg, pack, args)
 
 
 def _cmd_dr_sla_set(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dr import cmd_dr_sla_set
+
     return cmd_dr_sla_set(cfg, pack, args)
 
 
 def _cmd_dr_runbook_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dr import cmd_dr_runbook_list
+
     return cmd_dr_runbook_list(cfg, pack, args)
 
 
 def _cmd_dr_runbook_create(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dr import cmd_dr_runbook_create
+
     return cmd_dr_runbook_create(cfg, pack, args)
 
 
 def _cmd_dr_runbook_show(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dr import cmd_dr_runbook_show
+
     return cmd_dr_runbook_show(cfg, pack, args)
 
 
 # --- Firewall ---
 
+
 def _cmd_fw_status(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.firewall import cmd_fw_status
+
     return cmd_fw_status(cfg, pack, args)
 
 
 def _cmd_fw_rules(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.firewall import cmd_fw_rules
+
     return cmd_fw_rules(cfg, pack, args)
 
 
 def _cmd_fw_nat(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.firewall import cmd_fw_nat
+
     return cmd_fw_nat(cfg, pack, args)
 
 
 def _cmd_fw_states(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.firewall import cmd_fw_states
+
     return cmd_fw_states(cfg, pack, args)
 
 
 def _cmd_fw_interfaces(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.firewall import cmd_fw_interfaces
+
     return cmd_fw_interfaces(cfg, pack, args)
 
 
 def _cmd_fw_gateways(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.firewall import cmd_fw_gateways
+
     return cmd_fw_gateways(cfg, pack, args)
 
 
 def _cmd_fw_dhcp(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.firewall import cmd_fw_dhcp
+
     return cmd_fw_dhcp(cfg, pack, args)
 
 
 # --- DNS Internal ---
 
+
 def _cmd_dns_internal_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dns_management import cmd_dns_internal_list
+
     return cmd_dns_internal_list(cfg, pack, args)
 
 
 def _cmd_dns_internal_add(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dns_management import cmd_dns_internal_add
+
     return cmd_dns_internal_add(cfg, pack, args)
 
 
 def _cmd_dns_internal_remove(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dns_management import cmd_dns_internal_remove
+
     return cmd_dns_internal_remove(cfg, pack, args)
 
 
 def _cmd_dns_internal_sync(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dns_management import cmd_dns_internal_sync
+
     return cmd_dns_internal_sync(cfg, pack, args)
 
 
 def _cmd_dns_internal_audit(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dns_management import cmd_dns_internal_audit
+
     return cmd_dns_internal_audit(cfg, pack, args)
 
 
 # --- VPN ---
 
+
 def _cmd_vpn_wg_status(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vpn import cmd_vpn_wg_status
+
     return cmd_vpn_wg_status(cfg, pack, args)
 
 
 def _cmd_vpn_wg_peers(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vpn import cmd_vpn_wg_peers
+
     return cmd_vpn_wg_peers(cfg, pack, args)
 
 
 def _cmd_vpn_wg_audit(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vpn import cmd_vpn_wg_audit
+
     return cmd_vpn_wg_audit(cfg, pack, args)
 
 
 def _cmd_vpn_ovpn_status(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.vpn import cmd_vpn_ovpn_status
+
     return cmd_vpn_ovpn_status(cfg, pack, args)
 
 
 # --- Cert Management ---
 
+
 def _cmd_cert_inspect(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.cert_management import cmd_cert_inspect
+
     return cmd_cert_inspect(cfg, pack, args)
 
 
 def _cmd_cert_fleet_check(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.cert_management import cmd_cert_fleet_check
+
     return cmd_cert_fleet_check(cfg, pack, args)
 
 
 def _cmd_cert_acme_status(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.cert_management import cmd_cert_acme_status
+
     return cmd_cert_acme_status(cfg, pack, args)
 
 
 def _cmd_cert_issued_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.cert_management import cmd_cert_issued_list
+
     return cmd_cert_issued_list(cfg, pack, args)
 
 
 # --- Proxy Management ---
 
+
 def _cmd_proxy_status(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.proxy_management import cmd_proxy_status
+
     return cmd_proxy_status(cfg, pack, args)
 
 
 def _cmd_proxy_hosts(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.proxy_management import cmd_proxy_hosts
+
     return cmd_proxy_hosts(cfg, pack, args)
 
 
 def _cmd_proxy_health(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.proxy_management import cmd_proxy_health
+
     return cmd_proxy_health(cfg, pack, args)
 
 
 # --- Event Network ---
 
+
 def _cmd_event_create(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.event_network import cmd_event_create
+
     return cmd_event_create(cfg, pack, args)
 
 
 def _cmd_event_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.event_network import cmd_event_list
+
     return cmd_event_list(cfg, pack, args)
 
 
 def _cmd_event_show(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.event_network import cmd_event_show
+
     return cmd_event_show(cfg, pack, args)
 
 
 def _cmd_event_plan(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.event_network import cmd_event_plan
+
     return cmd_event_plan(cfg, pack, args)
 
 
 def _cmd_event_deploy(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.event_network import cmd_event_deploy
+
     return cmd_event_deploy(cfg, pack, args)
 
 
 def _cmd_event_verify(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.event_network import cmd_event_verify
+
     return cmd_event_verify(cfg, pack, args)
 
 
 def _cmd_event_wipe(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.event_network import cmd_event_wipe
+
     return cmd_event_wipe(cfg, pack, args)
 
 
 def _cmd_event_archive(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.event_network import cmd_event_archive
+
     return cmd_event_archive(cfg, pack, args)
 
 
 def _cmd_event_delete(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.event_network import cmd_event_delete
+
     return cmd_event_delete(cfg, pack, args)
 
 
 def _cmd_idrac(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.infrastructure import cmd_idrac
+
     return cmd_idrac(cfg, pack, args)
 
 
 def _cmd_watch(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.infrastructure import cmd_watch
+
     return cmd_watch(cfg, pack, args)
 
 
 def _cmd_init(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.init_cmd import cmd_init
+
     return cmd_init(cfg, pack, args)
 
 
 def _cmd_configure(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.init_cmd import cmd_configure
+
     return cmd_configure(cfg, pack, args)
 
 
 def _cmd_check(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.engine_cmds import cmd_check
+
     return cmd_check(cfg, pack, args)
 
 
 def _cmd_fix(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.engine_cmds import cmd_fix
+
     return cmd_fix(cfg, pack, args)
 
 
 def _cmd_diff(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.engine_cmds import cmd_diff
+
     return cmd_diff(cfg, pack, args)
 
 
 def _cmd_policies(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.engine_cmds import cmd_policies
+
     return cmd_policies(cfg, pack, args)
 
 
 def _cmd_notify(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.notify import cmd_notify
+
     return cmd_notify(cfg, pack, args)
 
 
 def _cmd_backup(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.backup import cmd_backup
+
     return cmd_backup(cfg, pack, args)
 
 
 def _cmd_journal(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.journal import cmd_journal
+
     return cmd_journal(cfg, pack, args)
 
 
 def _cmd_deploy_agent(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.deploy_agent import cmd_deploy_agent
+
     return cmd_deploy_agent(cfg, pack, args)
 
 
 def _cmd_agent_status(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.deploy_agent import cmd_agent_status
+
     return cmd_agent_status(cfg, pack, args)
 
 
 def _cmd_gwipe(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.gwipe import cmd_gwipe
+
     return cmd_gwipe(cfg, pack, args)
 
 
 def _cmd_serve(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.serve import cmd_serve
+
     return cmd_serve(cfg, pack, args)
 
 
 def _cmd_update(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.selfupdate import cmd_update
+
     return cmd_update(cfg, pack, args)
 
 
 def _cmd_import(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.provision import cmd_import
+
     return cmd_import(cfg, pack, args)
 
 
 def _cmd_provision(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.provision import cmd_provision
+
     return cmd_provision(cfg, pack, args)
 
 
 def _cmd_agent(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.agent import cmd_agent
+
     return cmd_agent(cfg, pack, args)
 
 
 def _cmd_learn(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.learn import cmd_learn
+
     return cmd_learn(cfg, pack, args)
 
 
 def _cmd_risk(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.risk import cmd_risk
+
     return cmd_risk(cfg, pack, args)
 
 
 def _cmd_sweep(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.sweep import cmd_sweep
+
     return cmd_sweep(cfg, pack, args)
 
 
 def _cmd_patrol(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.patrol import cmd_patrol
+
     return cmd_patrol(cfg, pack, args)
 
 
 def _cmd_playbook(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.playbook import cmd_playbook
+
     return cmd_playbook(cfg, pack, args)
 
 
 def _cmd_federation(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.federation import cmd_federation
+
     return cmd_federation(cfg, pack, args)
 
 
 def _cmd_gitops(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.gitops import cmd_gitops
+
     return cmd_gitops(cfg, pack, args)
 
 
 def _cmd_chaos(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.chaos import cmd_chaos
+
     return cmd_chaos(cfg, pack, args)
 
 
 def _cmd_capacity(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.capacity import cmd_capacity
+
     return cmd_capacity(cfg, pack, args)
 
 
 def _cmd_cost(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.cost import cmd_cost
+
     return cmd_cost(cfg, pack, args)
 
 
 def _cmd_rules(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.rules import cmd_rules
+
     return cmd_rules(cfg, pack, args)
 
 
 def _cmd_docker_fleet(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.fleet import cmd_docker_fleet
+
     return cmd_docker_fleet(cfg, pack, args)
 
 
 def _cmd_monitor(cfg: FreqConfig, pack, args) -> int:
     from freq.jarvis.patrol import check_http_monitors
+
     fmt.header("HTTP Endpoint Checks")
     fmt.blank()
     if not cfg.monitors:
         fmt.info("No [[monitor]] entries in freq.toml")
         fmt.blank()
         fmt.line(f"  {fmt.C.DIM}Add to freq.toml:{fmt.C.RESET}")
-        fmt.line(f'  {fmt.C.DIM}[[monitor]]{fmt.C.RESET}')
+        fmt.line(f"  {fmt.C.DIM}[[monitor]]{fmt.C.RESET}")
         fmt.line(f'  {fmt.C.DIM}name = "Dashboard"{fmt.C.RESET}')
         fmt.line(f'  {fmt.C.DIM}url = "http://10.0.0.50:8888/healthz"{fmt.C.RESET}')
         fmt.blank()
@@ -3085,26 +3548,31 @@ def _cmd_monitor(cfg: FreqConfig, pack, args) -> int:
 
 def _cmd_ip(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.ipam import cmd_ip
+
     return cmd_ip(cfg, pack, args)
 
 
 def _cmd_plan(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plan import cmd_plan
+
     return cmd_plan(cfg, pack, args)
 
 
 def _cmd_apply(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plan import cmd_apply
+
     return cmd_apply(cfg, pack, args)
 
 
 def _cmd_alert(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.alert import cmd_alert
+
     return cmd_alert(cfg, pack, args)
 
 
 def _cmd_rollback(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.rollback import cmd_rollback
+
     # Handle --no-start flag
     if getattr(args, "no_start", False):
         args.start = False
@@ -3115,138 +3583,165 @@ def _cmd_rollback(cfg: FreqConfig, pack, args) -> int:
 
 def _cmd_inventory(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.inventory import cmd_inventory
+
     return cmd_inventory(cfg, pack, args)
 
 
 def _cmd_compare(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.compare import cmd_compare
+
     return cmd_compare(cfg, pack, args)
 
 
 def _cmd_baseline(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.baseline import cmd_baseline
+
     return cmd_baseline(cfg, pack, args)
 
 
 def _cmd_report(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.report import cmd_report
+
     return cmd_report(cfg, pack, args)
 
 
 def _cmd_trend(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.trend import cmd_trend
+
     return cmd_trend(cfg, pack, args)
 
 
 def _cmd_sla(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.sla import cmd_sla
+
     return cmd_sla(cfg, pack, args)
 
 
 def _cmd_cert(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.cert import cmd_cert
+
     return cmd_cert(cfg, pack, args)
 
 
 def _cmd_dns(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.dns import cmd_dns
+
     return cmd_dns(cfg, pack, args)
 
 
 def _cmd_schedule(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.schedule import cmd_schedule
+
     return cmd_schedule(cfg, pack, args)
 
 
 def _cmd_backup_policy(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.backup_policy import cmd_backup_policy
+
     return cmd_backup_policy(cfg, pack, args)
 
 
 def _cmd_webhook(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.webhook import cmd_webhook
+
     return cmd_webhook(cfg, pack, args)
 
 
 def _cmd_migrate_plan(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.migrate_plan import cmd_migrate_plan
+
     return cmd_migrate_plan(cfg, pack, args)
 
 
 def _cmd_migrate_vmware(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.migrate_vmware import cmd_migrate_vmware
+
     return cmd_migrate_vmware(cfg, pack, args)
 
 
 def _cmd_patch(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.patch import cmd_patch
+
     return cmd_patch(cfg, pack, args)
 
 
 def _cmd_stack(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.stack import cmd_stack
+
     return cmd_stack(cfg, pack, args)
 
 
 def _cmd_docs(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.docs import cmd_docs
+
     return cmd_docs(cfg, pack, args)
 
 
 def _cmd_db(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.db import cmd_db
+
     return cmd_db(cfg, pack, args)
 
 
 def _cmd_proxy(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.proxy import cmd_proxy
+
     return cmd_proxy(cfg, pack, args)
 
 
 def _cmd_secrets(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.secrets import cmd_secrets
+
     return cmd_secrets(cfg, pack, args)
 
 
 def _cmd_logs(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.logs import cmd_logs
+
     return cmd_logs(cfg, pack, args)
 
 
 def _cmd_oncall(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.oncall import cmd_oncall
+
     return cmd_oncall(cfg, pack, args)
 
 
 def _cmd_comply(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.comply import cmd_comply
+
     return cmd_comply(cfg, pack, args)
 
 
 def _cmd_map(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.depmap import cmd_map
+
     return cmd_map(cfg, pack, args)
 
 
 def _cmd_netmon(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.netmon import cmd_netmon
+
     return cmd_netmon(cfg, pack, args)
 
 
 def _cmd_cost_analysis(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.cost_analysis import cmd_cost_analysis
+
     return cmd_cost_analysis(cfg, pack, args)
 
 
 def _cmd_hosts(cfg: FreqConfig, pack, args) -> int:
     """Route to hosts module."""
     from freq.modules.hosts import cmd_hosts
+
     return cmd_hosts(cfg, pack, args)
 
 
 def _cmd_groups(cfg: FreqConfig, pack, args) -> int:
     """Route to groups module."""
     from freq.modules.hosts import cmd_groups
+
     return cmd_groups(cfg, pack, args)
 
 
@@ -3254,41 +3749,50 @@ def _cmd_groups(cfg: FreqConfig, pack, args) -> int:
 # Plugin commands
 # ---------------------------------------------------------------------------
 
+
 def _cmd_plugin_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plugin_manager import cmd_plugin_list
+
     return cmd_plugin_list(cfg, pack, args)
 
 
 def _cmd_plugin_info(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plugin_manager import cmd_plugin_info
+
     return cmd_plugin_info(cfg, pack, args)
 
 
 def _cmd_plugin_install(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plugin_manager import cmd_plugin_install
+
     return cmd_plugin_install(cfg, pack, args)
 
 
 def _cmd_plugin_remove(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plugin_manager import cmd_plugin_remove
+
     return cmd_plugin_remove(cfg, pack, args)
 
 
 def _cmd_plugin_create(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plugin_manager import cmd_plugin_create
+
     return cmd_plugin_create(cfg, pack, args)
 
 
 def _cmd_plugin_search(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plugin_manager import cmd_plugin_search
+
     return cmd_plugin_search(cfg, pack, args)
 
 
 def _cmd_plugin_update(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plugin_manager import cmd_plugin_update
+
     return cmd_plugin_update(cfg, pack, args)
 
 
 def _cmd_plugin_types(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plugin_manager import cmd_plugin_types
+
     return cmd_plugin_types(cfg, pack, args)

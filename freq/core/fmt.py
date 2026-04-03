@@ -21,6 +21,7 @@ Design decisions:
     - Colors are always emitted. Pipe/NO_COLOR detection is a v3.0.0 TODO.
     - Purple is THE brand color. Every header, every border. Consistency.
 """
+
 import os
 import re
 import shutil
@@ -28,8 +29,10 @@ import shutil
 
 # --- Colors (ANSI escape sequences) ---
 
+
 class C:
     """Color constants. The FREQ palette."""
+
     RESET = "\033[0m"
     BOLD = "\033[1m"
     DIM = "\033[2m"
@@ -54,6 +57,7 @@ class C:
 
 
 # --- Symbols (Unicode with ASCII fallback) ---
+
 
 class _Symbols:
     """Symbols. Unicode by default, ASCII if terminal can't handle it."""
@@ -107,6 +111,7 @@ S = _Symbols()
 
 # --- Border Characters ---
 
+
 def _use_ascii() -> bool:
     return S._ascii
 
@@ -116,14 +121,36 @@ def _b(unicode_char: str, ascii_char: str) -> str:
 
 
 # Box drawing
-def B_TL() -> str: return _b("\u256d", "+")
-def B_TR() -> str: return _b("\u256e", "+")
-def B_BL() -> str: return _b("\u2570", "+")
-def B_BR() -> str: return _b("\u256f", "+")
-def B_H() -> str: return _b("\u2500", "-")
-def B_V() -> str: return _b("\u2502", "|")
-def B_LM() -> str: return _b("\u251c", "+")
-def B_RM() -> str: return _b("\u2524", "+")
+def B_TL() -> str:
+    return _b("\u256d", "+")
+
+
+def B_TR() -> str:
+    return _b("\u256e", "+")
+
+
+def B_BL() -> str:
+    return _b("\u2570", "+")
+
+
+def B_BR() -> str:
+    return _b("\u256f", "+")
+
+
+def B_H() -> str:
+    return _b("\u2500", "-")
+
+
+def B_V() -> str:
+    return _b("\u2502", "|")
+
+
+def B_LM() -> str:
+    return _b("\u251c", "+")
+
+
+def B_RM() -> str:
+    return _b("\u2524", "+")
 
 
 # --- Terminal Width ---
@@ -168,7 +195,7 @@ def truncate(text: str, max_width: int) -> str:
             j = i + 1
             while j < len(text) and text[j] != "m":
                 j += 1
-            result.append(text[i:j + 1])
+            result.append(text[i : j + 1])
             i = j + 1
         else:
             result.append(text[i])
@@ -179,6 +206,7 @@ def truncate(text: str, max_width: int) -> str:
 
 
 # --- Display Functions ---
+
 
 def header(title: str, breadcrumb: str = "PVE FREQ") -> None:
     """Print a bordered header line: [ PVE FREQ > Title ]"""
@@ -245,6 +273,7 @@ def divider(title: str = "") -> None:
 # --- Step Indicators ---
 # All step functions render inside the bordered box.
 
+
 def _bordered_line(content: str, end: str = "\n") -> None:
     """Print content wrapped in box borders with correct padding."""
     w = term_width()
@@ -308,12 +337,25 @@ def step_info(msg: str) -> None:
 # --- Badges ---
 
 _BADGE_COLORS = {
-    "ok": C.GREEN, "up": C.GREEN, "running": C.GREEN, "pass": C.GREEN,
-    "compliant": C.GREEN, "online": C.GREEN, "healthy": C.GREEN,
-    "warn": C.YELLOW, "drift": C.YELLOW, "degraded": C.YELLOW,
-    "fail": C.RED, "down": C.RED, "error": C.RED, "critical": C.RED,
-    "offline": C.RED, "failed": C.RED,
-    "skip": C.GRAY, "unknown": C.GRAY, "pending": C.GRAY,
+    "ok": C.GREEN,
+    "up": C.GREEN,
+    "running": C.GREEN,
+    "pass": C.GREEN,
+    "compliant": C.GREEN,
+    "online": C.GREEN,
+    "healthy": C.GREEN,
+    "warn": C.YELLOW,
+    "drift": C.YELLOW,
+    "degraded": C.YELLOW,
+    "fail": C.RED,
+    "down": C.RED,
+    "error": C.RED,
+    "critical": C.RED,
+    "offline": C.RED,
+    "failed": C.RED,
+    "skip": C.GRAY,
+    "unknown": C.GRAY,
+    "pending": C.GRAY,
 }
 
 
@@ -324,6 +366,7 @@ def badge(status: str) -> str:
 
 
 # --- Table Helpers ---
+
 
 def table_header(*columns: tuple) -> None:
     """Print a bordered table header row. Each column is (label, width)."""
@@ -346,6 +389,7 @@ def table_row(*cells: tuple) -> None:
 
 
 # --- Direct Output ---
+
 
 def error(msg: str) -> None:
     """Print an error message."""

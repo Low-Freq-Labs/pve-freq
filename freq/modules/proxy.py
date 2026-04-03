@@ -18,6 +18,7 @@ Design decisions:
     - Routes stored locally even if the proxy has its own state. FREQ is
       the source of truth. Drift between FREQ and backend is detectable.
 """
+
 import json
 import os
 import time
@@ -93,7 +94,8 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
 
     fmt.step_start(f"Scanning {len(hosts)} hosts for reverse proxies")
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=PROXY_CMD_TIMEOUT,
@@ -152,7 +154,9 @@ def _cmd_list(cfg: FreqConfig, args) -> int:
     if not routes:
         fmt.line(f"  {fmt.C.DIM}No managed proxy routes.{fmt.C.RESET}")
         fmt.blank()
-        fmt.line(f"  {fmt.C.DIM}Add one: freq proxy add --domain app.example.com --upstream 10.0.0.5:8080 --host web-01{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.DIM}Add one: freq proxy add --domain app.example.com --upstream 10.0.0.5:8080 --host web-01{fmt.C.RESET}"
+        )
         fmt.blank()
         fmt.footer()
         return 0

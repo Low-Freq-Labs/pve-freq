@@ -7,6 +7,7 @@ Routes:
     POST /api/v1/plugin/install  — install from URL
     POST /api/v1/plugin/remove   — remove a plugin
 """
+
 from freq.api.helpers import json_response, get_param, get_cfg
 
 
@@ -32,24 +33,28 @@ def handle_plugin_list(handler):
     for p in discovered:
         name = p["name"]
         reg = registry["plugins"].get(name, {})
-        plugins.append({
-            "name": name,
-            "description": p["description"],
-            "type": reg.get("type", "command"),
-            "version": reg.get("version", "local"),
-            "source": reg.get("source", "local"),
-        })
+        plugins.append(
+            {
+                "name": name,
+                "description": p["description"],
+                "type": reg.get("type", "command"),
+                "version": reg.get("version", "local"),
+                "source": reg.get("source", "local"),
+            }
+        )
 
     # Add deployer plugins from registry not in discovery
     for name, info in registry["plugins"].items():
         if info.get("type") == "deployer":
-            plugins.append({
-                "name": name,
-                "description": info.get("description", ""),
-                "type": "deployer",
-                "version": info.get("version", "local"),
-                "category": info.get("category", ""),
-            })
+            plugins.append(
+                {
+                    "name": name,
+                    "description": info.get("description", ""),
+                    "type": "deployer",
+                    "version": info.get("version", "local"),
+                    "category": info.get("category", ""),
+                }
+            )
 
     json_response(handler, {"plugins": plugins})
 
@@ -77,4 +82,5 @@ def handle_plugin_info(handler):
 def handle_plugin_types(handler):
     """GET /api/v1/plugin/types — available plugin types."""
     from freq.modules.plugin_manager import PLUGIN_TYPES
+
     json_response(handler, {"types": PLUGIN_TYPES})

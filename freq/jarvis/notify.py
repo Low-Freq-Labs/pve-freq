@@ -17,6 +17,7 @@ Design decisions:
     - All providers use stdlib urllib — zero external dependencies
     - Provider config checked at dispatch time, not at import
 """
+
 import json
 import urllib.parse
 import urllib.request
@@ -31,16 +32,17 @@ NOTIFY_TIMEOUT = 10
 
 # Severity → color mapping for providers that support colors
 SEVERITY_COLORS = {
-    "info": 0x7B2FBE,     # Purple
-    "success": 0x52D726,   # Green
-    "warn": 0xFFB100,      # Yellow
-    "warning": 0xFFB100,   # Yellow (alias)
-    "error": 0xFF4444,     # Red
+    "info": 0x7B2FBE,  # Purple
+    "success": 0x52D726,  # Green
+    "warn": 0xFFB100,  # Yellow
+    "warning": 0xFFB100,  # Yellow (alias)
+    "error": 0xFF4444,  # Red
     "critical": 0xFF0000,  # Bright red
 }
 
 
 # ── Provider Registry ──────────────────────────────────────────────────
+
 
 def _providers():
     """Return list of (name, config_check, send_func) tuples."""
@@ -63,8 +65,8 @@ def configured_providers(cfg: FreqConfig) -> list:
 
 # ── Discord ─────────────────────────────────────────────────────────────
 
-def send_discord(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
-                 severity: str = "info") -> bool:
+
+def send_discord(cfg: FreqConfig, message: str, title: str = "PVE FREQ", severity: str = "info") -> bool:
     """Send a message to Discord via webhook."""
     url = cfg.discord_webhook
     if not url:
@@ -72,18 +74,19 @@ def send_discord(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
     color = SEVERITY_COLORS.get(severity, 0x7B2FBE)
     payload = {
-        "embeds": [{
-            "title": title,
-            "description": message,
-            "color": color,
-            "footer": {"text": cfg.brand},
-        }]
+        "embeds": [
+            {
+                "title": title,
+                "description": message,
+                "color": color,
+                "footer": {"text": cfg.brand},
+            }
+        ]
     }
 
     try:
         data = json.dumps(payload).encode()
-        req = urllib.request.Request(url, data=data,
-                                     headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=NOTIFY_TIMEOUT)
         return True
     except (urllib.error.URLError, OSError) as e:
@@ -93,8 +96,8 @@ def send_discord(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
 # ── Slack ───────────────────────────────────────────────────────────────
 
-def send_slack(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
-               severity: str = "info") -> bool:
+
+def send_slack(cfg: FreqConfig, message: str, title: str = "PVE FREQ", severity: str = "info") -> bool:
     """Send a message to Slack via webhook."""
     url = cfg.slack_webhook
     if not url:
@@ -110,8 +113,7 @@ def send_slack(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
     try:
         data = json.dumps(payload).encode()
-        req = urllib.request.Request(url, data=data,
-                                     headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=NOTIFY_TIMEOUT)
         return True
     except (urllib.error.URLError, OSError) as e:
@@ -121,8 +123,8 @@ def send_slack(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
 # ── Telegram ────────────────────────────────────────────────────────────
 
-def send_telegram(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
-                  severity: str = "info") -> bool:
+
+def send_telegram(cfg: FreqConfig, message: str, title: str = "PVE FREQ", severity: str = "info") -> bool:
     """Send a message to Telegram via Bot API."""
     token = cfg.telegram_bot_token
     chat_id = cfg.telegram_chat_id
@@ -135,8 +137,7 @@ def send_telegram(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
     try:
         data = json.dumps(payload).encode()
-        req = urllib.request.Request(url, data=data,
-                                     headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=NOTIFY_TIMEOUT)
         return True
     except (urllib.error.URLError, OSError) as e:
@@ -146,8 +147,8 @@ def send_telegram(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
 # ── Email (SMTP) ────────────────────────────────────────────────────────
 
-def send_email(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
-               severity: str = "info") -> bool:
+
+def send_email(cfg: FreqConfig, message: str, title: str = "PVE FREQ", severity: str = "info") -> bool:
     """Send a notification email via SMTP."""
     if not cfg.smtp_host or not cfg.smtp_to:
         return False
@@ -178,8 +179,8 @@ def send_email(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
 # ── ntfy ────────────────────────────────────────────────────────────────
 
-def send_ntfy(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
-              severity: str = "info") -> bool:
+
+def send_ntfy(cfg: FreqConfig, message: str, title: str = "PVE FREQ", severity: str = "info") -> bool:
     """Send a notification via ntfy (https://ntfy.sh)."""
     base_url = cfg.ntfy_url.rstrip("/")
     topic = cfg.ntfy_topic
@@ -187,8 +188,14 @@ def send_ntfy(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
         return False
 
     # ntfy priority mapping
-    priority_map = {"info": "default", "success": "low", "warn": "high",
-                    "warning": "high", "error": "urgent", "critical": "max"}
+    priority_map = {
+        "info": "default",
+        "success": "low",
+        "warn": "high",
+        "warning": "high",
+        "error": "urgent",
+        "critical": "max",
+    }
     priority = priority_map.get(severity, "default")
 
     url = f"{base_url}/{topic}"
@@ -207,8 +214,8 @@ def send_ntfy(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
 # ── Gotify ──────────────────────────────────────────────────────────────
 
-def send_gotify(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
-                severity: str = "info") -> bool:
+
+def send_gotify(cfg: FreqConfig, message: str, title: str = "PVE FREQ", severity: str = "info") -> bool:
     """Send a notification via Gotify."""
     base_url = cfg.gotify_url.rstrip("/")
     token = cfg.gotify_token
@@ -216,8 +223,7 @@ def send_gotify(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
         return False
 
     # Gotify priority: 0-10
-    priority_map = {"info": 2, "success": 1, "warn": 5, "warning": 5,
-                    "error": 8, "critical": 10}
+    priority_map = {"info": 2, "success": 1, "warn": 5, "warning": 5, "error": 8, "critical": 10}
     priority = priority_map.get(severity, 2)
 
     url = f"{base_url}/message?token={token}"
@@ -225,8 +231,7 @@ def send_gotify(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
     try:
         data = json.dumps(payload).encode()
-        req = urllib.request.Request(url, data=data,
-                                     headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=NOTIFY_TIMEOUT)
         return True
     except (urllib.error.URLError, OSError) as e:
@@ -236,8 +241,8 @@ def send_gotify(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
 # ── Pushover ────────────────────────────────────────────────────────────
 
-def send_pushover(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
-                  severity: str = "info") -> bool:
+
+def send_pushover(cfg: FreqConfig, message: str, title: str = "PVE FREQ", severity: str = "info") -> bool:
     """Send a notification via Pushover."""
     user = cfg.pushover_user
     token = cfg.pushover_token
@@ -245,8 +250,7 @@ def send_pushover(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
         return False
 
     # Pushover priority: -2 to 2
-    priority_map = {"info": 0, "success": -1, "warn": 1, "warning": 1,
-                    "error": 1, "critical": 2}
+    priority_map = {"info": 0, "success": -1, "warn": 1, "warning": 1, "error": 1, "critical": 2}
     priority = priority_map.get(severity, 0)
 
     payload = {
@@ -263,8 +267,7 @@ def send_pushover(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
     try:
         data = urllib.parse.urlencode(payload).encode()
-        req = urllib.request.Request("https://api.pushover.net/1/messages.json",
-                                     data=data)
+        req = urllib.request.Request("https://api.pushover.net/1/messages.json", data=data)
         urllib.request.urlopen(req, timeout=NOTIFY_TIMEOUT)
         return True
     except (urllib.error.URLError, OSError) as e:
@@ -274,8 +277,8 @@ def send_pushover(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
 # ── Generic Webhook ─────────────────────────────────────────────────────
 
-def send_webhook(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
-                 severity: str = "info") -> bool:
+
+def send_webhook(cfg: FreqConfig, message: str, title: str = "PVE FREQ", severity: str = "info") -> bool:
     """Send a notification via generic webhook (POST JSON)."""
     url = cfg.webhook_url
     if not url:
@@ -290,8 +293,7 @@ def send_webhook(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
     try:
         data = json.dumps(payload).encode()
-        req = urllib.request.Request(url, data=data,
-                                     headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=NOTIFY_TIMEOUT)
         return True
     except (urllib.error.URLError, OSError) as e:
@@ -301,8 +303,8 @@ def send_webhook(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
 
 # ── Main Dispatch ───────────────────────────────────────────────────────
 
-def notify(cfg: FreqConfig, message: str, title: str = "PVE FREQ",
-           severity: str = "info") -> dict:
+
+def notify(cfg: FreqConfig, message: str, title: str = "PVE FREQ", severity: str = "info") -> dict:
     """Send notification to all configured channels.
 
     Returns dict of {channel: success} results.
@@ -339,7 +341,7 @@ def cmd_notify(cfg: FreqConfig, pack, args) -> int:
 
         fmt.blank()
         fmt.line(f"  {fmt.C.GRAY}Configure in freq.toml under [notifications]{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.GRAY}Usage: freq notify \"your message here\"{fmt.C.RESET}")
+        fmt.line(f'  {fmt.C.GRAY}Usage: freq notify "your message here"{fmt.C.RESET}')
         fmt.blank()
         fmt.footer()
         return 0

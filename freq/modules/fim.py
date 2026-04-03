@@ -13,6 +13,7 @@ Design decisions:
     - Critical paths are hardcoded sensible defaults, extensible via config.
     - Per-host baselines stored as JSON.
 """
+
 import json
 import os
 import time
@@ -26,9 +27,15 @@ from freq.core import log as logger
 FIM_DIR = "fim"
 
 DEFAULT_PATHS = [
-    "/etc/passwd", "/etc/shadow", "/etc/group", "/etc/sudoers",
-    "/etc/ssh/sshd_config", "/etc/hosts", "/etc/fstab",
-    "/etc/crontab", "/etc/resolv.conf",
+    "/etc/passwd",
+    "/etc/shadow",
+    "/etc/group",
+    "/etc/sudoers",
+    "/etc/ssh/sshd_config",
+    "/etc/hosts",
+    "/etc/fstab",
+    "/etc/crontab",
+    "/etc/resolv.conf",
 ]
 
 
@@ -62,8 +69,13 @@ def cmd_fim_baseline(cfg: FreqConfig, pack, args) -> int:
 
     linux_hosts = [h for h in cfg.hosts if h.htype in ("linux", "pve", "docker")]
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in linux_hosts]
-    results = run_many(hosts=hosts_data, command=cmd, key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=10)
+    results = run_many(
+        hosts=hosts_data,
+        command=cmd,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=10,
+    )
 
     ok_count = 0
     for h in linux_hosts:
@@ -71,7 +83,8 @@ def cmd_fim_baseline(cfg: FreqConfig, pack, args) -> int:
         if r and r.returncode == 0:
             hashes = _parse_hashes(r.stdout)
             baseline = {
-                "host": h.label, "ip": h.ip,
+                "host": h.label,
+                "ip": h.ip,
                 "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
                 "files": hashes,
             }
@@ -98,8 +111,13 @@ def cmd_fim_check(cfg: FreqConfig, pack, args) -> int:
 
     linux_hosts = [h for h in cfg.hosts if h.htype in ("linux", "pve", "docker")]
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in linux_hosts]
-    results = run_many(hosts=hosts_data, command=cmd, key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=10)
+    results = run_many(
+        hosts=hosts_data,
+        command=cmd,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=10,
+    )
 
     total_changes = 0
     for h in linux_hosts:

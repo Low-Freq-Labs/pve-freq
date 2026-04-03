@@ -17,6 +17,7 @@ Design decisions:
     - HMAC-SHA256 auth with 5-minute timestamp window prevents replay attacks
     - Secrets never serialized to API responses (sites_to_dicts strips them)
 """
+
 import hashlib
 import hmac
 import json
@@ -37,8 +38,9 @@ REQUEST_TIMEOUT = 10  # seconds
 @dataclass
 class Site:
     """A registered remote FREQ site."""
+
     name: str
-    url: str          # base URL, e.g. "https://freq.dc02.example.com:8888"
+    url: str  # base URL, e.g. "https://freq.dc02.example.com:8888"
     secret: str = ""  # shared secret for HMAC auth
     enabled: bool = True
     last_seen: float = 0.0
@@ -63,17 +65,19 @@ def load_sites(data_dir: str) -> list:
             data = json.load(f)
         sites = []
         for s in data.get("sites", []):
-            sites.append(Site(
-                name=s.get("name", ""),
-                url=s.get("url", "").rstrip("/"),
-                secret=s.get("secret", ""),
-                enabled=s.get("enabled", True),
-                last_seen=s.get("last_seen", 0.0),
-                last_status=s.get("last_status", "unknown"),
-                last_version=s.get("last_version", ""),
-                last_hosts=s.get("last_hosts", 0),
-                last_healthy=s.get("last_healthy", 0),
-            ))
+            sites.append(
+                Site(
+                    name=s.get("name", ""),
+                    url=s.get("url", "").rstrip("/"),
+                    secret=s.get("secret", ""),
+                    enabled=s.get("enabled", True),
+                    last_seen=s.get("last_seen", 0.0),
+                    last_status=s.get("last_status", "unknown"),
+                    last_version=s.get("last_version", ""),
+                    last_hosts=s.get("last_hosts", 0),
+                    last_healthy=s.get("last_healthy", 0),
+                )
+            )
         return sites
     except (json.JSONDecodeError, OSError):
         return []
@@ -82,20 +86,22 @@ def load_sites(data_dir: str) -> list:
 def save_sites(data_dir: str, sites: list):
     """Save registered sites to disk."""
     path = _federation_path(data_dir)
-    data = {"sites": [
-        {
-            "name": s.name,
-            "url": s.url,
-            "secret": s.secret,
-            "enabled": s.enabled,
-            "last_seen": s.last_seen,
-            "last_status": s.last_status,
-            "last_version": s.last_version,
-            "last_hosts": s.last_hosts,
-            "last_healthy": s.last_healthy,
-        }
-        for s in sites
-    ]}
+    data = {
+        "sites": [
+            {
+                "name": s.name,
+                "url": s.url,
+                "secret": s.secret,
+                "enabled": s.enabled,
+                "last_seen": s.last_seen,
+                "last_status": s.last_status,
+                "last_version": s.last_version,
+                "last_hosts": s.last_hosts,
+                "last_healthy": s.last_healthy,
+            }
+            for s in sites
+        ]
+    }
     try:
         with open(path, "w") as f:
             json.dump(data, f)
@@ -249,6 +255,7 @@ def federation_summary(sites: list) -> dict:
 
 # ── CLI Command ────────────────────────────────────────────────────────
 
+
 def cmd_federation(cfg, pack, args) -> int:
     """Manage multi-site federation."""
     from freq.core import fmt
@@ -269,10 +276,14 @@ def cmd_federation(cfg, pack, args) -> int:
                 status_color = fmt.C.GREEN if s["last_status"] == "ok" else fmt.C.RED
                 age = f"{s['age']}s" if s["age"] >= 0 else "never"
                 enabled = "" if s.get("enabled", True) else f" {fmt.C.DIM}(disabled){fmt.C.RESET}"
-                fmt.line(f"  {s['name']:<20} {s['url']:<35} {status_color}{s['last_status']:<10}{fmt.C.RESET} {s['last_hosts']:>6} {age:>8}{enabled}")
+                fmt.line(
+                    f"  {s['name']:<20} {s['url']:<35} {status_color}{s['last_status']:<10}{fmt.C.RESET} {s['last_hosts']:>6} {age:>8}{enabled}"
+                )
             fmt.blank()
             summary = federation_summary(sites)
-            fmt.line(f"  {fmt.C.BOLD}{summary['reachable_sites']}/{summary['total_sites']} sites reachable{fmt.C.RESET}  |  {summary['total_hosts']} hosts  |  {summary['total_healthy']} healthy")
+            fmt.line(
+                f"  {fmt.C.BOLD}{summary['reachable_sites']}/{summary['total_sites']} sites reachable{fmt.C.RESET}  |  {summary['total_hosts']} hosts  |  {summary['total_healthy']} healthy"
+            )
         fmt.blank()
         fmt.footer()
         return 0
@@ -313,7 +324,9 @@ def cmd_federation(cfg, pack, args) -> int:
         sites = poll_all_sites(cfg.data_dir)
         for s in sites:
             status_color = fmt.C.GREEN if s.last_status == "ok" else fmt.C.RED
-            fmt.line(f"  {s.name:<20} {status_color}{s.last_status}{fmt.C.RESET}  v{s.last_version}  {s.last_hosts} hosts")
+            fmt.line(
+                f"  {s.name:<20} {status_color}{s.last_status}{fmt.C.RESET}  v{s.last_version}  {s.last_hosts} hosts"
+            )
         fmt.blank()
         fmt.footer()
         return 0

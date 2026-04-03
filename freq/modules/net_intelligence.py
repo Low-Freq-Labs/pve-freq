@@ -14,6 +14,7 @@ Design decisions:
     - Troubleshoot is a diagnostic chain, not a fix. Show the path, not the patch.
     - IP conflict uses ARP tables from switches — no active scanning needed.
 """
+
 import re
 import socket
 
@@ -25,6 +26,7 @@ from freq.core import log as logger
 # ---------------------------------------------------------------------------
 # Commands — Find
 # ---------------------------------------------------------------------------
+
 
 def cmd_find_mac(cfg: FreqConfig, pack, args) -> int:
     """Search all switches for a MAC address."""
@@ -55,14 +57,16 @@ def cmd_find_mac(cfg: FreqConfig, pack, args) -> int:
         for e in entries:
             entry_clean = e.get("mac", "").replace(".", "").replace(":", "").replace("-", "")
             if mac_clean in entry_clean:
-                all_matches.append({
-                    "switch": h.label,
-                    "switch_ip": h.ip,
-                    "port": e.get("port", ""),
-                    "vlan": e.get("vlan", ""),
-                    "mac": e.get("mac", ""),
-                    "type": e.get("type", ""),
-                })
+                all_matches.append(
+                    {
+                        "switch": h.label,
+                        "switch_ip": h.ip,
+                        "port": e.get("port", ""),
+                        "vlan": e.get("vlan", ""),
+                        "mac": e.get("mac", ""),
+                        "type": e.get("type", ""),
+                    }
+                )
 
     if all_matches:
         fmt.table_header(("Switch", 14), ("Port", 16), ("VLAN", 6), ("MAC", 16), ("Type", 10))
@@ -75,7 +79,9 @@ def cmd_find_mac(cfg: FreqConfig, pack, args) -> int:
                 (m["type"], 10),
             )
         fmt.blank()
-        fmt.success(f"Found on {len(set(m['switch'] for m in all_matches))} switch(es), {len(all_matches)} entry/entries")
+        fmt.success(
+            f"Found on {len(set(m['switch'] for m in all_matches))} switch(es), {len(all_matches)} entry/entries"
+        )
     else:
         fmt.warn(f"MAC {mac_query} not found on any of {len(switches)} switches")
 
@@ -108,12 +114,14 @@ def cmd_find_ip(cfg: FreqConfig, pack, args) -> int:
         entries = deployer.get_arp_table(h.ip, cfg)
         for e in entries:
             if e.get("ip") == ip_query:
-                all_matches.append({
-                    "switch": h.label,
-                    "interface": e.get("interface", ""),
-                    "mac": e.get("mac", ""),
-                    "age": e.get("age", ""),
-                })
+                all_matches.append(
+                    {
+                        "switch": h.label,
+                        "interface": e.get("interface", ""),
+                        "mac": e.get("mac", ""),
+                        "age": e.get("age", ""),
+                    }
+                )
 
     if all_matches:
         fmt.table_header(("Switch", 14), ("Interface", 14), ("MAC", 16), ("Age", 8))
@@ -192,10 +200,10 @@ def cmd_troubleshoot(cfg: FreqConfig, pack, args) -> int:
     # Step 2: Ping check (if we have IP)
     if ip:
         import subprocess
+
         fmt.step_start(f"Ping {ip}")
         try:
-            r = subprocess.run(["ping", "-c", "1", "-W", "2", ip],
-                               capture_output=True, text=True, timeout=5)
+            r = subprocess.run(["ping", "-c", "1", "-W", "2", ip], capture_output=True, text=True, timeout=5)
             if r.returncode == 0:
                 # Extract RTT
                 m = re.search(r"time[=<](\S+)", r.stdout)
@@ -217,6 +225,7 @@ def cmd_troubleshoot(cfg: FreqConfig, pack, args) -> int:
 
     # Step 4: Find in ARP/MAC tables
     from freq.modules.switch_orchestration import _get_switch_hosts, _get_deployer, _vendor_for_host
+
     switches = _get_switch_hosts(cfg)
 
     if ip and not mac:
@@ -279,6 +288,7 @@ def cmd_troubleshoot(cfg: FreqConfig, pack, args) -> int:
 # Commands — IPAM Extensions
 # ---------------------------------------------------------------------------
 
+
 def cmd_ip_utilization(cfg: FreqConfig, pack, args) -> int:
     """Show subnet utilization per VLAN."""
     fmt.header("IP Utilization", breadcrumb="FREQ > Net > IP")
@@ -294,8 +304,7 @@ def cmd_ip_utilization(cfg: FreqConfig, pack, args) -> int:
     # Collect used IPs
     from freq.modules.ipam import _collect_used_ips
 
-    fmt.table_header(("VLAN", 6), ("Name", 16), ("Subnet", 20),
-                     ("Used", 6), ("Total", 6), ("Util %", 8), ("Bar", 20))
+    fmt.table_header(("VLAN", 6), ("Name", 16), ("Subnet", 20), ("Used", 6), ("Total", 6), ("Util %", 8), ("Bar", 20))
     for vname, vinfo in sorted(vlans.items(), key=lambda x: x[1].get("id", 0)):
         subnet = vinfo.get("subnet", "")
         if not subnet or "/" not in subnet:
@@ -393,9 +402,11 @@ def cmd_ip_conflict(cfg: FreqConfig, pack, args) -> int:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_vlans(cfg):
     """Load VLAN definitions from vlans.toml."""
     import os
+
     vlans_path = os.path.join(cfg.conf_dir, "vlans.toml")
     if not os.path.exists(vlans_path):
         return {}

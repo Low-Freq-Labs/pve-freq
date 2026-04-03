@@ -22,6 +22,7 @@ Design decisions:
       to feel special. Empirically tuned.
     - Pack is loaded once and passed through the call chain, not re-read.
 """
+
 import logging
 import os
 import random
@@ -41,6 +42,7 @@ from freq.core.fmt import C, term_width
 @dataclass
 class PersonalityPack:
     """A loaded personality pack."""
+
     name: str = "default"
     subtitle: str = "P V E  F R E Q"
     vibe_enabled: bool = True
@@ -67,6 +69,7 @@ def load_pack(conf_dir: str, pack_name: str = "default") -> PersonalityPack:
                 data = tomllib.load(f)
         else:
             from freq.core.config import load_toml
+
             data = load_toml(path)
     except FileNotFoundError:
         return pack  # Pack file doesn't exist — use defaults

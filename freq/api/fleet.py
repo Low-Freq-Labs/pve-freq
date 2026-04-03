@@ -52,7 +52,8 @@ def handle_status(handler):
         connect_timeout=3,
         command_timeout=5,
         max_parallel=10,
-        use_sudo=False, cfg=cfg,
+        use_sudo=False,
+        cfg=cfg,
     )
 
     duration = round(time.monotonic() - start, 1)
@@ -65,21 +66,37 @@ def handle_status(handler):
         if r and r.returncode == 0:
             up += 1
             uptime = r.stdout.strip().replace("up ", "")[:40]
-            host_data.append({
-                "label": h.label, "ip": h.ip, "type": h.htype,
-                "status": "up", "uptime": uptime,
-            })
+            host_data.append(
+                {
+                    "label": h.label,
+                    "ip": h.ip,
+                    "type": h.htype,
+                    "status": "up",
+                    "uptime": uptime,
+                }
+            )
         else:
             down += 1
-            host_data.append({
-                "label": h.label, "ip": h.ip, "type": h.htype,
-                "status": "down", "uptime": "",
-            })
+            host_data.append(
+                {
+                    "label": h.label,
+                    "ip": h.ip,
+                    "type": h.htype,
+                    "status": "down",
+                    "uptime": "",
+                }
+            )
 
-    json_response(handler, {
-        "total": len(hosts), "up": up, "down": down,
-        "duration": duration, "hosts": host_data,
-    })
+    json_response(
+        handler,
+        {
+            "total": len(hosts),
+            "up": up,
+            "down": down,
+            "duration": duration,
+            "hosts": host_data,
+        },
+    )
 
 
 def handle_health_api(handler):
@@ -98,19 +115,19 @@ def handle_health_api(handler):
     HEALTH_CMDS = {
         "linux": (
             'echo "$(hostname)|$(nproc)|'
-            '$(free -m | awk \'/Mem:/ {printf "%d/%dMB", $3, $2}\')|'
-            '$(df -h / | awk \'NR==2 {print $5}\')|'
-            '$(cat /proc/loadavg | awk \'{print $1}\')|'
+            "$(free -m | awk '/Mem:/ {printf \"%d/%dMB\", $3, $2}')|"
+            "$(df -h / | awk 'NR==2 {print $5}')|"
+            "$(cat /proc/loadavg | awk '{print $1}')|"
             '$(docker ps -q 2>/dev/null | wc -l)"'
         ),
         "pfsense": (
             'echo "$(hostname)|$(sysctl -n hw.ncpu)|'
-            '$(sysctl -n hw.physmem hw.usermem 2>/dev/null | '
-            'awk \'NR==1{t=$1} NR==2{u=$1} END{printf "%d/%dMB", (t-u)/1048576, t/1048576}\')|'
-            '$(df -h / | awk \'NR==2 {print $5}\')|'
-            '$(sysctl -n vm.loadavg | awk \'{print $2}\')|0"'
+            "$(sysctl -n hw.physmem hw.usermem 2>/dev/null | "
+            "awk 'NR==1{t=$1} NR==2{u=$1} END{printf \"%d/%dMB\", (t-u)/1048576, t/1048576}')|"
+            "$(df -h / | awk 'NR==2 {print $5}')|"
+            "$(sysctl -n vm.loadavg | awk '{print $2}')|0\""
         ),
-        "switch": 'show processes cpu | include CPU',
+        "switch": "show processes cpu | include CPU",
     }
 
     def _probe_host(h):
@@ -119,24 +136,42 @@ def handle_health_api(handler):
         use_sudo = htype not in ("switch", "idrac")
         probe_key = (cfg.ssh_rsa_key_path or cfg.ssh_key_path) if htype in ("idrac", "switch") else cfg.ssh_key_path
         r = ssh_single(
-            host=h.ip, command=cmd,
+            host=h.ip,
+            command=cmd,
             key_path=probe_key,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=15,
-            htype=htype, use_sudo=use_sudo, cfg=cfg,
+            htype=htype,
+            use_sudo=use_sudo,
+            cfg=cfg,
         )
         if r.returncode != 0 or not r.stdout.strip():
-            return {"label": h.label, "ip": h.ip, "type": htype,
-                    "groups": getattr(h, "groups", "") or "",
-                    "status": "unreachable", "cores": "-", "ram": "-",
-                    "disk": "-", "load": "-", "docker": "0"}
+            return {
+                "label": h.label,
+                "ip": h.ip,
+                "type": htype,
+                "groups": getattr(h, "groups", "") or "",
+                "status": "unreachable",
+                "cores": "-",
+                "ram": "-",
+                "disk": "-",
+                "load": "-",
+                "docker": "0",
+            }
 
         if htype == "switch":
-            m = re.search(r'one minute:\s*(\d+)%', r.stdout)
+            m = re.search(r"one minute:\s*(\d+)%", r.stdout)
             cpu_pct = m.group(1) if m else "0"
-            r2 = ssh_single(host=h.ip, command='show processes memory | include Processor',
-                            key_path=probe_key, connect_timeout=3,
-                            command_timeout=10, htype="switch", use_sudo=False, cfg=cfg)
+            r2 = ssh_single(
+                host=h.ip,
+                command="show processes memory | include Processor",
+                key_path=probe_key,
+                connect_timeout=3,
+                command_timeout=10,
+                htype="switch",
+                use_sudo=False,
+                cfg=cfg,
+            )
             ram = "-"
             if r2.returncode == 0 and r2.stdout:
                 parts = r2.stdout.split()
@@ -149,14 +184,24 @@ def handle_health_api(handler):
                 except (ValueError, IndexError):
                     pass
             load_val = f"{float(cpu_pct) / 100:.2f}" if cpu_pct != "0" else "0.00"
-            return {"label": h.label, "ip": h.ip, "type": htype,
-                    "groups": getattr(h, "groups", "") or "",
-                    "status": "healthy", "cores": "1", "ram": ram,
-                    "disk": "-", "load": load_val, "docker": "0"}
+            return {
+                "label": h.label,
+                "ip": h.ip,
+                "type": htype,
+                "groups": getattr(h, "groups", "") or "",
+                "status": "healthy",
+                "cores": "1",
+                "ram": ram,
+                "disk": "-",
+                "load": load_val,
+                "docker": "0",
+            }
 
         parts = r.stdout.strip().split("|")
         return {
-            "label": h.label, "ip": h.ip, "type": htype,
+            "label": h.label,
+            "ip": h.ip,
+            "type": htype,
             "groups": getattr(h, "groups", "") or "",
             "status": "healthy",
             "cores": parts[1] if len(parts) > 1 else "?",
@@ -175,10 +220,20 @@ def handle_health_api(handler):
             except Exception as e:
                 h = futures[f]
                 logger.warn(f"health probe failed for {h.label}: {e}")
-                host_data.append({"label": h.label, "ip": h.ip, "type": h.htype,
-                                  "groups": getattr(h, "groups", "") or "",
-                                  "status": "unreachable", "cores": "-", "ram": "-",
-                                  "disk": "-", "load": "-", "docker": "0"})
+                host_data.append(
+                    {
+                        "label": h.label,
+                        "ip": h.ip,
+                        "type": h.htype,
+                        "groups": getattr(h, "groups", "") or "",
+                        "status": "unreachable",
+                        "cores": "-",
+                        "ram": "-",
+                        "disk": "-",
+                        "load": "-",
+                        "docker": "0",
+                    }
+                )
 
     duration = round(time.monotonic() - start, 1)
     result = {"duration": duration, "hosts": host_data}
@@ -192,13 +247,28 @@ def handle_fleet_overview(handler):
     if cached:
         json_response(handler, cached)
     else:
-        json_response(handler, {
-            "vms": [], "vm_nics": {}, "physical": [], "pve_nodes": [],
-            "vlans": [], "nic_profiles": {}, "categories": {},
-            "summary": {"total_vms": 0, "running": 0, "stopped": 0,
-                         "prod_count": 0, "lab_count": 0, "template_count": 0},
-            "duration": 0, "_loading": True,
-        })
+        json_response(
+            handler,
+            {
+                "vms": [],
+                "vm_nics": {},
+                "physical": [],
+                "pve_nodes": [],
+                "vlans": [],
+                "nic_profiles": {},
+                "categories": {},
+                "summary": {
+                    "total_vms": 0,
+                    "running": 0,
+                    "stopped": 0,
+                    "prod_count": 0,
+                    "lab_count": 0,
+                    "template_count": 0,
+                },
+                "duration": 0,
+                "_loading": True,
+            },
+        )
 
 
 def handle_fleet_ntp(handler):
@@ -208,8 +278,11 @@ def handle_fleet_ntp(handler):
     results = ssh_run_many(
         hosts=cfg.hosts,
         command="timedatectl show --property=NTPSynchronized --value 2>/dev/null; date '+%H:%M:%S'",
-        key_path=cfg.ssh_key_path, connect_timeout=3,
-        command_timeout=10, max_parallel=10, use_sudo=False,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=3,
+        command_timeout=10,
+        max_parallel=10,
+        use_sudo=False,
     )
     for h in cfg.hosts:
         r = results.get(h.label)
@@ -217,9 +290,13 @@ def handle_fleet_ntp(handler):
             lines = r.stdout.strip().split("\n")
             synced = lines[0].strip() == "yes" if lines else False
             time_str = lines[1].strip() if len(lines) > 1 else "?"
-            results_data.append({
-                "label": h.label, "synced": synced, "time": time_str,
-            })
+            results_data.append(
+                {
+                    "label": h.label,
+                    "synced": synced,
+                    "time": time_str,
+                }
+            )
         else:
             results_data.append({"label": h.label, "synced": False, "time": "unreachable"})
     json_response(handler, {"hosts": results_data})
@@ -232,10 +309,13 @@ def handle_fleet_updates(handler):
     results = ssh_run_many(
         hosts=cfg.hosts,
         command="if command -v apt >/dev/null 2>&1; then "
-                "  apt list --upgradable 2>/dev/null | grep -c upgradable; echo apt; "
-                "else echo 0; echo unknown; fi",
-        key_path=cfg.ssh_key_path, connect_timeout=3,
-        command_timeout=30, max_parallel=10, use_sudo=False,
+        "  apt list --upgradable 2>/dev/null | grep -c upgradable; echo apt; "
+        "else echo 0; echo unknown; fi",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=3,
+        command_timeout=30,
+        max_parallel=10,
+        use_sudo=False,
     )
     for h in cfg.hosts:
         r = results.get(h.label)
@@ -247,9 +327,13 @@ def handle_fleet_updates(handler):
                 count_int = int(count)
             except ValueError:
                 count_int = 0
-            results_data.append({
-                "label": h.label, "updates": count_int, "pkg_mgr": pkg_mgr,
-            })
+            results_data.append(
+                {
+                    "label": h.label,
+                    "updates": count_int,
+                    "pkg_mgr": pkg_mgr,
+                }
+            )
         else:
             results_data.append({"label": h.label, "updates": -1, "pkg_mgr": "?"})
     json_response(handler, {"hosts": results_data})
@@ -276,25 +360,32 @@ def handle_info(handler):
     """GET /api/info -- FREQ installation info."""
     cfg = load_config()
     from freq.core.personality import load_pack
+
     pack = load_pack(cfg.conf_dir, cfg.build)
-    json_response(handler, {
-        "version": freq.__version__,
-        "brand": cfg.brand,
-        "build": cfg.build,
-        "hosts": len(cfg.hosts),
-        "pve_nodes": len(_get_discovered_nodes()),
-        "cluster": cfg.cluster_name,
-        "install_dir": cfg.install_dir,
-        "subtitle": getattr(pack, "subtitle", cfg.brand) if pack else cfg.brand,
-        "dashboard_header": getattr(pack, "dashboard_header", "PVE FREQ Dashboard") if pack else "PVE FREQ Dashboard",
-    })
+    json_response(
+        handler,
+        {
+            "version": freq.__version__,
+            "brand": cfg.brand,
+            "build": cfg.build,
+            "hosts": len(cfg.hosts),
+            "pve_nodes": len(_get_discovered_nodes()),
+            "cluster": cfg.cluster_name,
+            "install_dir": cfg.install_dir,
+            "subtitle": getattr(pack, "subtitle", cfg.brand) if pack else cfg.brand,
+            "dashboard_header": getattr(pack, "dashboard_header", "PVE FREQ Dashboard")
+            if pack
+            else "PVE FREQ Dashboard",
+        },
+    )
 
 
 def handle_exec(handler):
     """GET /api/exec -- execute a command across fleet hosts via API."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
     params = _parse_query(handler)
     target = params.get("target", ["all"])[0]
     cmd = params.get("cmd", [""])[0]
@@ -324,10 +415,13 @@ def handle_exec(handler):
         return
 
     results = ssh_run_many(
-        hosts=hosts, command=cmd,
+        hosts=hosts,
+        command=cmd,
         key_path=cfg.ssh_key_path,
-        connect_timeout=3, command_timeout=15,
-        max_parallel=10, use_sudo=False,
+        connect_timeout=3,
+        command_timeout=15,
+        max_parallel=10,
+        use_sudo=False,
     )
 
     result_list = []
@@ -336,8 +430,9 @@ def handle_exec(handler):
         if r and r.returncode == 0:
             result_list.append({"host": h.label, "ok": True, "output": r.stdout, "error": ""})
         else:
-            result_list.append({"host": h.label, "ok": False, "output": "",
-                                "error": r.stderr[:100] if r else "no response"})
+            result_list.append(
+                {"host": h.label, "ok": False, "output": "", "error": r.stderr[:100] if r else "no response"}
+            )
 
     json_response(handler, {"target": target, "command": cmd, "results": result_list})
 
@@ -346,7 +441,8 @@ def handle_deploy_agent(handler):
     """POST /api/deploy-agent -- deploy FREQ metrics agent to fleet hosts (admin only)."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
 
     params = get_params(handler)
     target = params.get("target", ["all"])[0]
@@ -358,7 +454,8 @@ def handle_deploy_agent(handler):
     else:
         h = res.by_target(cfg.hosts, target)
         if not h:
-            json_response(handler, {"error": f"Host not found: {target}"}); return
+            json_response(handler, {"error": f"Host not found: {target}"})
+            return
         hosts = [h]
 
     # Read agent source
@@ -367,7 +464,8 @@ def handle_deploy_agent(handler):
         with open(agent_src) as f:
             agent_code = f.read()
     except FileNotFoundError:
-        json_response(handler, {"error": f"Agent source not found: {agent_src}"}, 500); return
+        json_response(handler, {"error": f"Agent source not found: {agent_src}"}, 500)
+        return
 
     agent_port = cfg.agent_port
     remote_path = "/opt/freq-agent/collector.py"
@@ -378,9 +476,15 @@ def handle_deploy_agent(handler):
         host_result = {"host": h.label, "ip": h.ip, "steps": []}
 
         # Step 1: Create directory
-        r = ssh_single(host=h.ip, command="mkdir -p /opt/freq-agent",
-                       key_path=cfg.ssh_key_path, connect_timeout=3,
-                       command_timeout=10, htype=h.htype, use_sudo=True)
+        r = ssh_single(
+            host=h.ip,
+            command="mkdir -p /opt/freq-agent",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=10,
+            htype=h.htype,
+            use_sudo=True,
+        )
         if r.returncode != 0:
             host_result["status"] = "failed"
             host_result["error"] = "Cannot create directory"
@@ -391,9 +495,15 @@ def handle_deploy_agent(handler):
 
         # Step 2: Upload agent
         upload_cmd = f"cat > {remote_path} << 'FREQAGENTEOF'\n{agent_code}\nFREQAGENTEOF"
-        r = ssh_single(host=h.ip, command=upload_cmd,
-                       key_path=cfg.ssh_key_path, connect_timeout=3,
-                       command_timeout=30, htype=h.htype, use_sudo=True)
+        r = ssh_single(
+            host=h.ip,
+            command=upload_cmd,
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=30,
+            htype=h.htype,
+            use_sudo=True,
+        )
         if r.returncode != 0:
             host_result["status"] = "failed"
             host_result["error"] = "Cannot upload agent"
@@ -403,9 +513,15 @@ def handle_deploy_agent(handler):
         host_result["steps"].append({"step": "upload", "ok": True})
 
         # Step 3: chmod + systemd unit
-        ssh_single(host=h.ip, command=f"chmod +x {remote_path}",
-                   key_path=cfg.ssh_key_path, connect_timeout=3,
-                   command_timeout=5, htype=h.htype, use_sudo=True)
+        ssh_single(
+            host=h.ip,
+            command=f"chmod +x {remote_path}",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=5,
+            htype=h.htype,
+            use_sudo=True,
+        )
         host_result["steps"].append({"step": "chmod", "ok": True})
 
         unit = (
@@ -414,23 +530,40 @@ def handle_deploy_agent(handler):
             f"Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=multi-user.target\n"
         )
         svc_cmd = f"cat > /etc/systemd/system/{service_name}.service << 'FREQSVCEOF'\n{unit}\nFREQSVCEOF"
-        ssh_single(host=h.ip, command=svc_cmd,
-                   key_path=cfg.ssh_key_path, connect_timeout=3,
-                   command_timeout=10, htype=h.htype, use_sudo=True)
+        ssh_single(
+            host=h.ip,
+            command=svc_cmd,
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=10,
+            htype=h.htype,
+            use_sudo=True,
+        )
         host_result["steps"].append({"step": "systemd_unit", "ok": True})
 
         # Step 4: Enable and start
-        ssh_single(host=h.ip,
-                   command=f"systemctl daemon-reload && systemctl enable {service_name} && systemctl restart {service_name}",
-                   key_path=cfg.ssh_key_path, connect_timeout=3,
-                   command_timeout=30, htype=h.htype, use_sudo=True)
+        ssh_single(
+            host=h.ip,
+            command=f"systemctl daemon-reload && systemctl enable {service_name} && systemctl restart {service_name}",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=30,
+            htype=h.htype,
+            use_sudo=True,
+        )
         host_result["steps"].append({"step": "start", "ok": True})
 
         # Step 5: Verify
         time.sleep(1)
-        r = ssh_single(host=h.ip, command=f"curl -s http://localhost:{agent_port}/health 2>/dev/null",
-                       key_path=cfg.ssh_key_path, connect_timeout=3,
-                       command_timeout=5, htype=h.htype, use_sudo=False)
+        r = ssh_single(
+            host=h.ip,
+            command=f"curl -s http://localhost:{agent_port}/health 2>/dev/null",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=5,
+            htype=h.htype,
+            use_sudo=False,
+        )
         healthy = r.returncode == 0 and "ok" in r.stdout
         host_result["steps"].append({"step": "verify", "ok": healthy})
         host_result["status"] = "deployed" if healthy else "deployed_unverified"
@@ -439,10 +572,16 @@ def handle_deploy_agent(handler):
 
     deployed = sum(1 for r in results if "deployed" in r.get("status", ""))
     failed = sum(1 for r in results if r.get("status") == "failed")
-    json_response(handler, {
-        "results": results, "deployed": deployed, "failed": failed,
-        "total": len(results), "agent_port": agent_port,
-    })
+    json_response(
+        handler,
+        {
+            "results": results,
+            "deployed": deployed,
+            "failed": failed,
+            "total": len(results),
+            "agent_port": agent_port,
+        },
+    )
 
 
 def handle_infra_overview(handler):
@@ -450,17 +589,21 @@ def handle_infra_overview(handler):
     cfg = load_config()
 
     cmd = (
-        "echo \"$(hostname)|$(cat /etc/os-release 2>/dev/null | grep -oP '(?<=PRETTY_NAME=\\\").*(?=\\\")' || echo unknown)|"
+        'echo "$(hostname)|$(cat /etc/os-release 2>/dev/null | grep -oP \'(?<=PRETTY_NAME=\\").*(?=\\")\' || echo unknown)|'
         "$(nproc)|$(free -m | awk '/Mem:/ {printf \\\"%d/%dMB\\\", $3, $2}')|"
         "$(df -h / | awk 'NR==2 {print $5}')|"
         "$(docker ps -q 2>/dev/null | wc -l)|"
-        "$(systemctl list-units --type=service --state=running --no-legend 2>/dev/null | wc -l)\""
+        '$(systemctl list-units --type=service --state=running --no-legend 2>/dev/null | wc -l)"'
     )
 
     results = ssh_run_many(
-        hosts=cfg.hosts, command=cmd, key_path=cfg.ssh_key_path,
-        connect_timeout=3, command_timeout=10,
-        max_parallel=10, use_sudo=False,
+        hosts=cfg.hosts,
+        command=cmd,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=3,
+        command_timeout=10,
+        max_parallel=10,
+        use_sudo=False,
     )
 
     layers = []
@@ -468,39 +611,56 @@ def handle_infra_overview(handler):
         r = results.get(h.label)
         if r and r.returncode == 0 and r.stdout:
             parts = r.stdout.split("|")
-            layers.append({
-                "label": h.label, "ip": h.ip, "type": h.htype,
-                "status": "up",
-                "hostname": parts[0] if len(parts) > 0 else "?",
-                "os": parts[1] if len(parts) > 1 else "?",
-                "cores": parts[2] if len(parts) > 2 else "?",
-                "ram": parts[3] if len(parts) > 3 else "?",
-                "disk_pct": parts[4] if len(parts) > 4 else "?",
-                "containers": int(parts[5]) if len(parts) > 5 and parts[5].strip().isdigit() else 0,
-                "services": int(parts[6]) if len(parts) > 6 and parts[6].strip().isdigit() else 0,
-            })
+            layers.append(
+                {
+                    "label": h.label,
+                    "ip": h.ip,
+                    "type": h.htype,
+                    "status": "up",
+                    "hostname": parts[0] if len(parts) > 0 else "?",
+                    "os": parts[1] if len(parts) > 1 else "?",
+                    "cores": parts[2] if len(parts) > 2 else "?",
+                    "ram": parts[3] if len(parts) > 3 else "?",
+                    "disk_pct": parts[4] if len(parts) > 4 else "?",
+                    "containers": int(parts[5]) if len(parts) > 5 and parts[5].strip().isdigit() else 0,
+                    "services": int(parts[6]) if len(parts) > 6 and parts[6].strip().isdigit() else 0,
+                }
+            )
         else:
-            layers.append({
-                "label": h.label, "ip": h.ip, "type": h.htype,
-                "status": "down",
-            })
+            layers.append(
+                {
+                    "label": h.label,
+                    "ip": h.ip,
+                    "type": h.htype,
+                    "status": "down",
+                }
+            )
 
     pve_info = {"nodes": [], "vms": []}
     for node_ip in _get_discovered_node_ips():
-        r = ssh_single(host=node_ip,
-                       command="pvesh get /cluster/resources --type vm --output-format json 2>/dev/null",
-                       key_path=cfg.ssh_key_path, connect_timeout=3,
-                       command_timeout=10, htype="pve", use_sudo=True)
+        r = ssh_single(
+            host=node_ip,
+            command="pvesh get /cluster/resources --type vm --output-format json 2>/dev/null",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=10,
+            htype="pve",
+            use_sudo=True,
+        )
         if r.returncode == 0 and r.stdout:
             try:
                 vms = json.loads(r.stdout)
                 for v in vms:
-                    pve_info["vms"].append({
-                        "vmid": v.get("vmid"), "name": v.get("name", ""),
-                        "node": v.get("node", ""), "status": v.get("status", ""),
-                        "cpu": v.get("maxcpu", 0),
-                        "ram_mb": v.get("maxmem", 0) // (1024 * 1024) if v.get("maxmem") else 0,
-                    })
+                    pve_info["vms"].append(
+                        {
+                            "vmid": v.get("vmid"),
+                            "name": v.get("name", ""),
+                            "node": v.get("node", ""),
+                            "status": v.get("status", ""),
+                            "cpu": v.get("maxcpu", 0),
+                            "ram_mb": v.get("maxmem", 0) // (1024 * 1024) if v.get("maxmem") else 0,
+                        }
+                    )
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warn(f"infra overview VM parse failed: {e}")
             break
@@ -511,12 +671,15 @@ def handle_infra_overview(handler):
     if cfg.truenas_ip:
         infra["truenas"] = {"ip": cfg.truenas_ip, "status": "unknown"}
 
-    json_response(handler, {
-        "hosts": layers,
-        "pve": pve_info,
-        "infra": infra,
-        "cluster": cfg.cluster_name,
-    })
+    json_response(
+        handler,
+        {
+            "hosts": layers,
+            "pve": pve_info,
+            "infra": infra,
+            "cluster": cfg.cluster_name,
+        },
+    )
 
 
 def handle_infra_quick(handler):
@@ -537,11 +700,13 @@ def handle_diagnose(handler):
     query = _parse_query(handler)
     target = query.get("target", [""])[0]
     if not target:
-        json_response(handler, {"error": "target parameter required"}); return
+        json_response(handler, {"error": "target parameter required"})
+        return
     try:
         host = res.by_target(cfg.hosts, target)
         if not host:
-            json_response(handler, {"error": f"Unknown host: {target}"}); return
+            json_response(handler, {"error": f"Unknown host: {target}"})
+            return
         checks = {}
         cmds = {
             "uptime": "uptime",
@@ -554,9 +719,15 @@ def handle_diagnose(handler):
             "journal_errors": "journalctl -p err --since '1 hour ago' --no-pager -q 2>/dev/null | tail -20 || echo 'N/A'",
         }
         for label, cmd in cmds.items():
-            r = ssh_single(host=host.ip, command=cmd,
-                           key_path=cfg.ssh_key_path, connect_timeout=3,
-                           command_timeout=15, htype=host.htype, use_sudo=False)
+            r = ssh_single(
+                host=host.ip,
+                command=cmd,
+                key_path=cfg.ssh_key_path,
+                connect_timeout=3,
+                command_timeout=15,
+                htype=host.htype,
+                use_sudo=False,
+            )
             checks[label] = r.stdout if r.returncode == 0 else f"ERROR: {r.stderr or r.stdout}"
         json_response(handler, {"host": target, "ip": host.ip, "checks": checks})
     except Exception as e:
@@ -571,21 +742,34 @@ def handle_log(handler):
     lines = int(query.get("lines", ["50"])[0])
     unit = query.get("unit", [""])[0]
     if not target:
-        json_response(handler, {"error": "target parameter required"}); return
+        json_response(handler, {"error": "target parameter required"})
+        return
     try:
         host = res.by_target(cfg.hosts, target)
         if not host:
-            json_response(handler, {"error": f"Unknown host: {target}"}); return
+            json_response(handler, {"error": f"Unknown host: {target}"})
+            return
         cmd = f"journalctl --no-pager -n {min(lines, 500)}"
         if unit:
             cmd += f" -u {unit}"
-        r = ssh_single(host=host.ip, command=cmd,
-                       key_path=cfg.ssh_key_path, connect_timeout=3,
-                       command_timeout=15, htype=host.htype, use_sudo=True)
-        json_response(handler, {
-            "host": target, "ip": host.ip, "lines": r.stdout.split("\n") if r.returncode == 0 else [],
-            "error": "" if r.returncode == 0 else (r.stderr or r.stdout)
-        })
+        r = ssh_single(
+            host=host.ip,
+            command=cmd,
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=15,
+            htype=host.htype,
+            use_sudo=True,
+        )
+        json_response(
+            handler,
+            {
+                "host": target,
+                "ip": host.ip,
+                "lines": r.stdout.split("\n") if r.returncode == 0 else [],
+                "error": "" if r.returncode == 0 else (r.stderr or r.stdout),
+            },
+        )
     except Exception as e:
         json_response(handler, {"error": f"Log fetch failed: {e}"}, 500)
 
@@ -610,21 +794,22 @@ def handle_fleet_health_score(handler):
             if host_pct < 100:
                 penalty = min(40, (100 - host_pct) * 2)
                 score -= penalty
-                factors.append({"factor": "hosts_down", "penalty": penalty,
-                                "detail": f"{unhealthy}/{total} hosts unhealthy"})
+                factors.append(
+                    {"factor": "hosts_down", "penalty": penalty, "detail": f"{unhealthy}/{total} hosts unhealthy"}
+                )
 
             high_ram = sum(1 for h in hosts if _parse_pct(h.get("ram", "")) > 80)
             high_disk = sum(1 for h in hosts if _parse_pct(h.get("disk", "")) > 80)
             if high_ram > 0:
                 penalty = min(15, high_ram * 5)
                 score -= penalty
-                factors.append({"factor": "ram_pressure", "penalty": penalty,
-                                "detail": f"{high_ram} host(s) >80% RAM"})
+                factors.append({"factor": "ram_pressure", "penalty": penalty, "detail": f"{high_ram} host(s) >80% RAM"})
             if high_disk > 0:
                 penalty = min(15, high_disk * 5)
                 score -= penalty
-                factors.append({"factor": "disk_pressure", "penalty": penalty,
-                                "detail": f"{high_disk} host(s) >80% disk"})
+                factors.append(
+                    {"factor": "disk_pressure", "penalty": penalty, "detail": f"{high_disk} host(s) >80% disk"}
+                )
 
     if fleet and isinstance(fleet, dict):
         vms = fleet.get("vms", [])
@@ -633,18 +818,22 @@ def handle_fleet_health_score(handler):
         if total_vms > 0 and stopped > total_vms * 0.3:
             penalty = min(10, stopped)
             score -= penalty
-            factors.append({"factor": "vms_stopped", "penalty": penalty,
-                            "detail": f"{stopped}/{total_vms} VMs stopped"})
+            factors.append(
+                {"factor": "vms_stopped", "penalty": penalty, "detail": f"{stopped}/{total_vms} VMs stopped"}
+            )
 
     score = max(0, min(100, score))
     grade = "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F"
 
-    json_response(handler, {
-        "score": score,
-        "grade": grade,
-        "factors": factors,
-        "max_score": 100,
-    })
+    json_response(
+        handler,
+        {
+            "score": score,
+            "grade": grade,
+            "factors": factors,
+            "max_score": 100,
+        },
+    )
 
 
 def handle_topology_enhanced(handler):
@@ -670,26 +859,33 @@ def handle_topology_enhanced(handler):
         matched = False
         for vlan in cfg.vlans:
             if vlan.prefix and ip.startswith(vlan.prefix):
-                vlan_groups[vlan.name]["hosts"].append({
-                    "label": h.get("label", ""),
-                    "ip": ip,
-                    "type": h.get("type", ""),
-                    "status": h.get("status", ""),
-                })
+                vlan_groups[vlan.name]["hosts"].append(
+                    {
+                        "label": h.get("label", ""),
+                        "ip": ip,
+                        "type": h.get("type", ""),
+                        "status": h.get("status", ""),
+                    }
+                )
                 matched = True
                 break
         if not matched:
             if "untagged" not in vlan_groups:
                 vlan_groups["untagged"] = {
-                    "id": 0, "name": "Untagged", "subnet": "",
-                    "gateway": "", "hosts": [],
+                    "id": 0,
+                    "name": "Untagged",
+                    "subnet": "",
+                    "gateway": "",
+                    "hosts": [],
                 }
-            vlan_groups["untagged"]["hosts"].append({
-                "label": h.get("label", ""),
-                "ip": ip,
-                "type": h.get("type", ""),
-                "status": h.get("status", ""),
-            })
+            vlan_groups["untagged"]["hosts"].append(
+                {
+                    "label": h.get("label", ""),
+                    "ip": ip,
+                    "type": h.get("type", ""),
+                    "status": h.get("status", ""),
+                }
+            )
 
     nodes = {}
     if fleet and isinstance(fleet, dict):
@@ -701,12 +897,15 @@ def handle_topology_enhanced(handler):
             if vm.get("status") == "running":
                 nodes[node]["running"] += 1
 
-    json_response(handler, {
-        "vlans": list(vlan_groups.values()),
-        "nodes": list(nodes.values()),
-        "total_hosts": len(health_hosts),
-        "total_vlans": len(cfg.vlans),
-    })
+    json_response(
+        handler,
+        {
+            "vlans": list(vlan_groups.values()),
+            "nodes": list(nodes.values()),
+            "total_hosts": len(health_hosts),
+            "total_vlans": len(cfg.vlans),
+        },
+    )
 
 
 def handle_fleet_heatmap(handler):
@@ -725,14 +924,16 @@ def handle_fleet_heatmap(handler):
                 load = float(h.get("load", "0"))
             except (ValueError, TypeError):
                 load = 0
-            heatmap.append({
-                "label": h.get("label", ""),
-                "type": h.get("type", ""),
-                "ram_pct": round(ram_pct, 1),
-                "disk_pct": round(disk_pct, 1),
-                "load": round(load, 2),
-                "containers": int(h.get("docker", "0") or 0),
-            })
+            heatmap.append(
+                {
+                    "label": h.get("label", ""),
+                    "type": h.get("type", ""),
+                    "ram_pct": round(ram_pct, 1),
+                    "disk_pct": round(disk_pct, 1),
+                    "load": round(load, 2),
+                    "containers": int(h.get("docker", "0") or 0),
+                }
+            )
 
     json_response(handler, {"hosts": heatmap, "count": len(heatmap)})
 
@@ -760,11 +961,18 @@ def handle_topology(handler):
         h = health_map.get(pn_name, {})
         if h.get("status") == "unreachable":
             status = "unreachable"
-        nodes.append({
-            "id": f"pve:{pn_name}", "label": pn_name, "type": "pve",
-            "ip": pn_ip, "status": status,
-            "ram": h.get("ram", ""), "disk": h.get("disk", ""), "load": h.get("load", ""),
-        })
+        nodes.append(
+            {
+                "id": f"pve:{pn_name}",
+                "label": pn_name,
+                "type": "pve",
+                "ip": pn_ip,
+                "status": status,
+                "ram": h.get("ram", ""),
+                "disk": h.get("disk", ""),
+                "load": h.get("load", ""),
+            }
+        )
 
     vm_list = _get_fleet_vms(cfg)
     for vm in vm_list:
@@ -774,26 +982,42 @@ def handle_topology(handler):
         h = health_map.get(vm.get("name", ""), {})
         if h.get("status") == "unreachable" and status == "running":
             status = "unreachable"
-        nodes.append({
-            "id": vm_id, "label": vm.get("name", str(vm["vmid"])),
-            "type": "vm", "vmid": vm["vmid"], "status": status,
-            "category": vm.get("category", ""), "node": vm["node"],
-            "ram": h.get("ram", ""), "disk": h.get("disk", ""),
-            "docker": h.get("docker", "0"),
-        })
+        nodes.append(
+            {
+                "id": vm_id,
+                "label": vm.get("name", str(vm["vmid"])),
+                "type": "vm",
+                "vmid": vm["vmid"],
+                "status": status,
+                "category": vm.get("category", ""),
+                "node": vm["node"],
+                "ram": h.get("ram", ""),
+                "disk": h.get("disk", ""),
+                "docker": h.get("docker", "0"),
+            }
+        )
         links.append({"source": node_id, "target": vm_id})
 
     for dev in fb.physical.values():
-        nodes.append({
-            "id": f"dev:{dev.key}", "label": dev.label, "type": dev.device_type,
-            "ip": dev.ip, "status": "healthy",
-        })
+        nodes.append(
+            {
+                "id": f"dev:{dev.key}",
+                "label": dev.label,
+                "type": dev.device_type,
+                "ip": dev.ip,
+                "status": "healthy",
+            }
+        )
 
-    json_response(handler, {
-        "nodes": nodes, "links": links,
-        "pve_count": len(_get_discovered_nodes()),
-        "vm_count": len(vm_list),
-    })
+    json_response(
+        handler,
+        {
+            "nodes": nodes,
+            "links": links,
+            "pve_count": len(_get_discovered_nodes()),
+            "vm_count": len(vm_list),
+        },
+    )
 
 
 def handle_activity(handler):
@@ -837,43 +1061,57 @@ def handle_docker_fleet(handler):
         if r and r.returncode == 0 and r.stdout.strip():
             for line in r.stdout.strip().split("\n"):
                 parts = line.split("|")
-                containers.append({
-                    "name": parts[0] if len(parts) > 0 else "?",
-                    "image": parts[1] if len(parts) > 1 else "",
-                    "status": parts[2] if len(parts) > 2 else "",
-                })
+                containers.append(
+                    {
+                        "name": parts[0] if len(parts) > 0 else "?",
+                        "image": parts[1] if len(parts) > 1 else "",
+                        "status": parts[2] if len(parts) > 2 else "",
+                    }
+                )
             total += len(containers)
-        hosts_data.append({
-            "label": host.label,
-            "ip": host.ip,
-            "containers": containers,
-            "count": len(containers),
-            "reachable": r is not None and r.returncode == 0 if r else False,
-        })
+        hosts_data.append(
+            {
+                "label": host.label,
+                "ip": host.ip,
+                "containers": containers,
+                "count": len(containers),
+                "reachable": r is not None and r.returncode == 0 if r else False,
+            }
+        )
 
-    json_response(handler, {
-        "hosts": hosts_data,
-        "total_containers": total,
-        "total_hosts": len(docker_hosts),
-    })
+    json_response(
+        handler,
+        {
+            "hosts": hosts_data,
+            "total_containers": total,
+            "total_hosts": len(docker_hosts),
+        },
+    )
 
 
 def handle_inventory(handler):
     """GET /api/inventory -- full fleet inventory."""
     from freq.modules.inventory import _gather_hosts, _gather_vms, _gather_containers
+
     cfg = load_config()
     hosts = _gather_hosts(cfg)
     vms = _gather_vms(cfg)
     containers = _gather_containers(cfg)
-    json_response(handler, {
-        "hosts": hosts, "vms": vms, "containers": containers,
-        "meta": {"host_count": len(hosts), "vm_count": len(vms), "container_count": len(containers)},
-    })
+    json_response(
+        handler,
+        {
+            "hosts": hosts,
+            "vms": vms,
+            "containers": containers,
+            "meta": {"host_count": len(hosts), "vm_count": len(vms), "container_count": len(containers)},
+        },
+    )
 
 
 def handle_inventory_hosts(handler):
     """GET /api/inventory/hosts -- host inventory only."""
     from freq.modules.inventory import _gather_hosts
+
     cfg = load_config()
     hosts = _gather_hosts(cfg)
     json_response(handler, {"hosts": hosts, "count": len(hosts)})
@@ -882,6 +1120,7 @@ def handle_inventory_hosts(handler):
 def handle_inventory_vms(handler):
     """GET /api/inventory/vms -- VM inventory only."""
     from freq.modules.inventory import _gather_vms
+
     cfg = load_config()
     vms = _gather_vms(cfg)
     json_response(handler, {"vms": vms, "count": len(vms)})
@@ -890,6 +1129,7 @@ def handle_inventory_vms(handler):
 def handle_inventory_containers(handler):
     """GET /api/inventory/containers -- container inventory only."""
     from freq.modules.inventory import _gather_containers
+
     cfg = load_config()
     containers = _gather_containers(cfg)
     json_response(handler, {"containers": containers, "count": len(containers)})
@@ -899,16 +1139,19 @@ def handle_compare(handler):
     """GET /api/compare -- compare two hosts."""
     from freq.modules.compare import _gather_host_info
     from freq.core.resolve import host as resolve_host
+
     cfg = load_config()
     params = _parse_query(handler)
     a = params.get("a", [""])[0].strip()
     b = params.get("b", [""])[0].strip()
     if not a or not b:
-        json_response(handler, {"error": "Parameters 'a' and 'b' required"}, 400); return
+        json_response(handler, {"error": "Parameters 'a' and 'b' required"}, 400)
+        return
     host_a = resolve_host(cfg.hosts, a)
     host_b = resolve_host(cfg.hosts, b)
     if not host_a or not host_b:
-        json_response(handler, {"error": "Host not found"}, 404); return
+        json_response(handler, {"error": "Host not found"}, 404)
+        return
     info_a = _gather_host_info(cfg, host_a)
     info_b = _gather_host_info(cfg, host_b)
     json_response(handler, {"host_a": info_a, "host_b": info_b})
@@ -917,6 +1160,7 @@ def handle_compare(handler):
 def handle_report(handler):
     """GET /api/report -- generate fleet report."""
     from freq.modules.report import _generate_report
+
     cfg = load_config()
     report = _generate_report(cfg)
     json_response(handler, report)
@@ -927,14 +1171,17 @@ def handle_discover(handler):
     cfg = load_config()
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     query = _parse_query(handler)
     subnet = query.get("subnet", [""])[0]
     try:
         import io, contextlib
         from freq.modules.discover import cmd_discover
+
         class Args:
             pass
+
         args = Args()
         args.subnet = subnet or None
         buf = io.StringIO()
@@ -950,6 +1197,7 @@ def handle_watchdog_health(handler):
     import urllib.request
     import urllib.error
     from urllib.parse import urlparse as _urlparse
+
     cfg = load_config()
     wd_port = cfg.watchdog_port
     parsed = _urlparse(handler.path)
@@ -963,7 +1211,9 @@ def handle_watchdog_health(handler):
             data = json.loads(resp.read().decode())
             json_response(handler, data, resp.status)
     except urllib.error.URLError:
-        json_response(handler, {"error": f"WATCHDOG daemon not reachable at localhost:{wd_port}", "watchdog_down": True})
+        json_response(
+            handler, {"error": f"WATCHDOG daemon not reachable at localhost:{wd_port}", "watchdog_down": True}
+        )
     except Exception as e:
         json_response(handler, {"error": f"Proxy error: {e}"})
 
@@ -971,27 +1221,34 @@ def handle_watchdog_health(handler):
 def handle_federation_status(handler):
     """GET /api/federation/status -- return federation status and registered sites."""
     from freq.jarvis.federation import load_sites, sites_to_dicts, federation_summary
+
     cfg = load_config()
     sites = load_sites(cfg.data_dir)
-    json_response(handler, {
-        "sites": sites_to_dicts(sites),
-        "summary": federation_summary(sites),
-    })
+    json_response(
+        handler,
+        {
+            "sites": sites_to_dicts(sites),
+            "summary": federation_summary(sites),
+        },
+    )
 
 
 def handle_federation_register(handler):
     """POST /api/federation/register -- register a new remote FREQ site."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.federation import register_site
+
     cfg = load_config()
     params = _parse_query_flat(handler.path)
     name = params.get("name", "").strip()
     url = params.get("url", "").strip()
     secret = params.get("secret", "")
     if not name or not url:
-        json_response(handler, {"error": "Missing name or url parameter"}); return
+        json_response(handler, {"error": "Missing name or url parameter"})
+        return
     ok, msg = register_site(cfg.data_dir, name, url, secret)
     json_response(handler, {"ok": ok, "message": msg})
 
@@ -1000,13 +1257,16 @@ def handle_federation_unregister(handler):
     """POST /api/federation/unregister -- remove a registered remote site."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.federation import unregister_site
+
     cfg = load_config()
     params = _parse_query_flat(handler.path)
     name = params.get("name", "").strip()
     if not name:
-        json_response(handler, {"error": "Missing name parameter"}); return
+        json_response(handler, {"error": "Missing name parameter"})
+        return
     ok, msg = unregister_site(cfg.data_dir, name)
     json_response(handler, {"ok": ok, "message": msg})
 
@@ -1015,28 +1275,36 @@ def handle_federation_poll(handler):
     """POST /api/federation/poll -- trigger a poll of all remote sites."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.federation import poll_all_sites, sites_to_dicts, federation_summary
+
     cfg = load_config()
     sites = poll_all_sites(cfg.data_dir)
-    json_response(handler, {
-        "ok": True,
-        "sites": sites_to_dicts(sites),
-        "summary": federation_summary(sites),
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "sites": sites_to_dicts(sites),
+            "summary": federation_summary(sites),
+        },
+    )
 
 
 def handle_federation_toggle(handler):
     """POST /api/federation/toggle -- enable or disable a registered site."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.federation import load_sites, save_sites
+
     cfg = load_config()
     params = _parse_query_flat(handler.path)
     name = params.get("name", "").strip()
     if not name:
-        json_response(handler, {"error": "Missing name parameter"}); return
+        json_response(handler, {"error": "Missing name parameter"})
+        return
     sites = load_sites(cfg.data_dir)
     found = False
     enabled = False
@@ -1047,7 +1315,8 @@ def handle_federation_toggle(handler):
             found = True
             break
     if not found:
-        json_response(handler, {"error": f"Site '{name}' not found"}); return
+        json_response(handler, {"error": f"Site '{name}' not found"})
+        return
     save_sites(cfg.data_dir, sites)
     json_response(handler, {"ok": True, "enabled": enabled})
 
@@ -1064,13 +1333,22 @@ def handle_host_detail(handler):
         return
 
     def _cmd(command, timeout=10):
-        r = ssh_single(host=host.ip, command=command,
-                       key_path=cfg.ssh_key_path, connect_timeout=3,
-                       command_timeout=timeout, htype=host.htype, use_sudo=False)
+        r = ssh_single(
+            host=host.ip,
+            command=command,
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=timeout,
+            htype=host.htype,
+            use_sudo=False,
+        )
         return r.stdout.strip() if r.returncode == 0 else ""
 
     detail = {
-        "label": host.label, "ip": host.ip, "type": host.htype, "groups": host.groups,
+        "label": host.label,
+        "ip": host.ip,
+        "type": host.htype,
+        "groups": host.groups,
         "hostname": _cmd("hostname -f 2>/dev/null || hostname"),
         "os": _cmd("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'"),
         "kernel": _cmd("uname -r"),
@@ -1079,17 +1357,21 @@ def handle_host_detail(handler):
         "cores": _cmd("nproc"),
         "ram": _cmd("free -m | awk '/Mem:/ {printf \"%d/%dMB (%d%%)\", $3, $2, $3/$2*100}'"),
         "load": _cmd("cat /proc/loadavg | awk '{print $1, $2, $3}'"),
-        "disk": _cmd("df -h / | awk 'NR==2 {print $3\"/\"$2\" (\"$5\" used)\"}'"),
+        "disk": _cmd('df -h / | awk \'NR==2 {print $3"/"$2" ("$5" used)"}\''),
         "ips": _cmd("ip -4 addr show | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $NF\": \"$2}'"),
         "gateway": _cmd("ip route show default 2>/dev/null | awk '{print $3}' | head -1"),
         "dns": _cmd("grep nameserver /etc/resolv.conf 2>/dev/null | awk '{print $2}' | tr '\\n' ' '"),
-        "listening_ports": _cmd("ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | sed 's/.*://' | sort -un | tr '\\n' ' '"),
+        "listening_ports": _cmd(
+            "ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | sed 's/.*://' | sort -un | tr '\\n' ' '"
+        ),
         "docker_count": _cmd("docker ps -q 2>/dev/null | wc -l"),
         "docker_containers": [],
         "failed_services": _cmd("systemctl --failed --no-legend 2>/dev/null | head -5 || echo none"),
         "running_services": _cmd("systemctl list-units --type=service --state=running --no-legend 2>/dev/null | wc -l"),
         "ssh_root_login": _cmd("grep -i '^PermitRootLogin' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}'"),
-        "ssh_password_auth": _cmd("grep -i '^PasswordAuthentication' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}'"),
+        "ssh_password_auth": _cmd(
+            "grep -i '^PasswordAuthentication' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}'"
+        ),
         "last_login": _cmd("last -1 --time-format iso 2>/dev/null | head -1"),
         "ntp_synced": _cmd("timedatectl show --property=NTPSynchronized --value 2>/dev/null"),
         "ntp_service": _cmd("systemctl is-active systemd-timesyncd 2>/dev/null"),
@@ -1113,9 +1395,7 @@ def handle_host_detail(handler):
         for line in dc.split("\n"):
             parts = line.split("|")
             if len(parts) >= 3:
-                detail["docker_containers"].append({
-                    "name": parts[0], "status": parts[1], "image": parts[2]
-                })
+                detail["docker_containers"].append({"name": parts[0], "status": parts[1], "image": parts[2]})
 
     json_response(handler, detail)
 

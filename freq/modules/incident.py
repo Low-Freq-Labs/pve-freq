@@ -16,6 +16,7 @@ Design decisions:
     - Changes: draft -> approved -> implementing -> completed/rolled-back.
     - No database. JSON files are the database.
 """
+
 import json
 import os
 import time
@@ -56,6 +57,7 @@ def _next_id(directory, prefix):
 # Incident Commands
 # ---------------------------------------------------------------------------
 
+
 def cmd_incident_create(cfg: FreqConfig, pack, args) -> int:
     """Create a new incident."""
     title = getattr(args, "title", None)
@@ -72,9 +74,7 @@ def cmd_incident_create(cfg: FreqConfig, pack, args) -> int:
         "status": "open",
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "updated": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "timeline": [
-            {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "action": "created", "note": title}
-        ],
+        "timeline": [{"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "action": "created", "note": title}],
     }
 
     filepath = os.path.join(_inc_dir(cfg), f"INC-{inc_id}.json")
@@ -140,11 +140,13 @@ def cmd_incident_update(cfg: FreqConfig, pack, args) -> int:
 
     inc["status"] = status
     inc["updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-    inc["timeline"].append({
-        "time": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "action": f"status -> {status}",
-        "note": note,
-    })
+    inc["timeline"].append(
+        {
+            "time": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "action": f"status -> {status}",
+            "note": note,
+        }
+    )
 
     with open(filepath, "w") as f:
         json.dump(inc, f, indent=2)
@@ -156,6 +158,7 @@ def cmd_incident_update(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Change Commands
 # ---------------------------------------------------------------------------
+
 
 def cmd_change_create(cfg: FreqConfig, pack, args) -> int:
     """Create a change request."""
@@ -171,9 +174,7 @@ def cmd_change_create(cfg: FreqConfig, pack, args) -> int:
         "status": "draft",
         "risk": getattr(args, "risk", "low"),
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "timeline": [
-            {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "action": "created"}
-        ],
+        "timeline": [{"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "action": "created"}],
     }
 
     filepath = os.path.join(_chg_dir(cfg), f"CHG-{chg_id}.json")

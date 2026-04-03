@@ -14,6 +14,7 @@ Design decisions:
     - Peer configs stored locally in conf/vpn/peers/ for export/provisioning.
     - QR code generation for WireGuard uses qrencode CLI if available.
 """
+
 import os
 import time
 
@@ -40,11 +41,13 @@ def _vpn_dir(cfg):
 def _vpn_ssh(ip, cmd, cfg, timeout=10):
     """Run command on VPN host via SSH."""
     r = ssh_run(
-        host=ip, command=cmd,
+        host=ip,
+        command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
-        htype="pfsense", use_sudo=True,
+        htype="pfsense",
+        use_sudo=True,
     )
     return r.stdout or "", r.returncode == 0
 
@@ -62,6 +65,7 @@ def _get_vpn_host(cfg):
 # ---------------------------------------------------------------------------
 # Commands — WireGuard
 # ---------------------------------------------------------------------------
+
 
 def cmd_vpn_wg_status(cfg: FreqConfig, pack, args) -> int:
     """Show WireGuard tunnel status."""
@@ -85,8 +89,7 @@ def cmd_vpn_wg_status(cfg: FreqConfig, pack, args) -> int:
         fmt.footer()
         return 0
 
-    fmt.table_header(("Interface", 12), ("Peer", 20), ("Endpoint", 22),
-                     ("Latest Handshake", 18), ("Transfer", 16))
+    fmt.table_header(("Interface", 12), ("Peer", 20), ("Endpoint", 22), ("Latest Handshake", 18), ("Transfer", 16))
     for p in peers:
         # Truncate public key for display
         key_short = p.get("public_key", "")[:16] + "..."
@@ -184,6 +187,7 @@ def cmd_vpn_wg_audit(cfg: FreqConfig, pack, args) -> int:
 # Commands — OpenVPN
 # ---------------------------------------------------------------------------
 
+
 def cmd_vpn_ovpn_status(cfg: FreqConfig, pack, args) -> int:
     """Show OpenVPN server status."""
     ip = _get_vpn_host(cfg)
@@ -194,8 +198,9 @@ def cmd_vpn_ovpn_status(cfg: FreqConfig, pack, args) -> int:
     fmt.header("OpenVPN Status", breadcrumb="FREQ > VPN > OpenVPN")
     fmt.blank()
 
-    out, ok = _vpn_ssh(ip, "cat /var/log/openvpn-status.log 2>/dev/null || "
-                        "cat /tmp/openvpn-status.log 2>/dev/null", cfg)
+    out, ok = _vpn_ssh(
+        ip, "cat /var/log/openvpn-status.log 2>/dev/null || cat /tmp/openvpn-status.log 2>/dev/null", cfg
+    )
     if not ok or not out.strip():
         fmt.warn("OpenVPN status log not found — server may not be running")
         fmt.footer()
@@ -203,8 +208,7 @@ def cmd_vpn_ovpn_status(cfg: FreqConfig, pack, args) -> int:
 
     clients = _parse_ovpn_status(out)
     if clients:
-        fmt.table_header(("Client", 20), ("Real Address", 22), ("Virtual IP", 16),
-                         ("Connected Since", 20))
+        fmt.table_header(("Client", 20), ("Real Address", 22), ("Virtual IP", 16), ("Connected Since", 20))
         for c in clients:
             fmt.table_row(
                 (c.get("name", ""), 20),
@@ -225,6 +229,7 @@ def cmd_vpn_ovpn_status(cfg: FreqConfig, pack, args) -> int:
 # Parsers
 # ---------------------------------------------------------------------------
 
+
 def _parse_wg_show(text):
     """Parse 'wg show all' output into list of peer dicts."""
     peers = []
@@ -235,10 +240,12 @@ def _parse_wg_show(text):
         if line.startswith("interface:"):
             current_iface = line.split(":", 1)[1].strip()
         elif line.startswith("peer:"):
-            peers.append({
-                "interface": current_iface,
-                "public_key": line.split(":", 1)[1].strip(),
-            })
+            peers.append(
+                {
+                    "interface": current_iface,
+                    "public_key": line.split(":", 1)[1].strip(),
+                }
+            )
         elif line.startswith("endpoint:") and peers:
             peers[-1]["endpoint"] = line.split(":", 1)[1].strip()
         elif line.startswith("latest handshake:") and peers:
@@ -260,16 +267,20 @@ def _parse_wg_dump(text):
             continue
         # Skip interface lines (4 fields)
         if len(parts) >= 8:
-            peers.append({
-                "interface": parts[0],
-                "public_key": parts[1],
-                "endpoint": parts[3] if parts[3] != "(none)" else "none",
-                "allowed_ips": parts[4],
-                "latest_handshake_epoch": int(parts[5]) if parts[5] != "0" else 0,
-                "latest_handshake": time.strftime("%Y-%m-%d %H:%M", time.localtime(int(parts[5]))) if parts[5] != "0" else "never",
-                "rx": parts[6],
-                "tx": parts[7] if len(parts) > 7 else "0",
-            })
+            peers.append(
+                {
+                    "interface": parts[0],
+                    "public_key": parts[1],
+                    "endpoint": parts[3] if parts[3] != "(none)" else "none",
+                    "allowed_ips": parts[4],
+                    "latest_handshake_epoch": int(parts[5]) if parts[5] != "0" else 0,
+                    "latest_handshake": time.strftime("%Y-%m-%d %H:%M", time.localtime(int(parts[5])))
+                    if parts[5] != "0"
+                    else "never",
+                    "rx": parts[6],
+                    "tx": parts[7] if len(parts) > 7 else "0",
+                }
+            )
     return peers
 
 
@@ -291,11 +302,13 @@ def _parse_ovpn_status(text):
         if in_clients and "," in line:
             parts = line.split(",")
             if len(parts) >= 5:
-                clients.append({
-                    "name": parts[0] if not parts[0].startswith("HEADER") else parts[1],
-                    "real_address": parts[1] if len(parts) > 1 else "",
-                    "virtual_ip": parts[2] if len(parts) > 2 else "",
-                    "connected_since": parts[4] if len(parts) > 4 else "",
-                })
+                clients.append(
+                    {
+                        "name": parts[0] if not parts[0].startswith("HEADER") else parts[1],
+                        "real_address": parts[1] if len(parts) > 1 else "",
+                        "virtual_ip": parts[2] if len(parts) > 2 else "",
+                        "connected_since": parts[4] if len(parts) > 4 else "",
+                    }
+                )
 
     return clients

@@ -18,14 +18,18 @@ from freq.modules.serve import _check_session_role
 
 # -- Helper ------------------------------------------------------------------
 
+
 def _pf_ssh(cfg, cmd, timeout=15):
     """SSH to pfSense and return result."""
     return ssh_single(
-        host=cfg.pfsense_ip, command=cmd,
+        host=cfg.pfsense_ip,
+        command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
-        htype="pfsense", use_sudo=False, cfg=cfg,
+        htype="pfsense",
+        use_sudo=False,
+        cfg=cfg,
     )
 
 
@@ -55,8 +59,15 @@ def _require_pfsense(handler):
 # -- pfSense Service Control ------------------------------------------------
 
 _PF_SERVICES = {
-    "dhcpd", "unbound", "openvpn", "ipsec", "dpinger", "ntpd",
-    "sshd", "syslogd", "filterdns",
+    "dhcpd",
+    "unbound",
+    "openvpn",
+    "ipsec",
+    "dpinger",
+    "ntpd",
+    "sshd",
+    "syslogd",
+    "filterdns",
 }
 
 
@@ -77,9 +88,9 @@ def handle_pfsense_service(handler):
         json_response(handler, {"error": "action must be restart, start, or stop"}, 400)
         return
     if service not in _PF_SERVICES:
-        json_response(handler, {
-            "error": f"Unknown service: {service}. Allowed: {', '.join(sorted(_PF_SERVICES))}"
-        }, 400)
+        json_response(
+            handler, {"error": f"Unknown service: {service}. Allowed: {', '.join(sorted(_PF_SERVICES))}"}, 400
+        )
         return
 
     # pfSense uses FreeBSD service command or pfSsh.php for some services
@@ -96,13 +107,13 @@ def handle_pfsense_service(handler):
 
 # -- pfSense DHCP Reservations ---------------------------------------------
 
-_SAFE_MAC = re.compile(r'^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$')
-_SAFE_IP = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
-_SAFE_HOSTNAME = re.compile(r'^[a-zA-Z0-9_\-]{1,64}$')
-_SAFE_IFACE = re.compile(r'^[a-zA-Z0-9_]{1,16}$')
-_SAFE_CIDR = re.compile(r'^[0-9a-fA-F.:/ ]+$')
-_SAFE_TEXT = re.compile(r'^[a-zA-Z0-9 _\-.:,/()]{0,128}$')
-_SAFE_WG_KEY = re.compile(r'^[A-Za-z0-9+/=]{43,44}$')
+_SAFE_MAC = re.compile(r"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$")
+_SAFE_IP = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+_SAFE_HOSTNAME = re.compile(r"^[a-zA-Z0-9_\-]{1,64}$")
+_SAFE_IFACE = re.compile(r"^[a-zA-Z0-9_]{1,16}$")
+_SAFE_CIDR = re.compile(r"^[0-9a-fA-F.:/ ]+$")
+_SAFE_TEXT = re.compile(r"^[a-zA-Z0-9 _\-.:,/()]{0,128}$")
+_SAFE_WG_KEY = re.compile(r"^[A-Za-z0-9+/=]{43,44}$")
 
 
 def handle_pfsense_dhcp_reservation(handler):
@@ -120,7 +131,8 @@ def handle_pfsense_dhcp_reservation(handler):
     iface = body.get("interface", "lan").strip().lower()
 
     if not _SAFE_IFACE.match(iface):
-        json_response(handler, {"error": "Invalid interface name"}, 400); return
+        json_response(handler, {"error": "Invalid interface name"}, 400)
+        return
 
     if action == "list":
         # Parse config.xml for static mappings
@@ -145,17 +157,21 @@ def handle_pfsense_dhcp_reservation(handler):
         description = body.get("description", hostname)
 
         if not mac or not _SAFE_MAC.match(mac):
-            json_response(handler, {"error": "Invalid MAC address"}, 400); return
+            json_response(handler, {"error": "Invalid MAC address"}, 400)
+            return
         if not ip or not _SAFE_IP.match(ip):
-            json_response(handler, {"error": "Invalid IP address"}, 400); return
+            json_response(handler, {"error": "Invalid IP address"}, 400)
+            return
         if hostname and not _SAFE_HOSTNAME.match(hostname):
-            json_response(handler, {"error": "Invalid hostname"}, 400); return
+            json_response(handler, {"error": "Invalid hostname"}, 400)
+            return
         if description and not _SAFE_TEXT.match(description):
-            json_response(handler, {"error": "Invalid description (alphanumeric + basic punctuation only)"}, 400); return
+            json_response(handler, {"error": "Invalid description (alphanumeric + basic punctuation only)"}, 400)
+            return
 
         # Use PHP helper to add static mapping via pfSense's config system
         php_cmd = (
-            f"php -r \""
+            f'php -r "'
             f"require_once('config.inc');"
             f"require_once('util.inc');"
             f"require_once('services.inc');"
@@ -174,22 +190,28 @@ def handle_pfsense_dhcp_reservation(handler):
             f"echo 'OK';\""
         )
         r = _pf_ssh(cfg, php_cmd, timeout=30)
-        json_response(handler, {
-            "ok": r.returncode == 0 and "OK" in (r.stdout or ""),
-            "action": "add",
-            "mac": mac, "ip": ip, "hostname": hostname,
-            "output": r.stdout[:500] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0 and "OK" in (r.stdout or ""),
+                "action": "add",
+                "mac": mac,
+                "ip": ip,
+                "hostname": hostname,
+                "output": r.stdout[:500] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     if action == "delete":
         mac = body.get("mac", "").strip()
         if not mac or not _SAFE_MAC.match(mac):
-            json_response(handler, {"error": "MAC address required for delete"}, 400); return
+            json_response(handler, {"error": "MAC address required for delete"}, 400)
+            return
 
         php_cmd = (
-            f"php -r \""
+            f'php -r "'
             f"require_once('config.inc');"
             f"require_once('util.inc');"
             f"require_once('services.inc');"
@@ -211,13 +233,18 @@ def handle_pfsense_dhcp_reservation(handler):
         )
         r = _pf_ssh(cfg, php_cmd, timeout=30)
         found = "DELETED" in (r.stdout or "")
-        json_response(handler, {
-            "ok": found,
-            "action": "delete",
-            "mac": mac,
-            "output": r.stdout[:500] if r.returncode == 0 else "",
-            "error": "Reservation not found" if not found and r.returncode == 0 else (r.stderr[:200] if r.returncode != 0 else ""),
-        })
+        json_response(
+            handler,
+            {
+                "ok": found,
+                "action": "delete",
+                "mac": mac,
+                "output": r.stdout[:500] if r.returncode == 0 else "",
+                "error": "Reservation not found"
+                if not found and r.returncode == 0
+                else (r.stderr[:200] if r.returncode != 0 else ""),
+            },
+        )
         return
 
     json_response(handler, {"error": f"Unknown action: {action}"}, 400)
@@ -226,10 +253,10 @@ def handle_pfsense_dhcp_reservation(handler):
 def _parse_dhcp_static_maps(xml_text):
     """Parse staticmap XML fragments into list of dicts."""
     entries = []
-    for block in re.findall(r'<staticmap>(.*?)</staticmap>', xml_text, re.DOTALL):
+    for block in re.findall(r"<staticmap>(.*?)</staticmap>", xml_text, re.DOTALL):
         entry = {}
         for field in ("mac", "ipaddr", "hostname", "descr"):
-            m = re.search(rf'<{field}>(.*?)</{field}>', block)
+            m = re.search(rf"<{field}>(.*?)</{field}>", block)
             if m:
                 entry[field] = m.group(1)
         if entry.get("mac"):
@@ -255,11 +282,15 @@ def handle_pfsense_config_backup(handler):
     if action == "download":
         r = _pf_ssh(cfg, "cat /cf/conf/config.xml", timeout=20)
         if r.returncode == 0:
-            json_response(handler, {
-                "ok": True, "action": "download",
-                "config": r.stdout,
-                "size": len(r.stdout),
-            })
+            json_response(
+                handler,
+                {
+                    "ok": True,
+                    "action": "download",
+                    "config": r.stdout,
+                    "size": len(r.stdout),
+                },
+            )
         else:
             json_response(handler, {"ok": False, "error": r.stderr[:200]}, 500)
 
@@ -269,11 +300,14 @@ def handle_pfsense_config_backup(handler):
             "echo 'BACKUP_OK' || echo 'BACKUP_FAIL'"
         )
         r = _pf_ssh(cfg, cmd)
-        json_response(handler, {
-            "ok": r.returncode == 0 and "BACKUP_OK" in (r.stdout or ""),
-            "action": "create",
-            "output": r.stdout[:500],
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0 and "BACKUP_OK" in (r.stdout or ""),
+                "action": "create",
+                "output": r.stdout[:500],
+            },
+        )
 
     elif action == "list":
         cmd = "ls -la /cf/conf/backup/ 2>/dev/null | tail -20"
@@ -325,7 +359,7 @@ def handle_pfsense_rules(handler):
     if action == "list":
         cmd = (
             "pfctl -sr 2>/dev/null | grep -v '^scrub' | grep -v '^anchor' | "
-            "sed 's/ label \"[^\"]*\"//g; s/ ridentifier [0-9]*//g' | head -60"
+            'sed \'s/ label "[^"]*"//g; s/ ridentifier [0-9]*//g\' | head -60'
         )
         r = _pf_ssh(cfg, cmd)
         json_response(handler, _pf_ok(r, "list"))
@@ -343,23 +377,31 @@ def handle_pfsense_rules(handler):
 
         # Validate
         if rule_type not in ("pass", "block"):
-            json_response(handler, {"error": "type must be pass or block"}, 400); return
+            json_response(handler, {"error": "type must be pass or block"}, 400)
+            return
         if direction not in ("in", "out"):
-            json_response(handler, {"error": "direction must be in or out"}, 400); return
+            json_response(handler, {"error": "direction must be in or out"}, 400)
+            return
         if proto not in ("tcp", "udp", "icmp", "any"):
-            json_response(handler, {"error": "proto must be tcp, udp, icmp, or any"}, 400); return
+            json_response(handler, {"error": "proto must be tcp, udp, icmp, or any"}, 400)
+            return
 
         # Validate all inputs against safe patterns (prevent shell/PHP injection)
         if not _SAFE_IFACE.match(interface):
-            json_response(handler, {"error": "Invalid interface name"}, 400); return
+            json_response(handler, {"error": "Invalid interface name"}, 400)
+            return
         if src != "any" and not _SAFE_CIDR.match(src):
-            json_response(handler, {"error": "Invalid source (use 'any' or CIDR)"}, 400); return
+            json_response(handler, {"error": "Invalid source (use 'any' or CIDR)"}, 400)
+            return
         if dst != "any" and not _SAFE_CIDR.match(dst):
-            json_response(handler, {"error": "Invalid destination (use 'any' or CIDR)"}, 400); return
-        if dst_port and not re.match(r'^\d{1,5}$', dst_port):
-            json_response(handler, {"error": "Invalid port number"}, 400); return
+            json_response(handler, {"error": "Invalid destination (use 'any' or CIDR)"}, 400)
+            return
+        if dst_port and not re.match(r"^\d{1,5}$", dst_port):
+            json_response(handler, {"error": "Invalid port number"}, 400)
+            return
         if not _SAFE_TEXT.match(description):
-            json_response(handler, {"error": "Invalid description"}, 400); return
+            json_response(handler, {"error": "Invalid description"}, 400)
+            return
 
         port_part = ""
         if dst_port and proto in ("tcp", "udp"):
@@ -368,7 +410,7 @@ def handle_pfsense_rules(handler):
         proto_part = f"'protocol' => '{proto}'," if proto != "any" else ""
 
         php_cmd = (
-            f"php -r \""
+            f'php -r "'
             f"require_once('config.inc');"
             f"require_once('util.inc');"
             f"require_once('filter.inc');"
@@ -389,25 +431,30 @@ def handle_pfsense_rules(handler):
             f"echo 'OK';\""
         )
         r = _pf_ssh(cfg, php_cmd, timeout=30)
-        json_response(handler, {
-            "ok": r.returncode == 0 and "OK" in (r.stdout or ""),
-            "action": "add",
-            "output": r.stdout[:500] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0 and "OK" in (r.stdout or ""),
+                "action": "add",
+                "output": r.stdout[:500] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     if action == "delete":
         index = body.get("index")
         if index is None:
-            json_response(handler, {"error": "index required for delete"}, 400); return
+            json_response(handler, {"error": "index required for delete"}, 400)
+            return
         try:
             idx = int(index)
         except (ValueError, TypeError):
-            json_response(handler, {"error": "index must be integer"}, 400); return
+            json_response(handler, {"error": "index must be integer"}, 400)
+            return
 
         php_cmd = (
-            f"php -r \""
+            f'php -r "'
             f"require_once('config.inc');"
             f"require_once('util.inc');"
             f"require_once('filter.inc');"
@@ -422,12 +469,18 @@ def handle_pfsense_rules(handler):
         )
         r = _pf_ssh(cfg, php_cmd, timeout=30)
         found = "DELETED" in (r.stdout or "")
-        json_response(handler, {
-            "ok": found,
-            "action": "delete", "index": idx,
-            "output": r.stdout[:500] if r.returncode == 0 else "",
-            "error": "Rule not found" if not found and r.returncode == 0 else (r.stderr[:200] if r.returncode != 0 else ""),
-        })
+        json_response(
+            handler,
+            {
+                "ok": found,
+                "action": "delete",
+                "index": idx,
+                "output": r.stdout[:500] if r.returncode == 0 else "",
+                "error": "Rule not found"
+                if not found and r.returncode == 0
+                else (r.stderr[:200] if r.returncode != 0 else ""),
+            },
+        )
         return
 
     json_response(handler, {"error": f"Unknown action: {action}"}, 400)
@@ -463,22 +516,29 @@ def handle_pfsense_nat(handler):
         description = body.get("description", "Port forward via FREQ")
 
         if proto not in ("tcp", "udp", "tcp/udp"):
-            json_response(handler, {"error": "proto must be tcp, udp, or tcp/udp"}, 400); return
+            json_response(handler, {"error": "proto must be tcp, udp, or tcp/udp"}, 400)
+            return
         if not src_port or not dst_ip or not dst_port:
-            json_response(handler, {"error": "src_port, dst_ip, dst_port required"}, 400); return
+            json_response(handler, {"error": "src_port, dst_ip, dst_port required"}, 400)
+            return
         if not _SAFE_IP.match(dst_ip):
-            json_response(handler, {"error": "Invalid dst_ip"}, 400); return
+            json_response(handler, {"error": "Invalid dst_ip"}, 400)
+            return
         if not _SAFE_IFACE.match(interface):
-            json_response(handler, {"error": "Invalid interface name"}, 400); return
-        if not re.match(r'^\d{1,5}$', src_port):
-            json_response(handler, {"error": "Invalid source port"}, 400); return
-        if not re.match(r'^\d{1,5}$', dst_port):
-            json_response(handler, {"error": "Invalid destination port"}, 400); return
+            json_response(handler, {"error": "Invalid interface name"}, 400)
+            return
+        if not re.match(r"^\d{1,5}$", src_port):
+            json_response(handler, {"error": "Invalid source port"}, 400)
+            return
+        if not re.match(r"^\d{1,5}$", dst_port):
+            json_response(handler, {"error": "Invalid destination port"}, 400)
+            return
         if not _SAFE_TEXT.match(description):
-            json_response(handler, {"error": "Invalid description"}, 400); return
+            json_response(handler, {"error": "Invalid description"}, 400)
+            return
 
         php_cmd = (
-            f"php -r \""
+            f'php -r "'
             f"require_once('config.inc');"
             f"require_once('util.inc');"
             f"require_once('filter.inc');"
@@ -499,25 +559,30 @@ def handle_pfsense_nat(handler):
             f"echo 'OK';\""
         )
         r = _pf_ssh(cfg, php_cmd, timeout=30)
-        json_response(handler, {
-            "ok": r.returncode == 0 and "OK" in (r.stdout or ""),
-            "action": "add",
-            "output": r.stdout[:500] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0 and "OK" in (r.stdout or ""),
+                "action": "add",
+                "output": r.stdout[:500] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     if action == "delete":
         index = body.get("index")
         if index is None:
-            json_response(handler, {"error": "index required"}, 400); return
+            json_response(handler, {"error": "index required"}, 400)
+            return
         try:
             idx = int(index)
         except (ValueError, TypeError):
-            json_response(handler, {"error": "index must be integer"}, 400); return
+            json_response(handler, {"error": "index must be integer"}, 400)
+            return
 
         php_cmd = (
-            f"php -r \""
+            f'php -r "'
             f"require_once('config.inc');"
             f"require_once('util.inc');"
             f"require_once('filter.inc');"
@@ -532,11 +597,16 @@ def handle_pfsense_nat(handler):
         )
         r = _pf_ssh(cfg, php_cmd, timeout=30)
         found = "DELETED" in (r.stdout or "")
-        json_response(handler, {
-            "ok": found, "action": "delete", "index": idx,
-            "output": r.stdout[:500],
-            "error": "" if found else "Rule not found",
-        })
+        json_response(
+            handler,
+            {
+                "ok": found,
+                "action": "delete",
+                "index": idx,
+                "output": r.stdout[:500],
+                "error": "" if found else "Rule not found",
+            },
+        )
         return
 
     json_response(handler, {"error": f"Unknown action: {action}"}, 400)
@@ -561,7 +631,8 @@ def handle_pfsense_wg_peer(handler):
     iface = body.get("interface", "wg0").strip()
 
     if not _SAFE_IFACE.match(iface):
-        json_response(handler, {"error": "Invalid interface name"}, 400); return
+        json_response(handler, {"error": "Invalid interface name"}, 400)
+        return
 
     if action == "list":
         cmd = f"wg show {iface} 2>/dev/null || wg show 2>/dev/null || echo 'No WireGuard tunnels'"
@@ -576,15 +647,20 @@ def handle_pfsense_wg_peer(handler):
         psk = body.get("preshared_key", "").strip()
 
         if not pubkey:
-            json_response(handler, {"error": "public_key required"}, 400); return
+            json_response(handler, {"error": "public_key required"}, 400)
+            return
         if not allowed_ips or not _SAFE_CIDR.match(allowed_ips):
-            json_response(handler, {"error": "allowed_ips required (e.g. 10.25.100.5/32)"}, 400); return
+            json_response(handler, {"error": "allowed_ips required (e.g. 10.25.100.5/32)"}, 400)
+            return
         if not _SAFE_WG_KEY.match(pubkey):
-            json_response(handler, {"error": "Invalid public key format"}, 400); return
-        if endpoint and not re.match(r'^[0-9a-fA-F.:]+:\d{1,5}$', endpoint):
-            json_response(handler, {"error": "Invalid endpoint (format: ip:port)"}, 400); return
+            json_response(handler, {"error": "Invalid public key format"}, 400)
+            return
+        if endpoint and not re.match(r"^[0-9a-fA-F.:]+:\d{1,5}$", endpoint):
+            json_response(handler, {"error": "Invalid endpoint (format: ip:port)"}, 400)
+            return
         if psk and not _SAFE_WG_KEY.match(psk):
-            json_response(handler, {"error": "Invalid preshared key format"}, 400); return
+            json_response(handler, {"error": "Invalid preshared key format"}, 400)
+            return
 
         cmd = f"wg set {iface} peer {pubkey} allowed-ips {allowed_ips}"
         if endpoint:
@@ -593,30 +669,37 @@ def handle_pfsense_wg_peer(handler):
             cmd += f" preshared-key <(echo '{psk}')"
 
         r = _pf_ssh(cfg, cmd, timeout=10)
-        json_response(handler, {
-            "ok": r.returncode == 0,
-            "action": "add",
-            "public_key": pubkey,
-            "allowed_ips": allowed_ips,
-            "output": r.stdout[:500] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "action": "add",
+                "public_key": pubkey,
+                "allowed_ips": allowed_ips,
+                "output": r.stdout[:500] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     if action == "remove":
         pubkey = body.get("public_key", "").strip()
         if not pubkey or not _SAFE_WG_KEY.match(pubkey):
-            json_response(handler, {"error": "Valid public_key required"}, 400); return
+            json_response(handler, {"error": "Valid public_key required"}, 400)
+            return
 
         cmd = f"wg set {iface} peer {pubkey} remove"
         r = _pf_ssh(cfg, cmd, timeout=10)
-        json_response(handler, {
-            "ok": r.returncode == 0,
-            "action": "remove",
-            "public_key": pubkey,
-            "output": r.stdout[:500] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "action": "remove",
+                "public_key": pubkey,
+                "output": r.stdout[:500] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     json_response(handler, {"error": f"Unknown action: {action}"}, 400)

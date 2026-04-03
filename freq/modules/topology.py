@@ -16,6 +16,7 @@ Design decisions:
     - DOT export for Graphviz rendering — ops teams already use it.
     - No external graph library. Dict-based adjacency is enough.
 """
+
 import json
 import os
 import time
@@ -35,6 +36,7 @@ TOPOLOGY_DIR = "topology"
 # ---------------------------------------------------------------------------
 # Topology Storage
 # ---------------------------------------------------------------------------
+
 
 def _topo_dir(cfg):
     """Return topology data directory, creating if needed."""
@@ -79,6 +81,7 @@ def _list_snapshots(cfg):
 # Discovery Engine
 # ---------------------------------------------------------------------------
 
+
 def discover_topology(cfg):
     """Crawl all switches via LLDP/CDP and build topology graph.
 
@@ -118,32 +121,34 @@ def discover_topology(cfg):
 
         for n in neighbors:
             # Create a canonical edge key to avoid duplicates
-            edge_key = _edge_key(h.label, n.get("local_port", ""),
-                                 n.get("device", ""), n.get("remote_port", ""))
-            reverse_key = _edge_key(n.get("device", ""), n.get("remote_port", ""),
-                                    h.label, n.get("local_port", ""))
+            edge_key = _edge_key(h.label, n.get("local_port", ""), n.get("device", ""), n.get("remote_port", ""))
+            reverse_key = _edge_key(n.get("device", ""), n.get("remote_port", ""), h.label, n.get("local_port", ""))
 
             if edge_key not in seen_edges and reverse_key not in seen_edges:
                 seen_edges.add(edge_key)
-                edges.append({
-                    "from_device": h.label,
-                    "from_port": n.get("local_port", ""),
-                    "to_device": n.get("device", ""),
-                    "to_port": n.get("remote_port", ""),
-                    "to_ip": n.get("ip", ""),
-                    "to_platform": n.get("platform", ""),
-                })
+                edges.append(
+                    {
+                        "from_device": h.label,
+                        "from_port": n.get("local_port", ""),
+                        "to_device": n.get("device", ""),
+                        "to_port": n.get("remote_port", ""),
+                        "to_ip": n.get("ip", ""),
+                        "to_platform": n.get("platform", ""),
+                    }
+                )
 
                 # Add neighbor as a node if not already known
                 neighbor_name = n.get("device", "")
                 if neighbor_name and not any(nd["name"] == neighbor_name for nd in nodes):
-                    nodes.append({
-                        "name": neighbor_name,
-                        "ip": n.get("ip", ""),
-                        "label": neighbor_name,
-                        "model": n.get("platform", ""),
-                        "type": "discovered",
-                    })
+                    nodes.append(
+                        {
+                            "name": neighbor_name,
+                            "ip": n.get("ip", ""),
+                            "label": neighbor_name,
+                            "model": n.get("platform", ""),
+                            "type": "discovered",
+                        }
+                    )
 
     return {
         "nodes": nodes,
@@ -161,6 +166,7 @@ def _edge_key(dev_a, port_a, dev_b, port_b):
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
+
 
 def cmd_topology_discover(cfg: FreqConfig, pack, args) -> int:
     """Discover network topology via LLDP/CDP."""
@@ -273,10 +279,12 @@ def cmd_topology_diff(cfg: FreqConfig, pack, args) -> int:
         fmt.blank()
 
     # Edge diff
-    old_edges = {_edge_key(e["from_device"], e["from_port"], e["to_device"], e["to_port"])
-                 for e in old_topo.get("edges", [])}
-    new_edges = {_edge_key(e["from_device"], e["from_port"], e["to_device"], e["to_port"])
-                 for e in new_topo.get("edges", [])}
+    old_edges = {
+        _edge_key(e["from_device"], e["from_port"], e["to_device"], e["to_port"]) for e in old_topo.get("edges", [])
+    }
+    new_edges = {
+        _edge_key(e["from_device"], e["from_port"], e["to_device"], e["to_port"]) for e in new_topo.get("edges", [])
+    }
     added_edges = new_edges - old_edges
     removed_edges = old_edges - new_edges
 
@@ -302,6 +310,7 @@ def cmd_topology_diff(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Display Helpers
 # ---------------------------------------------------------------------------
+
 
 def _display_topology(topo):
     """Display topology summary."""
@@ -339,7 +348,7 @@ def _display_topology(topo):
 
 def _to_dot(topo):
     """Convert topology to Graphviz DOT format."""
-    lines = ["graph network {", '  rankdir=LR;', '  node [shape=box, style=filled, fillcolor=lightblue];', ""]
+    lines = ["graph network {", "  rankdir=LR;", "  node [shape=box, style=filled, fillcolor=lightblue];", ""]
 
     # Nodes
     for n in topo.get("nodes", []):

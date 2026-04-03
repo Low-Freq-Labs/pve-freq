@@ -26,6 +26,7 @@ from freq.core import log as logger
 # SMART Monitoring
 # ---------------------------------------------------------------------------
 
+
 def cmd_hw_smart(cfg: FreqConfig, pack, args) -> int:
     """Check SMART health across fleet."""
     fmt.header("SMART Health", breadcrumb="FREQ > Hardware")
@@ -39,9 +40,14 @@ def cmd_hw_smart(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in targets]
-    cmd = "smartctl --scan 2>/dev/null | while read dev rest; do echo \"$dev|$(smartctl -H $dev 2>/dev/null | grep overall)\"; done"
-    results = run_many(hosts=hosts_data, command=cmd, key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=15)
+    cmd = 'smartctl --scan 2>/dev/null | while read dev rest; do echo "$dev|$(smartctl -H $dev 2>/dev/null | grep overall)"; done'
+    results = run_many(
+        hosts=hosts_data,
+        command=cmd,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=15,
+    )
 
     issues = 0
     for h in targets:
@@ -75,6 +81,7 @@ def cmd_hw_smart(cfg: FreqConfig, pack, args) -> int:
 # UPS Monitoring
 # ---------------------------------------------------------------------------
 
+
 def cmd_hw_ups(cfg: FreqConfig, pack, args) -> int:
     """Show UPS status via NUT."""
     fmt.header("UPS Status", breadcrumb="FREQ > Hardware")
@@ -83,9 +90,13 @@ def cmd_hw_ups(cfg: FreqConfig, pack, args) -> int:
     # Try to find a host running NUT
     targets = [h for h in cfg.hosts if h.htype in ("linux", "pve")]
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in targets]
-    results = run_many(hosts=hosts_data, command="upsc -l 2>/dev/null",
-                       key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=5)
+    results = run_many(
+        hosts=hosts_data,
+        command="upsc -l 2>/dev/null",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=5,
+    )
 
     found = False
     for h in targets:
@@ -99,15 +110,23 @@ def cmd_hw_ups(cfg: FreqConfig, pack, args) -> int:
                 found = True
                 # Get UPS details
                 detail_r = ssh_run(
-                    host=h.ip, command=f"upsc {ups} 2>/dev/null",
+                    host=h.ip,
+                    command=f"upsc {ups} 2>/dev/null",
                     key_path=cfg.ssh_key_path,
                     connect_timeout=cfg.ssh_connect_timeout,
-                    command_timeout=5, htype=h.htype,
+                    command_timeout=5,
+                    htype=h.htype,
                 )
                 if detail_r.returncode == 0:
                     fmt.line(f"{fmt.C.BOLD}UPS: {ups} (on {h.label}){fmt.C.RESET}")
-                    important = ["battery.charge", "battery.runtime", "ups.load",
-                                 "ups.status", "input.voltage", "output.voltage"]
+                    important = [
+                        "battery.charge",
+                        "battery.runtime",
+                        "ups.load",
+                        "ups.status",
+                        "input.voltage",
+                        "output.voltage",
+                    ]
                     for line in detail_r.stdout.splitlines():
                         key, _, val = line.partition(":")
                         if key.strip() in important:
@@ -126,6 +145,7 @@ def cmd_hw_ups(cfg: FreqConfig, pack, args) -> int:
 # Power Management
 # ---------------------------------------------------------------------------
 
+
 def cmd_hw_power(cfg: FreqConfig, pack, args) -> int:
     """Show fleet power consumption estimates."""
     fmt.header("Power Consumption", breadcrumb="FREQ > Hardware")
@@ -140,8 +160,13 @@ def cmd_hw_power(cfg: FreqConfig, pack, args) -> int:
     # Estimate from /proc — CPU count * TDP estimate
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in targets]
     cmd = "nproc && cat /proc/cpuinfo | grep 'model name' | head -1"
-    results = run_many(hosts=hosts_data, command=cmd, key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=5)
+    results = run_many(
+        hosts=hosts_data,
+        command=cmd,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=5,
+    )
 
     total_watts = 0
     for h in targets:
@@ -165,6 +190,7 @@ def cmd_hw_power(cfg: FreqConfig, pack, args) -> int:
 # Inventory
 # ---------------------------------------------------------------------------
 
+
 def cmd_hw_inventory(cfg: FreqConfig, pack, args) -> int:
     """Show hardware inventory across fleet."""
     fmt.header("Hardware Inventory", breadcrumb="FREQ > Hardware")
@@ -178,8 +204,13 @@ def cmd_hw_inventory(cfg: FreqConfig, pack, args) -> int:
         "echo DISK:$(lsblk -d -o SIZE --noheadings 2>/dev/null | head -1);"
         "echo KERNEL:$(uname -r)"
     )
-    results = run_many(hosts=hosts_data, command=cmd, key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=10)
+    results = run_many(
+        hosts=hosts_data,
+        command=cmd,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=10,
+    )
 
     fmt.table_header(("Host", 14), ("Type", 8), ("CPU", 4), ("RAM", 6), ("Disk", 8), ("Kernel", 20))
     for h in targets:
@@ -191,9 +222,12 @@ def cmd_hw_inventory(cfg: FreqConfig, pack, args) -> int:
                     k, v = line.split(":", 1)
                     info[k] = v
             fmt.table_row(
-                (h.label, 14), (h.htype, 8),
-                (info.get("CPU", "?"), 4), (info.get("RAM", "?"), 6),
-                (info.get("DISK", "?"), 8), (info.get("KERNEL", "?")[:20], 20),
+                (h.label, 14),
+                (h.htype, 8),
+                (info.get("CPU", "?"), 4),
+                (info.get("RAM", "?"), 6),
+                (info.get("DISK", "?"), 8),
+                (info.get("KERNEL", "?")[:20], 20),
             )
         else:
             fmt.table_row((h.label, 14), (h.htype, 8), ("?", 4), ("?", 6), ("?", 8), ("unreachable", 20))

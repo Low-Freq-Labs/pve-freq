@@ -19,6 +19,7 @@ Design decisions:
     - Redaction is paranoid — any field matching password/token/secret/key
       patterns gets replaced with [REDACTED]. False positives > leaks.
 """
+
 import json
 import os
 import re
@@ -55,12 +56,12 @@ def init(log_file: str) -> None:
     except (OSError, PermissionError):
         # Fall back to a writable location under the user's home
         import tempfile
-        fallback_dir = os.path.join(
-            os.environ.get("HOME", tempfile.gettempdir()), ".freq", "log"
-        )
+
+        fallback_dir = os.path.join(os.environ.get("HOME", tempfile.gettempdir()), ".freq", "log")
         os.makedirs(fallback_dir, exist_ok=True)
         _LOG_FILE = os.path.join(fallback_dir, "freq.log")
         import sys
+
         print(
             f"  WARNING: Cannot write to {log_dir}, logging to {_LOG_FILE}",
             file=sys.stderr,
@@ -70,9 +71,14 @@ def init(log_file: str) -> None:
 def _redact(msg: str) -> str:
     """Scrub passwords, tokens, and secrets from log messages."""
     for pattern in _REDACT_PATTERNS:
-        msg = pattern.sub(lambda m: m.group(1) + m.group(2) + "***REDACTED***"
-                          if m.lastindex and m.lastindex >= 2
-                          else m.group(1) + "***REDACTED***", msg)
+        msg = pattern.sub(
+            lambda m: (
+                m.group(1) + m.group(2) + "***REDACTED***"
+                if m.lastindex and m.lastindex >= 2
+                else m.group(1) + "***REDACTED***"
+            ),
+            msg,
+        )
     return msg
 
 

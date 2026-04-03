@@ -43,15 +43,15 @@ def _gather_host_info(cfg: FreqConfig, host) -> dict:
         "echo \"DISK_USED=$(df -BG / | awk 'NR==2 {print $3}' | tr -d 'G')\"; "
         "echo \"DISK_PCT=$(df -h / | awk 'NR==2 {print $5}' | tr -d '%')\"; "
         "echo \"LOAD=$(cat /proc/loadavg | awk '{print $1, $2, $3}')\"; "
-        "echo \"UPTIME=$(cat /proc/uptime | awk '{d=int($1/86400); h=int(($1%86400)/3600); printf \"%dd %dh\", d, h}')\"; "
-        "echo \"DOCKER=$(systemctl is-active docker 2>/dev/null || echo inactive)\"; "
-        "echo \"DOCKER_COUNT=$(docker ps -q 2>/dev/null | wc -l || echo 0)\"; "
+        'echo "UPTIME=$(cat /proc/uptime | awk \'{d=int($1/86400); h=int(($1%86400)/3600); printf "%dd %dh", d, h}\')"; '
+        'echo "DOCKER=$(systemctl is-active docker 2>/dev/null || echo inactive)"; '
+        'echo "DOCKER_COUNT=$(docker ps -q 2>/dev/null | wc -l || echo 0)"; '
         "echo \"IPS=$(ip -4 addr show | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $2}' | tr '\\n' ',' | sed 's/,$//')\"; "
         "echo \"SWAP_TOTAL=$(free -m | awk '/Swap:/ {print $2}')\"; "
         "echo \"SWAP_USED=$(free -m | awk '/Swap:/ {print $3}')\"; "
         "echo \"PKG_COUNT=$(dpkg --list 2>/dev/null | grep '^ii' | wc -l || rpm -qa 2>/dev/null | wc -l || echo 0)\"; "
-        "echo \"SERVICES=$(systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null | wc -l || echo 0)\"; "
-        "echo \"USERS=$(who 2>/dev/null | wc -l || echo 0)\"; "
+        'echo "SERVICES=$(systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null | wc -l || echo 0)"; '
+        'echo "USERS=$(who 2>/dev/null | wc -l || echo 0)"; '
     )
 
     r = ssh_run(
@@ -244,8 +244,12 @@ def cmd_compare(cfg: FreqConfig, pack, args) -> int:
     # Differences summary
     diff_count = 0
     all_fields = [
-        ("os", "OS"), ("kernel", "Kernel"), ("cores", "CPU Cores"),
-        ("ram_mb", "RAM"), ("disk_total", "Disk"), ("docker", "Docker"),
+        ("os", "OS"),
+        ("kernel", "Kernel"),
+        ("cores", "CPU Cores"),
+        ("ram_mb", "RAM"),
+        ("disk_total", "Disk"),
+        ("docker", "Docker"),
     ]
     diffs = []
     for key, label in all_fields:

@@ -94,16 +94,24 @@ def handle_idrac(handler):
     results = []
     idrac_key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
     for name, ip in idrac_ips.items():
-        r = ssh_single(host=ip, command=cmd, key_path=idrac_key,
-                        connect_timeout=3, command_timeout=15,
-                        htype="idrac", use_sudo=False)
-        results.append({
-            "name": name,
-            "ip": ip,
-            "reachable": r.returncode == 0,
-            "output": r.stdout[:2000] if r.returncode == 0 else "",
-            "error": r.stderr[:100] if r.returncode != 0 else "",
-        })
+        r = ssh_single(
+            host=ip,
+            command=cmd,
+            key_path=idrac_key,
+            connect_timeout=3,
+            command_timeout=15,
+            htype="idrac",
+            use_sudo=False,
+        )
+        results.append(
+            {
+                "name": name,
+                "ip": ip,
+                "reachable": r.returncode == 0,
+                "output": r.stdout[:2000] if r.returncode == 0 else "",
+                "error": r.stderr[:100] if r.returncode != 0 else "",
+            }
+        )
 
     json_response(handler, {"action": action, "targets": results})
 
@@ -111,12 +119,14 @@ def handle_idrac(handler):
 def handle_cost(handler):
     """GET /api/cost -- return fleet cost estimates per host."""
     from freq.jarvis.cost import load_cost_config, compute_costs, costs_to_dicts, fleet_summary
+
     cfg = load_config()
     cost_cfg = load_cost_config(cfg.conf_dir)
     with _bg_lock:
         health = _bg_cache.get("health")
     if not health:
-        json_response(handler, {"error": "No health data available yet"}, 503); return
+        json_response(handler, {"error": "No health data available yet"}, 503)
+        return
 
     idrac_power = {}
     with _bg_lock:
@@ -125,28 +135,36 @@ def handle_cost(handler):
         for dev in infra.get("devices", []):
             if dev.get("type") == "idrac" and dev.get("reachable"):
                 from freq.jarvis.cost import parse_idrac_power
+
                 watts = parse_idrac_power(dev.get("raw_sensors", ""))
                 if watts > 0:
                     idrac_power[dev.get("label", "")] = watts
 
     costs = compute_costs(health, idrac_power, cost_cfg)
     summary = fleet_summary(costs, cost_cfg)
-    json_response(handler, {
-        "hosts": costs_to_dicts(costs),
-        "summary": summary,
-    })
+    json_response(
+        handler,
+        {
+            "hosts": costs_to_dicts(costs),
+            "summary": summary,
+        },
+    )
 
 
 def handle_cost_config(handler):
     """GET /api/cost/config -- return current cost configuration."""
     from freq.jarvis.cost import load_cost_config
+
     cfg = load_config()
     cost_cfg = load_cost_config(cfg.conf_dir)
-    json_response(handler, {
-        "rate_per_kwh": cost_cfg.rate_per_kwh,
-        "currency": cost_cfg.currency,
-        "pue": cost_cfg.pue,
-    })
+    json_response(
+        handler,
+        {
+            "rate_per_kwh": cost_cfg.rate_per_kwh,
+            "currency": cost_cfg.currency,
+            "pue": cost_cfg.pue,
+        },
+    )
 
 
 def handle_cost_waste(handler):
@@ -154,6 +172,7 @@ def handle_cost_waste(handler):
     cfg = load_config()
     try:
         from freq.modules.cost_analysis import _gather_vm_resources, _estimate_vm_monthly_cost
+
         vms = _gather_vm_resources(cfg)
         if not vms:
             json_response(handler, {"waste": [], "stopped": [], "potential_savings": 0})
@@ -173,22 +192,35 @@ def handle_cost_waste(handler):
                 right = _estimate_vm_monthly_cost(max(v["vcpu"] // 2, 1), max(v["ram_mb"] // 2048, 1))
                 savings = round(current - right, 2)
                 total_savings += savings
-                waste.append({
-                    "vmid": v["vmid"], "name": v.get("name", "?"),
-                    "issues": issues, "savings_month": savings,
-                    "vcpu": v["vcpu"], "ram_mb": v["ram_mb"],
-                    "cpu_usage": round(v.get("cpu_usage", 0), 1),
-                    "mem_usage": round(v.get("mem_usage", 0), 1),
-                })
+                waste.append(
+                    {
+                        "vmid": v["vmid"],
+                        "name": v.get("name", "?"),
+                        "issues": issues,
+                        "savings_month": savings,
+                        "vcpu": v["vcpu"],
+                        "ram_mb": v["ram_mb"],
+                        "cpu_usage": round(v.get("cpu_usage", 0), 1),
+                        "mem_usage": round(v.get("mem_usage", 0), 1),
+                    }
+                )
 
-        stopped = [{"vmid": v["vmid"], "name": v.get("name", "?"), "vcpu": v.get("vcpu", 0), "ram_mb": v.get("ram_mb", 0)}
-                   for v in vms if v.get("status") != "running"]
+        stopped = [
+            {"vmid": v["vmid"], "name": v.get("name", "?"), "vcpu": v.get("vcpu", 0), "ram_mb": v.get("ram_mb", 0)}
+            for v in vms
+            if v.get("status") != "running"
+        ]
 
-        json_response(handler, {
-            "waste": waste, "stopped": stopped,
-            "potential_savings": round(total_savings, 2),
-            "total_vms": len(vms), "running": len(running),
-        })
+        json_response(
+            handler,
+            {
+                "waste": waste,
+                "stopped": stopped,
+                "potential_savings": round(total_savings, 2),
+                "total_vms": len(vms),
+                "running": len(running),
+            },
+        )
     except Exception as e:
         json_response(handler, {"error": f"Waste analysis failed: {e}"}, 500)
 
@@ -198,6 +230,7 @@ def handle_cost_compare(handler):
     cfg = load_config()
     try:
         from freq.modules.cost_analysis import _gather_vm_resources, _estimate_vm_monthly_cost, _estimate_aws_cost
+
         params = _parse_query(handler)
         rate = float(params.get("rate", ["0.12"])[0])
 
@@ -218,23 +251,31 @@ def handle_cost_compare(handler):
             aws = _estimate_aws_cost(vcpu, ram_gb)
             total_onprem += onprem
             total_aws += aws
-            comparisons.append({
-                "vmid": v["vmid"], "name": v.get("name", "?"),
-                "vcpu": vcpu, "ram_gb": round(ram_gb, 1),
-                "onprem_month": round(onprem, 2), "aws_month": round(aws, 2),
-                "savings": round(aws - onprem, 2),
-            })
+            comparisons.append(
+                {
+                    "vmid": v["vmid"],
+                    "name": v.get("name", "?"),
+                    "vcpu": vcpu,
+                    "ram_gb": round(ram_gb, 1),
+                    "onprem_month": round(onprem, 2),
+                    "aws_month": round(aws, 2),
+                    "savings": round(aws - onprem, 2),
+                }
+            )
 
         pct_cheaper = round((1 - total_onprem / max(total_aws, 1)) * 100)
-        json_response(handler, {
-            "vms": comparisons,
-            "total_onprem": round(total_onprem, 2),
-            "total_aws": round(total_aws, 2),
-            "monthly_savings": round(total_aws - total_onprem, 2),
-            "annual_savings": round((total_aws - total_onprem) * 12, 2),
-            "pct_cheaper_onprem": pct_cheaper,
-            "rate_per_kwh": rate,
-        })
+        json_response(
+            handler,
+            {
+                "vms": comparisons,
+                "total_onprem": round(total_onprem, 2),
+                "total_aws": round(total_aws, 2),
+                "monthly_savings": round(total_aws - total_onprem, 2),
+                "annual_savings": round((total_aws - total_onprem) * 12, 2),
+                "pct_cheaper_onprem": pct_cheaper,
+                "rate_per_kwh": rate,
+            },
+        )
     except Exception as e:
         json_response(handler, {"error": f"Cost comparison failed: {e}"}, 500)
 
@@ -244,18 +285,23 @@ def handle_gwipe(handler):
     cfg = load_config()
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     import re
+
     query = _parse_query(handler)
     action = query.get("action", ["status"])[0]
-    if not re.match(r'^[a-zA-Z0-9_\-]{1,32}$', action):
-        json_response(handler, {"error": "Invalid action"}, 400); return
+    if not re.match(r"^[a-zA-Z0-9_\-]{1,32}$", action):
+        json_response(handler, {"error": "Invalid action"}, 400)
+        return
     try:
         host = vault_get(cfg, "gwipe", "gwipe_host") or ""
         key = vault_get(cfg, "gwipe", "gwipe_api_key") or ""
         if not host or not key:
-            json_response(handler, {"error": "GWIPE station not configured in vault"}); return
+            json_response(handler, {"error": "GWIPE station not configured in vault"})
+            return
         import urllib.request, urllib.error
+
         url = f"http://{host}:7980/api/v1/{action}"
         req = urllib.request.Request(url)
         req.add_header("X-API-Key", key)

@@ -46,11 +46,15 @@ def cmd_bootstrap(cfg: FreqConfig, pack, args) -> int:
 
     # Step 1: Check if already reachable
     fmt.step_start(f"Testing SSH to {ip}")
-    r = ssh_run(host=ip, command="echo ok",
-                key_path=cfg.ssh_key_path,
-                connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=BOOTSTRAP_CMD_TIMEOUT,
-                htype="linux", use_sudo=False)
+    r = ssh_run(
+        host=ip,
+        command="echo ok",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=BOOTSTRAP_CMD_TIMEOUT,
+        htype="linux",
+        use_sudo=False,
+    )
 
     if r.returncode == 0:
         fmt.step_ok(f"Already reachable via SSH")
@@ -64,11 +68,15 @@ def cmd_bootstrap(cfg: FreqConfig, pack, args) -> int:
 
     # Step 2: Verify sudo
     fmt.step_start("Testing sudo access")
-    r = ssh_run(host=ip, command="whoami",
-                key_path=cfg.ssh_key_path,
-                connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=BOOTSTRAP_CMD_TIMEOUT,
-                htype="linux", use_sudo=True)
+    r = ssh_run(
+        host=ip,
+        command="whoami",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=BOOTSTRAP_CMD_TIMEOUT,
+        htype="linux",
+        use_sudo=True,
+    )
 
     if r.returncode == 0 and "root" in r.stdout:
         fmt.step_ok("Sudo working (runs as root)")
@@ -78,16 +86,20 @@ def cmd_bootstrap(cfg: FreqConfig, pack, args) -> int:
     # Step 3: Get host info
     fmt.step_start("Gathering host info")
     info_cmd = (
-        "echo \"$(hostname -f 2>/dev/null || hostname)|"
+        'echo "$(hostname -f 2>/dev/null || hostname)|'
         "$(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"')|"
         "$(nproc)|"
         "$(free -m | awk '/Mem:/ {print $2}')MB\""
     )
-    r = ssh_run(host=ip, command=info_cmd,
-                key_path=cfg.ssh_key_path,
-                connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=BOOTSTRAP_CMD_TIMEOUT,
-                htype="linux", use_sudo=False)
+    r = ssh_run(
+        host=ip,
+        command=info_cmd,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=BOOTSTRAP_CMD_TIMEOUT,
+        htype="linux",
+        use_sudo=False,
+    )
 
     if r.returncode == 0:
         parts = r.stdout.split("|")
@@ -101,11 +113,15 @@ def cmd_bootstrap(cfg: FreqConfig, pack, args) -> int:
 
     # Step 4: Ensure service account exists
     fmt.step_start(f"Checking service account ({cfg.ssh_service_account})")
-    r = ssh_run(host=ip, command=f"id {cfg.ssh_service_account}",
-                key_path=cfg.ssh_key_path,
-                connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=BOOTSTRAP_CMD_TIMEOUT,
-                htype="linux", use_sudo=False)
+    r = ssh_run(
+        host=ip,
+        command=f"id {cfg.ssh_service_account}",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=BOOTSTRAP_CMD_TIMEOUT,
+        htype="linux",
+        use_sudo=False,
+    )
 
     if r.returncode == 0:
         fmt.step_ok(f"User '{cfg.ssh_service_account}' exists")
@@ -170,6 +186,7 @@ def cmd_onboard(cfg: FreqConfig, pack, args) -> int:
     fmt.step_start("Adding to fleet registry")
     try:
         from freq.core.config import Host, append_host_toml
+
         host = Host(ip=target, label=label, htype=htype, groups=groups)
         append_host_toml(cfg.hosts_file, host)
         fmt.step_ok(f"Added: {label} ({target})")
@@ -181,11 +198,15 @@ def cmd_onboard(cfg: FreqConfig, pack, args) -> int:
 
     # Bootstrap
     fmt.step_start(f"Testing connectivity to {target}")
-    r = ssh_run(host=target, command="echo ok",
-                key_path=cfg.ssh_key_path,
-                connect_timeout=cfg.ssh_connect_timeout,
-                command_timeout=BOOTSTRAP_CMD_TIMEOUT,
-                htype=htype, use_sudo=False)
+    r = ssh_run(
+        host=target,
+        command="echo ok",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=BOOTSTRAP_CMD_TIMEOUT,
+        htype=htype,
+        use_sudo=False,
+    )
 
     if r.returncode == 0:
         fmt.step_ok("SSH connectivity confirmed")

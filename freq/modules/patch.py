@@ -18,6 +18,7 @@ Design decisions:
     - Snapshot before patch, always. Rollback is one command, not a prayer.
       This is the entire value proposition over raw apt upgrade.
 """
+
 import json
 import os
 import time
@@ -120,24 +121,25 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
         'elif command -v zypper >/dev/null 2>&1; then PKG="zypper"; '
         'elif command -v apk >/dev/null 2>&1; then PKG="apk"; fi; '
         'LAST="never"; '
-        'if [ -f /var/log/apt/history.log ]; then '
+        "if [ -f /var/log/apt/history.log ]; then "
         "  LAST=$(stat -c %Y /var/log/apt/history.log 2>/dev/null || echo 0); "
-        'elif [ -f /var/log/dnf.log ]; then '
+        "elif [ -f /var/log/dnf.log ]; then "
         "  LAST=$(stat -c %Y /var/log/dnf.log 2>/dev/null || echo 0); "
-        'elif [ -f /var/log/yum.log ]; then '
+        "elif [ -f /var/log/yum.log ]; then "
         "  LAST=$(stat -c %Y /var/log/yum.log 2>/dev/null || echo 0); "
-        'elif [ -f /var/log/pacman.log ]; then '
+        "elif [ -f /var/log/pacman.log ]; then "
         "  LAST=$(stat -c %Y /var/log/pacman.log 2>/dev/null || echo 0); "
         "fi; "
         'REBOOT="no"; '
-        "if [ -f /var/run/reboot-required ]; then REBOOT=\"yes\"; "
-        "elif command -v needs-restarting >/dev/null 2>&1 && ! needs-restarting -r >/dev/null 2>&1; then REBOOT=\"yes\"; fi; "
+        'if [ -f /var/run/reboot-required ]; then REBOOT="yes"; '
+        'elif command -v needs-restarting >/dev/null 2>&1 && ! needs-restarting -r >/dev/null 2>&1; then REBOOT="yes"; fi; '
         'echo "${PKG}|${LAST}|${REBOOT}"'
     )
 
     fmt.step_start(f"Scanning {len(hosts)} hosts")
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=PATCH_CMD_TIMEOUT,
@@ -148,7 +150,10 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
     fmt.blank()
 
     fmt.table_header(
-        ("HOST", 14), ("PKG MGR", 8), ("LAST UPDATE", 14), ("REBOOT", 8),
+        ("HOST", 14),
+        ("PKG MGR", 8),
+        ("LAST UPDATE", 14),
+        ("REBOOT", 8),
     )
 
     needs_reboot = 0
@@ -157,7 +162,8 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
         if not r or r.returncode != 0:
             fmt.table_row(
                 (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 14),
-                ("-", 8), ("-", 14),
+                ("-", 8),
+                ("-", 14),
                 (f"{fmt.C.RED}UNREACHABLE{fmt.C.RESET}", 8),
             )
             continue
@@ -218,7 +224,8 @@ def _cmd_check(cfg: FreqConfig, args) -> int:
 
     fmt.step_start(f"Checking {len(hosts)} hosts for updates")
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=PATCH_CMD_TIMEOUT,
@@ -277,6 +284,7 @@ def _cmd_apply(cfg: FreqConfig, args) -> int:
     hosts = cfg.hosts
     if target:
         from freq.core.resolve import host as resolve_host
+
         h = resolve_host(hosts, target)
         if not h:
             fmt.error(f"Host not found: {target}")
@@ -309,11 +317,13 @@ def _cmd_apply(cfg: FreqConfig, args) -> int:
     for h in hosts:
         fmt.step_start(f"Patching {h.label}")
         r = ssh_run(
-            host=h.ip, command=command,
+            host=h.ip,
+            command=command,
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=PATCH_APPLY_TIMEOUT,
-            htype=h.htype, use_sudo=True,
+            htype=h.htype,
+            use_sudo=True,
         )
         if r.returncode == 0:
             fmt.step_ok(f"{h.label} patched")
@@ -324,17 +334,18 @@ def _cmd_apply(cfg: FreqConfig, args) -> int:
 
     # Record history
     history = _load_history(cfg)
-    history.append({
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "hosts": [h.label for h in hosts],
-        "success": success,
-        "failed": failed,
-    })
+    history.append(
+        {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "hosts": [h.label for h in hosts],
+            "success": success,
+            "failed": failed,
+        }
+    )
     _save_history(cfg, history)
 
     fmt.blank()
-    fmt.line(f"  {fmt.C.GREEN}{success} patched{fmt.C.RESET}, "
-             f"{fmt.C.RED}{failed} failed{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.GREEN}{success} patched{fmt.C.RESET}, {fmt.C.RED}{failed} failed{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 0 if failed == 0 else 1
@@ -418,7 +429,8 @@ def _cmd_compliance(cfg: FreqConfig, args) -> int:
     )
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=PATCH_CMD_TIMEOUT,
@@ -442,8 +454,7 @@ def _cmd_compliance(cfg: FreqConfig, args) -> int:
     pct = round(compliant / max(total_reachable, 1) * 100, 1)
     color = fmt.C.GREEN if pct >= 95 else (fmt.C.YELLOW if pct >= 80 else fmt.C.RED)
 
-    fmt.line(f"  {color}{fmt.C.BOLD}{pct}%{fmt.C.RESET} compliant "
-             f"({compliant}/{total_reachable} hosts fully patched)")
+    fmt.line(f"  {color}{fmt.C.BOLD}{pct}%{fmt.C.RESET} compliant ({compliant}/{total_reachable} hosts fully patched)")
     fmt.blank()
     fmt.footer()
     return 0

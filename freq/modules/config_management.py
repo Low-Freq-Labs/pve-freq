@@ -16,6 +16,7 @@ Design decisions:
     - Diff against last backup or between any two versions.
     - Search is grep across all stored config files — fast, simple.
 """
+
 import os
 import re
 import difflib
@@ -73,6 +74,7 @@ def _latest_backup(cfg, label):
 def _resolve_switch_target(target, cfg):
     """Resolve target for config commands. Reuses switch_orchestration logic."""
     from freq.modules.switch_orchestration import _resolve_target, _get_deployer
+
     ip, label, vendor = _resolve_target(target, cfg)
     if not ip:
         return None, None, None, None
@@ -83,6 +85,7 @@ def _resolve_switch_target(target, cfg):
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
+
 
 def cmd_config_backup(cfg: FreqConfig, pack, args) -> int:
     """Pull and store running-config from a device or all devices."""
@@ -123,8 +126,9 @@ def cmd_config_backup(cfg: FreqConfig, pack, args) -> int:
         with open(previous) as f:
             old_lines = f.read().splitlines()
         new_lines = config_text.splitlines()
-        changes = list(difflib.unified_diff(old_lines, new_lines, lineterm="",
-                                            fromfile="previous", tofile="current", n=0))
+        changes = list(
+            difflib.unified_diff(old_lines, new_lines, lineterm="", fromfile="previous", tofile="current", n=0)
+        )
         added = sum(1 for l in changes if l.startswith("+") and not l.startswith("+++"))
         removed = sum(1 for l in changes if l.startswith("-") and not l.startswith("---"))
         if added or removed:
@@ -301,8 +305,7 @@ def cmd_config_diff(cfg: FreqConfig, pack, args) -> int:
         with open(latest_path) as f:
             stored = f.read()
 
-        _show_diff(stored.splitlines(), running.splitlines(),
-                   "last backup", "running")
+        _show_diff(stored.splitlines(), running.splitlines(), "last backup", "running")
     else:
         # Offline diff between two stored versions
         if not label:
@@ -330,8 +333,7 @@ def cmd_config_diff(cfg: FreqConfig, pack, args) -> int:
         with open(new_path) as f:
             new_lines = f.read().splitlines()
 
-        _show_diff(old_lines, new_lines,
-                   os.path.basename(old_path), os.path.basename(new_path))
+        _show_diff(old_lines, new_lines, os.path.basename(old_path), os.path.basename(new_path))
 
     fmt.blank()
     logger.info("config_diff", target=label or target)
@@ -341,10 +343,16 @@ def cmd_config_diff(cfg: FreqConfig, pack, args) -> int:
 
 def _show_diff(old_lines, new_lines, old_label, new_label):
     """Display a unified diff between two config versions."""
-    diff = list(difflib.unified_diff(
-        old_lines, new_lines, lineterm="",
-        fromfile=old_label, tofile=new_label, n=3,
-    ))
+    diff = list(
+        difflib.unified_diff(
+            old_lines,
+            new_lines,
+            lineterm="",
+            fromfile=old_label,
+            tofile=new_label,
+            n=3,
+        )
+    )
 
     if not diff:
         fmt.success("No differences")
@@ -372,7 +380,7 @@ def cmd_config_search(cfg: FreqConfig, pack, args) -> int:
     """Search across all stored device configs."""
     pattern = getattr(args, "pattern", None)
     if not pattern:
-        fmt.error("Usage: freq net config search \"<pattern>\"")
+        fmt.error('Usage: freq net config search "<pattern>"')
         return 1
 
     fmt.header(f"Config Search: {pattern}", breadcrumb="FREQ > Net > Config")
@@ -462,8 +470,9 @@ def cmd_config_restore(cfg: FreqConfig, pack, args) -> int:
     with open(restore_path) as f:
         restore_config = f.read()
 
-    restore_lines = [l for l in restore_config.splitlines()
-                     if l.strip() and not l.startswith("!") and not l.startswith("Building")]
+    restore_lines = [
+        l for l in restore_config.splitlines() if l.strip() and not l.startswith("!") and not l.startswith("Building")
+    ]
 
     fmt.header(f"Config Restore: {label}", breadcrumb="FREQ > Net > Config")
     fmt.blank()

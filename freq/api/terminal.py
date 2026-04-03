@@ -46,8 +46,7 @@ def _cleanup_stale():
     """Remove sessions idle > timeout."""
     now = time.time()
     with _sessions_lock:
-        stale = [sid for sid, s in _sessions.items()
-                 if now - s["last_active"] > _SESSION_TIMEOUT]
+        stale = [sid for sid, s in _sessions.items() if now - s["last_active"] > _SESSION_TIMEOUT]
         for sid in stale:
             _kill_session(sid)
 
@@ -87,8 +86,8 @@ def handle_terminal_open(handler):
     cfg = load_config()
     params = get_params(handler)
     term_type = params.get("type", ["vm"])[0]  # vm, ct, node
-    target = params.get("target", [""])[0]      # IP or CTID
-    node = params.get("node", [""])[0]           # PVE node IP (for ct type)
+    target = params.get("target", [""])[0]  # IP or CTID
+    node = params.get("node", [""])[0]  # PVE node IP (for ct type)
     cols = int(params.get("cols", ["120"])[0])
     rows = int(params.get("rows", ["30"])[0])
 
@@ -98,10 +97,11 @@ def handle_terminal_open(handler):
 
     # Validate target — must be IP or numeric VMID/CTID, no shell metacharacters
     import re as _re
-    if not _re.match(r'^[a-zA-Z0-9._:-]+$', target):
+
+    if not _re.match(r"^[a-zA-Z0-9._:-]+$", target):
         json_response(handler, {"error": "Invalid target (alphanumeric, dots, colons, hyphens only)"})
         return
-    if node and not _re.match(r'^[a-zA-Z0-9._:-]+$', node):
+    if node and not _re.match(r"^[a-zA-Z0-9._:-]+$", node):
         json_response(handler, {"error": "Invalid node parameter"})
         return
 
@@ -111,15 +111,19 @@ def handle_terminal_open(handler):
         # Target is a VMID — resolve IP via PVE guest agent or fleet data
         vmid = int(target)
         from freq.modules.pve import _find_reachable_node, _pve_cmd
+
         node_ip = node or _find_reachable_node(cfg)
         if node_ip:
             # Try guest agent first
-            out, ok = _pve_cmd(cfg, node_ip,
+            out, ok = _pve_cmd(
+                cfg,
+                node_ip,
                 f"qm agent {vmid} network-get-interfaces 2>/dev/null | "
                 f"python3 -c \"import sys,json;[print(a['ip-address']) "
                 f"for i in json.load(sys.stdin) if i.get('name')!='lo' "
                 f"for a in i.get('ip-addresses',[]) if a.get('ip-address-type')=='ipv4']\" 2>/dev/null | head -1",
-                timeout=10)
+                timeout=10,
+            )
             if ok and out.strip():
                 resolved_ip = out.strip().split("\n")[0]
             else:
@@ -147,6 +151,7 @@ def handle_terminal_open(handler):
 
     # Device-specific SSH options from ssh.py platform config
     from freq.core.ssh import _PLATFORM_SSH_BASE
+
     platform = _PLATFORM_SSH_BASE.get(htype, _PLATFORM_SSH_BASE.get("linux", {}))
     extra_opts = platform.get("extra_opts", [])
     if extra_opts:
@@ -170,6 +175,7 @@ def handle_terminal_open(handler):
         # SSH to PVE node, then pct exec into container
         if not node:
             from freq.modules.pve import _find_reachable_node
+
             node = _find_reachable_node(cfg)
             if not node:
                 json_response(handler, {"error": "No PVE node reachable"})
@@ -208,6 +214,7 @@ def handle_terminal_open(handler):
     try:
         import fcntl
         import termios
+
         winsize = struct.pack("HHHH", rows, cols, 0, 0)
         fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
     except Exception:
@@ -226,12 +233,15 @@ def handle_terminal_open(handler):
             "rows": rows,
         }
 
-    json_response(handler, {
-        "ok": True,
-        "session": session_id,
-        "type": term_type,
-        "target": target,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "session": session_id,
+            "type": term_type,
+            "target": target,
+        },
+    )
 
 
 def handle_terminal_close(handler):
@@ -259,6 +269,7 @@ def handle_terminal_resize(handler):
         try:
             import fcntl
             import termios
+
             winsize = struct.pack("HHHH", rows, cols, 0, 0)
             fcntl.ioctl(s["fd"], termios.TIOCSWINSZ, winsize)
             s["cols"] = cols
@@ -281,13 +292,15 @@ def handle_terminal_sessions(handler):
     with _sessions_lock:
         sessions = []
         for sid, s in _sessions.items():
-            sessions.append({
-                "session": sid[:8] + "...",
-                "type": s["type"],
-                "target": s["target"],
-                "age": int(time.time() - s["created"]),
-                "idle": int(time.time() - s["last_active"]),
-            })
+            sessions.append(
+                {
+                    "session": sid[:8] + "...",
+                    "type": s["type"],
+                    "target": s["target"],
+                    "age": int(time.time() - s["created"]),
+                    "idle": int(time.time() - s["last_active"]),
+                }
+            )
     json_response(handler, {"sessions": sessions, "count": len(sessions)})
 
 
@@ -305,6 +318,7 @@ def handle_terminal_ws(handler):
     """
     # Extract session ID from query string
     from urllib.parse import urlparse, parse_qs
+
     parsed = urlparse(handler.path)
     qs = parse_qs(parsed.query)
     session_id = qs.get("session", [""])[0]
@@ -322,9 +336,7 @@ def handle_terminal_ws(handler):
         handler.send_error(400, "Missing Sec-WebSocket-Key")
         return
 
-    accept = base64.b64encode(
-        hashlib.sha1((ws_key + _WS_GUID).encode()).digest()
-    ).decode()
+    accept = base64.b64encode(hashlib.sha1((ws_key + _WS_GUID).encode()).digest()).decode()
 
     handler.send_response(101)
     handler.send_header("Upgrade", "websocket")

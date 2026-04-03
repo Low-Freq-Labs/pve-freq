@@ -9,6 +9,7 @@ Usage:
     print(rp.pkg_manager)   # "apt"
     print(rp.init_system)   # "systemd"
 """
+
 import dataclasses
 from typing import Optional
 
@@ -98,6 +99,7 @@ class RemotePlatform:
 
         # Resolve family using the same map as local platform
         from freq.core.platform import _FAMILY_MAP
+
         os_family = _FAMILY_MAP.get(os_id, "")
         if not os_family and id_like:
             for token in id_like.split():

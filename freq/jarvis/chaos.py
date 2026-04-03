@@ -18,11 +18,11 @@ Design decisions:
     - VMIDs 800-899 are always off-limits regardless of config
     - Auto-rollback fires even on failure to prevent lingering damage
 """
+
 import json
 import os
 import time
 from dataclasses import dataclass, field
-
 
 
 CHAOS_DIR_NAME = "chaos"
@@ -32,17 +32,19 @@ MAX_DURATION = 300  # 5 minutes max for any experiment
 @dataclass
 class Experiment:
     """A chaos engineering experiment definition."""
+
     name: str
     experiment_type: str  # service_kill, service_restart, network_delay, disk_fill, cpu_stress
-    target_host: str      # host label from hosts.conf
+    target_host: str  # host label from hosts.conf
     target_service: str = ""  # container or service name
-    duration: int = 60    # seconds
+    duration: int = 60  # seconds
     parameters: dict = field(default_factory=dict)
 
 
 @dataclass
 class ExperimentResult:
     """Result of a chaos experiment."""
+
     experiment_name: str
     experiment_type: str
     target_host: str
@@ -130,10 +132,10 @@ def check_safety(target_host: str, cfg) -> tuple:
 
             # Check fleet boundaries for production category
             fb = cfg.fleet_boundaries
-            if fb and hasattr(fb, 'tiers'):
+            if fb and hasattr(fb, "tiers"):
                 for tier_name, tier in fb.tiers.items():
                     if tier_name.lower() in ("production", "infrastructure", "critical"):
-                        if hasattr(tier, 'vmid_ranges'):
+                        if hasattr(tier, "vmid_ranges"):
                             for vr in tier.vmid_ranges:
                                 try:
                                     parts = vr.split("-")
@@ -167,7 +169,8 @@ def validate_experiment(exp: Experiment) -> tuple:
 
     # Validate service name — no shell metacharacters
     import re
-    if exp.target_service and not re.match(r'^[a-zA-Z0-9._@-]+$', exp.target_service):
+
+    if exp.target_service and not re.match(r"^[a-zA-Z0-9._@-]+$", exp.target_service):
         return False, "Invalid service name (alphanumeric, dots, hyphens, underscores only)"
 
     return True, ""
@@ -179,7 +182,9 @@ def build_commands(exp: Experiment) -> dict:
     params = {
         "service": exp.target_service,
         "duration": str(exp.duration),
-        "interface": exp.parameters.get("interface", "$(ip route show default 2>/dev/null | awk '{print $5}' | head -1 || echo eth0)"),
+        "interface": exp.parameters.get(
+            "interface", "$(ip route show default 2>/dev/null | awk '{print $5}' | head -1 || echo eth0)"
+        ),
         "size_mb": str(exp.parameters.get("size_mb", 100)),
     }
 
@@ -242,11 +247,14 @@ def run_experiment(exp: Experiment, ssh_func, cfg) -> ExperimentResult:
 
     # Inject failure
     r = ssh_func(
-        host=host.ip, command=commands["inject"],
+        host=host.ip,
+        command=commands["inject"],
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=min(exp.duration + 10, MAX_DURATION),
-        htype=host.htype, use_sudo=True, cfg=cfg,
+        htype=host.htype,
+        use_sudo=True,
+        cfg=cfg,
     )
     result.inject_output = (r.stdout or "").strip()[:500]
 
@@ -264,11 +272,14 @@ def run_experiment(exp: Experiment, ssh_func, cfg) -> ExperimentResult:
     # Rollback
     if commands["rollback"]:
         r = ssh_func(
-            host=host.ip, command=commands["rollback"],
+            host=host.ip,
+            command=commands["rollback"],
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=30,
-            htype=host.htype, use_sudo=True, cfg=cfg,
+            htype=host.htype,
+            use_sudo=True,
+            cfg=cfg,
         )
         result.rollback_output = (r.stdout or "").strip()[:500]
         if r.returncode != 0:
@@ -281,11 +292,14 @@ def run_experiment(exp: Experiment, ssh_func, cfg) -> ExperimentResult:
         recovered = False
         for attempt in range(10):
             r = ssh_func(
-                host=host.ip, command=commands["verify"],
+                host=host.ip,
+                command=commands["verify"],
                 key_path=cfg.ssh_key_path,
                 connect_timeout=cfg.ssh_connect_timeout,
                 command_timeout=10,
-                htype=host.htype, use_sudo=True, cfg=cfg,
+                htype=host.htype,
+                use_sudo=True,
+                cfg=cfg,
             )
             output = (r.stdout or "").strip()
             if commands["expect_recovered"] in output:
@@ -344,13 +358,11 @@ def result_to_dict(result: ExperimentResult) -> dict:
 
 def list_experiment_types() -> list:
     """List available experiment types with descriptions."""
-    return [
-        {"type": k, "description": v["description"]}
-        for k, v in EXPERIMENTS.items()
-    ]
+    return [{"type": k, "description": v["description"]} for k, v in EXPERIMENTS.items()]
 
 
 # ── CLI Command ────────────────────────────────────────────────────────
+
 
 def cmd_chaos(cfg, pack, args) -> int:
     """Chaos engineering experiments."""
@@ -365,7 +377,9 @@ def cmd_chaos(cfg, pack, args) -> int:
         for et in list_experiment_types():
             fmt.line(f"  {fmt.C.CYAN}{et['type']:<20}{fmt.C.RESET} {et['description']}")
         fmt.blank()
-        fmt.line(f"  {fmt.C.DIM}Usage: freq chaos run --type <type> --host <host> [--service <svc>] [--duration <sec>]{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.DIM}Usage: freq chaos run --type <type> --host <host> [--service <svc>] [--duration <sec>]{fmt.C.RESET}"
+        )
         fmt.blank()
         fmt.footer()
         return 0
@@ -433,7 +447,9 @@ def cmd_chaos(cfg, pack, args) -> int:
         else:
             for e in entries:
                 status_color = fmt.C.GREEN if e.get("status") == "completed" else fmt.C.RED
-                fmt.line(f"  {fmt.C.DIM}{e.get('experiment_name', '?')}{fmt.C.RESET} {status_color}{e.get('status', '?')}{fmt.C.RESET} {e.get('duration', 0):.1f}s → {e.get('target_host', '?')}")
+                fmt.line(
+                    f"  {fmt.C.DIM}{e.get('experiment_name', '?')}{fmt.C.RESET} {status_color}{e.get('status', '?')}{fmt.C.RESET} {e.get('duration', 0):.1f}s → {e.get('target_host', '?')}"
+                )
         fmt.blank()
         fmt.footer()
         return 0

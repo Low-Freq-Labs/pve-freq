@@ -15,6 +15,7 @@ Design decisions:
     - Runbooks are ordered step lists — not scripts. Human-readable.
     - DR testing is non-destructive — tabletop and read-only verification.
 """
+
 import json
 import os
 import time
@@ -81,6 +82,7 @@ def _save_runbook(cfg, name, data):
 # Commands — Backup Management
 # ---------------------------------------------------------------------------
 
+
 def cmd_dr_backup_list(cfg: FreqConfig, pack, args) -> int:
     """List recent backups across PVE cluster."""
     fmt.header("Backup Inventory", breadcrumb="FREQ > DR > Backup")
@@ -112,12 +114,10 @@ def cmd_dr_backup_list(cfg: FreqConfig, pack, args) -> int:
     total = 0
     for storage in backup_storages:
         fmt.line(f"{fmt.C.BOLD}Storage: {storage}{fmt.C.RESET}")
-        for node in cfg.pve_nodes if hasattr(cfg, 'pve_nodes') and cfg.pve_nodes else []:
-            content = _pve_api_get(cfg, node_ip,
-                                   f"/api2/json/nodes/{node}/storage/{storage}/content")
+        for node in cfg.pve_nodes if hasattr(cfg, "pve_nodes") and cfg.pve_nodes else []:
+            content = _pve_api_get(cfg, node_ip, f"/api2/json/nodes/{node}/storage/{storage}/content")
             if content:
-                backups = [c for c in content.get("data", [])
-                           if c.get("content") == "backup"]
+                backups = [c for c in content.get("data", []) if c.get("content") == "backup"]
                 for b in sorted(backups, key=lambda x: x.get("ctime", 0), reverse=True)[:10]:
                     vmid = b.get("vmid", "?")
                     size = b.get("size", 0)
@@ -171,6 +171,7 @@ def cmd_dr_backup_verify(cfg: FreqConfig, pack, args) -> int:
 # Commands — SLA Management
 # ---------------------------------------------------------------------------
 
+
 def cmd_dr_sla_list(cfg: FreqConfig, pack, args) -> int:
     """List SLA targets (RPO/RTO) per VM."""
     data = _load_sla_targets(cfg)
@@ -181,7 +182,7 @@ def cmd_dr_sla_list(cfg: FreqConfig, pack, args) -> int:
 
     if not targets:
         fmt.info("No SLA targets defined")
-        fmt.info("Set: freq dr sla set <vmid> --rpo 24 --rto 4 --name \"VM Name\"")
+        fmt.info('Set: freq dr sla set <vmid> --rpo 24 --rto 4 --name "VM Name"')
         fmt.footer()
         return 0
 
@@ -232,15 +233,17 @@ def cmd_dr_sla_set(cfg: FreqConfig, pack, args) -> int:
             break
 
     if not found:
-        targets.append({
-            "vmid": int(vmid),
-            "name": name or f"VM {vmid}",
-            "rpo_hours": int(rpo),
-            "rto_hours": int(rto),
-            "tier": tier,
-            "priority": int(priority),
-            "created": time.strftime("%Y-%m-%d"),
-        })
+        targets.append(
+            {
+                "vmid": int(vmid),
+                "name": name or f"VM {vmid}",
+                "rpo_hours": int(rpo),
+                "rto_hours": int(rto),
+                "tier": tier,
+                "priority": int(priority),
+                "created": time.strftime("%Y-%m-%d"),
+            }
+        )
 
     data["targets"] = targets
     _save_sla_targets(cfg, data)
@@ -254,6 +257,7 @@ def cmd_dr_sla_set(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Commands — Runbooks
 # ---------------------------------------------------------------------------
+
 
 def cmd_dr_runbook_list(cfg: FreqConfig, pack, args) -> int:
     """List DR runbooks."""
@@ -287,7 +291,7 @@ def cmd_dr_runbook_create(cfg: FreqConfig, pack, args) -> int:
     name = getattr(args, "name", None)
     description = getattr(args, "description", "")
     if not name:
-        fmt.error("Usage: freq dr runbook create <name> --description \"...\"")
+        fmt.error('Usage: freq dr runbook create <name> --description "..."')
         return 1
 
     existing = _load_runbook(cfg, name)
@@ -342,7 +346,7 @@ def cmd_dr_runbook_show(cfg: FreqConfig, pack, args) -> int:
         type_color = {
             "verify": fmt.C.CYAN,
             "execute": fmt.C.YELLOW,
-            "notify": fmt.C.PURPLE_BOLD if hasattr(fmt.C, 'PURPLE_BOLD') else fmt.C.BOLD,
+            "notify": fmt.C.PURPLE_BOLD if hasattr(fmt.C, "PURPLE_BOLD") else fmt.C.BOLD,
             "document": fmt.C.DIM,
         }.get(step_type, fmt.C.RESET)
         fmt.line(f"  {fmt.C.BOLD}{order}.{fmt.C.RESET} {action}  {type_color}[{step_type}]{fmt.C.RESET}")
@@ -356,6 +360,7 @@ def cmd_dr_runbook_show(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Commands — DR Status Overview
 # ---------------------------------------------------------------------------
+
 
 def cmd_dr_status(cfg: FreqConfig, pack, args) -> int:
     """Show DR readiness overview."""

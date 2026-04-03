@@ -18,6 +18,7 @@ Design decisions:
     - No log shipping, no central store. Logs stay where they are; FREQ
       queries them on demand via SSH. Zero storage cost, zero ingestion lag.
 """
+
 import json
 import re
 
@@ -58,6 +59,7 @@ def _cmd_tail(cfg: FreqConfig, args) -> int:
     hosts = cfg.hosts
     if target:
         from freq.core.resolve import host as resolve_host
+
         h = resolve_host(hosts, target)
         if not h:
             fmt.error(f"Host not found: {target}")
@@ -68,7 +70,8 @@ def _cmd_tail(cfg: FreqConfig, args) -> int:
     command = f"journalctl --no-pager -n {lines} {unit_filter} --output short-iso 2>/dev/null | tail -{lines}"
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=LOGS_CMD_TIMEOUT,
@@ -114,6 +117,7 @@ def _cmd_search(cfg: FreqConfig, args) -> int:
     hosts = cfg.hosts
     if target:
         from freq.core.resolve import host as resolve_host
+
         h = resolve_host(hosts, target)
         if not h:
             fmt.error(f"Host not found: {target}")
@@ -132,7 +136,8 @@ def _cmd_search(cfg: FreqConfig, args) -> int:
 
     fmt.step_start(f"Searching {len(hosts)} hosts (last {since})")
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=LOGS_SEARCH_TIMEOUT,
@@ -161,7 +166,8 @@ def _cmd_search(cfg: FreqConfig, args) -> int:
             highlighted = re.sub(
                 f"({re.escape(pattern)})",
                 f"{fmt.C.RED}\\1{fmt.C.RESET}",
-                line, flags=re.IGNORECASE,
+                line,
+                flags=re.IGNORECASE,
             )
             fmt.line(f"  {highlighted}")
 
@@ -200,7 +206,8 @@ def _cmd_stats(cfg: FreqConfig, args) -> int:
 
     fmt.step_start(f"Analyzing errors across {len(hosts)} hosts (last {since})")
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=LOGS_SEARCH_TIMEOUT,
@@ -256,6 +263,7 @@ def _cmd_export(cfg: FreqConfig, args) -> int:
     hosts = cfg.hosts
     if target:
         from freq.core.resolve import host as resolve_host
+
         h = resolve_host(hosts, target)
         if not h:
             fmt.error(f"Host not found: {target}")
@@ -265,7 +273,8 @@ def _cmd_export(cfg: FreqConfig, args) -> int:
     command = f"journalctl --no-pager --since '-{since}' --output json 2>/dev/null | tail -100"
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=LOGS_SEARCH_TIMEOUT,

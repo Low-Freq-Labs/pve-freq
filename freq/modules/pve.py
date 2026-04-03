@@ -19,6 +19,7 @@ Design decisions:
     - API-first, SSH-fallback. API is faster and structured; SSH works when
       the API is down or no token is configured. Graceful degradation.
 """
+
 import json
 import ssl
 import urllib.error
@@ -41,9 +42,10 @@ PVE_API_TIMEOUT = 15
 
 # ── PVE REST API Client ────────────────────────────────────────────────
 
-def _pve_api_call(cfg: FreqConfig, node_ip: str, endpoint: str,
-                  method: str = "GET", data: dict = None,
-                  timeout: int = PVE_API_TIMEOUT) -> tuple:
+
+def _pve_api_call(
+    cfg: FreqConfig, node_ip: str, endpoint: str, method: str = "GET", data: dict = None, timeout: int = PVE_API_TIMEOUT
+) -> tuple:
     """Call PVE REST API with token auth.
 
     Returns (parsed_data, success_bool).
@@ -73,25 +75,29 @@ def _pve_api_call(cfg: FreqConfig, node_ip: str, endpoint: str,
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
             body = json.loads(resp.read().decode())
             return body.get("data", body), True
-    except (urllib.error.URLError, urllib.error.HTTPError,
-            json.JSONDecodeError, OSError, TimeoutError) as e:
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError, TimeoutError) as e:
         logger.debug(f"PVE API call failed ({node_ip}{endpoint}): {e}")
         return str(e), False
 
 
-def _pve_call(cfg: FreqConfig, node_ip: str,
-              api_endpoint: str, ssh_command: str,
-              timeout: int = PVE_CMD_TIMEOUT,
-              method: str = "GET", data: dict = None) -> tuple:
+def _pve_call(
+    cfg: FreqConfig,
+    node_ip: str,
+    api_endpoint: str,
+    ssh_command: str,
+    timeout: int = PVE_CMD_TIMEOUT,
+    method: str = "GET",
+    data: dict = None,
+) -> tuple:
     """Try PVE REST API first, fall back to SSH.
 
     Returns (result, success_bool). Result is parsed JSON from API
     or stdout string from SSH.
     """
     if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
-        result, ok = _pve_api_call(cfg, node_ip, api_endpoint,
-                                   method=method, data=data,
-                                   timeout=min(timeout, PVE_API_TIMEOUT))
+        result, ok = _pve_api_call(
+            cfg, node_ip, api_endpoint, method=method, data=data, timeout=min(timeout, PVE_API_TIMEOUT)
+        )
         if ok:
             return result, True
 
@@ -100,6 +106,7 @@ def _pve_call(cfg: FreqConfig, node_ip: str,
 
 
 # ── SSH Foundation ──────────────────────────────────────────────────────
+
 
 def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = PVE_CMD_TIMEOUT) -> tuple:
     """Execute a command on a PVE node via SSH + sudo.
@@ -129,9 +136,13 @@ def _find_reachable_node(cfg: FreqConfig) -> str:
                 return ip
         # Fall back to SSH
         r = ssh_run(
-            host=ip, command="pvesh get /version --output-format json",
-            key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=PVE_QUICK_TIMEOUT, htype="pve", use_sudo=True,
+            host=ip,
+            command="pvesh get /version --output-format json",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=cfg.ssh_connect_timeout,
+            command_timeout=PVE_QUICK_TIMEOUT,
+            htype="pve",
+            use_sudo=True,
         )
         if r.returncode == 0:
             return ip
@@ -144,8 +155,11 @@ def _find_vm_node(cfg: FreqConfig, vmid: int, fallback_ip: str = "") -> str:
         r = ssh_run(
             host=nip,
             command=f"test -f /etc/pve/qemu-server/{vmid}.conf && echo FOUND || echo NOTFOUND",
-            key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=5, htype="pve", use_sudo=True,
+            key_path=cfg.ssh_key_path,
+            connect_timeout=cfg.ssh_connect_timeout,
+            command_timeout=5,
+            htype="pve",
+            use_sudo=True,
         )
         if r.returncode == 0 and r.stdout.strip() == "FOUND":
             return nip
@@ -176,9 +190,12 @@ def cmd_list(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     # Get cluster VM list (API-first with SSH fallback)
-    result, ok = _pve_call(cfg, node_ip,
-                           api_endpoint="/cluster/resources?type=vm",
-                           ssh_command="pvesh get /cluster/resources --type vm --output-format json")
+    result, ok = _pve_call(
+        cfg,
+        node_ip,
+        api_endpoint="/cluster/resources?type=vm",
+        ssh_command="pvesh get /cluster/resources --type vm --output-format json",
+    )
     if not ok or not result:
         fmt.step_fail("Failed to query cluster resources")
         fmt.blank()
@@ -248,12 +265,12 @@ def cmd_list(cfg: FreqConfig, pack, args) -> int:
         vm_tags = None
         try:
             from freq.modules.serve import get_vm_tags
+
             vm_tags = get_vm_tags(vmid)
         except ImportError:
             pass
         protected = ""
-        if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges,
-                                      vm_tags=vm_tags):
+        if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges, vm_tags=vm_tags):
             protected = f" {fmt.C.YELLOW}{fmt.S.WARN}{fmt.C.RESET}"
 
         fmt.table_row(
@@ -274,9 +291,7 @@ def cmd_list(cfg: FreqConfig, pack, args) -> int:
     fmt.divider("Summary")
     fmt.blank()
     fmt.line(
-        f"  {fmt.C.GREEN}{running}{fmt.C.RESET} running  "
-        f"{fmt.C.RED}{stopped}{fmt.C.RESET} stopped  "
-        f"({len(vms)} total)"
+        f"  {fmt.C.GREEN}{running}{fmt.C.RESET} running  {fmt.C.RED}{stopped}{fmt.C.RESET} stopped  ({len(vms)} total)"
     )
     fmt.blank()
     fmt.footer()
@@ -372,7 +387,9 @@ def cmd_snapshot(cfg: FreqConfig, pack, args) -> int:
 
     vm_node_ip = _find_vm_node(cfg, vmid, node_ip)
     fmt.step_start(f"Creating snapshot '{snap_name}' for VM {vmid}")
-    stdout, ok = _pve_cmd(cfg, vm_node_ip, f"qm snapshot {vmid} {snap_name} --description 'Created by FREQ'", timeout=PVE_SNAPSHOT_TIMEOUT)
+    stdout, ok = _pve_cmd(
+        cfg, vm_node_ip, f"qm snapshot {vmid} {snap_name} --description 'Created by FREQ'", timeout=PVE_SNAPSHOT_TIMEOUT
+    )
 
     if ok:
         fmt.step_ok(f"Snapshot '{snap_name}' created for VM {vmid}")
@@ -459,7 +476,8 @@ def cmd_snapshot_delete(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     import re
-    if not re.match(r'^[a-zA-Z0-9_-]+$', snap_name):
+
+    if not re.match(r"^[a-zA-Z0-9_-]+$", snap_name):
         fmt.error(f"Invalid snapshot name: {snap_name} (alphanumeric, hyphens, underscores only)")
         return 1
 
@@ -518,11 +536,11 @@ def cmd_power(cfg: FreqConfig, pack, args) -> int:
         pve_tags = None
         try:
             from freq.modules.serve import get_vm_tags
+
             pve_tags = get_vm_tags(vmid)
         except ImportError:
             pass
-        if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges,
-                                      vm_tags=pve_tags):
+        if validate.is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges, vm_tags=pve_tags):
             fmt.error(f"VM {vmid} is PROTECTED. Cannot {action}.")
             return 1
 
@@ -564,18 +582,19 @@ def cmd_power(cfg: FreqConfig, pack, args) -> int:
     if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
         api_action, api_method = api_actions[action]
         # Find the VM's node via cluster resources
-        res_data, res_ok = _pve_api_call(cfg, node_ip,
-                                         f"/cluster/resources?type=vm",
-                                         timeout=PVE_QUICK_TIMEOUT)
+        res_data, res_ok = _pve_api_call(cfg, node_ip, f"/cluster/resources?type=vm", timeout=PVE_QUICK_TIMEOUT)
         if res_ok and isinstance(res_data, list):
             vm_entry = next((v for v in res_data if v.get("vmid") == vmid), None)
             if vm_entry:
                 node_name = vm_entry.get("node", "")
                 if node_name:
                     result, ok = _pve_api_call(
-                        cfg, node_ip,
+                        cfg,
+                        node_ip,
                         f"/nodes/{node_name}/qemu/{vmid}/status/{api_action}",
-                        method=api_method, timeout=60)
+                        method=api_method,
+                        timeout=60,
+                    )
 
     # Fallback to SSH — find which node owns the VM
     if not ok:

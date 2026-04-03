@@ -18,6 +18,7 @@ Design decisions:
     - Scanning is pattern-based, not AST-based. Catches passwords in any
       file format (TOML, YAML, env, ini) without format-specific parsers.
 """
+
 import json
 import os
 import re
@@ -40,9 +41,9 @@ SECRET_PATTERNS = [
     (r'api[_-]?key\s*=\s*["\'][^"\']+["\']', "API key in config"),
     (r'secret\s*=\s*["\'][^"\']+["\']', "secret in config"),
     (r'token\s*=\s*["\'][^"\']+["\']', "token in config"),
-    (r'PASS\s*=\s*[^\s]+', "password in env var"),
-    (r'AWS_SECRET_ACCESS_KEY\s*=\s*[^\s]+', "AWS secret key"),
-    (r'-----BEGIN (?:RSA )?PRIVATE KEY-----', "private key in file"),
+    (r"PASS\s*=\s*[^\s]+", "password in env var"),
+    (r"AWS_SECRET_ACCESS_KEY\s*=\s*[^\s]+", "AWS secret key"),
+    (r"-----BEGIN (?:RSA )?PRIVATE KEY-----", "private key in file"),
 ]
 
 
@@ -185,7 +186,8 @@ def _cmd_scan(cfg: FreqConfig, args) -> int:
 
     fmt.step_start(f"Scanning {len(hosts)} hosts for hardcoded secrets")
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=SECRETS_CMD_TIMEOUT,
@@ -203,18 +205,23 @@ def _cmd_scan(cfg: FreqConfig, args) -> int:
 
         for line in r.stdout.strip().split("\n")[:20]:
             # Redact actual values
-            redacted = re.sub(r'=\s*["\']?[^"\':\s]+', '=***REDACTED***', line)
-            findings.append({
-                "host": h.label,
-                "finding": redacted[:100],
-            })
+            redacted = re.sub(r'=\s*["\']?[^"\':\s]+', "=***REDACTED***", line)
+            findings.append(
+                {
+                    "host": h.label,
+                    "finding": redacted[:100],
+                }
+            )
 
     # Save results
-    _save_scan_results(cfg, {
-        "findings": findings,
-        "scan_time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "hosts_scanned": len(hosts),
-    })
+    _save_scan_results(
+        cfg,
+        {
+            "findings": findings,
+            "scan_time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "hosts_scanned": len(hosts),
+        },
+    )
 
     if not findings:
         fmt.line(f"  {fmt.C.GREEN}{fmt.S.TICK} No hardcoded secrets found across {len(hosts)} hosts.{fmt.C.RESET}")
@@ -329,7 +336,7 @@ def _cmd_lease(cfg: FreqConfig, args) -> int:
     expires_str = getattr(args, "expires", "90d") or "90d"
 
     # Parse expiry
-    match = re.match(r'^(\d+)([dhm])$', expires_str.lower())
+    match = re.match(r"^(\d+)([dhm])$", expires_str.lower())
     if not match:
         fmt.error(f"Invalid expiry: {expires_str} (use 90d, 24h, etc)")
         return 1
@@ -345,18 +352,18 @@ def _cmd_lease(cfg: FreqConfig, args) -> int:
     existing = next((l for l in leases if l["name"] == name), None)
     if existing:
         existing["expires_epoch"] = time.time() + expires_secs
-        existing["expires"] = time.strftime("%Y-%m-%dT%H:%M:%S%z",
-                                            time.localtime(time.time() + expires_secs))
+        existing["expires"] = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(time.time() + expires_secs))
         existing["updated"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     else:
-        leases.append({
-            "name": name,
-            "type": getattr(args, "secret_type", "generic") or "generic",
-            "expires_epoch": time.time() + expires_secs,
-            "expires": time.strftime("%Y-%m-%dT%H:%M:%S%z",
-                                     time.localtime(time.time() + expires_secs)),
-            "created": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        })
+        leases.append(
+            {
+                "name": name,
+                "type": getattr(args, "secret_type", "generic") or "generic",
+                "expires_epoch": time.time() + expires_secs,
+                "expires": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(time.time() + expires_secs)),
+                "created": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            }
+        )
 
     _save_leases(cfg, leases)
 

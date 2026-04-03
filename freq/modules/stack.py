@@ -19,6 +19,7 @@ Design decisions:
     - Templates are starting points, not locked configs. Users can deploy
       a template then customize. FREQ tracks the stack, not the template.
 """
+
 import json
 import os
 
@@ -106,15 +107,12 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
         return 0
 
     # Find compose projects on each host
-    command = (
-        "docker compose ls --format json 2>/dev/null || "
-        "docker-compose ls --format json 2>/dev/null || "
-        "echo '[]'"
-    )
+    command = "docker compose ls --format json 2>/dev/null || docker-compose ls --format json 2>/dev/null || echo '[]'"
 
     fmt.step_start(f"Scanning {len(hosts)} hosts for stacks")
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=STACK_CMD_TIMEOUT,
@@ -182,6 +180,7 @@ def _cmd_update(cfg: FreqConfig, args) -> int:
     hosts = cfg.hosts
     if target:
         from freq.core.resolve import host as resolve_host
+
         h = resolve_host(hosts, target)
         if not h:
             fmt.error(f"Host not found: {target}")
@@ -192,11 +191,13 @@ def _cmd_update(cfg: FreqConfig, args) -> int:
         # Find the stack's compose file
         find_cmd = f"docker compose ls --format json 2>/dev/null | python3 -c \"import sys,json; [print(s['ConfigFiles']) for s in json.load(sys.stdin) if s['Name']=='{name}']\""
         r = ssh_run(
-            host=h.ip, command=find_cmd,
+            host=h.ip,
+            command=find_cmd,
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=STACK_CMD_TIMEOUT,
-            htype=h.htype, use_sudo=False,
+            htype=h.htype,
+            use_sudo=False,
         )
 
         if r.returncode != 0 or not r.stdout.strip():
@@ -212,7 +213,8 @@ def _cmd_update(cfg: FreqConfig, args) -> int:
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=STACK_DEPLOY_TIMEOUT,
-            htype=h.htype, use_sudo=False,
+            htype=h.htype,
+            use_sudo=False,
         )
         if r.returncode == 0:
             fmt.step_ok(f"Images pulled on {h.label}")
@@ -227,7 +229,8 @@ def _cmd_update(cfg: FreqConfig, args) -> int:
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=STACK_DEPLOY_TIMEOUT,
-            htype=h.htype, use_sudo=False,
+            htype=h.htype,
+            use_sudo=False,
         )
         if r.returncode == 0:
             fmt.step_ok(f"Stack '{name}' updated on {h.label}")
@@ -251,12 +254,11 @@ def _cmd_health(cfg: FreqConfig, args) -> int:
         fmt.footer()
         return 0
 
-    command = (
-        "docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null || echo ''"
-    )
+    command = "docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null || echo ''"
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=STACK_CMD_TIMEOUT,
@@ -296,8 +298,7 @@ def _cmd_health(cfg: FreqConfig, args) -> int:
             )
 
     fmt.blank()
-    fmt.line(f"  {fmt.C.GREEN}{healthy} healthy{fmt.C.RESET}, "
-             f"{fmt.C.RED}{unhealthy} unhealthy{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.GREEN}{healthy} healthy{fmt.C.RESET}, {fmt.C.RED}{unhealthy} unhealthy{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 0 if unhealthy == 0 else 1
@@ -319,6 +320,7 @@ def _cmd_logs(cfg: FreqConfig, args) -> int:
     hosts = cfg.hosts
     if target:
         from freq.core.resolve import host as resolve_host
+
         h = resolve_host(hosts, target)
         if not h:
             fmt.error(f"Host not found: {target}")
@@ -328,11 +330,13 @@ def _cmd_logs(cfg: FreqConfig, args) -> int:
     for h in hosts:
         find_cmd = f"docker compose ls --format json 2>/dev/null | python3 -c \"import sys,json; [print(s['ConfigFiles']) for s in json.load(sys.stdin) if s['Name']=='{name}']\""
         r = ssh_run(
-            host=h.ip, command=find_cmd,
+            host=h.ip,
+            command=find_cmd,
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=STACK_CMD_TIMEOUT,
-            htype=h.htype, use_sudo=False,
+            htype=h.htype,
+            use_sudo=False,
         )
 
         if r.returncode != 0 or not r.stdout.strip():
@@ -348,7 +352,8 @@ def _cmd_logs(cfg: FreqConfig, args) -> int:
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=STACK_CMD_TIMEOUT,
-            htype=h.htype, use_sudo=False,
+            htype=h.htype,
+            use_sudo=False,
         )
 
         if r.returncode == 0 and r.stdout.strip():
@@ -375,6 +380,7 @@ def _cmd_restart(cfg: FreqConfig, args) -> int:
     hosts = cfg.hosts
     if target:
         from freq.core.resolve import host as resolve_host
+
         h = resolve_host(hosts, target)
         if not h:
             fmt.error(f"Host not found: {target}")
@@ -384,11 +390,13 @@ def _cmd_restart(cfg: FreqConfig, args) -> int:
     for h in hosts:
         find_cmd = f"docker compose ls --format json 2>/dev/null | python3 -c \"import sys,json; [print(s['ConfigFiles']) for s in json.load(sys.stdin) if s['Name']=='{name}']\""
         r = ssh_run(
-            host=h.ip, command=find_cmd,
+            host=h.ip,
+            command=find_cmd,
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=STACK_CMD_TIMEOUT,
-            htype=h.htype, use_sudo=False,
+            htype=h.htype,
+            use_sudo=False,
         )
 
         if r.returncode != 0 or not r.stdout.strip():
@@ -403,7 +411,8 @@ def _cmd_restart(cfg: FreqConfig, args) -> int:
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=STACK_DEPLOY_TIMEOUT,
-            htype=h.htype, use_sudo=False,
+            htype=h.htype,
+            use_sudo=False,
         )
 
         if r.returncode == 0:

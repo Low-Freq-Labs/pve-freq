@@ -17,6 +17,7 @@ Design decisions:
     - Backup list aggregates across all PVE nodes, not just one.
       Single-node backup views are what the PVE GUI already does.
 """
+
 import os
 import time
 import json
@@ -63,8 +64,7 @@ def _backup_list(cfg: FreqConfig) -> int:
         return 1
 
     # List VM snapshots
-    stdout, ok = _pve_cmd(cfg, node_ip,
-                          "pvesh get /cluster/resources --type vm --output-format json")
+    stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/resources --type vm --output-format json")
     if ok and stdout:
         try:
             vms = json.loads(stdout)
@@ -74,11 +74,11 @@ def _backup_list(cfg: FreqConfig) -> int:
                 for vm in vms:
                     vmid = vm.get("vmid", "?")
                     name = vm.get("name", "?")
-                    snap_out, snap_ok = _pve_cmd(cfg, node_ip,
-                                                  f"qm listsnapshot {vmid} 2>/dev/null")
+                    snap_out, snap_ok = _pve_cmd(cfg, node_ip, f"qm listsnapshot {vmid} 2>/dev/null")
                     if snap_ok and snap_out.strip():
-                        snap_lines = [l.strip() for l in snap_out.split("\n")
-                                      if l.strip() and "current" not in l.lower()]
+                        snap_lines = [
+                            l.strip() for l in snap_out.split("\n") if l.strip() and "current" not in l.lower()
+                        ]
                         if snap_lines:
                             fmt.line(f"  {fmt.C.CYAN}VM {vmid}{fmt.C.RESET} ({name}): {len(snap_lines)} snapshot(s)")
                             for line in snap_lines[:3]:
@@ -113,6 +113,7 @@ def _backup_create(cfg: FreqConfig, args) -> int:
         return 1
 
     from freq.modules.pve import cmd_snapshot
+
     return cmd_snapshot(cfg, None, args)
 
 
@@ -130,8 +131,7 @@ def _backup_status(cfg: FreqConfig) -> int:
 
     # Check vzdump backup storage
     fmt.line(f"{fmt.C.PURPLE_BOLD}PVE Backup Storage{fmt.C.RESET}")
-    stdout, ok = _pve_cmd(cfg, node_ip,
-                          "pvesh get /cluster/backup --output-format json 2>/dev/null")
+    stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/backup --output-format json 2>/dev/null")
     if ok and stdout:
         try:
             jobs = json.loads(stdout)
@@ -152,16 +152,13 @@ def _backup_status(cfg: FreqConfig) -> int:
     fmt.blank()
 
     # List backup files on storage
-    stdout, ok = _pve_cmd(cfg, node_ip,
-                          "find /var/lib/vz/dump/ -name '*.vma*' -o -name '*.tar*' 2>/dev/null | "
-                          "wc -l")
+    stdout, ok = _pve_cmd(cfg, node_ip, "find /var/lib/vz/dump/ -name '*.vma*' -o -name '*.tar*' 2>/dev/null | wc -l")
     if ok:
         count = stdout.strip()
         fmt.line(f"  {fmt.C.BOLD}Backup files on local storage:{fmt.C.RESET} {count}")
 
     # Show disk usage of backup location
-    stdout, ok = _pve_cmd(cfg, node_ip,
-                          "du -sh /var/lib/vz/dump/ 2>/dev/null | awk '{print $1}'")
+    stdout, ok = _pve_cmd(cfg, node_ip, "du -sh /var/lib/vz/dump/ 2>/dev/null | awk '{print $1}'")
     if ok:
         size = stdout.strip()
         fmt.line(f"  {fmt.C.BOLD}Backup storage used:{fmt.C.RESET} {size}")
@@ -187,9 +184,9 @@ def _backup_prune(cfg: FreqConfig, args) -> int:
 
     # List old backups (>30 days)
     fmt.step_start("Finding old backups (>30 days)")
-    stdout, ok = _pve_cmd(cfg, node_ip,
-                          "find /var/lib/vz/dump/ \\( -name '*.vma*' -o -name '*.tar*' \\) "
-                          "-mtime +30 2>/dev/null")
+    stdout, ok = _pve_cmd(
+        cfg, node_ip, "find /var/lib/vz/dump/ \\( -name '*.vma*' -o -name '*.tar*' \\) -mtime +30 2>/dev/null"
+    )
     if not ok or not stdout.strip():
         fmt.step_ok("No old backups to prune")
         fmt.blank()
@@ -208,7 +205,9 @@ def _backup_prune(cfg: FreqConfig, args) -> int:
     fmt.blank()
     if not getattr(args, "yes", False):
         try:
-            confirm = input(f"  {fmt.C.YELLOW}Delete {len(old_files)} old backup(s)? [y/N]:{fmt.C.RESET} ").strip().lower()
+            confirm = (
+                input(f"  {fmt.C.YELLOW}Delete {len(old_files)} old backup(s)? [y/N]:{fmt.C.RESET} ").strip().lower()
+            )
         except (EOFError, KeyboardInterrupt):
             print()
             return 1
@@ -217,10 +216,12 @@ def _backup_prune(cfg: FreqConfig, args) -> int:
             return 0
 
     fmt.step_start(f"Pruning {len(old_files)} old backups")
-    stdout, ok = _pve_cmd(cfg, node_ip,
-                          "find /var/lib/vz/dump/ \\( -name '*.vma*' -o -name '*.tar*' \\) "
-                          "-mtime +30 -delete 2>&1",
-                          timeout=BACKUP_PRUNE_TIMEOUT)
+    stdout, ok = _pve_cmd(
+        cfg,
+        node_ip,
+        "find /var/lib/vz/dump/ \\( -name '*.vma*' -o -name '*.tar*' \\) -mtime +30 -delete 2>&1",
+        timeout=BACKUP_PRUNE_TIMEOUT,
+    )
     if ok:
         fmt.step_ok(f"Pruned {len(old_files)} old backups")
     else:
@@ -246,8 +247,7 @@ def _backup_export(cfg: FreqConfig) -> int:
     export_data = {
         "timestamp": timestamp,
         "version": cfg.version,
-        "hosts": [{"ip": h.ip, "label": h.label, "htype": h.htype, "groups": h.groups}
-                  for h in cfg.hosts],
+        "hosts": [{"ip": h.ip, "label": h.label, "htype": h.htype, "groups": h.groups} for h in cfg.hosts],
         "vlans": [{"id": v.id, "name": v.name, "subnet": v.subnet} for v in cfg.vlans],
         "pve_nodes": cfg.pve_nodes,
         "cluster_name": cfg.cluster_name,
@@ -259,7 +259,9 @@ def _backup_export(cfg: FreqConfig) -> int:
     fmt.step_ok(f"Saved to {export_file}")
 
     fmt.blank()
-    fmt.line(f"  {fmt.C.GRAY}Exported: {len(export_data['hosts'])} hosts, {len(export_data['vlans'])} VLANs{fmt.C.RESET}")
+    fmt.line(
+        f"  {fmt.C.GRAY}Exported: {len(export_data['hosts'])} hosts, {len(export_data['vlans'])} VLANs{fmt.C.RESET}"
+    )
     fmt.blank()
     fmt.footer()
     return 0

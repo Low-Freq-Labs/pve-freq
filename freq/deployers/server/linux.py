@@ -3,6 +3,7 @@
 Standard SSH + useradd + sudo deployment. Handles Alpine vs glibc.
 Adds docker group for docker-type hosts.
 """
+
 CATEGORY = "server"
 VENDOR = "linux"
 NEEDS_PASSWORD = False
@@ -17,10 +18,12 @@ NEEDS_RSA = False
 def deploy(ip, ctx, auth_pass, auth_key, auth_user, htype="linux"):
     """Deploy FREQ service account to a Linux-family host."""
     from freq.modules.init_cmd import _deploy_linux
+
     return _deploy_linux(ip, ctx, auth_pass, auth_key, auth_user, htype=htype)
 
 
 def remove(ip, svc_name, key_path, rsa_key_path=None):
     """Remove FREQ service account from a Linux-family host."""
     from freq.modules.init_cmd import _remove_linux
+
     return _remove_linux(ip, svc_name, key_path)

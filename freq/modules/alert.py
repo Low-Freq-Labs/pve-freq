@@ -19,6 +19,7 @@ Design decisions:
       subclasses. Simple to add new conditions without new files.
     - Alert history kept on disk so trends survive restarts.
 """
+
 import json
 import os
 import re
@@ -127,8 +128,7 @@ def _is_silenced(cfg: FreqConfig, rule_name: str, host_label: str) -> bool:
         pattern = s.get("pattern", "")
         if pattern == "*" or pattern == rule_name or pattern == host_label:
             return True
-        if pattern.endswith("*") and (rule_name.startswith(pattern[:-1])
-                                       or host_label.startswith(pattern[:-1])):
+        if pattern.endswith("*") and (rule_name.startswith(pattern[:-1]) or host_label.startswith(pattern[:-1])):
             return True
     return False
 
@@ -136,16 +136,18 @@ def _is_silenced(cfg: FreqConfig, rule_name: str, host_label: str) -> bool:
 def _record_alert(cfg: FreqConfig, rule: dict, host: str, value: str, fired: bool):
     """Record an alert event in history."""
     history = _load_history(cfg)
-    history.append({
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "epoch": int(time.time()),
-        "rule": rule["name"],
-        "condition": rule["condition"],
-        "severity": rule.get("severity", "warning"),
-        "host": host,
-        "value": value,
-        "fired": fired,
-    })
+    history.append(
+        {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "epoch": int(time.time()),
+            "rule": rule["name"],
+            "condition": rule["condition"],
+            "severity": rule.get("severity", "warning"),
+            "host": host,
+            "value": value,
+            "fired": fired,
+        }
+    )
     _save_history(cfg, history)
 
 
@@ -157,9 +159,7 @@ def _check_cooldown(cfg: FreqConfig, rule: dict, host: str) -> bool:
     history = _load_history(cfg)
     now = time.time()
     for entry in reversed(history):
-        if (entry.get("rule") == rule["name"]
-                and entry.get("host") == host
-                and entry.get("fired")):
+        if entry.get("rule") == rule["name"] and entry.get("host") == host and entry.get("fired"):
             if now - entry.get("epoch", 0) < cooldown:
                 return True
             break
@@ -180,18 +180,18 @@ def _evaluate_fleet(cfg: FreqConfig, rules: list) -> list:
     # Gather metrics from all hosts in one SSH pass
     command = (
         'echo "$('
-        'nproc'
-        ')|$('
+        "nproc"
+        ")|$("
         "cat /proc/loadavg | awk '{print $1,$2,$3}'"
-        ')|$('
+        ")|$("
         "free -m | awk '/Mem:/ {printf \"%d|%d\", $3, $2}'"
-        ')|$('
+        ")|$("
         "df -h / | awk 'NR==2 {print $5}' | tr -d '%'"
-        ')|$('
+        ")|$("
         "uptime -s 2>/dev/null || echo unknown"
-        ')|$('
+        ")|$("
         "systemctl is-active docker 2>/dev/null || echo inactive"
-        ')|$('
+        ")|$("
         "cat /proc/uptime | awk '{print $1}'"
         ')"'
     )
@@ -253,12 +253,14 @@ def _evaluate_fleet(cfg: FreqConfig, rules: list) -> list:
 
             alert_info = _evaluate_condition(condition, threshold, m, rule)
             if alert_info:
-                triggered.append({
-                    "rule": rule,
-                    "host": label,
-                    "value": alert_info["value"],
-                    "message": alert_info["message"],
-                })
+                triggered.append(
+                    {
+                        "rule": rule,
+                        "host": label,
+                        "value": alert_info["value"],
+                        "message": alert_info["message"],
+                    }
+                )
 
     return triggered
 
@@ -305,7 +307,10 @@ def _evaluate_condition(condition: str, threshold: float, m: dict, rule: dict) -
 
     elif condition == "docker_down":
         if m.get("reachable") and m.get("docker") != "active":
-            return {"value": m.get("docker", "unknown"), "message": f"{m['label']} Docker is {m.get('docker', 'unknown')}"}
+            return {
+                "value": m.get("docker", "unknown"),
+                "message": f"{m['label']} Docker is {m.get('docker', 'unknown')}",
+            }
 
     elif condition == "service_down":
         # service_down checks a specific service — stored in rule.service
@@ -404,7 +409,9 @@ def _cmd_list(cfg: FreqConfig, args) -> int:
         for s in active:
             remaining = int(s["expires"] - time.time())
             mins = remaining // 60
-            fmt.line(f"  {fmt.C.YELLOW}{fmt.S.WARN}{fmt.C.RESET} {s['pattern']} — {mins}m remaining ({s.get('reason', '')})")
+            fmt.line(
+                f"  {fmt.C.YELLOW}{fmt.S.WARN}{fmt.C.RESET} {s['pattern']} — {mins}m remaining ({s.get('reason', '')})"
+            )
 
     fmt.blank()
     fmt.footer()
@@ -419,7 +426,7 @@ def _cmd_create(cfg: FreqConfig, args) -> int:
         return 1
 
     # Validate name
-    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+    if not re.match(r"^[a-zA-Z0-9_-]+$", name):
         fmt.error("Alert name must be alphanumeric with hyphens/underscores only.")
         return 1
 
@@ -549,12 +556,14 @@ def _cmd_silence(cfg: FreqConfig, args) -> int:
     reason = getattr(args, "reason", "") or "manual silence"
 
     silences = _load_silences(cfg)
-    silences.append({
-        "pattern": name,
-        "expires": time.time() + (duration_mins * 60),
-        "reason": reason,
-        "created": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-    })
+    silences.append(
+        {
+            "pattern": name,
+            "expires": time.time() + (duration_mins * 60),
+            "reason": reason,
+            "created": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        }
+    )
     # Clean expired
     silences = [s for s in silences if s.get("expires", 0) > time.time()]
     _save_silences(cfg, silences)
@@ -587,7 +596,7 @@ def _cmd_test(cfg: FreqConfig, args) -> int:
         fmt.step_fail("No notification channels configured in freq.toml")
         fmt.blank()
         fmt.line(f"  {fmt.C.DIM}Add to freq.toml:{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}discord_webhook = \"https://discord.com/api/webhooks/...\"  {fmt.C.RESET}")
+        fmt.line(f'  {fmt.C.DIM}discord_webhook = "https://discord.com/api/webhooks/..."  {fmt.C.RESET}')
         fmt.blank()
         fmt.footer()
         return 1
@@ -710,6 +719,7 @@ def _cmd_check(cfg: FreqConfig, args) -> int:
 
         try:
             from freq.jarvis.notify import notify, configured_providers
+
             providers = configured_providers(cfg)
             if providers:
                 for alert in to_fire:

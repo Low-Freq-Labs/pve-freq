@@ -15,6 +15,7 @@ Design decisions:
     - Jobs wrap existing freq commands — no new execution model.
     - Cooldowns prevent reactor storms.
 """
+
 import json
 import os
 import time
@@ -55,6 +56,7 @@ def _workflows_dir(cfg):
 # ---------------------------------------------------------------------------
 # Reactor Commands
 # ---------------------------------------------------------------------------
+
 
 def cmd_react_list(cfg: FreqConfig, pack, args) -> int:
     """List automation reactors."""
@@ -104,14 +106,16 @@ def cmd_react_add(cfg: FreqConfig, pack, args) -> int:
         fmt.error(f"Reactor '{name}' already exists")
         return 1
 
-    reactors.append({
-        "name": name,
-        "trigger": trigger,
-        "action": action,
-        "enabled": True,
-        "cooldown": int(getattr(args, "cooldown", 300)),
-        "created": time.strftime("%Y-%m-%d"),
-    })
+    reactors.append(
+        {
+            "name": name,
+            "trigger": trigger,
+            "action": action,
+            "enabled": True,
+            "cooldown": int(getattr(args, "cooldown", 300)),
+            "created": time.strftime("%Y-%m-%d"),
+        }
+    )
     data["reactors"] = reactors
     _save_reactors(cfg, data)
 
@@ -141,6 +145,7 @@ def cmd_react_disable(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Workflow Commands
 # ---------------------------------------------------------------------------
+
 
 def cmd_workflow_list(cfg: FreqConfig, pack, args) -> int:
     """List workflows."""
@@ -201,6 +206,7 @@ def cmd_workflow_create(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Job Commands
 # ---------------------------------------------------------------------------
+
 
 def cmd_job_list(cfg: FreqConfig, pack, args) -> int:
     """List scheduled jobs."""

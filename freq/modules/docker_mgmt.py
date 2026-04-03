@@ -36,10 +36,13 @@ def cmd_docker_containers(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in hosts]
-    results = run_many(hosts=hosts_data,
-                       command="docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null || sudo docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null",
-                       key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=10)
+    results = run_many(
+        hosts=hosts_data,
+        command="docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null || sudo docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=10,
+    )
 
     total = 0
     for h in hosts:
@@ -75,10 +78,13 @@ def cmd_docker_images(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in hosts]
-    results = run_many(hosts=hosts_data,
-                       command="docker images --format '{{.Repository}}:{{.Tag}}|{{.Size}}' 2>/dev/null | head -20",
-                       key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=10)
+    results = run_many(
+        hosts=hosts_data,
+        command="docker images --format '{{.Repository}}:{{.Tag}}|{{.Size}}' 2>/dev/null | head -20",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=10,
+    )
 
     for h in hosts:
         r = results.get(h.ip)
@@ -107,10 +113,13 @@ def cmd_docker_prune(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in hosts]
-    results = run_many(hosts=hosts_data,
-                       command="docker system prune -f --volumes 2>/dev/null | tail -3",
-                       key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=30)
+    results = run_many(
+        hosts=hosts_data,
+        command="docker system prune -f --volumes 2>/dev/null | tail -3",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=30,
+    )
 
     for h in hosts:
         r = results.get(h.ip)
@@ -137,10 +146,13 @@ def cmd_docker_update_check(cfg: FreqConfig, pack, args) -> int:
 
     # Check running container images for updates
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in hosts]
-    results = run_many(hosts=hosts_data,
-                       command="docker ps --format '{{.Names}}|{{.Image}}' 2>/dev/null",
-                       key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=10)
+    results = run_many(
+        hosts=hosts_data,
+        command="docker ps --format '{{.Names}}|{{.Image}}' 2>/dev/null",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=10,
+    )
 
     total_containers = 0
     for h in hosts:

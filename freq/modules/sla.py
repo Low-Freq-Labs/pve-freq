@@ -19,6 +19,7 @@ Design decisions:
     - SLA is calculated from actual check results, not inferred from logs.
       If FREQ could not reach the host, it was down. Period.
 """
+
 import json
 import os
 import time
@@ -66,7 +67,8 @@ def _record_check(cfg: FreqConfig):
         return
 
     results = ssh_run_many(
-        hosts=hosts, command="echo ok",
+        hosts=hosts,
+        command="echo ok",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=SLA_CMD_TIMEOUT,
@@ -208,9 +210,7 @@ def _cmd_show(cfg: FreqConfig, args) -> int:
         # Use the requested period for the grade
         primary = _calculate_sla(data, label, days)
         grade = primary["grade"]
-        grade_color = (fmt.C.GREEN if grade.startswith("A") else
-                       fmt.C.YELLOW if grade.startswith("B") else
-                       fmt.C.RED)
+        grade_color = fmt.C.GREEN if grade.startswith("A") else fmt.C.YELLOW if grade.startswith("B") else fmt.C.RED
 
         def _pct_str(sla):
             if sla["checks"] == 0:
@@ -239,8 +239,10 @@ def _cmd_show(cfg: FreqConfig, args) -> int:
         fleet_color = fmt.C.GREEN if fleet_avg >= 99.5 else (fmt.C.YELLOW if fleet_avg >= 95 else fmt.C.RED)
         fmt.divider("Fleet Average")
         fmt.blank()
-        fmt.line(f"  {fleet_color}{fleet_avg:.3f}%{fmt.C.RESET} across {len(valid)} hosts "
-                 f"({sum(s['checks'] for s in valid)} total checks)")
+        fmt.line(
+            f"  {fleet_color}{fleet_avg:.3f}%{fmt.C.RESET} across {len(valid)} hosts "
+            f"({sum(s['checks'] for s in valid)} total checks)"
+        )
 
     fmt.blank()
     fmt.footer()

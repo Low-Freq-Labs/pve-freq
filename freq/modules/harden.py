@@ -19,6 +19,7 @@ Design decisions:
     - Harden is audit + fix in one pass. Separate from audit.py so you
       can audit without risk and harden with intent. Never silent fixes.
 """
+
 from freq.core import fmt
 from freq.core import resolve
 from freq.core.config import FreqConfig
@@ -97,11 +98,13 @@ def cmd_harden(cfg: FreqConfig, pack, args) -> int:
         for check_name, check_cmd, fix_cmd in checks:
             # Check current state
             r = ssh_run(
-                host=h.ip, command=check_cmd,
+                host=h.ip,
+                command=check_cmd,
                 key_path=cfg.ssh_key_path,
                 connect_timeout=cfg.ssh_connect_timeout,
                 command_timeout=HARDEN_CHECK_TIMEOUT,
-                htype=h.htype, use_sudo=True,
+                htype=h.htype,
+                use_sudo=True,
             )
 
             if r.returncode == 0 and "OK" in r.stdout:
@@ -110,16 +113,20 @@ def cmd_harden(cfg: FreqConfig, pack, args) -> int:
             else:
                 # Apply fix
                 r = ssh_run(
-                    host=h.ip, command=fix_cmd,
+                    host=h.ip,
+                    command=fix_cmd,
                     key_path=cfg.ssh_key_path,
                     connect_timeout=cfg.ssh_connect_timeout,
                     command_timeout=HARDEN_CHECK_TIMEOUT,
-                    htype=h.htype, use_sudo=True,
+                    htype=h.htype,
+                    use_sudo=True,
                 )
                 if r.returncode == 0:
                     total_fixed += 1
                     ssh_restart_needed.add(h.label)
-                    print(f"    {fmt.C.YELLOW}{fmt.S.WARN}{fmt.C.RESET}  {check_name} — {fmt.C.GREEN}FIXED{fmt.C.RESET}")
+                    print(
+                        f"    {fmt.C.YELLOW}{fmt.S.WARN}{fmt.C.RESET}  {check_name} — {fmt.C.GREEN}FIXED{fmt.C.RESET}"
+                    )
                 else:
                     total_fail += 1
                     print(f"    {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {check_name} — {fmt.C.RED}FAILED{fmt.C.RESET}")

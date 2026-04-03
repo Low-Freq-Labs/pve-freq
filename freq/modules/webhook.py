@@ -19,6 +19,7 @@ Design decisions:
     - Webhooks execute freq commands, not arbitrary shell. The blast radius
       of a compromised webhook is limited to what freq can do.
 """
+
 import hashlib
 import hmac
 import json
@@ -87,9 +88,7 @@ def _verify_signature(payload: bytes, signature: str, secret: str) -> bool:
     """Verify HMAC-SHA256 signature (GitHub-style)."""
     if not secret or not signature:
         return True  # No secret configured
-    expected = "sha256=" + hmac.new(
-        secret.encode(), payload, hashlib.sha256
-    ).hexdigest()
+    expected = "sha256=" + hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
 
 
@@ -130,7 +129,10 @@ def _cmd_list(cfg: FreqConfig, args) -> int:
         return 0
 
     fmt.table_header(
-        ("NAME", 18), ("COMMAND", 30), ("TOKEN", 12), ("STATUS", 8),
+        ("NAME", 18),
+        ("COMMAND", 30),
+        ("TOKEN", 12),
+        ("STATUS", 8),
     )
 
     for hook in hooks:
@@ -159,7 +161,7 @@ def _cmd_create(cfg: FreqConfig, args) -> int:
         fmt.error("Usage: freq webhook create <name> --command '<cmd>'")
         return 1
 
-    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+    if not re.match(r"^[a-zA-Z0-9_-]+$", name):
         fmt.error("Webhook name must be alphanumeric with hyphens/underscores.")
         return 1
 
@@ -246,7 +248,11 @@ def _cmd_test(cfg: FreqConfig, args) -> int:
 
     try:
         result = subprocess.run(
-            command, shell=True, capture_output=True, text=True, timeout=120,
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if result.returncode == 0:
             fmt.step_ok(f"Success (exit 0)")
@@ -261,11 +267,14 @@ def _cmd_test(cfg: FreqConfig, args) -> int:
 
     # Log
     log_entries = _load_log(cfg)
-    log_entries.append({
-        "webhook": name, "source": "test",
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "command": command,
-    })
+    log_entries.append(
+        {
+            "webhook": name,
+            "source": "test",
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "command": command,
+        }
+    )
     _save_log(cfg, log_entries)
 
     fmt.blank()
@@ -305,8 +314,7 @@ def _cmd_log(cfg: FreqConfig, args) -> int:
 
 
 # Webhook handler for serve.py integration
-def handle_webhook_request(cfg: FreqConfig, name: str, token: str,
-                           payload: bytes = b"", signature: str = "") -> dict:
+def handle_webhook_request(cfg: FreqConfig, name: str, token: str, payload: bytes = b"", signature: str = "") -> dict:
     """Handle an inbound webhook request. Called by serve.py."""
     hooks = _load_hooks(cfg)
     hook = next((h for h in hooks if h["name"] == name), None)
@@ -329,7 +337,11 @@ def handle_webhook_request(cfg: FreqConfig, name: str, token: str,
     command = hook["command"]
     try:
         result = subprocess.run(
-            command, shell=True, capture_output=True, text=True, timeout=120,
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         exit_code = result.returncode
     except (subprocess.TimeoutExpired, Exception) as e:
@@ -342,11 +354,15 @@ def handle_webhook_request(cfg: FreqConfig, name: str, token: str,
 
     # Log
     log_entries = _load_log(cfg)
-    log_entries.append({
-        "webhook": name, "source": "http",
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "command": command, "exit_code": exit_code,
-    })
+    log_entries.append(
+        {
+            "webhook": name,
+            "source": "http",
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "command": command,
+            "exit_code": exit_code,
+        }
+    )
     _save_log(cfg, log_entries)
 
     return {"ok": exit_code == 0, "exit_code": exit_code, "webhook": name}

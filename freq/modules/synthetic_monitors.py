@@ -13,6 +13,7 @@ Design decisions:
     - Checks are pull-based — run freq observe monitor run or schedule via cron.
     - Results append-only with rotation (last 1000 per check).
 """
+
 import json
 import os
 import socket
@@ -68,6 +69,7 @@ def _save_result(cfg, check_name, result):
 # Check Implementations
 # ---------------------------------------------------------------------------
 
+
 def _check_http(url, timeout=10):
     """HTTP GET check. Returns (ok, response_ms, status_code, error)."""
     start = time.time()
@@ -121,6 +123,7 @@ def _check_ssl(host, port=443, timeout=5):
                 if cert:
                     not_after = cert.get("notAfter", "")
                     from datetime import datetime
+
                     expiry = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
                     days_left = (expiry - datetime.utcnow()).days
                     subject = dict(x[0] for x in cert.get("subject", []))
@@ -133,6 +136,7 @@ def _check_ssl(host, port=443, timeout=5):
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
+
 
 def cmd_monitor_list(cfg: FreqConfig, pack, args) -> int:
     """List configured monitors."""
@@ -180,13 +184,15 @@ def cmd_monitor_add(cfg: FreqConfig, pack, args) -> int:
         fmt.error(f"Monitor '{name}' already exists")
         return 1
 
-    checks.append({
-        "name": name,
-        "type": check_type,
-        "target": target,
-        "interval": getattr(args, "interval", "5m"),
-        "created": time.strftime("%Y-%m-%d"),
-    })
+    checks.append(
+        {
+            "name": name,
+            "type": check_type,
+            "target": target,
+            "interval": getattr(args, "interval", "5m"),
+            "created": time.strftime("%Y-%m-%d"),
+        }
+    )
     data["checks"] = checks
     _save_checks(cfg, data)
 

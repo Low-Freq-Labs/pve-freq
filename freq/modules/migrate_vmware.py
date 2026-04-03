@@ -19,6 +19,7 @@ Design decisions:
     - State machine approach: scan → plan → import → verify. Each step is
       idempotent and resumable. Large disk imports can take 30+ minutes.
 """
+
 import json
 import os
 import time
@@ -69,9 +70,13 @@ def _find_pve_node(cfg: FreqConfig) -> str:
     """Find a reachable PVE node."""
     for ip in cfg.pve_nodes:
         r = ssh_run(
-            host=ip, command="pvesh get /version --output-format json",
-            key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=PVE_QUICK_TIMEOUT, htype="pve", use_sudo=True,
+            host=ip,
+            command="pvesh get /version --output-format json",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=cfg.ssh_connect_timeout,
+            command_timeout=PVE_QUICK_TIMEOUT,
+            htype="pve",
+            use_sudo=True,
         )
         if r.returncode == 0:
             return ip
@@ -81,9 +86,13 @@ def _find_pve_node(cfg: FreqConfig) -> str:
 def _pve_cmd(cfg, node_ip, command, timeout=PVE_CMD_TIMEOUT):
     """Execute PVE command."""
     r = ssh_run(
-        host=node_ip, command=command,
-        key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=timeout, htype="pve", use_sudo=True,
+        host=node_ip,
+        command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=timeout,
+        htype="pve",
+        use_sudo=True,
     )
     return r.stdout, r.returncode == 0
 
@@ -178,12 +187,14 @@ def _scan_directory(cfg: FreqConfig, directory: str) -> int:
 
     # Save scan results
     state = _load_state(cfg)
-    state["scans"].append({
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "directory": directory,
-        "found": len(found),
-        "files": [f["name"] for f in found],
-    })
+    state["scans"].append(
+        {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "directory": directory,
+            "found": len(found),
+            "files": [f["name"] for f in found],
+        }
+    )
     _save_state(cfg, state)
 
     fmt.blank()
@@ -211,9 +222,9 @@ def _scan_file(cfg: FreqConfig, filepath: str) -> int:
         fmt.step_start("Reading OVA metadata")
         node_ip = _find_pve_node(cfg)
         if node_ip:
-            stdout, ok = _pve_cmd(cfg, node_ip,
-                                  f"tar -tf {filepath} 2>/dev/null | head -20",
-                                  timeout=VMWARE_CMD_TIMEOUT)
+            stdout, ok = _pve_cmd(
+                cfg, node_ip, f"tar -tf {filepath} 2>/dev/null | head -20", timeout=VMWARE_CMD_TIMEOUT
+            )
             if ok and stdout.strip():
                 fmt.step_ok("OVA contents:")
                 for line in stdout.strip().split("\n")[:10]:
@@ -268,10 +279,7 @@ def _cmd_import(cfg: FreqConfig, args) -> int:
     # Determine import method based on file type
     if ext == "ova":
         fmt.step_start(f"Importing OVA as VM {vmid}")
-        import_cmd = (
-            f"qm importovf {vmid} {target} {storage}"
-            + (f" --target {node}" if node else "")
-        )
+        import_cmd = f"qm importovf {vmid} {target} {storage}" + (f" --target {node}" if node else "")
     elif ext == "vmdk":
         fmt.step_start(f"Importing VMDK disk to VM {vmid}")
         import_cmd = f"qm importdisk {vmid} {target} {storage} --format qcow2"
@@ -308,13 +316,15 @@ def _cmd_import(cfg: FreqConfig, args) -> int:
 
     # Log import
     state = _load_state(cfg)
-    state["imports"].append({
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "source": target,
-        "vmid": vmid,
-        "storage": storage,
-        "success": ok,
-    })
+    state["imports"].append(
+        {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "source": target,
+            "vmid": vmid,
+            "storage": storage,
+            "success": ok,
+        }
+    )
     _save_state(cfg, state)
 
     fmt.blank()
@@ -348,9 +358,9 @@ def _cmd_convert(cfg: FreqConfig, args) -> int:
 
     node_ip = _find_pve_node(cfg)
     if node_ip:
-        stdout, ok = _pve_cmd(cfg, node_ip,
-                              f"qemu-img convert -f vmdk -O qcow2 {target} {output}",
-                              timeout=VMWARE_IMPORT_TIMEOUT)
+        stdout, ok = _pve_cmd(
+            cfg, node_ip, f"qemu-img convert -f vmdk -O qcow2 {target} {output}", timeout=VMWARE_IMPORT_TIMEOUT
+        )
         if ok:
             fmt.step_ok(f"Converted: {output}")
         else:

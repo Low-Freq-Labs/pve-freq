@@ -20,6 +20,7 @@ Design decisions:
       installation, not a person. Any FREQ user on this machine can access it.
       This is intentional — FREQ is a shared infrastructure tool.
 """
+
 import getpass
 import hashlib
 import os
@@ -52,10 +53,10 @@ def _encrypt(plaintext: str, key: str, vault_path: str) -> bool:
     """Encrypt plaintext and write to vault file."""
     try:
         r = subprocess.run(
-            ["openssl", "enc", "-aes-256-cbc", "-salt", "-pbkdf2",
-             "-pass", f"pass:{key}", "-out", vault_path],
+            ["openssl", "enc", "-aes-256-cbc", "-salt", "-pbkdf2", "-pass", f"pass:{key}", "-out", vault_path],
             input=plaintext.encode(),
-            capture_output=True, timeout=VAULT_CRYPTO_TIMEOUT,
+            capture_output=True,
+            timeout=VAULT_CRYPTO_TIMEOUT,
         )
         if r.returncode == 0:
             os.chmod(vault_path, 0o600)
@@ -73,9 +74,9 @@ def _decrypt(key: str, vault_path: str) -> str:
         return ""
     try:
         r = subprocess.run(
-            ["openssl", "enc", "-aes-256-cbc", "-d", "-salt", "-pbkdf2",
-             "-pass", f"pass:{key}", "-in", vault_path],
-            capture_output=True, timeout=VAULT_CRYPTO_TIMEOUT,
+            ["openssl", "enc", "-aes-256-cbc", "-d", "-salt", "-pbkdf2", "-pass", f"pass:{key}", "-in", vault_path],
+            capture_output=True,
+            timeout=VAULT_CRYPTO_TIMEOUT,
         )
         if r.returncode == 0:
             return r.stdout.decode()

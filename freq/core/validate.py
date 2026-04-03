@@ -19,6 +19,7 @@ Design decisions:
     - VMID range 100-999999999 matches Proxmox's actual limits.
     - Hostnames follow RFC 1123. No underscores (DNS doesn't allow them).
 """
+
 import re
 
 # Validation limits
@@ -50,7 +51,9 @@ def hostname(value: str) -> bool:
     """Validate a hostname (RFC 1123)."""
     if not value or len(value) > MAX_HOSTNAME_LEN:
         return False
-    pattern = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$")
+    pattern = re.compile(
+        r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$"
+    )
     return bool(pattern.match(value))
 
 
@@ -105,8 +108,7 @@ def ssh_pubkey(value: str) -> bool:
     parts = value.strip().split()
     if len(parts) < 2:
         return False
-    valid_types = {"ssh-rsa", "ssh-ed25519", "ecdsa-sha2-nistp256",
-                   "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521"}
+    valid_types = {"ssh-rsa", "ssh-ed25519", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521"}
     return parts[0] in valid_types
 
 
@@ -142,8 +144,7 @@ def bay_device(value: str) -> bool:
     return bool(re.compile(r"^[a-z][a-z0-9]*$").match(value))
 
 
-def is_protected_vmid(value, protected_ids: list, protected_ranges: list,
-                      vm_tags: list = None) -> bool:
+def is_protected_vmid(value, protected_ids: list, protected_ranges: list, vm_tags: list = None) -> bool:
     """Check if a VMID is protected.
 
     Protection sources (any match = protected):

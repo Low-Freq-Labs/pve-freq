@@ -25,6 +25,7 @@ Design decisions:
     - Registry tracks what was installed, from where, and when. Uninstall
       reverses exactly what install did.
 """
+
 import json
 import os
 import shutil
@@ -38,19 +39,19 @@ from freq.core import fmt
 # CONSTANTS
 # ─────────────────────────────────────────────────────────────
 
-REGISTRY_FILE = "plugins/registry.json"       # Relative to conf_dir
-PLUGIN_DIR = "plugins"                        # Relative to conf_dir
+REGISTRY_FILE = "plugins/registry.json"  # Relative to conf_dir
+PLUGIN_DIR = "plugins"  # Relative to conf_dir
 DEPLOYER_BASE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "deployers")
 
 # Valid plugin types — each maps to a different install location
 PLUGIN_TYPES = {
-    "command":      "CLI command plugin — adds freq <name> top-level command",
-    "deployer":     "Device deployer — adds freq init support for new vendor",
-    "importer":     "Data importer — pulls data from external tools into FREQ",
-    "exporter":     "Data exporter — pushes FREQ data to external systems",
+    "command": "CLI command plugin — adds freq <name> top-level command",
+    "deployer": "Device deployer — adds freq init support for new vendor",
+    "importer": "Data importer — pulls data from external tools into FREQ",
+    "exporter": "Data exporter — pushes FREQ data to external systems",
     "notification": "Notification channel — adds alert delivery target",
-    "widget":       "Dashboard widget — adds visualization to web UI",
-    "policy":       "Compliance policy — custom security/audit checks",
+    "widget": "Dashboard widget — adds visualization to web UI",
+    "policy": "Compliance policy — custom security/audit checks",
 }
 
 # Scaffold templates per plugin type
@@ -189,6 +190,7 @@ def run(cfg, pack, args):
 # REGISTRY MANAGEMENT
 # ─────────────────────────────────────────────────────────────
 
+
 def _registry_path(cfg):
     """Full path to plugin registry JSON."""
     return os.path.join(cfg.conf_dir, REGISTRY_FILE)
@@ -218,6 +220,7 @@ def _save_registry(cfg, registry):
 # PLUGIN COMMANDS
 # ─────────────────────────────────────────────────────────────
 
+
 def cmd_plugin_list(cfg, pack, args):
     """List installed plugins."""
     from freq.core.plugins import discover_plugins
@@ -246,36 +249,40 @@ def cmd_plugin_list(cfg, pack, args):
             reg_info = registry["plugins"].get(name, {})
             version = reg_info.get("version", "local")
             ptype = reg_info.get("type", "command")
-            fmt.line(f"    {fmt.C.CYAN}{name:<20}{fmt.C.RESET} "
-                     f"{fmt.C.DIM}v{version:<8}{fmt.C.RESET} "
-                     f"{fmt.C.DIM}[{ptype}]{fmt.C.RESET}  {desc}")
+            fmt.line(
+                f"    {fmt.C.CYAN}{name:<20}{fmt.C.RESET} "
+                f"{fmt.C.DIM}v{version:<8}{fmt.C.RESET} "
+                f"{fmt.C.DIM}[{ptype}]{fmt.C.RESET}  {desc}"
+            )
         fmt.blank()
 
     # Show deployer plugins from registry
-    deployer_plugins = {k: v for k, v in registry["plugins"].items()
-                        if v.get("type") == "deployer"}
+    deployer_plugins = {k: v for k, v in registry["plugins"].items() if v.get("type") == "deployer"}
     if deployer_plugins:
         fmt.line(f"  {fmt.C.PURPLE_BOLD}Deployer Plugins{fmt.C.RESET}")
         for name, info in sorted(deployer_plugins.items()):
             cat = info.get("category", "unknown")
             ver = info.get("version", "local")
-            fmt.line(f"    {fmt.C.CYAN}{cat}:{name:<15}{fmt.C.RESET} "
-                     f"{fmt.C.DIM}v{ver}{fmt.C.RESET}  "
-                     f"{info.get('description', '')}")
+            fmt.line(
+                f"    {fmt.C.CYAN}{cat}:{name:<15}{fmt.C.RESET} "
+                f"{fmt.C.DIM}v{ver}{fmt.C.RESET}  "
+                f"{info.get('description', '')}"
+            )
         fmt.blank()
 
     # Show other plugin types
-    other = {k: v for k, v in registry["plugins"].items()
-             if v.get("type") not in ("command", "deployer")}
+    other = {k: v for k, v in registry["plugins"].items() if v.get("type") not in ("command", "deployer")}
     if other:
         fmt.line(f"  {fmt.C.PURPLE_BOLD}Other Plugins{fmt.C.RESET}")
         for name, info in sorted(other.items()):
             ptype = info.get("type", "unknown")
             ver = info.get("version", "local")
-            fmt.line(f"    {fmt.C.CYAN}{name:<20}{fmt.C.RESET} "
-                     f"{fmt.C.DIM}v{ver:<8}{fmt.C.RESET} "
-                     f"{fmt.C.DIM}[{ptype}]{fmt.C.RESET}  "
-                     f"{info.get('description', '')}")
+            fmt.line(
+                f"    {fmt.C.CYAN}{name:<20}{fmt.C.RESET} "
+                f"{fmt.C.DIM}v{ver:<8}{fmt.C.RESET} "
+                f"{fmt.C.DIM}[{ptype}]{fmt.C.RESET}  "
+                f"{info.get('description', '')}"
+            )
         fmt.blank()
 
     fmt.footer()

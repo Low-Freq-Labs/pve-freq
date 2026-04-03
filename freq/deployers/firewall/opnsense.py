@@ -6,6 +6,7 @@ Similar to pfSense but with different API surface.
 To contribute: implement deploy() using OPNsense configd or SSH + pw commands.
 Reference: freq/deployers/firewall/pfsense.py
 """
+
 CATEGORY = "firewall"
 VENDOR = "opnsense"
 NEEDS_PASSWORD = True
@@ -16,6 +17,7 @@ STUB = True
 def deploy(ip, ctx, auth_pass, auth_key, auth_user):
     """Deploy FREQ service account to OPNsense. (Not implemented — community plugin.)"""
     from freq.core import fmt
+
     fmt.step_warn("OPNsense deployer is a community plugin — not included in PVE FREQ base")
     fmt.info("  Workaround: use 'firewall:pfsense' (pw useradd works on both)")
     fmt.info("  To contribute: https://github.com/sonnet-io/pve-freq")

@@ -17,6 +17,7 @@ Design decisions:
     - Drift checks every 3rd cycle balances detection speed vs SSH overhead
     - auto-fix is opt-in and requires explicit flag — safety first
 """
+
 import time
 import urllib.request
 import urllib.error
@@ -122,7 +123,9 @@ def cmd_patrol(cfg: FreqConfig, pack, args) -> int:
 
             up = sum(1 for r in results.values() if r and r.returncode == 0)
             down = len(cfg.hosts) - up
-            down_hosts = [h.label for h in cfg.hosts if results.get(h.label) is None or results.get(h.label).returncode != 0]
+            down_hosts = [
+                h.label for h in cfg.hosts if results.get(h.label) is None or results.get(h.label).returncode != 0
+            ]
 
             if down > 0:
                 print(f"  {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {down} host(s) DOWN: {', '.join(down_hosts)}")
@@ -149,8 +152,11 @@ def cmd_patrol(cfg: FreqConfig, pack, args) -> int:
                 for policy in ALL_POLICIES:
                     mode = "fix" if auto_fix else "check"
                     result = run_sync(
-                        cfg.hosts, policy, cfg.ssh_key_path,
-                        mode=mode, max_parallel=cfg.ssh_max_parallel,
+                        cfg.hosts,
+                        policy,
+                        cfg.ssh_key_path,
+                        mode=mode,
+                        max_parallel=cfg.ssh_max_parallel,
                     )
                     drift_hosts = [h for h in result.hosts if h.phase in (Phase.DRIFT, Phase.PLANNED)]
                     fixed_hosts = [h for h in result.hosts if h.phase == Phase.DONE]
@@ -158,10 +164,14 @@ def cmd_patrol(cfg: FreqConfig, pack, args) -> int:
                     if drift_hosts:
                         total_drift += len(drift_hosts)
                         for h in drift_hosts:
-                            print(f"  {fmt.C.YELLOW}{fmt.S.WARN}{fmt.C.RESET}  {policy['name']}: {h.label} — {len(h.findings)} drift")
+                            print(
+                                f"  {fmt.C.YELLOW}{fmt.S.WARN}{fmt.C.RESET}  {policy['name']}: {h.label} — {len(h.findings)} drift"
+                            )
                     if fixed_hosts:
                         for h in fixed_hosts:
-                            print(f"  {fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET} {policy['name']}: {h.label} — auto-fixed {len(h.changes)} items")
+                            print(
+                                f"  {fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET} {policy['name']}: {h.label} — auto-fixed {len(h.changes)} items"
+                            )
 
                 if total_drift == 0:
                     print(f"  {fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET} All policies compliant")

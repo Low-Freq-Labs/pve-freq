@@ -19,6 +19,7 @@ Design decisions:
     - Engine is a separate layer (freq/engine/), CLI commands are thin
       wrappers. This keeps the engine testable without CLI dependencies.
 """
+
 from freq.core import fmt
 from freq.core import resolve
 from freq.core.config import FreqConfig
@@ -108,8 +109,7 @@ def cmd_check(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     # Run pipeline in check mode
-    result = run_sync(hosts, policy, cfg.ssh_key_path, mode="check",
-                      max_parallel=cfg.ssh_max_parallel)
+    result = run_sync(hosts, policy, cfg.ssh_key_path, mode="check", max_parallel=cfg.ssh_max_parallel)
 
     # Display results
     fmt.table_header(
@@ -142,9 +142,11 @@ def cmd_check(cfg: FreqConfig, pack, args) -> int:
 
         # Show findings detail
         for f in h.findings:
-            print(f"    {fmt.C.YELLOW}{f.key}:{fmt.C.RESET} "
-                  f"{fmt.C.RED}{f.current}{fmt.C.RESET} → "
-                  f"{fmt.C.GREEN}{f.desired}{fmt.C.RESET}")
+            print(
+                f"    {fmt.C.YELLOW}{f.key}:{fmt.C.RESET} "
+                f"{fmt.C.RED}{f.current}{fmt.C.RESET} → "
+                f"{fmt.C.GREEN}{f.desired}{fmt.C.RESET}"
+            )
 
     fmt.blank()
     fmt.divider("Summary")
@@ -197,8 +199,7 @@ def cmd_fix(cfg: FreqConfig, pack, args) -> int:
             return 0
 
     # Run pipeline in fix mode
-    result = run_sync(hosts, policy, cfg.ssh_key_path, mode="fix",
-                      max_parallel=cfg.ssh_max_parallel)
+    result = run_sync(hosts, policy, cfg.ssh_key_path, mode="fix", max_parallel=cfg.ssh_max_parallel)
 
     # Display results
     for h in result.hosts:
@@ -250,8 +251,7 @@ def cmd_diff(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     # Run pipeline in check mode
-    result = run_sync(hosts, policy, cfg.ssh_key_path, mode="check",
-                      max_parallel=cfg.ssh_max_parallel)
+    result = run_sync(hosts, policy, cfg.ssh_key_path, mode="check", max_parallel=cfg.ssh_max_parallel)
 
     executor = PolicyExecutor(policy)
 

@@ -19,6 +19,7 @@ Design decisions:
     - File-based, not socket-based. Works even if the relay is a minimal
       Linux box with nothing installed. SSH is the only requirement.
 """
+
 import base64
 import json
 import os
@@ -83,7 +84,9 @@ def _cmd_setup(cfg, args) -> int:
         command=f"sudo mkdir -p {INBOX} {OUTBOX} && sudo chmod -R 777 {COMMS_DIR}",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=COMMS_CMD_TIMEOUT, htype=relay.htype, use_sudo=False,
+        command_timeout=COMMS_CMD_TIMEOUT,
+        htype=relay.htype,
+        use_sudo=False,
     )
     if r.returncode == 0:
         fmt.step_ok(f"Comms directory ready at {relay.label}:{COMMS_DIR}")
@@ -113,12 +116,14 @@ def _cmd_send(cfg, args) -> int:
     timestamp = time.strftime("%Y-%m-%d-%H%M%S")
     filename = f"{timestamp}-{sender}.json"
 
-    msg_data = json.dumps({
-        "from": sender,
-        "to": target or "all",
-        "timestamp": timestamp,
-        "message": message,
-    })
+    msg_data = json.dumps(
+        {
+            "from": sender,
+            "to": target or "all",
+            "timestamp": timestamp,
+            "message": message,
+        }
+    )
 
     fmt.step_start(f"Sending message via {relay.label}")
     r = ssh_run(
@@ -126,7 +131,9 @@ def _cmd_send(cfg, args) -> int:
         command=f"printf '%s' {base64.b64encode(msg_data.encode()).decode()} | base64 -d > {INBOX}/{filename}",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=COMMS_CMD_TIMEOUT, htype=relay.htype, use_sudo=False,
+        command_timeout=COMMS_CMD_TIMEOUT,
+        htype=relay.htype,
+        use_sudo=False,
     )
 
     if r.returncode == 0:
@@ -153,7 +160,9 @@ def _cmd_check(cfg, args) -> int:
         command=f"ls -1t {INBOX}/*.json 2>/dev/null",
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=COMMS_CMD_TIMEOUT, htype=relay.htype, use_sudo=False,
+        command_timeout=COMMS_CMD_TIMEOUT,
+        htype=relay.htype,
+        use_sudo=False,
     )
 
     if r.returncode != 0 or not r.stdout.strip():
@@ -169,10 +178,13 @@ def _cmd_check(cfg, args) -> int:
     for f_path in files[:20]:
         fname = f_path.split("/")[-1]
         r2 = ssh_run(
-            host=relay.ip, command=f"cat {f_path}",
+            host=relay.ip,
+            command=f"cat {f_path}",
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=COMMS_READ_TIMEOUT, htype=relay.htype, use_sudo=False,
+            command_timeout=COMMS_READ_TIMEOUT,
+            htype=relay.htype,
+            use_sudo=False,
         )
         if r2.returncode == 0:
             try:
@@ -180,8 +192,7 @@ def _cmd_check(cfg, args) -> int:
                 sender = msg.get("from", "?")
                 ts = msg.get("timestamp", "?")
                 text = msg.get("message", "")[:60]
-                fmt.line(f"  {fmt.C.CYAN}{ts}{fmt.C.RESET} "
-                         f"{fmt.C.BOLD}{sender}{fmt.C.RESET}: {text}")
+                fmt.line(f"  {fmt.C.CYAN}{ts}{fmt.C.RESET} {fmt.C.BOLD}{sender}{fmt.C.RESET}: {text}")
             except json.JSONDecodeError:
                 fmt.line(f"  {fname}: {fmt.C.DIM}(invalid JSON){fmt.C.RESET}")
         else:

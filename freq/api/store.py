@@ -43,7 +43,8 @@ def handle_storage_health(handler):
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=15,
-            htype="pve", use_sudo=False,
+            htype="pve",
+            use_sudo=False,
         )
         if r.returncode == 0:
             for line in r.stdout.strip().split("\n"):
@@ -53,17 +54,19 @@ def handle_storage_health(handler):
                     used_bytes = int(parts[4]) if parts[4].isdigit() else 0
                     avail_bytes = int(parts[5]) if parts[5].isdigit() else 0
                     pct = round(used_bytes / total_bytes * 100, 1) if total_bytes > 0 else 0
-                    pools.append({
-                        "name": parts[0],
-                        "type": parts[1],
-                        "status": parts[2],
-                        "total_gb": round(total_bytes / (1024**3), 1),
-                        "used_gb": round(used_bytes / (1024**3), 1),
-                        "avail_gb": round(avail_bytes / (1024**3), 1),
-                        "used_pct": pct,
-                        "node": node_name,
-                        "source": "pve",
-                    })
+                    pools.append(
+                        {
+                            "name": parts[0],
+                            "type": parts[1],
+                            "status": parts[2],
+                            "total_gb": round(total_bytes / (1024**3), 1),
+                            "used_gb": round(used_bytes / (1024**3), 1),
+                            "avail_gb": round(avail_bytes / (1024**3), 1),
+                            "used_pct": pct,
+                            "node": node_name,
+                            "source": "pve",
+                        }
+                    )
 
     # TrueNAS pools (if configured)
     if cfg.truenas_ip:
@@ -73,7 +76,8 @@ def handle_storage_health(handler):
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=15,
-            htype="truenas", use_sudo=False,
+            htype="truenas",
+            use_sudo=False,
         )
         if r.returncode == 0:
             for line in r.stdout.strip().split("\n"):
@@ -82,44 +86,52 @@ def handle_storage_health(handler):
                     try:
                         total = int(parts[1])
                         used = int(parts[2])
-                        pools.append({
-                            "name": parts[0],
-                            "type": "zfs",
-                            "status": parts[9] if len(parts) > 9 else "unknown",
-                            "total_gb": round(total / (1024**3), 1),
-                            "used_gb": round(used / (1024**3), 1),
-                            "avail_gb": round((total - used) / (1024**3), 1),
-                            "used_pct": round(used / total * 100, 1) if total > 0 else 0,
-                            "node": "truenas",
-                            "source": "truenas",
-                        })
+                        pools.append(
+                            {
+                                "name": parts[0],
+                                "type": "zfs",
+                                "status": parts[9] if len(parts) > 9 else "unknown",
+                                "total_gb": round(total / (1024**3), 1),
+                                "used_gb": round(used / (1024**3), 1),
+                                "avail_gb": round((total - used) / (1024**3), 1),
+                                "used_pct": round(used / total * 100, 1) if total > 0 else 0,
+                                "node": "truenas",
+                                "source": "truenas",
+                            }
+                        )
                     except (ValueError, IndexError):
                         pass
 
-    json_response(handler, {
-        "pools": pools,
-        "count": len(pools),
-        "total_tb": round(sum(p["total_gb"] for p in pools) / 1024, 2),
-        "used_tb": round(sum(p["used_gb"] for p in pools) / 1024, 2),
-    })
+    json_response(
+        handler,
+        {
+            "pools": pools,
+            "count": len(pools),
+            "total_tb": round(sum(p["total_gb"] for p in pools) / 1024, 2),
+            "used_tb": round(sum(p["used_gb"] for p in pools) / 1024, 2),
+        },
+    )
 
 
 # -- TrueNAS Helper ----------------------------------------------------------
 
+
 def _truenas_ssh(cfg, cmd, timeout=15):
     """SSH to TrueNAS and return result."""
     return ssh_run_fn(
-        host=cfg.truenas_ip, command=cmd,
+        host=cfg.truenas_ip,
+        command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
-        htype="truenas", use_sudo=False,
+        htype="truenas",
+        use_sudo=False,
     )
 
 
 # -- TrueNAS Snapshot Operations (admin) ------------------------------------
 
-_SAFE_ZFS_NAME = re.compile(r'^[a-zA-Z0-9_/.\-]+$')
+_SAFE_ZFS_NAME = re.compile(r"^[a-zA-Z0-9_/.\-]+$")
 
 
 def handle_truenas_snapshot(handler):
@@ -129,11 +141,13 @@ def handle_truenas_snapshot(handler):
     """
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
 
     cfg = load_config()
     if not cfg.truenas_ip:
-        json_response(handler, {"error": "TrueNAS not configured"}, 400); return
+        json_response(handler, {"error": "TrueNAS not configured"}, 400)
+        return
 
     body = get_json_body(handler)
     action = body.get("action", "")
@@ -141,47 +155,67 @@ def handle_truenas_snapshot(handler):
     name = body.get("name", "").strip()
 
     if not dataset or not _SAFE_ZFS_NAME.match(dataset):
-        json_response(handler, {"error": "Invalid dataset name"}, 400); return
+        json_response(handler, {"error": "Invalid dataset name"}, 400)
+        return
 
     if action == "create":
         if not name or not _SAFE_ZFS_NAME.match(name):
-            json_response(handler, {"error": "Invalid snapshot name"}, 400); return
+            json_response(handler, {"error": "Invalid snapshot name"}, 400)
+            return
         cmd = f"zfs snapshot {dataset}@{name}"
     elif action == "delete":
         if not name or not _SAFE_ZFS_NAME.match(name):
-            json_response(handler, {"error": "Invalid snapshot name"}, 400); return
+            json_response(handler, {"error": "Invalid snapshot name"}, 400)
+            return
         cmd = f"zfs destroy {dataset}@{name}"
     elif action == "rollback":
         if not name or not _SAFE_ZFS_NAME.match(name):
-            json_response(handler, {"error": "Invalid snapshot name"}, 400); return
+            json_response(handler, {"error": "Invalid snapshot name"}, 400)
+            return
         cmd = f"zfs rollback -r {dataset}@{name}"
     elif action == "list":
         cmd = f"zfs list -t snapshot -r -o name,creation,used,referenced -s creation {dataset} 2>/dev/null"
         r = _truenas_ssh(cfg, cmd)
-        json_response(handler, {
-            "ok": r.returncode == 0,
-            "output": r.stdout[:4000] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "output": r.stdout[:4000] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
     else:
-        json_response(handler, {"error": f"Unknown action: {action}"}, 400); return
+        json_response(handler, {"error": f"Unknown action: {action}"}, 400)
+        return
 
     r = _truenas_ssh(cfg, cmd, timeout=30)
-    json_response(handler, {
-        "ok": r.returncode == 0,
-        "action": action,
-        "target": f"{dataset}@{name}",
-        "output": r.stdout[:2000] if r.returncode == 0 else "",
-        "error": r.stderr[:200] if r.returncode != 0 else "",
-    })
+    json_response(
+        handler,
+        {
+            "ok": r.returncode == 0,
+            "action": action,
+            "target": f"{dataset}@{name}",
+            "output": r.stdout[:2000] if r.returncode == 0 else "",
+            "error": r.stderr[:200] if r.returncode != 0 else "",
+        },
+    )
 
 
 # -- TrueNAS Service Control (admin) ---------------------------------------
 
 _TRUENAS_SERVICES = {
-    "smb", "nfs", "iscsitarget", "ssh", "cifs", "ftp", "snmp", "ups",
-    "lldp", "smartd", "collectd",
+    "smb",
+    "nfs",
+    "iscsitarget",
+    "ssh",
+    "cifs",
+    "ftp",
+    "snmp",
+    "ups",
+    "lldp",
+    "smartd",
+    "collectd",
 }
 
 
@@ -192,30 +226,39 @@ def handle_truenas_service(handler):
     """
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
 
     cfg = load_config()
     if not cfg.truenas_ip:
-        json_response(handler, {"error": "TrueNAS not configured"}, 400); return
+        json_response(handler, {"error": "TrueNAS not configured"}, 400)
+        return
 
     body = get_json_body(handler)
     action = body.get("action", "")
     service = body.get("service", "").strip().lower()
 
     if action not in ("start", "stop", "restart"):
-        json_response(handler, {"error": "action must be start, stop, or restart"}, 400); return
+        json_response(handler, {"error": "action must be start, stop, or restart"}, 400)
+        return
     if service not in _TRUENAS_SERVICES:
-        json_response(handler, {"error": f"Unknown service: {service}. Allowed: {', '.join(sorted(_TRUENAS_SERVICES))}"}, 400); return
+        json_response(
+            handler, {"error": f"Unknown service: {service}. Allowed: {', '.join(sorted(_TRUENAS_SERVICES))}"}, 400
+        )
+        return
 
     cmd = f"midclt call service.{action} {service}"
     r = _truenas_ssh(cfg, cmd, timeout=20)
-    json_response(handler, {
-        "ok": r.returncode == 0,
-        "action": action,
-        "service": service,
-        "output": r.stdout[:1000] if r.returncode == 0 else "",
-        "error": r.stderr[:200] if r.returncode != 0 else "",
-    })
+    json_response(
+        handler,
+        {
+            "ok": r.returncode == 0,
+            "action": action,
+            "service": service,
+            "output": r.stdout[:1000] if r.returncode == 0 else "",
+            "error": r.stderr[:200] if r.returncode != 0 else "",
+        },
+    )
 
 
 # -- TrueNAS Scrub (admin) -------------------------------------------------
@@ -228,25 +271,31 @@ def handle_truenas_scrub(handler):
     """
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
 
     cfg = load_config()
     if not cfg.truenas_ip:
-        json_response(handler, {"error": "TrueNAS not configured"}, 400); return
+        json_response(handler, {"error": "TrueNAS not configured"}, 400)
+        return
 
     body = get_json_body(handler)
     pool = body.get("pool", "").strip()
     if not pool or not _SAFE_ZFS_NAME.match(pool):
-        json_response(handler, {"error": "Invalid pool name"}, 400); return
+        json_response(handler, {"error": "Invalid pool name"}, 400)
+        return
 
     cmd = f"zpool scrub {pool}"
     r = _truenas_ssh(cfg, cmd, timeout=10)
-    json_response(handler, {
-        "ok": r.returncode == 0,
-        "pool": pool,
-        "output": r.stdout[:500] if r.returncode == 0 else "",
-        "error": r.stderr[:200] if r.returncode != 0 else "",
-    })
+    json_response(
+        handler,
+        {
+            "ok": r.returncode == 0,
+            "pool": pool,
+            "output": r.stdout[:500] if r.returncode == 0 else "",
+            "error": r.stderr[:200] if r.returncode != 0 else "",
+        },
+    )
 
 
 # -- TrueNAS Reboot (admin) ------------------------------------------------
@@ -259,15 +308,18 @@ def handle_truenas_reboot(handler):
     """
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
 
     cfg = load_config()
     if not cfg.truenas_ip:
-        json_response(handler, {"error": "TrueNAS not configured"}, 400); return
+        json_response(handler, {"error": "TrueNAS not configured"}, 400)
+        return
 
     body = get_json_body(handler)
     if not body.get("confirm"):
-        json_response(handler, {"error": "Must set confirm: true"}, 400); return
+        json_response(handler, {"error": "Must set confirm: true"}, 400)
+        return
 
     _truenas_ssh(cfg, "reboot", timeout=5)
     json_response(handler, {"ok": True, "message": "Reboot command sent"})
@@ -284,11 +336,13 @@ def handle_truenas_dataset(handler):
     """
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
 
     cfg = load_config()
     if not cfg.truenas_ip:
-        json_response(handler, {"error": "TrueNAS not configured"}, 400); return
+        json_response(handler, {"error": "TrueNAS not configured"}, 400)
+        return
 
     body = get_json_body(handler)
     action = body.get("action", "list")
@@ -297,18 +351,23 @@ def handle_truenas_dataset(handler):
     if action == "list":
         pool = dataset or ""
         if pool and not _SAFE_ZFS_NAME.match(pool):
-            json_response(handler, {"error": "Invalid pool/dataset name"}, 400); return
+            json_response(handler, {"error": "Invalid pool/dataset name"}, 400)
+            return
         cmd = f"zfs list -r -o name,used,avail,refer,mountpoint,compression,quota {pool} 2>/dev/null"
         r = _truenas_ssh(cfg, cmd)
-        json_response(handler, {
-            "ok": r.returncode == 0,
-            "output": r.stdout[:4000] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "output": r.stdout[:4000] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     if not dataset or not _SAFE_ZFS_NAME.match(dataset):
-        json_response(handler, {"error": "Invalid dataset name"}, 400); return
+        json_response(handler, {"error": "Invalid dataset name"}, 400)
+        return
 
     if action == "create":
         props = body.get("properties", {})
@@ -318,25 +377,39 @@ def handle_truenas_dataset(handler):
                 cmd += f" -o {k}={v}"
         cmd += f" {dataset}"
         r = _truenas_ssh(cfg, cmd, timeout=20)
-        json_response(handler, {
-            "ok": r.returncode == 0, "action": "create", "dataset": dataset,
-            "output": r.stdout[:1000], "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "action": "create",
+                "dataset": dataset,
+                "output": r.stdout[:1000],
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
 
     elif action == "delete":
         if not body.get("confirm"):
-            json_response(handler, {"error": "Must set confirm: true to delete dataset"}, 400); return
+            json_response(handler, {"error": "Must set confirm: true to delete dataset"}, 400)
+            return
         cmd = f"zfs destroy {dataset}"
         r = _truenas_ssh(cfg, cmd, timeout=20)
-        json_response(handler, {
-            "ok": r.returncode == 0, "action": "delete", "dataset": dataset,
-            "output": r.stdout[:1000], "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "action": "delete",
+                "dataset": dataset,
+                "output": r.stdout[:1000],
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
 
     elif action == "set":
         props = body.get("properties", {})
         if not props:
-            json_response(handler, {"error": "properties required"}, 400); return
+            json_response(handler, {"error": "properties required"}, 400)
+            return
         results = []
         for k, v in props.items():
             if not _SAFE_ZFS_NAME.match(k):
@@ -347,8 +420,14 @@ def handle_truenas_dataset(handler):
                 continue
             cmd = f"zfs set {k}={v} {dataset}"
             r = _truenas_ssh(cfg, cmd, timeout=10)
-            results.append({"property": k, "value": str(v), "ok": r.returncode == 0,
-                            "error": r.stderr[:100] if r.returncode != 0 else ""})
+            results.append(
+                {
+                    "property": k,
+                    "value": str(v),
+                    "ok": r.returncode == 0,
+                    "error": r.stderr[:100] if r.returncode != 0 else "",
+                }
+            )
         json_response(handler, {"ok": all(x["ok"] for x in results), "results": results})
 
     else:
@@ -367,18 +446,21 @@ def handle_truenas_share(handler):
     """
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
 
     cfg = load_config()
     if not cfg.truenas_ip:
-        json_response(handler, {"error": "TrueNAS not configured"}, 400); return
+        json_response(handler, {"error": "TrueNAS not configured"}, 400)
+        return
 
     body = get_json_body(handler)
     action = body.get("action", "list")
     share_type = body.get("type", "smb").lower()
 
     if share_type not in ("smb", "nfs"):
-        json_response(handler, {"error": "type must be smb or nfs"}, 400); return
+        json_response(handler, {"error": "type must be smb or nfs"}, 400)
+        return
 
     if action == "list":
         if share_type == "smb":
@@ -386,52 +468,72 @@ def handle_truenas_share(handler):
         else:
             cmd = "midclt call sharing.nfs.query '[]' 2>/dev/null"
         r = _truenas_ssh(cfg, cmd, timeout=15)
-        json_response(handler, {
-            "ok": r.returncode == 0, "type": share_type,
-            "output": r.stdout[:4000] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "type": share_type,
+                "output": r.stdout[:4000] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     if action == "create":
         name = body.get("name", "").strip()
         path = body.get("path", "").strip()
         if not name or not path:
-            json_response(handler, {"error": "name and path required"}, 400); return
+            json_response(handler, {"error": "name and path required"}, 400)
+            return
         if "'" in name or "'" in path or '"' in name or '"' in path:
-            json_response(handler, {"error": "Invalid characters"}, 400); return
+            json_response(handler, {"error": "Invalid characters"}, 400)
+            return
 
         if share_type == "smb":
-            cmd = f"midclt call sharing.smb.create '{{\"name\":\"{name}\",\"path\":\"{path}\",\"purpose\":\"DEFAULT_SHARE\"}}'"
+            cmd = f'midclt call sharing.smb.create \'{{"name":"{name}","path":"{path}","purpose":"DEFAULT_SHARE"}}\''
         else:
             networks = body.get("networks", ["10.25.0.0/16"])
             nets_json = ",".join(f'"{n}"' for n in networks)
-            cmd = f"midclt call sharing.nfs.create '{{\"path\":\"{path}\",\"networks\":[{nets_json}]}}'"
+            cmd = f'midclt call sharing.nfs.create \'{{"path":"{path}","networks":[{nets_json}]}}\''
 
         r = _truenas_ssh(cfg, cmd, timeout=20)
-        json_response(handler, {
-            "ok": r.returncode == 0, "action": "create", "type": share_type,
-            "name": name, "path": path,
-            "output": r.stdout[:1000] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "action": "create",
+                "type": share_type,
+                "name": name,
+                "path": path,
+                "output": r.stdout[:1000] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     if action == "delete":
         share_id = body.get("id")
         if share_id is None:
-            json_response(handler, {"error": "id required for delete"}, 400); return
+            json_response(handler, {"error": "id required for delete"}, 400)
+            return
         try:
             share_id = int(share_id)
         except (ValueError, TypeError):
-            json_response(handler, {"error": "id must be integer"}, 400); return
+            json_response(handler, {"error": "id must be integer"}, 400)
+            return
         cmd = f"midclt call sharing.{share_type}.delete {share_id}"
         r = _truenas_ssh(cfg, cmd, timeout=15)
-        json_response(handler, {
-            "ok": r.returncode == 0, "action": "delete", "type": share_type,
-            "id": share_id,
-            "output": r.stdout[:500], "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "action": "delete",
+                "type": share_type,
+                "id": share_id,
+                "output": r.stdout[:500],
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     json_response(handler, {"error": f"Unknown action: {action}"}, 400)
@@ -447,11 +549,13 @@ def handle_truenas_replication(handler):
     """
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
 
     cfg = load_config()
     if not cfg.truenas_ip:
-        json_response(handler, {"error": "TrueNAS not configured"}, 400); return
+        json_response(handler, {"error": "TrueNAS not configured"}, 400)
+        return
 
     body = get_json_body(handler)
     action = body.get("action", "list")
@@ -459,28 +563,38 @@ def handle_truenas_replication(handler):
     if action == "list":
         cmd = "midclt call replication.query '[]' 2>/dev/null"
         r = _truenas_ssh(cfg, cmd, timeout=15)
-        json_response(handler, {
-            "ok": r.returncode == 0,
-            "output": r.stdout[:4000] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "output": r.stdout[:4000] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     if action == "run":
         task_id = body.get("id")
         if task_id is None:
-            json_response(handler, {"error": "id required"}, 400); return
+            json_response(handler, {"error": "id required"}, 400)
+            return
         try:
             task_id = int(task_id)
         except (ValueError, TypeError):
-            json_response(handler, {"error": "id must be integer"}, 400); return
+            json_response(handler, {"error": "id must be integer"}, 400)
+            return
         cmd = f"midclt call replication.run {task_id}"
         r = _truenas_ssh(cfg, cmd, timeout=30)
-        json_response(handler, {
-            "ok": r.returncode == 0, "action": "run", "id": task_id,
-            "output": r.stdout[:1000] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "action": "run",
+                "id": task_id,
+                "output": r.stdout[:1000] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     json_response(handler, {"error": f"Unknown action: {action}"}, 400)
@@ -496,11 +610,13 @@ def handle_truenas_app(handler):
     """
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
 
     cfg = load_config()
     if not cfg.truenas_ip:
-        json_response(handler, {"error": "TrueNAS not configured"}, 400); return
+        json_response(handler, {"error": "TrueNAS not configured"}, 400)
+        return
 
     body = get_json_body(handler)
     action = body.get("action", "list")
@@ -508,18 +624,23 @@ def handle_truenas_app(handler):
     if action == "list":
         cmd = "midclt call chart.release.query '[]' 2>/dev/null || midclt call app.query '[]' 2>/dev/null || echo '[]'"
         r = _truenas_ssh(cfg, cmd, timeout=20)
-        json_response(handler, {
-            "ok": r.returncode == 0,
-            "output": r.stdout[:4000] if r.returncode == 0 else "",
-            "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "output": r.stdout[:4000] if r.returncode == 0 else "",
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
         return
 
     name = body.get("name", "").strip()
     if not name:
-        json_response(handler, {"error": "name required"}, 400); return
+        json_response(handler, {"error": "name required"}, 400)
+        return
     if "'" in name or '"' in name:
-        json_response(handler, {"error": "Invalid characters"}, 400); return
+        json_response(handler, {"error": "Invalid characters"}, 400)
+        return
 
     if action == "start":
         try:
@@ -528,18 +649,30 @@ def handle_truenas_app(handler):
             replicas = 1
         cmd = f"midclt call chart.release.scale '{name}' '{{\"replica_count\":{replicas}}}' 2>/dev/null || midclt call app.start '{name}' 2>/dev/null"
         r = _truenas_ssh(cfg, cmd, timeout=30)
-        json_response(handler, {
-            "ok": r.returncode == 0, "action": "start", "name": name,
-            "output": r.stdout[:500], "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "action": "start",
+                "name": name,
+                "output": r.stdout[:500],
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
 
     elif action == "stop":
         cmd = f"midclt call chart.release.scale '{name}' '{{\"replica_count\":0}}' 2>/dev/null || midclt call app.stop '{name}' 2>/dev/null"
         r = _truenas_ssh(cfg, cmd, timeout=30)
-        json_response(handler, {
-            "ok": r.returncode == 0, "action": "stop", "name": name,
-            "output": r.stdout[:500], "error": r.stderr[:200] if r.returncode != 0 else "",
-        })
+        json_response(
+            handler,
+            {
+                "ok": r.returncode == 0,
+                "action": "stop",
+                "name": name,
+                "output": r.stdout[:500],
+                "error": r.stderr[:200] if r.returncode != 0 else "",
+            },
+        )
 
     else:
         json_response(handler, {"error": f"Unknown action: {action}"}, 400)

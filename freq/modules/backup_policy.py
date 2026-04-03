@@ -18,6 +18,7 @@ Design decisions:
     - Policies are declarative (what, not how). The scheduler decides when
       to evaluate; the policy engine decides what to snapshot and prune.
 """
+
 import json
 import os
 import re
@@ -82,9 +83,13 @@ def _find_reachable_node(cfg: FreqConfig) -> str:
     """Find a reachable PVE node."""
     for ip in cfg.pve_nodes:
         r = ssh_run(
-            host=ip, command="pvesh get /version --output-format json",
-            key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=PVE_QUICK_TIMEOUT, htype="pve", use_sudo=True,
+            host=ip,
+            command="pvesh get /version --output-format json",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=cfg.ssh_connect_timeout,
+            command_timeout=PVE_QUICK_TIMEOUT,
+            htype="pve",
+            use_sudo=True,
         )
         if r.returncode == 0:
             return ip
@@ -94,9 +99,13 @@ def _find_reachable_node(cfg: FreqConfig) -> str:
 def _pve_cmd(cfg, node_ip, command, timeout=PVE_CMD_TIMEOUT):
     """Execute PVE command via SSH."""
     r = ssh_run(
-        host=node_ip, command=command,
-        key_path=cfg.ssh_key_path, connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=timeout, htype="pve", use_sudo=True,
+        host=node_ip,
+        command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=timeout,
+        htype="pve",
+        use_sudo=True,
     )
     return r.stdout, r.returncode == 0
 
@@ -104,9 +113,10 @@ def _pve_cmd(cfg, node_ip, command, timeout=PVE_CMD_TIMEOUT):
 def _get_vms_for_policy(cfg: FreqConfig, node_ip: str, policy: dict) -> list:
     """Get VMs that match a policy's target criteria."""
     import json as json_mod
-    stdout, ok = _pve_cmd(cfg, node_ip,
-                          "pvesh get /cluster/resources --type vm --output-format json",
-                          timeout=PVE_CMD_TIMEOUT)
+
+    stdout, ok = _pve_cmd(
+        cfg, node_ip, "pvesh get /cluster/resources --type vm --output-format json", timeout=PVE_CMD_TIMEOUT
+    )
     if not ok:
         return []
 
@@ -173,14 +183,19 @@ def _cmd_list(cfg: FreqConfig, args) -> int:
         fmt.line(f"  {fmt.C.DIM}No backup policies defined.{fmt.C.RESET}")
         fmt.blank()
         fmt.line(f"  {fmt.C.DIM}Create one:{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}  freq backup-policy create prod-daily --target prod --interval 24h --retention 7{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.DIM}  freq backup-policy create prod-daily --target prod --interval 24h --retention 7{fmt.C.RESET}"
+        )
         fmt.blank()
         fmt.footer()
         return 0
 
     fmt.table_header(
-        ("NAME", 18), ("TARGET", 12), ("INTERVAL", 10),
-        ("RETENTION", 10), ("STATUS", 8),
+        ("NAME", 18),
+        ("TARGET", 12),
+        ("INTERVAL", 10),
+        ("RETENTION", 10),
+        ("STATUS", 8),
     )
 
     for p in policies:
@@ -208,7 +223,7 @@ def _cmd_create(cfg: FreqConfig, args) -> int:
         fmt.error("Usage: freq backup-policy create <name> --target <tag> --interval <24h> --retention <7>")
         return 1
 
-    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+    if not re.match(r"^[a-zA-Z0-9_-]+$", name):
         fmt.error("Policy name must be alphanumeric with hyphens/underscores.")
         return 1
 
@@ -311,7 +326,8 @@ def _cmd_apply(cfg: FreqConfig, args) -> int:
             # Create snapshot
             fmt.step_start(f"Snapshot VM {vmid} ({vm_name})")
             stdout, ok = _pve_cmd(
-                cfg, node_ip,
+                cfg,
+                node_ip,
                 f"qm snapshot {vmid} {snap_name} --description 'Backup policy: {policy['name']}'",
                 timeout=PVE_SNAPSHOT_TIMEOUT,
             )
@@ -339,9 +355,9 @@ def _cmd_apply(cfg: FreqConfig, args) -> int:
                     to_prune = sorted(policy_snaps)[:-retention]
                     for old_snap in to_prune:
                         fmt.step_start(f"Pruning: {old_snap}")
-                        _, del_ok = _pve_cmd(cfg, node_ip,
-                                             f"qm delsnapshot {vmid} {old_snap}",
-                                             timeout=PVE_SNAPSHOT_TIMEOUT)
+                        _, del_ok = _pve_cmd(
+                            cfg, node_ip, f"qm delsnapshot {vmid} {old_snap}", timeout=PVE_SNAPSHOT_TIMEOUT
+                        )
                         if del_ok:
                             fmt.step_ok(f"Pruned: {old_snap}")
                             pruned += 1
@@ -374,8 +390,7 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
     state = _load_state(cfg)
     policies = _load_policies(cfg)
 
-    fmt.line(f"  Policies:          {len(policies)} total, "
-             f"{sum(1 for p in policies if p.get('enabled', True))} active")
+    fmt.line(f"  Policies:          {len(policies)} total, {sum(1 for p in policies if p.get('enabled', True))} active")
     fmt.line(f"  Last enforcement:  {state.get('last_run', 'never')}")
     fmt.line(f"  Total created:     {state.get('snapshots_created', 0)}")
     fmt.line(f"  Total pruned:      {state.get('snapshots_pruned', 0)}")

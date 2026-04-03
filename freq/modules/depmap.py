@@ -18,6 +18,7 @@ Design decisions:
     - Discovered from live state, not manually entered. If a dependency
       exists on the network, FREQ finds it. No stale CMDB entries.
 """
+
 import json
 import os
 import time
@@ -63,7 +64,7 @@ def _discover_connections(cfg: FreqConfig) -> dict:
         'echo "---LISTEN---"; '
         "ss -tlnp 2>/dev/null | awk 'NR>1 {print $4\"|\"$6}' | head -30; "
         'echo "---CONNS---"; '
-        "ss -tnp state established 2>/dev/null | awk 'NR>1 {print $3\"|\"$4\"|\"$5}' | head -50; "
+        'ss -tnp state established 2>/dev/null | awk \'NR>1 {print $3"|"$4"|"$5}\' | head -50; '
         'echo "---DOCKER---"; '
         "docker network inspect $(docker network ls -q 2>/dev/null) --format "
         "'{{range .Containers}}{{.Name}}|{{.IPv4Address}}{{end}}' 2>/dev/null | head -20 || true; "
@@ -73,7 +74,8 @@ def _discover_connections(cfg: FreqConfig) -> dict:
     )
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=MAP_CMD_TIMEOUT,
@@ -95,8 +97,11 @@ def _discover_connections(cfg: FreqConfig) -> dict:
             continue
 
         nodes[h.label] = {
-            "ip": h.ip, "type": h.htype,
-            "listens": [], "connects_to": [], "mounts": [],
+            "ip": h.ip,
+            "type": h.htype,
+            "listens": [],
+            "connects_to": [],
+            "mounts": [],
         }
 
         current_section = None
@@ -134,18 +139,22 @@ def _discover_connections(cfg: FreqConfig) -> dict:
                     # Resolve IP to label if known
                     remote_label = ip_to_label.get(remote_ip, remote_ip)
 
-                    nodes[h.label]["connects_to"].append({
-                        "target": remote_label,
-                        "target_ip": remote_ip,
-                        "port": remote_port,
-                    })
+                    nodes[h.label]["connects_to"].append(
+                        {
+                            "target": remote_label,
+                            "target_ip": remote_ip,
+                            "port": remote_port,
+                        }
+                    )
 
-                    edges.append({
-                        "from": h.label,
-                        "to": remote_label,
-                        "port": remote_port,
-                        "type": "tcp",
-                    })
+                    edges.append(
+                        {
+                            "from": h.label,
+                            "to": remote_label,
+                            "port": remote_port,
+                            "type": "tcp",
+                        }
+                    )
 
             elif current_section == "mounts":
                 parts = line.split("|", 1)
@@ -156,16 +165,22 @@ def _discover_connections(cfg: FreqConfig) -> dict:
                     server = source.split(":")[0] if ":" in source else source.split("/")[0]
                     server_label = ip_to_label.get(server, server)
 
-                    nodes[h.label]["mounts"].append({
-                        "source": source, "mount": mount_point, "server": server_label,
-                    })
+                    nodes[h.label]["mounts"].append(
+                        {
+                            "source": source,
+                            "mount": mount_point,
+                            "server": server_label,
+                        }
+                    )
 
-                    edges.append({
-                        "from": h.label,
-                        "to": server_label,
-                        "port": "nfs/smb",
-                        "type": "storage",
-                    })
+                    edges.append(
+                        {
+                            "from": h.label,
+                            "to": server_label,
+                            "port": "nfs/smb",
+                            "type": "storage",
+                        }
+                    )
 
     # Deduplicate edges
     seen = set()
@@ -284,8 +299,9 @@ def _cmd_show(cfg: FreqConfig, args) -> int:
         listen_count = len(node.get("listens", []))
         conn_count = len(node.get("connects_to", []))
         mount_count = len(node.get("mounts", []))
-        fmt.line(f"  {fmt.C.BOLD}{label}{fmt.C.RESET} "
-                 f"({listen_count} ports, {conn_count} outbound, {mount_count} mounts)")
+        fmt.line(
+            f"  {fmt.C.BOLD}{label}{fmt.C.RESET} ({listen_count} ports, {conn_count} outbound, {mount_count} mounts)"
+        )
 
     fmt.blank()
     fmt.footer()
@@ -336,8 +352,7 @@ def _cmd_impact(cfg: FreqConfig, args) -> int:
     fmt.blank()
     score = impact["impact_score"]
     color = fmt.C.RED if score >= 5 else (fmt.C.YELLOW if score >= 2 else fmt.C.GREEN)
-    fmt.line(f"  Impact score: {color}{fmt.C.BOLD}{score}{fmt.C.RESET} "
-             f"({len(impact['dependents'])} dependents)")
+    fmt.line(f"  Impact score: {color}{fmt.C.BOLD}{score}{fmt.C.RESET} ({len(impact['dependents'])} dependents)")
 
     fmt.blank()
     fmt.footer()

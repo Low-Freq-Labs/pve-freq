@@ -17,6 +17,7 @@ Design decisions:
     - Cooldown per rule+host pair prevents duplicate alerts during outages
     - Duration gate requires sustained condition before firing (no flapping)
 """
+
 import json
 import os
 import re
@@ -29,22 +30,25 @@ from freq.core import log as logger
 
 # ── Data Types ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class Rule:
     """A single alert rule."""
+
     name: str
-    condition: str          # host_unreachable, cpu_above, ram_above, disk_above, docker_down
-    target: str = "*"       # host label glob or "*" for all
+    condition: str  # host_unreachable, cpu_above, ram_above, disk_above, docker_down
+    target: str = "*"  # host label glob or "*" for all
     threshold: float = 0.0  # numeric threshold (%, load avg, count)
-    duration: int = 0       # seconds condition must persist before firing
+    duration: int = 0  # seconds condition must persist before firing
     severity: str = "warning"  # info, warning, critical
-    cooldown: int = 300     # seconds between repeated alerts for same rule+host
+    cooldown: int = 300  # seconds between repeated alerts for same rule+host
     enabled: bool = True
 
 
 @dataclass
 class Alert:
     """A fired alert."""
+
     rule_name: str
     host: str
     message: str
@@ -54,6 +58,7 @@ class Alert:
 
 # ── Rule Loading ────────────────────────────────────────────────────────
 
+
 def load_rules(conf_dir: str) -> list:
     """Load rules from conf/rules.toml. Returns list of Rule objects."""
     path = os.path.join(conf_dir, "rules.toml")
@@ -62,6 +67,7 @@ def load_rules(conf_dir: str) -> list:
 
     try:
         import tomllib
+
         with open(path, "rb") as f:
             data = tomllib.load(f)
     except Exception as e:
@@ -70,16 +76,18 @@ def load_rules(conf_dir: str) -> list:
 
     rules = []
     for name, cfg in data.get("rule", {}).items():
-        rules.append(Rule(
-            name=name,
-            condition=cfg.get("condition", ""),
-            target=cfg.get("target", "*"),
-            threshold=float(cfg.get("threshold", 0)),
-            duration=int(cfg.get("duration", 0)),
-            severity=cfg.get("severity", "warning"),
-            cooldown=int(cfg.get("cooldown", 300)),
-            enabled=cfg.get("enabled", True),
-        ))
+        rules.append(
+            Rule(
+                name=name,
+                condition=cfg.get("condition", ""),
+                target=cfg.get("target", "*"),
+                threshold=float(cfg.get("threshold", 0)),
+                duration=int(cfg.get("duration", 0)),
+                severity=cfg.get("severity", "warning"),
+                cooldown=int(cfg.get("cooldown", 300)),
+                enabled=cfg.get("enabled", True),
+            )
+        )
 
     return rules if rules else _default_rules()
 
@@ -111,16 +119,38 @@ def save_rules(conf_dir: str, rules: list) -> bool:
 def _default_rules() -> list:
     """Built-in default rules shipped with FREQ."""
     return [
-        Rule(name="host-unreachable", condition="host_unreachable",
-             target="*", threshold=0, duration=300, severity="critical", cooldown=600),
-        Rule(name="disk-critical", condition="disk_above",
-             target="*", threshold=90, duration=0, severity="warning", cooldown=3600),
-        Rule(name="ram-pressure", condition="ram_above",
-             target="*", threshold=95, duration=0, severity="warning", cooldown=3600),
+        Rule(
+            name="host-unreachable",
+            condition="host_unreachable",
+            target="*",
+            threshold=0,
+            duration=300,
+            severity="critical",
+            cooldown=600,
+        ),
+        Rule(
+            name="disk-critical",
+            condition="disk_above",
+            target="*",
+            threshold=90,
+            duration=0,
+            severity="warning",
+            cooldown=3600,
+        ),
+        Rule(
+            name="ram-pressure",
+            condition="ram_above",
+            target="*",
+            threshold=95,
+            duration=0,
+            severity="warning",
+            cooldown=3600,
+        ),
     ]
 
 
 # ── Rule State ──────────────────────────────────────────────────────────
+
 
 def load_rule_state(cache_dir: str) -> dict:
     """Load persistent rule state (cooldowns, durations) from disk."""
@@ -149,6 +179,7 @@ def save_rule_state(cache_dir: str, state: dict) -> None:
 
 MAX_HISTORY = 100
 
+
 def load_alert_history(cache_dir: str) -> list:
     """Load alert history from disk."""
     path = os.path.join(cache_dir, "alert_history.json")
@@ -174,6 +205,7 @@ def save_alert_history(cache_dir: str, history: list) -> None:
 
 # ── Evaluation ──────────────────────────────────────────────────────────
 
+
 def _matches_target(host_label: str, target: str) -> bool:
     """Check if a host label matches a target pattern (* = all, or prefix*)."""
     if target == "*":
@@ -185,7 +217,7 @@ def _matches_target(host_label: str, target: str) -> bool:
 
 def _parse_ram_percent(ram_str: str) -> Optional[float]:
     """Parse RAM string like '1234/8192MB' into percent used."""
-    m = re.match(r'(\d+)/(\d+)', ram_str)
+    m = re.match(r"(\d+)/(\d+)", ram_str)
     if m:
         used, total = int(m.group(1)), int(m.group(2))
         if total > 0:
@@ -195,7 +227,7 @@ def _parse_ram_percent(ram_str: str) -> Optional[float]:
 
 def _parse_disk_percent(disk_str: str) -> Optional[float]:
     """Parse disk string like '45%' into float."""
-    m = re.match(r'(\d+)%', disk_str)
+    m = re.match(r"(\d+)%", disk_str)
     if m:
         return float(m.group(1))
     return None
@@ -250,13 +282,15 @@ def evaluate_rules(health_data: dict, rules: list, state: dict) -> list:
 
                 # Fire alert
                 msg = _build_message(rule, host)
-                alerts.append(Alert(
-                    rule_name=rule.name,
-                    host=label,
-                    message=msg,
-                    severity=rule.severity,
-                    fired_at=now,
-                ))
+                alerts.append(
+                    Alert(
+                        rule_name=rule.name,
+                        host=label,
+                        message=msg,
+                        severity=rule.severity,
+                        fired_at=now,
+                    )
+                )
                 entry["last_alerted"] = now
             else:
                 # Condition cleared — reset tracking
@@ -331,6 +365,7 @@ def _build_message(rule: Rule, host: dict) -> str:
 
 # ── Serialization ───────────────────────────────────────────────────────
 
+
 def rules_to_dicts(rules: list) -> list:
     """Convert Rule objects to JSON-serializable dicts."""
     return [
@@ -384,8 +419,12 @@ def cmd_rules(cfg, pack, args) -> int:
             fmt.line(f"  {'─' * 78}")
             for r in rules:
                 on = f"{fmt.C.GREEN}yes{fmt.C.RESET}" if r.enabled else f"{fmt.C.RED}no{fmt.C.RESET}"
-                sev_color = fmt.C.RED if r.severity == "critical" else fmt.C.YELLOW if r.severity == "warning" else fmt.C.DIM
-                fmt.line(f"  {r.name:<25} {r.condition:<20} {r.target:<10} {r.threshold:>7.1f} {sev_color}{r.severity:<10}{fmt.C.RESET} {on}")
+                sev_color = (
+                    fmt.C.RED if r.severity == "critical" else fmt.C.YELLOW if r.severity == "warning" else fmt.C.DIM
+                )
+                fmt.line(
+                    f"  {r.name:<25} {r.condition:<20} {r.target:<10} {r.threshold:>7.1f} {sev_color}{r.severity:<10}{fmt.C.RESET} {on}"
+                )
 
         # Show recent alerts
         history = load_alert_history(os.path.join(cfg.data_dir, "cache"))
@@ -420,9 +459,14 @@ def cmd_rules(cfg, pack, args) -> int:
         cooldown = getattr(args, "cooldown", 300)
 
         new_rule = Rule(
-            name=name, condition=condition, target=target,
-            threshold=float(threshold), duration=int(duration),
-            severity=severity, cooldown=int(cooldown), enabled=True,
+            name=name,
+            condition=condition,
+            target=target,
+            threshold=float(threshold),
+            duration=int(duration),
+            severity=severity,
+            cooldown=int(cooldown),
+            enabled=True,
         )
         rules.append(new_rule)
         if save_rules(cfg.conf_dir, rules):
@@ -463,7 +507,9 @@ def cmd_rules(cfg, pack, args) -> int:
                 ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(a.get("fired_at", 0)))
                 sev = a.get("severity", "?")
                 sev_color = fmt.C.RED if sev == "critical" else fmt.C.YELLOW if sev == "warning" else fmt.C.DIM
-                fmt.line(f"  {fmt.C.DIM}{ts}{fmt.C.RESET} {sev_color}[{sev}]{fmt.C.RESET} {a.get('host', '?')}: {a.get('message', '')}")
+                fmt.line(
+                    f"  {fmt.C.DIM}{ts}{fmt.C.RESET} {sev_color}[{sev}]{fmt.C.RESET} {a.get('host', '?')}: {a.get('message', '')}"
+                )
         fmt.blank()
         fmt.footer()
         return 0

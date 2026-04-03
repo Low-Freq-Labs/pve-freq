@@ -18,6 +18,7 @@ Design decisions:
       there's no exact match. Prevents accidental fleet-wide commands.
     - "all" is a special keyword that returns every host. No group needed.
 """
+
 from typing import Optional
 
 from freq.core.types import Host, ContainerVM
@@ -103,6 +104,7 @@ def all_types(hosts: list) -> dict:
 
 
 # --- Container Resolution ---
+
 
 def container_by_name(container_vms: dict, name: str) -> tuple:
     """Find a container by name across all VMs.

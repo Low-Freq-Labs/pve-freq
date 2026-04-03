@@ -16,6 +16,7 @@ Design decisions:
     - PVE MaxAuthTries=5 prevents cluster join failures
     - PermitRootLogin=prohibit-password allows key-only root (PVE requirement)
 """
+
 POLICY = {
     "name": "ssh-hardening",
     "description": "Harden SSH daemon configuration across fleet",

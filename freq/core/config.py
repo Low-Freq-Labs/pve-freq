@@ -22,8 +22,10 @@ Design decisions:
     - Safe defaults mean a fresh install with empty freq.toml still boots.
     - hosts.conf migration path: detected, warned, auto-read, eventually removed.
 """
+
 import os
 import shutil
+
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -34,8 +36,15 @@ from pathlib import Path
 from typing import Optional
 
 from freq.core.types import (
-    Host, VLAN, Distro, Container, ContainerVM,
-    FleetBoundaries, PhysicalDevice, PVENode, Monitor,
+    Host,
+    VLAN,
+    Distro,
+    Container,
+    ContainerVM,
+    FleetBoundaries,
+    PhysicalDevice,
+    PVENode,
+    Monitor,
 )
 from freq import __version__
 
@@ -97,8 +106,8 @@ class FreqConfig:
     ssh_connect_timeout: int = _DEFAULTS["ssh_connect_timeout"]
     ssh_max_parallel: int = _DEFAULTS["ssh_max_parallel"]
     ssh_mode: str = _DEFAULTS["ssh_mode"]
-    ssh_key_path: str = ""       # ed25519 (primary — modern hosts)
-    ssh_rsa_key_path: str = ""   # RSA (legacy — iDRAC, switch)
+    ssh_key_path: str = ""  # ed25519 (primary — modern hosts)
+    ssh_rsa_key_path: str = ""  # RSA (legacy — iDRAC, switch)
 
     # PVE
     pve_nodes: list = field(default_factory=list)
@@ -131,9 +140,9 @@ class FreqConfig:
     synology_ip: str = ""
     switch_ip: str = ""
     docker_dev_ip: str = ""
-    docker_config_base: str = ""   # base path for Docker container configs
-    docker_backup_dir: str = ""    # path for Docker container backups
-    legacy_password_file: str = "" # password file for iDRAC/switch SSH auth
+    docker_config_base: str = ""  # base path for Docker container configs
+    docker_backup_dir: str = ""  # path for Docker container backups
+    legacy_password_file: str = ""  # password file for iDRAC/switch SSH auth
     snmp_community: str = "public"  # SNMP community string
 
     # Notifications
@@ -156,8 +165,8 @@ class FreqConfig:
     webhook_url: str = ""
 
     # PVE API (optional — token auth alternative to SSH)
-    pve_api_token_id: str = ""        # e.g. "freq@pve!dashboard"
-    pve_api_token_secret: str = ""    # loaded from credential file at runtime
+    pve_api_token_id: str = ""  # e.g. "freq@pve!dashboard"
+    pve_api_token_secret: str = ""  # loaded from credential file at runtime
     pve_api_verify_ssl: bool = False  # homelab self-signed certs
 
     # Users from TOML (populated by _apply_toml if [users] section exists)
@@ -316,11 +325,12 @@ def _deprecation_warn(old_name: str, new_name: str):
         return
     _deprecation_warned.add(old_name)
     import sys
-    print(f"[FREQ] DEPRECATION: {old_name} detected. "
-          f"Migrate to {new_name} for long-term support.", file=sys.stderr)
+
+    print(f"[FREQ] DEPRECATION: {old_name} detected. Migrate to {new_name} for long-term support.", file=sys.stderr)
 
 
 import time as _time
+
 _config_cache = None
 _config_cache_ts = 0
 _CONFIG_TTL = 5  # seconds
@@ -364,6 +374,7 @@ def load_config(install_dir: Optional[str] = None, force: bool = False) -> FreqC
                 # Auto-migrate: write hosts.toml and stop reading hosts.conf
                 save_hosts_toml(cfg.hosts_file, cfg.hosts)
                 from freq.core import log as _logger
+
                 _logger.info("auto-migrated hosts.conf to hosts.toml")
     cfg.vlans = load_vlans(os.path.join(cfg.conf_dir, "vlans.toml"))
     cfg.distros = load_distros(os.path.join(cfg.conf_dir, "distros.toml"))
@@ -377,6 +388,7 @@ def load_config(install_dir: Optional[str] = None, force: bool = False) -> FreqC
 
     # Validate loaded config
     from freq.core import log as logger
+
     for w in _validate_config(cfg):
         logger.warn(f"config: {w}")
 
@@ -393,9 +405,10 @@ def _validate_config(cfg: FreqConfig) -> list:
     for host in cfg.hosts:
         if host.ip and not valid_ip(host.ip):
             warnings.append(f"Host {host.label}: invalid IP '{host.ip}'")
-        if hasattr(host, 'htype') and host.htype:
+        if hasattr(host, "htype") and host.htype:
             try:
                 from freq.deployers import resolve_htype
+
                 cat, vendor = resolve_htype(host.htype)
                 if cat == "unknown":
                     warnings.append(f"Host {host.label}: unknown type '{host.htype}'")
@@ -420,6 +433,7 @@ def _safe_int(value, default):
         return int(value)
     except (ValueError, TypeError):
         from freq.core import log as logger
+
         logger.warn(f"config: expected int, got {type(value).__name__}: {value!r}, using default {default}")
         return default
 
@@ -535,14 +549,17 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     users_section = data.get("users", {})
     if users_section:
         for username, info in users_section.items():
-            cfg._toml_users.append({
-                "username": username,
-                "role": info.get("role", "viewer") if isinstance(info, dict) else "viewer",
-                "groups": info.get("groups", "") if isinstance(info, dict) else "",
-            })
+            cfg._toml_users.append(
+                {
+                    "username": username,
+                    "role": info.get("role", "viewer") if isinstance(info, dict) else "viewer",
+                    "groups": info.get("groups", "") if isinstance(info, dict) else "",
+                }
+            )
 
 
 # --- Fleet Loaders ---
+
 
 def load_hosts(path: str) -> list:
     """Load hosts.conf — one host per line: IP LABEL TYPE [GROUPS] [ALL_IPS].
@@ -563,13 +580,15 @@ def load_hosts(path: str) -> list:
                 all_ips = []
                 if len(parts) > 4:
                     all_ips = [ip for ip in parts[4].split(",") if ip]
-                hosts.append(Host(
-                    ip=parts[0],
-                    label=parts[1],
-                    htype=parts[2],
-                    groups=parts[3] if len(parts) > 3 else "",
-                    all_ips=all_ips,
-                ))
+                hosts.append(
+                    Host(
+                        ip=parts[0],
+                        label=parts[1],
+                        htype=parts[2],
+                        groups=parts[3] if len(parts) > 3 else "",
+                        all_ips=all_ips,
+                    )
+                )
     except FileNotFoundError:
         pass
     return hosts
@@ -592,13 +611,15 @@ def load_hosts_toml(path: str) -> list:
         all_ips = entry.get("all_ips", [])
         if isinstance(all_ips, str):
             all_ips = [ip for ip in all_ips.split(",") if ip]
-        hosts.append(Host(
-            ip=entry.get("ip", ""),
-            label=entry.get("label", ""),
-            htype=entry.get("type", "linux"),
-            groups=entry.get("groups", ""),
-            all_ips=all_ips,
-        ))
+        hosts.append(
+            Host(
+                ip=entry.get("ip", ""),
+                label=entry.get("label", ""),
+                htype=entry.get("type", "linux"),
+                groups=entry.get("groups", ""),
+                all_ips=all_ips,
+            )
+        )
     return hosts
 
 
@@ -657,16 +678,18 @@ def _load_monitors(data: dict) -> list:
     for mon in data.get("monitor", []):
         if not mon.get("url"):
             continue
-        monitors.append(Monitor(
-            name=mon.get("name", mon["url"]),
-            url=mon["url"],
-            interval=int(mon.get("interval", 60)),
-            timeout=int(mon.get("timeout", 10)),
-            expected_status=int(mon.get("expected_status", 200)),
-            method=mon.get("method", "GET"),
-            keyword=mon.get("keyword", ""),
-            notify=mon.get("notify", True),
-        ))
+        monitors.append(
+            Monitor(
+                name=mon.get("name", mon["url"]),
+                url=mon["url"],
+                interval=int(mon.get("interval", 60)),
+                timeout=int(mon.get("timeout", 10)),
+                expected_status=int(mon.get("expected_status", 200)),
+                method=mon.get("method", "GET"),
+                keyword=mon.get("keyword", ""),
+                notify=mon.get("notify", True),
+            )
+        )
     return monitors
 
 
@@ -675,13 +698,15 @@ def load_vlans(path: str) -> list:
     data = load_toml(path)
     vlans = []
     for key, info in data.get("vlan", {}).items():
-        vlans.append(VLAN(
-            id=info.get("id", 0),
-            name=info.get("name", key),
-            subnet=info.get("subnet", ""),
-            prefix=info.get("prefix", ""),
-            gateway=info.get("gateway", ""),
-        ))
+        vlans.append(
+            VLAN(
+                id=info.get("id", 0),
+                name=info.get("name", key),
+                subnet=info.get("subnet", ""),
+                prefix=info.get("prefix", ""),
+                gateway=info.get("gateway", ""),
+            )
+        )
     return vlans
 
 
@@ -690,16 +715,18 @@ def load_distros(path: str) -> list:
     data = load_toml(path)
     distros = []
     for key, info in data.get("distro", {}).items():
-        distros.append(Distro(
-            key=key,
-            name=info.get("name", key),
-            url=info.get("url", ""),
-            filename=info.get("filename", ""),
-            sha_url=info.get("sha_url", ""),
-            family=info.get("family", ""),
-            tier=info.get("tier", "supported"),
-            aliases=info.get("aliases", []),
-        ))
+        distros.append(
+            Distro(
+                key=key,
+                name=info.get("name", key),
+                url=info.get("url", ""),
+                filename=info.get("filename", ""),
+                sha_url=info.get("sha_url", ""),
+                family=info.get("family", ""),
+                tier=info.get("tier", "supported"),
+                aliases=info.get("aliases", []),
+            )
+        )
     return distros
 
 

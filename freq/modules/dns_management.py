@@ -15,6 +15,7 @@ Design decisions:
     - Pi-hole v6 API via session auth. AdGuard via basic auth.
     - Unbound via SSH to pfSense — edit local-data entries.
 """
+
 import json
 import os
 import socket
@@ -58,6 +59,7 @@ def _save_dns_inventory(cfg, data):
 # ---------------------------------------------------------------------------
 # Commands — Internal DNS
 # ---------------------------------------------------------------------------
+
 
 def cmd_dns_internal_list(cfg: FreqConfig, pack, args) -> int:
     """List internal DNS records."""
@@ -105,13 +107,15 @@ def cmd_dns_internal_add(cfg: FreqConfig, pack, args) -> int:
             fmt.warn(f"Record already exists: {hostname} -> {ip}")
             return 0
 
-    records.append({
-        "hostname": hostname,
-        "ip": ip,
-        "type": "A",
-        "source": "manual",
-        "added": time.strftime("%Y-%m-%d"),
-    })
+    records.append(
+        {
+            "hostname": hostname,
+            "ip": ip,
+            "type": "A",
+            "source": "manual",
+            "added": time.strftime("%Y-%m-%d"),
+        }
+    )
     data["records"] = records
     _save_dns_inventory(cfg, data)
 
@@ -158,13 +162,15 @@ def cmd_dns_internal_sync(cfg: FreqConfig, pack, args) -> int:
     # Generate from hosts.toml
     added = 0
     for h in cfg.hosts:
-        records.append({
-            "hostname": f"{h.label}.freq.local",
-            "ip": h.ip,
-            "type": "A",
-            "source": "hosts.toml",
-            "added": time.strftime("%Y-%m-%d"),
-        })
+        records.append(
+            {
+                "hostname": f"{h.label}.freq.local",
+                "ip": h.ip,
+                "type": "A",
+                "source": "hosts.toml",
+                "added": time.strftime("%Y-%m-%d"),
+            }
+        )
         added += 1
 
     data["records"] = records

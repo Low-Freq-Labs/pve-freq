@@ -10,6 +10,7 @@ Usage:
     print(plat.init_system)   # "systemd"
     print(plat.os_family)     # "debian"
 """
+
 import dataclasses
 import os
 import platform as _platform
@@ -22,25 +23,25 @@ class Platform:
     """Immutable snapshot of the local platform."""
 
     # OS identity
-    os_id: str          # "debian", "ubuntu", "rocky", "arch", "alpine", "freebsd"
-    os_version: str     # "13", "24.04", "9.5"
-    os_family: str      # "debian", "rhel", "arch", "alpine", "suse", "gentoo", "void", "freebsd"
-    os_pretty: str      # "Debian GNU/Linux 13 (trixie)"
+    os_id: str  # "debian", "ubuntu", "rocky", "arch", "alpine", "freebsd"
+    os_version: str  # "13", "24.04", "9.5"
+    os_family: str  # "debian", "rhel", "arch", "alpine", "suse", "gentoo", "void", "freebsd"
+    os_pretty: str  # "Debian GNU/Linux 13 (trixie)"
 
     # Python
     python_version: tuple  # (3, 11, 2)
 
     # Init system
-    init_system: str    # "systemd", "openrc", "runit", "sysvinit", "rc.d", "unknown"
+    init_system: str  # "systemd", "openrc", "runit", "sysvinit", "rc.d", "unknown"
 
     # Package manager
-    pkg_manager: str    # "apt", "dnf", "yum", "pacman", "zypper", "apk", "xbps", "pkg", "emerge", "unknown"
+    pkg_manager: str  # "apt", "dnf", "yum", "pacman", "zypper", "apk", "xbps", "pkg", "emerge", "unknown"
 
     # Privilege escalation
-    sudo_group: str     # "sudo" or "wheel"
+    sudo_group: str  # "sudo" or "wheel"
 
     # Architecture
-    arch: str           # "x86_64", "aarch64", "armv7l"
+    arch: str  # "x86_64", "aarch64", "armv7l"
 
     # Key capabilities
     has_bash: bool

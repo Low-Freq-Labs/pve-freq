@@ -19,6 +19,7 @@ Design decisions:
     - Agent is a single Python file, not a package. SCP one file, create
       one service, done. No pip, no venv, no package manager on the target.
 """
+
 import json
 import os
 import time
@@ -39,6 +40,7 @@ AGENT_CHECK_TIMEOUT = 3
 AGENT_PORT = 9990  # default — overridden by cfg.agent_port at deploy time
 AGENT_REMOTE_PATH = "/opt/freq-agent/collector.py"
 SERVICE_NAME = "freq-agent"
+
 
 def _systemd_unit(port):
     return f"""[Unit]
@@ -99,9 +101,15 @@ def cmd_deploy_agent(cfg: FreqConfig, pack, args) -> int:
         fmt.step_start(f"{h.label}")
 
         # Step 1: Create directory
-        r = ssh_run(host=h.ip, command="mkdir -p /opt/freq-agent",
-                    key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
-                    command_timeout=DEPLOY_CMD_TIMEOUT, htype=h.htype, use_sudo=True)
+        r = ssh_run(
+            host=h.ip,
+            command="mkdir -p /opt/freq-agent",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=DEPLOY_QUICK_TIMEOUT,
+            command_timeout=DEPLOY_CMD_TIMEOUT,
+            htype=h.htype,
+            use_sudo=True,
+        )
         if r.returncode != 0:
             fmt.step_fail(f"{h.label}: cannot create directory")
             fail_count += 1
@@ -111,37 +119,66 @@ def cmd_deploy_agent(cfg: FreqConfig, pack, args) -> int:
         # Escape for shell
         escaped = agent_code.replace("'", "'\\''")
         upload_cmd = f"cat > {AGENT_REMOTE_PATH} << 'FREQAGENTEOF'\n{agent_code}\nFREQAGENTEOF"
-        r = ssh_run(host=h.ip, command=upload_cmd,
-                    key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
-                    command_timeout=DEPLOY_UPLOAD_TIMEOUT, htype=h.htype, use_sudo=True)
+        r = ssh_run(
+            host=h.ip,
+            command=upload_cmd,
+            key_path=cfg.ssh_key_path,
+            connect_timeout=DEPLOY_QUICK_TIMEOUT,
+            command_timeout=DEPLOY_UPLOAD_TIMEOUT,
+            htype=h.htype,
+            use_sudo=True,
+        )
         if r.returncode != 0:
             fmt.step_fail(f"{h.label}: cannot upload agent")
             fail_count += 1
             continue
 
         # Step 3: Make executable
-        ssh_run(host=h.ip, command=f"chmod +x {AGENT_REMOTE_PATH}",
-                key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
-                command_timeout=DEPLOY_QUICK_TIMEOUT, htype=h.htype, use_sudo=True)
+        ssh_run(
+            host=h.ip,
+            command=f"chmod +x {AGENT_REMOTE_PATH}",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=DEPLOY_QUICK_TIMEOUT,
+            command_timeout=DEPLOY_QUICK_TIMEOUT,
+            htype=h.htype,
+            use_sudo=True,
+        )
 
         # Step 4: Create systemd service
         unit_content = _systemd_unit(AGENT_PORT)
         service_cmd = f"cat > /etc/systemd/system/{SERVICE_NAME}.service << 'FREQSVCEOF'\n{unit_content}\nFREQSVCEOF"
-        r = ssh_run(host=h.ip, command=service_cmd,
-                    key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
-                    command_timeout=DEPLOY_CMD_TIMEOUT, htype=h.htype, use_sudo=True)
+        r = ssh_run(
+            host=h.ip,
+            command=service_cmd,
+            key_path=cfg.ssh_key_path,
+            connect_timeout=DEPLOY_QUICK_TIMEOUT,
+            command_timeout=DEPLOY_CMD_TIMEOUT,
+            htype=h.htype,
+            use_sudo=True,
+        )
 
         # Step 5: Enable and start
-        ssh_run(host=h.ip,
-                command=f"systemctl daemon-reload && systemctl enable {SERVICE_NAME} && systemctl restart {SERVICE_NAME}",
-                key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
-                command_timeout=DEPLOY_UPLOAD_TIMEOUT, htype=h.htype, use_sudo=True)
+        ssh_run(
+            host=h.ip,
+            command=f"systemctl daemon-reload && systemctl enable {SERVICE_NAME} && systemctl restart {SERVICE_NAME}",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=DEPLOY_QUICK_TIMEOUT,
+            command_timeout=DEPLOY_UPLOAD_TIMEOUT,
+            htype=h.htype,
+            use_sudo=True,
+        )
 
         # Step 6: Verify
         time.sleep(1)
-        r = ssh_run(host=h.ip, command=f"curl -s http://localhost:{AGENT_PORT}/health 2>/dev/null",
-                    key_path=cfg.ssh_key_path, connect_timeout=DEPLOY_QUICK_TIMEOUT,
-                    command_timeout=DEPLOY_QUICK_TIMEOUT, htype=h.htype, use_sudo=False)
+        r = ssh_run(
+            host=h.ip,
+            command=f"curl -s http://localhost:{AGENT_PORT}/health 2>/dev/null",
+            key_path=cfg.ssh_key_path,
+            connect_timeout=DEPLOY_QUICK_TIMEOUT,
+            command_timeout=DEPLOY_QUICK_TIMEOUT,
+            htype=h.htype,
+            use_sudo=False,
+        )
 
         if r.returncode == 0 and "ok" in r.stdout:
             fmt.step_ok(f"{h.label}: agent running on port {AGENT_PORT}")

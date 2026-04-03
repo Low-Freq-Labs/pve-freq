@@ -19,6 +19,7 @@ Design decisions:
     - Capture everything in one SSH call, not 8. Minimizes round trips
       and ensures all categories reflect the same point in time.
 """
+
 import json
 import os
 import time
@@ -104,11 +105,13 @@ def _list_baselines(cfg: FreqConfig) -> list:
             try:
                 with open(filepath, "r") as fh:
                     data = json.load(fh)
-                baselines.append({
-                    "name": f.replace(".json", ""),
-                    "timestamp": data.get("timestamp", "unknown"),
-                    "host_count": len(data.get("hosts", {})),
-                })
+                baselines.append(
+                    {
+                        "name": f.replace(".json", ""),
+                        "timestamp": data.get("timestamp", "unknown"),
+                        "host_count": len(data.get("hosts", {})),
+                    }
+                )
             except (json.JSONDecodeError, OSError):
                 baselines.append({"name": f.replace(".json", ""), "timestamp": "corrupt", "host_count": 0})
     return baselines
@@ -192,9 +195,11 @@ def _cmd_capture(cfg: FreqConfig, args) -> int:
             usr = len(data.get("users", []))
             net = len(data.get("network", []))
             dkr = len([d for d in data.get("docker", []) if d != "none"])
-            fmt.line(f"  {fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET} {h.label}: "
-                     f"{pkg} packages, {svc} services, {usr} users, "
-                     f"{net} interfaces, {dkr} containers")
+            fmt.line(
+                f"  {fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET} {h.label}: "
+                f"{pkg} packages, {svc} services, {usr} users, "
+                f"{net} interfaces, {dkr} containers"
+            )
         else:
             fmt.line(f"  {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {h.label}: unreachable")
 
@@ -278,29 +283,35 @@ def _cmd_compare(cfg: FreqConfig, args) -> int:
             removed = old_set - new_set
 
             if added or removed:
-                host_drifts.append({
-                    "section": section,
-                    "added": sorted(added),
-                    "removed": sorted(removed),
-                })
+                host_drifts.append(
+                    {
+                        "section": section,
+                        "added": sorted(added),
+                        "removed": sorted(removed),
+                    }
+                )
 
         # Check kernel change
         old_kernel = saved.get("kernel", [""])[0] if saved.get("kernel") else ""
         new_kernel = current.get("kernel", [""])[0] if current.get("kernel") else ""
         if old_kernel and new_kernel and old_kernel != new_kernel:
-            host_drifts.append({
-                "section": "kernel",
-                "added": [new_kernel],
-                "removed": [old_kernel],
-            })
+            host_drifts.append(
+                {
+                    "section": "kernel",
+                    "added": [new_kernel],
+                    "removed": [old_kernel],
+                }
+            )
 
         # Report
         if not host_drifts:
             fmt.line(f"  {fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET} {h.label}: no drift")
         else:
             total_drift += len(host_drifts)
-            fmt.line(f"  {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {h.label}: "
-                     f"{fmt.C.YELLOW}{len(host_drifts)} section(s) changed{fmt.C.RESET}")
+            fmt.line(
+                f"  {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {h.label}: "
+                f"{fmt.C.YELLOW}{len(host_drifts)} section(s) changed{fmt.C.RESET}"
+            )
 
             for drift in host_drifts:
                 section = drift["section"]
@@ -310,12 +321,12 @@ def _cmd_compare(cfg: FreqConfig, args) -> int:
                 if added:
                     # Show max 5 items
                     shown = added[:5]
-                    extra = f" (+{len(added)-5} more)" if len(added) > 5 else ""
+                    extra = f" (+{len(added) - 5} more)" if len(added) > 5 else ""
                     fmt.line(f"      {fmt.C.GREEN}+ {section}:{fmt.C.RESET} {', '.join(shown)}{extra}")
 
                 if removed:
                     shown = removed[:5]
-                    extra = f" (+{len(removed)-5} more)" if len(removed) > 5 else ""
+                    extra = f" (+{len(removed) - 5} more)" if len(removed) > 5 else ""
                     fmt.line(f"      {fmt.C.RED}- {section}:{fmt.C.RESET} {', '.join(shown)}{extra}")
 
     fmt.blank()

@@ -15,6 +15,7 @@ Design decisions:
     - Track issued certs in JSON for renewal/expiry monitoring.
     - Deploy is SCP + service reload via SSH — works everywhere.
 """
+
 import json
 import os
 import ssl
@@ -59,6 +60,7 @@ def _save_issued(cfg, data):
 # ---------------------------------------------------------------------------
 # Commands — Certificate Inspection
 # ---------------------------------------------------------------------------
+
 
 def cmd_cert_inspect(cfg: FreqConfig, pack, args) -> int:
     """Inspect TLS certificate on a host:port."""
@@ -116,6 +118,7 @@ def cmd_cert_inspect(cfg: FreqConfig, pack, args) -> int:
     # Check expiry
     try:
         from datetime import datetime
+
         expiry = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
         days_left = (expiry - datetime.utcnow()).days
         if days_left < 0:
@@ -158,10 +161,14 @@ def cmd_cert_fleet_check(cfg: FreqConfig, pack, args) -> int:
                             not_after = cert.get("notAfter", "")
                             subject = dict(x[0] for x in cert.get("subject", []))
                             cn = subject.get("commonName", "?")
-                            results.append({
-                                "host": h.label, "port": port,
-                                "cn": cn, "expires": not_after,
-                            })
+                            results.append(
+                                {
+                                    "host": h.label,
+                                    "port": port,
+                                    "cn": cn,
+                                    "expires": not_after,
+                                }
+                            )
             except (ConnectionRefusedError, socket.timeout, OSError):
                 continue
 

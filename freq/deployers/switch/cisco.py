@@ -25,6 +25,7 @@ Known quirks:
     - 'terminal length 0' before show commands to disable paging.
     - 'write memory' not 'copy run start' on older IOS.
 """
+
 import re
 
 from freq.core.ssh import run as ssh_run
@@ -39,6 +40,7 @@ NEEDS_RSA = True
 # SSH helper — wraps ssh_run with switch defaults
 # ---------------------------------------------------------------------------
 
+
 def _ssh(ip, cmd, cfg, timeout=15):
     """Run a command on a Cisco switch via SSH.
 
@@ -48,11 +50,13 @@ def _ssh(ip, cmd, cfg, timeout=15):
     full_cmd = f"terminal length 0 ; {cmd}"
     key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
     r = ssh_run(
-        host=ip, command=full_cmd,
+        host=ip,
+        command=full_cmd,
         key_path=key,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
-        htype="switch", use_sudo=False,
+        htype="switch",
+        use_sudo=False,
     )
     ok = r.returncode == 0 and "% Invalid" not in (r.stdout or "")
     return r.stdout or "", ok
@@ -62,21 +66,25 @@ def _ssh(ip, cmd, cfg, timeout=15):
 # Deploy / Remove (existing — delegates to init_cmd)
 # ---------------------------------------------------------------------------
 
+
 def deploy(ip, ctx, auth_pass, auth_key, auth_user):
     """Deploy FREQ service account to Cisco IOS switch."""
     from freq.modules.init_cmd import _deploy_switch
+
     return _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user)
 
 
 def remove(ip, svc_name, key_path, rsa_key_path=None):
     """Remove FREQ service account from Cisco IOS switch."""
     from freq.modules.init_cmd import _remove_switch
+
     return _remove_switch(ip, svc_name, rsa_key_path or key_path)
 
 
 # ---------------------------------------------------------------------------
 # Getter Interface
 # ---------------------------------------------------------------------------
+
 
 def get_facts(ip, cfg):
     """Return device identity: hostname, model, serial, uptime, OS version."""
@@ -171,6 +179,7 @@ def get_environment(ip, cfg):
 # Setter Interface
 # ---------------------------------------------------------------------------
 
+
 def push_config(ip, cfg, lines):
     """Push config lines to device. Returns True on success."""
     config_block = "\n".join(["configure terminal"] + list(lines) + ["end"])
@@ -190,6 +199,7 @@ def save_config(ip, cfg):
 # Port Getters
 # ---------------------------------------------------------------------------
 
+
 def get_port_status(ip, cfg):
     """Return per-port status: name, status, vlan, speed, duplex, description."""
     return get_interfaces(ip, cfg)
@@ -206,6 +216,7 @@ def get_poe_status(ip, cfg):
 # ---------------------------------------------------------------------------
 # Port Setters
 # ---------------------------------------------------------------------------
+
 
 def set_port_vlan(ip, cfg, port, vlan, mode="access"):
     """Set port VLAN and mode. Returns True on success."""
@@ -250,6 +261,7 @@ def apply_profile_lines(ip, cfg, port, config_lines):
 # VLAN Management
 # ---------------------------------------------------------------------------
 
+
 def create_vlan(ip, cfg, vlan_id, vlan_name=""):
     """Create a VLAN. Returns True on success."""
     lines = [f"vlan {vlan_id}"]
@@ -272,6 +284,7 @@ def delete_vlan(ip, cfg, vlan_id):
 # ---------------------------------------------------------------------------
 # ACL Management
 # ---------------------------------------------------------------------------
+
 
 def get_acls(ip, cfg):
     """Return list of access-lists on the device."""
@@ -304,10 +317,14 @@ def delete_acl(ip, cfg, acl_name):
 
 def apply_acl_to_interface(ip, cfg, port, acl_name, direction="in"):
     """Apply a named ACL to an interface. direction: in or out."""
-    ok = push_config(ip, cfg, [
-        f"interface {port}",
-        f"ip access-group {acl_name} {direction}",
-    ])
+    ok = push_config(
+        ip,
+        cfg,
+        [
+            f"interface {port}",
+            f"ip access-group {acl_name} {direction}",
+        ],
+    )
     if ok:
         save_config(ip, cfg)
     return ok
@@ -315,10 +332,14 @@ def apply_acl_to_interface(ip, cfg, port, acl_name, direction="in"):
 
 def remove_acl_from_interface(ip, cfg, port, acl_name, direction="in"):
     """Remove a named ACL from an interface."""
-    ok = push_config(ip, cfg, [
-        f"interface {port}",
-        f"no ip access-group {acl_name} {direction}",
-    ])
+    ok = push_config(
+        ip,
+        cfg,
+        [
+            f"interface {port}",
+            f"no ip access-group {acl_name} {direction}",
+        ],
+    )
     if ok:
         save_config(ip, cfg)
     return ok
@@ -328,13 +349,14 @@ def remove_acl_from_interface(ip, cfg, port, acl_name, direction="in"):
 # Config Rollback
 # ---------------------------------------------------------------------------
 
+
 def _parse_acls(text):
     """Parse 'show access-lists' output."""
     acls = []
     current = None
     for line in text.splitlines():
         line = line.strip()
-        m = re.match(r'^(Extended|Standard)\s+IP\s+access\s+list\s+(\S+)', line)
+        m = re.match(r"^(Extended|Standard)\s+IP\s+access\s+list\s+(\S+)", line)
         if m:
             if current:
                 acls.append(current)
@@ -349,6 +371,7 @@ def _parse_acls(text):
 # ---------------------------------------------------------------------------
 # Parsers — IOS show command output to structured data
 # ---------------------------------------------------------------------------
+
 
 def _parse_show_version(text):
     """Parse 'show version' into facts dict."""
@@ -433,8 +456,7 @@ def _parse_interfaces_status(text):
         name = ""
 
         # Status keywords to find the status column
-        status_words = {"connected", "notconnect", "disabled", "err-disabled",
-                        "monitoring", "faulty", "inactive"}
+        status_words = {"connected", "notconnect", "disabled", "err-disabled", "monitoring", "faulty", "inactive"}
 
         # Find which token is the status
         status_idx = -1
@@ -446,7 +468,7 @@ def _parse_interfaces_status(text):
         if status_idx > 0:
             name = " ".join(parts[1:status_idx])
             status = parts[status_idx]
-            remaining = parts[status_idx + 1:]
+            remaining = parts[status_idx + 1 :]
             if len(remaining) >= 1:
                 vlan = remaining[0]
             if len(remaining) >= 2:
@@ -454,14 +476,16 @@ def _parse_interfaces_status(text):
             if len(remaining) >= 3:
                 speed = remaining[2]
 
-        interfaces.append({
-            "name": port,
-            "description": name,
-            "status": status,
-            "vlan": vlan,
-            "duplex": duplex,
-            "speed": speed,
-        })
+        interfaces.append(
+            {
+                "name": port,
+                "description": name,
+                "status": status,
+                "vlan": vlan,
+                "duplex": duplex,
+                "speed": speed,
+            }
+        )
 
     return interfaces
 
@@ -489,12 +513,14 @@ def _parse_vlan_brief(text):
             status = m.group(3)
             ports_str = m.group(4).strip()
             ports = [p.strip() for p in ports_str.split(",") if p.strip()] if ports_str else []
-            vlans.append({
-                "id": vlan_id,
-                "name": name,
-                "status": status,
-                "ports": ports,
-            })
+            vlans.append(
+                {
+                    "id": vlan_id,
+                    "name": name,
+                    "status": status,
+                    "ports": ports,
+                }
+            )
         elif vlans and line.startswith(" "):
             # Continuation line — more ports for the previous VLAN
             extra = [p.strip() for p in line.strip().split(",") if p.strip()]
@@ -512,12 +538,14 @@ def _parse_mac_table(text):
         # Skip header/footer lines
         m = re.match(r"^\s*(\d+)\s+([\da-fA-F]{4}\.[\da-fA-F]{4}\.[\da-fA-F]{4})\s+(\S+)\s+(\S+)", line)
         if m:
-            entries.append({
-                "vlan": int(m.group(1)),
-                "mac": m.group(2).lower(),
-                "type": m.group(3).lower(),
-                "port": m.group(4),
-            })
+            entries.append(
+                {
+                    "vlan": int(m.group(1)),
+                    "mac": m.group(2).lower(),
+                    "type": m.group(3).lower(),
+                    "port": m.group(4),
+                }
+            )
 
     return entries
 
@@ -533,12 +561,14 @@ def _parse_arp_table(text):
             line,
         )
         if m:
-            entries.append({
-                "ip": m.group(1),
-                "age": m.group(2),
-                "mac": m.group(3).lower(),
-                "interface": m.group(4),
-            })
+            entries.append(
+                {
+                    "ip": m.group(1),
+                    "age": m.group(2),
+                    "mac": m.group(3).lower(),
+                    "interface": m.group(4),
+                }
+            )
 
     return entries
 
@@ -610,26 +640,32 @@ def _parse_environment(text):
             # Various formats: "1   Inlet     28 C    (0 C  - 45 C)"
             m = re.match(r"^\s*\d+\s+(\S+)\s+(\d+)\s*C", line)
             if m:
-                result["temperature"].append({
-                    "sensor": m.group(1),
-                    "celsius": int(m.group(2)),
-                })
+                result["temperature"].append(
+                    {
+                        "sensor": m.group(1),
+                        "celsius": int(m.group(2)),
+                    }
+                )
 
         elif section == "fans":
             parts = line.split()
             if len(parts) >= 2:
-                result["fans"].append({
-                    "name": parts[0],
-                    "status": parts[-1],
-                })
+                result["fans"].append(
+                    {
+                        "name": parts[0],
+                        "status": parts[-1],
+                    }
+                )
 
         elif section == "power":
             parts = line.split()
             if len(parts) >= 2:
-                result["power"].append({
-                    "name": parts[0],
-                    "status": parts[-1],
-                })
+                result["power"].append(
+                    {
+                        "name": parts[0],
+                        "status": parts[-1],
+                    }
+                )
 
     return result
 
@@ -677,13 +713,15 @@ def _parse_power_inline(text):
             if len(parts) > 5 and not parts[5].replace(".", "").isdigit():
                 device += " " + parts[5]
 
-        entries.append({
-            "port": port,
-            "admin": admin,
-            "oper": oper,
-            "watts": watts,
-            "device": device,
-        })
+        entries.append(
+            {
+                "port": port,
+                "admin": admin,
+                "oper": oper,
+                "watts": watts,
+                "device": device,
+            }
+        )
 
     return entries
 

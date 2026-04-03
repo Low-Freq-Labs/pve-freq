@@ -18,6 +18,7 @@ Design decisions:
     - Uses stdlib socket, not dig/nslookup. Works on any platform without
       bind-utils installed. DNS resolution uses the host's resolver config.
 """
+
 import json
 import os
 import socket
@@ -90,7 +91,8 @@ def _gather_dns_info(cfg: FreqConfig) -> list:
     )
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=DNS_CMD_TIMEOUT,
@@ -144,12 +146,10 @@ def _gather_dns_info(cfg: FreqConfig) -> list:
         # Reverse lookup
         entry["reverse_hostname"] = _reverse_lookup(h.ip)
         if entry["reverse_hostname"]:
-            if (entry["reverse_hostname"] == entry["hostname"] or
-                    entry["reverse_hostname"] == entry["short"]):
+            if entry["reverse_hostname"] == entry["hostname"] or entry["reverse_hostname"] == entry["short"]:
                 entry["reverse_match"] = True
             else:
-                entry["issues"].append(
-                    f"Reverse DNS returns '{entry['reverse_hostname']}' not '{entry['hostname']}'")
+                entry["issues"].append(f"Reverse DNS returns '{entry['reverse_hostname']}' not '{entry['hostname']}'")
         else:
             entry["issues"].append("No PTR record (reverse DNS failed)")
 
@@ -200,14 +200,26 @@ def _cmd_scan(cfg: FreqConfig, args) -> int:
 
     # Display
     fmt.table_header(
-        ("HOST", 14), ("IP", 16), ("HOSTNAME", 22),
-        ("FWD", 5), ("REV", 5), ("ISSUES", 24),
+        ("HOST", 14),
+        ("IP", 16),
+        ("HOSTNAME", 22),
+        ("FWD", 5),
+        ("REV", 5),
+        ("ISSUES", 24),
     )
 
     issues_total = 0
     for rec in records:
-        fwd = f"{fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET}" if rec["forward_match"] else f"{fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET}"
-        rev = f"{fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET}" if rec["reverse_match"] else f"{fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET}"
+        fwd = (
+            f"{fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET}"
+            if rec["forward_match"]
+            else f"{fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET}"
+        )
+        rev = (
+            f"{fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET}"
+            if rec["reverse_match"]
+            else f"{fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET}"
+        )
         issues = "; ".join(rec["issues"])[:24] if rec["issues"] else ""
         issues_total += len(rec["issues"])
 
@@ -251,7 +263,7 @@ def _cmd_check(cfg: FreqConfig, args) -> int:
     fmt.blank()
 
     # Determine if it's an IP or hostname
-    is_ip = all(c.isdigit() or c == '.' for c in target)
+    is_ip = all(c.isdigit() or c == "." for c in target)
 
     if is_ip:
         fmt.step_start(f"Reverse lookup: {target}")

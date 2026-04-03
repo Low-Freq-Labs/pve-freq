@@ -19,17 +19,36 @@ from freq.core.ssh import run_many as ssh_run_many
 def handle_keys(handler):
     """GET /api/keys -- SSH key inventory across fleet."""
     cfg = load_config()
-    results = ssh_run_many(hosts=cfg.hosts, command="cat ~/.ssh/authorized_keys 2>/dev/null | wc -l",
-                       key_path=cfg.ssh_key_path, connect_timeout=3, command_timeout=5,
-                       max_parallel=10, use_sudo=False, cfg=cfg)
+    results = ssh_run_many(
+        hosts=cfg.hosts,
+        command="cat ~/.ssh/authorized_keys 2>/dev/null | wc -l",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=3,
+        command_timeout=5,
+        max_parallel=10,
+        use_sudo=False,
+        cfg=cfg,
+    )
     keys = []
     for h in cfg.hosts:
         r = results.get(h.label)
         err = r.stderr or "" if r else ""
-        down = r is None or r.returncode == 124 or "Connection timed out" in err or "Connection refused" in err or "No route to host" in err
+        down = (
+            r is None
+            or r.returncode == 124
+            or "Connection timed out" in err
+            or "Connection refused" in err
+            or "No route to host" in err
+        )
         reachable = not down
-        keys.append({"host": h.label, "ip": h.ip, "reachable": reachable,
-                     "key_count": int(r.stdout.strip()) if r and r.returncode == 0 and r.stdout.strip().isdigit() else 0})
+        keys.append(
+            {
+                "host": h.label,
+                "ip": h.ip,
+                "reachable": reachable,
+                "key_count": int(r.stdout.strip()) if r and r.returncode == 0 and r.stdout.strip().isdigit() else 0,
+            }
+        )
     json_response(handler, {"hosts": keys, "ssh_key": cfg.ssh_key_path})
 
 

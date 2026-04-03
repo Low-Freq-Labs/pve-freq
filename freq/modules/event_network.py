@@ -20,6 +20,7 @@ Design decisions:
     - Deploy is idempotent — running it twice produces the same result.
     - Wipe requires --confirm flag. No accidental network teardowns.
 """
+
 import json
 import os
 import time
@@ -40,6 +41,7 @@ ARCHIVES_DIR = "event-archives"
 # ─────────────────────────────────────────────────────────────
 # TEMPLATE STORAGE — Load, save, list event templates as TOML
 # ─────────────────────────────────────────────────────────────
+
 
 def _templates_dir(cfg):
     """Return path to event templates directory, creating if needed."""
@@ -81,9 +83,7 @@ def _list_templates(cfg):
 def _save_template(cfg, name, data):
     """Save an event template as TOML."""
     filepath = os.path.join(_templates_dir(cfg), f"{name}.toml")
-    lines = [f"# FREQ Event Template: {name}",
-             f"# Created: {time.strftime('%Y-%m-%d %H:%M:%S')}",
-             ""]
+    lines = [f"# FREQ Event Template: {name}", f"# Created: {time.strftime('%Y-%m-%d %H:%M:%S')}", ""]
 
     for section, content in data.items():
         if isinstance(content, dict):
@@ -123,6 +123,7 @@ def _toml_val(v):
 # COMMANDS — Event lifecycle: create, list, show, plan, deploy, verify, wipe
 # ─────────────────────────────────────────────────────────────
 
+
 def cmd_event_create(cfg: FreqConfig, pack, args) -> int:
     """Create a new event project with a template."""
     name = getattr(args, "name", None)
@@ -153,13 +154,16 @@ def cmd_event_create(cfg: FreqConfig, pack, args) -> int:
 
     # Pull switches from hosts.conf
     from freq.modules.switch_orchestration import _get_switch_hosts
+
     switches = _get_switch_hosts(cfg)
     for sw in switches:
-        template["switches"].append({
-            "label": sw.label,
-            "ip": sw.ip,
-            "role": "access",
-        })
+        template["switches"].append(
+            {
+                "label": sw.label,
+                "ip": sw.ip,
+                "role": "access",
+            }
+        )
 
     # Pull VLANs from vlans.toml
     vlans_path = os.path.join(cfg.conf_dir, "vlans.toml")
@@ -171,11 +175,13 @@ def cmd_event_create(cfg: FreqConfig, pack, args) -> int:
         with open(vlans_path, "rb") as f:
             vlan_data = tomllib.load(f)
         for vname, vinfo in vlan_data.get("vlan", {}).items():
-            template["vlans"].append({
-                "name": vname,
-                "id": vinfo.get("id", 0),
-                "subnet": vinfo.get("subnet", ""),
-            })
+            template["vlans"].append(
+                {
+                    "name": vname,
+                    "id": vinfo.get("id", 0),
+                    "subnet": vinfo.get("subnet", ""),
+                }
+            )
 
     filepath = _save_template(cfg, name, template)
 
@@ -252,9 +258,11 @@ def cmd_event_show(cfg: FreqConfig, pack, args) -> int:
         for sw in switches:
             profile = sw.get("profile", "—")
             ports = sw.get("ports", "—")
-            fmt.line(f"  {fmt.C.CYAN}{sw.get('label', '?'):<16}{fmt.C.RESET} "
-                     f"{sw.get('ip', '?'):<16} role={sw.get('role', '?'):<8} "
-                     f"profile={profile}  ports={ports}")
+            fmt.line(
+                f"  {fmt.C.CYAN}{sw.get('label', '?'):<16}{fmt.C.RESET} "
+                f"{sw.get('ip', '?'):<16} role={sw.get('role', '?'):<8} "
+                f"profile={profile}  ports={ports}"
+            )
         fmt.blank()
 
     # VLANs
@@ -262,8 +270,9 @@ def cmd_event_show(cfg: FreqConfig, pack, args) -> int:
     if vlans:
         fmt.line(f"{fmt.C.BOLD}VLANs ({len(vlans)}):{fmt.C.RESET}")
         for v in vlans:
-            fmt.line(f"  {fmt.C.CYAN}{v.get('id', '?'):>5}{fmt.C.RESET}  "
-                     f"{v.get('name', '?'):<16} {v.get('subnet', '')}")
+            fmt.line(
+                f"  {fmt.C.CYAN}{v.get('id', '?'):>5}{fmt.C.RESET}  {v.get('name', '?'):<16} {v.get('subnet', '')}"
+            )
         fmt.blank()
 
     # Port assignments
@@ -271,8 +280,7 @@ def cmd_event_show(cfg: FreqConfig, pack, args) -> int:
     if assignments:
         fmt.line(f"{fmt.C.BOLD}Port Assignments ({len(assignments)}):{fmt.C.RESET}")
         for a in assignments:
-            fmt.line(f"  {a.get('switch', '?')} {a.get('ports', '?')} -> "
-                     f"profile={a.get('profile', '?')}")
+            fmt.line(f"  {a.get('switch', '?')} {a.get('ports', '?')} -> profile={a.get('profile', '?')}")
         fmt.blank()
 
     fmt.footer()
@@ -359,7 +367,10 @@ def cmd_event_deploy(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     from freq.modules.switch_orchestration import (
-        _resolve_target, _get_deployer, _load_profiles, _expand_port_range,
+        _resolve_target,
+        _get_deployer,
+        _load_profiles,
+        _expand_port_range,
     )
 
     fmt.header(f"Deploy Event: {name}", breadcrumb="FREQ > Event")
@@ -398,6 +409,7 @@ def cmd_event_deploy(cfg: FreqConfig, pack, args) -> int:
             config_lines = deployer.profile_to_config_lines(profile)
         else:
             from freq.deployers.switch.cisco import profile_to_config_lines
+
             config_lines = profile_to_config_lines(profile)
 
         ports = _expand_port_range(port_range)
@@ -442,7 +454,9 @@ def cmd_event_verify(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     from freq.modules.switch_orchestration import (
-        _resolve_target, _get_deployer, _load_profiles,
+        _resolve_target,
+        _get_deployer,
+        _load_profiles,
     )
 
     fmt.header(f"Verify Event: {name}", breadcrumb="FREQ > Event")
@@ -481,6 +495,7 @@ def cmd_event_verify(cfg: FreqConfig, pack, args) -> int:
         # Check that ports assigned to this profile have the right VLAN
         port_range = assignment.get("ports", "")
         from freq.modules.switch_orchestration import _expand_port_range
+
         ports = _expand_port_range(port_range)
 
         mismatches = []
@@ -537,7 +552,9 @@ def cmd_event_wipe(cfg: FreqConfig, pack, args) -> int:
         return 0
 
     from freq.modules.switch_orchestration import (
-        _resolve_target, _get_deployer, _expand_port_range,
+        _resolve_target,
+        _get_deployer,
+        _expand_port_range,
     )
 
     fmt.header(f"Wipe Event: {name}", breadcrumb="FREQ > Event")
@@ -593,6 +610,7 @@ def cmd_event_wipe(cfg: FreqConfig, pack, args) -> int:
 # ARCHIVE & CLEANUP — Archive completed events, delete templates
 # ─────────────────────────────────────────────────────────────
 
+
 def cmd_event_archive(cfg: FreqConfig, pack, args) -> int:
     """Archive an event — save configs and reports, then remove template."""
     name = getattr(args, "name", None)
@@ -615,6 +633,7 @@ def cmd_event_archive(cfg: FreqConfig, pack, args) -> int:
 
     # Copy template
     import shutil
+
     src_template = os.path.join(_templates_dir(cfg), f"{name}.toml")
     shutil.copy2(src_template, os.path.join(archive_path, f"{name}.toml"))
     fmt.step_ok("Template archived")

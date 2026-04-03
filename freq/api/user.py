@@ -28,16 +28,19 @@ def handle_user_create(handler):
     """POST /api/users/create -- create a new user."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
     cfg = load_config()
     params = _parse_query(handler)
     username = params.get("username", [""])[0]
     role = params.get("role", ["operator"])[0]
     if not username:
-        json_response(handler, {"error": "Username required"}); return
+        json_response(handler, {"error": "Username required"})
+        return
     users = _load_users(cfg)
     if any(u["username"] == username for u in users):
-        json_response(handler, {"error": f"User '{username}' already exists"}); return
+        json_response(handler, {"error": f"User '{username}' already exists"})
+        return
     users.append({"username": username, "role": role, "groups": ""})
     ok = _save_users(cfg, users)
     json_response(handler, {"ok": ok, "username": username, "role": role})
@@ -47,17 +50,20 @@ def handle_user_promote(handler):
     """POST /api/users/promote -- promote a user."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
     cfg = load_config()
     params = _parse_query(handler)
     username = params.get("username", [""])[0]
     users = _load_users(cfg)
     user = next((u for u in users if u["username"] == username), None)
     if not user:
-        json_response(handler, {"error": f"User not found: {username}"}); return
+        json_response(handler, {"error": f"User not found: {username}"})
+        return
     lvl = _role_level(user["role"])
     if lvl >= _role_level("admin"):
-        json_response(handler, {"error": "Already at max role"}); return
+        json_response(handler, {"error": "Already at max role"})
+        return
     old = user["role"]
     user["role"] = ROLE_HIERARCHY[lvl + 1]
     _save_users(cfg, users)
@@ -68,17 +74,20 @@ def handle_user_demote(handler):
     """POST /api/users/demote -- demote a user."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
     cfg = load_config()
     params = _parse_query(handler)
     username = params.get("username", [""])[0]
     users = _load_users(cfg)
     user = next((u for u in users if u["username"] == username), None)
     if not user:
-        json_response(handler, {"error": f"User not found: {username}"}); return
+        json_response(handler, {"error": f"User not found: {username}"})
+        return
     lvl = _role_level(user["role"])
     if lvl <= 0:
-        json_response(handler, {"error": "Already at min role"}); return
+        json_response(handler, {"error": "Already at min role"})
+        return
     old = user["role"]
     user["role"] = ROLE_HIERARCHY[lvl - 1]
     _save_users(cfg, users)

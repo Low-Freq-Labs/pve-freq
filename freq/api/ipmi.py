@@ -36,8 +36,14 @@ def _ipmitool(ip, user, password, *args):
     exposing it in ps aux output. Timeout of 15 seconds.
     """
     cmd = [
-        "ipmitool", "-I", "lanplus",
-        "-H", ip, "-U", user, "-E",
+        "ipmitool",
+        "-I",
+        "lanplus",
+        "-H",
+        ip,
+        "-U",
+        user,
+        "-E",
     ] + list(args)
     env = os.environ.copy()
     env["IPMI_PASSWORD"] = password
@@ -72,10 +78,7 @@ def _resolve_ipmi_targets(cfg, target=None):
             targets[dev.label] = dev.ip
 
     if target:
-        matched = {
-            k: v for k, v in targets.items()
-            if target.lower() in k.lower()
-        }
+        matched = {k: v for k, v in targets.items() if target.lower() in k.lower()}
         return matched if matched else {}
 
     return targets
@@ -102,23 +105,27 @@ def _run_ipmi_for_targets(cfg, targets, *ipmi_args):
     for label, ip in targets.items():
         user, password = _get_bmc_creds(cfg, label)
         if not user:
-            results.append({
-                "name": label,
-                "ip": ip,
-                "reachable": False,
-                "output": "",
-                "error": "BMC credentials not found in vault",
-            })
+            results.append(
+                {
+                    "name": label,
+                    "ip": ip,
+                    "reachable": False,
+                    "output": "",
+                    "error": "BMC credentials not found in vault",
+                }
+            )
             continue
 
         stdout, ok = _ipmitool(ip, user, password, *ipmi_args)
-        results.append({
-            "name": label,
-            "ip": ip,
-            "reachable": ok,
-            "output": stdout[:4000] if ok else "",
-            "error": stdout[:200] if not ok else "",
-        })
+        results.append(
+            {
+                "name": label,
+                "ip": ip,
+                "reachable": ok,
+                "output": stdout[:4000] if ok else "",
+                "error": stdout[:200] if not ok else "",
+            }
+        )
     return results
 
 
@@ -136,34 +143,45 @@ def handle_ipmi_status(handler):
     targets = _resolve_ipmi_targets(cfg, target or None)
 
     if not targets:
-        json_response(handler, {
-            "error": "No IPMI targets found" + (f" matching '{target}'" if target else ""),
-            "hint": "Add physical devices with type 'ipmi' to fleet-boundaries.toml",
-        }, 404)
+        json_response(
+            handler,
+            {
+                "error": "No IPMI targets found" + (f" matching '{target}'" if target else ""),
+                "hint": "Add physical devices with type 'ipmi' to fleet-boundaries.toml",
+            },
+            404,
+        )
         return
 
     results = []
     for label, ip in targets.items():
         user, password = _get_bmc_creds(cfg, label)
         if not user:
-            results.append({
-                "name": label, "ip": ip, "reachable": False,
-                "mc_info": "", "power_status": "",
-                "error": "BMC credentials not found in vault",
-            })
+            results.append(
+                {
+                    "name": label,
+                    "ip": ip,
+                    "reachable": False,
+                    "mc_info": "",
+                    "power_status": "",
+                    "error": "BMC credentials not found in vault",
+                }
+            )
             continue
 
         mc_out, mc_ok = _ipmitool(ip, user, password, "mc", "info")
         pwr_out, pwr_ok = _ipmitool(ip, user, password, "chassis", "power", "status")
 
-        results.append({
-            "name": label,
-            "ip": ip,
-            "reachable": mc_ok or pwr_ok,
-            "mc_info": mc_out[:2000] if mc_ok else "",
-            "power_status": pwr_out.strip() if pwr_ok else "",
-            "error": (mc_out[:200] if not mc_ok else "") or (pwr_out[:200] if not pwr_ok else ""),
-        })
+        results.append(
+            {
+                "name": label,
+                "ip": ip,
+                "reachable": mc_ok or pwr_ok,
+                "mc_info": mc_out[:2000] if mc_ok else "",
+                "power_status": pwr_out.strip() if pwr_ok else "",
+                "error": (mc_out[:200] if not mc_ok else "") or (pwr_out[:200] if not pwr_ok else ""),
+            }
+        )
 
     json_response(handler, {"targets": results})
 
@@ -178,9 +196,13 @@ def handle_ipmi_sensors(handler):
     targets = _resolve_ipmi_targets(cfg, target or None)
 
     if not targets:
-        json_response(handler, {
-            "error": "No IPMI targets found" + (f" matching '{target}'" if target else ""),
-        }, 404)
+        json_response(
+            handler,
+            {
+                "error": "No IPMI targets found" + (f" matching '{target}'" if target else ""),
+            },
+            404,
+        )
         return
 
     results = _run_ipmi_for_targets(cfg, targets, "sdr", "list")
@@ -197,19 +219,28 @@ def handle_ipmi_sel(handler):
     targets = _resolve_ipmi_targets(cfg, target or None)
 
     if not targets:
-        json_response(handler, {
-            "error": "No IPMI targets found" + (f" matching '{target}'" if target else ""),
-        }, 404)
+        json_response(
+            handler,
+            {
+                "error": "No IPMI targets found" + (f" matching '{target}'" if target else ""),
+            },
+            404,
+        )
         return
 
     results = []
     for label, ip in targets.items():
         user, password = _get_bmc_creds(cfg, label)
         if not user:
-            results.append({
-                "name": label, "ip": ip, "reachable": False,
-                "output": "", "error": "BMC credentials not found in vault",
-            })
+            results.append(
+                {
+                    "name": label,
+                    "ip": ip,
+                    "reachable": False,
+                    "output": "",
+                    "error": "BMC credentials not found in vault",
+                }
+            )
             continue
 
         stdout, ok = _ipmitool(ip, user, password, "sel", "list")
@@ -219,14 +250,16 @@ def handle_ipmi_sel(handler):
             trimmed = lines[-20:] if len(lines) > 20 else lines
             stdout = "\n".join(trimmed)
 
-        results.append({
-            "name": label,
-            "ip": ip,
-            "reachable": ok,
-            "output": stdout[:4000] if ok else "",
-            "entries": len(stdout.strip().split("\n")) if ok and stdout.strip() else 0,
-            "error": stdout[:200] if not ok else "",
-        })
+        results.append(
+            {
+                "name": label,
+                "ip": ip,
+                "reachable": ok,
+                "output": stdout[:4000] if ok else "",
+                "entries": len(stdout.strip().split("\n")) if ok and stdout.strip() else 0,
+                "error": stdout[:200] if not ok else "",
+            }
+        )
 
     json_response(handler, {"targets": results})
 
@@ -256,9 +289,13 @@ def handle_ipmi_power(handler):
 
     valid_actions = ("on", "off", "cycle", "reset", "status")
     if action not in valid_actions:
-        json_response(handler, {
-            "error": f"Invalid action: '{action}'. Must be one of: {', '.join(valid_actions)}",
-        }, 400)
+        json_response(
+            handler,
+            {
+                "error": f"Invalid action: '{action}'. Must be one of: {', '.join(valid_actions)}",
+            },
+            400,
+        )
         return
 
     cfg = load_config()
@@ -293,9 +330,13 @@ def handle_ipmi_boot(handler):
 
     valid_devices = ("pxe", "bios", "disk", "cdrom")
     if device not in valid_devices:
-        json_response(handler, {
-            "error": f"Invalid device: '{device}'. Must be one of: {', '.join(valid_devices)}",
-        }, 400)
+        json_response(
+            handler,
+            {
+                "error": f"Invalid device: '{device}'. Must be one of: {', '.join(valid_devices)}",
+            },
+            400,
+        )
         return
 
     cfg = load_config()

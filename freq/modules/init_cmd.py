@@ -24,6 +24,7 @@ Design decisions:
     - --check validates existing install, --fix repairs broken hosts.
     - --uninstall removes FREQ service account from all hosts.
 """
+
 import base64
 import datetime
 import getpass
@@ -79,8 +80,8 @@ MARKER_CHPASSWD_FAIL = "CHPASSWD_FAIL"
 MARKER_CLEAN_OK = "CLEAN_OK"
 
 # Input validation patterns
-_VALID_USERNAME = re.compile(r'^[a-z_][a-z0-9_-]{0,31}$')
-_VALID_LABEL = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$')
+_VALID_USERNAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+_VALID_LABEL = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
 
 
 def _validate_username(name):
@@ -138,8 +139,7 @@ def _run_with_input(cmd, input_text, timeout=DEFAULT_CMD_TIMEOUT):
     not passed as SSH exec arguments.
     """
     try:
-        r = subprocess.run(cmd, input=input_text, capture_output=True,
-                           text=True, timeout=timeout)
+        r = subprocess.run(cmd, input=input_text, capture_output=True, text=True, timeout=timeout)
         return r.returncode, r.stdout, r.stderr
     except Exception as e:
         return 1, "", str(e)
@@ -279,6 +279,7 @@ def _phase(num, total, title):
 # MAIN ENTRY
 # ═══════════════════════════════════════════════════════════════════
 
+
 def cmd_init(cfg: FreqConfig, pack, args) -> int:
     """First-run setup wizard for FREQ."""
     from freq.core.personality import splash
@@ -411,6 +412,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
 # PHASE 1: Welcome + Prerequisites
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _phase_welcome(cfg):
     """Check prerequisites are installed."""
     fmt.line(f"  {fmt.C.DIM}Checking prerequisites...{fmt.C.RESET}")
@@ -472,8 +474,7 @@ def _phase_welcome(cfg):
     # Create data directories
     fmt.blank()
     fmt.step_start("Creating data directories")
-    dirs = [cfg.data_dir, cfg.vault_dir, cfg.key_dir,
-            os.path.dirname(cfg.log_file)]
+    dirs = [cfg.data_dir, cfg.vault_dir, cfg.key_dir, os.path.dirname(cfg.log_file)]
     for d in dirs:
         os.makedirs(d, exist_ok=True)
     fmt.step_ok(f"Data directories ready ({len(dirs)} created)")
@@ -519,6 +520,7 @@ def _seed_config_files(cfg):
 # PHASE 2: Cluster Configuration
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _update_toml_value(content, key, value):
     """Update a single key = value in TOML content, preserving comments.
 
@@ -527,7 +529,7 @@ def _update_toml_value(content, key, value):
     """
     # Format value for TOML
     if isinstance(value, list):
-        items = ', '.join(f'"{v}"' for v in value)
+        items = ", ".join(f'"{v}"' for v in value)
         toml_val = f"[{items}]"
     elif isinstance(value, bool):
         toml_val = "true" if value else "false"
@@ -539,7 +541,7 @@ def _update_toml_value(content, key, value):
     # Try to find and replace existing key (commented or not)
     # Match: optional # + optional spaces + key + optional spaces + = + rest of line
     pattern = re.compile(
-        r'^([ \t]*#?[ \t]*)(' + re.escape(key) + r')([ \t]*=[ \t]*)(.*)$',
+        r"^([ \t]*#?[ \t]*)(" + re.escape(key) + r")([ \t]*=[ \t]*)(.*)$",
         re.MULTILINE,
     )
     match = pattern.search(content)
@@ -553,15 +555,15 @@ def _update_toml_value(content, key, value):
             # Find comment that's not inside quotes
             in_str = False
             for i, ch in enumerate(stripped):
-                if ch == '"' and (i == 0 or stripped[i-1] != '\\'):
+                if ch == '"' and (i == 0 or stripped[i - 1] != "\\"):
                     in_str = not in_str
-                elif ch == '#' and not in_str:
+                elif ch == "#" and not in_str:
                     inline_comment = "  " + stripped[i:]
                     break
 
         # Replace: uncomment if commented, set new value
         new_line = f"{key} = {toml_val}{inline_comment}"
-        content = content[:match.start()] + new_line + content[match.end():]
+        content = content[: match.start()] + new_line + content[match.end() :]
     return content
 
 
@@ -597,10 +599,14 @@ def _phase_configure(cfg, args=None):
     if cli_pve_nodes:
         # CLI override — skip interactive prompt
         # Accept both comma-separated and space-separated node lists
-        nodes = re.split(r'[,\s]+', cli_pve_nodes.strip())
-        names = re.split(r'[,\s]+', cli_pve_names.strip()) if cli_pve_names else [f"pve{i+1:02d}" for i in range(len(nodes))]
+        nodes = re.split(r"[,\s]+", cli_pve_nodes.strip())
+        names = (
+            re.split(r"[,\s]+", cli_pve_names.strip())
+            if cli_pve_names
+            else [f"pve{i + 1:02d}" for i in range(len(nodes))]
+        )
         while len(names) < len(nodes):
-            names.append(f"pve{len(names)+1:02d}")
+            names.append(f"pve{len(names) + 1:02d}")
         content = _update_toml_value(content, "nodes", nodes)
         content = _update_toml_value(content, "node_names", names)
         cfg.pve_nodes = nodes
@@ -621,12 +627,12 @@ def _phase_configure(cfg, args=None):
             nodes = node_input.split()
             # Ask for node names
             fmt.line(f"  {fmt.C.DIM}Enter names for each node (space-separated, same order).{fmt.C.RESET}")
-            name_default = " ".join(f"pve{i+1:02d}" for i in range(len(nodes)))
+            name_default = " ".join(f"pve{i + 1:02d}" for i in range(len(nodes)))
             name_input = _input("Node names", name_default)
             names = name_input.split()
             # Pad names if fewer than nodes
             while len(names) < len(nodes):
-                names.append(f"pve{len(names)+1:02d}")
+                names.append(f"pve{len(names) + 1:02d}")
 
             content = _update_toml_value(content, "nodes", nodes)
             content = _update_toml_value(content, "node_names", names)
@@ -648,19 +654,19 @@ def _phase_configure(cfg, args=None):
                         pve_section = content.find("[pve]")
                         if pve_section >= 0:
                             # Find the next section header after [pve]
-                            next_section = re.search(r'^\[(?!pve\.)', content[pve_section+5:], re.MULTILINE)
+                            next_section = re.search(r"^\[(?!pve\.)", content[pve_section + 5 :], re.MULTILINE)
                             if next_section:
                                 insert_at = pve_section + 5 + next_section.start()
                             else:
                                 insert_at = len(content)
-                            storage_block = f"\n{section}\npool = \"{pool}\"\ntype = \"SSD\"\n\n"
+                            storage_block = f'\n{section}\npool = "{pool}"\ntype = "SSD"\n\n'
                             content = content[:insert_at] + storage_block + content[insert_at:]
                             changed = True
                     else:
                         # Section exists, update the pool value
                         section_pos = content.find(section)
                         pool_pattern = re.compile(
-                            r'^(pool\s*=\s*).*$',
+                            r"^(pool\s*=\s*).*$",
                             re.MULTILINE,
                         )
                         section_end = content.find("\n[", section_pos + len(section))
@@ -760,6 +766,7 @@ def _phase_configure(cfg, args=None):
         # Reload config to pick up changes
         try:
             from freq.core.config import load_config
+
             new_cfg = load_config(cfg.install_dir)
             cfg.pve_nodes = new_cfg.pve_nodes
             cfg.pve_node_names = new_cfg.pve_node_names
@@ -779,6 +786,7 @@ def _phase_configure(cfg, args=None):
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 3: Service Account
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _phase_service_account(cfg, ctx, args=None):
     """Create service account with NOPASSWD sudo."""
@@ -861,8 +869,9 @@ def _phase_service_account(cfg, ctx, args=None):
             return False
 
         # Set password
-        p = subprocess.Popen(["/usr/sbin/chpasswd"], stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(
+            ["/usr/sbin/chpasswd"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         p.communicate(input=f"{svc_name}:{svc_pass}\n".encode())
         if p.returncode == 0:
             fmt.step_ok("Password set")
@@ -875,12 +884,14 @@ def _phase_service_account(cfg, ctx, args=None):
     # Initialize vault if needed
     if not os.path.exists(cfg.vault_file):
         from freq.modules.vault import vault_init
+
         if not vault_init(cfg):
             fmt.step_fail("Vault init failed — check /etc/machine-id exists")
             return False
 
     # Store password in vault
     from freq.modules.vault import vault_set
+
     vault_key = f"{svc_name}-pass"
     if vault_set(cfg, "DEFAULT", vault_key, ctx["svc_pass"]):
         fmt.step_ok(f"Password stored in vault (key: {vault_key})")
@@ -923,7 +934,7 @@ def _ssh_with_pass(password, ssh_cmd_list, timeout=DEFAULT_CMD_TIMEOUT, input_te
     If input_text is provided, pipes it via stdin (for IOS switch config).
     Returns (rc, stdout, stderr).
     """
-    tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.freq-auth', delete=False)
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".freq-auth", delete=False)
     try:
         tmp.write(password)
         tmp.close()
@@ -942,6 +953,7 @@ def _ssh_with_pass(password, ssh_cmd_list, timeout=DEFAULT_CMD_TIMEOUT, input_te
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 4: SSH Keys
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _phase_ssh_keys(cfg, ctx):
     """Generate FREQ SSH keypairs and deploy to local service account.
@@ -966,11 +978,20 @@ def _phase_ssh_keys(cfg, ctx):
             fmt.line(f"    {fmt.C.DIM}{out.strip()}{fmt.C.RESET}")
     else:
         fmt.step_start("Generating ed25519 keypair (modern hosts)")
-        rc, _, err = _run([
-            "ssh-keygen", "-t", "ed25519",
-            "-C", f"freq@{hostname}",
-            "-f", ed_key, "-N", "", "-q",
-        ])
+        rc, _, err = _run(
+            [
+                "ssh-keygen",
+                "-t",
+                "ed25519",
+                "-C",
+                f"freq@{hostname}",
+                "-f",
+                ed_key,
+                "-N",
+                "",
+                "-q",
+            ]
+        )
         if rc == 0:
             os.chmod(ed_key, 0o600)
             os.chmod(f"{ed_key}.pub", 0o644)
@@ -991,11 +1012,22 @@ def _phase_ssh_keys(cfg, ctx):
             fmt.line(f"    {fmt.C.DIM}{out.strip()}{fmt.C.RESET}")
     else:
         fmt.step_start("Generating RSA-4096 keypair (iDRAC + switch)")
-        rc, _, err = _run([
-            "ssh-keygen", "-t", "rsa", "-b", "4096",
-            "-C", f"freq-legacy@{hostname}",
-            "-f", rsa_key, "-N", "", "-q",
-        ])
+        rc, _, err = _run(
+            [
+                "ssh-keygen",
+                "-t",
+                "rsa",
+                "-b",
+                "4096",
+                "-C",
+                f"freq-legacy@{hostname}",
+                "-f",
+                rsa_key,
+                "-N",
+                "",
+                "-q",
+            ]
+        )
         if rc == 0:
             os.chmod(rsa_key, 0o600)
             os.chmod(f"{rsa_key}.pub", 0o644)
@@ -1054,6 +1086,7 @@ def _phase_ssh_keys(cfg, ctx):
     # Also copy keys to service account's .ssh for outbound SSH
     if rc == 0 and ctx.get("key_path"):
         import shutil
+
         svc_ssh = os.path.join(svc_home, ".ssh")
 
         # ed25519 (primary)
@@ -1083,6 +1116,7 @@ def _phase_ssh_keys(cfg, ctx):
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 5: PVE Node Deployment
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _phase_pve_deploy(cfg, ctx, args=None):
     """Deploy service account + key to PVE nodes."""
@@ -1127,6 +1161,7 @@ def _phase_pve_deploy(cfg, ctx, args=None):
         if rc != 0:
             fmt.step_fail("'sshpass' not installed — required for --bootstrap-password-file")
             from freq.core.packages import install_hint
+
             fmt.line(f"  {fmt.C.DIM}Install with: {install_hint('sshpass')}{fmt.C.RESET}")
             return
         fmt.step_ok(f"Using bootstrap password auth: {pve_user} via sshpass")
@@ -1154,10 +1189,13 @@ def _phase_pve_deploy(cfg, ctx, args=None):
             if rc != 0:
                 fmt.step_fail("'sshpass' not installed — required for password-based SSH")
                 from freq.core.packages import install_hint
+
                 fmt.line(f"  {fmt.C.DIM}Install with: {install_hint('sshpass')}{fmt.C.RESET}")
                 fmt.line(f"  {fmt.C.DIM}Or choose option B (SSH key) instead.{fmt.C.RESET}")
                 return
-            auth_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for '{pve_user}' on PVE nodes: ")
+            auth_pass = getpass.getpass(
+                f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for '{pve_user}' on PVE nodes: "
+            )
 
     if pve_user != "root":
         fmt.line(f"  {fmt.C.DIM}Commands will be elevated via sudo on remote hosts.{fmt.C.RESET}")
@@ -1180,6 +1218,7 @@ def _phase_pve_deploy(cfg, ctx, args=None):
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 6: Fleet Host Deployment
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _register_host_interactive(cfg):
     """Prompt user to manually register a single host. Returns True if added."""
@@ -1228,6 +1267,7 @@ def _register_host_interactive(cfg):
     groups = _input("  Groups (comma-separated, optional)", "")
 
     from freq.core.config import Host, append_host_toml
+
     host = Host(ip=ip, label=label, htype=htype, groups=groups)
     append_host_toml(cfg.hosts_file, host)
     cfg.hosts.append(host)
@@ -1283,6 +1323,7 @@ def _discover_and_register(cfg, ctx):
 
     # Offer to register discovered hosts
     from freq.core.config import Host
+
     for h in hosts_info:
         if not h["reachable"] or h["ip"] in known_ips:
             continue
@@ -1299,6 +1340,7 @@ def _discover_and_register(cfg, ctx):
         groups = _input(f"    Groups (optional)", "")
 
         from freq.core.config import append_host_toml
+
         host = Host(ip=h["ip"], label=label, htype=htype, groups=groups)
         append_host_toml(cfg.hosts_file, host)
         cfg.hosts.append(host)
@@ -1314,6 +1356,7 @@ def _discover_and_register(cfg, ctx):
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 6: PDM Setup (detect / install / configure)
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _pdm_is_installed():
     """Check if PDM is installed on this host."""
@@ -1339,10 +1382,15 @@ def _pdm_install():
 
     # Add GPG key
     fmt.step_start("Adding Proxmox GPG key...")
-    rc, _, err = _run([
-        "wget", "-qO", "/etc/apt/trusted.gpg.d/proxmox-release-trixie.gpg",
-        "https://enterprise.proxmox.com/debian/proxmox-release-trixie.gpg",
-    ], timeout=30)
+    rc, _, err = _run(
+        [
+            "wget",
+            "-qO",
+            "/etc/apt/trusted.gpg.d/proxmox-release-trixie.gpg",
+            "https://enterprise.proxmox.com/debian/proxmox-release-trixie.gpg",
+        ],
+        timeout=30,
+    )
     if rc != 0:
         fmt.step_fail(f"Failed to download GPG key: {err.strip()}")
         return False
@@ -1370,9 +1418,15 @@ def _pdm_install():
 
     # Install PDM
     fmt.step_start("Installing proxmox-datacenter-manager (this may take a few minutes)...")
-    rc, _, err = _run([
-        "apt-get", "install", "-y", "proxmox-datacenter-manager",
-    ], timeout=600)
+    rc, _, err = _run(
+        [
+            "apt-get",
+            "install",
+            "-y",
+            "proxmox-datacenter-manager",
+        ],
+        timeout=600,
+    )
     if rc != 0:
         fmt.step_fail(f"Installation failed: {err.strip()[:200]}")
         return False
@@ -1407,6 +1461,7 @@ def _pdm_api_request(method, path, data=None, cookies=None, csrf_token=None):
     if data and method == "POST":
         # URL-encode form data
         import urllib.parse
+
         if isinstance(data, dict):
             # Handle repeated params (e.g. nodes=[...])
             parts = []
@@ -1456,10 +1511,14 @@ def _pdm_authenticate(password):
     PDM v1.0.3 returns the auth ticket via Set-Cookie header (not in JSON body).
     The JSON body contains CSRFPreventionToken and ticket-info.
     """
-    ok, result, set_cookie = _pdm_api_request("POST", "/api2/json/access/ticket", {
-        "username": "root@pam",
-        "password": password,
-    })
+    ok, result, set_cookie = _pdm_api_request(
+        "POST",
+        "/api2/json/access/ticket",
+        {
+            "username": "root@pam",
+            "password": password,
+        },
+    )
     if not ok:
         return None, None
 
@@ -1490,9 +1549,15 @@ def _pdm_authenticate(password):
 
 def _pdm_probe_tls(ip, cookies, csrf):
     """Probe TLS fingerprint for a PVE node. Returns fingerprint string or None."""
-    ok, result, _ = _pdm_api_request("POST", "/api2/json/pve/probe-tls", {
-        "hostname": ip,
-    }, cookies=cookies, csrf_token=csrf)
+    ok, result, _ = _pdm_api_request(
+        "POST",
+        "/api2/json/pve/probe-tls",
+        {
+            "hostname": ip,
+        },
+        cookies=cookies,
+        csrf_token=csrf,
+    )
     if not ok:
         return None
     data = result.get("data", {})
@@ -1512,8 +1577,7 @@ def _pdm_add_remote(remote_name, token_id, token_secret, node_entries, cookies, 
         "token": token_secret,
         "nodes": node_entries,
     }
-    ok, result, _ = _pdm_api_request("POST", "/api2/json/remotes/remote", data,
-                                      cookies=cookies, csrf_token=csrf)
+    ok, result, _ = _pdm_api_request("POST", "/api2/json/remotes/remote", data, cookies=cookies, csrf_token=csrf)
     return ok
 
 
@@ -1527,11 +1591,16 @@ def _pdm_create_pve_token(pve_ip, ctx):
     svc_name = ctx.get("svc_name", "freq-admin")
 
     ssh_base = [
-        "ssh", "-n",
-        "-o", "StrictHostKeyChecking=accept-new",
-        "-o", "ConnectTimeout=5",
-        "-o", "BatchMode=yes",
-        "-i", key_path,
+        "ssh",
+        "-n",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        "ConnectTimeout=5",
+        "-o",
+        "BatchMode=yes",
+        "-i",
+        key_path,
         f"{svc_name}@{pve_ip}",
     ]
 
@@ -1564,6 +1633,7 @@ def _pdm_create_pve_token(pve_ip, ctx):
 
     # Parse token output
     import json
+
     try:
         token_data = json.loads(out)
         # PVE returns: {"full-tokenid": "pdm@pve!pdm", "info": {...}, "value": "UUID-SECRET"}
@@ -1688,7 +1758,9 @@ def _phase_pdm(cfg, ctx, args=None):
     token_id, token_secret = _pdm_create_pve_token(first_node, ctx)
     if not token_id:
         fmt.step_fail("Could not create PVE API token")
-        fmt.line(f"  {fmt.C.DIM}Create manually: pveum user add pdm@pve && pveum user token add pdm@pve pdm --privsep 0{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.DIM}Create manually: pveum user add pdm@pve && pveum user token add pdm@pve pdm --privsep 0{fmt.C.RESET}"
+        )
         return
     fmt.step_ok(f"Token created: {token_id}")
 
@@ -1716,7 +1788,9 @@ def _phase_pdm(cfg, ctx, args=None):
     if _pdm_add_remote(remote_name, token_id, token_secret, node_entries, cookies, csrf):
         fmt.step_ok(f"Remote '{remote_name}' added to PDM")
         fmt.blank()
-        fmt.line(f"  {fmt.C.GREEN}PDM configured!{fmt.C.RESET} Dashboard: {fmt.C.CYAN}https://localhost:8443{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.GREEN}PDM configured!{fmt.C.RESET} Dashboard: {fmt.C.CYAN}https://localhost:8443{fmt.C.RESET}"
+        )
     else:
         fmt.step_fail(f"Failed to add remote '{remote_name}'")
         fmt.line(f"  {fmt.C.DIM}The remote may already exist. Check: https://localhost:8443{fmt.C.RESET}")
@@ -1737,6 +1811,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
         shutil.copy2(hosts_file_arg, cfg.hosts_file)
         # Reload hosts
         from freq.core.config import load_hosts
+
         try:
             cfg.hosts = load_hosts(cfg.hosts_file)
             fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")
@@ -1758,7 +1833,9 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
             _discover_and_register(cfg, ctx)
             # After discovery, offer to add non-discoverable devices
             fmt.blank()
-            fmt.line(f"  {fmt.C.DIM}Network scan can't find devices like pfSense, iDRAC, or managed switches.{fmt.C.RESET}")
+            fmt.line(
+                f"  {fmt.C.DIM}Network scan can't find devices like pfSense, iDRAC, or managed switches.{fmt.C.RESET}"
+            )
             fmt.line(f"  {fmt.C.DIM}These need to be added manually.{fmt.C.RESET}")
             fmt.blank()
             if _confirm("Add non-discoverable devices (pfSense, iDRAC, switches)?"):
@@ -1800,9 +1877,11 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
     linux_hosts.extend(nas_hosts)
 
     total = len(linux_hosts) + len(pfsense_hosts) + len(device_hosts)
-    fmt.line(f"  {fmt.C.DIM}Fleet: {len(linux_hosts)} server, "
-             f"{len(pfsense_hosts)} firewall, "
-             f"{len(device_hosts)} device(s) — {total} total{fmt.C.RESET}")
+    fmt.line(
+        f"  {fmt.C.DIM}Fleet: {len(linux_hosts)} server, "
+        f"{len(pfsense_hosts)} firewall, "
+        f"{len(device_hosts)} device(s) — {total} total{fmt.C.RESET}"
+    )
     fmt.blank()
 
     ok = fail = 0
@@ -1963,9 +2042,12 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     if rc != 0:
                         fmt.step_fail("'sshpass' not installed — required for device auth")
                         from freq.core.packages import install_hint
+
                         fmt.line(f"  {fmt.C.DIM}Install with: {install_hint('sshpass')}{fmt.C.RESET}")
                     else:
-                        dev_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for device admin ({dev_user}): ")
+                        dev_pass = getpass.getpass(
+                            f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for device admin ({dev_user}): "
+                        )
                         for h in dev_without_creds:
                             fmt.blank()
                             fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
@@ -1986,6 +2068,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                 f.write(dev_pass)
             os.chmod(pass_path, 0o600)
             import pwd
+
             try:
                 pw = pwd.getpwnam(ctx["svc_name"])
                 os.chown(pass_path, pw.pw_uid, pw.pw_gid)
@@ -2016,6 +2099,7 @@ def _get_auth_creds(choice, label):
         if rc != 0:
             fmt.step_fail("'sshpass' not installed — required for password-based SSH")
             from freq.core.packages import install_hint
+
             fmt.line(f"  {fmt.C.DIM}Install with: {install_hint('sshpass')}{fmt.C.RESET}")
             return "", ""
         auth_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Root password for {label}: ")
@@ -2041,8 +2125,7 @@ def _init_ssh(ip, auth_pass, auth_key, auth_user):
         if extra_opts:
             base.extend(extra_opts)
         if auth_key:
-            full = base + ["-o", "BatchMode=yes", "-i", auth_key,
-                           f"{auth_user}@{ip}", cmd]
+            full = base + ["-o", "BatchMode=yes", "-i", auth_key, f"{auth_user}@{ip}", cmd]
             return _run(full, timeout=timeout)
         else:
             full = base + [f"{auth_user}@{ip}", cmd]
@@ -2134,12 +2217,22 @@ echo DEPLOY_OK
     # Verify FREQ key SSH access
     success = True
     if ctx.get("key_path") and os.path.isfile(ctx["key_path"]):
-        rc2, _, _ = _run([
-            "ssh", "-n", "-i", ctx["key_path"],
-            "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
-            "-o", "StrictHostKeyChecking=accept-new",
-            f"{svc_name}@{ip}", "echo OK",
-        ])
+        rc2, _, _ = _run(
+            [
+                "ssh",
+                "-n",
+                "-i",
+                ctx["key_path"],
+                "-o",
+                "ConnectTimeout=3",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "StrictHostKeyChecking=accept-new",
+                f"{svc_name}@{ip}",
+                "echo OK",
+            ]
+        )
         if rc2 == 0:
             fmt.step_ok(f"Verified: FREQ key SSH as {svc_name}")
         else:
@@ -2148,12 +2241,22 @@ echo DEPLOY_OK
 
         # Verify sudo works
         if rc2 == 0:
-            rc3, _, _ = _run([
-                "ssh", "-n", "-i", ctx["key_path"],
-                "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
-                "-o", "StrictHostKeyChecking=accept-new",
-                f"{svc_name}@{ip}", "sudo -n true",
-            ])
+            rc3, _, _ = _run(
+                [
+                    "ssh",
+                    "-n",
+                    "-i",
+                    ctx["key_path"],
+                    "-o",
+                    "ConnectTimeout=3",
+                    "-o",
+                    "BatchMode=yes",
+                    "-o",
+                    "StrictHostKeyChecking=accept-new",
+                    f"{svc_name}@{ip}",
+                    "sudo -n true",
+                ]
+            )
             if rc3 == 0:
                 fmt.step_ok(f"Verified: NOPASSWD sudo works as {svc_name}")
             else:
@@ -2229,12 +2332,22 @@ echo DEPLOY_OK
     # Verify FREQ key SSH access (no sudo on pfSense)
     success = True
     if ctx.get("key_path") and os.path.isfile(ctx["key_path"]):
-        rc2, _, _ = _run([
-            "ssh", "-n", "-i", ctx["key_path"],
-            "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
-            "-o", "StrictHostKeyChecking=accept-new",
-            f"{svc_name}@{ip}", "echo OK",
-        ])
+        rc2, _, _ = _run(
+            [
+                "ssh",
+                "-n",
+                "-i",
+                ctx["key_path"],
+                "-o",
+                "ConnectTimeout=3",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "StrictHostKeyChecking=accept-new",
+                f"{svc_name}@{ip}",
+                "echo OK",
+            ]
+        )
         if rc2 == 0:
             fmt.step_ok(f"Verified: FREQ key SSH as {svc_name}")
         else:
@@ -2305,8 +2418,9 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
 
     # Deploy RSA public key
     rc, out, err = _ssh(
-        f"racadm sshpkauth -i {target_slot} -k 1 -t \"{rsa_pubkey}\"",
-        extra_opts=extra_opts, timeout=30,
+        f'racadm sshpkauth -i {target_slot} -k 1 -t "{rsa_pubkey}"',
+        extra_opts=extra_opts,
+        timeout=30,
     )
     if rc != 0:
         fmt.step_fail(f"RSA key upload failed ({(err or out).strip()[:60]})")
@@ -2316,7 +2430,8 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     # Verify the key was actually stored
     rc2, out2, _ = _ssh(
         f"racadm sshpkauth -v -i {target_slot} -k 1",
-        extra_opts=extra_opts, timeout=IDRAC_VERIFY_TIMEOUT,
+        extra_opts=extra_opts,
+        timeout=IDRAC_VERIFY_TIMEOUT,
     )
     if rc2 == 0 and out2.strip():
         fmt.step_ok("RSA public key deployed and verified on iDRAC")
@@ -2355,7 +2470,7 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     # RSA public key base64 data split into 72-char lines (PEM width).
     # IOS key-string chokes on 254-char lines — 72 works reliably.
     rsa_key_data = rsa_pubkey.split(" ")[1] if " " in rsa_pubkey else rsa_pubkey
-    key_lines = [rsa_key_data[i:i+IOS_KEY_LINE_WIDTH] for i in range(0, len(rsa_key_data), IOS_KEY_LINE_WIDTH)]
+    key_lines = [rsa_key_data[i : i + IOS_KEY_LINE_WIDTH] for i in range(0, len(rsa_key_data), IOS_KEY_LINE_WIDTH)]
 
     ios_cmds = [
         "configure terminal",
@@ -2367,13 +2482,15 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     # Key data lines — NO leading spaces (IOS includes them in key data)
     for kl in key_lines:
         ios_cmds.append(kl)
-    ios_cmds.extend([
-        "exit",           # exit key-string → username
-        "exit",           # exit username → pubkey-chain
-        "exit",           # exit pubkey-chain → config
-        "exit",           # exit config → exec mode
-        "write memory",   # save config (exec mode only)
-    ])
+    ios_cmds.extend(
+        [
+            "exit",  # exit key-string → username
+            "exit",  # exit username → pubkey-chain
+            "exit",  # exit pubkey-chain → config
+            "exit",  # exit config → exec mode
+            "write memory",  # save config (exec mode only)
+        ]
+    )
 
     # Pipe IOS commands via stdin — IOS requires interactive-style input
     # for config mode (configure terminal). SSH exec args don't work for
@@ -2382,17 +2499,19 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     ios_script = "\n".join(ios_cmds) + "\n"
 
     ssh_cmd = [
-        "ssh", "-T",
-        "-o", "ConnectTimeout=5",
-        "-o", "StrictHostKeyChecking=accept-new",
+        "ssh",
+        "-T",
+        "-o",
+        "ConnectTimeout=5",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
     ]
     if extra_opts:
         ssh_cmd.extend(extra_opts)
     ssh_cmd.append(f"{auth_user}@{ip}")
 
     if auth_pass:
-        rc, out, err = _ssh_with_pass(auth_pass, ssh_cmd, timeout=30,
-                                       input_text=ios_script)
+        rc, out, err = _ssh_with_pass(auth_pass, ssh_cmd, timeout=30, input_text=ios_script)
     elif auth_key:
         ssh_cmd.extend(["-o", "BatchMode=yes", "-i", auth_key])
         rc, out, err = _run_with_input(ssh_cmd, ios_script, timeout=30)
@@ -2403,17 +2522,17 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     # Generic "error" matching is too broad — IOS echoes "error" in normal output.
     out_lower = (out or "").lower()
     ios_errors = [
-        "% invalid input detected",     # bad command syntax
-        "% incomplete command",          # missing args
-        "% ambiguous command",           # ambiguous abbreviation
-        "% authorization failed",        # AAA rejection
-        "% authentication failed",       # login failure
-        "% bad ip address",              # invalid IP
-        "% invalid username",            # user creation failure
-        "%ssh-4-badpkauth",              # key auth failure (syslog)
+        "% invalid input detected",  # bad command syntax
+        "% incomplete command",  # missing args
+        "% ambiguous command",  # ambiguous abbreviation
+        "% authorization failed",  # AAA rejection
+        "% authentication failed",  # login failure
+        "% bad ip address",  # invalid IP
+        "% invalid username",  # user creation failure
+        "%ssh-4-badpkauth",  # key auth failure (syslog)
     ]
     key_warnings = [
-        "%ssh: failed to decode",        # bad key data (base64/format)
+        "%ssh: failed to decode",  # bad key data (base64/format)
         "failed to decode the key",
     ]
 
@@ -2467,18 +2586,28 @@ def _deploy_to_host_dispatch(ip, htype, ctx, auth_pass, auth_key, auth_user):
 # UNINSTALL — per-platform removal
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _uninstall_ssh(ip, svc_name, key_path, extra_opts=None):
     """Build an SSH runner for uninstall — auths as the FREQ service account."""
+
     def _ssh(cmd, timeout=DEFAULT_CMD_TIMEOUT):
         ssh_cmd = [
-            "ssh", "-n", "-i", key_path,
-            "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
-            "-o", "StrictHostKeyChecking=accept-new",
+            "ssh",
+            "-n",
+            "-i",
+            key_path,
+            "-o",
+            "ConnectTimeout=5",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
         ]
         if extra_opts:
             ssh_cmd.extend(extra_opts)
         ssh_cmd.extend([f"{svc_name}@{ip}", cmd])
         return _run(ssh_cmd, timeout=timeout)
+
     return _ssh
 
 
@@ -2577,8 +2706,8 @@ def _remove_idrac(ip, svc_name, key_path):
     # Disable the slot, clear username, remove SSH key
     remove_cmds = [
         f"racadm set iDRAC.Users.{target_slot}.Enable 0",
-        f"racadm set iDRAC.Users.{target_slot}.UserName \"\"",
-        f"racadm sshpkauth -i {target_slot} -k 1 -t \"\"",
+        f'racadm set iDRAC.Users.{target_slot}.UserName ""',
+        f'racadm sshpkauth -i {target_slot} -k 1 -t ""',
     ]
     remove_script = " && ".join(remove_cmds) + " && echo REMOVE_OK"
     rc, out, err = _ssh(remove_script, timeout=30)
@@ -2616,16 +2745,21 @@ def _remove_switch(ip, svc_name, key_path):
     ios_script = "\n".join(ios_cmds) + "\n"
     # Use subprocess directly with stdin for IOS config mode
     ssh_cmd = [
-        "ssh", "-T", "-i", key_path,
-        "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
-        "-o", "StrictHostKeyChecking=accept-new",
+        "ssh",
+        "-T",
+        "-i",
+        key_path,
+        "-o",
+        "ConnectTimeout=5",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
     ]
     if extra_opts:
         ssh_cmd.extend(extra_opts)
     ssh_cmd.append(f"{svc_name}@{ip}")
-    proc = subprocess.run(
-        ssh_cmd, input=ios_script, capture_output=True, text=True, timeout=30
-    )
+    proc = subprocess.run(ssh_cmd, input=ios_script, capture_output=True, text=True, timeout=30)
     rc, out, err = proc.returncode, proc.stdout, proc.stderr
 
     out_lower = (out or "").lower()
@@ -2651,6 +2785,7 @@ def _remove_from_host_dispatch(ip, htype, svc_name, key_path, rsa_key_path):
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 7: Admin Account Setup
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _phase_admin_setup(cfg, ctx):
     """Configure RBAC roles."""
@@ -2715,13 +2850,21 @@ def _phase_admin_setup(cfg, ctx):
 # PHASE 8: Verification
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _is_skip_error(err):
     """Check if SSH error is a skip-worthy condition (not a real failure)."""
     err_l = err.lower()
-    return any(s in err_l for s in [
-        "no route to host", "connection timed out", "connection refused",
-        "permission denied", "authentication", "host key verification failed",
-    ])
+    return any(
+        s in err_l
+        for s in [
+            "no route to host",
+            "connection timed out",
+            "connection refused",
+            "permission denied",
+            "authentication",
+            "host key verification failed",
+        ]
+    )
 
 
 def _skip_reason(err):
@@ -2761,11 +2904,22 @@ def _verify_host(ip, htype, svc_name, key_path, rsa_key_path):
     if not key or not os.path.isfile(key):
         return False, f"key not found: {key}"
 
-    ssh_cmd = [
-        "ssh", "-n", "-i", key,
-        "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
-        "-o", "StrictHostKeyChecking=accept-new",
-    ] + extra_opts + [f"{svc_name}@{ip}", verify_cmd]
+    ssh_cmd = (
+        [
+            "ssh",
+            "-n",
+            "-i",
+            key,
+            "-o",
+            "ConnectTimeout=5",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+        ]
+        + extra_opts
+        + [f"{svc_name}@{ip}", verify_cmd]
+    )
 
     rc, out, err = _run(ssh_cmd, timeout=VERIFY_TIMEOUT)
     # iDRAC has a 2-session SSH limit — retry once after a short wait
@@ -2895,6 +3049,7 @@ def _phase_verify(cfg, ctx):
 # PHASE 9: Summary
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _phase_summary(cfg, ctx, verified, pack=None):
     """Print summary and next steps."""
     svc_name = ctx["svc_name"]
@@ -2928,6 +3083,7 @@ def _phase_summary(cfg, ctx, verified, pack=None):
     # Celebrate
     if pack:
         from freq.core.personality import celebrate
+
         msg = celebrate(pack)
         if msg:
             fmt.line(f"  {fmt.C.DIM}{msg}{fmt.C.RESET}")
@@ -2938,6 +3094,7 @@ def _phase_summary(cfg, ctx, verified, pack=None):
 # ═══════════════════════════════════════════════════════════════════
 # --check mode
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _scan_fleet(cfg):
     """Test freq-admin SSH to all hosts. Returns (ok_list, fail_list, unreachable_list).
@@ -2955,7 +3112,7 @@ def _scan_fleet(cfg):
     all_hosts = []
 
     # PVE nodes
-    for ip in (cfg.pve_nodes or []):
+    for ip in cfg.pve_nodes or []:
         all_hosts.append({"label": ip, "ip": ip, "htype": "pve"})
 
     # Fleet hosts (skip PVE nodes already covered)
@@ -3078,6 +3235,7 @@ def _init_check(cfg):
 # --fix mode
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _init_fix(cfg, args):
     """Scan fleet, find broken hosts, redeploy freq-admin.
 
@@ -3127,9 +3285,11 @@ def _init_fix(cfg, args):
 
     ok_list, fail_list, unreachable_list = _scan_fleet(cfg)
 
-    fmt.line(f"  {fmt.C.GREEN}{len(ok_list)} OK{fmt.C.RESET}, "
-             f"{fmt.C.RED}{len(fail_list)} broken{fmt.C.RESET}, "
-             f"{fmt.C.YELLOW}{len(unreachable_list)} unreachable{fmt.C.RESET}")
+    fmt.line(
+        f"  {fmt.C.GREEN}{len(ok_list)} OK{fmt.C.RESET}, "
+        f"{fmt.C.RED}{len(fail_list)} broken{fmt.C.RESET}, "
+        f"{fmt.C.YELLOW}{len(unreachable_list)} unreachable{fmt.C.RESET}"
+    )
     fmt.blank()
 
     if not fail_list:
@@ -3294,7 +3454,9 @@ def _init_fix(cfg, args):
                         device_broken = []
                         dev_pass = ""
                     else:
-                        dev_pass = getpass.getpass(f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for device admin ({dev_user}): ")
+                        dev_pass = getpass.getpass(
+                            f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for device admin ({dev_user}): "
+                        )
 
             for h in device_broken:
                 fmt.blank()
@@ -3312,9 +3474,11 @@ def _init_fix(cfg, args):
 
     # Summary
     fmt.blank()
-    fmt.line(f"  {fmt.C.BOLD}Results:{fmt.C.RESET} "
-             f"{fmt.C.GREEN}{fixed} fixed{fmt.C.RESET}, "
-             f"{fmt.C.RED}{failed} failed{fmt.C.RESET}")
+    fmt.line(
+        f"  {fmt.C.BOLD}Results:{fmt.C.RESET} "
+        f"{fmt.C.GREEN}{fixed} fixed{fmt.C.RESET}, "
+        f"{fmt.C.RED}{failed} failed{fmt.C.RESET}"
+    )
 
     if failed:
         fmt.blank()
@@ -3331,6 +3495,7 @@ def _init_fix(cfg, args):
 # ═══════════════════════════════════════════════════════════════════
 # --reset mode
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _init_reset(cfg):
     """Reset FREQ to pre-init state."""
@@ -3368,6 +3533,7 @@ def _init_reset(cfg):
 # --uninstall: fleet-wide teardown
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _uninstall_interactive(cfg):
     """Interactive uninstall — remove FREQ service account from ALL hosts."""
     # Must be root
@@ -3384,7 +3550,9 @@ def _uninstall_interactive(cfg):
 
     fmt.header("Init — Uninstall")
     fmt.blank()
-    fmt.line(f"  {fmt.C.RED}{fmt.C.BOLD}WARNING: This will remove the FREQ service account from ALL hosts.{fmt.C.RESET}")
+    fmt.line(
+        f"  {fmt.C.RED}{fmt.C.BOLD}WARNING: This will remove the FREQ service account from ALL hosts.{fmt.C.RESET}"
+    )
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}Service account: {fmt.C.BOLD}{svc_name}{fmt.C.RESET}")
 
@@ -3482,7 +3650,11 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets):
                 fmt.line(f"  {fmt.C.BOLD}{label}{fmt.C.RESET} [{htype}]")
 
                 success, err_info = _remove_from_host_dispatch(
-                    ip, htype, svc_name, ed_key, rsa_key,
+                    ip,
+                    htype,
+                    svc_name,
+                    ed_key,
+                    rsa_key,
                 )
 
                 if success:
@@ -3501,9 +3673,11 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets):
                     fail += 1
 
         fmt.blank()
-        fmt.line(f"  Remote: {fmt.C.GREEN}{ok} removed{fmt.C.RESET}, "
-                 f"{fmt.C.RED}{fail} failed{fmt.C.RESET}, "
-                 f"{fmt.C.YELLOW}{skip} skipped{fmt.C.RESET}")
+        fmt.line(
+            f"  Remote: {fmt.C.GREEN}{ok} removed{fmt.C.RESET}, "
+            f"{fmt.C.RED}{fail} failed{fmt.C.RESET}, "
+            f"{fmt.C.YELLOW}{skip} skipped{fmt.C.RESET}"
+        )
 
     # ── Phase 2: Local cleanup ──
     fmt.blank()
@@ -3639,26 +3813,36 @@ def _uninstall_dry_run(cfg):
             if h.ip in pve_set:
                 continue
             if h.htype in ("linux", "pve", "docker", "truenas"):
-                steps.append(f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): userdel + sudoers + key [{h.htype}]")
+                steps.append(
+                    f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): userdel + sudoers + key [{h.htype}]"
+                )
             elif h.htype == "pfsense":
-                steps.append(f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): SSH key only (pfSense — manual account removal)")
+                steps.append(
+                    f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): SSH key only (pfSense — manual account removal)"
+                )
             elif h.htype == "idrac":
-                steps.append(f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): disable slot + clear RSA key [iDRAC]")
+                steps.append(
+                    f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): disable slot + clear RSA key [iDRAC]"
+                )
             elif h.htype == "switch":
-                steps.append(f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): no username + clear pubkey-chain [switch]")
+                steps.append(
+                    f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): no username + clear pubkey-chain [switch]"
+                )
             else:
                 steps.append(f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): [{h.htype}]")
             step_n += 1
 
     # Local cleanup
-    steps.extend([
-        f"{step_n}. Remove local sudoers: /etc/sudoers.d/freq-{svc_name}",
-        f"{step_n + 1}. Delete SSH keys: {cfg.key_dir}/freq_id_ed25519, freq_id_rsa (+ .pub)",
-        f"{step_n + 2}. Delete vault: {cfg.vault_file}",
-        f"{step_n + 3}. Delete roles: {cfg.conf_dir}/roles.conf",
-        f"{step_n + 4}. Delete init marker: {cfg.conf_dir}/.initialized",
-        f"{step_n + 5}. Delete local account '{svc_name}' + home directory",
-    ])
+    steps.extend(
+        [
+            f"{step_n}. Remove local sudoers: /etc/sudoers.d/freq-{svc_name}",
+            f"{step_n + 1}. Delete SSH keys: {cfg.key_dir}/freq_id_ed25519, freq_id_rsa (+ .pub)",
+            f"{step_n + 2}. Delete vault: {cfg.vault_file}",
+            f"{step_n + 3}. Delete roles: {cfg.conf_dir}/roles.conf",
+            f"{step_n + 4}. Delete init marker: {cfg.conf_dir}/.initialized",
+            f"{step_n + 5}. Delete local account '{svc_name}' + home directory",
+        ]
+    )
 
     for step in steps:
         fmt.line(f"    {step}")
@@ -3673,6 +3857,7 @@ def _uninstall_dry_run(cfg):
 # ═══════════════════════════════════════════════════════════════════
 # --dry-run mode
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _init_dry_run(cfg):
     """Show what init would do."""
@@ -3711,11 +3896,13 @@ def _init_dry_run(cfg):
                 steps.append(f"{step_n}. Deploy to {h.label} ({h.ip}): [{h.htype}]")
             step_n += 1
 
-    steps.extend([
-        f"{step_n}. Configure RBAC roles (admin for current user + service account)",
-        f"{step_n + 1}. Verify all steps completed (platform-aware)",
-        f"{step_n + 2}. Write .initialized marker",
-    ])
+    steps.extend(
+        [
+            f"{step_n}. Configure RBAC roles (admin for current user + service account)",
+            f"{step_n + 1}. Verify all steps completed (platform-aware)",
+            f"{step_n + 2}. Write .initialized marker",
+        ]
+    )
 
     for step in steps:
         fmt.line(f"    {step}")
@@ -3730,6 +3917,7 @@ def _init_dry_run(cfg):
 # ═══════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _update_toml(cfg, section, key, value):
     """Update a value in freq.toml."""
@@ -3767,7 +3955,7 @@ def _update_toml(cfg, section, key, value):
                     updated = True
                     break
         else:
-            lines.append(f"\n[{section}]\n{key} = \"{value}\"\n")
+            lines.append(f'\n[{section}]\n{key} = "{value}"\n')
 
     with open(toml_path, "w") as f:
         f.writelines(lines)
@@ -3808,6 +3996,7 @@ def cmd_configure(cfg: FreqConfig, pack, args) -> int:
 # ═══════════════════════════════════════════════════════════════════
 # HEADLESS MODE — agent-driven, zero prompts
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _init_headless(cfg, args):
     """Non-interactive init for agent-driven deployment.
@@ -3881,7 +4070,9 @@ def _init_headless(cfg, args):
     fmt.header("Init — Headless Mode")
     fmt.blank()
     if bootstrap_key:
-        fmt.line(f"  Bootstrap: {fmt.C.CYAN}{bootstrap_user}{fmt.C.RESET} via key {fmt.C.CYAN}{bootstrap_key}{fmt.C.RESET}")
+        fmt.line(
+            f"  Bootstrap: {fmt.C.CYAN}{bootstrap_user}{fmt.C.RESET} via key {fmt.C.CYAN}{bootstrap_key}{fmt.C.RESET}"
+        )
     else:
         fmt.line(f"  Bootstrap: {fmt.C.CYAN}{bootstrap_user}{fmt.C.RESET} via password (sshpass)")
     fmt.line(f"  Service account: {fmt.C.CYAN}{ctx['svc_name']}{fmt.C.RESET}")
@@ -3914,6 +4105,7 @@ def _init_headless(cfg, args):
         fmt.step_start(f"Importing fleet hosts from {hosts_file_arg}")
         shutil.copy2(hosts_file_arg, cfg.hosts_file)
         from freq.core.config import load_hosts
+
         try:
             cfg.hosts = load_hosts(cfg.hosts_file)
             fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")
@@ -3927,11 +4119,16 @@ def _init_headless(cfg, args):
     elif device_password_file:
         fmt.step_warn("Using deprecated --device-password-file (migrate to --device-credentials)")
 
-    _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
-                           bootstrap_pass=bootstrap_pass,
-                           device_password_file=device_password_file,
-                           device_user=device_user,
-                           device_creds=device_creds)
+    _headless_fleet_deploy(
+        cfg,
+        ctx,
+        bootstrap_key,
+        bootstrap_user,
+        bootstrap_pass=bootstrap_pass,
+        device_password_file=device_password_file,
+        device_user=device_user,
+        device_creds=device_creds,
+    )
 
     # ── Phase 6: PDM Setup ──
     _phase(6, 8, "PDM Setup")
@@ -3994,8 +4191,7 @@ def _headless_local_account(cfg, ctx):
         fmt.step_ok(f"Account '{svc_name}' exists")
 
     # Password
-    p = subprocess.Popen(["/usr/sbin/chpasswd"], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(["/usr/sbin/chpasswd"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     p.communicate(input=f"{svc_name}:{svc_pass}\n".encode())
     if p.returncode == 0:
         fmt.step_ok("Password set")
@@ -4008,8 +4204,10 @@ def _headless_local_account(cfg, ctx):
     # Vault
     if not os.path.exists(cfg.vault_file):
         from freq.modules.vault import vault_init
+
         vault_init(cfg)
     from freq.modules.vault import vault_set
+
     vault_key = f"{svc_name}-pass"
     vault_set(cfg, "DEFAULT", vault_key, svc_pass)
     fmt.step_ok(f"Password stored in vault (key: {vault_key})")
@@ -4021,10 +4219,16 @@ def _headless_local_account(cfg, ctx):
     return True
 
 
-def _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
-                           bootstrap_pass="",
-                           device_password_file=None, device_user="root",
-                           device_creds=None):
+def _headless_fleet_deploy(
+    cfg,
+    ctx,
+    bootstrap_key,
+    bootstrap_user,
+    bootstrap_pass="",
+    device_password_file=None,
+    device_user="root",
+    device_creds=None,
+):
     """Deploy service account to PVE + fleet hosts using bootstrap credentials.
 
     Uses the unified platform dispatcher for all host types.
@@ -4121,24 +4325,42 @@ def _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
         if htype not in ("idrac", "switch", "pfsense"):
             if bootstrap_key:
                 ssh_check = [
-                    "ssh", "-n", "-i", bootstrap_key,
-                    "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
-                    "-o", "StrictHostKeyChecking=accept-new",
-                    f"{bootstrap_user}@{ip}", "echo OK",
+                    "ssh",
+                    "-n",
+                    "-i",
+                    bootstrap_key,
+                    "-o",
+                    "ConnectTimeout=5",
+                    "-o",
+                    "BatchMode=yes",
+                    "-o",
+                    "StrictHostKeyChecking=accept-new",
+                    f"{bootstrap_user}@{ip}",
+                    "echo OK",
                 ]
             else:
                 # Password-based connectivity check via sshpass (tempfile, not CLI arg)
                 import tempfile
+
                 _bp_fd, _bp_path = tempfile.mkstemp(prefix="freq-bp-")
                 os.write(_bp_fd, bootstrap_pass.encode())
                 os.close(_bp_fd)
                 ssh_check = [
-                    "sshpass", "-f", _bp_path,
-                    "ssh", "-n",
-                    "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
-                    "-o", "StrictHostKeyChecking=accept-new",
-                    "-o", "PubkeyAuthentication=no",
-                    f"{bootstrap_user}@{ip}", "echo OK",
+                    "sshpass",
+                    "-f",
+                    _bp_path,
+                    "ssh",
+                    "-n",
+                    "-o",
+                    "ConnectTimeout=5",
+                    "-o",
+                    "BatchMode=yes",
+                    "-o",
+                    "StrictHostKeyChecking=accept-new",
+                    "-o",
+                    "PubkeyAuthentication=no",
+                    f"{bootstrap_user}@{ip}",
+                    "echo OK",
                 ]
             rc, _, err = _run(ssh_check, timeout=QUICK_CHECK_TIMEOUT)
             # Clean up temp password file if created
@@ -4174,6 +4396,7 @@ def _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
                 f.write(svc_pass)
             os.chmod(pass_path, 0o600)
             import pwd
+
             try:
                 pw = pwd.getpwnam(svc_name)
                 os.chown(pass_path, pw.pw_uid, pw.pw_gid)
@@ -4184,6 +4407,8 @@ def _headless_fleet_deploy(cfg, ctx, bootstrap_key, bootstrap_user,
             fmt.step_warn(f"Could not save device password: {e}")
 
     fmt.blank()
-    fmt.line(f"  Fleet: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, "
-             f"{fmt.C.RED}{fail} failed{fmt.C.RESET}, "
-             f"{fmt.C.YELLOW}{skip} skipped{fmt.C.RESET}")
+    fmt.line(
+        f"  Fleet: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, "
+        f"{fmt.C.RED}{fail} failed{fmt.C.RESET}, "
+        f"{fmt.C.YELLOW}{skip} skipped{fmt.C.RESET}"
+    )

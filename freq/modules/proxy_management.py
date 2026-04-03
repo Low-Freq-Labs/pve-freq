@@ -15,6 +15,7 @@ Design decisions:
     - Backend detection before commands — no guessing.
     - Each backend gets its own set of commands mapped to its API.
 """
+
 import json
 import urllib.request
 import urllib.error
@@ -26,6 +27,7 @@ from freq.core.config import FreqConfig
 # ---------------------------------------------------------------------------
 # Backend Detection
 # ---------------------------------------------------------------------------
+
 
 def _detect_backend(cfg):
     """Detect which reverse proxy is running. Returns (type, host_ip) or (None, None)."""
@@ -59,6 +61,7 @@ def _check_http(ip, port, path, timeout=2):
 # Commands — Status
 # ---------------------------------------------------------------------------
 
+
 def cmd_proxy_status(cfg: FreqConfig, pack, args) -> int:
     """Detect reverse proxy backend and show status."""
     fmt.header("Reverse Proxy Status", breadcrumb="FREQ > Proxy")
@@ -90,6 +93,7 @@ def cmd_proxy_status(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # NPM Backend
 # ---------------------------------------------------------------------------
+
 
 def _npm_api(ip, path, token=None, method="GET"):
     """Call NPM API endpoint."""
@@ -140,6 +144,7 @@ def _npm_status(ip):
 # Caddy Backend
 # ---------------------------------------------------------------------------
 
+
 def _caddy_status(ip):
     """Show Caddy server status."""
     try:
@@ -174,6 +179,7 @@ def _caddy_status(ip):
 # Traefik Backend
 # ---------------------------------------------------------------------------
 
+
 def _traefik_status(ip):
     """Show Traefik dashboard summary."""
     try:
@@ -200,6 +206,7 @@ def _traefik_status(ip):
 # ---------------------------------------------------------------------------
 # Commands — Proxy Hosts List (backend-agnostic)
 # ---------------------------------------------------------------------------
+
 
 def cmd_proxy_hosts(cfg: FreqConfig, pack, args) -> int:
     """List proxy hosts from detected backend."""

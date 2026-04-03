@@ -17,6 +17,7 @@ Design decisions:
     - Clamped watts (5W-2000W) and rates prevent nonsensical estimates
     - iDRAC vs estimate flagged per-host so operators know data quality
 """
+
 import math
 import os
 import re
@@ -28,15 +29,16 @@ from freq.core import log as logger
 COST_STATE_FILE = "cost_state.json"
 
 # Estimated power draw per resource unit (when no iDRAC data available)
-WATTS_PER_VCPU = 10     # rough estimate per vCPU
-WATTS_PER_GB_RAM = 3    # rough estimate per GB RAM
-WATTS_PER_TB_DISK = 6   # rough estimate per TB spinning disk
-HOURS_PER_MONTH = 730   # average
+WATTS_PER_VCPU = 10  # rough estimate per vCPU
+WATTS_PER_GB_RAM = 3  # rough estimate per GB RAM
+WATTS_PER_TB_DISK = 6  # rough estimate per TB spinning disk
+HOURS_PER_MONTH = 730  # average
 
 
 @dataclass
 class CostConfig:
     """Cost tracking configuration."""
+
     rate_per_kwh: float = 0.12
     currency: str = "USD"
     pue: float = 1.2  # Power Usage Effectiveness
@@ -45,6 +47,7 @@ class CostConfig:
 @dataclass
 class HostCost:
     """Cost estimate for a single host."""
+
     label: str
     watts: float = 0.0
     watts_source: str = "estimate"  # "idrac", "estimate"
@@ -62,6 +65,7 @@ def load_cost_config(conf_dir: str) -> CostConfig:
         return CostConfig()
     try:
         import tomllib
+
         with open(toml_path, "rb") as f:
             data = tomllib.load(f)
         cc = data.get("cost", {})
@@ -81,11 +85,11 @@ def parse_idrac_power(sensor_output: str) -> float:
     for line in sensor_output.split("\n"):
         low = line.lower()
         if "pwr consumption" in low or "power consumption" in low:
-            m = re.search(r'(\d+)\s*[Ww]', line)
+            m = re.search(r"(\d+)\s*[Ww]", line)
             if m:
                 return float(m.group(1))
         if "input wattage" in low or "input power" in low:
-            m = re.search(r'(\d+)\s*[Ww]', line)
+            m = re.search(r"(\d+)\s*[Ww]", line)
             if m:
                 return float(m.group(1))
     return 0.0
@@ -93,7 +97,7 @@ def parse_idrac_power(sensor_output: str) -> float:
 
 def _parse_ram_mb(ram_str: str) -> float:
     """Parse RAM string like '4096/8192MB' → used MB."""
-    m = re.match(r'(\d+)/(\d+)', ram_str)
+    m = re.match(r"(\d+)/(\d+)", ram_str)
     if m:
         return float(m.group(2))  # total
     return 0.0
@@ -219,6 +223,7 @@ def fleet_summary(costs: list, cost_cfg: CostConfig) -> dict:
 
 # ── CLI Command ────────────────────────────────────────────────────────
 
+
 def cmd_cost(cfg, pack, args) -> int:
     """Show fleet power cost estimates."""
     from freq.core import fmt
@@ -233,6 +238,7 @@ def cmd_cost(cfg, pack, args) -> int:
     health = None
     try:
         from freq.modules.serve import _bg_cache, _bg_lock
+
         with _bg_lock:
             health = _bg_cache.get("health")
     except (ImportError, AttributeError):
@@ -249,6 +255,7 @@ def cmd_cost(cfg, pack, args) -> int:
     idrac_data = {}
     try:
         from freq.modules.serve import _bg_cache as bgc, _bg_lock as bgl
+
         with bgl:
             infra = bgc.get("infra_quick")
         if infra:

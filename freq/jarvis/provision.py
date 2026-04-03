@@ -17,6 +17,7 @@ Design decisions:
     - Image cache avoids re-downloading on every provision
     - Node-aware storage selection reads pve_storage map from freq.toml
 """
+
 import os
 
 from freq.core import fmt
@@ -72,11 +73,13 @@ TEMPLATE_STORAGE = "/var/lib/vz/template/qcow2"
 def _pve_cmd(cfg, node_ip, command, timeout=PROVISION_CMD_TIMEOUT):
     """Run command on PVE node."""
     r = ssh_run(
-        host=node_ip, command=command,
+        host=node_ip,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
-        htype="pve", use_sudo=True,
+        htype="pve",
+        use_sudo=True,
     )
     return r.stdout, r.returncode == 0
 
@@ -101,9 +104,9 @@ def download_cloud_image(cfg: FreqConfig, node_ip: str, image_key: str = None) -
     # Download
     fmt.step_start(f"Downloading {image['name']} (may take a few minutes)")
     _pve_cmd(cfg, node_ip, f"mkdir -p {TEMPLATE_STORAGE}")
-    stdout, ok = _pve_cmd(cfg, node_ip,
-                          f"wget -q -O {remote_path} '{image['url']}'",
-                          timeout=PROVISION_DOWNLOAD_TIMEOUT)
+    stdout, ok = _pve_cmd(
+        cfg, node_ip, f"wget -q -O {remote_path} '{image['url']}'", timeout=PROVISION_DOWNLOAD_TIMEOUT
+    )
     if ok:
         fmt.step_ok(f"Downloaded: {image['name']}")
         return remote_path
@@ -197,8 +200,7 @@ def provision_agent_vm(
         return False
 
     # Attach the imported disk with performance flags
-    _pve_cmd(cfg, node_ip,
-             f"qm set {vmid} --scsi0 {storage}:vm-{vmid}-disk-0,discard=on,ssd=1,iothread=1")
+    _pve_cmd(cfg, node_ip, f"qm set {vmid} --scsi0 {storage}:vm-{vmid}-disk-0,discard=on,ssd=1,iothread=1")
     fmt.step_ok("Boot disk imported")
 
     # Step 4: Resize disk
@@ -280,12 +282,9 @@ def cmd_import(cfg: FreqConfig, pack, args) -> int:
             fmt.error("Cannot allocate VMID.")
             return 1
 
-    fmt.line("  {b}Image:{r}  {n}".format(
-        b=fmt.C.BOLD, r=fmt.C.RESET, n=CLOUD_IMAGES[image]["name"]))
-    fmt.line("  {b}VMID:{r}   {v}".format(
-        b=fmt.C.BOLD, r=fmt.C.RESET, v=vmid))
-    fmt.line("  {b}Name:{r}   {n}".format(
-        b=fmt.C.BOLD, r=fmt.C.RESET, n=name))
+    fmt.line("  {b}Image:{r}  {n}".format(b=fmt.C.BOLD, r=fmt.C.RESET, n=CLOUD_IMAGES[image]["name"]))
+    fmt.line("  {b}VMID:{r}   {v}".format(b=fmt.C.BOLD, r=fmt.C.RESET, v=vmid))
+    fmt.line("  {b}Name:{r}   {n}".format(b=fmt.C.BOLD, r=fmt.C.RESET, n=name))
     fmt.blank()
 
     ok = provision_agent_vm(cfg, node_ip, vmid, name, image_key=image)

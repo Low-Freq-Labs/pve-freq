@@ -14,10 +14,11 @@ from freq.core.config import load_config
 from freq.core.ssh import run_many as ssh_run_many
 
 # Shell-safe pattern: only allow alphanumeric, spaces, hyphens, dots, colons
-_SAFE_SHELL_RE = re.compile(r'^[a-zA-Z0-9 _\-.:,/]+$')
+_SAFE_SHELL_RE = re.compile(r"^[a-zA-Z0-9 _\-.:,/]+$")
 
 
 # -- Helpers -----------------------------------------------------------------
+
 
 def _log_query(cfg, command, target=None, max_hosts=50):
     """Run a log query across fleet hosts. Returns list of {host, output, ok}."""
@@ -45,12 +46,14 @@ def _log_query(cfg, command, target=None, max_hosts=50):
             continue
         output = r.stdout.strip() if r.returncode == 0 else ""
         if output:
-            results.append({
-                "host": h.label,
-                "ip": h.ip,
-                "output": output[:4000],
-                "lines": len(output.splitlines()),
-            })
+            results.append(
+                {
+                    "host": h.label,
+                    "ip": h.ip,
+                    "output": output[:4000],
+                    "lines": len(output.splitlines()),
+                }
+            )
 
     return results
 
@@ -74,21 +77,26 @@ def handle_logs_fleet(handler):
 
     # Validate since param — must be safe for shell (no injection)
     if not _SAFE_SHELL_RE.match(since):
-        json_response(handler, {"error": "Invalid 'since' parameter — use format like '1 hour ago' or '2026-04-03'"}, 400)
+        json_response(
+            handler, {"error": "Invalid 'since' parameter — use format like '1 hour ago' or '2026-04-03'"}, 400
+        )
         return
 
     cmd = f'journalctl --since "{since}" -p {priority} --no-pager -q 2>/dev/null | tail -{limit}'
     results = _log_query(cfg, cmd, target or None)
 
     total_lines = sum(r["lines"] for r in results)
-    json_response(handler, {
-        "ok": True,
-        "hosts_with_errors": len(results),
-        "total_lines": total_lines,
-        "since": since,
-        "priority": priority,
-        "results": results,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "hosts_with_errors": len(results),
+            "total_lines": total_lines,
+            "since": since,
+            "priority": priority,
+            "results": results,
+        },
+    )
 
 
 def handle_logs_search(handler):
@@ -112,7 +120,7 @@ def handle_logs_search(handler):
         return
 
     # Sanitize pattern — strip everything that could be shell metacharacters
-    safe_pattern = re.sub(r'[^a-zA-Z0-9 _\-.:,/]', '', pattern)[:100]
+    safe_pattern = re.sub(r"[^a-zA-Z0-9 _\-.:,/]", "", pattern)[:100]
     if not safe_pattern:
         json_response(handler, {"error": "Pattern contains only invalid characters"}, 400)
         return
@@ -120,12 +128,15 @@ def handle_logs_search(handler):
     cmd = f"journalctl --since \"{since}\" --no-pager -q 2>/dev/null | grep -i '{safe_pattern}' | tail -{limit}"
     results = _log_query(cfg, cmd, target or None)
 
-    json_response(handler, {
-        "ok": True,
-        "pattern": pattern,
-        "hosts_matched": len(results),
-        "results": results,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "pattern": pattern,
+            "hosts_matched": len(results),
+            "results": results,
+        },
+    )
 
 
 def handle_logs_oom(handler):
@@ -147,12 +158,15 @@ def handle_logs_oom(handler):
     )
     results = _log_query(cfg, cmd, target or None)
 
-    json_response(handler, {
-        "ok": True,
-        "hosts_with_oom": len(results),
-        "since": since,
-        "results": results,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "hosts_with_oom": len(results),
+            "since": since,
+            "results": results,
+        },
+    )
 
 
 def handle_logs_auth(handler):
@@ -174,12 +188,15 @@ def handle_logs_auth(handler):
     )
     results = _log_query(cfg, cmd, target or None)
 
-    json_response(handler, {
-        "ok": True,
-        "hosts_with_failures": len(results),
-        "since": since,
-        "results": results,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "hosts_with_failures": len(results),
+            "since": since,
+            "results": results,
+        },
+    )
 
 
 # -- Registration ------------------------------------------------------------

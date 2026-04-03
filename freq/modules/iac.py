@@ -14,6 +14,7 @@ Design decisions:
     - Drift detection covers: VMs, hosts, switches, firewall, DNS.
     - State export is read-only — never modifies infrastructure.
 """
+
 import json
 import os
 import time
@@ -46,10 +47,14 @@ def cmd_state_export(cfg: FreqConfig, pack, args) -> int:
 
     # Export host inventory
     for h in cfg.hosts:
-        state["hosts"].append({
-            "label": h.label, "ip": h.ip,
-            "htype": h.htype, "groups": h.groups,
-        })
+        state["hosts"].append(
+            {
+                "label": h.label,
+                "ip": h.ip,
+                "htype": h.htype,
+                "groups": h.groups,
+            }
+        )
     fmt.step_ok(f"Hosts: {len(state['hosts'])}")
 
     # Export VLANs
@@ -141,8 +146,10 @@ def cmd_state_drift(cfg: FreqConfig, pack, args) -> int:
 def cmd_state_history(cfg: FreqConfig, pack, args) -> int:
     """Show state snapshot history."""
     path = _state_dir(cfg)
-    files = sorted([f for f in os.listdir(path) if f.startswith("state-") and f.endswith(".json")
-                    and f != "state-latest.json"], reverse=True)
+    files = sorted(
+        [f for f in os.listdir(path) if f.startswith("state-") and f.endswith(".json") and f != "state-latest.json"],
+        reverse=True,
+    )
 
     fmt.header("State History", breadcrumb="FREQ > State")
     fmt.blank()

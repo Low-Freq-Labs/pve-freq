@@ -18,6 +18,7 @@ Design decisions:
     - Lab is a group filter, not a separate inventory. Lab hosts are normal
       fleet hosts with a 'lab' group tag. No duplicate management.
 """
+
 from freq.core import fmt
 from freq.core import log as logger
 from freq.core.config import FreqConfig
@@ -40,9 +41,13 @@ def _get_lab_hosts(cfg: FreqConfig) -> list:
 def _ssh(cfg, ip, command, timeout=LAB_CMD_TIMEOUT):
     """SSH to a lab host."""
     return ssh_run(
-        host=ip, command=command, key_path=cfg.ssh_key_path,
-        connect_timeout=cfg.ssh_connect_timeout, command_timeout=timeout,
-        htype="linux", use_sudo=False,
+        host=ip,
+        command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=timeout,
+        htype="linux",
+        use_sudo=False,
     )
 
 
@@ -90,7 +95,11 @@ def _cmd_status(cfg, args) -> int:
     fmt.blank()
 
     fmt.table_header(
-        ("HOST", 14), ("IP", 14), ("STATUS", 8), ("TYPE", 10), ("UPTIME", 16),
+        ("HOST", 14),
+        ("IP", 14),
+        ("STATUS", 8),
+        ("TYPE", 10),
+        ("UPTIME", 16),
     )
 
     up = 0
@@ -139,9 +148,7 @@ def _cmd_status(cfg, args) -> int:
 
     fmt.divider("Summary")
     fmt.blank()
-    fmt.line(f"  {fmt.C.GREEN}{up}{fmt.C.RESET} up  "
-             f"{fmt.C.RED}{down}{fmt.C.RESET} down  "
-             f"({len(lab_hosts)} lab hosts)")
+    fmt.line(f"  {fmt.C.GREEN}{up}{fmt.C.RESET} up  {fmt.C.RED}{down}{fmt.C.RESET} down  ({len(lab_hosts)} lab hosts)")
     fmt.blank()
     fmt.footer()
     return 0
@@ -223,10 +230,13 @@ def _deploy_media_stack(cfg, docker_dev_ip) -> int:
 
     # Create directories
     fmt.step_start("Creating directories")
-    r = _ssh(cfg, docker_dev_ip,
-             "sudo mkdir -p /opt/media-lab/{movies,tv,downloads,config/{sonarr,radarr,prowlarr}} && "
-             "sudo chmod -R 777 /opt/media-lab",
-             timeout=LAB_API_TIMEOUT)
+    r = _ssh(
+        cfg,
+        docker_dev_ip,
+        "sudo mkdir -p /opt/media-lab/{movies,tv,downloads,config/{sonarr,radarr,prowlarr}} && "
+        "sudo chmod -R 777 /opt/media-lab",
+        timeout=LAB_API_TIMEOUT,
+    )
     fmt.step_ok("Directories created") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Deploy compose file
@@ -277,28 +287,32 @@ services:
 """
 
     fmt.step_start("Deploying docker-compose.yml")
-    r = _ssh(cfg, docker_dev_ip,
-             f"cat > /opt/media-lab/docker-compose.yml << 'FREQEOF'\n{compose}\nFREQEOF",
-             timeout=LAB_API_TIMEOUT)
+    r = _ssh(
+        cfg,
+        docker_dev_ip,
+        f"cat > /opt/media-lab/docker-compose.yml << 'FREQEOF'\n{compose}\nFREQEOF",
+        timeout=LAB_API_TIMEOUT,
+    )
     fmt.step_ok("Compose file deployed") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Create test media
     fmt.step_start("Creating test media files")
-    r = _ssh(cfg, docker_dev_ip,
-             "mkdir -p '/opt/media-lab/movies/Test Movie (2024)' && "
-             "dd if=/dev/zero of='/opt/media-lab/movies/Test Movie (2024)/Test.Movie.2024.mkv' "
-             "bs=1M count=1 2>/dev/null && "
-             "mkdir -p '/opt/media-lab/tv/Test Show/Season 01' && "
-             "dd if=/dev/zero of='/opt/media-lab/tv/Test Show/Season 01/S01E01.mkv' "
-             "bs=1M count=1 2>/dev/null",
-             timeout=LAB_API_TIMEOUT)
+    r = _ssh(
+        cfg,
+        docker_dev_ip,
+        "mkdir -p '/opt/media-lab/movies/Test Movie (2024)' && "
+        "dd if=/dev/zero of='/opt/media-lab/movies/Test Movie (2024)/Test.Movie.2024.mkv' "
+        "bs=1M count=1 2>/dev/null && "
+        "mkdir -p '/opt/media-lab/tv/Test Show/Season 01' && "
+        "dd if=/dev/zero of='/opt/media-lab/tv/Test Show/Season 01/S01E01.mkv' "
+        "bs=1M count=1 2>/dev/null",
+        timeout=LAB_API_TIMEOUT,
+    )
     fmt.step_ok("Test media created") if r.returncode == 0 else fmt.step_fail("Failed")
 
     # Start stack
     fmt.step_start("Starting media stack")
-    r = _ssh(cfg, docker_dev_ip,
-             "cd /opt/media-lab && docker compose up -d",
-             timeout=LAB_LONG_TIMEOUT)
+    r = _ssh(cfg, docker_dev_ip, "cd /opt/media-lab && docker compose up -d", timeout=LAB_LONG_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok("Media stack running")
     else:
@@ -430,16 +444,17 @@ def _cmd_rebuild(cfg, args) -> int:
     # Recreate from template or as blank
     if template:
         fmt.step_start(f"Cloning from template {template}")
-        stdout, ok = _pve_cmd(cfg, node_ip,
-                               f"qm clone {template} {vmid} --name {vm_name} --full",
-                               timeout=LAB_BUILD_TIMEOUT)
+        stdout, ok = _pve_cmd(
+            cfg, node_ip, f"qm clone {template} {vmid} --name {vm_name} --full", timeout=LAB_BUILD_TIMEOUT
+        )
     else:
         fmt.step_start(f"Creating blank VM {vmid}")
-        stdout, ok = _pve_cmd(cfg, node_ip,
-                               f"qm create {vmid} --name {vm_name} "
-                               f"--cores 2 --memory 2048 "
-                               f"--net0 virtio,bridge={cfg.nic_bridge}",
-                               timeout=LAB_DOCKER_TIMEOUT)
+        stdout, ok = _pve_cmd(
+            cfg,
+            node_ip,
+            f"qm create {vmid} --name {vm_name} --cores 2 --memory 2048 --net0 virtio,bridge={cfg.nic_bridge}",
+            timeout=LAB_DOCKER_TIMEOUT,
+        )
 
     if ok:
         fmt.step_ok(f"VM {vmid} '{vm_name}' recreated")

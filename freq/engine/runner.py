@@ -17,6 +17,7 @@ Design decisions:
     - asyncio over threads — single event loop, no GIL contention
     - Semaphore cap prevents SSH connection exhaustion on large fleets
 """
+
 import asyncio
 import logging
 import time
@@ -49,9 +50,9 @@ async def _run_host(
         host.phase = Phase.PENDING
 
         # 1. PING
-        r = await ssh_run(host.ip, "echo ok", key_path=ssh_key,
-                          command_timeout=RUNNER_PING_TIMEOUT,
-                          htype=host.htype, use_sudo=False)
+        r = await ssh_run(
+            host.ip, "echo ok", key_path=ssh_key, command_timeout=RUNNER_PING_TIMEOUT, htype=host.htype, use_sudo=False
+        )
         if r.returncode != 0:
             host.phase = Phase.FAILED
             host.error = f"unreachable: {r.stderr[:50]}"
@@ -74,8 +75,7 @@ async def _run_host(
 
             if res_type == "file_line" and path:
                 # Read file and parse key-value pairs
-                r = await ssh_run(host.ip, f"cat {path} 2>/dev/null",
-                                  key_path=ssh_key, htype=host.htype, use_sudo=True)
+                r = await ssh_run(host.ip, f"cat {path} 2>/dev/null", key_path=ssh_key, htype=host.htype, use_sudo=True)
                 if r.returncode == 0:
                     for line in r.stdout.split("\n"):
                         line = line.strip()
@@ -94,8 +94,7 @@ async def _run_host(
             elif res_type == "command_check":
                 check_cmd = res.get("check_cmd", "")
                 if check_cmd:
-                    r = await ssh_run(host.ip, check_cmd,
-                                      key_path=ssh_key, htype=host.htype, use_sudo=True)
+                    r = await ssh_run(host.ip, check_cmd, key_path=ssh_key, htype=host.htype, use_sudo=True)
                     if r.returncode == 0:
                         current[res.get("key", "check")] = r.stdout.strip()
 
@@ -125,8 +124,7 @@ async def _run_host(
         host.phase = Phase.FIXING
         fix_cmds = executor.fix_commands(host, findings)
         for cmd in fix_cmds:
-            r = await ssh_run(host.ip, cmd, key_path=ssh_key,
-                              htype=host.htype, use_sudo=True)
+            r = await ssh_run(host.ip, cmd, key_path=ssh_key, htype=host.htype, use_sudo=True)
             if r.returncode != 0:
                 host.phase = Phase.FAILED
                 host.error = f"fix failed: {r.stderr[:50]}"
@@ -136,8 +134,7 @@ async def _run_host(
         # 5. ACTIVATE
         host.phase = Phase.ACTIVATING
         for cmd in executor.activate_commands(host):
-            r = await ssh_run(host.ip, cmd, key_path=ssh_key,
-                              htype=host.htype, use_sudo=True)
+            r = await ssh_run(host.ip, cmd, key_path=ssh_key, htype=host.htype, use_sudo=True)
             if r.returncode != 0:
                 host.phase = Phase.FAILED
                 host.error = f"activate failed: {r.stderr[:50]}"
@@ -150,8 +147,9 @@ async def _run_host(
         verify_ok = True
         for res in resources:
             if res.get("type") == "file_line" and res.get("path"):
-                r = await ssh_run(host.ip, "cat {} 2>/dev/null".format(res["path"]),
-                                  key_path=ssh_key, htype=host.htype, use_sudo=True)
+                r = await ssh_run(
+                    host.ip, "cat {} 2>/dev/null".format(res["path"]), key_path=ssh_key, htype=host.htype, use_sudo=True
+                )
                 if r.returncode == 0:
                     for line in r.stdout.split("\n"):
                         line = line.strip()
@@ -203,17 +201,13 @@ async def run_pipeline(
     applicable = [h for h in hosts if executor.applies_to(h)]
 
     # Run pipeline on all applicable hosts
-    tasks = [
-        asyncio.create_task(_run_host(h, executor, ssh_key, mode, semaphore))
-        for h in applicable
-    ]
+    tasks = [asyncio.create_task(_run_host(h, executor, ssh_key, mode, semaphore)) for h in applicable]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     # Handle exceptions
     for i, r in enumerate(results):
         if isinstance(r, Exception):
-            logger.error("pipeline failed for %s: %s: %s",
-                         applicable[i].label, type(r).__name__, r)
+            logger.error("pipeline failed for %s: %s: %s", applicable[i].label, type(r).__name__, r)
             applicable[i].phase = Phase.FAILED
             applicable[i].error = str(r)
 

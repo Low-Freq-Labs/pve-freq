@@ -19,6 +19,7 @@ Design decisions:
     - SSH-based, not SNMP agent. Most Linux hosts have SSH; many lack
       SNMP. SNMP is supported where available, SSH is the fallback.
 """
+
 import json
 import os
 import time
@@ -95,14 +96,12 @@ def _cmd_interfaces(cfg: FreqConfig, args) -> int:
         fmt.footer()
         return 0
 
-    command = (
-        "ip -j addr show 2>/dev/null || "
-        "ip addr show | awk '/^[0-9]/ {iface=$2} /inet / {print iface\"|\"$2}'"
-    )
+    command = "ip -j addr show 2>/dev/null || ip addr show | awk '/^[0-9]/ {iface=$2} /inet / {print iface\"|\"$2}'"
 
     fmt.step_start(f"Scanning {len(hosts)} hosts")
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=NETMON_CMD_TIMEOUT,
@@ -190,13 +189,14 @@ def _cmd_poll(cfg: FreqConfig, args) -> int:
         "  rx=$(cat /sys/class/net/$iface/statistics/rx_bytes 2>/dev/null || echo 0); "
         "  tx=$(cat /sys/class/net/$iface/statistics/tx_bytes 2>/dev/null || echo 0); "
         "  state=$(cat /sys/class/net/$iface/operstate 2>/dev/null || echo unknown); "
-        "  echo \"${iface}|${rx}|${tx}|${state}\"; "
+        '  echo "${iface}|${rx}|${tx}|${state}"; '
         "done"
     )
 
     fmt.step_start(f"Polling {len(hosts)} hosts")
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=NETMON_CMD_TIMEOUT,
@@ -324,7 +324,8 @@ def _cmd_topology(cfg: FreqConfig, args) -> int:
 
     fmt.step_start("Querying LLDP neighbors")
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=NETMON_CMD_TIMEOUT,
@@ -352,6 +353,7 @@ def _cmd_topology(cfg: FreqConfig, args) -> int:
         fmt.line(f"  {fmt.C.DIM}No LLDP data found. Install lldpd on hosts for topology discovery.{fmt.C.RESET}")
         fmt.blank()
         from freq.core.packages import install_hint
+
         fmt.line(f"  {fmt.C.DIM}  {install_hint('lldpd')}, then enable the lldpd service{fmt.C.RESET}")
 
     fmt.blank()

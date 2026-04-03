@@ -14,6 +14,7 @@ Design decisions:
     - No external scanner dependency. Package list + version comparison.
     - Fleet-wide: scan all hosts in parallel via ssh_run_many.
 """
+
 import json
 import os
 import time
@@ -47,8 +48,13 @@ def cmd_vuln_scan(cfg: FreqConfig, pack, args) -> int:
     # Check for security updates pending
     cmd = "apt list --upgradable 2>/dev/null | grep -i secur | wc -l; apt list --upgradable 2>/dev/null | wc -l"
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in linux_hosts]
-    results = run_many(hosts=hosts_data, command=cmd, key_path=cfg.ssh_key_path,
-                       connect_timeout=cfg.ssh_connect_timeout, command_timeout=15)
+    results = run_many(
+        hosts=hosts_data,
+        command=cmd,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=15,
+    )
 
     scan_results = []
     for h in linux_hosts:
@@ -63,11 +69,15 @@ def cmd_vuln_scan(cfg: FreqConfig, pack, args) -> int:
             status = f"{color}{security} security, {total} total{fmt.C.RESET}"
             fmt.line(f"  {h.label:<14} {status}")
 
-            scan_results.append({
-                "host": h.label, "ip": h.ip,
-                "security_updates": security, "total_updates": total,
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            })
+            scan_results.append(
+                {
+                    "host": h.label,
+                    "ip": h.ip,
+                    "security_updates": security,
+                    "total_updates": total,
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                }
+            )
         else:
             fmt.line(f"  {h.label:<14} {fmt.C.DIM}unreachable{fmt.C.RESET}")
 

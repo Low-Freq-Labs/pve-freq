@@ -19,6 +19,7 @@ Design decisions:
     - hosts.conf is a flat file, not TOML/YAML. Easy to grep, easy to edit
       by hand, easy to version control. Structured formats add no value here.
 """
+
 import json
 import os
 import shutil
@@ -209,6 +210,7 @@ def _hosts_add(cfg: FreqConfig) -> int:
 
     # Write to fleet registry
     from freq.core.config import Host, append_host_toml
+
     host = Host(ip=ip, label=label, htype=htype, groups=groups)
     append_host_toml(cfg.hosts_file, host)
     cfg.hosts.append(host)
@@ -246,6 +248,7 @@ def _hosts_remove(cfg: FreqConfig) -> int:
 
     # Remove from hosts list and rewrite
     from freq.core.config import save_hosts_toml
+
     cfg.hosts = [h for h in cfg.hosts if h.ip != host.ip and h.label != host.label]
     save_hosts_toml(cfg.hosts_file, cfg.hosts)
 
@@ -292,7 +295,8 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
     existing = {}  # ip -> {label, htype, groups, all_ips}
     for h in cfg.hosts:
         existing[h.ip] = {
-            "label": h.label, "htype": h.htype,
+            "label": h.label,
+            "htype": h.htype,
             "groups": getattr(h, "groups", "") or "",
             "all_ips": getattr(h, "all_ips", []) or [],
         }
@@ -308,7 +312,9 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             command="pvesh get /cluster/resources --type vm --output-format json",
             key_path=cfg.ssh_key_path,
             command_timeout=HOSTS_PVE_TIMEOUT,
-            htype="pve", use_sudo=True, cfg=cfg,
+            htype="pve",
+            use_sudo=True,
+            cfg=cfg,
         )
         if r.returncode == 0 and r.stdout:
             try:
@@ -368,8 +374,10 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             host=node_ip,
             command=f"qm agent {vmid} network-get-interfaces 2>/dev/null",
             key_path=cfg.ssh_key_path,
-            connect_timeout=3, command_timeout=HOSTS_AGENT_TIMEOUT,
-            htype="pve", use_sudo=True,
+            connect_timeout=3,
+            command_timeout=HOSTS_AGENT_TIMEOUT,
+            htype="pve",
+            use_sudo=True,
         )
 
         if r.returncode != 0 or not r.stdout.strip():
@@ -428,7 +436,14 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
         name_lower = name.lower()
         if "pve" in name_lower or "proxmox" in name_lower:
             htype = "pve"
-        elif "docker" in name_lower or "plex" in name_lower or "arr" in name_lower or "qbit" in name_lower or "tdarr" in name_lower or "sabnzbd" in name_lower:
+        elif (
+            "docker" in name_lower
+            or "plex" in name_lower
+            or "arr" in name_lower
+            or "qbit" in name_lower
+            or "tdarr" in name_lower
+            or "sabnzbd" in name_lower
+        ):
             htype = "docker"
         elif "truenas" in name_lower or "freenas" in name_lower:
             htype = "truenas"
@@ -444,8 +459,11 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
         if chosen_ip in existing:
             e = existing[chosen_ip]
             discovered[chosen_ip] = {
-                "label": safe_label, "htype": e["htype"],
-                "groups": e["groups"], "vmid": vmid, "source": "pve",
+                "label": safe_label,
+                "htype": e["htype"],
+                "groups": e["groups"],
+                "vmid": vmid,
+                "source": "pve",
                 "all_ips": real_all_ips,
             }
         else:
@@ -461,8 +479,11 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                     groups = "lab"
             safe_label = validate.sanitize_label(name)
             discovered[chosen_ip] = {
-                "label": safe_label, "htype": htype,
-                "groups": groups, "vmid": vmid, "source": "pve",
+                "label": safe_label,
+                "htype": htype,
+                "groups": groups,
+                "vmid": vmid,
+                "source": "pve",
                 "all_ips": real_all_ips,
             }
 
@@ -472,18 +493,24 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
 
     # ── Step 4: Add PVE nodes themselves ──
     for i, node_ip in enumerate(cfg.pve_nodes):
-        name = cfg.pve_node_names[i] if i < len(cfg.pve_node_names) else f"pve{i+1:02d}"
+        name = cfg.pve_node_names[i] if i < len(cfg.pve_node_names) else f"pve{i + 1:02d}"
         if node_ip in existing:
             e = existing[node_ip]
             discovered[node_ip] = {
-                "label": e["label"], "htype": e["htype"],
-                "groups": e["groups"], "vmid": 0, "source": "pve-node",
+                "label": e["label"],
+                "htype": e["htype"],
+                "groups": e["groups"],
+                "vmid": 0,
+                "source": "pve-node",
                 "all_ips": e.get("all_ips", []),
             }
         elif node_ip not in discovered:
             discovered[node_ip] = {
-                "label": name, "htype": "pve",
-                "groups": "prod,cluster", "vmid": 0, "source": "pve-node",
+                "label": name,
+                "htype": "pve",
+                "groups": "prod,cluster",
+                "vmid": 0,
+                "source": "pve-node",
                 "all_ips": [],
             }
 
@@ -495,17 +522,22 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             if ip in existing:
                 e = existing[ip]
                 discovered[ip] = {
-                    "label": e["label"], "htype": e["htype"],
-                    "groups": e["groups"], "vmid": 0, "source": "fleet-boundaries",
+                    "label": e["label"],
+                    "htype": e["htype"],
+                    "groups": e["groups"],
+                    "vmid": 0,
+                    "source": "fleet-boundaries",
                     "all_ips": e.get("all_ips", []),
                 }
             elif ip not in discovered:
                 # Sanitize label — hosts.conf uses whitespace as delimiter
                 safe_label = dev.label.replace(" ", "-").lower()
                 discovered[ip] = {
-                    "label": safe_label, "htype": dev.device_type,
+                    "label": safe_label,
+                    "htype": dev.device_type,
                     "groups": "prod,network" if dev.device_type in ("pfsense", "switch") else "prod",
-                    "vmid": 0, "source": "fleet-boundaries",
+                    "vmid": 0,
+                    "source": "fleet-boundaries",
                     "all_ips": [],
                 }
         fmt.step_ok(f"Fleet boundaries: {len(fb.physical)} physical devices")
@@ -514,8 +546,11 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
     for ip, e in existing.items():
         if ip not in discovered:
             discovered[ip] = {
-                "label": e["label"], "htype": e["htype"],
-                "groups": e["groups"], "vmid": 0, "source": "manual",
+                "label": e["label"],
+                "htype": e["htype"],
+                "groups": e["groups"],
+                "vmid": 0,
+                "source": "manual",
                 "all_ips": e.get("all_ips", []),
             }
 
@@ -525,7 +560,9 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
 
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}Sync Summary:{fmt.C.RESET}")
-    fmt.line(f"    Existing: {len(existing)}  |  Discovered: {len(discovered)}  |  New: {fmt.C.GREEN}{len(new_hosts)}{fmt.C.RESET}  |  Removed: {fmt.C.RED}{len(removed_hosts)}{fmt.C.RESET}")
+    fmt.line(
+        f"    Existing: {len(existing)}  |  Discovered: {len(discovered)}  |  New: {fmt.C.GREEN}{len(new_hosts)}{fmt.C.RESET}  |  Removed: {fmt.C.RED}{len(removed_hosts)}{fmt.C.RESET}"
+    )
     fmt.blank()
 
     if new_hosts:
@@ -566,21 +603,35 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
 
     # Build Host list from discovered data, sorted by type then IP
     all_hosts = []
-    for ip, d in sorted(discovered.items(), key=lambda x: (
-        0 if x[1]["htype"] == "pve" else
-        1 if x[1]["htype"] == "docker" else
-        2 if x[1]["htype"] == "truenas" else
-        3 if x[1]["htype"] in ("pfsense", "switch") else
-        4 if x[1]["htype"] == "idrac" else 5,
-        x[0],
-    )):
+    for ip, d in sorted(
+        discovered.items(),
+        key=lambda x: (
+            0
+            if x[1]["htype"] == "pve"
+            else 1
+            if x[1]["htype"] == "docker"
+            else 2
+            if x[1]["htype"] == "truenas"
+            else 3
+            if x[1]["htype"] in ("pfsense", "switch")
+            else 4
+            if x[1]["htype"] == "idrac"
+            else 5,
+            x[0],
+        ),
+    ):
         all_ips = d.get("all_ips", [])
         if isinstance(all_ips, str):
             all_ips = [a for a in all_ips.split(",") if a]
-        all_hosts.append(Host(
-            ip=ip, label=d["label"], htype=d["htype"],
-            groups=d.get("groups", ""), all_ips=all_ips,
-        ))
+        all_hosts.append(
+            Host(
+                ip=ip,
+                label=d["label"],
+                htype=d["htype"],
+                groups=d.get("groups", ""),
+                all_ips=all_ips,
+            )
+        )
 
     # Backup existing
     if os.path.isfile(cfg.hosts_file):
@@ -618,6 +669,7 @@ def update_host_label(cfg: FreqConfig, target_ip: str, new_label: str) -> bool:
 
     if updated:
         from freq.core.config import save_hosts_toml
+
         save_hosts_toml(cfg.hosts_file, cfg.hosts)
 
     return updated
@@ -689,6 +741,7 @@ def _groups_add(cfg: FreqConfig, args) -> int:
     # Update in-memory and rewrite
     host.groups = new_groups
     from freq.core.config import save_hosts_toml
+
     save_hosts_toml(cfg.hosts_file, cfg.hosts)
     fmt.info(f"Added {host.label} to group '{group}'.")
 
@@ -720,6 +773,7 @@ def _groups_remove(cfg: FreqConfig, args) -> int:
     # Update in-memory and rewrite
     host.groups = new_groups
     from freq.core.config import save_hosts_toml
+
     save_hosts_toml(cfg.hosts_file, cfg.hosts)
     fmt.info(f"Removed {host.label} from group '{group}'.")
 

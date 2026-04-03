@@ -7,7 +7,6 @@ Where: Routes registered at /api/* (same paths as legacy serve.py).
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
-
 from freq.api.helpers import json_response
 from freq.core.config import load_config
 from freq.modules.serve import (
@@ -23,6 +22,7 @@ from freq.modules.serve import (
 def handle_policies(handler):
     """GET /api/policies -- available policies."""
     from freq.engine.policies import ALL_POLICIES
+
     policy_list = [
         {
             "name": p["name"],
@@ -43,8 +43,10 @@ def handle_policy_check(handler):
     try:
         import io, contextlib
         from freq.modules.engine_cmds import cmd_check
+
         class Args:
             pass
+
         args = Args()
         args.policy = policy or None
         args.hosts = hosts_param or None
@@ -61,15 +63,18 @@ def handle_policy_fix(handler):
     cfg = load_config()
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     query = _parse_query(handler)
     policy = query.get("policy", [""])[0]
     hosts_param = query.get("hosts", [""])[0]
     try:
         import io, contextlib
         from freq.modules.engine_cmds import cmd_fix
+
         class Args:
             pass
+
         args = Args()
         args.policy = policy or None
         args.hosts = hosts_param or None
@@ -90,8 +95,10 @@ def handle_policy_diff(handler):
     try:
         import io, contextlib
         from freq.modules.engine_cmds import cmd_diff
+
         class Args:
             pass
+
         args = Args()
         args.policy = policy or None
         args.hosts = hosts_param or None
@@ -106,6 +113,7 @@ def handle_policy_diff(handler):
 def handle_baseline_list(handler):
     """GET /api/baseline/list -- list saved baselines."""
     from freq.modules.baseline import _list_baselines
+
     cfg = load_config()
     baselines = _list_baselines(cfg)
     json_response(handler, {"baselines": baselines, "count": len(baselines)})
@@ -114,29 +122,36 @@ def handle_baseline_list(handler):
 def handle_gitops_status(handler):
     """GET /api/gitops/status -- return GitOps sync status and configuration."""
     from freq.jarvis.gitops import load_gitops_config, load_state, state_to_dict
+
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)
     state = load_state(cfg.data_dir)
-    json_response(handler, {
-        "enabled": go_cfg.enabled,
-        "repo_url": go_cfg.repo_url,
-        "branch": go_cfg.branch,
-        "sync_interval": go_cfg.sync_interval,
-        "auto_apply": go_cfg.auto_apply,
-        "state": state_to_dict(state),
-    })
+    json_response(
+        handler,
+        {
+            "enabled": go_cfg.enabled,
+            "repo_url": go_cfg.repo_url,
+            "branch": go_cfg.branch,
+            "sync_interval": go_cfg.sync_interval,
+            "auto_apply": go_cfg.auto_apply,
+            "state": state_to_dict(state),
+        },
+    )
 
 
 def handle_gitops_sync(handler):
     """POST /api/gitops/sync -- trigger a sync (fetch) from remote."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.gitops import load_gitops_config, sync, state_to_dict
+
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)
     if not go_cfg.enabled:
-        json_response(handler, {"error": "GitOps not configured -- set repo_url in freq.toml [gitops]"}); return
+        json_response(handler, {"error": "GitOps not configured -- set repo_url in freq.toml [gitops]"})
+        return
     state = sync(cfg.data_dir, go_cfg.branch)
     json_response(handler, {"ok": True, "state": state_to_dict(state)})
 
@@ -145,12 +160,15 @@ def handle_gitops_apply(handler):
     """POST /api/gitops/apply -- apply pending changes (pull)."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.gitops import load_gitops_config, apply_changes, load_state, state_to_dict
+
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)
     if not go_cfg.enabled:
-        json_response(handler, {"error": "GitOps not configured"}); return
+        json_response(handler, {"error": "GitOps not configured"})
+        return
     ok, msg = apply_changes(cfg.data_dir, go_cfg.branch)
     state = load_state(cfg.data_dir)
     json_response(handler, {"ok": ok, "message": msg, "state": state_to_dict(state)})
@@ -159,6 +177,7 @@ def handle_gitops_apply(handler):
 def handle_gitops_diff(handler):
     """GET /api/gitops/diff -- show diff between local and remote."""
     from freq.jarvis.gitops import load_gitops_config, get_diff, get_diff_full
+
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)
     params = _parse_query_flat(handler.path)
@@ -173,6 +192,7 @@ def handle_gitops_diff(handler):
 def handle_gitops_log(handler):
     """GET /api/gitops/log -- return recent commit history."""
     from freq.jarvis.gitops import get_log
+
     cfg = load_config()
     params = _parse_query_flat(handler.path)
     try:
@@ -187,13 +207,16 @@ def handle_gitops_rollback(handler):
     """POST /api/gitops/rollback -- rollback config to a specific commit."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.gitops import rollback
+
     cfg = load_config()
     params = _parse_query_flat(handler.path)
     commit = params.get("commit", "").strip()
     if not commit:
-        json_response(handler, {"error": "Missing commit parameter"}); return
+        json_response(handler, {"error": "Missing commit parameter"})
+        return
     ok, msg = rollback(cfg.data_dir, commit)
     json_response(handler, {"ok": ok, "message": msg})
 
@@ -202,12 +225,15 @@ def handle_gitops_init(handler):
     """POST /api/gitops/init -- initialize the gitops repo clone."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     from freq.jarvis.gitops import load_gitops_config, init_repo
+
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)
     if not go_cfg.repo_url:
-        json_response(handler, {"error": "No repo_url configured in freq.toml [gitops]"}); return
+        json_response(handler, {"error": "No repo_url configured in freq.toml [gitops]"})
+        return
     ok, msg = init_repo(cfg.data_dir, go_cfg.repo_url, go_cfg.branch)
     json_response(handler, {"ok": ok, "message": msg})
 

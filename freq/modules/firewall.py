@@ -16,6 +16,7 @@ Design decisions:
     - DHCP lease parsing from dhcpd.leases file via SSH.
     - Gateway status via pfctl and netstat — no API needed.
 """
+
 import os
 import re
 import time
@@ -30,14 +31,17 @@ from freq.core import log as logger
 # SSH Helper
 # ---------------------------------------------------------------------------
 
+
 def _fw_ssh(ip, cmd, cfg, timeout=15):
     """Run a command on pfSense/OPNsense via SSH."""
     r = ssh_run(
-        host=ip, command=cmd,
+        host=ip,
+        command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
-        htype="pfsense", use_sudo=False,
+        htype="pfsense",
+        use_sudo=False,
     )
     return r.stdout or "", r.returncode == 0
 
@@ -62,6 +66,7 @@ def _fw_data_dir(cfg):
 # ---------------------------------------------------------------------------
 # Commands — System Status
 # ---------------------------------------------------------------------------
+
 
 def cmd_fw_status(cfg: FreqConfig, pack, args) -> int:
     """Show firewall system status."""
@@ -110,6 +115,7 @@ def cmd_fw_status(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Commands — Rules
 # ---------------------------------------------------------------------------
+
 
 def cmd_fw_rules(cfg: FreqConfig, pack, args) -> int:
     """List, export, or audit firewall rules."""
@@ -217,6 +223,7 @@ def _fw_rules_audit(cfg, ip):
 # Commands — NAT
 # ---------------------------------------------------------------------------
 
+
 def cmd_fw_nat(cfg: FreqConfig, pack, args) -> int:
     """List NAT/port forward rules."""
     ip = _get_fw_ip(cfg)
@@ -247,6 +254,7 @@ def cmd_fw_nat(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Commands — States
 # ---------------------------------------------------------------------------
+
 
 def cmd_fw_states(cfg: FreqConfig, pack, args) -> int:
     """Show active connection states."""
@@ -282,6 +290,7 @@ def cmd_fw_states(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Commands — Interfaces & Gateways
 # ---------------------------------------------------------------------------
+
 
 def cmd_fw_interfaces(cfg: FreqConfig, pack, args) -> int:
     """Show firewall network interfaces."""
@@ -333,6 +342,7 @@ def cmd_fw_gateways(cfg: FreqConfig, pack, args) -> int:
 # ---------------------------------------------------------------------------
 # Commands — DHCP
 # ---------------------------------------------------------------------------
+
 
 def cmd_fw_dhcp(cfg: FreqConfig, pack, args) -> int:
     """Show DHCP leases from pfSense."""

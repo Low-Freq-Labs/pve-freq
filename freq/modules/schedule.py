@@ -19,6 +19,7 @@ Design decisions:
     - JSON config, not crontab. Jobs are version-controllable, inspectable,
       and portable. The scheduler reads JSON, not /var/spool/cron.
 """
+
 import json
 import os
 import re
@@ -78,7 +79,7 @@ def _save_log(cfg: FreqConfig, log_entries: list):
 
 def _parse_interval(interval_str: str) -> int:
     """Parse an interval string like '2h', '30m', '1d' into seconds."""
-    match = re.match(r'^(\d+)([smhd])$', interval_str.strip().lower())
+    match = re.match(r"^(\d+)([smhd])$", interval_str.strip().lower())
     if not match:
         return 0
     value = int(match.group(1))
@@ -89,16 +90,27 @@ def _parse_interval(interval_str: str) -> int:
 
 # Pre-defined job templates
 JOB_TEMPLATES = {
-    "trend-snapshot": {"command": "freq trend snapshot", "interval": "2h",
-                       "description": "Record capacity data point every 2 hours"},
-    "sla-check": {"command": "freq sla check", "interval": "5m",
-                  "description": "Record SLA connectivity check every 5 minutes"},
-    "alert-check": {"command": "freq alert check", "interval": "5m",
-                    "description": "Evaluate alert rules every 5 minutes"},
-    "patrol-run": {"command": "freq patrol --interval 0", "interval": "30m",
-                   "description": "Run patrol sweep every 30 minutes"},
-    "report-daily": {"command": "freq report --json", "interval": "24h",
-                     "description": "Generate daily fleet report"},
+    "trend-snapshot": {
+        "command": "freq trend snapshot",
+        "interval": "2h",
+        "description": "Record capacity data point every 2 hours",
+    },
+    "sla-check": {
+        "command": "freq sla check",
+        "interval": "5m",
+        "description": "Record SLA connectivity check every 5 minutes",
+    },
+    "alert-check": {
+        "command": "freq alert check",
+        "interval": "5m",
+        "description": "Evaluate alert rules every 5 minutes",
+    },
+    "patrol-run": {
+        "command": "freq patrol --interval 0",
+        "interval": "30m",
+        "description": "Run patrol sweep every 30 minutes",
+    },
+    "report-daily": {"command": "freq report --json", "interval": "24h", "description": "Generate daily fleet report"},
 }
 
 
@@ -137,14 +149,20 @@ def _cmd_list(cfg: FreqConfig, args) -> int:
         fmt.line(f"  {fmt.C.DIM}No scheduled jobs.{fmt.C.RESET}")
         fmt.blank()
         fmt.line(f"  {fmt.C.DIM}Create one:{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}  freq schedule create my-job --command 'freq trend snapshot' --interval 2h{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.DIM}  freq schedule create my-job --command 'freq trend snapshot' --interval 2h{fmt.C.RESET}"
+        )
         fmt.line(f"  {fmt.C.DIM}  freq schedule templates   (see pre-built jobs){fmt.C.RESET}")
         fmt.blank()
         fmt.footer()
         return 0
 
     fmt.table_header(
-        ("NAME", 18), ("COMMAND", 28), ("INTERVAL", 10), ("STATUS", 8), ("LAST RUN", 20),
+        ("NAME", 18),
+        ("COMMAND", 28),
+        ("INTERVAL", 10),
+        ("STATUS", 8),
+        ("LAST RUN", 20),
     )
 
     for job in jobs:
@@ -179,7 +197,7 @@ def _cmd_create(cfg: FreqConfig, args) -> int:
         fmt.info("Interval: 5m, 2h, 1d, etc.")
         return 1
 
-    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+    if not re.match(r"^[a-zA-Z0-9_-]+$", name):
         fmt.error("Job name must be alphanumeric with hyphens/underscores.")
         return 1
 
@@ -280,7 +298,11 @@ def _cmd_run(cfg: FreqConfig, args) -> int:
 
     try:
         result = subprocess.run(
-            command, shell=True, capture_output=True, text=True, timeout=300,
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=300,
         )
         exit_code = result.returncode
         if exit_code == 0:
@@ -302,11 +324,14 @@ def _cmd_run(cfg: FreqConfig, args) -> int:
 
     # Log execution
     log_entries = _load_log(cfg)
-    log_entries.append({
-        "job": name, "command": command,
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "exit_code": exit_code,
-    })
+    log_entries.append(
+        {
+            "job": name,
+            "command": command,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "exit_code": exit_code,
+        }
+    )
     _save_log(cfg, log_entries)
 
     fmt.blank()

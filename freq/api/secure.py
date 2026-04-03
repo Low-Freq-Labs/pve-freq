@@ -29,13 +29,21 @@ def handle_vault(handler):
     """GET /api/vault — list vault entries (values masked)."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
     cfg = load_config()
     if not os.path.exists(cfg.vault_file):
-        json_response(handler, {"entries": [], "initialized": False}); return
+        json_response(handler, {"entries": [], "initialized": False})
+        return
     entries = vault_list(cfg)
-    safe = [{"host": h, "key": k, "masked": "********" if any(w in k.lower() for w in ["pass", "secret", "token", "key"]) else v[:20]}
-            for h, k, v in entries]
+    safe = [
+        {
+            "host": h,
+            "key": k,
+            "masked": "********" if any(w in k.lower() for w in ["pass", "secret", "token", "key"]) else v[:20],
+        }
+        for h, k, v in entries
+    ]
     json_response(handler, {"entries": safe, "initialized": True, "count": len(entries)})
 
 
@@ -43,14 +51,16 @@ def handle_vault_set(handler):
     """POST /api/vault/set — set a vault entry."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
     cfg = load_config()
     params = get_params(handler)
     key = params.get("key", [""])[0]
     value = params.get("value", [""])[0]
     host = params.get("host", ["DEFAULT"])[0]
     if not key or not value:
-        json_response(handler, {"error": "Key and value required"}); return
+        json_response(handler, {"error": "Key and value required"})
+        return
     if not os.path.exists(cfg.vault_file):
         vault_init(cfg)
     ok = vault_set(cfg, host, key, value)
@@ -61,7 +71,8 @@ def handle_vault_delete(handler):
     """POST /api/vault/delete — delete a vault entry."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
     cfg = load_config()
     params = get_params(handler)
     key = params.get("key", [""])[0]
@@ -74,7 +85,8 @@ def handle_harden(handler):
     """GET /api/harden — run SSH hardening checks across fleet."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err}, 403); return
+        json_response(handler, {"error": err}, 403)
+        return
     cfg = load_config()
     params = get_params(handler)
     target = params.get("target", ["all"])[0]
@@ -84,17 +96,33 @@ def handle_harden(handler):
         h = res.by_target(cfg.hosts, target)
         hosts = [h] if h else []
     checks = [
-        ("PasswordAuth", "grep -c '^PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null || echo 0",
-         "sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config"),
-        ("RootLogin", "grep -c '^PermitRootLogin prohibit-password' /etc/ssh/sshd_config 2>/dev/null || echo 0",
-         "sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config"),
-        ("EmptyPasswd", "grep -c '^PermitEmptyPasswords no' /etc/ssh/sshd_config 2>/dev/null || echo 0",
-         "sed -i 's/^#*PermitEmptyPasswords.*/PermitEmptyPasswords no/' /etc/ssh/sshd_config"),
+        (
+            "PasswordAuth",
+            "grep -c '^PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null || echo 0",
+            "sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config",
+        ),
+        (
+            "RootLogin",
+            "grep -c '^PermitRootLogin prohibit-password' /etc/ssh/sshd_config 2>/dev/null || echo 0",
+            "sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config",
+        ),
+        (
+            "EmptyPasswd",
+            "grep -c '^PermitEmptyPasswords no' /etc/ssh/sshd_config 2>/dev/null || echo 0",
+            "sed -i 's/^#*PermitEmptyPasswords.*/PermitEmptyPasswords no/' /etc/ssh/sshd_config",
+        ),
     ]
     results = []
     for name, check_cmd, _ in checks:
-        r = ssh_run_many(hosts=hosts, command=check_cmd, key_path=cfg.ssh_key_path,
-                         connect_timeout=3, command_timeout=10, max_parallel=10, use_sudo=True)
+        r = ssh_run_many(
+            hosts=hosts,
+            command=check_cmd,
+            key_path=cfg.ssh_key_path,
+            connect_timeout=3,
+            command_timeout=10,
+            max_parallel=10,
+            use_sudo=True,
+        )
         for h in hosts:
             host_res = r.get(h.label)
             ok = host_res and host_res.returncode == 0 and host_res.stdout.strip() != "0"
@@ -107,7 +135,8 @@ def handle_sweep(handler):
     cfg = load_config()
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err}); return
+        json_response(handler, {"error": err})
+        return
     params = get_params(handler)
     do_fix = params.get("fix", ["false"])[0].lower() == "true"
     try:
@@ -117,6 +146,7 @@ def handle_sweep(handler):
 
         class Args:
             pass
+
         args = Args()
         args.fix = do_fix
         buf = io.StringIO()
@@ -130,6 +160,7 @@ def handle_sweep(handler):
 def handle_cert_inventory(handler):
     """GET /api/cert/inventory — get cert inventory."""
     from freq.modules.cert import _load_cert_data
+
     cfg = load_config()
     data = _load_cert_data(cfg)
     json_response(handler, data)
@@ -138,6 +169,7 @@ def handle_cert_inventory(handler):
 def handle_dns_inventory(handler):
     """GET /api/dns/inventory — get DNS inventory."""
     from freq.modules.dns import _load_dns_data
+
     cfg = load_config()
     data = _load_dns_data(cfg)
     json_response(handler, data)
@@ -146,6 +178,7 @@ def handle_dns_inventory(handler):
 def handle_patch_status(handler):
     """GET /api/patch/status — get patch status (history only)."""
     from freq.modules.patch import _load_history, _load_holds
+
     cfg = load_config()
     json_response(handler, {"history": _load_history(cfg)[-20:], "holds": _load_holds(cfg)})
 
@@ -166,7 +199,8 @@ def handle_patch_compliance(handler):
         "else echo 0; fi"
     )
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=30,
@@ -189,36 +223,50 @@ def handle_patch_compliance(handler):
             count = 0
         if count == 0:
             compliant += 1
-        host_results.append({
-            "host": h.label, "status": "compliant" if count == 0 else "updates_available",
-            "updates": count,
-        })
+        host_results.append(
+            {
+                "host": h.label,
+                "status": "compliant" if count == 0 else "updates_available",
+                "updates": count,
+            }
+        )
 
     pct = round(compliant / max(total_reachable, 1) * 100, 1)
-    json_response(handler, {
-        "hosts": host_results, "compliance_pct": pct,
-        "compliant": compliant, "total": total_reachable,
-    })
+    json_response(
+        handler,
+        {
+            "hosts": host_results,
+            "compliance_pct": pct,
+            "compliant": compliant,
+            "total": total_reachable,
+        },
+    )
 
 
 def handle_secrets_audit(handler):
     """GET /api/secrets/audit — secret audit summary."""
     from freq.modules.secrets import _load_leases, _load_scan_results
+
     cfg = load_config()
     leases = _load_leases(cfg)
     scan = _load_scan_results(cfg)
     now = time.time()
     expired = sum(1 for l in leases if 0 < l.get("expires_epoch", 0) < now)
-    json_response(handler, {
-        "leases": len(leases), "expired": expired,
-        "scan_findings": len(scan.get("findings", [])),
-        "last_scan": scan.get("scan_time", "never"),
-    })
+    json_response(
+        handler,
+        {
+            "leases": len(leases),
+            "expired": expired,
+            "scan_findings": len(scan.get("findings", [])),
+            "last_scan": scan.get("scan_time", "never"),
+        },
+    )
 
 
 def handle_secrets_leases(handler):
     """GET /api/secrets/leases — list secret leases."""
     from freq.modules.secrets import _load_leases
+
     cfg = load_config()
     json_response(handler, {"leases": _load_leases(cfg)})
 
@@ -226,6 +274,7 @@ def handle_secrets_leases(handler):
 def handle_secrets_scan_results(handler):
     """GET /api/secrets/scan — get last scan results."""
     from freq.modules.secrets import _load_scan_results
+
     cfg = load_config()
     json_response(handler, _load_scan_results(cfg))
 
@@ -233,6 +282,7 @@ def handle_secrets_scan_results(handler):
 def handle_proxy_list(handler):
     """GET /api/proxy/list — list proxy routes."""
     from freq.modules.proxy import _load_routes
+
     cfg = load_config()
     routes = _load_routes(cfg)
     json_response(handler, {"routes": routes, "count": len(routes)})
@@ -255,7 +305,8 @@ def handle_proxy_status_api(handler):
         'echo "${NGINX}|${CADDY}|${TRAEFIK}|${HAPROXY}"'
     )
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=15,
@@ -274,10 +325,15 @@ def handle_proxy_status_api(handler):
         nginx, caddy, traefik, haproxy = parts[0], parts[1], parts[2], parts[3]
         if all(p == "no" for p in (nginx, caddy, traefik, haproxy)):
             continue
-        proxy_hosts.append({
-            "host": h.label, "nginx": nginx == "yes", "caddy": caddy == "yes",
-            "traefik": traefik == "yes", "haproxy": haproxy == "yes",
-        })
+        proxy_hosts.append(
+            {
+                "host": h.label,
+                "nginx": nginx == "yes",
+                "caddy": caddy == "yes",
+                "traefik": traefik == "yes",
+                "haproxy": haproxy == "yes",
+            }
+        )
 
     json_response(handler, {"hosts": proxy_hosts, "total": len(proxy_hosts)})
 
@@ -285,18 +341,23 @@ def handle_proxy_status_api(handler):
 def handle_comply_status(handler):
     """GET /api/comply/status — compliance status."""
     from freq.modules.comply import _load_results, CIS_CHECKS
+
     cfg = load_config()
     results = _load_results(cfg)
-    json_response(handler, {
-        "last_scan": results.get("last_scan", "never"),
-        "total_checks": len(CIS_CHECKS),
-        "scan_count": len(results.get("scans", [])),
-    })
+    json_response(
+        handler,
+        {
+            "last_scan": results.get("last_scan", "never"),
+            "total_checks": len(CIS_CHECKS),
+            "scan_count": len(results.get("scans", [])),
+        },
+    )
 
 
 def handle_comply_results(handler):
     """GET /api/comply/results — get compliance scan results."""
     from freq.modules.comply import _load_results
+
     cfg = load_config()
     results = _load_results(cfg)
     scans = results.get("scans", [])

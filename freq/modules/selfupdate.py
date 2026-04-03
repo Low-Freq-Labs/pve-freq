@@ -18,6 +18,7 @@ Design decisions:
     - Detect, don't assume. FREQ can be installed four different ways;
       the updater figures out which one and acts accordingly.
 """
+
 import os
 import subprocess
 
@@ -102,7 +103,9 @@ def _update_git(cfg: FreqConfig) -> int:
 
     r = subprocess.run(
         ["git", "-C", cfg.install_dir, "fetch", "--dry-run"],
-        capture_output=True, text=True, timeout=UPDATE_FETCH_TIMEOUT,
+        capture_output=True,
+        text=True,
+        timeout=UPDATE_FETCH_TIMEOUT,
     )
 
     if r.returncode != 0:
@@ -114,12 +117,16 @@ def _update_git(cfg: FreqConfig) -> int:
     # Check if behind
     r = subprocess.run(
         ["git", "-C", cfg.install_dir, "status", "-uno", "--porcelain"],
-        capture_output=True, text=True, timeout=UPDATE_CHECK_TIMEOUT,
+        capture_output=True,
+        text=True,
+        timeout=UPDATE_CHECK_TIMEOUT,
     )
 
     r2 = subprocess.run(
         ["git", "-C", cfg.install_dir, "log", "HEAD..@{u}", "--oneline"],
-        capture_output=True, text=True, timeout=UPDATE_CHECK_TIMEOUT,
+        capture_output=True,
+        text=True,
+        timeout=UPDATE_CHECK_TIMEOUT,
     )
 
     if r2.returncode == 0 and r2.stdout.strip():
@@ -141,12 +148,15 @@ def _update_git(cfg: FreqConfig) -> int:
             fmt.step_start("Pulling updates")
             r = subprocess.run(
                 ["git", "-C", cfg.install_dir, "pull", "--ff-only"],
-                capture_output=True, text=True, timeout=UPDATE_APPLY_TIMEOUT,
+                capture_output=True,
+                text=True,
+                timeout=UPDATE_APPLY_TIMEOUT,
             )
             if r.returncode == 0:
                 fmt.step_ok("Updated successfully")
                 # Reimport to show new version
                 import importlib
+
                 importlib.reload(freq)
                 fmt.line(f"  {fmt.C.GREEN}New version: {freq.__version__}{fmt.C.RESET}")
             else:

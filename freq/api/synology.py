@@ -30,6 +30,7 @@ _synology_session = {"sid": "", "ip": ""}
 
 # -- Helper ------------------------------------------------------------------
 
+
 def _syn_url(ip, api, version, method, extra_params=None):
     """Build a Synology DSM API URL."""
     params = {
@@ -77,11 +78,17 @@ def _syn_login(cfg):
     if not passwd:
         return None, "Synology credentials not in vault (synology|dsm_user, synology|dsm_pass)"
 
-    data, err = _syn_request(ip, "SYNO.API.Auth", 6, "login", {
-        "account": user,
-        "passwd": passwd,
-        "format": "sid",
-    })
+    data, err = _syn_request(
+        ip,
+        "SYNO.API.Auth",
+        6,
+        "login",
+        {
+            "account": user,
+            "passwd": passwd,
+            "format": "sid",
+        },
+    )
     if err:
         return None, f"Login failed: {err}"
     sid = data.get("sid", "")
@@ -134,16 +141,19 @@ def handle_synology_status(handler):
         json_response(handler, {"ok": False, "error": err})
         return
 
-    json_response(handler, {
-        "ok": True,
-        "model": data.get("model", ""),
-        "ram": data.get("ram", 0),
-        "serial": data.get("serial", ""),
-        "version": data.get("version_string", ""),
-        "uptime": data.get("uptime", 0),
-        "temperature": data.get("temperature", 0),
-        "raw": data,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "model": data.get("model", ""),
+            "ram": data.get("ram", 0),
+            "serial": data.get("serial", ""),
+            "version": data.get("version_string", ""),
+            "uptime": data.get("uptime", 0),
+            "temperature": data.get("temperature", 0),
+            "raw": data,
+        },
+    )
 
 
 def handle_synology_storage(handler):
@@ -159,25 +169,29 @@ def handle_synology_storage(handler):
 
     volumes = []
     for vol in data.get("volumes", []):
-        volumes.append({
-            "id": vol.get("id", ""),
-            "status": vol.get("status", ""),
-            "total_size": vol.get("size", {}).get("total", ""),
-            "used_size": vol.get("size", {}).get("used", ""),
-            "fs_type": vol.get("fs_type", ""),
-        })
+        volumes.append(
+            {
+                "id": vol.get("id", ""),
+                "status": vol.get("status", ""),
+                "total_size": vol.get("size", {}).get("total", ""),
+                "used_size": vol.get("size", {}).get("used", ""),
+                "fs_type": vol.get("fs_type", ""),
+            }
+        )
 
     disks = []
     for disk in data.get("disks", []):
-        disks.append({
-            "name": disk.get("name", ""),
-            "model": disk.get("model", ""),
-            "vendor": disk.get("vendor", ""),
-            "size": disk.get("size_total", 0),
-            "temp": disk.get("temp", 0),
-            "status": disk.get("status", ""),
-            "smart_status": disk.get("smart_status", ""),
-        })
+        disks.append(
+            {
+                "name": disk.get("name", ""),
+                "model": disk.get("model", ""),
+                "vendor": disk.get("vendor", ""),
+                "size": disk.get("size_total", 0),
+                "temp": disk.get("temp", 0),
+                "status": disk.get("status", ""),
+                "smart_status": disk.get("smart_status", ""),
+            }
+        )
 
     json_response(handler, {"ok": True, "volumes": volumes, "disks": disks})
 
@@ -195,11 +209,13 @@ def handle_synology_shares(handler):
 
     shares = []
     for s in data.get("shares", []):
-        shares.append({
-            "name": s.get("name", ""),
-            "path": s.get("path", ""),
-            "is_dir": s.get("isdir", False),
-        })
+        shares.append(
+            {
+                "name": s.get("name", ""),
+                "path": s.get("path", ""),
+                "is_dir": s.get("isdir", False),
+            }
+        )
 
     json_response(handler, {"ok": True, "shares": shares, "total": data.get("total", 0)})
 
@@ -218,12 +234,14 @@ def handle_synology_docker(handler):
 
     containers = []
     for c in data.get("containers", []):
-        containers.append({
-            "name": c.get("name", ""),
-            "image": c.get("image", ""),
-            "status": c.get("status", ""),
-            "state": c.get("state", ""),
-        })
+        containers.append(
+            {
+                "name": c.get("name", ""),
+                "image": c.get("image", ""),
+                "status": c.get("status", ""),
+                "state": c.get("state", ""),
+            }
+        )
 
     json_response(handler, {"ok": True, "containers": containers, "total": len(containers)})
 
@@ -241,12 +259,14 @@ def handle_synology_packages(handler):
 
     packages = []
     for pkg in data.get("packages", []):
-        packages.append({
-            "id": pkg.get("id", ""),
-            "name": pkg.get("name", ""),
-            "version": pkg.get("version", ""),
-            "status": "running" if pkg.get("additional", {}).get("status") == "running" else "stopped",
-        })
+        packages.append(
+            {
+                "id": pkg.get("id", ""),
+                "name": pkg.get("name", ""),
+                "version": pkg.get("version", ""),
+                "status": "running" if pkg.get("additional", {}).get("status") == "running" else "stopped",
+            }
+        )
 
     json_response(handler, {"ok": True, "packages": packages})
 

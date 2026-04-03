@@ -19,6 +19,7 @@ Design decisions:
     - Cost model uses power consumption, not license fees. On-prem cost is
       electricity, not per-seat pricing. This is the honest comparison.
 """
+
 import json
 
 from freq.core import fmt
@@ -32,15 +33,15 @@ PVE_QUICK_TIMEOUT = 10
 # AWS on-demand pricing (rough, us-east-1, 2026)
 AWS_PRICING = {
     # (vcpu, ram_gb): monthly_cost
-    (1, 1): 8.50,      # t3.micro
-    (1, 2): 15.00,     # t3.small
-    (2, 4): 30.00,     # t3.medium
-    (2, 8): 60.00,     # t3.large
-    (4, 16): 120.00,   # t3.xlarge
-    (8, 32): 240.00,   # t3.2xlarge
+    (1, 1): 8.50,  # t3.micro
+    (1, 2): 15.00,  # t3.small
+    (2, 4): 30.00,  # t3.medium
+    (2, 8): 60.00,  # t3.large
+    (4, 16): 120.00,  # t3.xlarge
+    (8, 32): 240.00,  # t3.2xlarge
     (16, 64): 480.00,  # m5.4xlarge
-    (32, 128): 960.00, # m5.8xlarge
-    (48, 192): 1440.00,# m5.12xlarge
+    (32, 128): 960.00,  # m5.8xlarge
+    (48, 192): 1440.00,  # m5.12xlarge
 }
 
 # Estimated watts per resource
@@ -78,23 +79,28 @@ def _gather_vm_resources(cfg: FreqConfig) -> list:
             key_path=cfg.ssh_key_path,
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=PVE_CMD_TIMEOUT,
-            htype="pve", use_sudo=True,
+            htype="pve",
+            use_sudo=True,
         )
         if r.returncode == 0:
             try:
                 vms = json.loads(r.stdout)
-                return [{
-                    "vmid": v.get("vmid", 0),
-                    "name": v.get("name", ""),
-                    "status": v.get("status", ""),
-                    "node": v.get("node", ""),
-                    "vcpu": v.get("maxcpu", 0),
-                    "ram_mb": round(v.get("maxmem", 0) / 1048576),
-                    "disk_gb": round(v.get("maxdisk", 0) / 1073741824),
-                    "cpu_usage": round(v.get("cpu", 0) * 100, 1),
-                    "mem_usage": round(v.get("mem", 0) / max(v.get("maxmem", 1), 1) * 100, 1)
-                    if v.get("maxmem", 0) > 0 else 0,
-                } for v in vms]
+                return [
+                    {
+                        "vmid": v.get("vmid", 0),
+                        "name": v.get("name", ""),
+                        "status": v.get("status", ""),
+                        "node": v.get("node", ""),
+                        "vcpu": v.get("maxcpu", 0),
+                        "ram_mb": round(v.get("maxmem", 0) / 1048576),
+                        "disk_gb": round(v.get("maxdisk", 0) / 1073741824),
+                        "cpu_usage": round(v.get("cpu", 0) * 100, 1),
+                        "mem_usage": round(v.get("mem", 0) / max(v.get("maxmem", 1), 1) * 100, 1)
+                        if v.get("maxmem", 0) > 0
+                        else 0,
+                    }
+                    for v in vms
+                ]
             except json.JSONDecodeError:
                 pass
     return []
@@ -185,8 +191,10 @@ def _cmd_waste(cfg: FreqConfig, args) -> int:
         fmt.blank()
         for v in stopped[:10]:
             cost = _estimate_vm_monthly_cost(v["vcpu"], v["ram_mb"] / 1024)
-            fmt.line(f"  {fmt.C.DIM}VM {v['vmid']} ({v['name']}) — {v['vcpu']} CPU, "
-                     f"{v['ram_mb']}MB RAM — allocated but idle{fmt.C.RESET}")
+            fmt.line(
+                f"  {fmt.C.DIM}VM {v['vmid']} ({v['name']}) — {v['vcpu']} CPU, "
+                f"{v['ram_mb']}MB RAM — allocated but idle{fmt.C.RESET}"
+            )
 
     fmt.blank()
     fmt.footer()
@@ -206,17 +214,12 @@ def _cmd_density(cfg: FreqConfig, args) -> int:
         return 0
 
     command = (
-        'echo "$('
-        'nproc'
-        ')|$('
-        "free -m | awk '/Mem:/ {printf \"%d|%d\", $3, $2}'"
-        ')|$('
-        "cat /proc/loadavg | awk '{print $1}'"
-        ')"'
+        "echo \"$(nproc)|$(free -m | awk '/Mem:/ {printf \"%d|%d\", $3, $2}')|$(cat /proc/loadavg | awk '{print $1}')\""
     )
 
     results = ssh_run_many(
-        hosts=hosts, command=command,
+        hosts=hosts,
+        command=command,
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=COST_CMD_TIMEOUT,
@@ -248,8 +251,7 @@ def _cmd_density(cfg: FreqConfig, args) -> int:
 
         # Density score: average of RAM% and load ratio (normalized to 100)
         density = round((ram_pct + min(load_ratio * 100, 100)) / 2, 1)
-        density_color = (fmt.C.GREEN if density >= 60 else
-                         fmt.C.YELLOW if density >= 30 else fmt.C.RED)
+        density_color = fmt.C.GREEN if density >= 60 else fmt.C.YELLOW if density >= 30 else fmt.C.RED
         density_label = "HIGH" if density >= 60 else ("MED" if density >= 30 else "LOW")
 
         fmt.table_row(
@@ -281,23 +283,32 @@ def _cmd_optimize(cfg: FreqConfig, args) -> int:
     recommendations = []
     for v in vms:
         if v["status"] != "running":
-            recommendations.append({
-                "vmid": v["vmid"], "name": v["name"],
-                "type": "decommission",
-                "message": f"VM {v['vmid']} ({v['name']}) is stopped — consider removing",
-            })
+            recommendations.append(
+                {
+                    "vmid": v["vmid"],
+                    "name": v["name"],
+                    "type": "decommission",
+                    "message": f"VM {v['vmid']} ({v['name']}) is stopped — consider removing",
+                }
+            )
         elif v["vcpu"] > 2 and v["cpu_usage"] < 5:
-            recommendations.append({
-                "vmid": v["vmid"], "name": v["name"],
-                "type": "rightsize-cpu",
-                "message": f"VM {v['vmid']} ({v['name']}): reduce from {v['vcpu']} to {max(v['vcpu']//2, 1)} cores",
-            })
+            recommendations.append(
+                {
+                    "vmid": v["vmid"],
+                    "name": v["name"],
+                    "type": "rightsize-cpu",
+                    "message": f"VM {v['vmid']} ({v['name']}): reduce from {v['vcpu']} to {max(v['vcpu'] // 2, 1)} cores",
+                }
+            )
         elif v["ram_mb"] > 4096 and v["mem_usage"] < 15:
-            recommendations.append({
-                "vmid": v["vmid"], "name": v["name"],
-                "type": "rightsize-ram",
-                "message": f"VM {v['vmid']} ({v['name']}): reduce from {v['ram_mb']}MB to {v['ram_mb']//2}MB",
-            })
+            recommendations.append(
+                {
+                    "vmid": v["vmid"],
+                    "name": v["name"],
+                    "type": "rightsize-ram",
+                    "message": f"VM {v['vmid']} ({v['name']}): reduce from {v['ram_mb']}MB to {v['ram_mb'] // 2}MB",
+                }
+            )
 
     if not recommendations:
         fmt.line(f"  {fmt.C.GREEN}{fmt.S.TICK} No optimizations recommended — fleet is well-sized.{fmt.C.RESET}")
@@ -358,8 +369,10 @@ def _cmd_compare(cfg: FreqConfig, args) -> int:
     fmt.blank()
     fmt.line(f"  On-prem:  ${total_onprem:.2f}/mo (power only, @${rate}/kWh)")
     fmt.line(f"  AWS:      {fmt.C.RED}${total_aws:.2f}/mo{fmt.C.RESET}")
-    fmt.line(f"  Savings:  {fmt.C.GREEN}{fmt.C.BOLD}${total_aws - total_onprem:.2f}/mo{fmt.C.RESET} "
-             f"({fmt.C.GREEN}{round((1 - total_onprem/max(total_aws, 1)) * 100)}% cheaper on-prem{fmt.C.RESET})")
+    fmt.line(
+        f"  Savings:  {fmt.C.GREEN}{fmt.C.BOLD}${total_aws - total_onprem:.2f}/mo{fmt.C.RESET} "
+        f"({fmt.C.GREEN}{round((1 - total_onprem / max(total_aws, 1)) * 100)}% cheaper on-prem{fmt.C.RESET})"
+    )
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}Annual savings: ${(total_aws - total_onprem) * 12:.2f}{fmt.C.RESET}")
     fmt.blank()

@@ -16,6 +16,7 @@ Design decisions:
     - Fix mode requires explicit --fix flag and interactive confirmation
     - Audit always runs in check mode even when sweep is in fix mode
 """
+
 import time
 
 from freq.core import fmt
@@ -42,7 +43,9 @@ def cmd_sweep(cfg: FreqConfig, pack, args) -> int:
 
     fmt.line(f"{fmt.C.BOLD}Fleet:{fmt.C.RESET} {len(cfg.hosts)} hosts")
     fmt.line(f"{fmt.C.BOLD}Policies:{fmt.C.RESET} {len(ALL_POLICIES)}")
-    fmt.line(f"{fmt.C.BOLD}Mode:{fmt.C.RESET} {'APPLY (will make changes)' if fix_mode else 'CHECK (dry run, no changes)'}")
+    fmt.line(
+        f"{fmt.C.BOLD}Mode:{fmt.C.RESET} {'APPLY (will make changes)' if fix_mode else 'CHECK (dry run, no changes)'}"
+    )
     fmt.blank()
 
     if fix_mode and not getattr(args, "yes", False):
@@ -60,6 +63,7 @@ def cmd_sweep(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
     from freq.modules.audit import cmd_audit
     import argparse
+
     audit_args = argparse.Namespace(fix=False)
     cmd_audit(cfg, pack, audit_args)
 
@@ -76,8 +80,11 @@ def cmd_sweep(cfg: FreqConfig, pack, args) -> int:
         fmt.blank()
 
         result = run_sync(
-            cfg.hosts, policy, cfg.ssh_key_path,
-            mode=mode, max_parallel=cfg.ssh_max_parallel,
+            cfg.hosts,
+            policy,
+            cfg.ssh_key_path,
+            mode=mode,
+            max_parallel=cfg.ssh_max_parallel,
         )
 
         # Summary per policy
@@ -118,6 +125,12 @@ def cmd_sweep(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
     fmt.footer()
 
-    logger.info("sweep complete", mode=mode, compliant=total_compliant,
-                drift=total_drift, fixed=total_fixed, failed=total_failed)
+    logger.info(
+        "sweep complete",
+        mode=mode,
+        compliant=total_compliant,
+        drift=total_drift,
+        fixed=total_fixed,
+        failed=total_failed,
+    )
     return 0 if total_failed == 0 else 1

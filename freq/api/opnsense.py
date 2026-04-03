@@ -15,7 +15,7 @@ import re
 import ssl
 
 # OPNsense uses UUID-v4 format for resource identifiers
-_SAFE_UUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+_SAFE_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 import urllib.request
 import urllib.error
 
@@ -26,6 +26,7 @@ from freq.modules.vault import vault_get
 
 
 # -- Helpers -----------------------------------------------------------------
+
 
 def _opn_request(cfg, path, method="GET", body=None):
     """Make a request to the OPNsense REST API.
@@ -158,14 +159,18 @@ def _firewall_safe_apply(cfg, mutation_path, mutation_body=None):
 
     # Step 3: Apply the revision
     apply_data, apply_err = _opn_request(
-        cfg, f"firewall/filter/apply/{revision}", method="POST",
+        cfg,
+        f"firewall/filter/apply/{revision}",
+        method="POST",
     )
     if apply_err:
         return None, f"Apply failed (auto-rollback pending): {apply_err}"
 
     # Step 4: Cancel the rollback timer — commit permanently
     cancel_data, cancel_err = _opn_request(
-        cfg, f"firewall/filter/cancelRollback/{revision}", method="POST",
+        cfg,
+        f"firewall/filter/cancelRollback/{revision}",
+        method="POST",
     )
     if cancel_err:
         # Non-fatal: the change is applied, rollback timer just stays active
@@ -175,6 +180,7 @@ def _firewall_safe_apply(cfg, mutation_path, mutation_body=None):
 
 
 # -- Read Operations (no role check) -----------------------------------------
+
 
 def handle_opnsense_status(handler):
     """GET /api/opnsense/status -- OPNsense system status.
@@ -300,6 +306,7 @@ def handle_opnsense_firmware(handler):
 
 # -- Write Operations (admin only) -------------------------------------------
 
+
 def handle_opnsense_service_action(handler):
     """POST /api/opnsense/service/action -- start/stop/restart a service.
 
@@ -328,12 +335,15 @@ def handle_opnsense_service_action(handler):
         json_response(handler, {"ok": False, "error": err, "action": action, "service": service}, 502)
         return
 
-    json_response(handler, {
-        "ok": True,
-        "action": action,
-        "service": service,
-        "result": data,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "action": action,
+            "service": service,
+            "result": data,
+        },
+    )
 
 
 def handle_opnsense_rule_add(handler):
@@ -405,11 +415,14 @@ def handle_opnsense_rule_add(handler):
         json_response(handler, {"ok": False, "error": err}, 502)
         return
 
-    json_response(handler, {
-        "ok": True,
-        "action": "add",
-        "result": data,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "action": "add",
+            "result": data,
+        },
+    )
 
 
 def handle_opnsense_rule_delete(handler):
@@ -435,12 +448,15 @@ def handle_opnsense_rule_delete(handler):
         json_response(handler, {"ok": False, "error": err}, 502)
         return
 
-    json_response(handler, {
-        "ok": True,
-        "action": "delete",
-        "uuid": uuid,
-        "result": data,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "action": "delete",
+            "uuid": uuid,
+            "result": data,
+        },
+    )
 
 
 def handle_opnsense_dhcp_add(handler):
@@ -484,22 +500,28 @@ def handle_opnsense_dhcp_add(handler):
     # Reconfigure Kea to apply
     _, reconf_err = _opn_request(cfg, "kea/service/reconfigure", method="POST")
     if reconf_err:
-        json_response(handler, {
-            "ok": True,
-            "action": "add",
-            "warning": f"Reservation added but reconfigure failed: {reconf_err}",
-            "result": data,
-        })
+        json_response(
+            handler,
+            {
+                "ok": True,
+                "action": "add",
+                "warning": f"Reservation added but reconfigure failed: {reconf_err}",
+                "result": data,
+            },
+        )
         return
 
-    json_response(handler, {
-        "ok": True,
-        "action": "add",
-        "mac": mac,
-        "ip": ip,
-        "hostname": hostname,
-        "result": data,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "action": "add",
+            "mac": mac,
+            "ip": ip,
+            "hostname": hostname,
+            "result": data,
+        },
+    )
 
 
 def handle_opnsense_dhcp_delete(handler):
@@ -529,21 +551,27 @@ def handle_opnsense_dhcp_delete(handler):
     # Reconfigure Kea to apply
     _, reconf_err = _opn_request(cfg, "kea/service/reconfigure", method="POST")
     if reconf_err:
-        json_response(handler, {
+        json_response(
+            handler,
+            {
+                "ok": True,
+                "action": "delete",
+                "uuid": uuid,
+                "warning": f"Reservation deleted but reconfigure failed: {reconf_err}",
+                "result": data,
+            },
+        )
+        return
+
+    json_response(
+        handler,
+        {
             "ok": True,
             "action": "delete",
             "uuid": uuid,
-            "warning": f"Reservation deleted but reconfigure failed: {reconf_err}",
             "result": data,
-        })
-        return
-
-    json_response(handler, {
-        "ok": True,
-        "action": "delete",
-        "uuid": uuid,
-        "result": data,
-    })
+        },
+    )
 
 
 def handle_opnsense_dns_add(handler):
@@ -590,22 +618,28 @@ def handle_opnsense_dns_add(handler):
     # Reconfigure Unbound to apply
     _, reconf_err = _opn_request(cfg, "unbound/service/reconfigure", method="POST")
     if reconf_err:
-        json_response(handler, {
-            "ok": True,
-            "action": "add",
-            "warning": f"Override added but reconfigure failed: {reconf_err}",
-            "result": data,
-        })
+        json_response(
+            handler,
+            {
+                "ok": True,
+                "action": "add",
+                "warning": f"Override added but reconfigure failed: {reconf_err}",
+                "result": data,
+            },
+        )
         return
 
-    json_response(handler, {
-        "ok": True,
-        "action": "add",
-        "host": host,
-        "domain": domain,
-        "ip": ip,
-        "result": data,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "action": "add",
+            "host": host,
+            "domain": domain,
+            "ip": ip,
+            "result": data,
+        },
+    )
 
 
 def handle_opnsense_dns_delete(handler):
@@ -635,21 +669,27 @@ def handle_opnsense_dns_delete(handler):
     # Reconfigure Unbound to apply
     _, reconf_err = _opn_request(cfg, "unbound/service/reconfigure", method="POST")
     if reconf_err:
-        json_response(handler, {
+        json_response(
+            handler,
+            {
+                "ok": True,
+                "action": "delete",
+                "uuid": uuid,
+                "warning": f"Override deleted but reconfigure failed: {reconf_err}",
+                "result": data,
+            },
+        )
+        return
+
+    json_response(
+        handler,
+        {
             "ok": True,
             "action": "delete",
             "uuid": uuid,
-            "warning": f"Override deleted but reconfigure failed: {reconf_err}",
             "result": data,
-        })
-        return
-
-    json_response(handler, {
-        "ok": True,
-        "action": "delete",
-        "uuid": uuid,
-        "result": data,
-    })
+        },
+    )
 
 
 def handle_opnsense_wg_add(handler):
@@ -704,22 +744,28 @@ def handle_opnsense_wg_add(handler):
     # Reconfigure WireGuard to apply
     _, reconf_err = _opn_request(cfg, "wireguard/service/reconfigure", method="POST")
     if reconf_err:
-        json_response(handler, {
-            "ok": True,
-            "action": "add",
-            "warning": f"Peer added but reconfigure failed: {reconf_err}",
-            "result": data,
-        })
+        json_response(
+            handler,
+            {
+                "ok": True,
+                "action": "add",
+                "warning": f"Peer added but reconfigure failed: {reconf_err}",
+                "result": data,
+            },
+        )
         return
 
-    json_response(handler, {
-        "ok": True,
-        "action": "add",
-        "name": name,
-        "pubkey": pubkey,
-        "tunneladdress": tunneladdress,
-        "result": data,
-    })
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "action": "add",
+            "name": name,
+            "pubkey": pubkey,
+            "tunneladdress": tunneladdress,
+            "result": data,
+        },
+    )
 
 
 def handle_opnsense_reboot(handler):
@@ -748,6 +794,7 @@ def handle_opnsense_reboot(handler):
 
 
 # -- Registration ------------------------------------------------------------
+
 
 def register(routes: dict):
     """Register OPNsense API routes."""

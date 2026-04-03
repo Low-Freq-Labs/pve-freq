@@ -17,6 +17,7 @@ Design decisions:
     - Fetch-then-count before pull lets operators review diffs first
     - auto_apply defaults to false — changes require explicit approval
 """
+
 import json
 import os
 import re
@@ -34,6 +35,7 @@ STATE_FILE = "gitops_state.json"
 @dataclass
 class GitOpsConfig:
     """GitOps sync configuration."""
+
     repo_url: str = ""
     branch: str = "main"
     sync_interval: int = 300  # seconds
@@ -44,6 +46,7 @@ class GitOpsConfig:
 @dataclass
 class SyncState:
     """Current state of the gitops sync."""
+
     last_sync: float = 0.0
     last_commit: str = ""
     last_message: str = ""
@@ -66,7 +69,11 @@ def _run_git(cwd: str, *args, timeout: int = 30) -> subprocess.CompletedProcess:
     """Run a git command in the given directory."""
     cmd = ["git"] + list(args)
     return subprocess.run(
-        cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout,
+        cmd,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
     )
 
 
@@ -78,6 +85,7 @@ def load_gitops_config(conf_dir: str) -> GitOpsConfig:
 
     try:
         import tomllib
+
         with open(toml_path, "rb") as f:
             data = tomllib.load(f)
         go = data.get("gitops", {})
@@ -118,14 +126,17 @@ def save_state(data_dir: str, state: SyncState):
     path = _state_path(data_dir)
     try:
         with open(path, "w") as f:
-            json.dump({
-                "last_sync": state.last_sync,
-                "last_commit": state.last_commit,
-                "last_message": state.last_message,
-                "last_error": state.last_error,
-                "pending_changes": state.pending_changes,
-                "status": state.status,
-            }, f)
+            json.dump(
+                {
+                    "last_sync": state.last_sync,
+                    "last_commit": state.last_commit,
+                    "last_message": state.last_message,
+                    "last_error": state.last_error,
+                    "pending_changes": state.pending_changes,
+                    "status": state.status,
+                },
+                f,
+            )
     except OSError as e:
         logger.warn(f"Failed to save gitops state: {e}")
 
@@ -256,12 +267,14 @@ def get_log(data_dir: str, count: int = 20) -> list:
             continue
         parts = line.split("|", 3)
         if len(parts) >= 4:
-            commits.append({
-                "hash": parts[0][:12],
-                "message": parts[1][:100],
-                "date": parts[2],
-                "author": parts[3],
-            })
+            commits.append(
+                {
+                    "hash": parts[0][:12],
+                    "message": parts[1][:100],
+                    "date": parts[2],
+                    "author": parts[3],
+                }
+            )
     return commits
 
 
@@ -272,7 +285,7 @@ def rollback(data_dir: str, commit_hash: str) -> tuple:
         return False, "Repository not initialized"
 
     # Validate hash format (prevent injection)
-    if not re.match(r'^[a-f0-9]{7,40}$', commit_hash):
+    if not re.match(r"^[a-f0-9]{7,40}$", commit_hash):
         return False, "Invalid commit hash"
 
     r = _run_git(go_dir, "checkout", commit_hash, "--", ".")
@@ -311,6 +324,7 @@ def state_to_dict(state: SyncState) -> dict:
 
 
 # ── CLI Command ────────────────────────────────────────────────────────
+
 
 def cmd_gitops(cfg, pack, args) -> int:
     """GitOps config sync management."""
@@ -382,7 +396,9 @@ def cmd_gitops(cfg, pack, args) -> int:
             fmt.line(f"  {fmt.C.DIM}No commits yet.{fmt.C.RESET}")
         else:
             for e in entries:
-                fmt.line(f"  {fmt.C.DIM}{e.get('date', '')}{fmt.C.RESET} {fmt.C.CYAN}{e.get('hash', '')[:8]}{fmt.C.RESET} {e.get('message', '')}")
+                fmt.line(
+                    f"  {fmt.C.DIM}{e.get('date', '')}{fmt.C.RESET} {fmt.C.CYAN}{e.get('hash', '')[:8]}{fmt.C.RESET} {e.get('message', '')}"
+                )
         fmt.blank()
         fmt.footer()
         return 0

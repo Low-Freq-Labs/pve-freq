@@ -17,6 +17,7 @@ Design decisions:
     - File-based snapshots, not a time-series DB — zero dependencies
     - 2-week minimum before projections to avoid noisy short-term data
 """
+
 import json
 import os
 import re
@@ -100,7 +101,7 @@ def load_snapshots(data_dir: str) -> list:
 
 def _parse_ram_pct(ram_str: str) -> float:
     """Parse RAM string '1234/8192MB' into percentage."""
-    m = re.match(r'(\d+)/(\d+)', ram_str)
+    m = re.match(r"(\d+)/(\d+)", ram_str)
     if m:
         used, total = int(m.group(1)), int(m.group(2))
         if total > 0:
@@ -110,7 +111,7 @@ def _parse_ram_pct(ram_str: str) -> float:
 
 def _parse_disk_pct(disk_str: str) -> float:
     """Parse disk string '45%' into float."""
-    m = re.match(r'(\d+)%', disk_str)
+    m = re.match(r"(\d+)%", disk_str)
     if m:
         return float(m.group(1))
     return -1
@@ -131,6 +132,7 @@ def _linear_regression(points: list) -> tuple:
     slope = (n * sum_xy - sum_x * sum_y) / denom
     intercept = (sum_y - slope * sum_x) / n
     import math
+
     if not math.isfinite(slope) or not math.isfinite(intercept):
         return (0, sum_y / n if n > 0 else 0)
     return (slope, intercept)
@@ -254,8 +256,8 @@ def recommend_migrations(projections: dict, costs: list = None) -> list:
         return recommendations
 
     # Classify hosts by resource pressure
-    hosts_at_risk = []   # approaching 80% within 90 days
-    hosts_stable = []    # stable or declining usage
+    hosts_at_risk = []  # approaching 80% within 90 days
+    hosts_stable = []  # stable or declining usage
 
     for label, metrics in projections.items():
         for metric in ("ram", "disk"):
@@ -267,38 +269,46 @@ def recommend_migrations(projections: dict, costs: list = None) -> list:
             direction = data.get("trend_direction", "stable")
 
             if current >= 80:
-                hosts_at_risk.append({
-                    "label": label,
-                    "metric": metric,
-                    "current": current,
-                    "days": 0,
-                    "direction": direction,
-                    "urgency": "critical",
-                })
+                hosts_at_risk.append(
+                    {
+                        "label": label,
+                        "metric": metric,
+                        "current": current,
+                        "days": 0,
+                        "direction": direction,
+                        "urgency": "critical",
+                    }
+                )
             elif 0 < days <= 30:
-                hosts_at_risk.append({
-                    "label": label,
-                    "metric": metric,
-                    "current": current,
-                    "days": days,
-                    "direction": direction,
-                    "urgency": "warning",
-                })
+                hosts_at_risk.append(
+                    {
+                        "label": label,
+                        "metric": metric,
+                        "current": current,
+                        "days": days,
+                        "direction": direction,
+                        "urgency": "warning",
+                    }
+                )
             elif 0 < days <= 90:
-                hosts_at_risk.append({
-                    "label": label,
-                    "metric": metric,
-                    "current": current,
-                    "days": days,
-                    "direction": direction,
-                    "urgency": "info",
-                })
+                hosts_at_risk.append(
+                    {
+                        "label": label,
+                        "metric": metric,
+                        "current": current,
+                        "days": days,
+                        "direction": direction,
+                        "urgency": "info",
+                    }
+                )
             elif direction in ("stable", "falling") and current < 50:
-                hosts_stable.append({
-                    "label": label,
-                    "metric": metric,
-                    "current": current,
-                })
+                hosts_stable.append(
+                    {
+                        "label": label,
+                        "metric": metric,
+                        "current": current,
+                    }
+                )
 
     # Build cost lookup
     cost_by_label = {}
@@ -309,19 +319,16 @@ def recommend_migrations(projections: dict, costs: list = None) -> list:
     # Generate recommendations
     for risk in hosts_at_risk:
         # Find a stable target for migration
-        targets = [
-            s for s in hosts_stable
-            if s["label"] != risk["label"] and s["metric"] == risk["metric"]
-        ]
+        targets = [s for s in hosts_stable if s["label"] != risk["label"] and s["metric"] == risk["metric"]]
         # Sort by most headroom
         targets.sort(key=lambda t: t["current"])
 
         if risk["urgency"] == "critical":
-            reason = (f"{risk['label']} {risk['metric'].upper()} at {risk['current']:.0f}% — "
-                      f"over threshold")
+            reason = f"{risk['label']} {risk['metric'].upper()} at {risk['current']:.0f}% — over threshold"
         elif risk["days"] > 0:
-            reason = (f"{risk['label']} {risk['metric'].upper()} at {risk['current']:.0f}% — "
-                      f"hits 80% in {risk['days']} days")
+            reason = (
+                f"{risk['label']} {risk['metric'].upper()} at {risk['current']:.0f}% — hits 80% in {risk['days']} days"
+            )
         else:
             reason = f"{risk['label']} {risk['metric'].upper()} trending {risk['direction']}"
 
@@ -359,18 +366,20 @@ def recommend_migrations(projections: dict, costs: list = None) -> list:
         if stable["current"] < 20 and stable["label"] in cost_by_label:
             cost = cost_by_label[stable["label"]]
             if cost.cost_month > 5:  # Only flag if meaningful cost
-                recommendations.append({
-                    "type": "optimize",
-                    "source": stable["label"],
-                    "target": "",
-                    "reason": f"{stable['label']} is only {stable['current']:.0f}% "
-                              f"{stable['metric'].upper()} — consider consolidation "
-                              f"(saves ~{cost.cost_month:.2f}/mo)",
-                    "metric": stable["metric"],
-                    "urgency": "info",
-                    "savings_month": round(cost.cost_month, 2),
-                    "days_extended": 0,
-                })
+                recommendations.append(
+                    {
+                        "type": "optimize",
+                        "source": stable["label"],
+                        "target": "",
+                        "reason": f"{stable['label']} is only {stable['current']:.0f}% "
+                        f"{stable['metric'].upper()} — consider consolidation "
+                        f"(saves ~{cost.cost_month:.2f}/mo)",
+                        "metric": stable["metric"],
+                        "urgency": "info",
+                        "savings_month": round(cost.cost_month, 2),
+                        "days_extended": 0,
+                    }
+                )
 
     # Sort by urgency: critical > warning > info
     urgency_order = {"critical": 0, "warning": 1, "info": 2}
@@ -381,6 +390,7 @@ def recommend_migrations(projections: dict, costs: list = None) -> list:
 
 # ── CLI Command ────────────────────────────────────────────────────────
 
+
 def cmd_capacity(cfg, pack, args) -> int:
     """Show fleet capacity projections."""
     from freq.core import fmt
@@ -390,6 +400,7 @@ def cmd_capacity(cfg, pack, args) -> int:
     if action == "snapshot":
         # Force a snapshot now
         from freq.modules.serve import _bg_cache, _bg_lock
+
         with _bg_lock:
             health = _bg_cache.get("health")
         if not health:

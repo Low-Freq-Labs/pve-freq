@@ -24,6 +24,7 @@ Design decisions:
       This is a hardware limitation, not a security choice.
     - Timeout defaults: 5s connect, 30s command. Overridable per call.
 """
+
 import asyncio
 import os
 import subprocess
@@ -68,20 +69,27 @@ _PLATFORM_SSH_BASE = {
     "idrac": {
         "sudo": "",
         "extra_opts": [
-            "-o", "KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1",
-            "-o", "HostKeyAlgorithms=+ssh-rsa",
-            "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
+            "-o",
+            "KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1",
+            "-o",
+            "HostKeyAlgorithms=+ssh-rsa",
+            "-o",
+            "PubkeyAcceptedAlgorithms=+ssh-rsa",
         ],
     },
     "switch": {
         "sudo": "",
         "extra_opts": [
-            "-o", "KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1",
-            "-o", "HostKeyAlgorithms=+ssh-rsa",
-            "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
+            "-o",
+            "KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1",
+            "-o",
+            "HostKeyAlgorithms=+ssh-rsa",
+            "-o",
+            "PubkeyAcceptedAlgorithms=+ssh-rsa",
         ],
     },
 }
+
 
 def get_platform_ssh(htype: str, cfg=None) -> dict:
     """Return platform SSH config for the given host type.
@@ -97,6 +105,7 @@ def get_platform_ssh(htype: str, cfg=None) -> dict:
         base["user"] = cfg.ssh_service_account
     else:
         from freq.core.config import _DEFAULTS
+
         base["user"] = _DEFAULTS["ssh_service_account"]
 
     # Set password_file for legacy devices (only if configured)
@@ -235,8 +244,13 @@ def run(
     Returns CmdResult with stdout, stderr, returncode, and duration.
     """
     ssh_cmd = _build_ssh_cmd(
-        host=host, command=command, user=user, key_path=key_path,
-        connect_timeout=connect_timeout, htype=htype, use_sudo=use_sudo,
+        host=host,
+        command=command,
+        user=user,
+        key_path=key_path,
+        connect_timeout=connect_timeout,
+        htype=htype,
+        use_sudo=use_sudo,
         cfg=cfg,
     )
 
@@ -290,8 +304,13 @@ async def async_run(
     Uses asyncio.create_subprocess_exec for non-blocking execution.
     """
     ssh_cmd = _build_ssh_cmd(
-        host=host, command=command, user=user, key_path=key_path,
-        connect_timeout=connect_timeout, htype=htype, use_sudo=use_sudo,
+        host=host,
+        command=command,
+        user=user,
+        key_path=key_path,
+        connect_timeout=connect_timeout,
+        htype=htype,
+        use_sudo=use_sudo,
         cfg=cfg,
     )
 
@@ -305,9 +324,7 @@ async def async_run(
         )
 
         try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=command_timeout
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=command_timeout)
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
@@ -381,8 +398,15 @@ def run_many(
 
     Convenience function for non-async callers.
     """
-    return asyncio.run(async_run_many(
-        hosts=hosts, command=command, key_path=key_path,
-        connect_timeout=connect_timeout, command_timeout=command_timeout,
-        max_parallel=max_parallel, use_sudo=use_sudo, cfg=cfg,
-    ))
+    return asyncio.run(
+        async_run_many(
+            hosts=hosts,
+            command=command,
+            key_path=key_path,
+            connect_timeout=connect_timeout,
+            command_timeout=command_timeout,
+            max_parallel=max_parallel,
+            use_sudo=use_sudo,
+            cfg=cfg,
+        )
+    )
