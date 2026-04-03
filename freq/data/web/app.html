@@ -187,6 +187,7 @@
       <button class="fleet-btn docker-sub" data-dsub="docker-all" data-action="switchDockerSub" data-arg="all">ALL</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-registry" data-action="switchDockerSub" data-arg="registry">REGISTRY</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-compose" data-action="switchDockerSub" data-arg="compose">COMPOSE</button>
+      <button class="fleet-btn docker-sub" data-dsub="docker-fleet-inv" data-action="switchDockerSub" data-arg="fleet-inv">FLEET INVENTORY</button>
     </div>
     <!-- SERVICES sub-view (default) -->
     <div id="docker-sub-services">
@@ -227,6 +228,15 @@
         <button class="fleet-btn" onclick="composeView()">VIEW COMPOSE</button>
       </div>
       <div id="compose-out" class="exec-out" style="min-height:80px">Select a Docker VM and an action.</div>
+    </div>
+    <!-- FLEET INVENTORY sub-view -->
+    <div id="docker-sub-fleet-inv" class="d-none">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Live fleet-wide container inventory via SSH. Shows all Docker containers across all VMs.</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+        <button class="fleet-btn c-purple-active" onclick="loadDockerFleet()">SCAN FLEET</button>
+      </div>
+      <div id="docker-fleet-stats" style="margin-bottom:12px"></div>
+      <div id="docker-fleet-table"><div class="exec-out">Click SCAN FLEET to discover containers across all Docker VMs.</div></div>
     </div>
   </div>
 </div>
@@ -282,6 +292,30 @@
 <div class="section layout-section" id="sec-policies">
   <div class="section-header"><h3>Policies</h3><span class="chev">▾</span></div>
   <div class="section-body"><div id="policies-c"></div></div>
+</div>
+<div class="section layout-section">
+  <div class="section-header"><h3>Security Posture</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="stats" id="sec-posture-stats"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+      <div>
+        <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">SECRETS AUDIT</h4>
+        <div id="sec-secrets-audit"><div class="exec-out">Loading...</div></div>
+      </div>
+      <div>
+        <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">COMPLIANCE STATUS</h4>
+        <div id="sec-comply-status"><div class="exec-out">Loading...</div></div>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">CERTIFICATE SUMMARY</h4>
+      <div id="sec-cert-summary"><div class="exec-out">Loading...</div></div>
+    </div>
+    <div style="margin-top:16px">
+      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">PATCH STATUS</h4>
+      <div id="sec-patch-status"><div class="exec-out">Loading...</div></div>
+    </div>
+  </div>
 </div>
 </div><!-- close security-view -->
 
@@ -538,6 +572,20 @@
     </div>
   </div>
 </div>
+<!-- Fleet Inventory (CMDB) -->
+<div class="section">
+  <div class="section-header"><h3>Fleet Inventory</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadInventory()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn c-purple-active" onclick="loadInventory()">FULL CMDB</button>
+      <button class="fleet-btn" onclick="loadInventoryView('hosts')">HOSTS ONLY</button>
+      <button class="fleet-btn" onclick="loadInventoryView('vms')">VMS ONLY</button>
+      <button class="fleet-btn" onclick="loadInventoryView('containers')">CONTAINERS ONLY</button>
+      <button class="fleet-btn" onclick="generateReport()">FLEET REPORT</button>
+    </div>
+    <div id="inventory-out"><div class="exec-out">Click to load fleet inventory.</div></div>
+  </div>
+</div>
 </div><!-- close tools-view -->
 
 <!-- ============================================================
@@ -598,6 +646,20 @@
   <div id="cap-info" style="font-size:12px;color:var(--text-dim);margin-bottom:12px"></div>
   <div id="cap-table"></div>
 </div>
+<div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">Capacity Trends</h3>
+    <button class="fleet-btn" onclick="loadTrendData()">LOAD TRENDS</button>
+  </div>
+  <div id="trend-data"><div class="exec-out">Click to load trend data.</div></div>
+</div>
+<div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:14px;color:var(--purple-light)">Migration Recommendations</h3>
+    <button class="fleet-btn" onclick="loadCapRecommend()">ANALYZE</button>
+  </div>
+  <div id="cap-recommend"><div class="exec-out">Click ANALYZE to get optimization suggestions.</div></div>
+</div>
 </div><!-- close capacity-view -->
 
 <!-- PLAYBOOKS VIEW -->
@@ -626,6 +688,16 @@
       <button class="fleet-btn" onclick="closePbRunner()">CLOSE</button>
     </div>
     <div id="pb-steps"></div>
+  </div>
+  <div style="margin-top:16px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+    <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">CREATE PLAYBOOK</h4>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input class="input" id="pb-create-name" placeholder="Playbook name" style="width:180px">
+      <input class="input" id="pb-create-desc" placeholder="Description" style="width:240px">
+      <input class="input" id="pb-create-trigger" placeholder="Trigger (optional)" style="width:160px">
+      <button class="fleet-btn" onclick="createPlaybook()">CREATE</button>
+      <span id="pb-create-msg" class="text-meta"></span>
+    </div>
   </div>
 </div>
 </div><!-- close playbook-view -->
@@ -824,6 +896,50 @@
   <div class="section-body"><div id="net-profiles"></div></div>
 </div>
 <div class="section">
+  <div class="section-header"><h3>Switch Detail</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn c-purple-active" onclick="loadSwitchData('facts')">FACTS</button>
+      <button class="fleet-btn" onclick="loadSwitchData('interfaces')">INTERFACES</button>
+      <button class="fleet-btn" onclick="loadSwitchData('vlans')">VLANS</button>
+      <button class="fleet-btn" onclick="loadSwitchData('mac')">MAC TABLE</button>
+      <button class="fleet-btn" onclick="loadSwitchData('arp')">ARP TABLE</button>
+      <button class="fleet-btn" onclick="loadSwitchData('neighbors')">NEIGHBORS</button>
+      <button class="fleet-btn" onclick="loadSwitchData('environment')">ENVIRONMENT</button>
+    </div>
+    <div class="exec-out" id="switch-detail-out">Select a data view to query the switch.</div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Config Backups</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="loadConfigHistory()">BACKUP HISTORY</button>
+      <input type="text" id="config-search-input" placeholder="Search configs (regex)..." class="input-field" style="width:200px">
+      <button class="fleet-btn" onclick="searchConfigs()">SEARCH</button>
+    </div>
+    <div class="exec-out" id="config-backup-out">View config backup history or search across saved configs.</div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Dependency Map</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn c-purple-active" onclick="loadDepMap()">LOAD MAP</button>
+      <input type="text" id="impact-host-input" placeholder="Host for impact analysis..." class="input-field" style="width:200px">
+      <button class="fleet-btn" onclick="runImpactAnalysis()">IMPACT ANALYSIS</button>
+    </div>
+    <div id="dep-map-out"><div class="exec-out">Load the dependency map to see infrastructure relationships.</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Network Monitoring</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <button class="fleet-btn" onclick="loadNetmonData()">LOAD NETMON DATA</button>
+    <div class="exec-out" id="netmon-out" style="margin-top:8px">Click to load network monitoring data.</div>
+  </div>
+</div>
+<div class="section">
   <div class="section-header"><h3>SNMP Discovery</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
@@ -989,6 +1105,13 @@
     <div id="dr-runbooks"><div class="exec-out">Runbooks loaded from conf/playbooks/dr/</div></div>
   </div>
 </div>
+<div class="section">
+  <div class="section-header"><h3>Backup Policies</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadBackupPolicies()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="backup-policy-stats" style="margin-bottom:12px"></div>
+    <div id="backup-policy-list"><div class="exec-out">Loading backup policies...</div></div>
+  </div>
+</div>
 </div>
 
 <!-- ============================================================
@@ -1012,6 +1135,18 @@
   <div class="section-body">
     <div class="stats" id="incident-stats"></div>
     <table><thead><tr><th>ID</th><th>Severity</th><th>Summary</th><th>Opened</th><th>Status</th></tr></thead><tbody id="incident-tbl"></tbody></table>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>On-Call</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadOncall()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="oncall-info"><div class="exec-out">Loading on-call info...</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>On-Call Incidents</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="oncall-incidents"><div class="exec-out">Loading...</div></div>
   </div>
 </div>
 <div class="section">
@@ -1046,9 +1181,28 @@
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Synthetic Monitors</h3><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Synthetic Monitors</h3><div class="flex-1"></div><button class="fleet-btn" onclick="runMonitorCheck()">CHECK NOW</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="synth-monitors"><div class="exec-out">HTTP/TCP endpoint monitors will display here.</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Alert Rules</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadMetricAlerts()">REFRESH</button><button class="fleet-btn" onclick="runAlertCheck()" style="margin-left:4px">EVALUATE</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="metric-alert-rules"><div class="exec-out">Loading alert rules...</div></div>
+    <div id="metric-alert-triggered" style="margin-top:12px"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Alert History</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="metric-alert-history"><div class="exec-out">Loading...</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>SLA / Uptime</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadSlaData()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="sla-data"><div class="exec-out">Loading SLA data...</div></div>
   </div>
 </div>
 </div>
@@ -1079,6 +1233,24 @@
     <div id="auto-workflows"></div>
     <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">SCHEDULED JOBS</h4>
     <div id="auto-jobs"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Job Scheduler</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadScheduleJobs()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="schedule-jobs"><div class="exec-out">Loading scheduled jobs...</div></div>
+    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">JOB TEMPLATES</h4>
+    <div id="schedule-templates"></div>
+    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">EXECUTION LOG</h4>
+    <div id="schedule-log"></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Webhooks</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadWebhooks()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="webhook-list"><div class="exec-out">Loading webhooks...</div></div>
+    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">WEBHOOK LOG</h4>
+    <div id="webhook-log"></div>
   </div>
 </div>
 </div>

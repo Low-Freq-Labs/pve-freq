@@ -228,7 +228,45 @@ var API={
   VM_ADD_DISK:'/api/vm/add-disk',VM_TAG:'/api/vm/tag',VM_CLONE:'/api/vm/clone',VM_MIGRATE:'/api/vm/migrate',
   COMPOSE_UP:'/api/containers/compose-up',COMPOSE_DOWN:'/api/containers/compose-down',COMPOSE_VIEW:'/api/containers/compose-view',
   BACKUP_LIST:'/api/backup/list',BACKUP_CREATE:'/api/backup/create',BACKUP_RESTORE:'/api/backup/restore',
-  EVENTS:'/api/events'
+  EVENTS:'/api/events',
+  /* ── Alerting ── */
+  ALERT_RULES:'/api/alert/rules',ALERT_HISTORY:'/api/alert/history',ALERT_CHECK:'/api/alert/check',ALERT_SILENCES:'/api/alert/silences',
+  /* ── Observability ── */
+  MONITORS:'/api/monitors',MONITORS_CHECK:'/api/monitors/check',
+  TREND_DATA:'/api/trend/data',TREND_SNAPSHOT:'/api/trend/snapshot',
+  SLA:'/api/sla',SLA_CHECK:'/api/sla/check',
+  CAPACITY_RECOMMEND:'/api/capacity/recommend',
+  /* ── Security/Compliance ── */
+  COMPLY_STATUS:'/api/comply/status',COMPLY_RESULTS:'/api/comply/results',
+  CERT_INVENTORY:'/api/cert/inventory',DNS_INVENTORY:'/api/dns/inventory',
+  PATCH_STATUS:'/api/patch/status',SECRETS_AUDIT:'/api/secrets/audit',
+  SECRETS_LEASES:'/api/secrets/leases',SECRETS_SCAN:'/api/secrets/scan',
+  BASELINE_LIST:'/api/baseline/list',
+  /* ── Network ── */
+  SWITCH_SHOW:'/api/v1/net/switch/show',SWITCH_FACTS:'/api/v1/net/switch/facts',
+  SWITCH_INTERFACES:'/api/v1/net/switch/interfaces',SWITCH_VLANS:'/api/v1/net/switch/vlans',
+  SWITCH_MAC:'/api/v1/net/switch/mac',SWITCH_ARP:'/api/v1/net/switch/arp',
+  SWITCH_NEIGHBORS:'/api/v1/net/switch/neighbors',SWITCH_ENV:'/api/v1/net/switch/environment',
+  CONFIG_HISTORY:'/api/v1/net/config/history',CONFIG_SEARCH:'/api/v1/net/config/search',
+  MAP_DATA:'/api/map/data',MAP_IMPACT:'/api/map/impact',
+  NETMON_DATA:'/api/netmon/data',
+  /* ── Docker Fleet ── */
+  DOCKER_FLEET:'/api/docker-fleet',
+  /* ── Oncall ── */
+  ONCALL_WHOAMI:'/api/oncall/whoami',ONCALL_SCHEDULE:'/api/oncall/schedule',ONCALL_INCIDENTS:'/api/oncall/incidents',
+  /* ── Schedule/Webhooks ── */
+  SCHEDULE_JOBS:'/api/schedule/jobs',SCHEDULE_LOG:'/api/schedule/log',SCHEDULE_TEMPLATES:'/api/schedule/templates',
+  WEBHOOK_LIST:'/api/webhook/list',WEBHOOK_LOG:'/api/webhook/log',
+  /* ── Inventory ── */
+  INVENTORY:'/api/inventory',INVENTORY_HOSTS:'/api/inventory/hosts',INVENTORY_VMS:'/api/inventory/vms',INVENTORY_CONTAINERS:'/api/inventory/containers',
+  COMPARE:'/api/compare',REPORT:'/api/report',
+  /* ── DR ── */
+  BACKUP_POLICY_LIST:'/api/backup-policy/list',BACKUP_POLICY_STATUS:'/api/backup-policy/status',
+  WATCHDOG_HEALTH:'/api/watchdog/health',
+  /* ── Playbook Create ── */
+  PLAYBOOKS_CREATE:'/api/playbooks/create',PLAYBOOKS_RUN:'/api/playbooks/run',
+  /* ── Cost ── */
+  COST_CONFIG:'/api/cost/config'
 };
 var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switch */
 
@@ -1358,12 +1396,13 @@ function _initFleetData(fo){
 var _dockerSub='services';
 function switchDockerSub(sub){
   _dockerSub=sub;
-  ['all','services','registry','compose'].forEach(function(s){var el=document.getElementById('docker-sub-'+s);if(el){if(s===sub){el.classList.remove('d-none');el.style.display='';}else{el.classList.add('d-none');el.style.display='';}}});
+  ['all','services','registry','compose','fleet-inv'].forEach(function(s){var el=document.getElementById('docker-sub-'+s);if(el){if(s===sub){el.classList.remove('d-none');el.style.display='';}else{el.classList.add('d-none');el.style.display='';}}});
   document.querySelectorAll('.docker-sub').forEach(function(b){b.classList.remove('active-view');});
   var btn=document.querySelector('.docker-sub[data-dsub="docker-'+sub+'"]');if(btn)btn.classList.add('active-view');
   if(sub==='services')loadServiceContainers();
   if(sub==='registry')loadContainerRegistry();
   if(sub==='compose')loadComposeVMs();
+  if(sub==='fleet-inv')loadDockerFleet();
 }
 function _getMediaTags(){try{return JSON.parse(localStorage.getItem('freq_media_tags')||'[]');}catch(e){return [];}}
 function _setMediaTags(tags){localStorage.setItem('freq_media_tags',JSON.stringify(tags));}
@@ -1653,13 +1692,107 @@ function addContainerQuick(name,vmId){
     toast(name+' registered','success');_mediaCache=null;loadContainerRegistry();rescanContainers();
   });
 }
+function loadDockerFleet(){
+  var stats=document.getElementById('docker-fleet-stats');
+  var tbl=document.getElementById('docker-fleet-table');
+  if(tbl)tbl.innerHTML='<div class="skeleton h-60"></div>';
+  _authFetch(API.DOCKER_FLEET).then(function(r){return r.json()}).then(function(d){
+    var vms=d.vms||[];var total=d.total_containers||0;var running=d.running||0;
+    if(stats)stats.innerHTML=_statCards([{l:'Docker VMs',v:vms.length},{l:'Total Containers',v:total},{l:'Running',v:running,c:'green'},{l:'Stopped',v:total-running,c:total-running>0?'yellow':'green'}]);
+    if(!vms.length){if(tbl)tbl.innerHTML='<div class="exec-out">No Docker VMs found in fleet.</div>';return;}
+    var h='';
+    vms.forEach(function(vm){
+      h+='<div style="margin-bottom:16px"><h4 style="color:var(--purple-light);margin-bottom:8px">'+_esc(vm.label||vm.host)+' <span style="color:var(--text-dim);font-weight:400;font-size:11px">('+_esc(vm.ip||'')+')</span></h4>';
+      var containers=vm.containers||[];
+      if(!containers.length){h+='<div class="exec-out">No containers found</div>';h+='</div>';return;}
+      h+='<table><thead><tr><th>Container</th><th>Image</th><th>Status</th><th>Ports</th><th>Created</th></tr></thead><tbody>';
+      containers.forEach(function(c){
+        var status=(c.state||c.status||'unknown').toLowerCase();
+        h+='<tr><td><strong>'+_esc(c.name||c.names)+'</strong></td><td class="mono-11">'+_esc(c.image||'-')+'</td><td>'+_statusBadge(status)+'</td><td class="mono-11">'+_esc(c.ports||'-')+'</td><td>'+_esc(c.created||'-')+'</td></tr>';
+      });
+      h+='</tbody></table></div>';
+    });
+    if(tbl)tbl.innerHTML=h;
+  }).catch(function(e){if(tbl)tbl.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
 function loadInfraPage(){loadInfra();}
 /* Security sub-view loaders */
-function loadSecurityOverview(){loadRisk();}
+function loadSecurityOverview(){loadRisk();loadSecPosture();}
 function loadSecHardening(){/* audit + hardening sections are button-triggered */}
 function loadSecAccess(){loadUsers();loadKeys();}
 function loadSecVault(){loadVault();}
-function loadSecCompliance(){loadPoliciesPage();}
+function loadSecCompliance(){loadPoliciesPage();loadComplianceData();}
+function loadSecPosture(){
+  /* Secrets audit */
+  _authFetch(API.SECRETS_AUDIT).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('sec-secrets-audit');if(!el)return;
+    el.innerHTML='<div style="display:flex;gap:16px;flex-wrap:wrap">'+
+      '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700">'+d.leases+'</div><div class="c-dim-fs12">LEASES</div></div>'+
+      '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--'+(d.expired>0?'red':'green')+')">'+d.expired+'</div><div class="c-dim-fs12">EXPIRED</div></div>'+
+      '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--'+(d.scan_findings>0?'yellow':'green')+')">'+d.scan_findings+'</div><div class="c-dim-fs12">SCAN FINDINGS</div></div>'+
+      '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:14px;font-weight:600;color:var(--text-dim)">'+_esc(d.last_scan)+'</div><div class="c-dim-fs12">LAST SCAN</div></div>'+
+      '</div>';
+  }).catch(function(e){var el=document.getElementById('sec-secrets-audit');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
+  /* Compliance status */
+  _authFetch(API.COMPLY_STATUS).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('sec-comply-status');if(!el)return;
+    el.innerHTML='<div style="display:flex;gap:16px;flex-wrap:wrap">'+
+      '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700">'+d.total_checks+'</div><div class="c-dim-fs12">CIS CHECKS</div></div>'+
+      '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700">'+d.scan_count+'</div><div class="c-dim-fs12">SCANS RUN</div></div>'+
+      '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:14px;font-weight:600;color:var(--text-dim)">'+_esc(d.last_scan)+'</div><div class="c-dim-fs12">LAST SCAN</div></div>'+
+      '</div>';
+  }).catch(function(e){var el=document.getElementById('sec-comply-status');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
+  /* Cert summary */
+  _authFetch(API.CERT_INVENTORY).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('sec-cert-summary');if(!el)return;
+    var certs=d.certs||[];
+    var valid=certs.filter(function(c){return c.status==='valid'}).length;
+    var expiring=certs.filter(function(c){return c.days_left<30&&c.days_left>=0}).length;
+    var expired=certs.filter(function(c){return c.status==='expired'}).length;
+    el.innerHTML=_statCards([{l:'Certificates',v:certs.length},{l:'Valid',v:valid,c:'green'},{l:'Expiring (<30d)',v:expiring,c:'yellow'},{l:'Expired',v:expired,c:'red'}]);
+  }).catch(function(e){var el=document.getElementById('sec-cert-summary');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
+  /* Patch status */
+  _authFetch(API.PATCH_STATUS).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('sec-patch-status');if(!el)return;
+    var hist=d.history||[];var holds=d.holds||[];
+    if(!hist.length&&!holds.length){el.innerHTML='<div class="exec-out">No patch history. Run <code>freq patch check</code> from CLI.</div>';return;}
+    var h='';
+    if(holds.length)h+='<div style="margin-bottom:8px"><strong style="color:var(--yellow)">'+holds.length+' package holds active</strong></div>';
+    if(hist.length){
+      h+='<table><thead><tr><th>Time</th><th>Host</th><th>Packages</th><th>Status</th></tr></thead><tbody>';
+      hist.slice(-10).reverse().forEach(function(r){h+='<tr><td>'+_esc(r.time||'-')+'</td><td>'+_esc(r.host||'-')+'</td><td>'+(r.count||0)+'</td><td>'+_statusBadge(r.status||'ok')+'</td></tr>';});
+      h+='</tbody></table>';
+    }
+    el.innerHTML=h;
+  }).catch(function(e){var el=document.getElementById('sec-patch-status');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
+}
+function loadComplianceData(){
+  /* Load compliance results on the compliance tab */
+  _authFetch(API.COMPLY_RESULTS).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('policy-out');if(!el||!d.latest)return;
+    var scan=d.latest;var hosts=scan.hosts||{};
+    var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Last scan: '+_esc(scan.scan_time||'unknown')+' &mdash; '+d.total_scans+' total scans</div>';
+    h+='<table><thead><tr><th>Host</th><th>Pass</th><th>Fail</th><th>Score</th></tr></thead><tbody>';
+    Object.keys(hosts).forEach(function(host){
+      var hr=hosts[host];var pass=hr.pass||0;var fail=hr.fail||0;var total=pass+fail;
+      var pct=total>0?Math.round(pass/total*100):0;
+      var color=pct>=80?'green':pct>=50?'yellow':'red';
+      h+='<tr><td>'+_esc(host)+'</td><td style="color:var(--green)">'+pass+'</td><td style="color:var(--red)">'+fail+'</td><td style="color:var(--'+color+')">'+pct+'%</td></tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(){});
+  /* Load baselines */
+  _authFetch(API.BASELINE_LIST).then(function(r){return r.json()}).then(function(d){
+    var baselines=d.baselines||[];if(!baselines.length)return;
+    var el=document.getElementById('patrol-out');if(!el)return;
+    var existing=el.innerHTML;
+    var h='<div style="margin-top:12px"><strong style="color:var(--purple-light)">Saved Baselines:</strong> ';
+    baselines.forEach(function(b){h+='<span class="badge ok" style="margin-right:4px">'+_esc(b.name||b)+'</span>';});
+    h+='</div>';
+    if(existing.indexOf('Saved Baselines')===-1)el.innerHTML+=h;
+  }).catch(function(){});
+}
 /* Stub loaders for extended views */
 function loadMediaPage(){loadMediaContainers();loadDownloads();loadStreams();}
 function loadToolsPage(){_populateHostDropdowns();}
@@ -1676,6 +1809,141 @@ function loadNetworkPage(){
     var pr=document.getElementById('net-profiles');
     if(pr&&d.profiles)pr.innerHTML='<div class="cards">'+d.profiles.map(function(p){return '<div class="crd"><h3>'+_esc(p.name)+'</h3><p>'+_esc(p.description||'')+'</p></div>';}).join('')+'</div>';
   });
+}
+function loadSwitchData(view){
+  var out=document.getElementById('switch-detail-out');
+  if(out)out.innerHTML='<div class="skeleton h-60"></div>';
+  var urls={facts:API.SWITCH_FACTS,interfaces:API.SWITCH_INTERFACES,vlans:API.SWITCH_VLANS,mac:API.SWITCH_MAC,arp:API.SWITCH_ARP,neighbors:API.SWITCH_NEIGHBORS,environment:API.SWITCH_ENV};
+  var url=urls[view]||urls.facts;
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
+    if(d.error){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(d.error)+'</div>';return;}
+    var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+_esc(d.host||'')+' ('+_esc(d.ip||'')+')</div>';
+    if(view==='facts'){
+      var f=d.facts||{};
+      h+='<table><tbody>';
+      Object.keys(f).forEach(function(k){h+='<tr><td style="color:var(--text-dim);width:200px">'+_esc(k)+'</td><td>'+_esc(String(f[k]))+'</td></tr>';});
+      h+='</tbody></table>';
+    }else if(view==='interfaces'){
+      var ifaces=d.interfaces||[];
+      h+='<table><thead><tr><th>Interface</th><th>Status</th><th>Speed</th><th>VLAN</th><th>Description</th></tr></thead><tbody>';
+      ifaces.forEach(function(i){h+='<tr><td>'+_esc(i.name||i.interface)+'</td><td>'+_statusBadge(i.status)+'</td><td>'+_esc(i.speed||'-')+'</td><td>'+_esc(i.vlan||'-')+'</td><td>'+_esc(i.description||'-')+'</td></tr>';});
+      h+='</tbody></table>';
+    }else if(view==='vlans'){
+      var vlans=d.vlans||[];
+      h+='<table><thead><tr><th>VLAN</th><th>Name</th><th>Ports</th><th>Status</th></tr></thead><tbody>';
+      vlans.forEach(function(v){h+='<tr><td>'+_esc(String(v.id||v.vlan))+'</td><td>'+_esc(v.name||'-')+'</td><td>'+_esc(v.ports||'-')+'</td><td>'+_statusBadge(v.status||'active')+'</td></tr>';});
+      h+='</tbody></table>';
+    }else if(view==='mac'){
+      var macs=d.mac_table||[];
+      h+='<table><thead><tr><th>MAC</th><th>VLAN</th><th>Type</th><th>Port</th></tr></thead><tbody>';
+      macs.forEach(function(m){h+='<tr><td class="mono-11">'+_esc(m.mac)+'</td><td>'+_esc(String(m.vlan||'-'))+'</td><td>'+_esc(m.type||'-')+'</td><td>'+_esc(m.port||'-')+'</td></tr>';});
+      h+='</tbody></table>';
+    }else if(view==='arp'){
+      var arps=d.arp_table||[];
+      h+='<table><thead><tr><th>IP</th><th>MAC</th><th>Interface</th><th>Age</th></tr></thead><tbody>';
+      arps.forEach(function(a){h+='<tr><td class="mono-11">'+_esc(a.ip)+'</td><td class="mono-11">'+_esc(a.mac)+'</td><td>'+_esc(a.interface||'-')+'</td><td>'+_esc(a.age||'-')+'</td></tr>';});
+      h+='</tbody></table>';
+    }else if(view==='neighbors'){
+      var nb=d.neighbors||[];
+      h+='<table><thead><tr><th>Local Port</th><th>Neighbor</th><th>Remote Port</th><th>Platform</th></tr></thead><tbody>';
+      nb.forEach(function(n){h+='<tr><td>'+_esc(n.local_port||'-')+'</td><td>'+_esc(n.neighbor||n.device||'-')+'</td><td>'+_esc(n.remote_port||'-')+'</td><td>'+_esc(n.platform||'-')+'</td></tr>';});
+      h+='</tbody></table>';
+    }else if(view==='environment'){
+      var env=d.environment||{};
+      h+='<table><tbody>';
+      Object.keys(env).forEach(function(k){
+        var v=env[k];
+        h+='<tr><td style="color:var(--text-dim);width:200px">'+_esc(k)+'</td><td>'+(typeof v==='object'?'<pre style="margin:0;font-size:11px">'+_esc(JSON.stringify(v,null,2))+'</pre>':_esc(String(v)))+'</td></tr>';
+      });
+      h+='</tbody></table>';
+    }
+    if(out)out.innerHTML=h;
+  }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+function loadConfigHistory(){
+  var out=document.getElementById('config-backup-out');
+  if(out)out.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.CONFIG_HISTORY).then(function(r){return r.json()}).then(function(d){
+    var backups=d.backups||[];
+    if(!backups.length){if(out)out.innerHTML='<div class="exec-out">No config backups found. Run <code>freq net config backup</code>.</div>';return;}
+    var h='<table><thead><tr><th>Device</th><th>Timestamp</th><th>Size</th><th>File</th></tr></thead><tbody>';
+    backups.forEach(function(b){h+='<tr><td>'+_esc(b.label)+'</td><td>'+_esc(b.timestamp)+'</td><td>'+b.size+' B</td><td class="mono-11">'+_esc(b.file)+'</td></tr>';});
+    h+='</tbody></table>';
+    if(out)out.innerHTML=h;
+  }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+function searchConfigs(){
+  var pattern=document.getElementById('config-search-input').value.trim();
+  var out=document.getElementById('config-backup-out');
+  if(!pattern){if(out)out.textContent='Enter a search pattern.';return;}
+  if(out)out.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.CONFIG_SEARCH+'?pattern='+encodeURIComponent(pattern)).then(function(r){return r.json()}).then(function(d){
+    if(d.error){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(d.error)+'</div>';return;}
+    var results=d.results||[];
+    if(!results.length){if(out)out.innerHTML='<div class="exec-out">No matches for "'+_esc(pattern)+'" across '+d.total_devices+' devices.</div>';return;}
+    var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Found matches in '+results.length+' device(s)</div>';
+    results.forEach(function(r){
+      h+='<div style="margin-bottom:12px"><strong style="color:var(--purple-light)">'+_esc(r.device)+'</strong>';
+      h+='<pre style="font-size:11px;margin:4px 0 0 0;background:var(--bg2);padding:8px;border-radius:4px;overflow-x:auto">';
+      r.matches.forEach(function(m){h+=_esc(m.line+': '+m.text)+'\n';});
+      h+='</pre></div>';
+    });
+    if(out)out.innerHTML=h;
+  }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+function loadDepMap(){
+  var out=document.getElementById('dep-map-out');
+  if(out)out.innerHTML='<div class="skeleton h-60"></div>';
+  _authFetch(API.MAP_DATA).then(function(r){return r.json()}).then(function(d){
+    var nodes=d.nodes||[];var edges=d.edges||[];
+    if(!nodes.length){if(out)out.innerHTML='<div class="exec-out">No dependency data. Run <code>freq map build</code> from CLI.</div>';return;}
+    var h='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">';
+    h+=_statCards([{l:'Nodes',v:nodes.length},{l:'Edges',v:edges.length},{l:'Services',v:nodes.filter(function(n){return n.type==='service'}).length,c:'purple'}]);
+    h+='</div>';
+    h+='<table><thead><tr><th>Node</th><th>Type</th><th>Dependencies</th><th>Dependents</th></tr></thead><tbody>';
+    nodes.forEach(function(n){
+      var deps=(n.depends_on||[]).join(', ')||'none';
+      var revs=(n.depended_by||[]).join(', ')||'none';
+      h+='<tr><td><strong>'+_esc(n.name||n.id)+'</strong></td><td>'+_esc(n.type||'-')+'</td><td>'+_esc(deps)+'</td><td>'+_esc(revs)+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    if(out)out.innerHTML=h;
+  }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+function runImpactAnalysis(){
+  var host=document.getElementById('impact-host-input').value.trim();
+  var out=document.getElementById('dep-map-out');
+  if(!host){if(out)out.textContent='Enter a host name.';return;}
+  if(out)out.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.MAP_IMPACT+'?host='+encodeURIComponent(host)).then(function(r){return r.json()}).then(function(d){
+    if(d.error){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(d.error)+'</div>';return;}
+    var h='<h4 style="color:var(--purple-light);margin-bottom:8px">Impact: '+_esc(host)+'</h4>';
+    var affected=d.affected||[];var services=d.services||[];
+    h+='<div style="margin-bottom:8px">Affected hosts: <strong>'+(affected.length||0)+'</strong> &middot; Services impacted: <strong>'+(services.length||0)+'</strong></div>';
+    if(affected.length){h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';affected.forEach(function(a){h+='<span class="badge CRITICAL">'+_esc(a)+'</span>';});h+='</div>';}
+    if(services.length){h+='<div style="display:flex;gap:6px;flex-wrap:wrap">';services.forEach(function(s){h+='<span class="badge warn">'+_esc(s)+'</span>';});h+='</div>';}
+    if(!affected.length&&!services.length)h+='<div class="exec-out">No downstream impact detected.</div>';
+    if(out)out.innerHTML=h;
+  }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+function loadNetmonData(){
+  var out=document.getElementById('netmon-out');
+  if(out)out.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.NETMON_DATA).then(function(r){return r.json()}).then(function(d){
+    var snaps=d.snapshots||[];
+    if(!snaps.length){if(out)out.innerHTML='<div class="exec-out">No monitoring data. Run <code>freq netmon poll</code> to start collecting.</div>';return;}
+    var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+snaps.length+' snapshots (showing latest 20)</div>';
+    h+='<table><thead><tr><th>Time</th><th>Host</th><th>Interface</th><th>RX</th><th>TX</th><th>Errors</th></tr></thead><tbody>';
+    snaps.slice(-20).reverse().forEach(function(s){
+      var ifaces=s.interfaces||[];
+      ifaces.forEach(function(i){
+        h+='<tr><td>'+_esc(s.time||'-')+'</td><td>'+_esc(s.host||'-')+'</td><td>'+_esc(i.name)+'</td><td>'+_esc(i.rx||'0')+'</td><td>'+_esc(i.tx||'0')+'</td><td>'+_esc(i.errors||'0')+'</td></tr>';
+      });
+      if(!ifaces.length)h+='<tr><td>'+_esc(s.time||'-')+'</td><td>'+_esc(s.host||'-')+'</td><td colspan="4"><pre style="margin:0;font-size:11px">'+_esc(JSON.stringify(s,null,2))+'</pre></td></tr>';
+    });
+    h+='</tbody></table>';
+    if(out)out.innerHTML=h;
+  }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
 }
 function runNetScan(type){
   var out=document.getElementById('net-snmp-out');
@@ -1769,6 +2037,7 @@ function loadDrPage(){
     var rb=document.getElementById('dr-runbooks');
     if(rb&&d.runbooks)rb.innerHTML='<div class="cards">'+d.runbooks.map(function(r){return '<div class="crd"><h3>'+_esc(r.name)+'</h3><p>'+_esc(r.description||'')+'</p></div>';}).join('')+'</div>';
   });
+  loadBackupPolicies();
 }
 function loadIncidentsPage(){
   _fetchAndRender('/api/v1/ops/incidents','incident-stats',function(d){
@@ -1783,6 +2052,33 @@ function loadIncidentsPage(){
     var cl=document.getElementById('change-log');
     if(cl&&d.changes)cl.innerHTML='<table><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Target</th></tr></thead><tbody>'+d.changes.map(function(c){return '<tr><td>'+_esc(c.time)+'</td><td>'+_esc(c.user)+'</td><td>'+_esc(c.action)+'</td><td>'+_esc(c.target)+'</td></tr>';}).join('')+'</tbody></table>';
   });
+  loadOncall();
+}
+function loadOncall(){
+  /* Who is on call */
+  _authFetch(API.ONCALL_WHOAMI).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('oncall-info');if(!el)return;
+    var h='<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">';
+    h+='<div class="crd" style="padding:12px 20px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--green)">'+_esc(d.oncall||'unset')+'</div><div class="c-dim-fs12">CURRENT ON-CALL</div></div>';
+    h+='<div class="crd" style="padding:12px 20px;text-align:center"><div style="font-size:16px;font-weight:600">'+_esc(d.rotation||'weekly')+'</div><div class="c-dim-fs12">ROTATION</div></div>';
+    var users=d.users||[];
+    if(users.length){h+='<div style="flex:1"><span class="c-dim-fs12">ROSTER: </span>';users.forEach(function(u){h+='<span class="badge ok" style="margin-right:4px">'+_esc(u)+'</span>';});h+='</div>';}
+    h+='</div>';
+    el.innerHTML=h;
+  }).catch(function(e){var el=document.getElementById('oncall-info');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
+  /* On-call incidents */
+  _authFetch(API.ONCALL_INCIDENTS).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('oncall-incidents');if(!el)return;
+    var incidents=d.incidents||[];
+    if(!incidents.length){el.innerHTML='<div class="exec-out" style="color:var(--green)">No on-call incidents. All quiet.</div>';return;}
+    var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+d.total+' total, '+d.open+' open</div>';
+    h+='<table><thead><tr><th>ID</th><th>Summary</th><th>Status</th><th>Assignee</th><th>Time</th></tr></thead><tbody>';
+    incidents.forEach(function(i){
+      h+='<tr><td>'+_esc(i.id||'-')+'</td><td>'+_esc(i.summary||'-')+'</td><td>'+_statusBadge(i.status||'open')+'</td><td>'+_esc(i.assignee||'-')+'</td><td>'+_esc(i.time||i.opened||'-')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(e){var el=document.getElementById('oncall-incidents');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
 }
 function loadMetricsPage(){
   _fetchAndRender('/api/v1/observe/metrics','metrics-top-stats',function(d){
@@ -1796,6 +2092,89 @@ function loadMetricsPage(){
     var mon=document.getElementById('synth-monitors');
     if(mon&&d.monitors)mon.innerHTML='<table><thead><tr><th>URL</th><th>Status</th><th>Latency</th><th>Last Check</th></tr></thead><tbody>'+d.monitors.map(function(m){return '<tr><td>'+_esc(m.url)+'</td><td>'+_statusBadge(m.status)+'</td><td>'+m.latency_ms+'ms</td><td>'+_esc(m.last_check||'-')+'</td></tr>';}).join('')+'</tbody></table>';
   });
+  loadMetricAlerts();loadSlaData();
+}
+function loadMetricAlerts(){
+  /* Alert rules */
+  _authFetch(API.ALERT_RULES).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('metric-alert-rules');if(!el)return;
+    var rules=d.rules||[];var silences=d.silences||[];
+    if(!rules.length){el.innerHTML='<div class="exec-out">No alert rules configured. Create rules in SYSTEM > Alert Rules.</div>';return;}
+    var h='<table><thead><tr><th>Rule</th><th>Condition</th><th>Target</th><th>Severity</th><th>Enabled</th></tr></thead><tbody>';
+    rules.forEach(function(r){
+      h+='<tr><td><strong>'+_esc(r.name)+'</strong></td><td>'+_esc(r.condition||'-')+' &gt; '+(r.threshold||0)+'</td>';
+      h+='<td>'+_esc(r.target||'*')+'</td><td><span class="badge '+(r.severity==='critical'?'CRITICAL':r.severity)+'">'+_esc(r.severity||'warning')+'</span></td>';
+      h+='<td>'+(r.enabled?'<span class="c-green">ON</span>':'<span class="c-red">OFF</span>')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    if(silences.length)h+='<div style="margin-top:8px;font-size:12px;color:var(--yellow)">'+silences.length+' active silence(s)</div>';
+    el.innerHTML=h;
+  }).catch(function(e){var el=document.getElementById('metric-alert-rules');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
+  /* Alert history */
+  _authFetch(API.ALERT_HISTORY).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('metric-alert-history');if(!el)return;
+    var hist=d.history||[];
+    if(!hist.length){el.innerHTML='<div class="exec-out">No alert history yet.</div>';return;}
+    var h='<table><thead><tr><th>Time</th><th>Rule</th><th>Host</th><th>Message</th><th>Severity</th></tr></thead><tbody>';
+    hist.slice(-20).reverse().forEach(function(a){
+      var t=a.fired_at?new Date(a.fired_at*1000).toLocaleString():(a.time||'?');
+      h+='<tr><td style="white-space:nowrap">'+_esc(t)+'</td><td>'+_esc(a.rule||a.rule_name||'-')+'</td><td>'+_esc(a.host||'-')+'</td><td>'+_esc(a.message||'-')+'</td>';
+      h+='<td><span class="badge '+(a.severity==='critical'?'CRITICAL':a.severity)+'">'+_esc(a.severity||'warning')+'</span></td></tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(e){var el=document.getElementById('metric-alert-history');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
+}
+function runAlertCheck(){
+  var el=document.getElementById('metric-alert-triggered');
+  if(el)el.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.ALERT_CHECK).then(function(r){return r.json()}).then(function(d){
+    if(!el)return;
+    var alerts=d.alerts||[];
+    if(!alerts.length){el.innerHTML='<div class="exec-out" style="color:var(--green)">All clear — '+d.rules_checked+' rules checked, 0 triggered.</div>';return;}
+    var h='<div style="color:var(--red);font-weight:600;margin-bottom:8px">'+alerts.length+' ALERT(S) TRIGGERED</div>';
+    h+='<table><thead><tr><th>Rule</th><th>Host</th><th>Value</th><th>Message</th><th>Severity</th></tr></thead><tbody>';
+    alerts.forEach(function(a){
+      h+='<tr><td><strong>'+_esc(a.rule)+'</strong></td><td>'+_esc(a.host)+'</td><td>'+_esc(String(a.value))+'</td><td>'+_esc(a.message)+'</td>';
+      h+='<td><span class="badge '+(a.severity==='critical'?'CRITICAL':a.severity)+'">'+_esc(a.severity)+'</span></td></tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(e){if(el)el.innerHTML='<div class="exec-out" style="color:var(--red)">Check failed: '+_esc(e.toString())+'</div>';});
+}
+function runMonitorCheck(){
+  var el=document.getElementById('synth-monitors');
+  if(el)el.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.MONITORS_CHECK).then(function(r){return r.json()}).then(function(d){
+    if(!el)return;
+    var results=d.results||[];
+    if(!results.length){el.innerHTML='<div class="exec-out">No monitors configured. Add monitors to freq.toml.</div>';return;}
+    var h='<div style="margin-bottom:8px">'+_statCards([{l:'Total',v:d.count||0},{l:'Healthy',v:d.healthy||0,c:'green'},{l:'Unhealthy',v:d.unhealthy||0,c:d.unhealthy>0?'red':'green'}])+'</div>';
+    h+='<table><thead><tr><th>URL</th><th>Status</th><th>Latency</th><th>Code</th></tr></thead><tbody>';
+    results.forEach(function(m){
+      h+='<tr><td>'+_esc(m.url||m.name)+'</td><td>'+_statusBadge(m.ok?'ok':'fail')+'</td><td>'+(m.latency_ms||'-')+'ms</td><td>'+(m.status_code||'-')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(e){if(el)el.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+function loadSlaData(){
+  var el=document.getElementById('sla-data');
+  if(el)el.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.SLA).then(function(r){return r.json()}).then(function(d){
+    if(!el)return;
+    var hosts=d.hosts||{};var keys=Object.keys(hosts);
+    if(!keys.length){el.innerHTML='<div class="exec-out">No SLA data. SLA checks run automatically with patrol. Run <code>freq sla record</code> to start.</div>';return;}
+    var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+d.total_checks+' total checks recorded</div>';
+    h+='<table><thead><tr><th>Host</th><th>7-Day SLA</th><th>30-Day SLA</th><th>90-Day SLA</th></tr></thead><tbody>';
+    keys.sort().forEach(function(host){
+      var s=hosts[host];
+      var fmt=function(pct){var p=parseFloat(pct)||0;var c=p>=99.9?'green':p>=99?'yellow':'red';return '<span style="color:var(--'+c+');font-weight:600">'+p.toFixed(2)+'%</span>';};
+      h+='<tr><td>'+_esc(host)+'</td><td>'+fmt(s['7d'])+'</td><td>'+fmt(s['30d'])+'</td><td>'+fmt(s['90d'])+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(e){if(el)el.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
 }
 function loadAutomationPage(){
   _fetchAndRender('/api/v1/auto/status','auto-stats',function(d){
@@ -1809,6 +2188,64 @@ function loadAutomationPage(){
     var jobs=document.getElementById('auto-jobs');
     if(jobs&&d.jobs)jobs.innerHTML='<table><thead><tr><th>Name</th><th>Schedule</th><th>Last Run</th><th>Status</th></tr></thead><tbody>'+d.jobs.map(function(j){return '<tr><td>'+_esc(j.name)+'</td><td>'+_esc(j.schedule)+'</td><td>'+_esc(j.last_run||'never')+'</td><td>'+_statusBadge(j.status)+'</td></tr>';}).join('')+'</tbody></table>';
   });
+  loadScheduleJobs();loadWebhooks();
+}
+function loadScheduleJobs(){
+  _authFetch(API.SCHEDULE_JOBS).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('schedule-jobs');if(!el)return;
+    var jobs=d.jobs||[];
+    if(!jobs.length){el.innerHTML='<div class="exec-out">No scheduled jobs. Create jobs with <code>freq schedule create</code>.</div>';return;}
+    var h='<table><thead><tr><th>Name</th><th>Schedule</th><th>Command</th><th>Target</th><th>Last Run</th><th>Status</th></tr></thead><tbody>';
+    jobs.forEach(function(j){
+      h+='<tr><td><strong>'+_esc(j.name)+'</strong></td><td>'+_esc(j.schedule||j.cron||'-')+'</td><td class="mono-11">'+_esc(j.command||'-')+'</td><td>'+_esc(j.target||'*')+'</td><td>'+_esc(j.last_run||'never')+'</td><td>'+_statusBadge(j.status||'idle')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(e){var el=document.getElementById('schedule-jobs');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
+  /* Templates */
+  _authFetch(API.SCHEDULE_TEMPLATES).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('schedule-templates');if(!el)return;
+    var templates=d.templates||[];
+    if(!templates.length){el.innerHTML='<div class="exec-out">No job templates available.</div>';return;}
+    el.innerHTML='<div class="cards">'+templates.map(function(t){return '<div class="crd"><h3>'+_esc(t.name||t)+'</h3><p>'+_esc(t.description||t.schedule||'')+'</p></div>';}).join('')+'</div>';
+  }).catch(function(){});
+  /* Execution log */
+  _authFetch(API.SCHEDULE_LOG).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('schedule-log');if(!el)return;
+    var log=d.log||[];
+    if(!log.length){el.innerHTML='<div class="exec-out">No job executions yet.</div>';return;}
+    var h='<table><thead><tr><th>Time</th><th>Job</th><th>Status</th><th>Duration</th></tr></thead><tbody>';
+    log.slice(-15).reverse().forEach(function(l){
+      h+='<tr><td>'+_esc(l.time||'-')+'</td><td>'+_esc(l.job||l.name||'-')+'</td><td>'+_statusBadge(l.status||'ok')+'</td><td>'+_esc(l.duration||'-')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(){});
+}
+function loadWebhooks(){
+  _authFetch(API.WEBHOOK_LIST).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('webhook-list');if(!el)return;
+    var hooks=d.webhooks||[];
+    if(!hooks.length){el.innerHTML='<div class="exec-out">No webhooks configured. Add webhooks with <code>freq webhook create</code>.</div>';return;}
+    var h='<table><thead><tr><th>Name</th><th>URL</th><th>Events</th><th>Enabled</th></tr></thead><tbody>';
+    hooks.forEach(function(w){
+      h+='<tr><td><strong>'+_esc(w.name)+'</strong></td><td class="mono-11">'+_esc(w.url||'-')+'</td><td>'+_esc((w.events||[]).join(', ')||'all')+'</td><td>'+(w.enabled!==false?'<span class="c-green">ON</span>':'<span class="c-red">OFF</span>')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(e){var el=document.getElementById('webhook-list');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
+  /* Webhook log */
+  _authFetch(API.WEBHOOK_LOG).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('webhook-log');if(!el)return;
+    var log=d.log||[];
+    if(!log.length){el.innerHTML='<div class="exec-out">No webhook executions yet.</div>';return;}
+    var h='<table><thead><tr><th>Time</th><th>Webhook</th><th>Event</th><th>Status</th></tr></thead><tbody>';
+    log.slice(-15).reverse().forEach(function(l){
+      h+='<tr><td>'+_esc(l.time||'-')+'</td><td>'+_esc(l.name||l.webhook||'-')+'</td><td>'+_esc(l.event||'-')+'</td><td>'+_statusBadge(l.status||l.result||'ok')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(){});
 }
 function loadPluginsPage(){
   _fetchAndRender('/api/v1/plugin/list','plugin-stats',function(d){
@@ -1834,6 +2271,123 @@ function _fetchAndRender(url,statsId,renderFn){
   });
 }
 /* Helper: stat cards HTML */
+/* ── Inventory ── */
+function loadInventory(){
+  var out=document.getElementById('inventory-out');
+  if(out)out.innerHTML='<div class="skeleton h-60"></div>';
+  _authFetch(API.INVENTORY).then(function(r){return r.json()}).then(function(d){
+    var hosts=d.hosts||[];var vms=d.vms||[];var containers=d.containers||[];
+    var h=_statCards([{l:'Hosts',v:hosts.length},{l:'VMs',v:vms.length,c:'purple'},{l:'Containers',v:containers.length,c:'green'}]);
+    h+='<div style="margin-top:16px"><h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">HOSTS</h4>';
+    if(hosts.length){
+      h+='<table><thead><tr><th>Label</th><th>IP</th><th>Type</th><th>OS</th><th>CPU</th><th>RAM</th></tr></thead><tbody>';
+      hosts.forEach(function(ho){h+='<tr><td><strong>'+_esc(ho.label||ho.hostname)+'</strong></td><td class="mono-11">'+_esc(ho.ip)+'</td><td>'+_esc(ho.type||'-')+'</td><td>'+_esc(ho.os||'-')+'</td><td>'+_esc(ho.cpu||'-')+'</td><td>'+_esc(ho.ram||'-')+'</td></tr>';});
+      h+='</tbody></table>';
+    }else h+='<div class="exec-out">No hosts</div>';
+    h+='</div>';
+    h+='<div style="margin-top:16px"><h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">VMS (showing first 50)</h4>';
+    if(vms.length){
+      h+='<table><thead><tr><th>VMID</th><th>Name</th><th>Node</th><th>Status</th><th>CPU</th><th>RAM</th></tr></thead><tbody>';
+      vms.slice(0,50).forEach(function(v){h+='<tr><td>'+_esc(String(v.vmid))+'</td><td>'+_esc(v.name)+'</td><td>'+_esc(v.node||'-')+'</td><td>'+_statusBadge(v.status)+'</td><td>'+(v.cpus||'-')+'</td><td>'+_esc(v.maxmem||'-')+'</td></tr>';});
+      h+='</tbody></table>';
+    }else h+='<div class="exec-out">No VMs</div>';
+    h+='</div>';
+    if(out)out.innerHTML=h;
+  }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+function loadInventoryView(type){
+  var out=document.getElementById('inventory-out');
+  if(out)out.innerHTML='<div class="skeleton h-40"></div>';
+  var url=type==='hosts'?API.INVENTORY_HOSTS:type==='vms'?API.INVENTORY_VMS:API.INVENTORY_CONTAINERS;
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
+    var items=d[type]||d.hosts||d.vms||d.containers||[];
+    if(!items.length){if(out)out.innerHTML='<div class="exec-out">No '+type+' found.</div>';return;}
+    if(out)out.innerHTML='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+items.length+' '+type+'</div><pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:500px;overflow:auto">'+_esc(JSON.stringify(items,null,2))+'</pre>';
+  }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+function generateReport(){
+  var out=document.getElementById('inventory-out');
+  if(out)out.innerHTML='<div class="skeleton h-60"></div>';
+  _authFetch(API.REPORT).then(function(r){return r.json()}).then(function(d){
+    if(out)out.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:600px;overflow:auto;white-space:pre-wrap">'+_esc(d.report||JSON.stringify(d,null,2))+'</pre>';
+  }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+/* ── Backup Policies (DR page) ── */
+function loadBackupPolicies(){
+  _authFetch(API.BACKUP_POLICY_LIST).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('backup-policy-list');if(!el)return;
+    var policies=d.policies||[];
+    if(!policies.length){el.innerHTML='<div class="exec-out">No backup policies defined. Create policies with <code>freq backup-policy create</code>.</div>';return;}
+    var h='<table><thead><tr><th>Name</th><th>Schedule</th><th>Retention</th><th>Targets</th><th>Enabled</th></tr></thead><tbody>';
+    policies.forEach(function(p){
+      h+='<tr><td><strong>'+_esc(p.name)+'</strong></td><td>'+_esc(p.schedule||p.cron||'-')+'</td><td>'+_esc(p.retention||'-')+'</td><td>'+_esc((p.targets||[]).join(', ')||p.target||'all')+'</td><td>'+(p.enabled!==false?'<span class="c-green">ON</span>':'<span class="c-red">OFF</span>')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    el.innerHTML=h;
+  }).catch(function(e){var el=document.getElementById('backup-policy-list');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
+  /* Policy enforcement status */
+  _authFetch(API.BACKUP_POLICY_STATUS).then(function(r){return r.json()}).then(function(d){
+    var el=document.getElementById('backup-policy-stats');if(!el)return;
+    var stats=d.stats||{};
+    if(stats.total)el.innerHTML=_statCards([{l:'Policies',v:stats.total||0},{l:'Compliant',v:stats.compliant||0,c:'green'},{l:'Violations',v:stats.violations||0,c:stats.violations>0?'red':'green'}]);
+  }).catch(function(){});
+}
+/* ── Trend Data (Capacity page) ── */
+function loadTrendData(){
+  var el=document.getElementById('trend-data');
+  if(el)el.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.TREND_DATA).then(function(r){return r.json()}).then(function(d){
+    var snaps=d.snapshots||[];
+    if(!snaps.length){if(el)el.innerHTML='<div class="exec-out">No trend data. Run <code>freq trend snapshot</code> to start collecting capacity trends.</div>';return;}
+    var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+d.total+' total snapshots (showing last '+snaps.length+')</div>';
+    h+='<table><thead><tr><th>Time</th><th>Hosts</th><th>Avg CPU</th><th>Avg RAM</th><th>Avg Disk</th></tr></thead><tbody>';
+    snaps.slice(-20).reverse().forEach(function(s){
+      h+='<tr><td>'+_esc(s.time||'-')+'</td><td>'+(s.host_count||'-')+'</td><td>'+(s.avg_cpu||'-')+'%</td><td>'+(s.avg_ram||'-')+'%</td><td>'+(s.avg_disk||'-')+'%</td></tr>';
+    });
+    h+='</tbody></table>';
+    if(el)el.innerHTML=h;
+  }).catch(function(e){if(el)el.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+/* ── Capacity Recommendations ── */
+function loadCapRecommend(){
+  var el=document.getElementById('cap-recommend');
+  if(el)el.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.CAPACITY_RECOMMEND).then(function(r){return r.json()}).then(function(d){
+    var recs=d.recommendations||[];
+    if(!recs.length){if(el)el.innerHTML='<div class="exec-out" style="color:var(--green)">No optimization recommendations. Fleet is balanced.</div>';return;}
+    var h=_statCards([{l:'Recommendations',v:d.count||recs.length},{l:'Critical',v:d.critical||0,c:'red'},{l:'Warning',v:d.warning||0,c:'yellow'}]);
+    h+='<div style="margin-top:12px">';
+    recs.forEach(function(r){
+      var color=r.urgency==='critical'?'red':r.urgency==='warning'?'yellow':'green';
+      h+='<div style="padding:10px;margin-bottom:8px;border-left:3px solid var(--'+color+');background:var(--bg2);border-radius:4px">';
+      h+='<strong style="color:var(--'+color+')">'+_esc(r.type||r.action||'recommendation')+'</strong>';
+      if(r.vm)h+=' &mdash; VM '+_esc(r.vm);
+      if(r.from)h+=' from '+_esc(r.from);
+      if(r.to)h+=' &rarr; '+_esc(r.to);
+      h+='<div style="font-size:12px;color:var(--text-dim);margin-top:4px">'+_esc(r.reason||r.message||'')+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+    if(el)el.innerHTML=h;
+  }).catch(function(e){if(el)el.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+/* ── Playbook Create ── */
+function createPlaybook(){
+  var name=document.getElementById('pb-create-name').value.trim();
+  var desc=document.getElementById('pb-create-desc').value.trim();
+  var trigger=document.getElementById('pb-create-trigger').value.trim();
+  var msg=document.getElementById('pb-create-msg');
+  if(!name){if(msg)msg.innerHTML='<span class="c-red">Name required</span>';return;}
+  _authFetch(API.PLAYBOOKS_CREATE+'?name='+encodeURIComponent(name)+'&description='+encodeURIComponent(desc)+'&trigger='+encodeURIComponent(trigger))
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.error){if(msg)msg.innerHTML='<span class="c-red">'+_esc(d.error)+'</span>';return;}
+    if(msg)msg.innerHTML='<span class="c-green">Created: '+_esc(d.filename)+'</span>';
+    document.getElementById('pb-create-name').value='';
+    document.getElementById('pb-create-desc').value='';
+    document.getElementById('pb-create-trigger').value='';
+    loadPlaybooks();
+  }).catch(function(e){if(msg)msg.innerHTML='<span class="c-red">Failed: '+_esc(e.toString())+'</span>';});
+}
 function _statCards(items){
   return '<div style="display:flex;gap:16px;flex-wrap:wrap">'+items.map(function(i){
     var color=i.c?'color:var(--'+i.c+')':'';
