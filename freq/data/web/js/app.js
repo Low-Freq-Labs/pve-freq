@@ -266,7 +266,22 @@ var API={
   /* ── Playbook Create ── */
   PLAYBOOKS_CREATE:'/api/playbooks/create',PLAYBOOKS_RUN:'/api/playbooks/run',
   /* ── Cost ── */
-  COST_CONFIG:'/api/cost/config'
+  COST_CONFIG:'/api/cost/config',
+  /* ── Remaining endpoints ── */
+  DB_STATUS:'/api/db/status',LOGS_STATS:'/api/logs/stats',
+  PATCH_COMPLIANCE:'/api/patch/compliance',NETMON_INTERFACES:'/api/netmon/interfaces',
+  STACK_HEALTH:'/api/stack/health',STACK_STATUS:'/api/stack/status',
+  MIGRATE_PLAN:'/api/migrate-plan',DEPLOY_AGENT:'/api/deploy-agent',
+  PROXY_STATUS:'/api/proxy/status',PROXY_LIST:'/api/proxy/list',
+  AGENT_CREATE:'/api/agent/create',AGENT_DESTROY:'/api/agent/destroy',
+  MIGRATE_VMWARE:'/api/migrate-vmware/status',
+  POOL:'/api/pool',ROLLBACK:'/api/rollback',
+  MEDIA_DOWNLOADS_DETAIL:'/api/media/downloads/detail',
+  COST_COMPARE:'/api/cost-analysis/compare',COST_WASTE:'/api/cost-analysis/waste',
+  GITOPS_INIT:'/api/gitops/init',PLUGIN_INFO:'/api/v1/plugin/info',
+  API_DOCS:'/api/docs',OPENAPI:'/api/openapi.json',
+  METRICS_PROMETHEUS:'/api/metrics/prometheus',
+  SETUP_STATUS:'/api/setup/status'
 };
 var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switch */
 
@@ -2503,6 +2518,147 @@ function createPlaybook(){
     document.getElementById('pb-create-trigger').value='';
     loadPlaybooks();
   }).catch(function(e){if(msg)msg.innerHTML='<span class="c-red">Failed: '+_esc(e.toString())+'</span>';});
+}
+/* ═══════════════════════════════════════════════════════════════════
+   FINAL WIRING — remaining endpoints
+   ═══════════════════════════════════════════════════════════════════ */
+/* Docker: stack status/health */
+function loadStackInfo(type){
+  var el=document.getElementById('stack-info');if(!el)return;
+  el.innerHTML='<div class="skeleton h-40"></div>';
+  var url=type==='health'?API.STACK_HEALTH:API.STACK_STATUS;
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
+    if(d.info){el.innerHTML='<div class="exec-out">'+_esc(d.info)+'<br><code>'+_esc(d.usage||'')+'</code></div>';return;}
+    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:300px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+  }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
+}
+/* System info panel */
+function loadSysInfo(type){
+  var el=document.getElementById('sysinfo-out');if(!el)return;
+  el.innerHTML='<div class="skeleton h-40"></div>';
+  var urls={db:API.DB_STATUS,logs:API.LOGS_STATS,proxy:API.PROXY_LIST,pool:API.POOL,deploy:API.DEPLOY_AGENT,setup:API.SETUP_STATUS};
+  _authFetch(urls[type]||urls.db).then(function(r){return r.json()}).then(function(d){
+    if(d.info||d.message){el.innerHTML='<div class="exec-out">'+_esc(d.info||d.message)+(d.usage?'<br><code>'+_esc(d.usage)+'</code>':'')+(d.note?'<br><span style="color:var(--text-dim)">'+_esc(d.note)+'</span>':'')+'</div>';return;}
+    /* Real data — render appropriately */
+    if(type==='proxy'){
+      var routes=d.routes||[];
+      if(!routes.length){el.innerHTML='<div class="exec-out">No proxy routes configured.</div>';return;}
+      var h='<table><thead><tr><th>Path</th><th>Target</th><th>Host</th></tr></thead><tbody>';
+      routes.forEach(function(r){h+='<tr><td>'+_esc(r.path||'-')+'</td><td class="mono-11">'+_esc(r.target||'-')+'</td><td>'+_esc(r.host||'-')+'</td></tr>';});
+      h+='</tbody></table>';
+      el.innerHTML=h;return;
+    }
+    if(type==='pool'){
+      var pools=d.pools||[];
+      if(!pools.length){el.innerHTML='<div class="exec-out">No storage pools found.</div>';return;}
+      var h='<table><thead><tr><th>Pool</th><th>Type</th><th>Size</th><th>Used</th><th>Status</th></tr></thead><tbody>';
+      pools.forEach(function(p){h+='<tr><td><strong>'+_esc(p.name||p.pool)+'</strong></td><td>'+_esc(p.type||'-')+'</td><td>'+_esc(p.size||'-')+'</td><td>'+_esc(p.used||'-')+'</td><td>'+_statusBadge(p.status||'ok')+'</td></tr>';});
+      h+='</tbody></table>';
+      el.innerHTML=h;return;
+    }
+    if(type==='setup'){
+      var h='<table><tbody>';
+      Object.keys(d).forEach(function(k){h+='<tr><td style="color:var(--text-dim);width:200px">'+_esc(k)+'</td><td>'+_esc(String(d[k]))+'</td></tr>';});
+      h+='</tbody></table>';
+      el.innerHTML=h;return;
+    }
+    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:400px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+  }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
+}
+/* DR: migration planning */
+function loadMigratePlan(){
+  var el=document.getElementById('migrate-plan-out');if(!el)return;
+  el.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.MIGRATE_PLAN).then(function(r){return r.json()}).then(function(d){
+    if(d.info){el.innerHTML='<div class="exec-out">'+_esc(d.info)+'<br><code>'+_esc(d.usage||'')+'</code></div>';return;}
+    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:400px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+  }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
+}
+function loadVmwareMigration(){
+  var el=document.getElementById('migrate-plan-out');if(!el)return;
+  el.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.MIGRATE_VMWARE).then(function(r){return r.json()}).then(function(d){
+    var scans=d.scans||[];var imports=d.imports||[];
+    if(!scans.length&&!imports.length){el.innerHTML='<div class="exec-out">No VMware migration data. Run <code>freq migrate-vmware scan</code> to discover.</div>';return;}
+    var h='';
+    if(scans.length){h+='<h4 style="font-size:11px;color:var(--text-dim);margin-bottom:8px">SCANS</h4><pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:200px;overflow:auto">'+_esc(JSON.stringify(scans,null,2))+'</pre>';}
+    if(imports.length){h+='<h4 style="font-size:11px;color:var(--text-dim);margin:12px 0 8px">IMPORTS</h4><pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:200px;overflow:auto">'+_esc(JSON.stringify(imports,null,2))+'</pre>';}
+    el.innerHTML=h;
+  }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
+}
+/* Cost analysis */
+function loadCostAnalysis(type){
+  var el=document.getElementById('cost-analysis-out');if(!el)return;
+  el.innerHTML='<div class="skeleton h-40"></div>';
+  var url=type==='waste'?API.COST_WASTE:API.COST_COMPARE;
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
+    if(d.info){el.innerHTML='<div class="exec-out">'+_esc(d.info)+'<br><code>'+_esc(d.usage||'')+'</code></div>';return;}
+    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:400px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+  }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
+}
+/* API docs */
+function openApiDocs(){
+  var el=document.getElementById('api-docs-out');if(!el)return;
+  el.innerHTML='<iframe src="'+API.API_DOCS+'" style="width:100%;height:600px;border:1px solid var(--border);border-radius:8px;background:#0d1117"></iframe>';
+}
+function loadOpenApi(){
+  var el=document.getElementById('api-docs-out');if(!el)return;
+  el.innerHTML='<div class="skeleton h-60"></div>';
+  _authFetch(API.OPENAPI).then(function(r){return r.json()}).then(function(d){
+    var paths=Object.keys(d.paths||{});
+    var h=_statCards([{l:'Endpoints',v:paths.length},{l:'Version',v:d.info?.version||'?'}]);
+    h+='<pre style="margin-top:12px;font-size:10px;background:var(--bg2);padding:12px;border-radius:6px;max-height:500px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+    el.innerHTML=h;
+  }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
+}
+function loadPrometheus(){
+  var el=document.getElementById('api-docs-out');if(!el)return;
+  el.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.METRICS_PROMETHEUS).then(function(r){return r.text()}).then(function(txt){
+    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:500px;overflow:auto;color:var(--green)">'+_esc(txt)+'</pre>';
+  }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
+}
+/* Patch compliance */
+function loadPatchCompliance(){
+  var el=document.getElementById('patrol-out');if(!el)return;
+  el.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.PATCH_COMPLIANCE).then(function(r){return r.json()}).then(function(d){
+    if(d.info){el.innerHTML='<div class="exec-out">'+_esc(d.info)+'<br><code>'+_esc(d.usage||'')+'</code></div>';return;}
+    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:400px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+  }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
+}
+/* Netmon interfaces */
+function loadNetmonInterfaces(){
+  var el=document.getElementById('netmon-out');if(!el)return;
+  el.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.NETMON_INTERFACES).then(function(r){return r.json()}).then(function(d){
+    if(d.info){el.innerHTML='<div class="exec-out">'+_esc(d.info)+'</div>';return;}
+    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:400px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+  }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
+}
+/* GitOps init */
+function gitopsInit(){
+  confirmAction('Initialize GitOps config tracking? This creates the git repo in your config directory.',function(){
+    _authFetch(API.GITOPS_INIT).then(function(r){return r.json()}).then(function(d){
+      if(d.error){toast(d.error,'error');return;}
+      toast('GitOps initialized','success');loadGitops();
+    }).catch(function(e){toast('Failed: '+e,'error');});
+  });
+}
+/* Media downloads detail */
+function loadDownloadDetail(){
+  var el=document.getElementById('dl-detail');if(!el)return;
+  el.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.MEDIA_DOWNLOADS_DETAIL).then(function(r){return r.json()}).then(function(d){
+    var active=d.active||[];var queued=d.queued||[];var hist=d.history||[];
+    if(!active.length&&!queued.length&&!hist.length){el.innerHTML='<div class="exec-out">No download activity.</div>';return;}
+    var h='';
+    if(active.length)h+='<div style="margin-bottom:8px;color:var(--green);font-weight:600">'+active.length+' active download(s)</div>';
+    if(queued.length)h+='<div style="margin-bottom:8px;color:var(--yellow)">'+queued.length+' queued</div>';
+    if(hist.length)h+='<div style="margin-bottom:8px;color:var(--text-dim)">'+hist.length+' in history</div>';
+    h+='<pre style="font-size:10px;background:var(--bg2);padding:12px;border-radius:6px;max-height:300px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+    el.innerHTML=h;
+  }).catch(function(e){el.innerHTML='';});
 }
 function _statCards(items){
   return '<div style="display:flex;gap:12px;flex-wrap:wrap">'+items.map(function(i){

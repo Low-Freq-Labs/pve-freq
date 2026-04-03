@@ -192,6 +192,11 @@
     </div>
     <!-- SERVICES sub-view (default) -->
     <div id="docker-sub-services">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button class="fleet-btn" onclick="loadStackInfo('status')">STACK STATUS</button>
+        <button class="fleet-btn" onclick="loadStackInfo('health')">STACK HEALTH</button>
+      </div>
+      <div id="stack-info" style="margin-bottom:12px"></div>
       <div id="services-container-cards" class="cards"></div>
     </div>
     <!-- ALL containers sub-view -->
@@ -254,9 +259,10 @@
   <div id="media-container-cards" class="cards mb-16"></div>
   <!-- Downloads -->
   <div class="section">
-    <div class="section-header"><h3>Downloads</h3><span class="chev">▾</span></div>
+    <div class="section-header"><h3>Downloads</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadDownloadDetail()">DETAIL VIEW</button><span class="chev">▾</span></div>
     <div class="section-body">
       <div class="stats" id="dl-stats"></div>
+      <div id="dl-detail" style="margin-bottom:8px"></div>
       <table><thead><tr><th>Name</th><th>Client</th><th>VM</th><th>Size</th><th>Progress</th><th>Speed</th></tr></thead><tbody id="dl-table"></tbody></table>
     </div>
   </div>
@@ -480,6 +486,7 @@
   <div class="section-header"><h3>Continuous Monitoring</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <button class="fleet-btn" onclick="loadPatrolStatus()">CHECK STATUS</button>
+    <button class="fleet-btn" onclick="loadPatchCompliance()" style="margin-left:4px">PATCH COMPLIANCE</button>
     <div class="exec-out" id="patrol-out">Click to check current compliance status.</div>
   </div>
 </div>
@@ -590,6 +597,21 @@
       <button class="fleet-btn" onclick="generateReport()">FLEET REPORT</button>
     </div>
     <div id="inventory-out"><div class="exec-out">Click to load fleet inventory.</div></div>
+  </div>
+</div>
+<!-- System Info — DB, logs, proxies, agents, pools -->
+<div class="section">
+  <div class="section-header"><h3>System Info</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="loadSysInfo('db')">DB STATUS</button>
+      <button class="fleet-btn" onclick="loadSysInfo('logs')">LOG STATS</button>
+      <button class="fleet-btn" onclick="loadSysInfo('proxy')">PROXY LIST</button>
+      <button class="fleet-btn" onclick="loadSysInfo('pool')">STORAGE POOLS</button>
+      <button class="fleet-btn" onclick="loadSysInfo('deploy')">DEPLOY AGENT</button>
+      <button class="fleet-btn" onclick="loadSysInfo('setup')">SETUP STATUS</button>
+    </div>
+    <div id="sysinfo-out"><div class="exec-out">Select a category above.</div></div>
   </div>
 </div>
 <!-- Host Compare -->
@@ -740,6 +762,7 @@
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">GitOps Config Sync</h3>
     <div style="display:flex;gap:8px">
+      <button class="fleet-btn" onclick="gitopsInit()">INIT</button>
       <button class="fleet-btn" onclick="gitopsFetch()">SYNC</button>
       <button class="fleet-btn" onclick="loadGitops()">REFRESH</button>
     </div>
@@ -866,6 +889,29 @@
       <div id="lab-assign-list"><div class="skeleton"></div></div>
     </div>
   </div>
+  <!-- Cost Analysis -->
+  <div class="section">
+    <div class="section-header"><h3>Cost Analysis</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div class="flex-wrap-8-mb12">
+        <button class="fleet-btn" onclick="loadCostAnalysis('compare')">COMPARE COSTS</button>
+        <button class="fleet-btn" onclick="loadCostAnalysis('waste')">WASTE DETECTION</button>
+      </div>
+      <div id="cost-analysis-out"><div class="exec-out">Analyze fleet costs — find waste and compare spending.</div></div>
+    </div>
+  </div>
+  <!-- API Documentation -->
+  <div class="section">
+    <div class="section-header"><h3>API</h3><span class="chev">▾</span></div>
+    <div class="section-body">
+      <div class="flex-wrap-8-mb12">
+        <button class="fleet-btn" onclick="openApiDocs()">API DOCS</button>
+        <button class="fleet-btn" onclick="loadOpenApi()">OPENAPI SPEC</button>
+        <button class="fleet-btn" onclick="loadPrometheus()">PROMETHEUS METRICS</button>
+      </div>
+      <div id="api-docs-out"><div class="exec-out">View API documentation, OpenAPI spec, or Prometheus metrics.</div></div>
+    </div>
+  </div>
   <!-- User Preferences -->
   <div class="section">
     <div class="section-header"><h3>Preferences</h3><span class="chev">▾</span></div>
@@ -956,7 +1002,8 @@
 <div class="section">
   <div class="section-header"><h3>Network Monitoring</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
-    <button class="fleet-btn" onclick="loadNetmonData()">LOAD NETMON DATA</button>
+    <button class="fleet-btn" onclick="loadNetmonData()">POLL DATA</button>
+    <button class="fleet-btn" onclick="loadNetmonInterfaces()">INTERFACES</button>
     <div class="exec-out" id="netmon-out" style="margin-top:8px">Click to load network monitoring data.</div>
   </div>
 </div>
@@ -1130,6 +1177,16 @@
   <div class="section-header"><h3>Runbooks</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="dr-runbooks"><div class="exec-out">Runbooks loaded from conf/playbooks/dr/</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Migration Planning</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" onclick="loadMigratePlan()">MIGRATION PLAN</button>
+      <button class="fleet-btn" onclick="loadVmwareMigration()">VMWARE STATUS</button>
+    </div>
+    <div id="migrate-plan-out"><div class="exec-out">Click to load migration planning data.</div></div>
   </div>
 </div>
 <div class="section">
