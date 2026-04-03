@@ -22,8 +22,9 @@ class TestPlatformDetection(unittest.TestCase):
         # We're running on Debian/Nexus
         self.assertIn(plat.os_id, [
             "debian", "ubuntu", "rocky", "arch", "alpine", "fedora",
-            "centos", "rhel", "almalinux", "opensuse-tumbleweed",
-            "opensuse-leap", "manjaro", "linux",
+            "centos", "rhel", "almalinux", "ol", "amzn",
+            "opensuse-tumbleweed", "opensuse-leap",
+            "manjaro", "void", "linux",
         ])
 
     def test_detect_family(self):

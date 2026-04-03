@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Datacenter management CLI for Proxmox homelabbers"
 requires-python = ">=3.11"
 dependencies = []
-license = {text = "MIT"}
+license = {text = "AGPL-3.0-or-later"}
 readme = "README.md"
 authors = [{name = "LOW FREQ Labs"}]
 keywords = ["proxmox", "datacenter", "fleet", "management", "cli", "homelab", "pve"]
@@ -16,7 +16,7 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",

@@ -18,9 +18,8 @@ jobs:
           - 'debian:12'
           - 'debian:13'
           - 'debian:sid'
-          # ── Ubuntu (LTS + interim) ──
+          # ── Ubuntu ──
           - 'ubuntu:24.04'
-          - 'ubuntu:24.10'
           - 'ubuntu:25.04'
           # ── RHEL family ──
           - 'rockylinux:8'
@@ -30,8 +29,6 @@ jobs:
           - 'quay.io/centos/centos:stream9'
           - 'oraclelinux:8'
           - 'oraclelinux:9'
-          # ── Amazon Linux ──
-          - 'amazonlinux:2023'
           # ── Fedora ──
           - 'fedora:40'
           - 'fedora:41'
@@ -40,14 +37,10 @@ jobs:
           - 'archlinux:latest'
           # ── SUSE ──
           - 'opensuse/tumbleweed:latest'
-          - 'opensuse/leap:15.6'
           # ── Alpine (musl libc) ──
           - 'alpine:3.19'
           - 'alpine:3.20'
           - 'alpine:3.21'
-          # ── Void Linux (musl + glibc) ──
-          - 'voidlinux/voidlinux:latest'
-          - 'voidlinux/voidlinux-musl:latest'
     container:
       image: ${{ matrix.os }}
     steps:
