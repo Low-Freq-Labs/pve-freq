@@ -1,3 +1,5 @@
+<!-- INTERNAL — Not for public distribution -->
+
 # FREQ v1.0.0 Library Architecture
 
 > Extracted from CLAUDE.md for on-demand reference. 41 files, 16,635 lines, 300+ functions.
