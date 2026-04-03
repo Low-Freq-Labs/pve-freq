@@ -67,8 +67,6 @@ _DEFAULTS = {
     "vm_default_disk": 32,
     "vm_cpu": "x86-64-v2-AES",
     "vm_machine": "q35",
-    "vm_bios": "seabios",
-    "vm_domain": "cluster.local",
     "vm_gateway": "",
     "vm_nameserver": "1.1.1.1",
     "max_failure_percent": 50,
@@ -121,8 +119,6 @@ class FreqConfig:
     vm_cpu: str = _DEFAULTS["vm_cpu"]
     vm_machine: str = _DEFAULTS["vm_machine"]
     vm_scsihw: str = "virtio-scsi-single"
-    vm_bios: str = _DEFAULTS["vm_bios"]
-    vm_domain: str = _DEFAULTS["vm_domain"]
     vm_gateway: str = _DEFAULTS["vm_gateway"]
     vm_nameserver: str = _DEFAULTS["vm_nameserver"]
 
@@ -188,7 +184,6 @@ class FreqConfig:
 
     # NIC
     nic_bridge: str = "vmbr0"
-    nic_mtu: int = 1500
     nic_profiles: dict = field(default_factory=dict)
 
     # Service ports
@@ -468,8 +463,6 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.vm_cpu = vm.get("cpu", cfg.vm_cpu)
     cfg.vm_machine = vm.get("machine", cfg.vm_machine)
     cfg.vm_scsihw = vm.get("scsihw", cfg.vm_scsihw)
-    cfg.vm_bios = vm.get("bios", cfg.vm_bios)
-    cfg.vm_domain = vm.get("domain", cfg.vm_domain)
     cfg.vm_gateway = vm.get("gateway", cfg.vm_gateway)
     cfg.vm_nameserver = vm.get("nameserver", cfg.vm_nameserver)
 
@@ -505,7 +498,6 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
 
     nic = data.get("nic", {})
     cfg.nic_bridge = nic.get("bridge", cfg.nic_bridge)
-    cfg.nic_mtu = _safe_int(nic.get("mtu"), cfg.nic_mtu)
     cfg.nic_profiles = nic.get("profiles", cfg.nic_profiles)
 
     notify = data.get("notifications", {})

@@ -221,7 +221,7 @@ var API={
   USERS_CREATE:'/api/users/create',USERS_PROMOTE:'/api/users/promote',USERS_DEMOTE:'/api/users/demote',
   LAB_TOOL_CONFIG:'/api/lab-tool/config',LAB_TOOL_PROXY:'/api/lab-tool/proxy',LAB_TOOL_SAVE:'/api/lab-tool/save-config',
   DOCTOR:'/api/doctor',DIAGNOSE:'/api/diagnose',LOG:'/api/log',
-  POLICY_CHECK:'/api/policy/check',POLICY_FIX:'/api/policy/fix',POLICY_DIFF:'/api/policy/diff',
+  /* POLICY_CHECK, POLICY_FIX, POLICY_DIFF removed — zero consumers */
   SWEEP:'/api/sweep',PATROL_STATUS:'/api/patrol/status',
   ZFS:'/api/zfs',BACKUP:'/api/backup',DISCOVER:'/api/discover',GWIPE:'/api/gwipe',
   VM_ADD_DISK:'/api/vm/add-disk',VM_TAG:'/api/vm/tag',VM_CLONE:'/api/vm/clone',VM_MIGRATE:'/api/vm/migrate',
@@ -257,7 +257,7 @@ var API={
   SCHEDULE_JOBS:'/api/schedule/jobs',SCHEDULE_LOG:'/api/schedule/log',SCHEDULE_TEMPLATES:'/api/schedule/templates',
   WEBHOOK_LIST:'/api/webhook/list',WEBHOOK_LOG:'/api/webhook/log',
   /* ── Inventory ── */
-  INVENTORY:'/api/inventory',INVENTORY_HOSTS:'/api/inventory/hosts',INVENTORY_VMS:'/api/inventory/vms',INVENTORY_CONTAINERS:'/api/inventory/containers',
+  INVENTORY:'/api/inventory',
   COMPARE:'/api/compare',REPORT:'/api/report',
   /* ── DR ── */
   BACKUP_POLICY_LIST:'/api/backup-policy/list',BACKUP_POLICY_STATUS:'/api/backup-policy/status',
@@ -269,14 +269,12 @@ var API={
   /* ── Remaining endpoints ── */
   DB_STATUS:'/api/db/status',LOGS_STATS:'/api/logs/stats',
   PATCH_COMPLIANCE:'/api/patch/compliance',NETMON_INTERFACES:'/api/netmon/interfaces',
-  STACK_HEALTH:'/api/stack/health',STACK_STATUS:'/api/stack/status',
   MIGRATE_PLAN:'/api/migrate-plan',DEPLOY_AGENT:'/api/deploy-agent',
   PROXY_STATUS:'/api/proxy/status',PROXY_LIST:'/api/proxy/list',
   AGENT_CREATE:'/api/agent/create',AGENT_DESTROY:'/api/agent/destroy',
   MIGRATE_VMWARE:'/api/migrate-vmware/status',
   POOL:'/api/pool',ROLLBACK:'/api/rollback',
   MEDIA_DOWNLOADS_DETAIL:'/api/media/downloads/detail',
-  COST_COMPARE:'/api/cost-analysis/compare',COST_WASTE:'/api/cost-analysis/waste',
   GITOPS_INIT:'/api/gitops/init',PLUGIN_INFO:'/api/v1/plugin/info',
   API_DOCS:'/api/docs',OPENAPI:'/api/openapi.json',
   METRICS_PROMETHEUS:'/api/metrics/prometheus',

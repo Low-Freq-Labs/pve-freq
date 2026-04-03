@@ -101,6 +101,10 @@ def handle_status(handler):
 
 def handle_health_api(handler):
     """GET /api/health -- fleet health from background cache, always instant."""
+    role, err = _check_session_role(handler, "viewer")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
     with _bg_lock:
         cached = _bg_cache.get("health")
     if cached:

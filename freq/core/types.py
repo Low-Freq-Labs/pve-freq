@@ -89,14 +89,6 @@ class VMCategory(Enum):
     UNKNOWN = "unknown"
 
 
-class PermissionTier(Enum):
-    """Permission tiers — what actions each tier allows."""
-
-    PROBE = "probe"
-    OPERATOR = "operator"
-    ADMIN = "admin"
-
-
 # --- Core Data ---
 
 

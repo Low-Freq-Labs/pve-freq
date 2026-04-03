@@ -1182,253 +1182,60 @@ def start_background_cache():
     t2.start()
 
 
-# --- Dashboard HTML ---
+# Legacy DASHBOARD_HTML removed — 240 lines of dead embedded HTML
+# Modern dashboard served from freq/data/web/app.html via _serve_static
 
-DASHBOARD_HTML = (
-    """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PVE FREQ — Dashboard</title>
-<style>
-  :root {
-    --purple: #7B2FBE;
-    --purple-light: #9B4FDE;
-    --bg: #0d1117;
-    --card: #161b22;
-    --border: #30363d;
-    --text: #c9d1d9;
-    --text-dim: #8b949e;
-    --green: #3fb950;
-    --yellow: #d29922;
-    --red: #f85149;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-  }
-  .header {
-    background: linear-gradient(135deg, var(--purple) 0%, #4a1a75 100%);
-    padding: 24px 32px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .header h1 { font-size: 24px; font-weight: 600; }
-  .header .version { color: rgba(255,255,255,0.6); font-size: 14px; }
-  .header .refresh { color: rgba(255,255,255,0.8); font-size: 12px; cursor: pointer; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-  .stat-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
-  }
-  .stat-card .label { color: var(--text-dim); font-size: 13px; margin-bottom: 8px; }
-  .stat-card .value { font-size: 28px; font-weight: 700; }
-  .stat-card .value.green { color: var(--green); }
-  .stat-card .value.yellow { color: var(--yellow); }
-  .stat-card .value.red { color: var(--red); }
-  .stat-card .value.purple { color: var(--purple-light); }
-  .section { margin-bottom: 24px; }
-  .section h2 {
-    font-size: 16px;
-    color: var(--purple-light);
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border);
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    background: var(--card);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  th {
-    text-align: left;
-    padding: 12px 16px;
-    font-size: 12px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid var(--border);
-  }
-  td {
-    padding: 10px 16px;
-    font-size: 14px;
-    border-bottom: 1px solid var(--border);
-  }
-  tr:last-child td { border-bottom: none; }
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-  .badge.up { background: rgba(63,185,80,0.15); color: var(--green); }
-  .badge.down { background: rgba(248,81,73,0.15); color: var(--red); }
-  .badge.warn { background: rgba(210,153,34,0.15); color: var(--yellow); }
-  .footer {
-    text-align: center;
-    padding: 24px;
-    color: var(--text-dim);
-    font-size: 12px;
-  }
-  #loading { text-align: center; padding: 60px; color: var(--text-dim); }
-  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-  .tab {
-    padding: 8px 16px; border-radius: 6px; cursor: pointer;
-    background: var(--card); border: 1px solid var(--border);
-    color: var(--text-dim); font-size: 13px; font-weight: 500;
-  }
-  .tab.active { background: var(--purple); color: white; border-color: var(--purple); }
-  .panel { display: none; }
-  .panel.active { display: block; }
-  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
-  .mini-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 6px; padding: 12px 16px;
-  }
-  .mini-card .title { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
-  .mini-card .val { font-size: 18px; font-weight: 600; }
-</style>
-</head>
-<body>
-<div class="header">
-  <div>
-    <h1>PVE FREQ</h1>
-    <span class="version">v"""
-    + freq.__version__
-    + """ — PVE FREQ</span>
-  </div>
-  <span class="refresh" onclick="refresh()">Refresh</span>
-</div>
-<div class="container">
-  <div id="loading">Loading fleet data...</div>
-  <div id="content" style="display:none">
-    <div class="stats">
-      <div class="stat-card"><div class="label">Hosts</div><div class="value purple" id="s-hosts">-</div></div>
-      <div class="stat-card"><div class="label">Online</div><div class="value green" id="s-up">-</div></div>
-      <div class="stat-card"><div class="label">Down</div><div class="value red" id="s-down">-</div></div>
-      <div class="stat-card"><div class="label">Response</div><div class="value" id="s-time">-</div></div>
-    </div>
-    <div class="tabs">
-      <div class="tab active" onclick="showTab('fleet')">Fleet</div>
-      <div class="tab" onclick="showTab('health')">Health</div>
-      <div class="tab" onclick="showTab('info')">Info</div>
-    </div>
-    <div id="panel-fleet" class="panel active">
-      <table>
-        <thead><tr><th>Host</th><th>IP</th><th>Type</th><th>Status</th><th>Uptime</th></tr></thead>
-        <tbody id="fleet-table"></tbody>
-      </table>
-    </div>
-    <div id="panel-health" class="panel">
-      <table>
-        <thead><tr><th>Host</th><th>CPU</th><th>RAM</th><th>Disk</th><th>Load</th><th>Status</th></tr></thead>
-        <tbody id="health-table"></tbody>
-      </table>
-    </div>
-    <div id="panel-info" class="panel">
-      <div class="two-col">
-        <div class="mini-card"><div class="title">Version</div><div class="val" id="i-version">-</div></div>
-        <div class="mini-card"><div class="title">Cluster</div><div class="val" id="i-cluster">-</div></div>
-        <div class="mini-card"><div class="title">PVE Nodes</div><div class="val" id="i-pve">-</div></div>
-        <div class="mini-card"><div class="title">Install Dir</div><div class="val" id="i-dir" style="font-size:13px">-</div></div>
-      </div>
-      <br>
-      <h2 style="color:var(--purple-light);font-size:14px;margin-bottom:8px">Policies</h2>
-      <table>
-        <thead><tr><th>Policy</th><th>Scope</th><th>Description</th></tr></thead>
-        <tbody id="policy-table"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-<div class="footer">PVE FREQ — Datacenter management for homelabbers</div>
-<script>
-function refresh() {
-  fetch('/api/status')
-    .then(r => r.json())
-    .then(data => {
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('content').style.display = 'block';
-      document.getElementById('s-hosts').textContent = data.total;
-      document.getElementById('s-up').textContent = data.up;
-      document.getElementById('s-down').textContent = data.down;
-      document.getElementById('s-time').textContent = data.duration + 's';
-      const tbody = document.getElementById('fleet-table');
-      tbody.innerHTML = '';
-      data.hosts.forEach(h => {
-        const badge = h.status === 'up'
-          ? '<span class="badge up">UP</span>'
-          : '<span class="badge down">DOWN</span>';
-        tbody.innerHTML += '<tr><td><strong>' + h.label + '</strong></td><td>' +
-          h.ip + '</td><td>' + h.type + '</td><td>' + badge + '</td><td>' +
-          (h.uptime || '-') + '</td></tr>';
-      });
-    })
-    .catch(e => {
-      document.getElementById('loading').textContent = 'Error loading data: ' + e;
-    });
-}
-function showTab(name) {
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('panel-' + name).classList.add('active');
-  event.target.classList.add('active');
-  if (name === 'health') loadHealth();
-  if (name === 'info') loadInfo();
-}
-function loadHealth() {
-  fetch('/api/health').then(r=>r.json()).then(data => {
-    var t = document.getElementById('health-table');
-    t.innerHTML = '';
-    data.hosts.forEach(h => {
-      var diskNum = parseInt(h.disk);
-      var diskColor = diskNum >= 90 ? 'red' : diskNum >= 75 ? 'yellow' : 'green';
-      var badge = h.status === 'healthy'
-        ? '<span class="badge up">OK</span>'
-        : '<span class="badge down">DOWN</span>';
-      t.innerHTML += '<tr><td><strong>'+h.label+'</strong></td><td>'+h.cores+'</td><td>'+h.ram+'</td><td style="color:var(--'+diskColor+')">'+h.disk+'</td><td>'+h.load+'</td><td>'+badge+'</td></tr>';
-    });
-  }).catch(()=>{});
-}
-function loadInfo() {
-  fetch('/api/info').then(r=>r.json()).then(data => {
-    document.getElementById('i-version').textContent = 'v' + data.version;
-    document.getElementById('i-cluster').textContent = data.cluster;
-    document.getElementById('i-pve').textContent = data.pve_nodes;
-    document.getElementById('i-dir').textContent = data.install_dir;
-  }).catch(()=>{});
-  fetch('/api/policies').then(r=>r.json()).then(data => {
-    var t = document.getElementById('policy-table');
-    t.innerHTML = '';
-    data.policies.forEach(p => {
-      t.innerHTML += '<tr><td><strong>'+p.name+'</strong></td><td>'+p.scope.join(', ')+'</td><td>'+p.description+'</td></tr>';
-    });
-  }).catch(()=>{});
-}
-refresh();
-setInterval(refresh, 30000);
-</script>
-</body>
-</html>"""
-)
+
+def _parse_pct(value: str) -> float:
+    """Parse a percentage string like '45%' or RAM string '4096/8192MB' into float."""
+    if not value:
+        return 0.0
+    import re as _re
+
+    m = _re.match(r"(\d+)%", value)
+    if m:
+        return float(m.group(1))
+    m = _re.match(r"(\d+)/(\d+)", value)
+    if m:
+        used, total = float(m.group(1)), float(m.group(2))
+        return round(used / total * 100, 1) if total > 0 else 0.0
+    return 0.0
+
+
+def _parse_query_flat(path_str):
+    """Parse query params from a URL path string. Returns {key: str}."""
+    raw = parse_qs(urlparse(path_str).query)
+    return {k: v[0] if v else "" for k, v in raw.items()}
+
+
+def _write_containers_toml(path: str, container_vms: dict):
+    """Write container registry back to containers.toml."""
+    lines = ["# FREQ Container Registry\n"]
+    for vm_id in sorted(container_vms.keys()):
+        vm = container_vms[vm_id]
+        lines.append(f"\n[vm.{vm_id}]")
+        if vm.ip:
+            lines.append(f'ip = "{vm.ip}"')
+        if vm.label:
+            lines.append(f'label = "{vm.label}"')
+        if vm.compose_path:
+            lines.append(f'compose_path = "{vm.compose_path}"')
+        for cname, c in sorted(vm.containers.items()):
+            lines.append(f"\n[vm.{vm_id}.containers.{cname}]")
+            if c.port:
+                lines.append(f"port = {c.port}")
+            if c.api_path:
+                lines.append(f'api_path = "{c.api_path}"')
+            if c.auth_type:
+                lines.append(f'auth_type = "{c.auth_type}"')
+            if c.auth_header:
+                lines.append(f'auth_header = "{c.auth_header}"')
+            if c.vault_key:
+                lines.append(f'vault_key = "{c.vault_key}"')
+    lines.append("")
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+
 
 
 def _check_vm_permission(cfg, vmid, action):
@@ -1476,30 +1283,6 @@ def _parse_query(handler):
     return parse_qs(urlparse(handler.path).query)
 
 
-def _parse_pct(value: str) -> float:
-    """Parse a percentage string like '45%' or RAM string '4096/8192MB' into float."""
-    if not value:
-        return 0.0
-    import re as _re
-
-    # Try percentage: "45%"
-    m = _re.match(r"(\d+)%", value)
-    if m:
-        return float(m.group(1))
-    # Try fraction: "4096/8192"
-    m = _re.match(r"(\d+)/(\d+)", value)
-    if m:
-        used, total = float(m.group(1)), float(m.group(2))
-        return round(used / total * 100, 1) if total > 0 else 0.0
-    return 0.0
-
-
-def _parse_query_flat(path_str):
-    """Parse query params from a URL path string. Returns {key: str}."""
-    raw = parse_qs(urlparse(path_str).query)
-    return {k: v[0] if v else "" for k, v in raw.items()}
-
-
 def _resolve_container_vm_ip(vm) -> str:
     """Resolve container VM IP from hosts.conf by label, falling back to hardcoded IP.
 
@@ -1518,35 +1301,6 @@ def _resolve_container_vm_ip(vm) -> str:
         except Exception as e:
             logger.warning(f"_resolve_container_vm_ip: failed to resolve '{vm.label}': {e}")
     return vm.ip
-
-
-def _write_containers_toml(path: str, container_vms: dict):
-    """Write container registry back to containers.toml."""
-    lines = ["# FREQ Container Registry\n"]
-    for vm_id in sorted(container_vms.keys()):
-        vm = container_vms[vm_id]
-        lines.append(f"\n[vm.{vm_id}]")
-        if vm.ip:
-            lines.append(f'ip = "{vm.ip}"')
-        if vm.label:
-            lines.append(f'label = "{vm.label}"')
-        if vm.compose_path:
-            lines.append(f'compose_path = "{vm.compose_path}"')
-        for cname, c in sorted(vm.containers.items()):
-            lines.append(f"\n[vm.{vm_id}.containers.{cname}]")
-            if c.port:
-                lines.append(f"port = {c.port}")
-            if c.api_path:
-                lines.append(f'api_path = "{c.api_path}"')
-            if c.auth_type:
-                lines.append(f'auth_type = "{c.auth_type}"')
-            if c.auth_header:
-                lines.append(f'auth_header = "{c.auth_header}"')
-            if c.vault_key:
-                lines.append(f'vault_key = "{c.vault_key}"')
-    lines.append("")
-    with open(path, "w") as f:
-        f.write("\n".join(lines))
 
 
 def _is_first_run():
@@ -1648,7 +1402,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         # ── Infrastructure routes (stay in serve.py) ──────────────────
         "/": "_serve_app",
         "/dashboard": "_serve_app",
-        "/old": "_serve_html",
         # ── Auth (stays in serve.py) ──────────────────────────────────
         "/api/pve/metrics": "_serve_pve_metrics",
         "/api/pve/rrd": "_serve_pve_rrd",
@@ -1959,7 +1712,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         # Group routes by category
         categories = {}
         for path, method_name in sorted(routes.items()):
-            if path in ("/", "/dashboard", "/old", "/api/docs", "/api/openapi.json"):
+            if path in ("/", "/dashboard", "/api/docs", "/api/openapi.json"):
                 continue
             # Extract category from path
             parts = path.strip("/").split("/")
@@ -2027,7 +1780,7 @@ a:hover{{text-decoration:underline}}
         routes = self._ROUTES
         paths = {}
         for path, method_name in sorted(routes.items()):
-            if path in ("/", "/dashboard", "/old", "/api/docs", "/api/openapi.json"):
+            if path in ("/", "/dashboard", "/api/docs", "/api/openapi.json"):
                 continue
             handler = getattr(self, method_name, None)
             desc = (handler.__doc__ or "").strip().split("\n")[0] if handler else ""
@@ -2425,79 +2178,6 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": f"Failed to reset setup: {e}"}, 500)
 
     # ── Legacy + Main HTML ───────────────────────────────────────────────
-
-    def _serve_html(self):
-        # Pre-fetch fleet data and embed it in HTML for instant load
-        cfg = load_config()
-        start = time.monotonic()
-        results = ssh_run_many(
-            hosts=cfg.hosts,
-            command="uptime -p 2>/dev/null || uptime",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=3,
-            command_timeout=5,
-            max_parallel=10,
-            use_sudo=False,
-            cfg=cfg,
-        )
-        duration = round(time.monotonic() - start, 1)
-
-        host_data = []
-        up = down = 0
-        for h in cfg.hosts:
-            r = results.get(h.label)
-            if r and r.returncode == 0:
-                up += 1
-                host_data.append(
-                    {
-                        "label": h.label,
-                        "ip": h.ip,
-                        "type": h.htype,
-                        "status": "up",
-                        "uptime": r.stdout.strip().replace("up ", "")[:40],
-                    }
-                )
-            else:
-                down += 1
-                host_data.append({"label": h.label, "ip": h.ip, "type": h.htype, "status": "down", "uptime": ""})
-
-        initial_data = json.dumps(
-            {"total": len(cfg.hosts), "up": up, "down": down, "duration": duration, "hosts": host_data}
-        )
-
-        # Inject pre-fetched data into HTML
-        html = DASHBOARD_HTML.replace(
-            "refresh();",
-            f"var INITIAL_DATA = {initial_data};\n"
-            "function loadInitial(data) {\n"
-            "  document.getElementById('loading').style.display = 'none';\n"
-            "  document.getElementById('content').style.display = 'block';\n"
-            "  document.getElementById('s-hosts').textContent = data.total;\n"
-            "  document.getElementById('s-up').textContent = data.up;\n"
-            "  document.getElementById('s-down').textContent = data.down;\n"
-            "  document.getElementById('s-time').textContent = data.duration + 's';\n"
-            "  var tbody = document.getElementById('fleet-table');\n"
-            "  tbody.innerHTML = '';\n"
-            "  data.hosts.forEach(function(h) {\n"
-            "    var badge = h.status === 'up'\n"
-            "      ? '<span class=\"badge up\">UP</span>'\n"
-            "      : '<span class=\"badge down\">DOWN</span>';\n"
-            "    tbody.innerHTML += '<tr><td><strong>' + h.label + '</strong></td><td>' +\n"
-            "      h.ip + '</td><td>' + h.type + '</td><td>' + badge + '</td><td>' +\n"
-            "      (h.uptime || '-') + '</td></tr>';\n"
-            "  });\n"
-            "}\n"
-            "loadInitial(INITIAL_DATA);\n"
-            "// Still auto-refresh via API\nsetInterval(refresh, 30000);\n"
-            "// refresh();",
-        )
-
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(html.encode())))
-        self.send_header("Connection", "close")
-        self.end_headers()
-        self.wfile.write(html.encode())
 
     def _serve_pve_metrics(self):
         """Real-time PVE node metrics via PVE API.
