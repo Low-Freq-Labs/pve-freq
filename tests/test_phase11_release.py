@@ -121,10 +121,9 @@ class TestLicense(unittest.TestCase):
 
     def test_license_has_content(self):
         content = (FREQ_ROOT / "LICENSE").read_text()
-        # License may be MIT (current) or AGPL (planned for v3.0.0)
         self.assertTrue(
-            "MIT" in content.upper() or "AGPL" in content.upper() or "GNU" in content.upper(),
-            "LICENSE file should contain a recognized license")
+            "GNU AFFERO GENERAL PUBLIC LICENSE" in content,
+            "LICENSE file should contain AGPL v3 text")
 
 
 class TestTestSuiteHealth(unittest.TestCase):
