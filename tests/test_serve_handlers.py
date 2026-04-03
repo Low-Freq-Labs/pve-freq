@@ -19,9 +19,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from freq.modules.serve import (
     FreqHandler,
-    SESSION_TIMEOUT_SECONDS,
     _parse_query,
 )
+from freq.api.auth import SESSION_TIMEOUT_SECONDS
 
 
 # ── Mock handler factory ────────────────────────────────────────────────

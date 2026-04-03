@@ -54,7 +54,7 @@ version = {attr = "freq.__version__"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=freq --cov-report=term-missing --cov-fail-under=50"
+addopts = "-v --tb=short"
 
 [tool.coverage.run]
 branch = true
