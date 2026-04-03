@@ -2389,9 +2389,9 @@ function createPlaybook(){
   }).catch(function(e){if(msg)msg.innerHTML='<span class="c-red">Failed: '+_esc(e.toString())+'</span>';});
 }
 function _statCards(items){
-  return '<div style="display:flex;gap:16px;flex-wrap:wrap">'+items.map(function(i){
+  return '<div style="display:flex;gap:12px;flex-wrap:wrap">'+items.map(function(i){
     var color=i.c?'color:var(--'+i.c+')':'';
-    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px"><div style="font-size:24px;font-weight:700;'+color+'">'+i.v+'</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">'+i.l+'</div></div>';
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 16px;text-align:center;min-width:90px"><div style="font-size:20px;font-weight:700;'+color+'">'+i.v+'</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">'+i.l+'</div></div>';
   }).join('')+'</div>';
 }
 /* Helper: status badge */
