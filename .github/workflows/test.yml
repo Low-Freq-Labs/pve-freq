@@ -115,7 +115,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-smoke-${{ matrix.os }}
+          name: test-results-smoke-${{ strategy.job-index }}
           path: test-results.xml
           retention-days: 30
 
