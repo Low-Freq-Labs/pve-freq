@@ -90,11 +90,16 @@ If the answer to all of those is yes, FREQ works. Implementation details (hash a
 
 ## PHASE 1: CLEAN INSTALL
 
-Fresh box. No FREQ. Simulate a new user.
+**First step, every time, no exceptions:**
+1. Wipe everything FREQ-related: `sudo rm -rf /opt/pve-freq /etc/freq /home/freq-admin`
+2. Remove freq-admin if it exists: `sudo userdel -r freq-admin; sudo rm -f /etc/sudoers.d/freq-admin`
+3. Fresh git clone: `git clone -b v3-rewrite https://github.com/Low-Freq-Labs/pve-freq.git /opt/pve-freq`
+
+No snapshots. No templates. No saving state. Wipe it and start clean.
 
 | # | Test | Expected |
 |---|---|---|
-| 1.1 | Clone repo and run `install.sh` | Installs without errors, `freq` is in PATH |
+| 1.1 | Wipe + fresh clone + run `install.sh` | Installs without errors, `freq` is in PATH |
 | 1.2 | `freq version` | Shows 3.0.0 |
 | 1.3 | `freq help` | Shows domains organized by category, not a wall of 126 flat commands |
 | 1.4 | `freq doctor` | Runs without crashing. Fails on fleet (no init yet) but system checks pass |
@@ -278,7 +283,7 @@ These rules were born from the fuck up documented at the top of this file. They 
 7. **Verify everything.** Before and after. Every phase.
 8. **3-fail rule.** Three consecutive failures = stop and ask.
 9. **Read-only first.** Every domain gets tested read-only before any write operation.
-10. **Snapshot before remediation.** ALWAYS snapshot before running any fix/harden/patch/apply command.
+10. **No snapshots on test VMs.** Snapshots block live migration on the PVE cluster. Backups already run. The test VM is disposable — wipe it, fresh pull, reinstall. That's the clean slate.
 11. **Production is sacred.** Write operations on switch, pfSense, TrueNAS, Docker stacks, or PVE cluster require Sonny's approval.
 12. **Clean up after yourself.** Every test VM gets destroyed. Leave the fleet cleaner than you found it.
 13. **Unit tests test code. E2E tests test the product.** If you're grepping source code in an E2E plan, you're doing it wrong.

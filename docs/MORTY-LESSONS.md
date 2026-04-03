@@ -277,6 +277,8 @@ The pattern: Sonny builds test infrastructure. I ignore it. Then I say we can't 
 
 18. **Config files are init's output, not your input.** Do not pre-fill hosts.toml, freq.toml, fleet-boundaries.toml. But DO maintain a reference doc (DC01-FLEET-REFERENCE.md) that describes what the fleet should look like. After init runs, compare its output to the reference. If they don't match, init has a bug.
 
+19. **Wipe, pull, install. That's the clean slate.** No snapshots — they block live migration and treat test VMs like they're precious. They're not. Backups run. Wipe FREQ off the box, fresh git pull, install.sh, go. Every test starts this way.
+
 ---
 
 ## TO FUTURE MORTY
