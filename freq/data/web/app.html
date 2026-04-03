@@ -137,11 +137,15 @@
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
       <div>
         <label class="c-dim-fs12">Type</label>
-        <select id="term-type" class="input" style="width:100px" onchange="updateTermTargets()">
+        <select id="term-type" class="input" style="width:120px" onchange="updateTermTargets()">
           <option value="node">PVE Node</option>
           <option value="vm">VM</option>
           <option value="ct">Container</option>
           <option value="host">Fleet Host</option>
+          <option value="pfsense">pfSense</option>
+          <option value="truenas">TrueNAS</option>
+          <option value="idrac">iDRAC</option>
+          <option value="switch">Switch</option>
         </select>
       </div>
       <div>

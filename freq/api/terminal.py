@@ -126,14 +126,38 @@ def handle_terminal_open(handler):
                     json_response(handler, {"error": f"Cannot resolve IP for VMID {vmid}. Try using the IP directly."})
                     return
 
-    # Build SSH command
+    # Build SSH command with device-type-aware options
     key_path = cfg.ssh_key_path
     ssh_user = cfg.service_account or "freq-ops"
+    htype = params.get("htype", ["linux"])[0]
+
+    # Base SSH options
     ssh_opts = (
         f"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
         f"-o ServerAliveInterval=15 -o ServerAliveCountMax=3 "
         f"-i {key_path}"
     )
+
+    # Device-specific SSH options from ssh.py platform config
+    from freq.core.ssh import _PLATFORM_SSH_BASE
+    platform = _PLATFORM_SSH_BASE.get(htype, _PLATFORM_SSH_BASE.get("linux", {}))
+    extra_opts = platform.get("extra_opts", [])
+    if extra_opts:
+        ssh_opts += " " + " ".join(extra_opts)
+
+    # Switch uses -T (no PTY allocation on remote — IOS doesn't support it)
+    if htype == "switch":
+        ssh_opts += " -T"
+        # Switch may need RSA key instead of ed25519
+        rsa_key = getattr(cfg, "ssh_rsa_key_path", "")
+        if rsa_key:
+            ssh_opts = ssh_opts.replace(f"-i {key_path}", f"-i {rsa_key}")
+
+    # iDRAC: use RSA key if available
+    if htype == "idrac":
+        rsa_key = getattr(cfg, "ssh_rsa_key_path", "")
+        if rsa_key:
+            ssh_opts = ssh_opts.replace(f"-i {key_path}", f"-i {rsa_key}")
 
     if term_type == "ct":
         # SSH to PVE node, then pct exec into container
@@ -146,8 +170,17 @@ def handle_terminal_open(handler):
         cmd = f"ssh {ssh_opts} {ssh_user}@{node} sudo pct enter {target}"
     elif term_type == "node":
         cmd = f"ssh {ssh_opts} {ssh_user}@{resolved_ip}"
+    elif htype == "pfsense":
+        # pfSense — no sudo prefix, direct shell
+        cmd = f"ssh {ssh_opts} {ssh_user}@{resolved_ip}"
+    elif htype == "idrac":
+        # iDRAC — racadm shell
+        cmd = f"ssh {ssh_opts} {ssh_user}@{resolved_ip}"
+    elif htype == "switch":
+        # Switch — IOS CLI, no PTY
+        cmd = f"ssh {ssh_opts} {ssh_user}@{resolved_ip}"
     else:
-        # VM — direct SSH
+        # VM or generic host — direct SSH
         cmd = f"ssh {ssh_opts} {ssh_user}@{resolved_ip}"
 
     # Spawn in PTY

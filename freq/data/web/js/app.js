@@ -2530,7 +2530,7 @@ function createPlaybook(){
    ═══════════════════════════════════════════════════════════════════ */
 var _termSession=null;var _termSocket=null;var _termXterm=null;var _termFit=null;
 
-function openTerminal(type,target,node,label){
+function openTerminal(type,target,node,label,htype){
   var overlay=document.getElementById('terminal-overlay');
   var container=document.getElementById('terminal-container');
   var title=document.getElementById('terminal-title');
@@ -2577,6 +2577,7 @@ function openTerminal(type,target,node,label){
 
   _authFetch('/api/terminal/open?type='+type+'&target='+encodeURIComponent(target)+
     (node?'&node='+encodeURIComponent(node):'')+
+    (htype?'&htype='+encodeURIComponent(htype):'')+
     '&cols='+cols+'&rows='+rows)
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){term.writeln('\x1b[31mError: '+d.error+'\x1b[0m');return;}
@@ -2682,10 +2683,19 @@ function updateTermTargets(){
         (fo.pve_nodes||[]).forEach(function(n){sel.innerHTML+='<option value="'+_esc(n.ip)+'" data-label="'+_esc(n.name)+'">'+_esc(n.name)+' ('+_esc(n.ip)+')</option>';});
       });
     }
+  }else if(type==='pfsense'||type==='truenas'||type==='idrac'||type==='switch'){
+    /* Infrastructure devices — filter fleet hosts by type */
+    _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
+      sel.innerHTML='<option value="">Select device...</option>';
+      (d.hosts||[]).forEach(function(h){
+        if(h.type===type||(type==='pfsense'&&h.type==='pfsense')||(type==='truenas'&&h.type==='truenas')||(type==='idrac'&&h.type==='idrac')||(type==='switch'&&h.type==='switch'))
+          sel.innerHTML+='<option value="'+_esc(h.ip)+'" data-label="'+_esc(h.label)+'" data-htype="'+_esc(h.type)+'">'+_esc(h.label)+' ('+_esc(h.ip)+')</option>';
+      });
+    });
   }else{
     _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
       sel.innerHTML='<option value="">Select host...</option>';
-      (d.hosts||[]).forEach(function(h){sel.innerHTML+='<option value="'+_esc(h.ip)+'" data-label="'+_esc(h.label)+'">'+_esc(h.label)+' ('+_esc(h.ip)+')</option>';});
+      (d.hosts||[]).forEach(function(h){sel.innerHTML+='<option value="'+_esc(h.ip)+'" data-label="'+_esc(h.label)+'" data-htype="'+_esc(h.type||'linux')+'">'+_esc(h.label)+' ('+_esc(h.ip)+')</option>';});
     });
   }
 }
@@ -2696,7 +2706,10 @@ function launchTermFromPicker(){
   if(!target){toast('Select a target','error');return;}
   var opt=sel.options[sel.selectedIndex];
   var label=opt.getAttribute('data-label')||target;
-  openTerminal(type==='host'?'vm':type,target,'',label);
+  var htype=opt.getAttribute('data-htype')||type;
+  /* For infra devices, use 'vm' type (direct SSH) but pass the htype for SSH config */
+  var termType=(type==='pfsense'||type==='truenas'||type==='idrac'||type==='switch'||type==='host')?'vm':type;
+  openTerminal(termType,target,'',label,htype);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -6129,6 +6142,10 @@ function renderInfraCard(config){
       var actionName=match?match[1]:'status';
       btns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();_runInfraAction(\''+infraType+'\',\''+actionName+'\')">'+a.l+'</button>';
     });
+    /* Add TERMINAL button for SSH-capable devices */
+    var termIp=ph?ph.ip:'';
+    var termHtype=infraType||'linux';
+    if(termIp)btns+='<button class="fleet-btn min-w-120-center" style="color:var(--cyan)" onclick="event.stopPropagation();openTerminal(\'vm\',\''+_esc(termIp)+'\',\'\',\''+_esc(label)+'\',\''+_esc(termHtype)+'\')">&#9002; TERMINAL</button>';
     html+=_infraPanelHtml(roleInfo.role+' CONTROLS',roleInfo.color,btns);
   }
   _infraOutputTarget='hd-infra-out';
@@ -6162,6 +6179,7 @@ function renderHostCard(config){
     html+='<button data-action="hdLogs">VIEW LOGS</button>';
     html+='<button data-action="hdDiagnose">FULL DIAGNOSE</button>';
     html+='<button data-action="hdRestart" class="c-yellow">RESTART SERVICES</button>';
+    html+='<button style="color:var(--cyan)" onclick="openTerminal(\'vm\',\''+_esc(d.ip||'')+'\',\'\',\''+_esc(label)+'\')">&#9002; TERMINAL</button>';
     html+='</div>';
     html+=_toolPanelHtml();
     /* ── Build reusable data sections ── */
