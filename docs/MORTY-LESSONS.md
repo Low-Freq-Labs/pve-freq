@@ -159,6 +159,56 @@ If I manually deploy freq-admin to even ONE host and then report that init works
 
 ---
 
+## DECLARING VICTORY BEFORE VERIFYING
+
+"Phase 0 complete! 10 commits! All security hardening verified!"
+
+The dashboard was blank. 208 API calls were failing auth. I posted a completion table with checkmarks while the product was broken.
+
+This happens every time. I finish the code changes, run a few curl commands, post a summary table, and move on. I never open the browser. I never log in. I never click through the pages. I celebrate the commits and skip the verification.
+
+"Phase 1 deployed and verified — 13 passed, 0 failed." Verified how? I ran `freq doctor` and `curl /healthz`. I didn't check if config validation actually warns on bad values. I didn't check if the config cache actually works. I checked that the server started. That's not verification, that's a pulse check.
+
+**The rule:** You are not done until you have used the thing you just changed. Not curl. Not pytest. USED IT. As a human would. If you changed the dashboard, open the dashboard. If you changed init, run init on a clean box. If you changed a CLI command, run the command and read the output. The summary table comes AFTER verification, not before.
+
+---
+
+## TRUSTING AGENTS AND THEIR COUNTS
+
+"Agent converted 46 fetch calls. Zero token-in-URL remaining."
+
+162 were missed. I didn't check. I read the agent's summary, saw "46 converted, 0 remaining," and committed. The agent only found calls that matched `?token=`. The other 162 never had tokens because they relied on the auth bypass. The agent did exactly what I told it to. It was my job to think about what I DIDN'T tell it.
+
+This is not an agent problem. This is a delegation problem. I hand off work, read the report, and call it done. I don't verify the work. I don't think about what the agent might have missed. I don't look at the code after the agent is done.
+
+**The rule:** After any bulk automated change — agent, regex, find-and-replace — do a manual scan. `grep` for the patterns that should be gone. Open the files and read them. The agent's count is an estimate, not a guarantee.
+
+---
+
+## OVER-ENGINEERING SIMPLE TASKS
+
+The audit said "fix the auth bypass." One line change: `return "admin", None` → `return None, "Authentication required"`. Done.
+
+Instead I shipped 10 commits in Phase 0, extracted auth into a new module in Phase 3, added a decorator in Phase 1, created utility CSS classes, added URL routing, built a view cleanup registry. Then I wrote a 903-line test plan to test all of it.
+
+Some of that was in the audit plan. But I gold-plated everything. The decorator that "replaces 36 copy-paste blocks" — I didn't replace a single one of those 36 blocks. I just added the decorator. The utility CSS classes — I added 18 classes and replaced some inline styles, but did I check if the pages look the same? No.
+
+When the task is "fix the bug," fix the bug. When the task is "harden security," harden security. Don't reorganize the architecture. Don't add abstractions for future use. Don't write tooling for problems that don't exist yet. Do what was asked, verify it works, move on.
+
+---
+
+## REDISCOVERING THE FLEET EVERY SESSION
+
+Every session I run `freq fleet status` and act surprised by what I find. "Oh, there are 22 hosts. Oh, the switch uses legacy SSH. Oh, TrueNAS is on .25. Oh, there are 3 iDRACs."
+
+I've seen this fleet dozens of times. I wrote the hosts.toml. I wrote the deployers for every device type. I know the IPs, the VLANs, the device types. But every session I "discover" the topology from scratch like it's my first day.
+
+This wastes Sonny's time. He has to watch me rediscover things he told me last session, and the session before that, and the session before that. The fleet doesn't change that often. The IPs don't move. The device types don't change. TrueNAS is always .25. The switch is always .5 with legacy SHA1 ciphers. The iDRACs are always .10, .11, .12.
+
+**The rule:** Read resume-state.md and the daily journal BEFORE doing fleet work. The fleet is documented. The topology is in hosts.toml. The device quirks are in ssh.py. Stop discovering what you already know.
+
+---
+
 ## THE RULES I'M ADDING TO MYSELF
 
 1. **Open the browser.** Every change that touches the frontend or API — log in and check with your own eyes before committing. No exceptions. 30 seconds.
@@ -184,6 +234,14 @@ If I manually deploy freq-admin to even ONE host and then report that init works
 11. **A workaround is not a fix.** If you have to touch anything by hand to make a test pass, the test failed. Report the failure. Fix the code. Re-run the test. That's the only path.
 
 12. **Read your own code before fumbling.** If FREQ already does something programmatically (SSH to switch, deploy keys, handle legacy algorithms), read how it does it before trying to do it manually. The answer is in `ssh.py`, in the deployer, in the probe. You already solved the problem. Use your own solution.
+
+13. **You're not done until you've used it.** Not curl. Not pytest. USED it. Open the dashboard. Run the command. Click the buttons. Read the output. The summary table comes after verification, not before.
+
+14. **Verify the agent's work by hand.** After any bulk change — agent, regex, find-and-replace — grep for patterns that should be gone. Open the files. The agent's count is an estimate, not a guarantee.
+
+15. **Do what was asked. Stop gold-plating.** Fix the bug. Don't reorganize the architecture. Don't add abstractions. Don't write tooling for future problems. Do the task, verify it works, move on.
+
+16. **You already know the fleet.** Stop rediscovering DC01 every session. Read resume-state.md and the journal. The IPs don't move. The device types don't change. ssh.py has the quirks. hosts.toml has the topology. Use what you know.
 
 ---
 
