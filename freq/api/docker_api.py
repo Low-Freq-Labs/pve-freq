@@ -257,6 +257,9 @@ def handle_containers_compose_down(handler):
 
 def handle_containers_compose_view(handler):
     """GET /api/containers/compose-view -- read docker-compose.yml for a VM."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     query = _parse_query_flat(handler.path)
     vm_id = int(query.get("vm_id", "0"))

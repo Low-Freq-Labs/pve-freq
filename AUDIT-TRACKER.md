@@ -30,19 +30,19 @@
 | [F] | freq/api/fleet.py | 1161 | 1 fixed: handle_exec missing admin auth — arbitrary command execution |
 | [F] | freq/api/vm.py | 1080 | 16 fixed: ALL write handlers missing auth (create/destroy/migrate=admin, power/resize/snapshot/rename/tag=operator) |
 | [F] | freq/api/ct.py | 597 | 1 fixed: handle_ct_power missing operator auth |
-| [ ] | freq/api/docker_api.py | 395 | |
-| [ ] | freq/api/observe.py | 439 | |
-| [ ] | freq/api/secure.py | 328 | |
-| [ ] | freq/api/state.py | 233 | |
-| [ ] | freq/api/auto.py | 409 | |
+| [F] | freq/api/docker_api.py | 395 | 1 fixed: compose-view missing operator auth |
+| [F] | freq/api/observe.py | 439 | 3 fixed: trend_snapshot, sla_check, monitors_check missing auth |
+| [F] | freq/api/secure.py | 328 | 1 fixed: harden missing operator auth |
+| [A] | freq/api/state.py | 233 | CLEAN — write ops have admin auth |
+| [A] | freq/api/auto.py | 409 | CLEAN — write ops have admin auth |
 | [F] | freq/api/dr.py | 290 | 2 fixed: handle_backup and handle_zfs missing operator auth |
 | [F] | freq/api/user.py | 86 | 3 fixed: create/promote/demote missing admin auth — privilege escalation |
-| [ ] | freq/api/plugin.py | 80 | |
-| [ ] | freq/api/ops.py | 71 | |
-| [ ] | freq/api/host.py | 49 | |
-| [ ] | freq/api/helpers.py | 86 | |
-| [ ] | freq/api/v1_stubs.py | 169 | |
-| [ ] | freq/api/__init__.py | 68 | |
+| [A] | freq/api/plugin.py | 80 | CLEAN — read-only |
+| [A] | freq/api/ops.py | 71 | CLEAN — read-only |
+| [A] | freq/api/host.py | 49 | CLEAN — read-only |
+| [A] | freq/api/helpers.py | 86 | CLEAN — utility functions |
+| [A] | freq/api/v1_stubs.py | 169 | CLEAN — stubs only |
+| [A] | freq/api/__init__.py | 68 | CLEAN — route registration |
 | [S] | freq/api/opnsense.py | 772 | audited S016 |
 | [S] | freq/api/fw.py | 660 | audited S016 |
 | [S] | freq/api/store.py | 562 | audited S016 |
@@ -59,148 +59,148 @@
 ## Tier 3: Modules + Core + Deployers + Engine + Jarvis (~40K lines)
 | Status | File | Lines | Findings |
 |--------|------|-------|----------|
-| [ ] | freq/cli.py | 3275 | |
-| [ ] | freq/modules/media.py | 2390 | |
-| [ ] | freq/modules/switch_orchestration.py | 1164 | |
-| [ ] | freq/modules/alert.py | 739 | |
-| [ ] | freq/modules/hosts.py | 725 | |
-| [ ] | freq/modules/event_network.py | 687 | |
-| [ ] | freq/modules/plugin_manager.py | 663 | |
-| [ ] | freq/modules/snmp.py | 512 | |
-| [ ] | freq/modules/config_management.py | 506 | |
-| [ ] | freq/modules/lab.py | 452 | |
-| [ ] | freq/modules/patch.py | 451 | |
-| [ ] | freq/modules/schedule.py | 444 | |
-| [ ] | freq/modules/stack.py | 439 | |
-| [ ] | freq/modules/specialist.py | 412 | |
-| [ ] | freq/modules/users.py | 426 | |
-| [ ] | freq/modules/plan.py | 565 | |
-| [ ] | freq/modules/net_intelligence.py | 408 | |
-| [ ] | freq/modules/migrate_vmware.py | 402 | |
-| [ ] | freq/modules/cert.py | 397 | |
-| [ ] | freq/modules/comply.py | 396 | |
-| [ ] | freq/modules/dr.py | 395 | |
-| [ ] | freq/modules/oncall.py | 392 | |
-| [ ] | freq/modules/inventory.py | 392 | |
-| [ ] | freq/modules/ipam.py | 390 | |
-| [ ] | freq/modules/baseline.py | 389 | |
-| [ ] | freq/modules/docs.py | 386 | |
-| [ ] | freq/modules/backup_policy.py | 385 | |
-| [ ] | freq/modules/report.py | 384 | |
-| [ ] | freq/modules/benchmark.py | 381 | |
-| [ ] | freq/modules/topology.py | 371 | |
-| [ ] | freq/modules/cost_analysis.py | 369 | |
-| [ ] | freq/modules/secrets.py | 367 | |
-| [ ] | freq/modules/depmap.py | 367 | |
-| [ ] | freq/modules/netmon.py | 360 | |
-| [ ] | freq/modules/webhook.py | 353 | |
-| [ ] | freq/modules/demo.py | 346 | |
-| [ ] | freq/modules/storage.py | 343 | |
-| [ ] | freq/modules/trend.py | 338 | |
-| [ ] | freq/modules/audit.py | 334 | |
-| [ ] | freq/modules/dns.py | 313 | |
-| [ ] | freq/modules/vpn.py | 303 | |
-| [ ] | freq/modules/infrastructure.py | 302 | |
-| [ ] | freq/modules/logs.py | 291 | |
-| [ ] | freq/modules/discover.py | 289 | |
-| [ ] | freq/modules/engine_cmds.py | 286 | |
-| [ ] | freq/modules/proxy.py | 279 | |
-| [ ] | freq/modules/migrate_plan.py | 279 | |
-| [ ] | freq/modules/synthetic_monitors.py | 277 | |
-| [ ] | freq/modules/sla.py | 273 | |
-| [ ] | freq/modules/compare.py | 270 | |
-| [ ] | freq/modules/backup.py | 265 | |
-| [ ] | freq/modules/proxy_management.py | 249 | |
-| [ ] | freq/modules/gwipe.py | 246 | |
-| [ ] | freq/modules/cert_management.py | 237 | |
-| [ ] | freq/modules/automation.py | 237 | |
-| [ ] | freq/modules/health.py | 230 | |
-| [ ] | freq/modules/dns_management.py | 217 | |
-| [ ] | freq/modules/incident.py | 215 | |
-| [ ] | freq/modules/deploy_agent.py | 211 | |
-| [ ] | freq/modules/rollback.py | 209 | |
-| [ ] | freq/modules/hardware.py | 208 | |
-| [ ] | freq/modules/bootstrap.py | 203 | |
-| [ ] | freq/modules/metrics.py | 199 | |
-| [ ] | freq/modules/comms.py | 197 | |
-| [ ] | freq/modules/db.py | 187 | |
-| [ ] | freq/modules/fim.py | 184 | |
-| [ ] | freq/modules/iac.py | 165 | |
-| [ ] | freq/modules/docker_mgmt.py | 163 | |
-| [ ] | freq/modules/wol.py | 160 | |
-| [ ] | freq/modules/selfupdate.py | 159 | |
-| [ ] | freq/modules/harden.py | 158 | |
-| [ ] | freq/modules/vuln.py | 117 | |
-| [ ] | freq/modules/journal.py | 112 | |
-| [ ] | freq/modules/why.py | 104 | |
-| [ ] | freq/modules/distros.py | 88 | |
-| [ ] | freq/modules/web_ui.py | 70 | |
-| [ ] | freq/modules/__init__.py | 1 | |
-| [ ] | freq/core/doctor.py | 391 | |
-| [ ] | freq/core/fmt.py | 372 | |
-| [ ] | freq/core/types.py | 306 | |
-| [ ] | freq/core/platform.py | 209 | |
-| [ ] | freq/core/packages.py | 199 | |
-| [ ] | freq/core/personality.py | 181 | |
-| [ ] | freq/core/validate.py | 177 | |
-| [ ] | freq/core/services.py | 173 | |
-| [ ] | freq/core/preflight.py | 165 | |
-| [ ] | freq/core/remote_platform.py | 153 | |
-| [ ] | freq/core/resolve.py | 142 | |
-| [ ] | freq/core/log.py | 120 | |
-| [ ] | freq/core/plugins.py | 77 | |
-| [ ] | freq/core/compat.py | 47 | |
-| [ ] | freq/core/__init__.py | 1 | |
-| [ ] | freq/deployers/switch/cisco.py | 740 | |
-| [ ] | freq/deployers/nas/truenas.py | 149 | |
-| [ ] | freq/deployers/__init__.py | 83 | |
-| [ ] | freq/deployers/firewall/opnsense.py | 27 | |
-| [ ] | freq/deployers/switch/ubiquiti.py | 26 | |
-| [ ] | freq/deployers/server/linux.py | 26 | |
-| [ ] | freq/deployers/bmc/ilo.py | 26 | |
-| [ ] | freq/deployers/firewall/pfsense.py | 21 | |
-| [ ] | freq/deployers/bmc/idrac.py | 21 | |
-| [ ] | freq/jarvis/agent.py | 736 | |
-| [ ] | freq/jarvis/rules.py | 472 | |
-| [ ] | freq/jarvis/capacity.py | 469 | |
-| [ ] | freq/jarvis/chaos.py | 438 | |
-| [ ] | freq/jarvis/gitops.py | 385 | |
-| [ ] | freq/jarvis/notify.py | 362 | |
-| [ ] | freq/jarvis/federation.py | 322 | |
-| [ ] | freq/jarvis/provision.py | 307 | |
-| [ ] | freq/jarvis/cost.py | 287 | |
-| [ ] | freq/jarvis/learn.py | 286 | |
-| [ ] | freq/jarvis/playbook.py | 260 | |
-| [ ] | freq/jarvis/patrol.py | 175 | |
-| [ ] | freq/jarvis/risk.py | 168 | |
-| [ ] | freq/jarvis/sweep.py | 123 | |
-| [ ] | freq/jarvis/__init__.py | 5 | |
-| [ ] | freq/engine/runner.py | 245 | |
-| [ ] | freq/engine/policy.py | 163 | |
-| [ ] | freq/engine/policies/ssh_hardening.py | 52 | |
-| [ ] | freq/engine/policies/ntp_sync.py | 37 | |
-| [ ] | freq/engine/policies/rpcbind.py | 35 | |
-| [ ] | freq/engine/policies/__init__.py | 10 | |
-| [ ] | freq/engine/__init__.py | 1 | |
-| [ ] | freq/tui/menu.py | 1524 | |
-| [ ] | freq/tui/__init__.py | 1 | |
-| [ ] | freq/agent_collector.py | 322 | |
-| [ ] | freq/__main__.py | 12 | |
-| [ ] | freq/__init__.py | 5 | |
-| [ ] | freq/data/__init__.py | 8 | |
-| [ ] | freq/data/web/__init__.py | 1 | |
-| [ ] | freq/data/conf-templates/plugins/example_ping.py | 47 | |
+| [A] | freq/cli.py | 3275 | CLEAN — CLI argument parsing, no direct shell injection |
+| [A] | freq/modules/media.py | 2390 | CLEAN — SSH via ssh.py, docker commands validated |
+| [A] | freq/modules/switch_orchestration.py | 1164 | CLEAN — SSH via ssh.py |
+| [A] | freq/modules/alert.py | 739 | CLEAN — config-driven, no user input in commands |
+| [A] | freq/modules/hosts.py | 725 | CLEAN — TOML parsing, no shell injection |
+| [A] | freq/modules/event_network.py | 687 | CLEAN |
+| [A] | freq/modules/plugin_manager.py | 663 | CLEAN — tarball path traversal checked |
+| [A] | freq/modules/snmp.py | 512 | CLEAN — subprocess list args, no shell=True |
+| [A] | freq/modules/config_management.py | 506 | CLEAN |
+| [A] | freq/modules/lab.py | 452 | CLEAN |
+| [A] | freq/modules/patch.py | 451 | CLEAN |
+| [A] | freq/modules/schedule.py | 444 | NOTE — shell=True by design (admin cron jobs) |
+| [A] | freq/modules/stack.py | 439 | CLEAN |
+| [A] | freq/modules/specialist.py | 412 | CLEAN |
+| [A] | freq/modules/users.py | 426 | CLEAN — shlex.quote used for passwords |
+| [A] | freq/modules/plan.py | 565 | CLEAN |
+| [A] | freq/modules/net_intelligence.py | 408 | CLEAN |
+| [A] | freq/modules/migrate_vmware.py | 402 | CLEAN |
+| [A] | freq/modules/cert.py | 397 | CLEAN |
+| [A] | freq/modules/comply.py | 396 | CLEAN |
+| [A] | freq/modules/dr.py | 395 | CLEAN |
+| [A] | freq/modules/oncall.py | 392 | CLEAN |
+| [A] | freq/modules/inventory.py | 392 | CLEAN |
+| [A] | freq/modules/ipam.py | 390 | CLEAN |
+| [A] | freq/modules/baseline.py | 389 | CLEAN |
+| [A] | freq/modules/docs.py | 386 | CLEAN |
+| [A] | freq/modules/backup_policy.py | 385 | CLEAN |
+| [A] | freq/modules/report.py | 384 | CLEAN |
+| [A] | freq/modules/benchmark.py | 381 | CLEAN |
+| [A] | freq/modules/topology.py | 371 | CLEAN |
+| [A] | freq/modules/cost_analysis.py | 369 | CLEAN |
+| [A] | freq/modules/secrets.py | 367 | CLEAN |
+| [A] | freq/modules/depmap.py | 367 | CLEAN |
+| [A] | freq/modules/netmon.py | 360 | CLEAN |
+| [A] | freq/modules/webhook.py | 353 | NOTE — shell=True by design (admin webhooks) |
+| [A] | freq/modules/demo.py | 346 | CLEAN |
+| [A] | freq/modules/storage.py | 343 | CLEAN |
+| [A] | freq/modules/trend.py | 338 | CLEAN |
+| [A] | freq/modules/audit.py | 334 | CLEAN |
+| [A] | freq/modules/dns.py | 313 | CLEAN |
+| [A] | freq/modules/vpn.py | 303 | CLEAN |
+| [A] | freq/modules/infrastructure.py | 302 | CLEAN |
+| [A] | freq/modules/logs.py | 291 | CLEAN |
+| [A] | freq/modules/discover.py | 289 | CLEAN |
+| [A] | freq/modules/engine_cmds.py | 286 | CLEAN |
+| [A] | freq/modules/proxy.py | 279 | CLEAN |
+| [A] | freq/modules/migrate_plan.py | 279 | CLEAN |
+| [A] | freq/modules/synthetic_monitors.py | 277 | CLEAN |
+| [A] | freq/modules/sla.py | 273 | CLEAN |
+| [A] | freq/modules/compare.py | 270 | CLEAN |
+| [A] | freq/modules/backup.py | 265 | CLEAN |
+| [A] | freq/modules/proxy_management.py | 249 | CLEAN |
+| [A] | freq/modules/gwipe.py | 246 | CLEAN |
+| [A] | freq/modules/cert_management.py | 237 | CLEAN |
+| [A] | freq/modules/automation.py | 237 | CLEAN |
+| [A] | freq/modules/health.py | 230 | CLEAN |
+| [A] | freq/modules/dns_management.py | 217 | CLEAN |
+| [A] | freq/modules/incident.py | 215 | CLEAN |
+| [A] | freq/modules/deploy_agent.py | 211 | CLEAN |
+| [A] | freq/modules/rollback.py | 209 | CLEAN |
+| [A] | freq/modules/hardware.py | 208 | CLEAN |
+| [A] | freq/modules/bootstrap.py | 203 | CLEAN |
+| [A] | freq/modules/metrics.py | 199 | CLEAN |
+| [A] | freq/modules/comms.py | 197 | CLEAN |
+| [A] | freq/modules/db.py | 187 | CLEAN |
+| [A] | freq/modules/fim.py | 184 | CLEAN |
+| [A] | freq/modules/iac.py | 165 | CLEAN |
+| [A] | freq/modules/docker_mgmt.py | 163 | CLEAN |
+| [A] | freq/modules/wol.py | 160 | CLEAN |
+| [A] | freq/modules/selfupdate.py | 159 | CLEAN |
+| [A] | freq/modules/harden.py | 158 | CLEAN |
+| [A] | freq/modules/vuln.py | 117 | CLEAN |
+| [A] | freq/modules/journal.py | 112 | CLEAN |
+| [A] | freq/modules/why.py | 104 | CLEAN |
+| [A] | freq/modules/distros.py | 88 | CLEAN |
+| [A] | freq/modules/web_ui.py | 70 | CLEAN |
+| [A] | freq/modules/__init__.py | 1 | CLEAN |
+| [A] | freq/core/doctor.py | 391 | CLEAN |
+| [A] | freq/core/fmt.py | 372 | CLEAN |
+| [A] | freq/core/types.py | 306 | CLEAN |
+| [A] | freq/core/platform.py | 209 | CLEAN |
+| [A] | freq/core/packages.py | 199 | CLEAN |
+| [A] | freq/core/personality.py | 181 | CLEAN |
+| [A] | freq/core/validate.py | 177 | CLEAN |
+| [A] | freq/core/services.py | 173 | CLEAN |
+| [A] | freq/core/preflight.py | 165 | CLEAN |
+| [A] | freq/core/remote_platform.py | 153 | CLEAN |
+| [A] | freq/core/resolve.py | 142 | CLEAN |
+| [A] | freq/core/log.py | 120 | CLEAN |
+| [A] | freq/core/plugins.py | 77 | CLEAN |
+| [A] | freq/core/compat.py | 47 | CLEAN |
+| [A] | freq/core/__init__.py | 1 | CLEAN |
+| [A] | freq/deployers/switch/cisco.py | 740 | NOTE — VLAN/port params from config, not user API input |
+| [A] | freq/deployers/nas/truenas.py | 149 | NOTE — password in stdin pipe, brief ps visibility |
+| [A] | freq/deployers/__init__.py | 83 | CLEAN |
+| [A] | freq/deployers/firewall/opnsense.py | 27 | CLEAN |
+| [A] | freq/deployers/switch/ubiquiti.py | 26 | CLEAN |
+| [A] | freq/deployers/server/linux.py | 26 | CLEAN |
+| [A] | freq/deployers/bmc/ilo.py | 26 | CLEAN |
+| [A] | freq/deployers/firewall/pfsense.py | 21 | CLEAN |
+| [A] | freq/deployers/bmc/idrac.py | 21 | CLEAN |
+| [A] | freq/jarvis/agent.py | 736 | CLEAN |
+| [A] | freq/jarvis/rules.py | 472 | CLEAN |
+| [A] | freq/jarvis/capacity.py | 469 | CLEAN |
+| [F] | freq/jarvis/chaos.py | 438 | FIXED — service name injection validated |
+| [A] | freq/jarvis/gitops.py | 385 | CLEAN |
+| [A] | freq/jarvis/notify.py | 362 | CLEAN |
+| [A] | freq/jarvis/federation.py | 322 | CLEAN |
+| [A] | freq/jarvis/provision.py | 307 | CLEAN |
+| [A] | freq/jarvis/cost.py | 287 | CLEAN |
+| [A] | freq/jarvis/learn.py | 286 | CLEAN |
+| [A] | freq/jarvis/playbook.py | 260 | CLEAN |
+| [A] | freq/jarvis/patrol.py | 175 | CLEAN |
+| [A] | freq/jarvis/risk.py | 168 | CLEAN |
+| [A] | freq/jarvis/sweep.py | 123 | CLEAN |
+| [A] | freq/jarvis/__init__.py | 5 | CLEAN |
+| [A] | freq/engine/runner.py | 245 | NOTE — policy paths from config files |
+| [A] | freq/engine/policy.py | 163 | CLEAN |
+| [A] | freq/engine/policies/ssh_hardening.py | 52 | CLEAN |
+| [A] | freq/engine/policies/ntp_sync.py | 37 | CLEAN |
+| [A] | freq/engine/policies/rpcbind.py | 35 | CLEAN |
+| [A] | freq/engine/policies/__init__.py | 10 | CLEAN |
+| [A] | freq/engine/__init__.py | 1 | CLEAN |
+| [A] | freq/tui/menu.py | 1524 | CLEAN — CLI only |
+| [A] | freq/tui/__init__.py | 1 | CLEAN |
+| [A] | freq/agent_collector.py | 322 | CLEAN |
+| [A] | freq/__main__.py | 12 | CLEAN |
+| [A] | freq/__init__.py | 5 | CLEAN |
+| [A] | freq/data/__init__.py | 8 | CLEAN |
+| [A] | freq/data/web/__init__.py | 1 | CLEAN |
+| [A] | freq/data/conf-templates/plugins/example_ping.py | 47 | CLEAN |
 
 ## Tier 4: Frontend + Docker (~10.7K lines)
 | Status | File | Lines | Findings |
 |--------|------|-------|----------|
-| [ ] | freq/data/web/js/app.js | 8628 | |
-| [ ] | freq/data/web/app.html | 1658 | |
-| [ ] | pve-freq-docker/Dockerfile | 82 | |
-| [ ] | pve-freq-docker/compose.yml | 77 | |
-| [ ] | pve-freq-docker/build.sh | 60 | |
-| [ ] | pve-freq-docker/docker-entrypoint.sh | 49 | |
-| [ ] | pve-freq-docker/.github/workflows/docker.yml | 114 | |
+| [A] | freq/data/web/js/app.js | 8628 | NOTE — 833 innerHTML uses, low-risk (internal tool, data from trusted PVE/SSH) |
+| [A] | freq/data/web/app.html | 1658 | CLEAN — CSP headers set by serve.py, no inline scripts |
+| [A] | pve-freq-docker/Dockerfile | 82 | CLEAN — non-root user, tini, no secrets |
+| [A] | pve-freq-docker/compose.yml | 77 | CLEAN — read_only root, no-new-privileges, resource limits |
+| [A] | pve-freq-docker/build.sh | 60 | CLEAN |
+| [A] | pve-freq-docker/docker-entrypoint.sh | 49 | CLEAN — drops to non-root, proper permissions |
+| [A] | pve-freq-docker/.github/workflows/docker.yml | 114 | CLEAN |
 
 ---
 

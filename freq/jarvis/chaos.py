@@ -166,6 +166,11 @@ def validate_experiment(exp: Experiment) -> tuple:
     if exp.experiment_type in ("service_kill", "service_restart") and not exp.target_service:
         return False, "Target service is required for this experiment type"
 
+    # Validate service name — no shell metacharacters
+    import re
+    if exp.target_service and not re.match(r'^[a-zA-Z0-9._@-]+$', exp.target_service):
+        return False, "Invalid service name (alphanumeric, dots, hyphens, underscores only)"
+
     return True, ""
 
 

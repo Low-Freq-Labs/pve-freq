@@ -72,6 +72,9 @@ def handle_vault_delete(handler):
 
 def handle_harden(handler):
     """GET /api/harden — run SSH hardening checks across fleet."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     target = params.get("target", ["all"])[0]

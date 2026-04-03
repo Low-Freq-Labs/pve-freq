@@ -84,6 +84,9 @@ def handle_trend_data(handler):
 
 def handle_trend_snapshot(handler):
     """GET /api/trend/snapshot — take a trend snapshot."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     from freq.modules.trend import _take_snapshot, _load_trend_data, _save_trend_data
     cfg = load_config()
     snapshot = _take_snapshot(cfg)
@@ -116,6 +119,9 @@ def handle_sla(handler):
 
 def handle_sla_check(handler):
     """GET /api/sla/check — record an SLA check."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     from freq.modules.sla import _record_check
     cfg = load_config()
     _record_check(cfg)
@@ -199,6 +205,9 @@ def handle_monitors(handler):
 
 def handle_monitors_check(handler):
     """GET /api/monitors/check — run all HTTP checks now."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     if not cfg.monitors:
         json_response(handler, {"results": [], "count": 0})

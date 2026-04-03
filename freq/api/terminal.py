@@ -98,6 +98,15 @@ def handle_terminal_open(handler):
         json_response(handler, {"error": "target parameter required"})
         return
 
+    # Validate target — must be IP or numeric VMID/CTID, no shell metacharacters
+    import re as _re
+    if not _re.match(r'^[a-zA-Z0-9._:-]+$', target):
+        json_response(handler, {"error": "Invalid target (alphanumeric, dots, colons, hyphens only)"})
+        return
+    if node and not _re.match(r'^[a-zA-Z0-9._:-]+$', node):
+        json_response(handler, {"error": "Invalid node parameter"})
+        return
+
     # Resolve target IP for VMs (target can be IP or VMID)
     resolved_ip = target
     if term_type == "vm" and target.isdigit():
