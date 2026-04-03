@@ -281,7 +281,13 @@ var API={
   GITOPS_INIT:'/api/gitops/init',PLUGIN_INFO:'/api/v1/plugin/info',
   API_DOCS:'/api/docs',OPENAPI:'/api/openapi.json',
   METRICS_PROMETHEUS:'/api/metrics/prometheus',
-  SETUP_STATUS:'/api/setup/status'
+  SETUP_STATUS:'/api/setup/status',
+  /* ── LXC Containers ── */
+  CT_LIST:'/api/ct/list',CT_CREATE:'/api/ct/create',CT_DESTROY:'/api/ct/destroy',
+  CT_POWER:'/api/ct/power',CT_CONFIG:'/api/ct/config',CT_SET:'/api/ct/set',
+  CT_SNAPSHOT:'/api/ct/snapshot',CT_ROLLBACK:'/api/ct/rollback',CT_SNAPSHOTS:'/api/ct/snapshots',
+  CT_DELETE_SNAP:'/api/ct/delete-snapshot',CT_CLONE:'/api/ct/clone',CT_MIGRATE:'/api/ct/migrate',
+  CT_RESIZE:'/api/ct/resize',CT_EXEC:'/api/ct/exec',CT_TEMPLATES:'/api/ct/templates'
 };
 var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switch */
 
@@ -1316,7 +1322,7 @@ function loadFleetPage(){
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   }
-  loadMetricsQuick();loadAgents();loadSpecialists();
+  loadMetricsQuick();loadAgents();loadSpecialists();loadLxcContainers();
   /* Overview cards — wait for cache or fetch independently */
   setTimeout(function(){
     if(_fleetCache.fo){_renderFleetOverview(_fleetCache.fo);_loadFleetOverviewMedia();}
@@ -2519,6 +2525,223 @@ function createPlaybook(){
     loadPlaybooks();
   }).catch(function(e){if(msg)msg.innerHTML='<span class="c-red">Failed: '+_esc(e.toString())+'</span>';});
 }
+/* ═══════════════════════════════════════════════════════════════════
+   LXC CONTAINERS — first-class citizen
+   ═══════════════════════════════════════════════════════════════════ */
+function loadLxcContainers(){
+  var stats=document.getElementById('ct-stats');
+  var cards=document.getElementById('ct-cards');
+  if(stats)stats.innerHTML='<div class="skeleton h-40"></div>';
+  if(cards)cards.innerHTML='<div class="skeleton h-60"></div>';
+  _authFetch(API.CT_LIST).then(function(r){return r.json()}).then(function(d){
+    var cts=d.containers||[];
+    if(stats)stats.innerHTML=_statCards([{l:'Containers',v:d.count||0},{l:'Running',v:d.running||0,c:'green'},{l:'Stopped',v:d.stopped||0,c:d.stopped>0?'yellow':'green'}]);
+    if(!cts.length){if(cards)cards.innerHTML='<div class="exec-out">No LXC containers found in PVE cluster.</div>';return;}
+    var h='';
+    cts.forEach(function(c){
+      var running=c.status==='running';
+      var ramGB=c.maxmem>0?(c.maxmem/1073741824).toFixed(1)+'G':'?';
+      var ramUsed=c.mem>0?(c.mem/1073741824).toFixed(1)+'G':'0';
+      h+='<div class="crd '+(running?'crd-up':'crd-down')+'">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:center">';
+      h+='<h3 style="margin:0">CT '+c.ctid+' — '+_esc(c.name)+'</h3>';
+      h+='<div style="display:flex;gap:4px">';
+      if(running){
+        h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px" onclick="ctPower('+c.ctid+',\'stop\')">STOP</button>';
+        h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px" onclick="ctPower('+c.ctid+',\'reboot\')">REBOOT</button>';
+      }else{
+        h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px;color:var(--green)" onclick="ctPower('+c.ctid+',\'start\')">START</button>';
+        h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px;color:var(--red)" onclick="ctDestroy('+c.ctid+',\''+_esc(c.name)+'\')">DESTROY</button>';
+      }
+      h+='</div></div>';
+      h+='<p style="margin-top:6px">'+_statusBadge(c.status)+' &middot; '+_esc(c.node)+' &middot; CPU: '+c.maxcpu+' &middot; RAM: '+ramUsed+'/'+ramGB+' ('+c.mem_pct+'%)';
+      if(c.tags)h+=' &middot; <span style="color:var(--purple-light)">'+_esc(c.tags)+'</span>';
+      h+='</p></div>';
+    });
+    if(cards)cards.innerHTML=h;
+  }).catch(function(e){
+    if(stats)stats.innerHTML='';
+    if(cards)cards.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';
+  });
+}
+function ctPower(ctid,action){
+  var msg=action==='stop'?'Stop':'Reboot';
+  if(action==='start')msg='Start';
+  confirmAction(msg+' container <strong>CT '+ctid+'</strong>?',function(){
+    toast(msg+'ing CT '+ctid+'...','info');
+    _authFetch(API.CT_POWER+'?ctid='+ctid+'&action='+action).then(function(r){return r.json()}).then(function(d){
+      if(d.ok)toast('CT '+ctid+' '+action+' OK','success');
+      else toast(d.error||'Failed','error');
+      setTimeout(loadLxcContainers,1500);
+    }).catch(function(e){toast('Failed: '+e,'error');});
+  });
+}
+function ctDestroy(ctid,name){
+  confirmAction('Destroy container <strong>CT '+ctid+' ('+_esc(name)+')</strong>? This cannot be undone.',function(){
+    toast('Destroying CT '+ctid+'...','info');
+    _authFetch(API.CT_DESTROY+'?ctid='+ctid).then(function(r){return r.json()}).then(function(d){
+      if(d.ok)toast('CT '+ctid+' destroyed','success');
+      else toast(d.error||'Failed','error');
+      setTimeout(loadLxcContainers,1500);
+    }).catch(function(e){toast('Failed: '+e,'error');});
+  });
+}
+function openCtTool(tool){
+  var form=document.getElementById('ct-tool-form');
+  var out=document.getElementById('ct-tool-out');
+  if(out)out.innerHTML='';
+  if(!form)return;
+  if(tool==='create'){
+    form.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">'+
+      '<div><label class="c-dim-fs12">Template</label><input id="ct-create-tpl" class="input" placeholder="local:vztmpl/debian-12..." style="width:320px"></div>'+
+      '<div><label class="c-dim-fs12">Hostname</label><input id="ct-create-name" class="input" placeholder="my-container" style="width:160px"></div>'+
+      '<div><label class="c-dim-fs12">Cores</label><select id="ct-create-cores" class="input"><option>1</option><option selected>2</option><option>4</option></select></div>'+
+      '<div><label class="c-dim-fs12">RAM (MB)</label><select id="ct-create-ram" class="input"><option>256</option><option selected>512</option><option>1024</option><option>2048</option><option>4096</option></select></div>'+
+      '<div><label class="c-dim-fs12">Disk (GB)</label><input id="ct-create-disk" class="input" value="8" style="width:60px" type="number"></div>'+
+      '<button class="fleet-btn c-purple-active" onclick="doCtCreate()">CREATE</button>'+
+      '<button class="fleet-btn" onclick="loadCtTemplates()">LIST TEMPLATES</button>'+
+      '</div>';
+  }else if(tool==='clone'){
+    _ctSelectForm(form,'CLONE','ct-clone-src','<button class="fleet-btn c-purple-active" onclick="doCtClone()">CLONE</button>',
+      '<div><label class="c-dim-fs12">New Name</label><input id="ct-clone-name" class="input" placeholder="clone-name" style="width:160px"></div>');
+  }else if(tool==='migrate'){
+    _ctSelectForm(form,'MIGRATE','ct-mig-src','<div><label class="c-dim-fs12">Target Node</label><input id="ct-mig-target" class="input" placeholder="pve02" style="width:120px"></div><button class="fleet-btn c-purple-active" onclick="doCtMigrate()">MIGRATE</button>');
+  }else if(tool==='resize'){
+    _ctSelectForm(form,'RESIZE DISK','ct-rsz-src','<div><label class="c-dim-fs12">Size</label><input id="ct-rsz-size" class="input" placeholder="+5G" style="width:80px"></div><button class="fleet-btn c-purple-active" onclick="doCtResize()">RESIZE</button>');
+  }else if(tool==='snapshot'){
+    _ctSelectForm(form,'SNAPSHOT','ct-snap-src','<div><label class="c-dim-fs12">Name</label><input id="ct-snap-name" class="input" placeholder="snap-name" style="width:140px"></div><button class="fleet-btn c-purple-active" onclick="doCtSnapshot()">CREATE</button>');
+  }else if(tool==='rollback'){
+    _ctSelectForm(form,'ROLLBACK','ct-rb-src','<div><label class="c-dim-fs12">Snapshot</label><input id="ct-rb-name" class="input" placeholder="(blank=latest)" style="width:140px"></div><button class="fleet-btn c-purple-active" onclick="doCtRollback()">ROLLBACK</button>');
+  }else if(tool==='exec'){
+    _ctSelectForm(form,'EXEC','ct-exec-src','<div><label class="c-dim-fs12">Command</label><input id="ct-exec-cmd" class="input" placeholder="apt update && apt upgrade -y" style="width:300px"></div><button class="fleet-btn c-purple-active" onclick="doCtExec()">RUN</button>');
+  }else if(tool==='config'){
+    _ctSelectForm(form,'CONFIG','ct-cfg-src','<button class="fleet-btn c-purple-active" onclick="doCtConfig()">VIEW CONFIG</button>');
+  }else if(tool==='templates'){
+    form.innerHTML='';loadCtTemplates();
+  }
+}
+function _ctSelectForm(form,label,selId,extra,before){
+  form.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">'+
+    '<div><label class="c-dim-fs12">Container</label><select id="'+selId+'" class="input" style="width:220px"><option value="">Loading...</option></select></div>'+
+    (before||'')+extra+'</div>';
+  _authFetch(API.CT_LIST).then(function(r){return r.json()}).then(function(d){
+    var sel=document.getElementById(selId);if(!sel)return;
+    sel.innerHTML='<option value="">Select CT...</option>';
+    (d.containers||[]).forEach(function(c){sel.innerHTML+='<option value="'+c.ctid+'">CT '+c.ctid+' — '+_esc(c.name)+' ('+c.status+')</option>';});
+  });
+}
+function doCtCreate(){
+  var tpl=document.getElementById('ct-create-tpl').value.trim();
+  var name=document.getElementById('ct-create-name').value.trim();
+  var cores=document.getElementById('ct-create-cores').value;
+  var ram=document.getElementById('ct-create-ram').value;
+  var disk=document.getElementById('ct-create-disk').value;
+  var out=document.getElementById('ct-tool-out');
+  if(!tpl||!name){toast('Template and hostname required','error');return;}
+  if(out)out.innerHTML='<div class="c-yellow">Creating container...</div>';
+  _authFetch(API.CT_CREATE+'?template='+encodeURIComponent(tpl)+'&hostname='+encodeURIComponent(name)+'&cores='+cores+'&ram='+ram+'&disk='+disk)
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('CT '+d.ctid+' created','success');if(out)out.innerHTML='<div class="c-green">Container CT '+d.ctid+' ('+_esc(d.hostname)+') created.</div>';loadLxcContainers();}
+    else{toast(d.error||'Failed','error');if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
+  }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
+}
+function doCtClone(){
+  var ctid=document.getElementById('ct-clone-src').value;var name=document.getElementById('ct-clone-name').value.trim();
+  var out=document.getElementById('ct-tool-out');
+  if(!ctid){toast('Select a container','error');return;}
+  if(out)out.innerHTML='<div class="c-yellow">Cloning CT '+ctid+'...</div>';
+  _authFetch(API.CT_CLONE+'?ctid='+ctid+(name?'&name='+encodeURIComponent(name):''))
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('Cloned to CT '+d.new_ctid,'success');if(out)out.innerHTML='<div class="c-green">Cloned CT '+ctid+' → CT '+d.new_ctid+'</div>';loadLxcContainers();}
+    else{if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
+  }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
+}
+function doCtMigrate(){
+  var ctid=document.getElementById('ct-mig-src').value;var target=document.getElementById('ct-mig-target').value.trim();
+  var out=document.getElementById('ct-tool-out');
+  if(!ctid||!target){toast('Container and target node required','error');return;}
+  if(out)out.innerHTML='<div class="c-yellow">Migrating CT '+ctid+' → '+_esc(target)+'...</div>';
+  _authFetch(API.CT_MIGRATE+'?ctid='+ctid+'&target='+encodeURIComponent(target))
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('CT '+ctid+' migrated to '+_esc(target),'success');if(out)out.innerHTML='<div class="c-green">Migrated</div>';loadLxcContainers();}
+    else{if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
+  }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
+}
+function doCtResize(){
+  var ctid=document.getElementById('ct-rsz-src').value;var size=document.getElementById('ct-rsz-size').value.trim();
+  var out=document.getElementById('ct-tool-out');
+  if(!ctid||!size){toast('Container and size required','error');return;}
+  if(out)out.innerHTML='<div class="c-yellow">Resizing...</div>';
+  _authFetch(API.CT_RESIZE+'?ctid='+ctid+'&size='+encodeURIComponent(size))
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('CT '+ctid+' resized','success');if(out)out.innerHTML='<div class="c-green">Resized to '+_esc(size)+'</div>';}
+    else{if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
+  }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
+}
+function doCtSnapshot(){
+  var ctid=document.getElementById('ct-snap-src').value;var name=document.getElementById('ct-snap-name').value.trim()||('freq-snap-'+ctid);
+  var out=document.getElementById('ct-tool-out');
+  if(!ctid){toast('Select a container','error');return;}
+  if(out)out.innerHTML='<div class="c-yellow">Creating snapshot...</div>';
+  _authFetch(API.CT_SNAPSHOT+'?ctid='+ctid+'&name='+encodeURIComponent(name))
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('Snapshot "'+_esc(d.snapshot)+'" created','success');if(out)out.innerHTML='<div class="c-green">Snapshot created</div>';}
+    else{if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
+  }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
+}
+function doCtRollback(){
+  var ctid=document.getElementById('ct-rb-src').value;var name=document.getElementById('ct-rb-name').value.trim();
+  var out=document.getElementById('ct-tool-out');
+  if(!ctid){toast('Select a container','error');return;}
+  confirmAction('Roll back CT '+ctid+(name?' to "'+_esc(name)+'"':' to latest snapshot')+'?',function(){
+    if(out)out.innerHTML='<div class="c-yellow">Rolling back...</div>';
+    _authFetch(API.CT_ROLLBACK+'?ctid='+ctid+(name?'&name='+encodeURIComponent(name):''))
+    .then(function(r){return r.json()}).then(function(d){
+      if(d.ok){toast('CT '+ctid+' rolled back','success');if(out)out.innerHTML='<div class="c-green">Rolled back to "'+_esc(d.snapshot)+'"</div>';loadLxcContainers();}
+      else{if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
+    }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
+  });
+}
+function doCtExec(){
+  var ctid=document.getElementById('ct-exec-src').value;var cmd=document.getElementById('ct-exec-cmd').value.trim();
+  var out=document.getElementById('ct-tool-out');
+  if(!ctid||!cmd){toast('Container and command required','error');return;}
+  if(out)out.innerHTML='<div class="c-yellow">Executing on CT '+ctid+'...</div>';
+  _authFetch(API.CT_EXEC+'?ctid='+ctid+'&command='+encodeURIComponent(cmd))
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.ok){if(out)out.innerHTML='<pre style="font-size:10px;background:var(--bg2);padding:12px;border-radius:6px;max-height:400px;overflow:auto;white-space:pre-wrap">'+_esc(d.stdout||'(no output)')+'</pre>';}
+    else{if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
+  }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
+}
+function doCtConfig(){
+  var ctid=document.getElementById('ct-cfg-src').value;
+  var out=document.getElementById('ct-tool-out');
+  if(!ctid){toast('Select a container','error');return;}
+  if(out)out.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.CT_CONFIG+'?ctid='+ctid).then(function(r){return r.json()}).then(function(d){
+    if(d.error){if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';return;}
+    var config=d.config||{};
+    var h='<h4 style="font-size:11px;color:var(--purple-light);margin-bottom:8px">CT '+ctid+' Configuration</h4>';
+    h+='<table><tbody>';
+    Object.keys(config).sort().forEach(function(k){h+='<tr><td style="color:var(--text-dim);width:180px">'+_esc(k)+'</td><td>'+_esc(config[k])+'</td></tr>';});
+    h+='</tbody></table>';
+    if(out)out.innerHTML=h;
+  }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
+}
+function loadCtTemplates(){
+  var out=document.getElementById('ct-tool-out');
+  if(out)out.innerHTML='<div class="skeleton h-40"></div>';
+  _authFetch(API.CT_TEMPLATES).then(function(r){return r.json()}).then(function(d){
+    var tpls=d.templates||[];
+    if(!tpls.length){if(out)out.innerHTML='<div class="exec-out">No templates found. Download with: <code>pveam download local debian-12-standard_12.2-1_amd64.tar.zst</code></div>';return;}
+    var h='<h4 style="font-size:11px;color:var(--purple-light);margin-bottom:8px">Available Templates ('+tpls.length+')</h4>';
+    h+='<table><thead><tr><th>Volume ID</th><th>Name</th><th>Size</th></tr></thead><tbody>';
+    tpls.forEach(function(t){h+='<tr><td class="mono-11">'+_esc(t.volid)+'</td><td>'+_esc(t.name)+'</td><td>'+_esc(t.size)+'</td></tr>';});
+    h+='</tbody></table>';
+    if(out)out.innerHTML=h;
+  }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    FINAL WIRING — remaining endpoints
    ═══════════════════════════════════════════════════════════════════ */

@@ -29,6 +29,7 @@ def build_routes() -> dict:
     # Modules are imported on demand — missing modules don't break the API
     _domains = [
         "freq.api.vm",
+        "freq.api.ct",
         "freq.api.fleet",
         "freq.api.host",
         "freq.api.secure",

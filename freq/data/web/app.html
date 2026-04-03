@@ -125,6 +125,33 @@
   <div class="section-header"><h3 class="cursor-ptr">Hosts &amp; VMs</h3><div class="flex-1"></div><input id="fleet-filter" placeholder="&#128269; Filter..." oninput="filterFleetCards(this.value)" onclick="event.stopPropagation()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit;width:180px;outline:none;transition:border-color 0.25s ease" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'"><span class="chev" style="cursor:pointer;margin-left:8px">▾</span></div>
   <div class="section-body"><div id="metrics-cards"></div></div>
 </div>
+<!-- LXC Containers -->
+<div class="section layout-section" id="fleet-sec-ct">
+  <div class="section-header"><h3>LXC Containers</h3><div class="flex-1"></div>
+    <button class="fleet-btn" onclick="loadLxcContainers()">REFRESH</button>
+    <span class="chev" style="margin-left:8px">▾</span>
+  </div>
+  <div class="section-body">
+    <div class="stats" id="ct-stats"></div>
+    <div id="ct-cards" class="cards"></div>
+    <div style="margin-top:16px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+      <h4 style="font-size:11px;color:var(--text-dim);margin-bottom:8px">CONTAINER MANAGEMENT</h4>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="fleet-btn" onclick="openCtTool('create')">CREATE</button>
+        <button class="fleet-btn" onclick="openCtTool('clone')">CLONE</button>
+        <button class="fleet-btn" onclick="openCtTool('migrate')">MIGRATE</button>
+        <button class="fleet-btn" onclick="openCtTool('resize')">RESIZE DISK</button>
+        <button class="fleet-btn" onclick="openCtTool('snapshot')">SNAPSHOT</button>
+        <button class="fleet-btn" onclick="openCtTool('rollback')">ROLLBACK</button>
+        <button class="fleet-btn" onclick="openCtTool('exec')">EXEC</button>
+        <button class="fleet-btn" onclick="openCtTool('config')">CONFIG</button>
+        <button class="fleet-btn" onclick="openCtTool('templates')">TEMPLATES</button>
+      </div>
+      <div id="ct-tool-form"></div>
+      <div id="ct-tool-out"></div>
+    </div>
+  </div>
+</div>
 <!-- Overview -->
 <div class="section layout-section" id="fleet-sec-overview">
   <div class="section-header"><h3>Overview</h3><span class="chev">▾</span></div>
