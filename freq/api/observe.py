@@ -257,13 +257,111 @@ def handle_metrics_prometheus(handler):
 
 
 def handle_db_status(handler):
-    """GET /api/db/status — database status."""
-    json_response(handler, {"info": "Run freq db status for live data", "usage": "freq db status"})
+    """GET /api/db/status — live database detection across fleet."""
+    cfg = load_config()
+    hosts = cfg.hosts
+    if not hosts:
+        json_response(handler, {"databases": [], "total": 0})
+        return
+
+    command = (
+        'PG="no"; MY="no"; CONNS=0; SIZE=0; '
+        'if systemctl is-active postgresql >/dev/null 2>&1; then PG="system"; '
+        '  CONNS=$(sudo -u postgres psql -t -c "SELECT count(*) FROM pg_stat_activity" 2>/dev/null || echo 0); '
+        '  SIZE=$(sudo -u postgres psql -t -c "SELECT pg_database_size(current_database())" 2>/dev/null || echo 0); '
+        'elif docker ps --format "{{.Names}}" 2>/dev/null | grep -qi postgres; then PG="docker"; fi; '
+        'if systemctl is-active mysql >/dev/null 2>&1 || systemctl is-active mariadb >/dev/null 2>&1; then MY="system"; '
+        'elif docker ps --format "{{.Names}}" 2>/dev/null | grep -qi -e mysql -e mariadb; then MY="docker"; fi; '
+        'echo "${PG}|${MY}|${CONNS}|${SIZE}"'
+    )
+    from freq.core.ssh import run_many as ssh_run_many
+    results = ssh_run_many(
+        hosts=hosts, command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=15,
+        max_parallel=cfg.ssh_max_parallel,
+        use_sudo=True,
+    )
+
+    databases = []
+    for h in hosts:
+        r = results.get(h.label)
+        if not r or r.returncode != 0:
+            continue
+        parts = r.stdout.strip().split("|")
+        if len(parts) < 4:
+            continue
+        pg, my = parts[0].strip(), parts[1].strip()
+        if pg == "no" and my == "no":
+            continue
+        try:
+            conns = int(parts[2].strip())
+        except ValueError:
+            conns = 0
+        try:
+            size = int(parts[3].strip())
+        except ValueError:
+            size = 0
+        databases.append({
+            "host": h.label, "postgres": pg, "mysql": my,
+            "active_connections": conns, "db_size_bytes": size,
+            "db_size_mb": round(size / 1048576, 1) if size > 0 else 0,
+        })
+
+    json_response(handler, {"databases": databases, "total": len(databases)})
 
 
 def handle_logs_stats(handler):
-    """GET /api/logs/stats — log stats info."""
-    json_response(handler, {"info": "Run freq logs stats for live data", "usage": "freq logs stats"})
+    """GET /api/logs/stats — fleet-wide error pattern analysis."""
+    cfg = load_config()
+    params = get_params(handler)
+    since = params.get("since", ["1h"])[0]
+    hosts = cfg.hosts
+    if not hosts:
+        json_response(handler, {"patterns": [], "total_errors": 0})
+        return
+
+    command = (
+        f"journalctl --no-pager --since '-{since}' --priority err --output cat 2>/dev/null | "
+        "sort | uniq -c | sort -rn | head -15"
+    )
+    from freq.core.ssh import run_many as ssh_run_many
+    results = ssh_run_many(
+        hosts=hosts, command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=20,
+        max_parallel=cfg.ssh_max_parallel,
+        use_sudo=True,
+    )
+
+    pattern_counts = {}
+    for h in hosts:
+        r = results.get(h.label)
+        if not r or r.returncode != 0 or not r.stdout.strip():
+            continue
+        for line in r.stdout.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(None, 1)
+            if len(parts) == 2:
+                try:
+                    count = int(parts[0])
+                    msg = parts[1][:120]
+                    pattern_counts[msg] = pattern_counts.get(msg, 0) + count
+                except ValueError:
+                    pass
+
+    sorted_patterns = sorted(pattern_counts.items(), key=lambda x: x[1], reverse=True)
+    patterns = [{"pattern": msg, "count": count} for msg, count in sorted_patterns[:20]]
+    total = sum(count for _, count in sorted_patterns)
+
+    json_response(handler, {
+        "patterns": patterns, "total_errors": total,
+        "period": since, "hosts_scanned": len(hosts),
+    })
 
 
 def handle_metrics(handler):

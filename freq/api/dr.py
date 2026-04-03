@@ -200,11 +200,49 @@ def handle_journal(handler):
 
 
 def handle_migrate_plan(handler):
-    """GET /api/migrate-plan -- get migration recommendations."""
-    json_response(handler, {
-        "info": "Migration planning requires live PVE access. Use CLI.",
-        "usage": "freq migrate-plan",
-    })
+    """GET /api/migrate-plan -- live migration recommendations from PVE cluster."""
+    cfg = load_config()
+    try:
+        from freq.modules.migrate_plan import _find_reachable_node, _gather_node_resources, _gather_vm_resources, _generate_recommendations
+        node_ip = _find_reachable_node(cfg)
+        if not node_ip:
+            json_response(handler, {"error": "Cannot reach any PVE node", "nodes": [], "recommendations": []})
+            return
+
+        nodes = _gather_node_resources(cfg, node_ip)
+        vms = _gather_vm_resources(cfg, node_ip)
+        recommendations = _generate_recommendations(nodes, vms) if nodes else []
+
+        avg_mem = sum(n.get("mem_pct", 0) for n in nodes) / len(nodes) if nodes else 0
+        node_data = []
+        for n in sorted(nodes, key=lambda x: x.get("mem_pct", 0), reverse=True):
+            node_data.append({
+                "node": n["node"], "cpu_pct": round(n.get("cpu_used", 0), 1),
+                "mem_pct": round(n.get("mem_pct", 0), 1),
+                "mem_used_gb": round(n.get("mem_used", 0) / 1073741824, 1),
+                "mem_total_gb": round(n.get("maxmem", 0) / 1073741824, 1),
+                "balance": round(n.get("mem_pct", 0) - avg_mem, 1),
+            })
+
+        recs = []
+        for r in recommendations:
+            recs.append({
+                "vmid": r.get("vmid"), "vm_name": r.get("vm_name"),
+                "vm_ram_mb": r.get("vm_ram_mb"),
+                "from_node": r.get("from_node"), "to_node": r.get("to_node"),
+                "from_mem_pct": round(r.get("from_mem_pct", 0), 1),
+                "to_mem_pct": round(r.get("to_mem_pct", 0), 1),
+                "projected_from": round(r.get("projected_from", 0), 1),
+                "projected_to": round(r.get("projected_to", 0), 1),
+                "impact": r.get("impact", ""),
+            })
+
+        json_response(handler, {
+            "nodes": node_data, "recommendations": recs,
+            "avg_mem_pct": round(avg_mem, 1), "total_vms": len(vms),
+        })
+    except Exception as e:
+        json_response(handler, {"error": f"Migration planning failed: {e}", "nodes": [], "recommendations": []}, 500)
 
 
 def handle_migrate_vmware_status(handler):

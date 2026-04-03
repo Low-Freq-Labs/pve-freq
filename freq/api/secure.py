@@ -148,8 +148,54 @@ def handle_patch_status(handler):
 
 
 def handle_patch_compliance(handler):
-    """GET /api/patch/compliance — patch compliance info."""
-    json_response(handler, {"info": "Run freq patch compliance for live data", "usage": "freq patch compliance"})
+    """GET /api/patch/compliance — live fleet patch compliance check."""
+    cfg = load_config()
+    hosts = cfg.hosts
+    if not hosts:
+        json_response(handler, {"hosts": [], "compliance_pct": 0, "compliant": 0, "total": 0})
+        return
+
+    command = (
+        "if command -v apt-get >/dev/null 2>&1; then "
+        "  apt list --upgradable 2>/dev/null | grep -cv '^Listing'; "
+        "elif command -v yum >/dev/null 2>&1; then "
+        "  yum check-update -q 2>/dev/null | grep -cv '^$'; "
+        "else echo 0; fi"
+    )
+    results = ssh_run_many(
+        hosts=hosts, command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=30,
+        max_parallel=cfg.ssh_max_parallel,
+        use_sudo=True,
+    )
+
+    host_results = []
+    compliant = 0
+    total_reachable = 0
+    for h in hosts:
+        r = results.get(h.label)
+        if not r or r.returncode not in (0, 100):
+            host_results.append({"host": h.label, "status": "unreachable", "updates": 0})
+            continue
+        total_reachable += 1
+        try:
+            count = int(r.stdout.strip().split("\n")[-1])
+        except (ValueError, IndexError):
+            count = 0
+        if count == 0:
+            compliant += 1
+        host_results.append({
+            "host": h.label, "status": "compliant" if count == 0 else "updates_available",
+            "updates": count,
+        })
+
+    pct = round(compliant / max(total_reachable, 1) * 100, 1)
+    json_response(handler, {
+        "hosts": host_results, "compliance_pct": pct,
+        "compliant": compliant, "total": total_reachable,
+    })
 
 
 def handle_secrets_audit(handler):
@@ -190,8 +236,47 @@ def handle_proxy_list(handler):
 
 
 def handle_proxy_status_api(handler):
-    """GET /api/proxy/status — proxy status."""
-    json_response(handler, {"info": "Run freq proxy status for live data", "usage": "freq proxy status"})
+    """GET /api/proxy/status — live reverse proxy detection across fleet."""
+    cfg = load_config()
+    hosts = cfg.hosts
+    if not hosts:
+        json_response(handler, {"hosts": [], "total": 0})
+        return
+
+    command = (
+        'NGINX="no"; CADDY="no"; TRAEFIK="no"; HAPROXY="no"; '
+        'if systemctl is-active nginx >/dev/null 2>&1 || docker ps --format "{{.Names}}" 2>/dev/null | grep -qi nginx; then NGINX="yes"; fi; '
+        'if systemctl is-active caddy >/dev/null 2>&1 || docker ps --format "{{.Names}}" 2>/dev/null | grep -qi caddy; then CADDY="yes"; fi; '
+        'if docker ps --format "{{.Names}}" 2>/dev/null | grep -qi traefik; then TRAEFIK="yes"; fi; '
+        'if systemctl is-active haproxy >/dev/null 2>&1; then HAPROXY="yes"; fi; '
+        'echo "${NGINX}|${CADDY}|${TRAEFIK}|${HAPROXY}"'
+    )
+    results = ssh_run_many(
+        hosts=hosts, command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=15,
+        max_parallel=cfg.ssh_max_parallel,
+        use_sudo=False,
+    )
+
+    proxy_hosts = []
+    for h in hosts:
+        r = results.get(h.label)
+        if not r or r.returncode != 0:
+            continue
+        parts = r.stdout.strip().split("|")
+        if len(parts) < 4:
+            continue
+        nginx, caddy, traefik, haproxy = parts[0], parts[1], parts[2], parts[3]
+        if all(p == "no" for p in (nginx, caddy, traefik, haproxy)):
+            continue
+        proxy_hosts.append({
+            "host": h.label, "nginx": nginx == "yes", "caddy": caddy == "yes",
+            "traefik": traefik == "yes", "haproxy": haproxy == "yes",
+        })
+
+    json_response(handler, {"hosts": proxy_hosts, "total": len(proxy_hosts)})
 
 
 def handle_comply_status(handler):

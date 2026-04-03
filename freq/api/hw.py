@@ -115,13 +115,93 @@ def handle_cost_config(handler):
 
 
 def handle_cost_waste(handler):
-    """GET /api/cost-analysis/waste -- cost waste analysis."""
-    json_response(handler, {"info": "Run freq cost-analysis waste for live data"})
+    """GET /api/cost-analysis/waste -- find overprovisioned VMs wasting resources."""
+    cfg = load_config()
+    try:
+        from freq.modules.cost_analysis import _gather_vm_resources, _estimate_vm_monthly_cost
+        vms = _gather_vm_resources(cfg)
+        if not vms:
+            json_response(handler, {"waste": [], "stopped": [], "potential_savings": 0})
+            return
+
+        running = [v for v in vms if v.get("status") == "running"]
+        waste = []
+        total_savings = 0
+        for v in running:
+            issues = []
+            if v.get("vcpu", 0) > 2 and v.get("cpu_usage", 100) < 10:
+                issues.append(f"CPU: {v['cpu_usage']:.0f}% of {v['vcpu']} cores")
+            if v.get("ram_mb", 0) > 2048 and v.get("mem_usage", 100) < 20:
+                issues.append(f"RAM: {v['mem_usage']:.0f}% of {v['ram_mb']}MB")
+            if issues:
+                current = _estimate_vm_monthly_cost(v["vcpu"], v["ram_mb"] / 1024)
+                right = _estimate_vm_monthly_cost(max(v["vcpu"] // 2, 1), max(v["ram_mb"] // 2048, 1))
+                savings = round(current - right, 2)
+                total_savings += savings
+                waste.append({
+                    "vmid": v["vmid"], "name": v.get("name", "?"),
+                    "issues": issues, "savings_month": savings,
+                    "vcpu": v["vcpu"], "ram_mb": v["ram_mb"],
+                    "cpu_usage": round(v.get("cpu_usage", 0), 1),
+                    "mem_usage": round(v.get("mem_usage", 0), 1),
+                })
+
+        stopped = [{"vmid": v["vmid"], "name": v.get("name", "?"), "vcpu": v.get("vcpu", 0), "ram_mb": v.get("ram_mb", 0)}
+                   for v in vms if v.get("status") != "running"]
+
+        json_response(handler, {
+            "waste": waste, "stopped": stopped,
+            "potential_savings": round(total_savings, 2),
+            "total_vms": len(vms), "running": len(running),
+        })
+    except Exception as e:
+        json_response(handler, {"error": f"Waste analysis failed: {e}"}, 500)
 
 
 def handle_cost_compare(handler):
-    """GET /api/cost-analysis/compare -- cost comparison."""
-    json_response(handler, {"info": "Run freq cost-analysis compare for live data"})
+    """GET /api/cost-analysis/compare -- on-prem vs cloud cost comparison."""
+    cfg = load_config()
+    try:
+        from freq.modules.cost_analysis import _gather_vm_resources, _estimate_vm_monthly_cost, _estimate_aws_cost
+        params = _parse_query(handler)
+        rate = float(params.get("rate", ["0.12"])[0])
+
+        vms = _gather_vm_resources(cfg)
+        if not vms:
+            json_response(handler, {"vms": [], "total_onprem": 0, "total_aws": 0})
+            return
+
+        running = [v for v in vms if v.get("status") == "running"]
+        total_onprem = 0
+        total_aws = 0
+        comparisons = []
+
+        for v in running:
+            vcpu = v.get("vcpu", 1)
+            ram_gb = v.get("ram_mb", 1024) / 1024
+            onprem = _estimate_vm_monthly_cost(vcpu, ram_gb, rate)
+            aws = _estimate_aws_cost(vcpu, ram_gb)
+            total_onprem += onprem
+            total_aws += aws
+            comparisons.append({
+                "vmid": v["vmid"], "name": v.get("name", "?"),
+                "vcpu": vcpu, "ram_gb": round(ram_gb, 1),
+                "onprem_month": round(onprem, 2), "aws_month": round(aws, 2),
+                "savings": round(aws - onprem, 2),
+            })
+
+        pct_cheaper = round((1 - total_onprem / max(total_aws, 1)) * 100)
+        json_response(handler, {
+            "vms": comparisons,
+            "total_onprem": round(total_onprem, 2),
+            "total_aws": round(total_aws, 2),
+            "monthly_savings": round(total_aws - total_onprem, 2),
+            "annual_savings": round((total_aws - total_onprem) * 12, 2),
+            "pct_cheaper_onprem": pct_cheaper,
+            "rate_per_kwh": rate,
+        })
+    except Exception as e:
+        json_response(handler, {"error": f"Cost comparison failed: {e}"}, 500)
 
 
 def handle_gwipe(handler):

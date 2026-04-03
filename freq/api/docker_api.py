@@ -286,13 +286,96 @@ def handle_containers_compose_view(handler):
 
 
 def handle_stack_status(handler):
-    """GET /api/stack/status -- stack status info."""
-    json_response(handler, {"info": "Run freq stack status for live data", "usage": "freq stack status"})
+    """GET /api/stack/status -- live Docker Compose stack status across fleet."""
+    import json as _json
+    cfg = load_config()
+    hosts = cfg.hosts
+    if not hosts:
+        json_response(handler, {"stacks": [], "total": 0})
+        return
+
+    command = (
+        "docker compose ls --format json 2>/dev/null || "
+        "docker-compose ls --format json 2>/dev/null || "
+        "echo '[]'"
+    )
+    from freq.core.ssh import run_many as ssh_run_many
+    results = ssh_run_many(
+        hosts=hosts, command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=30,
+        max_parallel=cfg.ssh_max_parallel,
+        use_sudo=False,
+    )
+
+    stacks = []
+    for h in hosts:
+        r = results.get(h.label)
+        if not r or r.returncode != 0:
+            continue
+        try:
+            host_stacks = _json.loads(r.stdout.strip())
+        except (ValueError, _json.JSONDecodeError):
+            continue
+        for stack in host_stacks:
+            status_raw = stack.get("Status", "unknown")
+            svc_match = status_raw.split("(")
+            services = svc_match[1].rstrip(")") if len(svc_match) > 1 else "?"
+            stacks.append({
+                "host": h.label, "name": stack.get("Name", "unknown"),
+                "status": status_raw.split("(")[0].strip() if "(" in status_raw else status_raw,
+                "services": services, "config": stack.get("ConfigFiles", ""),
+            })
+
+    json_response(handler, {"stacks": stacks, "total": len(stacks)})
 
 
 def handle_stack_health(handler):
-    """GET /api/stack/health -- stack health info."""
-    json_response(handler, {"info": "Run freq stack health for live data", "usage": "freq stack health"})
+    """GET /api/stack/health -- live container health across fleet."""
+    cfg = load_config()
+    hosts = cfg.hosts
+    if not hosts:
+        json_response(handler, {"containers": [], "healthy": 0, "unhealthy": 0})
+        return
+
+    command = "docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null || echo ''"
+    from freq.core.ssh import run_many as ssh_run_many
+    results = ssh_run_many(
+        hosts=hosts, command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=30,
+        max_parallel=cfg.ssh_max_parallel,
+        use_sudo=False,
+    )
+
+    containers = []
+    healthy = 0
+    unhealthy = 0
+    for h in hosts:
+        r = results.get(h.label)
+        if not r or r.returncode != 0 or not r.stdout.strip():
+            continue
+        for line in r.stdout.strip().split("\n"):
+            parts = line.split("|", 2)
+            if len(parts) < 3:
+                continue
+            name, status, image = parts
+            is_healthy = "Up" in status and "unhealthy" not in status.lower()
+            if is_healthy:
+                healthy += 1
+            else:
+                unhealthy += 1
+            containers.append({
+                "host": h.label, "name": name, "status": status,
+                "image": image, "healthy": is_healthy,
+            })
+
+    json_response(handler, {
+        "containers": containers, "total": len(containers),
+        "healthy": healthy, "unhealthy": unhealthy,
+    })
 
 
 # -- Registration ------------------------------------------------------------

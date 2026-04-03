@@ -2528,8 +2528,23 @@ function loadStackInfo(type){
   el.innerHTML='<div class="skeleton h-40"></div>';
   var url=type==='health'?API.STACK_HEALTH:API.STACK_STATUS;
   _authFetch(url).then(function(r){return r.json()}).then(function(d){
-    if(d.info){el.innerHTML='<div class="exec-out">'+_esc(d.info)+'<br><code>'+_esc(d.usage||'')+'</code></div>';return;}
-    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:300px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+    if(type==='status'){
+      var stacks=d.stacks||[];
+      if(!stacks.length){el.innerHTML='<div class="exec-out">No Docker Compose stacks found across fleet.</div>';return;}
+      var h=_statCards([{l:'Stacks',v:d.total||stacks.length}]);
+      h+='<table style="margin-top:8px"><thead><tr><th>Host</th><th>Stack</th><th>Status</th><th>Services</th></tr></thead><tbody>';
+      stacks.forEach(function(s){h+='<tr><td><strong>'+_esc(s.host)+'</strong></td><td>'+_esc(s.name)+'</td><td>'+_statusBadge(s.status)+'</td><td>'+_esc(s.services)+'</td></tr>';});
+      h+='</tbody></table>';
+      el.innerHTML=h;
+    }else{
+      var containers=d.containers||[];
+      if(!containers.length){el.innerHTML='<div class="exec-out">No running containers found.</div>';return;}
+      var h=_statCards([{l:'Containers',v:d.total||0},{l:'Healthy',v:d.healthy||0,c:'green'},{l:'Unhealthy',v:d.unhealthy||0,c:d.unhealthy>0?'red':'green'}]);
+      h+='<table style="margin-top:8px"><thead><tr><th>Host</th><th>Container</th><th>Status</th><th>Image</th></tr></thead><tbody>';
+      containers.forEach(function(c){h+='<tr><td>'+_esc(c.host)+'</td><td><strong>'+_esc(c.name)+'</strong></td><td>'+_statusBadge(c.healthy?'healthy':'unhealthy')+'</td><td class="mono-11">'+_esc((c.image||'').split('/').pop())+'</td></tr>';});
+      h+='</tbody></table>';
+      el.innerHTML=h;
+    }
   }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
 }
 /* System info panel */
@@ -2539,7 +2554,24 @@ function loadSysInfo(type){
   var urls={db:API.DB_STATUS,logs:API.LOGS_STATS,proxy:API.PROXY_LIST,pool:API.POOL,deploy:API.DEPLOY_AGENT,setup:API.SETUP_STATUS};
   _authFetch(urls[type]||urls.db).then(function(r){return r.json()}).then(function(d){
     if(d.info||d.message){el.innerHTML='<div class="exec-out">'+_esc(d.info||d.message)+(d.usage?'<br><code>'+_esc(d.usage)+'</code>':'')+(d.note?'<br><span style="color:var(--text-dim)">'+_esc(d.note)+'</span>':'')+'</div>';return;}
-    /* Real data — render appropriately */
+    if(type==='db'){
+      var dbs=d.databases||[];
+      if(!dbs.length){el.innerHTML='<div class="exec-out">No PostgreSQL or MySQL/MariaDB instances detected across fleet.</div>';return;}
+      var h=_statCards([{l:'DB Hosts',v:d.total||dbs.length}]);
+      h+='<table style="margin-top:8px"><thead><tr><th>Host</th><th>PostgreSQL</th><th>MySQL</th><th>Connections</th><th>Size</th></tr></thead><tbody>';
+      dbs.forEach(function(db){h+='<tr><td><strong>'+_esc(db.host)+'</strong></td><td>'+_statusBadge(db.postgres==='no'?'off':db.postgres)+'</td><td>'+_statusBadge(db.mysql==='no'?'off':db.mysql)+'</td><td>'+db.active_connections+'</td><td>'+(db.db_size_mb>0?db.db_size_mb+'MB':'-')+'</td></tr>';});
+      h+='</tbody></table>';
+      el.innerHTML=h;return;
+    }
+    if(type==='logs'){
+      var patterns=d.patterns||[];
+      if(!patterns.length){el.innerHTML='<div class="exec-out" style="color:var(--green)">No errors in the last '+_esc(d.period||'1h')+' across '+d.hosts_scanned+' hosts.</div>';return;}
+      var h='<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">'+d.total_errors+' total errors in last '+_esc(d.period||'1h')+' across '+d.hosts_scanned+' hosts</div>';
+      h+='<table><thead><tr><th>Count</th><th>Error Pattern</th></tr></thead><tbody>';
+      patterns.forEach(function(p){h+='<tr><td style="color:var(--red);font-weight:700">'+p.count+'</td><td>'+_esc(p.pattern)+'</td></tr>';});
+      h+='</tbody></table>';
+      el.innerHTML=h;return;
+    }
     if(type==='proxy'){
       var routes=d.routes||[];
       if(!routes.length){el.innerHTML='<div class="exec-out">No proxy routes configured.</div>';return;}
@@ -2558,7 +2590,10 @@ function loadSysInfo(type){
     }
     if(type==='setup'){
       var h='<table><tbody>';
-      Object.keys(d).forEach(function(k){h+='<tr><td style="color:var(--text-dim);width:200px">'+_esc(k)+'</td><td>'+_esc(String(d[k]))+'</td></tr>';});
+      Object.keys(d).forEach(function(k){
+        var v=d[k];var vs=typeof v==='boolean'?(v?'<span style="color:var(--green)">true</span>':'<span style="color:var(--red)">false</span>'):_esc(String(v));
+        h+='<tr><td style="color:var(--text-dim);width:200px">'+_esc(k)+'</td><td>'+vs+'</td></tr>';
+      });
       h+='</tbody></table>';
       el.innerHTML=h;return;
     }
@@ -2568,10 +2603,34 @@ function loadSysInfo(type){
 /* DR: migration planning */
 function loadMigratePlan(){
   var el=document.getElementById('migrate-plan-out');if(!el)return;
-  el.innerHTML='<div class="skeleton h-40"></div>';
+  el.innerHTML='<div class="skeleton h-60"></div>';
   _authFetch(API.MIGRATE_PLAN).then(function(r){return r.json()}).then(function(d){
-    if(d.info){el.innerHTML='<div class="exec-out">'+_esc(d.info)+'<br><code>'+_esc(d.usage||'')+'</code></div>';return;}
-    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:400px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+    if(d.error){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(d.error)+'</div>';return;}
+    var nodes=d.nodes||[];var recs=d.recommendations||[];
+    var h=_statCards([{l:'Nodes',v:nodes.length},{l:'VMs',v:d.total_vms||0},{l:'Avg RAM',v:(d.avg_mem_pct||0)+'%'},{l:'Recommendations',v:recs.length,c:recs.length>0?'yellow':'green'}]);
+    if(nodes.length){
+      h+='<h4 style="font-size:11px;color:var(--text-dim);margin:12px 0 6px">NODE RESOURCES</h4>';
+      h+='<table><thead><tr><th>Node</th><th>CPU</th><th>RAM %</th><th>RAM Used</th><th>RAM Total</th><th>Balance</th></tr></thead><tbody>';
+      nodes.forEach(function(n){
+        var mc=n.mem_pct>85?'red':n.mem_pct>70?'yellow':'green';
+        var bc=n.balance>5?'red':n.balance<-5?'green':'text-dim';
+        h+='<tr><td><strong>'+_esc(n.node)+'</strong></td><td>'+n.cpu_pct+'%</td><td style="color:var(--'+mc+')">'+n.mem_pct+'%</td><td>'+n.mem_used_gb+'G</td><td>'+n.mem_total_gb+'G</td><td style="color:var(--'+bc+')">'+(n.balance>0?'+':'')+n.balance+'%</td></tr>';
+      });
+      h+='</tbody></table>';
+    }
+    if(recs.length){
+      h+='<h4 style="font-size:11px;color:var(--text-dim);margin:12px 0 6px">RECOMMENDED MIGRATIONS</h4>';
+      recs.forEach(function(r,i){
+        h+='<div style="padding:8px 12px;margin-bottom:6px;border-left:3px solid var(--yellow);background:var(--bg2);border-radius:4px">';
+        h+='<strong>'+(i+1)+'. Move VM '+r.vmid+' ('+_esc(r.vm_name)+') ['+(r.vm_ram_mb||0)+'MB]</strong><br>';
+        h+='<span style="color:var(--text-dim)">'+_esc(r.from_node)+' ('+r.from_mem_pct+'% → '+r.projected_from+'%) → '+_esc(r.to_node)+' ('+r.to_mem_pct+'% → '+r.projected_to+'%)</span>';
+        if(r.impact)h+='<br><span style="font-size:10px;color:var(--text-dim)">'+_esc(r.impact)+'</span>';
+        h+='</div>';
+      });
+    }else if(nodes.length){
+      h+='<div class="exec-out" style="color:var(--green);margin-top:12px">Fleet is balanced — no migrations needed.</div>';
+    }
+    el.innerHTML=h;
   }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
 }
 function loadVmwareMigration(){
@@ -2592,8 +2651,35 @@ function loadCostAnalysis(type){
   el.innerHTML='<div class="skeleton h-40"></div>';
   var url=type==='waste'?API.COST_WASTE:API.COST_COMPARE;
   _authFetch(url).then(function(r){return r.json()}).then(function(d){
-    if(d.info){el.innerHTML='<div class="exec-out">'+_esc(d.info)+'<br><code>'+_esc(d.usage||'')+'</code></div>';return;}
-    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:400px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+    if(d.error){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(d.error)+'</div>';return;}
+    if(type==='waste'){
+      var waste=d.waste||[];var stopped=d.stopped||[];
+      var h=_statCards([{l:'Running VMs',v:d.running||0},{l:'Overprovisioned',v:waste.length,c:waste.length>0?'yellow':'green'},{l:'Stopped',v:stopped.length,c:stopped.length>0?'yellow':'green'},{l:'Potential Savings',v:'$'+(d.potential_savings||0)+'/mo',c:'green'}]);
+      if(waste.length){
+        h+='<h4 style="font-size:11px;color:var(--text-dim);margin:12px 0 8px">OVERPROVISIONED VMS</h4>';
+        h+='<table><thead><tr><th>VMID</th><th>Name</th><th>Issue</th><th>CPU Use</th><th>RAM Use</th><th>Savings</th></tr></thead><tbody>';
+        waste.forEach(function(w){h+='<tr><td>'+w.vmid+'</td><td><strong>'+_esc(w.name)+'</strong></td><td style="color:var(--yellow)">'+_esc(w.issues.join('; '))+'</td><td>'+w.cpu_usage+'%</td><td>'+w.mem_usage+'%</td><td style="color:var(--green)">$'+w.savings_month+'/mo</td></tr>';});
+        h+='</tbody></table>';
+      }
+      if(stopped.length){
+        h+='<h4 style="font-size:11px;color:var(--text-dim);margin:12px 0 8px">STOPPED VMS (allocated but idle)</h4>';
+        h+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
+        stopped.forEach(function(s){h+='<span class="badge warn">'+s.vmid+' '+_esc(s.name)+' ('+s.vcpu+'c/'+s.ram_mb+'MB)</span>';});
+        h+='</div>';
+      }
+      if(!waste.length&&!stopped.length)h+='<div class="exec-out" style="color:var(--green);margin-top:12px">No significant waste detected.</div>';
+      el.innerHTML=h;
+    }else{
+      var vms=d.vms||[];
+      var h=_statCards([{l:'On-Prem/mo',v:'$'+d.total_onprem},{l:'AWS/mo',v:'$'+d.total_aws,c:'red'},{l:'Monthly Savings',v:'$'+d.monthly_savings,c:'green'},{l:'Cheaper',v:d.pct_cheaper_onprem+'%',c:'green'}]);
+      h+='<div style="font-size:11px;color:var(--text-dim);margin:8px 0">Annual savings: <strong style="color:var(--green)">$'+d.annual_savings+'</strong> &middot; Rate: $'+d.rate_per_kwh+'/kWh</div>';
+      if(vms.length){
+        h+='<table style="margin-top:8px"><thead><tr><th>VMID</th><th>Name</th><th>Specs</th><th>On-Prem</th><th>AWS</th><th>Savings</th></tr></thead><tbody>';
+        vms.forEach(function(v){h+='<tr><td>'+v.vmid+'</td><td><strong>'+_esc(v.name)+'</strong></td><td>'+v.vcpu+'c/'+v.ram_gb+'G</td><td>$'+v.onprem_month+'</td><td style="color:var(--red)">$'+v.aws_month+'</td><td style="color:var(--green)">$'+v.savings+'</td></tr>';});
+        h+='</tbody></table>';
+      }
+      el.innerHTML=h;
+    }
   }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
 }
 /* API docs */
@@ -2623,8 +2709,19 @@ function loadPatchCompliance(){
   var el=document.getElementById('patrol-out');if(!el)return;
   el.innerHTML='<div class="skeleton h-40"></div>';
   _authFetch(API.PATCH_COMPLIANCE).then(function(r){return r.json()}).then(function(d){
-    if(d.info){el.innerHTML='<div class="exec-out">'+_esc(d.info)+'<br><code>'+_esc(d.usage||'')+'</code></div>';return;}
-    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:400px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+    if(d.error){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(d.error)+'</div>';return;}
+    var pct=d.compliance_pct||0;var color=pct>=95?'green':pct>=80?'yellow':'red';
+    var h=_statCards([{l:'Compliance',v:pct+'%',c:color},{l:'Compliant',v:d.compliant||0,c:'green'},{l:'Total Scanned',v:d.total||0}]);
+    var hosts=d.hosts||[];
+    if(hosts.length){
+      h+='<table style="margin-top:12px"><thead><tr><th>Host</th><th>Status</th><th>Updates Available</th></tr></thead><tbody>';
+      hosts.forEach(function(ho){
+        var sc=ho.status==='compliant'?'green':ho.status==='unreachable'?'red':'yellow';
+        h+='<tr><td><strong>'+_esc(ho.host)+'</strong></td><td>'+_statusBadge(ho.status)+'</td><td>'+(ho.updates>0?'<span style="color:var(--yellow)">'+ho.updates+'</span>':'-')+'</td></tr>';
+      });
+      h+='</tbody></table>';
+    }
+    el.innerHTML=h;
   }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
 }
 /* Netmon interfaces */
@@ -2632,8 +2729,20 @@ function loadNetmonInterfaces(){
   var el=document.getElementById('netmon-out');if(!el)return;
   el.innerHTML='<div class="skeleton h-40"></div>';
   _authFetch(API.NETMON_INTERFACES).then(function(r){return r.json()}).then(function(d){
-    if(d.info){el.innerHTML='<div class="exec-out">'+_esc(d.info)+'</div>';return;}
-    el.innerHTML='<pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:400px;overflow:auto">'+_esc(JSON.stringify(d,null,2))+'</pre>';
+    var allHosts=d.hosts||[];
+    if(!allHosts.length){el.innerHTML='<div class="exec-out">No interface data. Hosts may be unreachable.</div>';return;}
+    var h='<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">'+d.total_interfaces+' interfaces across '+allHosts.length+' hosts</div>';
+    allHosts.forEach(function(host){
+      var ifaces=host.interfaces||[];
+      if(!ifaces.length)return;
+      h+='<h4 style="font-size:11px;color:var(--purple-light);margin:12px 0 6px">'+_esc(host.host)+'</h4>';
+      h+='<table><thead><tr><th>Interface</th><th>State</th><th>IPs</th><th>MAC</th><th>MTU</th></tr></thead><tbody>';
+      ifaces.forEach(function(i){
+        h+='<tr><td><strong>'+_esc(i.name)+'</strong></td><td>'+_statusBadge(i.state)+'</td><td class="mono-11">'+_esc((i.ips||[]).join(', ')||'-')+'</td><td class="mono-11">'+_esc(i.mac||'-')+'</td><td>'+_esc(String(i.mtu||'-'))+'</td></tr>';
+      });
+      h+='</tbody></table>';
+    });
+    el.innerHTML=h;
   }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
 }
 /* GitOps init */

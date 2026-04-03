@@ -187,8 +187,54 @@ def handle_map_impact(handler):
 
 
 def handle_netmon_interfaces(handler):
-    """GET /api/netmon/interfaces -- network interfaces info."""
-    json_response(handler, {"info": "Run freq netmon interfaces for live data"})
+    """GET /api/netmon/interfaces -- live network interface data across fleet."""
+    import json as _json
+    cfg = load_config()
+    hosts = cfg.hosts
+    if not hosts:
+        json_response(handler, {"hosts": [], "total_interfaces": 0})
+        return
+
+    command = "ip -j addr show 2>/dev/null || echo '[]'"
+    from freq.core.ssh import run_many as ssh_run_many
+    results = ssh_run_many(
+        hosts=hosts, command=command,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=15,
+        max_parallel=cfg.ssh_max_parallel,
+        use_sudo=False,
+    )
+
+    all_hosts = []
+    total = 0
+    for h in hosts:
+        r = results.get(h.label)
+        if not r or r.returncode != 0:
+            continue
+        try:
+            ifaces_raw = _json.loads(r.stdout.strip())
+        except (_json.JSONDecodeError, ValueError):
+            continue
+        ifaces = []
+        for iface in ifaces_raw:
+            name = iface.get("ifname", "?")
+            if name == "lo":
+                continue
+            state = iface.get("operstate", "UNKNOWN").lower()
+            mac = iface.get("address", "-")
+            ips = []
+            for addr in iface.get("addr_info", []):
+                if addr.get("family") == "inet":
+                    ips.append(f"{addr['local']}/{addr.get('prefixlen', '?')}")
+            ifaces.append({
+                "name": name, "state": state, "mac": mac,
+                "ips": ips, "mtu": iface.get("mtu", 0),
+            })
+            total += 1
+        all_hosts.append({"host": h.label, "interfaces": ifaces})
+
+    json_response(handler, {"hosts": all_hosts, "total_interfaces": total})
 
 
 def handle_netmon_data(handler):
