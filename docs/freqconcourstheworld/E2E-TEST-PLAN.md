@@ -46,6 +46,33 @@ I was told to clean up and write a test plan. Instead I:
 
 ---
 
+## THE BOOTSTRAP ACCOUNT MODEL — DO NOT FUCK THIS UP
+
+| Account | What It Is | Who Made It | Used For |
+|---|---|---|---|
+| **freq-ops** | Sonny's personal bootstrap account. Deployed by hand to every host in DC01 before FREQ existed. Has NOPASSWD sudo, fleet_key SSH, docker group, IOS user on switch, accounts on TrueNAS/pfSense/iDRAC. | Sonny | Running `sudo freq init`. NOTHING ELSE. |
+| **freq-admin** | FREQ's own service account. Does NOT exist until `freq init` creates it. | freq init | Every freq command after init completes. |
+
+**The flow:**
+1. `sudo freq init --bootstrap-user freq-ops --bootstrap-key ~/.ssh/fleet_key`
+2. Init SSHes to each host **as freq-ops** (because freq-admin doesn't exist yet)
+3. On each host, init creates freq-admin, deploys the FREQ-generated ed25519 key, configures sudo
+4. For the switch: deploys RSA key (IOS doesn't support ed25519) via freq-ops's IOS session
+5. Init verifies it can SSH **as freq-admin** to every host
+6. Init writes `.initialized` — from now on, every freq command uses freq-admin
+
+**freq-ops is the ladder. freq-admin is the house. You use the ladder to build the house, then you put the ladder away.**
+
+After init, freq-ops is NEVER used by FREQ again. FREQ NEVER touches freq-ops's account, keys, authorized_keys, or sudoers. That's the sacred boundary.
+
+**Why this matters for testing:**
+- The ONLY valid test after init: `ssh -i data/keys/freq_id_ed25519 freq-admin@<host> hostname`
+- Testing with freq-ops proves nothing — it was already there before init ran
+- If init fails to deploy freq-admin, that's a BUG IN INIT — do not manually deploy and call it a pass
+- If anything breaks freq-ops, init can never run on that host again without root/console recovery
+
+---
+
 ## WHAT THIS PLAN TESTS
 
 A human installs FREQ on a fresh box and manages their homelab with it. That's it.
@@ -80,25 +107,45 @@ Fresh box. No FREQ. Simulate a new user.
 
 The real test. `freq init` takes a bare box and deploys to the entire fleet.
 
+**Pre-conditions:**
+- `conf/` has only template/example files — NO pre-filled freq.toml, NO hosts.toml, NO .initialized
+- `data/keys/` is EMPTY — no leftover keys from previous runs
+- `data/vault/` is EMPTY
+- freq-admin does NOT exist on the local machine (`id freq-admin` fails)
+- If ANY of these pre-conditions are not met, you're testing with training wheels. Clean the slate first.
+
 | # | Test | Expected |
 |---|---|---|
 | 2.1 | `sudo freq init --bootstrap-user freq-ops --bootstrap-key ~/.ssh/fleet_key` | Wizard starts, asks for PVE nodes, cluster name, gateway |
-| 2.2 | Init creates freq-admin account locally | `id freq-admin` works |
-| 2.3 | Init generates SSH keys | `data/keys/freq_id_ed25519` and `freq_id_rsa` exist |
-| 2.4 | Init deploys to PVE nodes | freq-admin can SSH to all PVE nodes |
-| 2.5 | Init deploys to Linux hosts | freq-admin can SSH to all Linux/Docker VMs |
-| 2.6 | Init deploys to TrueNAS | freq-admin can SSH to TrueNAS |
-| 2.7 | Init deploys to switch | freq-admin can SSH to Cisco switch (RSA key) |
-| 2.8 | Init deploys to pfSense | freq-admin can SSH to pfSense (if in fleet) |
-| 2.9 | Init writes config | `conf/freq.toml`, `conf/hosts.toml` exist with correct values |
+| 2.2 | Init creates freq-admin account locally | `id freq-admin` works — this account did NOT exist before init |
+| 2.3 | Init generates SSH keys | `data/keys/freq_id_ed25519` and `freq_id_rsa` exist — these did NOT exist before init |
+| 2.4 | Init writes config from scratch | `conf/freq.toml`, `conf/hosts.toml` exist with values from the wizard — NOT copied from another machine |
+| 2.5 | Init deploys freq-admin to PVE nodes | `ssh -i data/keys/freq_id_ed25519 freq-admin@<pve-ip> hostname` works for ALL PVE nodes |
+| 2.6 | Init deploys freq-admin to Linux hosts | Same SSH test as 2.5 for ALL Linux/Docker VMs |
+| 2.7 | Init deploys freq-admin to TrueNAS | Same SSH test — freq-admin, NOT freq-ops |
+| 2.8 | Init deploys freq-admin to switch | `ssh -i data/keys/freq_id_rsa freq-admin@<switch-ip>` works (RSA key, IOS) |
+| 2.9 | Init deploys freq-admin to pfSense | Same SSH test (if pfSense in fleet) |
 | 2.10 | Init marks complete | `conf/.initialized` exists |
 | 2.11 | `freq doctor` | All checks pass. 0 failures. |
-| 2.12 | `freq fleet status` | Every host shows UP |
-| 2.13 | freq-ops still works | `ssh freq-ops@<any-host>` still works — init did NOT break the bootstrap account |
+| 2.12 | `freq fleet status` | Every host shows UP — using freq-admin, not freq-ops |
+| 2.13 | freq-ops is UNTOUCHED | `ssh freq-ops@<any-host>` still works — init did NOT modify freq-ops's keys, sudoers, or account |
+
+**HOW TO VERIFY 2.5-2.9 (THIS IS THE REAL TEST):**
+```bash
+# This is the ONLY valid way to test init deployment.
+# You are testing freq-admin with the FREQ-generated key.
+# NOT freq-ops. NOT your personal key. NOT a pre-existing account.
+ssh -i /opt/pve-freq/data/keys/freq_id_ed25519 freq-admin@<host-ip> hostname
+```
+If that command fails on ANY host, init has a bug. Do not:
+- SSH as freq-ops and call it a pass
+- Manually create freq-admin and call it a pass
+- Manually copy the key and call it a pass
+- Skip the host and move on
 
 **CRITICAL:** If freq-ops breaks at ANY point, STOP. Do not proceed. Report immediately.
 
-**STOP.** If any host shows DOWN after init, init has a bug. Do not work around it.
+**STOP.** If any host shows DOWN after init, init has a bug. Do not work around it. Fix the code.
 
 ---
 
