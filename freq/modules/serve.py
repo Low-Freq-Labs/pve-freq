@@ -7556,8 +7556,9 @@ def cmd_serve(cfg, pack, args) -> int:
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}Starting dashboard on port {port}...{fmt.C.RESET}")
     fmt.blank()
-    fmt.line(f"  {fmt.C.GREEN}Dashboard: http://localhost:{port}{fmt.C.RESET}")
-    fmt.line(f"  {fmt.C.GREEN}API:       http://localhost:{port}/api/status{fmt.C.RESET}")
+    proto = "https" if (cfg.tls_cert and cfg.tls_key) else "http"
+    fmt.line(f"  {fmt.C.GREEN}Dashboard: {proto}://localhost:{port}{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.GREEN}API:       {proto}://localhost:{port}/api/status{fmt.C.RESET}")
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}Ctrl+C to stop{fmt.C.RESET}")
     fmt.blank()
@@ -7569,6 +7570,22 @@ def cmd_serve(cfg, pack, args) -> int:
     fmt.blank()
 
     server = ThreadedHTTPServer(("0.0.0.0", port), FreqHandler)
+
+    # Optional TLS wrapping
+    if cfg.tls_cert and cfg.tls_key:
+        if os.path.isfile(cfg.tls_cert) and os.path.isfile(cfg.tls_key):
+            import ssl
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(cfg.tls_cert, cfg.tls_key)
+            server.socket = context.wrap_socket(server.socket, server_side=True)
+            logger.info(f"TLS enabled: cert={cfg.tls_cert}")
+            fmt.line(f"  {fmt.C.GREEN}TLS: enabled{fmt.C.RESET}")
+        else:
+            fmt.line(f"  {fmt.C.YELLOW}TLS: cert/key files not found — running plaintext{fmt.C.RESET}")
+            logger.warn(f"TLS cert/key not found: {cfg.tls_cert}, {cfg.tls_key}")
+    else:
+        fmt.line(f"  {fmt.C.DIM}TLS: not configured — credentials sent in plaintext{fmt.C.RESET}")
+
     logger.info(f"web dashboard started on port {port}")
 
     try:

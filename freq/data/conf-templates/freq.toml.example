@@ -87,6 +87,9 @@ mtu = 1500
 dashboard_port = 8888
 watchdog_port = 9900
 agent_port = 9990
+# TLS — optional, omit for plaintext HTTP
+# tls_cert = "/etc/freq/tls/cert.pem"
+# tls_key = "/etc/freq/tls/key.pem"
 
 [notifications]
 discord_webhook = ""

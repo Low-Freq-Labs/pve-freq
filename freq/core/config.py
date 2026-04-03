@@ -184,6 +184,10 @@ class FreqConfig:
     watchdog_port: int = _DEFAULTS["watchdog_port"]
     agent_port: int = _DEFAULTS["agent_port"]
 
+    # TLS (optional — omit for plaintext HTTP)
+    tls_cert: str = ""
+    tls_key: str = ""
+
     # Fleet boundaries (loaded from fleet-boundaries.toml)
     fleet_boundaries: FleetBoundaries = field(default_factory=FleetBoundaries)
 
@@ -497,6 +501,8 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.dashboard_port = _safe_int(services.get("dashboard_port"), cfg.dashboard_port)
     cfg.watchdog_port = _safe_int(services.get("watchdog_port"), cfg.watchdog_port)
     cfg.agent_port = _safe_int(services.get("agent_port"), cfg.agent_port)
+    cfg.tls_cert = services.get("tls_cert", cfg.tls_cert)
+    cfg.tls_key = services.get("tls_key", cfg.tls_key)
 
     # PVE API token auth (optional — alternative to SSH)
     cfg.pve_api_token_id = pve.get("api_token_id", cfg.pve_api_token_id)
