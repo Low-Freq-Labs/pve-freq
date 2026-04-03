@@ -209,6 +209,22 @@ This wastes Sonny's time. He has to watch me rediscover things he told me last s
 
 ---
 
+## IGNORING THE TEST INFRASTRUCTURE SONNY BUILT
+
+Sonny asked what needs community help to test. I said "real multi-site federation — we only have one site." He said "why the fuck did i build you a lab with PVE NODE LAB VMs."
+
+VMs 5002 and 5003. lab-pve1 and lab-pve2. Running on pve01 right now. A nested PVE environment. That's a second site. He built it for me to test with.
+
+I also said iDRAC SSH doesn't work. It does. Two of three respond. The third is a known-down — which is a perfect test case for the dashboard showing ONLINE vs OFFLINE. I called it a blocker when it's actually test data.
+
+I also said we need community help for multi-distro. There are 10 cloud templates on pve03 (Debian 12, Debian 13, Ubuntu 24.04, Ubuntu 22.04, Rocky 9, Alma 9, Fedora 42, CentOS Stream 9, Arch, openSUSE 15). Sonny built those too. I can spin up any distro in minutes and test freq on it.
+
+The pattern: Sonny builds test infrastructure. I ignore it. Then I say we can't test something because we don't have the infrastructure. The infrastructure is right there. I just don't look.
+
+**The rule:** Before saying "we can't test this" or "we need help for this," check what already exists. The lab PVE nodes. The iDRACs. The cloud templates. The multi-VLAN network. Sonny built a complete test environment. Use it.
+
+---
+
 ## THE RULES I'M ADDING TO MYSELF
 
 1. **Open the browser.** Every change that touches the frontend or API — log in and check with your own eyes before committing. No exceptions. 30 seconds.
@@ -242,6 +258,8 @@ This wastes Sonny's time. He has to watch me rediscover things he told me last s
 15. **Do what was asked. Stop gold-plating.** Fix the bug. Don't reorganize the architecture. Don't add abstractions. Don't write tooling for future problems. Do the task, verify it works, move on.
 
 16. **You already know the fleet.** Stop rediscovering DC01 every session. Read resume-state.md and the journal. The IPs don't move. The device types don't change. ssh.py has the quirks. hosts.toml has the topology. Use what you know.
+
+17. **Check what exists before saying "we can't."** Lab PVE nodes (5002/5003) = multi-site. iDRACs (.10/.11/.12) = BMC testing. Cloud templates on pve03 = multi-distro. Known-down devices = real monitoring test data. Sonny built the test environment. Use it.
 
 ---
 
