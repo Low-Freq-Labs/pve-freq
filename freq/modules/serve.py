@@ -27,7 +27,6 @@ Design decisions:
 """
 import concurrent.futures
 import datetime
-import hashlib
 import json
 import os
 import re
@@ -41,21 +40,19 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from urllib.parse import urlparse, parse_qs
 
-from freq.core import fmt
 from freq.core import log as logger
 from freq.core import resolve as res
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single, run_many as ssh_run_many
 from freq.core.validate import (
-    ip as valid_ip, label as valid_label,
-    is_protected_vmid, vlan_id as valid_vlan,
+    label as valid_label,
 )
 from freq.modules.pve import _find_reachable_node, _pve_cmd
-from freq.modules.users import _load_users, _save_users, _role_level, ROLE_HIERARCHY
-from freq.modules.vault import vault_get, vault_set, vault_init, vault_list, vault_delete
+from freq.modules.users import _load_users, _save_users
+from freq.modules.vault import vault_get, vault_set, vault_init
 from freq.jarvis.agent import TEMPLATES, _load_agents, _save_agents
 from freq.jarvis.notify import notify as jarvis_notify
-from freq.jarvis.risk import _load_risk_map, _load_kill_chain
+from freq.jarvis.risk import _load_kill_chain
 import freq
 
 
@@ -1280,7 +1277,6 @@ def _check_vm_permission(cfg, vmid, action):
 # Auth functions delegated to freq.api.auth
 from freq.api.auth import (
     hash_password as _hash_password,
-    verify_password as _verify_password,
     check_session_role as _check_session_role,
     handle_auth_login,
     handle_auth_verify,
