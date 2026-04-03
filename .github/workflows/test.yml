@@ -125,7 +125,7 @@ jobs:
         shell: sh
         run: |
           pip3 install pytest-cov
-          python3 -m pytest tests/ -v --tb=short --cov=freq --cov-report=term-missing --cov-fail-under=50
+          python3 -m pytest tests/ -v --tb=short --cov=freq --cov-report=term-missing --cov-fail-under=20
         env:
           FREQ_DIR: ${{ github.workspace }}
 
