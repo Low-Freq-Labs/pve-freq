@@ -3,8 +3,6 @@
 Covers: SNMP helpers, topology graph, DOT export, CLI registration,
         module imports, SNMP value cleaning.
 """
-import json
-import os
 import sys
 import tempfile
 import unittest

@@ -54,7 +54,6 @@ from freq.modules.vault import vault_get, vault_set, vault_init
 from freq.jarvis.agent import TEMPLATES, _load_agents, _save_agents
 from freq.jarvis.notify import notify as jarvis_notify
 from freq.jarvis.risk import _load_kill_chain
-import freq
 
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):

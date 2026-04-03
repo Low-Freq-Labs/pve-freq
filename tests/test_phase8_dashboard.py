@@ -1,7 +1,6 @@
 """Tests for Phase 8 — The Face (WS20: Dashboard Pages).
 Covers: HTML view containers, JS view registration, API route registration.
 """
-import os
 import sys
 import unittest
 from pathlib import Path

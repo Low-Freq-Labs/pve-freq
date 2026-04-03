@@ -404,6 +404,16 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     _phase(10, total, "Summary")
     _phase_summary(cfg, ctx, verified, pack)
 
+    # Auto-sync hosts from PVE cluster after successful init
+    if verified and cfg.pve_nodes:
+        try:
+            from freq.modules.hosts import _hosts_sync
+
+            fmt.blank()
+            _hosts_sync(cfg)
+        except Exception:
+            pass
+
     logger.info("init complete", service_account=ctx["svc_name"])
     return 0 if verified else 1
 
@@ -4168,6 +4178,16 @@ def _init_headless(cfg, args):
     else:
         fmt.line(f"  {fmt.C.YELLOW}Init completed with warnings. Run 'freq init --check' to review.{fmt.C.RESET}")
     fmt.blank()
+
+    # Auto-sync hosts from PVE cluster after successful headless init
+    if verified and cfg.pve_nodes:
+        try:
+            from freq.modules.hosts import _hosts_sync
+
+            fmt.blank()
+            _hosts_sync(cfg)
+        except Exception:
+            pass
 
     logger.info("headless init complete", service_account=ctx["svc_name"])
     return 0 if verified else 1

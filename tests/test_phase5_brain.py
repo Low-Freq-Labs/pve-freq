@@ -1,7 +1,7 @@
 """Tests for Phase 5 — The Brain (WS12, 15-16).
 Covers: Incident CRUD, change CRUD, state export/drift, reactor CRUD, CLI registration.
 """
-import json, os, sys, tempfile, unittest
+import sys, tempfile, unittest
 from pathlib import Path
 from dataclasses import dataclass
 from unittest.mock import MagicMock

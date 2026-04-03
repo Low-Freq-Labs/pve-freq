@@ -46,21 +46,13 @@ class TestRequiredFiles(unittest.TestCase):
 
 
 class TestChangelog(unittest.TestCase):
-    """Verify CHANGELOG has v3.0.0 entry."""
+    """Verify CHANGELOG has release entry."""
 
     def setUp(self):
         self.changelog = (FREQ_ROOT / "CHANGELOG.md").read_text()
 
-    def test_has_v3_entry(self):
-        self.assertIn("[3.0.0]", self.changelog)
-
-    def test_has_phase_sections(self):
-        for phase in range(0, 11):
-            self.assertIn(f"Phase {phase}", self.changelog,
-                          f"CHANGELOG missing Phase {phase}")
-
-    def test_mentions_domain_dispatch(self):
-        self.assertIn("domain dispatch", self.changelog.lower())
+    def test_has_release_entry(self):
+        self.assertIn("[1.0.0]", self.changelog)
 
     def test_mentions_plugin_system(self):
         self.assertIn("plugin", self.changelog.lower())

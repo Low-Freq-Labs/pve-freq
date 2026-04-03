@@ -15,7 +15,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from freq.core.types import Host, Finding, Severity, Phase
+from freq.core.types import Host, Finding, Severity
 from freq.engine.policy import PolicyExecutor, PolicyStore
 from freq.engine.policies.ntp_sync import POLICY as NTP_POLICY
 from freq.engine.policies.rpcbind import POLICY as RPCBIND_POLICY

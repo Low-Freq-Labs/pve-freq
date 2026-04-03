@@ -5,7 +5,6 @@ Covers: Cisco IOS output parsers, target resolution, CLI subcommand registration
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 from dataclasses import dataclass
 
 sys.path.insert(0, str(Path(__file__).parent.parent))

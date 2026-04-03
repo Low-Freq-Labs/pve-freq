@@ -1,7 +1,6 @@
 """Tests for Phase 7 — The Ecosystem (WS19: Plugin System).
 Covers: Module imports, CLI registration, registry operations, scaffold generation.
 """
-import json
 import os
 import sys
 import tempfile

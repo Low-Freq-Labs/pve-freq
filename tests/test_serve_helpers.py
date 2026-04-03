@@ -16,7 +16,6 @@ import sys
 import tempfile
 import time
 import unittest
-from dataclasses import dataclass, field
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -372,10 +371,10 @@ class TestCheckSessionRole(unittest.TestCase):
         self.assertEqual(role, "admin")
 
     def test_expired_token(self):
-        from freq.api.auth import SESSION_TIMEOUT_SECONDS
+        timeout = self.auth_mod.SESSION_TIMEOUT_SECONDS
         self.auth_mod._auth_tokens["old"] = {
             "user": "admin", "role": "admin",
-            "ts": time.time() - SESSION_TIMEOUT_SECONDS - 1
+            "ts": time.time() - timeout - 1
         }
         h = self._handler("/api/test?token=old")
         role, err = self.fn(h)
@@ -582,14 +581,14 @@ class TestServeConstants(unittest.TestCase):
     """Verify serve.py constants are sane."""
 
     def test_session_timeout_positive(self):
-        from freq.api.auth import SESSION_TIMEOUT_SECONDS
-        self.assertGreater(SESSION_TIMEOUT_SECONDS, 0)
+        import freq.api.auth as auth_mod
+        self.assertGreater(auth_mod.SESSION_TIMEOUT_SECONDS, 0)
 
     def test_session_timeout_reasonable(self):
-        from freq.api.auth import SESSION_TIMEOUT_SECONDS
+        import freq.api.auth as auth_mod
         # Should be between 1 hour and 24 hours
-        self.assertGreaterEqual(SESSION_TIMEOUT_SECONDS, 3600)
-        self.assertLessEqual(SESSION_TIMEOUT_SECONDS, 86400)
+        self.assertGreaterEqual(auth_mod.SESSION_TIMEOUT_SECONDS, 3600)
+        self.assertLessEqual(auth_mod.SESSION_TIMEOUT_SECONDS, 86400)
 
     def test_bg_refresh_interval_positive(self):
         from freq.modules.serve import BG_CACHE_REFRESH_INTERVAL

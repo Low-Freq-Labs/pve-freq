@@ -3,8 +3,6 @@
 Tests for: map (depmap), netmon, cost-analysis
 """
 import argparse
-import json
-import os
 import sys
 import tempfile
 import unittest

@@ -16,8 +16,6 @@ import sys
 import threading
 import time
 import unittest
-from dataclasses import dataclass, field
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -31,11 +29,10 @@ class TestCachePathGeneration(unittest.TestCase):
     """_cache_path(name) builds the correct filesystem path."""
 
     def setUp(self):
-        from freq.modules.serve import _cache_path, _init_cache_dir
-        import freq.modules.serve as _serve_mod
+        from freq.modules.serve import _cache_path, _init_cache_dir, _get_cache_dir
         _init_cache_dir()
         self.fn = _cache_path
-        self.cache_dir = _serve_mod.CACHE_DIR
+        self.cache_dir = _get_cache_dir()
 
     def test_health_key(self):
         p = self.fn("health")

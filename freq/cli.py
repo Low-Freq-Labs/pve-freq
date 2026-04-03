@@ -675,6 +675,7 @@ def _register_secure(sub):
     p.set_defaults(func=_cmd_vault)
 
     p = secure_sub.add_parser("audit", help="Security audit")
+    p.add_argument("target", nargs="?", help="Host label or 'all'")
     p.add_argument("--fix", action="store_true", help="Auto-fix findings")
     p.set_defaults(func=_cmd_audit)
 

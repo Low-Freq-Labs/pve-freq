@@ -34,7 +34,10 @@ MAX_INCIDENTS = 500
 
 def _oncall_dir(cfg: FreqConfig) -> str:
     path = os.path.join(cfg.conf_dir, ONCALL_DIR)
-    os.makedirs(path, exist_ok=True)
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError:
+        pass
     return path
 
 

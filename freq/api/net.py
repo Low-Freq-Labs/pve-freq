@@ -7,6 +7,8 @@ Where: Routes registered at /api/* and /api/v1/net/*.
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
+import re
+
 from freq.api.helpers import json_response, get_param, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
@@ -310,7 +312,6 @@ def handle_config_history(handler):
 
 def handle_config_search(handler):
     """GET /api/v1/net/config/search -- search across stored configs."""
-    import re
     from freq.modules.config_management import _list_backups
 
     cfg = load_config()
@@ -341,8 +342,6 @@ def handle_config_search(handler):
 
 
 # -- V1 Switch Write Endpoints (admin) -------------------------------------
-
-import re
 
 _SAFE_VLAN_ID = re.compile(r"^\d{1,4}$")
 _SAFE_NAME = re.compile(r"^[a-zA-Z0-9_\-]{1,32}$")

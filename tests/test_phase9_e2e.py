@@ -6,8 +6,6 @@ These tests run LOCALLY — they verify CLI registration, help output, and
 module imports. Live fleet tests require freq-test (VM 5005) and Sonny's
 approval before execution.
 """
-import os
-import subprocess
 import sys
 import unittest
 from pathlib import Path

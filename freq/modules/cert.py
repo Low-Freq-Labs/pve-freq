@@ -25,6 +25,7 @@ import os
 import ssl
 import socket
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
@@ -264,11 +265,15 @@ def _cmd_scan(cfg: FreqConfig, args) -> int:
     fmt.step_ok(f"Found {len(file_certs)} certificate files")
     all_certs.extend(file_certs)
 
-    # Network TLS scan on common ports
+    # Network TLS scan on common ports (parallel with timeout)
     fmt.step_start("Probing TLS endpoints")
-    for h in cfg.hosts:
-        host_certs = _scan_host_certs(cfg, h)
-        all_certs.extend(host_certs)
+    with ThreadPoolExecutor(max_workers=cfg.ssh_max_parallel or 5) as pool:
+        futures = {pool.submit(_scan_host_certs, cfg, h): h for h in cfg.hosts}
+        for future in as_completed(futures, timeout=60):
+            try:
+                all_certs.extend(future.result(timeout=CERT_CONNECT_TIMEOUT + 2))
+            except Exception:
+                pass
     net_count = len(all_certs) - len(file_certs)
     fmt.step_ok(f"Found {net_count} TLS endpoints")
 

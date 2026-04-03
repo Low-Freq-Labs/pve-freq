@@ -3,8 +3,6 @@
 Tests for: db, proxy, secrets
 """
 import argparse
-import json
-import os
 import sys
 import tempfile
 import time

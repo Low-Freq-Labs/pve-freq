@@ -1243,7 +1243,7 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
             "-N",
             "",
             "-q",
-            "-y" if False else "",
+            "",
         ],
         capture_output=True,
         text=True,
