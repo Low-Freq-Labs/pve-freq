@@ -1,5 +1,9 @@
 name: CodeQL
 
+# CodeQL requires GitHub Advanced Security for private repos.
+# This workflow activates automatically when the repo goes public,
+# or when Advanced Security is enabled on the org.
+
 on:
   push:
     branches: [main]
@@ -26,7 +30,9 @@ jobs:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       security-events: write
+      actions: read
     steps:
       - uses: actions/checkout@v5
 
