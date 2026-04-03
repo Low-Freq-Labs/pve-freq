@@ -14,27 +14,40 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          # Debian family (11/bullseye has no Python 3.11 — two versions is the max)
+          # ── Debian family ──
           - 'debian:12'
           - 'debian:13'
-          # Ubuntu (LTS only — 22.04 has no Python 3.11 without PPA)
+          - 'debian:sid'
+          # ── Ubuntu (LTS + interim) ──
           - 'ubuntu:24.04'
-          # RHEL family (8 + 9 — python3.11 from AppStream on both)
+          - 'ubuntu:24.10'
+          - 'ubuntu:25.04'
+          # ── RHEL family ──
           - 'rockylinux:8'
           - 'rockylinux:9'
           - 'almalinux:8'
           - 'almalinux:9'
-          # Fedora (ships Python 3.12+ — older releases have dead repos)
-          - 'fedora:41'
+          - 'quay.io/centos/centos:stream9'
+          - 'oraclelinux:8'
+          - 'oraclelinux:9'
+          # ── Amazon Linux ──
+          - 'amazonlinux:2023'
+          # ── Fedora ──
           - 'fedora:40'
-          # Arch (rolling — only latest)
+          - 'fedora:41'
+          - 'fedora:42'
+          # ── Arch (rolling) ──
           - 'archlinux:latest'
-          # SUSE (Tumbleweed rolling — Leap lacks Python 3.11)
+          # ── SUSE ──
           - 'opensuse/tumbleweed:latest'
-          # Alpine (musl libc — 3.18 and older lack Python 3.11)
+          - 'opensuse/leap:15.6'
+          # ── Alpine (musl libc) ──
           - 'alpine:3.19'
           - 'alpine:3.20'
           - 'alpine:3.21'
+          # ── Void Linux (musl + glibc) ──
+          - 'voidlinux/voidlinux:latest'
+          - 'voidlinux/voidlinux-musl:latest'
     container:
       image: ${{ matrix.os }}
     steps:
@@ -44,32 +57,36 @@ jobs:
         shell: sh
         run: |
           # Detect package manager and install Python 3.11+, pip, pytest, openssh, openssl
-          if command -v apt-get >/dev/null 2>&1; then
+          if command -v xbps-install >/dev/null 2>&1; then
+            # Void Linux
+            xbps-install -Sy python3 python3-pip openssh openssl
+          elif command -v apt-get >/dev/null 2>&1; then
             # Debian, Ubuntu
             apt-get update -qq
             apt-get install -y -qq python3 python3-pip openssh-client openssl
           elif command -v dnf >/dev/null 2>&1; then
-            # Rocky/Alma 9 default to Python 3.9 — need 3.11 from AppStream
-            # Fedora 40+ ships Python 3.12+ as default python3
-            # Key: check for python3.11-pip specifically (only exists on RHEL AppStream)
+            # RHEL family: Rocky, Alma, Oracle, CentOS Stream, Amazon Linux, Fedora
             if dnf list python3.11-pip >/dev/null 2>&1; then
-              # RHEL/Rocky/Alma — install python3.11 from AppStream
+              # RHEL 8/9 clones — python3.11 from AppStream
               dnf install -y -q python3.11 python3.11-pip openssh-clients openssl
               alternatives --set python3 /usr/bin/python3.11 2>/dev/null || \
                 ln -sf /usr/bin/python3.11 /usr/local/bin/python3
               ln -sf /usr/bin/pip3.11 /usr/local/bin/pip3 2>/dev/null || true
             else
-              # Fedora or distro with python3 already 3.11+
+              # Fedora, Amazon Linux 2023, or distro with python3 already 3.11+
               dnf install -y -q python3 python3-pip openssh-clients openssl
             fi
+          elif command -v yum >/dev/null 2>&1; then
+            # Legacy yum (fallback)
+            yum install -y python3 python3-pip openssh-clients openssl
           elif command -v pacman >/dev/null 2>&1; then
             # Arch
             pacman -Sy --noconfirm python python-pip openssh openssl
           elif command -v zypper >/dev/null 2>&1; then
-            # openSUSE
+            # openSUSE (Tumbleweed + Leap)
             zypper --non-interactive install python3 python3-pip openssh-clients openssl
           elif command -v apk >/dev/null 2>&1; then
-            # Alpine (musl) — needs bash for install script tests, openssl for vault
+            # Alpine (musl) — needs bash for install script tests
             apk add --no-cache python3 py3-pip openssh-client openssl bash
           fi
           # Install pytest + build — handle PEP 668 (externally-managed) gracefully
