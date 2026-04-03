@@ -326,7 +326,7 @@ def _demo_closing(pack):
             p=fmt.C.PURPLE_BOLD, dim=fmt.C.DIM, r=fmt.C.RESET
         )
     )
-    print("  {dim}https://github.com/Low-Freq-Labs/pve-freq{r}".format(dim=fmt.C.DIM, r=fmt.C.RESET))
+    print("  {dim}https://github.com/Low-Freq-Labs/pve-freq-dev{r}".format(dim=fmt.C.DIM, r=fmt.C.RESET))
     print()
 
 

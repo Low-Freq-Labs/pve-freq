@@ -32,7 +32,7 @@ The hosts.conf in Nexus's `/data/projects/pve-freq/conf/` is Morty's reference c
 | 0.2 | Nuke everything freq-related on 5005 | `sudo rm -rf /opt/pve-freq /etc/freq /home/freq-admin` |
 | 0.3 | Remove freq-admin account if exists | `sudo userdel -r freq-admin 2>/dev/null; sudo rm -f /etc/sudoers.d/freq-admin` |
 | 0.4 | Verify clean slate | `ls /opt/pve-freq` → not found. `id freq-admin` → no such user. |
-| 0.5 | Fresh git clone on VM 5005 | `ssh freq-ops@10.25.255.55 'cd /opt && sudo git clone -b v3-rewrite https://github.com/Low-Freq-Labs/pve-freq.git pve-freq'` |
+| 0.5 | Fresh git clone on VM 5005 | `ssh freq-ops@10.25.255.55 'cd /opt && sudo git clone -b v3-rewrite https://github.com/Low-Freq-Labs/pve-freq-dev.git pve-freq'` |
 | 0.6 | Run install.sh on VM 5005 | `ssh freq-ops@10.25.255.55 'cd /opt/pve-freq && sudo bash install.sh --from-local . --yes'` |
 | 0.7 | Verify freq runs on 5005 | `ssh freq-ops@10.25.255.55 'freq version'` → shows 3.0.0 |
 | 0.8 | Verify config is EMPTY | `ssh freq-ops@10.25.255.55 'ls /opt/pve-freq/conf/'` → default template files only, no .initialized, no keys, no vault |

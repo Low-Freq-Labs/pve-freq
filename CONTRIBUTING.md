@@ -5,7 +5,7 @@ Thanks for looking at the code. Here's how to work with it.
 ## Development Setup
 
 ```bash
-git clone https://github.com/Low-Freq-Labs/pve-freq.git
+git clone https://github.com/Low-Freq-Labs/pve-freq-dev.git
 cd pve-freq
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .

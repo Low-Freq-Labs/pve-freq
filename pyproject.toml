@@ -26,9 +26,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Low-Freq-Labs/pve-freq"
-Repository = "https://github.com/Low-Freq-Labs/pve-freq"
-Issues = "https://github.com/Low-Freq-Labs/pve-freq/issues"
+Homepage = "https://github.com/Low-Freq-Labs/pve-freq-dev"
+Repository = "https://github.com/Low-Freq-Labs/pve-freq-dev"
+Issues = "https://github.com/Low-Freq-Labs/pve-freq-dev/issues"
 
 [project.scripts]
 freq = "freq.cli:main"

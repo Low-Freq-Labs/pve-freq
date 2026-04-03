@@ -93,7 +93,7 @@ If the answer to all of those is yes, FREQ works. Implementation details (hash a
 **First step, every time, no exceptions:**
 1. Wipe everything FREQ-related: `sudo rm -rf /opt/pve-freq /etc/freq /home/freq-admin`
 2. Remove freq-admin if it exists: `sudo userdel -r freq-admin; sudo rm -f /etc/sudoers.d/freq-admin`
-3. Fresh git clone: `git clone -b v3-rewrite https://github.com/Low-Freq-Labs/pve-freq.git /opt/pve-freq`
+3. Fresh git clone: `git clone -b v3-rewrite https://github.com/Low-Freq-Labs/pve-freq-dev.git /opt/pve-freq`
 
 No snapshots. No templates. No saving state. Wipe it and start clean.
 
