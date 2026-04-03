@@ -1829,7 +1829,7 @@ function loadPluginsPage(){
 function _fetchAndRender(url,statsId,renderFn){
   var el=document.getElementById(statsId);
   if(el)el.innerHTML='<div class="skeleton h-40"></div>';
-  fetch(url).then(function(r){return r.json();}).then(function(d){renderFn(d);}).catch(function(e){
+  _authFetch(url).then(function(r){return r.json();}).then(function(d){renderFn(d);}).catch(function(e){
     if(el)el.innerHTML='<div class="exec-out" style="color:var(--red)">Failed to load: '+_esc(e.toString())+'</div>';
   });
 }
@@ -3061,7 +3061,7 @@ function vmtResize(){
   var url='/api/vm/resize?vmid='+src;
   if(cores)url+='&cores='+cores;
   if(ram)url+='&ram='+ram;
-  fetch(url).then(function(r){return r.json()}).then(function(d){
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('VM '+src+' resized','success');if(out)out.innerHTML='<div class="c-green">VM '+src+' resized successfully.</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
@@ -3267,7 +3267,7 @@ function bkTakeSnap(){
   var out=document.getElementById('bk-snap-out');if(out)out.innerHTML='<div class="c-yellow">Creating snapshot...</div>';
   var url=API.BACKUP_CREATE+'?vmid='+vmid;
   if(name)url+='&name='+encodeURIComponent(name);
-  fetch(url).then(function(r){return r.json()}).then(function(d){
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Snapshot "'+d.snapshot+'" created','success');if(out)out.innerHTML='<div class="c-green">Snapshot "'+d.snapshot+'" created for VM '+vmid+'</div>';}
     else{toast(d.error||'Snapshot failed','error');if(out)out.innerHTML='<div class="c-red">'+(d.error||'Failed')+'</div>';}
   }).catch(function(e){toast('Snapshot failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -5273,7 +5273,7 @@ function ltAction(toolId,action,pfx,confirm){
   var c=_ltHostKey(toolId,pfx);
   var url='/api/lab-tool/proxy?tool='+encodeURIComponent(toolId)+'&method=POST&endpoint='+encodeURIComponent(action)+'&host='+encodeURIComponent(c.host)+'&key='+encodeURIComponent(c.key);
   if(confirm)url+='&confirm=YES';
-  fetch(url).then(function(r){return r.json()}).then(function(d){
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.message)toast(d.message,'success');if(d.error)toast(d.error,'error');
   });
 }
@@ -6363,7 +6363,7 @@ function fetchLogs(){
   out.innerHTML='<span class="text-dim">Fetching logs from '+_esc(host)+'...</span>';
   var url=API.LOG+'?target='+encodeURIComponent(host)+'&lines='+lines;
   if(unit)url+='&unit='+encodeURIComponent(unit);
-  fetch(url).then(function(r){return r.json()}).then(function(d){
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     var logLines=d.lines||[];
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:11px;color:var(--text);line-height:1.5">'+_esc(logLines.join('\\n'))+'</pre>';

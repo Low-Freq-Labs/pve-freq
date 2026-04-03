@@ -864,12 +864,8 @@ def handle_watchdog_health(handler):
         req = urllib.request.Request(target_url, method=handler.command)
         req.add_header("Accept", "application/json")
         with urllib.request.urlopen(req, timeout=10) as resp:
-            body = resp.read()
-            handler.send_response(resp.status)
-            handler.send_header("Content-Type", "application/json")
-            handler.send_header("Access-Control-Allow-Origin", "*")
-            handler.end_headers()
-            handler.wfile.write(body)
+            data = json.loads(resp.read().decode())
+            json_response(handler, data, resp.status)
     except urllib.error.URLError:
         json_response(handler, {"error": f"WATCHDOG daemon not reachable at localhost:{wd_port}", "watchdog_down": True})
     except Exception as e:

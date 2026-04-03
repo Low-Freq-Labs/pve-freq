@@ -251,7 +251,7 @@ def handle_metrics_prometheus(handler):
     body = "\n".join(lines) + "\n"
     handler.send_response(200)
     handler.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("X-Content-Type-Options", "nosniff")
     handler.end_headers()
     handler.wfile.write(body.encode())
 
