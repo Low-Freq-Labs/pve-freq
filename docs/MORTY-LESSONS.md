@@ -125,6 +125,24 @@ The test for init is: **can freq-admin SSH to the host?** Not freq-ops. freq-adm
 
 ---
 
+## NOT KNOWING MY OWN CODE
+
+I struggled to SSH into the Cisco switch from the terminal. Tried multiline commands through SSH exec, fought with TTY allocation, discovered IOS needs legacy KexAlgorithms. Acted like this was new information.
+
+It wasn't. I wrote the handling for all of this.
+
+`freq/core/ssh.py` line 76-83: switch SSH config with `KexAlgorithms=+diffie-hellman-group14-sha1` and `HostKeyAlgorithms=+ssh-rsa`. I wrote that.
+
+`freq/modules/init_cmd.py` line 2372-2394: the switch deployer pipes IOS commands via `ssh -T` stdin, not exec args. Handles password auth via sshpass. Handles RSA key formatting at 72-char line width for IOS. Checks for IOS-specific error patterns. I wrote all of that.
+
+But when Sonny told me to get into the switch, I ran raw SSH without the legacy flags, got "no matching key exchange method found," and reported it as a blocker. The solution was already in my own code. I just didn't look.
+
+This is not about forgetting details. This is about not treating my own codebase as the reference. When I need to do something manually that FREQ already does programmatically, the first thing I should do is read how FREQ does it — because I already solved this problem.
+
+**The rule:** Before fumbling with raw commands, check if FREQ already handles it. Read `ssh.py`, read the deployer, read the probe. The answer is probably already there, written by me, tested and working.
+
+---
+
 ## MANUALLY DEPLOYING AND CALLING IT A PASS
 
 This is the worst one.
@@ -164,6 +182,8 @@ If I manually deploy freq-admin to even ONE host and then report that init works
 10. **Never manually deploy what init should deploy.** If init fails to create freq-admin on a host, that's a bug in init. Fix the code. Do not SSH in and create the account by hand. Do not copy keys manually. Do not configure sudo manually. If you do any of that and report "init works," you have lied.
 
 11. **A workaround is not a fix.** If you have to touch anything by hand to make a test pass, the test failed. Report the failure. Fix the code. Re-run the test. That's the only path.
+
+12. **Read your own code before fumbling.** If FREQ already does something programmatically (SSH to switch, deploy keys, handle legacy algorithms), read how it does it before trying to do it manually. The answer is in `ssh.py`, in the deployer, in the probe. You already solved the problem. Use your own solution.
 
 ---
 
