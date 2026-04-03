@@ -119,12 +119,12 @@ jobs:
 
       - name: Lint
         shell: sh
-        run: pip3 install ruff && ruff check freq/ --exit-zero
+        run: pip3 install --break-system-packages ruff 2>/dev/null || pip3 install ruff && ruff check freq/ --exit-zero
 
       - name: Run tests with coverage
         shell: sh
         run: |
-          pip3 install pytest-cov
+          pip3 install --break-system-packages pytest-cov 2>/dev/null || pip3 install pytest-cov
           python3 -m pytest tests/ -v --tb=short --cov=freq --cov-report=term-missing --cov-fail-under=20
         env:
           FREQ_DIR: ${{ github.workspace }}
