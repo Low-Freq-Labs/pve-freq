@@ -1509,6 +1509,15 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/notify/test": "_serve_notify_test",
         "/api/doctor": "_serve_doctor",
         "/api/deploy/log": "_serve_deploy_log",
+        "/api/watch/start": "_serve_watch_start",
+        "/api/watch/stop": "_serve_watch_stop",
+        "/api/dns/lookup": "_serve_dns_lookup",
+        "/api/net/portscan": "_serve_portscan",
+        "/api/backup/schedules": "_serve_backup_schedules",
+        "/api/containers/action": "_serve_container_action",
+        "/api/containers/logs": "_serve_container_logs",
+        "/api/fleet/connectivity": "_serve_fleet_connectivity",
+        "/api/host/diagnostic": "_serve_host_diagnostic",
         # ── Agent lifecycle (stays in serve.py) ───────────────────────
         "/api/agent/create": "_serve_agent_create",
         "/api/agent/destroy": "_serve_agent_destroy",
@@ -6728,6 +6737,161 @@ a:hover{{text-decoration:underline}}
             self._json_response({"ok": result == 0, "output": buf.getvalue(), "exit_code": result})
         except Exception as e:
             self._json_response({"error": f"Doctor failed: {e}"}, 500)
+
+    def _serve_watch_start(self):
+        """Start the FREQ watch daemon."""
+        try:
+            rc, out, _ = subprocess.Popen(["freq", "watch", "start"], capture_output=True, text=True, timeout=10).communicate()
+            self._json_response({"ok": True, "output": out})
+        except Exception as e:
+            self._json_response({"error": str(e)})
+
+    def _serve_watch_stop(self):
+        """Stop the FREQ watch daemon."""
+        try:
+            rc, out, _ = subprocess.Popen(["freq", "watch", "stop"], capture_output=True, text=True, timeout=10).communicate()
+            self._json_response({"ok": True, "output": out})
+        except Exception as e:
+            self._json_response({"error": str(e)})
+
+    def _serve_dns_lookup(self):
+        """Resolve a hostname."""
+        query = _parse_query(self)
+        host = query.get("host", [""])[0]
+        if not host:
+            self._json_response({"error": "host required"}); return
+        import re as _re
+        if not _re.match(r'^[a-zA-Z0-9._-]+$', host):
+            self._json_response({"error": "Invalid hostname"}); return
+        try:
+            import socket
+            results = socket.getaddrinfo(host, None)
+            ips = sorted(set(r[4][0] for r in results))
+            self._json_response({"host": host, "ips": ips, "count": len(ips)})
+        except socket.gaierror:
+            self._json_response({"host": host, "ips": [], "error": "DNS resolution failed"})
+
+    def _serve_portscan(self):
+        """Scan ports on a host."""
+        query = _parse_query(self)
+        host = query.get("host", [""])[0]
+        ports_str = query.get("ports", [""])[0]
+        if not host or not ports_str:
+            self._json_response({"error": "host and ports required"}); return
+        import re as _re, socket
+        if not _re.match(r'^[a-zA-Z0-9._-]+$', host):
+            self._json_response({"error": "Invalid hostname"}); return
+        results = []
+        for p in ports_str.split(","):
+            try:
+                port = int(p.strip())
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(2)
+                ok = s.connect_ex((host, port)) == 0
+                s.close()
+                results.append({"port": port, "open": ok})
+            except (ValueError, OSError):
+                results.append({"port": p.strip(), "open": False, "error": "invalid"})
+        self._json_response({"host": host, "results": results})
+
+    def _serve_backup_schedules(self):
+        """List PVE backup schedules from cluster jobs config."""
+        cfg = load_config()
+        node_ip = _find_reachable_pve_node(cfg)
+        if not node_ip:
+            self._json_response({"schedules": [], "error": "No PVE node reachable"}); return
+        from freq.core.ssh import run_single as ssh_single
+        r = ssh_single(host=node_ip,
+            command="cat /etc/pve/jobs.cfg 2>/dev/null || echo ''",
+            key_path=cfg.ssh_key_path, connect_timeout=3, command_timeout=10,
+            htype="pve", use_sudo=True, cfg=cfg)
+        self._json_response({"raw": r.stdout if r and r.returncode == 0 else "", "ok": r is not None and r.returncode == 0})
+
+    def _serve_container_action(self):
+        """Restart/stop/start a container on a Docker host."""
+        cfg = load_config()
+        query = _parse_query(self)
+        host = query.get("host", [""])[0]
+        name = query.get("name", [""])[0]
+        action = query.get("action", ["restart"])[0]
+        if not host or not name:
+            self._json_response({"error": "host and name required"}); return
+        if action not in ("restart", "stop", "start"):
+            self._json_response({"error": "action must be restart, stop, or start"}); return
+        import re as _re
+        if not _re.match(r'^[a-zA-Z0-9._-]+$', name):
+            self._json_response({"error": "Invalid container name"}); return
+        from freq.core.ssh import run_single as ssh_single
+        from freq.core.resolve import by_target
+        h = by_target(cfg.hosts, host)
+        if not h:
+            self._json_response({"error": f"Host not found: {host}"}); return
+        r = ssh_single(host=h.ip,
+            command=f"docker {action} {name} 2>&1",
+            key_path=cfg.ssh_key_path, connect_timeout=5, command_timeout=30,
+            htype=h.htype, use_sudo=False, cfg=cfg)
+        self._json_response({"ok": r.returncode == 0, "output": r.stdout.strip() if r else "", "action": action, "container": name, "host": host})
+
+    def _serve_container_logs(self):
+        """Get logs from a container on a Docker host."""
+        cfg = load_config()
+        query = _parse_query(self)
+        host = query.get("host", [""])[0]
+        name = query.get("name", [""])[0]
+        lines = min(int(query.get("lines", ["50"])[0]), 200)
+        if not host or not name:
+            self._json_response({"error": "host and name required"}); return
+        import re as _re
+        if not _re.match(r'^[a-zA-Z0-9._-]+$', name):
+            self._json_response({"error": "Invalid container name"}); return
+        from freq.core.ssh import run_single as ssh_single
+        from freq.core.resolve import by_target
+        h = by_target(cfg.hosts, host)
+        if not h:
+            self._json_response({"error": f"Host not found: {host}"}); return
+        r = ssh_single(host=h.ip,
+            command=f"docker logs --tail {lines} {name} 2>&1",
+            key_path=cfg.ssh_key_path, connect_timeout=5, command_timeout=15,
+            htype=h.htype, use_sudo=False, cfg=cfg)
+        self._json_response({"output": r.stdout if r else "", "container": name, "host": host, "lines": lines})
+
+    def _serve_fleet_connectivity(self):
+        """Check SSH connectivity to all fleet hosts."""
+        cfg = load_config()
+        from freq.core.ssh import run_many as ssh_run_many
+        results = ssh_run_many(
+            hosts=cfg.hosts, command="whoami",
+            key_path=cfg.ssh_key_path, connect_timeout=3, command_timeout=5,
+            max_parallel=cfg.ssh_max_parallel, use_sudo=False, cfg=cfg)
+        hosts = []
+        for h in cfg.hosts:
+            r = results.get(h.label)
+            hosts.append({"label": h.label, "ip": h.ip, "reachable": r is not None and r.returncode == 0,
+                          "user": r.stdout.strip() if r and r.returncode == 0 else ""})
+        self._json_response({"hosts": hosts, "total": len(hosts), "reachable": sum(1 for h in hosts if h["reachable"])})
+
+    def _serve_host_diagnostic(self):
+        """Full system diagnostic for a single host."""
+        cfg = load_config()
+        query = _parse_query(self)
+        target = query.get("target", [""])[0]
+        if not target:
+            self._json_response({"error": "target required"}); return
+        from freq.core.ssh import run_single as ssh_single
+        from freq.core.resolve import by_target
+        h = by_target(cfg.hosts, target)
+        if not h:
+            self._json_response({"error": f"Host not found: {target}"}); return
+        cmd = ('echo "=== SYSTEM ===" && hostname -f && cat /etc/os-release 2>/dev/null | grep PRETTY && uname -r '
+               '&& echo "=== RESOURCES ===" && nproc && free -h | head -2 && df -h / && cat /proc/loadavg '
+               '&& echo "=== NETWORK ===" && ip -4 addr show | grep inet | grep -v 127 && ip route show default '
+               '&& echo "=== DOCKER ===" && docker ps --format "{{.Names}}: {{.Status}}" 2>/dev/null || echo "not installed" '
+               '&& echo "=== SECURITY ===" && systemctl --failed --no-legend 2>/dev/null | head -5 || echo "ok" '
+               '&& echo "=== LISTENING ===" && ss -tlnp 2>/dev/null | grep LISTEN | head -10')
+        r = ssh_single(host=h.ip, command=cmd,
+            key_path=cfg.ssh_key_path, connect_timeout=5, command_timeout=15,
+            htype=h.htype, use_sudo=True, cfg=cfg)
+        self._json_response({"host": target, "output": r.stdout if r else "", "ok": r is not None and r.returncode == 0})
 
     def _serve_diagnose(self):
         """Run deep diagnostic for a specific host."""

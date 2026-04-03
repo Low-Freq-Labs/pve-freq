@@ -3111,22 +3111,22 @@ function switchMonitoring(tab){
 function monRunDoctor(){
   var out=document.getElementById('mon-doc-out');if(!out)return;
   out.style.display='block';out.textContent='Running diagnostics...';
-  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq doctor 2>&1 || echo "doctor not available"')).then(function(r){return r.json()}).then(function(d){
-    var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
+  _authFetch('/api/doctor').then(function(r){return r.json()}).then(function(d){
+    var txt=d.output||d.error||'';
     out.textContent=txt||'(no output)';
   }).catch(function(){out.textContent='Failed to run doctor';});
 }
 function monWatchStart(){
   var out=document.getElementById('mon-w-out');if(out)out.textContent='Starting watch daemon...';
-  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq watch start 2>&1 || echo "watch not available"')).then(function(r){return r.json()}).then(function(d){
-    var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
+  _authFetch('/api/watch/start').then(function(r){return r.json()}).then(function(d){
+    var txt=d.output||d.error||'';
     if(out)out.textContent=txt||'Watch started.';
   });
 }
 function monWatchStop(){
   var out=document.getElementById('mon-w-out');if(out)out.textContent='Stopping watch daemon...';
-  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('freq watch stop 2>&1 || echo "watch not available"')).then(function(r){return r.json()}).then(function(d){
-    var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
+  _authFetch('/api/watch/stop').then(function(r){return r.json()}).then(function(d){
+    var txt=d.output||d.error||'';
     if(out)out.textContent=txt||'Watch stopped.';
   });
 }
@@ -3167,8 +3167,8 @@ function switchNetwork(tab){
 function netDnsCheck(){
   var host=(document.getElementById('net-dns-host')||{}).value.trim();if(!host){toast('Enter a hostname','error');return;}
   var out=document.getElementById('net-dns-out');if(out){out.style.display='block';out.textContent='Resolving '+host+'...';}
-  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('dig +short '+host+' 2>&1 || nslookup '+host+' 2>&1')).then(function(r){return r.json()}).then(function(d){
-    var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
+  _authFetch('/api/dns/lookup?host='+encodeURIComponent(host)).then(function(r){return r.json()}).then(function(d){
+    var txt=d.ips?d.ips.join('\n'):(d.error||'No results');
     if(out)out.textContent=txt||'(no results)';
   });
 }
@@ -3188,9 +3188,8 @@ function netPortScan(){
   var ports=(document.getElementById('net-port-ports')||{}).value.trim();
   if(!host){toast('Enter a target host','error');return;}
   var out=document.getElementById('net-port-out');if(out){out.style.display='block';out.textContent='Scanning '+host+'...';}
-  var cmd='for p in '+ports.replace(/,/g,' ')+'; do (echo >/dev/tcp/'+host+'/$p) 2>/dev/null && echo "PORT $p OPEN" || echo "PORT $p CLOSED"; done';
-  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
-    var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
+  _authFetch('/api/net/portscan?host='+encodeURIComponent(host)+'&ports='+encodeURIComponent(ports)).then(function(r){return r.json()}).then(function(d){
+    var txt='';if(d.results)d.results.forEach(function(r){txt+='PORT '+r.port+' '+(r.open?'OPEN':'CLOSED')+'\n';});
     if(out)out.textContent=txt||'(no results)';
   });
 }
@@ -3255,8 +3254,8 @@ function switchBackup(tab){
 }
 function bkCheckSchedules(){
   var out=document.getElementById('bk-sched-out');if(out){out.style.display='block';out.textContent='Checking schedules...';}
-  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('cat /etc/pve/jobs.cfg 2>/dev/null || echo "No backup schedules found"')).then(function(r){return r.json()}).then(function(d){
-    var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
+  _authFetch('/api/backup/schedules').then(function(r){return r.json()}).then(function(d){
+    var txt=d.raw||d.error||'No backup schedules found';
     if(out)out.textContent=txt||'(no schedules)';
   });
 }
@@ -3274,8 +3273,8 @@ function bkTakeSnap(){
 function bkListSnaps(){
   var vmid=(document.getElementById('bk-snap-vm')||{}).value;if(!vmid){toast('Select a VM','error');return;}
   var out=document.getElementById('bk-snap-out');if(out)out.innerHTML='<div class="skeleton"></div>';
-  _authFetch(API.EXEC+'?target=localhost&cmd='+encodeURIComponent('sudo qm listsnapshot '+vmid+' 2>&1')).then(function(r){return r.json()}).then(function(d){
-    var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
+  _authFetch('/api/vm/snapshots?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+    var txt=d.snapshots?d.snapshots.join('\n')+(d.live_migration?'\n\nLive migration: ELIGIBLE':'\\n\\nLive migration: BLOCKED'):'No snapshots';
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--text);white-space:pre-wrap;margin:0">'+(txt||'No snapshots')+'</pre>';
   });
 }
@@ -3325,8 +3324,8 @@ function labDockerAction(name,action){
 function _labDockerRun(name,action){
   var out=document.getElementById('ft-lab-out');
   if(out)out.innerHTML='<div class="c-yellow">'+action.toUpperCase()+' '+name+'...</div>';
-  _authFetch(API.EXEC+'?target=docker-dev&cmd='+encodeURIComponent('docker '+action+' '+name)).then(function(r){return r.json()}).then(function(d){
-    var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
+  _authFetch('/api/containers/action?host=docker-dev&name='+encodeURIComponent(name)+'&action='+encodeURIComponent(action)).then(function(r){return r.json()}).then(function(d){
+    var txt=d.output||d.error||'';
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--green);white-space:pre-wrap;margin:0">'+name+': '+(txt||action+' OK')+'</pre>';
     toast(name+' '+action+' complete','success');
   });
@@ -3404,7 +3403,7 @@ function unlockVault(){
   if(!user||!pass){toast('Enter admin credentials','error');return;}
   /* Verify credentials by attempting SSH auth to localhost */
   toast('Verifying credentials...','info');
-  _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent('whoami')).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/fleet/connectivity').then(function(r){return r.json()}).then(function(d){
     /* Check if the user is an admin in FREQ */
     _authFetch(API.USERS).then(function(r){return r.json()}).then(function(ud){
       var isAdmin=ud.users.some(function(u){return u.username===user&&u.role==='admin';});
@@ -4262,9 +4261,8 @@ function runSysInfo(){
   });
 }
 function runBackup(){
-  _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent('echo ok')).then(function(r){return r.json()}).then(function(d){
-    var reachable=d.results.filter(function(r){return r.ok}).length;
-    document.getElementById('backup-c').innerHTML='<div class="crd"><h3>Config Export</h3><p>Fleet snapshot: '+reachable+'/'+d.results.length+' hosts reachable</p><p class="text-dim mt-sm">Run from CLI: <code class="c-purple">freq backup export</code></p></div>';
+  _authFetch('/api/fleet/connectivity').then(function(r){return r.json()}).then(function(d){
+    document.getElementById('backup-c').innerHTML='<div class="crd"><h3>Config Export</h3><p>Fleet snapshot: '+d.reachable+'/'+d.total+' hosts reachable</p><p class="text-dim mt-sm">Run from CLI: <code class="c-purple">freq backup export</code></p></div>';
     toast('Backup snapshot complete','success');
   });
 }
@@ -4845,15 +4843,15 @@ function renderHostCard(config){
 function hdDockerRestart(name){
   if(!confirm('Restart container: '+name+'?'))return;
   var host=_cardState.host;
-  _authFetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent('docker restart '+name))
-    .then(function(r){return r.json()}).then(function(d){var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}toast(txt||'Restarted '+name,'success');}).catch(function(e){toast('Error: '+e,'error');});
+  _authFetch('/api/containers/action?host='+encodeURIComponent(host)+'&name='+encodeURIComponent(name)+'&action=restart')
+    .then(function(r){return r.json()}).then(function(d){toast(d.ok?'Restarted '+name:(d.error||'Failed'),'success');}).catch(function(e){toast('Error: '+e,'error');});
 }
 function hdDockerLogs(name){
   var host=_cardState.host;
   var panel=document.getElementById('hd-tool-panel');if(panel)panel.style.display='block';
   var out=document.getElementById('hd-exec-out');if(out)out.textContent='Loading logs for '+name+'...';
-  _authFetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent('docker logs --tail 50 '+name+' 2>&1'))
-    .then(function(r){return r.json()}).then(function(d){var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}if(out)out.textContent=txt||'(no output)';}).catch(function(e){if(out)out.textContent='Error: '+e;});
+  _authFetch('/api/containers/logs?host='+encodeURIComponent(host)+'&name='+encodeURIComponent(name))
+    .then(function(r){return r.json()}).then(function(d){if(out)out.textContent=d.output||'(no output)';}).catch(function(e){if(out)out.textContent='Error: '+e;});
 }
 
 /* ── VM Card helpers ── */
@@ -5126,15 +5124,15 @@ function hdExec(btn){_hdBtn(btn);document.getElementById('hd-tool-panel').style.
 function hdLogs(btn){
   _hdBtn(btn);document.getElementById('hd-tool-panel').style.display='block';
   document.getElementById('hd-exec-out').textContent='Loading logs for '+_cardState.host+'...';
-  _authFetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent('journalctl --no-pager -n 50 --output=short-iso 2>/dev/null || tail -50 /var/log/syslog 2>/dev/null')).then(function(r){return r.json()}).then(function(d){
-    var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}document.getElementById('hd-exec-out').textContent=txt||'No logs available.';
+  _authFetch(API.LOG+'?target='+encodeURIComponent(_cardState.host)+'&lines=50').then(function(r){return r.json()}).then(function(d){
+    var txt=d.lines?d.lines.join('\n'):(d.error||'No logs available.');document.getElementById('hd-exec-out').textContent=txt;
   }).catch(function(e){document.getElementById('hd-exec-out').textContent='Error: '+e;});
 }
 function hdDiagnose(btn){
   _hdBtn(btn);document.getElementById('hd-tool-panel').style.display='block';
   document.getElementById('hd-exec-out').textContent='Running full diagnostic on '+_cardState.host+'...';
-  _authFetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent('echo "=== SYSTEM ===" && hostname -f && cat /etc/os-release 2>/dev/null | grep PRETTY && uname -r && echo "=== RESOURCES ===" && nproc && free -h | head -2 && df -h / && cat /proc/loadavg && echo "=== NETWORK ===" && ip -4 addr show | grep inet | grep -v 127 && ip route show default && echo "=== DOCKER ===" && docker ps --format "{{.Names}}: {{.Status}}" 2>/dev/null || echo "not installed" && echo "=== SECURITY ===" && systemctl --failed --no-legend 2>/dev/null | head -5 || echo "ok" && echo "=== LISTENING ===" && ss -tlnp 2>/dev/null | grep LISTEN | head -10')).then(function(r){return r.json()}).then(function(d){
-    var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}document.getElementById('hd-exec-out').textContent=txt||'No output.';
+  _authFetch('/api/host/diagnostic?target='+encodeURIComponent(_cardState.host)).then(function(r){return r.json()}).then(function(d){
+    document.getElementById('hd-exec-out').textContent=d.output||d.error||'No output.';
   }).catch(function(e){document.getElementById('hd-exec-out').textContent='Error: '+e;});
 }
 function hdRestart(){
