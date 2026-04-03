@@ -8,10 +8,9 @@ Where: Routes registered at /api/pfsense/*.
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
-import json
 import re
 
-from freq.api.helpers import json_response, get_json_body, get_param
+from freq.api.helpers import json_response, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import _check_session_role
@@ -100,6 +99,10 @@ def handle_pfsense_service(handler):
 _SAFE_MAC = re.compile(r'^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$')
 _SAFE_IP = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
 _SAFE_HOSTNAME = re.compile(r'^[a-zA-Z0-9_\-]{1,64}$')
+_SAFE_IFACE = re.compile(r'^[a-zA-Z0-9_]{1,16}$')
+_SAFE_CIDR = re.compile(r'^[0-9a-fA-F.:/ ]+$')
+_SAFE_TEXT = re.compile(r'^[a-zA-Z0-9 _\-.:,/()]{0,128}$')
+_SAFE_WG_KEY = re.compile(r'^[A-Za-z0-9+/=]{43,44}$')
 
 
 def handle_pfsense_dhcp_reservation(handler):
@@ -115,6 +118,9 @@ def handle_pfsense_dhcp_reservation(handler):
     body = get_json_body(handler)
     action = body.get("action", "list")
     iface = body.get("interface", "lan").strip().lower()
+
+    if not _SAFE_IFACE.match(iface):
+        json_response(handler, {"error": "Invalid interface name"}, 400); return
 
     if action == "list":
         # Parse config.xml for static mappings
@@ -144,6 +150,8 @@ def handle_pfsense_dhcp_reservation(handler):
             json_response(handler, {"error": "Invalid IP address"}, 400); return
         if hostname and not _SAFE_HOSTNAME.match(hostname):
             json_response(handler, {"error": "Invalid hostname"}, 400); return
+        if description and not _SAFE_TEXT.match(description):
+            json_response(handler, {"error": "Invalid description (alphanumeric + basic punctuation only)"}, 400); return
 
         # Use PHP helper to add static mapping via pfSense's config system
         php_cmd = (
@@ -341,10 +349,17 @@ def handle_pfsense_rules(handler):
         if proto not in ("tcp", "udp", "icmp", "any"):
             json_response(handler, {"error": "proto must be tcp, udp, icmp, or any"}, 400); return
 
-        # Sanitize inputs
-        for val in (src, dst, dst_port, interface, description):
-            if "'" in str(val) or '"' in str(val) or ";" in str(val):
-                json_response(handler, {"error": "Invalid characters in input"}, 400); return
+        # Validate all inputs against safe patterns (prevent shell/PHP injection)
+        if not _SAFE_IFACE.match(interface):
+            json_response(handler, {"error": "Invalid interface name"}, 400); return
+        if src != "any" and not _SAFE_CIDR.match(src):
+            json_response(handler, {"error": "Invalid source (use 'any' or CIDR)"}, 400); return
+        if dst != "any" and not _SAFE_CIDR.match(dst):
+            json_response(handler, {"error": "Invalid destination (use 'any' or CIDR)"}, 400); return
+        if dst_port and not re.match(r'^\d{1,5}$', dst_port):
+            json_response(handler, {"error": "Invalid port number"}, 400); return
+        if not _SAFE_TEXT.match(description):
+            json_response(handler, {"error": "Invalid description"}, 400); return
 
         port_part = ""
         if dst_port and proto in ("tcp", "udp"):
@@ -453,9 +468,14 @@ def handle_pfsense_nat(handler):
             json_response(handler, {"error": "src_port, dst_ip, dst_port required"}, 400); return
         if not _SAFE_IP.match(dst_ip):
             json_response(handler, {"error": "Invalid dst_ip"}, 400); return
-        for val in (src_port, dst_port, interface, description):
-            if "'" in str(val) or '"' in str(val) or ";" in str(val):
-                json_response(handler, {"error": "Invalid characters in input"}, 400); return
+        if not _SAFE_IFACE.match(interface):
+            json_response(handler, {"error": "Invalid interface name"}, 400); return
+        if not re.match(r'^\d{1,5}$', src_port):
+            json_response(handler, {"error": "Invalid source port"}, 400); return
+        if not re.match(r'^\d{1,5}$', dst_port):
+            json_response(handler, {"error": "Invalid destination port"}, 400); return
+        if not _SAFE_TEXT.match(description):
+            json_response(handler, {"error": "Invalid description"}, 400); return
 
         php_cmd = (
             f"php -r \""
@@ -540,6 +560,9 @@ def handle_pfsense_wg_peer(handler):
     action = body.get("action", "list")
     iface = body.get("interface", "wg0").strip()
 
+    if not _SAFE_IFACE.match(iface):
+        json_response(handler, {"error": "Invalid interface name"}, 400); return
+
     if action == "list":
         cmd = f"wg show {iface} 2>/dev/null || wg show 2>/dev/null || echo 'No WireGuard tunnels'"
         r = _pf_ssh(cfg, cmd)
@@ -554,11 +577,14 @@ def handle_pfsense_wg_peer(handler):
 
         if not pubkey:
             json_response(handler, {"error": "public_key required"}, 400); return
-        if not allowed_ips:
+        if not allowed_ips or not _SAFE_CIDR.match(allowed_ips):
             json_response(handler, {"error": "allowed_ips required (e.g. 10.25.100.5/32)"}, 400); return
-        # Validate key is base64-ish
-        if not re.match(r'^[A-Za-z0-9+/=]{43,44}$', pubkey):
+        if not _SAFE_WG_KEY.match(pubkey):
             json_response(handler, {"error": "Invalid public key format"}, 400); return
+        if endpoint and not re.match(r'^[0-9a-fA-F.:]+:\d{1,5}$', endpoint):
+            json_response(handler, {"error": "Invalid endpoint (format: ip:port)"}, 400); return
+        if psk and not _SAFE_WG_KEY.match(psk):
+            json_response(handler, {"error": "Invalid preshared key format"}, 400); return
 
         cmd = f"wg set {iface} peer {pubkey} allowed-ips {allowed_ips}"
         if endpoint:
@@ -579,8 +605,8 @@ def handle_pfsense_wg_peer(handler):
 
     if action == "remove":
         pubkey = body.get("public_key", "").strip()
-        if not pubkey:
-            json_response(handler, {"error": "public_key required"}, 400); return
+        if not pubkey or not _SAFE_WG_KEY.match(pubkey):
+            json_response(handler, {"error": "Valid public_key required"}, 400); return
 
         cmd = f"wg set {iface} peer {pubkey} remove"
         r = _pf_ssh(cfg, cmd, timeout=10)

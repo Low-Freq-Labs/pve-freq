@@ -269,14 +269,6 @@ def delete_vlan(ip, cfg, vlan_id):
     return ok
 
 
-def rename_vlan(ip, cfg, vlan_id, new_name):
-    """Rename a VLAN. Returns True on success."""
-    ok = push_config(ip, cfg, [f"vlan {vlan_id}", f"name {new_name}"])
-    if ok:
-        save_config(ip, cfg)
-    return ok
-
-
 # ---------------------------------------------------------------------------
 # ACL Management
 # ---------------------------------------------------------------------------
@@ -335,18 +327,6 @@ def remove_acl_from_interface(ip, cfg, port, acl_name, direction="in"):
 # ---------------------------------------------------------------------------
 # Config Rollback
 # ---------------------------------------------------------------------------
-
-def rollback_config(ip, cfg, backup_text):
-    """Push a full config by piping it through configure replace.
-
-    For simpler rollback, use push_config with specific lines.
-    WARNING: This replaces the entire running config.
-    """
-    # For IOS, we can't pipe arbitrary configs safely via SSH.
-    # Instead, push specific config lines. For full rollback,
-    # the config management module handles backup/restore.
-    return False
-
 
 def _parse_acls(text):
     """Parse 'show access-lists' output."""

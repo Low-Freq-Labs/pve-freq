@@ -8,9 +8,8 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
 import json
-import time
 
-from freq.api.helpers import json_response, get_params, get_cfg
+from freq.api.helpers import json_response
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import (
@@ -45,7 +44,10 @@ def handle_idrac(handler):
 
     if target:
         matched = {k: v for k, v in targets.items() if target.lower() in k.lower()}
-        idrac_ips = matched if matched else targets
+        if not matched:
+            json_response(handler, {"error": f"No iDRAC matching '{target}'"}, 404)
+            return
+        idrac_ips = matched
     else:
         idrac_ips = targets
 
@@ -243,8 +245,11 @@ def handle_gwipe(handler):
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}); return
+    import re
     query = _parse_query(handler)
     action = query.get("action", ["status"])[0]
+    if not re.match(r'^[a-zA-Z0-9_\-]{1,32}$', action):
+        json_response(handler, {"error": "Invalid action"}, 400); return
     try:
         host = vault_get(cfg, "gwipe", "gwipe_host") or ""
         key = vault_get(cfg, "gwipe", "gwipe_api_key") or ""

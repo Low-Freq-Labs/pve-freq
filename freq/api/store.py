@@ -10,7 +10,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 
 import re
 
-from freq.api.helpers import json_response, get_cfg, get_json_body, get_param
+from freq.api.helpers import json_response, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_run_fn
 from freq.modules.serve import _check_session_role
@@ -269,7 +269,7 @@ def handle_truenas_reboot(handler):
     if not body.get("confirm"):
         json_response(handler, {"error": "Must set confirm: true"}, 400); return
 
-    r = _truenas_ssh(cfg, "reboot", timeout=5)
+    _truenas_ssh(cfg, "reboot", timeout=5)
     json_response(handler, {"ok": True, "message": "Reboot command sent"})
 
 
@@ -296,6 +296,8 @@ def handle_truenas_dataset(handler):
 
     if action == "list":
         pool = dataset or ""
+        if pool and not _SAFE_ZFS_NAME.match(pool):
+            json_response(handler, {"error": "Invalid pool/dataset name"}, 400); return
         cmd = f"zfs list -r -o name,used,avail,refer,mountpoint,compression,quota {pool} 2>/dev/null"
         r = _truenas_ssh(cfg, cmd)
         json_response(handler, {
@@ -339,6 +341,9 @@ def handle_truenas_dataset(handler):
         for k, v in props.items():
             if not _SAFE_ZFS_NAME.match(k):
                 results.append({"property": k, "ok": False, "error": "Invalid property name"})
+                continue
+            if not _SAFE_ZFS_NAME.match(str(v)):
+                results.append({"property": k, "ok": False, "error": "Invalid property value"})
                 continue
             cmd = f"zfs set {k}={v} {dataset}"
             r = _truenas_ssh(cfg, cmd, timeout=10)
@@ -416,6 +421,10 @@ def handle_truenas_share(handler):
         share_id = body.get("id")
         if share_id is None:
             json_response(handler, {"error": "id required for delete"}, 400); return
+        try:
+            share_id = int(share_id)
+        except (ValueError, TypeError):
+            json_response(handler, {"error": "id must be integer"}, 400); return
         cmd = f"midclt call sharing.{share_type}.delete {share_id}"
         r = _truenas_ssh(cfg, cmd, timeout=15)
         json_response(handler, {
@@ -461,6 +470,10 @@ def handle_truenas_replication(handler):
         task_id = body.get("id")
         if task_id is None:
             json_response(handler, {"error": "id required"}, 400); return
+        try:
+            task_id = int(task_id)
+        except (ValueError, TypeError):
+            json_response(handler, {"error": "id must be integer"}, 400); return
         cmd = f"midclt call replication.run {task_id}"
         r = _truenas_ssh(cfg, cmd, timeout=30)
         json_response(handler, {
@@ -509,7 +522,10 @@ def handle_truenas_app(handler):
         json_response(handler, {"error": "Invalid characters"}, 400); return
 
     if action == "start":
-        replicas = body.get("replicas", 1)
+        try:
+            replicas = int(body.get("replicas", 1))
+        except (ValueError, TypeError):
+            replicas = 1
         cmd = f"midclt call chart.release.scale '{name}' '{{\"replica_count\":{replicas}}}' 2>/dev/null || midclt call app.start '{name}' 2>/dev/null"
         r = _truenas_ssh(cfg, cmd, timeout=30)
         json_response(handler, {

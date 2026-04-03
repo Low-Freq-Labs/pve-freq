@@ -407,6 +407,11 @@ def handle_switch_acl(handler):
         entries = body.get("entries", [])
         if not entries or not isinstance(entries, list):
             json_response(handler, {"error": "entries required (list of ACL rules)"}, 400); return
+        # Validate each ACL entry — must start with permit/deny, no IOS escape sequences
+        _ACL_LINE = re.compile(r'^(permit|deny)\s+[a-zA-Z0-9 .:_/\-]+$')
+        for entry in entries:
+            if not isinstance(entry, str) or not _ACL_LINE.match(entry.strip()):
+                json_response(handler, {"error": f"Invalid ACL entry: {entry!r}. Must start with 'permit' or 'deny'."}, 400); return
         ok = deployer.create_acl(ip, cfg, acl_name, entries)
         json_response(handler, {"ok": ok, "host": label, "name": acl_name})
 
@@ -417,16 +422,20 @@ def handle_switch_acl(handler):
     elif action == "apply":
         port = body.get("port", "")
         direction = body.get("direction", "in")
-        if not port:
-            json_response(handler, {"error": "port required"}, 400); return
+        if not port or not re.match(r'^[a-zA-Z0-9/\-]{1,40}$', port):
+            json_response(handler, {"error": "Valid port name required (e.g. GigabitEthernet1/0/1)"}, 400); return
+        if direction not in ("in", "out"):
+            json_response(handler, {"error": "direction must be in or out"}, 400); return
         ok = deployer.apply_acl_to_interface(ip, cfg, port, acl_name, direction)
         json_response(handler, {"ok": ok, "host": label, "port": port, "acl": acl_name})
 
     elif action == "remove":
         port = body.get("port", "")
         direction = body.get("direction", "in")
-        if not port:
-            json_response(handler, {"error": "port required"}, 400); return
+        if not port or not re.match(r'^[a-zA-Z0-9/\-]{1,40}$', port):
+            json_response(handler, {"error": "Valid port name required"}, 400); return
+        if direction not in ("in", "out"):
+            json_response(handler, {"error": "direction must be in or out"}, 400); return
         ok = deployer.remove_acl_from_interface(ip, cfg, port, acl_name, direction)
         json_response(handler, {"ok": ok, "host": label, "port": port, "acl": acl_name})
 
