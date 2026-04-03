@@ -24,13 +24,16 @@ class TestPhase7Registration(unittest.TestCase):
                 self.registered.update(action.choices.keys())
 
     def test_map_registered(self):
-        self.assertIn("map", self.registered)
+        """map is under 'net' domain."""
+        self.assertIn("net", self.registered)
 
     def test_netmon_registered(self):
-        self.assertIn("netmon", self.registered)
+        """netmon is under 'net' domain."""
+        self.assertIn("net", self.registered)
 
     def test_cost_analysis_registered(self):
-        self.assertIn("cost-analysis", self.registered)
+        """cost-analysis is under 'hw' domain."""
+        self.assertIn("hw", self.registered)
 
 
 class TestPhase7Parsing(unittest.TestCase):
@@ -39,45 +42,45 @@ class TestPhase7Parsing(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_map_default(self):
-        args = self.parser.parse_args(["map"])
+        args = self.parser.parse_args(["net", "map"])
         self.assertEqual(args.action, "discover")
         self.assertTrue(hasattr(args, "func"))
 
     def test_map_impact(self):
-        args = self.parser.parse_args(["map", "impact", "db-01"])
+        args = self.parser.parse_args(["net", "map", "impact", "db-01"])
         self.assertEqual(args.action, "impact")
         self.assertEqual(args.target, "db-01")
 
     def test_map_export_dot(self):
-        args = self.parser.parse_args(["map", "export", "--format", "dot"])
+        args = self.parser.parse_args(["net", "map", "export", "--format", "dot"])
         self.assertEqual(args.action, "export")
         self.assertEqual(args.format, "dot")
 
     def test_netmon_default(self):
-        args = self.parser.parse_args(["netmon"])
+        args = self.parser.parse_args(["net", "netmon"])
         self.assertEqual(args.action, "interfaces")
         self.assertTrue(hasattr(args, "func"))
 
     def test_netmon_poll(self):
-        args = self.parser.parse_args(["netmon", "poll"])
+        args = self.parser.parse_args(["net", "netmon", "poll"])
         self.assertEqual(args.action, "poll")
 
     def test_netmon_bandwidth(self):
-        args = self.parser.parse_args(["netmon", "bandwidth"])
+        args = self.parser.parse_args(["net", "netmon", "bandwidth"])
         self.assertEqual(args.action, "bandwidth")
 
     def test_cost_analysis_default(self):
-        args = self.parser.parse_args(["cost-analysis"])
+        args = self.parser.parse_args(["hw", "cost-analysis"])
         self.assertEqual(args.action, "waste")
         self.assertTrue(hasattr(args, "func"))
 
     def test_cost_analysis_compare(self):
-        args = self.parser.parse_args(["cost-analysis", "compare", "--rate", "0.15"])
+        args = self.parser.parse_args(["hw", "cost-analysis", "compare", "--rate", "0.15"])
         self.assertEqual(args.action, "compare")
         self.assertEqual(args.rate, 0.15)
 
     def test_cost_analysis_density(self):
-        args = self.parser.parse_args(["cost-analysis", "density"])
+        args = self.parser.parse_args(["hw", "cost-analysis", "density"])
         self.assertEqual(args.action, "density")
 
 
@@ -180,15 +183,16 @@ class TestCostAnalysisModule(unittest.TestCase):
 
 
 class TestPhase7CommandCount(unittest.TestCase):
-    def test_command_count_at_least_126(self):
+    def test_command_count_at_least_38(self):
+        """Domain-based CLI: 38+ top-level domains."""
         from freq.cli import _build_parser
         parser = _build_parser()
         registered = set()
         for action in parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertGreaterEqual(len(registered), 126,
-                                f"Expected 126+, got {len(registered)}")
+        self.assertGreaterEqual(len(registered), 38,
+                                f"Expected 38+, got {len(registered)}")
 
 
 class TestPhase7Dispatch(unittest.TestCase):
@@ -197,15 +201,15 @@ class TestPhase7Dispatch(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_map_has_func(self):
-        args = self.parser.parse_args(["map"])
+        args = self.parser.parse_args(["net", "map"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_netmon_has_func(self):
-        args = self.parser.parse_args(["netmon"])
+        args = self.parser.parse_args(["net", "netmon"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_cost_analysis_has_func(self):
-        args = self.parser.parse_args(["cost-analysis"])
+        args = self.parser.parse_args(["hw", "cost-analysis"])
         self.assertTrue(hasattr(args, "func"))
 
 

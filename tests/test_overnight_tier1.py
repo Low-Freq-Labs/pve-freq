@@ -162,7 +162,7 @@ class TestTier1ProfileA(unittest.TestCase):
         self.assertEqual(cfg.vm_cpu, "kvm64")
         self.assertEqual(cfg.vm_gateway, "192.168.1.1")
         self.assertEqual(cfg.vm_nameserver, "192.168.1.1")
-        self.assertEqual(cfg.vm_domain, "home.lab")
+        # vm_domain was removed from FreqConfig
 
     def test_profile_a_storage(self):
         """Profile A: local-lvm storage."""
@@ -248,9 +248,9 @@ class TestTier1ProfileD(unittest.TestCase):
         self.assertEqual(cfg.ssh_mode, "root")
 
     def test_profile_d_custom_vm_settings(self):
-        """Profile D: custom VM settings (seabios, non-standard scsihw)."""
+        """Profile D: custom VM settings (non-standard scsihw)."""
         cfg = load_with_profile("profile_d")
-        self.assertEqual(cfg.vm_bios, "seabios")
+        # vm_bios was removed from FreqConfig
         self.assertEqual(cfg.vm_scsihw, "virtio-scsi-pci")
         self.assertEqual(cfg.vm_cpu, "host")
 
@@ -338,7 +338,7 @@ class TestTier1EdgeCases(unittest.TestCase):
         cfg = load_with_profile("profile_a")
         profile_dir = os.path.join(CONFIGS_DIR, "profile_a")
         self.assertEqual(cfg.conf_dir, os.path.join(profile_dir, "conf"))
-        self.assertTrue(cfg.hosts_file.endswith("hosts.conf"))
+        self.assertTrue(cfg.hosts_file.endswith("hosts.toml"))
         self.assertTrue(cfg.log_file.endswith("freq.log"))
 
     def test_default_freqconfig_values(self):
@@ -355,7 +355,7 @@ class TestTier1EdgeCases(unittest.TestCase):
         self.assertEqual(cfg.vm_default_disk, 32)
         self.assertEqual(cfg.max_failure_percent, 50)
         self.assertEqual(cfg.nic_bridge, "vmbr0")
-        self.assertEqual(cfg.nic_mtu, 1500)
+        # nic_mtu was removed from FreqConfig
         self.assertEqual(cfg.discord_webhook, "")
         self.assertEqual(cfg.slack_webhook, "")
 

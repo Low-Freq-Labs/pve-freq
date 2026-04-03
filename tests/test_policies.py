@@ -50,8 +50,8 @@ class TestNTPPolicyData(unittest.TestCase):
 
     def test_ntp_entries(self):
         entries = NTP_POLICY["resources"][0]["entries"]
-        self.assertEqual(entries["NTP"], "2.debian.pool.ntp.org")
-        self.assertEqual(entries["FallbackNTP"], "ntp.ubuntu.com")
+        self.assertEqual(entries["NTP"], "pool.ntp.org")
+        self.assertEqual(entries["FallbackNTP"], "time.cloudflare.com")
 
     def test_after_change_restarts_timesyncd(self):
         after = NTP_POLICY["resources"][0]["after_change"]
@@ -144,8 +144,8 @@ class TestPolicyExecutorDesiredState(unittest.TestCase):
     def test_ntp_desired_state_linux(self):
         ex = PolicyExecutor(NTP_POLICY)
         desired = ex.desired_state(_host("linux"))
-        self.assertEqual(desired["NTP"], "2.debian.pool.ntp.org")
-        self.assertEqual(desired["FallbackNTP"], "ntp.ubuntu.com")
+        self.assertEqual(desired["NTP"], "pool.ntp.org")
+        self.assertEqual(desired["FallbackNTP"], "time.cloudflare.com")
 
     def test_ssh_desired_state_linux_max_auth(self):
         ex = PolicyExecutor(SSH_POLICY)

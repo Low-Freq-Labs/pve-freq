@@ -294,10 +294,9 @@ class TestRisk(unittest.TestCase):
         deps = _load_risk_map(cfg)
         if not deps:
             self.skipTest("No risk.toml configured — risk map empty")
-        self.assertIn("pfsense", deps)
-        self.assertIn("truenas", deps)
-        self.assertIn("switch", deps)
-        self.assertEqual(deps["pfsense"]["risk"], "CRITICAL")
+        self.assertIn("firewall", deps)
+        self.assertIn("storage", deps)
+        self.assertEqual(deps["firewall"]["risk"], "CRITICAL")
 
     def test_all_have_impact(self):
         from freq.jarvis.risk import _load_risk_map
@@ -524,7 +523,7 @@ class TestInitFleetRegistration(unittest.TestCase):
         if not os.path.isfile(toml_src):
             toml_src = os.path.join(src_dir, "freq.toml.example")
         shutil.copy(toml_src, os.path.join(self.tmpdir, "conf", "freq.toml"))
-        with open(os.path.join(self.tmpdir, "conf", "hosts.conf"), "w") as f:
+        with open(os.path.join(self.tmpdir, "conf", "hosts.toml"), "w") as f:
             f.write("# Empty\n")
 
     def tearDown(self):
@@ -539,9 +538,9 @@ class TestInitFleetRegistration(unittest.TestCase):
     def test_host_registration_roundtrip(self):
         from freq.core.config import load_config, Host
         cfg = load_config(self.tmpdir)
-        # Simulate _register_host_interactive's write logic
-        with open(cfg.hosts_file, "a") as f:
-            f.write("192.168.1.10  test-host  linux  test\n")
+        # Write a host entry in TOML format
+        with open(cfg.hosts_file, "w") as f:
+            f.write('[[host]]\nip = "192.168.1.10"\nlabel = "test-host"\ntype = "linux"\ngroups = "test"\n')
         cfg2 = load_config(self.tmpdir)
         self.assertEqual(len(cfg2.hosts), 1)
         self.assertEqual(cfg2.hosts[0].ip, "192.168.1.10")
@@ -552,10 +551,10 @@ class TestInitFleetRegistration(unittest.TestCase):
     def test_multiple_host_registration(self):
         from freq.core.config import load_config
         cfg = load_config(self.tmpdir)
-        with open(cfg.hosts_file, "a") as f:
-            f.write("10.0.0.1  host-a  docker  prod\n")
-            f.write("10.0.0.2  host-b  pfsense\n")
-            f.write("10.0.0.3  host-c  idrac  mgmt\n")
+        with open(cfg.hosts_file, "w") as f:
+            f.write('[[host]]\nip = "10.0.0.1"\nlabel = "host-a"\ntype = "docker"\ngroups = "prod"\n\n')
+            f.write('[[host]]\nip = "10.0.0.2"\nlabel = "host-b"\ntype = "pfsense"\n\n')
+            f.write('[[host]]\nip = "10.0.0.3"\nlabel = "host-c"\ntype = "idrac"\ngroups = "mgmt"\n')
         cfg2 = load_config(self.tmpdir)
         self.assertEqual(len(cfg2.hosts), 3)
         types = [h.htype for h in cfg2.hosts]
@@ -565,12 +564,12 @@ class TestInitFleetRegistration(unittest.TestCase):
         """Verify registered hosts get grouped correctly for deploy."""
         from freq.core.config import load_config
         cfg = load_config(self.tmpdir)
-        with open(cfg.hosts_file, "a") as f:
-            f.write("10.0.0.1  web01     linux\n")
-            f.write("10.0.0.2  docker01  docker\n")
-            f.write("10.0.0.3  fw01      pfsense\n")
-            f.write("10.0.0.4  idrac01   idrac\n")
-            f.write("10.0.0.5  nas01     truenas\n")
+        with open(cfg.hosts_file, "w") as f:
+            f.write('[[host]]\nip = "10.0.0.1"\nlabel = "web01"\ntype = "linux"\n\n')
+            f.write('[[host]]\nip = "10.0.0.2"\nlabel = "docker01"\ntype = "docker"\n\n')
+            f.write('[[host]]\nip = "10.0.0.3"\nlabel = "fw01"\ntype = "pfsense"\n\n')
+            f.write('[[host]]\nip = "10.0.0.4"\nlabel = "idrac01"\ntype = "idrac"\n\n')
+            f.write('[[host]]\nip = "10.0.0.5"\nlabel = "nas01"\ntype = "truenas"\n')
         cfg2 = load_config(self.tmpdir)
         linux_hosts = [h for h in cfg2.hosts if h.htype in ("linux", "docker", "pve", "truenas")]
         pfsense_hosts = [h for h in cfg2.hosts if h.htype == "pfsense"]

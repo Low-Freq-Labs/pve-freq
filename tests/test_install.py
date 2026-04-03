@@ -272,13 +272,13 @@ class TestEntryPoint:
     def test_detail_command_registered(self):
         from freq.cli import _build_parser
         parser = _build_parser()
-        args = parser.parse_args(["detail", "web01"])
+        args = parser.parse_args(["fleet", "detail", "web01"])
         assert hasattr(args, "func")
 
     def test_boundaries_command_registered(self):
         from freq.cli import _build_parser
         parser = _build_parser()
-        args = parser.parse_args(["boundaries", "lookup", "5001"])
+        args = parser.parse_args(["fleet", "boundaries", "lookup", "5001"])
         assert hasattr(args, "func")
 
 

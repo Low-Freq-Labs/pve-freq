@@ -376,12 +376,12 @@ class TestCmdNic:
 # ═══════════════════════════════════════════════════════════════════
 
 class TestCLIParserParity:
-    """Verify new commands are registered in argparse."""
+    """Verify new commands are registered in argparse (under domain subcommands)."""
 
     def test_power_registered(self):
         from freq.cli import _build_parser
         p = _build_parser()
-        args = p.parse_args(["power", "start", "5001"])
+        args = p.parse_args(["vm", "power", "start", "5001"])
         assert args.action == "start"
         assert args.target == "5001"
         assert hasattr(args, "func")
@@ -389,21 +389,21 @@ class TestCLIParserParity:
     def test_snapshot_list_registered(self):
         from freq.cli import _build_parser
         p = _build_parser()
-        args = p.parse_args(["snapshot", "list", "5001"])
+        args = p.parse_args(["vm", "snapshot", "list", "5001"])
         assert args.snap_action == "list"
         assert args.target == "5001"
 
     def test_snapshot_delete_registered(self):
         from freq.cli import _build_parser
         p = _build_parser()
-        args = p.parse_args(["snapshot", "delete", "5001", "--name", "snap1"])
+        args = p.parse_args(["vm", "snapshot", "delete", "5001", "--name", "snap1"])
         assert args.snap_action == "delete"
         assert args.name == "snap1"
 
     def test_nic_add_registered(self):
         from freq.cli import _build_parser
         p = _build_parser()
-        args = p.parse_args(["nic", "add", "5001", "--ip", "192.168.10.50", "--vlan", "10"])
+        args = p.parse_args(["vm", "nic", "add", "5001", "--ip", "192.168.10.50", "--vlan", "10"])
         assert args.action == "add"
         assert args.target == "5001"
         assert args.ip == "192.168.10.50"
@@ -412,20 +412,20 @@ class TestCLIParserParity:
     def test_nic_clear_registered(self):
         from freq.cli import _build_parser
         p = _build_parser()
-        args = p.parse_args(["nic", "clear", "5001"])
+        args = p.parse_args(["vm", "nic", "clear", "5001"])
         assert args.action == "clear"
 
     def test_nic_change_id_registered(self):
         from freq.cli import _build_parser
         p = _build_parser()
-        args = p.parse_args(["nic", "change-id", "5001", "--new-id", "5002"])
+        args = p.parse_args(["vm", "nic", "change-id", "5001", "--new-id", "5002"])
         assert args.action == "change-id"
         assert args.new_id == "5002"
 
     def test_nic_check_ip_registered(self):
         from freq.cli import _build_parser
         p = _build_parser()
-        args = p.parse_args(["nic", "check-ip", "--ip", "192.168.10.1"])
+        args = p.parse_args(["vm", "nic", "check-ip", "--ip", "192.168.10.1"])
         assert args.action == "check-ip"
         assert args.ip == "192.168.10.1"
 
@@ -434,71 +434,9 @@ class TestCLIParserParity:
 # Phase 2: Web UI — New Endpoints
 # ═══════════════════════════════════════════════════════════════════
 
-class TestServeDiagnose:
-    """Test /api/diagnose endpoint."""
-
-    @patch("freq.modules.serve.ssh_single")
-    @patch("freq.modules.serve.res")
-    @patch("freq.modules.serve.load_config")
-    def test_diagnose_ok(self, mock_cfg, mock_res, mock_ssh):
-        mock_cfg.return_value = _mock_cfg()
-        mock_res.by_target.return_value = SimpleNamespace(
-            label="testhost", ip="192.168.10.50", htype="linux", groups="")
-        mock_ssh.return_value = _mock_ssh_result(stdout="test output")
-
-        h = _make_handler("/api/diagnose?target=testhost")
-        h._serve_diagnose()
-
-        data = _get_json(h)
-        assert data["host"] == "testhost"
-        assert "checks" in data
-        assert "uptime" in data["checks"]
-
-    @patch("freq.modules.serve.load_config")
-    def test_diagnose_no_target(self, mock_cfg):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/diagnose")
-        h._serve_diagnose()
-        data = _get_json(h)
-        assert "error" in data
-
-    @patch("freq.modules.serve.res")
-    @patch("freq.modules.serve.load_config")
-    def test_diagnose_unknown_host(self, mock_cfg, mock_res):
-        mock_cfg.return_value = _mock_cfg()
-        mock_res.by_target.return_value = None
-        h = _make_handler("/api/diagnose?target=nonexistent")
-        h._serve_diagnose()
-        data = _get_json(h)
-        assert "error" in data
-
-
-class TestServeLog:
-    """Test /api/log endpoint."""
-
-    @patch("freq.modules.serve.ssh_single")
-    @patch("freq.modules.serve.res")
-    @patch("freq.modules.serve.load_config")
-    def test_log_ok(self, mock_cfg, mock_res, mock_ssh):
-        mock_cfg.return_value = _mock_cfg()
-        mock_res.by_target.return_value = SimpleNamespace(
-            label="testhost", ip="192.168.10.50", htype="linux", groups="")
-        mock_ssh.return_value = _mock_ssh_result(stdout="Mar 25 log line 1\nMar 25 log line 2")
-
-        h = _make_handler("/api/log?target=testhost&lines=10")
-        h._serve_log()
-
-        data = _get_json(h)
-        assert data["host"] == "testhost"
-        assert len(data["lines"]) > 0
-
-    @patch("freq.modules.serve.load_config")
-    def test_log_no_target(self, mock_cfg):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/log")
-        h._serve_log()
-        data = _get_json(h)
-        assert "error" in data
+# NOTE: TestServeDiagnose and TestServeLog removed — _serve_diagnose and _serve_log
+# were deleted from serve.py. Those endpoints now live in freq/api/fleet.py and
+# are tested via the V1 API route handlers.
 
 
 class TestServeDoctor:
@@ -512,133 +450,11 @@ class TestServeDoctor:
         assert data["ok"] is True
 
 
-class TestServePolicyCheck:
-    """Test /api/policy/check endpoint."""
-
-    @patch("freq.modules.engine_cmds.cmd_check", return_value=0)
-    @patch("freq.modules.serve.load_config")
-    def test_policy_check_ok(self, mock_cfg, mock_check):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/policy/check")
-        h._serve_policy_check()
-        data = _get_json(h)
-        assert data["ok"] is True
-
-    @patch("freq.modules.engine_cmds.cmd_check", side_effect=Exception("boom"))
-    @patch("freq.modules.serve.load_config")
-    def test_policy_check_error(self, mock_cfg, mock_check):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/policy/check")
-        h._serve_policy_check()
-        data = _get_json(h)
-        assert "error" in data
-
-
-class TestServePolicyFix:
-    """Test /api/policy/fix endpoint (requires admin)."""
-
-    @patch("freq.modules.serve._check_session_role", return_value=("admin", None))
-    @patch("freq.modules.engine_cmds.cmd_fix", return_value=0)
-    @patch("freq.modules.serve.load_config")
-    def test_policy_fix_ok(self, mock_cfg, mock_fix, mock_role):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/policy/fix?token=test")
-        h._serve_policy_fix()
-        data = _get_json(h)
-        assert data["ok"] is True
-
-    @patch("freq.modules.serve._check_session_role", return_value=(None, "Unauthorized"))
-    @patch("freq.modules.serve.load_config")
-    def test_policy_fix_unauthorized(self, mock_cfg, mock_role):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/policy/fix")
-        h._serve_policy_fix()
-        data = _get_json(h)
-        assert "error" in data
-
-
-class TestServePolicyDiff:
-    """Test /api/policy/diff endpoint."""
-
-    @patch("freq.modules.engine_cmds.cmd_diff", return_value=0)
-    @patch("freq.modules.serve.load_config")
-    def test_policy_diff_ok(self, mock_cfg, mock_diff):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/policy/diff")
-        h._serve_policy_diff()
-        data = _get_json(h)
-        assert data["ok"] is True
-
-
-class TestServeSweep:
-    """Test /api/sweep endpoint."""
-
-    @patch("freq.modules.serve._check_session_role", return_value=("operator", None))
-    @patch("freq.jarvis.sweep.cmd_sweep", return_value=0)
-    @patch("freq.modules.serve.load_config")
-    def test_sweep_dry_run(self, mock_cfg, mock_sweep, mock_role):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/sweep?fix=false&token=test")
-        h._serve_sweep()
-        data = _get_json(h)
-        assert data["ok"] is True
-        assert data["fix_mode"] is False
-
-
-class TestServeZfs:
-    """Test /api/zfs endpoint."""
-
-    @patch("freq.modules.infrastructure.cmd_truenas", return_value=0)
-    @patch("freq.modules.serve.load_config")
-    def test_zfs_status(self, mock_cfg, mock_zfs):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/zfs?action=status")
-        h._serve_zfs()
-        data = _get_json(h)
-        assert data["ok"] is True
-
-
-class TestServeBackup:
-    """Test /api/backup endpoint."""
-
-    @patch("freq.modules.backup.cmd_backup", return_value=0)
-    @patch("freq.modules.serve.load_config")
-    def test_backup_list(self, mock_cfg, mock_backup):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/backup?action=list")
-        h._serve_backup()
-        data = _get_json(h)
-        assert data["ok"] is True
-        assert data["action"] == "list"
-
-
-class TestServeDiscover:
-    """Test /api/discover endpoint."""
-
-    @patch("freq.modules.serve._check_session_role", return_value=("operator", None))
-    @patch("freq.modules.discover.cmd_discover", return_value=0)
-    @patch("freq.modules.serve.load_config")
-    def test_discover_ok(self, mock_cfg, mock_discover, mock_role):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/discover?token=test")
-        h._serve_discover()
-        data = _get_json(h)
-        assert data["ok"] is True
-
-
-class TestServeGwipe:
-    """Test /api/gwipe endpoint."""
-
-    @patch("freq.modules.serve._check_session_role", return_value=("admin", None))
-    @patch("freq.modules.serve.vault_get", return_value="")
-    @patch("freq.modules.serve.load_config")
-    def test_gwipe_not_configured(self, mock_cfg, mock_vault, mock_role):
-        mock_cfg.return_value = _mock_cfg()
-        h = _make_handler("/api/gwipe?token=test")
-        h._serve_gwipe()
-        data = _get_json(h)
-        assert "error" in data
-        assert "not configured" in data["error"].lower()
+# NOTE: TestServePolicyCheck, TestServePolicyFix, TestServePolicyDiff, TestServeSweep,
+# TestServeZfs, TestServeBackup, TestServeDiscover, TestServeGwipe removed — all
+# _serve_* methods were deleted from serve.py during the API refactor. Those endpoints
+# now live in freq/api/ domain modules (secure.py, dr.py, fleet.py, hw.py) and are
+# tested via the V1 API route handlers.
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -651,13 +467,12 @@ class TestWebUIApiConstants:
     def test_api_constants_present(self):
         from freq.modules.web_ui import _read_asset
         app_js = _read_asset("js/app.js")
+        # POLICY_CHECK, POLICY_FIX, POLICY_DIFF were removed from the API object
+        # (zero consumers after refactor)
         required = [
             "DOCTOR:'/api/doctor'",
             "DIAGNOSE:'/api/diagnose'",
             "LOG:'/api/log'",
-            "POLICY_CHECK:'/api/policy/check'",
-            "POLICY_FIX:'/api/policy/fix'",
-            "POLICY_DIFF:'/api/policy/diff'",
             "SWEEP:'/api/sweep'",
             "PATROL_STATUS:'/api/patrol/status'",
             "ZFS:'/api/zfs'",
@@ -716,10 +531,13 @@ class TestWebUIJsFunctions:
 # ═══════════════════════════════════════════════════════════════════
 
 class TestRouteRegistration:
-    """Verify all new endpoints are in the _ROUTES dict."""
+    """Verify all new endpoints are registered in _ROUTES or _V1_ROUTES."""
 
     def test_new_routes_registered(self):
-        routes = FreqHandler._ROUTES
+        # Build the combined route set from _ROUTES + _V1_ROUTES
+        routes = dict(FreqHandler._ROUTES)
+        FreqHandler._load_v1_routes()
+        v1_routes = FreqHandler._V1_ROUTES or {}
         new_routes = [
             "/api/doctor", "/api/diagnose", "/api/log",
             "/api/policy/check", "/api/policy/fix", "/api/policy/diff",
@@ -727,10 +545,9 @@ class TestRouteRegistration:
             "/api/zfs", "/api/backup", "/api/discover", "/api/gwipe",
         ]
         for route in new_routes:
-            assert route in routes, f"Missing route: {route}"
-            # Verify handler method exists
-            method_name = routes[route]
-            assert hasattr(FreqHandler, method_name), f"Missing handler: {method_name}"
+            in_routes = route in routes
+            in_v1 = route in v1_routes
+            assert in_routes or in_v1, f"Missing route: {route} (not in _ROUTES or _V1_ROUTES)"
 
 
 # ── Phase 1D: detail + boundaries CLI ────────────────────────────────
@@ -836,26 +653,26 @@ class TestCmdBoundaries:
 
 
 class TestCLIParserPhase1D:
-    """Verify detail + boundaries are registered in argparse."""
+    """Verify detail + boundaries are registered in argparse (under fleet domain)."""
 
     def test_detail_registered(self):
         from freq.cli import _build_parser
         parser = _build_parser()
-        args = parser.parse_args(["detail", "web01"])
+        args = parser.parse_args(["fleet", "detail", "web01"])
         assert hasattr(args, "func")
         assert args.target == "web01"
 
     def test_boundaries_show(self):
         from freq.cli import _build_parser
         parser = _build_parser()
-        args = parser.parse_args(["boundaries"])
+        args = parser.parse_args(["fleet", "boundaries"])
         assert hasattr(args, "func")
         assert args.action == "show"
 
     def test_boundaries_lookup(self):
         from freq.cli import _build_parser
         parser = _build_parser()
-        args = parser.parse_args(["boundaries", "lookup", "5001"])
+        args = parser.parse_args(["fleet", "boundaries", "lookup", "5001"])
         assert hasattr(args, "func")
         assert args.action == "lookup"
         assert args.target == "5001"

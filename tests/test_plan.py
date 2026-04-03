@@ -214,35 +214,37 @@ class TestPlanCLI(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_plan_registered(self):
+        """plan is under 'state' domain."""
         import argparse
         registered = set()
         for action in self.parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertIn("plan", registered)
+        self.assertIn("state", registered)
 
     def test_apply_registered(self):
+        """apply is under 'state' domain."""
         import argparse
         registered = set()
         for action in self.parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertIn("apply", registered)
+        self.assertIn("state", registered)
 
     def test_plan_file_arg(self):
-        args = self.parser.parse_args(["plan", "--file", "/tmp/my-plan.toml"])
+        args = self.parser.parse_args(["state", "plan", "--file", "/tmp/my-plan.toml"])
         self.assertEqual(args.file, "/tmp/my-plan.toml")
 
     def test_plan_default(self):
-        args = self.parser.parse_args(["plan"])
+        args = self.parser.parse_args(["state", "plan"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_apply_dry_run(self):
-        args = self.parser.parse_args(["apply", "--dry-run"])
+        args = self.parser.parse_args(["state", "apply", "--dry-run"])
         self.assertTrue(args.dry_run)
 
     def test_apply_yes_flag(self):
-        args = self.parser.parse_args(["apply", "--yes"])
+        args = self.parser.parse_args(["state", "apply", "--yes"])
         self.assertTrue(args.yes)
 
 

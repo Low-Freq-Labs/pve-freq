@@ -29,19 +29,19 @@ class TestPhase1Registration(unittest.TestCase):
                 self.registered.update(action.choices.keys())
 
     def test_alert_registered(self):
-        self.assertIn("alert", self.registered)
+        self.assertIn("observe", self.registered)  # alert under observe
 
     def test_rollback_registered(self):
-        self.assertIn("rollback", self.registered)
+        self.assertIn("vm", self.registered)  # rollback under vm
 
     def test_inventory_registered(self):
-        self.assertIn("inventory", self.registered)
+        self.assertIn("fleet", self.registered)  # inventory under fleet
 
     def test_compare_registered(self):
-        self.assertIn("compare", self.registered)
+        self.assertIn("fleet", self.registered)  # compare under fleet
 
     def test_baseline_registered(self):
-        self.assertIn("baseline", self.registered)
+        self.assertIn("state", self.registered)  # baseline under state
 
 
 class TestPhase1Parsing(unittest.TestCase):
@@ -52,13 +52,13 @@ class TestPhase1Parsing(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_alert_list_default(self):
-        args = self.parser.parse_args(["alert"])
+        args = self.parser.parse_args(["observe", "alert"])
         self.assertEqual(args.action, "list")
         self.assertTrue(hasattr(args, "func"))
 
     def test_alert_create_args(self):
         args = self.parser.parse_args([
-            "alert", "create", "test-rule",
+            "observe", "alert", "create", "test-rule",
             "--condition", "cpu_above",
             "--threshold", "2.0",
             "--alert-severity", "critical",
@@ -70,83 +70,83 @@ class TestPhase1Parsing(unittest.TestCase):
         self.assertEqual(args.alert_severity, "critical")
 
     def test_alert_delete(self):
-        args = self.parser.parse_args(["alert", "delete", "my-rule"])
+        args = self.parser.parse_args(["observe", "alert", "delete", "my-rule"])
         self.assertEqual(args.action, "delete")
         self.assertEqual(args.name, "my-rule")
 
     def test_alert_silence(self):
-        args = self.parser.parse_args(["alert", "silence", "host-*", "--duration", "120"])
+        args = self.parser.parse_args(["observe", "alert", "silence", "host-*", "--duration", "120"])
         self.assertEqual(args.action, "silence")
         self.assertEqual(args.name, "host-*")
         self.assertEqual(args.duration, 120)
 
     def test_alert_check(self):
-        args = self.parser.parse_args(["alert", "check"])
+        args = self.parser.parse_args(["observe", "alert", "check"])
         self.assertEqual(args.action, "check")
 
     def test_alert_test(self):
-        args = self.parser.parse_args(["alert", "test"])
+        args = self.parser.parse_args(["observe", "alert", "test"])
         self.assertEqual(args.action, "test")
 
     def test_alert_history(self):
-        args = self.parser.parse_args(["alert", "history", "--lines", "50"])
+        args = self.parser.parse_args(["observe", "alert", "history", "--lines", "50"])
         self.assertEqual(args.action, "history")
         self.assertEqual(args.lines, 50)
 
     def test_rollback_vmid(self):
-        args = self.parser.parse_args(["rollback", "5005"])
+        args = self.parser.parse_args(["vm", "rollback", "5005"])
         self.assertEqual(args.target, "5005")
         self.assertTrue(hasattr(args, "func"))
 
     def test_rollback_with_name(self):
-        args = self.parser.parse_args(["rollback", "100", "--name", "pre-upgrade"])
+        args = self.parser.parse_args(["vm", "rollback", "100", "--name", "pre-upgrade"])
         self.assertEqual(args.target, "100")
         self.assertEqual(args.name, "pre-upgrade")
 
     def test_rollback_no_start(self):
-        args = self.parser.parse_args(["rollback", "100", "--no-start"])
+        args = self.parser.parse_args(["vm", "rollback", "100", "--no-start"])
         self.assertTrue(args.no_start)
 
     def test_inventory_default(self):
-        args = self.parser.parse_args(["inventory"])
+        args = self.parser.parse_args(["fleet", "inventory"])
         self.assertEqual(args.section, "all")
         self.assertTrue(hasattr(args, "func"))
 
     def test_inventory_hosts_only(self):
-        args = self.parser.parse_args(["inventory", "hosts"])
+        args = self.parser.parse_args(["fleet", "inventory", "hosts"])
         self.assertEqual(args.section, "hosts")
 
     def test_inventory_vms_only(self):
-        args = self.parser.parse_args(["inventory", "vms"])
+        args = self.parser.parse_args(["fleet", "inventory", "vms"])
         self.assertEqual(args.section, "vms")
 
     def test_inventory_csv(self):
-        args = self.parser.parse_args(["inventory", "--csv"])
+        args = self.parser.parse_args(["fleet", "inventory", "--csv"])
         self.assertTrue(args.csv)
 
     def test_compare_two_hosts(self):
-        args = self.parser.parse_args(["compare", "pve01", "pve02"])
+        args = self.parser.parse_args(["fleet", "compare", "pve01", "pve02"])
         self.assertEqual(args.target_a, "pve01")
         self.assertEqual(args.target_b, "pve02")
         self.assertTrue(hasattr(args, "func"))
 
     def test_baseline_default(self):
-        args = self.parser.parse_args(["baseline"])
+        args = self.parser.parse_args(["state", "baseline"])
         self.assertEqual(args.action, "list")
         self.assertTrue(hasattr(args, "func"))
 
     def test_baseline_capture(self):
-        args = self.parser.parse_args(["baseline", "capture", "my-baseline"])
+        args = self.parser.parse_args(["state", "baseline", "capture", "my-baseline"])
         self.assertEqual(args.action, "capture")
         self.assertEqual(args.name, "my-baseline")
 
     def test_baseline_compare(self):
-        args = self.parser.parse_args(["baseline", "compare", "my-baseline"])
+        args = self.parser.parse_args(["state", "baseline", "compare", "my-baseline"])
         self.assertEqual(args.action, "compare")
         self.assertEqual(args.name, "my-baseline")
 
     def test_baseline_delete(self):
-        args = self.parser.parse_args(["baseline", "delete", "old-baseline"])
+        args = self.parser.parse_args(["state", "baseline", "delete", "old-baseline"])
         self.assertEqual(args.action, "delete")
         self.assertEqual(args.name, "old-baseline")
 
@@ -407,15 +407,15 @@ class TestPhase1CommandCount(unittest.TestCase):
     """Verify we've passed 100 commands."""
 
     def test_command_count_at_least_104(self):
-        """We should have at least 104 commands (99 + 5 new)."""
+        """We should have at least 38 domain commands."""
         from freq.cli import _build_parser
         parser = _build_parser()
         registered = set()
         for action in parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertGreaterEqual(len(registered), 104,
-                                f"Expected 104+ commands, got {len(registered)}: {sorted(registered)}")
+        self.assertGreaterEqual(len(registered), 38,
+                                f"Expected 38+ domain commands, got {len(registered)}: {sorted(registered)}")
 
 
 class TestPhase1Dispatch(unittest.TestCase):
@@ -426,23 +426,23 @@ class TestPhase1Dispatch(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_alert_has_func(self):
-        args = self.parser.parse_args(["alert"])
+        args = self.parser.parse_args(["observe", "alert"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_rollback_has_func(self):
-        args = self.parser.parse_args(["rollback", "100"])
+        args = self.parser.parse_args(["vm", "rollback", "100"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_inventory_has_func(self):
-        args = self.parser.parse_args(["inventory"])
+        args = self.parser.parse_args(["fleet", "inventory"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_compare_has_func(self):
-        args = self.parser.parse_args(["compare", "a", "b"])
+        args = self.parser.parse_args(["fleet", "compare", "a", "b"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_baseline_has_func(self):
-        args = self.parser.parse_args(["baseline"])
+        args = self.parser.parse_args(["state", "baseline"])
         self.assertTrue(hasattr(args, "func"))
 
 

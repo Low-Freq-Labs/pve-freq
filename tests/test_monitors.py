@@ -85,52 +85,56 @@ class TestHTTPChecks(unittest.TestCase):
 
 
 class TestCLIRegistration(unittest.TestCase):
-    """Test new commands are registered."""
+    """Test new commands are registered (under domain subcommands)."""
 
     def setUp(self):
         from freq.cli import _build_parser
         self.parser = _build_parser()
 
     def test_docker_fleet_registered(self):
+        """docker fleet is under the 'docker' domain."""
         import argparse
         registered = set()
         for action in self.parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertIn("docker-fleet", registered)
+        self.assertIn("docker", registered)
 
     def test_monitor_registered(self):
+        """monitor is under the 'observe' domain."""
         import argparse
         registered = set()
         for action in self.parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertIn("monitor", registered)
+        self.assertIn("observe", registered)
 
     def test_docker_fleet_ps(self):
-        args = self.parser.parse_args(["docker-fleet", "ps"])
+        args = self.parser.parse_args(["docker", "fleet", "ps"])
         self.assertEqual(args.docker_action, "ps")
 
     def test_docker_fleet_stats(self):
-        args = self.parser.parse_args(["docker-fleet", "stats"])
+        args = self.parser.parse_args(["docker", "fleet", "stats"])
         self.assertEqual(args.docker_action, "stats")
 
     def test_docker_fleet_logs(self):
-        args = self.parser.parse_args(["docker-fleet", "logs", "nginx", "--lines", "50"])
+        args = self.parser.parse_args(["docker", "fleet", "logs", "nginx", "--lines", "50"])
         self.assertEqual(args.docker_action, "logs")
         self.assertEqual(args.service, "nginx")
         self.assertEqual(args.lines, 50)
 
 
 class TestServeRoutes(unittest.TestCase):
-    """Test new API routes are registered."""
+    """Test new API routes are registered (in _ROUTES or _V1_ROUTES)."""
 
     def test_monitor_routes_exist(self):
         from freq.modules.serve import FreqHandler
-        routes = FreqHandler._ROUTES
-        self.assertIn("/api/monitors", routes)
-        self.assertIn("/api/monitors/check", routes)
-        self.assertIn("/api/docker-fleet", routes)
+        FreqHandler._load_v1_routes()
+        all_routes = dict(FreqHandler._ROUTES)
+        all_routes.update(FreqHandler._V1_ROUTES or {})
+        self.assertIn("/api/monitors", all_routes)
+        self.assertIn("/api/monitors/check", all_routes)
+        self.assertIn("/api/docker-fleet", all_routes)
 
 
 if __name__ == "__main__":

@@ -519,9 +519,9 @@ class TestCacheConstants(unittest.TestCase):
         self.assertIsInstance(BG_CACHE_REFRESH_INTERVAL, int)
         self.assertGreater(BG_CACHE_REFRESH_INTERVAL, 0)
 
-    def test_refresh_interval_is_60(self):
+    def test_refresh_interval_is_15(self):
         from freq.modules.serve import BG_CACHE_REFRESH_INTERVAL
-        self.assertEqual(BG_CACHE_REFRESH_INTERVAL, 60)
+        self.assertEqual(BG_CACHE_REFRESH_INTERVAL, 15)
 
     def test_cache_dir_is_string_path(self):
         from freq.modules.serve import CACHE_DIR

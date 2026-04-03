@@ -28,19 +28,19 @@ class TestPhase2Registration(unittest.TestCase):
                 self.registered.update(action.choices.keys())
 
     def test_report_registered(self):
-        self.assertIn("report", self.registered)
+        self.assertIn("fleet", self.registered)  # report under fleet
 
     def test_trend_registered(self):
-        self.assertIn("trend", self.registered)
+        self.assertIn("observe", self.registered)  # trend under observe
 
     def test_sla_registered(self):
-        self.assertIn("sla", self.registered)
+        self.assertIn("observe", self.registered)  # sla under observe
 
     def test_cert_registered(self):
-        self.assertIn("cert", self.registered)
+        self.assertIn("cert", self.registered)  # cert under cert
 
     def test_dns_registered(self):
-        self.assertIn("dns", self.registered)
+        self.assertIn("dns", self.registered)  # dns under dns
 
 
 class TestPhase2Parsing(unittest.TestCase):
@@ -51,72 +51,72 @@ class TestPhase2Parsing(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_report_default(self):
-        args = self.parser.parse_args(["report"])
+        args = self.parser.parse_args(["fleet", "report"])
         self.assertEqual(args.action, "generate")
         self.assertTrue(hasattr(args, "func"))
 
     def test_report_markdown(self):
-        args = self.parser.parse_args(["report", "--markdown"])
+        args = self.parser.parse_args(["fleet", "report", "--markdown"])
         self.assertTrue(args.markdown)
 
     def test_trend_default(self):
-        args = self.parser.parse_args(["trend"])
+        args = self.parser.parse_args(["observe", "trend"])
         self.assertEqual(args.action, "show")
         self.assertTrue(hasattr(args, "func"))
 
     def test_trend_snapshot(self):
-        args = self.parser.parse_args(["trend", "snapshot"])
+        args = self.parser.parse_args(["observe", "trend", "snapshot"])
         self.assertEqual(args.action, "snapshot")
 
     def test_trend_history(self):
-        args = self.parser.parse_args(["trend", "history", "--lines", "50"])
+        args = self.parser.parse_args(["observe", "trend", "history", "--lines", "50"])
         self.assertEqual(args.action, "history")
         self.assertEqual(args.lines, 50)
 
     def test_sla_default(self):
-        args = self.parser.parse_args(["sla"])
+        args = self.parser.parse_args(["observe", "sla"])
         self.assertEqual(args.action, "show")
         self.assertTrue(hasattr(args, "func"))
 
     def test_sla_check(self):
-        args = self.parser.parse_args(["sla", "check"])
+        args = self.parser.parse_args(["observe", "sla", "check"])
         self.assertEqual(args.action, "check")
 
     def test_sla_days(self):
-        args = self.parser.parse_args(["sla", "show", "--days", "90"])
+        args = self.parser.parse_args(["observe", "sla", "show", "--days", "90"])
         self.assertEqual(args.days, 90)
 
     def test_sla_reset(self):
-        args = self.parser.parse_args(["sla", "reset"])
+        args = self.parser.parse_args(["observe", "sla", "reset"])
         self.assertEqual(args.action, "reset")
 
     def test_cert_default(self):
         args = self.parser.parse_args(["cert"])
-        self.assertEqual(args.action, "scan")
+        self.assertIsNone(args.subcmd)  # default has no subcmd
         self.assertTrue(hasattr(args, "func"))
 
     def test_cert_check(self):
         args = self.parser.parse_args(["cert", "check", "pve01:8006"])
-        self.assertEqual(args.action, "check")
+        self.assertEqual(args.subcmd, "check")
         self.assertEqual(args.target, "pve01:8006")
 
     def test_cert_list(self):
         args = self.parser.parse_args(["cert", "list"])
-        self.assertEqual(args.action, "list")
+        self.assertEqual(args.subcmd, "list")
 
     def test_dns_default(self):
         args = self.parser.parse_args(["dns"])
-        self.assertEqual(args.action, "scan")
+        self.assertIsNone(args.subcmd)  # default has no subcmd
         self.assertTrue(hasattr(args, "func"))
 
     def test_dns_check(self):
         args = self.parser.parse_args(["dns", "check", "10.25.255.50"])
-        self.assertEqual(args.action, "check")
+        self.assertEqual(args.subcmd, "check")
         self.assertEqual(args.target, "10.25.255.50")
 
     def test_dns_list(self):
         args = self.parser.parse_args(["dns", "list"])
-        self.assertEqual(args.action, "list")
+        self.assertEqual(args.subcmd, "list")
 
 
 class TestReportModule(unittest.TestCase):
@@ -323,8 +323,8 @@ class TestPhase2CommandCount(unittest.TestCase):
         for action in parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertGreaterEqual(len(registered), 109,
-                                f"Expected 109+ commands, got {len(registered)}")
+        self.assertGreaterEqual(len(registered), 38,
+                                f"Expected 38+ domain commands, got {len(registered)}")
 
 
 class TestPhase2Dispatch(unittest.TestCase):
@@ -335,15 +335,15 @@ class TestPhase2Dispatch(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_report_has_func(self):
-        args = self.parser.parse_args(["report"])
+        args = self.parser.parse_args(["fleet", "report"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_trend_has_func(self):
-        args = self.parser.parse_args(["trend"])
+        args = self.parser.parse_args(["observe", "trend"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_sla_has_func(self):
-        args = self.parser.parse_args(["sla"])
+        args = self.parser.parse_args(["observe", "sla"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_cert_has_func(self):

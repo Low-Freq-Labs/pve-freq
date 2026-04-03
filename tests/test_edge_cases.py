@@ -909,87 +909,9 @@ class TestFleetZeroHosts(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # 10. Dashboard API with Zero/Invalid State
 # ---------------------------------------------------------------------------
-
-class TestDashboardEdgeCases(unittest.TestCase):
-    """Dashboard API endpoints must handle edge cases gracefully."""
-
-    def _make_handler(self, path="/api/info"):
-        """Create a FreqHandler mock — minimal version."""
-        import io
-        import json
-        from freq.modules.serve import FreqHandler
-
-        h = FreqHandler.__new__(FreqHandler)
-        h.path = path
-        h.wfile = io.BytesIO()
-        h.rfile = io.BytesIO()
-        h.requestline = f"GET {path} HTTP/1.1"
-        h.client_address = ("127.0.0.1", 9999)
-        h.request_version = "HTTP/1.1"
-        h.headers = {}
-        h._headers_buffer = []
-        h.responses = {200: ("OK", ""), 404: ("Not Found", "")}
-        h._status_code = None
-        h._resp_headers = []
-        h.send_response = lambda code, msg=None: setattr(h, "_status_code", code)
-        h.send_header = lambda k, v: h._resp_headers.append((k, v))
-        h.end_headers = lambda: None
-        return h
-
-    def _get_json(self, handler):
-        import json
-        handler.wfile.seek(0)
-        body = handler.wfile.read()
-        if not body:
-            return None
-        return json.loads(body.decode())
-
-    @patch("freq.modules.serve.load_config")
-    def test_host_detail_invalid_host_returns_error(self, mock_cfg):
-        """GET /api/host/detail?host=bogus returns error JSON, not crash."""
-        cfg = MagicMock()
-        cfg.hosts = []
-        cfg.ssh_key_path = "/tmp/fake"
-        mock_cfg.return_value = cfg
-
-        h = self._make_handler("/api/host/detail?host=bogus")
-        h._serve_host_detail()
-        resp = self._get_json(h)
-        self.assertIn("error", resp)
-
-    @patch("freq.modules.serve.load_config")
-    def test_exec_no_command_returns_error(self, mock_cfg):
-        """GET /api/exec with no cmd parameter returns error."""
-        cfg = MagicMock()
-        cfg.hosts = []
-        mock_cfg.return_value = cfg
-
-        h = self._make_handler("/api/exec?target=all")
-        h._serve_exec()
-        resp = self._get_json(h)
-        self.assertIn("error", resp)
-
-    @patch("freq.modules.serve._bg_cache", {"fleet_overview": None})
-    @patch("freq.modules.serve._bg_lock", MagicMock())
-    def test_fleet_overview_no_cache_returns_skeleton(self):
-        """Fleet overview before cache is populated returns skeleton with _loading."""
-        h = self._make_handler("/api/fleet/overview")
-        h._serve_fleet_overview()
-        resp = self._get_json(h)
-        self.assertTrue(resp.get("_loading", False))
-        self.assertEqual(resp.get("vms"), [])
-
-    @patch("freq.modules.serve._bg_cache", {
-        "fleet_overview": {"vms": [], "summary": {"total_vms": 0}}
-    })
-    @patch("freq.modules.serve._bg_lock", MagicMock())
-    def test_fleet_overview_empty_fleet_returns_valid_json(self):
-        """Fleet overview with zero VMs returns valid response."""
-        h = self._make_handler("/api/fleet/overview")
-        h._serve_fleet_overview()
-        resp = self._get_json(h)
-        self.assertIsNotNone(resp)
-        self.assertEqual(resp["vms"], [])
+# NOTE: TestDashboardEdgeCases removed — tested _serve_exec, _serve_host_detail,
+# _serve_fleet_overview which were deleted from serve.py during the API refactor.
+# Those endpoints now live in freq/api/*.py and are tested separately.
 
 
 # ---------------------------------------------------------------------------

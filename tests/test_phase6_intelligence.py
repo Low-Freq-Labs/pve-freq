@@ -25,13 +25,16 @@ class TestPhase6Registration(unittest.TestCase):
                 self.registered.update(action.choices.keys())
 
     def test_logs_registered(self):
-        self.assertIn("logs", self.registered)
+        """logs is under 'observe' domain."""
+        self.assertIn("observe", self.registered)
 
     def test_oncall_registered(self):
-        self.assertIn("oncall", self.registered)
+        """oncall is under 'ops' domain."""
+        self.assertIn("ops", self.registered)
 
     def test_comply_registered(self):
-        self.assertIn("comply", self.registered)
+        """comply is under 'secure' domain."""
+        self.assertIn("secure", self.registered)
 
 
 class TestPhase6Parsing(unittest.TestCase):
@@ -40,58 +43,58 @@ class TestPhase6Parsing(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_logs_default(self):
-        args = self.parser.parse_args(["logs"])
+        args = self.parser.parse_args(["observe", "logs"])
         self.assertEqual(args.action, "tail")
         self.assertTrue(hasattr(args, "func"))
 
     def test_logs_search(self):
-        args = self.parser.parse_args(["logs", "search", "OOM", "--since", "2h"])
+        args = self.parser.parse_args(["observe", "logs", "search", "OOM", "--since", "2h"])
         self.assertEqual(args.action, "search")
         self.assertEqual(args.pattern, "OOM")
         self.assertEqual(args.since, "2h")
 
     def test_logs_stats(self):
-        args = self.parser.parse_args(["logs", "stats"])
+        args = self.parser.parse_args(["observe", "logs", "stats"])
         self.assertEqual(args.action, "stats")
 
     def test_oncall_default(self):
-        args = self.parser.parse_args(["oncall"])
+        args = self.parser.parse_args(["ops", "oncall"])
         self.assertEqual(args.action, "whoami")
         self.assertTrue(hasattr(args, "func"))
 
     def test_oncall_schedule(self):
-        args = self.parser.parse_args(["oncall", "schedule", "--users", "alice,bob"])
+        args = self.parser.parse_args(["ops", "oncall", "schedule", "--users", "alice,bob"])
         self.assertEqual(args.action, "schedule")
         self.assertEqual(args.users, "alice,bob")
 
     def test_oncall_alert(self):
-        args = self.parser.parse_args(["oncall", "alert", "--message", "Disk full",
+        args = self.parser.parse_args(["ops", "oncall", "alert", "--message", "Disk full",
                                        "--alert-severity", "critical"])
         self.assertEqual(args.action, "alert")
         self.assertEqual(args.message, "Disk full")
         self.assertEqual(args.alert_severity, "critical")
 
     def test_oncall_ack(self):
-        args = self.parser.parse_args(["oncall", "ack", "INC-001"])
+        args = self.parser.parse_args(["ops", "oncall", "ack", "INC-001"])
         self.assertEqual(args.action, "ack")
         self.assertEqual(args.name, "INC-001")
 
     def test_oncall_resolve(self):
-        args = self.parser.parse_args(["oncall", "resolve", "INC-001", "--note", "Fixed it"])
+        args = self.parser.parse_args(["ops", "oncall", "resolve", "INC-001", "--note", "Fixed it"])
         self.assertEqual(args.action, "resolve")
         self.assertEqual(args.note, "Fixed it")
 
     def test_comply_default(self):
-        args = self.parser.parse_args(["comply"])
+        args = self.parser.parse_args(["secure", "comply"])
         self.assertEqual(args.action, "scan")
         self.assertTrue(hasattr(args, "func"))
 
     def test_comply_report(self):
-        args = self.parser.parse_args(["comply", "report"])
+        args = self.parser.parse_args(["secure", "comply", "report"])
         self.assertEqual(args.action, "report")
 
     def test_comply_exceptions(self):
-        args = self.parser.parse_args(["comply", "exceptions"])
+        args = self.parser.parse_args(["secure", "comply", "exceptions"])
         self.assertEqual(args.action, "exceptions")
 
 
@@ -182,15 +185,16 @@ class TestComplyModule(unittest.TestCase):
 
 
 class TestPhase6CommandCount(unittest.TestCase):
-    def test_command_count_at_least_123(self):
+    def test_command_count_at_least_38(self):
+        """Domain-based CLI: 38+ top-level domains (not 123+ flat commands)."""
         from freq.cli import _build_parser
         parser = _build_parser()
         registered = set()
         for action in parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertGreaterEqual(len(registered), 123,
-                                f"Expected 123+, got {len(registered)}")
+        self.assertGreaterEqual(len(registered), 38,
+                                f"Expected 38+, got {len(registered)}")
 
 
 class TestPhase6Dispatch(unittest.TestCase):
@@ -199,15 +203,15 @@ class TestPhase6Dispatch(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_logs_has_func(self):
-        args = self.parser.parse_args(["logs"])
+        args = self.parser.parse_args(["observe", "logs"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_oncall_has_func(self):
-        args = self.parser.parse_args(["oncall"])
+        args = self.parser.parse_args(["ops", "oncall"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_comply_has_func(self):
-        args = self.parser.parse_args(["comply"])
+        args = self.parser.parse_args(["secure", "comply"])
         self.assertTrue(hasattr(args, "func"))
 
 

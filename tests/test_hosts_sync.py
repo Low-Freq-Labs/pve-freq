@@ -108,6 +108,13 @@ class TestHostsSync(unittest.TestCase):
         with open(cfg.hosts_file) as f:
             return f.read()
 
+    def _read_hosts_toml(self, cfg):
+        """Parse the TOML hosts file and return list of host dicts."""
+        import tomllib
+        with open(cfg.hosts_file, "rb") as f:
+            data = tomllib.load(f)
+        return data.get("host", [])
+
     # ── PVE VM discovery ──
 
     @patch("freq.core.ssh.run")
@@ -132,9 +139,9 @@ class TestHostsSync(unittest.TestCase):
         rc = _hosts_sync(cfg)
         self.assertEqual(rc, 0)
 
-        lines = self._read_hosts_conf(cfg)
-        ips = [l.split()[0] for l in lines]
-        self.assertIn("192.168.255.30", ips)
+        # Output is now TOML format — parse and check IPs
+        content = self._read_hosts_conf_raw(cfg)
+        self.assertIn('ip = "192.168.255.30"', content)
 
     @patch("freq.core.ssh.run")
     def test_preserves_existing_host_metadata(self, mock_ssh):
@@ -259,16 +266,9 @@ class TestHostsSync(unittest.TestCase):
         _hosts_sync(cfg)
 
         content = self._read_hosts_conf_raw(cfg)
-        # Label should be sanitized — no spaces (hosts.conf uses whitespace as delimiter)
-        lines = self._read_hosts_conf(cfg)
-        for line in lines:
-            if "192.168.255.10" in line:
-                label = line.split()[1]
-                self.assertNotIn(" ", label)
-                self.assertEqual(label, "idrac---truenas")
-                break
-        else:
-            self.fail("iDRAC host not found in hosts.conf")
+        # Label should be sanitized — output is TOML format now
+        self.assertIn('ip = "192.168.255.10"', content)
+        self.assertIn('label = "idrac---truenas"', content)
 
     # ── Backup creation ──
 
@@ -512,8 +512,8 @@ class TestHostsSync(unittest.TestCase):
     # ── Output format ──
 
     @patch("freq.core.ssh.run")
-    def test_output_has_section_headers(self, mock_ssh):
-        """Written hosts.conf contains section headers (Production, Lab)."""
+    def test_output_has_toml_structure(self, mock_ssh):
+        """Written hosts file uses TOML format with [[host]] entries."""
         existing = [
             Host(ip="192.168.255.30", label="plex", htype="docker", groups="prod,media"),
             Host(ip="192.168.10.60", label="lab-debian12", htype="linux", groups="lab,distro"),
@@ -537,8 +537,12 @@ class TestHostsSync(unittest.TestCase):
         _hosts_sync(cfg)
 
         content = self._read_hosts_conf_raw(cfg)
-        self.assertIn("# Production Fleet", content)
-        self.assertIn("# Lab Fleet", content)
+        # TOML format: header comment + [[host]] entries
+        self.assertIn("# FREQ Fleet Registry", content)
+        self.assertIn("[[host]]", content)
+        # Both existing and new hosts should be present
+        self.assertIn('label = "plex"', content)
+        self.assertIn('label = "lab-debian12"', content)
 
 
     # ── Multi-IP tracking ──
@@ -628,15 +632,12 @@ class TestHostsSync(unittest.TestCase):
         from freq.modules.hosts import _hosts_sync
         _hosts_sync(cfg)
 
-        lines = self._read_hosts_conf(cfg)
-        for line in lines:
-            if "plex" in line:
-                primary_ip = line.split()[0]
-                # Should pick MGMT VLAN IP as primary, not storage
-                self.assertEqual(primary_ip, "192.168.255.30")
-                break
-        else:
-            self.fail("plex not found in hosts.conf")
+        # Output is TOML — find the plex entry and verify its primary IP
+        hosts = self._read_hosts_toml(cfg)
+        plex_hosts = [h for h in hosts if h.get("label") == "plex"]
+        self.assertEqual(len(plex_hosts), 1, "plex not found in hosts file")
+        # Should pick MGMT VLAN IP as primary, not storage
+        self.assertEqual(plex_hosts[0]["ip"], "192.168.255.30")
 
     # ── Backwards compatibility ──
 

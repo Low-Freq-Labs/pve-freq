@@ -24,10 +24,10 @@ class TestPhase4Registration(unittest.TestCase):
                 self.registered.update(action.choices.keys())
 
     def test_patch_registered(self):
-        self.assertIn("patch", self.registered)
+        self.assertIn("secure", self.registered)  # patch under secure
 
     def test_stack_registered(self):
-        self.assertIn("stack", self.registered)
+        self.assertIn("docker", self.registered)  # stack under docker
 
     def test_docs_registered(self):
         self.assertIn("docs", self.registered)
@@ -39,50 +39,50 @@ class TestPhase4Parsing(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_patch_default(self):
-        args = self.parser.parse_args(["patch"])
+        args = self.parser.parse_args(["secure", "patch"])
         self.assertEqual(args.action, "status")
         self.assertTrue(hasattr(args, "func"))
 
     def test_patch_check(self):
-        args = self.parser.parse_args(["patch", "check"])
+        args = self.parser.parse_args(["secure", "patch", "check"])
         self.assertEqual(args.action, "check")
 
     def test_patch_apply(self):
-        args = self.parser.parse_args(["patch", "apply", "--target-host", "web-01"])
+        args = self.parser.parse_args(["secure", "patch", "apply", "--target-host", "web-01"])
         self.assertEqual(args.action, "apply")
         self.assertEqual(args.target_host, "web-01")
 
     def test_patch_hold(self):
-        args = self.parser.parse_args(["patch", "hold", "nginx"])
+        args = self.parser.parse_args(["secure", "patch", "hold", "nginx"])
         self.assertEqual(args.action, "hold")
         self.assertEqual(args.name, "nginx")
 
     def test_patch_compliance(self):
-        args = self.parser.parse_args(["patch", "compliance"])
+        args = self.parser.parse_args(["secure", "patch", "compliance"])
         self.assertEqual(args.action, "compliance")
 
     def test_stack_default(self):
-        args = self.parser.parse_args(["stack"])
+        args = self.parser.parse_args(["docker", "stack"])
         self.assertEqual(args.action, "status")
         self.assertTrue(hasattr(args, "func"))
 
     def test_stack_update(self):
-        args = self.parser.parse_args(["stack", "update", "media"])
+        args = self.parser.parse_args(["docker", "stack", "update", "media"])
         self.assertEqual(args.action, "update")
         self.assertEqual(args.name, "media")
 
     def test_stack_health(self):
-        args = self.parser.parse_args(["stack", "health"])
+        args = self.parser.parse_args(["docker", "stack", "health"])
         self.assertEqual(args.action, "health")
 
     def test_stack_logs(self):
-        args = self.parser.parse_args(["stack", "logs", "media", "--lines", "50"])
+        args = self.parser.parse_args(["docker", "stack", "logs", "media", "--lines", "50"])
         self.assertEqual(args.action, "logs")
         self.assertEqual(args.name, "media")
         self.assertEqual(args.lines, 50)
 
     def test_stack_template(self):
-        args = self.parser.parse_args(["stack", "template"])
+        args = self.parser.parse_args(["docker", "stack", "template"])
         self.assertEqual(args.action, "template")
 
     def test_docs_default(self):
@@ -198,8 +198,8 @@ class TestPhase4CommandCount(unittest.TestCase):
         for action in parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertGreaterEqual(len(registered), 117,
-                                f"Expected 117+, got {len(registered)}")
+        self.assertGreaterEqual(len(registered), 38,
+                                f"Expected 38+ domain commands, got {len(registered)}")
 
 
 class TestPhase4Dispatch(unittest.TestCase):
@@ -208,11 +208,11 @@ class TestPhase4Dispatch(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_patch_has_func(self):
-        args = self.parser.parse_args(["patch"])
+        args = self.parser.parse_args(["secure", "patch"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_stack_has_func(self):
-        args = self.parser.parse_args(["stack"])
+        args = self.parser.parse_args(["docker", "stack"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_docs_has_func(self):

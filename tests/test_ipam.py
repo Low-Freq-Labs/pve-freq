@@ -235,36 +235,37 @@ class TestListIPs(unittest.TestCase):
 
 
 class TestIPAMCLI(unittest.TestCase):
-    """Test CLI registration for ip command."""
+    """Test CLI registration for ip command (under net domain)."""
 
     def setUp(self):
         from freq.cli import _build_parser
         self.parser = _build_parser()
 
     def test_ip_registered(self):
+        """ip is registered as a subcommand under the 'net' domain."""
         import argparse
         registered = set()
         for action in self.parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertIn("ip", registered)
+        self.assertIn("net", registered)
 
     def test_ip_next(self):
-        args = self.parser.parse_args(["ip", "next", "--vlan", "mgmt"])
+        args = self.parser.parse_args(["net", "ip", "next", "--vlan", "mgmt"])
         self.assertEqual(args.action, "next")
         self.assertEqual(args.vlan, "mgmt")
 
     def test_ip_list(self):
-        args = self.parser.parse_args(["ip", "list"])
+        args = self.parser.parse_args(["net", "ip", "list"])
         self.assertEqual(args.action, "list")
 
     def test_ip_check(self):
-        args = self.parser.parse_args(["ip", "check", "10.0.0.50"])
+        args = self.parser.parse_args(["net", "ip", "check", "10.0.0.50"])
         self.assertEqual(args.action, "check")
         self.assertEqual(args.target, "10.0.0.50")
 
     def test_ip_count(self):
-        args = self.parser.parse_args(["ip", "next", "--vlan", "lan", "--count", "5"])
+        args = self.parser.parse_args(["net", "ip", "next", "--vlan", "lan", "--count", "5"])
         self.assertEqual(args.count, 5)
 
 

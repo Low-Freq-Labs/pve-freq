@@ -1885,6 +1885,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
     fmt.blank()
 
     ok = fail = 0
+    dev_pass = ""
 
     # Check for CLI bootstrap credentials (--bootstrap-key, --bootstrap-user)
     bootstrap_key = getattr(args, "bootstrap_key", None) if args else None

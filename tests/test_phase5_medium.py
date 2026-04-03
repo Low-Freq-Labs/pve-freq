@@ -25,13 +25,13 @@ class TestPhase5Registration(unittest.TestCase):
                 self.registered.update(action.choices.keys())
 
     def test_db_registered(self):
-        self.assertIn("db", self.registered)
+        self.assertIn("observe", self.registered)  # db under observe
 
     def test_proxy_registered(self):
-        self.assertIn("proxy", self.registered)
+        self.assertIn("proxy", self.registered)  # proxy under proxy
 
     def test_secrets_registered(self):
-        self.assertIn("secrets", self.registered)
+        self.assertIn("secure", self.registered)  # secrets under secure
 
 
 class TestPhase5Parsing(unittest.TestCase):
@@ -40,48 +40,46 @@ class TestPhase5Parsing(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_db_default(self):
-        args = self.parser.parse_args(["db"])
+        args = self.parser.parse_args(["observe", "db"])
         self.assertEqual(args.action, "status")
         self.assertTrue(hasattr(args, "func"))
 
     def test_db_size(self):
-        args = self.parser.parse_args(["db", "size"])
+        args = self.parser.parse_args(["observe", "db", "size"])
         self.assertEqual(args.action, "size")
 
     def test_proxy_default(self):
         args = self.parser.parse_args(["proxy"])
-        self.assertEqual(args.action, "status")
+        self.assertIsNone(args.subcmd)  # default has no subcmd
         self.assertTrue(hasattr(args, "func"))
 
     def test_proxy_add(self):
-        args = self.parser.parse_args(["proxy", "add", "--domain", "app.example.com",
-                                       "--upstream", "10.0.0.5:8080"])
-        self.assertEqual(args.action, "add")
-        self.assertEqual(args.domain, "app.example.com")
+        args = self.parser.parse_args(["proxy", "add", "--upstream", "10.0.0.5:8080"])
+        self.assertEqual(args.subcmd, "add")
         self.assertEqual(args.upstream, "10.0.0.5:8080")
 
-    def test_proxy_certs(self):
-        args = self.parser.parse_args(["proxy", "certs"])
-        self.assertEqual(args.action, "certs")
+    def test_proxy_list(self):
+        args = self.parser.parse_args(["proxy", "list"])
+        self.assertEqual(args.subcmd, "list")
 
     def test_secrets_default(self):
-        args = self.parser.parse_args(["secrets"])
+        args = self.parser.parse_args(["secure", "secrets"])
         self.assertEqual(args.action, "list")
         self.assertTrue(hasattr(args, "func"))
 
     def test_secrets_scan(self):
-        args = self.parser.parse_args(["secrets", "scan"])
+        args = self.parser.parse_args(["secure", "secrets", "scan"])
         self.assertEqual(args.action, "scan")
 
     def test_secrets_generate(self):
-        args = self.parser.parse_args(["secrets", "generate", "--secret-type", "token",
+        args = self.parser.parse_args(["secure", "secrets", "generate", "--secret-type", "token",
                                        "--length", "48"])
         self.assertEqual(args.action, "generate")
         self.assertEqual(args.secret_type, "token")
         self.assertEqual(args.length, 48)
 
     def test_secrets_lease(self):
-        args = self.parser.parse_args(["secrets", "lease", "my-key", "--expires", "90d"])
+        args = self.parser.parse_args(["secure", "secrets", "lease", "my-key", "--expires", "90d"])
         self.assertEqual(args.action, "lease")
         self.assertEqual(args.name, "my-key")
         self.assertEqual(args.expires, "90d")
@@ -161,8 +159,8 @@ class TestPhase5CommandCount(unittest.TestCase):
         for action in parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertGreaterEqual(len(registered), 120,
-                                f"Expected 120+, got {len(registered)}")
+        self.assertGreaterEqual(len(registered), 38,
+                                f"Expected 38+ domain commands, got {len(registered)}")
 
 
 class TestPhase5Dispatch(unittest.TestCase):
@@ -171,7 +169,7 @@ class TestPhase5Dispatch(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_db_has_func(self):
-        args = self.parser.parse_args(["db"])
+        args = self.parser.parse_args(["observe", "db"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_proxy_has_func(self):
@@ -179,7 +177,7 @@ class TestPhase5Dispatch(unittest.TestCase):
         self.assertTrue(hasattr(args, "func"))
 
     def test_secrets_has_func(self):
-        args = self.parser.parse_args(["secrets"])
+        args = self.parser.parse_args(["secure", "secrets"])
         self.assertTrue(hasattr(args, "func"))
 
 

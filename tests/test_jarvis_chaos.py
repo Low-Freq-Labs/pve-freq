@@ -100,6 +100,7 @@ class TestSafetyGates(unittest.TestCase):
     def test_safe_target_allowed(self):
         host = MagicMock()
         host.label = "lab-01"
+        host.vmid = 5001  # Lab VMID, not in blocked range
         cfg = self._make_cfg(hosts=[host])
         safe, reason = check_safety("lab-01", cfg)
         self.assertTrue(safe)

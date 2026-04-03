@@ -28,19 +28,19 @@ class TestPhase3Registration(unittest.TestCase):
                 self.registered.update(action.choices.keys())
 
     def test_schedule_registered(self):
-        self.assertIn("schedule", self.registered)
+        self.assertIn("auto", self.registered)  # schedule under auto
 
     def test_backup_policy_registered(self):
-        self.assertIn("backup-policy", self.registered)
+        self.assertIn("dr", self.registered)  # backup-policy (now 'policy') under dr
 
     def test_webhook_registered(self):
-        self.assertIn("webhook", self.registered)
+        self.assertIn("auto", self.registered)  # webhook under auto
 
     def test_migrate_plan_registered(self):
-        self.assertIn("migrate-plan", self.registered)
+        self.assertIn("dr", self.registered)  # migrate-plan under dr
 
     def test_migrate_vmware_registered(self):
-        self.assertIn("migrate-vmware", self.registered)
+        self.assertIn("dr", self.registered)  # migrate-vmware under dr
 
 
 class TestPhase3Parsing(unittest.TestCase):
@@ -51,13 +51,13 @@ class TestPhase3Parsing(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_schedule_default(self):
-        args = self.parser.parse_args(["schedule"])
+        args = self.parser.parse_args(["auto", "schedule"])
         self.assertEqual(args.action, "list")
         self.assertTrue(hasattr(args, "func"))
 
     def test_schedule_create(self):
         args = self.parser.parse_args([
-            "schedule", "create", "my-job",
+            "auto", "schedule", "create", "my-job",
             "--command", "freq trend snapshot",
             "--interval", "2h",
         ])
@@ -67,17 +67,17 @@ class TestPhase3Parsing(unittest.TestCase):
         self.assertEqual(args.interval, "2h")
 
     def test_schedule_templates(self):
-        args = self.parser.parse_args(["schedule", "templates"])
+        args = self.parser.parse_args(["auto", "schedule", "templates"])
         self.assertEqual(args.action, "templates")
 
     def test_backup_policy_default(self):
-        args = self.parser.parse_args(["backup-policy"])
+        args = self.parser.parse_args(["dr", "policy"])
         self.assertEqual(args.action, "list")
         self.assertTrue(hasattr(args, "func"))
 
     def test_backup_policy_create(self):
         args = self.parser.parse_args([
-            "backup-policy", "create", "prod-daily",
+            "dr", "policy", "create", "prod-daily",
             "--target", "prod", "--retention", "14",
         ])
         self.assertEqual(args.action, "create")
@@ -86,17 +86,17 @@ class TestPhase3Parsing(unittest.TestCase):
         self.assertEqual(args.retention, 14)
 
     def test_backup_policy_apply(self):
-        args = self.parser.parse_args(["backup-policy", "apply"])
+        args = self.parser.parse_args(["dr", "policy", "apply"])
         self.assertEqual(args.action, "apply")
 
     def test_webhook_default(self):
-        args = self.parser.parse_args(["webhook"])
+        args = self.parser.parse_args(["auto", "webhook"])
         self.assertEqual(args.action, "list")
         self.assertTrue(hasattr(args, "func"))
 
     def test_webhook_create(self):
         args = self.parser.parse_args([
-            "webhook", "create", "deploy-hook",
+            "auto", "webhook", "create", "deploy-hook",
             "--command", "freq gitops sync",
         ])
         self.assertEqual(args.action, "create")
@@ -104,23 +104,23 @@ class TestPhase3Parsing(unittest.TestCase):
         self.assertEqual(args.command, "freq gitops sync")
 
     def test_webhook_test(self):
-        args = self.parser.parse_args(["webhook", "test", "my-hook"])
+        args = self.parser.parse_args(["auto", "webhook", "test", "my-hook"])
         self.assertEqual(args.action, "test")
         self.assertEqual(args.name, "my-hook")
 
     def test_migrate_plan_default(self):
-        args = self.parser.parse_args(["migrate-plan"])
+        args = self.parser.parse_args(["dr", "migrate-plan"])
         self.assertEqual(args.action, "show")
         self.assertTrue(hasattr(args, "func"))
 
     def test_migrate_vmware_default(self):
-        args = self.parser.parse_args(["migrate-vmware"])
+        args = self.parser.parse_args(["dr", "migrate-vmware"])
         self.assertEqual(args.action, "scan")
         self.assertTrue(hasattr(args, "func"))
 
     def test_migrate_vmware_import(self):
         args = self.parser.parse_args([
-            "migrate-vmware", "import", "/tmp/vm.ova",
+            "dr", "migrate-vmware", "import", "/tmp/vm.ova",
             "--vmid", "200", "--node", "pve01",
         ])
         self.assertEqual(args.action, "import")
@@ -129,7 +129,7 @@ class TestPhase3Parsing(unittest.TestCase):
         self.assertEqual(args.node, "pve01")
 
     def test_migrate_vmware_status(self):
-        args = self.parser.parse_args(["migrate-vmware", "status"])
+        args = self.parser.parse_args(["dr", "migrate-vmware", "status"])
         self.assertEqual(args.action, "status")
 
 
@@ -315,8 +315,8 @@ class TestPhase3CommandCount(unittest.TestCase):
         for action in parser._subparsers._actions:
             if isinstance(action, argparse._SubParsersAction):
                 registered.update(action.choices.keys())
-        self.assertGreaterEqual(len(registered), 114,
-                                f"Expected 114+ commands, got {len(registered)}")
+        self.assertGreaterEqual(len(registered), 38,
+                                f"Expected 38+ domain commands, got {len(registered)}")
 
 
 class TestPhase3Dispatch(unittest.TestCase):
@@ -327,23 +327,23 @@ class TestPhase3Dispatch(unittest.TestCase):
         self.parser = _build_parser()
 
     def test_schedule_has_func(self):
-        args = self.parser.parse_args(["schedule"])
+        args = self.parser.parse_args(["auto", "schedule"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_backup_policy_has_func(self):
-        args = self.parser.parse_args(["backup-policy"])
+        args = self.parser.parse_args(["dr", "policy"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_webhook_has_func(self):
-        args = self.parser.parse_args(["webhook"])
+        args = self.parser.parse_args(["auto", "webhook"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_migrate_plan_has_func(self):
-        args = self.parser.parse_args(["migrate-plan"])
+        args = self.parser.parse_args(["dr", "migrate-plan"])
         self.assertTrue(hasattr(args, "func"))
 
     def test_migrate_vmware_has_func(self):
-        args = self.parser.parse_args(["migrate-vmware"])
+        args = self.parser.parse_args(["dr", "migrate-vmware"])
         self.assertTrue(hasattr(args, "func"))
 
 
