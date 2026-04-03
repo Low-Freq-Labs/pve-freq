@@ -130,9 +130,9 @@ document.addEventListener('click',function(e){
     if(a==='hdDiagnose'){hdDiagnose(da);return;}
     if(a==='togglePveGroup'){togglePveGroup(da);return;}
     if(a==='clearHarden'){document.getElementById('harden-c').innerHTML='';return;}
-    var fns={sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,vmtRollback:vmtRollback,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll,pfWriteService:pfWriteService,pfWriteDhcp:pfWriteDhcp,pfWriteRule:pfWriteRule,pfWriteNat:pfWriteNat,pfWriteWgPeer:pfWriteWgPeer,pfBackupNow:pfBackupNow,pfCheckUpdates:pfCheckUpdates,pfReboot:pfReboot,tnWriteService:tnWriteService,tnWriteScrub:tnWriteScrub,tnWriteShare:tnWriteShare,tnWriteReplication:tnWriteReplication,tnReboot:tnReboot,swWriteAcl:swWriteAcl};
+    var fns={sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,vmtRollback:vmtRollback,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll,pfWriteService:pfWriteService,pfWriteDhcp:pfWriteDhcp,pfWriteRule:pfWriteRule,pfWriteNat:pfWriteNat,pfWriteWgPeer:pfWriteWgPeer,pfBackupNow:pfBackupNow,pfCheckUpdates:pfCheckUpdates,pfReboot:pfReboot,tnWriteService:tnWriteService,tnWriteScrub:tnWriteScrub,tnWriteShare:tnWriteShare,tnWriteReplication:tnWriteReplication,tnReboot:tnReboot,swWriteAcl:swWriteAcl,opnWriteService:opnWriteService,opnWriteRule:opnWriteRule,opnDeleteRule:opnDeleteRule,opnWriteDhcp:opnWriteDhcp,opnWriteDns:opnWriteDns,opnWriteWg:opnWriteWg,opnReboot:opnReboot,ipmiClearSel:ipmiClearSel,synWriteService:synWriteService,synReboot:synReboot};
     if(fns[a]){fns[a]();return;}
-    var argFns={tnAction:tnAction,swAction:swAction,pfAction:pfAction,idracAction:idracAction,idracWrite:idracWrite,tnWriteSnapshot:tnWriteSnapshot,tnWriteDataset:tnWriteDataset,swWriteVlan:swWriteVlan,switchVaultTab:switchVaultTab,switchDockerSub:switchDockerSub,toggleMediaTag:toggleMediaTag,runHostUpdate:runHostUpdate,sshdRestartHost:sshdRestartHost,ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart};
+    var argFns={tnAction:tnAction,swAction:swAction,pfAction:pfAction,idracAction:idracAction,idracWrite:idracWrite,opnAction:opnAction,ipmiAction:ipmiAction,ipmiWrite:ipmiWrite,ipmiWriteBoot:ipmiWriteBoot,redfishAction:redfishAction,redfishWrite:redfishWrite,synAction:synAction,tnWriteSnapshot:tnWriteSnapshot,tnWriteDataset:tnWriteDataset,swWriteVlan:swWriteVlan,switchVaultTab:switchVaultTab,switchDockerSub:switchDockerSub,toggleMediaTag:toggleMediaTag,runHostUpdate:runHostUpdate,sshdRestartHost:sshdRestartHost,ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart};
     if(argFns[a]){argFns[a](g);return;}
   }
 });
@@ -298,7 +298,32 @@ var API={
   PFSENSE_RULES:'/api/pfsense/rules',PFSENSE_NAT:'/api/pfsense/nat',
   PFSENSE_WG_PEER:'/api/pfsense/wg/peer',PFSENSE_UPDATES:'/api/pfsense/updates',
   SWITCH_VLAN_CREATE:'/api/v1/net/switch/vlan/create',SWITCH_VLAN_DELETE:'/api/v1/net/switch/vlan/delete',
-  SWITCH_ACL:'/api/v1/net/switch/acl'
+  SWITCH_ACL:'/api/v1/net/switch/acl',
+  /* ── OPNsense ── */
+  OPN_STATUS:'/api/opnsense/status',OPN_SERVICES:'/api/opnsense/services',OPN_SVC_ACTION:'/api/opnsense/service/action',
+  OPN_RULES:'/api/opnsense/rules',OPN_RULES_ADD:'/api/opnsense/rules/add',OPN_RULES_DEL:'/api/opnsense/rules/delete',
+  OPN_DHCP:'/api/opnsense/dhcp',OPN_DHCP_ADD:'/api/opnsense/dhcp/add',OPN_DHCP_DEL:'/api/opnsense/dhcp/delete',
+  OPN_DNS:'/api/opnsense/dns',OPN_DNS_ADD:'/api/opnsense/dns/add',OPN_DNS_DEL:'/api/opnsense/dns/delete',
+  OPN_WG:'/api/opnsense/wireguard',OPN_WG_ADD:'/api/opnsense/wireguard/add',
+  OPN_FW:'/api/opnsense/firmware',OPN_REBOOT:'/api/opnsense/reboot',
+  /* ── Generic IPMI ── */
+  IPMI_STATUS:'/api/ipmi/status',IPMI_SENSORS:'/api/ipmi/sensors',IPMI_SEL:'/api/ipmi/sel',
+  IPMI_POWER:'/api/ipmi/power',IPMI_BOOT:'/api/ipmi/boot',IPMI_SEL_CLEAR:'/api/ipmi/sel/clear',
+  /* ── Redfish ── */
+  RF_SYSTEM:'/api/redfish/system',RF_THERMAL:'/api/redfish/thermal',RF_POWER_USAGE:'/api/redfish/power-usage',
+  RF_EVENTS:'/api/redfish/events',RF_POWER:'/api/redfish/power',
+  /* ── Synology ── */
+  SYN_STATUS:'/api/synology/status',SYN_STORAGE:'/api/synology/storage',SYN_SHARES:'/api/synology/shares',
+  SYN_DOCKER:'/api/synology/docker',SYN_PACKAGES:'/api/synology/packages',
+  SYN_SERVICE:'/api/synology/service',SYN_REBOOT:'/api/synology/reboot',
+  /* ── WoL + Benchmarks ── */
+  WOL:'/api/wol',BENCH_RUN:'/api/bench/run',BENCH_RESULTS:'/api/bench/results',
+  BENCH_NETSPEED:'/api/bench/netspeed',BENCH_TOOLS:'/api/bench/tools',
+  /* ── Log Aggregation ── */
+  LOGS_FLEET:'/api/logs/fleet',LOGS_SEARCH:'/api/logs/search',LOGS_OOM:'/api/logs/oom',LOGS_AUTH:'/api/logs/auth',
+  /* ── Backup Verify + Cert Expiry ── */
+  BACKUP_VERIFY_RUN:'/api/backup/verify',BACKUP_VERIFY_STATUS:'/api/backup/verify/status',
+  CERT_EXPIRY:'/api/cert/expiry'
 };
 var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switch */
 
@@ -3665,6 +3690,26 @@ var INFRA_ACTIONS={
     {l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"},
     /* Write operations */
     {l:'\u26a1 POWER ON',f:"idracWrite('poweron')",w:1},{l:'\u26a1 POWER OFF',f:"idracWrite('poweroff')",w:2},{l:'\u26a1 POWER CYCLE',f:"idracWrite('powercycle')",w:2},{l:'\u26a1 HARD RESET',f:"idracWrite('hardreset')",w:2},{l:'\u26a1 GRACEFUL OFF',f:"idracWrite('graceshutdown')",w:1},{l:'\u2699 CLEAR SEL',f:"idracWrite('clearsel')",w:1},{l:'\u2699 BOOT PXE',f:"idracWrite('bootpxe')",w:1},{l:'\u2699 BOOT BIOS',f:"idracWrite('bootbios')",w:1}
+  ],
+  /* ── OPNsense (REST API — not SSH) ── */
+  opnsense:[
+    {l:'STATUS',f:"opnAction('status')"},{l:'SERVICES',f:"opnAction('services')"},{l:'FW RULES',f:"opnAction('rules')"},{l:'DHCP',f:"opnAction('dhcp')"},{l:'DNS OVERRIDES',f:"opnAction('dns')"},{l:'WIREGUARD',f:"opnAction('wireguard')"},{l:'FIRMWARE',f:"opnAction('firmware')"},
+    {l:'\u2699 RESTART SVC',f:"opnWriteService()",w:1},{l:'\u2699 ADD FW RULE',f:"opnWriteRule()",w:1},{l:'\u2699 DELETE FW RULE',f:"opnDeleteRule()",w:2},{l:'\u2699 ADD DHCP',f:"opnWriteDhcp()",w:1},{l:'\u2699 ADD DNS',f:"opnWriteDns()",w:1},{l:'\u2699 ADD WG PEER',f:"opnWriteWg()",w:1},{l:'\u26a0 REBOOT',f:"opnReboot()",w:2}
+  ],
+  /* ── Synology DSM (REST API) ── */
+  synology:[
+    {l:'SYSTEM',f:"synAction('status')"},{l:'STORAGE',f:"synAction('storage')"},{l:'SHARES',f:"synAction('shares')"},{l:'DOCKER',f:"synAction('docker')"},{l:'PACKAGES',f:"synAction('packages')"},
+    {l:'\u2699 START/STOP PKG',f:"synWriteService()",w:1},{l:'\u26a0 REBOOT',f:"synReboot()",w:2}
+  ],
+  /* ── Generic IPMI (ipmitool from controller) ── */
+  ipmi:[
+    {l:'STATUS',f:"ipmiAction('status')"},{l:'SENSORS',f:"ipmiAction('sensors')"},{l:'EVENT LOG',f:"ipmiAction('sel')"},
+    {l:'\u26a1 POWER ON',f:"ipmiWrite('on')",w:1},{l:'\u26a1 POWER OFF',f:"ipmiWrite('off')",w:2},{l:'\u26a1 POWER CYCLE',f:"ipmiWrite('cycle')",w:2},{l:'\u26a1 RESET',f:"ipmiWrite('reset')",w:2},{l:'\u2699 BOOT PXE',f:"ipmiWriteBoot('pxe')",w:1},{l:'\u2699 BOOT BIOS',f:"ipmiWriteBoot('bios')",w:1},{l:'\u2699 CLEAR SEL',f:"ipmiClearSel()",w:1}
+  ],
+  /* ── HP iLO / Redfish ── */
+  ilo:[
+    {l:'SYSTEM',f:"redfishAction('system')"},{l:'THERMAL',f:"redfishAction('thermal')"},{l:'POWER USAGE',f:"redfishAction('power-usage')"},{l:'EVENTS',f:"redfishAction('events')"},
+    {l:'\u26a1 POWER ON',f:"redfishWrite('On')",w:1},{l:'\u26a1 FORCE OFF',f:"redfishWrite('ForceOff')",w:2},{l:'\u26a1 GRACEFUL OFF',f:"redfishWrite('GracefulShutdown')",w:1},{l:'\u26a1 FORCE RESTART',f:"redfishWrite('ForceRestart')",w:2}
   ]
 };
 function loadMetricsQuick(){
@@ -3911,7 +3956,7 @@ function _renderFleetData(fo,hd,md){
     var foDuration=fo?fo.duration:0;
     var hdDuration=hd?hd.duration:0;
     /* Infrastructure role cards — sorted: firewall → switch → network_storage → bmc */
-    var _infraOrder={pfsense:1,opnsense:1,switch:2,truenas:3,bmc:4,idrac:4};
+    var _infraOrder={pfsense:1,opnsense:1,switch:2,truenas:3,synology:3,unraid:3,bmc:4,idrac:4,ilo:4,ipmi:4};
     var sortedPhysicals=physicals.slice().sort(function(a,b){return (_infraOrder[a.type]||99)-(_infraOrder[b.type]||99);});
     var infraCards='';
     sortedPhysicals.forEach(function(ph){infraCards+=_infraRoleCard(ph,healthMap);});
@@ -5702,6 +5747,175 @@ function swWriteAcl(){
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   OPNSENSE — REST API handlers (separate from pfSense SSH)
+   ═══════════════════════════════════════════════════════════════════ */
+function opnAction(action){
+  var o=_infraOut('pf-out');if(!o)return;
+  o.innerHTML='<div class="skeleton"></div>';
+  var url={status:API.OPN_STATUS,services:API.OPN_SERVICES,rules:API.OPN_RULES,dhcp:API.OPN_DHCP,dns:API.OPN_DNS,wireguard:API.OPN_WG,firmware:API.OPN_FW};
+  _authFetch(url[action]||API.OPN_STATUS).then(function(r){return r.json()}).then(function(d){
+    if(d.error){o.innerHTML='<div class="c-red">'+d.error+'</div>';return;}
+    if(d.rows){
+      var html='<div class="c-green mb-8" style="font-weight:600">OPNSENSE \u2014 '+action.toUpperCase()+' ('+d.rows.length+' items)</div>';
+      html+='<pre style="font-size:11px;color:var(--text);white-space:pre-wrap;font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px">'+JSON.stringify(d.rows.slice(0,20),null,2).replace(/</g,'&lt;')+'</pre>';
+      o.innerHTML=html;
+    } else {
+      o.innerHTML=_infraPre('OPNSENSE \u2014 '+action.toUpperCase(),JSON.stringify(d,null,2));
+    }
+  }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
+}
+function opnWriteService(){
+  _writeForm([
+    {id:'service',label:'Service Name',placeholder:'unbound'},
+    {id:'action',label:'Action',type:'select',options:['restart','start','stop']}
+  ],'EXECUTE',function(v){
+    if(!v.service){toast('Service name required','error');return;}
+    if(!confirm(v.action.toUpperCase()+' '+v.service+' on OPNsense?'))return;
+    _writePost(API.OPN_SVC_ACTION,{service:v.service,action:v.action},v.action.toUpperCase()+' '+v.service);
+  });
+}
+function opnWriteRule(){
+  _writeForm([
+    {id:'action',label:'Action',type:'select',options:['pass','block']},
+    {id:'direction',label:'Direction',type:'select',options:['in','out']},
+    {id:'interface',label:'Interface',placeholder:'lan'},
+    {id:'protocol',label:'Protocol',type:'select',options:['any','TCP','UDP','ICMP']},
+    {id:'source',label:'Source',placeholder:'any or 10.0.0.0/24'},
+    {id:'destination',label:'Destination',placeholder:'any or 10.0.0.0/24'},
+    {id:'port',label:'Port',placeholder:'443'},
+    {id:'description',label:'Description',placeholder:'Allow HTTPS'}
+  ],'ADD RULE (with savepoint)',function(v){
+    if(!confirm('Add '+v.action+' rule? OPNsense will use savepoint/rollback for safety.'))return;
+    _writePost(API.OPN_RULES_ADD,{action:v.action,direction:v.direction,interface:v.interface||'lan',protocol:v.protocol,source:v.source||'any',destination:v.destination||'any',port:v.port,description:v.description||'Added via FREQ'},'Add firewall rule (with savepoint)');
+  });
+}
+function opnDeleteRule(){
+  _writeForm([{id:'uuid',label:'Rule UUID',placeholder:'paste UUID from rule list'}],'DELETE RULE',function(v){
+    if(!v.uuid){toast('UUID required','error');return;}
+    if(!confirm('DELETE rule '+v.uuid+'?'))return;
+    _writePost(API.OPN_RULES_DEL,{uuid:v.uuid},'Delete firewall rule');
+  });
+}
+function opnWriteDhcp(){
+  _writeForm([
+    {id:'mac',label:'MAC Address',placeholder:'AA:BB:CC:DD:EE:FF'},
+    {id:'ip',label:'IP Address',placeholder:'10.0.0.50'},
+    {id:'hostname',label:'Hostname',placeholder:'my-device'}
+  ],'ADD DHCP RESERVATION',function(v){
+    if(!v.mac||!v.ip){toast('MAC and IP required','error');return;}
+    if(!confirm('Add DHCP reservation: '+v.mac+' \u2192 '+v.ip+'?'))return;
+    _writePost(API.OPN_DHCP_ADD,{mac:v.mac,ip:v.ip,hostname:v.hostname},'Add DHCP reservation');
+  });
+}
+function opnWriteDns(){
+  _writeForm([
+    {id:'host',label:'Hostname',placeholder:'myapp'},
+    {id:'domain',label:'Domain',placeholder:'lab.local'},
+    {id:'ip',label:'IP Address',placeholder:'10.0.0.50'}
+  ],'ADD DNS OVERRIDE',function(v){
+    if(!v.host||!v.ip){toast('Hostname and IP required','error');return;}
+    _writePost(API.OPN_DNS_ADD,{host:v.host,domain:v.domain||'',ip:v.ip},'Add DNS override');
+  });
+}
+function opnWriteWg(){
+  _writeForm([
+    {id:'name',label:'Peer Name',placeholder:'my-laptop'},
+    {id:'pubkey',label:'Public Key',placeholder:'base64 key'},
+    {id:'tunneladdress',label:'Tunnel Address',placeholder:'10.25.100.5/32'}
+  ],'ADD WIREGUARD PEER',function(v){
+    if(!v.pubkey||!v.tunneladdress){toast('Public key and tunnel address required','error');return;}
+    _writePost(API.OPN_WG_ADD,{name:v.name,pubkey:v.pubkey,tunneladdress:v.tunneladdress},'Add WireGuard peer');
+  });
+}
+function opnReboot(){
+  if(!confirm('REBOOT OPNsense? All network services will be interrupted!'))return;
+  if(!confirm('Are you REALLY sure?'))return;
+  _writePost(API.OPN_REBOOT,{confirm:true},'Reboot OPNsense');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   GENERIC IPMI — ipmitool from controller
+   ═══════════════════════════════════════════════════════════════════ */
+function ipmiAction(action){
+  var target=_cardState.host||'';
+  var o=_infraOut('idrac-out');if(!o)return;
+  o.innerHTML='<div class="skeleton"></div>';
+  var url={status:API.IPMI_STATUS,sensors:API.IPMI_SENSORS,sel:API.IPMI_SEL};
+  _authFetch((url[action]||API.IPMI_STATUS)+(target?'?target='+encodeURIComponent(target):'')).then(function(r){return r.json()}).then(function(d){
+    if(d.error){o.innerHTML='<div class="c-red">'+d.error+'</div>';return;}
+    o.innerHTML=_infraPre((target||'IPMI').toUpperCase()+' \u2014 '+action.toUpperCase(),d.output||JSON.stringify(d,null,2));
+  }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
+}
+function ipmiWrite(action){
+  var target=_cardState.host||'';
+  if(!target){toast('Open an IPMI card first','error');return;}
+  var msgs={on:'POWER ON',off:'POWER OFF',cycle:'POWER CYCLE',reset:'HARD RESET'};
+  if(!confirm((msgs[action]||action)+' on '+target.toUpperCase()+'?'))return;
+  _writePost(API.IPMI_POWER,{target:target,action:action},(msgs[action]||action)+' '+target);
+}
+function ipmiWriteBoot(device){
+  var target=_cardState.host||'';
+  if(!target){toast('Open an IPMI card first','error');return;}
+  if(!confirm('Set next boot to '+device.toUpperCase()+' on '+target.toUpperCase()+'?'))return;
+  _writePost(API.IPMI_BOOT,{target:target,device:device},'Set boot '+device+' on '+target);
+}
+function ipmiClearSel(){
+  var target=_cardState.host||'';
+  if(!target){toast('Open an IPMI card first','error');return;}
+  if(!confirm('Clear event log on '+target.toUpperCase()+'?'))return;
+  _writePost(API.IPMI_SEL_CLEAR,{target:target},'Clear SEL on '+target);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   REDFISH — HP iLO + Supermicro + any Redfish BMC
+   ═══════════════════════════════════════════════════════════════════ */
+function redfishAction(action){
+  var target=_cardState.host||'';
+  var o=_infraOut('idrac-out');if(!o)return;
+  o.innerHTML='<div class="skeleton"></div>';
+  var url={system:API.RF_SYSTEM,thermal:API.RF_THERMAL,'power-usage':API.RF_POWER_USAGE,events:API.RF_EVENTS};
+  _authFetch((url[action]||API.RF_SYSTEM)+(target?'?target='+encodeURIComponent(target):'')).then(function(r){return r.json()}).then(function(d){
+    if(d.error){o.innerHTML='<div class="c-red">'+d.error+'</div>';return;}
+    o.innerHTML=_infraPre((target||'REDFISH').toUpperCase()+' \u2014 '+action.toUpperCase(),JSON.stringify(d,null,2));
+  }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
+}
+function redfishWrite(action){
+  var target=_cardState.host||'';
+  if(!target){toast('Open a BMC card first','error');return;}
+  var msgs={On:'POWER ON',ForceOff:'FORCE OFF',GracefulShutdown:'GRACEFUL SHUTDOWN',ForceRestart:'FORCE RESTART'};
+  if(!confirm((msgs[action]||action)+' on '+target.toUpperCase()+'?'))return;
+  _writePost(API.RF_POWER,{target:target,action:action},(msgs[action]||action)+' '+target);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SYNOLOGY DSM — REST API handlers
+   ═══════════════════════════════════════════════════════════════════ */
+function synAction(action){
+  var o=_infraOut('tn-out');if(!o)return;
+  o.innerHTML='<div class="skeleton"></div>';
+  var url={status:API.SYN_STATUS,storage:API.SYN_STORAGE,shares:API.SYN_SHARES,docker:API.SYN_DOCKER,packages:API.SYN_PACKAGES};
+  _authFetch(url[action]||API.SYN_STATUS).then(function(r){return r.json()}).then(function(d){
+    if(d.error){o.innerHTML='<div class="c-red">'+d.error+'</div>';return;}
+    o.innerHTML=_infraPre('SYNOLOGY \u2014 '+action.toUpperCase(),JSON.stringify(d,null,2));
+  }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
+}
+function synWriteService(){
+  _writeForm([
+    {id:'package',label:'Package Name',placeholder:'ContainerManager'},
+    {id:'action',label:'Action',type:'select',options:['start','stop']}
+  ],'EXECUTE',function(v){
+    if(!v.package){toast('Package name required','error');return;}
+    if(!confirm(v.action.toUpperCase()+' '+v.package+' on Synology?'))return;
+    _writePost(API.SYN_SERVICE,{package:v.package,action:v.action},v.action.toUpperCase()+' '+v.package);
+  });
+}
+function synReboot(){
+  if(!confirm('REBOOT Synology NAS? All services will be interrupted!'))return;
+  if(!confirm('Are you REALLY sure? This will take storage offline.'))return;
+  _writePost(API.SYN_REBOOT,{confirm:true},'Reboot Synology');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    SECURITY
    ═══════════════════════════════════════════════════════════════════ */
 function loadVault(){
@@ -6820,7 +7034,7 @@ function _findInfraType(label){
   return null;
 }
 function _getInfraFn(type){
-  var map={pfsense:pfAction,opnsense:pfAction,truenas:tnAction,synology:tnAction,unraid:tnAction,switch:swAction,idrac:idracAction,ilo:idracAction,ipmi:idracAction};
+  var map={pfsense:pfAction,opnsense:opnAction,truenas:tnAction,synology:synAction,unraid:tnAction,switch:swAction,idrac:idracAction,ilo:redfishAction,ipmi:ipmiAction};
   return map[type]||null;
 }
 function _runPveNodeCmd(label,ip,cmd){
