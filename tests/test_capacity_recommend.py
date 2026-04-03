@@ -145,8 +145,9 @@ class TestCapacityAPI(unittest.TestCase):
     """Test capacity API route exists."""
 
     def test_recommend_route_exists(self):
-        from freq.modules.serve import FreqHandler
-        self.assertIn("/api/capacity/recommend", FreqHandler._ROUTES)
+        from freq.api import build_routes
+        v1_routes = build_routes()
+        self.assertIn("/api/capacity/recommend", v1_routes)
 
 
 if __name__ == "__main__":

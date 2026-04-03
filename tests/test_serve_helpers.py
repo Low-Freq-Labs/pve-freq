@@ -282,101 +282,113 @@ class TestCheckVmPermission(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════
 
 class TestCheckSessionRole(unittest.TestCase):
-    """Test session-based role authorization."""
+    """Test session-based role authorization.
+
+    Auth tokens moved from FreqHandler._auth_tokens to freq.api.auth._auth_tokens
+    during the Phase 3.1 refactor.  check_session_role now requires a valid token
+    (no-token returns error, not admin).
+    """
 
     def setUp(self):
-        from freq.modules.serve import _check_session_role, FreqHandler
+        import freq.api.auth as auth_mod
+        from freq.modules.serve import _check_session_role
         self.fn = _check_session_role
-        self.handler_cls = FreqHandler
-        # Save and reset auth tokens for each test
-        self._orig_tokens = dict(FreqHandler._auth_tokens)
-        FreqHandler._auth_tokens.clear()
+        self.auth_mod = auth_mod
+        self._orig_tokens = dict(auth_mod._auth_tokens)
+        auth_mod._auth_tokens.clear()
 
     def tearDown(self):
-        self.handler_cls._auth_tokens.clear()
-        self.handler_cls._auth_tokens.update(self._orig_tokens)
+        self.auth_mod._auth_tokens.clear()
+        self.auth_mod._auth_tokens.update(self._orig_tokens)
 
-    def test_no_token_returns_admin(self):
-        """When no token system is active, assume admin."""
-        h = _mock_handler("/api/test")
-        role, err = self.fn(h)
-        self.assertEqual(role, "admin")
-        self.assertIsNone(err)
+    def _handler(self, path):
+        """Create a mock handler with proper headers dict for auth checks."""
+        h = MagicMock()
+        h.path = path
+        h.headers = {}  # real dict so .get("Authorization", "") works correctly
+        return h
 
-    def test_empty_token_returns_admin(self):
-        h = _mock_handler("/api/test?token=")
+    def test_no_token_requires_auth(self):
+        """When no token is provided, auth is required."""
+        h = self._handler("/api/test")
         role, err = self.fn(h)
-        self.assertEqual(role, "admin")
-        self.assertIsNone(err)
+        self.assertIsNone(role)
+        self.assertIn("required", err.lower())
+
+    def test_empty_token_requires_auth(self):
+        h = self._handler("/api/test?token=")
+        role, err = self.fn(h)
+        self.assertIsNone(role)
+        self.assertIn("required", err.lower())
 
     def test_invalid_token_returns_error(self):
-        h = _mock_handler("/api/test?token=invalid123")
+        h = self._handler("/api/test?token=invalid123")
         role, err = self.fn(h)
         self.assertIsNone(role)
         self.assertIn("expired", err.lower())
 
     def test_valid_admin_token(self):
-        self.handler_cls._auth_tokens["tok1"] = {
+        self.auth_mod._auth_tokens["tok1"] = {
             "user": "admin", "role": "admin", "ts": time.time()
         }
-        h = _mock_handler("/api/test?token=tok1")
+        h = self._handler("/api/test?token=tok1")
         role, err = self.fn(h, min_role="admin")
         self.assertEqual(role, "admin")
         self.assertIsNone(err)
 
     def test_valid_operator_token(self):
-        self.handler_cls._auth_tokens["tok2"] = {
+        self.auth_mod._auth_tokens["tok2"] = {
             "user": "ops", "role": "operator", "ts": time.time()
         }
-        h = _mock_handler("/api/test?token=tok2")
+        h = self._handler("/api/test?token=tok2")
         role, err = self.fn(h, min_role="operator")
         self.assertEqual(role, "operator")
         self.assertIsNone(err)
 
     def test_viewer_blocked_from_operator(self):
-        self.handler_cls._auth_tokens["tok3"] = {
+        self.auth_mod._auth_tokens["tok3"] = {
             "user": "viewer", "role": "viewer", "ts": time.time()
         }
-        h = _mock_handler("/api/test?token=tok3")
+        h = self._handler("/api/test?token=tok3")
         role, err = self.fn(h, min_role="operator")
         self.assertIsNone(role)
         self.assertIn("requires", err.lower())
 
     def test_operator_blocked_from_admin(self):
-        self.handler_cls._auth_tokens["tok4"] = {
+        self.auth_mod._auth_tokens["tok4"] = {
             "user": "ops", "role": "operator", "ts": time.time()
         }
-        h = _mock_handler("/api/test?token=tok4")
+        h = self._handler("/api/test?token=tok4")
         role, err = self.fn(h, min_role="admin")
         self.assertIsNone(role)
         self.assertIn("requires", err.lower())
 
     def test_admin_can_access_viewer(self):
-        self.handler_cls._auth_tokens["tok5"] = {
+        self.auth_mod._auth_tokens["tok5"] = {
             "user": "admin", "role": "admin", "ts": time.time()
         }
-        h = _mock_handler("/api/test?token=tok5")
+        h = self._handler("/api/test?token=tok5")
         role, err = self.fn(h, min_role="viewer")
         self.assertEqual(role, "admin")
 
     def test_expired_token(self):
-        from freq.modules.serve import SESSION_TIMEOUT_SECONDS
-        self.handler_cls._auth_tokens["old"] = {
+        from freq.api.auth import SESSION_TIMEOUT_SECONDS
+        self.auth_mod._auth_tokens["old"] = {
             "user": "admin", "role": "admin",
             "ts": time.time() - SESSION_TIMEOUT_SECONDS - 1
         }
-        h = _mock_handler("/api/test?token=old")
+        h = self._handler("/api/test?token=old")
         role, err = self.fn(h)
         self.assertIsNone(role)
         self.assertIn("expired", err.lower())
         # Expired token should be removed
-        self.assertNotIn("old", self.handler_cls._auth_tokens)
+        self.assertNotIn("old", self.auth_mod._auth_tokens)
 
     def test_default_min_role_is_operator(self):
-        self.handler_cls._auth_tokens["tok6"] = {
+        self.auth_mod._auth_tokens["tok6"] = {
             "user": "viewer", "role": "viewer", "ts": time.time()
         }
-        h = _mock_handler("/api/test?token=tok6")
+        h = self._handler("/api/test?token=tok6")
         role, err = self.fn(h)  # default min_role="operator"
         self.assertIsNone(role)
         self.assertIn("requires", err.lower())
@@ -570,11 +582,11 @@ class TestServeConstants(unittest.TestCase):
     """Verify serve.py constants are sane."""
 
     def test_session_timeout_positive(self):
-        from freq.modules.serve import SESSION_TIMEOUT_SECONDS
+        from freq.api.auth import SESSION_TIMEOUT_SECONDS
         self.assertGreater(SESSION_TIMEOUT_SECONDS, 0)
 
     def test_session_timeout_reasonable(self):
-        from freq.modules.serve import SESSION_TIMEOUT_SECONDS
+        from freq.api.auth import SESSION_TIMEOUT_SECONDS
         # Should be between 1 hour and 24 hours
         self.assertGreaterEqual(SESSION_TIMEOUT_SECONDS, 3600)
         self.assertLessEqual(SESSION_TIMEOUT_SECONDS, 86400)

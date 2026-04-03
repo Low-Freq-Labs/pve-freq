@@ -140,15 +140,15 @@ class TestCLIDispatch(unittest.TestCase):
     def test_fw_action(self):
         args = self.parser.parse_args(["fw", "status"])
         self.assertEqual(args.domain, "fw")
-        self.assertEqual(args.action, "status")
+        self.assertEqual(args.subcmd, "status")
 
     def test_cert_parses(self):
         args = self.parser.parse_args(["cert", "scan"])
-        self.assertEqual(args.action, "scan")
+        self.assertEqual(args.subcmd, "scan")
 
     def test_dns_parses(self):
         args = self.parser.parse_args(["dns", "check", "myhost"])
-        self.assertEqual(args.action, "check")
+        self.assertEqual(args.subcmd, "check")
         self.assertEqual(args.target, "myhost")
 
     def test_net_ip_parses(self):
