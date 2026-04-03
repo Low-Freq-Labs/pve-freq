@@ -47,6 +47,13 @@ def build_routes() -> dict:
         "freq.api.terminal",
         "freq.api.v1_stubs",
         "freq.api.fw",
+        "freq.api.opnsense",
+        "freq.api.ipmi",
+        "freq.api.redfish",
+        "freq.api.bench",
+        "freq.api.synology",
+        "freq.api.logs",
+        "freq.api.backup_verify",
     ]
 
     for module_path in _domains:

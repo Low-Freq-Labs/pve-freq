@@ -127,6 +127,8 @@ class FreqConfig:
     timezone: str = _DEFAULTS["timezone"]
     truenas_ip: str = ""
     pfsense_ip: str = ""
+    opnsense_ip: str = ""
+    synology_ip: str = ""
     switch_ip: str = ""
     docker_dev_ip: str = ""
     docker_config_base: str = ""   # base path for Docker container configs
@@ -465,6 +467,8 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.timezone = infra.get("timezone", cfg.timezone)
     cfg.truenas_ip = infra.get("truenas_ip", cfg.truenas_ip)
     cfg.pfsense_ip = infra.get("pfsense_ip", cfg.pfsense_ip)
+    cfg.opnsense_ip = infra.get("opnsense_ip", cfg.opnsense_ip)
+    cfg.synology_ip = infra.get("synology_ip", cfg.synology_ip)
     cfg.switch_ip = infra.get("switch_ip", cfg.switch_ip)
     cfg.docker_dev_ip = infra.get("docker_dev_ip", cfg.docker_dev_ip)
     cfg.docker_config_base = infra.get("docker_config_base", cfg.docker_config_base)
