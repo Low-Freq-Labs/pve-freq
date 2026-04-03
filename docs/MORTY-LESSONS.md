@@ -275,7 +275,7 @@ The pattern: Sonny builds test infrastructure. I ignore it. Then I say we can't 
 
 17. **Check what exists before saying "we can't."** Lab PVE nodes (5002/5003) = multi-site. iDRACs (.10/.11/.12) = BMC testing. Cloud templates on pve03 = multi-distro. Known-down devices = real monitoring test data. Sonny built the test environment. Use it.
 
-18. **Do not touch config files that init generates.** hosts.toml, freq.toml, fleet-boundaries.toml, vlans.toml, containers.toml — init writes them, the wizard configures them. If they're wrong, fix init. Do not fix the file.
+18. **Config files are init's output, not your input.** Do not pre-fill hosts.toml, freq.toml, fleet-boundaries.toml. But DO maintain a reference doc (DC01-FLEET-REFERENCE.md) that describes what the fleet should look like. After init runs, compare its output to the reference. If they don't match, init has a bug.
 
 ---
 
