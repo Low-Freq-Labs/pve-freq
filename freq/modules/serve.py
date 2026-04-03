@@ -1578,7 +1578,8 @@ class FreqHandler(BaseHTTPRequestHandler):
                 import traceback
                 traceback.print_exc()
                 try:
-                    self._json_response({"error": str(e), "path": path}, 500)
+                    logger.error(f"handler error: {path}: {e}")
+                    self._json_response({"error": "Internal server error", "path": path}, 500)
                 except Exception as e2:
                     import sys
                     print(f"[FREQ] Failed to send error response for {path}: {e2}", file=sys.stderr)
@@ -4763,7 +4764,9 @@ a:hover{{text-decoration:underline}}
         self._json_response({"results": results, "hosts": len(hosts)})
 
     def _serve_agent_create(self):
-
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
         cfg = load_config()
         params = _parse_query(self)
         template = params.get("template", ["blank"])[0]
@@ -4798,7 +4801,9 @@ a:hover{{text-decoration:underline}}
         self._json_response({"ok": True, "name": name, "vmid": vmid, "template": template})
 
     def _serve_agent_destroy(self):
-
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
         cfg = load_config()
         params = _parse_query(self)
         name = params.get("name", [""])[0]
@@ -5172,8 +5177,10 @@ a:hover{{text-decoration:underline}}
 
     def _serve_media_restart(self):
         """Restart a container (GET with ?name=xxx)."""
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
         cfg = load_config()
-
 
         query = _parse_query(self)
         name = query.get("name", [""])[0]
@@ -5229,8 +5236,10 @@ a:hover{{text-decoration:underline}}
 
     def _serve_media_update(self):
         """Update a container (GET with ?name=xxx)."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
         cfg = load_config()
-
 
         query = _parse_query(self)
         name = query.get("name", [""])[0]
@@ -6341,7 +6350,9 @@ a:hover{{text-decoration:underline}}
 
     def _serve_lab_tool_proxy(self):
         """Generic proxy for lab tool API requests (GET or POST)."""
-
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
         params = _parse_query(self)
         tool = params.get("tool", [""])[0]
         host = params.get("host", [""])[0]
@@ -6360,7 +6371,9 @@ a:hover{{text-decoration:underline}}
 
     def _serve_lab_tool_config(self):
         """Return saved connection config for a lab tool from vault."""
-
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
         params = _parse_query(self)
         tool = params.get("tool", [""])[0]
         if not tool:
@@ -6378,7 +6391,9 @@ a:hover{{text-decoration:underline}}
 
     def _serve_lab_tool_save_config(self):
         """Save lab tool connection config to vault."""
-
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}); return
         params = _parse_query(self)
         tool = params.get("tool", [""])[0]
         host = params.get("host", [""])[0]
@@ -6809,6 +6824,9 @@ a:hover{{text-decoration:underline}}
 
     def _serve_container_action(self):
         """Restart/stop/start a container on a Docker host."""
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}); return
         cfg = load_config()
         query = _parse_query(self)
         host = query.get("host", [""])[0]

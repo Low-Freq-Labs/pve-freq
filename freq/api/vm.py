@@ -49,6 +49,9 @@ def handle_vm_list(handler):
 
 def handle_vm_create(handler):
     """GET /api/vm/create — create a new VM."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     name = params.get("name", [""])[0]
@@ -83,6 +86,9 @@ def handle_vm_create(handler):
 
 def handle_vm_destroy(handler):
     """GET /api/vm/destroy — destroy a VM."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     vmid = int(params.get("vmid", ["0"])[0])
@@ -106,6 +112,9 @@ def handle_vm_destroy(handler):
 
 def handle_vm_snapshot(handler):
     """GET /api/vm/snapshot — take a snapshot of a VM."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     vmid = int(params.get("vmid", ["0"])[0])
@@ -128,6 +137,9 @@ def handle_vm_snapshot(handler):
 
 def handle_vm_resize(handler):
     """GET /api/vm/resize — resize VM cores/RAM."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     vmid = int(params.get("vmid", ["0"])[0])
@@ -164,6 +176,9 @@ def handle_vm_resize(handler):
 
 def handle_vm_power(handler):
     """GET /api/vm/power — start/stop/reset/status a VM."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     vmid = int(params.get("vmid", ["0"])[0])
@@ -215,6 +230,9 @@ def handle_vm_power(handler):
 
 def handle_vm_template(handler):
     """GET /api/vm/template — convert VM to template."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
 
     query = get_params(handler)
@@ -244,6 +262,9 @@ def handle_vm_template(handler):
 
 def handle_vm_rename(handler):
     """GET /api/vm/rename — rename a VM."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
 
     query = get_params(handler)
@@ -306,6 +327,9 @@ def handle_vm_snapshots(handler):
 
 def handle_vm_delete_snapshot(handler):
     """GET /api/vm/delete-snapshot — delete a snapshot from a VM."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
 
     query = get_params(handler)
@@ -334,6 +358,9 @@ def handle_vm_delete_snapshot(handler):
 
 def handle_vm_change_id(handler):
     """GET /api/vm/change-id — change VMID. Requires VM to be stopped."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
 
     query = get_params(handler)
@@ -407,6 +434,9 @@ def handle_vm_check_ip(handler):
 
 def handle_vm_add_nic(handler):
     """GET /api/vm/add-nic — add a NIC to a VM without clearing existing ones."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
 
     query = get_params(handler)
@@ -480,6 +510,9 @@ def handle_vm_add_nic(handler):
 
 def handle_vm_clear_nics(handler):
     """GET /api/vm/clear-nics — clear all NICs and ipconfigs from a VM."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
 
     query = get_params(handler)
@@ -527,6 +560,9 @@ def handle_vm_clear_nics(handler):
 
 def handle_vm_change_ip(handler):
     """GET /api/vm/change-ip — change VM IP via cloud-init or manual config."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
 
     query = get_params(handler)
@@ -638,6 +674,9 @@ def handle_vm_push_key(handler):
 
 def handle_vm_add_disk(handler):
     """GET /api/vm/add-disk — add a disk to a VM."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     vmid = int(params.get("vmid", ["0"])[0])
@@ -690,6 +729,9 @@ def handle_vm_add_disk(handler):
 
 def handle_vm_tag(handler):
     """GET /api/vm/tag — set PVE tags on a VM."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     vmid = int(params.get("vmid", ["0"])[0])
@@ -728,6 +770,9 @@ def handle_vm_tag(handler):
 
 def handle_vm_clone(handler):
     """GET /api/vm/clone — clone a VM."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     source_vmid = int(params.get("vmid", ["0"])[0])
@@ -782,6 +827,9 @@ def handle_vm_migrate(handler):
     Auto-detects best local storage on target. Checks for snapshots
     that would block live migration.
     """
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     vmid = int(params.get("vmid", ["0"])[0])

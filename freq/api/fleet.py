@@ -296,6 +296,9 @@ def handle_info(handler):
 
 def handle_exec(handler):
     """GET /api/exec -- execute a command across fleet hosts via API."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     params = _parse_query(handler)
     target = params.get("target", ["all"])[0]
     cmd = params.get("cmd", [""])[0]

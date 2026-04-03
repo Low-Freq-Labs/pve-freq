@@ -207,15 +207,14 @@ def handle_auth_change_password(handler):
     if not token:
         params = parse_qs(urlparse(handler.path).query)
         token = params.get("token", [""])[0]
-    if handler.command == "POST":
-        try:
-            body = handler._request_body()
-            new_password = body.get("password", "")
-        except Exception:
-            new_password = ""
-    else:
-        params = parse_qs(urlparse(handler.path).query)
-        new_password = params.get("password", [""])[0]
+    if handler.command != "POST":
+        handler._json_response({"error": "Use POST to change password"}, 405)
+        return
+    try:
+        body = handler._request_body()
+        new_password = body.get("password", "")
+    except Exception:
+        new_password = ""
 
     with _auth_lock:
         session = _auth_tokens.get(token)
@@ -235,4 +234,5 @@ def handle_auth_change_password(handler):
         vault_set(cfg, "auth", f"password_{username}", pw_hash)
         handler._json_response({"ok": True, "user": username})
     except Exception as e:
-        handler._json_response({"error": f"Failed to update password: {e}"})
+        logger.error(f"password change failed for {username}: {e}")
+        handler._json_response({"error": "Failed to update password"})

@@ -8,6 +8,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
 from freq.api.helpers import json_response, get_cfg
+from freq.api.auth import check_session_role as _check_session_role
 from freq.core.config import load_config
 from freq.modules.users import _load_users, _save_users, _role_level, ROLE_HIERARCHY
 from freq.modules.serve import _parse_query
@@ -25,6 +26,9 @@ def handle_users(handler):
 
 def handle_user_create(handler):
     """POST /api/users/create -- create a new user."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = _parse_query(handler)
     username = params.get("username", [""])[0]
@@ -41,6 +45,9 @@ def handle_user_create(handler):
 
 def handle_user_promote(handler):
     """POST /api/users/promote -- promote a user."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = _parse_query(handler)
     username = params.get("username", [""])[0]
@@ -59,6 +66,9 @@ def handle_user_promote(handler):
 
 def handle_user_demote(handler):
     """POST /api/users/demote -- demote a user."""
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = _parse_query(handler)
     username = params.get("username", [""])[0]

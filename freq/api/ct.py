@@ -173,6 +173,9 @@ def handle_ct_destroy(handler):
 
 def handle_ct_power(handler):
     """POST /api/ct/power — start/stop/shutdown/reboot a container."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     params = get_params(handler)
     ctid = _ct_id(params)

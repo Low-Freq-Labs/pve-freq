@@ -27,6 +27,9 @@ from freq.modules.pve import _find_reachable_node, _pve_cmd
 
 def handle_backup(handler):
     """GET /api/backup -- backup management: list, create, status, prune."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     query = _parse_query(handler)
     action = query.get("action", ["list"])[0]
@@ -255,6 +258,9 @@ def handle_migrate_vmware_status(handler):
 
 def handle_zfs(handler):
     """GET /api/zfs -- ZFS pool status and operations."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403); return
     cfg = load_config()
     query = _parse_query(handler)
     action = query.get("action", ["status"])[0]
