@@ -6,6 +6,10 @@
 <title>PVE FREQ</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%239B4FDE'/%3E%3Cstop offset='100%25' stop-color='%237B2FBE'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='6' fill='%230d1117'/%3E%3Cpath d='M7 8h18v3.5H11.5v4H20v3.5H11.5V24H7V8z' fill='url(%23g)'/%3E%3Cpath d='M3 21 Q8 15 13 21 Q18 27 23 21 Q28 15 32 21' stroke='%239B4FDE' stroke-width='1.5' fill='none' opacity='0.4'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/static/css/app.css?v=3.0.1">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-clipboard@0.1.0/lib/addon-clipboard.min.js"></script>
 <style>
   /* Critical inline — prevent FOUC before font loads */
   body { opacity: 0; animation: bodyFadeIn 0.3s 0.1s forwards; }
@@ -124,6 +128,29 @@
 <div class="section layout-section" id="fleet-sec-infra">
   <div class="section-header"><h3 class="cursor-ptr">Hosts &amp; VMs</h3><div class="flex-1"></div><input id="fleet-filter" placeholder="&#128269; Filter..." oninput="filterFleetCards(this.value)" onclick="event.stopPropagation()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit;width:180px;outline:none;transition:border-color 0.25s ease" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'"><span class="chev" style="cursor:pointer;margin-left:8px">▾</span></div>
   <div class="section-body"><div id="metrics-cards"></div></div>
+</div>
+<!-- Quick Terminal -->
+<div class="section layout-section" id="fleet-sec-terminal">
+  <div class="section-header"><h3>Terminal</h3><span class="chev" style="margin-left:8px">▾</span></div>
+  <div class="section-body">
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Open a live SSH shell to any host, VM, or LXC container.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div>
+        <label class="c-dim-fs12">Type</label>
+        <select id="term-type" class="input" style="width:100px" onchange="updateTermTargets()">
+          <option value="node">PVE Node</option>
+          <option value="vm">VM</option>
+          <option value="ct">Container</option>
+          <option value="host">Fleet Host</option>
+        </select>
+      </div>
+      <div>
+        <label class="c-dim-fs12">Target</label>
+        <select id="term-target" class="input" style="width:260px"><option value="">Select...</option></select>
+      </div>
+      <button class="fleet-btn c-purple-active" onclick="launchTermFromPicker()" style="color:var(--cyan)">&#9002; OPEN TERMINAL</button>
+    </div>
+  </div>
 </div>
 <!-- LXC Containers -->
 <div class="section layout-section" id="fleet-sec-ct">
@@ -1575,6 +1602,24 @@
 <!-- ═══ TOAST + MODAL ═══ -->
 <div id="toast-container" class="toast-container"></div>
 <div id="modal-container" class="modal-overlay" style="display:none"></div>
+
+<!-- Terminal Overlay -->
+<div id="terminal-overlay" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.92);backdrop-filter:blur(8px);padding:0">
+  <div style="display:flex;flex-direction:column;height:100%;max-width:1400px;margin:0 auto">
+    <div id="terminal-header" style="display:flex;justify-content:space-between;align-items:center;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="color:var(--green);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;font-family:var(--font-ui)">&#9679; TERMINAL</span>
+        <span id="terminal-title" style="color:var(--text);font-size:12px;font-family:var(--font-mono)"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="fleet-btn" onclick="termCopy()" style="font-size:9px;padding:2px 8px">COPY</button>
+        <button class="fleet-btn" onclick="termPaste()" style="font-size:9px;padding:2px 8px">PASTE</button>
+        <button class="fleet-btn" onclick="closeTerminal()" style="font-size:9px;padding:2px 8px;color:var(--red)">CLOSE</button>
+      </div>
+    </div>
+    <div id="terminal-container" style="flex:1;padding:8px 20px 20px;overflow:hidden"></div>
+  </div>
+</div>
 
 <!-- Global Search Overlay -->
 <div id="search-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;padding-top:15vh" onclick="closeSearch()">

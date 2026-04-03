@@ -1270,6 +1270,11 @@ body.compact .btn { font-size: 11px; padding: 4px 12px; }
    ═══════════════════════════════════════════════════════════════════ */
 ::selection { background: rgba(168,85,247,0.3); color: var(--text-bright); }
 
+/* ── Terminal ── */
+#terminal-container .xterm { height: 100%; }
+#terminal-container .xterm-viewport { overflow-y: auto !important; }
+#terminal-container .xterm-screen { height: 100%; }
+
 /* ═══════════════════════════════════════════════════════════════════
    FOCUS VISIBLE — accessibility
    ═══════════════════════════════════════════════════════════════════ */

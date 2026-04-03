@@ -44,6 +44,7 @@ def build_routes() -> dict:
         "freq.api.ops",
         "freq.api.user",
         "freq.api.plugin",
+        "freq.api.terminal",
         "freq.api.v1_stubs",
     ]
 

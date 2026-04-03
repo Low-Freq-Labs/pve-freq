@@ -2526,6 +2526,180 @@ function createPlaybook(){
   }).catch(function(e){if(msg)msg.innerHTML='<span class="c-red">Failed: '+_esc(e.toString())+'</span>';});
 }
 /* ═══════════════════════════════════════════════════════════════════
+   TERMINAL — in-browser SSH via xterm.js + WebSocket
+   ═══════════════════════════════════════════════════════════════════ */
+var _termSession=null;var _termSocket=null;var _termXterm=null;var _termFit=null;
+
+function openTerminal(type,target,node,label){
+  var overlay=document.getElementById('terminal-overlay');
+  var container=document.getElementById('terminal-container');
+  var title=document.getElementById('terminal-title');
+  if(!overlay||!container)return;
+
+  overlay.style.display='block';
+  container.innerHTML='';
+  title.textContent=(label||target)+' ('+type+')';
+
+  /* Create xterm instance */
+  var term=new Terminal({
+    cursorBlink:true,cursorStyle:'bar',
+    fontFamily:"'JetBrains Mono','Fira Code','Cascadia Code',monospace",
+    fontSize:13,lineHeight:1.3,
+    theme:{
+      background:'#08090D',foreground:'#E2E8F0',cursor:'#A855F7',
+      cursorAccent:'#08090D',selectionBackground:'rgba(168,85,247,0.35)',
+      black:'#0C0E14',red:'#EF4444',green:'#22C55E',yellow:'#EAB308',
+      blue:'#3B82F6',magenta:'#A855F7',cyan:'#06B6D4',white:'#E2E8F0',
+      brightBlack:'#4B5563',brightRed:'#F87171',brightGreen:'#4ADE80',
+      brightYellow:'#FDE047',brightBlue:'#60A5FA',brightMagenta:'#C084FC',
+      brightCyan:'#22D3EE',brightWhite:'#F8FAFC'
+    },
+    allowProposedApi:true,
+    scrollback:5000,
+  });
+
+  /* Fit addon — auto-resize to container */
+  var fitAddon=new FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
+
+  /* Clipboard addon */
+  if(typeof ClipboardAddon!=='undefined'){
+    try{term.loadAddon(new ClipboardAddon.ClipboardAddon());}catch(e){}
+  }
+
+  term.open(container);
+  fitAddon.fit();
+  _termXterm=term;_termFit=fitAddon;
+
+  /* Request session from server */
+  var cols=term.cols;var rows=term.rows;
+  term.writeln('\x1b[90mConnecting to '+_esc(label||target)+'...\x1b[0m');
+
+  _authFetch('/api/terminal/open?type='+type+'&target='+encodeURIComponent(target)+
+    (node?'&node='+encodeURIComponent(node):'')+
+    '&cols='+cols+'&rows='+rows)
+  .then(function(r){return r.json()}).then(function(d){
+    if(d.error){term.writeln('\x1b[31mError: '+d.error+'\x1b[0m');return;}
+    _termSession=d.session;
+
+    /* Open websocket */
+    var proto=location.protocol==='https:'?'wss:':'ws:';
+    var ws=new WebSocket(proto+'//'+location.host+'/api/terminal/ws?session='+d.session);
+    ws.binaryType='arraybuffer';
+    _termSocket=ws;
+
+    ws.onopen=function(){
+      term.writeln('\x1b[32mConnected.\x1b[0m\r\n');
+      term.focus();
+    };
+    ws.onmessage=function(e){
+      if(e.data instanceof ArrayBuffer){
+        term.write(new Uint8Array(e.data));
+      }else{
+        term.write(e.data);
+      }
+    };
+    ws.onclose=function(){
+      term.writeln('\r\n\x1b[90m--- Session closed ---\x1b[0m');
+      _termSession=null;_termSocket=null;
+    };
+    ws.onerror=function(){
+      term.writeln('\r\n\x1b[31mWebSocket error\x1b[0m');
+    };
+
+    /* Send keystrokes to server */
+    term.onData(function(data){
+      if(ws.readyState===WebSocket.OPEN){
+        ws.send(new TextEncoder().encode(data));
+      }
+    });
+
+    /* Handle resize */
+    term.onResize(function(size){
+      if(_termSession){
+        _authFetch('/api/terminal/resize?session='+_termSession+'&cols='+size.cols+'&rows='+size.rows);
+      }
+    });
+
+  }).catch(function(e){term.writeln('\x1b[31mFailed to open session: '+e+'\x1b[0m');});
+
+  /* Resize on window resize */
+  window._termResizeHandler=function(){if(_termFit)try{_termFit.fit();}catch(e){}};
+  window.addEventListener('resize',window._termResizeHandler);
+
+  /* Keyboard shortcut: Escape to close */
+  /* Don't intercept Escape — terminal needs it. Use the CLOSE button. */
+}
+
+function closeTerminal(){
+  if(_termSocket&&_termSocket.readyState===WebSocket.OPEN)_termSocket.close();
+  if(_termSession)_authFetch('/api/terminal/close?session='+_termSession);
+  if(_termXterm){_termXterm.dispose();_termXterm=null;}
+  _termSession=null;_termSocket=null;_termFit=null;
+  document.getElementById('terminal-overlay').style.display='none';
+  if(window._termResizeHandler)window.removeEventListener('resize',window._termResizeHandler);
+}
+
+function termCopy(){
+  if(!_termXterm)return;
+  var sel=_termXterm.getSelection();
+  if(sel){
+    navigator.clipboard.writeText(sel).then(function(){toast('Copied to clipboard','success');});
+  }else{toast('Nothing selected','info');}
+}
+
+function termPaste(){
+  if(!_termXterm)return;
+  navigator.clipboard.readText().then(function(text){
+    if(_termSocket&&_termSocket.readyState===WebSocket.OPEN){
+      _termSocket.send(new TextEncoder().encode(text));
+    }
+  }).catch(function(){toast('Clipboard access denied','error');});
+}
+
+/* Terminal target picker */
+function updateTermTargets(){
+  var type=document.getElementById('term-type').value;
+  var sel=document.getElementById('term-target');if(!sel)return;
+  sel.innerHTML='<option value="">Loading...</option>';
+  if(type==='vm'){
+    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+      sel.innerHTML='<option value="">Select VM...</option>';
+      (d.vms||[]).forEach(function(v){if(v.status==='running')sel.innerHTML+='<option value="'+v.vmid+'" data-label="'+_esc(v.name)+'">'+v.vmid+' — '+_esc(v.name)+' ('+v.node+')</option>';});
+    });
+  }else if(type==='ct'){
+    _authFetch(API.CT_LIST).then(function(r){return r.json()}).then(function(d){
+      sel.innerHTML='<option value="">Select CT...</option>';
+      (d.containers||[]).forEach(function(c){if(c.status==='running')sel.innerHTML+='<option value="'+c.ctid+'" data-label="CT '+c.ctid+' '+_esc(c.name)+'">CT '+c.ctid+' — '+_esc(c.name)+' ('+c.node+')</option>';});
+    });
+  }else if(type==='node'){
+    if(_fleetCache.fo&&_fleetCache.fo.pve_nodes){
+      sel.innerHTML='<option value="">Select node...</option>';
+      _fleetCache.fo.pve_nodes.forEach(function(n){sel.innerHTML+='<option value="'+_esc(n.ip)+'" data-label="'+_esc(n.name)+'">'+_esc(n.name)+' ('+_esc(n.ip)+')</option>';});
+    }else{
+      _authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
+        sel.innerHTML='<option value="">Select node...</option>';
+        (fo.pve_nodes||[]).forEach(function(n){sel.innerHTML+='<option value="'+_esc(n.ip)+'" data-label="'+_esc(n.name)+'">'+_esc(n.name)+' ('+_esc(n.ip)+')</option>';});
+      });
+    }
+  }else{
+    _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
+      sel.innerHTML='<option value="">Select host...</option>';
+      (d.hosts||[]).forEach(function(h){sel.innerHTML+='<option value="'+_esc(h.ip)+'" data-label="'+_esc(h.label)+'">'+_esc(h.label)+' ('+_esc(h.ip)+')</option>';});
+    });
+  }
+}
+function launchTermFromPicker(){
+  var type=document.getElementById('term-type').value;
+  var sel=document.getElementById('term-target');
+  var target=sel.value;
+  if(!target){toast('Select a target','error');return;}
+  var opt=sel.options[sel.selectedIndex];
+  var label=opt.getAttribute('data-label')||target;
+  openTerminal(type==='host'?'vm':type,target,'',label);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    LXC CONTAINERS — first-class citizen
    ═══════════════════════════════════════════════════════════════════ */
 function loadLxcContainers(){
@@ -2549,6 +2723,7 @@ function loadLxcContainers(){
       if(running){
         h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px" onclick="ctPower('+c.ctid+',\'stop\')">STOP</button>';
         h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px" onclick="ctPower('+c.ctid+',\'reboot\')">REBOOT</button>';
+        h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px;color:var(--cyan)" onclick="openTerminal(\'ct\',\''+c.ctid+'\',\'\',\'CT '+c.ctid+' '+_esc(c.name)+'\')">&#9002; TERM</button>';
       }else{
         h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px;color:var(--green)" onclick="ctPower('+c.ctid+',\'start\')">START</button>';
         h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px;color:var(--red)" onclick="ctDestroy('+c.ctid+',\''+_esc(c.name)+'\')">DESTROY</button>';
@@ -4143,6 +4318,7 @@ function vmtLoadList(){
       if(acts.indexOf('start')>=0&&!isRun)h+='<button class="fleet-btn pill-ok-3-8" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="start" >START</button>';
       if(acts.indexOf('configure')>=0)h+='<button class="fleet-btn pill-xs" data-action="vmQuickTag" data-vmid="'+v.vmid+'" >TAG</button>';
       if(acts.indexOf('destroy')>=0)h+='<button class="fleet-btn pill-err-3-8" data-action="vmDestroy" data-vmid="'+v.vmid+'" >DESTROY</button>';
+      if(isRun)h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px;color:var(--cyan)" onclick="openTerminal(\'vm\',\''+v.vmid+'\',\'\',\''+_esc(v.name)+'\')">&#9002; TERM</button>';
       h+='</td></tr>';
     });
     h+='</tbody></table>';el.innerHTML=h;
@@ -5919,6 +6095,7 @@ function renderPveNodeCard(config){
   btns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();hdExec(this)">RUN CMD</button>';
   btns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();hdLogs(this)">LOGS</button>';
   btns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();hdDiagnose(this)">DIAGNOSE</button>';
+  btns+='<button class="fleet-btn min-w-120-center" style="color:var(--cyan)" onclick="event.stopPropagation();openTerminal(\'node\',\''+_esc(ip)+'\',\'\',\''+_esc(label)+'\')">&#9002; TERMINAL</button>';
   html+=_infraPanelHtml('PVE NODE CONTROLS','var(--purple-light)',btns);
   html+=_toolPanelHtml();
   _infraOutputTarget='hd-infra-out';
@@ -6152,6 +6329,7 @@ function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip){
   ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdDiagnose" >DIAGNOSE</button>';
   ctrl+='<button class="fleet-btn pad-v8-warn" data-action="hdRestart" >RESTART SVC</button>';
   ctrl+='<button class="fleet-btn pad-v8-fs11" onclick="vmPushKey(\''+(ip||'')+'\')" >PUSH KEY</button>';
+  if(isRunning)ctrl+='<button class="fleet-btn pad-v8-fs11" style="color:var(--cyan)" onclick="openTerminal(\'vm\',\''+vmid+'\',\'\',\''+_esc(label)+'\')">&#9002; TERMINAL</button>';
   ctrl+='</div></div>';
   ctrl+='</div>';
   ctrl+='<div id="vm-ctrl-out"></div>';
