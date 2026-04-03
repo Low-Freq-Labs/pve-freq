@@ -18,11 +18,8 @@ Design decisions:
     - Detection runs first, metrics second. No point querying PostgreSQL
       catalogs on a host that only runs MariaDB in Docker.
 """
-import json
-import time
 
 from freq.core import fmt
-from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run_many as ssh_run_many
 

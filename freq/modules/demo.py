@@ -25,10 +25,9 @@ import time
 
 from freq.core import fmt
 from freq.core.personality import (
-    PersonalityPack, celebrate, tagline, quote,
-    splash, LOGO, LOGO_SMALL,
+    quote,
+    splash,
 )
-from freq.core.types import Host
 
 
 # Demo timing (seconds between visual steps)

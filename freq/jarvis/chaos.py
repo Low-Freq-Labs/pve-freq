@@ -20,11 +20,9 @@ Design decisions:
 """
 import json
 import os
-import re
 import time
 from dataclasses import dataclass, field
 
-from freq.core import log as logger
 
 
 CHAOS_DIR_NAME = "chaos"
@@ -123,29 +121,30 @@ def check_safety(target_host: str, cfg) -> tuple:
 
     Returns (safe: bool, reason: str).
     """
-    # Hard block: VMIDs 800-899
-    # Check if any host config references these VMIDs
     for h in cfg.hosts:
         if h.label == target_host:
+            # Hard block: VMIDs 800-899 — unconditional, regardless of config
+            vmid = getattr(h, "vmid", 0)
+            if vmid and 800 <= vmid <= 899:
+                return False, f"VMID {vmid} is in hard-blocked range 800-899"
+
             # Check fleet boundaries for production category
             fb = cfg.fleet_boundaries
             if fb and hasattr(fb, 'tiers'):
                 for tier_name, tier in fb.tiers.items():
                     if tier_name.lower() in ("production", "infrastructure", "critical"):
-                        # Check if host is in this tier
                         if hasattr(tier, 'vmid_ranges'):
                             for vr in tier.vmid_ranges:
                                 try:
                                     parts = vr.split("-")
                                     if len(parts) == 2:
                                         low, high = int(parts[0]), int(parts[1])
-                                        if 800 <= low <= 899 or 800 <= high <= 899:
-                                            return False, "Target is in protected VMID range 800-899"
+                                        if vmid and low <= vmid <= high:
+                                            return False, f"VMID {vmid} is in protected tier '{tier_name}'"
                                 except ValueError:
                                     pass
             break
 
-    # Check if host is reachable (don't chaos-test unreachable hosts)
     return True, ""
 
 
@@ -412,9 +411,9 @@ def cmd_chaos(cfg, pack, args) -> int:
         fmt.blank()
         result = run_experiment(exp, ssh_run, cfg)
 
-        if result.status == "pass":
+        if result.status == "completed":
             fmt.step_ok(f"Experiment completed — recovered in {result.recovery_time:.1f}s")
-        elif result.status == "fail":
+        elif result.status == "failed":
             fmt.error(f"Experiment failed: {result.error}")
         else:
             fmt.warn(f"Status: {result.status}")
@@ -423,7 +422,7 @@ def cmd_chaos(cfg, pack, args) -> int:
             fmt.line(f"  {fmt.C.DIM}Output: {result.inject_output[:100]}{fmt.C.RESET}")
         fmt.blank()
         fmt.footer()
-        return 0 if result.status == "pass" else 1
+        return 0 if result.status == "completed" else 1
 
     elif action == "log":
         fmt.header("Chaos Experiment Log")
@@ -433,7 +432,7 @@ def cmd_chaos(cfg, pack, args) -> int:
             fmt.line(f"  {fmt.C.DIM}No experiments recorded yet.{fmt.C.RESET}")
         else:
             for e in entries:
-                status_color = fmt.C.GREEN if e.get("status") == "pass" else fmt.C.RED
+                status_color = fmt.C.GREEN if e.get("status") == "completed" else fmt.C.RED
                 fmt.line(f"  {fmt.C.DIM}{e.get('experiment_name', '?')}{fmt.C.RESET} {status_color}{e.get('status', '?')}{fmt.C.RESET} {e.get('duration', 0):.1f}s → {e.get('target_host', '?')}")
         fmt.blank()
         fmt.footer()

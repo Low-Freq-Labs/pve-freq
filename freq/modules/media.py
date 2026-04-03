@@ -60,7 +60,8 @@ def _get_vault_credential(cfg, vault_key):
 
 
 def _api_call(cfg, vm, port, endpoint, method="GET", auth_header="",
-              auth_value="", auth_param="", auth_param_value="", timeout=API_TIMEOUT):
+              auth_value="", auth_param="", auth_param_value="",
+              body="", timeout=API_TIMEOUT):
     """SSH to a VM and curl a local API endpoint. Returns CmdResult."""
     url = f"http://localhost:{port}{endpoint}"
     if auth_param and auth_param_value:
@@ -72,6 +73,9 @@ def _api_call(cfg, vm, port, endpoint, method="GET", auth_header="",
         # Escape header values to prevent injection via quotes
         safe_header = f"{auth_header}: {auth_value}".replace("'", "'\\''")
         curl_cmd += f" -H '{safe_header}'"
+    if body:
+        safe_body = body.replace("'", "'\\''")
+        curl_cmd += f" -H 'Content-Type: application/json' -d '{safe_body}'"
     curl_cmd += f" '{url}'"
 
     return ssh_run(
@@ -81,7 +85,8 @@ def _api_call(cfg, vm, port, endpoint, method="GET", auth_header="",
     )
 
 
-def _api_call_authed(cfg, vm, container, endpoint, method="GET", timeout=API_TIMEOUT):
+def _api_call_authed(cfg, vm, container, endpoint, method="GET",
+                     body="", timeout=API_TIMEOUT):
     """API call with automatic auth from container registry + vault."""
     auth_header = ""
     auth_value = ""
@@ -102,7 +107,7 @@ def _api_call_authed(cfg, vm, container, endpoint, method="GET", timeout=API_TIM
         cfg, vm, container.port, endpoint, method=method,
         auth_header=auth_header, auth_value=auth_value,
         auth_param=auth_param, auth_param_value=auth_param_value,
-        timeout=timeout,
+        body=body, timeout=timeout,
     )
 
 
@@ -1024,8 +1029,9 @@ def _cmd_vpn(cfg, args) -> int:
                 continue
             found = True
 
-            # VPN status
-            r = _api_call(cfg, vm, 8000, "/v1/openvpn/status", timeout=API_QUICK_TIMEOUT)
+            # VPN status — use container port if configured, default to 8000
+            gluetun_port = getattr(container, 'port', 0) or 8000
+            r = _api_call(cfg, vm, gluetun_port, "/v1/openvpn/status", timeout=API_QUICK_TIMEOUT)
             vpn_status = "unknown"
             if r.returncode == 0:
                 data = _parse_json(r.stdout)
@@ -1192,22 +1198,10 @@ def _cmd_scan(cfg, args) -> int:
         if not container:
             continue
         fmt.step_start(f"Scanning {svc_name}")
-        r = _api_call_authed(cfg, vm, container,
-                              "/api/v3/command", method="POST")
-        # Note: Sonarr/Radarr command needs body. Use curl with -d
-        r2 = ssh_run(
-            host=vm.ip,
-            command=f"curl -s -X POST 'http://localhost:{container.port}/api/v3/command' "
-                    f"-H 'Content-Type: application/json' "
-                    f"-d '{{\"name\": \"RescanSeries\"}}' 2>/dev/null"
-                    if svc_name == "sonarr" else
-                    f"curl -s -X POST 'http://localhost:{container.port}/api/v3/command' "
-                    f"-H 'Content-Type: application/json' "
-                    f"-d '{{\"name\": \"RescanMovie\"}}' 2>/dev/null",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=SSH_CMD_TIMEOUT, htype="docker", use_sudo=False,
-        )
+        cmd_name = "RescanSeries" if svc_name == "sonarr" else "RescanMovie"
+        r2 = _api_call_authed(cfg, vm, container,
+                               "/api/v3/command", method="POST",
+                               body=f'{{"name": "{cmd_name}"}}')
         if r2.returncode == 0:
             fmt.step_ok(f"{svc_name} scan triggered")
         else:
@@ -1364,7 +1358,8 @@ def _indexers_sync(cfg, vm, container) -> int:
 
     fmt.step_start("Triggering Prowlarr sync")
     r = _api_call_authed(cfg, vm, container, "/api/v1/command",
-                          method="POST", timeout=API_SLOW_TIMEOUT)
+                          method="POST", body='{"name": "AppIndexerSync"}',
+                          timeout=API_SLOW_TIMEOUT)
     if r.returncode == 0:
         fmt.step_ok("Sync triggered")
     else:
@@ -2108,7 +2103,7 @@ def _cmd_gpu(cfg, args) -> int:
     if not container:
         # Try any VM with GPU
         for v in _all_vms(cfg):
-            r = _docker_cmd(v, v if hasattr(v, "ip") else None,
+            r = _docker_cmd(cfg, v,
                              "ls /dev/dri 2>/dev/null")
             # Fallback
         fmt.line(f"  {fmt.C.DIM}No GPU-equipped containers found.{fmt.C.RESET}")

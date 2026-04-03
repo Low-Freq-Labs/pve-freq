@@ -20,14 +20,12 @@ Terminal types:
 
 import base64
 import hashlib
-import json
 import os
 import pty
 import secrets
 import select
 import signal
 import struct
-import subprocess
 import threading
 import time
 
@@ -137,7 +135,7 @@ def handle_terminal_open(handler):
 
     # Build SSH command with device-type-aware options
     key_path = cfg.ssh_key_path
-    ssh_user = cfg.service_account or "freq-ops"
+    ssh_user = cfg.ssh_service_account or "freq-ops"
     htype = params.get("htype", ["linux"])[0]
 
     # Base SSH options

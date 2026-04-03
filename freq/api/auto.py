@@ -14,9 +14,8 @@ function that receives the HTTP handler as its first argument.
 import os
 import re
 
-from freq.api.helpers import json_response, get_params, get_cfg
+from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
-from freq.core.ssh import run as ssh_single
 from freq.modules.serve import (
     _check_session_role,
     CACHE_DIR,

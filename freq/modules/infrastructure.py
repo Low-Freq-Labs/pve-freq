@@ -20,7 +20,6 @@ Design decisions:
     - One shared handler, not four separate files. Appliance commands follow
       the same pattern (SSH + action dict), so the code is shared.
 """
-import json
 import time
 
 from freq.core import fmt

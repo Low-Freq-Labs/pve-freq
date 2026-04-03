@@ -173,8 +173,7 @@ function doLogin(){
   passEl.dispatchEvent(new Event('input',{bubbles:true}));
   var user=userEl.value.trim();
   var pass=passEl.value;
-  if(errEl){errEl.textContent='DEBUG: user=['+user+'] pass_len='+pass.length;errEl.style.display='block';}
-  if(!user||!pass){if(errEl){errEl.textContent='Enter username and password (got user=['+user+'] pass_len='+pass.length+')';errEl.style.display='block';}return;}
+  if(!user||!pass){if(errEl){errEl.textContent='Enter username and password';errEl.style.display='block';}return;}
   if(errEl)errEl.style.display='none';
   var btn=document.querySelector('#login-overlay button');if(btn){btn.textContent='LOGGING IN...';btn.disabled=true;}
   _authFetch(API.AUTH_LOGIN,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})}).then(function(r){return r.json()}).then(function(d){
@@ -1010,7 +1009,7 @@ function _silentHealthRefresh(){
     /* Update fleet stats online/offline counts */
     var up=0,down=0;hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;});
     var sumEl=document.getElementById('metrics-summary');
-    if(sumEl){var sts=sumEl.querySelectorAll('.st .vl, .st span[style*="font-size:20px"]');/* lightweight — skip if layout differs */}
+    if(sumEl){var sts=sumEl.querySelectorAll('.st .vl');if(sts.length>=2){sts[0].textContent=up;sts[1].textContent=down;}}
   }).catch(function(){_healthInFlight=false;});
 }
 function _silentFleetRefresh(){
@@ -1120,7 +1119,7 @@ function _pveMetricsRefresh(){
           }
         });
     });
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 function startPveMetrics(){
   /* Delay first call 2s to avoid login burst — let page render first */
@@ -1171,7 +1170,7 @@ function _sparkline(canvas,points,color,fillColor){
     var y=h-pad-(v-mn)/range*(h-pad*2);
     if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
   });
-  ctx.strokeStyle=color||'var(--purple-light)';
+  ctx.strokeStyle=color||getComputedStyle(document.documentElement).getPropertyValue('--purple-light').trim()||'#a78bfa';
   ctx.lineWidth=1.5;
   ctx.lineJoin='round';
   ctx.stroke();
@@ -1189,7 +1188,7 @@ function _fetchRrdData(){
     if(!d.nodes)return;
     d.nodes.forEach(function(n){_rrdCache[n.name]=n;});
     _renderSparklines();
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 function _renderSparklines(){
   Object.keys(_rrdCache).forEach(function(nodeName){
@@ -1253,7 +1252,7 @@ var _evtSource=null;
 function startSSE(){
   if(typeof EventSource==='undefined')return;/* browser doesn't support SSE */
   if(_evtSource)_evtSource.close();
-  _evtSource=new EventSource(API.EVENTS);
+  _evtSource=new EventSource(API.EVENTS+(_token?'?token='+encodeURIComponent(_token):''));
 
   _evtSource.addEventListener('cache_update',function(e){
     var d=JSON.parse(e.data);
@@ -1359,11 +1358,9 @@ function loadFleetPage(){
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   }
   loadMetricsQuick();loadAgents();loadSpecialists();loadLxcContainers();
-  /* Overview cards — wait for cache or fetch independently */
-  setTimeout(function(){
-    if(_fleetCache.fo){_renderFleetOverview(_fleetCache.fo);_loadFleetOverviewMedia();}
-    else{_authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(){toast('Failed to load fleet overview','error');});}
-  },4000);
+  /* Overview cards — render immediately if cached, otherwise fetch */
+  if(_fleetCache.fo){_renderFleetOverview(_fleetCache.fo);_loadFleetOverviewMedia();}
+  else{_authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(e){console.error('Fleet overview load failed:',e);});}
 }
 function _loadFleetOverviewMedia(){
   _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
@@ -1838,7 +1835,7 @@ function loadComplianceData(){
     });
     h+='</tbody></table>';
     el.innerHTML=h;
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
   /* Load baselines */
   _authFetch(API.BASELINE_LIST).then(function(r){return r.json()}).then(function(d){
     var baselines=d.baselines||[];if(!baselines.length)return;
@@ -1848,7 +1845,7 @@ function loadComplianceData(){
     baselines.forEach(function(b){h+='<span class="badge ok" style="margin-right:4px">'+_esc(b.name||b)+'</span>';});
     h+='</div>';
     if(existing.indexOf('Saved Baselines')===-1)el.innerHTML+=h;
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 function loadSecretsLeases(){
   var el=document.getElementById('sec-secrets-detail');if(!el)return;
@@ -1890,7 +1887,7 @@ function _populateCompareDropdowns(){
       sel.innerHTML='<option value="">Select host...</option>';
       hosts.forEach(function(h){sel.innerHTML+='<option value="'+_esc(h.label)+'">'+_esc(h.label)+'</option>';});
     });
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 function loadLabPage(){loadLabTools();}
 function loadSettingsPage(){loadCosts();loadFederation();_loadSettingsPrefs();_loadLabAssignments();}
@@ -2352,7 +2349,7 @@ function loadScheduleJobs(){
     var templates=d.templates||[];
     if(!templates.length){el.innerHTML='<div class="exec-out">No job templates available.</div>';return;}
     el.innerHTML='<div class="cards">'+templates.map(function(t){return '<div class="crd"><h3>'+_esc(t.name||t)+'</h3><p>'+_esc(t.description||t.schedule||'')+'</p></div>';}).join('')+'</div>';
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
   /* Execution log */
   _authFetch(API.SCHEDULE_LOG).then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('schedule-log');if(!el)return;
@@ -2364,7 +2361,7 @@ function loadScheduleJobs(){
     });
     h+='</tbody></table>';
     el.innerHTML=h;
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 function loadWebhooks(){
   _authFetch(API.WEBHOOK_LIST).then(function(r){return r.json()}).then(function(d){
@@ -2389,7 +2386,7 @@ function loadWebhooks(){
     });
     h+='</tbody></table>';
     el.innerHTML=h;
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 function loadPluginsPage(){
   _fetchAndRender('/api/v1/plugin/list','plugin-stats',function(d){
@@ -2496,7 +2493,7 @@ function loadBackupPolicies(){
     var el=document.getElementById('backup-policy-stats');if(!el)return;
     var stats=d.stats||{};
     if(stats.total)el.innerHTML=_statCards([{l:'Policies',v:stats.total||0},{l:'Compliant',v:stats.compliant||0,c:'green'},{l:'Violations',v:stats.violations||0,c:stats.violations>0?'red':'green'}]);
-  }).catch(function(){});
+  }).catch(function(e){console.error('API error:',e);});
 }
 /* ── Trend Data (Capacity page) ── */
 function takeTrendSnapshot(){
@@ -3228,8 +3225,7 @@ function _statusBadge(status){
   var c=s==='up'||s==='online'||s==='ok'||s==='pass'||s==='valid'||s==='active'||s==='resolved'||s==='healthy'||s==='protected'?'green':s==='down'||s==='offline'||s==='fail'||s==='critical'||s==='expired'||s==='error'?'red':s==='warning'||s==='degraded'||s==='stale'||s==='expiring'||s==='investigating'?'yellow':'text-dim';
   return '<span style="color:var(--'+c+');font-weight:600;text-transform:uppercase;font-size:11px">'+_esc(s)+'</span>';
 }
-/* Helper: escape HTML */
-function _esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+/* _esc() defined at top of file — single-quote escaping included */
 
 function _loadSettingsPrefs(){
   var r=localStorage.getItem('freq_refresh_interval');
@@ -4418,7 +4414,7 @@ function vmtCreate(){
   var r=(document.getElementById('vmt-c-ram')||{}).value;
   if(!n){toast('Enter a VM name','error');return;}
   var out=document.getElementById('vmt-c-out');if(out)out.innerHTML='<div class="c-yellow">Creating VM...</div>';
-  _authFetch(API.VM_CREATE+'?name='+encodeURIComponent(n)+'&cores='+c+'&ram='+r).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_CREATE+'?name='+encodeURIComponent(n)+'&cores='+c+'&ram='+r,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('VM '+d.vmid+' "'+d.name+'" created!','success');if(out)out.innerHTML='<div class="c-green">VM '+d.vmid+' created successfully.</div>';document.getElementById('vmt-c-name').value='';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
@@ -4429,7 +4425,7 @@ function vmtClone(){
   if(!src){toast('Select a source VM','error');return;}
   if(!name){toast('Enter a name for the clone','error');return;}
   var out=document.getElementById('vmt-cl-out');if(out)out.innerHTML='<div class="c-yellow">Cloning VM '+src+'...</div>';
-  _authFetch(API.VM_CLONE+'?vmid='+src+'&name='+encodeURIComponent(name)+'&full=1').then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_CLONE+'?vmid='+src+'&name='+encodeURIComponent(name)+'&full=1',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Clone created as VM '+d.new_vmid+'!','success');if(out)out.innerHTML='<div class="c-green">Clone "'+name+'" created as VM '+d.new_vmid+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   }).catch(function(e){toast('Clone failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -4441,7 +4437,7 @@ function vmtMigrate(){
   if(!src||!tgt){toast('Select VM and target node','error');return;}
   var out=document.getElementById('vmt-m-out');if(out)out.innerHTML='<div class="c-yellow">Migrating VM '+src+' to '+tgt+'...</div>';
   confirmAction('Migrate VM <strong>'+src+'</strong> to <strong>'+tgt+'</strong>?',function(){
-    _authFetch(API.VM_MIGRATE+'?vmid='+src+'&target_node='+encodeURIComponent(tgt)+'&online='+online).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_MIGRATE+'?vmid='+src+'&target_node='+encodeURIComponent(tgt)+'&online='+online,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('Migration started','success');if(out)out.innerHTML='<div class="c-green">VM '+src+' migrating to '+tgt+(d.online?' (live)':' (offline)')+'</div>';}
       else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
     }).catch(function(e){toast('Migration failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -4480,7 +4476,7 @@ function vmtSnapshot(){
   });
 }
 function vmtRollback(){
-  var vmForm=document.getElementById('vm-tools-form');if(!vmForm)return;
+  var vmForm=document.getElementById('vm-form');if(!vmForm)return;
   vmForm.innerHTML='<div class="form-vertical">'+
     '<div><label class="label-sub">VM</label><select id="vmt-rb-source" class="input-primary"><option value="">Loading...</option></select></div>'+
     '<div><label class="label-sub">SNAPSHOT (blank = latest)</label><input id="vmt-rb-snap" class="input-primary" placeholder="Snapshot name (optional)"></div>'+
@@ -4754,7 +4750,7 @@ function bkListSnaps(){
   var vmid=(document.getElementById('bk-snap-vm')||{}).value;if(!vmid){toast('Select a VM','error');return;}
   var out=document.getElementById('bk-snap-out');if(out)out.innerHTML='<div class="skeleton"></div>';
   _authFetch('/api/vm/snapshots?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
-    var txt=d.snapshots?d.snapshots.join('\n')+(d.live_migration?'\n\nLive migration: ELIGIBLE':'\\n\\nLive migration: BLOCKED'):'No snapshots';
+    var txt=d.snapshots?d.snapshots.join('\n')+(d.live_migration?'\n\nLive migration: ELIGIBLE':'\n\nLive migration: BLOCKED'):'No snapshots';
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--text);white-space:pre-wrap;margin:0">'+(txt||'No snapshots')+'</pre>';
   });
 }
@@ -4881,10 +4877,11 @@ function unlockVault(){
   var user=document.getElementById('vault-auth-user').value.trim();
   var pass=document.getElementById('vault-auth-pass').value;
   if(!user||!pass){toast('Enter admin credentials','error');return;}
-  /* Verify credentials by attempting SSH auth to localhost */
+  /* Verify credentials by attempting actual login */
   toast('Verifying credentials...','info');
-  _authFetch('/api/fleet/connectivity').then(function(r){return r.json()}).then(function(d){
-    /* Check if the user is an admin in FREQ */
+  fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})}).then(function(r){return r.json()}).then(function(d){
+    if(!d.ok||!d.token){toast('Invalid credentials','error');document.getElementById('vault-auth-pass').value='';return;}
+    /* Login succeeded — now verify admin role */
     _authFetch(API.USERS).then(function(r){return r.json()}).then(function(ud){
       var isAdmin=ud.users.some(function(u){return u.username===user&&u.role==='admin';});
       if(!isAdmin){toast('Access denied — admin role required','error');document.getElementById('vault-auth-pass').value='';return;}
@@ -4894,7 +4891,7 @@ function unlockVault(){
       toast('Vault unlocked','success');
       loadSensitiveVault();
     });
-  });
+  }).catch(function(){toast('Authentication failed','error');document.getElementById('vault-auth-pass').value='';});
 }
 function lockVault(){
   _vaultUnlocked=false;
@@ -5042,30 +5039,40 @@ function demoteUser(username){
     });
   });
 }
-/* Fleet user/password/key functions */
+/* Fleet user/password/key — input validation to prevent shell injection */
+function _validUnixUser(s){return /^[a-z_][a-z0-9_-]{0,31}$/.test(s);}
+function _validSshKey(s){return /^ssh-(ed25519|rsa|ecdsa|dsa)\s+[A-Za-z0-9+\/=]+/.test(s);}
+function _b64(s){try{return btoa(unescape(encodeURIComponent(s)));}catch(e){return '';}}
+function _fleetUserCmd(user,pass,role,key){
+  /* Build shell command with base64-encoded password to avoid injection */
+  var passB64=_b64(user+':'+pass);
+  var cmd='useradd -m -s /bin/bash \''+user+'\' 2>/dev/null; echo \''+passB64+'\' | base64 -d | chpasswd';
+  if(role==='admin')cmd+='; echo \''+user+' ALL=(ALL) NOPASSWD:ALL\' > /etc/sudoers.d/\''+user+'\'; chmod 440 /etc/sudoers.d/\''+user+'\'';
+  else if(role==='operator')cmd+='; echo \''+user+' ALL=(ALL) ALL\' > /etc/sudoers.d/\''+user+'\'; chmod 440 /etc/sudoers.d/\''+user+'\'';
+  if(key)cmd+='; mkdir -p /home/\''+user+'\'/.ssh; echo \''+key+'\' >> /home/\''+user+'\'/.ssh/authorized_keys; chmod 700 /home/\''+user+'\'/.ssh; chmod 600 /home/\''+user+'\'/.ssh/authorized_keys; chown -R \''+user+'\':\''+user+'\' /home/\''+user+'\'/.ssh';
+  return cmd;
+}
 function fleetNewUser(){
   var user=document.getElementById('ft-nu-user').value.trim();
   var pass=document.getElementById('ft-nu-pass').value;
   var key=document.getElementById('ft-nu-key').value.trim();
   var role=document.getElementById('ft-nu-role').value;
   if(!user){toast('Username required','error');return;}
+  if(!_validUnixUser(user)){toast('Invalid username — lowercase letters, digits, hyphens, underscores only','error');return;}
   if(!pass){toast('Password required','error');return;}
   if(pass.length<8){toast('Password must be at least 8 characters','error');return;}
-  confirmAction('Create user <strong>'+user+'</strong> as <strong>'+role.toUpperCase()+'</strong> and deploy to ALL fleet hosts?<br><br>SSH Key: '+(key?'provided':'none'),function(){
+  if(key&&!_validSshKey(key)){toast('Invalid SSH key format — must start with ssh-ed25519 or ssh-rsa','error');return;}
+  confirmAction('Create user <strong>'+_esc(user)+'</strong> as <strong>'+_esc(role).toUpperCase()+'</strong> and deploy to ALL fleet hosts?<br><br>SSH Key: '+(key?'provided':'none'),function(){
     toast('Creating '+user+' ('+role+') across fleet...','info');
-    var sudoLine=role==='admin'?user+' ALL=(ALL) NOPASSWD:ALL':role==='operator'?user+' ALL=(ALL) ALL':'';
-    var cmd='useradd -m -s /bin/bash '+user+' 2>/dev/null; echo "'+user+':'+pass+'" | chpasswd';
-    if(sudoLine)cmd+='; echo "'+sudoLine+'" > /etc/sudoers.d/'+user+'; chmod 440 /etc/sudoers.d/'+user;
-    if(key)cmd+='; mkdir -p /home/'+user+'/.ssh; echo "'+key+'" >> /home/'+user+'/.ssh/authorized_keys; chmod 700 /home/'+user+'/.ssh; chmod 600 /home/'+user+'/.ssh/authorized_keys; chown -R '+user+':'+user+' /home/'+user+'/.ssh';
+    var cmd=_fleetUserCmd(user,pass,role,key);
     var out=document.getElementById('ft-nu-out');out.innerHTML='<div class="skeleton"></div>';
     _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
-      d.results.forEach(function(r,i){h+='<tr><td><strong>'+r.host.toUpperCase()+'</strong></td><td>'+(r.ok?'<span class="c-green">DEPLOYED</span>':'<span class="c-red">'+r.error+'</span>')+'</td></tr>';});
+      d.results.forEach(function(r,i){h+='<tr><td><strong>'+_esc(r.host).toUpperCase()+'</strong></td><td>'+(r.ok?'<span class="c-green">DEPLOYED</span>':'<span class="c-red">'+_esc(r.error)+'</span>')+'</td></tr>';});
       h+='</tbody></table>';out.innerHTML=h;
       toast('User '+user+' deployed to '+d.results.length+' hosts','success');
-      /* Also register in FREQ */
-      _authFetch(API.USERS_CREATE+'?username='+encodeURIComponent(user)+'&role='+role).catch(function(){});
-    });
+      _authFetch(API.USERS_CREATE+'?username='+encodeURIComponent(user)+'&role='+encodeURIComponent(role)).catch(function(e){console.error('FREQ user register failed:',e);});
+    }).catch(function(e){toast('Fleet exec failed: '+e,'error');});
   });
 }
 function fleetPasswdUpdate(){
@@ -5073,34 +5080,37 @@ function fleetPasswdUpdate(){
   var pass=document.getElementById('ft-pw-pass').value;
   var confirm=document.getElementById('ft-pw-confirm').value;
   if(!user){toast('Username required','error');return;}
+  if(!_validUnixUser(user)){toast('Invalid username','error');return;}
   if(!pass){toast('Password required','error');return;}
   if(pass!==confirm){toast('Passwords do not match','error');return;}
   if(pass.length<8){toast('Password must be at least 8 characters','error');return;}
-  confirmAction('Update password for <strong>'+user+'</strong> on ALL fleet hosts?',function(){
+  confirmAction('Update password for <strong>'+_esc(user)+'</strong> on ALL fleet hosts?',function(){
     toast('Updating password for '+user+'...','info');
-    var cmd='echo "'+user+':'+pass+'" | chpasswd && echo OK || echo FAIL';
+    var passB64=_b64(user+':'+pass);
+    var cmd='echo \''+passB64+'\' | base64 -d | chpasswd && echo OK || echo FAIL';
     var out=document.getElementById('ft-pw-out');out.innerHTML='<div class="skeleton"></div>';
     _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
         var success=r.ok&&r.output.trim()==='OK';if(success)ok++;
-        h+='<tr><td><strong>'+r.host.toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">UPDATED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
+        h+='<tr><td><strong>'+_esc(r.host).toUpperCase()+'</strong></td><td>'+(success?'<span class="c-green">UPDATED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       });
       h+='</tbody></table>';out.innerHTML=h;
       toast('Password updated on '+ok+'/'+d.results.length+' hosts','success');
-    });
+    }).catch(function(e){toast('Fleet exec failed: '+e,'error');});
   });
 }
 function fleetSshKeyDeploy(){
   var user=document.getElementById('ft-sk-user').value.trim();
   var key=document.getElementById('ft-sk-key').value.trim();
   if(!user){toast('Username required','error');return;}
+  if(!_validUnixUser(user)){toast('Invalid username','error');return;}
   if(!key){toast('Public key required','error');return;}
-  if(key.indexOf('ssh-')<0){toast('Invalid key — must start with ssh-ed25519 or ssh-rsa','error');return;}
-  confirmAction('Deploy SSH key to <strong>'+user+'</strong> on ALL fleet hosts?<br><br><code style="font-size:12px;word-break:break-all">'+key.substring(0,60)+'...</code>',function(){
+  if(!_validSshKey(key)){toast('Invalid key — must start with ssh-ed25519 or ssh-rsa','error');return;}
+  confirmAction('Deploy SSH key to <strong>'+_esc(user)+'</strong> on ALL fleet hosts?<br><br><code style="font-size:12px;word-break:break-all">'+_esc(key.substring(0,60))+'...</code>',function(){
     toast('Deploying SSH key for '+user+'...','info');
-    var cmd='mkdir -p /home/'+user+'/.ssh; echo "'+key+'" >> /home/'+user+'/.ssh/authorized_keys; chmod 700 /home/'+user+'/.ssh; chmod 600 /home/'+user+'/.ssh/authorized_keys; chown -R '+user+':'+user+' /home/'+user+'/.ssh && echo OK || echo FAIL';
+    var cmd='mkdir -p /home/\''+user+'\'/.ssh; echo \''+key+'\' >> /home/\''+user+'\'/.ssh/authorized_keys; chmod 700 /home/\''+user+'\'/.ssh; chmod 600 /home/\''+user+'\'/.ssh/authorized_keys; chown -R \''+user+'\':\''+user+'\' /home/\''+user+'\'/.ssh && echo OK || echo FAIL';
     var out=document.getElementById('ft-sk-out');out.innerHTML='<div class="skeleton"></div>';
     _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
@@ -6261,7 +6271,7 @@ function testNotify(){_authFetch(API.NOTIFY_TEST).then(function(r){return r.json
    ═══════════════════════════════════════════════════════════════════ */
 function vmDestroy(vmid){
   confirmAction('Destroy VM <strong>'+vmid+'</strong>? This cannot be undone.',function(){
-    _authFetch(API.VM_DESTROY+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_DESTROY+'?vmid='+vmid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok)toast('VM '+vmid+' destroyed','success');else toast('Error: '+d.error,'error');refreshCurrentView();
     });
   });
@@ -6404,11 +6414,11 @@ function _vmDoMigrate(vmid){
   var out=document.getElementById('vm-ctrl-out');
   confirmAction('Live migrate VM <strong>'+vmid+'</strong> to <strong>'+target+'</strong>?<br><span class="c-dim">Uses direct node-to-node transfer with local disks. May take several minutes.</span>',function(){
     if(out)out.innerHTML='<span class="c-yellow">Live migrating to '+target+'... (this may take several minutes)</span>';
-    _authFetch(API.VM_MIGRATE+'?vmid='+vmid+'&target_node='+target).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_MIGRATE+'?vmid='+vmid+'&target_node='+target,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.error==='snapshots_block_migration'){
         confirmAction('VM has <strong>'+d.count+'</strong> snapshot(s) blocking live migration:<br><strong>'+d.snapshots.join(', ')+'</strong><br><br>Delete snapshots and migrate?',function(){
           if(out)out.innerHTML='<span class="c-yellow">Deleting snapshots and migrating...</span>';
-          _authFetch(API.VM_MIGRATE+'?vmid='+vmid+'&target_node='+target+'&delete_snapshots=1').then(function(r2){return r2.json()}).then(function(d2){
+          _authFetch(API.VM_MIGRATE+'?vmid='+vmid+'&target_node='+target+'&delete_snapshots=1',{method:'POST'}).then(function(r2){return r2.json()}).then(function(d2){
             if(d2.ok){if(out)out.innerHTML='<span class="c-green">VM '+vmid+' migrated to '+target+' ('+d2.target_storage+', '+d2.snapshots_deleted+' snapshots deleted)</span>';toast('Migration complete','success');}
             else{if(out)out.innerHTML='<span class="c-red">'+d2.error+'</span>';toast('Migration failed','error');}
           }).catch(function(e){if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});

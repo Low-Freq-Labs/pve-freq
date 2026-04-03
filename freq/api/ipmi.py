@@ -18,7 +18,6 @@ Architecture:
 
 import os
 import subprocess
-import tempfile
 
 from freq.api.helpers import json_response, get_json_body, get_param
 from freq.core.config import load_config

@@ -144,6 +144,37 @@ echo DEPLOY_OK
 
 
 def remove(ip, svc_name, key_path, rsa_key_path=None):
-    """Remove FREQ service account from TrueNAS."""
-    from freq.deployers.server.linux import remove as linux_remove
-    return linux_remove(ip, svc_name, key_path)
+    """Remove FREQ service account from TrueNAS.
+
+    Detects SCALE (midclt) vs CORE (pw) vs Linux fallback, matching deploy().
+    """
+    from freq.core.ssh import run as ssh_run
+
+    remove_script = f"""
+# Detect TrueNAS variant
+if command -v midclt >/dev/null 2>&1; then
+    # TrueNAS SCALE — use midclt
+    uid=$(midclt call user.query '[["username","=","{svc_name}"]]' 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d[0]['id'])" 2>/dev/null)
+    if [ -n "$uid" ]; then
+        midclt call user.delete "$uid" '{{"delete_group": true}}' >/dev/null 2>&1 && echo REMOVE_OK || echo REMOVE_FAIL
+    else
+        echo REMOVE_OK
+    fi
+elif command -v pw >/dev/null 2>&1; then
+    # TrueNAS CORE (FreeBSD)
+    pw userdel '{svc_name}' -r 2>/dev/null; echo REMOVE_OK
+else
+    # Linux fallback
+    userdel -r '{svc_name}' 2>/dev/null; echo REMOVE_OK
+fi
+# Clean up sudoers
+rm -f /etc/sudoers.d/freq-{svc_name} /usr/local/etc/sudoers.d/freq-{svc_name} 2>/dev/null
+"""
+    r = ssh_run(
+        host=ip, command=remove_script, key_path=key_path,
+        connect_timeout=5, command_timeout=30,
+        htype="truenas", use_sudo=True,
+    )
+    if r.returncode == 0 and "REMOVE_OK" in (r.stdout or ""):
+        return True, "Account removed"
+    return False, (r.stderr or r.stdout or "Remove failed")[:100]

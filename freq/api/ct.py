@@ -12,7 +12,7 @@ Operations:
 import json
 import time
 
-from freq.api.helpers import json_response, get_params, get_param
+from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
 from freq.core.validate import (
     label as valid_label,
@@ -21,8 +21,6 @@ from freq.core.validate import (
 from freq.modules.pve import _find_reachable_node, _pve_cmd
 from freq.modules.serve import (
     _check_session_role,
-    _check_vm_permission,
-    get_vm_tags,
 )
 
 

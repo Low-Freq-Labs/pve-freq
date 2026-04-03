@@ -14,7 +14,7 @@ import freq
 from freq.core.config import load_config, FreqConfig
 from freq.core import fmt
 from freq.core import log as logger
-from freq.core.personality import load_pack, show_vibe, splash
+from freq.core.personality import load_pack, show_vibe
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +130,6 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"PVE FREQ v{freq.__version__}")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
     parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmations")
-    parser.add_argument("--json", action="store_true", help="JSON output mode")
     parser.add_argument("--dry-run", action="store_true", help="Preview without changes")
 
     sub = parser.add_subparsers(dest="domain")
@@ -1911,7 +1910,6 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
         ]),
         ("freq store — Storage", [
             ("store nas <action>", "TrueNAS management"),
-            ("store zfs <action>", "ZFS operations"),
         ]),
         ("freq dr — Disaster Recovery", [
             ("dr backup [list|create|export|prune]", "Backup management"),
@@ -1941,6 +1939,27 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
             ("user promote <username>", "Promote to higher role"),
             ("user demote <username>", "Demote to lower role"),
             ("user install <username>", "Install across fleet"),
+        ]),
+        ("freq vpn — VPN Management", [
+            ("vpn list", "List VPN peers"),
+            ("vpn add <name>", "Add VPN peer"),
+            ("vpn remove <name>", "Remove VPN peer"),
+        ]),
+        ("freq event — Event Network", [
+            ("event list", "List event networks"),
+            ("event create <name>", "Create event network"),
+            ("event remove <name>", "Remove event network"),
+        ]),
+        ("freq specialist — Specialist Ops", [
+            ("specialist <action>", "Specialist operations"),
+        ]),
+        ("freq lab — Lab Management", [
+            ("lab list", "List lab environments"),
+            ("lab tool <action>", "Lab tool management"),
+        ]),
+        ("freq engine — Policy Engine", [
+            ("engine run", "Run policy checks"),
+            ("engine list", "List available policies"),
         ]),
         ("freq plugin — Plugin Ecosystem", [
             ("plugin list", "List installed plugins"),

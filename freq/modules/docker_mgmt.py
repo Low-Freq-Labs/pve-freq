@@ -14,13 +14,10 @@ Design decisions:
     - Fleet-wide: every command targets all docker hosts by default.
     - Update check is non-destructive. Apply is explicit.
 """
-import json
-import os
-import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many
+from freq.core.ssh import run_many
 from freq.core import log as logger
 
 

@@ -17,11 +17,8 @@ Design decisions:
     - Everything in one SSH round-trip per host. Two hosts = two calls,
       not thirty-four. Fast enough to run ad-hoc during incidents.
 """
-import json
-import time
 
 from freq.core import fmt
-from freq.core import log as logger
 from freq.core import resolve
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run

@@ -213,7 +213,7 @@ def handle_bench_run(handler):
         return
 
     from freq.modules.benchmark import (
-        bench_cpu, bench_memory, bench_disk, bench_all, check_tools,
+        bench_cpu, bench_memory, bench_disk, bench_all,
     )
 
     try:

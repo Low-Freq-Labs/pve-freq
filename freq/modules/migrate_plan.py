@@ -20,10 +20,8 @@ Design decisions:
       Migrations move live VMs — never auto-execute without human intent.
 """
 import json
-import time
 
 from freq.core import fmt
-from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 

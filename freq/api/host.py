@@ -7,7 +7,7 @@ Where: Routes registered at /api/* (same paths as legacy serve.py).
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
-from freq.api.helpers import json_response, get_cfg
+from freq.api.helpers import json_response
 from freq.core.config import load_config
 from freq.core import resolve as res
 from freq.core.ssh import run_many as ssh_run_many

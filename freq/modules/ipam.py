@@ -20,11 +20,9 @@ Design decisions:
       exists (hosts.conf + PVE configs). One source of truth, not two.
 """
 import ipaddress
-import os
 
 from freq.core.config import FreqConfig
 from freq.core import fmt
-from freq.core import log as logger
 
 
 def _parse_subnet(subnet_str: str):

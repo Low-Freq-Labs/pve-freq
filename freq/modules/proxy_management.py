@@ -16,14 +16,11 @@ Design decisions:
     - Each backend gets its own set of commands mapped to its API.
 """
 import json
-import os
 import urllib.request
 import urllib.error
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run
-from freq.core import log as logger
 
 
 # ---------------------------------------------------------------------------

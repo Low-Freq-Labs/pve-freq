@@ -17,12 +17,10 @@ Design decisions:
     - Clamped watts (5W-2000W) and rates prevent nonsensical estimates
     - iDRAC vs estimate flagged per-host so operators know data quality
 """
-import json
 import math
 import os
 import re
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from freq.core import log as logger
 

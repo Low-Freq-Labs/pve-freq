@@ -28,7 +28,6 @@ import subprocess
 import time
 
 from freq.core import fmt
-from freq.core import log as logger
 from freq.core.config import FreqConfig
 
 # Storage

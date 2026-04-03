@@ -18,12 +18,10 @@ Design decisions:
     - Auto-selects latest snapshot, no user input needed. In an emergency,
       fewer decisions means faster recovery. Override with --snapshot flag.
 """
-import re
 import time
 
 from freq.core import fmt
 from freq.core import log as logger
-from freq.core import validate
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run
 

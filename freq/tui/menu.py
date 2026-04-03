@@ -134,7 +134,6 @@ def _render_menu(title: str, items: list, breadcrumb: list = None):
 def _run_command(cfg, pack, cmd_name: str, args_override: dict = None):
     """Execute a FREQ command and return to menu."""
     from freq.cli import _build_parser
-    import argparse
 
     print()
 

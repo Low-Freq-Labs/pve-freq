@@ -15,7 +15,7 @@ import os
 import re
 import subprocess
 
-from freq.api.helpers import json_response, get_params, get_param, get_json_body, get_cfg
+from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.core.validate import (
@@ -29,12 +29,18 @@ from freq.modules.serve import (
     _get_fleet_vms,
     _check_vm_permission,
     get_vm_tags,
-    _bg_cache,
-    _bg_lock,
     _find_reachable_pve_node,
     _check_session_role,
     _get_discovered_node_ips,
 )
+
+
+def _require_post(handler, action="this operation"):
+    """Reject non-POST requests for destructive operations."""
+    if handler.command != "POST":
+        json_response(handler, {"error": f"{action} requires POST"}, 405)
+        return True
+    return False
 
 
 # ── Handlers ────────────────────────────────────────────────────────────
@@ -48,7 +54,8 @@ def handle_vm_list(handler):
 
 
 def handle_vm_create(handler):
-    """GET /api/vm/create — create a new VM."""
+    """POST /api/vm/create — create a new VM."""
+    if _require_post(handler, "VM create"): return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403); return
@@ -85,7 +92,8 @@ def handle_vm_create(handler):
 
 
 def handle_vm_destroy(handler):
-    """GET /api/vm/destroy — destroy a VM."""
+    """POST /api/vm/destroy — destroy a VM."""
+    if _require_post(handler, "VM destroy"): return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403); return
@@ -103,7 +111,7 @@ def handle_vm_destroy(handler):
         node_ip = _find_reachable_node(cfg)
         if not node_ip:
             json_response(handler, {"error": "No PVE node reachable"}); return
-        _pve_cmd(cfg, node_ip, f"qm stop {vmid} --skiplock", timeout=30)
+        _pve_cmd(cfg, node_ip, f"qm stop {vmid}", timeout=30)
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=120)
         json_response(handler, {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""})
     except Exception as e:
@@ -314,7 +322,7 @@ def handle_vm_snapshots(handler):
     if r.returncode == 0:
         for line in r.stdout.strip().split("\n"):
             line = line.strip()
-            if not line or "current" in line.lower() and "->" in line:
+            if (not line) or ("current" in line.lower() and "->" in line):
                 continue
             parts = line.split()
             if parts:
@@ -769,7 +777,8 @@ def handle_vm_tag(handler):
 
 
 def handle_vm_clone(handler):
-    """GET /api/vm/clone — clone a VM."""
+    """POST /api/vm/clone — clone a VM."""
+    if _require_post(handler, "VM clone"): return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403); return
@@ -827,6 +836,7 @@ def handle_vm_migrate(handler):
     Auto-detects best local storage on target. Checks for snapshots
     that would block live migration.
     """
+    if _require_post(handler, "VM migrate"): return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403); return
@@ -960,10 +970,10 @@ def handle_rollback(handler):
     except ValueError:
         json_response(handler, {"error": f"Invalid VMID: {vmid_str}"}, 400); return
 
-    if is_protected_vmid(vmid):
-        json_response(handler, {"error": f"VMID {vmid} is protected"}, 403); return
-
     cfg = load_config()
+
+    if is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges):
+        json_response(handler, {"error": f"VMID {vmid} is protected"}, 403); return
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
         json_response(handler, {"error": "Cannot reach any PVE node"}, 503); return
@@ -1077,13 +1087,24 @@ def handle_snapshots_stale(handler):
                 if len(sparts) >= 1:
                     snap_name = sparts[0]
                     snap_date = " ".join(sparts[1:3]) if len(sparts) >= 3 else ""
-                    stale.append({
-                        "vmid": int(vm_id),
-                        "vm_name": vm_name,
-                        "snapshot": snap_name,
-                        "date": snap_date,
-                        "node": node_name,
-                    })
+                    # Filter by age — only include snapshots older than threshold
+                    import datetime
+                    is_stale = True  # Default to stale if date can't be parsed
+                    if snap_date:
+                        try:
+                            snap_dt = datetime.datetime.strptime(snap_date, "%Y-%m-%d %H:%M:%S")
+                            age_days = (datetime.datetime.now() - snap_dt).days
+                            is_stale = age_days >= days
+                        except ValueError:
+                            pass
+                    if is_stale:
+                        stale.append({
+                            "vmid": int(vm_id),
+                            "vm_name": vm_name,
+                            "snapshot": snap_name,
+                            "date": snap_date,
+                            "node": node_name,
+                        })
 
     json_response(handler, {
         "stale": stale,

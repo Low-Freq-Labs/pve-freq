@@ -55,10 +55,13 @@ cluster_name = ""
 timezone = "UTC"
 # truenas_ip = ""
 # pfsense_ip = ""
+# opnsense_ip = ""
+# synology_ip = ""
 # switch_ip = ""
 # docker_dev_ip = ""
 # docker_config_base = ""
 # docker_backup_dir = ""
+# snmp_community = "public"
 
 [templates.profiles]
 minimal = { cores = 1, ram = 1024, disk = 8 }

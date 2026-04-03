@@ -17,7 +17,6 @@ Design decisions:
     - TOML playbooks are git-trackable and human-editable, not stored in a DB
     - Steps run sequentially, not in parallel — incident response needs order
 """
-import json
 import os
 import time
 from dataclasses import dataclass, field

@@ -20,7 +20,7 @@ Design decisions:
 """
 from typing import Optional
 
-from freq.core.types import Host, Container, ContainerVM
+from freq.core.types import Host, ContainerVM
 
 
 def by_label(hosts: list, label: str) -> Optional[Host]:

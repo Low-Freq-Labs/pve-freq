@@ -27,7 +27,6 @@ from freq.core import fmt
 from freq.core import resolve
 from freq.core.config import FreqConfig
 from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
-from freq.core.types import Host
 
 # ─────────────────────────────────────────────────────────────
 # CONSTANTS — Timeouts for fleet SSH operations
@@ -224,7 +223,7 @@ def cmd_exec(cfg: FreqConfig, pack, args) -> int:
     )
     print()
 
-    return 0
+    return 0 if fail_count == 0 else 1
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1242,6 +1241,30 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
         else:
             fmt.step_fail(f"Failed: {h.label} — {result.stderr[:80]}")
             failures += 1
+
+    # Step 5: Remove old key from authorized_keys on all hosts
+    old_pub_bak = old_pub + ".bak"
+    if successes > 0 and os.path.isfile(old_pub_bak):
+        with open(old_pub_bak) as f:
+            old_pubkey = f.read().strip()
+        if old_pubkey:
+            fmt.blank()
+            fmt.divider("Removing old key")
+            for h in cfg.hosts:
+                if h.htype in ("switch", "idrac"):
+                    continue
+                from freq.core.ssh import run as ssh_run
+                old_escaped = old_pubkey.replace("/", "\\/").replace(".", "\\.")
+                rm_cmd = f"sed -i '/{old_escaped}/d' ~/.ssh/authorized_keys 2>/dev/null; echo OK"
+                result = ssh_run(
+                    host=h.ip, command=rm_cmd, key_path=old_key,
+                    connect_timeout=cfg.ssh_connect_timeout,
+                    command_timeout=15, htype=h.htype, use_sudo=False,
+                )
+                if result.returncode == 0:
+                    fmt.step_ok(f"Old key removed from {h.label}")
+                else:
+                    fmt.step_warn(f"Could not remove old key from {h.label}")
 
     fmt.blank()
     fmt.divider("Results")

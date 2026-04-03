@@ -10,7 +10,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 import json
 import os
 
-from freq.api.helpers import json_response, get_params, get_cfg
+from freq.api.helpers import json_response
 from freq.core.config import load_config
 from freq.core import log as logger
 from freq.modules.serve import (

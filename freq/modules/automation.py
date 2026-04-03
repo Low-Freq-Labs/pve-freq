@@ -21,7 +21,6 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core import log as logger
 
 
 AUTO_DIR = "auto"

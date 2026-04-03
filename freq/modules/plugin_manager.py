@@ -31,10 +31,8 @@ import shutil
 import tarfile
 import tempfile
 import time
-from pathlib import Path
 
 from freq.core import fmt
-from freq.core import log as logger
 
 # ─────────────────────────────────────────────────────────────
 # CONSTANTS

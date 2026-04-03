@@ -135,8 +135,14 @@ def _node_storage(cfg: FreqConfig, node_ip: str) -> str:
 
 def _apply_cloudinit(cfg: FreqConfig, node_ip: str, vmid: int, ip_addr: str = None):
     """Apply cloud-init settings to a VM: user, SSH keys, IP, nameserver."""
-    _pve_cmd(cfg, node_ip, f"qm set {vmid} --ciuser {cfg.ssh_service_account}")
-    _pve_cmd(cfg, node_ip, f"qm set {vmid} --citype nocloud")
+    errors = []
+
+    _, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} --ciuser {cfg.ssh_service_account}")
+    if not ok:
+        errors.append("ciuser")
+    _, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} --citype nocloud")
+    if not ok:
+        errors.append("citype")
 
     # SSH key
     pubkey_path = cfg.ssh_key_path + ".pub" if cfg.ssh_key_path else ""
@@ -144,7 +150,9 @@ def _apply_cloudinit(cfg: FreqConfig, node_ip: str, vmid: int, ip_addr: str = No
         with open(pubkey_path) as f:
             pubkey = f.read().strip()
         _pve_cmd(cfg, node_ip, f"echo '{pubkey}' > /tmp/agent-sshkey-{vmid}.pub")
-        _pve_cmd(cfg, node_ip, f"qm set {vmid} --sshkeys /tmp/agent-sshkey-{vmid}.pub")
+        _, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} --sshkeys /tmp/agent-sshkey-{vmid}.pub")
+        if not ok:
+            errors.append("sshkeys")
 
     # IP address
     if ip_addr:
@@ -152,14 +160,24 @@ def _apply_cloudinit(cfg: FreqConfig, node_ip: str, vmid: int, ip_addr: str = No
         if "/" not in ip_addr:
             logger.warn(f"no CIDR prefix on IP {ip_addr} — assuming /24")
         gw = cfg.vm_gateway
-        _pve_cmd(cfg, node_ip, f"qm set {vmid} --ipconfig0 ip={ip_with_prefix},gw={gw}")
+        _, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} --ipconfig0 ip={ip_with_prefix},gw={gw}")
+        if not ok:
+            errors.append("ipconfig")
     else:
-        _pve_cmd(cfg, node_ip, f"qm set {vmid} --ipconfig0 ip=dhcp")
+        _, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} --ipconfig0 ip=dhcp")
+        if not ok:
+            errors.append("ipconfig")
 
     # Nameserver
-    _pve_cmd(cfg, node_ip, f"qm set {vmid} --nameserver {cfg.vm_nameserver}")
-    fmt.step_ok(f"Cloud-init configured: user={cfg.ssh_service_account}" +
-                (f", ip={ip_addr}" if ip_addr else ", ip=dhcp"))
+    _, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} --nameserver {cfg.vm_nameserver}")
+    if not ok:
+        errors.append("nameserver")
+
+    if errors:
+        fmt.step_warn(f"Cloud-init partially configured (failed: {', '.join(errors)})")
+    else:
+        fmt.step_ok(f"Cloud-init configured: user={cfg.ssh_service_account}" +
+                    (f", ip={ip_addr}" if ip_addr else ", ip=dhcp"))
 
 
 def _find_vm_node(cfg: FreqConfig, vmid: int) -> str:
@@ -602,7 +620,9 @@ def cmd_resize(cfg: FreqConfig, pack, args) -> int:
         fmt.error("Specify at least one: --cores, --ram, or --disk")
         return 1
 
-    node_ip = _find_node(cfg)
+    node_ip = _find_vm_node(cfg, vmid)
+    if not node_ip:
+        node_ip = _find_node(cfg)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
         _pve_unreachable_hint(cfg)
@@ -638,10 +658,18 @@ def cmd_resize(cfg: FreqConfig, pack, args) -> int:
             fmt.step_fail(f"Failed: {stdout}")
             return 1
 
-    # Disk resize
+    # Disk resize — detect boot disk from VM config
     if disk:
-        fmt.step_start(f"Expanding disk by {disk}GB")
-        stdout, ok = _pve_cmd(cfg, node_ip, f"qm disk resize {vmid} scsi0 +{disk}G")
+        boot_disk = "scsi0"  # default
+        cfg_out, cfg_ok = _pve_cmd(cfg, node_ip, f"qm config {vmid}")
+        if cfg_ok:
+            for cline in cfg_out.strip().split("\n"):
+                for prefix in ("scsi0:", "virtio0:", "sata0:", "ide0:"):
+                    if cline.startswith(prefix):
+                        boot_disk = prefix.rstrip(":")
+                        break
+        fmt.step_start(f"Expanding {boot_disk} by {disk}GB")
+        stdout, ok = _pve_cmd(cfg, node_ip, f"qm disk resize {vmid} {boot_disk} +{disk}G")
         if ok:
             fmt.step_ok(f"Disk expanded by {disk}GB")
         else:

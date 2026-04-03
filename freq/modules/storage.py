@@ -17,8 +17,6 @@ Design decisions:
 """
 import json
 import os
-import re
-import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig

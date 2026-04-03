@@ -22,7 +22,7 @@ import os
 import re
 import subprocess
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from freq.core import log as logger
 
@@ -279,6 +279,10 @@ def rollback(data_dir: str, commit_hash: str) -> tuple:
     if r.returncode != 0:
         return False, r.stderr.strip() or "git checkout failed"
 
+    # Commit the rollback to keep working tree clean
+    _run_git(go_dir, "add", "-A")
+    _run_git(go_dir, "commit", "-m", f"rollback to {commit_hash[:12]}")
+
     state = load_state(data_dir)
     state.last_commit = commit_hash[:12]
     state.pending_changes = 0
@@ -341,7 +345,8 @@ def cmd_gitops(cfg, pack, args) -> int:
 
     elif action == "sync":
         fmt.header("GitOps Sync")
-        state = sync(cfg.data_dir)
+        gcfg = load_gitops_config(cfg.conf_dir)
+        state = sync(cfg.data_dir, gcfg.branch)
         sd = state_to_dict(state)
         if sd["last_error"]:
             fmt.error(sd["last_error"])
@@ -352,7 +357,8 @@ def cmd_gitops(cfg, pack, args) -> int:
 
     elif action == "apply":
         fmt.header("GitOps Apply")
-        ok, msg = apply_changes(cfg.data_dir)
+        gcfg = load_gitops_config(cfg.conf_dir)
+        ok, msg = apply_changes(cfg.data_dir, gcfg.branch)
         if ok:
             fmt.step_ok(msg)
         else:

@@ -21,7 +21,7 @@ import json
 import os
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from freq.core import log as logger
 

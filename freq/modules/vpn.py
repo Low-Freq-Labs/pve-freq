@@ -14,9 +14,7 @@ Design decisions:
     - Peer configs stored locally in conf/vpn/peers/ for export/provisioning.
     - QR code generation for WireGuard uses qrencode CLI if available.
 """
-import json
 import os
-import re
 import time
 
 from freq.core import fmt

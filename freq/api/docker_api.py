@@ -9,7 +9,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 
 import os
 
-from freq.api.helpers import json_response, get_cfg
+from freq.api.helpers import json_response
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import (

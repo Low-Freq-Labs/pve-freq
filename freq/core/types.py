@@ -275,12 +275,14 @@ class FleetBoundaries:
     def is_prod(self, vmid: int) -> bool:
         """True if this VMID belongs to a production category."""
         cat, _ = self.categorize(vmid)
-        return cat in ("infrastructure", "prod_media", "prod_other")
+        return cat in (VMCategory.INFRASTRUCTURE.value, VMCategory.PROD_MEDIA.value,
+                       VMCategory.PROD_OTHER.value)
 
     def is_protected(self, vmid: int) -> bool:
         """True if this VMID belongs to a category that should not be casually modified."""
         cat, _ = self.categorize(vmid)
-        return cat in ("personal", "infrastructure", "prod_media", "prod_other")
+        return cat in (VMCategory.PERSONAL.value, VMCategory.INFRASTRUCTURE.value,
+                       VMCategory.PROD_MEDIA.value, VMCategory.PROD_OTHER.value)
 
     def can_action(self, vmid: int, action: str) -> bool:
         """Check if a specific action is allowed for a VMID."""

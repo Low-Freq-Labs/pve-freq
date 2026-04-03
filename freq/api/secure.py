@@ -14,11 +14,11 @@ function that receives the HTTP handler as its first argument.
 import os
 import time
 
-from freq.api.helpers import json_response, get_params, get_cfg
+from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
 from freq.core import resolve as res
 from freq.core.ssh import run_many as ssh_run_many
-from freq.modules.vault import vault_get, vault_set, vault_init, vault_list, vault_delete
+from freq.modules.vault import vault_set, vault_init, vault_list, vault_delete
 from freq.api.auth import check_session_role as _check_session_role
 
 

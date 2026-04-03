@@ -7,10 +7,8 @@ Where: Routes registered at /api/* (same paths as legacy serve.py).
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
-import json
-import os
 
-from freq.api.helpers import json_response, get_params, get_param, get_cfg
+from freq.api.helpers import json_response
 from freq.core.config import load_config
 from freq.modules.serve import (
     _parse_query,

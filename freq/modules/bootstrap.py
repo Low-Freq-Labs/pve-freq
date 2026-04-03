@@ -18,7 +18,6 @@ Design decisions:
     - Bootstrap only tests and reports; it does not force key deployment.
       If the host is unreachable, it tells you the manual step. No magic.
 """
-import os
 
 from freq.core import fmt
 from freq.core import resolve

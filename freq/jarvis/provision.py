@@ -182,8 +182,13 @@ def provision_agent_vm(
 
     # Step 3: Import cloud image as disk
     fmt.step_start("Importing cloud image as boot disk")
-    # Detect ZFS storage — use raw format to avoid double CoW
-    storage_type = cfg.pve_storage.get(storage, {}).get("type", "")
+    # Detect ZFS storage via PVE API — use raw format to avoid double CoW
+    storage_type = ""
+    st_out, st_ok = _pve_cmd(cfg, node_ip, f"pvesm status --storage {storage} 2>/dev/null | tail -1")
+    if st_ok and st_out.strip():
+        st_parts = st_out.strip().split()
+        if len(st_parts) >= 2:
+            storage_type = st_parts[1]  # type column
     format_flag = " --format raw" if "zfs" in storage_type.lower() else ""
     import_cmd = f"qm importdisk {vmid} {image_path} {storage}{format_flag}"
     stdout, ok = _pve_cmd(cfg, node_ip, import_cmd, timeout=PROVISION_IMPORT_TIMEOUT)
@@ -213,7 +218,6 @@ def provision_agent_vm(
     pubkey_path = ssh_pubkey_path or (cfg.ssh_key_path + ".pub" if cfg.ssh_key_path else "")
     if pubkey_path and os.path.isfile(pubkey_path):
         # Upload pubkey to PVE node first
-        import subprocess
         with open(pubkey_path) as f:
             pubkey = f.read().strip()
         # Write to temp file on PVE

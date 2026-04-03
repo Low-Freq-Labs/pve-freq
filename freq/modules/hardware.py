@@ -15,10 +15,6 @@ Design decisions:
     - SMART scanning is fleet-wide — every host with drives gets checked.
     - UPS management via NUT — the standard Linux UPS daemon.
 """
-import json
-import os
-import re
-import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig

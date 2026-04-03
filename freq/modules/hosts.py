@@ -55,7 +55,8 @@ def cmd_hosts(cfg: FreqConfig, pack, args) -> int:
         dry_run = getattr(args, "dry_run", False)
         return _hosts_sync(cfg, dry_run=dry_run)
     else:
-        return _hosts_list(cfg)
+        fmt.error(f"Unknown host action: {action}. Available: list, add, remove, sync")
+        return 1
 
 
 def cmd_groups(cfg: FreqConfig, pack, args) -> int:

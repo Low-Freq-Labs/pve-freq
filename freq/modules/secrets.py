@@ -18,7 +18,6 @@ Design decisions:
     - Scanning is pattern-based, not AST-based. Catches passwords in any
       file format (TOML, YAML, env, ini) without format-specific parsers.
 """
-import hashlib
 import json
 import os
 import re
@@ -27,9 +26,8 @@ import string
 import time
 
 from freq.core import fmt
-from freq.core import log as logger
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many
 
 SECRETS_DIR = "secrets"
 SECRETS_LEASES = "leases.json"

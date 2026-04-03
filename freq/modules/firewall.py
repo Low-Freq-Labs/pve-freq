@@ -16,7 +16,6 @@ Design decisions:
     - DHCP lease parsing from dhcpd.leases file via SSH.
     - Gateway status via pfctl and netstat — no API needed.
 """
-import json
 import os
 import re
 import time

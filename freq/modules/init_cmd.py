@@ -29,6 +29,7 @@ import datetime
 import getpass
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -371,7 +372,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
 
     # Phase 3: Service Account
     _phase(3, total, "Service Account Setup")
-    if not _phase_service_account(cfg, ctx, args):
+    if _phase_service_account(cfg, ctx, args) != 0:
         return 1
 
     # Phase 4: SSH Keys
@@ -815,8 +816,8 @@ def _phase_service_account(cfg, ctx, args=None):
     rc, _, _ = _run(["id", svc_name])
     if rc == 0:
         fmt.step_ok(f"Account '{svc_name}' already exists")
-        # Check sudo
-        rc2, _, _ = _run(["sudo", "-u", svc_name, "sudo", "-n", "true"])
+        # Check sudo — verify sudoers file exists (don't rely on sudo -u from root)
+        rc2, _, _ = _run(["test", "-f", f"/etc/sudoers.d/freq-{svc_name}"])
         if rc2 == 0:
             fmt.step_ok("Has NOPASSWD sudo")
         else:
@@ -1791,7 +1792,6 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
         fmt.blank()
 
     # Group hosts by auth category (using deployer registry)
-    from freq.deployers import resolve_htype, PASSWORD_AUTH_CATEGORIES
     linux_hosts = [h for h in cfg.hosts if h.category == "server"]
     pfsense_hosts = [h for h in cfg.hosts if h.category == "firewall"]
     device_hosts = [h for h in cfg.hosts if h.category in ("bmc", "switch")]
@@ -1977,13 +1977,13 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     fmt.step_warn("Skipping device hosts")
 
     # Persist device (iDRAC/switch) password for ongoing SSH access
-    if device_hosts and ok > 0 and ctx.get("svc_pass"):
+    if device_hosts and ok > 0 and dev_pass:
         svc_home = os.path.expanduser("~" + ctx["svc_name"])
         pass_path = os.path.join(svc_home, ".ssh", "switch-pass")
         try:
             os.makedirs(os.path.dirname(pass_path), mode=0o700, exist_ok=True)
             with open(pass_path, "w") as f:
-                f.write(ctx["svc_pass"])
+                f.write(dev_pass)
             os.chmod(pass_path, 0o600)
             import pwd
             try:
@@ -2061,6 +2061,9 @@ def _deploy_linux(ip, ctx, auth_pass, auth_key, auth_user, htype="linux"):
     svc_name = ctx["svc_name"]
     svc_pass = ctx["svc_pass"]
     pubkey = ctx["pubkey"]
+
+    # Sanitize pubkey — escape single quotes for safe shell embedding
+    pubkey = pubkey.replace("'", "'\\''") if pubkey else ""
 
     _ssh = _init_ssh(ip, auth_pass, auth_key, auth_user)
 
@@ -2169,6 +2172,9 @@ def _deploy_pfsense(ip, ctx, auth_pass, auth_key, auth_user):
     svc_name = ctx["svc_name"]
     svc_pass = ctx["svc_pass"]
     pubkey = ctx["pubkey"]
+
+    # Sanitize pubkey — escape single quotes for safe shell embedding
+    pubkey = pubkey.replace("'", "'\\''") if pubkey else ""
 
     # pfSense: admin IS root (UID 0). No sudo available on FreeBSD/pfSense.
     # Auth user must be root or admin for user creation to work.
@@ -2597,7 +2603,7 @@ def _remove_switch(ip, svc_name, key_path):
     if rc != 0:
         return False, err
 
-    # IOS removal commands
+    # IOS removal commands — must be sent via stdin for configure terminal
     ios_cmds = [
         "configure terminal",
         f"no username {svc_name}",
@@ -2607,8 +2613,20 @@ def _remove_switch(ip, svc_name, key_path):
         "exit",
         "write memory",
     ]
-    ios_script = "\n".join(ios_cmds)
-    rc, out, err = _ssh(ios_script, timeout=30)
+    ios_script = "\n".join(ios_cmds) + "\n"
+    # Use subprocess directly with stdin for IOS config mode
+    ssh_cmd = [
+        "ssh", "-T", "-i", key_path,
+        "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
+        "-o", "StrictHostKeyChecking=accept-new",
+    ]
+    if extra_opts:
+        ssh_cmd.extend(extra_opts)
+    ssh_cmd.append(f"{svc_name}@{ip}")
+    proc = subprocess.run(
+        ssh_cmd, input=ios_script, capture_output=True, text=True, timeout=30
+    )
+    rc, out, err = proc.returncode, proc.stdout, proc.stderr
 
     out_lower = (out or "").lower()
     if "invalid input" in out_lower:
@@ -3092,7 +3110,7 @@ def _init_fix(cfg, args):
             rsa_pubkey = f.read().strip()
     ctx = {
         "svc_name": svc_name,
-        "svc_pass": "",  # Will prompt if needed
+        "svc_pass": secrets.token_urlsafe(24),  # Auto-generate for --fix mode
         "key_path": key_file,
         "pubkey": pubkey,
         "rsa_key_path": rsa_file,
@@ -3943,12 +3961,11 @@ def _init_headless(cfg, args):
     _phase(8, 8, "Verification")
     verified = _phase_verify(cfg, ctx)
 
-    # Write marker
-    with open(INIT_MARKER, "w") as f:
-        f.write(f"{cfg.version}\n")
-
     fmt.blank()
     if verified:
+        # Only write marker if verification passed
+        with open(INIT_MARKER, "w") as f:
+            f.write(f"{cfg.version}\n")
         fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ initialized successfully — headless.{fmt.C.RESET}")
     else:
         fmt.line(f"  {fmt.C.YELLOW}Init completed with warnings. Run 'freq init --check' to review.{fmt.C.RESET}")

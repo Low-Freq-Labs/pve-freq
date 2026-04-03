@@ -35,7 +35,7 @@ except ModuleNotFoundError:
 _logger = logging.getLogger(__name__)
 from typing import Optional
 
-from freq.core.fmt import C, S, B_H, B_V, B_TL, B_TR, B_BL, B_BR, term_width
+from freq.core.fmt import C, term_width
 
 
 @dataclass

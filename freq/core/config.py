@@ -134,6 +134,7 @@ class FreqConfig:
     docker_config_base: str = ""   # base path for Docker container configs
     docker_backup_dir: str = ""    # path for Docker container backups
     legacy_password_file: str = "" # password file for iDRAC/switch SSH auth
+    snmp_community: str = "public"  # SNMP community string
 
     # Notifications
     discord_webhook: str = ""
@@ -232,7 +233,7 @@ def load_toml(path: str) -> dict:
     try:
         with open(path, "rb") as f:
             return tomllib.load(f)
-    except (FileNotFoundError, tomllib.TOMLDecodeError):
+    except (FileNotFoundError, PermissionError, tomllib.TOMLDecodeError):
         return {}
 
 
@@ -362,7 +363,8 @@ def load_config(install_dir: Optional[str] = None, force: bool = False) -> FreqC
                 _deprecation_warn("hosts.conf", "hosts.toml")
                 # Auto-migrate: write hosts.toml and stop reading hosts.conf
                 save_hosts_toml(cfg.hosts_file, cfg.hosts)
-                fmt.line(f"  {fmt.C.GREEN}Auto-migrated hosts.conf → hosts.toml{fmt.C.RESET}")
+                from freq.core import log as _logger
+                _logger.info("auto-migrated hosts.conf to hosts.toml")
     cfg.vlans = load_vlans(os.path.join(cfg.conf_dir, "vlans.toml"))
     cfg.distros = load_distros(os.path.join(cfg.conf_dir, "distros.toml"))
     cfg.container_vms = load_containers(os.path.join(cfg.conf_dir, "containers.toml"))
@@ -459,7 +461,16 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
 
     safety = data.get("safety", {})
     cfg.protected_vmids = safety.get("protected_vmids", cfg.protected_vmids)
-    cfg.protected_ranges = safety.get("protected_ranges", cfg.protected_ranges)
+    raw_ranges = safety.get("protected_ranges", cfg.protected_ranges)
+    validated_ranges = []
+    if isinstance(raw_ranges, list):
+        for rng in raw_ranges:
+            if isinstance(rng, (list, tuple)) and len(rng) == 2:
+                try:
+                    validated_ranges.append([int(rng[0]), int(rng[1])])
+                except (ValueError, TypeError):
+                    pass
+    cfg.protected_ranges = validated_ranges if validated_ranges else cfg.protected_ranges
     cfg.max_failure_percent = _safe_int(safety.get("max_failure_percent"), cfg.max_failure_percent)
 
     infra = data.get("infrastructure", {})
@@ -473,6 +484,7 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.docker_dev_ip = infra.get("docker_dev_ip", cfg.docker_dev_ip)
     cfg.docker_config_base = infra.get("docker_config_base", cfg.docker_config_base)
     cfg.docker_backup_dir = infra.get("docker_backup_dir", cfg.docker_backup_dir)
+    cfg.snmp_community = infra.get("snmp_community", cfg.snmp_community)
 
     templates = data.get("templates", {})
     cfg.template_profiles = templates.get("profiles", cfg.template_profiles)

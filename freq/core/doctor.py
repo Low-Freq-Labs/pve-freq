@@ -21,10 +21,8 @@ Design decisions:
     - Non-fatal warnings (missing personality pack) don't return exit code 1.
 """
 import os
-import platform
 import shutil
 import subprocess
-import sys
 
 from freq.core.config import FreqConfig
 from freq.core import fmt

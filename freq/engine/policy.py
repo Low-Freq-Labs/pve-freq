@@ -16,7 +16,6 @@ Design decisions:
     - Platform-aware overrides via nested dicts in entries
 """
 import difflib
-import re as re_mod
 
 from freq.core.types import Finding, Severity
 

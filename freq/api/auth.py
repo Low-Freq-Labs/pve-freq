@@ -7,7 +7,6 @@ Used by: serve.py (route handlers), secure.py (vault auth), helpers.py (decorato
 """
 
 import hashlib
-import json
 import os
 import secrets
 import threading
