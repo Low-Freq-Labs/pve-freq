@@ -16,8 +16,9 @@ Architecture:
     - Python stdlib only (subprocess, json).
 """
 
-import json
+import os
 import subprocess
+import tempfile
 
 from freq.api.helpers import json_response, get_json_body, get_param
 from freq.core.config import load_config
@@ -32,18 +33,22 @@ def _ipmitool(ip, user, password, *args):
     """Run an ipmitool command over LAN. Returns (stdout, ok).
 
     Uses lanplus interface for IPMI v2.0 encrypted sessions.
-    Timeout of 15 seconds prevents hangs on unreachable BMCs.
+    Password passed via environment variable (IPMI_PASSWORD) to avoid
+    exposing it in ps aux output. Timeout of 15 seconds.
     """
     cmd = [
         "ipmitool", "-I", "lanplus",
-        "-H", ip, "-U", user, "-P", password,
+        "-H", ip, "-U", user, "-E",
     ] + list(args)
+    env = os.environ.copy()
+    env["IPMI_PASSWORD"] = password
     try:
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=15,
+            env=env,
         )
         return result.stdout.strip(), result.returncode == 0
     except subprocess.TimeoutExpired:

@@ -13,12 +13,11 @@ Synology DSM API uses session-based auth:
 """
 
 import json
-import ssl
 import urllib.request
 import urllib.error
 import urllib.parse
 
-from freq.api.helpers import json_response, get_json_body, get_param
+from freq.api.helpers import json_response, get_json_body
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
 from freq.modules.vault import vault_get
@@ -296,7 +295,7 @@ def handle_synology_reboot(handler):
         json_response(handler, {"error": "Must set confirm: true"}, 400)
         return
 
-    data, err = _syn_request(ip, "SYNO.DSM.System", 1, "reboot")
+    _, err = _syn_request(ip, "SYNO.DSM.System", 1, "reboot")
     if err:
         json_response(handler, {"ok": False, "error": err})
     else:

@@ -22,7 +22,6 @@ Design decisions:
 """
 import re
 import socket
-import struct
 
 
 def parse_mac(mac_str: str) -> bytes:

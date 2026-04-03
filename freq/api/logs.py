@@ -7,9 +7,14 @@ Where: Routes registered at /api/logs/*.
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
+import re
+
 from freq.api.helpers import json_response, get_param, get_param_int
 from freq.core.config import load_config
-from freq.core.ssh import run as ssh_single, run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many
+
+# Shell-safe pattern: only allow alphanumeric, spaces, hyphens, dots, colons
+_SAFE_SHELL_RE = re.compile(r'^[a-zA-Z0-9 _\-.:,/]+$')
 
 
 # -- Helpers -----------------------------------------------------------------
@@ -67,6 +72,11 @@ def handle_logs_fleet(handler):
     if priority not in ("emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"):
         priority = "err"
 
+    # Validate since param — must be safe for shell (no injection)
+    if not _SAFE_SHELL_RE.match(since):
+        json_response(handler, {"error": "Invalid 'since' parameter — use format like '1 hour ago' or '2026-04-03'"}, 400)
+        return
+
     cmd = f'journalctl --since "{since}" -p {priority} --no-pager -q 2>/dev/null | tail -{limit}'
     results = _log_query(cfg, cmd, target or None)
 
@@ -96,8 +106,16 @@ def handle_logs_search(handler):
         json_response(handler, {"error": "pattern parameter required"}, 400)
         return
 
-    # Sanitize pattern for shell safety
-    safe_pattern = pattern.replace("'", "").replace('"', '').replace(";", "").replace("|", "")[:100]
+    # Validate since param
+    if not _SAFE_SHELL_RE.match(since):
+        json_response(handler, {"error": "Invalid 'since' parameter"}, 400)
+        return
+
+    # Sanitize pattern — strip everything that could be shell metacharacters
+    safe_pattern = re.sub(r'[^a-zA-Z0-9 _\-.:,/]', '', pattern)[:100]
+    if not safe_pattern:
+        json_response(handler, {"error": "Pattern contains only invalid characters"}, 400)
+        return
 
     cmd = f"journalctl --since \"{since}\" --no-pager -q 2>/dev/null | grep -i '{safe_pattern}' | tail -{limit}"
     results = _log_query(cfg, cmd, target or None)
@@ -118,6 +136,10 @@ def handle_logs_oom(handler):
     cfg = load_config()
     since = get_param(handler, "since", "24 hours ago")
     target = get_param(handler, "target", "")
+
+    if not _SAFE_SHELL_RE.match(since):
+        json_response(handler, {"error": "Invalid 'since' parameter"}, 400)
+        return
 
     cmd = (
         f'journalctl -k --since "{since}" --no-pager 2>/dev/null | '
@@ -141,6 +163,10 @@ def handle_logs_auth(handler):
     cfg = load_config()
     since = get_param(handler, "since", "24 hours ago")
     target = get_param(handler, "target", "")
+
+    if not _SAFE_SHELL_RE.match(since):
+        json_response(handler, {"error": "Invalid 'since' parameter"}, 400)
+        return
 
     cmd = (
         f'journalctl _SYSTEMD_UNIT=sshd.service --since "{since}" --no-pager 2>/dev/null | '

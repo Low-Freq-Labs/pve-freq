@@ -7,11 +7,9 @@ Where: Routes registered at /api/backup/verify*.
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
-import json
-import os
-import time
+import re
 
-from freq.api.helpers import json_response, get_json_body, get_param, get_param_int
+from freq.api.helpers import json_response, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import _check_session_role
@@ -59,8 +57,13 @@ def handle_backup_verify(handler):
     node = body.get("node", "")
     file_path = body.get("file", "")
 
-    if not vmid:
-        json_response(handler, {"error": "vmid required"}, 400)
+    # Validate vmid is a positive integer (prevent shell injection)
+    try:
+        vmid = int(vmid) if vmid else 0
+    except (ValueError, TypeError):
+        vmid = 0
+    if vmid < 100:
+        json_response(handler, {"error": "Valid vmid required (integer >= 100)"}, 400)
         return
 
     node_ip = _find_node_ip(cfg, node)
@@ -69,12 +72,14 @@ def handle_backup_verify(handler):
         return
 
     if file_path:
-        # Verify specific backup file
-        # Sanitize path
-        if ".." in file_path or ";" in file_path or "|" in file_path:
-            json_response(handler, {"error": "Invalid file path"}, 400)
+        # Validate file_path: only allow safe characters (alphanumeric, /, -, _, .)
+        if not re.match(r'^[a-zA-Z0-9/_\-. ]+$', file_path):
+            json_response(handler, {"error": "Invalid file path characters"}, 400)
             return
-        cmd = f"qmrestore {file_path} --verify 2>&1 | tail -10"
+        if ".." in file_path:
+            json_response(handler, {"error": "Path traversal not allowed"}, 400)
+            return
+        cmd = f"qmrestore '{file_path}' --verify 2>&1 | tail -10"
     else:
         # Find latest backup for this VMID and verify it
         cmd = (
@@ -130,7 +135,10 @@ def handle_backup_verify_status(handler):
             vmid_str, ts, size_str, btype, filename = parts
             if not vmid_str:
                 continue
-            vmid = int(vmid_str)
+            try:
+                vmid = int(vmid_str)
+            except ValueError:
+                continue
             # Keep only the latest backup per VMID
             if vmid not in backups:
                 ts_fmt = ts.replace("_", "-", 2).replace("_", ":", 2) if ts else ""
@@ -162,12 +170,12 @@ def handle_cert_expiry(handler):
 
     import ssl
     import socket
-    from datetime import datetime
+    from datetime import datetime, timezone
 
-    ports = [443, 8443, 8006, 8888, 9090, 3000, 8080]
+    ports = [443, 8006, 8443, 8888]
     certs = []
 
-    for h in hosts[:30]:  # Limit to 30 hosts to avoid timeout
+    for h in hosts[:15]:  # Limit to 15 hosts × 4 ports × 2s = 2 min worst case
         for port in ports:
             try:
                 ctx = ssl.create_default_context()
@@ -196,7 +204,7 @@ def handle_cert_expiry(handler):
                             # Parse "Mar 15 12:00:00 2026 GMT"
                             try:
                                 exp = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
-                                days = (exp - datetime.utcnow()).days
+                                days = (exp - datetime.now(timezone.utc).replace(tzinfo=None)).days
                             except ValueError:
                                 days = -1
                         else:

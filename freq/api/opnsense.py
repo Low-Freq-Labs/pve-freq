@@ -11,7 +11,11 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 
 import base64
 import json
+import re
 import ssl
+
+# OPNsense uses UUID-v4 format for resource identifiers
+_SAFE_UUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
 import urllib.request
 import urllib.error
 
@@ -422,8 +426,8 @@ def handle_opnsense_rule_delete(handler):
     body = get_json_body(handler)
     uuid = body.get("uuid", "").strip()
 
-    if not uuid:
-        json_response(handler, {"error": "uuid is required"}, 400)
+    if not uuid or not _SAFE_UUID.match(uuid):
+        json_response(handler, {"error": "Valid UUID required (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"}, 400)
         return
 
     data, err = _firewall_safe_apply(cfg, f"firewall/filter/delRule/{uuid}")
@@ -478,7 +482,7 @@ def handle_opnsense_dhcp_add(handler):
         return
 
     # Reconfigure Kea to apply
-    reconf_data, reconf_err = _opn_request(cfg, "kea/service/reconfigure", method="POST")
+    _, reconf_err = _opn_request(cfg, "kea/service/reconfigure", method="POST")
     if reconf_err:
         json_response(handler, {
             "ok": True,
@@ -512,8 +516,8 @@ def handle_opnsense_dhcp_delete(handler):
     body = get_json_body(handler)
     uuid = body.get("uuid", "").strip()
 
-    if not uuid:
-        json_response(handler, {"error": "uuid is required"}, 400)
+    if not uuid or not _SAFE_UUID.match(uuid):
+        json_response(handler, {"error": "Valid UUID required"}, 400)
         return
 
     # Delete the reservation
@@ -523,7 +527,7 @@ def handle_opnsense_dhcp_delete(handler):
         return
 
     # Reconfigure Kea to apply
-    reconf_data, reconf_err = _opn_request(cfg, "kea/service/reconfigure", method="POST")
+    _, reconf_err = _opn_request(cfg, "kea/service/reconfigure", method="POST")
     if reconf_err:
         json_response(handler, {
             "ok": True,
@@ -584,7 +588,7 @@ def handle_opnsense_dns_add(handler):
         return
 
     # Reconfigure Unbound to apply
-    reconf_data, reconf_err = _opn_request(cfg, "unbound/service/reconfigure", method="POST")
+    _, reconf_err = _opn_request(cfg, "unbound/service/reconfigure", method="POST")
     if reconf_err:
         json_response(handler, {
             "ok": True,
@@ -618,8 +622,8 @@ def handle_opnsense_dns_delete(handler):
     body = get_json_body(handler)
     uuid = body.get("uuid", "").strip()
 
-    if not uuid:
-        json_response(handler, {"error": "uuid is required"}, 400)
+    if not uuid or not _SAFE_UUID.match(uuid):
+        json_response(handler, {"error": "Valid UUID required"}, 400)
         return
 
     # Delete the host override
@@ -629,7 +633,7 @@ def handle_opnsense_dns_delete(handler):
         return
 
     # Reconfigure Unbound to apply
-    reconf_data, reconf_err = _opn_request(cfg, "unbound/service/reconfigure", method="POST")
+    _, reconf_err = _opn_request(cfg, "unbound/service/reconfigure", method="POST")
     if reconf_err:
         json_response(handler, {
             "ok": True,
@@ -698,7 +702,7 @@ def handle_opnsense_wg_add(handler):
         return
 
     # Reconfigure WireGuard to apply
-    reconf_data, reconf_err = _opn_request(cfg, "wireguard/service/reconfigure", method="POST")
+    _, reconf_err = _opn_request(cfg, "wireguard/service/reconfigure", method="POST")
     if reconf_err:
         json_response(handler, {
             "ok": True,

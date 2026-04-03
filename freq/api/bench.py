@@ -14,8 +14,8 @@ import json
 import os
 import time
 
-from freq.api.helpers import json_response, get_json_body, get_param, get_cfg
-from freq.api.auth import check_session_role as _check_session_role
+from freq.api.helpers import json_response, get_json_body, get_param
+from freq.modules.serve import _check_session_role
 from freq.core.config import load_config
 from freq.core import resolve as res
 
