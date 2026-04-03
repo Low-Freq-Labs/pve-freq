@@ -2745,7 +2745,7 @@ function _fleetToolInner(tool,panel,content){
   } else if(tool==='fleetops'){
     _buildToolTabs('FLEET OPS',[{id:'deepscan',label:'DEEP SCAN'},{id:'ntp',label:'NTP SYNC'},{id:'updates',label:'OS UPDATES'},{id:'sshd',label:'RESTART SSHD'},{id:'exec',label:'FLEET EXEC'}],'fo-tab','switchFleetOps','fo-subtitle','fo-form',content);return;
   } else if(tool==='vmmgmt'){
-    _buildToolTabs('VM MANAGEMENT',[{id:'vmlist',label:'VM LIST'},{id:'vmcreate',label:'CREATE VM'},{id:'vmclone',label:'CLONE VM'},{id:'vmmigrate',label:'MIGRATE'},{id:'vmsnapshot',label:'SNAPSHOTS'},{id:'vmresize',label:'RESIZE'},{id:'vmadddisk',label:'ADD DISK'},{id:'vmtag',label:'TAGS'}],'vm-tab','switchVmMgmt','vm-subtitle','vm-form',content);return;
+    _buildToolTabs('VM MANAGEMENT',[{id:'vmlist',label:'VM LIST'},{id:'vmcreate',label:'CREATE VM'},{id:'vmclone',label:'CLONE VM'},{id:'vmmigrate',label:'MIGRATE'},{id:'vmresize',label:'RESIZE'},{id:'vmadddisk',label:'ADD DISK'},{id:'vmtag',label:'TAGS'}],'vm-tab','switchVmMgmt','vm-subtitle','vm-form',content);return;
   } else if(tool==='newuser'){
     content.innerHTML='<h3 class="section-label-pl">NEW FLEET USER</h3>'+
       '<div class="form-vertical">'+
@@ -2971,7 +2971,6 @@ function vmtLoadList(){
       var displayStatus=v.status;
       h+='<tr><td><strong>'+v.vmid+'</strong></td><td>'+v.name+'</td><td><span class="cat-badge cat-'+(v.category||'unknown')+'">'+catLabel+'</span></td><td>'+v.node+'</td><td>'+v.cpu+'</td><td>'+_ramGB(v.ram_mb)+'</td>';
       h+='<td>'+badge(displayStatus)+'</td><td class="flex-gap-4">';
-      if(acts.indexOf('snapshot')>=0)h+='<button class="fleet-btn pill-warn-xs" onclick="_vmSnapWarn('+v.vmid+','+isRun+')" >SNAP</button>';
       if(acts.indexOf('stop')>=0&&isRun)h+='<button class="fleet-btn pill-warn-xs" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="stop" >STOP</button>';
       if(acts.indexOf('start')>=0&&!isRun)h+='<button class="fleet-btn pill-ok-3-8" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="start" >START</button>';
       if(acts.indexOf('configure')>=0)h+='<button class="fleet-btn pill-xs" data-action="vmQuickTag" data-vmid="'+v.vmid+'" >TAG</button>';
@@ -3870,7 +3869,6 @@ function loadVMs(){
       html+=_mrow('CPU',v.cpu+' Cores',0,'var(--purple-light)');
       html+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM</span><span class="metric-val">'+_ramGB(v.ram_mb)+'</span></div></div>';
       html+='<div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap" onclick="event.stopPropagation()">';
-      if(acts.indexOf('snapshot')>=0)html+='<button class="fleet-btn pill-warn-4-10" onclick="_vmSnapWarn('+v.vmid+','+isRunning+')" >SNAP</button>';
       if(acts.indexOf('stop')>=0&&isRunning)html+='<button class="fleet-btn pill-warn-4-10" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="stop" >STOP</button>';
       if(acts.indexOf('start')>=0&&!isRunning)html+='<button class="fleet-btn" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="start" style="padding:4px 10px;font-size:12px;color:var(--green)">START</button>';
       if(acts.indexOf('destroy')>=0)html+='<button class="fleet-btn" data-action="vmDestroy" data-vmid="'+v.vmid+'" style="padding:4px 10px;font-size:12px;color:var(--red)">DESTROY</button>';
