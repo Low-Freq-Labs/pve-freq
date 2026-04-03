@@ -7,10 +7,10 @@ Where: Routes registered at /api/* and /api/v1/net/*.
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
-from freq.api.helpers import json_response, get_param, get_cfg
+from freq.api.helpers import json_response, get_param, get_json_body, get_cfg
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
-from freq.modules.serve import _parse_query
+from freq.modules.serve import _parse_query, _check_session_role
 
 
 # -- Switch Deployer Helpers ------------------------------------------------
@@ -298,6 +298,142 @@ def handle_config_search(handler):
     json_response(handler, {"pattern": pattern, "results": results, "total_devices": len(results)})
 
 
+# -- V1 Switch Write Endpoints (admin) -------------------------------------
+
+import re
+
+_SAFE_VLAN_ID = re.compile(r'^\d{1,4}$')
+_SAFE_NAME = re.compile(r'^[a-zA-Z0-9_\-]{1,32}$')
+
+
+def handle_switch_vlan_create(handler):
+    """POST /api/v1/net/switch/vlan/create -- create a VLAN.
+
+    Body: {"target": "switch-label", "vlan_id": 100, "name": "SERVERS"}
+    """
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
+
+    cfg = load_config()
+    body = get_json_body(handler)
+    target = body.get("target", "")
+    vlan_id = str(body.get("vlan_id", ""))
+    vlan_name = body.get("name", "")
+
+    if not _SAFE_VLAN_ID.match(vlan_id) or not (1 <= int(vlan_id) <= 4094):
+        json_response(handler, {"error": "VLAN ID must be 1-4094"}, 400); return
+    if vlan_name and not _SAFE_NAME.match(vlan_name):
+        json_response(handler, {"error": "Invalid VLAN name"}, 400); return
+
+    ip, label, deployer = _resolve_switch(cfg, target or None)
+    if not deployer:
+        json_response(handler, {"error": "Switch not found or no deployer"}, 404); return
+
+    if not hasattr(deployer, "create_vlan"):
+        json_response(handler, {"error": "Deployer does not support VLAN creation"}, 400); return
+
+    ok = deployer.create_vlan(ip, cfg, int(vlan_id), vlan_name)
+    json_response(handler, {
+        "ok": ok, "host": label, "ip": ip,
+        "vlan_id": int(vlan_id), "name": vlan_name,
+    })
+
+
+def handle_switch_vlan_delete(handler):
+    """POST /api/v1/net/switch/vlan/delete -- delete a VLAN.
+
+    Body: {"target": "switch-label", "vlan_id": 100}
+    """
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
+
+    cfg = load_config()
+    body = get_json_body(handler)
+    target = body.get("target", "")
+    vlan_id = str(body.get("vlan_id", ""))
+
+    if not _SAFE_VLAN_ID.match(vlan_id) or not (1 <= int(vlan_id) <= 4094):
+        json_response(handler, {"error": "VLAN ID must be 1-4094"}, 400); return
+    if int(vlan_id) == 1:
+        json_response(handler, {"error": "Cannot delete VLAN 1 (default)"}, 400); return
+
+    ip, label, deployer = _resolve_switch(cfg, target or None)
+    if not deployer:
+        json_response(handler, {"error": "Switch not found or no deployer"}, 404); return
+
+    if not hasattr(deployer, "delete_vlan"):
+        json_response(handler, {"error": "Deployer does not support VLAN deletion"}, 400); return
+
+    ok = deployer.delete_vlan(ip, cfg, int(vlan_id))
+    json_response(handler, {"ok": ok, "host": label, "vlan_id": int(vlan_id)})
+
+
+def handle_switch_acl(handler):
+    """POST /api/v1/net/switch/acl -- manage ACLs.
+
+    Body: {"action": "list|create|delete|apply|remove",
+           "target": "switch-label", "name": "ACL_NAME",
+           "entries": ["permit tcp any host 10.0.0.1 eq 80"],
+           "port": "GigabitEthernet1/0/1", "direction": "in"}
+    """
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403); return
+
+    cfg = load_config()
+    body = get_json_body(handler)
+    action = body.get("action", "list")
+    target = body.get("target", "")
+
+    ip, label, deployer = _resolve_switch(cfg, target or None)
+    if not deployer:
+        json_response(handler, {"error": "Switch not found or no deployer"}, 404); return
+
+    if action == "list":
+        if hasattr(deployer, "get_acls"):
+            acls = deployer.get_acls(ip, cfg)
+            json_response(handler, {"ok": True, "host": label, "acls": acls})
+        else:
+            json_response(handler, {"error": "Deployer does not support ACL listing"}, 400)
+        return
+
+    acl_name = body.get("name", "")
+    if not acl_name or not _SAFE_NAME.match(acl_name):
+        json_response(handler, {"error": "Invalid ACL name"}, 400); return
+
+    if action == "create":
+        entries = body.get("entries", [])
+        if not entries or not isinstance(entries, list):
+            json_response(handler, {"error": "entries required (list of ACL rules)"}, 400); return
+        ok = deployer.create_acl(ip, cfg, acl_name, entries)
+        json_response(handler, {"ok": ok, "host": label, "name": acl_name})
+
+    elif action == "delete":
+        ok = deployer.delete_acl(ip, cfg, acl_name)
+        json_response(handler, {"ok": ok, "host": label, "name": acl_name})
+
+    elif action == "apply":
+        port = body.get("port", "")
+        direction = body.get("direction", "in")
+        if not port:
+            json_response(handler, {"error": "port required"}, 400); return
+        ok = deployer.apply_acl_to_interface(ip, cfg, port, acl_name, direction)
+        json_response(handler, {"ok": ok, "host": label, "port": port, "acl": acl_name})
+
+    elif action == "remove":
+        port = body.get("port", "")
+        direction = body.get("direction", "in")
+        if not port:
+            json_response(handler, {"error": "port required"}, 400); return
+        ok = deployer.remove_acl_from_interface(ip, cfg, port, acl_name, direction)
+        json_response(handler, {"ok": ok, "host": label, "port": port, "acl": acl_name})
+
+    else:
+        json_response(handler, {"error": f"Unknown action: {action}"}, 400)
+
+
 # -- Registration ------------------------------------------------------------
 
 
@@ -312,6 +448,11 @@ def register(routes: dict):
     routes["/api/v1/net/switch/arp"] = handle_switch_arp
     routes["/api/v1/net/switch/neighbors"] = handle_switch_neighbors
     routes["/api/v1/net/switch/environment"] = handle_switch_environment
+
+    # V1 switch write endpoints (admin)
+    routes["/api/v1/net/switch/vlan/create"] = handle_switch_vlan_create
+    routes["/api/v1/net/switch/vlan/delete"] = handle_switch_vlan_delete
+    routes["/api/v1/net/switch/acl"] = handle_switch_acl
 
     # V1 config endpoints
     routes["/api/v1/net/config/history"] = handle_config_history

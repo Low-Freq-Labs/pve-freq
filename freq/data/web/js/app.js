@@ -130,9 +130,9 @@ document.addEventListener('click',function(e){
     if(a==='hdDiagnose'){hdDiagnose(da);return;}
     if(a==='togglePveGroup'){togglePveGroup(da);return;}
     if(a==='clearHarden'){document.getElementById('harden-c').innerHTML='';return;}
-    var fns={sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,vmtRollback:vmtRollback,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll};
+    var fns={sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,vmtRollback:vmtRollback,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll,pfWriteService:pfWriteService,pfWriteDhcp:pfWriteDhcp,pfWriteRule:pfWriteRule,pfWriteNat:pfWriteNat,pfWriteWgPeer:pfWriteWgPeer,pfBackupNow:pfBackupNow,pfCheckUpdates:pfCheckUpdates,pfReboot:pfReboot,tnWriteService:tnWriteService,tnWriteScrub:tnWriteScrub,tnWriteShare:tnWriteShare,tnWriteReplication:tnWriteReplication,tnReboot:tnReboot,swWriteAcl:swWriteAcl};
     if(fns[a]){fns[a]();return;}
-    var argFns={tnAction:tnAction,swAction:swAction,pfAction:pfAction,idracAction:idracAction,switchVaultTab:switchVaultTab,switchDockerSub:switchDockerSub,toggleMediaTag:toggleMediaTag,runHostUpdate:runHostUpdate,sshdRestartHost:sshdRestartHost,ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart};
+    var argFns={tnAction:tnAction,swAction:swAction,pfAction:pfAction,idracAction:idracAction,idracWrite:idracWrite,tnWriteSnapshot:tnWriteSnapshot,tnWriteDataset:tnWriteDataset,swWriteVlan:swWriteVlan,switchVaultTab:switchVaultTab,switchDockerSub:switchDockerSub,toggleMediaTag:toggleMediaTag,runHostUpdate:runHostUpdate,sshdRestartHost:sshdRestartHost,ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart};
     if(argFns[a]){argFns[a](g);return;}
   }
 });
@@ -287,7 +287,18 @@ var API={
   CT_POWER:'/api/ct/power',CT_CONFIG:'/api/ct/config',CT_SET:'/api/ct/set',
   CT_SNAPSHOT:'/api/ct/snapshot',CT_ROLLBACK:'/api/ct/rollback',CT_SNAPSHOTS:'/api/ct/snapshots',
   CT_DELETE_SNAP:'/api/ct/delete-snapshot',CT_CLONE:'/api/ct/clone',CT_MIGRATE:'/api/ct/migrate',
-  CT_RESIZE:'/api/ct/resize',CT_EXEC:'/api/ct/exec',CT_TEMPLATES:'/api/ct/templates'
+  CT_RESIZE:'/api/ct/resize',CT_EXEC:'/api/ct/exec',CT_TEMPLATES:'/api/ct/templates',
+  /* ── Device Write Operations ── */
+  TRUENAS_SNAPSHOT:'/api/truenas/snapshot',TRUENAS_SERVICE:'/api/truenas/service',
+  TRUENAS_SCRUB:'/api/truenas/scrub',TRUENAS_REBOOT:'/api/truenas/reboot',
+  TRUENAS_DATASET:'/api/truenas/dataset',TRUENAS_SHARE:'/api/truenas/share',
+  TRUENAS_REPLICATION:'/api/truenas/replication',TRUENAS_APP:'/api/truenas/app',
+  PFSENSE_SERVICE:'/api/pfsense/service',PFSENSE_DHCP:'/api/pfsense/dhcp/reservation',
+  PFSENSE_CONFIG_BACKUP:'/api/pfsense/config/backup',PFSENSE_REBOOT:'/api/pfsense/reboot',
+  PFSENSE_RULES:'/api/pfsense/rules',PFSENSE_NAT:'/api/pfsense/nat',
+  PFSENSE_WG_PEER:'/api/pfsense/wg/peer',PFSENSE_UPDATES:'/api/pfsense/updates',
+  SWITCH_VLAN_CREATE:'/api/v1/net/switch/vlan/create',SWITCH_VLAN_DELETE:'/api/v1/net/switch/vlan/delete',
+  SWITCH_ACL:'/api/v1/net/switch/acl'
 };
 var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switch */
 
@@ -3635,10 +3646,26 @@ function _enrichInfraCards(){
 }
 /* Action buttons and output div IDs for physical infrastructure devices — keyed by device type */
 var INFRA_ACTIONS={
-  pfsense:[{l:'STATUS',f:"pfAction('status')"},{l:'RULES',f:"pfAction('rules')"},{l:'NAT',f:"pfAction('nat')"},{l:'STATES',f:"pfAction('states')"},{l:'INTERFACES',f:"pfAction('interfaces')"},{l:'GATEWAYS',f:"pfAction('gateways')"},{l:'GATEWAY MONITOR',f:"pfAction('gateway_monitor')"},{l:'DNS',f:"pfAction('dns')"},{l:'TRAFFIC',f:"pfAction('traffic')"},{l:'VPN',f:"pfAction('vpn')"},{l:'SERVICES',f:"pfAction('services')"},{l:'FIREWALL LOG',f:"pfAction('log')"},{l:'SYSTEM LOG',f:"pfAction('syslog')"},{l:'ARP TABLE',f:"pfAction('arp')"},{l:'DHCP LEASES',f:"pfAction('dhcp')"},{l:'ALIASES',f:"pfAction('aliases')"},{l:'BACKUP CONFIG',f:"pfAction('backup')"}],
-  truenas:[{l:'SYSTEM',f:"tnAction('status')"},{l:'POOLS',f:"tnAction('pools')"},{l:'HEALTH',f:"tnAction('health')"},{l:'DATASETS',f:"tnAction('datasets')"},{l:'SHARES',f:"tnAction('shares')"},{l:'ALERTS',f:"tnAction('alerts')"},{l:'SMART DISKS',f:"tnAction('smart')"},{l:'SNAPSHOTS',f:"tnAction('snapshots')"},{l:'REPLICATION',f:"tnAction('replication')"},{l:'SERVICES',f:"tnAction('services')"},{l:'NETWORK',f:"tnAction('network')"},{l:'SYSTEM LOG',f:"tnAction('syslog')"}],
-  switch:[{l:'STATUS',f:"swAction('status')"},{l:'VLANS',f:"swAction('vlans')"},{l:'INTERFACES',f:"swAction('interfaces')"},{l:'MAC TABLE',f:"swAction('mac')"},{l:'TRUNKS',f:"swAction('trunk')"},{l:'PORT ERRORS',f:"swAction('errors')"},{l:'SPANNING TREE',f:"swAction('spanning')"},{l:'LOG',f:"swAction('log')"},{l:'CDP NEIGHBORS',f:"swAction('cdp')"},{l:'INVENTORY',f:"swAction('inventory')"}],
-  idrac:[{l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"}]
+  pfsense:[
+    {l:'STATUS',f:"pfAction('status')"},{l:'RULES',f:"pfAction('rules')"},{l:'NAT',f:"pfAction('nat')"},{l:'STATES',f:"pfAction('states')"},{l:'INTERFACES',f:"pfAction('interfaces')"},{l:'GATEWAYS',f:"pfAction('gateways')"},{l:'GATEWAY MONITOR',f:"pfAction('gateway_monitor')"},{l:'DNS',f:"pfAction('dns')"},{l:'TRAFFIC',f:"pfAction('traffic')"},{l:'VPN',f:"pfAction('vpn')"},{l:'SERVICES',f:"pfAction('services')"},{l:'FIREWALL LOG',f:"pfAction('log')"},{l:'SYSTEM LOG',f:"pfAction('syslog')"},{l:'ARP TABLE',f:"pfAction('arp')"},{l:'DHCP LEASES',f:"pfAction('dhcp')"},{l:'ALIASES',f:"pfAction('aliases')"},{l:'BACKUP CONFIG',f:"pfAction('backup')"},
+    /* Write operations */
+    {l:'\u2699 RESTART SVC',f:"pfWriteService()",w:1},{l:'\u2699 DHCP RESERVE',f:"pfWriteDhcp()",w:1},{l:'\u2699 ADD FW RULE',f:"pfWriteRule()",w:1},{l:'\u2699 ADD NAT RULE',f:"pfWriteNat()",w:1},{l:'\u2699 WG PEERS',f:"pfWriteWgPeer()",w:1},{l:'\u2699 BACKUP NOW',f:"pfBackupNow()",w:1},{l:'\u2699 CHECK UPDATES',f:"pfCheckUpdates()",w:1},{l:'\u26a0 REBOOT',f:"pfReboot()",w:2}
+  ],
+  truenas:[
+    {l:'SYSTEM',f:"tnAction('status')"},{l:'POOLS',f:"tnAction('pools')"},{l:'HEALTH',f:"tnAction('health')"},{l:'DATASETS',f:"tnAction('datasets')"},{l:'SHARES',f:"tnAction('shares')"},{l:'ALERTS',f:"tnAction('alerts')"},{l:'SMART DISKS',f:"tnAction('smart')"},{l:'SNAPSHOTS',f:"tnAction('snapshots')"},{l:'REPLICATION',f:"tnAction('replication')"},{l:'SERVICES',f:"tnAction('services')"},{l:'NETWORK',f:"tnAction('network')"},{l:'SYSTEM LOG',f:"tnAction('syslog')"},
+    /* Write operations */
+    {l:'\u2699 CREATE SNAP',f:"tnWriteSnapshot('create')",w:1},{l:'\u2699 DELETE SNAP',f:"tnWriteSnapshot('delete')",w:1},{l:'\u2699 ROLLBACK SNAP',f:"tnWriteSnapshot('rollback')",w:2},{l:'\u2699 RESTART SVC',f:"tnWriteService()",w:1},{l:'\u2699 SCRUB POOL',f:"tnWriteScrub()",w:1},{l:'\u2699 CREATE DATASET',f:"tnWriteDataset('create')",w:1},{l:'\u2699 DELETE DATASET',f:"tnWriteDataset('delete')",w:2},{l:'\u2699 CREATE SHARE',f:"tnWriteShare()",w:1},{l:'\u2699 RUN REPLICATION',f:"tnWriteReplication()",w:1},{l:'\u26a0 REBOOT',f:"tnReboot()",w:2}
+  ],
+  switch:[
+    {l:'STATUS',f:"swAction('status')"},{l:'VLANS',f:"swAction('vlans')"},{l:'INTERFACES',f:"swAction('interfaces')"},{l:'MAC TABLE',f:"swAction('mac')"},{l:'TRUNKS',f:"swAction('trunk')"},{l:'PORT ERRORS',f:"swAction('errors')"},{l:'SPANNING TREE',f:"swAction('spanning')"},{l:'LOG',f:"swAction('log')"},{l:'CDP NEIGHBORS',f:"swAction('cdp')"},{l:'INVENTORY',f:"swAction('inventory')"},
+    /* Write operations */
+    {l:'\u2699 CREATE VLAN',f:"swWriteVlan('create')",w:1},{l:'\u2699 DELETE VLAN',f:"swWriteVlan('delete')",w:2},{l:'\u2699 MANAGE ACL',f:"swWriteAcl()",w:1}
+  ],
+  idrac:[
+    {l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"},
+    /* Write operations */
+    {l:'\u26a1 POWER ON',f:"idracWrite('poweron')",w:1},{l:'\u26a1 POWER OFF',f:"idracWrite('poweroff')",w:2},{l:'\u26a1 POWER CYCLE',f:"idracWrite('powercycle')",w:2},{l:'\u26a1 HARD RESET',f:"idracWrite('hardreset')",w:2},{l:'\u26a1 GRACEFUL OFF',f:"idracWrite('graceshutdown')",w:1},{l:'\u2699 CLEAR SEL',f:"idracWrite('clearsel')",w:1},{l:'\u2699 BOOT PXE',f:"idracWrite('bootpxe')",w:1},{l:'\u2699 BOOT BIOS',f:"idracWrite('bootbios')",w:1}
+  ]
 };
 function loadMetricsQuick(){
   /* If we have cached data, render instantly — no skeletons, no wait */
@@ -5403,6 +5430,278 @@ function swAction(action){
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   DEVICE WRITE OPERATIONS — Admin-only management actions
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Shared helpers for write ops ── */
+function _writeOut(){
+  var o=document.getElementById('hd-infra-out');
+  if(o)o.style.display='block';
+  return o;
+}
+function _writePost(url,body,label){
+  var o=_writeOut();if(!o)return;
+  o.innerHTML='<span class="c-dim">'+label+'...</span>';
+  _authFetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.ok){o.innerHTML='<div class="c-green" style="font-weight:600;margin-bottom:8px">\u2713 '+label+' \u2014 SUCCESS</div>'+(d.output?_infraPre('OUTPUT',d.output):'')+(d.message?'<div class="c-dim mt-8">'+d.message+'</div>':'');}
+      else{o.innerHTML='<div class="c-red" style="font-weight:600;margin-bottom:8px">\u2717 '+label+' \u2014 FAILED</div><div class="c-dim">'+(d.error||'Unknown error')+'</div>';}
+    })
+    .catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
+}
+function _writeForm(fields,submitLabel,onSubmit){
+  /* Build a simple inline form. fields: [{id,label,type,placeholder,options}] */
+  var html='<div style="background:var(--bg-alt);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px">';
+  fields.forEach(function(f){
+    html+='<div style="margin-bottom:10px"><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:3px">'+f.label+'</label>';
+    if(f.type==='select'){
+      html+='<select id="wf-'+f.id+'" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:4px;width:100%;font-size:12px">';
+      (f.options||[]).forEach(function(opt){html+='<option value="'+opt+'">'+opt+'</option>';});
+      html+='</select>';
+    } else {
+      html+='<input id="wf-'+f.id+'" type="'+(f.type||'text')+'" placeholder="'+(f.placeholder||'')+'" style="background:var(--bg);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:4px;width:100%;font-size:12px;box-sizing:border-box">';
+    }
+    html+='</div>';
+  });
+  html+='<button class="fleet-btn" style="color:var(--yellow);margin-top:4px" id="wf-submit">'+submitLabel+'</button>';
+  html+='</div>';
+  var o=_writeOut();if(!o)return;
+  o.innerHTML=html;
+  document.getElementById('wf-submit').addEventListener('click',function(){
+    var vals={};
+    fields.forEach(function(f){var el=document.getElementById('wf-'+f.id);vals[f.id]=el?el.value:'';});
+    onSubmit(vals);
+  });
+}
+
+/* ── iDRAC Write Operations ── */
+function idracWrite(action){
+  var target=_cardState.host||'';
+  if(!target){toast('Open an iDRAC card first','error');return;}
+  var msgs={poweron:'POWER ON',poweroff:'POWER OFF',powercycle:'POWER CYCLE',hardreset:'HARD RESET',graceshutdown:'GRACEFUL SHUTDOWN',clearsel:'CLEAR EVENT LOG',bootpxe:'SET NEXT BOOT TO PXE',bootbios:'SET NEXT BOOT TO BIOS'};
+  var label=msgs[action]||action.toUpperCase();
+  if(!confirm(label+' on '+target.toUpperCase()+'?'))return;
+  var o=_writeOut();if(!o)return;
+  o.innerHTML='<span class="c-dim">Executing '+label+' on '+target+'...</span>';
+  _authFetch(API.INFRA_IDRAC+'?action='+action+'&target='+encodeURIComponent(target))
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.error){o.innerHTML='<div class="c-red">'+d.error+'</div>';return;}
+      var html='';
+      (d.targets||[]).forEach(function(t){
+        if(t.reachable)html+='<div class="c-green" style="font-weight:600;margin-bottom:8px">\u2713 '+t.name.toUpperCase()+' \u2014 '+label+' sent</div>'+(t.output?_infraPre('RESPONSE',t.output):'');
+        else html+='<div class="c-red" style="font-weight:600">'+t.name.toUpperCase()+' \u2014 UNREACHABLE</div><div class="c-dim">'+(t.error||'')+'</div>';
+      });
+      o.innerHTML=html||'<div class="c-green">\u2713 '+label+' command sent</div>';
+    })
+    .catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
+}
+
+/* ── TrueNAS Write Operations ── */
+function tnWriteSnapshot(action){
+  var fields=[{id:'dataset',label:'Dataset',placeholder:'tank/dataset'},{id:'name',label:'Snapshot Name',placeholder:'snap-2026-04-03'}];
+  _writeForm(fields,action.toUpperCase()+' SNAPSHOT',function(v){
+    if(!v.dataset){toast('Dataset required','error');return;}
+    if(action!=='list'&&!v.name){toast('Snapshot name required','error');return;}
+    if(action==='rollback'&&!confirm('ROLLBACK '+v.dataset+'@'+v.name+'? This will revert the dataset!')){return;}
+    if(action==='delete'&&!confirm('DELETE snapshot '+v.dataset+'@'+v.name+'?')){return;}
+    _writePost(API.TRUENAS_SNAPSHOT,{action:action,dataset:v.dataset,name:v.name},action.toUpperCase()+' snapshot '+v.dataset+'@'+v.name);
+  });
+}
+function tnWriteService(){
+  _writeForm([
+    {id:'service',label:'Service',type:'select',options:['smb','nfs','iscsitarget','ssh','ftp','snmp','ups','smartd']},
+    {id:'action',label:'Action',type:'select',options:['restart','start','stop']}
+  ],'EXECUTE',function(v){
+    if(!confirm(v.action.toUpperCase()+' '+v.service+'?'))return;
+    _writePost(API.TRUENAS_SERVICE,{action:v.action,service:v.service},v.action.toUpperCase()+' '+v.service);
+  });
+}
+function tnWriteScrub(){
+  _writeForm([{id:'pool',label:'Pool Name',placeholder:'tank'}],'START SCRUB',function(v){
+    if(!v.pool){toast('Pool name required','error');return;}
+    if(!confirm('Start scrub on pool '+v.pool+'?'))return;
+    _writePost(API.TRUENAS_SCRUB,{pool:v.pool},'Scrub '+v.pool);
+  });
+}
+function tnWriteDataset(action){
+  if(action==='create'){
+    _writeForm([
+      {id:'dataset',label:'Dataset Path',placeholder:'tank/newdataset'},
+      {id:'compression',label:'Compression',type:'select',options:['lz4','gzip','zstd','off']},
+      {id:'quota',label:'Quota (optional)',placeholder:'100G'}
+    ],'CREATE DATASET',function(v){
+      if(!v.dataset){toast('Dataset path required','error');return;}
+      var props={};
+      if(v.compression&&v.compression!=='lz4')props.compression=v.compression;
+      if(v.quota)props.quota=v.quota;
+      _writePost(API.TRUENAS_DATASET,{action:'create',dataset:v.dataset,properties:props},'Create dataset '+v.dataset);
+    });
+  } else {
+    _writeForm([{id:'dataset',label:'Dataset Path',placeholder:'tank/dataset'}],'DELETE DATASET',function(v){
+      if(!v.dataset){toast('Dataset path required','error');return;}
+      if(!confirm('DELETE dataset '+v.dataset+'? This is PERMANENT!')){return;}
+      _writePost(API.TRUENAS_DATASET,{action:'delete',dataset:v.dataset,confirm:true},'Delete dataset '+v.dataset);
+    });
+  }
+}
+function tnWriteShare(){
+  _writeForm([
+    {id:'type',label:'Share Type',type:'select',options:['smb','nfs']},
+    {id:'name',label:'Share Name',placeholder:'myshare'},
+    {id:'path',label:'Path',placeholder:'/mnt/tank/dataset'}
+  ],'CREATE SHARE',function(v){
+    if(!v.name||!v.path){toast('Name and path required','error');return;}
+    _writePost(API.TRUENAS_SHARE,{action:'create',type:v.type,name:v.name,path:v.path},'Create '+v.type.toUpperCase()+' share '+v.name);
+  });
+}
+function tnWriteReplication(){
+  _writeForm([{id:'id',label:'Replication Task ID',placeholder:'1'}],'RUN REPLICATION',function(v){
+    if(!v.id){toast('Task ID required','error');return;}
+    if(!confirm('Run replication task #'+v.id+'?'))return;
+    _writePost(API.TRUENAS_REPLICATION,{action:'run',id:parseInt(v.id)},'Run replication task #'+v.id);
+  });
+}
+function tnReboot(){
+  if(!confirm('REBOOT TrueNAS? All services will be interrupted!'))return;
+  if(!confirm('Are you REALLY sure? This will take the storage offline.'))return;
+  _writePost(API.TRUENAS_REBOOT,{confirm:true},'Reboot TrueNAS');
+}
+
+/* ── pfSense Write Operations ── */
+function pfWriteService(){
+  _writeForm([
+    {id:'service',label:'Service',type:'select',options:['dhcpd','unbound','openvpn','ipsec','dpinger','ntpd','sshd','syslogd','filterdns']},
+    {id:'action',label:'Action',type:'select',options:['restart','start','stop']}
+  ],'EXECUTE',function(v){
+    if(!confirm(v.action.toUpperCase()+' '+v.service+' on pfSense?'))return;
+    _writePost(API.PFSENSE_SERVICE,{service:v.service,action:v.action},v.action.toUpperCase()+' '+v.service);
+  });
+}
+function pfWriteDhcp(){
+  _writeForm([
+    {id:'action',label:'Action',type:'select',options:['add','delete','list']},
+    {id:'mac',label:'MAC Address',placeholder:'AA:BB:CC:DD:EE:FF'},
+    {id:'ip',label:'IP Address',placeholder:'10.25.10.50'},
+    {id:'hostname',label:'Hostname',placeholder:'my-device'},
+    {id:'description',label:'Description (optional)',placeholder:'Lab server'}
+  ],'SUBMIT',function(v){
+    if(v.action==='list'){
+      _writePost(API.PFSENSE_DHCP,{action:'list'},'List DHCP reservations');
+      return;
+    }
+    if(!v.mac){toast('MAC address required','error');return;}
+    if(v.action==='add'&&!v.ip){toast('IP address required','error');return;}
+    if(!confirm(v.action.toUpperCase()+' DHCP reservation: '+v.mac+' → '+v.ip+'?'))return;
+    _writePost(API.PFSENSE_DHCP,{action:v.action,mac:v.mac,ip:v.ip,hostname:v.hostname,description:v.description||v.hostname},v.action.toUpperCase()+' DHCP reservation');
+  });
+}
+function pfWriteRule(){
+  _writeForm([
+    {id:'type',label:'Rule Type',type:'select',options:['pass','block']},
+    {id:'direction',label:'Direction',type:'select',options:['in','out']},
+    {id:'interface',label:'Interface',placeholder:'lan'},
+    {id:'proto',label:'Protocol',type:'select',options:['any','tcp','udp','icmp']},
+    {id:'src',label:'Source',placeholder:'any or 10.25.10.0/24'},
+    {id:'dst',label:'Destination',placeholder:'any or 10.25.20.0/24'},
+    {id:'dst_port',label:'Dest Port (tcp/udp only)',placeholder:'443'},
+    {id:'description',label:'Description',placeholder:'Allow HTTPS from lab'}
+  ],'ADD RULE',function(v){
+    if(!confirm('Add '+v.type.toUpperCase()+' rule: '+v.proto+' '+v.src+' → '+v.dst+(v.dst_port?':'+v.dst_port:'')+'?'))return;
+    _writePost(API.PFSENSE_RULES,{action:'add',type:v.type,direction:v.direction,interface:v.interface||'lan',proto:v.proto,src:v.src||'any',dst:v.dst||'any',dst_port:v.dst_port,description:v.description||'Added via FREQ'},'Add firewall rule');
+  });
+}
+function pfWriteNat(){
+  _writeForm([
+    {id:'interface',label:'Interface',placeholder:'wan'},
+    {id:'proto',label:'Protocol',type:'select',options:['tcp','udp','tcp/udp']},
+    {id:'src_port',label:'External Port',placeholder:'8080'},
+    {id:'dst_ip',label:'Internal IP',placeholder:'10.25.10.50'},
+    {id:'dst_port',label:'Internal Port',placeholder:'80'},
+    {id:'description',label:'Description',placeholder:'Web server forward'}
+  ],'ADD NAT RULE',function(v){
+    if(!v.src_port||!v.dst_ip||!v.dst_port){toast('External port, internal IP, and internal port required','error');return;}
+    if(!confirm('Add NAT rule: :'+v.src_port+' → '+v.dst_ip+':'+v.dst_port+'?'))return;
+    _writePost(API.PFSENSE_NAT,{action:'add',interface:v.interface||'wan',proto:v.proto,src_port:v.src_port,dst_ip:v.dst_ip,dst_port:v.dst_port,description:v.description||'Added via FREQ'},'Add NAT rule');
+  });
+}
+function pfWriteWgPeer(){
+  _writeForm([
+    {id:'action',label:'Action',type:'select',options:['list','add','remove']},
+    {id:'interface',label:'WG Interface',placeholder:'wg0'},
+    {id:'public_key',label:'Public Key',placeholder:'Base64 public key'},
+    {id:'allowed_ips',label:'Allowed IPs',placeholder:'10.25.100.5/32'},
+    {id:'endpoint',label:'Endpoint (optional)',placeholder:'1.2.3.4:51820'}
+  ],'SUBMIT',function(v){
+    if(v.action==='list'){
+      _writePost(API.PFSENSE_WG_PEER,{action:'list',interface:v.interface||'wg0'},'List WireGuard peers');
+      return;
+    }
+    if(!v.public_key){toast('Public key required','error');return;}
+    if(v.action==='add'&&!v.allowed_ips){toast('Allowed IPs required','error');return;}
+    if(!confirm(v.action.toUpperCase()+' WireGuard peer?'))return;
+    _writePost(API.PFSENSE_WG_PEER,{action:v.action,interface:v.interface||'wg0',public_key:v.public_key,allowed_ips:v.allowed_ips,endpoint:v.endpoint},v.action.toUpperCase()+' WireGuard peer');
+  });
+}
+function pfBackupNow(){
+  if(!confirm('Create pfSense config backup?'))return;
+  _writePost(API.PFSENSE_CONFIG_BACKUP,{action:'create'},'Create config backup');
+}
+function pfCheckUpdates(){
+  _writePost(API.PFSENSE_UPDATES,{action:'check'},'Check for updates');
+}
+function pfReboot(){
+  if(!confirm('REBOOT pfSense? All network services will be interrupted!'))return;
+  if(!confirm('Are you REALLY sure? This will take the FIREWALL offline.'))return;
+  _writePost(API.PFSENSE_REBOOT,{confirm:true},'Reboot pfSense');
+}
+
+/* ── Switch Write Operations ── */
+function swWriteVlan(action){
+  if(action==='create'){
+    _writeForm([
+      {id:'vlan_id',label:'VLAN ID (1-4094)',placeholder:'100'},
+      {id:'name',label:'VLAN Name',placeholder:'SERVERS'}
+    ],'CREATE VLAN',function(v){
+      if(!v.vlan_id){toast('VLAN ID required','error');return;}
+      if(!confirm('Create VLAN '+v.vlan_id+(v.name?' ('+v.name+')':'')+'?'))return;
+      _writePost(API.SWITCH_VLAN_CREATE,{target:_cardState.host||'',vlan_id:parseInt(v.vlan_id),name:v.name},'Create VLAN '+v.vlan_id);
+    });
+  } else {
+    _writeForm([{id:'vlan_id',label:'VLAN ID to delete',placeholder:'100'}],'DELETE VLAN',function(v){
+      if(!v.vlan_id){toast('VLAN ID required','error');return;}
+      if(!confirm('DELETE VLAN '+v.vlan_id+'? This will remove it from all ports!'))return;
+      _writePost(API.SWITCH_VLAN_DELETE,{target:_cardState.host||'',vlan_id:parseInt(v.vlan_id)},'Delete VLAN '+v.vlan_id);
+    });
+  }
+}
+function swWriteAcl(){
+  _writeForm([
+    {id:'action',label:'Action',type:'select',options:['list','create','delete','apply','remove']},
+    {id:'name',label:'ACL Name',placeholder:'MY_ACL'},
+    {id:'entries',label:'Rules (one per line, for create)',placeholder:'permit tcp any host 10.0.0.1 eq 80'},
+    {id:'port',label:'Interface (for apply/remove)',placeholder:'GigabitEthernet1/0/1'},
+    {id:'direction',label:'Direction',type:'select',options:['in','out']}
+  ],'SUBMIT',function(v){
+    var body={action:v.action,target:_cardState.host||'',name:v.name};
+    if(v.action==='create'){
+      if(!v.name||!v.entries){toast('Name and rules required','error');return;}
+      body.entries=v.entries.split('\n').filter(function(l){return l.trim();});
+      if(!confirm('Create ACL '+v.name+' with '+body.entries.length+' rules?'))return;
+    } else if(v.action==='delete'){
+      if(!v.name){toast('ACL name required','error');return;}
+      if(!confirm('DELETE ACL '+v.name+'?'))return;
+    } else if(v.action==='apply'||v.action==='remove'){
+      if(!v.name||!v.port){toast('ACL name and port required','error');return;}
+      body.port=v.port;body.direction=v.direction;
+      if(!confirm(v.action.toUpperCase()+' ACL '+v.name+' on '+v.port+'?'))return;
+    }
+    _writePost(API.SWITCH_ACL,body,v.action.toUpperCase()+' ACL'+(v.name?' '+v.name:''));
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    SECURITY
    ═══════════════════════════════════════════════════════════════════ */
 function loadVault(){
@@ -6136,17 +6435,26 @@ function renderInfraCard(config){
   var html='<div class="card-box"><div class="stats mb-0" >'+stats+'</div></div>';
   var actions=INFRA_ACTIONS[infraType];
   if(actions){
-    var btns='';
+    var readBtns='',writeBtns='';
     actions.forEach(function(a){
-      var match=a.f.match(/\('([^']+)'\)/);
-      var actionName=match?match[1]:'status';
-      btns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();_runInfraAction(\''+infraType+'\',\''+actionName+'\')">'+a.l+'</button>';
+      if(a.w){
+        /* Write operation — call function directly, style by severity */
+        var color=a.w===2?'var(--red)':'var(--yellow)';
+        var fn=a.f.replace(/"/g,'');
+        writeBtns+='<button class="fleet-btn min-w-120-center" style="color:'+color+'" onclick="event.stopPropagation();'+fn+'">'+a.l+'</button>';
+      } else {
+        /* Read operation — dispatch through _runInfraAction */
+        var match=a.f.match(/\('([^']+)'\)/);
+        var actionName=match?match[1]:'status';
+        readBtns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();_runInfraAction(\''+infraType+'\',\''+actionName+'\')">'+a.l+'</button>';
+      }
     });
     /* Add TERMINAL button for SSH-capable devices */
     var termIp=ph?ph.ip:'';
     var termHtype=infraType||'linux';
-    if(termIp)btns+='<button class="fleet-btn min-w-120-center" style="color:var(--cyan)" onclick="event.stopPropagation();openTerminal(\'vm\',\''+_esc(termIp)+'\',\'\',\''+_esc(label)+'\',\''+_esc(termHtype)+'\')">&#9002; TERMINAL</button>';
-    html+=_infraPanelHtml(roleInfo.role+' CONTROLS',roleInfo.color,btns);
+    if(termIp)readBtns+='<button class="fleet-btn min-w-120-center" style="color:var(--cyan)" onclick="event.stopPropagation();openTerminal(\'vm\',\''+_esc(termIp)+'\',\'\',\''+_esc(label)+'\',\''+_esc(termHtype)+'\')">&#9002; TERMINAL</button>';
+    html+=_infraPanelHtml(roleInfo.role+' MONITORING',roleInfo.color,readBtns);
+    if(writeBtns)html+=_infraPanelHtml(roleInfo.role+' MANAGEMENT','var(--yellow)',writeBtns);
   }
   _infraOutputTarget='hd-infra-out';
   _cardReady(html);

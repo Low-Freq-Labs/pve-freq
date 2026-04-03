@@ -26,7 +26,12 @@ from freq.modules.vault import vault_get
 
 
 def handle_idrac(handler):
-    """GET /api/infra/idrac -- iDRAC data via SSH/racadm."""
+    """GET /api/infra/idrac -- iDRAC data + write ops via SSH/racadm.
+
+    Read actions: status, sensors, sel, storage, network, license, firmware, power
+    Write actions (admin only): poweron, poweroff, powercycle, hardreset,
+        graceshutdown, clearsel, bootpxe, bootbios
+    """
     cfg = load_config()
     params = _parse_query(handler)
     action = params.get("action", ["status"])[0]
@@ -44,7 +49,8 @@ def handle_idrac(handler):
     else:
         idrac_ips = targets
 
-    actions = {
+    # -- Read actions (no role check) --
+    read_actions = {
         "status": "racadm getsysinfo -s",
         "sensors": "racadm getsensorinfo",
         "sel": "racadm getsel -i 1-10",
@@ -52,11 +58,38 @@ def handle_idrac(handler):
         "network": "racadm getniccfg",
         "license": "racadm license view",
         "firmware": "racadm getversion",
+        "power": "racadm serveraction powerstatus",
     }
 
-    cmd = actions.get(action, actions["status"])
-    results = []
+    # -- Write actions (admin only) --
+    write_actions = {
+        "poweron": "racadm serveraction powerup",
+        "poweroff": "racadm serveraction powerdown",
+        "powercycle": "racadm serveraction powercycle",
+        "hardreset": "racadm serveraction hardreset",
+        "graceshutdown": "racadm serveraction graceshutdown",
+        "clearsel": "racadm clrsel",
+        "bootpxe": "racadm set iDRAC.ServerBoot.FirstBootDevice PXE",
+        "bootbios": "racadm set iDRAC.ServerBoot.FirstBootDevice BiosSetup",
+        "bootnormal": "racadm set iDRAC.ServerBoot.FirstBootDevice Normal",
+    }
 
+    if action in write_actions:
+        role, err = _check_session_role(handler, "admin")
+        if err:
+            json_response(handler, {"error": err}, 403)
+            return
+        if not target:
+            json_response(handler, {"error": "target required for write operations"}, 400)
+            return
+        cmd = write_actions[action]
+    elif action in read_actions:
+        cmd = read_actions[action]
+    else:
+        json_response(handler, {"error": f"Unknown action: {action}"}, 400)
+        return
+
+    results = []
     idrac_key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
     for name, ip in idrac_ips.items():
         r = ssh_single(host=ip, command=cmd, key_path=idrac_key,

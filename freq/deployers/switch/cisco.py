@@ -247,6 +247,126 @@ def apply_profile_lines(ip, cfg, port, config_lines):
 
 
 # ---------------------------------------------------------------------------
+# VLAN Management
+# ---------------------------------------------------------------------------
+
+def create_vlan(ip, cfg, vlan_id, vlan_name=""):
+    """Create a VLAN. Returns True on success."""
+    lines = [f"vlan {vlan_id}"]
+    if vlan_name:
+        lines.append(f"name {vlan_name}")
+    ok = push_config(ip, cfg, lines)
+    if ok:
+        save_config(ip, cfg)
+    return ok
+
+
+def delete_vlan(ip, cfg, vlan_id):
+    """Delete a VLAN. Returns True on success."""
+    ok = push_config(ip, cfg, [f"no vlan {vlan_id}"])
+    if ok:
+        save_config(ip, cfg)
+    return ok
+
+
+def rename_vlan(ip, cfg, vlan_id, new_name):
+    """Rename a VLAN. Returns True on success."""
+    ok = push_config(ip, cfg, [f"vlan {vlan_id}", f"name {new_name}"])
+    if ok:
+        save_config(ip, cfg)
+    return ok
+
+
+# ---------------------------------------------------------------------------
+# ACL Management
+# ---------------------------------------------------------------------------
+
+def get_acls(ip, cfg):
+    """Return list of access-lists on the device."""
+    out, ok = _ssh(ip, "show access-lists", cfg)
+    if not ok:
+        return []
+    return _parse_acls(out)
+
+
+def create_acl(ip, cfg, acl_name, entries):
+    """Create or update a named extended ACL.
+
+    entries: list of strings like "permit tcp any host 10.0.0.1 eq 80"
+    """
+    lines = [f"ip access-list extended {acl_name}"]
+    lines.extend(entries)
+    ok = push_config(ip, cfg, lines)
+    if ok:
+        save_config(ip, cfg)
+    return ok
+
+
+def delete_acl(ip, cfg, acl_name):
+    """Delete a named ACL. Returns True on success."""
+    ok = push_config(ip, cfg, [f"no ip access-list extended {acl_name}"])
+    if ok:
+        save_config(ip, cfg)
+    return ok
+
+
+def apply_acl_to_interface(ip, cfg, port, acl_name, direction="in"):
+    """Apply a named ACL to an interface. direction: in or out."""
+    ok = push_config(ip, cfg, [
+        f"interface {port}",
+        f"ip access-group {acl_name} {direction}",
+    ])
+    if ok:
+        save_config(ip, cfg)
+    return ok
+
+
+def remove_acl_from_interface(ip, cfg, port, acl_name, direction="in"):
+    """Remove a named ACL from an interface."""
+    ok = push_config(ip, cfg, [
+        f"interface {port}",
+        f"no ip access-group {acl_name} {direction}",
+    ])
+    if ok:
+        save_config(ip, cfg)
+    return ok
+
+
+# ---------------------------------------------------------------------------
+# Config Rollback
+# ---------------------------------------------------------------------------
+
+def rollback_config(ip, cfg, backup_text):
+    """Push a full config by piping it through configure replace.
+
+    For simpler rollback, use push_config with specific lines.
+    WARNING: This replaces the entire running config.
+    """
+    # For IOS, we can't pipe arbitrary configs safely via SSH.
+    # Instead, push specific config lines. For full rollback,
+    # the config management module handles backup/restore.
+    return False
+
+
+def _parse_acls(text):
+    """Parse 'show access-lists' output."""
+    acls = []
+    current = None
+    for line in text.splitlines():
+        line = line.strip()
+        m = re.match(r'^(Extended|Standard)\s+IP\s+access\s+list\s+(\S+)', line)
+        if m:
+            if current:
+                acls.append(current)
+            current = {"name": m.group(2), "type": m.group(1).lower(), "entries": []}
+        elif current and line:
+            current["entries"].append(line)
+    if current:
+        acls.append(current)
+    return acls
+
+
+# ---------------------------------------------------------------------------
 # Parsers — IOS show command output to structured data
 # ---------------------------------------------------------------------------
 

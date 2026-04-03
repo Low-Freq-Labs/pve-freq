@@ -46,6 +46,7 @@ def build_routes() -> dict:
         "freq.api.plugin",
         "freq.api.terminal",
         "freq.api.v1_stubs",
+        "freq.api.fw",
     ]
 
     for module_path in _domains:
