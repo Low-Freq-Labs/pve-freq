@@ -32,8 +32,8 @@ class TestRequiredFiles(unittest.TestCase):
         "freq/core/plugins.py",
         "freq/deployers/__init__.py",
         "freq/api/__init__.py",
-        "conf/freq.toml",
-        "conf/hosts.conf",
+        "conf/freq.toml.example",
+        "conf/hosts.toml.example",
     ]
 
     def test_all_required_files_exist(self):

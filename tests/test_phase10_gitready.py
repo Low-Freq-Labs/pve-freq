@@ -241,9 +241,9 @@ class TestConfigFilesSafe(unittest.TestCase):
         # Should reference credential files, not inline secrets
         # This is a sanity check — the actual secrets are in /etc/freq/credentials/
 
-    def test_hosts_conf_exists(self):
-        path = CONF_DIR / "hosts.conf"
-        self.assertTrue(path.exists(), "hosts.conf missing from conf/")
+    def test_hosts_toml_exists(self):
+        path = CONF_DIR / "hosts.toml.example"
+        self.assertTrue(path.exists(), "hosts.toml.example missing from conf/")
 
     def test_no_private_keys_in_conf(self):
         for path in CONF_DIR.rglob("*"):
