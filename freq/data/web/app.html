@@ -49,6 +49,7 @@
     <div><h1 id="page-title" style="font-size:16px">Home</h1><div class="tagline fs-11" id="header-tagline" ></div></div>
   </div>
   <div class="flex-gap-16-center">
+    <span id="watchdog-status"></span>
     <button id="header-user-btn" onclick="openUserMenu()" style="display:none;background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 14px;border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--input-border)'"><span id="header-user-icon" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></span><span id="header-user-name" style="font-weight:600;text-transform:uppercase;letter-spacing:0.5px"></span><span id="header-user-role" style="font-size:10px;color:var(--text-dim)"></span></button>
     <span style="font-family:'Courier New',monospace;font-size:20px;font-weight:700;color:var(--purple-light);letter-spacing:2px;opacity:0.7;animation:none;text-shadow:none" id="header-time"></span>
   </div>
@@ -301,6 +302,11 @@
       <div>
         <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">SECRETS AUDIT</h4>
         <div id="sec-secrets-audit"><div class="exec-out">Loading...</div></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="fleet-btn" onclick="loadSecretsLeases()">VIEW LEASES</button>
+          <button class="fleet-btn" onclick="loadSecretsScan()">SCAN RESULTS</button>
+        </div>
+        <div id="sec-secrets-detail" style="margin-top:8px"></div>
       </div>
       <div>
         <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">COMPLIANCE STATUS</h4>
@@ -586,6 +592,20 @@
     <div id="inventory-out"><div class="exec-out">Click to load fleet inventory.</div></div>
   </div>
 </div>
+<!-- Host Compare -->
+<div class="section">
+  <div class="section-header"><h3>Host Compare</h3><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Compare two hosts side-by-side (CPU, RAM, disk, packages, services).</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <select id="compare-host-a" class="input-field" style="width:180px"><option value="">Host A...</option></select>
+      <span style="color:var(--text-dim)">vs</span>
+      <select id="compare-host-b" class="input-field" style="width:180px"><option value="">Host B...</option></select>
+      <button class="fleet-btn" onclick="runHostCompare()">COMPARE</button>
+    </div>
+    <div id="compare-out"><div class="exec-out">Select two hosts and click COMPARE.</div></div>
+  </div>
+</div>
 </div><!-- close tools-view -->
 
 <!-- ============================================================
@@ -649,7 +669,7 @@
 <div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">Capacity Trends</h3>
-    <button class="fleet-btn" onclick="loadTrendData()">LOAD TRENDS</button>
+    <div style="display:flex;gap:8px"><button class="fleet-btn" onclick="takeTrendSnapshot()">TAKE SNAPSHOT</button><button class="fleet-btn" onclick="loadTrendData()">LOAD TRENDS</button></div>
   </div>
   <div id="trend-data"><div class="exec-out">Click to load trend data.</div></div>
 </div>
@@ -808,7 +828,7 @@
     <div class="section-body">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <span style="font-size:12px;color:var(--text-dim)">Track infrastructure costs across the fleet.</span>
-        <button class="fleet-btn" onclick="loadCosts()">REFRESH</button>
+        <div style="display:flex;gap:4px"><button class="fleet-btn" onclick="showCostConfig()">CONFIG</button><button class="fleet-btn" onclick="loadCosts()">REFRESH</button></div>
       </div>
       <div id="cost-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
       <div id="cost-table"></div>
@@ -899,7 +919,8 @@
   <div class="section-header"><h3>Switch Detail</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn c-purple-active" onclick="loadSwitchData('facts')">FACTS</button>
+      <button class="fleet-btn c-purple-active" onclick="loadSwitchData('show')">OVERVIEW</button>
+      <button class="fleet-btn" onclick="loadSwitchData('facts')">FACTS</button>
       <button class="fleet-btn" onclick="loadSwitchData('interfaces')">INTERFACES</button>
       <button class="fleet-btn" onclick="loadSwitchData('vlans')">VLANS</button>
       <button class="fleet-btn" onclick="loadSwitchData('mac')">MAC TABLE</button>
@@ -1042,6 +1063,12 @@
     <div class="exec-out" id="dns-check-out">Enter a domain to check DNS resolution.</div>
   </div>
 </div>
+<div class="section">
+  <div class="section-header"><h3>DNS Inventory</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadDnsInventory()">SCAN</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="dns-inventory-out"><div class="exec-out">Click SCAN to discover fleet DNS records.</div></div>
+  </div>
+</div>
 </div>
 
 <!-- ============================================================
@@ -1138,9 +1165,10 @@
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>On-Call</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadOncall()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>On-Call</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadOncallSchedule()">FULL SCHEDULE</button><button class="fleet-btn" onclick="loadOncall()" style="margin-left:4px">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="oncall-info"><div class="exec-out">Loading on-call info...</div></div>
+    <div id="oncall-schedule-detail" style="margin-top:8px"></div>
   </div>
 </div>
 <div class="section">
@@ -1200,7 +1228,7 @@
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>SLA / Uptime</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadSlaData()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>SLA / Uptime</h3><div class="flex-1"></div><button class="fleet-btn" onclick="recordSlaCheck()">RECORD CHECK</button><button class="fleet-btn" onclick="loadSlaData()" style="margin-left:4px">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="sla-data"><div class="exec-out">Loading SLA data...</div></div>
   </div>
