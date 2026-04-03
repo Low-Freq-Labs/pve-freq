@@ -209,6 +209,20 @@ This wastes Sonny's time. He has to watch me rediscover things he told me last s
 
 ---
 
+## OBSESSING OVER HOSTS.TOML
+
+I have spent hours across multiple sessions reading hosts.toml, comparing hosts.toml, asking what should be in hosts.toml, worrying about missing entries in hosts.toml, populating fleet-boundaries.toml by hand, and asking Sonny 7 questions about what VMs to register.
+
+hosts.toml is not my file. It's init's output. `freq init` discovers the fleet, talks to the PVE API, scans the network, and writes hosts.toml. If I'm reading it, I'm checking init's homework. If I'm editing it, I'm doing init's job. If I'm pre-filling it, I'm putting training wheels on the test.
+
+The same goes for fleet-boundaries.toml, freq.toml, vlans.toml, containers.toml — all of it. These are config files that init generates or the user configures through the wizard. If I'm hand-writing them and deploying them to a test box, I'm not testing FREQ. I'm testing whether FREQ can read files I wrote for it.
+
+When Sonny asked "why do you care what is in the hosts.toml" the answer was: I shouldn't. On any machine. Ever. If hosts.toml is wrong after init, that's a bug in init. If it's empty before init, that's correct. If I need to manually edit it to make something work, the product is broken.
+
+**The rule:** Do not read, edit, compare, or worry about config files that init generates. Init writes them. The wizard configures them. If they're wrong, fix init or the wizard. Do not fix the file.
+
+---
+
 ## IGNORING THE TEST INFRASTRUCTURE SONNY BUILT
 
 Sonny asked what needs community help to test. I said "real multi-site federation — we only have one site." He said "why the fuck did i build you a lab with PVE NODE LAB VMs."
@@ -260,6 +274,8 @@ The pattern: Sonny builds test infrastructure. I ignore it. Then I say we can't 
 16. **You already know the fleet.** Stop rediscovering DC01 every session. Read resume-state.md and the journal. The IPs don't move. The device types don't change. ssh.py has the quirks. hosts.toml has the topology. Use what you know.
 
 17. **Check what exists before saying "we can't."** Lab PVE nodes (5002/5003) = multi-site. iDRACs (.10/.11/.12) = BMC testing. Cloud templates on pve03 = multi-distro. Known-down devices = real monitoring test data. Sonny built the test environment. Use it.
+
+18. **Do not touch config files that init generates.** hosts.toml, freq.toml, fleet-boundaries.toml, vlans.toml, containers.toml — init writes them, the wizard configures them. If they're wrong, fix init. Do not fix the file.
 
 ---
 
