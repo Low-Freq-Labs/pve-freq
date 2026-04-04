@@ -386,6 +386,11 @@ do_install() {
     mkdir -p "$INSTALL_DIR/data/knowledge"
     chmod 700 "$INSTALL_DIR/data/vault"
     chmod 700 "$INSTALL_DIR/data/keys"
+    # Make data dirs writable by the user who runs freq (not just root)
+    local freq_user="${SUDO_USER:-$(whoami)}"
+    if [[ -n "$freq_user" && "$freq_user" != "root" ]]; then
+        chown -R "$freq_user" "$INSTALL_DIR/data"
+    fi
     ok "Data directories created"
 
     # Seed config files from examples (idempotent — never overwrite existing)
