@@ -1392,6 +1392,10 @@ def _get_fleet_vms(cfg):
 class FreqHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the FREQ dashboard."""
 
+    # Class-level caches for PVE metrics polling
+    _pve_metrics_cache = None
+    _pve_metrics_ts = 0
+
     def log_message(self, format, *args):
         """Suppress default logging."""
         pass
@@ -1482,7 +1486,8 @@ class FreqHandler(BaseHTTPRequestHandler):
                 from freq.api import build_routes
 
                 cls._V1_ROUTES = build_routes()
-            except Exception:
+            except Exception as e:
+                logger.error(f"build_routes failed: {e}")
                 cls._V1_ROUTES = {}
 
     def _dispatch(self):

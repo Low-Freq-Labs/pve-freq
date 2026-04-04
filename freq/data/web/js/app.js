@@ -693,7 +693,8 @@ function _renderHomeWidgets(){
 }
 function _loadHomeFleetStats(){
   _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
-    var up=0,down=0,pve=0;var _homeLabLabels=_getLabLabels(hd.hosts);var lab=Object.keys(_homeLabLabels).length;
+    if(!hd||!hd.hosts)hd={hosts:[],duration:0};
+    var up=0,down=0,pve=0;var _homeLabLabels=_getLabLabels(hd.hosts);var lab=Object.keys(_homeLabLabels||{}).length;
     hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;if(h.type==='pve')pve++;});
     var totalAll=hd.hosts.length;
     var totalOff=down;var prodCount=totalAll-lab;var pveCount=PROD_HOSTS.filter(function(h){return h.type==='pve';}).length||pve;
@@ -1371,6 +1372,8 @@ function _loadFleetOverviewMedia(){
   }).catch(function(){var me=document.getElementById('home-media');if(me)me.innerHTML='<span class="c-dim-fs12">NO MEDIA DATA</span>';});
 }
 function _renderFleetOverview(fo){
+    if(!fo)return;
+    fo.summary=fo.summary||{};fo.pve_nodes=fo.pve_nodes||[];fo.physical=fo.physical||[];
     /* PVE summary */
     var nodeCount=fo.pve_nodes?fo.pve_nodes.length:0;
     var nodeNames=fo.pve_nodes?fo.pve_nodes.map(function(n){return n.name}).join(', '):'';
@@ -3794,7 +3797,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
       if(ctr){dockerCount+=ctr.total;dockerUp+=ctr.up;dockerDown+=ctr.down;}
     });
     var nRamGb=Math.round(nRamMb/1024);
-    var detailRam=pn.detail.match(/(\d+)GB/);var nodeRamStr=detailRam?detailRam[1]+'GB':'?';
+    var detailRam=(pn.detail||'').match(/(\d+)GB/);var nodeRamStr=detailRam?detailRam[1]+'GB':(pn.ram_gb?pn.ram_gb+'GB':'?');
     var nodeCard='<div class="host-card" data-host-id="'+nodeName.toLowerCase()+'" style="cursor:pointer;" onclick="openVmInfo(\''+nodeName+'\',\''+pn.ip+'\',0)">';
     nodeCard+='<div class="mb-8"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
     nodeCard+='<div class="divider-light">';
@@ -3921,6 +3924,9 @@ function _enrichFleetNtpUpdates(){
 function _renderFleetData(fo,hd,md){
   try{
     if(!fo&&!hd){document.getElementById('metrics-cards').innerHTML='<p class="c-red">Both fleet overview and health APIs failed.</p>';return;}
+    /* Guard against null sub-fields */
+    if(fo){fo.vms=fo.vms||[];fo.physical=fo.physical||[];fo.pve_nodes=fo.pve_nodes||[];fo.summary=fo.summary||{};}
+    if(hd){hd.hosts=hd.hosts||[];}
     /* Build container counts by VMID from media status data */
     var ctrByVmid={};
     if(md&&md.containers){md.containers.forEach(function(c){

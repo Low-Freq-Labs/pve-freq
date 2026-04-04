@@ -1142,7 +1142,7 @@ def handle_inventory_containers(handler):
 def handle_compare(handler):
     """GET /api/compare -- compare two hosts."""
     from freq.modules.compare import _gather_host_info
-    from freq.core.resolve import host as resolve_host
+    from freq.core.resolve import by_target as resolve_host
 
     cfg = load_config()
     params = _parse_query(handler)

@@ -20,13 +20,26 @@ from freq.modules.serve import _check_session_role
 
 
 def handle_truenas(handler):
-    """GET /api/infra/truenas -- TrueNAS data via SSH.
-
-    Delegates to serve.py's _serve_truenas method because the TrueNAS
-    handler is 300+ lines with complex SSH orchestration. The handler
-    arg IS the FreqHandler instance, so we call the method directly on it.
-    """
-    handler._serve_truenas()
+    """GET /api/infra/truenas -- TrueNAS overview."""
+    cfg = load_config()
+    if not cfg.truenas_ip:
+        json_response(handler, {"error": "TrueNAS not configured", "configured": False})
+        return
+    # Basic SSH probe for TrueNAS status
+    r = ssh_run_fn(
+        host=cfg.truenas_ip,
+        command="hostname && uptime && zpool list -H 2>/dev/null | head -10",
+        key_path=cfg.ssh_key_path,
+        connect_timeout=cfg.ssh_connect_timeout,
+        command_timeout=15,
+        htype="truenas",
+        use_sudo=False,
+    )
+    if r.returncode != 0:
+        json_response(handler, {"error": "TrueNAS unreachable", "configured": True, "ip": cfg.truenas_ip})
+        return
+    lines = r.stdout.strip().split("\n")
+    json_response(handler, {"configured": True, "ip": cfg.truenas_ip, "hostname": lines[0] if lines else "", "raw": r.stdout.strip()})
 
 
 def handle_storage_health(handler):
