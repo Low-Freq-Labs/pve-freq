@@ -1128,7 +1128,7 @@ function startPveMetrics(){
     _pveMetricsTimer=setInterval(_pveMetricsRefresh,5000);
   },2000);
 }
-startPveMetrics();
+/* startPveMetrics() called from loadFleetPage() after cards render */
 
 /* === Sparkline Mini-Charts ===
    Canvas-based sparklines for PVE node cards.
@@ -1356,7 +1356,7 @@ function loadFleetPage(){
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   }
-  loadMetricsQuick();loadAgents();loadSpecialists();loadLxcContainers();
+  loadMetricsQuick();loadAgents();loadSpecialists();loadLxcContainers();startPveMetrics();
   /* Overview cards — render immediately if cached, otherwise fetch */
   if(_fleetCache.fo){_renderFleetOverview(_fleetCache.fo);_loadFleetOverviewMedia();}
   else{_authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(e){console.error('Fleet overview load failed:',e);});}
