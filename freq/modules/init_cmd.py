@@ -3327,6 +3327,351 @@ def _phase_fleet_configure(cfg, ctx):
     else:
         fmt.line(f"  {fmt.C.DIM}No VMs to categorize (PVE API unavailable or no VMs found).{fmt.C.RESET}")
 
+    # ── 9d: QEMU Guest Agent Install ─────────────────────────────
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}QEMU Guest Agent Housekeeping{fmt.C.RESET}")
+    fmt.blank()
+
+    # Find Linux hosts that are VMs (not PVE nodes themselves, not physical devices)
+    vm_hosts = [h for h in cfg.hosts if h.htype in ("linux", "docker") and h.ip not in set(cfg.pve_nodes or [])]
+    if vm_hosts:
+        installed_count = 0
+        already_count = 0
+        for h in vm_hosts:
+            ssh_cmd = ["ssh", "-n"] + ssh_base_opts + [f"{svc_name}@{h.ip}"]
+            # Check if guest agent is already running
+            rc, _, _ = _run(ssh_cmd + ["systemctl is-active qemu-guest-agent 2>/dev/null"], timeout=QUICK_CHECK_TIMEOUT)
+            if rc == 0:
+                already_count += 1
+                continue
+            # Try to install it
+            rc, _, _ = _run(
+                ssh_cmd + [
+                    "which apt-get >/dev/null 2>&1 && sudo apt-get install -y qemu-guest-agent >/dev/null 2>&1"
+                    " || which dnf >/dev/null 2>&1 && sudo dnf install -y qemu-guest-agent >/dev/null 2>&1"
+                    " || which zypper >/dev/null 2>&1 && sudo zypper install -y qemu-guest-agent >/dev/null 2>&1"
+                    "; sudo systemctl enable --now qemu-guest-agent 2>/dev/null"
+                ],
+                timeout=60,
+            )
+            if rc == 0:
+                installed_count += 1
+
+        if installed_count:
+            fmt.step_ok(f"Guest agent: {installed_count} newly installed, {already_count} already running")
+        elif already_count:
+            fmt.step_ok(f"Guest agent: all {already_count} VMs already have it")
+        else:
+            fmt.line(f"  {fmt.C.DIM}No VMs reachable for guest agent install.{fmt.C.RESET}")
+    else:
+        fmt.line(f"  {fmt.C.DIM}No VM hosts to install guest agent on.{fmt.C.RESET}")
+
+    # ── 9e: LXC Container Discovery ──────────────────────────────
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}LXC Container Discovery{fmt.C.RESET}")
+    fmt.blank()
+
+    if cfg.pve_nodes and key_path and os.path.isfile(key_path):
+        lxc_count = 0
+        # Query PVE API for LXC containers
+        lxc_found = []
+        if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+            try:
+                from freq.modules.pve import _pve_api_call
+                result, ok = _pve_api_call(cfg, cfg.pve_nodes[0], "/cluster/resources?type=vm")
+                if ok and isinstance(result, list):
+                    lxc_found = [v for v in result if v.get("type") == "lxc"]
+            except Exception:
+                pass
+
+        if not lxc_found:
+            # SSH fallback
+            ssh_cmd = ["ssh", "-n"] + ssh_base_opts + [f"{svc_name}@{cfg.pve_nodes[0]}"]
+            rc, out, _ = _run(
+                ssh_cmd + ["sudo pvesh get /cluster/resources --type vm --output-format json 2>/dev/null"],
+                timeout=DEFAULT_CMD_TIMEOUT,
+            )
+            if rc == 0 and out.strip():
+                try:
+                    all_res = _json.loads(out)
+                    lxc_found = [v for v in all_res if v.get("type") == "lxc"]
+                except _json.JSONDecodeError:
+                    pass
+
+        if lxc_found:
+            # Register LXC containers as hosts (if they have IPs via pct exec)
+            from freq.core.config import Host, append_host_toml
+            existing_ips = {h.ip for h in cfg.hosts}
+            for ct in lxc_found:
+                ctid = ct.get("vmid", 0)
+                name = ct.get("name", "")
+                node = ct.get("node", "")
+                status = ct.get("status", "")
+                if status != "running" or not name:
+                    continue
+
+                # Get CT IP via pct exec
+                node_ip = cfg.pve_nodes[0]
+                for i, pn in enumerate(getattr(cfg, "pve_node_names", []) or []):
+                    if pn == node and i < len(cfg.pve_nodes):
+                        node_ip = cfg.pve_nodes[i]
+                        break
+
+                ssh_cmd = ["ssh", "-n"] + ssh_base_opts + [f"{svc_name}@{node_ip}"]
+                rc, out, _ = _run(
+                    ssh_cmd + [f"sudo pct exec {ctid} -- hostname -I 2>/dev/null"],
+                    timeout=QUICK_CHECK_TIMEOUT,
+                )
+                if rc == 0 and out.strip():
+                    # Take first non-loopback IP
+                    ct_ip = ""
+                    for ip_str in out.strip().split():
+                        if not ip_str.startswith("127."):
+                            ct_ip = ip_str
+                            break
+                    if ct_ip and ct_ip not in existing_ips:
+                        try:
+                            from freq.core.validate import sanitize_label
+                            safe_label = sanitize_label(name)
+                        except ImportError:
+                            safe_label = name.lower().replace(" ", "-")
+                        host = Host(ip=ct_ip, label=safe_label, htype="linux", groups="lxc")
+                        append_host_toml(cfg.hosts_file, host)
+                        cfg.hosts.append(host)
+                        existing_ips.add(ct_ip)
+                        lxc_count += 1
+
+            if lxc_count:
+                fmt.step_ok(f"LXC: {lxc_count} containers discovered and registered")
+            else:
+                fmt.step_ok(f"LXC: {len(lxc_found)} found on PVE, all already registered or no IPs")
+        else:
+            fmt.line(f"  {fmt.C.DIM}No LXC containers found on PVE cluster.{fmt.C.RESET}")
+    else:
+        fmt.line(f"  {fmt.C.DIM}PVE not available for LXC discovery.{fmt.C.RESET}")
+
+    # ── 9f: Cloud-Init Template Discovery ─────────────────────────
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Cloud-Init Template Discovery{fmt.C.RESET}")
+    fmt.blank()
+
+    if cfg.pve_nodes and key_path and os.path.isfile(key_path):
+        templates = []
+        # Query PVE for templates
+        pve_vms_all = []
+        if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+            try:
+                from freq.modules.pve import _pve_api_call
+                result, ok = _pve_api_call(cfg, cfg.pve_nodes[0], "/cluster/resources?type=vm")
+                if ok and isinstance(result, list):
+                    pve_vms_all = result
+            except Exception:
+                pass
+
+        if pve_vms_all:
+            templates = [v for v in pve_vms_all if v.get("template", 0) == 1]
+
+        if templates:
+            # Write discovered templates info
+            distros_path = os.path.join(cfg.conf_dir, "distros.toml")
+            try:
+                lines = [
+                    "# FREQ Distro Templates",
+                    "# Auto-discovered from PVE cluster",
+                    "",
+                ]
+                for t in sorted(templates, key=lambda x: x.get("vmid", 0)):
+                    vmid = t.get("vmid", 0)
+                    name = t.get("name", "unknown")
+                    node = t.get("node", "")
+                    safe = name.lower().replace(" ", "-").replace(".", "-")
+                    lines.append(f"[template.{safe}]")
+                    lines.append(f"vmid = {vmid}")
+                    lines.append(f'name = "{name}"')
+                    lines.append(f'node = "{node}"')
+                    lines.append("")
+                with open(distros_path, "w") as f:
+                    f.write("\n".join(lines))
+                fmt.step_ok(f"Templates: {len(templates)} cloud-init templates discovered")
+            except OSError as e:
+                fmt.step_warn(f"Could not write distros.toml: {e}")
+        else:
+            fmt.line(f"  {fmt.C.DIM}No cloud-init templates found.{fmt.C.RESET}")
+    else:
+        fmt.line(f"  {fmt.C.DIM}PVE not available for template discovery.{fmt.C.RESET}")
+
+    # ── 9g: Protected VMs ─────────────────────────────────────────
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Protected VMs{fmt.C.RESET}")
+    fmt.blank()
+
+    # Auto-protect: PVE nodes themselves, templates, and VMs in the 900-999 range
+    protected_vmids = []
+    protected_ranges = [[900, 999]]  # default: FREQ infra range
+    if cfg.pve_nodes:
+        pve_vms_for_protection = []
+        if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+            try:
+                from freq.modules.pve import _pve_api_call
+                result, ok = _pve_api_call(cfg, cfg.pve_nodes[0], "/cluster/resources?type=vm")
+                if ok and isinstance(result, list):
+                    pve_vms_for_protection = result
+            except Exception:
+                pass
+        # Protect templates automatically
+        for v in pve_vms_for_protection:
+            if v.get("template", 0) == 1:
+                protected_vmids.append(v.get("vmid", 0))
+
+    # Update freq.toml safety section
+    toml_path = os.path.join(cfg.conf_dir, "freq.toml")
+    try:
+        with open(toml_path) as f:
+            content = f.read()
+        if protected_vmids:
+            content = _update_toml_value(content, "protected_vmids", protected_vmids)
+        content = _update_toml_value(content, "protected_ranges", protected_ranges)
+        with open(toml_path, "w") as f:
+            f.write(content)
+        total_protected = len(protected_vmids) + sum(hi - lo + 1 for lo, hi in protected_ranges)
+        fmt.step_ok(f"Protected: {len(protected_vmids)} templates + VMID range 900-999")
+    except OSError:
+        pass
+
+    # ── 9h: pfSense Configuration ─────────────────────────────────
+    pfsense_ip = getattr(cfg, "pfsense_ip", "")
+    if pfsense_ip:
+        fmt.blank()
+        fmt.line(f"  {fmt.C.BOLD}pfSense Integration{fmt.C.RESET}")
+        fmt.blank()
+
+        try:
+            with open(toml_path) as f:
+                content = f.read()
+            # Write [pfsense] section if not present
+            if "[pfsense]" not in content:
+                content += (
+                    "\n[pfsense]\n"
+                    f'host = "{pfsense_ip}"\n'
+                    f'user = "{svc_name}"\n'
+                    'config_path = "/cf/conf/config.xml"\n'
+                )
+                with open(toml_path, "w") as f:
+                    f.write(content)
+            fmt.step_ok(f"pfSense configured: {pfsense_ip}")
+        except OSError:
+            pass
+
+    # ── 9i: NIC Profiles from VLANs ──────────────────────────────
+    vlans = getattr(cfg, "vlans", []) or []
+    if vlans:
+        fmt.blank()
+        fmt.line(f"  {fmt.C.BOLD}NIC Profiles{fmt.C.RESET}")
+        fmt.blank()
+
+        try:
+            with open(toml_path) as f:
+                content = f.read()
+            if "[nic.profiles]" not in content:
+                vlan_ids = [v.id for v in vlans if hasattr(v, "id")]
+                # Build profiles: standard = all VLANs, minimal = first VLAN only
+                if vlan_ids:
+                    all_str = str(vlan_ids)
+                    min_str = str(vlan_ids[:1])
+                    content += (
+                        "\n[nic.profiles]\n"
+                        f"standard = {all_str}\n"
+                        f"minimal = {min_str}\n"
+                    )
+                    with open(toml_path, "w") as f:
+                        f.write(content)
+                    fmt.step_ok(f"NIC profiles: standard ({len(vlan_ids)} VLANs), minimal (1 VLAN)")
+            else:
+                fmt.step_ok("NIC profiles already configured")
+        except OSError:
+            pass
+
+    # ── 9j: Notifications ─────────────────────────────────────────
+    headless = getattr(cfg, "_headless", False)
+    if not headless:
+        fmt.blank()
+        fmt.line(f"  {fmt.C.BOLD}Notifications{fmt.C.RESET}")
+        fmt.blank()
+        fmt.line(f"  {fmt.C.DIM}FREQ can alert you via Discord, Slack, Telegram, email, ntfy, and more.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Configure later in freq.toml [notifications] section.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Or run: freq configure notifications{fmt.C.RESET}")
+
+    # ── 9k: Dashboard Service ─────────────────────────────────────
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Dashboard Service{fmt.C.RESET}")
+    fmt.blank()
+
+    dashboard_port = getattr(cfg, "dashboard_port", 8888)
+    service_unit = (
+        "[Unit]\n"
+        "Description=PVE FREQ Dashboard\n"
+        "After=network.target\n"
+        "\n"
+        "[Service]\n"
+        "Type=simple\n"
+        f"ExecStart=/usr/bin/freq serve --port {dashboard_port}\n"
+        "Restart=always\n"
+        "RestartSec=10\n"
+        f"User={svc_name}\n"
+        "WorkingDirectory=/opt/pve-freq\n"
+        "\n"
+        "[Install]\n"
+        "WantedBy=multi-user.target\n"
+    )
+    try:
+        service_path = "/etc/systemd/system/freq-dashboard.service"
+        with open(service_path, "w") as f:
+            f.write(service_unit)
+        _run(["systemctl", "daemon-reload"])
+        _run(["systemctl", "enable", "freq-dashboard"])
+        fmt.step_ok(f"Dashboard service installed: freq-dashboard (port {dashboard_port})")
+        fmt.line(f"  {fmt.C.DIM}Start with: sudo systemctl start freq-dashboard{fmt.C.RESET}")
+    except OSError as e:
+        fmt.step_warn(f"Could not install dashboard service: {e}")
+
+    # ── 9l: Dashboard HTTPS ───────────────────────────────────────
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Dashboard TLS{fmt.C.RESET}")
+    fmt.blank()
+
+    cert_dir = os.path.join(os.path.dirname(cfg.conf_dir), "tls")
+    cert_path = os.path.join(cert_dir, "freq.crt")
+    key_path_tls = os.path.join(cert_dir, "freq.key")
+    if not os.path.isfile(cert_path):
+        os.makedirs(cert_dir, mode=0o700, exist_ok=True)
+        # Generate self-signed cert
+        rc, _, err = _run(
+            [
+                "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                "-keyout", key_path_tls, "-out", cert_path,
+                "-days", "3650", "-nodes",
+                "-subj", "/CN=freq-dashboard/O=PVE FREQ",
+            ],
+            timeout=DEFAULT_CMD_TIMEOUT,
+        )
+        if rc == 0:
+            os.chmod(key_path_tls, 0o600)
+            # Update freq.toml with TLS paths
+            try:
+                with open(toml_path) as f:
+                    content = f.read()
+                content = _update_toml_value(content, "tls_cert", cert_path)
+                content = _update_toml_value(content, "tls_key", key_path_tls)
+                with open(toml_path, "w") as f:
+                    f.write(content)
+                fmt.step_ok(f"Self-signed TLS cert generated (10-year, {cert_path})")
+            except OSError:
+                fmt.step_ok(f"TLS cert generated but could not update freq.toml")
+        else:
+            fmt.step_warn(f"Could not generate TLS cert: {err.strip()[:100]}")
+    else:
+        fmt.step_ok("TLS certificate already exists")
+
 
 def _categorize_vms(cfg):
     """Auto-categorize VMs into fleet-boundary tiers.
