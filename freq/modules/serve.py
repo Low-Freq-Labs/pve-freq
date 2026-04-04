@@ -219,6 +219,9 @@ def _load_disk_cache():
 
 def _save_disk_cache(name, data):
     """Persist to disk atomically so next server start is instant."""
+    global CACHE_DIR
+    if CACHE_DIR is None:
+        _init_cache_dir()
     os.makedirs(CACHE_DIR, exist_ok=True)
     target = _cache_path(name)
     try:

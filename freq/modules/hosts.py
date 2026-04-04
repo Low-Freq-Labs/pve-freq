@@ -587,6 +587,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
 
     if not new_hosts and not removed_hosts:
         fmt.step_ok("hosts.conf is up to date — no changes needed")
+        _auto_populate_fleet_boundaries(cfg, discovered)
         fmt.blank()
         fmt.footer()
         return 0
@@ -643,9 +644,79 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
     cfg.hosts = all_hosts
 
     fmt.step_ok(f"Fleet registry updated: {len(discovered)} hosts ({len(new_hosts)} new)")
+
+    # ── Step 9: Auto-populate fleet-boundaries.toml with discovered devices ──
+    _auto_populate_fleet_boundaries(cfg, discovered)
+
     fmt.blank()
     fmt.footer()
     return 0
+
+
+def _auto_populate_fleet_boundaries(cfg, discovered: dict):
+    """Auto-populate fleet-boundaries.toml physical section from discovered hosts.
+
+    Only adds devices that aren't already defined. Never overwrites user config.
+    """
+    fb_path = os.path.join(cfg.conf_dir, "fleet-boundaries.toml")
+
+    # Device types that are "physical infrastructure" (not VMs/containers)
+    INFRA_TYPES = {"pfsense", "opnsense", "truenas", "synology", "switch", "idrac", "ilo", "ipmi"}
+
+    # Find infra devices in discovered hosts
+    infra_devices = {}
+    for ip, d in discovered.items():
+        if d["htype"] in INFRA_TYPES:
+            key = d["label"].replace("-", "_").replace(" ", "_")
+            infra_devices[key] = {"ip": ip, "label": d["label"], "type": d["htype"]}
+
+    # Find PVE nodes
+    pve_nodes = {}
+    for ip, d in discovered.items():
+        if d["htype"] == "pve" and d.get("source") == "pve-node":
+            key = d["label"].replace("-", "_").replace(" ", "_")
+            pve_nodes[key] = {"ip": ip}
+
+    if not infra_devices and not pve_nodes:
+        return
+
+    # Load existing file to avoid overwriting user config
+    import tomllib
+
+    existing_data = {}
+    try:
+        with open(fb_path, "rb") as f:
+            existing_data = tomllib.load(f)
+    except (FileNotFoundError, tomllib.TOMLDecodeError):
+        pass
+
+    existing_physical = existing_data.get("physical", {})
+    existing_pve = existing_data.get("pve_nodes", {})
+
+    # Only add new devices not already defined
+    new_physical = {k: v for k, v in infra_devices.items() if k not in existing_physical}
+    new_pve = {k: v for k, v in pve_nodes.items() if k not in existing_pve}
+
+    if not new_physical and not new_pve:
+        return
+
+    # Append to the TOML file
+    with open(fb_path, "a") as f:
+        if new_physical:
+            f.write("\n# Auto-discovered physical devices\n[physical]\n")
+            for key, dev in sorted(new_physical.items()):
+                detail_map = {"pfsense": "Firewall", "opnsense": "Firewall", "truenas": "NAS",
+                              "synology": "NAS", "switch": "Switch", "idrac": "BMC", "ilo": "BMC", "ipmi": "BMC"}
+                detail = detail_map.get(dev["type"], dev["type"].upper())
+                f.write(f'{key} = {{ ip = "{dev["ip"]}", label = "{dev["label"]}", type = "{dev["type"]}", tier = "probe", detail = "{detail}" }}\n')
+
+        if new_pve:
+            f.write("\n# Auto-discovered PVE nodes\n[pve_nodes]\n")
+            for key, node in sorted(new_pve.items()):
+                f.write(f'{key} = {{ ip = "{node["ip"]}", detail = "" }}\n')
+
+    count = len(new_physical) + len(new_pve)
+    fmt.step_ok(f"Fleet boundaries: auto-added {len(new_physical)} physical + {len(new_pve)} PVE nodes")
 
 
 # ─────────────────────────────────────────────────────────────

@@ -1251,7 +1251,7 @@ var _evtSource=null;
 function startSSE(){
   if(typeof EventSource==='undefined')return;/* browser doesn't support SSE */
   if(_evtSource)_evtSource.close();
-  _evtSource=new EventSource(API.EVENTS+(_token?'?token='+encodeURIComponent(_token):''));
+  _evtSource=new EventSource(API.EVENTS+(_authToken?'?token='+encodeURIComponent(_authToken):''));
 
   _evtSource.addEventListener('cache_update',function(e){
     var d=JSON.parse(e.data);
@@ -3573,7 +3573,8 @@ var INFRA_ROLES={
   ipmi:     {role:'BMC',            icon:'\u2699', color:'var(--yellow)'}
 };
 function _infraRoleCard(ph,healthMap){
-  var roleInfo=INFRA_ROLES[ph.type]||{role:ph.type.toUpperCase(),icon:'\u2726',color:'var(--text-dim)'};
+  if(!ph||!ph.type)return '';
+  var roleInfo=(INFRA_ROLES||{})[ph.type]||{role:(ph.type||'DEVICE').toUpperCase(),icon:'\u2726',color:'var(--text-dim)'};
   var live=healthMap[ph.label];
   var up=ph.reachable||false;if(live&&live.status==='healthy')up=true;
   var safeId=ph.label.replace(/[^a-zA-Z0-9]/g,'-');
