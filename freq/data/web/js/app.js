@@ -3244,7 +3244,7 @@ function updatePref(key,val){
   toast('Preference saved: '+key+' = '+val,'ok');
 }
 /* ── Lab Assignment — tag fleet members as LAB ── */
-var _labAssignments=JSON.parse(localStorage.getItem('freq_lab_assign')||'{}');
+var _labAssignments;try{_labAssignments=JSON.parse(localStorage.getItem('freq_lab_assign')||'{}');}catch(e){_labAssignments={};}
 function _getLabLabels(healthHosts){
   /* Merge: server-side groups + client-side overrides */
   var labels={};
@@ -3252,10 +3252,10 @@ function _getLabLabels(healthHosts){
     if(h.groups&&h.groups.indexOf('lab')>=0)labels[h.label]=true;
   });}
   /* Apply user overrides from Settings */
-  Object.keys(_labAssignments).forEach(function(k){
+  if(_labAssignments&&typeof _labAssignments==='object'){Object.keys(_labAssignments).forEach(function(k){
     if(_labAssignments[k])labels[k]=true;
     else delete labels[k];
-  });
+  });}
   return labels;
 }
 function _loadLabAssignments(){
@@ -3544,18 +3544,18 @@ function _assignVlanColors(){var vi=0;Object.keys(_VLAN_MAP).forEach(function(id
 /* Fleet color scheme — node-based, generated from PVE node list.
    Called from _initFleetData() after PROD_HOSTS is populated. */
 var _NODE_PALETTE=['#9B4FDE','#f778ba','#58a6ff','#ffa657','#f0f6fc','#6e7681','#79c0ff','#d2a8ff'];
-var NODE_COLORS={};
+var NODE_COLORS=Object.create(null);
 function _assignNodeColors(){var pveHosts=PROD_HOSTS.filter(function(h){return h.type==='pve';});pveHosts.forEach(function(h,i){NODE_COLORS[h.label]=_NODE_PALETTE[i%_NODE_PALETTE.length];});}
 var INFRA_GOLD='var(--text)';
 function _hostColor(label,htype,node){
   /* Infra devices → gold */
   if(htype==='pfsense'||htype==='truenas'||htype==='switch'||htype==='docker'||htype==='idrac')return INFRA_GOLD;
   /* PVE nodes → node color */
-  if(htype==='pve'){return NODE_COLORS[label]||INFRA_GOLD;}
+  if(htype==='pve'){return (NODE_COLORS||{})[label]||INFRA_GOLD;}
   /* VMs → inherit from node */
-  if(node)return NODE_COLORS[node]||'#79c0ff';
+  if(node)return (NODE_COLORS||{})[node]||'#79c0ff';
   /* Lab VMs → dim */
-  var pv=PROD_VMS.find(function(v){return v.label===label;});
+  var pv=(PROD_VMS||[]).find(function(v){return v.label===label;});
   if(pv&&pv.category==='lab')return '#6e7681';
   return '#79c0ff';
 }
@@ -3851,7 +3851,7 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
   var pveContent='';
   nodeOrder.forEach(function(nodeName){
     var nd=nodeData[nodeName];if(!nd||!nd.card)return;
-    var nodeColor=NODE_COLORS[nodeName]||'var(--text)';
+    var nodeColor=(NODE_COLORS||{})[nodeName]||'var(--text)';
     var vmCount=nd.vms?(nd.vms.match(/host-card/g)||[]).length:0;
     var cols=Math.max(vmCount,3);if(cols>4)cols=4;
     pveContent+='<div class="pve-group" style="border-left:4px solid '+nodeColor+';border-radius:6px;background:var(--bg2);overflow:hidden">';
