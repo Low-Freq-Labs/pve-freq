@@ -5409,7 +5409,7 @@ def _init_headless(cfg, args):
     fmt.line(f"  Service account: {fmt.C.CYAN}{ctx['svc_name']}{fmt.C.RESET}")
     fmt.blank()
 
-    headless_total = 11
+    headless_total = 12
 
     # ── Phase 1: Prerequisites ──
     _phase(1, headless_total, "Prerequisites")
@@ -5430,8 +5430,30 @@ def _init_headless(cfg, args):
     _phase(4, headless_total, "SSH Key Generation")
     _phase_ssh_keys(cfg, ctx)
 
-    # ── Phase 5: Fleet Deployment ──
-    _phase(5, headless_total, "Fleet Deployment")
+    # ── Phase 5: PVE Node Deployment ──
+    _phase(5, headless_total, "PVE Node Deployment")
+    _headless_fleet_deploy(
+        cfg,
+        ctx,
+        bootstrap_key,
+        bootstrap_user,
+        bootstrap_pass=bootstrap_pass,
+        device_password_file=None,
+        device_user="root",
+        device_creds={},
+        pve_only=True,
+    )
+
+    # ── Phase 6: PVE API Token ──
+    _phase(6, headless_total, "PVE API Token")
+    _phase_pve_api_token(cfg, ctx)
+
+    # ── Phase 7: Fleet Discovery ──
+    _phase(7, headless_total, "Fleet Discovery")
+    _phase_fleet_discover(cfg, ctx, args)
+
+    # ── Phase 8: Fleet Deployment ──
+    _phase(8, headless_total, "Fleet Deployment")
 
     # Import hosts from --hosts-file if provided
     hosts_file_arg = getattr(args, "hosts_file", None)
@@ -5464,24 +5486,16 @@ def _init_headless(cfg, args):
         device_creds=device_creds,
     )
 
-    # ── Phase 6: PVE API Token ──
-    _phase(6, headless_total, "PVE API Token")
-    _phase_pve_api_token(cfg, ctx)
-
-    # ── Phase 7: Fleet Discovery ──
-    _phase(7, headless_total, "Fleet Discovery")
-    _phase_fleet_discover(cfg, ctx, args)
-
-    # ── Phase 8: Fleet Configuration ──
-    _phase(8, headless_total, "Fleet Configuration")
+    # ── Phase 9: Fleet Configuration ──
+    _phase(9, headless_total, "Fleet Configuration")
     _phase_fleet_configure(cfg, ctx)
 
-    # ── Phase 9: PDM Setup ──
-    _phase(9, headless_total, "PDM Setup")
+    # ── Phase 10: PDM Setup ──
+    _phase(10, headless_total, "PDM Setup")
     _phase_pdm(cfg, ctx, args)
 
-    # ── Phase 10: RBAC ──
-    _phase(10, headless_total, "RBAC Setup")
+    # ── Phase 11: RBAC ──
+    _phase(11, headless_total, "RBAC Setup")
     roles_file = os.path.join(cfg.conf_dir, "roles.conf")
     existing = ""
     if os.path.isfile(roles_file):
@@ -5500,8 +5514,8 @@ def _init_headless(cfg, args):
         else:
             fmt.step_ok(f"{svc_name} already in roles")
 
-    # ── Phase 11: Verification ──
-    _phase(11, headless_total, "Verification")
+    # ── Phase 12: Verification ──
+    _phase(12, headless_total, "Verification")
     verified = _phase_verify(cfg, ctx)
 
     fmt.blank()
@@ -5573,11 +5587,15 @@ def _headless_fleet_deploy(
     device_password_file=None,
     device_user="root",
     device_creds=None,
+    pve_only=False,
 ):
     """Deploy service account to PVE + fleet hosts using bootstrap credentials.
 
     Uses the unified platform dispatcher for all host types.
     Supports bootstrap via SSH key (--bootstrap-key) or password (--bootstrap-password-file).
+
+    pve_only: if True, only deploy to PVE nodes (Phase 5). Fleet hosts
+    are deployed later in Phase 8 after discovery populates hosts.toml.
 
     device_creds: dict from _load_device_credentials() — per-device-type auth:
         {"pfsense": {"user": "root", "password": "..."}, "switch": {"user": "gigecolo", "password": "..."}}
@@ -5585,7 +5603,7 @@ def _headless_fleet_deploy(
     """
     if device_creds is None:
         device_creds = {}
-    # Collect all targets: PVE nodes + fleet hosts (deduplicated by IP)
+    # Collect targets: PVE nodes first, then fleet hosts (deduplicated by IP)
     seen_ips = set()
     targets = []
 
@@ -5594,10 +5612,11 @@ def _headless_fleet_deploy(
         targets.append({"ip": ip, "label": name, "htype": "pve"})
         seen_ips.add(ip)
 
-    for h in cfg.hosts:
-        if h.ip not in seen_ips:
-            targets.append({"ip": h.ip, "label": h.label, "htype": h.htype})
-            seen_ips.add(h.ip)
+    if not pve_only:
+        for h in cfg.hosts:
+            if h.ip not in seen_ips:
+                targets.append({"ip": h.ip, "label": h.label, "htype": h.htype})
+                seen_ips.add(h.ip)
 
     if not targets:
         fmt.line(f"  {fmt.C.DIM}No targets found in config.{fmt.C.RESET}")
