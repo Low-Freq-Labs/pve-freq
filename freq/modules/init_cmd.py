@@ -874,15 +874,19 @@ def _parse_network_interfaces(text):
                     pass
 
         # Match bridge-vids (VLAN-aware bridge): "bridge-vids 5 10 25 2550"
+        # NOTE: "bridge-vids 2-4094" is PVE's default "allow all VLANs" —
+        # NOT actual VLAN definitions. Skip ranges > 100 VLANs wide.
         elif line.startswith("bridge-vids "):
             vid_strs = line.split()[1:]
             bridge = current_iface or "vmbr0"
             for vs in vid_strs:
-                # Handle ranges like "2-100"
                 if "-" in vs:
                     try:
                         lo, hi = vs.split("-", 1)
-                        for vid in range(int(lo), int(hi) + 1):
+                        lo_i, hi_i = int(lo), int(hi)
+                        if (hi_i - lo_i) > 100:
+                            continue  # Skip "2-4094" style allow-all ranges
+                        for vid in range(lo_i, hi_i + 1):
                             vlans.setdefault(vid, {"bridge": bridge, "address": "", "prefix": "", "gateway": ""})
                     except ValueError:
                         pass
@@ -911,6 +915,7 @@ def _parse_network_interfaces(text):
                 # Infer subnet for bridge-vids that lack their own addresses
                 pass  # We can't derive VLAN subnets from the bridge address alone
 
+    # Only return VLANs that have actual addresses — skip bridge-vids placeholders
     return [
         {
             "vlan_id": vid,
@@ -921,6 +926,7 @@ def _parse_network_interfaces(text):
             "name": f"VLAN{vid}",
         }
         for vid, info in sorted(vlans.items())
+        if info["address"] or info["prefix"]
     ]
 
 
@@ -2500,7 +2506,6 @@ def _phase_fleet_discover(cfg, ctx, args=None):
             htype = _classify_host_by_name(name)
 
             if chosen_ip not in existing_ips and chosen_ip not in discovered:
-                from freq.core.config import validate
                 try:
                     from freq.core.validate import sanitize_label
                     safe_label = sanitize_label(name)
