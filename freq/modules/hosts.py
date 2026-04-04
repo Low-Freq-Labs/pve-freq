@@ -680,6 +680,34 @@ def _auto_populate_fleet_boundaries(cfg, discovered: dict):
         if ip and key not in infra_devices:
             infra_devices[key] = {"ip": ip, "label": key, "type": dtype}
 
+    # Auto-detect gateway as pfSense/firewall if not already known
+    gw = cfg.vm_gateway or ""
+    if gw and "pfsense" not in infra_devices and "opnsense" not in infra_devices and "firewall" not in infra_devices:
+        # Probe gateway — if it responds, assume firewall
+        import subprocess
+        try:
+            r = subprocess.run(["ping", "-c", "1", "-W", "1", gw], capture_output=True, timeout=3)
+            if r.returncode == 0:
+                # Check if it's FreeBSD (pfSense) via SSH banner
+                gw_type = "pfsense"
+                try:
+                    from freq.core.ssh import run as ssh_run
+                    probe = ssh_run(
+                        host=gw, command="uname -s",
+                        key_path=cfg.ssh_key_path,
+                        connect_timeout=3, command_timeout=5,
+                        htype="pfsense", use_sudo=False,
+                    )
+                    if probe.returncode == 0 and "FreeBSD" in probe.stdout:
+                        gw_type = "pfsense"
+                    elif probe.returncode == 0 and "Linux" in probe.stdout:
+                        gw_type = "opnsense"  # OPNsense runs on Linux too
+                except Exception:
+                    pass  # Can't SSH — still likely a firewall at the gateway
+                infra_devices["firewall"] = {"ip": gw, "label": "firewall", "type": gw_type}
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
     # Find PVE nodes
     pve_nodes = {}
     for ip, d in discovered.items():
