@@ -358,18 +358,26 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
         "pubkey": "",
         "rsa_key_path": "",
         "rsa_pubkey": "",
+        # Bootstrap auth (collected in Phase 2, reused by Phase 5)
+        "bootstrap_key": "",
+        "bootstrap_pass": "",
+        "bootstrap_user": "root",
     }
 
-    total = 10
+    total = 13
 
-    # Phase 1: Welcome + Prerequisites
-    _phase(1, total, "Welcome + Prerequisites")
+    # Phase 1: Prerequisites
+    _phase(1, total, "Prerequisites")
     if not _phase_welcome(cfg):
         return 1
 
-    # Phase 2: Cluster Configuration
-    _phase(2, total, "Cluster Configuration")
+    # Phase 2: Cluster Configuration + VLAN Discovery
+    _phase(2, total, "Cluster Configuration + VLAN Discovery")
     _phase_configure(cfg, args)
+    # Collect bootstrap auth for PVE access
+    _collect_bootstrap_auth(cfg, ctx, args)
+    # Discover VLANs from PVE network config (using bootstrap creds)
+    _discover_vlans_from_pve(cfg, ctx)
 
     # Phase 3: Service Account
     _phase(3, total, "Service Account Setup")
@@ -383,36 +391,41 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     # Phase 5: PVE Node Deployment
     _phase(5, total, "PVE Node Deployment")
     _phase_pve_deploy(cfg, ctx, args)
+    # Retry VLAN discovery if skipped in Phase 2 (now freq-admin key is available)
+    if not (getattr(cfg, "vlans", None)):
+        _discover_vlans_from_pve(cfg, ctx)
 
-    # Phase 6: PDM Setup
-    _phase(6, total, "PDM Setup")
-    _phase_pdm(cfg, ctx, args)
+    # Phase 6: PVE API Token
+    _phase(6, total, "PVE API Token")
+    _phase_pve_api_token(cfg, ctx)
 
-    # Phase 7: Fleet Host Deployment
-    _phase(7, total, "Fleet Host Deployment")
+    # Phase 7: Fleet Discovery
+    _phase(7, total, "Fleet Discovery")
+    _phase_fleet_discover(cfg, ctx, args)
+
+    # Phase 8: Fleet Deployment
+    _phase(8, total, "Fleet Deployment")
     _phase_fleet_deploy(cfg, ctx, args)
 
-    # Phase 8: Admin Accounts
-    _phase(8, total, "Admin Account Setup")
+    # Phase 9: Fleet Configuration
+    _phase(9, total, "Fleet Configuration")
+    _phase_fleet_configure(cfg, ctx)
+
+    # Phase 10: PDM Setup (optional)
+    _phase(10, total, "PDM Setup")
+    _phase_pdm(cfg, ctx, args)
+
+    # Phase 11: Admin Accounts
+    _phase(11, total, "Admin Account Setup")
     _phase_admin_setup(cfg, ctx)
 
-    # Phase 9: Verification
-    _phase(9, total, "Configuration + Verification")
+    # Phase 12: Verification
+    _phase(12, total, "Verification")
     verified = _phase_verify(cfg, ctx)
 
-    # Phase 10: Summary
-    _phase(10, total, "Summary")
+    # Phase 13: Summary
+    _phase(13, total, "Summary")
     _phase_summary(cfg, ctx, verified, pack)
-
-    # Auto-sync hosts from PVE cluster after successful init
-    if verified and cfg.pve_nodes:
-        try:
-            from freq.modules.hosts import _hosts_sync
-
-            fmt.blank()
-            _hosts_sync(cfg)
-        except Exception:
-            pass
 
     logger.info("init complete", service_account=ctx["svc_name"])
     return 0 if verified else 1
@@ -793,6 +806,346 @@ def _phase_configure(cfg, args=None):
         fmt.step_ok("Configuration unchanged — all values already set")
 
 
+# ── VLAN Discovery (Phase 2 supplement) ───────────────────────────
+
+
+def _parse_network_interfaces(text):
+    """Parse Debian /etc/network/interfaces for VLAN information.
+
+    Handles two PVE network config styles:
+    1. VLAN subinterfaces: iface vmbr0.100 inet static
+    2. Bridge-VLAN-aware: bridge-vids 5 10 25 2550
+
+    Returns list of dicts: [{vlan_id, bridge, address, prefix, gateway, name}]
+    """
+    vlans = {}  # vlan_id -> {bridge, address, prefix, gateway}
+    current_iface = None
+
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        # Match iface declarations: "iface vmbr0.100 inet static"
+        if line.startswith("iface "):
+            parts = line.split()
+            if len(parts) >= 2:
+                iface_name = parts[1]
+                current_iface = iface_name
+
+                # Check for VLAN subinterface pattern: vmbr0.100
+                if "." in iface_name:
+                    base, vid_str = iface_name.rsplit(".", 1)
+                    try:
+                        vid = int(vid_str)
+                        if 1 <= vid <= 4094:
+                            vlans.setdefault(vid, {"bridge": base, "address": "", "prefix": "", "gateway": ""})
+                    except ValueError:
+                        pass
+
+        # Match address lines: "address 10.25.255.50/24"
+        elif line.startswith("address ") and current_iface:
+            addr = line.split(None, 1)[1].strip()
+            # Apply to VLAN if this iface is a VLAN subinterface
+            if "." in current_iface:
+                _, vid_str = current_iface.rsplit(".", 1)
+                try:
+                    vid = int(vid_str)
+                    if vid in vlans:
+                        vlans[vid]["address"] = addr
+                        # Derive prefix from CIDR
+                        ip_part = addr.split("/")[0]
+                        octets = ip_part.rsplit(".", 1)
+                        if len(octets) == 2:
+                            vlans[vid]["prefix"] = octets[0]
+                except ValueError:
+                    pass
+
+        # Match gateway lines: "gateway 10.25.255.1"
+        elif line.startswith("gateway ") and current_iface:
+            gw = line.split(None, 1)[1].strip()
+            if "." in current_iface:
+                _, vid_str = current_iface.rsplit(".", 1)
+                try:
+                    vid = int(vid_str)
+                    if vid in vlans:
+                        vlans[vid]["gateway"] = gw
+                except ValueError:
+                    pass
+
+        # Match bridge-vids (VLAN-aware bridge): "bridge-vids 5 10 25 2550"
+        elif line.startswith("bridge-vids "):
+            vid_strs = line.split()[1:]
+            bridge = current_iface or "vmbr0"
+            for vs in vid_strs:
+                # Handle ranges like "2-100"
+                if "-" in vs:
+                    try:
+                        lo, hi = vs.split("-", 1)
+                        for vid in range(int(lo), int(hi) + 1):
+                            vlans.setdefault(vid, {"bridge": bridge, "address": "", "prefix": "", "gateway": ""})
+                    except ValueError:
+                        pass
+                else:
+                    try:
+                        vid = int(vs)
+                        if 1 <= vid <= 4094:
+                            vlans.setdefault(vid, {"bridge": bridge, "address": "", "prefix": "", "gateway": ""})
+                    except ValueError:
+                        pass
+
+    # Also extract the base bridge address (VLAN 0 / native LAN)
+    # Re-scan for non-VLAN ifaces with addresses
+    current_iface = None
+    for line in text.split("\n"):
+        line = line.strip()
+        if line.startswith("iface "):
+            parts = line.split()
+            current_iface = parts[1] if len(parts) >= 2 else None
+        elif line.startswith("address ") and current_iface and "." not in current_iface:
+            # Non-VLAN interface address — this is the native/mgmt network
+            addr = line.split(None, 1)[1].strip()
+            ip_part = addr.split("/")[0]
+            octets = ip_part.rsplit(".", 1)
+            if len(octets) == 2 and current_iface.startswith("vmbr"):
+                # Infer subnet for bridge-vids that lack their own addresses
+                pass  # We can't derive VLAN subnets from the bridge address alone
+
+    return [
+        {
+            "vlan_id": vid,
+            "bridge": info["bridge"],
+            "address": info["address"],
+            "prefix": info["prefix"],
+            "gateway": info["gateway"],
+            "name": f"VLAN{vid}",
+        }
+        for vid, info in sorted(vlans.items())
+    ]
+
+
+def _collect_bootstrap_auth(cfg, ctx, args=None):
+    """Collect bootstrap SSH credentials for PVE access.
+
+    Stores in ctx for reuse by Phase 5 (PVE deploy) and VLAN discovery.
+    Returns True if credentials were collected.
+    """
+    # Check CLI flags first
+    bootstrap_key = getattr(args, "bootstrap_key", None) if args else None
+    bootstrap_user = getattr(args, "bootstrap_user", None) if args else None
+    bootstrap_pass_file = getattr(args, "bootstrap_password_file", None) if args else None
+
+    if bootstrap_key and os.path.isfile(bootstrap_key):
+        ctx["bootstrap_key"] = bootstrap_key
+        ctx["bootstrap_user"] = bootstrap_user or "root"
+        ctx["bootstrap_pass"] = ""
+        fmt.step_ok(f"Bootstrap auth: {ctx['bootstrap_user']} via key {bootstrap_key}")
+        return True
+
+    if bootstrap_pass_file and os.path.isfile(bootstrap_pass_file):
+        with open(bootstrap_pass_file) as f:
+            ctx["bootstrap_pass"] = f.read().strip()
+        ctx["bootstrap_user"] = bootstrap_user or "root"
+        ctx["bootstrap_key"] = ""
+        fmt.step_ok(f"Bootstrap auth: {ctx['bootstrap_user']} via password file")
+        return True
+
+    if not cfg.pve_nodes:
+        return False
+
+    # Interactive prompt
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Bootstrap authentication for PVE nodes{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.DIM}Needed to deploy service account and discover VLANs.{fmt.C.RESET}")
+    fmt.blank()
+
+    pve_user = _input("Deploy as user (root or sudo account)", "root")
+    ctx["bootstrap_user"] = pve_user
+
+    fmt.line(f"  {fmt.C.DIM}How to authenticate to PVE nodes as '{pve_user}'?{fmt.C.RESET}")
+    fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Password")
+    fmt.line(f"    {fmt.C.BOLD}B{fmt.C.RESET}) Existing SSH key")
+    fmt.blank()
+
+    auth_choice = _input("Choice", "A").upper()
+
+    if auth_choice == "B":
+        key_path = _input("SSH key path", os.path.expanduser("~/.ssh/id_ed25519"))
+        if os.path.isfile(key_path):
+            ctx["bootstrap_key"] = key_path
+            ctx["bootstrap_pass"] = ""
+            fmt.step_ok(f"Using SSH key: {key_path}")
+            return True
+        fmt.step_warn(f"Key not found: {key_path} — falling back to password")
+
+    # Password auth
+    rc, _, _ = _run(["which", "sshpass"])
+    if rc != 0:
+        fmt.step_fail("'sshpass' not installed — required for password-based SSH")
+        from freq.core.packages import install_hint
+        fmt.line(f"  {fmt.C.DIM}Install with: {install_hint('sshpass')}{fmt.C.RESET}")
+        ctx["bootstrap_key"] = ""
+        ctx["bootstrap_pass"] = ""
+        return False
+
+    auth_pass = getpass.getpass(
+        f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for '{pve_user}' on PVE nodes: "
+    )
+    ctx["bootstrap_pass"] = auth_pass
+    ctx["bootstrap_key"] = ""
+    return True
+
+
+def _discover_vlans_from_pve(cfg, ctx):
+    """SSH to a PVE node and discover VLANs from network configuration.
+
+    Parses /etc/network/interfaces for VLAN subinterfaces and bridge-vids.
+    Supplements with `ip -j addr show` for live interface data.
+    Writes vlans.toml with discovered VLANs.
+    """
+    if not cfg.pve_nodes:
+        return
+
+    # Determine SSH method: bootstrap creds or freq-admin key
+    key_path = ctx.get("key_path", "") or cfg.ssh_key_path
+    svc_name = ctx.get("svc_name", cfg.ssh_service_account)
+    bootstrap_key = ctx.get("bootstrap_key", "")
+    bootstrap_pass = ctx.get("bootstrap_pass", "")
+    bootstrap_user = ctx.get("bootstrap_user", "root")
+
+    # Choose auth method
+    use_bootstrap = bool(bootstrap_key or bootstrap_pass)
+    if use_bootstrap:
+        ssh_user = bootstrap_user
+        ssh_key = bootstrap_key
+        ssh_pass = bootstrap_pass
+    elif key_path and os.path.isfile(key_path):
+        ssh_user = svc_name
+        ssh_key = key_path
+        ssh_pass = ""
+    else:
+        fmt.step_warn("No SSH credentials available — skipping VLAN discovery")
+        return
+
+    fmt.step_start("Discovering VLANs from PVE network config...")
+
+    # Try each PVE node until one responds
+    iface_text = ""
+    ip_json = ""
+    for node_ip in cfg.pve_nodes:
+        # Build SSH command
+        ssh_opts = ["-n", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=accept-new"]
+
+        if ssh_key:
+            ssh_cmd = ["ssh"] + ssh_opts + ["-o", "BatchMode=yes", "-i", ssh_key, f"{ssh_user}@{node_ip}"]
+        elif ssh_pass:
+            ssh_cmd = ["sshpass", "-p", ssh_pass, "ssh"] + ssh_opts + [f"{ssh_user}@{node_ip}"]
+        else:
+            continue
+
+        # Read network interfaces config
+        cmd_ifaces = "cat /etc/network/interfaces /etc/network/interfaces.d/* 2>/dev/null"
+        if ssh_user != "root":
+            cmd_ifaces = f"sudo {cmd_ifaces}"
+        rc, out, _ = _run(ssh_cmd + [cmd_ifaces], timeout=DEFAULT_CMD_TIMEOUT)
+        if rc == 0 and out.strip():
+            iface_text = out
+            # Also get live interface data for address info
+            cmd_ip = "ip -j addr show 2>/dev/null"
+            if ssh_user != "root":
+                cmd_ip = f"sudo {cmd_ip}"
+            rc2, out2, _ = _run(ssh_cmd + [cmd_ip], timeout=DEFAULT_CMD_TIMEOUT)
+            if rc2 == 0:
+                ip_json = out2
+            break
+
+    if not iface_text:
+        fmt.step_warn("Could not read network config from any PVE node")
+        return
+
+    # Parse interfaces file
+    parsed_vlans = _parse_network_interfaces(iface_text)
+
+    if not parsed_vlans:
+        fmt.step_warn("No VLANs found in PVE network configuration")
+        return
+
+    # Supplement with live IP data to fill in missing addresses
+    if ip_json:
+        import json as _json
+        try:
+            ip_data = _json.loads(ip_json)
+            # Build map of iface name -> first IPv4 address
+            live_addrs = {}
+            for iface in ip_data:
+                ifname = iface.get("ifname", "")
+                for ai in iface.get("addr_info", []):
+                    if ai.get("family") == "inet" and not ai.get("local", "").startswith("127."):
+                        live_addrs[ifname] = f"{ai['local']}/{ai.get('prefixlen', 24)}"
+                        break
+
+            # Fill in missing addresses from live data
+            for v in parsed_vlans:
+                if not v["address"]:
+                    # Look for matching interface name
+                    vid = v["vlan_id"]
+                    bridge = v["bridge"]
+                    candidates = [f"{bridge}.{vid}", f"vlan{vid}"]
+                    for cand in candidates:
+                        if cand in live_addrs:
+                            v["address"] = live_addrs[cand]
+                            ip_part = live_addrs[cand].split("/")[0]
+                            octets = ip_part.rsplit(".", 1)
+                            if len(octets) == 2:
+                                v["prefix"] = octets[0]
+                            break
+        except (_json.JSONDecodeError, ValueError, KeyError):
+            pass
+
+    # Write vlans.toml
+    vlans_path = os.path.join(cfg.conf_dir, "vlans.toml")
+    try:
+        lines = [
+            "# FREQ VLAN Definitions",
+            "# Auto-discovered from PVE network configuration",
+            "",
+        ]
+        for v in parsed_vlans:
+            # Generate a human-friendly name
+            vlan_key = f"vlan{v['vlan_id']}"
+            lines.append(f"[vlan.{vlan_key}]")
+            lines.append(f"id = {v['vlan_id']}")
+            lines.append(f'name = "{v["name"]}"')
+            if v["address"]:
+                # Derive subnet from address
+                ip_part, cidr = v["address"].split("/") if "/" in v["address"] else (v["address"], "24")
+                octets = ip_part.rsplit(".", 1)
+                prefix = octets[0] if len(octets) == 2 else ip_part
+                lines.append(f'subnet = "{prefix}.0/{cidr}"')
+                lines.append(f'prefix = "{prefix}"')
+            elif v["prefix"]:
+                lines.append(f'subnet = "{v["prefix"]}.0/24"')
+                lines.append(f'prefix = "{v["prefix"]}"')
+            if v["gateway"]:
+                lines.append(f'gateway = "{v["gateway"]}"')
+            lines.append("")
+
+        with open(vlans_path, "w") as f:
+            f.write("\n".join(lines))
+
+        fmt.step_ok(f"Discovered {len(parsed_vlans)} VLANs — written to vlans.toml")
+
+        # Reload VLANs into config
+        try:
+            from freq.core.config import load_vlans
+            cfg.vlans = load_vlans(vlans_path)
+        except Exception:
+            pass
+
+    except OSError as e:
+        fmt.step_warn(f"Could not write vlans.toml: {e}")
+
+
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 3: Service Account
 # ═══════════════════════════════════════════════════════════════════
@@ -1145,67 +1498,49 @@ def _phase_pve_deploy(cfg, ctx, args=None):
         fmt.line(f"    {fmt.C.CYAN}{ip}{fmt.C.RESET}")
     fmt.blank()
 
-    # Check for CLI bootstrap credentials (--bootstrap-key, --bootstrap-user, --bootstrap-password-file)
-    bootstrap_key = getattr(args, "bootstrap_key", None) if args else None
-    bootstrap_user = getattr(args, "bootstrap_user", None) if args else None
-    bootstrap_pass_file = getattr(args, "bootstrap_password_file", None) if args else None
+    # Reuse bootstrap credentials collected in Phase 2
+    auth_key = ctx.get("bootstrap_key", "")
+    auth_pass = ctx.get("bootstrap_pass", "")
+    pve_user = ctx.get("bootstrap_user", "root")
 
-    # Read bootstrap password from file if provided
-    bootstrap_pass = ""
-    if bootstrap_pass_file and os.path.isfile(bootstrap_pass_file):
-        with open(bootstrap_pass_file) as f:
-            bootstrap_pass = f.read().strip()
+    # Fallback: check CLI flags if ctx doesn't have creds
+    if not auth_key and not auth_pass:
+        bootstrap_key = getattr(args, "bootstrap_key", None) if args else None
+        bootstrap_pass_file = getattr(args, "bootstrap_password_file", None) if args else None
+        bootstrap_user = getattr(args, "bootstrap_user", None) if args else None
 
-    if bootstrap_key and os.path.isfile(bootstrap_key):
-        # Bootstrap key mode — skip interactive prompts
-        pve_user = bootstrap_user or "root"
-        auth_key = bootstrap_key
-        auth_pass = ""
-        fmt.step_ok(f"Using bootstrap key auth: {pve_user} via {auth_key}")
-    elif bootstrap_pass:
-        # Bootstrap password mode — use sshpass
-        pve_user = bootstrap_user or "root"
-        auth_key = ""
-        auth_pass = bootstrap_pass
-        rc, _, _ = _run(["which", "sshpass"])
-        if rc != 0:
-            fmt.step_fail("'sshpass' not installed — required for --bootstrap-password-file")
-            from freq.core.packages import install_hint
+        if bootstrap_key and os.path.isfile(bootstrap_key):
+            auth_key = bootstrap_key
+            pve_user = bootstrap_user or "root"
+        elif bootstrap_pass_file and os.path.isfile(bootstrap_pass_file):
+            with open(bootstrap_pass_file) as f:
+                auth_pass = f.read().strip()
+            pve_user = bootstrap_user or "root"
 
-            fmt.line(f"  {fmt.C.DIM}Install with: {install_hint('sshpass')}{fmt.C.RESET}")
-            return
-        fmt.step_ok(f"Using bootstrap password auth: {pve_user} via sshpass")
-    else:
-        # Interactive mode
+    # Last resort: interactive prompt
+    if not auth_key and not auth_pass:
         pve_user = _input("Deploy as user (root or sudo account)", "root")
-
         fmt.line(f"  {fmt.C.DIM}How to authenticate to PVE nodes as '{pve_user}'?{fmt.C.RESET}")
         fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Password")
         fmt.line(f"    {fmt.C.BOLD}B{fmt.C.RESET}) Existing SSH key")
         fmt.blank()
 
         auth_choice = _input("Choice", "A").upper()
-        auth_pass = ""
-        auth_key = ""
-
         if auth_choice == "B":
             auth_key = _input("SSH key path", os.path.expanduser("~/.ssh/id_ed25519"))
             if not os.path.isfile(auth_key):
                 fmt.step_warn(f"Key not found: {auth_key} — falling back to password")
                 auth_key = ""
-
         if not auth_key:
             rc, _, _ = _run(["which", "sshpass"])
             if rc != 0:
                 fmt.step_fail("'sshpass' not installed — required for password-based SSH")
-                from freq.core.packages import install_hint
-
-                fmt.line(f"  {fmt.C.DIM}Install with: {install_hint('sshpass')}{fmt.C.RESET}")
-                fmt.line(f"  {fmt.C.DIM}Or choose option B (SSH key) instead.{fmt.C.RESET}")
                 return
             auth_pass = getpass.getpass(
                 f"{fmt.C.PURPLE}{fmt.B_V()}{fmt.C.RESET}  Password for '{pve_user}' on PVE nodes: "
             )
+
+    fmt.step_ok(f"Bootstrap auth: {pve_user} via {'key' if auth_key else 'password'}")
 
     if pve_user != "root":
         fmt.line(f"  {fmt.C.DIM}Commands will be elevated via sudo on remote hosts.{fmt.C.RESET}")
@@ -1226,7 +1561,166 @@ def _phase_pve_deploy(cfg, ctx, args=None):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 6: Fleet Host Deployment
+# PHASE 6: PVE API Token
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _phase_pve_api_token(cfg, ctx):
+    """Create a FREQ-specific PVE API token for dashboard metrics.
+
+    Creates freq-ops@pam user with PVEAuditor+PVEVMUser roles,
+    generates an API token, saves the secret to a credential file,
+    and updates freq.toml so the dashboard can pull live PVE metrics.
+    """
+    import json as _json
+
+    pve_nodes = cfg.pve_nodes
+    if not pve_nodes:
+        fmt.step_warn("No PVE nodes configured — skipping API token creation")
+        return
+
+    key_path = ctx.get("key_path", "") or cfg.ssh_key_path
+    svc_name = ctx.get("svc_name", cfg.ssh_service_account)
+
+    if not key_path or not os.path.isfile(key_path):
+        fmt.step_warn("SSH key not available — skipping API token creation")
+        return
+
+    # Find first reachable PVE node
+    first_node = None
+    for ip in pve_nodes:
+        rc, _, _ = _run(
+            ["ssh", "-n", "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
+             "-i", key_path, f"{svc_name}@{ip}", "echo ok"],
+            timeout=QUICK_CHECK_TIMEOUT,
+        )
+        if rc == 0:
+            first_node = ip
+            break
+
+    if not first_node:
+        fmt.step_warn("No PVE nodes reachable via freq-admin — skipping API token")
+        return
+
+    ssh_base = [
+        "ssh", "-n",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "ConnectTimeout=5",
+        "-o", "BatchMode=yes",
+        "-i", key_path,
+        f"{svc_name}@{first_node}",
+    ]
+
+    # Step 1: Check if freq-ops@pam user already exists
+    fmt.step_start("Checking for existing FREQ API user...")
+    rc, out, _ = _run(ssh_base + ["sudo pveum user list --output-format json 2>/dev/null"])
+    user_exists = "freq-ops@pam" in out if rc == 0 else False
+
+    if not user_exists:
+        # Create freq-ops@pam user
+        fmt.step_start("Creating freq-ops@pam user on PVE...")
+        rc, _, err = _run(ssh_base + ["sudo pveum user add freq-ops@pam --comment 'FREQ API access'"])
+        if rc != 0:
+            fmt.step_fail(f"Failed to create freq-ops@pam: {err.strip()[:200]}")
+            return
+        fmt.step_ok("Created freq-ops@pam user")
+
+        # Grant roles
+        rc, _, err = _run(
+            ssh_base + ["sudo pveum acl modify / --roles PVEAuditor,PVEVMUser --users freq-ops@pam"]
+        )
+        if rc != 0:
+            fmt.step_warn(f"Failed to set roles: {err.strip()[:200]}")
+    else:
+        fmt.step_ok("freq-ops@pam user already exists")
+
+    # Step 2: Create API token (delete+recreate to get secret)
+    fmt.step_start("Creating API token freq-ops@pam!freq-rw...")
+    rc, out, err = _run(
+        ssh_base + [
+            "sudo pveum user token add freq-ops@pam freq-rw"
+            " --privsep 0 --output-format json 2>&1"
+        ]
+    )
+    if rc != 0 and "already exists" in (err + out):
+        # Token exists — delete and recreate to get the secret
+        _run(ssh_base + ["sudo pveum user token remove freq-ops@pam freq-rw"])
+        rc, out, err = _run(
+            ssh_base + [
+                "sudo pveum user token add freq-ops@pam freq-rw"
+                " --privsep 0 --output-format json 2>&1"
+            ]
+        )
+    if rc != 0:
+        fmt.step_fail(f"Failed to create API token: {(err + out).strip()[:200]}")
+        return
+
+    # Parse token output
+    token_id = "freq-ops@pam!freq-rw"
+    token_secret = ""
+    try:
+        token_data = _json.loads(out)
+        token_id = token_data.get("full-tokenid", token_id)
+        token_secret = token_data.get("value", "")
+    except (_json.JSONDecodeError, ValueError):
+        # Fallback: plain text parse
+        for line in out.split("\n"):
+            if "value" in line.lower() and ":" in line:
+                token_secret = line.split(":", 1)[1].strip().strip('"')
+                break
+
+    if not token_secret:
+        fmt.step_fail("Token created but no secret returned")
+        return
+
+    fmt.step_ok(f"Token created: {token_id}")
+
+    # Step 3: Save token secret to credential file
+    cred_dir = os.path.join(os.path.dirname(cfg.conf_dir), "credentials")
+    os.makedirs(cred_dir, mode=0o700, exist_ok=True)
+    cred_path = os.path.join(cred_dir, "pve-token-rw")
+    try:
+        with open(cred_path, "w") as f:
+            f.write(token_secret)
+        os.chmod(cred_path, 0o600)
+        fmt.step_ok(f"Token secret saved to {cred_path}")
+    except OSError as e:
+        fmt.step_fail(f"Failed to save token secret: {e}")
+        return
+
+    # Step 4: Update freq.toml
+    toml_path = os.path.join(cfg.conf_dir, "freq.toml")
+    try:
+        with open(toml_path) as f:
+            content = f.read()
+        content = _update_toml_value(content, "api_token_id", token_id)
+        content = _update_toml_value(content, "api_token_secret_path", cred_path)
+        with open(toml_path, "w") as f:
+            f.write(content)
+        fmt.step_ok("freq.toml updated with PVE API token")
+    except OSError as e:
+        fmt.step_warn(f"Could not update freq.toml: {e}")
+
+    # Step 5: Update cfg in-memory for subsequent phases
+    cfg.pve_api_token_id = token_id
+    cfg.pve_api_token_secret = token_secret
+
+    # Step 6: Verify token works via REST API
+    fmt.step_start("Verifying PVE API token...")
+    try:
+        from freq.modules.pve import _pve_api_call
+        result, ok = _pve_api_call(cfg, first_node, "/version")
+        if ok:
+            ver = result.get("version", "unknown") if isinstance(result, dict) else "unknown"
+            fmt.step_ok(f"PVE REST API verified (PVE {ver})")
+        else:
+            fmt.step_warn("Token saved but API test failed — will fall back to SSH")
+    except Exception as e:
+        fmt.step_warn(f"API verification error: {e} — will fall back to SSH")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Fleet Host Discovery + Deployment Helpers
 # ═══════════════════════════════════════════════════════════════════
 
 
@@ -1364,7 +1858,7 @@ def _discover_and_register(cfg, ctx):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 6: PDM Setup (detect / install / configure)
+# PHASE 10: PDM Setup (detect / install / configure)
 # ═══════════════════════════════════════════════════════════════════
 
 
@@ -1806,6 +2300,485 @@ def _phase_pdm(cfg, ctx, args=None):
         fmt.line(f"  {fmt.C.DIM}The remote may already exist. Check: https://localhost:8443{fmt.C.RESET}")
 
 
+# ═══════════════════════════════════════════════════════════════════
+# PHASE 7: Fleet Discovery
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _is_docker_bridge_ip(ip):
+    """Return True if ip looks like a Docker bridge address (172.17-31.x.x)."""
+    if not ip.startswith("172."):
+        return False
+    parts = ip.split(".")
+    if len(parts) != 4:
+        return False
+    try:
+        second = int(parts[1])
+        return 17 <= second <= 31
+    except ValueError:
+        return False
+
+
+def _classify_host_by_name(name):
+    """Auto-classify host type from VM/hostname. Returns htype string.
+
+    Order matters: more specific patterns (idrac, switch) before generic (pve).
+    """
+    name_lower = name.lower()
+    # Device types first (most specific)
+    if "idrac" in name_lower or "ilo" in name_lower or "bmc" in name_lower:
+        return "idrac"
+    if "switch" in name_lower or "cisco" in name_lower:
+        return "switch"
+    if "pfsense" in name_lower or "opnsense" in name_lower:
+        return "pfsense"
+    if "truenas" in name_lower or "freenas" in name_lower:
+        return "truenas"
+    # Docker before PVE (a "pve-docker" host is a docker host)
+    if any(k in name_lower for k in ("docker", "plex", "arr", "qbit", "tdarr", "sabnzbd", "portainer")):
+        return "docker"
+    if "pve" in name_lower or "proxmox" in name_lower:
+        return "pve"
+    return "linux"
+
+
+def _phase_fleet_discover(cfg, ctx, args=None):
+    """Discover all fleet hosts via PVE API + multi-VLAN sweep.
+
+    Step 1: Query PVE API for all VMs/CTs, get IPs via guest agent.
+    Step 2: Scan all VLANs for additional hosts (physical devices, bare-metal).
+    Step 3: Auto-detect infrastructure devices (firewall, NAS, switch).
+    Step 4: Write hosts.toml with discovered fleet.
+    Step 5: Write fleet-boundaries.toml with physical devices + PVE nodes.
+    Step 6: Update freq.toml [infrastructure] with detected IPs.
+    """
+    import json as _json
+
+    from freq.core.config import Host, append_host_toml
+
+    key_path = ctx.get("key_path", "") or cfg.ssh_key_path
+    svc_name = ctx.get("svc_name", cfg.ssh_service_account)
+
+    # Track all discovered hosts: ip -> {label, htype, groups, vmid, source, all_ips}
+    discovered = {}
+    existing_ips = {h.ip for h in cfg.hosts}
+
+    # ── Step 1: PVE API Discovery (primary mechanism) ──────────────
+    fmt.line(f"  {fmt.C.BOLD}Step 1: PVE Cluster Discovery{fmt.C.RESET}")
+    fmt.blank()
+
+    pve_vms = []
+    if cfg.pve_nodes:
+        # Try API first (if token was created in Phase 6), fall back to SSH
+        api_ok = False
+        if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+            try:
+                from freq.modules.pve import _pve_api_call
+                result, ok = _pve_api_call(cfg, cfg.pve_nodes[0], "/cluster/resources?type=vm")
+                if ok and isinstance(result, list):
+                    pve_vms = result
+                    api_ok = True
+                    fmt.step_ok(f"PVE API: {len(pve_vms)} VMs/CTs found")
+            except Exception:
+                pass
+
+        if not api_ok:
+            # SSH fallback
+            fmt.step_start("Querying PVE cluster via SSH...")
+            for node_ip in cfg.pve_nodes:
+                rc, out, _ = _run(
+                    ["ssh", "-n", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
+                     "-i", key_path, f"{svc_name}@{node_ip}",
+                     "sudo pvesh get /cluster/resources --type vm --output-format json 2>/dev/null"],
+                    timeout=DEFAULT_CMD_TIMEOUT,
+                )
+                if rc == 0 and out.strip():
+                    try:
+                        pve_vms = _json.loads(out)
+                        fmt.step_ok(f"PVE SSH: {len(pve_vms)} VMs/CTs found")
+                    except _json.JSONDecodeError:
+                        pass
+                break  # Cluster API returns all VMs from any node
+
+    if not pve_vms:
+        fmt.step_warn("No VMs returned from PVE — skipping PVE-based discovery")
+    else:
+        # Get IPs for running VMs via QEMU guest agent
+        running_vms = [v for v in pve_vms if v.get("status") == "running" and v.get("type") == "qemu"]
+        fmt.step_start(f"Resolving IPs for {len(running_vms)} running VMs via guest agent...")
+
+        # Derive management VLAN prefix from PVE node IPs
+        mgmt_prefixes = set()
+        for nip in cfg.pve_nodes:
+            parts = nip.rsplit(".", 1)
+            if len(parts) == 2:
+                mgmt_prefixes.add(parts[0] + ".")
+
+        resolved = 0
+        unresolved = 0
+        for v in running_vms:
+            vmid = v.get("vmid", 0)
+            name = v.get("name", "")
+            node = v.get("node", "")
+
+            if not name or vmid < 100:
+                continue
+
+            # Find PVE node IP for this VM
+            node_ip = None
+            for i, pn in enumerate(getattr(cfg, "pve_node_names", []) or []):
+                if pn == node and i < len(cfg.pve_nodes):
+                    node_ip = cfg.pve_nodes[i]
+                    break
+            if not node_ip:
+                node_ip = cfg.pve_nodes[0] if cfg.pve_nodes else None
+            if not node_ip:
+                continue
+
+            # Get IPs via guest agent — try API first, then SSH
+            all_ips = []
+            agent_data = None
+
+            if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+                try:
+                    from freq.modules.pve import _pve_api_call
+                    result, ok = _pve_api_call(
+                        cfg, node_ip,
+                        f"/nodes/{node}/qemu/{vmid}/agent/network-get-interfaces",
+                    )
+                    if ok:
+                        agent_data = result
+                except Exception:
+                    pass
+
+            if agent_data is None:
+                # SSH fallback
+                rc, out, _ = _run(
+                    ["ssh", "-n", "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
+                     "-i", key_path, f"{svc_name}@{node_ip}",
+                     f"sudo qm agent {vmid} network-get-interfaces 2>/dev/null"],
+                    timeout=10,
+                )
+                if rc == 0 and out.strip():
+                    try:
+                        data = _json.loads(out)
+                        agent_data = data.get("result", data) if isinstance(data, dict) else data
+                    except (_json.JSONDecodeError, ValueError):
+                        pass
+
+            if agent_data is None:
+                unresolved += 1
+                continue
+
+            # Handle both list and dict formats from guest agent
+            ifaces = agent_data if isinstance(agent_data, list) else agent_data.get("result", agent_data) if isinstance(agent_data, dict) else []
+            if isinstance(ifaces, dict):
+                ifaces = ifaces.get("result", []) if "result" in ifaces else []
+
+            for iface in ifaces if isinstance(ifaces, list) else []:
+                for addr in iface.get("ip-addresses", []):
+                    if addr.get("ip-address-type") == "ipv4":
+                        ip = addr.get("ip-address", "")
+                        if ip and not ip.startswith("127.") and not _is_docker_bridge_ip(ip):
+                            all_ips.append(ip)
+
+            if not all_ips:
+                unresolved += 1
+                continue
+
+            # Smart IP selection: prefer management VLAN
+            chosen_ip = None
+            for ip in all_ips:
+                if ip in existing_ips or ip in discovered:
+                    chosen_ip = ip
+                    break
+            if not chosen_ip:
+                mgmt_ips = [ip for ip in all_ips if any(ip.startswith(p) for p in mgmt_prefixes)]
+                chosen_ip = mgmt_ips[0] if mgmt_ips else all_ips[0]
+
+            # Auto-classify type
+            htype = _classify_host_by_name(name)
+
+            if chosen_ip not in existing_ips and chosen_ip not in discovered:
+                from freq.core.config import validate
+                try:
+                    from freq.core.validate import sanitize_label
+                    safe_label = sanitize_label(name)
+                except ImportError:
+                    safe_label = name.lower().replace(" ", "-")
+                discovered[chosen_ip] = {
+                    "label": safe_label,
+                    "htype": htype,
+                    "groups": "",
+                    "vmid": vmid,
+                    "source": "pve-api",
+                    "all_ips": all_ips,
+                }
+                resolved += 1
+
+        # Also add PVE nodes themselves to discovered for fleet-boundaries
+        for i, nip in enumerate(cfg.pve_nodes):
+            pn = cfg.pve_node_names[i] if i < len(getattr(cfg, "pve_node_names", []) or []) else f"pve{i+1}"
+            if nip not in existing_ips and nip not in discovered:
+                discovered[nip] = {
+                    "label": pn,
+                    "htype": "pve",
+                    "groups": "cluster",
+                    "vmid": 0,
+                    "source": "pve-node",
+                    "all_ips": [nip],
+                }
+
+        if resolved or unresolved:
+            fmt.step_ok(f"Guest agent: {resolved} VMs resolved, {unresolved} unresolved")
+
+    # ── Step 2: Multi-VLAN Ping Sweep (supplement) ─────────────────
+    vlans = getattr(cfg, "vlans", []) or []
+    if vlans:
+        fmt.blank()
+        fmt.line(f"  {fmt.C.BOLD}Step 2: Multi-VLAN Discovery{fmt.C.RESET}")
+        fmt.blank()
+
+        already_known = existing_ips | set(discovered.keys())
+
+        for vlan in vlans:
+            prefix = getattr(vlan, "prefix", "") or ""
+            vlan_name = getattr(vlan, "name", "") or f"VLAN{getattr(vlan, 'id', '?')}"
+            if not prefix:
+                continue
+
+            fmt.step_start(f"Scanning {vlan_name} ({prefix}.0/24)...")
+            try:
+                from freq.modules.discover import scan_and_identify
+                alive, hosts_info = scan_and_identify(prefix, key_path, cfg=cfg)
+
+                new_on_vlan = 0
+                for h in hosts_info:
+                    if h.get("reachable") and h["ip"] not in already_known:
+                        discovered[h["ip"]] = {
+                            "label": h.get("hostname", "") or f"host-{h['ip'].split('.')[-1]}",
+                            "htype": h.get("type", "linux"),
+                            "groups": vlan_name.lower().replace("/", "-"),
+                            "vmid": 0,
+                            "source": f"vlan-scan",
+                            "all_ips": [h["ip"]],
+                        }
+                        already_known.add(h["ip"])
+                        new_on_vlan += 1
+
+                if new_on_vlan:
+                    fmt.step_ok(f"{vlan_name}: {new_on_vlan} new host(s)")
+                else:
+                    fmt.step_ok(f"{vlan_name}: {len(alive)} alive, 0 new")
+            except Exception as e:
+                fmt.step_warn(f"{vlan_name} scan failed: {e}")
+    else:
+        fmt.blank()
+        fmt.line(f"  {fmt.C.DIM}No VLANs configured — skipping multi-VLAN scan.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Run 'freq discover' later to scan subnets manually.{fmt.C.RESET}")
+
+    # ── Step 3: Infrastructure Auto-Detection ──────────────────────
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Step 3: Infrastructure Detection{fmt.C.RESET}")
+    fmt.blank()
+
+    infra_pfsense = ""
+    infra_truenas = ""
+    infra_switch = ""
+
+    # Gateway = firewall
+    gw = getattr(cfg, "vm_gateway", "") or ""
+    if gw and gw not in existing_ips:
+        if gw in discovered:
+            # Already discovered — check/update type
+            if discovered[gw]["htype"] == "linux":
+                discovered[gw]["htype"] = "pfsense"
+                discovered[gw]["label"] = "firewall"
+            infra_pfsense = gw
+            fmt.step_ok(f"Gateway {gw} → firewall ({discovered[gw]['htype']})")
+        else:
+            # Probe gateway
+            rc, _, _ = _run(["ping", "-c", "1", "-W", "1", gw], timeout=PING_TIMEOUT)
+            if rc == 0:
+                # Try SSH fingerprint
+                gw_type = "pfsense"
+                try:
+                    rc2, out2, _ = _run(
+                        ["ssh", "-n", "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
+                         "-o", "StrictHostKeyChecking=accept-new",
+                         "-i", key_path, f"{svc_name}@{gw}", "uname -s"],
+                        timeout=QUICK_CHECK_TIMEOUT,
+                    )
+                    if rc2 == 0:
+                        if "Linux" in out2:
+                            gw_type = "opnsense"
+                except Exception:
+                    pass
+
+                discovered[gw] = {
+                    "label": "firewall",
+                    "htype": gw_type,
+                    "groups": "infrastructure",
+                    "vmid": 0,
+                    "source": "gateway-probe",
+                    "all_ips": [gw],
+                }
+                infra_pfsense = gw
+                fmt.step_ok(f"Gateway {gw} → {gw_type}")
+            else:
+                fmt.step_warn(f"Gateway {gw} not responding to ping")
+    elif gw and gw in existing_ips:
+        infra_pfsense = gw
+        fmt.step_ok(f"Gateway {gw} already registered")
+
+    # Detect TrueNAS, switch, iDRAC from discovered hosts
+    for ip, d in discovered.items():
+        if d["htype"] == "truenas" and not infra_truenas:
+            infra_truenas = ip
+            fmt.step_ok(f"TrueNAS detected: {d['label']} ({ip})")
+        elif d["htype"] == "switch" and not infra_switch:
+            infra_switch = ip
+            fmt.step_ok(f"Switch detected: {d['label']} ({ip})")
+
+    # Also check existing hosts for infrastructure
+    for h in cfg.hosts:
+        if h.htype == "truenas" and not infra_truenas:
+            infra_truenas = h.ip
+        elif h.htype == "switch" and not infra_switch:
+            infra_switch = h.ip
+        elif h.htype == "pfsense" and not infra_pfsense:
+            infra_pfsense = h.ip
+
+    if not infra_truenas and not infra_switch:
+        fmt.line(f"  {fmt.C.DIM}No additional infrastructure devices auto-detected.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Add manually later with 'freq hosts add'.{fmt.C.RESET}")
+
+    # ── Step 4: Register discovered hosts ──────────────────────────
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Step 4: Fleet Registration{fmt.C.RESET}")
+    fmt.blank()
+
+    if not discovered:
+        fmt.line(f"  {fmt.C.DIM}No new hosts discovered.{fmt.C.RESET}")
+        if not cfg.hosts:
+            fmt.line(f"  {fmt.C.DIM}Add hosts manually with 'freq hosts add' or 'freq discover'.{fmt.C.RESET}")
+    else:
+        headless = getattr(args, "headless", False) if args else False
+
+        # Display discovery table
+        fmt.table_header(
+            ("IP", 17), ("LABEL", 20), ("TYPE", 10), ("SOURCE", 12),
+        )
+        for ip, d in sorted(discovered.items(), key=lambda x: x[0]):
+            type_color = {
+                "pve": fmt.C.PURPLE, "linux": fmt.C.GREEN, "docker": fmt.C.CYAN,
+                "truenas": fmt.C.BLUE, "pfsense": fmt.C.YELLOW, "idrac": fmt.C.RED,
+                "switch": fmt.C.RED, "opnsense": fmt.C.YELLOW,
+            }.get(d["htype"], fmt.C.GRAY)
+            fmt.table_row(
+                (ip, 17), (d["label"][:20], 20),
+                (f"{type_color}{d['htype']}{fmt.C.RESET}", 10),
+                (d["source"][:12], 12),
+            )
+
+        fmt.blank()
+        fmt.line(f"  {fmt.C.BOLD}{len(discovered)} new host(s) discovered.{fmt.C.RESET}")
+        fmt.blank()
+
+        if headless:
+            # Auto-register all in headless mode
+            for ip, d in discovered.items():
+                host = Host(ip=ip, label=d["label"], htype=d["htype"], groups=d.get("groups", ""))
+                append_host_toml(cfg.hosts_file, host)
+                cfg.hosts.append(host)
+            fmt.step_ok(f"Auto-registered {len(discovered)} host(s)")
+        else:
+            # Interactive: confirm registration
+            if _confirm(f"Register all {len(discovered)} discovered hosts?", default=True):
+                for ip, d in discovered.items():
+                    host = Host(ip=ip, label=d["label"], htype=d["htype"], groups=d.get("groups", ""))
+                    append_host_toml(cfg.hosts_file, host)
+                    cfg.hosts.append(host)
+                fmt.step_ok(f"Registered {len(discovered)} host(s)")
+            else:
+                # One-by-one confirmation
+                registered = 0
+                for ip, d in discovered.items():
+                    if _confirm(f"  Register {d['label']} ({ip}) [{d['htype']}]?", default=True):
+                        label = _input(f"    Label", d["label"])
+                        htype = _input(f"    Type", d["htype"])
+                        host = Host(ip=ip, label=label, htype=htype, groups=d.get("groups", ""))
+                        append_host_toml(cfg.hosts_file, host)
+                        cfg.hosts.append(host)
+                        registered += 1
+                fmt.step_ok(f"Registered {registered}/{len(discovered)} host(s)")
+
+        # Offer to add non-discoverable devices manually
+        if not headless:
+            fmt.blank()
+            fmt.line(
+                f"  {fmt.C.DIM}Network scan can't find all devices (iDRAC, managed switches).{fmt.C.RESET}"
+            )
+            if _confirm("Add additional devices manually?"):
+                fmt.blank()
+                fmt.line(f"  {fmt.C.DIM}Enter hosts one at a time. Press Enter with empty IP to stop.{fmt.C.RESET}")
+                fmt.blank()
+                while True:
+                    if not _register_host_interactive(cfg):
+                        break
+                    fmt.blank()
+
+    # ── Step 5: Write fleet-boundaries.toml ───��────────────────────
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Step 5: Fleet Boundaries{fmt.C.RESET}")
+    fmt.blank()
+
+    try:
+        from freq.modules.hosts import _auto_populate_fleet_boundaries
+        _auto_populate_fleet_boundaries(cfg, discovered)
+        fmt.step_ok("fleet-boundaries.toml updated with discovered devices")
+    except Exception as e:
+        fmt.step_warn(f"Could not update fleet-boundaries: {e}")
+
+    # ── Step 6: Update freq.toml [infrastructure] ──────────────────
+    toml_path = os.path.join(cfg.conf_dir, "freq.toml")
+    infra_updated = False
+    try:
+        with open(toml_path) as f:
+            content = f.read()
+
+        if infra_pfsense:
+            content = _update_toml_value(content, "pfsense_ip", infra_pfsense)
+            cfg.pfsense_ip = infra_pfsense
+            infra_updated = True
+        if infra_truenas:
+            content = _update_toml_value(content, "truenas_ip", infra_truenas)
+            cfg.truenas_ip = infra_truenas
+            infra_updated = True
+        if infra_switch:
+            content = _update_toml_value(content, "switch_ip", infra_switch)
+            cfg.switch_ip = infra_switch
+            infra_updated = True
+
+        if infra_updated:
+            with open(toml_path, "w") as f:
+                f.write(content)
+            fmt.step_ok("freq.toml [infrastructure] updated")
+        else:
+            fmt.line(f"  {fmt.C.DIM}No infrastructure IPs to update in freq.toml.{fmt.C.RESET}")
+    except OSError as e:
+        fmt.step_warn(f"Could not update freq.toml infrastructure: {e}")
+
+    fmt.blank()
+    total_fleet = len(cfg.hosts)
+    fmt.line(f"  {fmt.C.GREEN}Fleet: {total_fleet} host(s) registered.{fmt.C.RESET}")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# PHASE 8: Fleet Deployment
+# ════════════════════════════════════════════════════════════��══════
+
+
 def _phase_fleet_deploy(cfg, ctx, args=None):
     """Deploy service account + key to fleet hosts (all platform types)."""
     # Load per-device credentials (--device-credentials TOML)
@@ -1814,12 +2787,11 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
     if device_creds:
         fmt.step_ok(f"Device credentials loaded: {', '.join(sorted(device_creds.keys()))}")
 
-    # Import hosts from file if --hosts-file provided
+    # Import hosts from file if --hosts-file provided (headless/automation)
     hosts_file_arg = getattr(args, "hosts_file", None) if args else None
     if hosts_file_arg and os.path.isfile(hosts_file_arg) and not cfg.hosts:
         fmt.step_start(f"Importing fleet hosts from {hosts_file_arg}")
         shutil.copy2(hosts_file_arg, cfg.hosts_file)
-        # Reload hosts
         from freq.core.config import load_hosts
 
         try:
@@ -1829,54 +2801,9 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
             fmt.step_fail(f"Failed to reload hosts: {e}")
 
     if not cfg.hosts:
-        fmt.line(f"  {fmt.C.DIM}No hosts registered yet.{fmt.C.RESET}")
-        fmt.blank()
-        fmt.line(f"  {fmt.C.BOLD}How would you like to add fleet hosts?{fmt.C.RESET}")
-        fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Auto-discover — scan your network for SSH-reachable hosts")
-        fmt.line(f"    {fmt.C.BOLD}M{fmt.C.RESET}) Manual entry — add hosts one at a time")
-        fmt.line(f"    {fmt.C.BOLD}S{fmt.C.RESET}) Skip — add hosts later with 'freq hosts add' or 'freq discover'")
-        fmt.blank()
-
-        choice = _input("Choice", "A").upper()
-
-        if choice == "A":
-            _discover_and_register(cfg, ctx)
-            # After discovery, offer to add non-discoverable devices
-            fmt.blank()
-            fmt.line(
-                f"  {fmt.C.DIM}Network scan can't find devices like pfSense, iDRAC, or managed switches.{fmt.C.RESET}"
-            )
-            fmt.line(f"  {fmt.C.DIM}These need to be added manually.{fmt.C.RESET}")
-            fmt.blank()
-            if _confirm("Add non-discoverable devices (pfSense, iDRAC, switches)?"):
-                fmt.blank()
-                fmt.line(f"  {fmt.C.DIM}Enter hosts one at a time. Press Enter with empty IP to stop.{fmt.C.RESET}")
-                fmt.blank()
-                while True:
-                    if not _register_host_interactive(cfg):
-                        break
-                    fmt.blank()
-        elif choice == "M":
-            fmt.blank()
-            fmt.line(f"  {fmt.C.DIM}Enter hosts one at a time. Press Enter with empty IP to stop.{fmt.C.RESET}")
-            fmt.blank()
-            while True:
-                if not _register_host_interactive(cfg):
-                    break
-                fmt.blank()
-        else:
-            fmt.step_warn("Skipping fleet registration — add hosts later with 'freq hosts add'")
-            return
-
-        if not cfg.hosts:
-            fmt.blank()
-            fmt.line(f"  {fmt.C.DIM}No hosts registered. Skipping fleet deployment.{fmt.C.RESET}")
-            fmt.line(f"  {fmt.C.DIM}Add hosts later with 'freq hosts add', then re-run init.{fmt.C.RESET}")
-            return
-
-        fmt.blank()
-        fmt.line(f"  {fmt.C.GREEN}{len(cfg.hosts)} host(s) registered.{fmt.C.RESET} Proceeding to deployment...")
-        fmt.blank()
+        fmt.line(f"  {fmt.C.DIM}No hosts registered — nothing to deploy.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Add hosts with 'freq hosts add' or re-run 'freq init'.{fmt.C.RESET}")
+        return
 
     # Group hosts by auth category (using deployer registry)
     linux_hosts = [h for h in cfg.hosts if h.category == "server"]
@@ -2092,6 +3019,288 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
 
     fmt.blank()
     fmt.line(f"  Fleet deployment: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, {fmt.C.RED}{fail} failed{fmt.C.RESET}")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# PHASE 9: Fleet Configuration
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _phase_fleet_configure(cfg, ctx):
+    """Post-deployment fleet configuration.
+
+    9a: Verify and tag Docker hosts (add freq-admin to docker group).
+    9b: Deploy metrics agent to all Linux-family hosts.
+    9c: Auto-categorize VMs into fleet-boundary tiers.
+    """
+    import json as _json
+
+    key_path = ctx.get("key_path", "") or cfg.ssh_key_path
+    svc_name = ctx.get("svc_name", cfg.ssh_service_account)
+
+    if not cfg.hosts or not key_path or not os.path.isfile(key_path):
+        fmt.line(f"  {fmt.C.DIM}No hosts or keys available — skipping fleet configuration.{fmt.C.RESET}")
+        return
+
+    ssh_base_opts = [
+        "-o", "ConnectTimeout=5",
+        "-o", "BatchMode=yes",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-i", key_path,
+    ]
+
+    # ── 9a: Docker Host Verification + Tagging ────────────────────
+    docker_hosts = [h for h in cfg.hosts if h.htype == "docker"]
+    if docker_hosts:
+        fmt.line(f"  {fmt.C.BOLD}Docker Host Verification ({len(docker_hosts)} hosts){fmt.C.RESET}")
+        fmt.blank()
+        for h in docker_hosts:
+            ssh_cmd = ["ssh", "-n"] + ssh_base_opts + [f"{svc_name}@{h.ip}"]
+            # Check docker is installed
+            rc, out, _ = _run(ssh_cmd + ["docker --version 2>/dev/null"], timeout=QUICK_CHECK_TIMEOUT)
+            if rc == 0 and "Docker" in out:
+                # Add freq-admin to docker group
+                rc2, _, _ = _run(
+                    ssh_cmd + [f"sudo usermod -aG docker {svc_name} 2>/dev/null"],
+                    timeout=QUICK_CHECK_TIMEOUT,
+                )
+                if rc2 == 0:
+                    fmt.step_ok(f"{h.label}: Docker verified, {svc_name} added to docker group")
+                else:
+                    fmt.step_warn(f"{h.label}: Docker found but could not add to docker group")
+            else:
+                fmt.step_warn(f"{h.label}: tagged as docker but docker not installed")
+    else:
+        fmt.line(f"  {fmt.C.DIM}No Docker hosts to configure.{fmt.C.RESET}")
+
+    # ── 9b: Metrics Agent Deployment ──────────────────────────────
+    fmt.blank()
+    agent_hosts = [h for h in cfg.hosts if h.htype in ("linux", "pve", "docker", "truenas")]
+    if agent_hosts:
+        fmt.line(f"  {fmt.C.BOLD}Metrics Agent Deployment ({len(agent_hosts)} hosts){fmt.C.RESET}")
+        fmt.blank()
+
+        # Find the agent_collector.py source file
+        agent_src = None
+        for candidate in [
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent_collector.py"),
+            "/opt/pve-freq/freq/agent_collector.py",
+        ]:
+            if os.path.isfile(candidate):
+                agent_src = candidate
+                break
+
+        if not agent_src:
+            fmt.step_warn("agent_collector.py not found — skipping agent deployment")
+        else:
+            agent_port = getattr(cfg, "agent_port", 9990) or 9990
+            agent_ok = agent_fail = 0
+
+            for h in agent_hosts:
+                ssh_target = f"{svc_name}@{h.ip}"
+                ssh_cmd = ["ssh", "-n"] + ssh_base_opts + [ssh_target]
+
+                # Test connectivity first
+                rc, _, _ = _run(ssh_cmd + ["echo ok"], timeout=QUICK_CHECK_TIMEOUT)
+                if rc != 0:
+                    agent_fail += 1
+                    continue
+
+                # Upload agent via SSH + cat
+                try:
+                    with open(agent_src) as f:
+                        agent_code = f.read()
+                except OSError:
+                    fmt.step_warn(f"Cannot read {agent_src}")
+                    break
+
+                # Create dir + upload
+                setup_script = (
+                    f"sudo mkdir -p /opt/freq-agent && "
+                    f"sudo tee /opt/freq-agent/agent_collector.py > /dev/null && "
+                    f"sudo chmod +x /opt/freq-agent/agent_collector.py"
+                )
+                try:
+                    r = subprocess.run(
+                        ["ssh", "-n"] + ssh_base_opts + [ssh_target, setup_script],
+                        input=agent_code, capture_output=True, text=True, timeout=DEFAULT_CMD_TIMEOUT,
+                    )
+                    if r.returncode != 0:
+                        agent_fail += 1
+                        continue
+                except Exception:
+                    agent_fail += 1
+                    continue
+
+                # Create systemd service
+                unit = (
+                    "[Unit]\n"
+                    "Description=FREQ Metrics Agent\n"
+                    "After=network.target\n"
+                    "\n"
+                    "[Service]\n"
+                    f"Environment=FREQ_AGENT_PORT={agent_port}\n"
+                    "ExecStart=/usr/bin/python3 /opt/freq-agent/agent_collector.py\n"
+                    "Restart=always\n"
+                    "RestartSec=5\n"
+                    "\n"
+                    "[Install]\n"
+                    "WantedBy=multi-user.target\n"
+                )
+                unit_cmd = (
+                    f"echo '{unit}' | sudo tee /etc/systemd/system/freq-agent.service > /dev/null && "
+                    "sudo systemctl daemon-reload && "
+                    "sudo systemctl enable freq-agent --now 2>/dev/null"
+                )
+                rc, _, _ = _run(ssh_cmd + [unit_cmd], timeout=DEFAULT_CMD_TIMEOUT)
+                if rc == 0:
+                    agent_ok += 1
+                else:
+                    agent_fail += 1
+
+            fmt.step_ok(f"Agent deployed: {agent_ok} OK, {agent_fail} failed")
+    else:
+        fmt.line(f"  {fmt.C.DIM}No agent-capable hosts found.{fmt.C.RESET}")
+
+    # ── 9c: VM Categorization ─────────────────────────────────────
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}VM Categorization{fmt.C.RESET}")
+    fmt.blank()
+
+    categories = _categorize_vms(cfg)
+    if categories:
+        fb_path = os.path.join(cfg.conf_dir, "fleet-boundaries.toml")
+        try:
+            with open(fb_path, "a") as f:
+                f.write("\n# Auto-categorized VM groups\n")
+                for cat_name, cat_data in sorted(categories.items()):
+                    vmids = cat_data["vmids"]
+                    if not vmids:
+                        continue
+                    f.write(f"\n[categories.{cat_name}]\n")
+                    f.write(f'description = "{cat_data["description"]}"\n')
+                    f.write(f'tier = "{cat_data["tier"]}"\n')
+                    if cat_data.get("range_start") is not None:
+                        f.write(f"range_start = {cat_data['range_start']}\n")
+                        f.write(f"range_end = {cat_data['range_end']}\n")
+                    else:
+                        f.write(f"vmids = {vmids}\n")
+            fmt.step_ok(f"VM categories written: {', '.join(categories.keys())}")
+        except OSError as e:
+            fmt.step_warn(f"Could not update fleet-boundaries: {e}")
+    else:
+        fmt.line(f"  {fmt.C.DIM}No VMs to categorize (PVE API unavailable or no VMs found).{fmt.C.RESET}")
+
+
+def _categorize_vms(cfg):
+    """Auto-categorize VMs into fleet-boundary tiers.
+
+    Uses VMID ranges, name patterns, and PVE tags.
+    Returns dict of {category_name: {description, tier, vmids, range_start?, range_end?}}.
+    """
+    import json as _json
+
+    if not cfg.pve_nodes:
+        return {}
+
+    # Query PVE for VM list
+    pve_vms = []
+    key_path = cfg.ssh_key_path
+    svc_name = cfg.ssh_service_account
+
+    if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+        try:
+            from freq.modules.pve import _pve_api_call
+            result, ok = _pve_api_call(cfg, cfg.pve_nodes[0], "/cluster/resources?type=vm")
+            if ok and isinstance(result, list):
+                pve_vms = result
+        except Exception:
+            pass
+
+    if not pve_vms and key_path and os.path.isfile(key_path):
+        # SSH fallback
+        rc, out, _ = _run(
+            ["ssh", "-n", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
+             "-i", key_path, f"{svc_name}@{cfg.pve_nodes[0]}",
+             "sudo pvesh get /cluster/resources --type vm --output-format json 2>/dev/null"],
+            timeout=DEFAULT_CMD_TIMEOUT,
+        )
+        if rc == 0 and out.strip():
+            try:
+                pve_vms = _json.loads(out)
+            except _json.JSONDecodeError:
+                pass
+
+    if not pve_vms:
+        return {}
+
+    # Categorize VMs
+    lab_vmids = []
+    prod_vmids = []
+    template_vmids = []
+    infra_vmids = []
+
+    for vm in pve_vms:
+        vmid = vm.get("vmid", 0)
+        name = (vm.get("name", "") or "").lower()
+        tags = vm.get("tags", "") or ""
+        template_flag = vm.get("template", 0)
+
+        # Templates (PVE template flag or naming convention)
+        if template_flag or "template" in name or name.startswith("tmpl-") or 9000 <= vmid < 9100:
+            template_vmids.append(vmid)
+            continue
+
+        # Check tags first
+        if "prod" in tags or "production" in tags:
+            prod_vmids.append(vmid)
+        elif "lab" in tags or "dev" in tags or "test" in tags:
+            lab_vmids.append(vmid)
+        # VMID range heuristics
+        elif 5000 <= vmid < 5100:
+            lab_vmids.append(vmid)
+        elif 100 <= vmid < 200:
+            infra_vmids.append(vmid)
+        elif 200 <= vmid < 1000:
+            prod_vmids.append(vmid)
+        else:
+            prod_vmids.append(vmid)
+
+    categories = {}
+    if prod_vmids:
+        categories["production"] = {
+            "description": "Production workloads",
+            "tier": "operator",
+            "vmids": sorted(prod_vmids),
+            "range_start": None,
+            "range_end": None,
+        }
+    if lab_vmids:
+        categories["lab"] = {
+            "description": "Lab and development VMs",
+            "tier": "admin",
+            "vmids": sorted(lab_vmids),
+            "range_start": None,
+            "range_end": None,
+        }
+    if template_vmids:
+        categories["templates"] = {
+            "description": "Clone sources — never start directly",
+            "tier": "probe",
+            "vmids": sorted(template_vmids),
+            "range_start": None,
+            "range_end": None,
+        }
+    if infra_vmids:
+        categories["infrastructure"] = {
+            "description": "Core infrastructure VMs",
+            "tier": "probe",
+            "vmids": sorted(infra_vmids),
+            "range_start": None,
+            "range_end": None,
+        }
+
+    return categories
 
 
 def _get_auth_creds(choice, label):
@@ -2794,7 +4003,7 @@ def _remove_from_host_dispatch(ip, htype, svc_name, key_path, rsa_key_path):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 7: Admin Account Setup
+# PHASE 11: Admin Account Setup
 # ═══════════════════════════════════════════════════════════════════
 
 
@@ -2858,7 +4067,7 @@ def _phase_admin_setup(cfg, ctx):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 8: Verification
+# PHASE 12: Verification
 # ═══════════════════════════════════════════════════════════════════
 
 
@@ -3036,6 +4245,77 @@ def _phase_verify(cfg, ctx):
             else:
                 _check(check_label, False)
 
+    # ── Enhanced checks (new phases) ──
+
+    # PVE API Token
+    if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+        try:
+            from freq.modules.pve import _pve_api_call
+            _, api_ok = _pve_api_call(cfg, cfg.pve_nodes[0], "/version")
+            _check("PVE API token: REST API reachable", api_ok)
+        except Exception:
+            _check("PVE API token: REST API reachable", False)
+    else:
+        fmt.step_warn("PVE API token not configured — dashboard metrics will use SSH fallback")
+
+    # vlans.toml populated
+    vlans = getattr(cfg, "vlans", []) or []
+    if vlans:
+        _check(f"vlans.toml: {len(vlans)} VLANs discovered", True)
+    else:
+        fmt.step_warn("vlans.toml is empty — run 'freq discover' to scan VLANs")
+
+    # fleet-boundaries.toml populated
+    fb_path = os.path.join(cfg.conf_dir, "fleet-boundaries.toml")
+    fb_populated = False
+    if os.path.isfile(fb_path):
+        try:
+            with open(fb_path) as f:
+                fb_content = f.read()
+            fb_populated = "[physical]" in fb_content or "[categories." in fb_content or "[pve_nodes]" in fb_content
+        except OSError:
+            pass
+    if fb_populated:
+        _check("fleet-boundaries.toml: populated", True)
+    else:
+        fmt.step_warn("fleet-boundaries.toml is empty — no device categories configured")
+
+    # freq.toml [infrastructure]
+    infra_configured = any([
+        getattr(cfg, "pfsense_ip", ""),
+        getattr(cfg, "truenas_ip", ""),
+        getattr(cfg, "switch_ip", ""),
+    ])
+    if infra_configured:
+        _check("freq.toml [infrastructure]: devices configured", True)
+    else:
+        fmt.step_warn("freq.toml [infrastructure] is empty — no infrastructure IPs detected")
+
+    # Metrics agent spot-check (first linux host)
+    linux_hosts = [h for h in cfg.hosts if h.htype in ("linux", "docker")]
+    if linux_hosts and key_file and os.path.isfile(key_file):
+        test_host = linux_hosts[0]
+        agent_port = getattr(cfg, "agent_port", 9990) or 9990
+        rc_agent, out_agent, _ = _run(
+            ["ssh", "-n", "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
+             "-i", key_file, f"{svc_name}@{test_host.ip}",
+             f"curl -s http://localhost:{agent_port}/health 2>/dev/null"],
+            timeout=QUICK_CHECK_TIMEOUT,
+        )
+        agent_ok = rc_agent == 0 and "ok" in out_agent.lower()
+        if agent_ok:
+            _check(f"Metrics agent responding on {test_host.label}", True)
+        else:
+            fmt.step_warn(f"Metrics agent not responding on {test_host.label} — may need manual start")
+
+    # Dashboard readiness
+    dashboard_ready = bool(
+        getattr(cfg, "pve_api_token_id", "")
+        and cfg.hosts
+        and cfg.pve_nodes
+    )
+    _check("Dashboard readiness: token + hosts + nodes", dashboard_ready)
+
     fmt.blank()
     summary = f"  Verification: {fmt.C.GREEN}{passes} pass{fmt.C.RESET}, {fmt.C.RED}{fails} fail{fmt.C.RESET}"
     if warns:
@@ -3057,12 +4337,12 @@ def _phase_verify(cfg, ctx):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PHASE 9: Summary
+# PHASE 13: Summary
 # ═══════════════════════════════════════════════════════════════════
 
 
 def _phase_summary(cfg, ctx, verified, pack=None):
-    """Print summary and next steps."""
+    """Print summary and next steps — enhanced with fleet topology."""
     svc_name = ctx["svc_name"]
     ed_key = os.path.join(cfg.key_dir, "freq_id_ed25519")
     rsa_key = os.path.join(cfg.key_dir, "freq_id_rsa")
@@ -3080,11 +4360,58 @@ def _phase_summary(cfg, ctx, verified, pack=None):
     fmt.line(f"    Vault: {cfg.vault_file}")
     fmt.line(f"    SSH mode: sudo (via {svc_name})")
 
+    # Fleet topology
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Fleet Topology:{fmt.C.RESET}")
+    fmt.line(f"    PVE Nodes:       {len(cfg.pve_nodes) if cfg.pve_nodes else 0}")
+    vlans = getattr(cfg, "vlans", []) or []
+    fmt.line(f"    VLANs:           {len(vlans)}")
+    fmt.line(f"    Fleet Hosts:     {len(cfg.hosts)}")
+
+    # Type breakdown
+    if cfg.hosts:
+        type_counts = {}
+        for h in cfg.hosts:
+            type_counts[h.htype] = type_counts.get(h.htype, 0) + 1
+        for htype, count in sorted(type_counts.items()):
+            fmt.line(f"      {htype:14s} {count}")
+
+    # Infrastructure
+    pfsense_ip = getattr(cfg, "pfsense_ip", "")
+    truenas_ip = getattr(cfg, "truenas_ip", "")
+    switch_ip = getattr(cfg, "switch_ip", "")
+    if pfsense_ip or truenas_ip or switch_ip:
+        fmt.blank()
+        fmt.line(f"  {fmt.C.BOLD}Infrastructure:{fmt.C.RESET}")
+        if pfsense_ip:
+            fmt.line(f"    Firewall:  {pfsense_ip}")
+        if truenas_ip:
+            fmt.line(f"    NAS:       {truenas_ip}")
+        if switch_ip:
+            fmt.line(f"    Switch:    {switch_ip}")
+
+    # API status
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}API Access:{fmt.C.RESET}")
+    token_id = getattr(cfg, "pve_api_token_id", "")
+    if token_id:
+        fmt.line(f"    PVE API:   {fmt.C.GREEN}enabled{fmt.C.RESET} ({token_id})")
+    else:
+        fmt.line(f"    PVE API:   {fmt.C.YELLOW}SSH-only{fmt.C.RESET} (no token configured)")
+
+    # Component ports
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Services:{fmt.C.RESET}")
+    fmt.line(f"    Dashboard: http://localhost:{getattr(cfg, 'dashboard_port', 8888)}")
+    fmt.line(f"    Watchdog:  port {getattr(cfg, 'watchdog_port', 9900)}")
+    fmt.line(f"    Agent:     port {getattr(cfg, 'agent_port', 9990)}")
+
+    # Next steps
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}Next steps:{fmt.C.RESET}")
-    fmt.line(f"    freq hosts list      — see registered hosts")
-    fmt.line(f"    freq discover        — find unregistered VMs")
-    fmt.line(f"    freq hosts add       — add your first host")
+    fmt.line(f"    freq serve           — start the dashboard")
+    fmt.line(f"    freq fleet status    — check fleet connectivity")
+    fmt.line(f"    freq vm list         — see all VMs across cluster")
     fmt.line(f"    freq doctor          — verify FREQ is healthy")
 
     fmt.blank()
@@ -3872,51 +5199,36 @@ def _uninstall_dry_run(cfg):
 
 def _init_dry_run(cfg):
     """Show what init would do."""
-    fmt.header("Init — Dry Run")
+    fmt.header("Init — Dry Run (13 Phases)")
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}This shows what 'freq init' would do without making changes:{fmt.C.RESET}")
     fmt.blank()
 
-    steps = [
-        "1. Check prerequisites (ssh, ssh-keygen, openssl)",
-        "2. Create data directories",
-        "3. Configure cluster settings (PVE nodes, gateway, SSH mode)",
-        f"4. Create service account '{cfg.ssh_service_account}' with NOPASSWD sudo",
-        f"5. Generate ed25519 + RSA-4096 SSH keypairs in {cfg.key_dir}/",
-        "6. Deploy public key to local service account",
-        "7. Initialize encrypted vault (AES-256-CBC)",
-        "8. Store service account password in vault",
+    phases = [
+        ("Phase 1", "Prerequisites", "Check binaries (ssh, openssl), create dirs, seed configs"),
+        ("Phase 2", "Cluster Config + VLAN Discovery", "PVE nodes, gateway, bootstrap auth, discover VLANs from PVE"),
+        ("Phase 3", "Service Account", f"Create '{cfg.ssh_service_account}' with NOPASSWD sudo, init vault"),
+        ("Phase 4", "SSH Keys", f"Generate ed25519 + RSA-4096 keypairs in {cfg.key_dir}/"),
+        ("Phase 5", "PVE Node Deployment", f"Deploy {cfg.ssh_service_account} to {len(cfg.pve_nodes) if cfg.pve_nodes else 0} PVE node(s)"),
+        ("Phase 6", "PVE API Token", "Create freq-ops@pam!freq-rw token, save to /etc/freq/credentials/"),
+        ("Phase 7", "Fleet Discovery", "PVE API + multi-VLAN sweep, detect infrastructure, write hosts.toml + fleet-boundaries"),
+        ("Phase 8", "Fleet Deployment", f"Deploy {cfg.ssh_service_account} to all discovered hosts (Linux, pfSense, iDRAC, switch)"),
+        ("Phase 9", "Fleet Configuration", "Docker host tagging, metrics agent deploy, VM categorization"),
+        ("Phase 10", "PDM Setup", "Optional Proxmox Datacenter Manager integration"),
+        ("Phase 11", "Admin Accounts", "Configure RBAC roles (admin for current user + service account)"),
+        ("Phase 12", "Verification", "SSH/sudo all hosts, PVE API, agent health, dashboard readiness"),
+        ("Phase 13", "Summary", "Fleet topology, infrastructure IPs, component ports, next steps"),
     ]
 
-    step_n = 9
+    for num, name, desc in phases:
+        fmt.line(f"    {fmt.C.BOLD}{num}{fmt.C.RESET}: {name}")
+        fmt.line(f"      {fmt.C.DIM}{desc}{fmt.C.RESET}")
+
     if cfg.pve_nodes:
-        for ip in cfg.pve_nodes:
-            steps.append(f"{step_n}. Deploy to PVE node {ip}: useradd + sudo + ed25519 key")
-            step_n += 1
+        fmt.blank()
+        fmt.line(f"  PVE nodes: {', '.join(cfg.pve_nodes)}")
     if cfg.hosts:
-        for h in cfg.hosts:
-            if h.htype in ("linux", "pve", "docker", "truenas"):
-                steps.append(f"{step_n}. Deploy to {h.label} ({h.ip}): useradd + sudo + ed25519 key")
-            elif h.htype == "pfsense":
-                steps.append(f"{step_n}. Deploy to {h.label} ({h.ip}): pw useradd + ed25519 key (FreeBSD, no sudo)")
-            elif h.htype == "idrac":
-                steps.append(f"{step_n}. Deploy to {h.label} ({h.ip}): racadm user + RSA key (iDRAC)")
-            elif h.htype == "switch":
-                steps.append(f"{step_n}. Deploy to {h.label} ({h.ip}): IOS username + RSA pubkey-chain (switch)")
-            else:
-                steps.append(f"{step_n}. Deploy to {h.label} ({h.ip}): [{h.htype}]")
-            step_n += 1
-
-    steps.extend(
-        [
-            f"{step_n}. Configure RBAC roles (admin for current user + service account)",
-            f"{step_n + 1}. Verify all steps completed (platform-aware)",
-            f"{step_n + 2}. Write .initialized marker",
-        ]
-    )
-
-    for step in steps:
-        fmt.line(f"    {step}")
+        fmt.line(f"  Fleet hosts: {len(cfg.hosts)} registered")
 
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}Run 'freq init' (as root) to execute.{fmt.C.RESET}")
@@ -4076,6 +5388,9 @@ def _init_headless(cfg, args):
         "pubkey": "",
         "rsa_key_path": "",
         "rsa_pubkey": "",
+        "bootstrap_key": bootstrap_key or "",
+        "bootstrap_pass": bootstrap_pass,
+        "bootstrap_user": bootstrap_user,
     }
 
     fmt.header("Init — Headless Mode")
@@ -4089,28 +5404,31 @@ def _init_headless(cfg, args):
     fmt.line(f"  Service account: {fmt.C.CYAN}{ctx['svc_name']}{fmt.C.RESET}")
     fmt.blank()
 
+    headless_total = 11
+
     # ── Phase 1: Prerequisites ──
-    _phase(1, 8, "Prerequisites")
+    _phase(1, headless_total, "Prerequisites")
     if not _phase_welcome(cfg):
         return 1
 
-    # ── Phase 2: Cluster Configuration ──
-    _phase(2, 8, "Cluster Configuration")
+    # ── Phase 2: Cluster Configuration + VLAN Discovery ──
+    _phase(2, headless_total, "Cluster Configuration + VLAN Discovery")
     _phase_configure(cfg, args)
+    _discover_vlans_from_pve(cfg, ctx)
 
     # ── Phase 3: Local Service Account ──
-    _phase(3, 8, "Local Service Account")
+    _phase(3, headless_total, "Local Service Account")
     if not _headless_local_account(cfg, ctx):
         return 1
 
     # ── Phase 4: SSH Keys ──
-    _phase(4, 8, "SSH Key Generation")
+    _phase(4, headless_total, "SSH Key Generation")
     _phase_ssh_keys(cfg, ctx)
 
     # ── Phase 5: Fleet Deployment ──
-    _phase(5, 8, "Fleet Deployment")
+    _phase(5, headless_total, "Fleet Deployment")
 
-    # Import hosts from --hosts-file if provided (before fleet deploy so all targets are included)
+    # Import hosts from --hosts-file if provided
     hosts_file_arg = getattr(args, "hosts_file", None)
     if hosts_file_arg and os.path.isfile(hosts_file_arg):
         fmt.step_start(f"Importing fleet hosts from {hosts_file_arg}")
@@ -4123,7 +5441,7 @@ def _init_headless(cfg, args):
         except Exception as e:
             fmt.step_fail(f"Failed to reload hosts: {e}")
 
-    # Load per-device credentials (new style) or fall back to legacy single-file
+    # Load per-device credentials
     device_creds = _load_device_credentials(device_credentials_file)
     if device_creds:
         fmt.step_ok(f"Per-device credentials loaded: {', '.join(sorted(device_creds.keys()))}")
@@ -4141,12 +5459,24 @@ def _init_headless(cfg, args):
         device_creds=device_creds,
     )
 
-    # ── Phase 6: PDM Setup ──
-    _phase(6, 8, "PDM Setup")
+    # ── Phase 6: PVE API Token ──
+    _phase(6, headless_total, "PVE API Token")
+    _phase_pve_api_token(cfg, ctx)
+
+    # ── Phase 7: Fleet Discovery ──
+    _phase(7, headless_total, "Fleet Discovery")
+    _phase_fleet_discover(cfg, ctx, args)
+
+    # ── Phase 8: Fleet Configuration ──
+    _phase(8, headless_total, "Fleet Configuration")
+    _phase_fleet_configure(cfg, ctx)
+
+    # ── Phase 9: PDM Setup ──
+    _phase(9, headless_total, "PDM Setup")
     _phase_pdm(cfg, ctx, args)
 
-    # ── Phase 7: RBAC ──
-    _phase(7, 8, "RBAC Setup")
+    # ── Phase 10: RBAC ──
+    _phase(10, headless_total, "RBAC Setup")
     roles_file = os.path.join(cfg.conf_dir, "roles.conf")
     existing = ""
     if os.path.isfile(roles_file):
@@ -4165,29 +5495,18 @@ def _init_headless(cfg, args):
         else:
             fmt.step_ok(f"{svc_name} already in roles")
 
-    # ── Phase 8: Verification ──
-    _phase(8, 8, "Verification")
+    # ── Phase 11: Verification ──
+    _phase(11, headless_total, "Verification")
     verified = _phase_verify(cfg, ctx)
 
     fmt.blank()
     if verified:
-        # Only write marker if verification passed
         with open(INIT_MARKER, "w") as f:
             f.write(f"{cfg.version}\n")
         fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ initialized successfully — headless.{fmt.C.RESET}")
     else:
         fmt.line(f"  {fmt.C.YELLOW}Init completed with warnings. Run 'freq init --check' to review.{fmt.C.RESET}")
     fmt.blank()
-
-    # Auto-sync hosts from PVE cluster after successful headless init
-    if verified and cfg.pve_nodes:
-        try:
-            from freq.modules.hosts import _hosts_sync
-
-            fmt.blank()
-            _hosts_sync(cfg)
-        except Exception:
-            pass
 
     logger.info("headless init complete", service_account=ctx["svc_name"])
     return 0 if verified else 1
