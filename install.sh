@@ -399,6 +399,16 @@ do_install() {
             seeded=$((seeded + 1))
         fi
     done
+
+    # Seed personality packs from package data
+    local pkg_personality="$INSTALL_DIR/freq/data/conf-templates/personality"
+    local conf_personality="$INSTALL_DIR/conf/personality"
+    if [[ -d "$pkg_personality" && ! -d "$conf_personality" ]]; then
+        mkdir -p "$conf_personality"
+        cp "$pkg_personality"/*.toml "$conf_personality/" 2>/dev/null
+        seeded=$((seeded + 1))
+    fi
+
     if [[ $seeded -gt 0 ]]; then
         ok "Created ${seeded} config file(s) from examples"
     else
