@@ -3930,3 +3930,21 @@ a:hover{{text-decoration:underline}}
         self._json_response({"runbooks": runbooks, "count": len(runbooks)})
 
     # --- Phase 5: Medium Kills API Handlers ---
+
+
+def cmd_serve(cfg, pack, args) -> int:
+    """Start the FREQ web dashboard."""
+    port = getattr(args, "port", None) or cfg.dashboard_port or 8888
+    print(f"\n  \033[38;5;93mPVE FREQ → Dashboard\033[0m")
+    print(f"  Starting on port {port}...\n")
+    start_background_cache()
+    httpd = ThreadedHTTPServer(("0.0.0.0", port), FreqHandler)
+    print(f"  \033[38;5;82m✔\033[0m Dashboard running at http://0.0.0.0:{port}")
+    print(f"  \033[38;5;245mPress Ctrl+C to stop\033[0m\n")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print(f"\n  \033[38;5;220mDashboard stopped.\033[0m")
+    finally:
+        httpd.server_close()
+    return 0
