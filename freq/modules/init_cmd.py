@@ -3054,27 +3054,158 @@ def _phase_fleet_configure(cfg, ctx):
         "-i", key_path,
     ]
 
-    # ── 9a: Docker Host Verification + Tagging ────────────────────
+    # ── 9a: Docker — Verify, Tag, Discover Containers ───────────
     docker_hosts = [h for h in cfg.hosts if h.htype == "docker"]
+    verified_docker_hosts = []  # hosts where docker is confirmed working
+
     if docker_hosts:
-        fmt.line(f"  {fmt.C.BOLD}Docker Host Verification ({len(docker_hosts)} hosts){fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.BOLD}Docker Host Setup ({len(docker_hosts)} hosts){fmt.C.RESET}")
         fmt.blank()
+
         for h in docker_hosts:
             ssh_cmd = ["ssh", "-n"] + ssh_base_opts + [f"{svc_name}@{h.ip}"]
             # Check docker is installed
             rc, out, _ = _run(ssh_cmd + ["docker --version 2>/dev/null"], timeout=QUICK_CHECK_TIMEOUT)
             if rc == 0 and "Docker" in out:
                 # Add freq-admin to docker group
-                rc2, _, _ = _run(
+                _run(
                     ssh_cmd + [f"sudo usermod -aG docker {svc_name} 2>/dev/null"],
                     timeout=QUICK_CHECK_TIMEOUT,
                 )
-                if rc2 == 0:
-                    fmt.step_ok(f"{h.label}: Docker verified, {svc_name} added to docker group")
-                else:
-                    fmt.step_warn(f"{h.label}: Docker found but could not add to docker group")
+                verified_docker_hosts.append(h)
+                fmt.step_ok(f"{h.label}: Docker verified, {svc_name} added to docker group")
             else:
                 fmt.step_warn(f"{h.label}: tagged as docker but docker not installed")
+
+        # Discover containers on each verified docker host
+        if verified_docker_hosts:
+            fmt.blank()
+            fmt.line(f"  {fmt.C.BOLD}Docker Container Discovery{fmt.C.RESET}")
+            fmt.blank()
+
+            all_containers = {}  # host_label -> list of container dicts
+            total_containers = 0
+            primary_docker_ip = ""
+            primary_docker_count = 0
+
+            for h in verified_docker_hosts:
+                ssh_cmd = ["ssh", "-n"] + ssh_base_opts + [f"{svc_name}@{h.ip}"]
+                # Get running containers as JSON
+                rc, out, _ = _run(
+                    ssh_cmd + [
+                        "sudo docker ps --format '{{json .}}' 2>/dev/null"
+                    ],
+                    timeout=DEFAULT_CMD_TIMEOUT,
+                )
+                if rc != 0 or not out.strip():
+                    # Try without sudo (freq-admin may already be in docker group from a prior init)
+                    rc, out, _ = _run(
+                        ssh_cmd + [
+                            "docker ps --format '{{json .}}' 2>/dev/null"
+                        ],
+                        timeout=DEFAULT_CMD_TIMEOUT,
+                    )
+
+                containers = []
+                if rc == 0 and out.strip():
+                    for line in out.strip().split("\n"):
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            c = _json.loads(line)
+                            containers.append({
+                                "name": c.get("Names", "unknown"),
+                                "image": c.get("Image", ""),
+                                "status": c.get("Status", ""),
+                                "ports": c.get("Ports", ""),
+                            })
+                        except (_json.JSONDecodeError, ValueError):
+                            pass
+
+                if containers:
+                    all_containers[h.label] = {"ip": h.ip, "containers": containers}
+                    total_containers += len(containers)
+                    fmt.step_ok(f"{h.label}: {len(containers)} container(s) running")
+
+                    # Track which docker host has the most containers → primary
+                    if len(containers) > primary_docker_count:
+                        primary_docker_count = len(containers)
+                        primary_docker_ip = h.ip
+                else:
+                    fmt.line(f"  {fmt.C.DIM}{h.label}: no running containers{fmt.C.RESET}")
+
+                # Also discover compose paths
+                rc2, out2, _ = _run(
+                    ssh_cmd + [
+                        "sudo find /opt /home -maxdepth 3 -name 'docker-compose.yml' -o -name 'compose.yml' 2>/dev/null | head -20"
+                    ],
+                    timeout=DEFAULT_CMD_TIMEOUT,
+                )
+                if rc2 == 0 and out2.strip():
+                    compose_paths = [p.strip() for p in out2.strip().split("\n") if p.strip()]
+                    if compose_paths and h.label in all_containers:
+                        # Find common base path
+                        dirs = [os.path.dirname(p) for p in compose_paths]
+                        if dirs:
+                            # Get shortest common prefix
+                            common = os.path.commonpath(dirs) if len(dirs) > 1 else os.path.dirname(dirs[0])
+                            all_containers[h.label]["compose_path"] = common
+
+            # Write containers.toml
+            if all_containers:
+                containers_path = os.path.join(cfg.conf_dir, "containers.toml")
+                try:
+                    lines = [
+                        "# FREQ Container Registry",
+                        "# Auto-discovered by freq init",
+                        "",
+                    ]
+                    for host_label, data in sorted(all_containers.items()):
+                        # Find vmid for this host
+                        vmid = 0
+                        for h in cfg.hosts:
+                            if h.label == host_label:
+                                # Try to get vmid from PVE
+                                break
+
+                        lines.append(f"[host.{host_label}]")
+                        lines.append(f'ip = "{data["ip"]}"')
+                        lines.append(f'label = "{host_label}"')
+                        if data.get("compose_path"):
+                            lines.append(f'compose_path = "{data["compose_path"]}"')
+                        lines.append("")
+
+                        for c in data["containers"]:
+                            safe_name = c["name"].replace("-", "_").replace(".", "_").lower()
+                            lines.append(f"[host.{host_label}.containers.{safe_name}]")
+                            lines.append(f'name = "{c["name"]}"')
+                            lines.append(f'image = "{c["image"]}"')
+                            lines.append(f'status = "{c["status"]}"')
+                            lines.append("")
+
+                    with open(containers_path, "w") as f:
+                        f.write("\n".join(lines))
+                    fmt.step_ok(f"containers.toml: {total_containers} containers across {len(all_containers)} hosts")
+                except OSError as e:
+                    fmt.step_warn(f"Could not write containers.toml: {e}")
+
+            # Set docker_dev_ip in freq.toml (primary docker host)
+            if primary_docker_ip:
+                toml_path = os.path.join(cfg.conf_dir, "freq.toml")
+                try:
+                    with open(toml_path) as f:
+                        content = f.read()
+                    content = _update_toml_value(content, "docker_dev_ip", primary_docker_ip)
+                    with open(toml_path, "w") as f:
+                        f.write(content)
+                    cfg.docker_dev_ip = primary_docker_ip
+                    fmt.step_ok(f"docker_dev_ip set to {primary_docker_ip}")
+                except OSError:
+                    pass
+
+            fmt.blank()
+            fmt.line(f"  {fmt.C.GREEN}Docker: {total_containers} containers on {len(verified_docker_hosts)} hosts{fmt.C.RESET}")
     else:
         fmt.line(f"  {fmt.C.DIM}No Docker hosts to configure.{fmt.C.RESET}")
 
