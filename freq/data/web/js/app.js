@@ -2750,14 +2750,16 @@ function launchTermFromPicker(){
    LXC CONTAINERS — first-class citizen
    ═══════════════════════════════════════════════════════════════════ */
 function loadLxcContainers(){
+  var section=document.getElementById('fleet-sec-ct');
   var stats=document.getElementById('ct-stats');
   var cards=document.getElementById('ct-cards');
   if(stats)stats.innerHTML='<div class="skeleton h-40"></div>';
   if(cards)cards.innerHTML='<div class="skeleton h-60"></div>';
   _authFetch(API.CT_LIST).then(function(r){return r.json()}).then(function(d){
     var cts=d.containers||[];
+    if(!cts.length){if(section)section.style.display='none';return;}
+    if(section)section.style.display='';
     if(stats)stats.innerHTML=_statCards([{l:'Containers',v:d.count||0},{l:'Running',v:d.running||0,c:'green'},{l:'Stopped',v:d.stopped||0,c:d.stopped>0?'yellow':'green'}]);
-    if(!cts.length){if(cards)cards.innerHTML='<div class="exec-out">No LXC containers found in PVE cluster.</div>';return;}
     var h='';
     cts.forEach(function(c){
       var running=c.status==='running';

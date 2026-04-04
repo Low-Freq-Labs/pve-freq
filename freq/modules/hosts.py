@@ -670,6 +670,16 @@ def _auto_populate_fleet_boundaries(cfg, discovered: dict):
             key = d["label"].replace("-", "_").replace(" ", "_")
             infra_devices[key] = {"ip": ip, "label": d["label"], "type": d["htype"]}
 
+    # Also add infrastructure devices from freq.toml config
+    _cfg_devices = [
+        (cfg.pfsense_ip, "pfsense", "pfsense"),
+        (cfg.truenas_ip, "truenas", "truenas"),
+        (cfg.switch_ip, "switch", "switch"),
+    ]
+    for ip, dtype, key in _cfg_devices:
+        if ip and key not in infra_devices:
+            infra_devices[key] = {"ip": ip, "label": key, "type": dtype}
+
     # Find PVE nodes
     pve_nodes = {}
     for ip, d in discovered.items():
