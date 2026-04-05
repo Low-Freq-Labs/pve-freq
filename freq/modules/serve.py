@@ -3730,7 +3730,7 @@ a:hover{{text-decoration:underline}}
         if not node_ip:
             self._json_response({"schedules": [], "error": "No PVE node reachable"})
             return
-        from freq.core.ssh import run_single as ssh_single
+        from freq.core.ssh import run as ssh_single
 
         r = ssh_single(
             host=node_ip,
@@ -3768,7 +3768,7 @@ a:hover{{text-decoration:underline}}
         if not _re.match(r"^[a-zA-Z0-9._-]+$", name):
             self._json_response({"error": "Invalid container name"})
             return
-        from freq.core.ssh import run_single as ssh_single
+        from freq.core.ssh import run as ssh_single
         from freq.core.resolve import by_target
 
         h = by_target(cfg.hosts, host)
@@ -3810,7 +3810,7 @@ a:hover{{text-decoration:underline}}
         if not _re.match(r"^[a-zA-Z0-9._-]+$", name):
             self._json_response({"error": "Invalid container name"})
             return
-        from freq.core.ssh import run_single as ssh_single
+        from freq.core.ssh import run as ssh_single
         from freq.core.resolve import by_target
 
         h = by_target(cfg.hosts, host)
@@ -3830,29 +3830,48 @@ a:hover{{text-decoration:underline}}
         self._json_response({"output": r.stdout if r else "", "container": name, "host": host, "lines": lines})
 
     def _serve_fleet_connectivity(self):
-        """Check SSH connectivity to all fleet hosts."""
-        cfg = load_config()
-        from freq.core.ssh import run_many as ssh_run_many
+        """Check SSH connectivity to all fleet hosts.
 
-        results = ssh_run_many(
-            hosts=cfg.hosts,
-            command="whoami",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=3,
-            command_timeout=5,
-            max_parallel=cfg.ssh_max_parallel,
-            use_sudo=False,
-            cfg=cfg,
-        )
+        Uses per-host SSH config: legacy devices (iDRAC, switch) get RSA key
+        + legacy KexAlgorithms; modern hosts get ed25519.
+        """
+        cfg = load_config()
+        from freq.core.ssh import run as ssh_single, PLATFORM_SSH
+
         hosts = []
         for h in cfg.hosts:
-            r = results.get(h.label)
+            # Select key and command based on device type
+            htype = getattr(h, "htype", "linux")
+            legacy_types = {"idrac", "switch"}
+            if htype in legacy_types:
+                key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
+            else:
+                key = cfg.ssh_key_path
+
+            try:
+                r = ssh_single(
+                    host=h.ip,
+                    command="whoami" if htype not in legacy_types else "racadm getversion" if htype == "idrac" else "show version | include uptime",
+                    key_path=key,
+                    user=cfg.ssh_account if htype not in legacy_types else "",
+                    connect_timeout=3,
+                    command_timeout=5,
+                    htype=htype,
+                    cfg=cfg,
+                )
+                reachable = r.returncode == 0
+                user = r.stdout.strip() if reachable else ""
+            except Exception:
+                reachable = False
+                user = ""
+
             hosts.append(
                 {
                     "label": h.label,
                     "ip": h.ip,
-                    "reachable": r is not None and r.returncode == 0,
-                    "user": r.stdout.strip() if r and r.returncode == 0 else "",
+                    "type": htype,
+                    "reachable": reachable,
+                    "user": user,
                 }
             )
         self._json_response({"hosts": hosts, "total": len(hosts), "reachable": sum(1 for h in hosts if h["reachable"])})
@@ -3865,7 +3884,7 @@ a:hover{{text-decoration:underline}}
         if not target:
             self._json_response({"error": "target required"})
             return
-        from freq.core.ssh import run_single as ssh_single
+        from freq.core.ssh import run as ssh_single
         from freq.core.resolve import by_target
 
         h = by_target(cfg.hosts, target)

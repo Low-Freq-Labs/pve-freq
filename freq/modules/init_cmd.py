@@ -1408,14 +1408,12 @@ def _phase_ssh_keys(cfg, ctx):
     ctx["rsa_key_path"] = rsa_key
 
     # Fix ownership — init runs as root but keys need to be readable by
-    # the service account and whoever runs the dashboard.
-    # The invoking user (SUDO_USER) is the real operator.
-    real_user = os.environ.get("SUDO_USER", "")
-    if real_user:
-        for f in [key_dir, ed_key, f"{ed_key}.pub", rsa_key, f"{rsa_key}.pub"]:
-            if os.path.exists(f):
-                _run(["chown", f"{real_user}:{real_user}", f])
-        fmt.step_ok(f"Key ownership set to {real_user}")
+    # the service account (freq-admin) that runs the dashboard.
+    svc_name = ctx["svc_name"]
+    for f in [key_dir, ed_key, f"{ed_key}.pub", rsa_key, f"{rsa_key}.pub"]:
+        if os.path.exists(f):
+            _run(["chown", f"{svc_name}:{svc_name}", f])
+    fmt.step_ok(f"Key ownership set to {svc_name}")
 
     # Read public keys
     ed_pub = f"{ed_key}.pub"
@@ -1682,6 +1680,7 @@ def _phase_pve_api_token(cfg, ctx):
     fmt.step_ok(f"Token created: {token_id}")
 
     # Step 3: Save token secret to credential file
+    svc_name = ctx["svc_name"]
     cred_dir = os.path.join(os.path.dirname(cfg.conf_dir), "credentials")
     os.makedirs(cred_dir, mode=0o700, exist_ok=True)
     cred_path = os.path.join(cred_dir, "pve-token-rw")
@@ -1689,6 +1688,8 @@ def _phase_pve_api_token(cfg, ctx):
         with open(cred_path, "w") as f:
             f.write(token_secret)
         os.chmod(cred_path, 0o600)
+        # Dashboard runs as svc_name — must be able to read token
+        _run(["chown", "-R", f"{svc_name}:{svc_name}", cred_dir])
         fmt.step_ok(f"Token secret saved to {cred_path}")
     except OSError as e:
         fmt.step_fail(f"Failed to save token secret: {e}")
@@ -2654,7 +2655,91 @@ def _phase_fleet_discover(cfg, ctx, args=None):
         elif h.htype == "pfsense" and not infra_pfsense:
             infra_pfsense = h.ip
 
-    if not infra_truenas and not infra_switch:
+    # ── Probe for infrastructure devices on well-known IPs ────────
+    # iDRAC/BMC, switch, TrueNAS are often missed by VLAN scan because
+    # they use legacy SSH or non-standard protocols. Probe explicitly.
+    infra_idrac_ips = []
+    all_known_ips = set(discovered.keys()) | existing_ips
+
+    # Probe known infrastructure subnets for iDRAC, switch, TrueNAS
+    # Use the management subnet from PVE nodes to derive likely IPs
+    mgmt_prefix = ""
+    if cfg.pve_nodes:
+        parts = cfg.pve_nodes[0].rsplit(".", 1)
+        if len(parts) == 2:
+            mgmt_prefix = parts[0]
+
+    if mgmt_prefix:
+        # iDRAC devices — common range .10-.15
+        for last_octet in range(10, 16):
+            ip = f"{mgmt_prefix}.{last_octet}"
+            if ip in all_known_ips:
+                continue
+            rc, _, _ = _run(["ping", "-c", "1", "-W", "1", ip], timeout=PING_TIMEOUT)
+            if rc == 0:
+                # Try SSH banner check for iDRAC
+                rc2, out2, _ = _run(
+                    ["ssh", "-n", "-o", "ConnectTimeout=2", "-o", "BatchMode=yes",
+                     "-o", "StrictHostKeyChecking=accept-new",
+                     "-o", "KexAlgorithms=+diffie-hellman-group14-sha1",
+                     "-o", "HostKeyAlgorithms=+ssh-rsa",
+                     f"root@{ip}", "racadm getversion"],
+                    timeout=QUICK_CHECK_TIMEOUT,
+                )
+                if rc2 == 0 and ("racadm" in out2.lower() or "idrac" in out2.lower() or "version" in out2.lower()):
+                    label = f"idrac-{ip.split('.')[-1]}"
+                    discovered[ip] = {
+                        "label": label, "htype": "idrac",
+                        "groups": "infrastructure", "vmid": 0,
+                        "source": "infra-probe", "all_ips": [ip],
+                    }
+                    infra_idrac_ips.append(ip)
+                    fmt.step_ok(f"iDRAC detected: {label} ({ip})")
+                else:
+                    # Still reachable but not confirmed iDRAC — add as possible BMC
+                    label = f"bmc-{ip.split('.')[-1]}"
+                    discovered[ip] = {
+                        "label": label, "htype": "idrac",
+                        "groups": "infrastructure", "vmid": 0,
+                        "source": "infra-probe-ping", "all_ips": [ip],
+                    }
+                    infra_idrac_ips.append(ip)
+                    fmt.step_ok(f"BMC reachable: {label} ({ip})")
+
+        # Switch — common at .5
+        if not infra_switch:
+            for last_octet in [5, 6]:
+                ip = f"{mgmt_prefix}.{last_octet}"
+                if ip in all_known_ips:
+                    continue
+                rc, _, _ = _run(["ping", "-c", "1", "-W", "1", ip], timeout=PING_TIMEOUT)
+                if rc == 0:
+                    discovered[ip] = {
+                        "label": "switch", "htype": "switch",
+                        "groups": "infrastructure", "vmid": 0,
+                        "source": "infra-probe", "all_ips": [ip],
+                    }
+                    infra_switch = ip
+                    fmt.step_ok(f"Switch detected: {ip}")
+                    break
+
+        # TrueNAS — common at .25
+        if not infra_truenas:
+            for last_octet in [25]:
+                ip = f"{mgmt_prefix}.{last_octet}"
+                if ip in all_known_ips:
+                    continue
+                rc, _, _ = _run(["ping", "-c", "1", "-W", "1", ip], timeout=PING_TIMEOUT)
+                if rc == 0:
+                    discovered[ip] = {
+                        "label": "truenas", "htype": "truenas",
+                        "groups": "infrastructure", "vmid": 0,
+                        "source": "infra-probe", "all_ips": [ip],
+                    }
+                    infra_truenas = ip
+                    fmt.step_ok(f"TrueNAS detected: {ip}")
+
+    if not infra_truenas and not infra_switch and not infra_idrac_ips:
         fmt.line(f"  {fmt.C.DIM}No additional infrastructure devices auto-detected.{fmt.C.RESET}")
         fmt.line(f"  {fmt.C.DIM}Add manually later with 'freq hosts add'.{fmt.C.RESET}")
 
@@ -3607,6 +3692,12 @@ def _phase_fleet_configure(cfg, ctx):
     fmt.blank()
 
     dashboard_port = getattr(cfg, "dashboard_port", 8888)
+    # Detect actual freq binary path — install.sh may place it in /usr/local/bin
+    freq_bin = "/usr/bin/freq"
+    for candidate in ["/usr/local/bin/freq", "/usr/bin/freq"]:
+        if os.path.isfile(candidate):
+            freq_bin = candidate
+            break
     service_unit = (
         "[Unit]\n"
         "Description=PVE FREQ Dashboard\n"
@@ -3614,7 +3705,7 @@ def _phase_fleet_configure(cfg, ctx):
         "\n"
         "[Service]\n"
         "Type=simple\n"
-        f"ExecStart=/usr/bin/freq serve --port {dashboard_port}\n"
+        f"ExecStart={freq_bin} serve --port {dashboard_port}\n"
         "Restart=always\n"
         "RestartSec=10\n"
         f"User={svc_name}\n"
@@ -3671,6 +3762,18 @@ def _phase_fleet_configure(cfg, ctx):
             fmt.step_warn(f"Could not generate TLS cert: {err.strip()[:100]}")
     else:
         fmt.step_ok("TLS certificate already exists")
+
+    # ── 9m: Fix ownership for dashboard ───────────────────────────
+    # Dashboard runs as svc_name (freq-admin). Init runs as root.
+    # Every directory the dashboard needs must be owned by svc_name.
+    install_dir = os.path.dirname(cfg.conf_dir)
+    for subdir in ["data/keys", "data/log", "data/vault", "data/cache", "credentials", "tls"]:
+        target = os.path.join(install_dir, subdir)
+        if os.path.isdir(target):
+            _run(["chown", "-R", f"{svc_name}:{svc_name}", target])
+    # conf/ must be readable by dashboard (freq.toml, hosts.toml, etc.)
+    _run(["chown", "-R", f"{svc_name}:{svc_name}", cfg.conf_dir])
+    fmt.step_ok(f"Dashboard data directories owned by {svc_name}")
 
 
 def _categorize_vms(cfg):
