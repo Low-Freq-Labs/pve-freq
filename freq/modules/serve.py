@@ -3853,7 +3853,7 @@ a:hover{{text-decoration:underline}}
                     host=h.ip,
                     command="whoami" if htype not in legacy_types else "racadm getversion" if htype == "idrac" else "show version | include uptime",
                     key_path=key,
-                    user=cfg.ssh_account if htype not in legacy_types else "",
+                    user=cfg.ssh_service_account if htype not in legacy_types else "",
                     connect_timeout=3,
                     command_timeout=5,
                     htype=htype,

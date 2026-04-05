@@ -731,9 +731,11 @@ def _auto_populate_fleet_boundaries(cfg, discovered: dict):
     existing_physical = existing_data.get("physical", {})
     existing_pve = existing_data.get("pve_nodes", {})
 
-    # Only add new devices not already defined
-    new_physical = {k: v for k, v in infra_devices.items() if k not in existing_physical}
-    new_pve = {k: v for k, v in pve_nodes.items() if k not in existing_pve}
+    # Only add new devices not already defined (dedup by IP, not key name)
+    existing_ips = {v.get("ip", "") for v in existing_physical.values() if isinstance(v, dict)}
+    existing_pve_ips = {v.get("ip", "") for v in existing_pve.values() if isinstance(v, dict)}
+    new_physical = {k: v for k, v in infra_devices.items() if k not in existing_physical and v.get("ip", "") not in existing_ips}
+    new_pve = {k: v for k, v in pve_nodes.items() if k not in existing_pve and v.get("ip", "") not in existing_pve_ips}
 
     if not new_physical and not new_pve:
         return
