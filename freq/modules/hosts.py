@@ -738,20 +738,61 @@ def _auto_populate_fleet_boundaries(cfg, discovered: dict):
     if not new_physical and not new_pve:
         return
 
-    # Append to the TOML file
-    with open(fb_path, "a") as f:
-        if new_physical:
-            f.write("\n# Auto-discovered physical devices\n[physical]\n")
-            for key, dev in sorted(new_physical.items()):
-                detail_map = {"pfsense": "Firewall", "opnsense": "Firewall", "truenas": "NAS",
-                              "synology": "NAS", "switch": "Switch", "idrac": "BMC", "ilo": "BMC", "ipmi": "BMC"}
-                detail = detail_map.get(dev["type"], dev["type"].upper())
-                f.write(f'{key} = {{ ip = "{dev["ip"]}", label = "{dev["label"]}", type = "{dev["type"]}", tier = "probe", detail = "{detail}" }}\n')
+    # Rebuild the physical and pve_nodes sections to avoid duplicate TOML headers.
+    # Merge existing + new, then rewrite the file with a single [physical] and [pve_nodes].
+    merged_physical = {**existing_physical, **new_physical}
+    merged_pve = {**existing_pve, **new_pve}
 
-        if new_pve:
+    # Read the file, strip old [physical] and [pve_nodes] sections, rewrite cleanly
+    try:
+        with open(fb_path) as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        lines = []
+
+    # Remove existing [physical] and [pve_nodes] blocks (including their entries)
+    cleaned = []
+    skip_section = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "[physical]" or stripped == "[pve_nodes]":
+            skip_section = True
+            continue
+        if skip_section:
+            # Stop skipping at the next section header or blank line before a header
+            if stripped.startswith("[") and stripped != "[physical]" and stripped != "[pve_nodes]":
+                skip_section = False
+                cleaned.append(line)
+            elif stripped.startswith("#") or stripped == "":
+                # Skip comments/blanks that belong to the removed section
+                continue
+            else:
+                continue  # Skip entries in the removed section
+        else:
+            cleaned.append(line)
+
+    with open(fb_path, "w") as f:
+        f.writelines(cleaned)
+        if merged_physical:
+            f.write("\n# Auto-discovered physical devices\n[physical]\n")
+            for key, dev in sorted(merged_physical.items()):
+                if isinstance(dev, dict):
+                    detail_map = {"pfsense": "Firewall", "opnsense": "Firewall", "truenas": "NAS",
+                                  "synology": "NAS", "switch": "Switch", "idrac": "BMC", "ilo": "BMC", "ipmi": "BMC"}
+                    ip = dev.get("ip", "")
+                    label = dev.get("label", key)
+                    dtype = dev.get("type", "unknown")
+                    detail = dev.get("detail", detail_map.get(dtype, dtype.upper()))
+                    tier = dev.get("tier", "probe")
+                    f.write(f'{key} = {{ ip = "{ip}", label = "{label}", type = "{dtype}", tier = "{tier}", detail = "{detail}" }}\n')
+
+        if merged_pve:
             f.write("\n# Auto-discovered PVE nodes\n[pve_nodes]\n")
-            for key, node in sorted(new_pve.items()):
-                f.write(f'{key} = {{ ip = "{node["ip"]}", detail = "" }}\n')
+            for key, node in sorted(merged_pve.items()):
+                if isinstance(node, dict):
+                    ip = node.get("ip", "")
+                    detail = node.get("detail", "")
+                    f.write(f'{key} = {{ ip = "{ip}", detail = "{detail}" }}\n')
 
     count = len(new_physical) + len(new_pve)
     fmt.step_ok(f"Fleet boundaries: auto-added {len(new_physical)} physical + {len(new_pve)} PVE nodes")
