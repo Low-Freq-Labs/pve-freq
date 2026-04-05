@@ -424,6 +424,9 @@ def cmd_snapshot_list(cfg: FreqConfig, pack, args) -> int:
         fmt.footer()
         return 1
 
+    # Find which node actually hosts this VM
+    node_ip = _find_vm_node(cfg, vmid, node_ip)
+
     fmt.step_start(f"Querying snapshots for VM {vmid}")
     stdout, ok = _pve_cmd(cfg, node_ip, f"qm listsnapshot {vmid}", timeout=PVE_CMD_TIMEOUT)
 
@@ -490,6 +493,9 @@ def cmd_snapshot_delete(cfg: FreqConfig, pack, args) -> int:
         fmt.blank()
         fmt.footer()
         return 1
+
+    # Find which node actually hosts this VM
+    node_ip = _find_vm_node(cfg, vmid, node_ip)
 
     # Confirm unless --yes
     if not getattr(args, "yes", False):

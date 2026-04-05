@@ -486,6 +486,11 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.truenas_ip = infra.get("truenas_ip", cfg.truenas_ip)
     cfg.pfsense_ip = infra.get("pfsense_ip", cfg.pfsense_ip)
     cfg.opnsense_ip = infra.get("opnsense_ip", cfg.opnsense_ip)
+
+    # Also load [pfsense] section (written by freq init)
+    pfsense_section = data.get("pfsense", {})
+    if pfsense_section.get("host") and not cfg.pfsense_ip:
+        cfg.pfsense_ip = pfsense_section["host"]
     cfg.synology_ip = infra.get("synology_ip", cfg.synology_ip)
     cfg.switch_ip = infra.get("switch_ip", cfg.switch_ip)
     cfg.docker_dev_ip = infra.get("docker_dev_ip", cfg.docker_dev_ip)

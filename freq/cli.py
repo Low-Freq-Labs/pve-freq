@@ -322,11 +322,13 @@ def _register_vm(sub):
     p.add_argument("--ip", help="Static IP (triggers disk mount network config)")
     p.add_argument("--vlan", help="VLAN name (dirty/clean/dev/mgmt)")
     p.add_argument("--start", action="store_true", help="Start VM after clone")
+    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmation")
     p.set_defaults(func=_cmd_clone)
 
     p = vm_sub.add_parser("destroy", help="Destroy a VM")
     p.add_argument("target", nargs="?", help="VMID or name")
     p.add_argument("--dry-run", action="store_true", help="Show what would be destroyed without executing")
+    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmation")
     p.set_defaults(func=_cmd_destroy)
 
     p = vm_sub.add_parser("resize", help="Resize a VM")
@@ -346,6 +348,7 @@ def _register_vm(sub):
     )
     p.add_argument("target", nargs="?", help="VMID or name")
     p.add_argument("--name", help="Snapshot name (for create/delete)")
+    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmation for delete")
     p.set_defaults(func=_cmd_snapshot)
 
     p = vm_sub.add_parser("power", help="VM power control (start/stop/reboot/shutdown/status)")
@@ -429,6 +432,7 @@ def _register_vm(sub):
     p.add_argument("target", nargs="?", help="VMID")
     p.add_argument("--name", help="Specific snapshot name (default: most recent)")
     p.add_argument("--no-start", action="store_true", help="Don't start VM after rollback")
+    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmation")
     p.set_defaults(func=_cmd_rollback)
 
     p = vm_sub.add_parser("provision", help="Cloud-init VM provisioning")

@@ -122,6 +122,10 @@ def cmd_rollback(cfg: FreqConfig, pack, args) -> int:
         return 1
     fmt.step_ok(f"Connected to {node_ip}")
 
+    # Find which node actually hosts this VM
+    from freq.modules.pve import _find_vm_node
+    node_ip = _find_vm_node(cfg, vmid, node_ip)
+
     # Get VM status
     status = _get_vm_status(cfg, node_ip, vmid)
     fmt.line(f"  VM {vmid} status: {status}")

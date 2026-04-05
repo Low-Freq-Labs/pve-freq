@@ -1489,9 +1489,12 @@ class FreqHandler(BaseHTTPRequestHandler):
                 from freq.api import build_routes
 
                 cls._V1_ROUTES = build_routes()
+                logger.info(f"v1 API routes loaded: {len(cls._V1_ROUTES)} endpoints")
             except Exception as e:
-                logger.error(f"build_routes failed: {e}")
-                cls._V1_ROUTES = {}
+                import traceback
+
+                logger.error(f"build_routes failed: {e}\n{traceback.format_exc()}")
+                cls._V1_ROUTES = {}  # Fallback — traceback logged for debugging
 
     def _dispatch(self):
         """Route request to handler method or callable by path.
