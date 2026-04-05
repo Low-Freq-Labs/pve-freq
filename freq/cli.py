@@ -1853,7 +1853,7 @@ def _register_event(sub):
 
     p = ev_sub.add_parser("delete", help="Delete event template")
     p.add_argument("name", help="Event name")
-    p.add_argument("--confirm", action="store_true", help="Required — confirms deletion")
+    p.add_argument("--yes", "-y", action="store_true", help="Required — confirms deletion")
     p.set_defaults(func=_cmd_event_delete)
 
     ev.set_defaults(func=_cmd_event_list)

@@ -120,8 +120,8 @@ def cmd_compare(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     # Resolve hosts
-    host_a = resolve.host(cfg.hosts, target_a)
-    host_b = resolve.host(cfg.hosts, target_b)
+    host_a = resolve.by_target(cfg.hosts, target_a)
+    host_b = resolve.by_target(cfg.hosts, target_b)
 
     if not host_a:
         fmt.error(f"Host not found: {target_a}")

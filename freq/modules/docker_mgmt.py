@@ -115,7 +115,7 @@ def cmd_docker_prune(cfg: FreqConfig, pack, args) -> int:
     hosts_data = [{"ip": h.ip, "label": h.label, "htype": h.htype} for h in hosts]
     results = run_many(
         hosts=hosts_data,
-        command="docker system prune -f --volumes 2>/dev/null | tail -3",
+        command='sg docker -c "docker system prune -f --volumes 2>/dev/null | tail -3" 2>/dev/null || sudo docker system prune -f --volumes 2>/dev/null | tail -3',
         key_path=cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=30,

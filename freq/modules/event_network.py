@@ -687,12 +687,12 @@ def cmd_event_archive(cfg: FreqConfig, pack, args) -> int:
 def cmd_event_delete(cfg: FreqConfig, pack, args) -> int:
     """Delete an event template (use archive for completed events)."""
     name = getattr(args, "name", None)
-    confirm = getattr(args, "confirm", False)
+    yes = getattr(args, "yes", False)
     if not name:
-        fmt.error("Usage: freq event delete <name> --confirm")
+        fmt.error("Usage: freq event delete <name> --yes")
         return 1
-    if not confirm:
-        fmt.error("Delete requires --confirm flag")
+    if not yes:
+        fmt.error("Delete requires --yes flag")
         return 1
 
     filepath = os.path.join(_templates_dir(cfg), f"{name}.toml")
