@@ -436,15 +436,16 @@ def cmd_snapshot_list(cfg: FreqConfig, pack, args) -> int:
         fmt.footer()
         return 1
 
-    # Parse snapshot output
+    # Parse snapshot output — PVE format: "`-> snapname  description..."
     snaps = []
     for line in stdout.strip().split("\n"):
         line = line.strip()
         if not line:
             continue
-        parts = line.split()
+        cleaned = line.lstrip("`->\\ ").strip()
+        parts = cleaned.split()
         if parts:
-            name = parts[0].replace("`-", "").replace("->", "").strip()
+            name = parts[0]
             if name and name != "current":
                 snaps.append(name)
 

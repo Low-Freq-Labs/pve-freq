@@ -74,9 +74,12 @@ def _get_snapshots(cfg: FreqConfig, node_ip: str, vmid: int) -> list:
         line = line.strip()
         if not line:
             continue
-        parts = line.split()
+        # PVE qm listsnapshot format: "`-> snapname  desc..." or "  `-> current"
+        # Strip tree drawing characters: ` - > and whitespace
+        cleaned = line.lstrip("`->\\ ").strip()
+        parts = cleaned.split()
         if parts:
-            name = parts[0].replace("`-", "").replace("->", "").strip()
+            name = parts[0]
             if name and name != "current":
                 snaps.append(name)
 
