@@ -3644,9 +3644,14 @@ function _enrichInfraCards(){
       var m=dev.metrics;var h='';
       var _m=function(val,lbl,color){return '<div class="role-metric"><span class="rm-val" style="color:'+color+'">'+val+'</span><span class="rm-lbl">'+lbl+'</span></div>';};
       if(dev.type==='pfsense'||dev.type==='opnsense'){
-        h+=_m(m.states||'?','STATES','var(--cyan)');
-        if(m.interfaces)h+=_m(m.interfaces,'IFACES','var(--text)');
-        if(m.uptime){var pfUp=m.uptime.replace(/^up\s+/i,'').replace(/,\s*\d+:\d+$/,'');h+=_m(pfUp,'UPTIME','var(--green)');}
+        if(m.states||m.interfaces||m.uptime){
+          h+=_m(m.states||'—','STATES','var(--cyan)');
+          if(m.interfaces)h+=_m(m.interfaces,'IFACES','var(--text)');
+          if(m.uptime){var pfUp=m.uptime.replace(/^up\s+/i,'').replace(/,\s*\d+:\d+$/,'');h+=_m(pfUp,'UPTIME','var(--green)');}
+        } else {
+          h+=_m('ONLINE','GATEWAY','var(--green)');
+          h+=_m('No SSH','METRICS','var(--text-dim)');
+        }
       } else if(dev.type==='truenas'||dev.type==='synology'||dev.type==='unraid'){
         var poolColor=m.pool_health==='ONLINE'?'var(--green)':m.pool_health==='DEGRADED'?'var(--yellow)':'var(--red)';
         h+=_m(m.pool_health||'?','POOLS',poolColor);
