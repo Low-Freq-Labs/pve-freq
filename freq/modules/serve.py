@@ -1565,11 +1565,17 @@ class FreqHandler(BaseHTTPRequestHandler):
         v1 domain routes use callables: function(handler) from freq/api/.
         """
         path = self.path.split("?")[0]
+        if "/terminal/" in path:
+            import sys
+            print(f"[DISPATCH] {self.command} {path} from {self.client_address[0]} upgrade={self.headers.get('Upgrade','none')}", file=sys.stderr, flush=True)
         # Check legacy routes first, then v1 domain routes
         handler_ref = self._ROUTES.get(path)
         if not handler_ref:
             self._load_v1_routes()
             handler_ref = self._V1_ROUTES.get(path)
+            if "/terminal/" in path:
+                import sys
+                print(f"[DISPATCH] route lookup: {path} -> {'FOUND' if handler_ref else 'NOT FOUND'} (v1 routes: {[k for k in self._V1_ROUTES if 'terminal' in k]})", file=sys.stderr, flush=True)
         if handler_ref:
             try:
                 if callable(handler_ref):

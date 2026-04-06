@@ -2644,8 +2644,10 @@ function openTerminal(type,target,node,label,htype){
       term.writeln('\r\n\x1b[90m--- Session closed ---\x1b[0m');
       _termSession=null;_termSocket=null;
     };
-    ws.onerror=function(){
-      term.writeln('\r\n\x1b[31mWebSocket error\x1b[0m');
+    ws.onerror=function(ev){
+      term.writeln('\r\n\x1b[31mWebSocket error: '+ws.url+'\x1b[0m');
+      term.writeln('\x1b[31mreadyState='+ws.readyState+' proto='+location.protocol+' host='+location.host+'\x1b[0m');
+      console.error('WS error',ev,ws);
     };
 
     /* Send keystrokes to server */
