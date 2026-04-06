@@ -21,7 +21,7 @@ _detect_version() {
             grep -oP '__version__\s*=\s*"\K[^"]+' "$init_py" 2>/dev/null && return
         fi
     done
-    echo "3.0.0"  # fallback — keep in sync with freq/__init__.py
+    echo "1.0.0"  # fallback — keep in sync with freq/__init__.py
 }
 FREQ_VERSION="${FREQ_VERSION:-$(_detect_version)}"
 INSTALL_DIR="${FREQ_DIR:-/opt/pve-freq}"
