@@ -1352,7 +1352,10 @@ function _applyCompactMode(on){
 /* Apply compact mode on load if saved */
 (function(){var s=_loadSettings();if(s&&s.compactMode)_applyCompactMode(true);})();
 function loadFleetPage(){
-  if(!_fleetCache.fo&&!_fleetCache.hd){
+  /* Render from cache immediately if available — never show skeletons on page switch */
+  if(_fleetCache.fo||_fleetCache.hd){
+    _renderFleetData(_fleetCache.fo,_fleetCache.hd);
+  } else {
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   }
