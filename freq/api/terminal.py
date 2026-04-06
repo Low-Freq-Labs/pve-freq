@@ -305,16 +305,21 @@ def handle_terminal_ws(handler):
     This hijacks the HTTP connection, performs the WebSocket handshake,
     then enters a select() loop bridging PTY fd and websocket frames.
     """
+    import sys
+
     # Extract session ID from query string
     from urllib.parse import urlparse, parse_qs
 
     parsed = urlparse(handler.path)
     qs = parse_qs(parsed.query)
     session_id = qs.get("session", [""])[0]
+    client = handler.client_address[0] if handler.client_address else "?"
+    print(f"[TERM-WS] client={client} session={session_id[:8]}... path={handler.path}", file=sys.stderr, flush=True)
 
     with _sessions_lock:
         session = _sessions.get(session_id)
         if not session:
+            print(f"[TERM-WS] ERROR: session not found (active: {list(_sessions.keys())[:3]})", file=sys.stderr, flush=True)
             handler.send_error(404, "Session not found")
             return
         fd = session["fd"]
@@ -322,24 +327,28 @@ def handle_terminal_ws(handler):
     # WebSocket handshake
     ws_key = handler.headers.get("Sec-WebSocket-Key", "")
     if not ws_key:
+        print(f"[TERM-WS] ERROR: no Sec-WebSocket-Key in headers", file=sys.stderr, flush=True)
         handler.send_error(400, "Missing Sec-WebSocket-Key")
         return
 
     accept = base64.b64encode(hashlib.sha1((ws_key + _WS_GUID).encode()).digest()).decode()
+    print(f"[TERM-WS] handshake: key={ws_key[:8]}... accept={accept[:8]}...", file=sys.stderr, flush=True)
 
     handler.send_response(101)
     handler.send_header("Upgrade", "websocket")
     handler.send_header("Connection", "Upgrade")
     handler.send_header("Sec-WebSocket-Accept", accept)
     handler.end_headers()
-    handler.wfile.flush()  # flush 101 response before switching to raw socket
+    handler.wfile.flush()
+    print(f"[TERM-WS] 101 sent + flushed, entering bridge", file=sys.stderr, flush=True)
 
     sock = handler.request  # raw socket
 
     try:
         _ws_bridge(sock, fd, session_id)
-    except Exception:
-        pass
+        print(f"[TERM-WS] bridge exited cleanly", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"[TERM-WS] bridge exception: {e}", file=sys.stderr, flush=True)
     finally:
         with _sessions_lock:
             if session_id in _sessions:
