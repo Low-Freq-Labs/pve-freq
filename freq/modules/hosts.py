@@ -663,10 +663,17 @@ def _auto_populate_fleet_boundaries(cfg, discovered: dict):
     # Device types that are "physical infrastructure" (not VMs/containers)
     INFRA_TYPES = {"pfsense", "opnsense", "truenas", "synology", "switch", "idrac", "ilo", "ipmi"}
 
-    # Find infra devices in discovered hosts
+    # Find infra devices in discovered hosts (skip lab VMs — they're VMs, not physical infra)
+    lab_vmids = set()
+    for cat_info in cfg.fleet_boundaries.categories.values():
+        if cat_info.get("tier") == "admin":  # lab tier
+            lab_vmids.update(cat_info.get("vmids", []))
     infra_devices = {}
     for ip, d in discovered.items():
         if d["htype"] in INFRA_TYPES:
+            # Skip VMs categorized as lab (e.g., truenas-lab, pfsense-lab)
+            if d.get("vmid", 0) in lab_vmids:
+                continue
             key = d["label"].replace("-", "_").replace(" ", "_")
             infra_devices[key] = {"ip": ip, "label": d["label"], "type": d["htype"]}
 
