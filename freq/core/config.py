@@ -614,6 +614,7 @@ def load_hosts_toml(path: str) -> list:
                 label=entry.get("label", ""),
                 htype=entry.get("type", "linux"),
                 groups=entry.get("groups", ""),
+                vmid=int(entry.get("vmid", 0)),
                 all_ips=all_ips,
             )
         )
@@ -633,6 +634,8 @@ def save_hosts_toml(path: str, hosts: list) -> None:
         lines.append(f'type = "{h.htype}"\n')
         if h.groups:
             lines.append(f'groups = "{h.groups}"\n')
+        if h.vmid:
+            lines.append(f"vmid = {h.vmid}\n")
         if h.all_ips:
             ips_str = ", ".join(f'"{ip}"' for ip in h.all_ips)
             lines.append(f"all_ips = [{ips_str}]\n")
@@ -652,6 +655,8 @@ def append_host_toml(path: str, host) -> None:
     lines.append(f'type = "{host.htype}"\n')
     if host.groups:
         lines.append(f'groups = "{host.groups}"\n')
+    if host.vmid:
+        lines.append(f"vmid = {host.vmid}\n")
     if host.all_ips:
         ips_str = ", ".join(f'"{ip}"' for ip in host.all_ips)
         lines.append(f"all_ips = [{ips_str}]\n")

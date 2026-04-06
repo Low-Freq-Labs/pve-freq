@@ -630,6 +630,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                 label=d["label"],
                 htype=d["htype"],
                 groups=d.get("groups", ""),
+                vmid=d.get("vmid", 0),
                 all_ips=all_ips,
             )
         )

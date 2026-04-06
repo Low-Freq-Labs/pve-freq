@@ -108,34 +108,34 @@ def handle_terminal_open(handler):
     # Resolve target IP for VMs (target can be IP or VMID)
     resolved_ip = target
     if term_type == "vm" and target.isdigit():
-        # Target is a VMID — resolve IP via PVE guest agent or fleet data
         vmid = int(target)
-        from freq.modules.pve import _find_reachable_node, _pve_cmd
 
-        node_ip = node or _find_reachable_node(cfg)
-        if node_ip:
-            # Try guest agent first
-            out, ok = _pve_cmd(
-                cfg,
-                node_ip,
-                f"qm agent {vmid} network-get-interfaces 2>/dev/null | "
-                f"python3 -c \"import sys,json;[print(a['ip-address']) "
-                f"for i in json.load(sys.stdin) if i.get('name')!='lo' "
-                f"for a in i.get('ip-addresses',[]) if a.get('ip-address-type')=='ipv4']\" 2>/dev/null | head -1",
-                timeout=10,
-            )
-            if ok and out.strip():
-                resolved_ip = out.strip().split("\n")[0]
-            else:
-                # Fallback: check fleet hosts for matching VMID
-                for h in cfg.hosts:
-                    if getattr(h, "vmid", 0) == vmid:
-                        resolved_ip = h.ip
-                        break
-                else:
-                    # Last resort: try hosts whose label contains the vmid
-                    json_response(handler, {"error": f"Cannot resolve IP for VMID {vmid}. Try using the IP directly."})
-                    return
+        # 1. Fleet registry (hosts.toml) — instant, no SSH needed
+        for h in cfg.hosts:
+            if getattr(h, "vmid", 0) == vmid:
+                resolved_ip = h.ip
+                break
+        else:
+            # 2. PVE guest agent — slower but authoritative
+            from freq.modules.pve import _find_reachable_node, _pve_cmd
+
+            node_ip = node or _find_reachable_node(cfg)
+            if node_ip:
+                out, ok = _pve_cmd(
+                    cfg,
+                    node_ip,
+                    f"qm agent {vmid} network-get-interfaces 2>/dev/null | "
+                    f"python3 -c \"import sys,json;[print(a['ip-address']) "
+                    f"for i in json.load(sys.stdin) if i.get('name')!='lo' "
+                    f"for a in i.get('ip-addresses',[]) if a.get('ip-address-type')=='ipv4']\" 2>/dev/null | head -1",
+                    timeout=10,
+                )
+                if ok and out.strip():
+                    resolved_ip = out.strip().split("\n")[0]
+
+        if resolved_ip == target:
+            json_response(handler, {"error": f"Cannot resolve IP for VMID {vmid}. Run 'freq discover' to populate hosts.toml with VMIDs."})
+            return
 
     # Build SSH command with device-type-aware options
     key_path = cfg.ssh_key_path

@@ -100,6 +100,7 @@ class Host:
     label: str
     htype: str
     groups: str = ""
+    vmid: int = 0
     all_ips: list = field(default_factory=list)
     phase: Phase = Phase.PENDING
     current: dict = field(default_factory=dict)
