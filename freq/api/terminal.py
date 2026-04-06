@@ -332,17 +332,20 @@ def handle_terminal_ws(handler):
         return
 
     accept = base64.b64encode(hashlib.sha1((ws_key + _WS_GUID).encode()).digest()).decode()
-    print(f"[TERM-WS] handshake: key={ws_key[:8]}... accept={accept[:8]}...", file=sys.stderr, flush=True)
-
-    handler.send_response(101)
-    handler.send_header("Upgrade", "websocket")
-    handler.send_header("Connection", "Upgrade")
-    handler.send_header("Sec-WebSocket-Accept", accept)
-    handler.end_headers()
-    handler.wfile.flush()
-    print(f"[TERM-WS] 101 sent + flushed, entering bridge", file=sys.stderr, flush=True)
 
     sock = handler.request  # raw socket
+
+    # Write 101 directly to socket — bypass BaseHTTPRequestHandler's
+    # BufferedWriter which can hold data or interfere with the raw socket.
+    response = (
+        "HTTP/1.1 101 Switching Protocols\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        f"Sec-WebSocket-Accept: {accept}\r\n"
+        "\r\n"
+    )
+    sock.sendall(response.encode())
+    print(f"[TERM-WS] 101 sent directly to socket, entering bridge", file=sys.stderr, flush=True)
 
     try:
         _ws_bridge(sock, fd, session_id)
