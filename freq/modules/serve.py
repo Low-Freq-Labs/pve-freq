@@ -366,26 +366,25 @@ def _bg_probe_infra():
                 else:
                     d["reachable"] = _ping_check(dev.ip)
             elif dt == "switch":
-                # Switch: try password auth via sshpass (Cisco IOS), then key fallback
+                # Switch: password auth via sshpass (Cisco IOS needs legacy ciphers)
                 sw_pass_file = os.path.join(os.path.dirname(cfg.conf_dir), "credentials", "switch-password")
-                sw_key = cfg.ssh_rsa_key_path or fleet_key
                 if os.path.isfile(sw_pass_file):
-                    from freq.core.ssh import get_platform_ssh
-                    plat = get_platform_ssh("switch", cfg)
-                    ssh_opts = []
-                    for k2, v2 in plat.get("options", {}).items():
-                        ssh_opts.extend(["-o", f"{k2}={v2}"])
-                    sw_cmd = ["sshpass", "-f", sw_pass_file, "ssh", "-n",
-                              "-o", "ConnectTimeout=3", "-o", "StrictHostKeyChecking=accept-new",
-                              ] + ssh_opts + [f"{plat.get('user', 'freq-ops')}@{dev.ip}",
-                              "show version | include uptime"]
+                    sw_cmd = [
+                        "sshpass", "-f", sw_pass_file, "ssh", "-n",
+                        "-o", "ConnectTimeout=3",
+                        "-o", "StrictHostKeyChecking=accept-new",
+                        "-o", "KexAlgorithms=+diffie-hellman-group14-sha1",
+                        "-o", "HostKeyAlgorithms=+ssh-rsa",
+                        f"{bootstrap_user}@{dev.ip}",
+                        "show version | include uptime",
+                    ]
                     proc = subprocess.run(sw_cmd, capture_output=True, text=True, timeout=10)
                     r = type("R", (), {"returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})()
                 else:
                     r = ssh_single(
                         host=dev.ip,
                         command="show version | include uptime",
-                        key_path=sw_key,
+                        key_path=fleet_key,
                         connect_timeout=2,
                         command_timeout=5,
                         htype="switch",
