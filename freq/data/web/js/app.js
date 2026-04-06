@@ -3786,7 +3786,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
     var nodeName=pn.name;
     var cl=_hostColor(nodeName,'pve');
     var live=healthMap[nodeName];
-    var up=live&&live.status==='healthy';
+    var up=(live&&live.status==='healthy')||pn.online===true;
     var nodeVms=(vmsByNode[nodeName]||[]).filter(function(v){return !labLabels[v.name]&&v.category!=='lab';});
     var nVms=nodeVms.length;
     var nCores=0,nRamMb=0,nOnline=0,nOffline=0;

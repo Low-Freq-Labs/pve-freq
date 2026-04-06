@@ -684,11 +684,17 @@ def _bg_probe_fleet_overview():
             "name": dn.get("name", ""),
             "ip": dn.get("ip", ""),
             "detail": fb_detail.get(dn.get("name", ""), dn.get("detail", "")),
+            "online": dn.get("online", False),
         }
         if dn.get("cores"):
             entry["cores"] = dn["cores"]
         if dn.get("ram_gb"):
             entry["ram_gb"] = dn["ram_gb"]
+        # Check PVE API reachability if not already set
+        if not entry["online"]:
+            from freq.modules.pve import _pve_api_call
+            _, ok = _pve_api_call(cfg, entry["ip"], f"/nodes/{entry['name']}/status", timeout=3)
+            entry["online"] = ok
         pve_nodes.append(entry)
 
     # Category summaries
