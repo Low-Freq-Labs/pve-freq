@@ -378,11 +378,10 @@ def _ws_bridge(sock, fd, session_id, leftover=b""):
         session_id: Session key for the session store
         leftover: Bytes drained from rfile's buffer (already consumed from kernel)
     """
-    # Keep socket BLOCKING. select() tells us when data is available;
-    # blocking recv/sendall handle the rest cleanly. Non-blocking mode
-    # causes sendall() to raise BlockingIOError on keep-alive connections.
+    import sys as _sys
     sock.setblocking(True)
     sock.settimeout(30)
+    print(f"[BRIDGE] start fd={fd} sock_fd={sock.fileno()}", file=_sys.stderr, flush=True)
 
     while True:
         with _sessions_lock:
@@ -411,14 +410,20 @@ def _ws_bridge(sock, fd, session_id, leftover=b""):
             try:
                 data = os.read(fd, 4096)
                 if not data:
+                    print(f"[BRIDGE] PTY EOF", file=_sys.stderr, flush=True)
                     break
+                print(f"[BRIDGE] PTY→WS {len(data)}b", file=_sys.stderr, flush=True)
                 _ws_send(sock, data)
-            except OSError:
+                print(f"[BRIDGE] sent ok", file=_sys.stderr, flush=True)
+            except OSError as e:
+                print(f"[BRIDGE] PTY/send err: {e}", file=_sys.stderr, flush=True)
                 break
 
         if sock in rlist:
+            print(f"[BRIDGE] sock readable", file=_sys.stderr, flush=True)
             payload = _ws_recv(sock)
             if payload is None:
+                print(f"[BRIDGE] ws recv None", file=_sys.stderr, flush=True)
                 break
             if payload:
                 try:
