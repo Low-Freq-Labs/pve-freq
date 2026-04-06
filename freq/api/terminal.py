@@ -337,21 +337,19 @@ def handle_terminal_ws(handler):
     # handle_one_request() on our now-dead WebSocket socket.
     handler.close_connection = True
 
-    # Send 101 directly on the raw socket. We bypass handler.send_response()
-    # and handler.wfile entirely so there's no BufferedWriter interference.
+    # Send 101 through handler.wfile — on keep-alive connections, wfile owns
+    # the socket's write buffer. Direct sock.sendall() gets queued behind
+    # wfile's unflushed data and the client never sees our WebSocket frames.
+    handler.send_response(101)
+    handler.send_header("Upgrade", "websocket")
+    handler.send_header("Connection", "Upgrade")
+    handler.send_header("Sec-WebSocket-Accept", accept)
+    handler.end_headers()
+    handler.wfile.flush()
+
     sock = handler.request
-    response = (
-        "HTTP/1.1 101 Switching Protocols\r\n"
-        "Upgrade: websocket\r\n"
-        "Connection: Upgrade\r\n"
-        f"Sec-WebSocket-Accept: {accept}\r\n"
-        "\r\n"
-    )
-    sock.sendall(response.encode())
 
     # Drain any bytes rfile's BufferedReader consumed past the HTTP headers.
-    # These bytes belong to the WebSocket stream but are stuck in Python's
-    # userspace buffer — select() and sock.recv() will never see them.
     rfile = handler.rfile
     leftover = b""
     if hasattr(rfile, "peek"):
@@ -359,8 +357,11 @@ def handle_terminal_ws(handler):
         if peeked:
             leftover = rfile.read(len(peeked))
 
+    # Pass wfile for writing — on keep-alive, wfile owns the socket write buffer
+    wfile = handler.wfile
+
     try:
-        _ws_bridge(sock, fd, session_id, leftover)
+        _ws_bridge(sock, wfile, fd, session_id, leftover)
     except Exception:
         pass
     finally:
@@ -369,19 +370,18 @@ def handle_terminal_ws(handler):
                 _kill_session(session_id)
 
 
-def _ws_bridge(sock, fd, session_id, leftover=b""):
+def _ws_bridge(sock, wfile, fd, session_id, leftover=b""):
     """Bridge websocket ↔ PTY using select().
 
     Args:
-        sock: Raw TCP socket (post-handshake, in WebSocket mode)
+        sock: Raw TCP socket (for reading WebSocket frames)
+        wfile: handler.wfile BufferedWriter (for writing — owns socket write buffer)
         fd: PTY file descriptor connected to SSH process
         session_id: Session key for the session store
         leftover: Bytes drained from rfile's buffer (already consumed from kernel)
     """
-    import sys as _sys
     sock.setblocking(True)
     sock.settimeout(30)
-    print(f"[BRIDGE] start fd={fd} sock_fd={sock.fileno()}", file=_sys.stderr, flush=True)
 
     while True:
         with _sessions_lock:
@@ -412,18 +412,13 @@ def _ws_bridge(sock, fd, session_id, leftover=b""):
                 if not data:
                     print(f"[BRIDGE] PTY EOF", file=_sys.stderr, flush=True)
                     break
-                print(f"[BRIDGE] PTY→WS {len(data)}b", file=_sys.stderr, flush=True)
-                _ws_send(sock, data)
-                print(f"[BRIDGE] sent ok", file=_sys.stderr, flush=True)
-            except OSError as e:
-                print(f"[BRIDGE] PTY/send err: {e}", file=_sys.stderr, flush=True)
+                _ws_send(wfile, data)
+            except OSError:
                 break
 
         if sock in rlist:
-            print(f"[BRIDGE] sock readable", file=_sys.stderr, flush=True)
             payload = _ws_recv(sock)
             if payload is None:
-                print(f"[BRIDGE] ws recv None", file=_sys.stderr, flush=True)
                 break
             if payload:
                 try:
@@ -432,8 +427,8 @@ def _ws_bridge(sock, fd, session_id, leftover=b""):
                     break
 
 
-def _ws_send(sock, data):
-    """Send a websocket binary frame."""
+def _ws_send(wfile, data):
+    """Send a websocket binary frame through wfile."""
     length = len(data)
     header = bytearray()
     header.append(0x82)  # FIN + binary opcode
@@ -447,7 +442,8 @@ def _ws_send(sock, data):
         header.append(127)
         header.extend(struct.pack(">Q", length))
 
-    sock.sendall(bytes(header) + data)
+    wfile.write(bytes(header) + data)
+    wfile.flush()
 
 
 def _ws_recv(sock):
@@ -517,10 +513,8 @@ def _ws_parse_frame(head, sock, remaining=b""):
             payload[i] ^= mask_key[i % 4]
         payload = bytes(payload)
 
-    # Handle ping
+    # Handle ping — just acknowledge, pong is sent by bridge caller if needed
     if opcode == 0x09:
-        if sock:
-            _ws_send_pong(sock, payload)
         return b""
 
     return payload
@@ -540,10 +534,11 @@ def _ws_read_exact(sock, n):
     return bytes(buf)
 
 
-def _ws_send_pong(sock, data):
-    """Send a websocket pong frame."""
+def _ws_send_pong(wfile, data):
+    """Send a websocket pong frame through wfile."""
     header = bytearray([0x8A, len(data)])
-    sock.sendall(bytes(header) + data)
+    wfile.write(bytes(header) + data)
+    wfile.flush()
 
 
 # ── Route Registration ──────────────────────────────────────────────────
