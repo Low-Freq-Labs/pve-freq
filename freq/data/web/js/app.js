@@ -1462,8 +1462,10 @@ function switchDockerSub(sub){
   if(sub==='compose')loadComposeVMs();
   if(sub==='fleet-inv')loadDockerFleet();
 }
-function _getMediaTags(){try{return JSON.parse(localStorage.getItem('freq_media_tags')||'[]');}catch(e){return [];}}
-function _setMediaTags(tags){localStorage.setItem('freq_media_tags',JSON.stringify(tags));}
+var _serverMediaTags=null;
+function _getMediaTags(){if(_serverMediaTags!==null)return _serverMediaTags;try{return JSON.parse(localStorage.getItem('freq_media_tags')||'[]');}catch(e){return [];}}
+function _setMediaTags(tags){_serverMediaTags=tags;localStorage.setItem('freq_media_tags',JSON.stringify(tags));_authFetch('/api/media/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tags:tags})}).catch(function(){});}
+function _loadServerMediaTags(){_authFetch('/api/media/tags').then(function(r){return r.json()}).then(function(d){if(d.tags&&d.tags.length){_serverMediaTags=d.tags;localStorage.setItem('freq_media_tags',JSON.stringify(d.tags));}}).catch(function(){});}
 var _mediaCache=null;/* cached /api/media/status response */
 function toggleMediaTag(name){
   var tags=_getMediaTags();
@@ -1585,6 +1587,7 @@ function setPublicUrl(name){
   toast(val?name+' public URL set':'Public URL removed for '+name,'success');
 }
 function loadDockerPage(){
+  _loadServerMediaTags();
   loadContainerSection();
   if(_dockerSub==='services')loadServiceContainers();
   else if(_dockerSub==='media'){loadMediaContainers();loadDownloads();loadStreams();}

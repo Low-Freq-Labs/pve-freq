@@ -1530,6 +1530,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/media/logs": "_serve_media_logs",
         "/api/media/update": "_serve_media_update",
         "/api/media/tdarr": "_serve_media_tdarr",
+        "/api/media/tags": "_serve_media_tags",
         "/api/media/downloads/detail": "_serve_media_downloads_detail",
         # ── Infrastructure device (stays — pfsense goes to fw later) ──
         "/api/infra/pfsense": "_serve_pfsense",
@@ -1643,6 +1644,29 @@ class FreqHandler(BaseHTTPRequestHandler):
             _sse_unsubscribe(q)
 
     # ── Topology ─────────────────────────────────────────────────────────
+
+    def _serve_media_tags(self):
+        """GET/POST /api/media/tags — persist media container tags server-side."""
+        cfg = load_config()
+        tags_file = os.path.join(cfg.data_dir, "cache", "media_tags.json")
+        if self.command == "POST":
+            body = self._request_body()
+            if body and "tags" in body:
+                try:
+                    with open(tags_file, "w") as f:
+                        json.dump(body["tags"], f)
+                    self._json_response({"ok": True, "tags": body["tags"]})
+                except OSError as e:
+                    self._json_response({"error": str(e)}, 500)
+            else:
+                self._json_response({"error": "tags array required"}, 400)
+        else:
+            try:
+                with open(tags_file) as f:
+                    tags = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                tags = []
+            self._json_response({"tags": tags})
 
     def _serve_media_tdarr(self):
         """GET /api/media/tdarr — Tdarr transcoding status."""
