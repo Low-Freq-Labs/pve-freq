@@ -400,25 +400,28 @@ def _bg_probe_infra():
                     if d["reachable"]:
                         d["metrics"]["note"] = "Reachable (no SSH)"
             elif dt == "idrac":
-                # iDRAC: try RSA key first, then fleet key as root
-                idrac_key = cfg.ssh_rsa_key_path or fleet_key
-                r = ssh_single(
-                    host=dev.ip,
-                    command="racadm getsysinfo -s",
-                    key_path=idrac_key,
-                    user="root",
-                    connect_timeout=3,
-                    command_timeout=8,
-                    htype="idrac",
-                    use_sudo=False,
-                    cfg=cfg,
-                )
-                if r.returncode != 0:
-                    # Try fleet key as root
+                # iDRAC: password auth via sshpass (same cred file as switch)
+                idrac_pass_file = os.path.join(os.path.dirname(cfg.conf_dir), "credentials", "switch-password")
+                if os.path.isfile(idrac_pass_file):
+                    idrac_cmd = [
+                        "sshpass", "-f", idrac_pass_file, "ssh", "-n",
+                        "-o", "ConnectTimeout=3",
+                        "-o", "StrictHostKeyChecking=accept-new",
+                        "-o", "KexAlgorithms=+diffie-hellman-group14-sha1",
+                        "-o", "HostKeyAlgorithms=+ssh-rsa",
+                        "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
+                        f"{bootstrap_user}@{dev.ip}",
+                        "racadm getsysinfo -s",
+                    ]
+                    proc = subprocess.run(idrac_cmd, capture_output=True, text=True, timeout=15)
+                    r = type("R", (), {"returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})()
+                else:
+                    # Fallback: try RSA key
+                    idrac_key = cfg.ssh_rsa_key_path or fleet_key
                     r = ssh_single(
                         host=dev.ip,
                         command="racadm getsysinfo -s",
-                        key_path=fleet_key,
+                        key_path=idrac_key,
                         user="root",
                         connect_timeout=3,
                         command_timeout=8,
