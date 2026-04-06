@@ -342,8 +342,11 @@ def _handle_terminal_ws_inner(handler, _log):
     accept = base64.b64encode(hashlib.sha1((ws_key + _WS_GUID).encode()).digest()).decode()
     handler.close_connection = True
 
-    # Write 101 as raw bytes to wfile — bypass send_response() which adds
-    # Server/Date headers. Minimal RFC 6455 compliant response only.
+    # Log the exact key and accept for debugging
+    _log(f"ws_key='{ws_key}' accept='{accept}'")
+    # Log ALL request headers from browser
+    _log(f"headers={dict(handler.headers)}")
+
     raw_101 = (
         "HTTP/1.1 101 Switching Protocols\r\n"
         "Upgrade: websocket\r\n"
@@ -351,6 +354,7 @@ def _handle_terminal_ws_inner(handler, _log):
         f"Sec-WebSocket-Accept: {accept}\r\n"
         "\r\n"
     ).encode()
+    _log(f"raw_101={raw_101!r}")
     handler.wfile.write(raw_101)
     handler.wfile.flush()
     _log(f"101 sent ({len(raw_101)}b)")
