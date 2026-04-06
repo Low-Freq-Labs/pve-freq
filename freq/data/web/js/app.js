@@ -423,7 +423,7 @@ _checkSession();
 /* Widget registry — all possible widgets for HOME dashboard */
 var WIDGET_REGISTRY=[
   {id:'w-fleet-stats',page:'FLEET',label:'Fleet Stats',loader:function(el){el.innerHTML='<div class="stats" id="hw-fleet-stats"></div>';_loadHomeFleetStats();}},
-  {id:'w-fleet-infra',page:'FLEET',label:'Hosts & VMs',ref:'fleet-sec-infra',preload:function(){loadFleetPage();}},
+  {id:'w-fleet-infra',page:'FLEET',label:'Hosts & VMs & LXC',ref:'fleet-sec-infra',preload:function(){loadFleetPage();}},
   {id:'w-fleet-overview',page:'FLEET',label:'Overview',loader:function(el){
     /* Summary cards row — cluster-level stats */
     var g='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">';
