@@ -378,7 +378,11 @@ def _ws_bridge(sock, fd, session_id, leftover=b""):
         session_id: Session key for the session store
         leftover: Bytes drained from rfile's buffer (already consumed from kernel)
     """
-    sock.setblocking(False)
+    # Keep socket BLOCKING. select() tells us when data is available;
+    # blocking recv/sendall handle the rest cleanly. Non-blocking mode
+    # causes sendall() to raise BlockingIOError on keep-alive connections.
+    sock.setblocking(True)
+    sock.settimeout(30)
 
     while True:
         with _sessions_lock:
@@ -523,9 +527,8 @@ def _ws_read_exact(sock, n):
     while len(buf) < n:
         try:
             chunk = sock.recv(n - len(buf))
-        except BlockingIOError:
-            select.select([sock], [], [], 5.0)
-            continue
+        except (BlockingIOError, TimeoutError):
+            return None
         if not chunk:
             return None
         buf.extend(chunk)
