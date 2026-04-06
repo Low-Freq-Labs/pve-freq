@@ -100,9 +100,10 @@ class TestSSHHardeningPolicyData(unittest.TestCase):
         self.assertEqual(mat["pve"], "5")
         self.assertEqual(mat["docker"], "3")
 
-    def test_password_auth_is_uniform(self):
+    def test_password_auth_not_enforced(self):
+        """PasswordAuthentication is intentionally not in the policy — user choice."""
         entries = SSH_POLICY["resources"][0]["entries"]
-        self.assertEqual(entries["PasswordAuthentication"], "no")
+        self.assertNotIn("PasswordAuthentication", entries)
 
 
 # === PolicyExecutor Tests ===
@@ -160,7 +161,7 @@ class TestPolicyExecutorDesiredState(unittest.TestCase):
     def test_ssh_desired_state_uniform_values(self):
         ex = PolicyExecutor(SSH_POLICY)
         desired = ex.desired_state(_host("linux"))
-        self.assertEqual(desired["PasswordAuthentication"], "no")
+        self.assertNotIn("PasswordAuthentication", desired)
         self.assertEqual(desired["X11Forwarding"], "no")
         self.assertEqual(desired["PermitEmptyPasswords"], "no")
         self.assertEqual(desired["ClientAliveInterval"], "300")
