@@ -302,24 +302,24 @@ _WS_GUID = "258EAFA5-E914-47DA-95CA-5AB5DC11DE10"
 def handle_terminal_ws(handler):
     """WebSocket endpoint — bridges xterm.js ↔ PTY.
 
-    This hijacks the HTTP connection, performs the WebSocket handshake,
-    then enters a select() loop bridging PTY fd and websocket frames.
-    """
-    import sys
+    Hijacks the HTTP connection: sends 101 directly on the raw socket,
+    drains any data buffered by rfile, then bridges PTY ↔ WebSocket.
 
-    # Extract session ID from query string
+    Key constraints of BaseHTTPRequestHandler:
+      - rfile (BufferedReader) may have consumed bytes past the HTTP headers
+        from the kernel socket buffer. select() can't see those bytes.
+      - close_connection must be True so the handler loop doesn't try to
+        read another HTTP request after the bridge exits.
+    """
     from urllib.parse import urlparse, parse_qs
 
     parsed = urlparse(handler.path)
     qs = parse_qs(parsed.query)
     session_id = qs.get("session", [""])[0]
-    client = handler.client_address[0] if handler.client_address else "?"
-    print(f"[TERM-WS] client={client} session={session_id[:8]}... path={handler.path}", file=sys.stderr, flush=True)
 
     with _sessions_lock:
         session = _sessions.get(session_id)
         if not session:
-            print(f"[TERM-WS] ERROR: session not found (active: {list(_sessions.keys())[:3]})", file=sys.stderr, flush=True)
             handler.send_error(404, "Session not found")
             return
         fd = session["fd"]
@@ -327,16 +327,19 @@ def handle_terminal_ws(handler):
     # WebSocket handshake
     ws_key = handler.headers.get("Sec-WebSocket-Key", "")
     if not ws_key:
-        print(f"[TERM-WS] ERROR: no Sec-WebSocket-Key in headers", file=sys.stderr, flush=True)
         handler.send_error(400, "Missing Sec-WebSocket-Key")
         return
 
     accept = base64.b64encode(hashlib.sha1((ws_key + _WS_GUID).encode()).digest()).decode()
 
-    sock = handler.request  # raw socket
+    # CRITICAL: Tell BaseHTTPRequestHandler to NOT loop back and read
+    # another request after we return. Without this, handle() re-enters
+    # handle_one_request() on our now-dead WebSocket socket.
+    handler.close_connection = True
 
-    # Write 101 directly to socket — bypass BaseHTTPRequestHandler's
-    # BufferedWriter which can hold data or interfere with the raw socket.
+    # Send 101 directly on the raw socket. We bypass handler.send_response()
+    # and handler.wfile entirely so there's no BufferedWriter interference.
+    sock = handler.request
     response = (
         "HTTP/1.1 101 Switching Protocols\r\n"
         "Upgrade: websocket\r\n"
@@ -345,62 +348,79 @@ def handle_terminal_ws(handler):
         "\r\n"
     )
     sock.sendall(response.encode())
-    print(f"[TERM-WS] 101 sent directly to socket, entering bridge", file=sys.stderr, flush=True)
+
+    # Drain any bytes rfile's BufferedReader consumed past the HTTP headers.
+    # These bytes belong to the WebSocket stream but are stuck in Python's
+    # userspace buffer — select() and sock.recv() will never see them.
+    rfile = handler.rfile
+    leftover = b""
+    if hasattr(rfile, "peek"):
+        peeked = rfile.peek(65536)
+        if peeked:
+            leftover = rfile.read(len(peeked))
 
     try:
-        _ws_bridge(sock, fd, session_id)
-        print(f"[TERM-WS] bridge exited cleanly", file=sys.stderr, flush=True)
-    except Exception as e:
-        print(f"[TERM-WS] bridge exception: {e}", file=sys.stderr, flush=True)
+        _ws_bridge(sock, fd, session_id, leftover)
+    except Exception:
+        pass
     finally:
         with _sessions_lock:
             if session_id in _sessions:
                 _kill_session(session_id)
 
 
-def _ws_bridge(sock, fd, session_id):
-    """Bridge websocket ↔ PTY using select()."""
-    import sys
+def _ws_bridge(sock, fd, session_id, leftover=b""):
+    """Bridge websocket ↔ PTY using select().
+
+    Args:
+        sock: Raw TCP socket (post-handshake, in WebSocket mode)
+        fd: PTY file descriptor connected to SSH process
+        session_id: Session key for the session store
+        leftover: Bytes drained from rfile's buffer (already consumed from kernel)
+    """
     sock.setblocking(False)
-    _iter = 0
 
     while True:
-        _iter += 1
         with _sessions_lock:
             s = _sessions.get(session_id)
             if not s:
-                print(f"[WS-BRIDGE] iter={_iter} EXIT: session gone", file=sys.stderr, flush=True)
                 break
             s["last_active"] = time.time()
 
+        # If rfile had leftover bytes, process them before entering select.
+        # These bytes are in userspace — select() won't report them.
+        if leftover:
+            payload = _ws_decode_frame(leftover)
+            if payload is None:
+                break  # Close frame or corrupt data
+            if payload:
+                os.write(fd, payload)
+            leftover = b""
+            continue
+
         try:
             rlist, _, _ = select.select([sock, fd], [], [], 1.0)
-        except (ValueError, OSError) as e:
-            print(f"[WS-BRIDGE] iter={_iter} EXIT: select error: {e}", file=sys.stderr, flush=True)
+        except (ValueError, OSError):
             break
 
         if fd in rlist:
             try:
                 data = os.read(fd, 4096)
                 if not data:
-                    print(f"[WS-BRIDGE] iter={_iter} EXIT: PTY EOF", file=sys.stderr, flush=True)
                     break
                 _ws_send(sock, data)
-            except OSError as e:
-                print(f"[WS-BRIDGE] iter={_iter} EXIT: PTY/send error: {e}", file=sys.stderr, flush=True)
+            except OSError:
                 break
 
         if sock in rlist:
-            try:
-                payload = _ws_recv(sock)
-                if payload is None:
-                    print(f"[WS-BRIDGE] iter={_iter} EXIT: ws recv None (closed)", file=sys.stderr, flush=True)
-                    break
-                if payload:
-                    os.write(fd, payload)
-            except (OSError, ConnectionError) as e:
-                print(f"[WS-BRIDGE] iter={_iter} EXIT: ws recv error: {e}", file=sys.stderr, flush=True)
+            payload = _ws_recv(sock)
+            if payload is None:
                 break
+            if payload:
+                try:
+                    os.write(fd, payload)
+                except OSError:
+                    break
 
 
 def _ws_send(sock, data):
@@ -422,47 +442,65 @@ def _ws_send(sock, data):
 
 
 def _ws_recv(sock):
-    """Read one websocket frame. Returns payload bytes or None on close."""
-    import sys
+    """Read one websocket frame from socket. Returns payload bytes or None on close."""
     try:
         head = _ws_read_exact(sock, 2)
-    except (OSError, ConnectionError) as e:
-        print(f"[WS-RECV] head read error: {e}", file=sys.stderr, flush=True)
+    except (OSError, ConnectionError):
         return None
 
     if not head or len(head) < 2:
-        print(f"[WS-RECV] head={head!r} (short/empty)", file=sys.stderr, flush=True)
         return None
 
+    return _ws_parse_frame(head, sock)
+
+
+def _ws_decode_frame(data):
+    """Parse a websocket frame from raw bytes (for leftover buffer). Returns payload or None."""
+    if len(data) < 2:
+        return b""
+
+    return _ws_parse_frame(data[:2], None, data[2:])
+
+
+def _ws_parse_frame(head, sock, remaining=b""):
+    """Parse frame given 2-byte header. Reads additional bytes from sock or remaining buffer."""
     opcode = head[0] & 0x0F
-    fin = bool(head[0] & 0x80)
-    print(f"[WS-RECV] opcode={opcode} fin={fin} byte0=0x{head[0]:02x} byte1=0x{head[1]:02x}", file=sys.stderr, flush=True)
     if opcode == 0x08:
         return None  # Close frame
 
     masked = bool(head[1] & 0x80)
     length = head[1] & 0x7F
 
+    def _read(n):
+        nonlocal remaining
+        if remaining:
+            chunk = remaining[:n]
+            remaining = remaining[n:]
+            return chunk if len(chunk) == n else None
+        if sock:
+            return _ws_read_exact(sock, n)
+        return None
+
     if length == 126:
-        ext = _ws_read_exact(sock, 2)
+        ext = _read(2)
         if not ext:
             return None
         length = struct.unpack(">H", ext)[0]
     elif length == 127:
-        ext = _ws_read_exact(sock, 8)
+        ext = _read(8)
         if not ext:
             return None
         length = struct.unpack(">Q", ext)[0]
 
     mask_key = b""
     if masked:
-        mask_key = _ws_read_exact(sock, 4)
+        mask_key = _read(4)
         if not mask_key:
             return None
 
-    payload = _ws_read_exact(sock, length)
+    payload = _read(length)
     if not payload:
-        return None
+        return None if length > 0 else b""
 
     if masked:
         payload = bytearray(payload)
@@ -472,7 +510,8 @@ def _ws_recv(sock):
 
     # Handle ping
     if opcode == 0x09:
-        _ws_send_pong(sock, payload)
+        if sock:
+            _ws_send_pong(sock, payload)
         return b""
 
     return payload
@@ -485,7 +524,6 @@ def _ws_read_exact(sock, n):
         try:
             chunk = sock.recv(n - len(buf))
         except BlockingIOError:
-            # Non-blocking socket, retry with select
             select.select([sock], [], [], 5.0)
             continue
         if not chunk:
