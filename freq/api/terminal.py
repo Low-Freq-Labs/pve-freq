@@ -157,19 +157,20 @@ def handle_terminal_open(handler):
     if extra_opts:
         ssh_opts += " " + " ".join(extra_opts)
 
+    # Legacy devices (iDRAC/switch) need RSA key and may need password auth
+    sshpass_prefix = ""
+    if htype in ("idrac", "switch"):
+        rsa_key = getattr(cfg, "ssh_rsa_key_path", "")
+        if rsa_key:
+            ssh_opts = ssh_opts.replace(f"-i {key_path}", f"-i {rsa_key}")
+        # Password auth via sshpass if configured
+        pw_file = getattr(cfg, "legacy_password_file", "")
+        if pw_file and os.path.isfile(pw_file):
+            sshpass_prefix = f"sshpass -f {pw_file} "
+
     # Switch uses -T (no PTY allocation on remote — IOS doesn't support it)
     if htype == "switch":
         ssh_opts += " -T"
-        # Switch may need RSA key instead of ed25519
-        rsa_key = getattr(cfg, "ssh_rsa_key_path", "")
-        if rsa_key:
-            ssh_opts = ssh_opts.replace(f"-i {key_path}", f"-i {rsa_key}")
-
-    # iDRAC: use RSA key if available
-    if htype == "idrac":
-        rsa_key = getattr(cfg, "ssh_rsa_key_path", "")
-        if rsa_key:
-            ssh_opts = ssh_opts.replace(f"-i {key_path}", f"-i {rsa_key}")
 
     if term_type == "ct":
         # SSH to PVE node, then pct exec into container
@@ -181,20 +182,8 @@ def handle_terminal_open(handler):
                 json_response(handler, {"error": "No PVE node reachable"})
                 return
         cmd = f"ssh {ssh_opts} {ssh_user}@{node} sudo pct enter {target}"
-    elif term_type == "node":
-        cmd = f"ssh {ssh_opts} {ssh_user}@{resolved_ip}"
-    elif htype == "pfsense":
-        # pfSense — no sudo prefix, direct shell
-        cmd = f"ssh {ssh_opts} {ssh_user}@{resolved_ip}"
-    elif htype == "idrac":
-        # iDRAC — racadm shell
-        cmd = f"ssh {ssh_opts} {ssh_user}@{resolved_ip}"
-    elif htype == "switch":
-        # Switch — IOS CLI, no PTY
-        cmd = f"ssh {ssh_opts} {ssh_user}@{resolved_ip}"
     else:
-        # VM or generic host — direct SSH
-        cmd = f"ssh {ssh_opts} {ssh_user}@{resolved_ip}"
+        cmd = f"{sshpass_prefix}ssh {ssh_opts} {ssh_user}@{resolved_ip}"
 
     # Spawn in PTY
     try:
