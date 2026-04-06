@@ -201,8 +201,8 @@ class TestCLIEventRegistration(unittest.TestCase):
         self.assertTrue(hasattr(args, "func"))
 
     def test_event_delete(self):
-        args = self._parse("event delete superbowl --confirm")
-        self.assertTrue(args.confirm)
+        args = self._parse("event delete superbowl --yes")
+        self.assertTrue(args.yes)
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +320,7 @@ class TestEventDeleteCommand(unittest.TestCase):
 
         args = MagicMock()
         args.name = "test"
-        args.confirm = False
+        args.yes = False
 
         buf = io.StringIO()
         with redirect_stdout(buf):
@@ -339,7 +339,7 @@ class TestEventDeleteCommand(unittest.TestCase):
 
         args = MagicMock()
         args.name = "test"
-        args.confirm = True
+        args.yes = True
 
         buf = io.StringIO()
         with redirect_stdout(buf):
