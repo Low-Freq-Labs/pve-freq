@@ -32,7 +32,9 @@ POLICY = {
                     "pve": "prohibit-password",
                     "docker": "prohibit-password",
                 },
-                "PasswordAuthentication": "no",
+                # PasswordAuthentication intentionally NOT enforced — user choice
+                # Was "no" but this broke SSH access for users with password auth.
+                # Key-only enforcement is opt-in via dashboard security panel.
                 "MaxAuthTries": {
                     "linux": "3",
                     "pve": "5",  # PVE cluster needs more auth attempts
