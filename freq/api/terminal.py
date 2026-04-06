@@ -296,56 +296,41 @@ def handle_terminal_sessions(handler):
 # ── WebSocket Handler ──────────────────────────────────────────────────
 
 # WebSocket magic GUID per RFC 6455
-_WS_GUID = "258EAFA5-E914-47DA-95CA-5AB5DC11DE10"
+_WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
 def handle_terminal_ws(handler):
-    """WebSocket endpoint — bridges xterm.js ↔ PTY."""
-    import traceback as _tb
-    def _log(msg):
-        try:
-            with open("/tmp/freq-ws.log", "a") as f:
-                f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
-        except Exception:
-            pass
+    """WebSocket endpoint — bridges xterm.js ↔ PTY.
 
-    _log(f"ENTER client={handler.client_address}")
-    try:
-        _handle_terminal_ws_inner(handler, _log)
-    except Exception as e:
-        _log(f"EXCEPTION: {e}\n{''.join(_tb.format_exc())}")
-        raise
-
-def _handle_terminal_ws_inner(handler, _log):
+    Hijacks the HTTP connection: sends 101 via raw socket sendall(),
+    drains any data buffered by rfile, then bridges PTY ↔ WebSocket.
+    """
     from urllib.parse import urlparse, parse_qs
 
     parsed = urlparse(handler.path)
     qs = parse_qs(parsed.query)
     session_id = qs.get("session", [""])[0]
-    _log(f"session={session_id[:8]}...")
 
     with _sessions_lock:
         session = _sessions.get(session_id)
         if not session:
-            _log(f"session NOT FOUND, active={len(_sessions)}")
             handler.send_error(404, "Session not found")
             return
         fd = session["fd"]
-    _log(f"session found, fd={fd}")
 
     ws_key = handler.headers.get("Sec-WebSocket-Key", "")
     if not ws_key:
-        _log("no ws key")
         handler.send_error(400, "Missing Sec-WebSocket-Key")
         return
 
     accept = base64.b64encode(hashlib.sha1((ws_key + _WS_GUID).encode()).digest()).decode()
+
+    # Stop the HTTP handler loop from re-entering after we return
     handler.close_connection = True
 
-    # Flush wfile to drain any data buffered from prior keep-alive requests,
-    # then use sock.sendall() for all WebSocket I/O. wfile (unbuffered,
-    # wbufsize=0) wraps sock.send() which can do partial sends — sendall()
-    # is the only safe way to guarantee complete delivery.
+    # Flush wfile to drain any prior keep-alive response data, then use
+    # sock.sendall() for all WebSocket I/O (wfile is unbuffered and wraps
+    # sock.send() which can do partial sends)
     sock = handler.request
     try:
         handler.wfile.flush()
@@ -360,20 +345,18 @@ def _handle_terminal_ws_inner(handler, _log):
         "\r\n"
     ).encode()
     sock.sendall(raw_101)
-    _log(f"101 sent via sendall ({len(raw_101)}b)")
 
+    # Drain any bytes rfile's BufferedReader consumed past the HTTP headers
     rfile = handler.rfile
     leftover = b""
     if hasattr(rfile, "peek"):
         peeked = rfile.peek(65536)
         if peeked:
             leftover = rfile.read(len(peeked))
-    _log(f"leftover={len(leftover)}b, entering bridge")
 
     try:
-        _ws_bridge(sock, fd, session_id, leftover, _log)
-    except Exception as e:
-        _log(f"bridge exception: {e}")
+        _ws_bridge(sock, fd, session_id, leftover)
+    except Exception:
         pass
     finally:
         with _sessions_lock:
@@ -381,11 +364,10 @@ def _handle_terminal_ws_inner(handler, _log):
                 _kill_session(session_id)
 
 
-def _ws_bridge(sock, fd, session_id, leftover=b"", _log=None):
+def _ws_bridge(sock, fd, session_id, leftover=b""):
     """Bridge websocket ↔ PTY using select()."""
     sock.setblocking(True)
     sock.settimeout(30)
-    _i = 0
 
     while True:
         with _sessions_lock:
@@ -410,23 +392,18 @@ def _ws_bridge(sock, fd, session_id, leftover=b"", _log=None):
         except (ValueError, OSError):
             break
 
-        _i += 1
         if fd in rlist:
             try:
                 data = os.read(fd, 4096)
                 if not data:
-                    if _log: _log(f"i={_i} PTY EOF")
                     break
                 _ws_send(sock, data)
-                if _log and _i <= 3: _log(f"i={_i} sent {len(data)}b to wfile")
-            except OSError as e:
-                if _log: _log(f"i={_i} PTY/send err: {e}")
+            except OSError:
                 break
 
         if sock in rlist:
             payload = _ws_recv(sock)
             if payload is None:
-                if _log: _log(f"i={_i} ws closed")
                 break
             if payload:
                 try:
