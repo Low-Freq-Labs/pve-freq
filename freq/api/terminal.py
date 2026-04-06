@@ -357,39 +357,46 @@ def handle_terminal_ws(handler):
 
 def _ws_bridge(sock, fd, session_id):
     """Bridge websocket ↔ PTY using select()."""
+    import sys
     sock.setblocking(False)
+    _iter = 0
 
     while True:
+        _iter += 1
         with _sessions_lock:
             s = _sessions.get(session_id)
             if not s:
+                print(f"[WS-BRIDGE] iter={_iter} EXIT: session gone", file=sys.stderr, flush=True)
                 break
             s["last_active"] = time.time()
 
         try:
             rlist, _, _ = select.select([sock, fd], [], [], 1.0)
-        except (ValueError, OSError):
+        except (ValueError, OSError) as e:
+            print(f"[WS-BRIDGE] iter={_iter} EXIT: select error: {e}", file=sys.stderr, flush=True)
             break
 
         if fd in rlist:
-            # PTY has data → send to websocket as binary frame
             try:
                 data = os.read(fd, 4096)
                 if not data:
+                    print(f"[WS-BRIDGE] iter={_iter} EXIT: PTY EOF", file=sys.stderr, flush=True)
                     break
                 _ws_send(sock, data)
-            except OSError:
+            except OSError as e:
+                print(f"[WS-BRIDGE] iter={_iter} EXIT: PTY/send error: {e}", file=sys.stderr, flush=True)
                 break
 
         if sock in rlist:
-            # Websocket has data → read frame, write to PTY
             try:
                 payload = _ws_recv(sock)
                 if payload is None:
-                    break  # Connection closed
+                    print(f"[WS-BRIDGE] iter={_iter} EXIT: ws recv None (closed)", file=sys.stderr, flush=True)
+                    break
                 if payload:
                     os.write(fd, payload)
-            except (OSError, ConnectionError):
+            except (OSError, ConnectionError) as e:
+                print(f"[WS-BRIDGE] iter={_iter} EXIT: ws recv error: {e}", file=sys.stderr, flush=True)
                 break
 
 
