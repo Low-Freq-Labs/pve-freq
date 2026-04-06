@@ -322,53 +322,52 @@ def _handle_terminal_ws_inner(handler, _log):
     parsed = urlparse(handler.path)
     qs = parse_qs(parsed.query)
     session_id = qs.get("session", [""])[0]
+    _log(f"session={session_id[:8]}...")
 
     with _sessions_lock:
         session = _sessions.get(session_id)
         if not session:
+            _log(f"session NOT FOUND, active={len(_sessions)}")
             handler.send_error(404, "Session not found")
             return
         fd = session["fd"]
+    _log(f"session found, fd={fd}")
 
-    # WebSocket handshake
     ws_key = handler.headers.get("Sec-WebSocket-Key", "")
     if not ws_key:
+        _log("no ws key")
         handler.send_error(400, "Missing Sec-WebSocket-Key")
         return
 
     accept = base64.b64encode(hashlib.sha1((ws_key + _WS_GUID).encode()).digest()).decode()
-
-    # CRITICAL: Tell BaseHTTPRequestHandler to NOT loop back and read
-    # another request after we return. Without this, handle() re-enters
-    # handle_one_request() on our now-dead WebSocket socket.
     handler.close_connection = True
+    _log(f"sending 101, accept={accept[:8]}...")
 
-    # Send 101 through handler.wfile — on keep-alive connections, wfile owns
-    # the socket's write buffer. Direct sock.sendall() gets queued behind
-    # wfile's unflushed data and the client never sees our WebSocket frames.
     handler.send_response(101)
     handler.send_header("Upgrade", "websocket")
     handler.send_header("Connection", "Upgrade")
     handler.send_header("Sec-WebSocket-Accept", accept)
     handler.end_headers()
+    _log("101 headers sent, flushing...")
     handler.wfile.flush()
+    _log("flushed ok")
 
     sock = handler.request
 
-    # Drain any bytes rfile's BufferedReader consumed past the HTTP headers.
     rfile = handler.rfile
     leftover = b""
     if hasattr(rfile, "peek"):
         peeked = rfile.peek(65536)
         if peeked:
             leftover = rfile.read(len(peeked))
+    _log(f"leftover={len(leftover)}b, entering bridge")
 
-    # Pass wfile for writing — on keep-alive, wfile owns the socket write buffer
     wfile = handler.wfile
 
     try:
-        _ws_bridge(sock, wfile, fd, session_id, leftover)
-    except Exception:
+        _ws_bridge(sock, wfile, fd, session_id, leftover, _log)
+    except Exception as e:
+        _log(f"bridge exception: {e}")
         pass
     finally:
         with _sessions_lock:
@@ -376,18 +375,11 @@ def _handle_terminal_ws_inner(handler, _log):
                 _kill_session(session_id)
 
 
-def _ws_bridge(sock, wfile, fd, session_id, leftover=b""):
-    """Bridge websocket ↔ PTY using select().
-
-    Args:
-        sock: Raw TCP socket (for reading WebSocket frames)
-        wfile: handler.wfile BufferedWriter (for writing — owns socket write buffer)
-        fd: PTY file descriptor connected to SSH process
-        session_id: Session key for the session store
-        leftover: Bytes drained from rfile's buffer (already consumed from kernel)
-    """
+def _ws_bridge(sock, wfile, fd, session_id, leftover=b"", _log=None):
+    """Bridge websocket ↔ PTY using select()."""
     sock.setblocking(True)
     sock.settimeout(30)
+    _i = 0
 
     while True:
         with _sessions_lock:
@@ -412,19 +404,23 @@ def _ws_bridge(sock, wfile, fd, session_id, leftover=b""):
         except (ValueError, OSError):
             break
 
+        _i += 1
         if fd in rlist:
             try:
                 data = os.read(fd, 4096)
                 if not data:
-                    print(f"[BRIDGE] PTY EOF", file=_sys.stderr, flush=True)
+                    if _log: _log(f"i={_i} PTY EOF")
                     break
                 _ws_send(wfile, data)
-            except OSError:
+                if _log and _i <= 3: _log(f"i={_i} sent {len(data)}b to wfile")
+            except OSError as e:
+                if _log: _log(f"i={_i} PTY/send err: {e}")
                 break
 
         if sock in rlist:
             payload = _ws_recv(sock)
             if payload is None:
+                if _log: _log(f"i={_i} ws closed")
                 break
             if payload:
                 try:
