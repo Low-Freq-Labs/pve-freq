@@ -300,17 +300,23 @@ _WS_GUID = "258EAFA5-E914-47DA-95CA-5AB5DC11DE10"
 
 
 def handle_terminal_ws(handler):
-    """WebSocket endpoint — bridges xterm.js ↔ PTY.
+    """WebSocket endpoint — bridges xterm.js ↔ PTY."""
+    import traceback as _tb
+    def _log(msg):
+        try:
+            with open("/tmp/freq-ws.log", "a") as f:
+                f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+        except Exception:
+            pass
 
-    Hijacks the HTTP connection: sends 101 directly on the raw socket,
-    drains any data buffered by rfile, then bridges PTY ↔ WebSocket.
+    _log(f"ENTER client={handler.client_address}")
+    try:
+        _handle_terminal_ws_inner(handler, _log)
+    except Exception as e:
+        _log(f"EXCEPTION: {e}\n{''.join(_tb.format_exc())}")
+        raise
 
-    Key constraints of BaseHTTPRequestHandler:
-      - rfile (BufferedReader) may have consumed bytes past the HTTP headers
-        from the kernel socket buffer. select() can't see those bytes.
-      - close_connection must be True so the handler loop doesn't try to
-        read another HTTP request after the bridge exits.
-    """
+def _handle_terminal_ws_inner(handler, _log):
     from urllib.parse import urlparse, parse_qs
 
     parsed = urlparse(handler.path)
