@@ -332,6 +332,7 @@ def handle_terminal_ws(handler):
     handler.send_header("Connection", "Upgrade")
     handler.send_header("Sec-WebSocket-Accept", accept)
     handler.end_headers()
+    handler.wfile.flush()  # flush 101 response before switching to raw socket
 
     sock = handler.request  # raw socket
 
