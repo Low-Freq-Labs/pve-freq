@@ -8,7 +8,7 @@ You built a homelab because you love this stuff. You shouldn't need 12 different
 
 [![Tests](https://github.com/Low-Freq-Labs/pve-freq-dev/actions/workflows/test.yml/badge.svg)](https://github.com/Low-Freq-Labs/pve-freq-dev/actions/workflows/test.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-8b5cf6.svg)](https://www.python.org/downloads/)
-[![LOC](https://img.shields.io/badge/lines_of_code-82K-8b5cf6.svg)](#)
+[![LOC](https://tokei.rs/b1/github/Low-Freq-Labs/pve-freq?category=code&style=flat&color=8b5cf6&label=lines%20of%20code)](#)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL_v3-8b5cf6.svg)](LICENSE)
 [![21 Distros](https://img.shields.io/badge/tested_on-21_distros-8b5cf6.svg)](#every-linux-distro)
 
