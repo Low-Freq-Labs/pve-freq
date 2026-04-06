@@ -341,16 +341,19 @@ def _handle_terminal_ws_inner(handler, _log):
 
     accept = base64.b64encode(hashlib.sha1((ws_key + _WS_GUID).encode()).digest()).decode()
     handler.close_connection = True
-    _log(f"sending 101, accept={accept[:8]}...")
 
-    handler.send_response(101)
-    handler.send_header("Upgrade", "websocket")
-    handler.send_header("Connection", "Upgrade")
-    handler.send_header("Sec-WebSocket-Accept", accept)
-    handler.end_headers()
-    _log("101 headers sent, flushing...")
+    # Write 101 as raw bytes to wfile — bypass send_response() which adds
+    # Server/Date headers. Minimal RFC 6455 compliant response only.
+    raw_101 = (
+        "HTTP/1.1 101 Switching Protocols\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        f"Sec-WebSocket-Accept: {accept}\r\n"
+        "\r\n"
+    ).encode()
+    handler.wfile.write(raw_101)
     handler.wfile.flush()
-    _log("flushed ok")
+    _log(f"101 sent ({len(raw_101)}b)")
 
     sock = handler.request
 
