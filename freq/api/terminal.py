@@ -423,15 +423,20 @@ def _ws_send(sock, data):
 
 def _ws_recv(sock):
     """Read one websocket frame. Returns payload bytes or None on close."""
+    import sys
     try:
         head = _ws_read_exact(sock, 2)
-    except (OSError, ConnectionError):
+    except (OSError, ConnectionError) as e:
+        print(f"[WS-RECV] head read error: {e}", file=sys.stderr, flush=True)
         return None
 
     if not head or len(head) < 2:
+        print(f"[WS-RECV] head={head!r} (short/empty)", file=sys.stderr, flush=True)
         return None
 
     opcode = head[0] & 0x0F
+    fin = bool(head[0] & 0x80)
+    print(f"[WS-RECV] opcode={opcode} fin={fin} byte0=0x{head[0]:02x} byte1=0x{head[1]:02x}", file=sys.stderr, flush=True)
     if opcode == 0x08:
         return None  # Close frame
 
