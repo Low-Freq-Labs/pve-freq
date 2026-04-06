@@ -1453,6 +1453,9 @@ def _get_fleet_vms(cfg):
 class FreqHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the FREQ dashboard."""
 
+    # HTTP/1.1 required for WebSocket upgrade (RFC 6455) and SSE keep-alive
+    protocol_version = "HTTP/1.1"
+
     # Class-level caches for PVE metrics polling
     _pve_metrics_cache = None
     _pve_metrics_ts = 0
@@ -4015,6 +4018,7 @@ a:hover{{text-decoration:underline}}
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
             self.send_header("Vary", "Origin")
+        self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.end_headers()

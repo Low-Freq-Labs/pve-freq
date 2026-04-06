@@ -22,6 +22,7 @@ def json_response(handler, data, status=200):
         handler.send_header("Access-Control-Allow-Origin", origin)
         handler.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
         handler.send_header("Vary", "Origin")
+    handler.send_header("Content-Length", str(len(body)))
     handler.send_header("X-Content-Type-Options", "nosniff")
     handler.send_header("X-Frame-Options", "DENY")
     handler.end_headers()
