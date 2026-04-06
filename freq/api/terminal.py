@@ -342,10 +342,15 @@ def _handle_terminal_ws_inner(handler, _log):
     accept = base64.b64encode(hashlib.sha1((ws_key + _WS_GUID).encode()).digest()).decode()
     handler.close_connection = True
 
-    # Log the exact key and accept for debugging
-    _log(f"ws_key='{ws_key}' accept='{accept}'")
-    # Log ALL request headers from browser
-    _log(f"headers={dict(handler.headers)}")
+    # Flush wfile to drain any data buffered from prior keep-alive requests,
+    # then use sock.sendall() for all WebSocket I/O. wfile (unbuffered,
+    # wbufsize=0) wraps sock.send() which can do partial sends — sendall()
+    # is the only safe way to guarantee complete delivery.
+    sock = handler.request
+    try:
+        handler.wfile.flush()
+    except Exception:
+        pass
 
     raw_101 = (
         "HTTP/1.1 101 Switching Protocols\r\n"
@@ -354,12 +359,8 @@ def _handle_terminal_ws_inner(handler, _log):
         f"Sec-WebSocket-Accept: {accept}\r\n"
         "\r\n"
     ).encode()
-    _log(f"raw_101={raw_101!r}")
-    handler.wfile.write(raw_101)
-    handler.wfile.flush()
-    _log(f"101 sent ({len(raw_101)}b)")
-
-    sock = handler.request
+    sock.sendall(raw_101)
+    _log(f"101 sent via sendall ({len(raw_101)}b)")
 
     rfile = handler.rfile
     leftover = b""
@@ -369,10 +370,8 @@ def _handle_terminal_ws_inner(handler, _log):
             leftover = rfile.read(len(peeked))
     _log(f"leftover={len(leftover)}b, entering bridge")
 
-    wfile = handler.wfile
-
     try:
-        _ws_bridge(sock, wfile, fd, session_id, leftover, _log)
+        _ws_bridge(sock, fd, session_id, leftover, _log)
     except Exception as e:
         _log(f"bridge exception: {e}")
         pass
@@ -382,7 +381,7 @@ def _handle_terminal_ws_inner(handler, _log):
                 _kill_session(session_id)
 
 
-def _ws_bridge(sock, wfile, fd, session_id, leftover=b"", _log=None):
+def _ws_bridge(sock, fd, session_id, leftover=b"", _log=None):
     """Bridge websocket ↔ PTY using select()."""
     sock.setblocking(True)
     sock.settimeout(30)
@@ -418,7 +417,7 @@ def _ws_bridge(sock, wfile, fd, session_id, leftover=b"", _log=None):
                 if not data:
                     if _log: _log(f"i={_i} PTY EOF")
                     break
-                _ws_send(wfile, data)
+                _ws_send(sock, data)
                 if _log and _i <= 3: _log(f"i={_i} sent {len(data)}b to wfile")
             except OSError as e:
                 if _log: _log(f"i={_i} PTY/send err: {e}")
@@ -436,8 +435,8 @@ def _ws_bridge(sock, wfile, fd, session_id, leftover=b"", _log=None):
                     break
 
 
-def _ws_send(wfile, data):
-    """Send a websocket binary frame through wfile."""
+def _ws_send(sock, data):
+    """Send a websocket binary frame."""
     length = len(data)
     header = bytearray()
     header.append(0x82)  # FIN + binary opcode
@@ -451,8 +450,7 @@ def _ws_send(wfile, data):
         header.append(127)
         header.extend(struct.pack(">Q", length))
 
-    wfile.write(bytes(header) + data)
-    wfile.flush()
+    sock.sendall(bytes(header) + data)
 
 
 def _ws_recv(sock):
@@ -543,11 +541,10 @@ def _ws_read_exact(sock, n):
     return bytes(buf)
 
 
-def _ws_send_pong(wfile, data):
-    """Send a websocket pong frame through wfile."""
+def _ws_send_pong(sock, data):
+    """Send a websocket pong frame."""
     header = bytearray([0x8A, len(data)])
-    wfile.write(bytes(header) + data)
-    wfile.flush()
+    sock.sendall(bytes(header) + data)
 
 
 # ── Route Registration ──────────────────────────────────────────────────
