@@ -250,6 +250,14 @@ def _bg_probe_infra():
     fb = cfg.fleet_boundaries
     start = time.monotonic()
 
+    def _ping_check(ip):
+        """Quick ping fallback for devices where SSH isn't available."""
+        try:
+            r = subprocess.run(["ping", "-c", "1", "-W", "1", ip], capture_output=True, timeout=2)
+            return r.returncode == 0
+        except (subprocess.TimeoutExpired, OSError):
+            return False
+
     def _probe_device(key, dev):
         d = {"key": key, "label": dev.label, "type": dev.device_type, "ip": dev.ip, "reachable": False, "metrics": {}}
         dt = dev.device_type
@@ -280,6 +288,8 @@ def _bg_probe_infra():
                             i for i in parts[2].strip().split() if not i.startswith(("lo", "enc", "pflog", "pfsync"))
                         ]
                         m["interfaces"] = str(len(ifaces))
+                else:
+                    d["reachable"] = _ping_check(dev.ip)
             elif dt == "truenas":
                 # Two quick SSH calls: zpool for pool status, midclt for alert count
                 r = ssh_single(
@@ -343,6 +353,8 @@ def _bg_probe_infra():
                         m["alerts"] = len(alerts) if isinstance(alerts, list) else 0
                     except (json.JSONDecodeError, ValueError):
                         m["alerts"] = 0
+                else:
+                    d["reachable"] = _ping_check(dev.ip)
             elif dt == "switch":
                 # Switch requires RSA key (no ed25519 support)
                 sw_key = cfg.ssh_rsa_key_path or cfg.ssh_key_path

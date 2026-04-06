@@ -3804,7 +3804,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
     var nodeCard='<div class="host-card" data-host-id="'+nodeName.toLowerCase()+'" style="cursor:pointer;" onclick="openVmInfo(\''+nodeName+'\',\''+pn.ip+'\',0)">';
     nodeCard+='<div class="mb-8"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
     nodeCard+='<div class="divider-light">';
-    if(up&&live){
+    if(up){
       var cores=parseInt(live.cores)||1;var loadVal=parseFloat(live.load)||0;
       var loadPct=cores>0?Math.round(loadVal/cores*100):0;
       var diskPct=parseInt((live.disk||'0').replace('%',''))||0;
