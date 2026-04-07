@@ -2660,8 +2660,8 @@ function openTerminal(type,target,node,label,htype){
       var _phase2=false;
       /* Safety timeout — if marker never arrives, show banner anyway */
       var _safetyTimer=setTimeout(function(){
-        if(!_phase2){ _phase2=true; _drawBanner('connected'); }
-      }, 6000);
+        if(!_phase2){ _phase2=true; _drawBanner('timeout: buf='+_buf.length+'chars clean=['+_stripAnsi(_buf).substring(0,200)+']'); }
+      }, 8000);
       ws.onmessage=function(e){
         if(_phase2){ _origOnMsg(e); return; }
         var txt;
