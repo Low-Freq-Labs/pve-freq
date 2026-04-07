@@ -2647,31 +2647,39 @@ function openTerminal(type,target,node,label,htype){
       var enc=new TextEncoder();
       /* Mute all SSH output — we control the screen */
       ws.onmessage=function(){};
-      /* Step 1 (immediate): set PS1, echo uptime with marker, all in one shot */
+      /* Strip ANSI escape sequences for marker detection */
+      function _stripAnsi(s){return s.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g,'').replace(/\x1b\][^\x07]*\x07/g,'');}
+      /* Step 1 (immediate): disable bracket paste, set PS1, echo uptime with marker */
       var ps1='\\[\\e[90m\\]\u250c\u2500 \\[\\e[35m\\]\u25c6 \\[\\e[36;1m\\]\\u\\[\\e[0m\\] \\[\\e[90m\\]\u00b7\\[\\e[0m\\] \\[\\e[1m\\]\\h\\[\\e[0m\\] \\[\\e[90m\\]:\\[\\e[34m\\] \\w\\[\\e[0m\\]\\n\\[\\e[90m\\]\u2514\u2500\\[\\e[35m\\]\u25b8\\[\\e[0m\\] ';
-      ws.send(enc.encode('export PS1=\''+ps1+'\'\n'));
+      ws.send(enc.encode('bind "set enable-bracketed-paste off" 2>/dev/null; export PS1=\''+ps1+'\'\n'));
       ws.send(enc.encode('echo "FREQ_UPTIME:$(uptime -p 2>/dev/null || uptime)"\n'));
       /* Step 2: capture the uptime marker from output */
       var _buf='';
       var _phase2=false;
+      /* Safety timeout — if marker never arrives, show banner anyway */
+      var _safetyTimer=setTimeout(function(){
+        if(!_phase2){ _phase2=true; _drawBanner('connected'); }
+      }, 4000);
       ws.onmessage=function(e){
         if(_phase2){ _origOnMsg(e); return; }
         var txt;
         if(e.data instanceof ArrayBuffer) txt=new TextDecoder().decode(e.data);
         else txt=e.data;
         _buf+=txt;
-        /* Wait until we see our marker */
-        var idx=_buf.indexOf('FREQ_UPTIME:');
+        /* Strip ANSI codes for reliable marker search */
+        var clean=_stripAnsi(_buf);
+        var idx=clean.indexOf('FREQ_UPTIME:');
         if(idx<0) return;
-        /* Extract uptime string after marker */
-        var after=_buf.substring(idx+12);
+        var after=clean.substring(idx+12);
         var nl=after.indexOf('\n');
-        if(nl<0) return; /* wait for full line */
+        if(nl<0) return;
         var raw=after.substring(0,nl).replace(/\r/g,'').trim();
-        /* Clean up: "up 6 days, 17 hours, 56 minutes" → "6 days, 17 hours, 56 minutes" */
         var uptimeStr=raw.replace(/^up\s+/i,'').replace(/,\s*\d+\s*users?.*$/,'').trim()||'connected';
-        /* Now draw the final banner */
         _phase2=true;
+        clearTimeout(_safetyTimer);
+        _drawBanner(uptimeStr);
+      };
+      function _drawBanner(uptimeStr){
         term.reset();
         var W=45;
         var dm='\x1b[90m',cy='\x1b[36m',pu='\x1b[35m',bd='\x1b[1m',gn='\x1b[32m',rs='\x1b[0m';
@@ -2692,7 +2700,7 @@ function openTerminal(type,target,node,label,htype){
         /* Unmute and trigger a clean prompt */
         ws.onmessage=_origOnMsg;
         ws.send(enc.encode('\n'));
-      };
+      }
     };
     ws.onmessage=function(e){
       if(e.data instanceof ArrayBuffer){
