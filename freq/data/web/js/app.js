@@ -2686,7 +2686,13 @@ function openTerminal(type,target,node,label,htype){
       };
 
       var _safetyTimer=setTimeout(function(){
-        if(!_done){ _done=true; _drawBanner('connected'); }
+        if(!_done){
+          _done=true;
+          /* Dump full debug to /tmp via the terminal session */
+          var clean=_stripAnsi(_buf);
+          ws.send(enc.encode('cat > /tmp/freq-ws-debug.txt << \'DBGEOF\'\ngotPrompt='+_gotPrompt+'\nbufLen='+_buf.length+'\ncleanLen='+clean.length+'\n---CLEAN---\n'+clean+'\nDBGEOF\n'));
+          _drawBanner('connected');
+        }
       }, 10000);
 
       function _drawBanner(uptimeStr){
