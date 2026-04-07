@@ -2652,7 +2652,8 @@ function openTerminal(type,target,node,label,htype){
       /* Step 1 (immediate): disable bracket paste, set PS1, echo uptime with marker */
       var ps1='\\[\\e[90m\\]\u250c\u2500 \\[\\e[35m\\]\u25c6 \\[\\e[36;1m\\]\\u\\[\\e[0m\\] \\[\\e[90m\\]\u00b7\\[\\e[0m\\] \\[\\e[1m\\]\\h\\[\\e[0m\\] \\[\\e[90m\\]:\\[\\e[34m\\] \\w\\[\\e[0m\\]\\n\\[\\e[90m\\]\u2514\u2500\\[\\e[35m\\]\u25b8\\[\\e[0m\\] ';
       ws.send(enc.encode('bind "set enable-bracketed-paste off" 2>/dev/null; export PS1=\''+ps1+'\'\n'));
-      ws.send(enc.encode('echo "FREQ_UPTIME:$(uptime -p 2>/dev/null || uptime)"\n'));
+      /* Use stty -echo to suppress command echo, so marker only appears once (as output) */
+      ws.send(enc.encode('stty -echo; echo "FREQ_UP""TIME:$(uptime -p 2>/dev/null || uptime)"; stty echo\n'));
       /* Step 2: capture the uptime marker from output */
       var _buf='';
       var _phase2=false;
@@ -2697,9 +2698,16 @@ function openTerminal(type,target,node,label,htype){
         term.writeln(gn+'    UPTIME     '+rs+uptimeStr);
         term.writeln(bar);
         term.writeln('');
-        /* Unmute and trigger a clean prompt */
-        ws.onmessage=_origOnMsg;
-        ws.send(enc.encode('\n'));
+        /* Unmute — send clear to wipe pending shell prompts, then one clean prompt */
+        ws.onmessage=function(e){
+          /* Swallow the clear output, then fully unmute */
+          var t; if(e.data instanceof ArrayBuffer) t=new TextDecoder().decode(e.data); else t=e.data;
+          if(_stripAnsi(t).indexOf('\u250c\u2500')>=0||_stripAnsi(t).indexOf('\u2514\u2500')>=0){
+            ws.onmessage=_origOnMsg;
+            _origOnMsg(e);
+          }
+        };
+        ws.send(enc.encode('clear\n'));
       }
     };
     ws.onmessage=function(e){
