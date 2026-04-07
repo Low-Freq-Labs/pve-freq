@@ -2670,32 +2670,20 @@ function openTerminal(type,target,node,label,htype){
 
     ws.onopen=function(){
       term.focus();
-      /* Device-aware shell setup */
       var ht=htype||'linux';
-      if(ht==='idrac'||ht==='switch'){
-        /* No shell customization — racadm/IOS don't support it */
-        setTimeout(function(){
-          if(ws.readyState!==WebSocket.OPEN) return;
-          _muted=false;
-          ws.send(enc.encode('\n'));
-        }, 1000);
-      }else if(ht==='pfsense'){
-        /* tcsh — use set prompt instead of export PS1 */
-        ws.send(enc.encode('set prompt="\\n`/bin/echo -n \'\\033[90m\'`\u250c\u2500 `/bin/echo -n \'\\033[35m\'`\u25c6 `/bin/echo -n \'\\033[36;1m\'`%n`/bin/echo -n \'\\033[0m\'` `/bin/echo -n \'\\033[90m\'`\u00b7`/bin/echo -n \'\\033[0m\'` `/bin/echo -n \'\\033[1m\'`%m`/bin/echo -n \'\\033[0m\'` `/bin/echo -n \'\\033[90m\'`:`/bin/echo -n \'\\033[34m\'` %~`/bin/echo -n \'\\033[0m\'`\\n`/bin/echo -n \'\\033[90m\'`\u2514\u2500`/bin/echo -n \'\\033[35m\'`\u25b8`/bin/echo -n \'\\033[0m\'` "\n'));
-        ws.send(enc.encode('clear\n'));
-        setTimeout(function(){
-          if(ws.readyState!==WebSocket.OPEN) return;
-          _muted=false;
-          ws.send(enc.encode('\n'));
-        }, 1500);
-      }else{
-        /* bash/zsh (linux, pve, docker, truenas) */
+      var isBash=(ht==='linux'||ht==='pve'||ht==='docker');
+      if(isBash){
+        /* Bash shells: set FREQ prompt, clear SSH banner, unmute after 1.5s */
         ws.send(enc.encode('export PS1=\''+ps1+'\'; clear\n'));
         setTimeout(function(){
           if(ws.readyState!==WebSocket.OPEN) return;
           _muted=false;
           ws.send(enc.encode('\n'));
         }, 1500);
+      }else{
+        /* Non-bash (pfsense/truenas/idrac/switch): unmute fast, show native prompt.
+           These often need password auth — user must see the password prompt. */
+        _muted=false;
       }
     };
     ws.onclose=function(){
