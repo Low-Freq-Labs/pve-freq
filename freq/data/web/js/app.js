@@ -2673,10 +2673,11 @@ function openTerminal(type,target,node,label,htype){
       /* Send PS1 + clear in one command — clear wipes the shell's
          buffered prompts/banner so only our FREQ prompt appears */
       ws.send(enc.encode('export PS1=\''+ps1+'\'; clear\n'));
-      /* Unmute after shell has processed the command */
+      /* Unmute after shell has processed, then trigger prompt */
       setTimeout(function(){
         if(ws.readyState!==WebSocket.OPEN) return;
         _muted=false;
+        ws.send(enc.encode('\n'));
       }, 1500);
     };
     ws.onclose=function(){
