@@ -2642,94 +2642,43 @@ function openTerminal(type,target,node,label,htype){
     _termSocket=ws;
 
     var enc=new TextEncoder();
-    function _stripAnsi(s){return s.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g,'').replace(/\x1b\][^\x07]*\x07/g,'');}
-    var _buf='';
-    var _done=false;
-    var _gotPrompt=false;
-    var _wsReady=false;
     var ps1='\\[\\e[90m\\]\u250c\u2500 \\[\\e[35m\\]\u25c6 \\[\\e[36;1m\\]\\u\\[\\e[0m\\] \\[\\e[90m\\]\u00b7\\[\\e[0m\\] \\[\\e[1m\\]\\h\\[\\e[0m\\] \\[\\e[90m\\]:\\[\\e[34m\\] \\w\\[\\e[0m\\]\\n\\[\\e[90m\\]\u2514\u2500\\[\\e[35m\\]\u25b8\\[\\e[0m\\] ';
+    var _muted=true;
 
-    /* Set onmessage IMMEDIATELY — before onopen — to capture all data */
+    /* Draw banner immediately — no server data needed */
+    var W=45;
+    var dm='\x1b[90m',cy='\x1b[36m',pu='\x1b[35m',bd='\x1b[1m',rs='\x1b[0m';
+    var bar=dm+'  '+Array(W+1).join('\u2550')+rs;
+    term.writeln('');
+    term.writeln(bar);
+    term.writeln('');
+    term.writeln(pu+bd+_center('\u25c6\u25c6\u25c6   PVE FREQ   \u25c6\u25c6\u25c6',W)+rs);
+    term.writeln('');
+    term.writeln(cy+bd+_center(_displayName,W)+rs);
+    term.writeln('');
+    term.writeln(dm+_center('~ \u223f ~ \u223f ~  LOW FREQ Labs  ~ \u223f ~ \u223f ~',W)+rs);
+    term.writeln('');
+    term.writeln(bar);
+    term.writeln('');
+
+    /* Mute SSH output while banner shows, pass through after unmute */
     ws.onmessage=function(e){
-      if(_done){
-        /* Normal mode: write to xterm */
-        if(e.data instanceof ArrayBuffer) term.write(new Uint8Array(e.data));
-        else term.write(e.data);
-        return;
-      }
-      /* Capture mode: buffer data, wait for prompt + uptime */
-      var txt;
-      if(e.data instanceof ArrayBuffer) txt=new TextDecoder().decode(e.data);
-      else txt=e.data;
-      _buf+=txt;
-      var clean=_stripAnsi(_buf);
-
-      if(!_gotPrompt){
-        if(clean.match(/[$#>]\s*$/) && _wsReady){
-          _gotPrompt=true;
-          ws.send(enc.encode('export PS1=\''+ps1+'\'; printf "\\nFRQ_UT:%s\\n" "$(uptime -p 2>/dev/null || uptime)"\n'));
-          _buf='';
-        }
-        return;
-      }
-
-      clean=_stripAnsi(_buf);
-      var idx=clean.lastIndexOf('FRQ_UT:');
-      if(idx<0) return;
-      var after=clean.substring(idx+7);
-      var nl=after.indexOf('\n');
-      if(nl<0) return;
-      var raw=after.substring(0,nl).replace(/\r/g,'').trim();
-      var uptimeStr=raw.replace(/^up\s+/i,'').replace(/,\s*\d+\s*users?.*$/,'').trim()||'unknown';
-      _done=true;
-      clearTimeout(_safetyTimer);
-      _drawBanner(uptimeStr);
+      if(_muted) return;
+      if(e.data instanceof ArrayBuffer) term.write(new Uint8Array(e.data));
+      else term.write(e.data);
     };
 
     ws.onopen=function(){
       term.focus();
-      _wsReady=true;
-      /* If prompt already arrived in buffered messages, trigger command send */
-      var clean=_stripAnsi(_buf);
-      if(!_gotPrompt && clean.match(/[$#>]\s*$/)){
-        _gotPrompt=true;
-        ws.send(enc.encode('export PS1=\''+ps1+'\'; printf "\\nFRQ_UT:%s\\n" "$(uptime -p 2>/dev/null || uptime)"\n'));
-        _buf='';
-      }
-    };
-
-    var _safetyTimer=setTimeout(function(){
-      if(!_done){ _done=true; _drawBanner('connected'); }
-    }, 10000);
-
-    function _drawBanner(uptimeStr){
-        term.reset();
-        var W=45;
-        var dm='\x1b[90m',cy='\x1b[36m',pu='\x1b[35m',bd='\x1b[1m',gn='\x1b[32m',rs='\x1b[0m';
-        var bar=dm+'  '+Array(W+1).join('\u2550')+rs;
-        term.writeln('');
-        term.writeln(bar);
-        term.writeln('');
-        term.writeln(pu+bd+_center('\u25c6\u25c6\u25c6   PVE FREQ   \u25c6\u25c6\u25c6',W)+rs);
-        term.writeln('');
-        term.writeln(cy+bd+_center(_displayName,W)+rs);
-        term.writeln('');
-        term.writeln(dm+_center('~ \u223f ~ \u223f ~  LOW FREQ Labs  ~ \u223f ~ \u223f ~',W)+rs);
-        term.writeln('');
-        term.writeln(bar);
-        term.writeln(gn+'    UPTIME     '+rs+uptimeStr);
-        term.writeln(bar);
-        term.writeln('');
-        /* Unmute — send clear to wipe leftover, wait for our prompt to appear */
-        ws.onmessage=function(e){
-          var t; if(e.data instanceof ArrayBuffer) t=new TextDecoder().decode(e.data); else t=e.data;
-          if(_stripAnsi(t).indexOf('\u2514\u2500')>=0){
-            ws.onmessage=_origOnMsg;
-            _origOnMsg(e);
-          }
-        };
+      /* Set PS1 immediately — shell queues it until ready */
+      ws.send(enc.encode('export PS1=\''+ps1+'\'\n'));
+      /* After SSH connects and shell is ready, clear and unmute */
+      setTimeout(function(){
+        if(ws.readyState!==WebSocket.OPEN) return;
+        _muted=false;
         ws.send(enc.encode('clear\n'));
-      }
+      }, 1500);
+    };
     };
     ws.onmessage=function(e){
       if(e.data instanceof ArrayBuffer){
