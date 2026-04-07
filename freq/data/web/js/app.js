@@ -2679,14 +2679,6 @@ function openTerminal(type,target,node,label,htype){
         ws.send(enc.encode('clear\n'));
       }, 1500);
     };
-    };
-    ws.onmessage=function(e){
-      if(e.data instanceof ArrayBuffer){
-        term.write(new Uint8Array(e.data));
-      }else{
-        term.write(e.data);
-      }
-    };
     ws.onclose=function(){
       term.writeln('\r\n\x1b[90m--- Session closed ---\x1b[0m');
       _termSession=null;_termSocket=null;
