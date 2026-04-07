@@ -2613,7 +2613,21 @@ function openTerminal(type,target,node,label,htype){
 
   /* Request session from server */
   var cols=term.cols;var rows=term.rows;
-  term.writeln('\x1b[90mConnecting to '+_esc(label||target)+'...\x1b[0m');
+  var _displayName=label||target;
+
+  /* FREQ branded connect banner */
+  var dim='\x1b[90m',cyan='\x1b[36m',purple='\x1b[35m',bold='\x1b[1m',reset='\x1b[0m';
+  term.writeln('');
+  term.writeln(dim+'  \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550'+reset);
+  term.writeln('');
+  term.writeln(purple+bold+'          \u25c6\u25c6\u25c6   PVE FREQ   \u25c6\u25c6\u25c6'+reset);
+  term.writeln('');
+  term.writeln(cyan+bold+'               '+_esc(_displayName)+reset);
+  term.writeln('');
+  term.writeln(dim+'      ~ \u223f ~ \u223f ~  LOW FREQ Labs  ~ \u223f ~ \u223f ~'+reset);
+  term.writeln('');
+  term.writeln(dim+'  \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550'+reset);
+  term.writeln('');
 
   _authFetch('/api/terminal/open?type='+type+'&target='+encodeURIComponent(target)+
     (node?'&node='+encodeURIComponent(node):'')+
@@ -2630,12 +2644,17 @@ function openTerminal(type,target,node,label,htype){
     _termSocket=ws;
 
     ws.onopen=function(){
-      term.writeln('\x1b[32mConnected.\x1b[0m\r\n');
+      term.writeln('\x1b[32m  \u2713 Connected\x1b[0m');
+      term.writeln('');
       term.focus();
-      /* Send a newline to trigger the prompt after SSH banner */
+      /* Set FREQ branded prompt + suppress SSH banner noise, then trigger prompt */
       setTimeout(function(){
-        if(ws.readyState===WebSocket.OPEN) ws.send(new TextEncoder().encode('\n'));
-      }, 500);
+        if(ws.readyState!==WebSocket.OPEN) return;
+        var enc=new TextEncoder();
+        /* Clear screen, set custom two-line PS1 prompt */
+        var ps1='\\[\\e[90m\\]\u250c\u2500 \\[\\e[35m\\]\u25c6 \\[\\e[36;1m\\]\\u\\[\\e[0m\\] \\[\\e[90m\\]\u00b7\\[\\e[0m\\] \\[\\e[1m\\]\\h\\[\\e[0m\\] \\[\\e[90m\\]:\\[\\e[34m\\] \\w\\[\\e[0m\\]\\n\\[\\e[90m\\]\u2514\u2500\\[\\e[35m\\]\u25b8\\[\\e[0m\\] ';
+        ws.send(enc.encode('export PS1=\''+ps1+'\'; clear\n'));
+      }, 800);
     };
     ws.onmessage=function(e){
       if(e.data instanceof ArrayBuffer){
