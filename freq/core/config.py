@@ -730,22 +730,28 @@ def load_vlans(path: str) -> list:
 
 
 def load_distros(path: str) -> list:
-    """Load cloud image definitions from TOML."""
+    """Load cloud image / template definitions from TOML.
+
+    Accepts both [distro.xxx] (cloud images) and [template.xxx] (PVE templates
+    written by freq init discovery).
+    """
     data = load_toml(path)
     distros = []
-    for key, info in data.get("distro", {}).items():
-        distros.append(
-            Distro(
-                key=key,
-                name=info.get("name", key),
-                url=info.get("url", ""),
-                filename=info.get("filename", ""),
-                sha_url=info.get("sha_url", ""),
-                family=info.get("family", ""),
-                tier=info.get("tier", "supported"),
-                aliases=info.get("aliases", []),
+    # Accept both 'distro' and 'template' sections
+    for section in ("distro", "template"):
+        for key, info in data.get(section, {}).items():
+            distros.append(
+                Distro(
+                    key=key,
+                    name=info.get("name", key),
+                    url=info.get("url", ""),
+                    filename=info.get("filename", ""),
+                    sha_url=info.get("sha_url", ""),
+                    family=info.get("family", ""),
+                    tier=info.get("tier", "supported"),
+                    aliases=info.get("aliases", []),
+                )
             )
-        )
     return distros
 
 

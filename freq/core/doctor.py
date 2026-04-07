@@ -285,16 +285,21 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     def _test(h):
         cmd = VERIFY_CMDS.get(h.htype, "echo ok")
         key = cfg.ssh_key_path
-        if h.htype in ("idrac", "switch"):
+        is_legacy = h.htype in ("idrac", "switch")
+        if is_legacy:
             key = getattr(cfg, "ssh_rsa_key_path", None) or cfg.ssh_key_path
+        # Legacy devices need longer timeouts (sshpass + cipher negotiation)
+        ct = 10 if is_legacy else 3
+        ct_cmd = 15 if is_legacy else DOCTOR_CMD_TIMEOUT
         r = ssh_run(
             host=h.ip,
             command=cmd,
             key_path=key,
-            connect_timeout=3,
-            command_timeout=DOCTOR_CMD_TIMEOUT,
+            connect_timeout=ct,
+            command_timeout=ct_cmd,
             htype=h.htype,
             use_sudo=False,
+            cfg=cfg,
         )
         return h, r.returncode == 0
 
@@ -344,13 +349,13 @@ def _check_service_account(cfg: FreqConfig) -> int:
         if h.htype in ("idrac", "switch"):
             return h, True, ""  # SSH verify is sufficient for these
         if h.htype == "pfsense":
-            cmd = f"pw usershow {svc} >/dev/null 2>&1 && echo ACCT_OK"
+            cmd = f"pw usershow {svc} && echo ACCT_OK"
         else:
-            cmd = f"id {svc} >/dev/null 2>&1 && sudo -n true 2>/dev/null && echo ACCT_OK"
+            cmd = f"id {svc} && sudo -n true && echo ACCT_OK"
         r = ssh_run(
             host=h.ip, command=cmd, key_path=cfg.ssh_key_path,
             connect_timeout=3, command_timeout=DOCTOR_CMD_TIMEOUT,
-            htype=h.htype, use_sudo=False,
+            htype=h.htype, use_sudo=False, cfg=cfg,
         )
         ok = "ACCT_OK" in (r.stdout or "")
         return h, ok, r.stderr.strip()[:60] if not ok else ""

@@ -4697,8 +4697,12 @@ def _skip_reason(err):
     return "SSH error"
 
 
-def _verify_host(ip, htype, svc_name, key_path, rsa_key_path):
-    """Platform-aware host verification. Returns (success, error_stderr)."""
+def _verify_host(ip, htype, svc_name, key_path, rsa_key_path, cfg=None):
+    """Platform-aware host verification. Returns (success, error_stderr).
+
+    For legacy devices (iDRAC/switch), falls back to sshpass password auth
+    if cfg.legacy_password_file is configured and key auth fails.
+    """
     # Select key and command based on platform
     if htype in ("linux", "pve", "docker", "truenas"):
         key = key_path
@@ -4720,7 +4724,9 @@ def _verify_host(ip, htype, svc_name, key_path, rsa_key_path):
         return False, f"unknown htype: {htype}"
 
     if not key or not os.path.isfile(key):
-        return False, f"key not found: {key}"
+        # For legacy devices, missing key is OK if password file exists
+        if htype not in ("idrac", "switch"):
+            return False, f"key not found: {key}"
 
     ssh_cmd = (
         [
@@ -4744,6 +4750,23 @@ def _verify_host(ip, htype, svc_name, key_path, rsa_key_path):
     if rc != 0 and htype in ("idrac", "switch") and "no more sessions" in (out + err).lower():
         time.sleep(5)
         rc, out, err = _run(ssh_cmd, timeout=VERIFY_TIMEOUT)
+
+    # If key auth failed for legacy device, try sshpass with password file
+    if rc != 0 and htype in ("idrac", "switch") and cfg:
+        pw_file = getattr(cfg, "legacy_password_file", "") or ""
+        if pw_file and os.path.isfile(pw_file):
+            sshpass_cmd = (
+                ["sshpass", "-f", pw_file, "ssh", "-n",
+                 "-o", "ConnectTimeout=5",
+                 "-o", "StrictHostKeyChecking=accept-new"]
+                + extra_opts
+                + [f"{svc_name}@{ip}", verify_cmd]
+            )
+            rc, out, err = _run(sshpass_cmd, timeout=VERIFY_TIMEOUT)
+            if rc != 0 and "no more sessions" in (out + err).lower():
+                time.sleep(5)
+                rc, out, err = _run(sshpass_cmd, timeout=VERIFY_TIMEOUT)
+
     return rc == 0, err
 
 
@@ -4807,7 +4830,7 @@ def _phase_verify(cfg, ctx):
     warns = 0
     if cfg.pve_nodes and os.path.isfile(key_file):
         for ip in cfg.pve_nodes:
-            ok, err = _verify_host(ip, "pve", svc_name, key_file, rsa_file)
+            ok, err = _verify_host(ip, "pve", svc_name, key_file, rsa_file, cfg=cfg)
             if ok:
                 _check(f"PVE {ip}: SSH + sudo as {svc_name}", True)
             elif _is_skip_error(err):
@@ -4835,7 +4858,7 @@ def _phase_verify(cfg, ctx):
                 warns += 1
                 continue
 
-            ok, err = _verify_host(h.ip, h.htype, svc_name, key_file, rsa_file)
+            ok, err = _verify_host(h.ip, h.htype, svc_name, key_file, rsa_file, cfg=cfg)
             if ok:
                 _check(check_label, True)
             elif h.ip in deployed_ips:
@@ -5065,7 +5088,7 @@ def _scan_fleet(cfg):
     unreachable_list = []
 
     def _test_one(entry):
-        ok, err = _verify_host(entry["ip"], entry["htype"], svc_name, key_file, rsa_file)
+        ok, err = _verify_host(entry["ip"], entry["htype"], svc_name, key_file, rsa_file, cfg=cfg)
         return entry, ok, err
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
@@ -5368,7 +5391,7 @@ def _init_fix(cfg, args):
             fmt.line(f"  {fmt.C.BOLD}{h['label']}{fmt.C.RESET} ({h['ip']}) [{h['htype']}]")
             if _deploy_to_host_dispatch(h["ip"], h["htype"], ctx, auth_pass, auth_key, auth_user):
                 # Verify it worked
-                ok, _ = _verify_host(h["ip"], h["htype"], svc_name, key_file, rsa_file)
+                ok, _ = _verify_host(h["ip"], h["htype"], svc_name, key_file, rsa_file, cfg=cfg)
                 if ok:
                     fmt.step_ok(f"{h['label']}: {svc_name} deployed and verified")
                     fixed += 1
@@ -5467,7 +5490,7 @@ def _init_fix(cfg, args):
                 fmt.blank()
                 fmt.line(f"  {fmt.C.BOLD}{h['label']}{fmt.C.RESET} ({h['ip']}) [{h['htype']}]")
                 if _deploy_to_host_dispatch(h["ip"], h["htype"], ctx, dev_pass, "", dev_user):
-                    ok, _ = _verify_host(h["ip"], h["htype"], svc_name, key_file, rsa_file)
+                    ok, _ = _verify_host(h["ip"], h["htype"], svc_name, key_file, rsa_file, cfg=cfg)
                     if ok:
                         fmt.step_ok(f"{h['label']}: {svc_name} deployed and verified")
                         fixed += 1
