@@ -735,6 +735,7 @@ def handle_diagnose(handler):
             checks[label] = r.stdout if r.returncode == 0 else f"ERROR: {r.stderr or r.stdout}"
         json_response(handler, {"host": target, "ip": host.ip, "checks": checks})
     except Exception as e:
+        logger.error(f"api_fleet_error: diagnose failed: {e}", endpoint="diagnose")
         json_response(handler, {"error": f"Diagnose failed: {e}"}, 500)
 
 
@@ -775,6 +776,7 @@ def handle_log(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_fleet_error: log fetch failed: {e}", endpoint="log")
         json_response(handler, {"error": f"Log fetch failed: {e}"}, 500)
 
 
@@ -1193,6 +1195,7 @@ def handle_discover(handler):
             result = cmd_discover(cfg, None, args)
         json_response(handler, {"ok": result == 0, "output": buf.getvalue()})
     except Exception as e:
+        logger.error(f"api_fleet_error: discovery failed: {e}", endpoint="discover")
         json_response(handler, {"error": f"Discovery failed: {e}"}, 500)
 
 
@@ -1219,6 +1222,7 @@ def handle_watchdog_health(handler):
             handler, {"error": f"WATCHDOG daemon not reachable at localhost:{wd_port}", "watchdog_down": True}
         )
     except Exception as e:
+        logger.error(f"api_fleet_error: watchdog proxy error: {e}", endpoint="watchdog/health")
         json_response(handler, {"error": f"Proxy error: {e}"})
 
 

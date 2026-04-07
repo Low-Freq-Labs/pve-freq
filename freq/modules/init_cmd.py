@@ -41,7 +41,7 @@ try:
 except ModuleNotFoundError:
     tomllib = None
 
-from freq.core import fmt
+from freq.core import audit, fmt
 from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.ssh import PLATFORM_SSH
@@ -366,70 +366,101 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
         "bootstrap_key": "",
         "bootstrap_pass": "",
         "bootstrap_user": "root",
+        "dry_run": dry_run,
     }
 
     total = 13
+    init_start = time.monotonic()
+    logger.info("init_start: interactive mode", phases=total)
 
     # Phase 1: Prerequisites
     _phase(1, total, "Prerequisites")
+    _t = time.monotonic()
     if not _phase_welcome(cfg):
         return 1
+    logger.perf("init_phase", time.monotonic() - _t, phase=1, name="prerequisites")
 
     # Phase 2: Cluster Configuration + VLAN Discovery
     _phase(2, total, "Cluster Configuration + VLAN Discovery")
+    _t = time.monotonic()
     _phase_configure(cfg, args)
     # Collect bootstrap auth for PVE access
     _collect_bootstrap_auth(cfg, ctx, args)
     # Discover VLANs from PVE network config (using bootstrap creds)
     _discover_vlans_from_pve(cfg, ctx)
+    logger.perf("init_phase", time.monotonic() - _t, phase=2, name="configure")
 
     # Phase 3: Service Account
     _phase(3, total, "Service Account Setup")
+    _t = time.monotonic()
     if _phase_service_account(cfg, ctx, args) != 0:
         return 1
+    logger.perf("init_phase", time.monotonic() - _t, phase=3, name="service_account")
 
     # Phase 4: SSH Keys
     _phase(4, total, "SSH Key Generation")
+    _t = time.monotonic()
     _phase_ssh_keys(cfg, ctx)
+    logger.perf("init_phase", time.monotonic() - _t, phase=4, name="ssh_keys")
 
     # Phase 5: PVE Node Deployment
     _phase(5, total, "PVE Node Deployment")
+    _t = time.monotonic()
     _phase_pve_deploy(cfg, ctx, args)
     # Retry VLAN discovery if skipped in Phase 2 (now freq-admin key is available)
     if not (getattr(cfg, "vlans", None)):
         _discover_vlans_from_pve(cfg, ctx)
+    logger.perf("init_phase", time.monotonic() - _t, phase=5, name="pve_deploy")
 
     # Phase 6: PVE API Token
     _phase(6, total, "PVE API Token")
+    _t = time.monotonic()
     _phase_pve_api_token(cfg, ctx)
+    logger.perf("init_phase", time.monotonic() - _t, phase=6, name="pve_api_token")
 
     # Phase 7: Fleet Discovery
     _phase(7, total, "Fleet Discovery")
+    _t = time.monotonic()
     _phase_fleet_discover(cfg, ctx, args)
+    logger.perf("init_phase", time.monotonic() - _t, phase=7, name="fleet_discover")
 
     # Phase 8: Fleet Deployment
     _phase(8, total, "Fleet Deployment")
+    _t = time.monotonic()
     _phase_fleet_deploy(cfg, ctx, args)
+    logger.perf("init_phase", time.monotonic() - _t, phase=8, name="fleet_deploy")
 
     # Phase 9: Fleet Configuration
     _phase(9, total, "Fleet Configuration")
+    _t = time.monotonic()
     _phase_fleet_configure(cfg, ctx)
+    logger.perf("init_phase", time.monotonic() - _t, phase=9, name="fleet_configure")
 
     # Phase 10: PDM Setup (optional)
     _phase(10, total, "PDM Setup")
+    _t = time.monotonic()
     _phase_pdm(cfg, ctx, args)
+    logger.perf("init_phase", time.monotonic() - _t, phase=10, name="pdm")
 
     # Phase 11: Admin Accounts
     _phase(11, total, "Admin Account Setup")
+    _t = time.monotonic()
     _phase_admin_setup(cfg, ctx)
+    logger.perf("init_phase", time.monotonic() - _t, phase=11, name="admin_setup")
 
     # Phase 12: Verification
     _phase(12, total, "Verification")
+    _t = time.monotonic()
     verified = _phase_verify(cfg, ctx)
+    logger.perf("init_phase", time.monotonic() - _t, phase=12, name="verify")
 
     # Phase 13: Summary
     _phase(13, total, "Summary")
+    _t = time.monotonic()
     _phase_summary(cfg, ctx, verified, pack)
+    logger.perf("init_phase", time.monotonic() - _t, phase=13, name="summary")
+
+    logger.perf("init_total", time.monotonic() - init_start, phases=total)
 
     logger.info("init complete", service_account=ctx["svc_name"])
     return 0 if verified else 1
@@ -442,6 +473,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
 
 def _phase_welcome(cfg):
     """Check prerequisites are installed."""
+    logger.info("init_phase_start: Phase 1 - prerequisites", phase=1)
     fmt.line(f"  {fmt.C.DIM}Checking prerequisites...{fmt.C.RESET}")
     fmt.blank()
 
@@ -496,6 +528,7 @@ def _phase_welcome(cfg):
     if not ok:
         fmt.blank()
         fmt.line(f"  {fmt.C.RED}Missing required dependencies. Install them and re-run.{fmt.C.RESET}")
+        logger.error("init_phase_failed: Phase 1 - prerequisites", phase=1, reason="missing_deps")
         return False
 
     # Create data directories
@@ -509,6 +542,7 @@ def _phase_welcome(cfg):
     # Seed config files from .example templates
     _seed_config_files(cfg)
 
+    logger.info("init_phase_complete: Phase 1 - prerequisites", phase=1)
     return True
 
 
@@ -601,6 +635,7 @@ def _phase_configure(cfg, args=None):
     that are already configured (non-empty, non-default) unless user opts to
     reconfigure. In headless mode, uses CLI flags and defaults — no prompts.
     """
+    logger.info("init_phase_start: Phase 2 - configure", phase=2)
     toml_path = os.path.join(cfg.conf_dir, "freq.toml")
     if not os.path.isfile(toml_path):
         fmt.step_fail(f"freq.toml not found at {toml_path}")
@@ -808,6 +843,8 @@ def _phase_configure(cfg, args=None):
             fmt.step_warn(f"Config reload issue: {e} — continuing with current values")
     else:
         fmt.step_ok("Configuration unchanged — all values already set")
+
+    logger.info("init_phase_complete: Phase 2 - configure", phase=2, pve_nodes=len(cfg.pve_nodes))
 
 
 # ── VLAN Discovery (Phase 2 supplement) ───────────────────────────
@@ -1163,6 +1200,7 @@ def _discover_vlans_from_pve(cfg, ctx):
 
 def _phase_service_account(cfg, ctx, args=None):
     """Create service account with NOPASSWD sudo."""
+    logger.info("init_phase_start: Phase 3 - service_account", phase=3)
     fmt.line(f"  {fmt.C.DIM}The service account is used for fleet-wide SSH operations.{fmt.C.RESET}")
     fmt.line(f"  {fmt.C.DIM}It will be created on this host and deployed to all managed nodes.{fmt.C.RESET}")
     fmt.blank()
@@ -1278,6 +1316,8 @@ def _phase_service_account(cfg, ctx, args=None):
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}Remember this password — it's your break-glass access (su - {svc_name}){fmt.C.RESET}")
 
+    logger.info("init_phase_complete: Phase 3 - service_account", phase=3, user=svc_name)
+    audit.record("create_service_account", "local", "success", user=svc_name)
     return True
 
 
@@ -1335,6 +1375,7 @@ def _phase_ssh_keys(cfg, ctx):
     - freq_id_ed25519: modern hosts (linux, pve, docker, truenas, pfsense)
     - freq_id_rsa: legacy devices (iDRAC, Cisco switch) that don't support ed25519
     """
+    logger.info("init_phase_start: Phase 4 - ssh_keys", phase=4)
     key_dir = cfg.key_dir
     hostname = os.uname().nodename
     os.makedirs(key_dir, mode=0o700, exist_ok=True)
@@ -1483,6 +1524,9 @@ def _phase_ssh_keys(cfg, ctx):
     if os.path.isfile(rsa_pub):
         fmt.step_ok("RSA key ready for automated iDRAC/switch deployment")
 
+    logger.info("init_phase_complete: Phase 4 - ssh_keys", phase=4)
+    audit.record("generate_keys", "local", "success", key_type="ed25519+rsa")
+
 
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 5: PVE Node Deployment
@@ -1491,6 +1535,7 @@ def _phase_ssh_keys(cfg, ctx):
 
 def _phase_pve_deploy(cfg, ctx, args=None):
     """Deploy service account + key to PVE nodes."""
+    logger.info("init_phase_start: Phase 5 - pve_deploy", phase=5)
     pve_nodes = cfg.pve_nodes
 
     if not pve_nodes:
@@ -1566,6 +1611,7 @@ def _phase_pve_deploy(cfg, ctx, args=None):
 
     fmt.blank()
     fmt.line(f"  PVE deployment: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, {fmt.C.RED}{fail} failed{fmt.C.RESET}")
+    logger.info("init_phase_complete: Phase 5 - pve_deploy", phase=5, ok=ok, fail=fail)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1580,6 +1626,7 @@ def _phase_pve_api_token(cfg, ctx):
     generates an API token, saves the secret to a credential file,
     and updates freq.toml so the dashboard can pull live PVE metrics.
     """
+    logger.info("init_phase_start: Phase 6 - pve_api_token", phase=6)
     import json as _json
 
     pve_nodes = cfg.pve_nodes
@@ -1728,6 +1775,9 @@ def _phase_pve_api_token(cfg, ctx):
             fmt.step_warn("Token saved but API test failed — will fall back to SSH")
     except Exception as e:
         fmt.step_warn(f"API verification error: {e} — will fall back to SSH")
+
+    logger.info("init_phase_complete: Phase 6 - pve_api_token", phase=6)
+    audit.record("create_api_token", first_node, "success")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -2171,6 +2221,7 @@ def _pdm_create_pve_token(pve_ip, ctx):
 
 def _phase_pdm(cfg, ctx, args=None):
     """PDM setup phase — detect, optionally install, configure remote."""
+    logger.info("init_phase_start: Phase 10 - pdm", phase=10)
     skip_pdm = getattr(args, "skip_pdm", False) if args else False
     install_pdm = getattr(args, "install_pdm", False) if args else False
     remote_name = getattr(args, "pdm_remote_name", None) if args else None
@@ -2310,6 +2361,8 @@ def _phase_pdm(cfg, ctx, args=None):
         fmt.step_fail(f"Failed to add remote '{remote_name}'")
         fmt.line(f"  {fmt.C.DIM}The remote may already exist. Check: https://localhost:8443{fmt.C.RESET}")
 
+    logger.info("init_phase_complete: Phase 10 - pdm", phase=10)
+
 
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 7: Fleet Discovery
@@ -2363,6 +2416,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     Step 5: Write fleet-boundaries.toml with physical devices + PVE nodes.
     Step 6: Update freq.toml [infrastructure] with detected IPs.
     """
+    logger.info("init_phase_start: Phase 7 - fleet_discover", phase=7)
     import json as _json
 
     from freq.core.config import Host, append_host_toml
@@ -2866,6 +2920,8 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     fmt.blank()
     total_fleet = len(cfg.hosts)
     fmt.line(f"  {fmt.C.GREEN}Fleet: {total_fleet} host(s) registered.{fmt.C.RESET}")
+    logger.info("init_phase_complete: Phase 7 - fleet_discover", phase=7, hosts=total_fleet)
+    audit.record("config_write", "hosts.toml", "success", hosts=total_fleet)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -2875,6 +2931,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
 def _phase_fleet_deploy(cfg, ctx, args=None):
     """Deploy service account + key to fleet hosts (all platform types)."""
+    logger.info("init_phase_start: Phase 8 - fleet_deploy", phase=8)
     # Load per-device credentials (--device-credentials TOML)
     device_creds_file = getattr(args, "device_credentials", None) if args else None
     device_creds = _load_device_credentials(device_creds_file)
@@ -2941,9 +2998,12 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
             for h in linux_hosts:
                 fmt.blank()
                 fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
+                before = audit.snapshot_host(h.ip, ctx["svc_name"], h.htype, cfg)
                 if _deploy_to_host_dispatch(h.ip, h.htype, ctx, linux_pass, linux_key, linux_user):
                     ok += 1
                     deployed_ips.add(h.ip)
+                    after = audit.snapshot_host(h.ip, ctx["svc_name"], h.htype, cfg)
+                    audit.record_change(h.ip, "deploy_user", before, after)
                 else:
                     fail += 1
         else:
@@ -2966,8 +3026,11 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     for h in linux_hosts:
                         fmt.blank()
                         fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
+                        before = audit.snapshot_host(h.ip, ctx["svc_name"], h.htype, cfg)
                         if _deploy_to_host_dispatch(h.ip, h.htype, ctx, linux_pass, linux_key, linux_user):
                             ok += 1
+                            after = audit.snapshot_host(h.ip, ctx["svc_name"], h.htype, cfg)
+                            audit.record_change(h.ip, "deploy_user", before, after)
                         else:
                             fail += 1
             else:
@@ -2989,9 +3052,12 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
             for h in pfsense_hosts:
                 fmt.blank()
                 fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [pfsense]")
+                before = audit.snapshot_host(h.ip, ctx["svc_name"], "pfsense", cfg)
                 if _deploy_to_host_dispatch(h.ip, "pfsense", ctx, pf_pass, pf_key, pf_user):
                     ok += 1
                     deployed_ips.add(h.ip)
+                    after = audit.snapshot_host(h.ip, ctx["svc_name"], "pfsense", cfg)
+                    audit.record_change(h.ip, "deploy_user", before, after)
                 else:
                     fail += 1
         elif has_bootstrap:
@@ -3003,9 +3069,12 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
             for h in pfsense_hosts:
                 fmt.blank()
                 fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [pfsense]")
+                before = audit.snapshot_host(h.ip, ctx["svc_name"], "pfsense", cfg)
                 if _deploy_to_host_dispatch(h.ip, "pfsense", ctx, pf_pass, pf_key, pf_user):
                     ok += 1
                     deployed_ips.add(h.ip)
+                    after = audit.snapshot_host(h.ip, ctx["svc_name"], "pfsense", cfg)
+                    audit.record_change(h.ip, "deploy_user", before, after)
                 else:
                     fail += 1
         else:
@@ -3023,8 +3092,11 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     for h in pfsense_hosts:
                         fmt.blank()
                         fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [pfsense]")
+                        before = audit.snapshot_host(h.ip, ctx["svc_name"], "pfsense", cfg)
                         if _deploy_to_host_dispatch(h.ip, "pfsense", ctx, pf_pass, pf_key, pf_user):
                             ok += 1
+                            after = audit.snapshot_host(h.ip, ctx["svc_name"], "pfsense", cfg)
+                            audit.record_change(h.ip, "deploy_user", before, after)
                         else:
                             fail += 1
             else:
@@ -3115,6 +3187,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
             except (KeyError, PermissionError):
                 pass
             fmt.step_ok(f"Device password saved to {pass_path}")
+            audit.record("password_save", pass_path, "success")
         except OSError as e:
             fmt.step_warn(f"Could not save device password to {pass_path}: {e}")
 
@@ -3123,6 +3196,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
 
     fmt.blank()
     fmt.line(f"  Fleet deployment: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, {fmt.C.RED}{fail} failed{fmt.C.RESET}")
+    logger.info("init_phase_complete: Phase 8 - fleet_deploy", phase=8, ok=ok, fail=fail)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -3137,6 +3211,7 @@ def _phase_fleet_configure(cfg, ctx):
     9b: Deploy metrics agent to all Linux-family hosts.
     9c: Auto-categorize VMs into fleet-boundary tiers.
     """
+    logger.info("init_phase_start: Phase 9 - fleet_configure", phase=9)
     import json as _json
 
     key_path = ctx.get("key_path", "") or cfg.ssh_key_path
@@ -3735,6 +3810,7 @@ def _phase_fleet_configure(cfg, ctx):
         _run(["systemctl", "daemon-reload"])
         _run(["systemctl", "enable", "freq-dashboard"])
         fmt.step_ok(f"Dashboard service installed: freq-dashboard (port {dashboard_port})")
+        audit.record("deploy_service", "local", "success", service="freq-dashboard")
         fmt.line(f"  {fmt.C.DIM}Start with: sudo systemctl start freq-dashboard{fmt.C.RESET}")
     except OSError as e:
         fmt.step_warn(f"Could not install dashboard service: {e}")
@@ -3788,6 +3864,7 @@ def _phase_fleet_configure(cfg, ctx):
     # conf/ must be readable by dashboard (freq.toml, hosts.toml, etc.)
     _run(["chown", "-R", f"{svc_name}:{svc_name}", cfg.conf_dir])
     fmt.step_ok(f"Dashboard data directories owned by {svc_name}")
+    logger.info("init_phase_complete: Phase 9 - fleet_configure", phase=9)
 
 
 def _categorize_vms(cfg):
@@ -3962,6 +4039,14 @@ def _deploy_linux(ip, ctx, auth_pass, auth_key, auth_user, htype="linux"):
     svc_name = ctx["svc_name"]
     svc_pass = ctx["svc_pass"]
     pubkey = ctx["pubkey"]
+    logger.info(f"deploy_start: {ip} [{htype}]", host=ip, htype=htype)
+
+    # Dry-run: show what would be done without making changes
+    if ctx.get("dry_run"):
+        fmt.step_info(f"DRY RUN: Would deploy {svc_name} to {ip}")
+        logger.info("dry_run_deploy", host=ip, htype=htype, user=svc_name)
+        audit.record("deploy_user", ip, "dry_run", user=svc_name)
+        return True
 
     # Sanitize pubkey — escape single quotes for safe shell embedding
     pubkey = pubkey.replace("'", "'\\''") if pubkey else ""
@@ -3972,6 +4057,8 @@ def _deploy_linux(ip, ctx, auth_pass, auth_key, auth_user, htype="linux"):
     rc, out, err = _ssh("echo OK")
     if rc != 0:
         fmt.step_fail(f"Cannot connect ({err[:60]})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=err[:120])
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="connect_failed")
         return False
     fmt.step_ok("Connected")
 
@@ -4018,12 +4105,18 @@ echo DEPLOY_OK
     rc, out, err = _ssh(deploy, as_root=True)
     if MARKER_USERADD_FAIL in out or "ACCOUNT_MISSING" in out:
         fmt.step_fail(f"Failed to create account '{svc_name}'")
+        logger.error(f"deploy_failed: {ip}", host=ip, error="useradd_failed")
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="useradd")
         return False
     elif "SUDOERS_FAIL" in out:
         fmt.step_fail("Sudoers validation failed")
+        logger.error(f"deploy_failed: {ip}", host=ip, error="sudoers_failed")
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="sudoers")
         return False
     elif MARKER_DEPLOY_OK not in out:
         fmt.step_fail(f"Deploy script failed ({err[:60]})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=err[:120])
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="script_failed")
         return False
 
     # Report chpasswd status
@@ -4081,6 +4174,12 @@ echo DEPLOY_OK
                 fmt.step_fail(f"SUDO FAILED — {svc_name} cannot sudo on {ip}")
                 success = False
 
+    if success:
+        logger.info(f"deploy_success: {ip}", host=ip)
+        audit.record("deploy_user", ip, "success", user=svc_name, method="useradd")
+    else:
+        logger.error(f"deploy_failed: {ip}", host=ip, error="verification_failed")
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="verification")
     return success
 
 
@@ -4093,6 +4192,14 @@ def _deploy_pfsense(ip, ctx, auth_pass, auth_key, auth_user):
     svc_name = ctx["svc_name"]
     svc_pass = ctx["svc_pass"]
     pubkey = ctx["pubkey"]
+    logger.info(f"deploy_start: {ip} [pfsense]", host=ip, htype="pfsense")
+
+    # Dry-run: show what would be done without making changes
+    if ctx.get("dry_run"):
+        fmt.step_info(f"DRY RUN: Would deploy {svc_name} to {ip}")
+        logger.info("dry_run_deploy", host=ip, htype="pfsense", user=svc_name)
+        audit.record("deploy_user", ip, "dry_run", user=svc_name)
+        return True
 
     # Sanitize pubkey — escape single quotes for safe shell embedding
     pubkey = pubkey.replace("'", "'\\''") if pubkey else ""
@@ -4108,6 +4215,8 @@ def _deploy_pfsense(ip, ctx, auth_pass, auth_key, auth_user):
     rc, out, err = _ssh("echo OK")
     if rc != 0:
         fmt.step_fail(f"Cannot connect ({err[:60]})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=err[:120])
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="connect_failed")
         return False
     fmt.step_ok("Connected")
 
@@ -4137,9 +4246,13 @@ echo DEPLOY_OK
     rc, out, err = _ssh(deploy)  # No as_root — pfSense admin IS root, no sudo
     if MARKER_USERADD_FAIL in out or "ACCOUNT_MISSING" in out:
         fmt.step_fail(f"Failed to create account '{svc_name}'")
+        logger.error(f"deploy_failed: {ip}", host=ip, error="useradd_failed")
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="useradd")
         return False
     elif MARKER_DEPLOY_OK not in out:
         fmt.step_fail(f"Deploy script failed ({err[:60]})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=err[:120])
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="script_failed")
         return False
 
     if MARKER_CHPASSWD_FAIL in out:
@@ -4172,6 +4285,12 @@ echo DEPLOY_OK
             fmt.step_fail(f"FREQ key login FAILED as {svc_name}")
             success = False
 
+    if success:
+        logger.info(f"deploy_success: {ip}", host=ip)
+        audit.record("deploy_user", ip, "success", user=svc_name, method="pw_useradd")
+    else:
+        logger.error(f"deploy_failed: {ip}", host=ip, error="verification_failed")
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="verification")
     return success
 
 
@@ -4184,6 +4303,14 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     svc_name = ctx["svc_name"]
     svc_pass = ctx["svc_pass"]
     rsa_pubkey = ctx.get("rsa_pubkey", "")
+    logger.info(f"deploy_start: {ip} [idrac]", host=ip, htype="idrac")
+
+    # Dry-run: show what would be done without making changes
+    if ctx.get("dry_run"):
+        fmt.step_info(f"DRY RUN: Would deploy {svc_name} to {ip}")
+        logger.info("dry_run_deploy", host=ip, htype="idrac", user=svc_name)
+        audit.record("deploy_user", ip, "dry_run", user=svc_name)
+        return True
 
     if not rsa_pubkey:
         fmt.step_fail("No RSA public key — iDRAC requires RSA (not ed25519)")
@@ -4197,6 +4324,8 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     rc, out, err = _ssh("racadm getsysinfo", extra_opts=extra_opts)
     if rc != 0:
         fmt.step_fail(f"Cannot connect ({err[:60]})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=err[:120])
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="connect_failed")
         return False
     fmt.step_ok("Connected to iDRAC")
 
@@ -4204,6 +4333,7 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     rc, out, err = _ssh(_gen_idrac_slot_check(), extra_opts=extra_opts)
     if rc != 0:
         fmt.step_fail(f"Cannot query iDRAC user slots ({err[:60]})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error="slot_query_failed")
         return False
 
     # Parse slots — find first empty or matching
@@ -4231,6 +4361,8 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
 
     if MARKER_SETUP_OK not in out:
         fmt.step_fail(f"iDRAC user setup failed ({(err or out).strip()[:80]})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error="idrac_setup_failed")
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="racadm_setup")
         return False
     fmt.step_ok(f"iDRAC user '{svc_name}' configured (slot {target_slot})")
 
@@ -4243,6 +4375,8 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     if rc != 0:
         fmt.step_fail(f"RSA key upload failed ({(err or out).strip()[:60]})")
         fmt.step_warn("iDRAC user created but key-based SSH won't work — password auth only")
+        logger.error(f"deploy_failed: {ip}", host=ip, error="rsa_key_upload_failed")
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="rsa_key_upload")
         return False
 
     # Verify the key was actually stored
@@ -4256,6 +4390,8 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     else:
         fmt.step_warn("RSA key uploaded but verification query failed — check manually")
 
+    logger.info(f"deploy_success: {ip}", host=ip)
+    audit.record("deploy_user", ip, "success", user=svc_name, method="racadm")
     return True
 
 
@@ -4268,6 +4404,14 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     svc_name = ctx["svc_name"]
     svc_pass = ctx["svc_pass"]
     rsa_pubkey = ctx.get("rsa_pubkey", "")
+    logger.info(f"deploy_start: {ip} [switch]", host=ip, htype="switch")
+
+    # Dry-run: show what would be done without making changes
+    if ctx.get("dry_run"):
+        fmt.step_info(f"DRY RUN: Would deploy {svc_name} to {ip}")
+        logger.info("dry_run_deploy", host=ip, htype="switch", user=svc_name)
+        audit.record("deploy_user", ip, "dry_run", user=svc_name)
+        return True
 
     if not rsa_pubkey:
         fmt.step_fail("No RSA public key — switch requires RSA (not ed25519)")
@@ -4281,6 +4425,8 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     rc, out, err = _ssh("show version | include uptime", extra_opts=extra_opts)
     if rc != 0:
         fmt.step_fail(f"Cannot connect ({err[:60]})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=err[:120])
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="connect_failed")
         return False
     fmt.step_ok("Connected to switch")
 
@@ -4358,6 +4504,8 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     for pat in ios_errors:
         if pat in out_lower:
             fmt.step_fail(f"IOS config failed: {pat.strip('% ')} ({out.strip()[:80]})")
+            logger.error(f"deploy_failed: {ip}", host=ip, error=f"ios_{pat.strip('% ')}")
+            audit.record("deploy_user", ip, "failed", user=svc_name, error="ios_config")
             return False
 
     # Key decode warnings — user created but key won't work
@@ -4376,6 +4524,8 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     else:
         fmt.step_ok(f"Switch user '{svc_name}' configured (verify write memory)")
 
+    logger.info(f"deploy_success: {ip}", host=ip)
+    audit.record("deploy_user", ip, "success", user=svc_name, method="ios_config")
     return True
 
 
@@ -4607,6 +4757,7 @@ def _remove_from_host_dispatch(ip, htype, svc_name, key_path, rsa_key_path):
 
 def _phase_admin_setup(cfg, ctx):
     """Configure RBAC roles."""
+    logger.info("init_phase_start: Phase 11 - admin_setup", phase=11)
     roles_file = os.path.join(cfg.conf_dir, "roles.conf")
 
     # Ensure file exists
@@ -4662,6 +4813,8 @@ def _phase_admin_setup(cfg, ctx):
                 with open(roles_file, "a") as f:
                     f.write(f"{username}:{role}\n")
                 fmt.step_ok(f"Added {username} as {role}")
+
+    logger.info("init_phase_complete: Phase 11 - admin_setup", phase=11)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -4772,6 +4925,7 @@ def _verify_host(ip, htype, svc_name, key_path, rsa_key_path, cfg=None):
 
 def _phase_verify(cfg, ctx):
     """Verify all init steps completed. Returns True if all pass."""
+    logger.info("init_phase_start: Phase 12 - verify", phase=12)
     svc_name = ctx["svc_name"]
     passes = 0
     fails = 0
@@ -4955,9 +5109,11 @@ def _phase_verify(cfg, ctx):
         fmt.step_ok(f"Marked initialized: {INIT_MARKER}")
         if warns:
             fmt.line(f"  {fmt.C.DIM}Re-run 'freq init' when unreachable hosts come online.{fmt.C.RESET}")
+        logger.info("init_phase_complete: Phase 12 - verify", phase=12, passes=passes, fails=fails, warns=warns)
         return True
     else:
         fmt.step_fail(f"NOT initialized ({fails} failures — fix and re-run 'freq init')")
+        logger.error("init_phase_failed: Phase 12 - verify", phase=12, passes=passes, fails=fails, warns=warns)
         return False
 
 
@@ -4968,6 +5124,7 @@ def _phase_verify(cfg, ctx):
 
 def _phase_summary(cfg, ctx, verified, pack=None):
     """Print summary and next steps — enhanced with fleet topology."""
+    logger.info("init_phase_start: Phase 13 - summary", phase=13)
     svc_name = ctx["svc_name"]
     ed_key = os.path.join(cfg.key_dir, "freq_id_ed25519")
     rsa_key = os.path.join(cfg.key_dir, "freq_id_rsa")
@@ -5051,6 +5208,7 @@ def _phase_summary(cfg, ctx, verified, pack=None):
         if msg:
             fmt.line(f"  {fmt.C.DIM}{msg}{fmt.C.RESET}")
 
+    logger.info("init_phase_complete: Phase 13 - summary", phase=13, verified=verified)
     fmt.footer()
 
 
@@ -6081,6 +6239,7 @@ def _init_headless(cfg, args):
         "bootstrap_key": bootstrap_key or "",
         "bootstrap_pass": bootstrap_pass,
         "bootstrap_user": bootstrap_user,
+        "dry_run": False,
     }
 
     fmt.header("Init — Headless Mode")
@@ -6452,6 +6611,7 @@ def _headless_fleet_deploy(
             except (KeyError, PermissionError):
                 pass
             fmt.step_ok(f"Device password saved to {pass_path}")
+            audit.record("password_save", pass_path, "success")
         except OSError as e:
             fmt.step_warn(f"Could not save device password: {e}")
 

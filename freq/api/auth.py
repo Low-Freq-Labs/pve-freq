@@ -125,7 +125,8 @@ def handle_auth_login(handler):
         body = handler._request_body()
         username = body.get("username", "").strip().lower()
         password = body.get("password", "")
-    except Exception:
+    except Exception as e:
+        logger.warn(f"auth_failed: invalid request body: {e}", endpoint="auth/login")
         handler._json_response({"error": "Invalid request body"}, 400)
         return
 
@@ -138,6 +139,7 @@ def handle_auth_login(handler):
     user = next((u for u in users if u["username"] == username), None)
     if not user:
         record_login_attempt(client_ip, False)
+        logger.warn(f"auth_failed: unknown user '{username}'", ip=client_ip)
         handler._json_response({"error": "Unknown user"})
         return
 
@@ -149,6 +151,7 @@ def handle_auth_login(handler):
 
     if stored_hash and not verify_password(password, stored_hash):
         record_login_attempt(client_ip, False)
+        logger.warn(f"auth_failed: invalid password for '{username}'", ip=client_ip)
         handler._json_response({"error": "Invalid password"})
         return
 
@@ -223,7 +226,8 @@ def handle_auth_change_password(handler):
     try:
         body = handler._request_body()
         new_password = body.get("password", "")
-    except Exception:
+    except Exception as e:
+        logger.warn(f"api_auth: failed to parse password change body: {e}")
         new_password = ""
 
     with _auth_lock:

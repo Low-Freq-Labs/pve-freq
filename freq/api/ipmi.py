@@ -19,6 +19,7 @@ Architecture:
 import os
 import subprocess
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_json_body, get_param
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
@@ -57,10 +58,13 @@ def _ipmitool(ip, user, password, *args):
         )
         return result.stdout.strip(), result.returncode == 0
     except subprocess.TimeoutExpired:
+        logger.warn("api_ipmi: ipmitool timed out", host=ip)
         return "ipmitool command timed out (15s)", False
     except FileNotFoundError:
+        logger.error("api_ipmi_error: ipmitool binary not found")
         return "ipmitool not found — install it: apt install ipmitool", False
     except Exception as e:
+        logger.error(f"api_ipmi_error: {e}", host=ip)
         return f"ipmitool error: {e}", False
 
 

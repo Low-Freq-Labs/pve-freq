@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
@@ -94,6 +95,7 @@ def handle_vm_create(handler):
         stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=120)
         json_response(handler, {"ok": ok, "vmid": vmid, "name": name, "error": stdout if not ok else ""})
     except Exception as e:
+        logger.error(f"api_vm_error: vm create failed: {e}", endpoint="vm/create")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -125,6 +127,7 @@ def handle_vm_destroy(handler):
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=120)
         json_response(handler, {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""})
     except Exception as e:
+        logger.error(f"api_vm_error: vm destroy failed: {e}", endpoint="vm/destroy")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -154,6 +157,7 @@ def handle_vm_snapshot(handler):
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm snapshot {vmid} {snap_name}", timeout=120)
         json_response(handler, {"ok": ok, "vmid": vmid, "snapshot": snap_name, "error": stdout if not ok else ""})
     except Exception as e:
+        logger.error(f"api_vm_error: vm snapshot failed: {e}", endpoint="vm/snapshot")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -199,6 +203,7 @@ def handle_vm_resize(handler):
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} {' '.join(parts)}")
         json_response(handler, {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""})
     except Exception as e:
+        logger.error(f"api_vm_error: vm resize failed: {e}", endpoint="vm/resize")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -263,6 +268,7 @@ def handle_vm_power(handler):
             handler, {"ok": ok, "vmid": vmid, "action": action, "output": output, "error": "" if ok else output}
         )
     except Exception as e:
+        logger.error(f"api_vm_error: vm power failed: {e}", endpoint="vm/power")
         json_response(handler, {"error": f"PVE operation failed: {e}"})
 
 
@@ -302,6 +308,7 @@ def handle_vm_template(handler):
         )
         json_response(handler, {"ok": r.returncode == 0, "vmid": vmid})
     except Exception as e:
+        logger.error(f"api_vm_error: vm template failed: {e}", endpoint="vm/template")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -345,6 +352,7 @@ def handle_vm_rename(handler):
         )
         json_response(handler, {"ok": r.returncode == 0, "vmid": vmid, "name": name})
     except Exception as e:
+        logger.error(f"api_vm_error: vm rename failed: {e}", endpoint="vm/rename")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -429,6 +437,7 @@ def handle_vm_delete_snapshot(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_vm_error: vm snapshot delete failed: {e}", endpoint="vm/snapshot-delete")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -510,6 +519,7 @@ def handle_vm_change_id(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_vm_error: vm change-id failed: {e}", endpoint="vm/change-id")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -625,6 +635,7 @@ def handle_vm_add_nic(handler):
             handler, {"ok": ok, "vmid": vmid, "nic": f"net{next_nic}", "ip": new_ip, "vlan": vlan_id_val, "error": err}
         )
     except Exception as e:
+        logger.error(f"api_vm_error: vm add-nic failed: {e}", endpoint="vm/add-nic")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -685,6 +696,7 @@ def handle_vm_clear_nics(handler):
 
         json_response(handler, {"ok": True, "vmid": vmid, "cleared": deleted, "count": len(deleted)})
     except Exception as e:
+        logger.error(f"api_vm_error: vm clear-nics failed: {e}", endpoint="vm/clear-nics")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -764,6 +776,7 @@ def handle_vm_change_ip(handler):
             err = f"IP config failed: {r2.stderr or r2.stdout}"
         json_response(handler, {"ok": ok, "vmid": vmid, "ip": new_ip, "nic": nic_idx, "error": err})
     except Exception as e:
+        logger.error(f"api_vm_error: vm change-ip failed: {e}", endpoint="vm/change-ip")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -896,6 +909,7 @@ def handle_vm_add_disk(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_vm_error: vm add-disk failed: {e}", endpoint="vm/add-disk")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -947,6 +961,7 @@ def handle_vm_tag(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_vm_error: vm tag failed: {e}", endpoint="vm/tag")
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -1014,6 +1029,7 @@ def handle_vm_clone(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_vm_error: vm clone failed: {e}", endpoint="vm/clone")
         json_response(handler, {"error": f"Clone failed: {e}"})
 
 
@@ -1118,6 +1134,7 @@ def handle_vm_migrate(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_vm_error: vm migrate failed: {e}", endpoint="vm/migrate")
         json_response(handler, {"error": f"Migration failed: {e}"})
 
 

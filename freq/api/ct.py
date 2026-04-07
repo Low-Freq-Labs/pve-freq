@@ -12,6 +12,7 @@ Operations:
 import json
 import time
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
 from freq.core.validate import (
@@ -59,7 +60,8 @@ def handle_ct_list(handler):
 
     try:
         resources = json.loads(stdout)
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warn(f"api_ct: invalid PVE response in ct/list: {e}")
         json_response(handler, {"containers": [], "error": "Invalid response from PVE"})
         return
 

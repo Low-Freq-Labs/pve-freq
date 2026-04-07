@@ -9,6 +9,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 
 import re
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_param, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
@@ -247,7 +248,8 @@ def handle_netmon_interfaces(handler):
             continue
         try:
             ifaces_raw = _json.loads(r.stdout.strip())
-        except (_json.JSONDecodeError, ValueError):
+        except (_json.JSONDecodeError, ValueError) as e:
+            logger.debug(f"api_net: failed to parse interface data from {h.label}: {e}")
             continue
         ifaces = []
         for iface in ifaces_raw:

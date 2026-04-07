@@ -9,6 +9,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 
 import os
 
+from freq.core import log as logger
 from freq.api.helpers import json_response
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
@@ -389,7 +390,8 @@ def handle_stack_status(handler):
             continue
         try:
             host_stacks = _json.loads(r.stdout.strip())
-        except (ValueError, _json.JSONDecodeError):
+        except (ValueError, _json.JSONDecodeError) as e:
+            logger.debug(f"api_docker: failed to parse stack status from {h.label}: {e}")
             continue
         for stack in host_stacks:
             status_raw = stack.get("Status", "unknown")

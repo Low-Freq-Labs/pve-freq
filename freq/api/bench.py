@@ -14,6 +14,7 @@ import json
 import os
 import time
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_json_body, get_param
 from freq.modules.serve import _check_session_role
 from freq.core.config import load_config
@@ -172,6 +173,7 @@ def handle_wol(handler):
             },
         )
     except OSError as e:
+        logger.error(f"api_bench_error: WoL send failed: {e}", endpoint="wol")
         json_response(
             handler,
             {
@@ -254,6 +256,7 @@ def handle_bench_run(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_bench_error: benchmark failed on {host_ip}: {e}", endpoint="bench/run")
         json_response(
             handler,
             {
@@ -349,6 +352,7 @@ def handle_bench_netspeed(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_bench_error: network benchmark failed: {e}", endpoint="bench/netspeed")
         json_response(
             handler,
             {
@@ -396,6 +400,7 @@ def handle_bench_tools(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_bench_error: tool check failed on {host_ip}: {e}", endpoint="bench/tools")
         json_response(
             handler,
             {

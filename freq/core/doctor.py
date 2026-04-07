@@ -24,6 +24,7 @@ Design decisions:
 import os
 import shutil
 import subprocess
+import time
 
 from freq.core.config import FreqConfig
 from freq.core import fmt
@@ -34,12 +35,16 @@ DOCTOR_CMD_TIMEOUT = 5
 DOCTOR_PVE_TIMEOUT = 10
 
 
-def run(cfg: FreqConfig) -> int:
+def run(cfg: FreqConfig, json_output: bool = False) -> int:
     """Run all diagnostic checks. Returns 0 if all pass, 1 if any fail."""
-    fmt.header("Doctor", "PVE FREQ")
-    fmt.blank()
-    fmt.line(f"{fmt.C.BOLD}Self-Diagnostic{fmt.C.RESET}")
-    fmt.blank()
+    start = time.monotonic()
+    check_results = []
+
+    if not json_output:
+        fmt.header("Doctor", "PVE FREQ")
+        fmt.blank()
+        fmt.line(f"{fmt.C.BOLD}Self-Diagnostic{fmt.C.RESET}")
+        fmt.blank()
 
     passed = 0
     failed = 0
@@ -91,16 +96,42 @@ def run(cfg: FreqConfig) -> int:
     ]
 
     for section_name, checks in sections:
-        fmt.line(f"  {fmt.C.PURPLE_BOLD}{section_name}{fmt.C.RESET}")
+        if not json_output:
+            fmt.line(f"  {fmt.C.PURPLE_BOLD}{section_name}{fmt.C.RESET}")
         for check in checks:
             result = check(cfg)
+            status = "pass" if result == 0 else "fail" if result == 1 else "warn"
+            check_results.append({"section": section_name, "name": check.__name__.lstrip("_"), "status": status})
             if result == 0:
                 passed += 1
             elif result == 1:
                 failed += 1
             else:
                 warnings += 1
-        print()
+        if not json_output:
+            print()
+
+    duration = time.monotonic() - start
+
+    # Save health history
+    _save_health_history(cfg, passed, failed, warnings, duration)
+
+    if json_output:
+        import json as _json
+
+        total = passed + failed + warnings
+        status = "healthy" if failed == 0 and warnings == 0 else "degraded" if failed == 0 else "unhealthy"
+        result = {
+            "passed": passed,
+            "failed": failed,
+            "warnings": warnings,
+            "total": total,
+            "status": status,
+            "duration": round(duration, 2),
+            "checks": check_results,
+        }
+        print(_json.dumps(result, indent=2))
+        return 1 if failed > 0 else 0
 
     fmt.divider("Summary")
     fmt.blank()
@@ -125,6 +156,91 @@ def run(cfg: FreqConfig) -> int:
     fmt.footer()
 
     return 1 if failed > 0 else 0
+
+
+def _save_health_history(cfg, passed, failed, warnings, duration):
+    """Persist doctor results to health.jsonl for trend analysis."""
+    import json as _json
+    from datetime import datetime, timezone
+
+    log_dir = os.path.dirname(cfg.log_file)
+    health_file = os.path.join(log_dir, "health.jsonl")
+
+    entry = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "passed": passed,
+        "failed": failed,
+        "warnings": warnings,
+        "total": passed + failed + warnings,
+        "duration": round(duration, 2),
+    }
+
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        # Read existing, keep last 89 entries (+ this one = 90)
+        entries = []
+        if os.path.isfile(health_file):
+            with open(health_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            entries.append(_json.loads(line))
+                        except _json.JSONDecodeError:
+                            pass
+        entries = entries[-89:]  # Keep last 89 + new = 90
+        entries.append(entry)
+        with open(health_file, "w") as f:
+            for e in entries:
+                f.write(_json.dumps(e) + "\n")
+    except (OSError, PermissionError):
+        pass
+
+
+def show_history(cfg: FreqConfig) -> int:
+    """Display health check history from health.jsonl."""
+    import json as _json
+
+    log_dir = os.path.dirname(cfg.log_file)
+    health_file = os.path.join(log_dir, "health.jsonl")
+
+    if not os.path.isfile(health_file):
+        fmt.line("No health history found. Run 'freq doctor' to start recording.")
+        return 0
+
+    entries = []
+    with open(health_file) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    entries.append(_json.loads(line))
+                except _json.JSONDecodeError:
+                    pass
+
+    if not entries:
+        fmt.line("No health history entries found.")
+        return 0
+
+    fmt.header("Doctor History")
+    fmt.blank()
+    fmt.line(f"  {'Timestamp':<28} {'Pass':>6} {'Warn':>6} {'Fail':>6} {'Duration':>10}")
+    fmt.line(f"  {'─' * 28} {'─' * 6} {'─' * 6} {'─' * 6} {'─' * 10}")
+
+    for e in entries[-20:]:  # Show last 20
+        ts = e.get("ts", "?")[:19].replace("T", " ")
+        p = e.get("passed", 0)
+        w = e.get("warnings", 0)
+        f_count = e.get("failed", 0)
+        dur = f"{e.get('duration', 0):.1f}s"
+
+        status_color = fmt.C.GREEN if f_count == 0 and w == 0 else fmt.C.YELLOW if f_count == 0 else fmt.C.RED
+        fmt.line(f"  {ts:<28} {status_color}{p:>6}{fmt.C.RESET} {w:>6} {f_count:>6} {dur:>10}")
+
+    fmt.blank()
+    fmt.line(f"  {len(entries)} total entries")
+    fmt.blank()
+    return 0
 
 
 # --- System ---

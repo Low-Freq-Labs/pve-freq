@@ -1,6 +1,6 @@
 """Config validation tests — validates Phase 1.1 config hardening.
 
-Tests _validate_config(), _safe_int(), and load_config() edge cases.
+Tests validate_config(), _safe_int(), and load_config() edge cases.
 """
 import os
 import sys
@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from freq.core.config import _validate_config, _safe_int, FreqConfig
+from freq.core.config import validate_config, _safe_int, FreqConfig
 from freq.core.types import Host
 
 
@@ -44,7 +44,7 @@ class TestSafeInt:
         assert _safe_int(-1, 0) == -1
 
 
-# ── _validate_config ─────────────────────────────────────────────────
+# ── validate_config ─────────────────────────────────────────────────
 
 class TestValidateConfig:
     """Config validation must catch bad values without crashing."""
@@ -58,48 +58,49 @@ class TestValidateConfig:
         cfg.ssh_max_parallel = ssh_max_parallel
         return cfg
 
-    def test_empty_config_no_warnings(self):
+    def test_empty_config_reports_issues(self):
         cfg = self._make_cfg()
-        warnings = _validate_config(cfg)
-        assert len(warnings) == 0
+        issues = validate_config(cfg)
+        # Empty config should report missing SSH key and missing dirs
+        assert any("SSH" in i or "Directory" in i for i in issues)
 
     def test_valid_hosts_no_warnings(self):
         hosts = [Host(label="test", ip="10.0.0.1", htype="linux")]
         cfg = self._make_cfg(hosts=hosts)
         # May warn about htype depending on deployer registration
         # but should not crash
-        _validate_config(cfg)
+        validate_config(cfg)
 
     def test_invalid_ip_produces_warning(self):
         hosts = [Host(label="bad-host", ip="999.999.999.999", htype="linux")]
         cfg = self._make_cfg(hosts=hosts)
-        warnings = _validate_config(cfg)
-        assert any("invalid IP" in w for w in warnings)
+        warnings = validate_config(cfg)
+        assert any("Invalid IP" in w for w in warnings)
 
     def test_empty_ip_no_crash(self):
         hosts = [Host(label="no-ip", ip="", htype="linux")]
         cfg = self._make_cfg(hosts=hosts)
         # Empty IP should not crash validation
-        _validate_config(cfg)
+        validate_config(cfg)
 
     def test_negative_ssh_timeout_warns(self):
         cfg = self._make_cfg(ssh_connect_timeout=-1)
-        warnings = _validate_config(cfg)
+        warnings = validate_config(cfg)
         assert any("timeout" in w.lower() for w in warnings)
 
     def test_zero_ssh_parallel_warns(self):
         cfg = self._make_cfg(ssh_max_parallel=0)
-        warnings = _validate_config(cfg)
+        warnings = validate_config(cfg)
         assert any("parallel" in w.lower() for w in warnings)
 
     def test_valid_port_no_warning(self):
         cfg = self._make_cfg(dashboard_port=8888)
-        warnings = _validate_config(cfg)
+        warnings = validate_config(cfg)
         assert not any("port" in w.lower() for w in warnings)
 
     def test_invalid_port_warns(self):
         cfg = self._make_cfg(dashboard_port=99999)
-        warnings = _validate_config(cfg)
+        warnings = validate_config(cfg)
         assert any("port" in w.lower() for w in warnings)
 
 

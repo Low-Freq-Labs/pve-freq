@@ -29,6 +29,7 @@ import struct
 import threading
 import time
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
@@ -188,6 +189,7 @@ def handle_terminal_open(handler):
     try:
         pid, fd = pty.fork()
     except OSError as e:
+        logger.error(f"api_terminal_error: PTY fork failed: {e}", endpoint="terminal/open")
         json_response(handler, {"error": f"PTY fork failed: {e}"}, 500)
         return
 
@@ -263,6 +265,7 @@ def handle_terminal_resize(handler):
             s["cols"] = cols
             s["rows"] = rows
         except Exception as e:
+            logger.warn(f"api_terminal: resize failed: {e}", endpoint="terminal/resize")
             json_response(handler, {"error": str(e)})
             return
 
@@ -355,8 +358,8 @@ def handle_terminal_ws(handler):
 
     try:
         _ws_bridge(sock, fd, session_id, leftover)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"api_terminal: ws bridge ended: {e}")
     finally:
         with _sessions_lock:
             if session_id in _sessions:

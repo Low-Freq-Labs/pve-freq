@@ -9,6 +9,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 
 import json
 
+from freq.core import log as logger
 from freq.api.helpers import json_response
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
@@ -222,6 +223,7 @@ def handle_cost_waste(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_hw_error: waste analysis failed: {e}", endpoint="cost-analysis/waste")
         json_response(handler, {"error": f"Waste analysis failed: {e}"}, 500)
 
 
@@ -277,6 +279,7 @@ def handle_cost_compare(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_hw_error: cost comparison failed: {e}", endpoint="cost-analysis/compare")
         json_response(handler, {"error": f"Cost comparison failed: {e}"}, 500)
 
 
@@ -309,6 +312,7 @@ def handle_gwipe(handler):
             data = json.loads(resp.read().decode())
         json_response(handler, {"ok": True, "action": action, "data": data})
     except Exception as e:
+        logger.error(f"api_hw_error: GWIPE operation failed: {e}", endpoint="gwipe")
         json_response(handler, {"error": f"GWIPE operation failed: {e}"}, 500)
 
 

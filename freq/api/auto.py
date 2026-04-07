@@ -14,6 +14,7 @@ function that receives the HTTP handler as its first argument.
 import os
 import re
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
 from freq.modules.serve import (
@@ -348,6 +349,7 @@ def handle_playbooks_create(handler):
             f.write(content)
         json_response(handler, {"ok": True, "filename": filename})
     except OSError as e:
+        logger.error(f"api_auto_error: {e}", endpoint="playbooks/create")
         json_response(handler, {"error": str(e)}, 500)
 
 
@@ -440,6 +442,7 @@ def handle_patrol_status(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_auto_error: {e}", endpoint="patrol/status")
         json_response(handler, {"error": f"Patrol status failed: {e}"}, 500)
 
 

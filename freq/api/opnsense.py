@@ -14,6 +14,8 @@ import json
 import re
 import ssl
 
+from freq.core import log as logger
+
 # OPNsense uses UUID-v4 format for resource identifiers
 _SAFE_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 import urllib.request
@@ -83,12 +85,16 @@ def _opn_request(cfg, path, method="GET", body=None):
             err_body = e.read().decode()[:500]
         except Exception:
             pass
+        logger.warn(f"api_opnsense: HTTP {e.code} on {path}", endpoint=path)
         return None, f"OPNsense HTTP {e.code}: {err_body or e.reason}"
     except urllib.error.URLError as e:
+        logger.warn(f"api_opnsense: connection failed: {e.reason}", endpoint=path)
         return None, f"OPNsense connection failed: {e.reason}"
     except json.JSONDecodeError:
+        logger.warn(f"api_opnsense: invalid JSON from {path}", endpoint=path)
         return None, "OPNsense returned invalid JSON"
     except Exception as e:
+        logger.error(f"api_opnsense_error: {e}", endpoint=path)
         return None, f"OPNsense request error: {e}"
 
 

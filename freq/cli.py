@@ -76,8 +76,12 @@ def main(argv: list = None) -> int:
 
     args = parser.parse_args(argv)
 
-    # Init logging
+    # Init logging, audit trail, and performance tracking
+    log_dir = os.path.dirname(cfg.log_file)
     logger.init(cfg.log_file)
+    logger.init_perf(log_dir)
+    from freq.core import audit
+    audit.init(log_dir)
 
     # Set ASCII mode from config
     fmt.S.set_ascii(cfg.ascii_mode)
@@ -167,6 +171,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _register_event(sub)
     _register_vpn(sub)
     _register_plugin(sub)
+    _register_config(sub)
 
     return parser
 
@@ -185,7 +190,23 @@ def _register_utilities(sub):
     p.set_defaults(func=cmd_help)
 
     p = sub.add_parser("doctor", help="Self-diagnostic")
+    p.add_argument("--json", dest="json_output", action="store_true", help="Output results as JSON")
+    p.add_argument("--history", action="store_true", help="Show health check history")
     p.set_defaults(func=cmd_doctor)
+
+    p = sub.add_parser("perf", help="Performance metrics")
+    p.add_argument("--last", type=int, default=100, help="Number of entries to analyze (default: 100)")
+    p.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
+    p.set_defaults(func=cmd_perf)
+
+    p = sub.add_parser("audit", help="Infrastructure change audit trail")
+    au_sub = p.add_subparsers(dest="action")
+    p_log = au_sub.add_parser("log", help="Show audit log")
+    p_log.add_argument("--host", help="Filter by host IP")
+    p_log.add_argument("--action", dest="filter_action", help="Filter by action type")
+    p_log.add_argument("--last", type=int, default=20, help="Number of entries (default: 20)")
+    p_log.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
+    p_log.set_defaults(func=cmd_audit_log)
 
     p = sub.add_parser("menu", help="Interactive TUI menu")
     p.set_defaults(func=cmd_menu)
@@ -195,6 +216,7 @@ def _register_utilities(sub):
 
     p = sub.add_parser("init", help="First-run setup wizard")
     p.add_argument("--check", action="store_true", help="Validate init state — local files + remote host SSH")
+    p.add_argument("--json", dest="json_output", action="store_true", help="Output results as JSON")
     p.add_argument("--fix", action="store_true", help="Scan fleet, find broken hosts, redeploy freq-admin")
     p.add_argument("--reset", action="store_true", help="Wipe vault, roles, .initialized (fresh start)")
     p.add_argument("--uninstall", action="store_true", help="Remove FREQ service account from all hosts")
@@ -457,6 +479,7 @@ def _register_fleet(sub):
     fleet_sub = fleet.add_subparsers(dest="subcmd")
 
     p = fleet_sub.add_parser("status", help="Fleet health summary")
+    p.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
     p.set_defaults(func=_cmd_status)
 
     p = fleet_sub.add_parser("dashboard", help="Fleet dashboard overview")
@@ -569,6 +592,7 @@ def _register_host(sub):
     host_sub = host.add_subparsers(dest="subcmd")
 
     p = host_sub.add_parser("list", help="List fleet hosts")
+    p.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
     p.set_defaults(func=_set_action(_cmd_hosts, "list"))
 
     p = host_sub.add_parser("add", help="Add a host to the fleet")
@@ -1909,6 +1933,24 @@ def _register_plugin(sub):
 
 
 # ---------------------------------------------------------------------------
+# freq config — Configuration Management
+# ---------------------------------------------------------------------------
+
+
+def _register_config(sub):
+    """Register freq config subcommands."""
+    cfg_parser = sub.add_parser("config", help="Configuration management and validation")
+    _domain_help(cfg_parser)
+    cfg_sub = cfg_parser.add_subparsers(dest="subcmd")
+
+    p = cfg_sub.add_parser("validate", help="Validate FREQ configuration")
+    p.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
+    p.set_defaults(func=_cmd_config_validate)
+
+    cfg_parser.set_defaults(func=lambda c, pk, a: cfg_parser.print_help() or 0)
+
+
+# ---------------------------------------------------------------------------
 # Help command — domain-based reference
 # ---------------------------------------------------------------------------
 
@@ -2171,6 +2213,13 @@ def cmd_help(cfg: FreqConfig, pack, args) -> int:
                 ("plugin types", "List plugin types"),
             ],
         ),
+        (
+            "freq config — Configuration Management",
+            [
+                ("config validate", "Validate configuration"),
+                ("config validate --json", "Validate (JSON output)"),
+            ],
+        ),
     ]
 
     for category, commands in categories:
@@ -2198,9 +2247,117 @@ def cmd_version(cfg: FreqConfig, pack, args) -> int:
 
 def cmd_doctor(cfg: FreqConfig, pack, args) -> int:
     """Run self-diagnostic."""
-    from freq.core.doctor import run
+    from freq.core.doctor import run, show_history
 
-    return run(cfg)
+    if getattr(args, "history", False):
+        return show_history(cfg)
+    return run(cfg, json_output=getattr(args, "json_output", False))
+
+
+def cmd_perf(cfg: FreqConfig, pack, args) -> int:
+    """Show performance metrics."""
+    import json as _json
+
+    entries = logger.read_perf(last=getattr(args, "last", 100))
+
+    if getattr(args, "json_output", False):
+        print(_json.dumps(entries, indent=2))
+        return 0
+
+    if not entries:
+        fmt.line("No performance data. Run freq commands to generate timing data.")
+        return 0
+
+    fmt.header("Performance Metrics")
+    fmt.blank()
+
+    # Group SSH timings by host
+    ssh_by_host = {}
+    for e in entries:
+        if e.get("op") in ("ssh", "ssh_async"):
+            host = e.get("host", "?")
+            ssh_by_host.setdefault(host, []).append(e.get("duration", 0))
+
+    if ssh_by_host:
+        fmt.line(f"  {fmt.C.BOLD}SSH Timing (last {len(entries)} ops){fmt.C.RESET}")
+        fmt.blank()
+        fmt.line(f"  {'Host':<22} {'Count':>6} {'Avg':>8} {'p95':>8} {'Max':>8}")
+        fmt.line(f"  {'─'*22} {'─'*6} {'─'*8} {'─'*8} {'─'*8}")
+
+        for host in sorted(ssh_by_host, key=lambda h: sum(ssh_by_host[h]) / len(ssh_by_host[h]), reverse=True):
+            times = sorted(ssh_by_host[host])
+            count = len(times)
+            avg = sum(times) / count
+            p95 = times[int(count * 0.95)] if count > 1 else times[0]
+            mx = times[-1]
+            fmt.line(f"  {host:<22} {count:>6} {avg:>7.2f}s {p95:>7.2f}s {mx:>7.2f}s")
+
+    # Phase timings
+    phases = [e for e in entries if e.get("op") == "init_phase"]
+    if phases:
+        fmt.blank()
+        fmt.line(f"  {fmt.C.BOLD}Init Phase Timing{fmt.C.RESET}")
+        fmt.blank()
+        for p in phases:
+            name = p.get("name", "?")
+            dur = p.get("duration", 0)
+            fmt.line(f"  Phase {p.get('phase', '?'):>2}: {name:<30} {dur:.1f}s")
+
+    fmt.blank()
+    fmt.line(f"  {len(entries)} total entries")
+    fmt.blank()
+    return 0
+
+
+def cmd_audit_log(cfg: FreqConfig, pack, args) -> int:
+    """Show infrastructure audit trail."""
+    import json as _json
+    from freq.core import audit
+
+    host = getattr(args, "host", "") or ""
+    action = getattr(args, "filter_action", "") or ""
+    last = getattr(args, "last", 20)
+
+    entries = audit.read_log(host=host, action=action, last=last)
+
+    if getattr(args, "json_output", False):
+        print(_json.dumps(entries, indent=2))
+        return 0
+
+    if not entries:
+        fmt.line("No audit entries found. Infrastructure changes are recorded here.")
+        return 0
+
+    fmt.header("Audit Trail")
+    fmt.blank()
+
+    for e in entries:
+        ts = e.get("ts", "?")[:19].replace("T", " ")
+        act = e.get("action", "?")
+        target = e.get("target", "?")
+        result = e.get("result", "?")
+
+        if result == "success":
+            color = fmt.C.GREEN
+        elif result == "failed":
+            color = fmt.C.RED
+        elif result == "dry_run":
+            color = fmt.C.YELLOW
+        else:
+            color = fmt.C.DIM
+
+        fmt.line(f"  {ts}  {color}{result:<8}{fmt.C.RESET}  {act:<20}  {target}")
+
+        # Show extra details
+        skip = {"ts", "action", "target", "result"}
+        extras = {k: v for k, v in e.items() if k not in skip}
+        if extras:
+            fmt.line(f"  {'':>19}  {fmt.C.DIM}{extras}{fmt.C.RESET}")
+
+    fmt.blank()
+    fmt.line(f"  {len(entries)} entries shown")
+    fmt.blank()
+    return 0
 
 
 def cmd_menu(cfg: FreqConfig, pack, args) -> int:
@@ -3801,3 +3958,24 @@ def _cmd_plugin_types(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.plugin_manager import cmd_plugin_types
 
     return cmd_plugin_types(cfg, pack, args)
+
+
+def _cmd_config_validate(cfg: FreqConfig, pack, args) -> int:
+    """Validate FREQ configuration."""
+    from freq.core.config import validate_config
+
+    issues = validate_config(cfg)
+
+    if getattr(args, "json_output", False):
+        import json
+        print(json.dumps({"valid": len(issues) == 0, "issues": issues}, indent=2))
+        return 0 if not issues else 1
+
+    if not issues:
+        fmt.step_ok("Configuration is valid")
+        return 0
+
+    fmt.step_fail(f"Configuration has {len(issues)} issue(s):")
+    for issue in issues:
+        fmt.line(f"    {fmt.C.RED}•{fmt.C.RESET} {issue}")
+    return 1

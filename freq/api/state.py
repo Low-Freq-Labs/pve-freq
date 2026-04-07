@@ -7,6 +7,7 @@ Where: Routes registered at /api/* (same paths as legacy serve.py).
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
+from freq.core import log as logger
 from freq.api.helpers import json_response
 from freq.core.config import load_config
 from freq.modules.serve import (
@@ -55,6 +56,7 @@ def handle_policy_check(handler):
             result = cmd_check(cfg, None, args)
         json_response(handler, {"ok": result == 0, "output": buf.getvalue(), "policy": policy})
     except Exception as e:
+        logger.error(f"api_state_error: policy check failed: {e}", endpoint="policy/check")
         json_response(handler, {"error": f"Policy check failed: {e}"}, 500)
 
 
@@ -83,6 +85,7 @@ def handle_policy_fix(handler):
             result = cmd_fix(cfg, None, args)
         json_response(handler, {"ok": result == 0, "output": buf.getvalue(), "policy": policy})
     except Exception as e:
+        logger.error(f"api_state_error: policy fix failed: {e}", endpoint="policy/fix")
         json_response(handler, {"error": f"Policy fix failed: {e}"}, 500)
 
 
@@ -107,6 +110,7 @@ def handle_policy_diff(handler):
             result = cmd_diff(cfg, None, args)
         json_response(handler, {"ok": result == 0, "output": buf.getvalue(), "policy": policy})
     except Exception as e:
+        logger.error(f"api_state_error: policy diff failed: {e}", endpoint="policy/diff")
         json_response(handler, {"error": f"Policy diff failed: {e}"}, 500)
 
 

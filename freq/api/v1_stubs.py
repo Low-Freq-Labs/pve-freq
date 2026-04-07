@@ -5,6 +5,7 @@ instead of 404 errors in the console. As real implementations are built,
 move routes from here to their proper domain modules.
 """
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_param
 
 

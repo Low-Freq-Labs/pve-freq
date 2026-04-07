@@ -13,6 +13,7 @@ function that receives the HTTP handler as its first argument.
 
 import time
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
@@ -196,8 +197,8 @@ def handle_capacity_recommend(handler):
             health = _bg_cache.get("health")
         if health:
             costs = compute_costs(health, {}, cost_cfg)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warn(f"api_observe: cost data unavailable for recommendations: {e}")
 
     recs = recommend_migrations(projections, costs)
     json_response(

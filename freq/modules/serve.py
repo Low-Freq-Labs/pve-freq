@@ -491,6 +491,7 @@ def _bg_probe_health():
     except Exception as e:
         logger.error(f"bg_probe_health: failed to load config: {e}")
         return
+    logger.debug("health_probe_start", host_count=len(cfg.hosts))
     start = time.monotonic()
 
     HEALTH_CMDS = {
@@ -644,8 +645,11 @@ def _bg_probe_health():
                 host_data.append(result_entry)
                 # Circuit breaker: track success/failure
                 if result_entry.get("status") == "healthy":
+                    was_in_backoff = h.ip in _host_backoff_until
                     _host_fail_count.pop(h.ip, None)
                     _host_backoff_until.pop(h.ip, None)
+                    if was_in_backoff:
+                        logger.info("circuit_breaker_reset", host=h.ip)
                 else:
                     count = _host_fail_count.get(h.ip, 0) + 1
                     _host_fail_count[h.ip] = count
@@ -724,6 +728,13 @@ def _bg_probe_health():
 
     # Evaluate alert rules against fresh health data
     _evaluate_alert_rules(cfg, result)
+
+    # Log probe completion
+    duration = round(time.monotonic() - start, 1)
+    healthy_count = sum(1 for h in host_data if h.get("status") == "healthy")
+    unreachable_count = sum(1 for h in host_data if h.get("status") != "healthy")
+    logger.info("health_probe_complete", duration=duration, total=len(host_data), healthy=healthy_count, unreachable=unreachable_count)
+    logger.perf("health_probe", duration, hosts_total=len(host_data), hosts_healthy=healthy_count)
 
     # Save capacity snapshot if due (weekly)
     try:
@@ -1272,6 +1283,7 @@ def _evaluate_alert_rules(cfg, health_data):
 def _bg_health_loop():
     """Fast health-only loop — runs every 15s for live dashboard bars."""
     while True:
+        logger.debug("bg_loop_cycle", loop="health")
         try:
             _bg_probe_health()
         except Exception as e:
@@ -1282,6 +1294,7 @@ def _bg_health_loop():
 def _bg_slow_loop():
     """Slower loop for fleet overview, infra, tags, updates — runs every 60s."""
     while True:
+        logger.debug("bg_loop_cycle", loop="slow")
         for fn, label in [
             (_bg_discover_pve_nodes, "node discovery"),
             (_bg_fetch_vm_tags, "tag fetch"),
@@ -1646,6 +1659,7 @@ class FreqHandler(BaseHTTPRequestHandler):
 
                 traceback.print_exc()
                 try:
+                    logger.error("api_error", method=getattr(self, "command", "?"), path=path, status=500)
                     logger.error(f"handler error: {path}: {e}")
                     self._json_response({"error": "Internal server error", "path": path}, 500)
                 except Exception as e2:
@@ -1657,14 +1671,17 @@ class FreqHandler(BaseHTTPRequestHandler):
         elif path.startswith("/api/comms/") or path.startswith("/api/watch/"):
             self._proxy_watchdog()
         elif path.startswith("/api/"):
+            logger.error("api_error", method=getattr(self, "command", "?"), path=path, status=404)
             self._json_response({"error": "not found", "path": path}, 404)
         else:
             self._serve_app()
 
     def do_GET(self):
+        logger.debug("api_request", method=getattr(self, "command", "GET"), path=self.path)
         self._dispatch()
 
     def do_POST(self):
+        logger.debug("api_request", method=getattr(self, "command", "POST"), path=self.path)
         self._dispatch()
 
     # ── Server-Sent Events ────────────────────────────────────────────────
@@ -4119,6 +4136,7 @@ def cmd_serve(cfg, pack, args) -> int:
     print(f"\n  \033[38;5;93mPVE FREQ → Dashboard\033[0m")
     print(f"  Starting on port {port}...\n")
     start_background_cache()
+    logger.info("dashboard_start", port=port, host="0.0.0.0")
     httpd = ThreadedHTTPServer(("0.0.0.0", port), FreqHandler)
     print(f"  \033[38;5;82m✔\033[0m Dashboard running at http://0.0.0.0:{port}")
     print(f"  \033[38;5;245mPress Ctrl+C to stop\033[0m\n")

@@ -14,6 +14,7 @@ function that receives the HTTP handler as its first argument.
 import os
 import time
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
 from freq.core import resolve as res
@@ -154,6 +155,7 @@ def handle_sweep(handler):
             result = cmd_sweep(cfg, None, args)
         json_response(handler, {"ok": result == 0, "output": buf.getvalue(), "fix_mode": do_fix})
     except Exception as e:
+        logger.error(f"api_secure_error: sweep failed: {e}", endpoint="sweep")
         json_response(handler, {"error": f"Sweep failed: {e}"}, 500)
 
 

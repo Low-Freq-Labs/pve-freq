@@ -9,6 +9,7 @@ freq/api/<domain>.py module to avoid duplicating HTTP response logic.
 import json
 from urllib.parse import urlparse, parse_qs
 
+from freq.core import log as logger
 from freq.core.config import load_config
 
 
@@ -49,7 +50,8 @@ def get_json_body(handler) -> dict:
             return {}
         raw = handler.rfile.read(length)
         return json.loads(raw)
-    except (ValueError, json.JSONDecodeError):
+    except (ValueError, json.JSONDecodeError) as e:
+        logger.warn(f"api_helpers: invalid JSON body: {e}")
         return {}
 
 

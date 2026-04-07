@@ -398,43 +398,95 @@ def load_config(install_dir: Optional[str] = None, force: bool = False) -> FreqC
     cfg.ssh_key_path = _detect_ssh_key(cfg)
     cfg.ssh_rsa_key_path = _detect_rsa_key(cfg)
 
-    # Validate loaded config
-    from freq.core import log as logger
-
-    for w in _validate_config(cfg):
-        logger.warn(f"config: {w}")
+    # Validate config and log warnings
+    try:
+        _issues = validate_config(cfg)
+        if _issues:
+            from freq.core import log as _log
+            for _issue in _issues:
+                _log.warn(f"config_issue: {_issue}")
+    except Exception:
+        pass  # Validation should never block startup
 
     _config_cache = cfg
     _config_cache_ts = _time.time()
     return cfg
 
 
-def _validate_config(cfg: FreqConfig) -> list:
-    """Validate config. Returns list of warning strings."""
-    warnings = []
-    from freq.core.validate import ip as valid_ip, port as valid_port
+def validate_config(cfg: FreqConfig) -> list:
+    """Validate FREQ configuration. Returns list of issue strings (empty = valid)."""
+    issues = []
 
-    for host in cfg.hosts:
-        if host.ip and not valid_ip(host.ip):
-            warnings.append(f"Host {host.label}: invalid IP '{host.ip}'")
-        if hasattr(host, "htype") and host.htype:
-            try:
-                from freq.deployers import resolve_htype
+    # Check SSH key files
+    if cfg.ssh_key_path:
+        if not os.path.isfile(cfg.ssh_key_path):
+            issues.append(f"SSH key not found: {cfg.ssh_key_path}")
+        else:
+            mode = oct(os.stat(cfg.ssh_key_path).st_mode)[-3:]
+            if mode not in ("600", "400"):
+                issues.append(f"SSH key permissions {mode} (should be 600): {cfg.ssh_key_path}")
+    else:
+        issues.append("No SSH key path configured")
 
-                cat, vendor = resolve_htype(host.htype)
-                if cat == "unknown":
-                    warnings.append(f"Host {host.label}: unknown type '{host.htype}'")
-            except Exception:
-                pass
+    rsa_path = getattr(cfg, "ssh_rsa_key_path", "")
+    if rsa_path and not os.path.isfile(rsa_path):
+        issues.append(f"RSA key not found: {rsa_path}")
 
+    # Check hosts
+    if cfg.hosts:
+        from freq.core import validate as _validate
+        seen_ips = set()
+        seen_labels = set()
+        for h in cfg.hosts:
+            if not _validate.ip(h.ip):
+                issues.append(f"Invalid IP for host {h.label}: {h.ip}")
+            if h.ip in seen_ips:
+                issues.append(f"Duplicate IP: {h.ip}")
+            seen_ips.add(h.ip)
+            if h.label in seen_labels:
+                issues.append(f"Duplicate label: {h.label}")
+            seen_labels.add(h.label)
+
+    # Check legacy password file if iDRAC/switch hosts exist
+    legacy_hosts = [h for h in cfg.hosts if h.htype in ("idrac", "switch")]
+    if legacy_hosts:
+        pw_file = getattr(cfg, "legacy_password_file", "")
+        if not pw_file:
+            issues.append(f"{len(legacy_hosts)} iDRAC/switch host(s) but no legacy_password_file configured")
+        elif not os.path.isfile(pw_file):
+            issues.append(f"legacy_password_file not found: {pw_file}")
+
+    # Check PVE nodes
+    if cfg.pve_nodes:
+        from freq.core import validate as _validate
+        for ip in cfg.pve_nodes:
+            if not _validate.ip(ip):
+                issues.append(f"Invalid PVE node IP: {ip}")
+
+    # Check required directories
+    for name, path in [("conf", cfg.conf_dir), ("data", cfg.data_dir), ("keys", cfg.key_dir)]:
+        if not os.path.isdir(path):
+            issues.append(f"Directory missing: {name} ({path})")
+        elif not os.access(path, os.R_OK):
+            issues.append(f"Directory not readable: {name} ({path})")
+
+    # Check log file writable
+    log_dir = os.path.dirname(cfg.log_file)
+    if os.path.isdir(log_dir) and not os.access(log_dir, os.W_OK):
+        issues.append(f"Log directory not writable: {log_dir}")
+
+    # Check ports
+    from freq.core.validate import port as valid_port
     if cfg.dashboard_port and not valid_port(cfg.dashboard_port):
-        warnings.append(f"Invalid dashboard port: {cfg.dashboard_port}")
-    if cfg.ssh_connect_timeout <= 0:
-        warnings.append(f"SSH connect timeout must be positive: {cfg.ssh_connect_timeout}")
-    if cfg.ssh_max_parallel <= 0:
-        warnings.append(f"SSH max parallel must be positive: {cfg.ssh_max_parallel}")
+        issues.append(f"Invalid dashboard port: {cfg.dashboard_port}")
 
-    return warnings
+    # Check SSH settings
+    if cfg.ssh_connect_timeout <= 0:
+        issues.append(f"SSH connect timeout must be positive: {cfg.ssh_connect_timeout}")
+    if cfg.ssh_max_parallel <= 0:
+        issues.append(f"SSH max parallel must be positive: {cfg.ssh_max_parallel}")
+
+    return issues
 
 
 def _safe_int(value, default):

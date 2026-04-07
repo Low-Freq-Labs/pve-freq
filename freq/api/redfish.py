@@ -23,6 +23,7 @@ import ssl
 import urllib.error
 import urllib.request
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_json_body, get_param
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
@@ -83,12 +84,16 @@ def _redfish_request(ip, path, user, password, method="GET", body=None):
             error_body = e.read().decode()[:500]
         except Exception:
             pass
+        logger.warn(f"api_redfish: HTTP {e.code} on {path}", host=ip)
         return {}, False, f"HTTP {e.code}: {error_body or e.reason}"
     except urllib.error.URLError as e:
+        logger.warn(f"api_redfish: connection failed to {ip}: {e.reason}")
         return {}, False, f"Connection failed: {e.reason}"
     except json.JSONDecodeError:
+        logger.warn(f"api_redfish: invalid JSON from {ip}{path}")
         return {}, False, "Invalid JSON response from BMC"
     except Exception as e:
+        logger.error(f"api_redfish_error: {e}", host=ip, path=path)
         return {}, False, f"Redfish request failed: {e}"
 
 

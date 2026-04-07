@@ -8,6 +8,7 @@ Routes:
     POST /api/v1/plugin/remove   — remove a plugin
 """
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_param, get_cfg
 
 

@@ -124,3 +124,62 @@ def error(msg: str, **extra) -> None:
 def cmd(command: str, exit_code: int, duration: float = 0.0, **extra) -> None:
     """Log a command execution."""
     _write("CMD", _redact(command), exit_code=exit_code, duration=round(duration, 3), **extra)
+
+
+# ── Performance logging ──────────────────────────────────────────────
+# Separate from general log — writes to data/log/perf.jsonl
+# for timing analysis via `freq perf`.
+
+_PERF_FILE: str = ""
+_PERF_MAX_ENTRIES = 10000
+
+
+def init_perf(log_dir: str) -> None:
+    """Initialize performance log file."""
+    global _PERF_FILE
+    os.makedirs(log_dir, exist_ok=True)
+    _PERF_FILE = os.path.join(log_dir, "perf.jsonl")
+
+
+def perf(op: str, duration: float, **extra) -> None:
+    """Record a performance metric."""
+    if not _PERF_FILE:
+        return
+
+    entry = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "op": op,
+        "duration": round(duration, 4),
+    }
+    entry.update(extra)
+
+    try:
+        with open(_PERF_FILE, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except (OSError, PermissionError):
+        pass
+
+
+def read_perf(path: str = "", last: int = 0) -> list:
+    """Read performance log entries."""
+    perf_file = path or _PERF_FILE
+    if not perf_file or not os.path.isfile(perf_file):
+        return []
+
+    entries = []
+    try:
+        with open(perf_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except (OSError, PermissionError):
+        return []
+
+    if last > 0:
+        entries = entries[-last:]
+    return entries

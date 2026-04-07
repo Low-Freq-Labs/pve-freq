@@ -50,6 +50,7 @@ def handle_backup(handler):
             result = cmd_backup(cfg, None, args)
         json_response(handler, {"ok": result == 0, "output": buf.getvalue(), "action": action})
     except Exception as e:
+        logger.error(f"api_dr_error: backup operation failed: {e}", endpoint="backup")
         json_response(handler, {"error": f"Backup operation failed: {e}"}, 500)
 
 
@@ -147,6 +148,7 @@ def handle_backup_create(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_dr_error: snapshot create failed: {e}", endpoint="backup/create")
         json_response(handler, {"error": f"Snapshot failed: {e}"})
 
 
@@ -194,6 +196,7 @@ def handle_backup_restore(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_dr_error: restore failed: {e}", endpoint="backup/restore")
         json_response(handler, {"error": f"Restore failed: {e}"})
 
 
@@ -293,6 +296,7 @@ def handle_migrate_plan(handler):
             },
         )
     except Exception as e:
+        logger.error(f"api_dr_error: migration planning failed: {e}", endpoint="migrate-plan")
         json_response(handler, {"error": f"Migration planning failed: {e}", "nodes": [], "recommendations": []}, 500)
 
 
@@ -328,6 +332,7 @@ def handle_zfs(handler):
             result = cmd_truenas(cfg, None, args)
         json_response(handler, {"ok": result == 0, "output": buf.getvalue(), "action": action})
     except Exception as e:
+        logger.error(f"api_dr_error: ZFS operation failed: {e}", endpoint="zfs")
         json_response(handler, {"error": f"ZFS operation failed: {e}"}, 500)
 
 

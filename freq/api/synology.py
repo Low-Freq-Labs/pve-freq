@@ -17,6 +17,7 @@ import urllib.request
 import urllib.error
 import urllib.parse
 
+from freq.core import log as logger
 from freq.api.helpers import json_response, get_json_body
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
@@ -62,8 +63,10 @@ def _syn_request(ip, api, version, method, extra_params=None, timeout=15):
             return None, "Session expired — re-login required"
         return None, f"API error code {code}"
     except urllib.error.URLError as e:
+        logger.warn(f"api_synology: connection failed: {e}")
         return None, f"Connection failed: {e}"
     except Exception as e:
+        logger.error(f"api_synology_error: {e}")
         return None, str(e)
 
 

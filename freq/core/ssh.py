@@ -254,6 +254,8 @@ def run(
         cfg=cfg,
     )
 
+    logger.debug(f"ssh_start: {host} [{htype}]", command=command[:120])
+
     start = time.monotonic()
     try:
         result = subprocess.run(
@@ -267,10 +269,23 @@ def run(
         duration = time.monotonic() - start
 
         logger.cmd(
-            f"ssh {host}: {command}",
+            f"ssh {host}: {command[:80]}",
             exit_code=result.returncode,
             duration=duration,
+            htype=htype,
         )
+
+        if result.returncode != 0:
+            stderr_snippet = (result.stderr or "").strip()[:200]
+            logger.error(
+                f"ssh_failed: {host} [{htype}] rc={result.returncode}",
+                command=command[:120],
+                stderr=stderr_snippet,
+                duration=duration,
+            )
+
+        # Performance tracking
+        logger.perf("ssh", duration, host=host, htype=htype, ok=result.returncode == 0)
 
         return CmdResult(
             stdout=result.stdout.strip(),
@@ -280,11 +295,13 @@ def run(
         )
     except subprocess.TimeoutExpired:
         duration = time.monotonic() - start
-        logger.warn(f"ssh timeout: {host} after {command_timeout}s", command=command)
+        logger.error(f"ssh_timeout: {host} [{htype}] after {command_timeout}s", command=command[:120])
+        logger.perf("ssh", duration, host=host, htype=htype, ok=False, timeout=True)
         return CmdResult(stdout="", stderr=f"Timeout after {command_timeout}s", returncode=124, duration=duration)
     except OSError as e:
         duration = time.monotonic() - start
-        logger.error(f"ssh error: {host}: {e}", command=command)
+        logger.error(f"ssh_error: {host} [{htype}]: {e}", command=command[:120])
+        logger.perf("ssh", duration, host=host, htype=htype, ok=False, error=str(e)[:80])
         return CmdResult(stdout="", stderr=str(e), returncode=1, duration=duration)
 
 
@@ -314,6 +331,8 @@ async def async_run(
         cfg=cfg,
     )
 
+    logger.debug(f"async_ssh_start: {host} [{htype}]", command=command[:120])
+
     start = time.monotonic()
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -329,18 +348,25 @@ async def async_run(
             proc.kill()
             await proc.wait()
             duration = time.monotonic() - start
+            logger.error(f"async_ssh_timeout: {host} [{htype}] after {command_timeout}s", command=command[:120])
+            logger.perf("ssh_async", duration, host=host, htype=htype, ok=False, timeout=True)
             return CmdResult(stdout="", stderr=f"Timeout after {command_timeout}s", returncode=124, duration=duration)
 
         duration = time.monotonic() - start
+        rc = proc.returncode or 0
+        out = stdout.decode().strip() if stdout else ""
+        err = stderr.decode().strip() if stderr else ""
 
-        return CmdResult(
-            stdout=stdout.decode().strip() if stdout else "",
-            stderr=stderr.decode().strip() if stderr else "",
-            returncode=proc.returncode or 0,
-            duration=duration,
-        )
+        logger.cmd(f"async_ssh {host}: {command[:80]}", exit_code=rc, duration=duration, htype=htype)
+        if rc != 0:
+            logger.error(f"async_ssh_failed: {host} [{htype}] rc={rc}", command=command[:120], stderr=err[:200])
+        logger.perf("ssh_async", duration, host=host, htype=htype, ok=rc == 0)
+
+        return CmdResult(stdout=out, stderr=err, returncode=rc, duration=duration)
     except OSError as e:
         duration = time.monotonic() - start
+        logger.error(f"async_ssh_error: {host} [{htype}]: {e}", command=command[:120])
+        logger.perf("ssh_async", duration, host=host, htype=htype, ok=False, error=str(e)[:80])
         return CmdResult(stdout="", stderr=str(e), returncode=1, duration=duration)
 
 
