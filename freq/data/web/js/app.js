@@ -2645,42 +2645,50 @@ function openTerminal(type,target,node,label,htype){
       term.focus();
       var _origOnMsg=ws.onmessage;
       var enc=new TextEncoder();
-      /* Mute all SSH output — we control the screen */
-      ws.onmessage=function(){};
-      /* Strip ANSI escape sequences for marker detection */
       function _stripAnsi(s){return s.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g,'').replace(/\x1b\][^\x07]*\x07/g,'');}
-      /* Step 1 (immediate): disable bracket paste, set PS1, echo uptime with marker */
-      var ps1='\\[\\e[90m\\]\u250c\u2500 \\[\\e[35m\\]\u25c6 \\[\\e[36;1m\\]\\u\\[\\e[0m\\] \\[\\e[90m\\]\u00b7\\[\\e[0m\\] \\[\\e[1m\\]\\h\\[\\e[0m\\] \\[\\e[90m\\]:\\[\\e[34m\\] \\w\\[\\e[0m\\]\\n\\[\\e[90m\\]\u2514\u2500\\[\\e[35m\\]\u25b8\\[\\e[0m\\] ';
-      ws.send(enc.encode('bind "set enable-bracketed-paste off" 2>/dev/null; export PS1=\''+ps1+'\'\n'));
-      /* printf avoids echo-back matching — the shell echoes the command with %s literal,
-         but the output has the expanded uptime string after the marker */
-      ws.send(enc.encode('printf "\\nFRQ_UT:%s\\n" "$(uptime -p 2>/dev/null || uptime)"\n'));
-      /* Step 2: capture the uptime marker from output */
       var _buf='';
-      var _phase2=false;
-      /* Safety timeout — if marker never arrives, show banner anyway */
-      var _safetyTimer=setTimeout(function(){
-        if(!_phase2){ _phase2=true; _drawBanner('timeout: buf='+_buf.length+'chars clean=['+_stripAnsi(_buf).substring(0,200)+']'); }
-      }, 8000);
+      var _done=false;
+      var _gotPrompt=false;
+      var ps1='\\[\\e[90m\\]\u250c\u2500 \\[\\e[35m\\]\u25c6 \\[\\e[36;1m\\]\\u\\[\\e[0m\\] \\[\\e[90m\\]\u00b7\\[\\e[0m\\] \\[\\e[1m\\]\\h\\[\\e[0m\\] \\[\\e[90m\\]:\\[\\e[34m\\] \\w\\[\\e[0m\\]\\n\\[\\e[90m\\]\u2514\u2500\\[\\e[35m\\]\u25b8\\[\\e[0m\\] ';
+
+      /* Phase 1: Mute output. Wait for shell prompt ($), then send our commands. */
       ws.onmessage=function(e){
-        if(_phase2){ _origOnMsg(e); return; }
+        if(_done){ _origOnMsg(e); return; }
         var txt;
         if(e.data instanceof ArrayBuffer) txt=new TextDecoder().decode(e.data);
         else txt=e.data;
         _buf+=txt;
-        /* Strip ANSI codes for reliable marker search */
         var clean=_stripAnsi(_buf);
+
+        /* Wait for initial shell prompt before sending commands */
+        if(!_gotPrompt){
+          if(clean.match(/[$#>]\s*$/)){
+            _gotPrompt=true;
+            /* Shell is ready — send PS1 + uptime in one shot */
+            ws.send(enc.encode('export PS1=\''+ps1+'\'; printf "\\nFRQ_UT:%s\\n" "$(uptime -p 2>/dev/null || uptime)"\n'));
+            _buf=''; /* reset buffer — only capture command output */
+          }
+          return;
+        }
+
+        /* Phase 2: Look for uptime marker in output */
+        clean=_stripAnsi(_buf);
         var idx=clean.lastIndexOf('FRQ_UT:');
         if(idx<0) return;
         var after=clean.substring(idx+7);
         var nl=after.indexOf('\n');
         if(nl<0) return;
         var raw=after.substring(0,nl).replace(/\r/g,'').trim();
-        var uptimeStr=raw.replace(/^up\s+/i,'').replace(/,\s*\d+\s*users?.*$/,'').trim()||'connected';
-        _phase2=true;
+        var uptimeStr=raw.replace(/^up\s+/i,'').replace(/,\s*\d+\s*users?.*$/,'').trim()||'unknown';
+        _done=true;
         clearTimeout(_safetyTimer);
         _drawBanner(uptimeStr);
       };
+
+      var _safetyTimer=setTimeout(function(){
+        if(!_done){ _done=true; _drawBanner('connected'); }
+      }, 10000);
+
       function _drawBanner(uptimeStr){
         term.reset();
         var W=45;
@@ -2699,11 +2707,10 @@ function openTerminal(type,target,node,label,htype){
         term.writeln(gn+'    UPTIME     '+rs+uptimeStr);
         term.writeln(bar);
         term.writeln('');
-        /* Unmute — send clear to wipe pending shell prompts, then one clean prompt */
+        /* Unmute — send clear to wipe leftover, wait for our prompt to appear */
         ws.onmessage=function(e){
-          /* Swallow the clear output, then fully unmute */
           var t; if(e.data instanceof ArrayBuffer) t=new TextDecoder().decode(e.data); else t=e.data;
-          if(_stripAnsi(t).indexOf('\u250c\u2500')>=0||_stripAnsi(t).indexOf('\u2514\u2500')>=0){
+          if(_stripAnsi(t).indexOf('\u2514\u2500')>=0){
             ws.onmessage=_origOnMsg;
             _origOnMsg(e);
           }
