@@ -168,9 +168,8 @@ def handle_terminal_open(handler):
         if pw_file and os.path.isfile(pw_file):
             sshpass_prefix = f"sshpass -f {pw_file} "
 
-    # Switch uses -T (no PTY allocation on remote — IOS doesn't support it)
-    if htype == "switch":
-        ssh_opts += " -T"
+    # Note: -T (no remote PTY) is used for non-interactive switch commands
+    # but for terminal sessions we need the PTY for interactive IOS CLI
 
     if term_type == "ct":
         # SSH to PVE node, then pct exec into container
