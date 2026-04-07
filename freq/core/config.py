@@ -371,6 +371,23 @@ def load_config(install_dir: Optional[str] = None, force: bool = False) -> FreqC
                 from freq.core import log as _logger
 
                 _logger.info("auto-migrated hosts.conf to hosts.toml")
+    # Deduplicate hosts — warn on duplicates, keep first occurrence
+    if cfg.hosts:
+        seen_ips = set()
+        deduped = []
+        for h in cfg.hosts:
+            if h.ip in seen_ips:
+                import logging as _logging
+                _logging.getLogger("freq.config").warning(
+                    f"duplicate host IP {h.ip} ({h.label}) — skipping"
+                )
+                continue
+            seen_ips.add(h.ip)
+            deduped.append(h)
+        if len(deduped) < len(cfg.hosts):
+            cfg.hosts_had_duplicates = True
+        cfg.hosts = deduped
+
     cfg.vlans = load_vlans(os.path.join(cfg.conf_dir, "vlans.toml"))
     cfg.distros = load_distros(os.path.join(cfg.conf_dir, "distros.toml"))
     cfg.container_vms = load_containers(os.path.join(cfg.conf_dir, "containers.toml"))

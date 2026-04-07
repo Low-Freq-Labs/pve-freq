@@ -72,6 +72,10 @@ IDRAC_SLOT_MAX = 17  # exclusive — range(3, 17) gives slots 3-16
 # IOS SSH key line width (PEM line wrapping limit)
 IOS_KEY_LINE_WIDTH = 72
 
+# Agent deployment — single source of truth for remote path
+AGENT_REMOTE_PATH = "/opt/freq-agent/collector.py"
+AGENT_REMOTE_DIR = "/opt/freq-agent"
+
 # Error markers in remote deployment scripts
 MARKER_DEPLOY_OK = "DEPLOY_OK"
 MARKER_SETUP_OK = "SETUP_OK"
@@ -2912,6 +2916,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
     fmt.blank()
 
     ok = fail = 0
+    deployed_ips = set()  # Track IPs we deployed to — Phase 12 uses this
     dev_pass = ""
 
     # Check for CLI bootstrap credentials (--bootstrap-key, --bootstrap-user)
@@ -2938,6 +2943,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                 fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
                 if _deploy_to_host_dispatch(h.ip, h.htype, ctx, linux_pass, linux_key, linux_user):
                     ok += 1
+                    deployed_ips.add(h.ip)
                 else:
                     fail += 1
         else:
@@ -2985,6 +2991,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                 fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [pfsense]")
                 if _deploy_to_host_dispatch(h.ip, "pfsense", ctx, pf_pass, pf_key, pf_user):
                     ok += 1
+                    deployed_ips.add(h.ip)
                 else:
                     fail += 1
         elif has_bootstrap:
@@ -2998,6 +3005,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                 fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [pfsense]")
                 if _deploy_to_host_dispatch(h.ip, "pfsense", ctx, pf_pass, pf_key, pf_user):
                     ok += 1
+                    deployed_ips.add(h.ip)
                 else:
                     fail += 1
         else:
@@ -3041,6 +3049,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                 fmt.step_ok(f"Using device credentials: {creds['user']}")
                 if _deploy_to_host_dispatch(h.ip, h.htype, ctx, creds["password"], "", creds["user"]):
                     ok += 1
+                    deployed_ips.add(h.ip)
                 else:
                     fail += 1
 
@@ -3055,6 +3064,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
                     if _deploy_to_host_dispatch(h.ip, h.htype, ctx, "", bootstrap_key, dev_user):
                         ok += 1
+                        deployed_ips.add(h.ip)
                     else:
                         fail += 1
             else:
@@ -3081,6 +3091,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                             fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [{h.htype}]")
                             if _deploy_to_host_dispatch(h.ip, h.htype, ctx, dev_pass, "", dev_user):
                                 ok += 1
+                                deployed_ips.add(h.ip)
                             else:
                                 fail += 1
                 else:
@@ -3106,6 +3117,9 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
             fmt.step_ok(f"Device password saved to {pass_path}")
         except OSError as e:
             fmt.step_warn(f"Could not save device password to {pass_path}: {e}")
+
+    # Store deployed IPs for Phase 12 — deployed hosts MUST pass verification
+    ctx["deployed_ips"] = deployed_ips
 
     fmt.blank()
     fmt.line(f"  Fleet deployment: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, {fmt.C.RED}{fail} failed{fmt.C.RESET}")
@@ -3337,9 +3351,9 @@ def _phase_fleet_configure(cfg, ctx):
 
                 # Create dir + upload
                 setup_script = (
-                    f"sudo mkdir -p /opt/freq-agent && "
-                    f"sudo tee /opt/freq-agent/agent_collector.py > /dev/null && "
-                    f"sudo chmod +x /opt/freq-agent/agent_collector.py"
+                    f"sudo mkdir -p {AGENT_REMOTE_DIR} && "
+                    f"sudo tee {AGENT_REMOTE_PATH} > /dev/null && "
+                    f"sudo chmod +x {AGENT_REMOTE_PATH}"
                 )
                 try:
                     r = subprocess.run(
@@ -3361,9 +3375,9 @@ def _phase_fleet_configure(cfg, ctx):
                     "\n"
                     "[Service]\n"
                     f"Environment=FREQ_AGENT_PORT={agent_port}\n"
-                    "ExecStart=/usr/bin/python3 /opt/freq-agent/agent_collector.py\n"
+                    f"ExecStart=/usr/bin/env python3 {AGENT_REMOTE_PATH}\n"
                     "Restart=always\n"
-                    "RestartSec=5\n"
+                    "RestartSec=10\n"
                     "\n"
                     "[Install]\n"
                     "WantedBy=multi-user.target\n"
@@ -4803,6 +4817,7 @@ def _phase_verify(cfg, ctx):
                 _check(f"PVE {ip}: SSH + sudo as {svc_name}", False)
 
     # Fleet host connectivity — ALL platform types
+    deployed_ips = ctx.get("deployed_ips", set())
     if cfg.hosts:
         pve_set = set(cfg.pve_nodes) if cfg.pve_nodes else set()
         fleet_hosts = [h for h in cfg.hosts if h.ip not in pve_set]
@@ -4823,6 +4838,9 @@ def _phase_verify(cfg, ctx):
             ok, err = _verify_host(h.ip, h.htype, svc_name, key_file, rsa_file)
             if ok:
                 _check(check_label, True)
+            elif h.ip in deployed_ips:
+                # We JUST deployed to this host — auth/skip errors are real failures
+                _check(f"{check_label} — {_skip_reason(err)}", False)
             elif _is_skip_error(err):
                 fmt.step_warn(f"Fleet {h.label} ({h.ip}): {_skip_reason(err)} (skipped)")
                 warns += 1
@@ -5117,6 +5135,20 @@ def _init_check(cfg):
     roles_file = os.path.join(cfg.conf_dir, "roles.conf")
     _chk("roles.conf exists", "pass" if os.path.isfile(roles_file) else "warn")
 
+    # ── Duplicate host detection ──
+    if cfg.hosts:
+        seen_ips = {}
+        seen_labels = {}
+        for h in cfg.hosts:
+            if h.ip in seen_ips:
+                _chk(f"Duplicate IP: {h.ip} ({h.label} + {seen_ips[h.ip]})", "fail")
+            else:
+                seen_ips[h.ip] = h.label
+            if h.label in seen_labels:
+                _chk(f"Duplicate label: {h.label} ({h.ip} + {seen_labels[h.label]})", "fail")
+            else:
+                seen_labels[h.label] = h.ip
+
     # ── Remote fleet verification ──
     if cfg.hosts or cfg.pve_nodes:
         fmt.blank()
@@ -5133,6 +5165,57 @@ def _init_check(cfg):
             _chk(f"{h['label']} ({h['ip']}) [{h['htype']}]: {err_short}", "fail")
         for h in sorted(unreachable_list, key=lambda x: x["label"]):
             _chk(f"{h['label']} ({h['ip']}) [{h['htype']}]: {_skip_reason(h['error'])}", "warn")
+
+    # ── Deep deployment state checks (on reachable hosts) ──
+    if cfg.hosts and ok_list:
+        import concurrent.futures as _cf
+
+        fmt.blank()
+        fmt.line(f"  {fmt.C.BOLD}Deployment State{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Verifying service account + agent on reachable hosts...{fmt.C.RESET}")
+        fmt.blank()
+
+        key_file = os.path.join(cfg.key_dir, "freq_id_ed25519")
+
+        def _deep_check(entry):
+            ip, htype, label = entry["ip"], entry["htype"], entry["label"]
+            if htype in ("linux", "pve", "docker", "truenas"):
+                cmd = (
+                    f"id {svc_name} >/dev/null 2>&1 && "
+                    f"sudo -n true 2>/dev/null && "
+                    f"test -f /home/{svc_name}/.ssh/authorized_keys && "
+                    f"echo DEEP_CHECK_OK"
+                )
+                use_key = key_file
+            elif htype == "pfsense":
+                cmd = (
+                    f"pw usershow {svc_name} >/dev/null 2>&1 && "
+                    f"test -f /home/{svc_name}/.ssh/authorized_keys && "
+                    f"echo DEEP_CHECK_OK"
+                )
+                use_key = key_file
+            else:
+                return label, ip, htype, True, ""  # iDRAC/switch — SSH verify is sufficient
+
+            ssh_cmd = [
+                "ssh", "-n", "-i", use_key,
+                "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
+                "-o", "StrictHostKeyChecking=accept-new",
+                f"{svc_name}@{ip}", cmd,
+            ]
+            rc, out, err = _run(ssh_cmd, timeout=15)
+            ok = "DEEP_CHECK_OK" in out
+            return label, ip, htype, ok, err.strip()[:80] if not ok else ""
+
+        with _cf.ThreadPoolExecutor(max_workers=10) as pool:
+            futs = [pool.submit(_deep_check, h) for h in ok_list]
+            for f in _cf.as_completed(futs):
+                label, ip, htype, deep_ok, deep_err = f.result()
+                if deep_ok:
+                    _chk(f"{label}: account + sudo + key verified", "pass")
+                else:
+                    detail = deep_err or "account/sudo/key missing"
+                    _chk(f"{label}: {detail}", "fail")
 
     fmt.blank()
     summary = f"  {fmt.C.GREEN}{passes} pass{fmt.C.RESET}"

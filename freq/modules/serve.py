@@ -66,6 +66,15 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 BG_CACHE_REFRESH_INTERVAL = 15  # seconds between background cache refreshes
 DASHBOARD_AUTO_REFRESH_MS = 30000  # milliseconds between frontend auto-refreshes
+
+# ── CIRCUIT BREAKER — prevent sshguard blocking from aggressive probes ───
+LEGACY_HTYPES = {"idrac", "switch"}
+LEGACY_PROBE_INTERVAL = 60       # seconds between probes for iDRAC/switch
+CIRCUIT_BREAKER_THRESHOLD = 3    # consecutive failures before backoff
+CIRCUIT_BREAKER_BACKOFF = 300    # 5 minutes backoff after threshold
+_host_fail_count = {}            # ip -> consecutive failure count
+_host_backoff_until = {}         # ip -> monotonic timestamp when backoff expires
+_last_legacy_probe = 0.0         # monotonic timestamp of last legacy probe
 _SERVER_START_TIME = time.monotonic()
 DEFAULT_LOG_LINES = 50
 
@@ -585,16 +594,68 @@ def _bg_probe_health():
             "docker": parts[5].strip() if len(parts) > 5 else "0",
         }
 
-    probe_hosts = cfg.hosts
+    # ── Circuit breaker: skip hosts in backoff or legacy hosts probed recently ──
+    global _last_legacy_probe
+    now = time.monotonic()
+    probe_legacy = (now - _last_legacy_probe) >= LEGACY_PROBE_INTERVAL
 
+    active_hosts = []
+    skipped_hosts = []
+    for h in cfg.hosts:
+        # Skip hosts in circuit-breaker backoff
+        if _host_backoff_until.get(h.ip, 0) > now:
+            skipped_hosts.append(h)
+            continue
+        # Rate-limit legacy device probes
+        if h.htype in LEGACY_HTYPES and not probe_legacy:
+            skipped_hosts.append(h)
+            continue
+        active_hosts.append(h)
+
+    if probe_legacy and any(h.htype in LEGACY_HTYPES for h in active_hosts):
+        _last_legacy_probe = now
+
+    # Reuse cached data for skipped hosts
     host_data = []
+    if skipped_hosts:
+        with _bg_lock:
+            cached = _bg_cache.get("health")
+        cached_by_ip = {}
+        if cached and isinstance(cached, dict):
+            cached_by_ip = {h["ip"]: h for h in cached.get("hosts", [])}
+        for h in skipped_hosts:
+            prev = cached_by_ip.get(h.ip)
+            if prev:
+                host_data.append(prev)
+            else:
+                host_data.append({
+                    "label": h.label, "ip": h.ip, "type": h.htype,
+                    "status": "unreachable", "cores": "-", "ram": "-",
+                    "disk": "-", "load": "-", "docker": "0",
+                    "last_error": "circuit breaker / rate limited",
+                })
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=cfg.ssh_max_parallel) as pool:
-        futures = {pool.submit(_probe_host, h): h for h in probe_hosts}
+        futures = {pool.submit(_probe_host, h): h for h in active_hosts}
         for f in concurrent.futures.as_completed(futures):
+            h = futures[f]
             try:
-                host_data.append(f.result())
+                result_entry = f.result()
+                host_data.append(result_entry)
+                # Circuit breaker: track success/failure
+                if result_entry.get("status") == "healthy":
+                    _host_fail_count.pop(h.ip, None)
+                    _host_backoff_until.pop(h.ip, None)
+                else:
+                    count = _host_fail_count.get(h.ip, 0) + 1
+                    _host_fail_count[h.ip] = count
+                    if count >= CIRCUIT_BREAKER_THRESHOLD:
+                        _host_backoff_until[h.ip] = now + CIRCUIT_BREAKER_BACKOFF
+                        logger.warning(
+                            f"circuit breaker: {h.label} ({h.ip}) failed {count}x, "
+                            f"backing off {CIRCUIT_BREAKER_BACKOFF}s"
+                        )
             except Exception as e:
-                h = futures[f]
                 logger.warn(f"health probe failed for {h.label}: {e}")
                 host_data.append(
                     {
@@ -610,6 +671,10 @@ def _bg_probe_health():
                         "last_error": str(e)[:120],
                     }
                 )
+                count = _host_fail_count.get(h.ip, 0) + 1
+                _host_fail_count[h.ip] = count
+                if count >= CIRCUIT_BREAKER_THRESHOLD:
+                    _host_backoff_until[h.ip] = now + CIRCUIT_BREAKER_BACKOFF
 
     # Aggregate container counts per PVE node.
     # Chain: container_vms (vm_id→IP) + WATCHDOG (vm_id→node) + health (IP→docker count)

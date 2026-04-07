@@ -1,4 +1,4 @@
-"""FREQ Doctor — 15-point self-diagnostic.
+"""FREQ Doctor — 17-point self-diagnostic.
 
 Domain: freq doctor
 
@@ -16,7 +16,7 @@ Architecture:
     - Output through freq/core/fmt.py for consistent branding
 
 Design decisions:
-    - 15 checks, not 5. Thoroughness > speed for diagnostics.
+    - 17 checks, not 5. Thoroughness > speed for diagnostics.
     - Fleet SSH is tested in parallel (ThreadPoolExecutor) — 14 hosts in <3s.
     - Non-fatal warnings (missing personality pack) don't return exit code 1.
 """
@@ -69,6 +69,8 @@ def run(cfg: FreqConfig) -> int:
                 _check_ssh_binary,
                 _check_ssh_key,
                 _check_fleet_connectivity,
+                _check_service_account,
+                _check_legacy_passwords,
             ],
         ),
         (
@@ -262,35 +264,130 @@ def _check_ssh_key(cfg: FreqConfig) -> int:
 
 
 def _check_fleet_connectivity(cfg: FreqConfig) -> int:
-    """Quick connectivity test to first 3 hosts."""
+    """Test SSH connectivity to ALL fleet hosts in parallel with device-appropriate commands."""
     if not cfg.hosts:
         fmt.step_info("Fleet connectivity: no hosts to test")
         return 0
 
-    sample = cfg.hosts[:3]
-    reachable = 0
-    for h in sample:
+    import concurrent.futures
+
+    # Device-specific verify commands (same as init Phase 12)
+    VERIFY_CMDS = {
+        "linux": "sudo -n true",
+        "pve": "sudo -n true",
+        "docker": "sudo -n true",
+        "truenas": "sudo -n true",
+        "pfsense": "echo OK",
+        "idrac": "racadm getsysinfo -s",
+        "switch": "show version | include uptime",
+    }
+
+    def _test(h):
+        cmd = VERIFY_CMDS.get(h.htype, "echo ok")
+        key = cfg.ssh_key_path
+        if h.htype in ("idrac", "switch"):
+            key = getattr(cfg, "ssh_rsa_key_path", None) or cfg.ssh_key_path
         r = ssh_run(
             host=h.ip,
-            command="echo ok",
-            key_path=cfg.ssh_key_path,
+            command=cmd,
+            key_path=key,
             connect_timeout=3,
             command_timeout=DOCTOR_CMD_TIMEOUT,
             htype=h.htype,
             use_sudo=False,
         )
-        if r.returncode == 0:
-            reachable += 1
+        return h, r.returncode == 0
 
-    if reachable == len(sample):
-        fmt.step_ok(f"Fleet SSH: {reachable}/{len(sample)} sample hosts reachable")
+    reachable = 0
+    unreachable = []
+    total = len(cfg.hosts)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+        for h, ok in pool.map(lambda h: _test(h), cfg.hosts):
+            if ok:
+                reachable += 1
+            else:
+                unreachable.append(h.label)
+
+    if reachable == total:
+        fmt.step_ok(f"Fleet SSH: {reachable}/{total} hosts reachable")
         return 0
     elif reachable > 0:
-        fmt.step_warn(f"Fleet SSH: {reachable}/{len(sample)} reachable")
+        down = ", ".join(unreachable[:5])
+        suffix = f" +{len(unreachable)-5} more" if len(unreachable) > 5 else ""
+        fmt.step_warn(f"Fleet SSH: {reachable}/{total} reachable (down: {down}{suffix})")
         return 2
     else:
-        fmt.step_fail(f"Fleet SSH: 0/{len(sample)} reachable")
+        fmt.step_fail(f"Fleet SSH: 0/{total} reachable")
         return 1
+
+
+def _check_service_account(cfg: FreqConfig) -> int:
+    """Verify service account exists and has correct permissions on reachable hosts."""
+    if not cfg.hosts:
+        return 0
+
+    import concurrent.futures
+
+    svc = cfg.ssh_service_account
+    # Sample: first 2 of each type to keep it fast
+    by_type = {}
+    for h in cfg.hosts:
+        by_type.setdefault(h.htype, []).append(h)
+    sample = []
+    for hosts in by_type.values():
+        sample.extend(hosts[:2])
+
+    if not sample:
+        return 0
+
+    def _test(h):
+        if h.htype in ("idrac", "switch"):
+            return h, True, ""  # SSH verify is sufficient for these
+        if h.htype == "pfsense":
+            cmd = f"pw usershow {svc} >/dev/null 2>&1 && echo ACCT_OK"
+        else:
+            cmd = f"id {svc} >/dev/null 2>&1 && sudo -n true 2>/dev/null && echo ACCT_OK"
+        r = ssh_run(
+            host=h.ip, command=cmd, key_path=cfg.ssh_key_path,
+            connect_timeout=3, command_timeout=DOCTOR_CMD_TIMEOUT,
+            htype=h.htype, use_sudo=False,
+        )
+        ok = "ACCT_OK" in (r.stdout or "")
+        return h, ok, r.stderr.strip()[:60] if not ok else ""
+
+    issues = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+        for h, ok, err in pool.map(lambda h: _test(h), sample):
+            if not ok and h.htype not in ("idrac", "switch"):
+                issues.append(f"{h.label}: {err or 'account/sudo missing'}")
+
+    if not issues:
+        fmt.step_ok(f"Service account '{svc}': verified on {len(sample)} sampled hosts")
+        return 0
+    else:
+        fmt.step_fail(f"Service account: {len(issues)} issue(s) — {issues[0]}")
+        return 1
+
+
+def _check_legacy_passwords(cfg: FreqConfig) -> int:
+    """Verify password files exist for legacy devices that need them."""
+    legacy_hosts = [h for h in cfg.hosts if h.htype in ("idrac", "switch")]
+    if not legacy_hosts:
+        return 0  # No legacy devices, nothing to check
+
+    pw_file = getattr(cfg, "legacy_password_file", "") or ""
+    if pw_file and os.path.isfile(pw_file):
+        fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)}")
+        return 0
+    elif pw_file:
+        fmt.step_warn(f"Legacy password file configured but missing: {pw_file}")
+        return 2
+    else:
+        fmt.step_warn(
+            f"No legacy_password_file configured ({len(legacy_hosts)} "
+            f"iDRAC/switch host(s) may need it)"
+        )
+        return 2
 
 
 # --- Fleet Data ---
@@ -335,8 +432,8 @@ def _check_hosts_validity(cfg: FreqConfig) -> int:
         labels.add(h.label)
 
     if issues:
-        fmt.step_warn(f"Fleet data: {len(issues)} issue(s) — {issues[0]}")
-        return 2
+        fmt.step_fail(f"Fleet data: {len(issues)} issue(s) — {issues[0]}")
+        return 1
     else:
         fmt.step_ok("Fleet data: no duplicates, all IPs valid")
         return 0
