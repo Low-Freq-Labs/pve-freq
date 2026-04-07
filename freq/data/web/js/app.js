@@ -2644,28 +2644,58 @@ function openTerminal(type,target,node,label,htype){
     _termSocket=ws;
 
     ws.onopen=function(){
-      term.writeln('\x1b[32m  \u2713 Connected\x1b[0m');
-      term.writeln('');
       term.focus();
-      /* Mute incoming SSH banner noise — stop writing to xterm until we clear */
+      /* Mute incoming SSH banner — we'll draw our own */
       var _muted=true;
-      var _origWrite=ws.onmessage;
-      ws.onmessage=function(e){
-        if(_muted) return; /* swallow SSH MOTD/banner */
-        _origWrite(e);
-      };
-      /* Wait for SSH to finish its banner, then set prompt and unmute */
+      var _origOnMsg=ws.onmessage;
+      ws.onmessage=function(e){ if(!_muted) _origOnMsg(e); };
+      var enc=new TextEncoder();
+      /* Step 1: silently set PS1 + grab uptime while SSH banner streams in */
       setTimeout(function(){
         if(ws.readyState!==WebSocket.OPEN) return;
-        var enc=new TextEncoder();
         var ps1='\\[\\e[90m\\]\u250c\u2500 \\[\\e[35m\\]\u25c6 \\[\\e[36;1m\\]\\u\\[\\e[0m\\] \\[\\e[90m\\]\u00b7\\[\\e[0m\\] \\[\\e[1m\\]\\h\\[\\e[0m\\] \\[\\e[90m\\]:\\[\\e[34m\\] \\w\\[\\e[0m\\]\\n\\[\\e[90m\\]\u2514\u2500\\[\\e[35m\\]\u25b8\\[\\e[0m\\] ';
-        ws.send(enc.encode('export PS1=\''+ps1+'\'\n'));
-        setTimeout(function(){
-          if(ws.readyState!==WebSocket.OPEN) return;
-          _muted=false;
-          ws.send(enc.encode('clear\n'));
-        }, 300);
-      }, 1200);
+        ws.send(enc.encode('export PS1=\''+ps1+'\'; uptime -p 2>/dev/null | sed "s/^up //" > /tmp/.freq-uptime 2>/dev/null; cat /tmp/.freq-uptime 2>/dev/null || uptime | sed "s/.*up\\s*//" | sed "s/,\\s*[0-9]* user.*//" \n'));
+      }, 500);
+      /* Step 2: grab uptime output, draw banner, unmute, show prompt */
+      setTimeout(function(){
+        if(ws.readyState!==WebSocket.OPEN) return;
+        /* Capture uptime by sending it as a marker we can read */
+        var _captureUptime='';
+        var _captureDone=false;
+        ws.onmessage=function(e){
+          if(_captureDone){ _origOnMsg(e); return; }
+          var txt;
+          if(e.data instanceof ArrayBuffer){ txt=new TextDecoder().decode(e.data); }
+          else{ txt=e.data; }
+          _captureUptime+=txt;
+          /* Look for the prompt marker (our PS1 starts with box-drawing char) */
+          if(_captureUptime.indexOf('\u250c\u2500')>=0||_captureUptime.indexOf('\u2514\u2500')>=0){
+            _captureDone=true;
+            /* Extract uptime — look for time-like text */
+            var um=_captureUptime.match(/(\d+\s*(?:days?|hours?|minutes?|weeks?|months?)[\s\S]*?)(?:\x1b|\u250c)/);
+            var uptimeStr=um?um[1].replace(/[\r\n]+/g,' ').replace(/\s+/g,' ').trim():'connected';
+            /* Clear terminal and draw FREQ banner */
+            term.reset();
+            var d='\x1b[90m',c='\x1b[36m',p='\x1b[35m',b='\x1b[1m',g='\x1b[32m',r='\x1b[0m';
+            term.writeln('');
+            term.writeln(d+'  \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550'+r);
+            term.writeln('');
+            term.writeln(p+b+'          \u25c6\u25c6\u25c6   PVE FREQ   \u25c6\u25c6\u25c6'+r);
+            term.writeln('');
+            term.writeln(c+b+'               '+_esc(_displayName)+r);
+            term.writeln('');
+            term.writeln(d+'      ~ \u223f ~ \u223f ~  LOW FREQ Labs  ~ \u223f ~ \u223f ~'+r);
+            term.writeln('');
+            term.writeln(d+'  \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550'+r);
+            term.writeln(g+'    UPTIME     '+r+uptimeStr);
+            term.writeln(d+'  \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550'+r);
+            term.writeln('');
+            /* Unmute and send newline so the prompt renders below the banner */
+            ws.onmessage=_origOnMsg;
+            ws.send(enc.encode('\n'));
+          }
+        };
+      }, 1500);
     };
     ws.onmessage=function(e){
       if(e.data instanceof ArrayBuffer){
