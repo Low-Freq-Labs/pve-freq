@@ -2676,7 +2676,7 @@ function openTerminal(type,target,node,label,htype){
       setTimeout(function(){
         if(ws.readyState!==WebSocket.OPEN) return;
         _muted=false;
-        ws.send(enc.encode('clear\n'));
+        ws.send(enc.encode('\n'));
       }, 1500);
     };
     ws.onclose=function(){
