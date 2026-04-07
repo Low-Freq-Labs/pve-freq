@@ -2632,6 +2632,10 @@ function openTerminal(type,target,node,label,htype){
     ws.onopen=function(){
       term.writeln('\x1b[32mConnected.\x1b[0m\r\n');
       term.focus();
+      /* Send a newline to trigger the prompt after SSH banner */
+      setTimeout(function(){
+        if(ws.readyState===WebSocket.OPEN) ws.send(new TextEncoder().encode('\n'));
+      }, 500);
     };
     ws.onmessage=function(e){
       if(e.data instanceof ArrayBuffer){
