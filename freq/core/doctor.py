@@ -122,8 +122,9 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
 
     duration = time.monotonic() - start
 
-    # Save health history
-    _save_health_history(cfg, passed, failed, warnings, duration)
+    # Save health history to SQLite
+    from freq.core.log import save_health
+    save_health(passed, failed, warnings, duration, check_results)
 
     if json_output:
         import json as _json
@@ -167,68 +168,14 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
     return 1 if failed > 0 else 0
 
 
-def _save_health_history(cfg, passed, failed, warnings, duration):
-    """Persist doctor results to health.jsonl for trend analysis."""
-    import json as _json
-    from datetime import datetime, timezone
-
-    log_dir = os.path.dirname(cfg.log_file)
-    health_file = os.path.join(log_dir, "health.jsonl")
-
-    entry = {
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "passed": passed,
-        "failed": failed,
-        "warnings": warnings,
-        "total": passed + failed + warnings,
-        "duration": round(duration, 2),
-    }
-
-    try:
-        os.makedirs(log_dir, exist_ok=True)
-        # Read existing, keep last 89 entries (+ this one = 90)
-        entries = []
-        if os.path.isfile(health_file):
-            with open(health_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            entries.append(_json.loads(line))
-                        except _json.JSONDecodeError:
-                            pass
-        entries = entries[-89:]  # Keep last 89 + new = 90
-        entries.append(entry)
-        with open(health_file, "w") as f:
-            for e in entries:
-                f.write(_json.dumps(e) + "\n")
-    except (OSError, PermissionError):
-        pass
-
-
 def show_history(cfg: FreqConfig) -> int:
-    """Display health check history from health.jsonl."""
-    import json as _json
+    """Display health check history from SQLite."""
+    from freq.core.log import read_health
 
-    log_dir = os.path.dirname(cfg.log_file)
-    health_file = os.path.join(log_dir, "health.jsonl")
-
-    if not os.path.isfile(health_file):
-        fmt.line("No health history found. Run 'freq doctor' to start recording.")
-        return 0
-
-    entries = []
-    with open(health_file) as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    entries.append(_json.loads(line))
-                except _json.JSONDecodeError:
-                    pass
+    entries = read_health(last=20)
 
     if not entries:
-        fmt.line("No health history entries found.")
+        fmt.line("No health history found. Run 'freq doctor' to start recording.")
         return 0
 
     fmt.header("Doctor History")
@@ -236,7 +183,7 @@ def show_history(cfg: FreqConfig) -> int:
     fmt.line(f"  {'Timestamp':<28} {'Pass':>6} {'Warn':>6} {'Fail':>6} {'Duration':>10}")
     fmt.line(f"  {'─' * 28} {'─' * 6} {'─' * 6} {'─' * 6} {'─' * 10}")
 
-    for e in entries[-20:]:  # Show last 20
+    for e in entries:
         ts = e.get("ts", "?")[:19].replace("T", " ")
         p = e.get("passed", 0)
         w = e.get("warnings", 0)
