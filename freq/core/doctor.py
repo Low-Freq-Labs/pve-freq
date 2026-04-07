@@ -95,11 +95,20 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
         ),
     ]
 
+    import io, sys
     for section_name, checks in sections:
         if not json_output:
             fmt.line(f"  {fmt.C.PURPLE_BOLD}{section_name}{fmt.C.RESET}")
         for check in checks:
-            result = check(cfg)
+            # In JSON mode, suppress check functions' terminal output
+            if json_output:
+                _old_stdout = sys.stdout
+                sys.stdout = io.StringIO()
+            try:
+                result = check(cfg)
+            finally:
+                if json_output:
+                    sys.stdout = _old_stdout
             status = "pass" if result == 0 else "fail" if result == 1 else "warn"
             check_results.append({"section": section_name, "name": check.__name__.lstrip("_"), "status": status})
             if result == 0:
