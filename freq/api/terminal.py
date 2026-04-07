@@ -157,16 +157,16 @@ def handle_terminal_open(handler):
     if extra_opts:
         ssh_opts += " " + " ".join(extra_opts)
 
-    # Legacy devices (iDRAC/switch) need RSA key and may need password auth
+    # Legacy devices (iDRAC/switch) need RSA key, password auth, and root user
     sshpass_prefix = ""
     if htype in ("idrac", "switch"):
         rsa_key = getattr(cfg, "ssh_rsa_key_path", "")
         if rsa_key:
             ssh_opts = ssh_opts.replace(f"-i {key_path}", f"-i {rsa_key}")
-        # Password auth via sshpass if configured
         pw_file = getattr(cfg, "legacy_password_file", "")
         if pw_file and os.path.isfile(pw_file):
             sshpass_prefix = f"sshpass -f {pw_file} "
+        ssh_user = "root"  # iDRAC/switch use root, not freq-admin
 
     # Note: -T (no remote PTY) is used for non-interactive switch commands
     # but for terminal sessions we need the PTY for interactive IOS CLI
