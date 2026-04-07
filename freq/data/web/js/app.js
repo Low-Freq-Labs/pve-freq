@@ -2647,14 +2647,25 @@ function openTerminal(type,target,node,label,htype){
       term.writeln('\x1b[32m  \u2713 Connected\x1b[0m');
       term.writeln('');
       term.focus();
-      /* Set FREQ branded prompt + suppress SSH banner noise, then trigger prompt */
+      /* Mute incoming SSH banner noise — stop writing to xterm until we clear */
+      var _muted=true;
+      var _origWrite=ws.onmessage;
+      ws.onmessage=function(e){
+        if(_muted) return; /* swallow SSH MOTD/banner */
+        _origWrite(e);
+      };
+      /* Wait for SSH to finish its banner, then set prompt and unmute */
       setTimeout(function(){
         if(ws.readyState!==WebSocket.OPEN) return;
         var enc=new TextEncoder();
-        /* Clear screen, set custom two-line PS1 prompt */
         var ps1='\\[\\e[90m\\]\u250c\u2500 \\[\\e[35m\\]\u25c6 \\[\\e[36;1m\\]\\u\\[\\e[0m\\] \\[\\e[90m\\]\u00b7\\[\\e[0m\\] \\[\\e[1m\\]\\h\\[\\e[0m\\] \\[\\e[90m\\]:\\[\\e[34m\\] \\w\\[\\e[0m\\]\\n\\[\\e[90m\\]\u2514\u2500\\[\\e[35m\\]\u25b8\\[\\e[0m\\] ';
-        ws.send(enc.encode('export PS1=\''+ps1+'\'; clear\n'));
-      }, 800);
+        ws.send(enc.encode('export PS1=\''+ps1+'\'\n'));
+        setTimeout(function(){
+          if(ws.readyState!==WebSocket.OPEN) return;
+          _muted=false;
+          ws.send(enc.encode('clear\n'));
+        }, 300);
+      }, 1200);
     };
     ws.onmessage=function(e){
       if(e.data instanceof ArrayBuffer){
