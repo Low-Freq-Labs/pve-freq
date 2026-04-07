@@ -93,7 +93,7 @@ def clear_context() -> None:
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS perf (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    ts TEXT NOT NULL,
     op TEXT NOT NULL,
     duration REAL NOT NULL,
     host TEXT,
@@ -106,7 +106,7 @@ CREATE INDEX IF NOT EXISTS idx_perf_host ON perf(host);
 
 CREATE TABLE IF NOT EXISTS health (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    ts TEXT NOT NULL,
     passed INTEGER NOT NULL,
     failed INTEGER NOT NULL,
     warnings INTEGER NOT NULL,
@@ -300,10 +300,11 @@ def perf(op: str, duration: float, **extra) -> None:
     ok = extra.pop("ok", None)
     extra_json = json.dumps(extra) if extra else None
 
+    ts = datetime.now(timezone.utc).isoformat()
     try:
         db.execute(
-            "INSERT INTO perf (op, duration, host, htype, ok, extra) VALUES (?, ?, ?, ?, ?, ?)",
-            (op, round(duration, 4), host, htype, 1 if ok else 0 if ok is not None else None, extra_json),
+            "INSERT INTO perf (ts, op, duration, host, htype, ok, extra) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (ts, op, round(duration, 4), host, htype, 1 if ok else 0 if ok is not None else None, extra_json),
         )
         db.commit()
     except sqlite3.Error:
@@ -351,10 +352,11 @@ def save_health(passed: int, failed: int, warnings: int, duration: float, checks
 
     checks_json = json.dumps(checks) if checks else None
 
+    ts = datetime.now(timezone.utc).isoformat()
     try:
         db.execute(
-            "INSERT INTO health (passed, failed, warnings, total, duration, checks) VALUES (?, ?, ?, ?, ?, ?)",
-            (passed, failed, warnings, passed + failed + warnings, round(duration, 2), checks_json),
+            "INSERT INTO health (ts, passed, failed, warnings, total, duration, checks) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (ts, passed, failed, warnings, passed + failed + warnings, round(duration, 2), checks_json),
         )
         db.execute("DELETE FROM health WHERE id NOT IN (SELECT id FROM health ORDER BY id DESC LIMIT 90)")
         db.commit()
