@@ -2661,7 +2661,7 @@ function openTerminal(type,target,node,label,htype){
     term.writeln(bar);
     term.writeln('');
 
-    /* Mute SSH output while banner shows, pass through after unmute */
+    /* Mute SSH banner, unmute only after PS1 is set */
     ws.onmessage=function(e){
       if(_muted) return;
       if(e.data instanceof ArrayBuffer) term.write(new Uint8Array(e.data));
@@ -2670,13 +2670,13 @@ function openTerminal(type,target,node,label,htype){
 
     ws.onopen=function(){
       term.focus();
-      /* Set PS1 immediately — shell queues it until ready */
-      ws.send(enc.encode('export PS1=\''+ps1+'\'\n'));
-      /* After SSH connects and shell is ready, clear and unmute */
+      /* Send PS1 + clear in one command — clear wipes the shell's
+         buffered prompts/banner so only our FREQ prompt appears */
+      ws.send(enc.encode('export PS1=\''+ps1+'\'; clear\n'));
+      /* Unmute after shell has processed the command */
       setTimeout(function(){
         if(ws.readyState!==WebSocket.OPEN) return;
         _muted=false;
-        ws.send(enc.encode('\n'));
       }, 1500);
     };
     ws.onclose=function(){
