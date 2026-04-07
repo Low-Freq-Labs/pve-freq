@@ -58,3 +58,4 @@ MagicMock/
 
 # Tilde expansion artifacts (prevent ~user/ dirs from being committed)
 ~*/
+conf/switch-profiles.toml
