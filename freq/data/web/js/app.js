@@ -2613,21 +2613,19 @@ function openTerminal(type,target,node,label,htype){
 
   /* Request session from server */
   var cols=term.cols;var rows=term.rows;
+  /* Build display name: "VM 103 · qbit" for VMs, just label for nodes/infra */
   var _displayName=label||target;
+  if(type==='vm'&&target&&target.match(/^\d+$/)&&label&&label!==target){
+    _displayName='VM '+target+' \u00b7 '+label;
+  }else if(type==='ct'&&target&&label){
+    _displayName='CT '+target+' \u00b7 '+label;
+  }
 
-  /* FREQ branded connect banner */
-  var dim='\x1b[90m',cyan='\x1b[36m',purple='\x1b[35m',bold='\x1b[1m',reset='\x1b[0m';
-  term.writeln('');
-  term.writeln(dim+'  \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550'+reset);
-  term.writeln('');
-  term.writeln(purple+bold+'          \u25c6\u25c6\u25c6   PVE FREQ   \u25c6\u25c6\u25c6'+reset);
-  term.writeln('');
-  term.writeln(cyan+bold+'               '+_esc(_displayName)+reset);
-  term.writeln('');
-  term.writeln(dim+'      ~ \u223f ~ \u223f ~  LOW FREQ Labs  ~ \u223f ~ \u223f ~'+reset);
-  term.writeln('');
-  term.writeln(dim+'  \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550'+reset);
-  term.writeln('');
+  /* Helper: center text in a 45-char field */
+  function _center(txt,w){w=w||45;var pad=Math.max(0,Math.floor((w-txt.length)/2));return Array(pad+1).join(' ')+txt;}
+
+  /* Show connecting state */
+  term.writeln('\x1b[90m  Connecting to '+_esc(_displayName)+'...\x1b[0m');
 
   _authFetch('/api/terminal/open?type='+type+'&target='+encodeURIComponent(target)+
     (node?'&node='+encodeURIComponent(node):'')+
@@ -2645,57 +2643,56 @@ function openTerminal(type,target,node,label,htype){
 
     ws.onopen=function(){
       term.focus();
-      /* Mute incoming SSH banner — we'll draw our own */
-      var _muted=true;
       var _origOnMsg=ws.onmessage;
-      ws.onmessage=function(e){ if(!_muted) _origOnMsg(e); };
       var enc=new TextEncoder();
-      /* Step 1: silently set PS1 + grab uptime while SSH banner streams in */
-      setTimeout(function(){
-        if(ws.readyState!==WebSocket.OPEN) return;
-        var ps1='\\[\\e[90m\\]\u250c\u2500 \\[\\e[35m\\]\u25c6 \\[\\e[36;1m\\]\\u\\[\\e[0m\\] \\[\\e[90m\\]\u00b7\\[\\e[0m\\] \\[\\e[1m\\]\\h\\[\\e[0m\\] \\[\\e[90m\\]:\\[\\e[34m\\] \\w\\[\\e[0m\\]\\n\\[\\e[90m\\]\u2514\u2500\\[\\e[35m\\]\u25b8\\[\\e[0m\\] ';
-        ws.send(enc.encode('export PS1=\''+ps1+'\'; uptime -p 2>/dev/null | sed "s/^up //" > /tmp/.freq-uptime 2>/dev/null; cat /tmp/.freq-uptime 2>/dev/null || uptime | sed "s/.*up\\s*//" | sed "s/,\\s*[0-9]* user.*//" \n'));
-      }, 500);
-      /* Step 2: grab uptime output, draw banner, unmute, show prompt */
-      setTimeout(function(){
-        if(ws.readyState!==WebSocket.OPEN) return;
-        /* Capture uptime by sending it as a marker we can read */
-        var _captureUptime='';
-        var _captureDone=false;
-        ws.onmessage=function(e){
-          if(_captureDone){ _origOnMsg(e); return; }
-          var txt;
-          if(e.data instanceof ArrayBuffer){ txt=new TextDecoder().decode(e.data); }
-          else{ txt=e.data; }
-          _captureUptime+=txt;
-          /* Look for the prompt marker (our PS1 starts with box-drawing char) */
-          if(_captureUptime.indexOf('\u250c\u2500')>=0||_captureUptime.indexOf('\u2514\u2500')>=0){
-            _captureDone=true;
-            /* Extract uptime — look for time-like text */
-            var um=_captureUptime.match(/(\d+\s*(?:days?|hours?|minutes?|weeks?|months?)[\s\S]*?)(?:\x1b|\u250c)/);
-            var uptimeStr=um?um[1].replace(/[\r\n]+/g,' ').replace(/\s+/g,' ').trim():'connected';
-            /* Clear terminal and draw FREQ banner */
-            term.reset();
-            var d='\x1b[90m',c='\x1b[36m',p='\x1b[35m',b='\x1b[1m',g='\x1b[32m',r='\x1b[0m';
-            term.writeln('');
-            term.writeln(d+'  \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550'+r);
-            term.writeln('');
-            term.writeln(p+b+'          \u25c6\u25c6\u25c6   PVE FREQ   \u25c6\u25c6\u25c6'+r);
-            term.writeln('');
-            term.writeln(c+b+'               '+_esc(_displayName)+r);
-            term.writeln('');
-            term.writeln(d+'      ~ \u223f ~ \u223f ~  LOW FREQ Labs  ~ \u223f ~ \u223f ~'+r);
-            term.writeln('');
-            term.writeln(d+'  \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550'+r);
-            term.writeln(g+'    UPTIME     '+r+uptimeStr);
-            term.writeln(d+'  \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550'+r);
-            term.writeln('');
-            /* Unmute and send newline so the prompt renders below the banner */
-            ws.onmessage=_origOnMsg;
-            ws.send(enc.encode('\n'));
-          }
-        };
-      }, 1500);
+      /* Mute all SSH output — we control the screen */
+      ws.onmessage=function(){};
+      /* Step 1 (immediate): set PS1, echo uptime with marker, all in one shot */
+      var ps1='\\[\\e[90m\\]\u250c\u2500 \\[\\e[35m\\]\u25c6 \\[\\e[36;1m\\]\\u\\[\\e[0m\\] \\[\\e[90m\\]\u00b7\\[\\e[0m\\] \\[\\e[1m\\]\\h\\[\\e[0m\\] \\[\\e[90m\\]:\\[\\e[34m\\] \\w\\[\\e[0m\\]\\n\\[\\e[90m\\]\u2514\u2500\\[\\e[35m\\]\u25b8\\[\\e[0m\\] ';
+      ws.send(enc.encode('export PS1=\''+ps1+'\'\n'));
+      ws.send(enc.encode('echo "FREQ_UPTIME:$(uptime -p 2>/dev/null || uptime)"\n'));
+      /* Step 2: capture the uptime marker from output */
+      var _buf='';
+      var _phase2=false;
+      ws.onmessage=function(e){
+        if(_phase2){ _origOnMsg(e); return; }
+        var txt;
+        if(e.data instanceof ArrayBuffer) txt=new TextDecoder().decode(e.data);
+        else txt=e.data;
+        _buf+=txt;
+        /* Wait until we see our marker */
+        var idx=_buf.indexOf('FREQ_UPTIME:');
+        if(idx<0) return;
+        /* Extract uptime string after marker */
+        var after=_buf.substring(idx+12);
+        var nl=after.indexOf('\n');
+        if(nl<0) return; /* wait for full line */
+        var raw=after.substring(0,nl).replace(/\r/g,'').trim();
+        /* Clean up: "up 6 days, 17 hours, 56 minutes" → "6 days, 17 hours, 56 minutes" */
+        var uptimeStr=raw.replace(/^up\s+/i,'').replace(/,\s*\d+\s*users?.*$/,'').trim()||'connected';
+        /* Now draw the final banner */
+        _phase2=true;
+        term.reset();
+        var W=45;
+        var dm='\x1b[90m',cy='\x1b[36m',pu='\x1b[35m',bd='\x1b[1m',gn='\x1b[32m',rs='\x1b[0m';
+        var bar=dm+'  '+Array(W+1).join('\u2550')+rs;
+        term.writeln('');
+        term.writeln(bar);
+        term.writeln('');
+        term.writeln(pu+bd+_center('\u25c6\u25c6\u25c6   PVE FREQ   \u25c6\u25c6\u25c6',W)+rs);
+        term.writeln('');
+        term.writeln(cy+bd+_center(_displayName,W)+rs);
+        term.writeln('');
+        term.writeln(dm+_center('~ \u223f ~ \u223f ~  LOW FREQ Labs  ~ \u223f ~ \u223f ~',W)+rs);
+        term.writeln('');
+        term.writeln(bar);
+        term.writeln(gn+'    UPTIME     '+rs+uptimeStr);
+        term.writeln(bar);
+        term.writeln('');
+        /* Unmute and trigger a clean prompt */
+        ws.onmessage=_origOnMsg;
+        ws.send(enc.encode('\n'));
+      };
     };
     ws.onmessage=function(e){
       if(e.data instanceof ArrayBuffer){
