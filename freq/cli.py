@@ -76,6 +76,13 @@ def main(argv: list = None) -> int:
 
     args = parser.parse_args(argv)
 
+    # Propagate global --yes/--dry-run to subparser args (subparser defaults
+    # can clobber parent values when both define the same flag)
+    if "--yes" in check_args or "-y" in check_args:
+        args.yes = True
+    if "--dry-run" in check_args:
+        args.dry_run = True
+
     # Init logging, audit trail, and performance tracking
     log_dir = os.path.dirname(cfg.log_file)
     logger.init(cfg.log_file)

@@ -170,9 +170,10 @@ class TestCreateRejectsBadName:
 class TestCloneRejectsBadInput:
     """cmd_clone must reject invalid names, IPs, and VLANs."""
 
+    @patch("freq.modules.vm._find_vm_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._find_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._pve_cmd")
-    def test_bad_name_rejected(self, mock_pve, mock_node):
+    def test_bad_name_rejected(self, mock_pve, mock_node, mock_vm_node):
         from freq.modules.vm import cmd_clone
         cfg = _make_cfg()
         args = SimpleNamespace(
@@ -183,9 +184,10 @@ class TestCloneRejectsBadInput:
         assert result == 1
         mock_pve.assert_not_called()
 
+    @patch("freq.modules.vm._find_vm_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._find_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._pve_cmd")
-    def test_bad_vlan_rejected(self, mock_pve, mock_node):
+    def test_bad_vlan_rejected(self, mock_pve, mock_node, mock_vm_node):
         from freq.modules.vm import cmd_clone
         cfg = _make_cfg()
         args = SimpleNamespace(
@@ -196,9 +198,10 @@ class TestCloneRejectsBadInput:
         assert result == 1
         mock_pve.assert_not_called()
 
+    @patch("freq.modules.vm._find_vm_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._find_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._pve_cmd")
-    def test_bad_ip_rejected(self, mock_pve, mock_node):
+    def test_bad_ip_rejected(self, mock_pve, mock_node, mock_vm_node):
         from freq.modules.vm import cmd_clone
         cfg = _make_cfg()
         args = SimpleNamespace(
@@ -209,9 +212,10 @@ class TestCloneRejectsBadInput:
         assert result == 1
         mock_pve.assert_not_called()
 
+    @patch("freq.modules.vm._find_vm_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._find_node", return_value="192.168.255.1")
     @patch("freq.modules.vm._pve_cmd")
-    def test_valid_vlan_accepted(self, mock_pve, mock_node):
+    def test_valid_vlan_accepted(self, mock_pve, mock_node, mock_vm_node):
         from freq.modules.vm import cmd_clone
         cfg = _make_cfg()
         cfg.protected_vmids = []

@@ -84,7 +84,10 @@ def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = VM_CMD_
         htype="pve",
         use_sudo=True,
     )
-    return r.stdout, r.returncode == 0
+    output = r.stdout
+    if r.returncode != 0 and r.stderr and not output:
+        output = r.stderr
+    return output, r.returncode == 0
 
 
 def _pve_unreachable_hint(cfg):
@@ -377,7 +380,9 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
     fmt.header(f"Clone VM {src_vmid}")
     fmt.blank()
 
-    node_ip = _find_node(cfg)
+    node_ip = _find_vm_node(cfg, src_vmid)
+    if not node_ip:
+        node_ip = _find_node(cfg)
     if not node_ip:
         fmt.step_fail("Cannot reach any PVE node")
         _pve_unreachable_hint(cfg)
