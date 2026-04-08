@@ -273,7 +273,7 @@ def _bg_probe_infra():
     fleet_key = os.path.join(cfg.key_dir, "fleet_key")
     if not os.path.isfile(fleet_key):
         fleet_key = cfg.ssh_key_path  # fallback to service account key
-    bootstrap_user = os.environ.get("SUDO_USER", "freq-ops") or "freq-ops"
+    bootstrap_user = os.environ.get("SUDO_USER") or cfg.ssh_service_account or "freq-admin"
 
     def _probe_device(key, dev):
         d = {"key": key, "label": dev.label, "type": dev.device_type, "ip": dev.ip, "reachable": False, "metrics": {}}
@@ -4109,7 +4109,10 @@ a:hover{{text-decoration:underline}}
         if length > 1_000_000:  # 1MB limit
             return {}
         raw = self.rfile.read(length)
-        return json.loads(raw)
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return {}
 
     def _json_response(self, data, status=200):
         """Send a JSON response."""

@@ -3433,11 +3433,11 @@ def _phase_fleet_configure(cfg, ctx):
         fmt.line(f"  {fmt.C.BOLD}Metrics Agent Deployment ({len(agent_hosts)} hosts){fmt.C.RESET}")
         fmt.blank()
 
-        # Find the agent_collector.py source file
+        # Find the agent_collector.py source file — check relative to this module, then install_dir
         agent_src = None
         for candidate in [
             os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent_collector.py"),
-            "/opt/pve-freq/freq/agent_collector.py",
+            os.path.join(cfg.install_dir, "freq", "agent_collector.py"),
         ]:
             if os.path.isfile(candidate):
                 agent_src = candidate

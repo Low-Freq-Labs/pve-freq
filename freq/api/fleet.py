@@ -471,8 +471,10 @@ def handle_deploy_agent(handler):
         json_response(handler, {"error": f"Agent source not found: {agent_src}"}, 500)
         return
 
+    from freq.modules.init_cmd import AGENT_REMOTE_PATH, AGENT_REMOTE_DIR
+
     agent_port = cfg.agent_port
-    remote_path = "/opt/freq-agent/collector.py"
+    remote_path = AGENT_REMOTE_PATH
     service_name = "freq-agent"
 
     results = []
@@ -482,7 +484,7 @@ def handle_deploy_agent(handler):
         # Step 1: Create directory
         r = ssh_single(
             host=h.ip,
-            command="mkdir -p /opt/freq-agent",
+            command=f"mkdir -p {AGENT_REMOTE_DIR}",
             key_path=cfg.ssh_key_path,
             connect_timeout=3,
             command_timeout=10,

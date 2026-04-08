@@ -38,7 +38,7 @@ DEPLOY_QUICK_TIMEOUT = 5
 AGENT_CHECK_TIMEOUT = 3
 
 AGENT_PORT = 9990  # default — overridden by cfg.agent_port at deploy time
-AGENT_REMOTE_PATH = "/opt/freq-agent/collector.py"
+from freq.modules.init_cmd import AGENT_REMOTE_PATH
 SERVICE_NAME = "freq-agent"
 
 
