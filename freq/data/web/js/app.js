@@ -358,6 +358,7 @@ function _showApp(){
   Promise.all([p1,p2,p3]).then(function(){
     _p(100,'READY','Welcome, '+_currentUser);
     setTimeout(function(){
+      var body=document.getElementById('mn-body');if(body)body.style.display='';
       login.style.display='none';
       /* Update header user button */
       var btn=document.getElementById('header-user-btn');if(btn)btn.style.display='flex';
