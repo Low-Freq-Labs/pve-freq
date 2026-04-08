@@ -608,8 +608,7 @@ def _register_host(sub):
     p = host_sub.add_parser("remove", help="Remove a host from the fleet")
     p.set_defaults(func=_set_action(_cmd_hosts, "remove"))
 
-    p = host_sub.add_parser("edit", help="Edit host configuration")
-    p.set_defaults(func=_set_action(_cmd_hosts, "edit"))
+    # "edit" removed — not implemented (was silently falling through to error)
 
     p = host_sub.add_parser("sync", help="Sync host list from PVE cluster")
     p.add_argument("--dry-run", action="store_true", help="Show what sync would change without writing")

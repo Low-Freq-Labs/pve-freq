@@ -1011,7 +1011,7 @@ def handle_vm_clone(handler):
         json_response(handler, {"error": "vmid (source) required"})
         return
 
-    allowed, err = _check_vm_permission(cfg, source_vmid, "view")
+    allowed, err = _check_vm_permission(cfg, source_vmid, "clone")
     if not allowed:
         json_response(handler, {"error": err})
         return

@@ -1464,8 +1464,8 @@ function switchDockerSub(sub){
 }
 var _serverMediaTags=null;
 function _getMediaTags(){if(_serverMediaTags!==null)return _serverMediaTags;try{return JSON.parse(localStorage.getItem('freq_media_tags')||'[]');}catch(e){return [];}}
-function _setMediaTags(tags){_serverMediaTags=tags;localStorage.setItem('freq_media_tags',JSON.stringify(tags));_authFetch('/api/media/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tags:tags})}).catch(function(){});}
-function _loadServerMediaTags(){_authFetch('/api/media/tags').then(function(r){return r.json()}).then(function(d){if(d.tags&&d.tags.length){_serverMediaTags=d.tags;localStorage.setItem('freq_media_tags',JSON.stringify(d.tags));}}).catch(function(){});}
+function _setMediaTags(tags){_serverMediaTags=tags;localStorage.setItem('freq_media_tags',JSON.stringify(tags));_authFetch('/api/media/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tags:tags})}).catch(function(e){console.error('media tags error:',e);});}
+function _loadServerMediaTags(){_authFetch('/api/media/tags').then(function(r){return r.json()}).then(function(d){if(d.tags&&d.tags.length){_serverMediaTags=d.tags;localStorage.setItem('freq_media_tags',JSON.stringify(d.tags));}}).catch(function(e){console.error('media tags error:',e);});}
 var _mediaCache=null;/* cached /api/media/status response */
 function toggleMediaTag(name){
   var tags=_getMediaTags();
@@ -8423,7 +8423,7 @@ function fetchLogs(){
   _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     var logLines=d.lines||[];
-    out.innerHTML='<pre style="white-space:pre-wrap;font-size:11px;color:var(--text);line-height:1.5">'+_esc(logLines.join('\\n'))+'</pre>';
+    out.innerHTML='<pre style="white-space:pre-wrap;font-size:11px;color:var(--text);line-height:1.5">'+_esc(logLines.join('\n'))+'</pre>';
   }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
 }
 function loadZfs(){
