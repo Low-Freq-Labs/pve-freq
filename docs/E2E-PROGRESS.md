@@ -9,12 +9,12 @@
 
 | Tier | Name | Status | Session |
 |---|---|---|---|
-| 0 | Init from scratch | DONE | S026 |
-| 1 | Core CLI (utilities, fleet, host, VM) | DONE | S026 |
-| 2 | Devices (net/fw/store/hw) | SKIPPED — deployers broken, would just confirm known bugs |
-| 3 | Security/observe/state | DONE (quick sweep) | S026 |
-| 4 | Auto/DR/media/gitops/RBAC | DONE (quick sweep) | S026 |
-| 5 | Dashboard API + 62 regression checks | DONE | S026 |
+| 0 | Init from scratch (NO --hosts-file) | DONE — 22 hosts, 0 fail | S027 |
+| 1 | Core CLI (utilities, fleet, host, VM) | DONE — all pass | S027 |
+| 2 | Devices (net/fw/store/hw) | DONE — infra-dependent results | S027 |
+| 3 | Security/observe/state | DONE — vault, boundaries, doctor | S027 |
+| 4 | Auto/DR/media/gitops/RBAC | DONE — 18 containers, 7 hosts | S027 |
+| 5 | Dashboard API | DONE — auth, POST, config security all pass | S027 |
 | 6 | Dashboard data quality (29 pages) | NOT STARTED |
 
 ## Bugs Found
