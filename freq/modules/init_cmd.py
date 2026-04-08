@@ -166,13 +166,18 @@ def _load_device_credentials(cred_file):
     if not cred_file or not os.path.isfile(cred_file):
         return result
 
-    # Parse TOML
-    try:
-        if tomllib is not None:
+    # Parse TOML — try tomllib first, fall back to manual parser
+    # (tomllib rejects section names with colons like [switch:cisco]
+    # which are valid in our format but not bare TOML keys)
+    data = None
+    if tomllib is not None:
+        try:
             with open(cred_file, "rb") as f:
                 data = tomllib.load(f)
-        else:
-            # Minimal fallback: read key=value pairs per section
+        except Exception:
+            pass  # Fall through to manual parser
+    if data is None:
+        try:
             data = {}
             section = None
             for line in open(cred_file):
@@ -185,9 +190,9 @@ def _load_device_credentials(cred_file):
                 elif "=" in line and section:
                     k, v = line.split("=", 1)
                     data[section][k.strip()] = v.strip().strip('"').strip("'")
-    except Exception as e:
-        fmt.step_warn(f"Failed to parse device credentials: {e}")
-        return result
+        except Exception as e:
+            fmt.step_warn(f"Failed to parse device credentials: {e}")
+            return result
 
     def _read_entry(entry, label):
         """Extract user + password from a credential entry."""
@@ -2943,10 +2948,13 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
     if hosts_file_arg and os.path.isfile(hosts_file_arg) and not cfg.hosts:
         fmt.step_start(f"Importing fleet hosts from {hosts_file_arg}")
         shutil.copy2(hosts_file_arg, cfg.hosts_file)
-        from freq.core.config import load_hosts
+        from freq.core.config import load_hosts, load_hosts_toml
 
         try:
-            cfg.hosts = load_hosts(cfg.hosts_file)
+            if hosts_file_arg.endswith(".toml"):
+                cfg.hosts = load_hosts_toml(cfg.hosts_file)
+            else:
+                cfg.hosts = load_hosts(cfg.hosts_file)
             fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")
         except Exception as e:
             fmt.step_fail(f"Failed to reload hosts: {e}")
@@ -6304,10 +6312,13 @@ def _init_headless(cfg, args):
     if hosts_file_arg and os.path.isfile(hosts_file_arg):
         fmt.step_start(f"Importing fleet hosts from {hosts_file_arg}")
         shutil.copy2(hosts_file_arg, cfg.hosts_file)
-        from freq.core.config import load_hosts
+        from freq.core.config import load_hosts, load_hosts_toml
 
         try:
-            cfg.hosts = load_hosts(cfg.hosts_file)
+            if hosts_file_arg.endswith(".toml"):
+                cfg.hosts = load_hosts_toml(cfg.hosts_file)
+            else:
+                cfg.hosts = load_hosts(cfg.hosts_file)
             fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")
         except Exception as e:
             fmt.step_fail(f"Failed to reload hosts: {e}")
