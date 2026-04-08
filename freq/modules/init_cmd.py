@@ -5402,10 +5402,11 @@ def _init_check(cfg, json_output=False):
     if cfg.hosts and ok_list:
         import concurrent.futures as _cf
 
-        fmt.blank()
-        fmt.line(f"  {fmt.C.BOLD}Deployment State{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}Verifying service account + agent on reachable hosts...{fmt.C.RESET}")
-        fmt.blank()
+        if not json_output:
+            fmt.blank()
+            fmt.line(f"  {fmt.C.BOLD}Deployment State{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.DIM}Verifying service account + agent on reachable hosts...{fmt.C.RESET}")
+            fmt.blank()
 
         key_file = os.path.join(cfg.key_dir, "freq_id_ed25519")
 
