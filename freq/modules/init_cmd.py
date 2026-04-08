@@ -3824,39 +3824,52 @@ def _phase_fleet_configure(cfg, ctx):
     fmt.blank()
 
     dashboard_port = getattr(cfg, "dashboard_port", 8888)
-    # Detect actual freq binary path — install.sh may place it in /usr/local/bin
-    freq_bin = "/usr/bin/freq"
-    for candidate in ["/usr/local/bin/freq", "/usr/bin/freq"]:
-        if os.path.isfile(candidate):
-            freq_bin = candidate
-            break
-    service_unit = (
-        "[Unit]\n"
-        "Description=PVE FREQ Dashboard\n"
-        "After=network.target\n"
-        "\n"
-        "[Service]\n"
-        "Type=simple\n"
-        f"ExecStart={freq_bin} serve --port {dashboard_port}\n"
-        "Restart=always\n"
-        "RestartSec=10\n"
-        f"User={svc_name}\n"
-        "WorkingDirectory=/opt/pve-freq\n"
-        "\n"
-        "[Install]\n"
-        "WantedBy=multi-user.target\n"
-    )
-    try:
-        service_path = "/etc/systemd/system/freq-dashboard.service"
-        with open(service_path, "w") as f:
-            f.write(service_unit)
-        _run(["systemctl", "daemon-reload"])
-        _run(["systemctl", "enable", "freq-dashboard"])
-        fmt.step_ok(f"Dashboard service installed: freq-dashboard (port {dashboard_port})")
-        audit.record("deploy_service", "local", "success", service="freq-dashboard")
-        fmt.line(f"  {fmt.C.DIM}Start with: sudo systemctl start freq-dashboard{fmt.C.RESET}")
-    except OSError as e:
-        fmt.step_warn(f"Could not install dashboard service: {e}")
+    # Detect actual freq binary — check PATH, common locations, pip user installs
+    freq_bin = shutil.which("freq")
+    if not freq_bin:
+        for candidate in ["/usr/local/bin/freq", "/usr/bin/freq",
+                          os.path.expanduser("~/.local/bin/freq"),
+                          f"/home/{svc_name}/.local/bin/freq"]:
+            if os.path.isfile(candidate):
+                freq_bin = candidate
+                break
+    if not freq_bin:
+        fmt.step_warn("Cannot find 'freq' binary — dashboard service not installed")
+    else:
+        work_dir = cfg.install_dir or "/opt/pve-freq"
+        service_unit = (
+            "[Unit]\n"
+            "Description=PVE FREQ Dashboard\n"
+            "After=network.target\n"
+            "\n"
+            "[Service]\n"
+            "Type=simple\n"
+            f"ExecStart={freq_bin} serve --port {dashboard_port}\n"
+            "Restart=always\n"
+            "RestartSec=10\n"
+            f"User={svc_name}\n"
+            f"WorkingDirectory={work_dir}\n"
+            f"Environment=FREQ_DIR={work_dir}\n"
+            "\n"
+            "[Install]\n"
+            "WantedBy=multi-user.target\n"
+        )
+        try:
+            service_path = "/etc/systemd/system/freq-dashboard.service"
+            with open(service_path, "w") as f:
+                f.write(service_unit)
+            _run(["systemctl", "daemon-reload"])
+            _run(["systemctl", "enable", "freq-dashboard"])
+            # Actually start the service — don't make the user guess
+            rc_start, _, _ = _run(["systemctl", "start", "freq-dashboard"])
+            if rc_start == 0:
+                fmt.step_ok(f"Dashboard running on port {dashboard_port}")
+            else:
+                fmt.step_ok(f"Dashboard service installed (port {dashboard_port})")
+                fmt.line(f"  {fmt.C.DIM}Start with: sudo systemctl start freq-dashboard{fmt.C.RESET}")
+            audit.record("deploy_service", "local", "success", service="freq-dashboard")
+        except OSError as e:
+            fmt.step_warn(f"Could not install dashboard service: {e}")
 
     # ── 9l: Dashboard HTTPS ───────────────────────────────────────
     fmt.blank()
