@@ -6524,11 +6524,14 @@ def _headless_fleet_deploy(
             auth_key = ""
         elif htype in ("idrac", "switch"):
             # Legacy fallback: device_password_file + device_user
-            auth_pass = device_pass or ctx["svc_pass"]
-            auth_key = ""
-            auth_user = device_user
-            if not device_pass:
-                fmt.step_warn("No device credentials — using service account password for device auth")
+            if device_pass:
+                auth_pass = device_pass
+                auth_key = ""
+                auth_user = device_user
+            else:
+                fmt.step_warn(f"No device credentials for {htype} — skipping (provide --device-credentials)")
+                skip += 1
+                continue
         elif htype == "pfsense":
             # pfSense: root IS the admin. No sudo — must auth as root.
             # bootstrap_user (service account) can connect but can't create users.
