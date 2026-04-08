@@ -2636,6 +2636,8 @@ def _phase_fleet_discover(cfg, ctx, args=None):
         fmt.blank()
 
         already_known = existing_ips | set(discovered.keys())
+        known_labels = {d["label"].lower() for d in discovered.values()}
+        known_labels |= {h.label.lower() for h in cfg.hosts}
 
         for vlan in vlans:
             prefix = getattr(vlan, "prefix", "") or ""
@@ -2650,17 +2652,23 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
                 new_on_vlan = 0
                 for h in hosts_info:
-                    if h.get("reachable") and h["ip"] not in already_known:
-                        discovered[h["ip"]] = {
-                            "label": h.get("hostname", "") or f"host-{h['ip'].split('.')[-1]}",
-                            "htype": h.get("type", "linux"),
-                            "groups": vlan_name.lower().replace("/", "-"),
-                            "vmid": 0,
-                            "source": f"vlan-scan",
-                            "all_ips": [h["ip"]],
-                        }
-                        already_known.add(h["ip"])
-                        new_on_vlan += 1
+                    if not h.get("reachable") or h["ip"] in already_known:
+                        continue
+                    hostname = h.get("hostname", "") or f"host-{h['ip'].split('.')[-1]}"
+                    # Skip if same hostname already registered (different VLAN for same host)
+                    if hostname.lower() in known_labels:
+                        continue
+                    discovered[h["ip"]] = {
+                        "label": hostname,
+                        "htype": h.get("type", "linux"),
+                        "groups": vlan_name.lower().replace("/", "-"),
+                        "vmid": 0,
+                        "source": f"vlan-scan",
+                        "all_ips": [h["ip"]],
+                    }
+                    already_known.add(h["ip"])
+                    known_labels.add(hostname.lower())
+                    new_on_vlan += 1
 
                 if new_on_vlan:
                     fmt.step_ok(f"{vlan_name}: {new_on_vlan} new host(s)")
