@@ -87,6 +87,15 @@ def handle_vm_create(handler):
         vmid_floor = lab_cat.get("range_start", 5000)
         if vmid < vmid_floor:
             vmid = vmid_floor
+            # Verify the floor VMID isn't already in use
+            check_out, check_ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/resources --type vm --output-format json")
+            if check_ok:
+                try:
+                    existing = {v.get("vmid") for v in __import__("json").loads(check_out)}
+                    while vmid in existing:
+                        vmid += 1
+                except Exception:
+                    pass  # Best effort — if parse fails, try the original vmid
         cmd = (
             f"qm create {vmid} --name {name} --cores {cores} --memory {ram} "
             f"--cpu {cfg.vm_cpu} --machine {cfg.vm_machine} "

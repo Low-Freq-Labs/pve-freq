@@ -634,6 +634,9 @@ def cmd_resize(cfg: FreqConfig, pack, args) -> int:
         _pve_unreachable_hint(cfg)
         return 1
 
+    if not _safety_check(cfg, vmid, "resize"):
+        return 1
+
     fmt.header(f"Resize VM {vmid}")
     fmt.blank()
 

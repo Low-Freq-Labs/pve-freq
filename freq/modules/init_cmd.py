@@ -304,7 +304,8 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
 
     # --check: validation with remote host verification (no root needed)
     if check_mode:
-        return _init_check(cfg)
+        json_output = getattr(args, "json_output", False)
+        return _init_check(cfg, json_output=json_output)
 
     # --fix: scan fleet, find broken hosts, redeploy
     fix_mode = getattr(args, "fix", False)
@@ -5272,29 +5273,36 @@ def _scan_fleet(cfg):
     return ok_list, fail_list, unreachable_list
 
 
-def _init_check(cfg):
+def _init_check(cfg, json_output=False):
     """Validate init state — local files + remote host SSH."""
-    fmt.header("Init Check")
-    fmt.blank()
+    if not json_output:
+        fmt.header("Init Check")
+        fmt.blank()
 
     svc_name = cfg.ssh_service_account
     passes = fails = warns = 0
+    check_results = []
 
     def _chk(label, status):
         nonlocal passes, fails, warns
+        check_results.append({"check": label, "status": status})
         if status == "pass":
-            fmt.step_ok(label)
+            if not json_output:
+                fmt.step_ok(label)
             passes += 1
         elif status == "fail":
-            fmt.step_fail(label)
+            if not json_output:
+                fmt.step_fail(label)
             fails += 1
         else:
-            fmt.step_warn(label)
+            if not json_output:
+                fmt.step_warn(label)
             warns += 1
 
     # ── Local checks ──
-    fmt.line(f"  {fmt.C.BOLD}Local State{fmt.C.RESET}")
-    fmt.blank()
+    if not json_output:
+        fmt.line(f"  {fmt.C.BOLD}Local State{fmt.C.RESET}")
+        fmt.blank()
 
     marker = os.path.join(cfg.conf_dir, ".initialized")
     if os.path.isfile(marker):
@@ -5340,10 +5348,11 @@ def _init_check(cfg):
 
     # ── Remote fleet verification ──
     if cfg.hosts or cfg.pve_nodes:
-        fmt.blank()
-        fmt.line(f"  {fmt.C.BOLD}Fleet Verification{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}Testing SSH as '{svc_name}' to all registered hosts...{fmt.C.RESET}")
-        fmt.blank()
+        if not json_output:
+            fmt.blank()
+            fmt.line(f"  {fmt.C.BOLD}Fleet Verification{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.DIM}Testing SSH as '{svc_name}' to all registered hosts...{fmt.C.RESET}")
+            fmt.blank()
 
         ok_list, fail_list, unreachable_list = _scan_fleet(cfg)
 
@@ -5405,6 +5414,16 @@ def _init_check(cfg):
                 else:
                     detail = deep_err or "account/sudo/key missing"
                     _chk(f"{label}: {detail}", "fail")
+
+    if json_output:
+        import json as _json
+
+        print(_json.dumps({
+            "checks": check_results,
+            "passed": passes, "failed": fails, "warnings": warns,
+            "total": passes + fails + warns,
+        }, indent=2))
+        return 1 if fails else 0
 
     fmt.blank()
     summary = f"  {fmt.C.GREEN}{passes} pass{fmt.C.RESET}"

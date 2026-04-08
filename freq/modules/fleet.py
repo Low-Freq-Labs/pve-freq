@@ -72,6 +72,32 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
     )
     total_duration = time.monotonic() - start
 
+    # JSON output mode
+    if getattr(args, "json_output", False):
+        import json as _json
+
+        fleet_data = []
+        for h in hosts:
+            r = results.get(h.label)
+            if r and r.returncode == 0:
+                fleet_data.append({
+                    "label": h.label, "ip": h.ip, "type": h.htype,
+                    "status": "online", "uptime": r.stdout.strip(),
+                    "duration": round(r.duration, 2),
+                })
+            else:
+                fleet_data.append({
+                    "label": h.label, "ip": h.ip, "type": h.htype,
+                    "status": "offline",
+                    "error": r.stderr.strip() if r else "no response",
+                    "duration": round(r.duration, 2) if r else None,
+                })
+        print(_json.dumps({"hosts": fleet_data, "total": len(hosts),
+                           "online": sum(1 for h in fleet_data if h["status"] == "online"),
+                           "offline": sum(1 for h in fleet_data if h["status"] == "offline"),
+                           "duration": round(total_duration, 2)}, indent=2))
+        return 0
+
     # Display results
     fmt.table_header(
         ("HOST", 16),

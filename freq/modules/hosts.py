@@ -47,7 +47,7 @@ def cmd_hosts(cfg: FreqConfig, pack, args) -> int:
     action = getattr(args, "action", "list")
 
     if action == "list":
-        return _hosts_list(cfg)
+        return _hosts_list(cfg, args)
     elif action == "add":
         return _hosts_add(cfg)
     elif action == "remove":
@@ -76,12 +76,23 @@ def cmd_groups(cfg: FreqConfig, pack, args) -> int:
         return 1
 
 
-def _hosts_list(cfg: FreqConfig) -> int:
+def _hosts_list(cfg: FreqConfig, args=None) -> int:
     """Display all registered fleet hosts."""
+    hosts = cfg.hosts
+
+    # JSON output mode
+    if getattr(args, "json_output", False):
+        import json as _json
+
+        data = [{"label": h.label, "ip": h.ip, "type": h.htype,
+                 "groups": h.groups, "vmid": getattr(h, "vmid", 0),
+                 "all_ips": getattr(h, "all_ips", [])} for h in hosts]
+        print(_json.dumps({"hosts": data, "count": len(data)}, indent=2))
+        return 0
+
     fmt.header("Fleet Hosts")
     fmt.blank()
 
-    hosts = cfg.hosts
     if not hosts:
         fmt.line(f"{fmt.C.YELLOW}No hosts registered.{fmt.C.RESET}")
         fmt.line(f"{fmt.C.GRAY}Add hosts with: freq hosts add{fmt.C.RESET}")
