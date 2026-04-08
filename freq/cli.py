@@ -207,6 +207,7 @@ def _register_utilities(sub):
     p.set_defaults(func=cmd_perf)
 
     p = sub.add_parser("audit", help="Infrastructure change audit trail")
+    p.set_defaults(func=cmd_audit_log)
     au_sub = p.add_subparsers(dest="action")
     p_log = au_sub.add_parser("log", help="Show audit log")
     p_log.add_argument("--host", help="Filter by host IP")
