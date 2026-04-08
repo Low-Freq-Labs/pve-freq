@@ -131,7 +131,7 @@ def handle_auth_login(handler):
         return
 
     if not username or not password:
-        handler._json_response({"error": "Username and password required"})
+        handler._json_response({"error": "Username and password required"}, 400)
         return
 
     cfg = load_config()
@@ -140,7 +140,7 @@ def handle_auth_login(handler):
     if not user:
         record_login_attempt(client_ip, False)
         logger.warn(f"auth_failed: unknown user '{username}'", ip=client_ip)
-        handler._json_response({"error": "Unknown user"})
+        handler._json_response({"error": "Invalid credentials"}, 401)
         return
 
     stored_hash = ""
@@ -152,7 +152,7 @@ def handle_auth_login(handler):
     if stored_hash and not verify_password(password, stored_hash):
         record_login_attempt(client_ip, False)
         logger.warn(f"auth_failed: invalid password for '{username}'", ip=client_ip)
-        handler._json_response({"error": "Invalid password"})
+        handler._json_response({"error": "Invalid credentials"}, 401)
         return
 
     # First login sets password / migrate legacy SHA256 to PBKDF2

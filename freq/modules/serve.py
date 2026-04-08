@@ -1636,6 +1636,19 @@ class FreqHandler(BaseHTTPRequestHandler):
                 logger.error(f"build_routes failed: {e}\n{traceback.format_exc()}")
                 cls._V1_ROUTES = {}  # Fallback — traceback logged for debugging
 
+    # Paths that don't require authentication
+    _AUTH_WHITELIST = frozenset({
+        "/api/auth/login",
+        "/api/auth/verify",
+        "/api/setup/status",
+        "/api/setup/complete",
+        "/healthz",
+        "/readyz",
+        "/api/openapi.json",
+    })
+    # Path prefixes that don't require authentication
+    _AUTH_WHITELIST_PREFIXES = ("/static/", "/dashboard", "/api/watch/", "/api/comms/")
+
     def _dispatch(self):
         """Route request to handler method or callable by path.
 
@@ -1643,6 +1656,16 @@ class FreqHandler(BaseHTTPRequestHandler):
         v1 domain routes use callables: function(handler) from freq/api/.
         """
         path = self.path.split("?")[0]
+
+        # Global auth check — all /api/ endpoints require at least viewer role
+        # unless explicitly whitelisted. Non-API paths (SPA, static) are public.
+        if path.startswith("/api/") and path not in self._AUTH_WHITELIST \
+                and not any(path.startswith(p) for p in self._AUTH_WHITELIST_PREFIXES):
+            role, err = _check_session_role(self, "viewer")
+            if err:
+                self._json_response({"error": "Authentication required"}, 403)
+                return
+
         # Check legacy routes first, then v1 domain routes
         handler_ref = self._ROUTES.get(path)
         if not handler_ref:

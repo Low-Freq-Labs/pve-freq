@@ -140,12 +140,16 @@ class TestDoGetRouting:
         # Patch _serve_config to just track it was called
         called = []
         h._serve_config = lambda: called.append(True)
-        h.do_GET()
+        # Bypass global auth check for routing test (auth tested separately)
+        with patch("freq.modules.serve._check_session_role", return_value=("admin", None)):
+            h.do_GET()
         assert called == [True]
 
     def test_unknown_route_404(self):
         h = _make_handler("/api/nonexistent")
-        h.do_GET()
+        # Bypass global auth check for routing test (auth tested separately)
+        with patch("freq.modules.serve._check_session_role", return_value=("admin", None)):
+            h.do_GET()
         # Unknown API routes return JSON 404 via _json_response
         assert h._status_code == 404
         data = _get_json(h)

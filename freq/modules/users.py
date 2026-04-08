@@ -40,11 +40,11 @@ USER_CMD_TIMEOUT = 15
 
 
 def _load_users(cfg: FreqConfig) -> list:
-    """Load users. Prefers freq.toml [users] section, falls back to users.conf."""
+    """Load users. Prefers freq.toml [users], then users.conf, then roles.conf."""
     # TOML users take priority if defined
     if cfg._toml_users:
         return list(cfg._toml_users)
-    # Legacy: load from users.conf
+    # Primary: load from users.conf (space-delimited: USERNAME ROLE [GROUPS])
     users = []
     path = os.path.join(cfg.conf_dir, "users.conf")
     try:
@@ -61,6 +61,24 @@ def _load_users(cfg: FreqConfig) -> list:
                             "role": parts[1],
                             "groups": parts[2] if len(parts) > 2 else "",
                         }
+                    )
+    except FileNotFoundError:
+        pass
+    if users:
+        return users
+    # Fallback: load from roles.conf (colon-delimited: USERNAME:ROLE)
+    # Init writes roles.conf but not users.conf — this bridges the gap.
+    roles_path = os.path.join(cfg.conf_dir, "roles.conf")
+    try:
+        with open(roles_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if ":" in line:
+                    parts = line.split(":", 1)
+                    users.append(
+                        {"username": parts[0].strip(), "role": parts[1].strip(), "groups": ""}
                     )
     except FileNotFoundError:
         pass
