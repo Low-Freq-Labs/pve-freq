@@ -1874,6 +1874,7 @@ def _discover_and_register(cfg, ctx):
         return
 
     known_ips = {h.ip for h in cfg.hosts}
+    known_labels = {h.label.lower() for h in cfg.hosts}
     ssh_reachable = sum(1 for h in hosts_info if h["reachable"])
     new_count = _display_discovery_results(alive, hosts_info, known_ips)
 
@@ -1896,17 +1897,41 @@ def _discover_and_register(cfg, ctx):
     from freq.core.config import Host
 
     for h in hosts_info:
-        if not h["reachable"] or h["ip"] in known_ips:
+        if h["ip"] in known_ips:
             continue
 
-        hostname = h["hostname"] or "unknown"
-        detected_type = h["type"]
+        hostname = h["hostname"] or ""
+        detected_type = h["type"] if h["reachable"] else "unknown"
+
+        if not h["reachable"]:
+            # Ping-only host — offer manual registration (pfSense, TrueNAS, BMCs)
+            fmt.line(
+                f"  {fmt.C.YELLOW}{h['ip']}{fmt.C.RESET} — ping only "
+                f"(could not SSH — pfSense/TrueNAS/BMC?)"
+            )
+            if not _confirm(f"  Register this host manually?", default=False):
+                continue
+            hostname = _input(f"    Hostname/label")
+            if not hostname:
+                continue
+            detected_type = _input(f"    Type (pfsense/truenas/idrac/switch/linux)", "linux")
+
+        # Check if same host already registered under different VLAN IP
+        if hostname and hostname.lower() in known_labels:
+            fmt.line(
+                f"  {fmt.C.YELLOW}⚠{fmt.C.RESET} {h['ip']} — {hostname} "
+                f"[{detected_type}] — hostname already registered (different VLAN?), skipping"
+            )
+            continue
 
         fmt.line(f"  {fmt.C.CYAN}{h['ip']}{fmt.C.RESET} — {hostname} [{detected_type}]")
         if not _confirm(f"  Register this host?", default=True):
             continue
 
         label = _input(f"    Label", hostname)
+        if label.lower() in known_labels:
+            fmt.step_warn(f"Label '{label}' already in use — skipping")
+            continue
         htype = _input(f"    Type", detected_type)
         groups = _input(f"    Groups (optional)", "")
 
@@ -1916,6 +1941,7 @@ def _discover_and_register(cfg, ctx):
         append_host_toml(cfg.hosts_file, host)
         cfg.hosts.append(host)
         known_ips.add(h["ip"])
+        known_labels.add(label.lower())
         fmt.step_ok(f"Registered: {label} ({h['ip']}) [{htype}]")
 
     # Offer to scan another subnet
@@ -5492,6 +5518,17 @@ def _init_fix(cfg, args):
         fmt.step_fail("FREQ ed25519 public key not found")
         return 1
 
+    # Persist the generated password in vault so it's recoverable
+    from freq.modules.vault import vault_set, vault_init
+
+    if not os.path.exists(cfg.vault_file):
+        vault_init(cfg)
+    vault_key = f"{svc_name}-pass"
+    if vault_set(cfg, "DEFAULT", vault_key, ctx["svc_pass"]):
+        fmt.step_ok(f"Password stored in vault (key: {vault_key})")
+    else:
+        fmt.step_warn("Could not store password in vault — deploy will continue")
+
     # Phase 1: Scan
     fmt.line(f"  {fmt.C.BOLD}Phase 1: Scanning fleet...{fmt.C.RESET}")
     fmt.blank()
@@ -5505,6 +5542,15 @@ def _init_fix(cfg, args):
     )
     fmt.blank()
 
+    # Include unreachable hosts as candidates — they may need fresh deployment
+    if unreachable_list:
+        fmt.line(f"  {fmt.C.BOLD}Unreachable hosts (will attempt deployment):{fmt.C.RESET}")
+        for h in unreachable_list:
+            err_short = h["error"][:60] if h["error"] else "no response"
+            fmt.line(f"    {fmt.C.YELLOW}?{fmt.C.RESET} {h['label']} ({h['ip']}) [{h['htype']}] — {err_short}")
+        fmt.blank()
+        fail_list.extend(unreachable_list)
+
     if not fail_list:
         fmt.step_ok("All reachable hosts are healthy — nothing to fix")
         fmt.blank()
@@ -5512,7 +5558,7 @@ def _init_fix(cfg, args):
         return 0
 
     # Show broken hosts
-    fmt.line(f"  {fmt.C.BOLD}Broken hosts:{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.BOLD}Hosts to fix:{fmt.C.RESET}")
     for h in fail_list:
         err_short = h["error"][:60] if h["error"] else "auth failed"
         fmt.line(f"    {fmt.C.RED}✗{fmt.C.RESET} {h['label']} ({h['ip']}) [{h['htype']}] — {err_short}")
@@ -5855,10 +5901,27 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets):
         has_rsa_key = os.path.isfile(rsa_key)
 
         if not has_ed_key and not has_rsa_key:
-            fmt.step_warn("No FREQ SSH keys found — skipping remote hosts")
-            fmt.line(f"  {fmt.C.DIM}Remote accounts must be removed manually.{fmt.C.RESET}")
-            skip = len(targets)
-        else:
+            # Try bootstrap key fallback
+            fallback_key = ""
+            bootstrap_candidates = [
+                os.path.expanduser("~/.ssh/fleet_key"),
+                os.path.expanduser("~/.ssh/id_ed25519"),
+                os.path.expanduser("~/.ssh/id_rsa"),
+            ]
+            for candidate in bootstrap_candidates:
+                if os.path.isfile(candidate):
+                    fallback_key = candidate
+                    break
+            if fallback_key:
+                fmt.step_warn(f"No FREQ SSH keys — using fallback: {fallback_key}")
+                ed_key = fallback_key
+                has_ed_key = True
+            else:
+                fmt.step_warn("No FREQ SSH keys found — skipping remote hosts")
+                fmt.line(f"  {fmt.C.DIM}Remote accounts must be removed manually.{fmt.C.RESET}")
+                skip = len(targets)
+
+        if has_ed_key or has_rsa_key:
             for ip, htype, label in targets:
                 fmt.line(f"  {fmt.C.BOLD}{label}{fmt.C.RESET} [{htype}]")
 

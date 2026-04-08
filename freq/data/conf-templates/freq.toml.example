@@ -121,3 +121,11 @@ slack_webhook = ""
 # [users.operator1]
 # role = "operator"
 # groups = "fleet"
+
+# HTTP monitors — dashboard health checks
+# [[monitor]]
+# name = "Dashboard"
+# url = "http://10.0.0.50:8888/healthz"
+# interval = 60
+# timeout = 10
+# expected_status = 200

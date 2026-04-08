@@ -1253,7 +1253,7 @@ def _menu_infrastructure(cfg, pack):
         elif ch == "8":
             _run_command(cfg, pack, "fleet comms")
         elif ch == "9":
-            _run_command(cfg, pack, "store zfs")
+            _run_command(cfg, pack, "store pools")
         elif ch == "a":
             _run_command(cfg, pack, "dr backup")
         elif ch == "j":

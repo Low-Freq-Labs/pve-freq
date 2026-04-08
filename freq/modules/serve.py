@@ -127,6 +127,7 @@ HOSTS_SYNC_INTERVAL = 3600  # 1 hour — keep hosts.conf in sync with PVE
 NODE_DISCOVERY_INTERVAL = 300  # 5 min — discover PVE cluster nodes
 VM_TAGS_INTERVAL = 300  # 5 min — refresh PVE VM tags
 _bg_lock = threading.Lock()
+_setup_lock = threading.Lock()
 
 # ── SSE EVENT BUS ────────────────────────────────────────────────────────
 # Lightweight pub/sub: each connected EventSource client gets a Queue.
@@ -2264,12 +2265,21 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": "Setup already complete"}, 403)
             return
 
-        cfg = load_config()
-        data_dir = cfg.data_dir
-        os.makedirs(data_dir, exist_ok=True)
-        marker = os.path.join(data_dir, "setup-complete")
+        if not _setup_lock.acquire(blocking=False):
+            self._json_response({"error": "Setup already in progress"}, 409)
+            return
 
         try:
+            # Re-check after acquiring lock (another request may have completed setup)
+            if not _is_first_run():
+                self._json_response({"error": "Setup already complete"}, 403)
+                return
+
+            cfg = load_config()
+            data_dir = cfg.data_dir
+            os.makedirs(data_dir, exist_ok=True)
+            marker = os.path.join(data_dir, "setup-complete")
+
             with open(marker, "w") as f:
                 f.write(f"Setup completed: {datetime.datetime.now().isoformat()}\n")
 
@@ -2294,6 +2304,8 @@ a:hover{{text-decoration:underline}}
             self._json_response({"ok": True, "message": "Setup complete — redirecting to dashboard"})
         except OSError as e:
             self._json_response({"error": f"Failed to write setup marker: {e}"}, 500)
+        finally:
+            _setup_lock.release()
 
     def _serve_setup_test_ssh(self):
         """Test SSH connectivity to a PVE node during setup."""
@@ -2834,20 +2846,6 @@ a:hover{{text-decoration:underline}}
                 "protected_vmids": cfg.protected_vmids,
                 "pve_nodes_discovered": [n.get("name", "") for n in _get_discovered_nodes()],
                 "kill_chain": _load_kill_chain(cfg) or ["Operator", "VPN", "Firewall", "Switch", "Network", "Target"],
-                # Notification provider status (booleans only — no secrets)
-                "discord_webhook": bool(cfg.discord_webhook),
-                "slack_webhook": bool(cfg.slack_webhook),
-                "telegram_bot_token": bool(cfg.telegram_bot_token),
-                "telegram_chat_id": bool(cfg.telegram_chat_id),
-                "smtp_host": bool(cfg.smtp_host),
-                "smtp_to": bool(cfg.smtp_to),
-                "ntfy_url": bool(cfg.ntfy_url),
-                "ntfy_topic": bool(cfg.ntfy_topic),
-                "gotify_url": bool(cfg.gotify_url),
-                "gotify_token": bool(cfg.gotify_token),
-                "pushover_user": bool(cfg.pushover_user),
-                "pushover_token": bool(cfg.pushover_token),
-                "webhook_url": bool(cfg.webhook_url),
             }
         )
 
@@ -4159,9 +4157,25 @@ def cmd_serve(cfg, pack, args) -> int:
     print(f"\n  \033[38;5;93mPVE FREQ → Dashboard\033[0m")
     print(f"  Starting on port {port}...\n")
     start_background_cache()
-    logger.info("dashboard_start", port=port, host="0.0.0.0")
+
     httpd = ThreadedHTTPServer(("0.0.0.0", port), FreqHandler)
-    print(f"  \033[38;5;82m✔\033[0m Dashboard running at http://0.0.0.0:{port}")
+
+    # Wrap in TLS if certs exist
+    use_tls = False
+    if cfg.tls_cert and cfg.tls_key and os.path.isfile(cfg.tls_cert) and os.path.isfile(cfg.tls_key):
+        import ssl
+
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        try:
+            ssl_ctx.load_cert_chain(cfg.tls_cert, cfg.tls_key)
+            httpd.socket = ssl_ctx.wrap_socket(httpd.socket, server_side=True)
+            use_tls = True
+        except Exception as e:
+            logger.warning(f"dashboard_tls_failed: {e} — falling back to HTTP")
+
+    proto = "https" if use_tls else "http"
+    logger.info("dashboard_start", port=port, host="0.0.0.0", tls=use_tls)
+    print(f"  \033[38;5;82m✔\033[0m Dashboard running at {proto}://0.0.0.0:{port}")
     print(f"  \033[38;5;245mPress Ctrl+C to stop\033[0m\n")
     try:
         httpd.serve_forever()

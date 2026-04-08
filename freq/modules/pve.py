@@ -321,7 +321,10 @@ def cmd_vmconfig(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     # Find which node has this VM
-    node_ip = _find_reachable_node(cfg)
+    node_ip = _find_vm_node(cfg, vmid)
+    if not node_ip:
+        # VM not found on any specific node — try any reachable node (cluster might route it)
+        node_ip = _find_reachable_node(cfg)
     if not node_ip:
         fmt.step_fail("Cannot reach any PVE node")
         fmt.blank()

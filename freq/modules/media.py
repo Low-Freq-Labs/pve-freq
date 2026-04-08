@@ -1084,7 +1084,7 @@ def _cmd_vpn(cfg, args) -> int:
                     vpn_status = data.get("status", "unknown")
 
             # Public IP
-            r2 = _api_call(cfg, vm, 8000, "/v1/publicip/ip", timeout=API_QUICK_TIMEOUT)
+            r2 = _api_call(cfg, vm, gluetun_port, "/v1/publicip/ip", timeout=API_QUICK_TIMEOUT)
             public_ip = "unknown"
             if r2.returncode == 0:
                 data2 = _parse_json(r2.stdout)
@@ -2189,10 +2189,6 @@ def _cmd_gpu(cfg, args) -> int:
     # Check tdarr-node VM (301)
     container, vm = _find_container(cfg, "tdarr-node")
     if not container:
-        # Try any VM with GPU
-        for v in _all_vms(cfg):
-            r = _docker_cmd(cfg, v, "ls /dev/dri 2>/dev/null")
-            # Fallback
         fmt.line(f"  {fmt.C.DIM}No GPU-equipped containers found.{fmt.C.RESET}")
         fmt.blank()
         fmt.footer()

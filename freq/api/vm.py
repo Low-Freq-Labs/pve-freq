@@ -30,7 +30,6 @@ from freq.modules.serve import (
     _get_fleet_vms,
     _check_vm_permission,
     get_vm_tags,
-    _find_reachable_pve_node,
     _check_session_role,
     _get_discovered_node_ips,
 )
@@ -73,6 +72,8 @@ def handle_vm_create(handler):
     if not valid_label(name):
         json_response(handler, {"error": "Invalid VM name (alphanumeric + hyphens only)"})
         return
+    vmid = None
+    node_ip = None
     try:
         node_ip = _find_reachable_node(cfg)
         if not node_ip:
@@ -102,9 +103,19 @@ def handle_vm_create(handler):
             f"--net0 virtio,bridge={cfg.nic_bridge} --scsihw {cfg.vm_scsihw}"
         )
         stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=120)
-        json_response(handler, {"ok": ok, "vmid": vmid, "name": name, "error": stdout if not ok else ""})
+        if not ok:
+            # Clean up partially created VM if it exists
+            _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge 1", timeout=30)
+            json_response(handler, {"ok": False, "vmid": vmid, "name": name, "error": stdout})
+        else:
+            json_response(handler, {"ok": True, "vmid": vmid, "name": name, "error": ""})
     except Exception as e:
         logger.error(f"api_vm_error: vm create failed: {e}", endpoint="vm/create")
+        if vmid and node_ip:
+            try:
+                _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge 1", timeout=30)
+            except Exception:
+                pass
         json_response(handler, {"error": f"SSH operation failed: {e}"})
 
 
@@ -307,7 +318,7 @@ def handle_vm_template(handler):
         return
 
     try:
-        node_ip = _find_reachable_pve_node(cfg)
+        node_ip = _find_reachable_node(cfg)
         if not node_ip:
             json_response(handler, {"error": "no PVE node reachable"})
             return
@@ -353,7 +364,7 @@ def handle_vm_rename(handler):
         return
 
     try:
-        node_ip = _find_reachable_pve_node(cfg)
+        node_ip = _find_reachable_node(cfg)
         if not node_ip:
             json_response(handler, {"error": "no PVE node reachable"})
             return
@@ -382,7 +393,7 @@ def handle_vm_snapshots(handler):
     if not vmid:
         json_response(handler, {"error": "vmid required"})
         return
-    node_ip = _find_reachable_pve_node(cfg)
+    node_ip = _find_reachable_node(cfg)
     if not node_ip:
         json_response(handler, {"error": "no PVE node reachable"})
         return
@@ -433,7 +444,7 @@ def handle_vm_delete_snapshot(handler):
         json_response(handler, {"error": err})
         return
     try:
-        node_ip = _find_reachable_pve_node(cfg)
+        node_ip = _find_reachable_node(cfg)
         if not node_ip:
             json_response(handler, {"error": "no PVE node reachable"})
             return
@@ -487,7 +498,7 @@ def handle_vm_change_id(handler):
         return
 
     try:
-        node_ip = _find_reachable_pve_node(cfg)
+        node_ip = _find_reachable_node(cfg)
         if not node_ip:
             json_response(handler, {"error": "no PVE node reachable"})
             return
@@ -595,7 +606,7 @@ def handle_vm_add_nic(handler):
         return
 
     try:
-        node_ip = _find_reachable_pve_node(cfg)
+        node_ip = _find_reachable_node(cfg)
         if not node_ip:
             json_response(handler, {"error": "no PVE node reachable"})
             return
@@ -681,7 +692,7 @@ def handle_vm_clear_nics(handler):
         return
 
     try:
-        node_ip = _find_reachable_pve_node(cfg)
+        node_ip = _find_reachable_node(cfg)
         if not node_ip:
             json_response(handler, {"error": "no PVE node reachable"})
             return
@@ -764,7 +775,7 @@ def handle_vm_change_ip(handler):
         json_response(handler, {"error": "Invalid VLAN ID"})
         return
     try:
-        node_ip = _find_reachable_pve_node(cfg)
+        node_ip = _find_reachable_node(cfg)
         if not node_ip:
             json_response(handler, {"error": "no PVE node reachable"})
             return

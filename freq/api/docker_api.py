@@ -79,7 +79,7 @@ def handle_containers_rescan(handler):
         vm_id = info["vm_id"]
         cname = info["name"]
         vm_containers = discovered.get(vm_id, [])
-        found = any(cname.lower() in dc.lower() or dc.lower() in cname.lower() for dc in vm_containers)
+        found = any(cname.lower() == dc.lower() for dc in vm_containers)
         if not found:
             stale.append(info)
 
@@ -89,7 +89,7 @@ def handle_containers_rescan(handler):
         if not vm:
             continue
         for dc in names:
-            already = any(dc.lower() in cname.lower() or cname.lower() in dc.lower() for cname in vm.containers)
+            already = any(dc.lower() == cname.lower() for cname in vm.containers)
             if not already:
                 new_found.append({"name": dc, "vm_id": vm_id, "vm_label": vm.label})
 

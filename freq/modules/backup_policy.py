@@ -26,15 +26,13 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run
+from freq.modules.pve import _find_reachable_node, _pve_cmd, PVE_CMD_TIMEOUT
 
 # Storage
 BPOLICY_DIR = "backup-policies"
 BPOLICY_FILE = "policies.json"
 BPOLICY_STATE = "policy-state.json"
 
-PVE_CMD_TIMEOUT = 30
-PVE_QUICK_TIMEOUT = 10
 PVE_SNAPSHOT_TIMEOUT = 120
 
 
@@ -77,37 +75,6 @@ def _save_state(cfg: FreqConfig, state: dict):
     filepath = os.path.join(_policy_dir(cfg), BPOLICY_STATE)
     with open(filepath, "w") as f:
         json.dump(state, f, indent=2)
-
-
-def _find_reachable_node(cfg: FreqConfig) -> str:
-    """Find a reachable PVE node."""
-    for ip in cfg.pve_nodes:
-        r = ssh_run(
-            host=ip,
-            command="pvesh get /version --output-format json",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=PVE_QUICK_TIMEOUT,
-            htype="pve",
-            use_sudo=True,
-        )
-        if r.returncode == 0:
-            return ip
-    return ""
-
-
-def _pve_cmd(cfg, node_ip, command, timeout=PVE_CMD_TIMEOUT):
-    """Execute PVE command via SSH."""
-    r = ssh_run(
-        host=node_ip,
-        command=command,
-        key_path=cfg.ssh_key_path,
-        connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=timeout,
-        htype="pve",
-        use_sudo=True,
-    )
-    return r.stdout, r.returncode == 0
 
 
 def _get_vms_for_policy(cfg: FreqConfig, node_ip: str, policy: dict) -> list:

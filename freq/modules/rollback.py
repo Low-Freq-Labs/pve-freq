@@ -24,43 +24,10 @@ import time
 from freq.core import fmt
 from freq.core import log as logger
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run
+from freq.modules.pve import _find_reachable_node, _pve_cmd, PVE_CMD_TIMEOUT
 
 # Timeouts
-PVE_CMD_TIMEOUT = 30
 PVE_ROLLBACK_TIMEOUT = 180
-PVE_QUICK_TIMEOUT = 10
-
-
-def _find_reachable_node(cfg: FreqConfig) -> str:
-    """Find the first reachable PVE node."""
-    for ip in cfg.pve_nodes:
-        r = ssh_run(
-            host=ip,
-            command="pvesh get /version --output-format json",
-            key_path=cfg.ssh_key_path,
-            connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=PVE_QUICK_TIMEOUT,
-            htype="pve",
-            use_sudo=True,
-        )
-        if r.returncode == 0:
-            return ip
-    return ""
-
-
-def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = PVE_CMD_TIMEOUT) -> tuple:
-    """Execute a command on a PVE node via SSH + sudo."""
-    r = ssh_run(
-        host=node_ip,
-        command=command,
-        key_path=cfg.ssh_key_path,
-        connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=timeout,
-        htype="pve",
-        use_sudo=True,
-    )
-    return r.stdout, r.returncode == 0
 
 
 def _get_snapshots(cfg: FreqConfig, node_ip: str, vmid: int) -> list:

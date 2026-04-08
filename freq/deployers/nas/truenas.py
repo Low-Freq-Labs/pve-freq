@@ -51,9 +51,40 @@ fi
 _pass=$(echo '{pass_b64}' | base64 -d)
 
 if [ "$VARIANT" = "scale" ]; then
-    # TrueNAS SCALE — use midclt
+    # TrueNAS SCALE — use midclt for persistent user management
     if ! id '{svc_name}' >/dev/null 2>&1; then
-        midclt call user.create '{{"username": "{svc_name}", "full_name": "FREQ Service Account", "group_create": true, "home": "/home/{svc_name}", "shell": "/bin/bash", "password": "'$_pass'", "ssh_password_enabled": false}}' >/dev/null 2>&1 || {{ echo USERADD_FAIL; exit 1; }}
+        # Build JSON payload with Python to avoid shell quoting issues
+        python3 -c "
+import json, subprocess, sys
+payload = {{
+    'username': '{svc_name}',
+    'full_name': 'FREQ Service Account',
+    'group_create': True,
+    'home': '/home/{svc_name}',
+    'home_create': True,
+    'shell': '/bin/bash',
+    'password': '$_pass',
+    'ssh_password_enabled': False,
+    'sshpubkey': '''{pubkey}''',
+}}
+r = subprocess.run(['midclt', 'call', 'user.create', json.dumps(payload)],
+                    capture_output=True, text=True, timeout=30)
+if r.returncode != 0:
+    print('USERADD_FAIL: ' + r.stderr[:100], file=sys.stderr)
+    sys.exit(1)
+" || {{ echo USERADD_FAIL; exit 1; }}
+    else
+        # User exists — update SSH key via middleware
+        python3 -c "
+import json, subprocess, sys
+uid_out = subprocess.run(['midclt', 'call', 'user.query', json.dumps([['username', '=', '{svc_name}']])],
+                         capture_output=True, text=True, timeout=15)
+users = json.loads(uid_out.stdout) if uid_out.returncode == 0 else []
+if users:
+    uid = users[0]['id']
+    subprocess.run(['midclt', 'call', 'user.update', str(uid), json.dumps({{'sshpubkey': '''{pubkey}'''}})],
+                   capture_output=True, text=True, timeout=15)
+" 2>/dev/null || true
     fi
 elif [ "$VARIANT" = "core" ]; then
     # TrueNAS CORE (FreeBSD) — use pw
@@ -74,18 +105,19 @@ unset _pass
 # Verify account exists
 id '{svc_name}' >/dev/null 2>&1 || {{ echo ACCOUNT_MISSING; exit 1; }}
 
-# SSH key — works on all variants
-svc_home=$(getent passwd '{svc_name}' | cut -d: -f6 2>/dev/null)
-if [ -z "$svc_home" ]; then
-    # FreeBSD fallback
-    svc_home="/home/{svc_name}"
-fi
-mkdir -p "$svc_home/.ssh"
-chmod 700 "$svc_home/.ssh"
-if [ -n '{pubkey}' ]; then
-    grep -qF '{pubkey}' "$svc_home/.ssh/authorized_keys" 2>/dev/null || echo '{pubkey}' >> "$svc_home/.ssh/authorized_keys"
-    chmod 600 "$svc_home/.ssh/authorized_keys"
-    chown -R '{svc_name}' "$svc_home/.ssh"
+# SSH key — filesystem fallback for CORE/Linux (SCALE handled via middleware above)
+if [ "$VARIANT" != "scale" ]; then
+    svc_home=$(getent passwd '{svc_name}' | cut -d: -f6 2>/dev/null)
+    if [ -z "$svc_home" ]; then
+        svc_home="/home/{svc_name}"
+    fi
+    mkdir -p "$svc_home/.ssh"
+    chmod 700 "$svc_home/.ssh"
+    if [ -n '{pubkey}' ]; then
+        grep -qF '{pubkey}' "$svc_home/.ssh/authorized_keys" 2>/dev/null || echo '{pubkey}' >> "$svc_home/.ssh/authorized_keys"
+        chmod 600 "$svc_home/.ssh/authorized_keys"
+        chown -R '{svc_name}' "$svc_home/.ssh"
+    fi
 fi
 
 # Sudoers — TrueNAS may not have visudo, check first
