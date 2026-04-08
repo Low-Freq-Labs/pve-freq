@@ -132,7 +132,9 @@ def handle_vm_destroy(handler):
 
 
 def handle_vm_snapshot(handler):
-    """GET /api/vm/snapshot — take a snapshot of a VM."""
+    """POST /api/vm/snapshot — take a snapshot of a VM."""
+    if _require_post(handler, "VM snapshot"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -162,7 +164,9 @@ def handle_vm_snapshot(handler):
 
 
 def handle_vm_resize(handler):
-    """GET /api/vm/resize — resize VM cores/RAM."""
+    """POST /api/vm/resize — resize VM cores/RAM."""
+    if _require_post(handler, "VM resize"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -208,7 +212,9 @@ def handle_vm_resize(handler):
 
 
 def handle_vm_power(handler):
-    """GET /api/vm/power — start/stop/reset/status a VM."""
+    """POST /api/vm/power — start/stop/reset/status a VM."""
+    if _require_post(handler, "VM power"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -313,7 +319,9 @@ def handle_vm_template(handler):
 
 
 def handle_vm_rename(handler):
-    """GET /api/vm/rename — rename a VM."""
+    """POST /api/vm/rename — rename a VM."""
+    if _require_post(handler, "VM rename"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -393,7 +401,9 @@ def handle_vm_snapshots(handler):
 
 
 def handle_vm_delete_snapshot(handler):
-    """GET /api/vm/delete-snapshot — delete a snapshot from a VM."""
+    """POST /api/vm/delete-snapshot — delete a snapshot from a VM."""
+    if _require_post(handler, "VM delete snapshot"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -442,7 +452,9 @@ def handle_vm_delete_snapshot(handler):
 
 
 def handle_vm_change_id(handler):
-    """GET /api/vm/change-id — change VMID. Requires VM to be stopped."""
+    """POST /api/vm/change-id — change VMID. Requires VM to be stopped."""
+    if _require_post(handler, "VM change ID"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -640,7 +652,9 @@ def handle_vm_add_nic(handler):
 
 
 def handle_vm_clear_nics(handler):
-    """GET /api/vm/clear-nics — clear all NICs and ipconfigs from a VM."""
+    """POST /api/vm/clear-nics — clear all NICs and ipconfigs from a VM."""
+    if _require_post(handler, "VM clear NICs"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -701,7 +715,9 @@ def handle_vm_clear_nics(handler):
 
 
 def handle_vm_change_ip(handler):
-    """GET /api/vm/change-ip — change VM IP via cloud-init or manual config."""
+    """POST /api/vm/change-ip — change VM IP via cloud-init or manual config."""
+    if _require_post(handler, "VM change IP"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -914,7 +930,9 @@ def handle_vm_add_disk(handler):
 
 
 def handle_vm_tag(handler):
-    """GET /api/vm/tag — set PVE tags on a VM."""
+    """POST /api/vm/tag — set PVE tags on a VM."""
+    if _require_post(handler, "VM tag"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
