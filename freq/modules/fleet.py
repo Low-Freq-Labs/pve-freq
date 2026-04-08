@@ -46,18 +46,26 @@ FLEET_EXEC_TIMEOUT = 600
 
 def cmd_status(cfg: FreqConfig, pack, args) -> int:
     """Fleet health summary — ping every host and report status."""
-    fmt.header("Fleet Status")
-    fmt.blank()
+    json_mode = getattr(args, "json_output", False)
 
     hosts = cfg.hosts
     if not hosts:
+        if json_mode:
+            import json as _json
+            print(_json.dumps({"hosts": [], "total": 0, "online": 0, "offline": 0}))
+            return 0
+        fmt.header("Fleet Status")
+        fmt.blank()
         fmt.line(f"{fmt.C.YELLOW}No hosts registered. Run: freq hosts add{fmt.C.RESET}")
         fmt.blank()
         fmt.footer()
         return 0
 
-    fmt.line(f"{fmt.C.BOLD}Checking {len(hosts)} hosts...{fmt.C.RESET}")
-    fmt.blank()
+    if not json_mode:
+        fmt.header("Fleet Status")
+        fmt.blank()
+        fmt.line(f"{fmt.C.BOLD}Checking {len(hosts)} hosts...{fmt.C.RESET}")
+        fmt.blank()
 
     # Parallel ping all hosts (no sudo needed for uptime)
     start = time.monotonic()
@@ -73,7 +81,7 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
     total_duration = time.monotonic() - start
 
     # JSON output mode
-    if getattr(args, "json_output", False):
+    if json_mode:
         import json as _json
 
         fleet_data = []
