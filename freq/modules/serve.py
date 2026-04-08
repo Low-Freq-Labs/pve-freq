@@ -1311,12 +1311,28 @@ def _bg_slow_loop():
         time.sleep(60)
 
 
+def _bg_initial_probe():
+    """Run critical probes immediately on startup so first page load has data."""
+    for fn, label in [
+        (_bg_discover_pve_nodes, "node discovery"),
+        (_bg_probe_fleet_overview, "fleet overview"),
+        (_bg_fetch_vm_tags, "tag fetch"),
+    ]:
+        try:
+            fn()
+        except Exception as e:
+            logger.error(f"bg initial {label} failed: {e}")
+
+
 def start_background_cache():
     """Load disk cache, then start background refresh threads."""
     _init_cache_dir()
     _load_disk_cache()
+    # Kick off critical probes immediately so first page load has data
+    t0 = threading.Thread(target=_bg_initial_probe, daemon=True, name="freq-init-probe")
     t1 = threading.Thread(target=_bg_health_loop, daemon=True, name="freq-health")
     t2 = threading.Thread(target=_bg_slow_loop, daemon=True, name="freq-slow")
+    t0.start()
     t1.start()
     t2.start()
 
