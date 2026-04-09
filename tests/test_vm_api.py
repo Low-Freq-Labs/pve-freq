@@ -81,6 +81,18 @@ class TestVmApiTrust(unittest.TestCase):
         data = _json(handler)
         self.assertIn("Invalid next VMID", data["error"])
 
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
+    def test_vm_create_requires_name_with_400(self, mock_load, _mock_role):
+        mock_load.return_value = self._cfg()
+        handler = _Handler("/api/vm/create")
+
+        vm_api.handle_vm_create(handler)
+
+        self.assertEqual(handler.status, 400)
+        data = _json(handler)
+        self.assertEqual(data["error"], "Name required")
+
     @patch("freq.api.vm._check_session_role", return_value=("operator", None))
     @patch("freq.api.vm.load_config")
     def test_vm_power_rejects_invalid_action(self, mock_load, _mock_role):
@@ -92,6 +104,24 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertEqual(handler.status, 400)
         data = _json(handler)
         self.assertEqual(data["error"], "Invalid action: explode")
+
+    @patch("freq.api.vm._check_session_role", return_value=("operator", None))
+    @patch("freq.api.vm.load_config")
+    @patch("freq.api.vm._find_vm_node_ip", return_value="10.0.0.1")
+    @patch("freq.api.vm._check_vm_permission", return_value=(True, ""))
+    @patch("freq.api.vm._pve_cmd", return_value=("qm failed", False))
+    def test_vm_power_backend_failure_returns_502(
+        self, _mock_pve_cmd, _mock_permission, _mock_find_node, mock_load, _mock_role
+    ):
+        mock_load.return_value = self._cfg()
+        handler = _Handler("/api/vm/power?vmid=101&action=start")
+
+        vm_api.handle_vm_power(handler)
+
+        self.assertEqual(handler.status, 502)
+        data = _json(handler)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"], "qm failed")
 
     @patch("freq.api.vm._check_session_role", return_value=("admin", None))
     @patch("freq.api.vm.load_config")
@@ -122,6 +152,59 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertEqual(handler.status, 404)
         data = _json(handler)
         self.assertIn("not found", data["error"])
+
+    @patch("freq.api.vm._check_session_role", return_value=("operator", None))
+    @patch("freq.api.vm.load_config")
+    def test_snapshot_invalid_name_returns_400(self, mock_load, _mock_role):
+        mock_load.return_value = self._cfg()
+        handler = _Handler("/api/vm/snapshot?vmid=101&name=bad/name")
+
+        vm_api.handle_vm_snapshot(handler)
+
+        self.assertEqual(handler.status, 400)
+        data = _json(handler)
+        self.assertIn("Invalid snapshot name", data["error"])
+
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
+    def test_destroy_protected_vm_returns_403(self, mock_load, _mock_role):
+        cfg = self._cfg()
+        cfg.protected_vmids = [101]
+        mock_load.return_value = cfg
+        handler = _Handler("/api/vm/destroy?vmid=101")
+
+        with patch("freq.api.vm._check_vm_permission", return_value=(True, "")), \
+             patch("freq.api.vm.get_vm_tags", return_value=[]):
+            vm_api.handle_vm_destroy(handler)
+
+        self.assertEqual(handler.status, 403)
+        data = _json(handler)
+        self.assertIn("PROTECTED", data["error"])
+
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
+    def test_migrate_snapshots_block_returns_409(self, mock_load, _mock_role):
+        mock_load.return_value = self._cfg()
+        handler = _Handler("/api/vm/migrate?vmid=101&target_node=pve02")
+
+        fake_vm_module = type(
+            "FakeVmModule",
+            (),
+            {
+                "_find_vm_node": staticmethod(lambda cfg, vmid: "10.0.0.1"),
+                "_find_best_local_storage": staticmethod(lambda cfg, source_ip, target_node: "local-lvm"),
+                "_check_snapshots": staticmethod(lambda cfg, source_ip, vmid: ["snap1"]),
+                "_delete_snapshots": staticmethod(lambda cfg, source_ip, vmid, snaps: None),
+            },
+        )
+
+        with patch("freq.api.vm._check_vm_permission", return_value=(True, "")), \
+             patch.dict(sys.modules, {"freq.modules.vm": fake_vm_module}):
+            vm_api.handle_vm_migrate(handler)
+
+        self.assertEqual(handler.status, 409)
+        data = _json(handler)
+        self.assertEqual(data["error"], "snapshots_block_migration")
 
 
 if __name__ == "__main__":

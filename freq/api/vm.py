@@ -72,6 +72,11 @@ def _parse_next_vmid(raw_value: str) -> int:
         return 0
 
 
+def _respond_operation(handler, payload, ok, failure_status=502):
+    """Return 200 on success and a real error status when the backend action failed."""
+    json_response(handler, payload, 200 if ok else failure_status)
+
+
 # ── Handlers ────────────────────────────────────────────────────────────
 
 
@@ -100,21 +105,21 @@ def handle_vm_create(handler):
     if ram is None:
         return
     if not name:
-        json_response(handler, {"error": "Name required"})
+        json_response(handler, {"error": "Name required"}, 400)
         return
     if not valid_label(name):
-        json_response(handler, {"error": "Invalid VM name (alphanumeric + hyphens only)"})
+        json_response(handler, {"error": "Invalid VM name (alphanumeric + hyphens only)"}, 400)
         return
     vmid = None
     node_ip = None
     try:
         node_ip = _find_reachable_node(cfg)
         if not node_ip:
-            json_response(handler, {"error": "No PVE node reachable"})
+            json_response(handler, {"error": "No PVE node reachable"}, 502)
             return
         stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
         if not ok:
-            json_response(handler, {"error": "Cannot allocate VMID"})
+            json_response(handler, {"error": "Cannot allocate VMID"}, 502)
             return
         vmid = _parse_next_vmid(stdout)
         if vmid <= 0:
@@ -142,7 +147,7 @@ def handle_vm_create(handler):
         if not ok:
             # Clean up partially created VM if it exists
             _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge 1", timeout=30)
-            json_response(handler, {"ok": False, "vmid": vmid, "name": name, "error": stdout})
+            _respond_operation(handler, {"ok": False, "vmid": vmid, "name": name, "error": stdout}, ok=False)
         else:
             json_response(handler, {"ok": True, "vmid": vmid, "name": name, "error": ""})
     except Exception as e:
@@ -152,7 +157,7 @@ def handle_vm_create(handler):
                 _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge 1", timeout=30)
             except Exception:
                 pass
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_destroy(handler):
@@ -171,10 +176,10 @@ def handle_vm_destroy(handler):
     # Fleet boundary check — only admin-tier VMs can be destroyed
     allowed, err = _check_vm_permission(cfg, vmid, "destroy")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     if is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges, vm_tags=get_vm_tags(vmid)):
-        json_response(handler, {"error": f"VMID {vmid} is PROTECTED"})
+        json_response(handler, {"error": f"VMID {vmid} is PROTECTED"}, 403)
         return
     try:
         node_ip = _find_vm_node_ip(cfg, vmid)
@@ -183,10 +188,10 @@ def handle_vm_destroy(handler):
             return
         _pve_cmd(cfg, node_ip, f"qm stop {vmid}", timeout=30)
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=120)
-        json_response(handler, {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""})
+        _respond_operation(handler, {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""}, ok=ok)
     except Exception as e:
         logger.error(f"api_vm_error: vm destroy failed: {e}", endpoint="vm/destroy")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_snapshot(handler):
@@ -204,12 +209,12 @@ def handle_vm_snapshot(handler):
         return
     snap_name = params.get("name", [f"freq-snap-{vmid}"])[0]
     if not valid_label(snap_name):
-        json_response(handler, {"error": "Invalid snapshot name (alphanumeric + hyphens only)"})
+        json_response(handler, {"error": "Invalid snapshot name (alphanumeric + hyphens only)"}, 400)
         return
     # Fleet boundary check
     allowed, err = _check_vm_permission(cfg, vmid, "snapshot")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     try:
         node_ip = _find_vm_node_ip(cfg, vmid)
@@ -217,10 +222,12 @@ def handle_vm_snapshot(handler):
             json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm snapshot {vmid} {snap_name}", timeout=120)
-        json_response(handler, {"ok": ok, "vmid": vmid, "snapshot": snap_name, "error": stdout if not ok else ""})
+        _respond_operation(
+            handler, {"ok": ok, "vmid": vmid, "snapshot": snap_name, "error": stdout if not ok else ""}, ok=ok
+        )
     except Exception as e:
         logger.error(f"api_vm_error: vm snapshot failed: {e}", endpoint="vm/snapshot")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_resize(handler):
@@ -241,25 +248,25 @@ def handle_vm_resize(handler):
     # Fleet boundary check
     allowed, err = _check_vm_permission(cfg, vmid, "resize")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     parts = []
     if cores:
         try:
             cores = int(cores)
         except ValueError:
-            json_response(handler, {"error": "Invalid cores value"})
+            json_response(handler, {"error": "Invalid cores value"}, 400)
             return
         parts.append(f"--cores {cores}")
     if ram:
         try:
             ram = int(ram)
         except ValueError:
-            json_response(handler, {"error": "Invalid ram value"})
+            json_response(handler, {"error": "Invalid ram value"}, 400)
             return
         parts.append(f"--memory {ram}")
     if not parts:
-        json_response(handler, {"error": "Specify cores or ram"})
+        json_response(handler, {"error": "Specify cores or ram"}, 400)
         return
     try:
         node_ip = _find_vm_node_ip(cfg, vmid)
@@ -267,10 +274,10 @@ def handle_vm_resize(handler):
             json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} {' '.join(parts)}")
-        json_response(handler, {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""})
+        _respond_operation(handler, {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""}, ok=ok)
     except Exception as e:
         logger.error(f"api_vm_error: vm resize failed: {e}", endpoint="vm/resize")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_power(handler):
@@ -295,7 +302,7 @@ def handle_vm_power(handler):
         perm_action = "start" if action == "start" else "stop"
         allowed, err = _check_vm_permission(cfg, vmid, perm_action)
         if not allowed:
-            json_response(handler, {"error": err})
+            json_response(handler, {"error": err}, 403)
             return
     try:
         node_ip = _find_vm_node_ip(cfg, vmid)
@@ -337,12 +344,14 @@ def handle_vm_power(handler):
         if not ok:
             result, ok = _pve_cmd(cfg, node_ip, ssh_cmd, timeout=60)
         output = result if isinstance(result, str) else json.dumps(result) if result else ""
-        json_response(
-            handler, {"ok": ok, "vmid": vmid, "action": action, "output": output, "error": "" if ok else output}
+        _respond_operation(
+            handler,
+            {"ok": ok, "vmid": vmid, "action": action, "output": output, "error": "" if ok else output},
+            ok=ok,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm power failed: {e}", endpoint="vm/power")
-        json_response(handler, {"error": f"PVE operation failed: {e}"})
+        json_response(handler, {"error": f"PVE operation failed: {e}"}, 502)
 
 
 def handle_vm_template(handler):
@@ -360,7 +369,7 @@ def handle_vm_template(handler):
     # Fleet boundary check
     allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
 
     try:
@@ -378,10 +387,14 @@ def handle_vm_template(handler):
             htype="pve",
             use_sudo=False,
         )
-        json_response(handler, {"ok": r.returncode == 0, "vmid": vmid})
+        _respond_operation(
+            handler,
+            {"ok": r.returncode == 0, "vmid": vmid, "error": "" if r.returncode == 0 else (r.stderr or r.stdout)},
+            ok=r.returncode == 0,
+        )
     except Exception as e:
         logger.error(f"api_vm_error: vm template failed: {e}", endpoint="vm/template")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_rename(handler):
@@ -398,15 +411,15 @@ def handle_vm_rename(handler):
     vmid = _get_int_param(handler, query, "vmid", required=True)
     name = query.get("name", [""])[0]
     if vmid is None or not name:
-        json_response(handler, {"error": "vmid and name parameters required"})
+        json_response(handler, {"error": "vmid and name parameters required"}, 400)
         return
     if not valid_label(name):
-        json_response(handler, {"error": "Invalid VM name (alphanumeric + hyphens only)"})
+        json_response(handler, {"error": "Invalid VM name (alphanumeric + hyphens only)"}, 400)
         return
     # Fleet boundary check
     allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
 
     try:
@@ -424,10 +437,14 @@ def handle_vm_rename(handler):
             htype="pve",
             use_sudo=False,
         )
-        json_response(handler, {"ok": r.returncode == 0, "vmid": vmid, "name": name})
+        _respond_operation(
+            handler,
+            {"ok": r.returncode == 0, "vmid": vmid, "name": name, "error": "" if r.returncode == 0 else (r.stderr or r.stdout)},
+            ok=r.returncode == 0,
+        )
     except Exception as e:
         logger.error(f"api_vm_error: vm rename failed: {e}", endpoint="vm/rename")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_snapshots(handler):
@@ -479,14 +496,14 @@ def handle_vm_delete_snapshot(handler):
     vmid = _get_int_param(handler, query, "vmid", required=True)
     snap = query.get("name", [""])[0]
     if vmid is None or not snap:
-        json_response(handler, {"error": "vmid and name required"})
+        json_response(handler, {"error": "vmid and name required"}, 400)
         return
     if not valid_label(snap):
-        json_response(handler, {"error": "Invalid snapshot name (alphanumeric + hyphens only)"})
+        json_response(handler, {"error": "Invalid snapshot name (alphanumeric + hyphens only)"}, 400)
         return
     allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     try:
         node_ip = _find_vm_node_ip(cfg, vmid)
@@ -502,7 +519,7 @@ def handle_vm_delete_snapshot(handler):
             htype="pve",
             use_sudo=False,
         )
-        json_response(
+        _respond_operation(
             handler,
             {
                 "ok": r.returncode == 0,
@@ -510,10 +527,11 @@ def handle_vm_delete_snapshot(handler):
                 "snapshot": snap,
                 "error": "" if r.returncode == 0 else (r.stderr or r.stdout),
             },
+            ok=r.returncode == 0,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm snapshot delete failed: {e}", endpoint="vm/snapshot-delete")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_change_id(handler):
@@ -530,16 +548,16 @@ def handle_vm_change_id(handler):
     vmid = _get_int_param(handler, query, "vmid", required=True)
     newid = _get_int_param(handler, query, "newid", required=True)
     if vmid is None or newid is None:
-        json_response(handler, {"error": "vmid and newid parameters required"})
+        json_response(handler, {"error": "vmid and newid parameters required"}, 400)
         return
     # Fleet boundary check on BOTH old and new VMID
     allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     allowed2, err2 = _check_vm_permission(cfg, newid, "configure")
     if not allowed2:
-        json_response(handler, {"error": f"Target VMID blocked: {err2}"})
+        json_response(handler, {"error": f"Target VMID blocked: {err2}"}, 403)
         return
 
     try:
@@ -559,7 +577,7 @@ def handle_vm_change_id(handler):
             use_sudo=False,
         )
         if "running" in (r.stdout or ""):
-            json_response(handler, {"error": f"VM {vmid} must be stopped first"})
+            json_response(handler, {"error": f"VM {vmid} must be stopped first"}, 409)
             return
 
         # Clone to new ID then destroy old
@@ -573,7 +591,7 @@ def handle_vm_change_id(handler):
             use_sudo=False,
         )
         if r.returncode != 0:
-            json_response(handler, {"error": f"Clone failed: {r.stderr or r.stdout}"})
+            json_response(handler, {"error": f"Clone failed: {r.stderr or r.stdout}"}, 502)
             return
 
         # Destroy old VM
@@ -586,7 +604,7 @@ def handle_vm_change_id(handler):
             htype="pve",
             use_sudo=False,
         )
-        json_response(
+        _respond_operation(
             handler,
             {
                 "ok": r2.returncode == 0,
@@ -594,10 +612,11 @@ def handle_vm_change_id(handler):
                 "new_vmid": newid,
                 "error": "" if r2.returncode == 0 else (r2.stderr or r2.stdout),
             },
+            ok=r2.returncode == 0,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm change-id failed: {e}", endpoint="vm/change-id")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_check_ip(handler):
@@ -609,7 +628,7 @@ def handle_vm_check_ip(handler):
     query = get_params(handler)
     ip = query.get("ip", [""])[0]
     if not ip:
-        json_response(handler, {"error": "ip required"})
+        json_response(handler, {"error": "ip required"}, 400)
         return
     try:
         r = subprocess.run(["ping", "-c", "1", "-W", "1", ip], capture_output=True, timeout=3)
@@ -633,21 +652,21 @@ def handle_vm_add_nic(handler):
     gateway = query.get("gw", [""])[0]
     vlan_id_val = query.get("vlan", [""])[0]
     if vmid is None or not new_ip:
-        json_response(handler, {"error": "vmid and ip required"})
+        json_response(handler, {"error": "vmid and ip required"}, 400)
         return
     bare_ip = new_ip.split("/")[0] if "/" in new_ip else new_ip
     if not valid_ip(bare_ip):
-        json_response(handler, {"error": "Invalid IP address"})
+        json_response(handler, {"error": "Invalid IP address"}, 400)
         return
     if gateway and not valid_ip(gateway):
-        json_response(handler, {"error": "Invalid gateway IP"})
+        json_response(handler, {"error": "Invalid gateway IP"}, 400)
         return
     if vlan_id_val and not valid_vlan(vlan_id_val):
-        json_response(handler, {"error": "Invalid VLAN ID"})
+        json_response(handler, {"error": "Invalid VLAN ID"}, 400)
         return
     allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
 
     try:
@@ -708,12 +727,14 @@ def handle_vm_add_nic(handler):
             err = f"NIC create failed: {r1.stderr or r1.stdout}"
         elif r2.returncode != 0:
             err = f"IP config failed: {r2.stderr or r2.stdout}"
-        json_response(
-            handler, {"ok": ok, "vmid": vmid, "nic": f"net{next_nic}", "ip": new_ip, "vlan": vlan_id_val, "error": err}
+        _respond_operation(
+            handler,
+            {"ok": ok, "vmid": vmid, "nic": f"net{next_nic}", "ip": new_ip, "vlan": vlan_id_val, "error": err},
+            ok=ok,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm add-nic failed: {e}", endpoint="vm/add-nic")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_clear_nics(handler):
@@ -732,7 +753,7 @@ def handle_vm_clear_nics(handler):
         return
     allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
 
     try:
@@ -775,7 +796,7 @@ def handle_vm_clear_nics(handler):
         json_response(handler, {"ok": True, "vmid": vmid, "cleared": deleted, "count": len(deleted)})
     except Exception as e:
         logger.error(f"api_vm_error: vm clear-nics failed: {e}", endpoint="vm/clear-nics")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_change_ip(handler):
@@ -793,19 +814,19 @@ def handle_vm_change_ip(handler):
     new_ip = query.get("ip", [""])[0]
     gateway = query.get("gw", [""])[0]
     if vmid is None or not new_ip:
-        json_response(handler, {"error": "vmid and ip parameters required"})
+        json_response(handler, {"error": "vmid and ip parameters required"}, 400)
         return
     bare_ip = new_ip.split("/")[0] if "/" in new_ip else new_ip
     if not valid_ip(bare_ip):
-        json_response(handler, {"error": "Invalid IP address"})
+        json_response(handler, {"error": "Invalid IP address"}, 400)
         return
     if gateway and not valid_ip(gateway):
-        json_response(handler, {"error": "Invalid gateway IP"})
+        json_response(handler, {"error": "Invalid gateway IP"}, 400)
         return
     # Fleet boundary check
     allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
 
     # Create the virtual NIC (net*) with VLAN tag + set cloud-init IP (ipconfig*)
@@ -814,7 +835,7 @@ def handle_vm_change_ip(handler):
         return
     vlan_id_val = query.get("vlan", [""])[0]
     if vlan_id_val and not valid_vlan(vlan_id_val):
-        json_response(handler, {"error": "Invalid VLAN ID"})
+        json_response(handler, {"error": "Invalid VLAN ID"}, 400)
         return
     try:
         node_ip = _find_vm_node_ip(cfg, vmid)
@@ -852,10 +873,10 @@ def handle_vm_change_ip(handler):
             err = f"NIC create failed: {r1.stderr or r1.stdout}"
         elif r2.returncode != 0:
             err = f"IP config failed: {r2.stderr or r2.stdout}"
-        json_response(handler, {"ok": ok, "vmid": vmid, "ip": new_ip, "nic": nic_idx, "error": err})
+        _respond_operation(handler, {"ok": ok, "vmid": vmid, "ip": new_ip, "nic": nic_idx, "error": err}, ok=ok)
     except Exception as e:
         logger.error(f"api_vm_error: vm change-ip failed: {e}", endpoint="vm/change-ip")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_push_key(handler):
@@ -871,18 +892,18 @@ def handle_vm_push_key(handler):
     query = {k: v[0] if v else "" for k, v in raw.items()}
     target_ip = query.get("ip", "")
     if not target_ip or not valid_ip(target_ip):
-        json_response(handler, {"error": "Valid IP required"})
+        json_response(handler, {"error": "Valid IP required"}, 400)
         return
 
     # Read the public key
     pub_path = cfg.ssh_key_path + ".pub"
     if not os.path.isfile(pub_path):
-        json_response(handler, {"error": f"Public key not found: {pub_path}"})
+        json_response(handler, {"error": f"Public key not found: {pub_path}"}, 500)
         return
     with open(pub_path) as f:
         pubkey = f.read().strip()
     if not pubkey:
-        json_response(handler, {"error": "Public key file is empty"})
+        json_response(handler, {"error": "Public key file is empty"}, 500)
         return
 
     # SSH as service account (who has sudo) to write the key
@@ -906,7 +927,7 @@ def handle_vm_push_key(handler):
         use_sudo=False,
     )
     if r.returncode != 0:
-        json_response(handler, {"error": f"Key push failed: {r.stderr or r.stdout}"})
+        json_response(handler, {"error": f"Key push failed: {r.stderr or r.stdout}"}, 502)
         return
 
     # Verify: try connecting as freq-admin with the freq key
@@ -938,17 +959,17 @@ def handle_vm_add_disk(handler):
     storage = params.get("storage", [""])[0]
 
     if not vmid or not size:
-        json_response(handler, {"error": "vmid and size required"})
+        json_response(handler, {"error": "vmid and size required"}, 400)
         return
 
     allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
 
     # Validate size format
     if not re.match(r"^\d+[GMTgmt]?$", size):
-        json_response(handler, {"error": "Invalid size (e.g. '32G', '100')"})
+        json_response(handler, {"error": "Invalid size (e.g. '32G', '100')"}, 400)
         return
 
     try:
@@ -960,7 +981,7 @@ def handle_vm_add_disk(handler):
         # Find next available scsi slot
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm config {vmid}")
         if not ok:
-            json_response(handler, {"error": f"Cannot read VM config: {stdout}"})
+            json_response(handler, {"error": f"Cannot read VM config: {stdout}"}, 502)
             return
 
         next_idx = 0
@@ -977,7 +998,7 @@ def handle_vm_add_disk(handler):
         storage_target = storage or "local-lvm"
         cmd = f"qm set {vmid} --scsi{next_idx} {storage_target}:{size}"
         stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=60)
-        json_response(
+        _respond_operation(
             handler,
             {
                 "ok": ok,
@@ -987,10 +1008,11 @@ def handle_vm_add_disk(handler):
                 "storage": storage_target,
                 "error": stdout if not ok else "",
             },
+            ok=ok,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm add-disk failed: {e}", endpoint="vm/add-disk")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_tag(handler):
@@ -1009,12 +1031,12 @@ def handle_vm_tag(handler):
     tags = params.get("tags", [""])[0]  # comma-separated
 
     if not vmid:
-        json_response(handler, {"error": "vmid required"})
+        json_response(handler, {"error": "vmid required"}, 400)
         return
 
     allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
 
     # Validate tag names
@@ -1022,7 +1044,7 @@ def handle_vm_tag(handler):
         for tag in tags.split(","):
             tag = tag.strip()
             if tag and not re.match(r"^[a-zA-Z0-9_-]+$", tag):
-                json_response(handler, {"error": f"Invalid tag name: {tag}"})
+                json_response(handler, {"error": f"Invalid tag name: {tag}"}, 400)
                 return
 
     try:
@@ -1035,7 +1057,7 @@ def handle_vm_tag(handler):
         pve_tags = ";".join(t.strip() for t in tags.split(",") if t.strip()) if tags else ""
         cmd = f'qm set {vmid} --tags "{pve_tags}"'
         stdout, ok = _pve_cmd(cfg, node_ip, cmd)
-        json_response(
+        _respond_operation(
             handler,
             {
                 "ok": ok,
@@ -1043,10 +1065,11 @@ def handle_vm_tag(handler):
                 "tags": tags,
                 "error": stdout if not ok else "",
             },
+            ok=ok,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm tag failed: {e}", endpoint="vm/tag")
-        json_response(handler, {"error": f"SSH operation failed: {e}"})
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
 def handle_vm_clone(handler):
@@ -1067,12 +1090,12 @@ def handle_vm_clone(handler):
     full = params.get("full", ["1"])[0] == "1"
 
     if not source_vmid:
-        json_response(handler, {"error": "vmid (source) required"})
+        json_response(handler, {"error": "vmid (source) required"}, 400)
         return
 
     allowed, err = _check_vm_permission(cfg, source_vmid, "clone")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
 
     try:
@@ -1084,7 +1107,7 @@ def handle_vm_clone(handler):
         # Get next available VMID
         stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
         if not ok:
-            json_response(handler, {"error": "Cannot get next VMID"})
+            json_response(handler, {"error": "Cannot get next VMID"}, 502)
             return
         new_vmid = stdout.strip()
         parsed_new_vmid = _parse_next_vmid(new_vmid)
@@ -1097,7 +1120,7 @@ def handle_vm_clone(handler):
             from freq.core.validate import shell_safe_name
 
             if not shell_safe_name(name):
-                json_response(handler, {"error": f"Invalid VM name: {name}"})
+                json_response(handler, {"error": f"Invalid VM name: {name}"}, 400)
                 return
             parts.append(f"--name {name}")
         if target_node:
@@ -1107,7 +1130,7 @@ def handle_vm_clone(handler):
 
         cmd = " ".join(parts)
         stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=300)
-        json_response(
+        _respond_operation(
             handler,
             {
                 "ok": ok,
@@ -1117,10 +1140,11 @@ def handle_vm_clone(handler):
                 "full_clone": full,
                 "error": stdout if not ok else "",
             },
+            ok=ok,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm clone failed: {e}", endpoint="vm/clone")
-        json_response(handler, {"error": f"Clone failed: {e}"})
+        json_response(handler, {"error": f"Clone failed: {e}"}, 502)
 
 
 def handle_vm_migrate(handler):
@@ -1145,16 +1169,16 @@ def handle_vm_migrate(handler):
     delete_snaps = params.get("delete_snapshots", ["0"])[0] == "1"
 
     if not vmid or not target_node:
-        json_response(handler, {"error": "vmid and target_node required"})
+        json_response(handler, {"error": "vmid and target_node required"}, 400)
         return
 
     allowed, err = _check_vm_permission(cfg, vmid, "migrate")
     if not allowed:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
 
     if not re.match(r"^[a-zA-Z0-9_-]+$", target_node):
-        json_response(handler, {"error": f"Invalid node name: {target_node}"})
+        json_response(handler, {"error": f"Invalid node name: {target_node}"}, 400)
         return
 
     try:
@@ -1163,7 +1187,7 @@ def handle_vm_migrate(handler):
         # Find source node
         source_ip = _find_vm_node(cfg, vmid)
         if not source_ip:
-            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
 
         # Resolve source node name
@@ -1174,7 +1198,7 @@ def handle_vm_migrate(handler):
                 break
 
         if source_node == target_node:
-            json_response(handler, {"error": f"VM {vmid} is already on {target_node}"})
+            json_response(handler, {"error": f"VM {vmid} is already on {target_node}"}, 409)
             return
 
         # Check snapshots — they block live migration
@@ -1188,6 +1212,7 @@ def handle_vm_migrate(handler):
                     "count": len(snapshots),
                     "message": f"VM has {len(snapshots)} snapshot(s) that block live migration. Resend with delete_snapshots=1 to remove them.",
                 },
+                409,
             )
             return
 
@@ -1211,7 +1236,7 @@ def handle_vm_migrate(handler):
                 migrate_cmd += f" --targetstorage {target_storage}"
             stdout, ok = _pve_cmd(cfg, source_ip, migrate_cmd, timeout=600)
 
-        json_response(
+        _respond_operation(
             handler,
             {
                 "ok": ok,
@@ -1224,10 +1249,11 @@ def handle_vm_migrate(handler):
                 "snapshots_deleted": len(snapshots) if delete_snaps and snapshots else 0,
                 "error": stdout if not ok else "",
             },
+            ok=ok,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm migrate failed: {e}", endpoint="vm/migrate")
-        json_response(handler, {"error": f"Migration failed: {e}"})
+        json_response(handler, {"error": f"Migration failed: {e}"}, 502)
 
 
 def handle_vm_wizard_defaults(handler):
