@@ -136,35 +136,114 @@ def cmd_dr_backup_list(cfg: FreqConfig, pack, args) -> int:
 
 
 def cmd_dr_backup_verify(cfg: FreqConfig, pack, args) -> int:
-    """Verify backup integrity — check all VMs have recent backups."""
+    """Verify backup integrity — check all VMs have recent backups against SLA."""
     fmt.header("Backup Verification", breadcrumb="FREQ > DR > Backup")
     fmt.blank()
+
+    from freq.modules.pve import _find_reachable_node, _pve_cmd
+
+    node_ip = _find_reachable_node(cfg)
+    if not node_ip:
+        fmt.step_fail("Cannot reach any PVE node — verification impossible")
+        fmt.footer()
+        return 1
 
     sla_data = _load_sla_targets(cfg)
     targets = sla_data.get("targets", [])
 
     if not targets:
-        fmt.warn("No SLA targets defined")
-        fmt.info("Set targets: freq dr sla set <vmid> --rpo 24h --rto 4h")
-        fmt.footer()
-        return 0
+        fmt.warn("No SLA targets defined — checking all VMs for any recent backup")
+        fmt.info("Set targets: freq dr sla set <vmid> --rpo 24 --rto 4")
+        fmt.blank()
 
+    # Get actual backup inventory from PVE
+    cmd = (
+        "for f in /var/lib/vz/dump/vzdump-qemu-*.vma* /var/lib/vz/dump/vzdump-lxc-*.tar* 2>/dev/null; do "
+        '  [ -f "$f" ] || continue; '
+        '  base=$(basename "$f"); '
+        "  vmid=$(echo \"$base\" | grep -oP '(?<=vzdump-(qemu|lxc)-)\\d+'); "
+        "  epoch=$(stat -c%Y \"$f\" 2>/dev/null || echo 0); "
+        '  echo "$vmid|$epoch"; '
+        "done | sort -t'|' -k1,1n -k2,2rn"
+    )
+    r = _pve_cmd(cfg, node_ip, cmd, timeout=30)
+
+    # Build map: vmid -> latest backup epoch
+    backup_ages = {}
+    if r[1] and r[0]:  # (stdout, ok)
+        for line in r[0].strip().splitlines():
+            parts = line.split("|")
+            if len(parts) >= 2 and parts[0].strip().isdigit():
+                vid = int(parts[0].strip())
+                try:
+                    epoch = int(parts[1].strip())
+                except ValueError:
+                    epoch = 0
+                if vid not in backup_ages or epoch > backup_ages[vid]:
+                    backup_ages[vid] = epoch
+    elif not r[1]:
+        fmt.step_fail(f"Could not list backups: {(r[0] or 'unknown error')[:100]}")
+        fmt.footer()
+        return 1
+
+    now = time.time()
     pass_count = 0
     fail_count = 0
+    unknown_count = 0
 
-    for t in targets:
-        vmid = t.get("vmid", "?")
+    # If SLA targets exist, verify against RPO
+    check_list = targets if targets else [{"vmid": vid, "rpo_hours": 24, "name": f"VM {vid}"} for vid in sorted(backup_ages.keys())]
+
+    fmt.table_header(("STATUS", 8), ("VM", 20), ("VMID", 6), ("LAST BACKUP", 16), ("AGE", 10), ("RPO", 6))
+    for t in check_list:
+        vmid = t.get("vmid", 0)
         rpo_hours = t.get("rpo_hours", 24)
         name = t.get("name", f"VM {vmid}")
 
-        # Check if backup exists within RPO window
-        # This would query PVE API — for now, report the target
-        fmt.line(f"  {fmt.C.CYAN}{name:<20}{fmt.C.RESET} VMID={vmid}  RPO={rpo_hours}h  RTO={t.get('rto_hours', '?')}h")
+        if vmid not in backup_ages:
+            fmt.table_row(
+                (f"{fmt.C.RED}FAIL{fmt.C.RESET}", 8),
+                (name[:20], 20),
+                (str(vmid), 6),
+                ("NONE", 16),
+                ("—", 10),
+                (f"{rpo_hours}h", 6),
+            )
+            fail_count += 1
+            continue
+
+        age_seconds = now - backup_ages[vmid]
+        age_hours = age_seconds / 3600
+        age_str = f"{age_hours:.1f}h" if age_hours < 48 else f"{age_hours / 24:.1f}d"
+        backup_time = time.strftime("%Y-%m-%d %H:%M", time.localtime(backup_ages[vmid]))
+
+        if age_hours <= rpo_hours:
+            status = f"{fmt.C.GREEN}PASS{fmt.C.RESET}"
+            pass_count += 1
+        else:
+            status = f"{fmt.C.RED}FAIL{fmt.C.RESET}"
+            fail_count += 1
+
+        fmt.table_row(
+            (status, 8),
+            (name[:20], 20),
+            (str(vmid), 6),
+            (backup_time, 16),
+            (age_str, 10),
+            (f"{rpo_hours}h", 6),
+        )
 
     fmt.blank()
-    fmt.info(f"{len(targets)} VM(s) with SLA targets defined")
+    summary = f"  {fmt.C.GREEN}{pass_count} pass{fmt.C.RESET}"
+    if fail_count:
+        summary += f", {fmt.C.RED}{fail_count} fail{fmt.C.RESET}"
+    if unknown_count:
+        summary += f", {fmt.C.YELLOW}{unknown_count} unknown{fmt.C.RESET}"
+    fmt.line(summary)
+
+    fmt.blank()
     fmt.footer()
-    return 0
+    return 1 if fail_count else 0
 
 
 # ---------------------------------------------------------------------------
