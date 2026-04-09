@@ -64,6 +64,14 @@ def _find_vm_node_ip(cfg, vmid: int) -> str:
     return _find_vm_node(cfg, vmid, "")
 
 
+def _parse_next_vmid(raw_value: str) -> int:
+    """Parse the cluster next VMID output safely."""
+    try:
+        return int((raw_value or "").strip())
+    except (ValueError, TypeError):
+        return 0
+
+
 # ── Handlers ────────────────────────────────────────────────────────────
 
 
@@ -108,7 +116,10 @@ def handle_vm_create(handler):
         if not ok:
             json_response(handler, {"error": "Cannot allocate VMID"})
             return
-        vmid = int(stdout.strip())
+        vmid = _parse_next_vmid(stdout)
+        if vmid <= 0:
+            json_response(handler, {"error": f"Invalid next VMID from cluster: {stdout.strip() or 'empty'}"}, 502)
+            return
         lab_cat = cfg.fleet_boundaries.categories.get("lab", {})
         vmid_floor = lab_cat.get("range_start", 5000)
         if vmid < vmid_floor:
@@ -276,6 +287,9 @@ def handle_vm_power(handler):
     if vmid is None:
         return
     action = params.get("action", ["status"])[0]
+    if action not in ("start", "stop", "reset", "status"):
+        json_response(handler, {"error": f"Invalid action: {action}"}, 400)
+        return
     # Fleet boundary check — power actions require start/stop permission
     if action in ("start", "stop", "reset"):
         perm_action = "start" if action == "start" else "stop"
@@ -590,7 +604,7 @@ def handle_vm_check_ip(handler):
     """GET /api/vm/check-ip — check if an IP is available by pinging it."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     query = get_params(handler)
     ip = query.get("ip", [""])[0]
@@ -848,7 +862,7 @@ def handle_vm_push_key(handler):
     """GET /api/vm/push-key — push the freq SSH key to a target VM."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     cfg = load_config()
     from urllib.parse import urlparse, parse_qs
@@ -1073,6 +1087,10 @@ def handle_vm_clone(handler):
             json_response(handler, {"error": "Cannot get next VMID"})
             return
         new_vmid = stdout.strip()
+        parsed_new_vmid = _parse_next_vmid(new_vmid)
+        if parsed_new_vmid <= 0:
+            json_response(handler, {"error": f"Invalid next VMID from cluster: {new_vmid or 'empty'}"}, 502)
+            return
 
         parts = [f"qm clone {source_vmid} {new_vmid}"]
         if name:
@@ -1094,7 +1112,7 @@ def handle_vm_clone(handler):
             {
                 "ok": ok,
                 "source_vmid": source_vmid,
-                "new_vmid": int(new_vmid),
+                "new_vmid": parsed_new_vmid,
                 "name": name,
                 "full_clone": full,
                 "error": stdout if not ok else "",
@@ -1295,13 +1313,13 @@ def handle_rollback(handler):
                 snaps.append(parts[0])
 
     if not snaps:
-        json_response(handler, {"error": f"No snapshots found for VM {vmid}"})
+        json_response(handler, {"error": f"No snapshots found for VM {vmid}"}, 404)
         return
 
     if not snap_name:
         snap_name = snaps[-1]
     elif snap_name not in snaps:
-        json_response(handler, {"error": f"Snapshot '{snap_name}' not found", "available": snaps})
+        json_response(handler, {"error": f"Snapshot '{snap_name}' not found", "available": snaps}, 404)
         return
 
     # Get current status
