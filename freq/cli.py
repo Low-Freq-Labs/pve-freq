@@ -206,16 +206,6 @@ def _register_utilities(sub):
     p.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
     p.set_defaults(func=cmd_perf)
 
-    p = sub.add_parser("audit", help="Infrastructure change audit trail")
-    p.set_defaults(func=cmd_audit_log)
-    au_sub = p.add_subparsers(dest="action")
-    p_log = au_sub.add_parser("log", help="Show audit log")
-    p_log.add_argument("--host", help="Filter by host IP")
-    p_log.add_argument("--action", dest="filter_action", help="Filter by action type")
-    p_log.add_argument("--last", type=int, default=20, help="Number of entries (default: 20)")
-    p_log.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
-    p_log.set_defaults(func=cmd_audit_log)
-
     p = sub.add_parser("menu", help="Interactive TUI menu")
     p.set_defaults(func=cmd_menu)
 
