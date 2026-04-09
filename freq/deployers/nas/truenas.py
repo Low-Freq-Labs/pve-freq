@@ -28,7 +28,6 @@ def deploy(ip, ctx, auth_pass, auth_key, auth_user, htype="truenas"):
 
     _ssh = _init_ssh(ip, auth_pass, auth_key, auth_user)
 
-    # Test connectivity
     rc, out, err = _ssh("echo OK")
     if rc != 0:
         fmt.step_fail(f"Cannot connect ({err[:60]})")
@@ -36,10 +35,9 @@ def deploy(ip, ctx, auth_pass, auth_key, auth_user, htype="truenas"):
     fmt.step_ok("Connected")
 
     pass_b64 = base64.b64encode(svc_pass.encode()).decode()
+    pubkey_b64 = base64.b64encode((pubkey or "").encode()).decode()
 
-    # Detect platform and deploy accordingly
     deploy_script = f"""set -e
-# Detect TrueNAS variant
 if command -v midclt >/dev/null 2>&1; then
     VARIANT="scale"
 elif command -v pw >/dev/null 2>&1; then
@@ -48,66 +46,109 @@ else
     VARIANT="linux"
 fi
 
-_pass=$(echo '{pass_b64}' | base64 -d)
-
 if [ "$VARIANT" = "scale" ]; then
-    # TrueNAS SCALE — use midclt for persistent user management
-    if ! id '{svc_name}' >/dev/null 2>&1; then
-        # Build JSON payload with Python to avoid shell quoting issues
-        python3 -c "
-import json, subprocess, sys
-payload = {{
-    'username': '{svc_name}',
-    'full_name': 'FREQ Service Account',
-    'group_create': True,
-    'home': '/home/{svc_name}',
-    'home_create': True,
-    'shell': '/bin/bash',
-    'password': '$_pass',
-    'ssh_password_enabled': False,
-    'sshpubkey': '''{pubkey}''',
-}}
-r = subprocess.run(['midclt', 'call', 'user.create', json.dumps(payload)],
-                    capture_output=True, text=True, timeout=30)
-if r.returncode != 0:
-    print('USERADD_FAIL: ' + r.stderr[:100], file=sys.stderr)
-    sys.exit(1)
-" || {{ echo USERADD_FAIL; exit 1; }}
+    POOL_PATH=$(midclt call pool.query | python3 -c 'import json,sys; data=json.load(sys.stdin); print(data[0].get("path","") if data else "")')
+    if [ -n "$POOL_PATH" ]; then
+        HOME_PARENT="$POOL_PATH/.freq-home"
+        mkdir -p "$HOME_PARENT"
     else
-        # User exists — update SSH key via middleware
-        python3 -c "
-import json, subprocess, sys
-uid_out = subprocess.run(['midclt', 'call', 'user.query', json.dumps([['username', '=', '{svc_name}']])],
-                         capture_output=True, text=True, timeout=15)
-users = json.loads(uid_out.stdout) if uid_out.returncode == 0 else []
-if users:
-    uid = users[0]['id']
-    subprocess.run(['midclt', 'call', 'user.update', str(uid), json.dumps({{'sshpubkey': '''{pubkey}'''}})],
-                   capture_output=True, text=True, timeout=15)
-" 2>/dev/null || true
+        HOME_PARENT="/var/empty"
     fi
+    export FREQ_USER='{svc_name}'
+    export FREQ_PASS_B64='{pass_b64}'
+    export FREQ_PUBKEY_B64='{pubkey_b64}'
+    export FREQ_HOME_PARENT="$HOME_PARENT"
+    python3 - <<'PY'
+import base64
+import json
+import os
+import subprocess
+import sys
+
+svc_name = os.environ["FREQ_USER"]
+svc_pass = base64.b64decode(os.environ["FREQ_PASS_B64"]).decode()
+pubkey = base64.b64decode(os.environ["FREQ_PUBKEY_B64"]).decode().strip()
+home_parent = os.environ["FREQ_HOME_PARENT"] or "/var/empty"
+
+query = subprocess.run(
+    ["midclt", "call", "user.query", json.dumps([["username", "=", svc_name]])],
+    capture_output=True,
+    text=True,
+    timeout=30,
+)
+if query.returncode != 0:
+    print("USERADD_FAIL: " + (query.stderr or query.stdout)[:120], file=sys.stderr)
+    sys.exit(1)
+
+users = json.loads(query.stdout or "[]")
+payload = {
+    "full_name": "FREQ Service Account",
+    "shell": "/usr/bin/bash",
+    "password": svc_pass,
+    "smb": False,
+    "ssh_password_enabled": False,
+    "password_disabled": False,
+    "sshpubkey": pubkey or None,
+    "sudo_commands_nopasswd": ["ALL"],
+}
+
+if users:
+    uid = str(users[0]["id"])
+    result = subprocess.run(
+        ["midclt", "call", "user.update", uid, json.dumps(payload)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+else:
+    payload.update({
+        "username": svc_name,
+        "group_create": True,
+        "home": home_parent,
+        "home_create": home_parent != "/var/empty",
+    })
+    result = subprocess.run(
+        ["midclt", "call", "user.create", json.dumps(payload)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+if result.returncode != 0:
+    print("USERADD_FAIL: " + (result.stderr or result.stdout)[:160], file=sys.stderr)
+    sys.exit(1)
+
+print("ACCOUNT_OK")
+PY
+    test "$(midclt call user.query "[[\\"username\\",\\"=\\",\\"{svc_name}\\"]]" | python3 -c 'import json,sys; data=json.load(sys.stdin); print("1" if data else "")')" = "1" || {{ echo ACCOUNT_MISSING; exit 1; }}
 elif [ "$VARIANT" = "core" ]; then
-    # TrueNAS CORE (FreeBSD) — use pw
     if ! id '{svc_name}' >/dev/null 2>&1; then
         pw useradd '{svc_name}' -m -s /bin/sh -c "FREQ Service Account" || {{ echo USERADD_FAIL; exit 1; }}
-        echo "$_pass" | pw usermod '{svc_name}' -h 0 || echo CHPASSWD_FAIL
     fi
+    _pass=$(echo '{pass_b64}' | base64 -d)
+    echo "$_pass" | pw usermod '{svc_name}' -h 0 || echo CHPASSWD_FAIL
+    unset _pass
 else
-    # Fallback: standard Linux
     if ! id '{svc_name}' >/dev/null 2>&1; then
         useradd -m -s /bin/bash '{svc_name}' || {{ echo USERADD_FAIL; exit 1; }}
     fi
+    _pass=$(echo '{pass_b64}' | base64 -d)
     printf '%s:%s\\n' '{svc_name}' "$_pass" | chpasswd 2>/dev/null || echo CHPASSWD_FAIL
+    unset _pass
 fi
 
-unset _pass
-
-# Verify account exists
-id '{svc_name}' >/dev/null 2>&1 || {{ echo ACCOUNT_MISSING; exit 1; }}
-
-# SSH key — filesystem fallback for CORE/Linux (SCALE handled via middleware above)
 if [ "$VARIANT" != "scale" ]; then
-    svc_home=$(getent passwd '{svc_name}' | cut -d: -f6 2>/dev/null)
+    id '{svc_name}' >/dev/null 2>&1 || {{ echo ACCOUNT_MISSING; exit 1; }}
+fi
+
+if [ "$VARIANT" != "scale" ]; then
+    svc_home=""
+    if command -v getent >/dev/null 2>&1; then
+        svc_home=$(getent passwd '{svc_name}' | cut -d: -f6 2>/dev/null)
+    fi
+    if [ -z "$svc_home" ] && command -v pw >/dev/null 2>&1; then
+        svc_home=$(pw usershow '{svc_name}' | cut -d: -f9 2>/dev/null)
+    fi
     if [ -z "$svc_home" ]; then
         svc_home="/home/{svc_name}"
     fi
@@ -120,11 +161,10 @@ if [ "$VARIANT" != "scale" ]; then
     fi
 fi
 
-# Sudoers — TrueNAS may not have visudo, check first
-if [ -d /usr/local/etc/sudoers.d ]; then
+if [ "$VARIANT" = "core" ] && [ -d /usr/local/etc/sudoers.d ]; then
     echo '{svc_name} ALL=(ALL) NOPASSWD: ALL' > '/usr/local/etc/sudoers.d/freq-{svc_name}'
     chmod 440 '/usr/local/etc/sudoers.d/freq-{svc_name}'
-elif [ -d /etc/sudoers.d ]; then
+elif [ "$VARIANT" != "scale" ] && [ -d /etc/sudoers.d ]; then
     echo '{svc_name} ALL=(ALL) NOPASSWD: ALL' > '/etc/sudoers.d/freq-{svc_name}'
     chmod 440 '/etc/sudoers.d/freq-{svc_name}'
     visudo -cf '/etc/sudoers.d/freq-{svc_name}' 2>/dev/null || true
@@ -137,7 +177,7 @@ echo DEPLOY_OK
         fmt.step_fail(f"Failed to create account '{svc_name}'")
         return False
     elif MARKER_DEPLOY_OK not in out:
-        fmt.step_fail(f"Deploy script failed ({err[:80]})")
+        fmt.step_fail(f"Deploy script failed ({(err or out)[:80]})")
         return False
 
     if "CHPASSWD_FAIL" in out:
@@ -145,7 +185,6 @@ echo DEPLOY_OK
     else:
         fmt.step_ok("Account + SSH key deployed")
 
-    # Verify FREQ key SSH access
     success = True
     if ctx.get("key_path") and os.path.isfile(ctx["key_path"]):
         rc2, _, _ = _run(
@@ -170,7 +209,6 @@ echo DEPLOY_OK
             fmt.step_fail(f"FREQ key login FAILED as {svc_name}")
             success = False
 
-        # Verify sudo
         if rc2 == 0:
             rc3, _, _ = _run(
                 [
@@ -191,7 +229,7 @@ echo DEPLOY_OK
             if rc3 == 0:
                 fmt.step_ok(f"Verified: NOPASSWD sudo as {svc_name}")
             else:
-                fmt.step_warn(f"sudo not available — TrueNAS may restrict sudo")
+                fmt.step_warn("sudo not available — TrueNAS may restrict sudo")
 
     return success
 

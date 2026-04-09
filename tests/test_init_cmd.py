@@ -7,6 +7,7 @@ import os
 import sys
 import stat
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -174,6 +175,32 @@ class TestSSHWithPass(unittest.TestCase):
         _ssh_with_pass("secret", ["ssh", "host", "cmd"], timeout=60)
         call_kwargs = mock_run.call_args[1]
         self.assertEqual(call_kwargs.get("timeout"), 60)
+
+
+class TestIdracParsing(unittest.TestCase):
+    """Test helpers for live iDRAC RACADM output."""
+
+    def test_parse_idrac_username_output_handles_real_racadm_format(self):
+        from freq.modules.init_cmd import _parse_idrac_username_output
+
+        output = "[Key=iDRAC.Embedded.1#Users.8]\nUserName=\n"
+        self.assertEqual(_parse_idrac_username_output(output), "")
+
+        output = "[Key=iDRAC.Embedded.1#Users.8]\nUserName=freq-admin\n"
+        self.assertEqual(_parse_idrac_username_output(output), "freq-admin")
+
+    def test_parse_idrac_slots_treats_null_as_empty(self):
+        from freq.modules.init_cmd import _parse_idrac_slots
+
+        slot_dump = "\n".join([
+            "SLOT3=root",
+            "SLOT4=(NULL)",
+            "SLOT5=",
+            "SLOT6=freq-admin",
+        ])
+        target_slot, existing_slot = _parse_idrac_slots(slot_dump, "freq-admin")
+        self.assertEqual(target_slot, 4)
+        self.assertEqual(existing_slot, 6)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -413,11 +440,12 @@ class TestUpdateTomlValue(unittest.TestCase):
         self.assertIn('mode = "sudo"', result)
         self.assertIn("# SSH as root directly", result)
 
-    def test_no_match_returns_unchanged(self):
-        """Key not found — content returned unchanged."""
+    def test_no_match_inserts_key(self):
+        """Missing keys are inserted so init can populate minimal configs."""
         content = 'something_else = "value"\n'
         result = self._update(content, "nonexistent", "test")
-        self.assertEqual(content, result)
+        self.assertIn(content, result)
+        self.assertIn('nonexistent = "test"', result)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1050,6 +1078,70 @@ class TestHostsFileImport(unittest.TestCase):
 
         # hosts-target.conf should NOT have been created (import skipped)
         self.assertFalse(os.path.isfile(self.cfg_hosts_file))
+
+
+class TestPhaseDiscoverScopedHosts(unittest.TestCase):
+    """Discovery must not pollute a curated --hosts-file run."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="freq-test-discover-scope-")
+        self.hosts_file = os.path.join(self.tmpdir, "hosts.toml")
+        with open(self.hosts_file, "w") as f:
+            f.write('[[host]]\n')
+            f.write('ip = "10.25.255.25"\n')
+            f.write('label = "truenas"\n')
+            f.write('type = "truenas"\n')
+            f.write('groups = "infrastructure"\n')
+        self.cfg_hosts_file = os.path.join(self.tmpdir, "hosts-target.toml")
+        self.freq_toml = os.path.join(self.tmpdir, "freq.toml")
+        self.boundaries = os.path.join(self.tmpdir, "fleet-boundaries.toml")
+        with open(self.freq_toml, "w") as f:
+            f.write("[freq]\nversion = \"test\"\n\n[ssh]\nlegacy_password_file = \"\"\n\n[infrastructure]\n")
+        with open(self.boundaries, "w") as f:
+            f.write("")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.core.config.append_host_toml")
+    def test_hosts_file_prevents_headless_auto_registration(self, mock_append, mock_run, mock_fmt):
+        from freq.modules.init_cmd import _phase_fleet_discover
+
+        cfg = MagicMock()
+        cfg.conf_dir = self.tmpdir
+        cfg.hosts_file = self.cfg_hosts_file
+        cfg.hosts = []
+        cfg.pve_nodes = ["10.25.255.26"]
+        cfg.pve_node_names = ["pve01"]
+        cfg.vlans = []
+        cfg.vm_gateway = ""
+        cfg.pfsense_ip = ""
+        cfg.truenas_ip = ""
+        cfg.switch_ip = ""
+        cfg.fleet_boundaries = types.SimpleNamespace(categories={}, physical={})
+
+        ctx = {"key_path": "/tmp/fake", "svc_name": "freq-admin"}
+        args = MagicMock(headless=True, hosts_file=self.hosts_file)
+
+        vm_list = '[{"vmid":5001,"name":"truenas-lab","status":"running","type":"qemu","node":"pve01"}]'
+        agent_ips = '{"result":[{"name":"eth0","ip-addresses":[{"ip-address-type":"ipv4","ip-address":"192.168.255.25"}]}]}'
+
+        def run_side_effect(cmd, timeout=30):
+            cmd_str = " ".join(cmd)
+            if "/cluster/resources --type vm" in cmd_str:
+                return 0, vm_list, ""
+            if "qm agent 5001 network-get-interfaces" in cmd_str:
+                return 0, agent_ips, ""
+            return 1, "", "not mocked"
+
+        mock_run.side_effect = run_side_effect
+
+        _phase_fleet_discover(cfg, ctx, args)
+
+        mock_append.assert_not_called()
 
 
 # ═══════════════════════════════════════════════════════════════════

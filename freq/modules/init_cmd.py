@@ -99,11 +99,25 @@ def _validate_label(label):
 
 
 def _gen_idrac_slot_check():
-    """Generate the racadm command to query all iDRAC user slots."""
-    return "; ".join(
-        f"echo SLOT{i}=$(racadm get iDRAC.Users.{i}.UserName 2>/dev/null | grep -oP '(?<=UserName=).*')"
+    """Generate human-readable single-command racadm slot queries.
+
+    iDRAC SSH lands in a RACADM command interpreter, not a POSIX shell.
+    Keep this shell-free so callers do not accidentally rely on command
+    substitution, pipes, or semicolons that the BMC cannot execute.
+    """
+    return "\n".join(
+        f"racadm get iDRAC.Users.{i}.UserName"
         for i in range(IDRAC_SLOT_MIN, IDRAC_SLOT_MAX)
     )
+
+
+def _parse_idrac_username_output(output):
+    """Extract a username value from `racadm get ...UserName` output."""
+    for raw in (output or "").splitlines():
+        line = raw.strip().replace("\r", "")
+        if line.lower().startswith("username"):
+            return line.split("=", 1)[1].strip()
+    return ""
 
 
 def _parse_idrac_slots(output, svc_name):
@@ -117,14 +131,104 @@ def _parse_idrac_slots(output, svc_name):
     for i in range(IDRAC_SLOT_MIN, IDRAC_SLOT_MAX):
         marker = f"SLOT{i}="
         for line in output.split("\n"):
-            if marker in line:
+            if line.startswith(marker):
                 val = line.split(marker, 1)[1].strip()
+                if val.upper() in ("NULL", "(NULL)", "NONE"):
+                    val = ""
                 if val == svc_name:
                     existing_slot = i
                     break
                 elif not val and target_slot is None:
                     target_slot = i
     return target_slot, existing_slot
+
+
+def _query_idrac_slots(_ssh, extra_opts, svc_name):
+    """Query iDRAC user slots one command at a time via RACADM."""
+    target_slot = None
+    existing_slot = None
+
+    for slot in range(IDRAC_SLOT_MIN, IDRAC_SLOT_MAX):
+        rc, out, err = _ssh(
+            f"racadm get iDRAC.Users.{slot}.UserName",
+            extra_opts=extra_opts,
+            timeout=QUICK_CHECK_TIMEOUT,
+        )
+        if rc != 0:
+            logger.warning(
+                "idrac slot query failed",
+                host=getattr(_ssh, "__name__", "idrac"),
+                slot=slot,
+                error=(err or out)[:120],
+            )
+            continue
+        val = _parse_idrac_username_output(out)
+        if val.upper() in ("NULL", "(NULL)", "NONE"):
+            val = ""
+        if val == svc_name:
+            existing_slot = slot
+            break
+        if not val and target_slot is None:
+            target_slot = slot
+
+    return target_slot, existing_slot
+
+
+def _run_idrac_command(_ssh, extra_opts, cmd, timeout=IDRAC_SETUP_TIMEOUT):
+    """Run a single RACADM command and reject device-reported failures."""
+    rc, out, err = _ssh(cmd, extra_opts=extra_opts, timeout=timeout)
+    combined = f"{out}\n{err}".strip()
+    if rc != 0:
+        return False, combined
+    bad_markers = (
+        "command processing failed",
+        "command not recognized",
+        "error:",
+        "rac9",
+    )
+    if any(marker in combined.lower() for marker in bad_markers):
+        return False, combined
+    return True, combined
+
+
+def _persist_legacy_password_file(cfg, svc_name, password):
+    """Persist one shared iDRAC/switch password for verification fallback."""
+    if not password:
+        return
+
+    svc_home = os.path.expanduser("~" + svc_name)
+    pass_path = os.path.join(svc_home, ".ssh", "switch-pass")
+    try:
+        os.makedirs(os.path.dirname(pass_path), mode=0o700, exist_ok=True)
+        with open(pass_path, "w") as f:
+            f.write(password)
+        os.chmod(pass_path, 0o600)
+
+        import pwd
+
+        try:
+            pw = pwd.getpwnam(svc_name)
+            os.chown(pass_path, pw.pw_uid, pw.pw_gid)
+            os.chown(os.path.dirname(pass_path), pw.pw_uid, pw.pw_gid)
+        except (KeyError, PermissionError):
+            pass
+
+        cfg.legacy_password_file = pass_path
+
+        toml_path = os.path.join(cfg.conf_dir, "freq.toml")
+        try:
+            with open(toml_path) as f:
+                content = f.read()
+            content = _update_toml_value(content, "legacy_password_file", pass_path)
+            with open(toml_path, "w") as f:
+                f.write(content)
+        except OSError as e:
+            fmt.step_warn(f"Could not update legacy_password_file in freq.toml: {e}")
+
+        fmt.step_ok(f"Device password saved to {pass_path}")
+        audit.record("password_save", pass_path, "success")
+    except OSError as e:
+        fmt.step_warn(f"Could not save device password to {pass_path}: {e}")
 
 
 def _run(cmd, timeout=DEFAULT_CMD_TIMEOUT):
@@ -2528,10 +2632,32 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
     key_path = ctx.get("key_path", "") or cfg.ssh_key_path
     svc_name = ctx.get("svc_name", cfg.ssh_service_account)
+    hosts_file_arg = getattr(args, "hosts_file", None) if args else None
+    scoped_hosts = []
+
+    if hosts_file_arg and os.path.isfile(hosts_file_arg):
+        from freq.core.config import load_hosts, load_hosts_toml
+
+        try:
+            if hosts_file_arg.endswith(".toml"):
+                scoped_hosts = load_hosts_toml(hosts_file_arg)
+            else:
+                scoped_hosts = load_hosts(hosts_file_arg)
+            fmt.step_ok(f"Explicit hosts file loaded: {len(scoped_hosts)} host(s)")
+        except Exception as e:
+            fmt.step_warn(f"Could not load --hosts-file for discovery scope: {e}")
+            scoped_hosts = []
 
     # Track all discovered hosts: ip -> {label, htype, groups, vmid, source, all_ips}
     discovered = {}
-    existing_ips = {h.ip for h in cfg.hosts}
+    existing_hosts = list(cfg.hosts)
+    seen_existing = {h.ip for h in existing_hosts}
+    for h in scoped_hosts:
+        if h.ip not in seen_existing:
+            existing_hosts.append(h)
+            seen_existing.add(h.ip)
+    existing_ips = {h.ip for h in existing_hosts}
+    scoped_infra_types = {h.htype for h in scoped_hosts if h.htype in {"pfsense", "truenas", "switch", "idrac"}}
 
     # ── Step 1: PVE API Discovery (primary mechanism) ──────────────
     fmt.line(f"  {fmt.C.BOLD}Step 1: PVE Cluster Discovery{fmt.C.RESET}")
@@ -2669,6 +2795,10 @@ def _phase_fleet_discover(cfg, ctx, args=None):
             # Auto-classify type
             htype = _classify_host_by_name(name)
 
+            # An explicit hosts file is the source of truth for infrastructure.
+            if scoped_hosts and htype in scoped_infra_types:
+                continue
+
             if chosen_ip not in existing_ips and chosen_ip not in discovered:
                 try:
                     from freq.core.validate import sanitize_label
@@ -2710,7 +2840,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
         already_known = existing_ips | set(discovered.keys())
         known_labels = {d["label"].lower() for d in discovered.values()}
-        known_labels |= {h.label.lower() for h in cfg.hosts}
+        known_labels |= {h.label.lower() for h in existing_hosts}
 
         for vlan in vlans:
             prefix = getattr(vlan, "prefix", "") or ""
@@ -2818,7 +2948,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
             fmt.step_ok(f"Switch detected: {d['label']} ({ip})")
 
     # Also check existing hosts for infrastructure
-    for h in cfg.hosts:
+    for h in existing_hosts:
         if h.htype == "truenas" and not infra_truenas:
             infra_truenas = h.ip
         elif h.htype == "switch" and not infra_switch:
@@ -2947,12 +3077,15 @@ def _phase_fleet_discover(cfg, ctx, args=None):
         fmt.blank()
 
         if headless:
-            # Auto-register all in headless mode
-            for ip, d in discovered.items():
-                host = Host(ip=ip, label=d["label"], htype=d["htype"], groups=d.get("groups", ""))
-                append_host_toml(cfg.hosts_file, host)
-                cfg.hosts.append(host)
-            fmt.step_ok(f"Auto-registered {len(discovered)} host(s)")
+            if scoped_hosts:
+                fmt.step_ok(f"Explicit hosts file provided — skipped auto-registration of {len(discovered)} discovered host(s)")
+            else:
+                # Auto-register all in headless mode
+                for ip, d in discovered.items():
+                    host = Host(ip=ip, label=d["label"], htype=d["htype"], groups=d.get("groups", ""))
+                    append_host_toml(cfg.hosts_file, host)
+                    cfg.hosts.append(host)
+                fmt.step_ok(f"Auto-registered {len(discovered)} host(s)")
         else:
             # Interactive: confirm registration
             if _confirm(f"Register all {len(discovered)} discovered hosts?", default=True):
@@ -3031,7 +3164,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
         fmt.step_warn(f"Could not update freq.toml infrastructure: {e}")
 
     fmt.blank()
-    total_fleet = len(cfg.hosts)
+    total_fleet = len(cfg.hosts) if cfg.hosts else len(scoped_hosts)
     fmt.line(f"  {fmt.C.GREEN}Fleet: {total_fleet} host(s) registered.{fmt.C.RESET}")
     logger.info("init_phase_complete: Phase 7 - fleet_discover", phase=7, hosts=total_fleet)
     audit.record("config_write", "hosts.toml", "success", hosts=total_fleet)
@@ -3090,7 +3223,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
 
     ok = fail = 0
     deployed_ips = set()  # Track IPs we deployed to — Phase 12 uses this
-    dev_pass = ""
+    legacy_passwords = set()
 
     # Check for CLI bootstrap credentials (--bootstrap-key, --bootstrap-user)
     bootstrap_key = getattr(args, "bootstrap_key", None) if args else None
@@ -3238,6 +3371,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                 if _deploy_to_host_dispatch(h.ip, h.htype, ctx, creds["password"], "", creds["user"]):
                     ok += 1
                     deployed_ips.add(h.ip)
+                    legacy_passwords.add(creds["password"])
                 else:
                     fail += 1
 
@@ -3280,35 +3414,22 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                             if _deploy_to_host_dispatch(h.ip, h.htype, ctx, dev_pass, "", dev_user):
                                 ok += 1
                                 deployed_ips.add(h.ip)
+                                legacy_passwords.add(dev_pass)
                             else:
                                 fail += 1
                 else:
                     fmt.step_warn("Skipping device hosts")
 
     # Persist device (iDRAC/switch) password for ongoing SSH access
-    if device_hosts and ok > 0 and dev_pass:
-        svc_home = os.path.expanduser("~" + ctx["svc_name"])
-        pass_path = os.path.join(svc_home, ".ssh", "switch-pass")
-        try:
-            os.makedirs(os.path.dirname(pass_path), mode=0o700, exist_ok=True)
-            with open(pass_path, "w") as f:
-                f.write(dev_pass)
-            os.chmod(pass_path, 0o600)
-            import pwd
-
-            try:
-                pw = pwd.getpwnam(ctx["svc_name"])
-                os.chown(pass_path, pw.pw_uid, pw.pw_gid)
-                os.chown(os.path.dirname(pass_path), pw.pw_uid, pw.pw_gid)
-            except (KeyError, PermissionError):
-                pass
-            fmt.step_ok(f"Device password saved to {pass_path}")
-            audit.record("password_save", pass_path, "success")
-        except OSError as e:
-            fmt.step_warn(f"Could not save device password to {pass_path}: {e}")
+    if device_hosts and ok > 0 and legacy_passwords:
+        if len(legacy_passwords) == 1:
+            _persist_legacy_password_file(cfg, ctx["svc_name"], next(iter(legacy_passwords)))
+        else:
+            fmt.step_warn("Multiple distinct iDRAC/switch passwords used — legacy password fallback not persisted")
 
     # Store deployed IPs for Phase 12 — deployed hosts MUST pass verification
     ctx["deployed_ips"] = deployed_ips
+    ctx["fleet_deploy_failures"] = fail
 
     fmt.blank()
     fmt.line(f"  Fleet deployment: {fmt.C.GREEN}{ok} OK{fmt.C.RESET}, {fmt.C.RED}{fail} failed{fmt.C.RESET}")
@@ -4459,14 +4580,7 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     fmt.step_ok("Connected to iDRAC")
 
     # Find an empty user slot (slots 3-16, 1-2 are reserved)
-    rc, out, err = _ssh(_gen_idrac_slot_check(), extra_opts=extra_opts)
-    if rc != 0:
-        fmt.step_fail(f"Cannot query iDRAC user slots ({err[:60]})")
-        logger.error(f"deploy_failed: {ip}", host=ip, error="slot_query_failed")
-        return False
-
-    # Parse slots — find first empty or matching
-    target_slot, existing_slot = _parse_idrac_slots(out, svc_name)
+    target_slot, existing_slot = _query_idrac_slots(_ssh, extra_opts, svc_name)
 
     if existing_slot:
         fmt.step_ok(f"Account '{svc_name}' already in slot {existing_slot}")
@@ -4478,43 +4592,43 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
         return False
 
     # Create/update user in target slot
-    setup_cmds = [
+    setup_cmds = (
         f"racadm set iDRAC.Users.{target_slot}.UserName {svc_name}",
         f"racadm set iDRAC.Users.{target_slot}.Password {svc_pass}",
         f"racadm set iDRAC.Users.{target_slot}.Privilege 0x1ff",
         f"racadm set iDRAC.Users.{target_slot}.Enable 1",
         f"racadm set iDRAC.Users.{target_slot}.IpmiLanPrivilege 4",
-    ]
-    setup_script = " && ".join(setup_cmds) + " && echo SETUP_OK"
-    rc, out, err = _ssh(setup_script, extra_opts=extra_opts, timeout=IDRAC_SETUP_TIMEOUT)
-
-    if MARKER_SETUP_OK not in out:
-        fmt.step_fail(f"iDRAC user setup failed ({(err or out).strip()[:80]})")
-        logger.error(f"deploy_failed: {ip}", host=ip, error="idrac_setup_failed")
-        audit.record("deploy_user", ip, "failed", user=svc_name, error="racadm_setup")
-        return False
+    )
+    for cmd in setup_cmds:
+        ok_cmd, details = _run_idrac_command(_ssh, extra_opts, cmd, timeout=IDRAC_SETUP_TIMEOUT)
+        if not ok_cmd:
+            fmt.step_fail(f"iDRAC user setup failed ({details.strip()[:80]})")
+            logger.error(f"deploy_failed: {ip}", host=ip, error="idrac_setup_failed")
+            audit.record("deploy_user", ip, "failed", user=svc_name, error="racadm_setup")
+            return False
     fmt.step_ok(f"iDRAC user '{svc_name}' configured (slot {target_slot})")
 
     # Deploy RSA public key
-    rc, out, err = _ssh(
+    ok_cmd, details = _run_idrac_command(
+        _ssh,
+        extra_opts,
         f'racadm sshpkauth -i {target_slot} -k 1 -t "{rsa_pubkey}"',
-        extra_opts=extra_opts,
         timeout=30,
     )
-    if rc != 0:
-        fmt.step_fail(f"RSA key upload failed ({(err or out).strip()[:60]})")
+    if not ok_cmd:
+        fmt.step_fail(f"RSA key upload failed ({details.strip()[:60]})")
         fmt.step_warn("iDRAC user created but key-based SSH won't work — password auth only")
         logger.error(f"deploy_failed: {ip}", host=ip, error="rsa_key_upload_failed")
         audit.record("deploy_user", ip, "failed", user=svc_name, error="rsa_key_upload")
         return False
 
     # Verify the key was actually stored
-    rc2, out2, _ = _ssh(
+    rc2, out2, err2 = _ssh(
         f"racadm sshpkauth -v -i {target_slot} -k 1",
         extra_opts=extra_opts,
         timeout=IDRAC_VERIFY_TIMEOUT,
     )
-    if rc2 == 0 and out2.strip():
+    if rc2 == 0 and out2.strip() and "failed" not in (out2 + err2).lower():
         fmt.step_ok("RSA public key deployed and verified on iDRAC")
     else:
         fmt.step_warn("RSA key uploaded but verification query failed — check manually")
@@ -4789,29 +4903,24 @@ def _remove_idrac(ip, svc_name, key_path):
         return False, err
 
     # Find the user's slot
-    rc, out, err = _ssh(_gen_idrac_slot_check())
-    if rc != 0:
-        return False, f"cannot query slots: {err[:60]}"
-
-    _, target_slot = _parse_idrac_slots(out, svc_name)
+    _, target_slot = _query_idrac_slots(_ssh, extra_opts, svc_name)
     # In removal, we want the existing slot (not the empty one)
     # _parse_idrac_slots returns (empty_slot, existing_slot)
 
     if not target_slot:
         return True, "not_found"  # Already gone
 
-    # Disable the slot, clear username, remove SSH key
-    remove_cmds = [
+    remove_cmds = (
         f"racadm set iDRAC.Users.{target_slot}.Enable 0",
         f'racadm set iDRAC.Users.{target_slot}.UserName ""',
         f'racadm sshpkauth -i {target_slot} -k 1 -t ""',
-    ]
-    remove_script = " && ".join(remove_cmds) + " && echo REMOVE_OK"
-    rc, out, err = _ssh(remove_script, timeout=30)
+    )
+    for cmd in remove_cmds:
+        ok_cmd, details = _run_idrac_command(_ssh, extra_opts, cmd, timeout=30)
+        if not ok_cmd:
+            return False, f"removal failed: {details.strip()[:80]}"
 
-    if "REMOVE_OK" in out:
-        return True, ""
-    return False, f"removal failed: {(err or out).strip()[:80]}"
+    return True, ""
 
 
 def _remove_switch(ip, svc_name, key_path):
@@ -5049,7 +5158,7 @@ def _verify_host(ip, htype, svc_name, key_path, rsa_key_path, cfg=None):
                 time.sleep(5)
                 rc, out, err = _run(sshpass_cmd, timeout=VERIFY_TIMEOUT)
 
-    return rc == 0, err
+    return rc == 0, (err or out)
 
 
 def _phase_verify(cfg, ctx):
@@ -5223,6 +5332,10 @@ def _phase_verify(cfg, ctx):
         and cfg.pve_nodes
     )
     _check("Dashboard readiness: token + hosts + nodes", dashboard_ready)
+
+    fleet_deploy_failures = int(ctx.get("fleet_deploy_failures", 0) or 0)
+    if fleet_deploy_failures:
+        _check(f"Phase 8 fleet deployment: 0 failed hosts (saw {fleet_deploy_failures})", False)
 
     fmt.blank()
     summary = f"  Verification: {fmt.C.GREEN}{passes} pass{fmt.C.RESET}, {fmt.C.RED}{fails} fail{fmt.C.RESET}"
@@ -6784,27 +6897,16 @@ def _headless_fleet_deploy(
 
     # Persist device password for ongoing iDRAC/switch SSH access
     has_devices = any(t["htype"] in ("idrac", "switch") for t in targets)
-    svc_pass = ctx.get("svc_pass", "")
-    if has_devices and ok > 0 and svc_pass:
-        svc_name = ctx.get("svc_name", "freq-admin")
-        svc_home = os.path.expanduser("~" + svc_name)
-        pass_path = os.path.join(svc_home, ".ssh", "switch-pass")
-        try:
-            os.makedirs(os.path.dirname(pass_path), mode=0o700, exist_ok=True)
-            with open(pass_path, "w") as f:
-                f.write(svc_pass)
-            os.chmod(pass_path, 0o600)
-            import pwd
-
-            try:
-                pw = pwd.getpwnam(svc_name)
-                os.chown(pass_path, pw.pw_uid, pw.pw_gid)
-            except (KeyError, PermissionError):
-                pass
-            fmt.step_ok(f"Device password saved to {pass_path}")
-            audit.record("password_save", pass_path, "success")
-        except OSError as e:
-            fmt.step_warn(f"Could not save device password: {e}")
+    if has_devices and ok > 0:
+        device_passwords = {
+            device_creds[t["htype"]]["password"]
+            for t in targets
+            if t["htype"] in ("idrac", "switch") and t["htype"] in device_creds
+        }
+        if device_passwords and len(device_passwords) == 1:
+            _persist_legacy_password_file(cfg, ctx.get("svc_name", "freq-admin"), next(iter(device_passwords)))
+        elif len(device_passwords) > 1:
+            fmt.step_warn("Multiple distinct iDRAC/switch passwords used — legacy password fallback not persisted")
 
     fmt.blank()
     fmt.line(
