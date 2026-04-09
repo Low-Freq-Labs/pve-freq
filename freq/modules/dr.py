@@ -32,6 +32,112 @@ from freq.core import log as logger
 DR_DIR = "dr"
 
 
+def _pve_node_name(cfg, node_ip):
+    """Map a configured PVE node IP to its node name."""
+    for i, ip in enumerate(getattr(cfg, "pve_nodes", []) or []):
+        if ip == node_ip and i < len(getattr(cfg, "pve_node_names", []) or []):
+            return cfg.pve_node_names[i]
+    return ""
+
+
+def _collect_storage_backups(cfg, anchor_node_ip, reachable_nodes):
+    """Collect backup inventory via PVE storage metadata instead of path guessing."""
+    from freq.modules.pve import _pve_cmd
+
+    storage_cmd = "pvesh get /storage --content backup --output-format json"
+    storage_out, storage_ok = _pve_cmd(cfg, anchor_node_ip, storage_cmd, timeout=20)
+    if not storage_ok or not storage_out:
+        return {}, False
+
+    try:
+        storages = json.loads(storage_out)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}, False
+
+    backup_storages = []
+    for entry in storages if isinstance(storages, list) else []:
+        storage_name = str(entry.get("storage", "")).strip()
+        content = entry.get("content", "")
+        if storage_name and "backup" in str(content):
+            backup_storages.append(storage_name)
+
+    if not backup_storages:
+        return {}, False
+
+    backup_ages = {}
+    successful_queries = 0
+    for node_ip in reachable_nodes:
+        node_name = _pve_node_name(cfg, node_ip)
+        if not node_name:
+            continue
+        for storage_name in backup_storages:
+            content_cmd = (
+                f"pvesh get /nodes/{node_name}/storage/{storage_name}/content "
+                "--content backup --output-format json"
+            )
+            content_out, content_ok = _pve_cmd(cfg, node_ip, content_cmd, timeout=30)
+            if not content_ok or not content_out:
+                continue
+            try:
+                content_items = json.loads(content_out)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            successful_queries += 1
+            for item in content_items if isinstance(content_items, list) else []:
+                if item.get("content") != "backup":
+                    continue
+                vmid = item.get("vmid")
+                ctime = item.get("ctime")
+                try:
+                    vmid = int(vmid)
+                    ctime = int(ctime)
+                except (TypeError, ValueError):
+                    continue
+                if vmid not in backup_ages or ctime > backup_ages[vmid]:
+                    backup_ages[vmid] = ctime
+
+    return backup_ages, successful_queries > 0
+
+
+def _collect_filesystem_backups(cfg, reachable_nodes):
+    """Fallback backup inventory scan for environments without usable storage metadata."""
+    from freq.modules.pve import _pve_cmd
+
+    cmd = (
+        "for d in /var/lib/vz/dump /mnt/*/dump /mnt/pbs-*; do "
+        '  [ -d "$d" ] || continue; '
+        '  for f in "$d"/vzdump-qemu-*.vma* "$d"/vzdump-lxc-*.tar*; do '
+        '    [ -f "$f" ] || continue; '
+        '    base=$(basename "$f"); '
+        "    vmid=$(echo \"$base\" | grep -oP '(?<=vzdump-(qemu|lxc)-)\\d+'); "
+        "    epoch=$(stat -c%Y \"$f\" 2>/dev/null || echo 0); "
+        '    echo "$vmid|$epoch"; '
+        "  done; "
+        "done 2>/dev/null | sort -t'|' -k1,1n -k2,2rn"
+    )
+
+    backup_ages = {}
+    nodes_queried = 0
+    nodes_failed = []
+    for node_ip in reachable_nodes:
+        r = _pve_cmd(cfg, node_ip, cmd, timeout=30)
+        if r[1] and r[0]:
+            nodes_queried += 1
+            for line in r[0].strip().splitlines():
+                parts = line.split("|")
+                if len(parts) >= 2 and parts[0].strip().isdigit():
+                    vid = int(parts[0].strip())
+                    try:
+                        epoch = int(parts[1].strip())
+                    except ValueError:
+                        epoch = 0
+                    if vid not in backup_ages or epoch > backup_ages[vid]:
+                        backup_ages[vid] = epoch
+        elif not r[1]:
+            nodes_failed.append(node_ip)
+    return backup_ages, nodes_queried, nodes_failed
+
+
 def _dr_dir(cfg):
     """Return DR data directory."""
     path = os.path.join(cfg.conf_dir, DR_DIR)
@@ -140,7 +246,7 @@ def cmd_dr_backup_verify(cfg: FreqConfig, pack, args) -> int:
     fmt.header("Backup Verification", breadcrumb="FREQ > DR > Backup")
     fmt.blank()
 
-    from freq.modules.pve import _find_reachable_node, _pve_cmd
+    from freq.modules.pve import _pve_cmd
 
     # Check ALL reachable nodes — backups can live on any node or shared storage
     reachable_nodes = []
@@ -164,48 +270,18 @@ def cmd_dr_backup_verify(cfg: FreqConfig, pack, args) -> int:
         fmt.info("Set targets: freq dr sla set <vmid> --rpo 24 --rto 4")
         fmt.blank()
 
-    # Query backup inventory from ALL reachable nodes
-    # Covers local storage, shared storage, and different node-local dumps
-    cmd = (
-        "for d in /var/lib/vz/dump /mnt/*/dump /mnt/pbs-*; do "
-        '  [ -d "$d" ] || continue; '
-        '  for f in "$d"/vzdump-qemu-*.vma* "$d"/vzdump-lxc-*.tar*; do '
-        '    [ -f "$f" ] || continue; '
-        '    base=$(basename "$f"); '
-        "    vmid=$(echo \"$base\" | grep -oP '(?<=vzdump-(qemu|lxc)-)\\d+'); "
-        "    epoch=$(stat -c%Y \"$f\" 2>/dev/null || echo 0); "
-        '    echo "$vmid|$epoch"; '
-        "  done; "
-        "done 2>/dev/null | sort -t'|' -k1,1n -k2,2rn"
-    )
-
-    backup_ages = {}
-    nodes_queried = 0
-    nodes_failed = []
-    for node_ip in reachable_nodes:
-        r = _pve_cmd(cfg, node_ip, cmd, timeout=30)
-        if r[1] and r[0]:
-            nodes_queried += 1
-            for line in r[0].strip().splitlines():
-                parts = line.split("|")
-                if len(parts) >= 2 and parts[0].strip().isdigit():
-                    vid = int(parts[0].strip())
-                    try:
-                        epoch = int(parts[1].strip())
-                    except ValueError:
-                        epoch = 0
-                    if vid not in backup_ages or epoch > backup_ages[vid]:
-                        backup_ages[vid] = epoch
-        elif not r[1]:
-            nodes_failed.append(node_ip)
-
-    if nodes_queried == 0:
-        fmt.step_fail("Could not list backups from any node")
-        fmt.footer()
-        return 1
-
-    if nodes_failed:
-        fmt.step_warn(f"Backup query failed on: {', '.join(nodes_failed)}")
+    backup_ages, storage_ok = _collect_storage_backups(cfg, reachable_nodes[0], reachable_nodes)
+    if storage_ok:
+        fmt.step_ok("Backup inventory gathered from PVE storage metadata")
+    else:
+        fmt.step_warn("PVE storage metadata unavailable — falling back to filesystem scan")
+        backup_ages, nodes_queried, nodes_failed = _collect_filesystem_backups(cfg, reachable_nodes)
+        if nodes_queried == 0:
+            fmt.step_fail("Could not list backups from any node")
+            fmt.footer()
+            return 1
+        if nodes_failed:
+            fmt.step_warn(f"Backup query failed on: {', '.join(nodes_failed)}")
 
     now = time.time()
     pass_count = 0
