@@ -3,14 +3,13 @@
 Tests validate_config(), _safe_int(), and load_config() edge cases.
 """
 import os
+import tempfile
 import sys
 from unittest.mock import patch, MagicMock
 
-import pytest
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from freq.core.config import validate_config, _safe_int, FreqConfig
+from freq.core.config import validate_config, _safe_int, FreqConfig, _apply_toml, load_hosts_toml, load_config
 from freq.core.types import Host
 
 
@@ -128,3 +127,39 @@ class TestConfigCaching:
             config.load_config(force=True)
         except Exception:
             pass  # Expected in test env without freq installed
+
+
+class TestConfigTrustHardening:
+    """Regression coverage for malformed config that must not take down startup."""
+
+    def test_apply_toml_tolerates_scalar_pve_storage_entries(self):
+        cfg = FreqConfig()
+        _apply_toml(cfg, {"pve": {"storage": {"node1": "local-lvm"}}})
+        assert cfg.pve_storage["node1"] == {"pool": "", "type": ""}
+
+    def test_load_hosts_toml_tolerates_bad_vmid(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write('[[host]]\nip = "10.0.0.10"\nlabel = "bad"\ntype = "linux"\nvmid = "oops"\n')
+            path = f.name
+        try:
+            hosts = load_hosts_toml(path)
+            assert len(hosts) == 1
+            assert hosts[0].vmid == 0
+        finally:
+            os.unlink(path)
+
+    def test_load_config_skips_duplicate_labels(self):
+        with tempfile.TemporaryDirectory() as td:
+            conf_dir = os.path.join(td, "conf")
+            os.makedirs(conf_dir, exist_ok=True)
+            with open(os.path.join(conf_dir, "freq.toml"), "w") as f:
+                f.write("[freq]\nversion = \"test\"\n")
+            with open(os.path.join(conf_dir, "hosts.toml"), "w") as f:
+                f.write(
+                    '[[host]]\nip = "10.0.0.1"\nlabel = "dup"\ntype = "linux"\n\n'
+                    '[[host]]\nip = "10.0.0.2"\nlabel = "dup"\ntype = "linux"\n'
+                )
+
+            cfg = load_config(td, force=True)
+            assert len(cfg.hosts) == 1
+            assert cfg.hosts[0].ip == "10.0.0.1"

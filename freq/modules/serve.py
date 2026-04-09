@@ -2175,6 +2175,21 @@ a:hover{{text-decoration:underline}}
             pve_nodes = str(pve_nodes_value).strip()
             node_ips = [ip.strip() for ip in pve_nodes.split(",") if ip.strip()] if pve_nodes else []
 
+        try:
+            import zoneinfo
+
+            zoneinfo.ZoneInfo(timezone or "UTC")
+        except Exception:
+            self._json_response({"error": f"Invalid timezone: {timezone}"}, 400)
+            return
+
+        from freq.core import validate as _val
+
+        invalid_nodes = [ip for ip in node_ips if not _val.ip(ip)]
+        if invalid_nodes:
+            self._json_response({"error": f"Invalid PVE node IP(s): {', '.join(invalid_nodes)}"}, 400)
+            return
+
         cfg = load_config()
 
         toml_path = os.path.join(cfg.conf_dir, "freq.toml")
@@ -2349,14 +2364,14 @@ a:hover{{text-decoration:underline}}
         host = params.get("host", [""])[0].strip()
 
         if not host:
-            self._json_response({"error": "host parameter required"})
+            self._json_response({"error": "host parameter required"}, 400)
             return
 
         # Basic IP/hostname validation
         from freq.core import validate as _val
 
         if not (_val.ip(host) or _val.hostname(host)):
-            self._json_response({"error": f"Invalid host: {host}"})
+            self._json_response({"error": f"Invalid host: {host}"}, 400)
             return
 
         cfg = load_config()
@@ -2396,10 +2411,11 @@ a:hover{{text-decoration:underline}}
                         "host": host,
                         "user": user,
                         "error": err,
-                    }
+                    },
+                    502,
                 )
         except Exception as e:
-            self._json_response({"ok": False, "host": host, "error": str(e)[:200]})
+            self._json_response({"ok": False, "host": host, "error": str(e)[:200]}, 502)
 
     def _serve_setup_reset(self):
         """Reset setup wizard — admin only. Deletes setup-complete marker."""

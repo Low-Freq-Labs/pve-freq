@@ -10,6 +10,7 @@ Covers:
 - Route dispatch table completeness
 """
 import json
+import importlib
 import os
 import shutil
 import sys
@@ -571,6 +572,20 @@ class TestRouteTable(unittest.TestCase):
     def test_all_api_routes_start_with_slash(self):
         for path in self.handler_cls._ROUTES:
             self.assertTrue(path.startswith("/"), f"Route '{path}' missing leading /")
+
+    def test_build_routes_raises_on_import_error(self):
+        from freq.api import build_routes
+
+        orig_import_module = importlib.import_module
+
+        def fake_import_module(name, package=None):
+            if name == "freq.api.vm":
+                raise ImportError("boom")
+            return orig_import_module(name, package)
+
+        with patch("importlib.import_module", side_effect=fake_import_module):
+            with self.assertRaises(ImportError):
+                build_routes()
 
 
 # ═══════════════════════════════════════════════════════════════════

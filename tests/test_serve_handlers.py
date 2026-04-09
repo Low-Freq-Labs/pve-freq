@@ -249,6 +249,75 @@ class TestServeMediaUpdate:
         assert "error" in data
 
 
+class TestSetupHandlers:
+    """Trust-critical setup handler behavior."""
+
+    @patch("freq.modules.serve._is_first_run", return_value=True)
+    @patch("freq.modules.serve.load_config")
+    def test_setup_configure_rejects_invalid_timezone(self, mock_cfg_fn, _mock_first_run):
+        cfg = _mock_cfg(conf_dir="/tmp/freq-test-conf")
+        mock_cfg_fn.return_value = cfg
+
+        h = _make_handler("/api/setup/configure")
+        h.command = "POST"
+        h._request_body = lambda: {"cluster_name": "dc01", "timezone": "Mars/Phobos", "pve_nodes": ["10.0.0.1"]}
+
+        h._serve_setup_configure()
+
+        assert h._status_code == 400
+        data = _get_json(h)
+        assert "Invalid timezone" in data["error"]
+
+    @patch("freq.modules.serve._is_first_run", return_value=True)
+    @patch("freq.modules.serve.load_config")
+    def test_setup_configure_rejects_invalid_pve_nodes(self, mock_cfg_fn, _mock_first_run):
+        cfg = _mock_cfg(conf_dir="/tmp/freq-test-conf")
+        mock_cfg_fn.return_value = cfg
+
+        h = _make_handler("/api/setup/configure")
+        h.command = "POST"
+        h._request_body = lambda: {"cluster_name": "dc01", "timezone": "UTC", "pve_nodes": ["bad-ip", "10.0.0.2"]}
+
+        h._serve_setup_configure()
+
+        assert h._status_code == 400
+        data = _get_json(h)
+        assert "Invalid PVE node IP" in data["error"]
+
+    @patch("freq.modules.serve._is_first_run", return_value=True)
+    def test_setup_test_ssh_requires_host(self, _mock_first_run):
+        h = _make_handler("/api/setup/test-ssh")
+        h._serve_setup_test_ssh()
+
+        assert h._status_code == 400
+        data = _get_json(h)
+        assert data["error"] == "host parameter required"
+
+    @patch("freq.modules.serve._is_first_run", return_value=True)
+    def test_setup_test_ssh_rejects_invalid_host(self, _mock_first_run):
+        h = _make_handler("/api/setup/test-ssh?host=bad host")
+        h._serve_setup_test_ssh()
+
+        assert h._status_code == 400
+        data = _get_json(h)
+        assert "Invalid host" in data["error"]
+
+    @patch("freq.modules.serve.ssh_single")
+    @patch("freq.modules.serve.load_config")
+    @patch("freq.modules.serve._is_first_run", return_value=True)
+    def test_setup_test_ssh_returns_502_on_connection_failure(self, _mock_first_run, mock_cfg_fn, mock_ssh_single):
+        mock_cfg_fn.return_value = _mock_cfg(ssh_connect_timeout=5, ssh_service_account="freq-admin")
+        mock_ssh_single.return_value = _mock_ssh_result("", "Permission denied", 255)
+
+        h = _make_handler("/api/setup/test-ssh?host=10.0.0.1")
+        h._serve_setup_test_ssh()
+
+        assert h._status_code == 502
+        data = _get_json(h)
+        assert data["ok"] is False
+        assert data["error"] == "Permission denied"
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # JSON Response Mechanics
 # ══════════════════════════════════════════════════════════════════════════
