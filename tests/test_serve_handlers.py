@@ -12,6 +12,7 @@ import io
 import json
 import os
 import sys
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -283,6 +284,78 @@ class TestSetupHandlers:
         assert h._status_code == 400
         data = _get_json(h)
         assert "Invalid PVE node IP" in data["error"]
+
+    @patch("freq.modules.serve._is_first_run", return_value=True)
+    @patch("freq.modules.serve.load_config")
+    def test_setup_configure_requires_cluster_name(self, mock_cfg_fn, _mock_first_run):
+        cfg = _mock_cfg(conf_dir="/tmp/freq-test-conf")
+        mock_cfg_fn.return_value = cfg
+
+        h = _make_handler("/api/setup/configure")
+        h.command = "POST"
+        h._request_body = lambda: {"cluster_name": "", "timezone": "UTC", "pve_nodes": ["10.0.0.1"]}
+
+        h._serve_setup_configure()
+
+        assert h._status_code == 400
+        data = _get_json(h)
+        assert data["error"] == "cluster_name is required"
+
+    @patch("freq.modules.serve._is_first_run", return_value=True)
+    @patch("freq.modules.serve.load_config")
+    def test_setup_configure_requires_pve_nodes(self, mock_cfg_fn, _mock_first_run):
+        cfg = _mock_cfg(conf_dir="/tmp/freq-test-conf")
+        mock_cfg_fn.return_value = cfg
+
+        h = _make_handler("/api/setup/configure")
+        h.command = "POST"
+        h._request_body = lambda: {"cluster_name": "dc01", "timezone": "UTC", "pve_nodes": []}
+
+        h._serve_setup_configure()
+
+        assert h._status_code == 400
+        data = _get_json(h)
+        assert data["error"] == "At least one PVE node IP is required"
+
+    @patch("freq.modules.serve._is_first_run", return_value=True)
+    @patch("freq.modules.serve.load_config")
+    def test_setup_configure_rejects_duplicate_pve_nodes(self, mock_cfg_fn, _mock_first_run):
+        cfg = _mock_cfg(conf_dir="/tmp/freq-test-conf")
+        mock_cfg_fn.return_value = cfg
+
+        h = _make_handler("/api/setup/configure")
+        h.command = "POST"
+        h._request_body = lambda: {"cluster_name": "dc01", "timezone": "UTC", "pve_nodes": ["10.0.0.1", "10.0.0.1"]}
+
+        h._serve_setup_configure()
+
+        assert h._status_code == 400
+        data = _get_json(h)
+        assert data["error"] == "Duplicate PVE node IPs are not allowed"
+
+    @patch("freq.modules.serve._is_first_run", return_value=True)
+    @patch("freq.modules.serve.load_config")
+    def test_setup_configure_writes_default_node_names(self, mock_cfg_fn, _mock_first_run):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _mock_cfg(conf_dir=td)
+            mock_cfg_fn.return_value = cfg
+
+            h = _make_handler("/api/setup/configure")
+            h.command = "POST"
+            h._request_body = lambda: {
+                "cluster_name": "dc01",
+                "timezone": "UTC",
+                "pve_nodes": ["10.0.0.1", "10.0.0.2"],
+            }
+
+            h._serve_setup_configure()
+
+            assert h._status_code == 200
+            data = _get_json(h)
+            assert data["pve_node_names"] == ["pve01", "pve02"]
+            with open(os.path.join(td, "freq.toml")) as f:
+                content = f.read()
+            assert 'node_names = ["pve01", "pve02"]' in content
 
     @patch("freq.modules.serve._is_first_run", return_value=True)
     def test_setup_test_ssh_requires_host(self, _mock_first_run):

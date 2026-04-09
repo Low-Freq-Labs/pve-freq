@@ -2175,6 +2175,13 @@ a:hover{{text-decoration:underline}}
             pve_nodes = str(pve_nodes_value).strip()
             node_ips = [ip.strip() for ip in pve_nodes.split(",") if ip.strip()] if pve_nodes else []
 
+        if not cluster_name:
+            self._json_response({"error": "cluster_name is required"}, 400)
+            return
+        if not node_ips:
+            self._json_response({"error": "At least one PVE node IP is required"}, 400)
+            return
+
         try:
             import zoneinfo
 
@@ -2189,6 +2196,11 @@ a:hover{{text-decoration:underline}}
         if invalid_nodes:
             self._json_response({"error": f"Invalid PVE node IP(s): {', '.join(invalid_nodes)}"}, 400)
             return
+        if len(set(node_ips)) != len(node_ips):
+            self._json_response({"error": "Duplicate PVE node IPs are not allowed"}, 400)
+            return
+
+        node_names = [f"pve{i + 1:02d}" for i in range(len(node_ips))]
 
         cfg = load_config()
 
@@ -2219,17 +2231,23 @@ a:hover{{text-decoration:underline}}
                     content = "[freq]\n\n[pve]\nnodes = []\n"
 
             # Update only the targeted keys (preserves everything else)
-            if cluster_name:
-                content = _update_toml_value(content, "cluster_name", cluster_name)
+            content = _update_toml_value(content, "cluster_name", cluster_name)
             content = _update_toml_value(content, "timezone", timezone)
-
-            if node_ips:
-                content = _update_toml_value(content, "nodes", node_ips)
+            content = _update_toml_value(content, "nodes", node_ips)
+            content = _update_toml_value(content, "node_names", node_names)
 
             with open(toml_path, "w") as f:
                 f.write(content)
 
-            self._json_response({"ok": True, "cluster_name": cluster_name, "timezone": timezone, "pve_nodes": node_ips})
+            self._json_response(
+                {
+                    "ok": True,
+                    "cluster_name": cluster_name,
+                    "timezone": timezone,
+                    "pve_nodes": node_ips,
+                    "pve_node_names": node_names,
+                }
+            )
         except OSError as e:
             self._json_response({"error": f"Failed to write config: {e}"}, 500)
 
