@@ -33,12 +33,17 @@ def _pve_ssh(cfg, node_ip, cmd, timeout=60):
 
 
 def _find_node_ip(cfg, node_name=None):
-    """Find a reachable PVE node IP."""
+    """Find a reachable PVE node IP. Tries named node first, then all nodes."""
     if node_name:
         for i, name in enumerate(cfg.pve_node_names):
             if name == node_name and i < len(cfg.pve_nodes):
                 return cfg.pve_nodes[i]
-    return cfg.pve_nodes[0] if cfg.pve_nodes else None
+    # Try each node until one responds
+    for ip in cfg.pve_nodes:
+        r = _pve_ssh(cfg, ip, "echo OK", timeout=5)
+        if r.returncode == 0:
+            return ip
+    return None
 
 
 # -- Handlers ----------------------------------------------------------------
@@ -94,17 +99,35 @@ def handle_backup_verify(handler):
         )
 
     r = _pve_ssh(cfg, node_ip, cmd, timeout=120)
-    ok = r.returncode == 0 and "NO_BACKUP_FOUND" not in (r.stdout or "")
+
+    # Explicit status: pass, fail, unknown — never ambiguous
+    if r.returncode != 0 and not r.stdout:
+        status = "unknown"
+        http_code = 502
+        detail = r.stderr[:500] if r.stderr else "SSH command failed"
+    elif "NO_BACKUP_FOUND" in (r.stdout or ""):
+        status = "fail"
+        http_code = 200
+        detail = f"No backup found for VM {vmid}"
+    elif r.returncode == 0:
+        status = "pass"
+        http_code = 200
+        detail = ""
+    else:
+        status = "fail"
+        http_code = 200
+        detail = r.stderr[:500] if r.stderr else "Verification failed"
 
     json_response(
         handler,
         {
-            "ok": ok,
+            "status": status,
             "vmid": vmid,
             "node": node or "auto",
             "output": r.stdout[:2000] if r.stdout else "",
-            "error": r.stderr[:500] if not ok and r.stderr else "",
+            "error": detail,
         },
+        http_code,
     )
 
 
@@ -133,8 +156,21 @@ def handle_backup_verify_status(handler):
     )
     r = _pve_ssh(cfg, node_ip, cmd, timeout=30)
 
+    if r.returncode != 0:
+        json_response(
+            handler,
+            {
+                "status": "unknown",
+                "error": f"Could not query backups: {(r.stderr or 'SSH failed')[:200]}",
+                "backups": [],
+                "total_vms_with_backups": 0,
+            },
+            502,
+        )
+        return
+
     backups = {}
-    if r.returncode == 0 and r.stdout.strip():
+    if r.stdout.strip():
         for line in r.stdout.strip().splitlines():
             parts = line.split("|")
             if len(parts) < 5:
@@ -160,7 +196,7 @@ def handle_backup_verify_status(handler):
     json_response(
         handler,
         {
-            "ok": True,
+            "status": "pass",
             "backups": list(backups.values()),
             "total_vms_with_backups": len(backups),
         },
