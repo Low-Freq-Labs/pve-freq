@@ -167,16 +167,16 @@ def cmd_dr_backup_verify(cfg: FreqConfig, pack, args) -> int:
     # Query backup inventory from ALL reachable nodes
     # Covers local storage, shared storage, and different node-local dumps
     cmd = (
-        "for d in /var/lib/vz/dump /mnt/*/dump /mnt/pbs-* 2>/dev/null; do "
-        "  [ -d \"$d\" ] || continue; "
-        "  for f in \"$d\"/vzdump-qemu-*.vma* \"$d\"/vzdump-lxc-*.tar* 2>/dev/null; do "
+        "for d in /var/lib/vz/dump /mnt/*/dump /mnt/pbs-*; do "
+        '  [ -d "$d" ] || continue; '
+        '  for f in "$d"/vzdump-qemu-*.vma* "$d"/vzdump-lxc-*.tar*; do '
         '    [ -f "$f" ] || continue; '
         '    base=$(basename "$f"); '
         "    vmid=$(echo \"$base\" | grep -oP '(?<=vzdump-(qemu|lxc)-)\\d+'); "
         "    epoch=$(stat -c%Y \"$f\" 2>/dev/null || echo 0); "
         '    echo "$vmid|$epoch"; '
         "  done; "
-        "done | sort -t'|' -k1,1n -k2,2rn"
+        "done 2>/dev/null | sort -t'|' -k1,1n -k2,2rn"
     )
 
     backup_ages = {}
