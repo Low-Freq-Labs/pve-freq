@@ -79,11 +79,18 @@ def _cmd_tail(cfg: FreqConfig, args) -> int:
         use_sudo=True,
     )
 
+    reachable = 0
+    unreachable = []
     for h in hosts:
         r = results.get(h.label)
-        if not r or r.returncode != 0 or not r.stdout.strip():
+        if not r or r.returncode != 0:
+            unreachable.append(h.label)
+            continue
+        if not r.stdout.strip():
+            reachable += 1
             continue
 
+        reachable += 1
         fmt.divider(h.label)
         fmt.blank()
         for line in r.stdout.strip().split("\n")[-lines:]:
@@ -96,6 +103,12 @@ def _cmd_tail(cfg: FreqConfig, args) -> int:
                 fmt.line(f"  {fmt.C.DIM}{line}{fmt.C.RESET}")
         fmt.blank()
 
+    if unreachable:
+        fmt.blank()
+        fmt.line(f"  {fmt.C.RED}{len(unreachable)} host(s) unreachable:{fmt.C.RESET} {', '.join(unreachable)}")
+
+    fmt.blank()
+    fmt.line(f"  {fmt.C.DIM}{reachable}/{len(hosts)} hosts returned logs{fmt.C.RESET}")
     fmt.footer()
     return 0
 
@@ -144,7 +157,20 @@ def _cmd_search(cfg: FreqConfig, args) -> int:
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=True,
     )
-    fmt.step_ok("Search complete")
+
+    reachable = 0
+    unreachable = []
+    for h in hosts:
+        r = results.get(h.label)
+        if not r or r.returncode != 0:
+            unreachable.append(h.label)
+        else:
+            reachable += 1
+
+    if unreachable:
+        fmt.step_warn(f"Search done — {len(unreachable)} host(s) unreachable")
+    else:
+        fmt.step_ok(f"Search complete — {reachable} hosts checked")
     fmt.blank()
 
     total_matches = 0
@@ -175,11 +201,14 @@ def _cmd_search(cfg: FreqConfig, args) -> int:
             fmt.line(f"  {fmt.C.DIM}... +{len(match_lines) - 20} more{fmt.C.RESET}")
         fmt.blank()
 
+    if unreachable:
+        fmt.line(f"  {fmt.C.RED}Unreachable:{fmt.C.RESET} {', '.join(unreachable)}")
+
     if total_matches == 0:
         fmt.line(f"  {fmt.C.DIM}No matches for '{pattern}' in last {since}.{fmt.C.RESET}")
 
     fmt.blank()
-    fmt.line(f"  {fmt.C.BOLD}{total_matches}{fmt.C.RESET} total matches across {len(hosts)} hosts")
+    fmt.line(f"  {fmt.C.BOLD}{total_matches}{fmt.C.RESET} matches across {reachable}/{len(hosts)} reachable hosts")
     fmt.blank()
     fmt.footer()
     return 0

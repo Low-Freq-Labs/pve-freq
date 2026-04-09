@@ -38,6 +38,14 @@ def handle_alert_rules(handler):
     json_response(handler, {"rules": rules, "count": len(rules), "silences": silences})
 
 
+def _safe_int_param(params, key, default):
+    """Parse an integer query parameter safely. Returns default on bad input."""
+    try:
+        return int(params.get(key, [str(default)])[0])
+    except (ValueError, TypeError):
+        return default
+
+
 def handle_alert_history(handler):
     """GET /api/alert/history — get alert history."""
     from freq.modules.alert import _load_history
@@ -45,7 +53,7 @@ def handle_alert_history(handler):
     cfg = load_config()
     history = _load_history(cfg)
     params = get_params(handler)
-    limit = int(params.get("limit", ["50"])[0])
+    limit = _safe_int_param(params, "limit", 50)
     json_response(handler, {"history": history[-limit:], "total": len(history)})
 
 
@@ -86,7 +94,7 @@ def handle_trend_data(handler):
     cfg = load_config()
     data = _load_trend_data(cfg)
     params = get_params(handler)
-    limit = int(params.get("limit", ["100"])[0])
+    limit = _safe_int_param(params, "limit", 100)
     json_response(handler, {"snapshots": data[-limit:], "total": len(data)})
 
 
@@ -114,7 +122,7 @@ def handle_sla(handler):
     cfg = load_config()
     data = _load_sla_data(cfg)
     params = get_params(handler)
-    days = int(params.get("days", ["30"])[0])
+    days = _safe_int_param(params, "days", 30)
     all_hosts = set()
     for c in data.get("checks", []):
         all_hosts.update(c.get("results", {}).keys())
@@ -331,9 +339,11 @@ def handle_db_status(handler):
     )
 
     databases = []
+    unreachable = []
     for h in hosts:
         r = results.get(h.label)
         if not r or r.returncode != 0:
+            unreachable.append(h.label)
             continue
         parts = r.stdout.strip().split("|")
         if len(parts) < 4:
@@ -360,7 +370,12 @@ def handle_db_status(handler):
             }
         )
 
-    json_response(handler, {"databases": databases, "total": len(databases)})
+    json_response(handler, {
+        "databases": databases,
+        "total": len(databases),
+        "hosts_checked": len(hosts) - len(unreachable),
+        "hosts_unreachable": unreachable,
+    })
 
 
 def handle_logs_stats(handler):
