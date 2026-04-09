@@ -595,6 +595,66 @@ class TestPhaseConfigure(unittest.TestCase):
         self.assertEqual(cfg.vm_gateway, "192.168.1.1")
         self.assertEqual(cfg.vm_nameserver, "8.8.4.4")
 
+    @patch("freq.core.config.load_config")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_phase_configure_rejects_invalid_cli_pve_nodes(self, mock_fmt, mock_input, mock_lc):
+        cfg = self._make_cfg()
+        args = MagicMock()
+        args.pve_nodes = "10.0.0.1 bad-ip"
+        args.pve_node_names = "pve01 pve02"
+        args.gateway = None
+        args.nameserver = None
+        args.hosts_file = None
+        args.yes = False
+
+        mock_input.side_effect = [
+            "10.0.0.1",
+            "1.1.1.1",
+            "",
+            "sudo",
+        ]
+        mock_lc.return_value = cfg
+
+        from freq.modules.init_cmd import _phase_configure
+        _phase_configure(cfg, args)
+
+        with open(self.toml_path) as f:
+            content = f.read()
+
+        self.assertNotIn("bad-ip", content)
+        self.assertEqual(cfg.pve_nodes, [])
+        mock_fmt.step_fail.assert_any_call("Invalid PVE node IP(s) from CLI: bad-ip")
+
+    @patch("freq.core.config.load_config")
+    @patch("freq.modules.init_cmd._input")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_phase_configure_rejects_invalid_cli_gateway(self, mock_fmt, mock_input, mock_lc):
+        cfg = self._make_cfg()
+        args = MagicMock()
+        args.pve_nodes = "10.0.0.1"
+        args.pve_node_names = "pve01"
+        args.gateway = "not-an-ip"
+        args.nameserver = "8.8.4.4"
+        args.hosts_file = None
+        args.yes = False
+
+        mock_input.side_effect = [
+            "mylab",
+            "sudo",
+        ]
+        mock_lc.return_value = cfg
+
+        from freq.modules.init_cmd import _phase_configure
+        _phase_configure(cfg, args)
+
+        with open(self.toml_path) as f:
+            content = f.read()
+
+        self.assertNotIn('gateway = "not-an-ip"', content)
+        self.assertEqual(cfg.vm_gateway, "")
+        mock_fmt.step_fail.assert_any_call("Invalid gateway IP from CLI: not-an-ip")
+
     @patch("freq.modules.init_cmd._confirm")
     @patch("freq.modules.init_cmd._input")
     @patch("freq.modules.init_cmd.fmt")

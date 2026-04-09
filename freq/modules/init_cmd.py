@@ -710,6 +710,11 @@ def _phase_configure(cfg, args=None):
     cli_cluster_name = getattr(args, "cluster_name", None) if args else None
     cli_ssh_mode = getattr(args, "ssh_mode", None) if args else None
 
+    from freq.core import validate as _val
+
+    def _invalid_ip_values(values):
+        return [value for value in values if value and not _val.ip(value)]
+
     # ── PVE Nodes ──
     if cli_pve_nodes:
         # CLI override — skip interactive prompt
@@ -722,12 +727,16 @@ def _phase_configure(cfg, args=None):
         )
         while len(names) < len(nodes):
             names.append(f"pve{len(names) + 1:02d}")
-        content = _update_toml_value(content, "nodes", nodes)
-        content = _update_toml_value(content, "node_names", names)
-        cfg.pve_nodes = nodes
-        cfg.pve_node_names = names
-        changed = True
-        fmt.step_ok(f"PVE nodes (from CLI): {', '.join(nodes)}")
+        invalid_nodes = _invalid_ip_values(nodes)
+        if invalid_nodes:
+            fmt.step_fail(f"Invalid PVE node IP(s) from CLI: {', '.join(invalid_nodes)}")
+        else:
+            content = _update_toml_value(content, "nodes", nodes)
+            content = _update_toml_value(content, "node_names", names)
+            cfg.pve_nodes = nodes
+            cfg.pve_node_names = names
+            changed = True
+            fmt.step_ok(f"PVE nodes (from CLI): {', '.join(nodes)}")
     elif cfg.pve_nodes:
         fmt.step_ok(f"PVE nodes already configured: {', '.join(cfg.pve_nodes)}")
         if not headless and not yes_flag and _confirm("Reconfigure PVE nodes?"):
@@ -740,6 +749,11 @@ def _phase_configure(cfg, args=None):
         node_input = _input("PVE node IPs")
         if node_input:
             nodes = node_input.split()
+            invalid_nodes = _invalid_ip_values(nodes)
+            if invalid_nodes:
+                fmt.step_fail(f"Invalid PVE node IP(s): {', '.join(invalid_nodes)}")
+                nodes = []
+        if node_input and nodes:
             # Ask for node names
             fmt.line(f"  {fmt.C.DIM}Enter names for each node (space-separated, same order).{fmt.C.RESET}")
             name_default = " ".join(f"pve{i + 1:02d}" for i in range(len(nodes)))
@@ -797,29 +811,38 @@ def _phase_configure(cfg, args=None):
     # ── Gateway ──
     fmt.blank()
     if cli_gateway:
-        content = _update_toml_value(content, "gateway", cli_gateway)
-        cfg.vm_gateway = cli_gateway
-        changed = True
-        fmt.step_ok(f"Gateway (from CLI): {cli_gateway}")
+        if not _val.ip(cli_gateway):
+            fmt.step_fail(f"Invalid gateway IP from CLI: {cli_gateway}")
+        else:
+            content = _update_toml_value(content, "gateway", cli_gateway)
+            cfg.vm_gateway = cli_gateway
+            changed = True
+            fmt.step_ok(f"Gateway (from CLI): {cli_gateway}")
     elif cfg.vm_gateway:
         fmt.step_ok(f"Gateway: {cfg.vm_gateway}")
     else:
         fmt.line(f"  {fmt.C.DIM}Your network gateway IP (for VM networking).{fmt.C.RESET}")
         gw = _input("Gateway IP")
         if gw:
-            content = _update_toml_value(content, "gateway", gw)
-            cfg.vm_gateway = gw
-            changed = True
-            fmt.step_ok(f"Gateway: {gw}")
+            if not _val.ip(gw):
+                fmt.step_fail(f"Invalid gateway IP: {gw}")
+            else:
+                content = _update_toml_value(content, "gateway", gw)
+                cfg.vm_gateway = gw
+                changed = True
+                fmt.step_ok(f"Gateway: {gw}")
         else:
             fmt.step_warn("No gateway set — VM networking may not work")
 
     # ── Nameserver ──
     if cli_nameserver:
-        content = _update_toml_value(content, "nameserver", cli_nameserver)
-        cfg.vm_nameserver = cli_nameserver
-        changed = True
-        fmt.step_ok(f"Nameserver (from CLI): {cli_nameserver}")
+        if not _val.ip(cli_nameserver):
+            fmt.step_fail(f"Invalid nameserver IP from CLI: {cli_nameserver}")
+        else:
+            content = _update_toml_value(content, "nameserver", cli_nameserver)
+            cfg.vm_nameserver = cli_nameserver
+            changed = True
+            fmt.step_ok(f"Nameserver (from CLI): {cli_nameserver}")
     elif cfg.vm_nameserver and cfg.vm_nameserver != "1.1.1.1":
         fmt.step_ok(f"Nameserver: {cfg.vm_nameserver}")
     elif headless:
@@ -828,10 +851,13 @@ def _phase_configure(cfg, args=None):
     else:
         ns = _input("DNS nameserver", cfg.vm_nameserver or "1.1.1.1")
         if ns != (cfg.vm_nameserver or "1.1.1.1"):
-            content = _update_toml_value(content, "nameserver", ns)
-            cfg.vm_nameserver = ns
-            changed = True
-            fmt.step_ok(f"Nameserver: {ns}")
+            if not _val.ip(ns):
+                fmt.step_fail(f"Invalid nameserver IP: {ns}")
+            else:
+                content = _update_toml_value(content, "nameserver", ns)
+                cfg.vm_nameserver = ns
+                changed = True
+                fmt.step_ok(f"Nameserver: {ns}")
         else:
             fmt.step_ok(f"Nameserver: {ns} (default)")
 
