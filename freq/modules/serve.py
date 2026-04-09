@@ -1850,8 +1850,10 @@ class FreqHandler(BaseHTTPRequestHandler):
                     use_sudo=False,
                 )
                 if r.returncode == 0 and "no-dl-client" not in r.stdout:
-                    downloads["total"] = len([l for l in r.stdout.split("\n") if l.strip()])
-                break
+                    lines = [l for l in r.stdout.split("\n") if l.strip()]
+                    downloads["total"] += len(lines)
+                    for line in lines:
+                        downloads["active"].append({"host": h.get("label", ""), "detail": line})
 
         self._json_response(downloads)
 
@@ -1921,11 +1923,18 @@ class FreqHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._json_response({"commits": [], "count": 0, "error": str(e)})
 
+    def _documented_routes(self):
+        """Return combined legacy and v1 route tables for docs/spec generation."""
+        routes = dict(self._ROUTES)
+        self._load_v1_routes()
+        routes.update(self._V1_ROUTES or {})
+        return routes
+
     def _serve_api_docs(self):
         """Self-contained API documentation page."""
         from freq import __version__
 
-        routes = self._ROUTES
+        routes = self._documented_routes()
         # Group routes by category
         categories = {}
         for path, method_name in sorted(routes.items()):
@@ -1994,7 +2003,7 @@ a:hover{{text-decoration:underline}}
         """OpenAPI 3.0 spec generated from route table."""
         from freq import __version__
 
-        routes = self._ROUTES
+        routes = self._documented_routes()
         paths = {}
         for path, method_name in sorted(routes.items()):
             if path in ("/", "/dashboard", "/api/docs", "/api/openapi.json"):
@@ -2104,16 +2113,19 @@ a:hover{{text-decoration:underline}}
             password = password or params.get("password", [""])[0]
 
         if not username or not password:
-            self._json_response({"error": "Username and password required"})
+            self._json_response({"error": "Username and password required"}, 400)
             return
 
         # Validate username
         if not re.match(r"^[a-z_][a-z0-9_-]{0,31}$", username):
-            self._json_response({"error": "Invalid username (lowercase, 1-32 chars, alphanumeric/hyphens/underscores)"})
+            self._json_response(
+                {"error": "Invalid username (lowercase, 1-32 chars, alphanumeric/hyphens/underscores)"},
+                400,
+            )
             return
 
         if len(password) < 8:
-            self._json_response({"error": "Password must be at least 8 characters"})
+            self._json_response({"error": "Password must be at least 8 characters"}, 400)
             return
 
         cfg = load_config()
@@ -2121,7 +2133,7 @@ a:hover{{text-decoration:underline}}
         # Create user in users.conf
         users = _load_users(cfg)
         if any(u["username"] == username for u in users):
-            self._json_response({"error": f"User '{username}' already exists"})
+            self._json_response({"error": f"User '{username}' already exists"}, 409)
             return
 
         users.append({"username": username, "role": "admin", "groups": ""})
@@ -2152,10 +2164,16 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": "Setup already complete"}, 403)
             return
 
+        body = self._request_body() if self.command == "POST" else {}
         params = _parse_query(self)
-        cluster_name = params.get("cluster_name", [""])[0].strip()
-        timezone = params.get("timezone", ["UTC"])[0].strip()
-        pve_nodes = params.get("pve_nodes", [""])[0].strip()
+        cluster_name = str(body.get("cluster_name", params.get("cluster_name", [""])[0])).strip()
+        timezone = str(body.get("timezone", params.get("timezone", ["UTC"])[0])).strip()
+        pve_nodes_value = body.get("pve_nodes", params.get("pve_nodes", [""])[0])
+        if isinstance(pve_nodes_value, list):
+            node_ips = [str(ip).strip() for ip in pve_nodes_value if str(ip).strip()]
+        else:
+            pve_nodes = str(pve_nodes_value).strip()
+            node_ips = [ip.strip() for ip in pve_nodes.split(",") if ip.strip()] if pve_nodes else []
 
         cfg = load_config()
 
@@ -2190,15 +2208,13 @@ a:hover{{text-decoration:underline}}
                 content = _update_toml_value(content, "cluster_name", cluster_name)
             content = _update_toml_value(content, "timezone", timezone)
 
-            if pve_nodes:
-                node_ips = [ip.strip() for ip in pve_nodes.split(",") if ip.strip()]
-                if node_ips:
-                    content = _update_toml_value(content, "nodes", node_ips)
+            if node_ips:
+                content = _update_toml_value(content, "nodes", node_ips)
 
             with open(toml_path, "w") as f:
                 f.write(content)
 
-            self._json_response({"ok": True, "cluster_name": cluster_name, "timezone": timezone})
+            self._json_response({"ok": True, "cluster_name": cluster_name, "timezone": timezone, "pve_nodes": node_ips})
         except OSError as e:
             self._json_response({"error": f"Failed to write config: {e}"}, 500)
 

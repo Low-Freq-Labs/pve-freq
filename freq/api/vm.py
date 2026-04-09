@@ -25,7 +25,7 @@ from freq.core.validate import (
     is_protected_vmid,
     vlan_id as valid_vlan,
 )
-from freq.modules.pve import _find_reachable_node, _pve_cmd
+from freq.modules.pve import _find_reachable_node, _find_vm_node, _pve_cmd
 from freq.modules.serve import (
     _get_fleet_vms,
     _check_vm_permission,
@@ -41,6 +41,27 @@ def _require_post(handler, action="this operation"):
         json_response(handler, {"error": f"{action} requires POST"}, 405)
         return True
     return False
+
+
+def _get_int_param(handler, params, key, default=None, required=False):
+    """Parse an integer query parameter and return None after responding on error."""
+    raw_default = "" if required else ("" if default is None else str(default))
+    raw = params.get(key, [raw_default])[0]
+    if raw in ("", None):
+        if required:
+            json_response(handler, {"error": f"{key} parameter required"}, 400)
+            return None
+        return default
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
+        json_response(handler, {"error": f"Invalid {key}: {raw}"}, 400)
+        return None
+
+
+def _find_vm_node_ip(cfg, vmid: int) -> str:
+    """Resolve the actual PVE node for an existing VM."""
+    return _find_vm_node(cfg, vmid, "")
 
 
 # ── Handlers ────────────────────────────────────────────────────────────
@@ -64,8 +85,12 @@ def handle_vm_create(handler):
     cfg = load_config()
     params = get_params(handler)
     name = params.get("name", [""])[0]
-    cores = int(params.get("cores", ["2"])[0])
-    ram = int(params.get("ram", ["2048"])[0])
+    cores = _get_int_param(handler, params, "cores", default=2)
+    if cores is None:
+        return
+    ram = _get_int_param(handler, params, "ram", default=2048)
+    if ram is None:
+        return
     if not name:
         json_response(handler, {"error": "Name required"})
         return
@@ -129,7 +154,9 @@ def handle_vm_destroy(handler):
         return
     cfg = load_config()
     params = get_params(handler)
-    vmid = int(params.get("vmid", ["0"])[0])
+    vmid = _get_int_param(handler, params, "vmid", required=True)
+    if vmid is None:
+        return
     # Fleet boundary check — only admin-tier VMs can be destroyed
     allowed, err = _check_vm_permission(cfg, vmid, "destroy")
     if not allowed:
@@ -139,9 +166,9 @@ def handle_vm_destroy(handler):
         json_response(handler, {"error": f"VMID {vmid} is PROTECTED"})
         return
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "No PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
         _pve_cmd(cfg, node_ip, f"qm stop {vmid}", timeout=30)
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=120)
@@ -161,7 +188,9 @@ def handle_vm_snapshot(handler):
         return
     cfg = load_config()
     params = get_params(handler)
-    vmid = int(params.get("vmid", ["0"])[0])
+    vmid = _get_int_param(handler, params, "vmid", required=True)
+    if vmid is None:
+        return
     snap_name = params.get("name", [f"freq-snap-{vmid}"])[0]
     if not valid_label(snap_name):
         json_response(handler, {"error": "Invalid snapshot name (alphanumeric + hyphens only)"})
@@ -172,9 +201,9 @@ def handle_vm_snapshot(handler):
         json_response(handler, {"error": err})
         return
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "No PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm snapshot {vmid} {snap_name}", timeout=120)
         json_response(handler, {"ok": ok, "vmid": vmid, "snapshot": snap_name, "error": stdout if not ok else ""})
@@ -193,7 +222,9 @@ def handle_vm_resize(handler):
         return
     cfg = load_config()
     params = get_params(handler)
-    vmid = int(params.get("vmid", ["0"])[0])
+    vmid = _get_int_param(handler, params, "vmid", required=True)
+    if vmid is None:
+        return
     cores = params.get("cores", [None])[0]
     ram = params.get("ram", [None])[0]
     # Fleet boundary check
@@ -220,9 +251,9 @@ def handle_vm_resize(handler):
         json_response(handler, {"error": "Specify cores or ram"})
         return
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "No PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} {' '.join(parts)}")
         json_response(handler, {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""})
@@ -241,7 +272,9 @@ def handle_vm_power(handler):
         return
     cfg = load_config()
     params = get_params(handler)
-    vmid = int(params.get("vmid", ["0"])[0])
+    vmid = _get_int_param(handler, params, "vmid", required=True)
+    if vmid is None:
+        return
     action = params.get("action", ["status"])[0]
     # Fleet boundary check — power actions require start/stop permission
     if action in ("start", "stop", "reset"):
@@ -251,9 +284,9 @@ def handle_vm_power(handler):
             json_response(handler, {"error": err})
             return
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "No PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
         ssh_cmds = {
             "start": f"qm start {vmid}",
@@ -307,20 +340,19 @@ def handle_vm_template(handler):
     cfg = load_config()
 
     query = get_params(handler)
-    vmid = query.get("vmid", [""])[0]
-    if not vmid:
-        json_response(handler, {"error": "vmid parameter required"})
+    vmid = _get_int_param(handler, query, "vmid", required=True)
+    if vmid is None:
         return
     # Fleet boundary check
-    allowed, err = _check_vm_permission(cfg, int(vmid), "configure")
+    allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
         json_response(handler, {"error": err})
         return
 
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "no PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
 
         r = ssh_single(
@@ -349,24 +381,24 @@ def handle_vm_rename(handler):
     cfg = load_config()
 
     query = get_params(handler)
-    vmid = query.get("vmid", [""])[0]
+    vmid = _get_int_param(handler, query, "vmid", required=True)
     name = query.get("name", [""])[0]
-    if not vmid or not name:
+    if vmid is None or not name:
         json_response(handler, {"error": "vmid and name parameters required"})
         return
     if not valid_label(name):
         json_response(handler, {"error": "Invalid VM name (alphanumeric + hyphens only)"})
         return
     # Fleet boundary check
-    allowed, err = _check_vm_permission(cfg, int(vmid), "configure")
+    allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
         json_response(handler, {"error": err})
         return
 
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "no PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
 
         r = ssh_single(
@@ -389,13 +421,12 @@ def handle_vm_snapshots(handler):
     cfg = load_config()
 
     query = get_params(handler)
-    vmid = query.get("vmid", [""])[0]
-    if not vmid:
-        json_response(handler, {"error": "vmid required"})
+    vmid = _get_int_param(handler, query, "vmid", required=True)
+    if vmid is None:
         return
-    node_ip = _find_reachable_node(cfg)
+    node_ip = _find_vm_node_ip(cfg, vmid)
     if not node_ip:
-        json_response(handler, {"error": "no PVE node reachable"})
+        json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
         return
     r = ssh_single(
         host=node_ip,
@@ -431,22 +462,22 @@ def handle_vm_delete_snapshot(handler):
     cfg = load_config()
 
     query = get_params(handler)
-    vmid = query.get("vmid", [""])[0]
+    vmid = _get_int_param(handler, query, "vmid", required=True)
     snap = query.get("name", [""])[0]
-    if not vmid or not snap:
+    if vmid is None or not snap:
         json_response(handler, {"error": "vmid and name required"})
         return
     if not valid_label(snap):
         json_response(handler, {"error": "Invalid snapshot name (alphanumeric + hyphens only)"})
         return
-    allowed, err = _check_vm_permission(cfg, int(vmid), "configure")
+    allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
         json_response(handler, {"error": err})
         return
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "no PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
         r = ssh_single(
             host=node_ip,
@@ -482,25 +513,25 @@ def handle_vm_change_id(handler):
     cfg = load_config()
 
     query = get_params(handler)
-    vmid = query.get("vmid", [""])[0]
-    newid = query.get("newid", [""])[0]
-    if not vmid or not newid:
+    vmid = _get_int_param(handler, query, "vmid", required=True)
+    newid = _get_int_param(handler, query, "newid", required=True)
+    if vmid is None or newid is None:
         json_response(handler, {"error": "vmid and newid parameters required"})
         return
     # Fleet boundary check on BOTH old and new VMID
-    allowed, err = _check_vm_permission(cfg, int(vmid), "configure")
+    allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
         json_response(handler, {"error": err})
         return
-    allowed2, err2 = _check_vm_permission(cfg, int(newid), "configure")
+    allowed2, err2 = _check_vm_permission(cfg, newid, "configure")
     if not allowed2:
         json_response(handler, {"error": f"Target VMID blocked: {err2}"})
         return
 
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "no PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
 
         # VM must be stopped first
@@ -583,11 +614,11 @@ def handle_vm_add_nic(handler):
     cfg = load_config()
 
     query = get_params(handler)
-    vmid = query.get("vmid", [""])[0]
+    vmid = _get_int_param(handler, query, "vmid", required=True)
     new_ip = query.get("ip", [""])[0]
     gateway = query.get("gw", [""])[0]
     vlan_id_val = query.get("vlan", [""])[0]
-    if not vmid or not new_ip:
+    if vmid is None or not new_ip:
         json_response(handler, {"error": "vmid and ip required"})
         return
     bare_ip = new_ip.split("/")[0] if "/" in new_ip else new_ip
@@ -600,15 +631,15 @@ def handle_vm_add_nic(handler):
     if vlan_id_val and not valid_vlan(vlan_id_val):
         json_response(handler, {"error": "Invalid VLAN ID"})
         return
-    allowed, err = _check_vm_permission(cfg, int(vmid), "configure")
+    allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
         json_response(handler, {"error": err})
         return
 
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "no PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
 
         # Find the next available NIC index
@@ -682,19 +713,18 @@ def handle_vm_clear_nics(handler):
     cfg = load_config()
 
     query = get_params(handler)
-    vmid = query.get("vmid", [""])[0]
-    if not vmid:
-        json_response(handler, {"error": "vmid required"})
+    vmid = _get_int_param(handler, query, "vmid", required=True)
+    if vmid is None:
         return
-    allowed, err = _check_vm_permission(cfg, int(vmid), "configure")
+    allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
         json_response(handler, {"error": err})
         return
 
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "no PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
 
         # Get current VM config to find existing NICs
@@ -745,10 +775,10 @@ def handle_vm_change_ip(handler):
     cfg = load_config()
 
     query = get_params(handler)
-    vmid = query.get("vmid", [""])[0]
+    vmid = _get_int_param(handler, query, "vmid", required=True)
     new_ip = query.get("ip", [""])[0]
     gateway = query.get("gw", [""])[0]
-    if not vmid or not new_ip:
+    if vmid is None or not new_ip:
         json_response(handler, {"error": "vmid and ip parameters required"})
         return
     bare_ip = new_ip.split("/")[0] if "/" in new_ip else new_ip
@@ -759,25 +789,23 @@ def handle_vm_change_ip(handler):
         json_response(handler, {"error": "Invalid gateway IP"})
         return
     # Fleet boundary check
-    allowed, err = _check_vm_permission(cfg, int(vmid), "configure")
+    allowed, err = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
         json_response(handler, {"error": err})
         return
 
     # Create the virtual NIC (net*) with VLAN tag + set cloud-init IP (ipconfig*)
-    try:
-        nic_idx = int(query.get("nic", ["0"])[0])
-    except ValueError:
-        json_response(handler, {"error": "Invalid NIC index"})
+    nic_idx = _get_int_param(handler, query, "nic", default=0)
+    if nic_idx is None:
         return
     vlan_id_val = query.get("vlan", [""])[0]
     if vlan_id_val and not valid_vlan(vlan_id_val):
         json_response(handler, {"error": "Invalid VLAN ID"})
         return
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "no PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
 
         cidr = new_ip if "/" in new_ip else new_ip + "/24"
@@ -889,7 +917,9 @@ def handle_vm_add_disk(handler):
         return
     cfg = load_config()
     params = get_params(handler)
-    vmid = int(params.get("vmid", ["0"])[0])
+    vmid = _get_int_param(handler, params, "vmid", required=True)
+    if vmid is None:
+        return
     size = params.get("size", [""])[0]  # e.g. "32G"
     storage = params.get("storage", [""])[0]
 
@@ -908,9 +938,9 @@ def handle_vm_add_disk(handler):
         return
 
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "No PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
 
         # Find next available scsi slot
@@ -959,7 +989,9 @@ def handle_vm_tag(handler):
         return
     cfg = load_config()
     params = get_params(handler)
-    vmid = int(params.get("vmid", ["0"])[0])
+    vmid = _get_int_param(handler, params, "vmid", required=True)
+    if vmid is None:
+        return
     tags = params.get("tags", [""])[0]  # comma-separated
 
     if not vmid:
@@ -980,9 +1012,9 @@ def handle_vm_tag(handler):
                 return
 
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, vmid)
         if not node_ip:
-            json_response(handler, {"error": "No PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
 
         # PVE uses semicolon-separated tags
@@ -1013,7 +1045,9 @@ def handle_vm_clone(handler):
         return
     cfg = load_config()
     params = get_params(handler)
-    source_vmid = int(params.get("vmid", ["0"])[0])
+    source_vmid = _get_int_param(handler, params, "vmid", required=True)
+    if source_vmid is None:
+        return
     name = params.get("name", [""])[0]
     target_node = params.get("target_node", [""])[0]
     full = params.get("full", ["1"])[0] == "1"
@@ -1028,9 +1062,9 @@ def handle_vm_clone(handler):
         return
 
     try:
-        node_ip = _find_reachable_node(cfg)
+        node_ip = _find_vm_node_ip(cfg, source_vmid)
         if not node_ip:
-            json_response(handler, {"error": "No PVE node reachable"})
+            json_response(handler, {"error": f"Cannot find VM {source_vmid} on any PVE node"}, 404)
             return
 
         # Get next available VMID
@@ -1086,7 +1120,9 @@ def handle_vm_migrate(handler):
         return
     cfg = load_config()
     params = get_params(handler)
-    vmid = int(params.get("vmid", ["0"])[0])
+    vmid = _get_int_param(handler, params, "vmid", required=True)
+    if vmid is None:
+        return
     target_node = params.get("target_node", [""])[0]
     delete_snaps = params.get("delete_snapshots", ["0"])[0] == "1"
 
@@ -1228,17 +1264,10 @@ def handle_rollback(handler):
         return
 
     params = get_params(handler)
-    vmid_str = params.get("vmid", [""])[0]
+    vmid = _get_int_param(handler, params, "vmid", required=True)
     snap_name = params.get("name", [""])[0]
     start_after = params.get("start", ["true"])[0].lower() != "false"
-
-    if not vmid_str:
-        json_response(handler, {"error": "vmid parameter required"}, 400)
-        return
-    try:
-        vmid = int(vmid_str)
-    except ValueError:
-        json_response(handler, {"error": f"Invalid VMID: {vmid_str}"}, 400)
+    if vmid is None:
         return
 
     cfg = load_config()
@@ -1246,9 +1275,9 @@ def handle_rollback(handler):
     if is_protected_vmid(vmid, cfg.protected_vmids, cfg.protected_ranges):
         json_response(handler, {"error": f"VMID {vmid} is protected"}, 403)
         return
-    node_ip = _find_reachable_node(cfg)
+    node_ip = _find_vm_node_ip(cfg, vmid)
     if not node_ip:
-        json_response(handler, {"error": "Cannot reach any PVE node"}, 503)
+        json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
         return
 
     # Get snapshots

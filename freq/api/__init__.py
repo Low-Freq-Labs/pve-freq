@@ -13,6 +13,8 @@ Architecture:
     - Legacy /api/ routes remain in serve.py during migration, new routes go here
 """
 
+from freq.core import log as logger
+
 # Domain modules register their routes here
 _DOMAIN_ROUTES: dict = {}
 
@@ -56,6 +58,7 @@ def build_routes() -> dict:
         "freq.api.backup_verify",
     ]
 
+    import_errors = []
     for module_path in _domains:
         try:
             import importlib
@@ -63,7 +66,11 @@ def build_routes() -> dict:
             mod = importlib.import_module(module_path)
             if hasattr(mod, "register"):
                 mod.register(routes)
-        except ImportError:
-            pass  # Domain module not yet created — that's fine during migration
+        except ImportError as e:
+            import_errors.append(f"{module_path}: {e}")
+
+    if import_errors:
+        logger.error("api_route_import_failed", count=len(import_errors), modules="; ".join(import_errors))
+        raise ImportError("API route import failures: " + "; ".join(import_errors))
 
     return routes

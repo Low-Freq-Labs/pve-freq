@@ -631,7 +631,54 @@ def _update_toml_value(content, key, value):
         # Replace: uncomment if commented, set new value
         new_line = f"{key} = {toml_val}{inline_comment}"
         content = content[: match.start()] + new_line + content[match.end() :]
-    return content
+        return content
+
+    section_map = {
+        "mode": "ssh",
+        "nodes": "pve",
+        "node_names": "pve",
+        "api_token_id": "pve",
+        "api_token_secret_path": "pve",
+        "gateway": "vm.defaults",
+        "nameserver": "vm.defaults",
+        "protected_vmids": "safety",
+        "protected_ranges": "safety",
+        "cluster_name": "infrastructure",
+        "timezone": "infrastructure",
+        "pfsense_ip": "infrastructure",
+        "truenas_ip": "infrastructure",
+        "switch_ip": "infrastructure",
+        "docker_dev_ip": "infrastructure",
+        "tls_cert": "services",
+        "tls_key": "services",
+    }
+    section_name = section_map.get(key)
+    new_line = f"{key} = {toml_val}\n"
+
+    if not section_name:
+        if content and not content.endswith("\n"):
+            content += "\n"
+        return content + new_line
+
+    section_header = f"[{section_name}]"
+    section_pattern = re.compile(rf"(?m)^({re.escape(section_header)})\s*$")
+    section_match = section_pattern.search(content)
+    if not section_match:
+        if content and not content.endswith("\n"):
+            content += "\n"
+        if content and not content.endswith("\n\n"):
+            content += "\n"
+        return content + f"{section_header}\n{new_line}"
+
+    insert_at = len(content)
+    next_section = re.search(r"(?m)^\[", content[section_match.end() :])
+    if next_section:
+        insert_at = section_match.end() + next_section.start()
+
+    insertion = new_line
+    if insert_at > 0 and content[insert_at - 1] != "\n":
+        insertion = "\n" + insertion
+    return content[:insert_at] + insertion + content[insert_at:]
 
 
 def _phase_configure(cfg, args=None):
@@ -2493,9 +2540,9 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     try:
                         pve_vms = _json.loads(out)
                         fmt.step_ok(f"PVE SSH: {len(pve_vms)} VMs/CTs found")
+                        break  # Cluster API returns all VMs from any healthy node
                     except _json.JSONDecodeError:
                         pass
-                break  # Cluster API returns all VMs from any node
 
     if not pve_vms:
         fmt.step_warn("No VMs returned from PVE — skipping PVE-based discovery")

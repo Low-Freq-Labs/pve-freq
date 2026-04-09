@@ -374,15 +374,25 @@ def load_config(install_dir: Optional[str] = None, force: bool = False) -> FreqC
     # Deduplicate hosts — warn on duplicates, keep first occurrence
     if cfg.hosts:
         seen_ips = set()
+        seen_labels = set()
         deduped = []
         for h in cfg.hosts:
             if h.ip in seen_ips:
                 import logging as _logging
+
                 _logging.getLogger("freq.config").warning(
                     f"duplicate host IP {h.ip} ({h.label}) — skipping"
                 )
                 continue
+            if h.label in seen_labels:
+                import logging as _logging
+
+                _logging.getLogger("freq.config").warning(
+                    f"duplicate host label {h.label} ({h.ip}) — skipping"
+                )
+                continue
             seen_ips.add(h.ip)
+            seen_labels.add(h.label)
             deduped.append(h)
         if len(deduped) < len(cfg.hosts):
             cfg.hosts_had_duplicates = True
@@ -502,6 +512,19 @@ def _safe_int(value, default):
         return default
 
 
+def _safe_storage_entry(node: str, info) -> dict:
+    """Normalize a [pve.storage] entry without crashing on malformed data."""
+    if isinstance(info, dict):
+        return {"pool": info.get("pool", ""), "type": info.get("type", "")}
+
+    from freq.core import log as logger
+
+    logger.warn(
+        f"config: expected [pve.storage.{node}] table, got {type(info).__name__}: {info!r}, using empty values"
+    )
+    return {"pool": "", "type": ""}
+
+
 def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     """Apply TOML config values to FreqConfig."""
     freq = data.get("freq", {})
@@ -523,7 +546,7 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.pve_node_names = pve.get("node_names", cfg.pve_node_names)
     storage = pve.get("storage", {})
     for node, info in storage.items():
-        cfg.pve_storage[node] = {"pool": info.get("pool", ""), "type": info.get("type", "")}
+        cfg.pve_storage[node] = _safe_storage_entry(node, info)
 
     vm = data.get("vm", {}).get("defaults", {})
     cfg.vm_default_cores = _safe_int(vm.get("cores"), cfg.vm_default_cores)
@@ -683,7 +706,7 @@ def load_hosts_toml(path: str) -> list:
                 label=entry.get("label", ""),
                 htype=entry.get("type", "linux"),
                 groups=entry.get("groups", ""),
-                vmid=int(entry.get("vmid", 0)),
+                vmid=_safe_int(entry.get("vmid", 0), 0),
                 all_ips=all_ips,
             )
         )

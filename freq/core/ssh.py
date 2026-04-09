@@ -402,7 +402,11 @@ async def async_run_many(
                 use_sudo=use_sudo,
                 cfg=cfg,
             )
-            results[host.label] = result
+            if host.label not in results:
+                results[host.label] = result
+            else:
+                results[f"{host.label}@{host.ip}"] = result
+            results[host.ip] = result
 
     tasks = [asyncio.create_task(_run_one(h)) for h in hosts]
     await asyncio.gather(*tasks, return_exceptions=True)

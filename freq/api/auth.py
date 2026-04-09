@@ -233,10 +233,10 @@ def handle_auth_change_password(handler):
     with _auth_lock:
         session = _auth_tokens.get(token)
     if not session:
-        handler._json_response({"error": "Not authenticated"})
+        handler._json_response({"error": "Not authenticated"}, 401)
         return
     if not new_password or len(new_password) < 6:
-        handler._json_response({"error": "Password must be at least 6 characters"})
+        handler._json_response({"error": "Password must be at least 6 characters"}, 400)
         return
 
     username = session["user"]
@@ -249,4 +249,4 @@ def handle_auth_change_password(handler):
         handler._json_response({"ok": True, "user": username})
     except Exception as e:
         logger.error(f"password change failed for {username}: {e}")
-        handler._json_response({"error": "Failed to update password"})
+        handler._json_response({"error": "Failed to update password"}, 500)
