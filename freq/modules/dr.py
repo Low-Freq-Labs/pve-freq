@@ -142,11 +142,19 @@ def cmd_dr_backup_verify(cfg: FreqConfig, pack, args) -> int:
 
     from freq.modules.pve import _find_reachable_node, _pve_cmd
 
-    node_ip = _find_reachable_node(cfg)
-    if not node_ip:
+    # Check ALL reachable nodes — backups can live on any node or shared storage
+    reachable_nodes = []
+    for ip in cfg.pve_nodes:
+        r = _pve_cmd(cfg, ip, "echo OK", timeout=5)
+        if r[1]:
+            reachable_nodes.append(ip)
+
+    if not reachable_nodes:
         fmt.step_fail("Cannot reach any PVE node — verification impossible")
         fmt.footer()
         return 1
+
+    fmt.step_ok(f"{len(reachable_nodes)}/{len(cfg.pve_nodes)} PVE nodes reachable")
 
     sla_data = _load_sla_targets(cfg)
     targets = sla_data.get("targets", [])
@@ -156,35 +164,48 @@ def cmd_dr_backup_verify(cfg: FreqConfig, pack, args) -> int:
         fmt.info("Set targets: freq dr sla set <vmid> --rpo 24 --rto 4")
         fmt.blank()
 
-    # Get actual backup inventory from PVE
+    # Query backup inventory from ALL reachable nodes
+    # Covers local storage, shared storage, and different node-local dumps
     cmd = (
-        "for f in /var/lib/vz/dump/vzdump-qemu-*.vma* /var/lib/vz/dump/vzdump-lxc-*.tar* 2>/dev/null; do "
-        '  [ -f "$f" ] || continue; '
-        '  base=$(basename "$f"); '
-        "  vmid=$(echo \"$base\" | grep -oP '(?<=vzdump-(qemu|lxc)-)\\d+'); "
-        "  epoch=$(stat -c%Y \"$f\" 2>/dev/null || echo 0); "
-        '  echo "$vmid|$epoch"; '
+        "for d in /var/lib/vz/dump /mnt/*/dump /mnt/pbs-* 2>/dev/null; do "
+        "  [ -d \"$d\" ] || continue; "
+        "  for f in \"$d\"/vzdump-qemu-*.vma* \"$d\"/vzdump-lxc-*.tar* 2>/dev/null; do "
+        '    [ -f "$f" ] || continue; '
+        '    base=$(basename "$f"); '
+        "    vmid=$(echo \"$base\" | grep -oP '(?<=vzdump-(qemu|lxc)-)\\d+'); "
+        "    epoch=$(stat -c%Y \"$f\" 2>/dev/null || echo 0); "
+        '    echo "$vmid|$epoch"; '
+        "  done; "
         "done | sort -t'|' -k1,1n -k2,2rn"
     )
-    r = _pve_cmd(cfg, node_ip, cmd, timeout=30)
 
-    # Build map: vmid -> latest backup epoch
     backup_ages = {}
-    if r[1] and r[0]:  # (stdout, ok)
-        for line in r[0].strip().splitlines():
-            parts = line.split("|")
-            if len(parts) >= 2 and parts[0].strip().isdigit():
-                vid = int(parts[0].strip())
-                try:
-                    epoch = int(parts[1].strip())
-                except ValueError:
-                    epoch = 0
-                if vid not in backup_ages or epoch > backup_ages[vid]:
-                    backup_ages[vid] = epoch
-    elif not r[1]:
-        fmt.step_fail(f"Could not list backups: {(r[0] or 'unknown error')[:100]}")
+    nodes_queried = 0
+    nodes_failed = []
+    for node_ip in reachable_nodes:
+        r = _pve_cmd(cfg, node_ip, cmd, timeout=30)
+        if r[1] and r[0]:
+            nodes_queried += 1
+            for line in r[0].strip().splitlines():
+                parts = line.split("|")
+                if len(parts) >= 2 and parts[0].strip().isdigit():
+                    vid = int(parts[0].strip())
+                    try:
+                        epoch = int(parts[1].strip())
+                    except ValueError:
+                        epoch = 0
+                    if vid not in backup_ages or epoch > backup_ages[vid]:
+                        backup_ages[vid] = epoch
+        elif not r[1]:
+            nodes_failed.append(node_ip)
+
+    if nodes_queried == 0:
+        fmt.step_fail("Could not list backups from any node")
         fmt.footer()
         return 1
+
+    if nodes_failed:
+        fmt.step_warn(f"Backup query failed on: {', '.join(nodes_failed)}")
 
     now = time.time()
     pass_count = 0

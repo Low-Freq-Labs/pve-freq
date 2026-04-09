@@ -40,13 +40,13 @@ echo ""
 
 # ── Step 1: Verify author identity on recent commits ──
 echo "Checking commit identity..."
-BAD_AUTHORS=$(git log --format="%an <%ae>" -20 | grep -v "$REQUIRED_AUTHOR <$REQUIRED_EMAIL>" | sort -u)
+BAD_AUTHORS=$(git log --format="%an <%ae>" -20 | grep -v "$REQUIRED_AUTHOR <$REQUIRED_EMAIL>" | sort -u || true)
 if [ -n "$BAD_AUTHORS" ]; then
     die "Non-lowfreqlabs commits found in last 20:\n$BAD_AUTHORS\n\nAll commits must use: $REQUIRED_AUTHOR <$REQUIRED_EMAIL>"
 fi
 ok "All recent commits authored by $REQUIRED_AUTHOR"
 
-BAD_COMMITTERS=$(git log --format="%cn <%ce>" -20 | grep -v "$REQUIRED_AUTHOR <$REQUIRED_EMAIL>" | sort -u)
+BAD_COMMITTERS=$(git log --format="%cn <%ce>" -20 | grep -v "$REQUIRED_AUTHOR <$REQUIRED_EMAIL>" | sort -u || true)
 if [ -n "$BAD_COMMITTERS" ]; then
     die "Non-lowfreqlabs committers found:\n$BAD_COMMITTERS"
 fi

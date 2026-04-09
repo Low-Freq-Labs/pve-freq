@@ -33,11 +33,17 @@ def _pve_ssh(cfg, node_ip, cmd, timeout=60):
 
 
 def _find_node_ip(cfg, node_name=None):
-    """Find a reachable PVE node IP. Tries named node first, then all nodes."""
+    """Find a reachable PVE node IP. Verifies reachability before returning."""
+    # If a specific node was requested, try it first — but verify it's actually up
     if node_name:
         for i, name in enumerate(cfg.pve_node_names):
             if name == node_name and i < len(cfg.pve_nodes):
-                return cfg.pve_nodes[i]
+                ip = cfg.pve_nodes[i]
+                r = _pve_ssh(cfg, ip, "echo OK", timeout=5)
+                if r.returncode == 0:
+                    return ip
+                # Named node is down — fall through to try others
+                break
     # Try each node until one responds
     for ip in cfg.pve_nodes:
         r = _pve_ssh(cfg, ip, "echo OK", timeout=5)
