@@ -4052,15 +4052,20 @@ a:hover{{text-decoration:underline}}
         """Run FREQ self-diagnostic and return results as JSON."""
         try:
             from freq.core.doctor import run as doctor_run
-            import io, contextlib
+            import io, contextlib, json as _json
 
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 from freq.core.config import load_config as _lc
 
                 cfg = _lc()
-                result = doctor_run(cfg)
-            self._json_response({"ok": result == 0, "output": buf.getvalue(), "exit_code": result})
+                result = doctor_run(cfg, json_output=True)
+            # doctor_run with json_output prints JSON to stdout
+            try:
+                data = _json.loads(buf.getvalue())
+            except (ValueError, _json.JSONDecodeError):
+                data = {"ok": result == 0, "output": buf.getvalue(), "exit_code": result}
+            self._json_response(data)
         except Exception as e:
             self._json_response({"error": f"Doctor failed: {e}"}, 500)
 
