@@ -1863,7 +1863,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         """GET /api/config/view — read-only view of freq.toml settings."""
         role, err = _check_session_role(self, "admin")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
         cfg = load_config()
         # Return safe config values (no secrets)
@@ -2692,7 +2692,7 @@ a:hover{{text-decoration:underline}}
 
         pf_ip = cfg.pfsense_ip
         if not pf_ip:
-            self._json_response({"error": "pfSense IP not configured", "data": {}})
+            self._json_response({"error": "pfSense IP not configured", "data": {}}, 400)
             return
 
         actions = {
@@ -2925,27 +2925,27 @@ a:hover{{text-decoration:underline}}
     def _serve_agent_create(self):
         role, err = _check_session_role(self, "admin")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
         cfg = load_config()
         params = _parse_query(self)
         template = params.get("template", ["blank"])[0]
         name = params.get("name", [template])[0]
         if not valid_label(name):
-            self._json_response({"error": "Invalid agent name (alphanumeric + hyphens only)"})
+            self._json_response({"error": "Invalid agent name (alphanumeric + hyphens only)"}, 400)
             return
         agents = _load_agents(cfg)
         if name in agents:
-            self._json_response({"error": f"Agent '{name}' already exists"})
+            self._json_response({"error": f"Agent '{name}' already exists"}, 409)
             return
         tmpl = TEMPLATES.get(template, TEMPLATES.get("blank"))
         node_ip = _find_reachable_node(cfg)
         if not node_ip:
-            self._json_response({"error": "No PVE node reachable"})
+            self._json_response({"error": "No PVE node reachable"}, 502)
             return
         stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
         if not ok:
-            self._json_response({"error": "Cannot allocate VMID"})
+            self._json_response({"error": "Cannot allocate VMID"}, 502)
             return
         lab_cat = cfg.fleet_boundaries.categories.get("lab", {})
         vmid_floor = lab_cat.get("range_start", 5000)
@@ -2953,7 +2953,7 @@ a:hover{{text-decoration:underline}}
         cmd = f"qm create {vmid} --name {name} --cores {tmpl['cores']} --memory {tmpl['ram']} --cpu {cfg.vm_cpu} --machine {cfg.vm_machine} --net0 virtio,bridge={cfg.nic_bridge} --scsihw {cfg.vm_scsihw}"
         stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=120)
         if not ok:
-            self._json_response({"error": f"VM creation failed: {stdout[:60]}"})
+            self._json_response({"error": f"VM creation failed: {stdout[:60]}"}, 500)
             return
         agents[name] = {
             "name": name,
@@ -2976,14 +2976,14 @@ a:hover{{text-decoration:underline}}
     def _serve_agent_destroy(self):
         role, err = _check_session_role(self, "admin")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
         cfg = load_config()
         params = _parse_query(self)
         name = params.get("name", [""])[0]
         agents = _load_agents(cfg)
         if name not in agents:
-            self._json_response({"error": f"Agent not found: {name}"})
+            self._json_response({"error": f"Agent not found: {name}"}, 404)
             return
         vmid = agents[name].get("vmid")
         if vmid:
@@ -3267,19 +3267,19 @@ a:hover{{text-decoration:underline}}
         """Restart a container (GET with ?name=xxx)."""
         role, err = _check_session_role(self, "operator")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
         cfg = load_config()
 
         query = _parse_query(self)
         name = query.get("name", [""])[0]
         if not name:
-            self._json_response({"error": "name parameter required"})
+            self._json_response({"error": "name parameter required"}, 400)
             return
 
         container, vm = res.container_by_name(cfg.container_vms, name)
         if not container:
-            self._json_response({"error": f"container not found: {name}"})
+            self._json_response({"error": f"container not found: {name}"}, 404)
             return
 
         r = ssh_single(
@@ -3311,12 +3311,12 @@ a:hover{{text-decoration:underline}}
             lines = 50
 
         if not name:
-            self._json_response({"error": "name parameter required"})
+            self._json_response({"error": "name parameter required"}, 400)
             return
 
         container, vm = res.container_by_name(cfg.container_vms, name)
         if not container:
-            self._json_response({"error": f"container not found: {name}"})
+            self._json_response({"error": f"container not found: {name}"}, 404)
             return
 
         r = ssh_single(
@@ -3340,7 +3340,7 @@ a:hover{{text-decoration:underline}}
         """Update a container (GET with ?name=xxx)."""
         role, err = _check_session_role(self, "admin")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
         cfg = load_config()
 
@@ -3348,12 +3348,12 @@ a:hover{{text-decoration:underline}}
         name = query.get("name", [""])[0]
 
         if not name:
-            self._json_response({"error": "name parameter required"})
+            self._json_response({"error": "name parameter required"}, 400)
             return
 
         container, vm = res.container_by_name(cfg.container_vms, name)
         if not container or not vm.compose_path:
-            self._json_response({"error": f"container or compose not found: {name}"})
+            self._json_response({"error": f"container or compose not found: {name}"}, 404)
             return
 
         compose_dir = vm.compose_path.rsplit("/", 1)[0]
@@ -3489,7 +3489,7 @@ a:hover{{text-decoration:underline}}
         """Generic proxy for lab tool API requests (GET or POST)."""
         role, err = _check_session_role(self, "operator")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
         params = _parse_query(self)
         tool = params.get("tool", [""])[0]
@@ -3500,7 +3500,7 @@ a:hover{{text-decoration:underline}}
         confirm = params.get("confirm", [""])[0]
 
         if not tool or not host or not key or not endpoint:
-            self._json_response({"error": "Missing parameters"})
+            self._json_response({"error": "Missing parameters"}, 400)
             return
 
         body = {"confirm": "YES"} if confirm == "YES" else None
@@ -3511,12 +3511,12 @@ a:hover{{text-decoration:underline}}
         """Return saved connection config for a lab tool from vault."""
         role, err = _check_session_role(self, "operator")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
         params = _parse_query(self)
         tool = params.get("tool", [""])[0]
         if not tool:
-            self._json_response({"error": "Missing tool parameter"})
+            self._json_response({"error": "Missing tool parameter"}, 400)
             return
         cfg = load_config()
         host = ""
@@ -3532,7 +3532,7 @@ a:hover{{text-decoration:underline}}
         """Save lab tool connection config to vault."""
         role, err = _check_session_role(self, "admin")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
         params = _parse_query(self)
         tool = params.get("tool", [""])[0]
@@ -3540,7 +3540,7 @@ a:hover{{text-decoration:underline}}
         key = params.get("key", [""])[0]
 
         if not tool or not host or not key:
-            self._json_response({"error": "Missing parameters"})
+            self._json_response({"error": "Missing parameters"}, 400)
             return
 
         cfg = load_config()
@@ -3551,7 +3551,7 @@ a:hover{{text-decoration:underline}}
             vault_set(cfg, tool, f"{tool}_api_key", key)
             self._json_response({"ok": True})
         except Exception as e:
-            self._json_response({"error": str(e)})
+            self._json_response({"error": str(e)}, 500)
 
     # ── Auth (delegated to freq.api.auth) ────────────────────────────
 
@@ -3583,7 +3583,7 @@ a:hover{{text-decoration:underline}}
                 {"error": f"WATCHDOG daemon not reachable at localhost:{wd_port}", "watchdog_down": True}
             )
         except Exception as e:
-            self._json_response({"error": f"Proxy error: {e}"})
+            self._json_response({"error": f"Proxy error: {e}"}, 502)
 
     # ── ADMIN API ENDPOINTS ──────────────────────────────────────────
 
@@ -3591,7 +3591,7 @@ a:hover{{text-decoration:underline}}
         """GET /api/admin/fleet-boundaries — return current fleet boundary config."""
         role, err = _check_session_role(self, "admin")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
         cfg = load_config()
         fb = cfg.fleet_boundaries
@@ -3629,7 +3629,7 @@ a:hover{{text-decoration:underline}}
         """
         role, err = _check_session_role(self, "admin")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
 
         params = _parse_query(self)
@@ -3642,13 +3642,13 @@ a:hover{{text-decoration:underline}}
             cat_name = params.get("category", [""])[0]
             new_tier = params.get("tier", [""])[0]
             if not cat_name or not new_tier:
-                self._json_response({"error": "category and tier required"})
+                self._json_response({"error": "category and tier required"}, 400)
                 return
             if cat_name not in cfg.fleet_boundaries.categories:
-                self._json_response({"error": f"Unknown category: {cat_name}"})
+                self._json_response({"error": f"Unknown category: {cat_name}"}, 404)
                 return
             if new_tier not in cfg.fleet_boundaries.tiers:
-                self._json_response({"error": f"Unknown tier: {new_tier}"})
+                self._json_response({"error": f"Unknown tier: {new_tier}"}, 404)
                 return
             self._update_fb_toml(fb_path, "category_tier", cat_name=cat_name, tier=new_tier)
             self._json_response({"ok": True, "action": action})
@@ -3657,12 +3657,12 @@ a:hover{{text-decoration:underline}}
             cat_name = params.get("category", [""])[0]
             vmid_str = params.get("vmid", [""])[0]
             if not cat_name or not vmid_str:
-                self._json_response({"error": "category and vmid required"})
+                self._json_response({"error": "category and vmid required"}, 400)
                 return
             try:
                 vmid = int(vmid_str)
             except ValueError:
-                self._json_response({"error": "vmid must be an integer"})
+                self._json_response({"error": "vmid must be an integer"}, 400)
                 return
             self._update_fb_toml(fb_path, "add_vmid", cat_name=cat_name, vmid=vmid)
             self._json_response({"ok": True, "action": action, "vmid": vmid})
@@ -3671,12 +3671,12 @@ a:hover{{text-decoration:underline}}
             cat_name = params.get("category", [""])[0]
             vmid_str = params.get("vmid", [""])[0]
             if not cat_name or not vmid_str:
-                self._json_response({"error": "category and vmid required"})
+                self._json_response({"error": "category and vmid required"}, 400)
                 return
             try:
                 vmid = int(vmid_str)
             except ValueError:
-                self._json_response({"error": "vmid must be an integer"})
+                self._json_response({"error": "vmid must be an integer"}, 400)
                 return
             self._update_fb_toml(fb_path, "remove_vmid", cat_name=cat_name, vmid=vmid)
             self._json_response({"ok": True, "action": action, "vmid": vmid})
@@ -3686,15 +3686,15 @@ a:hover{{text-decoration:underline}}
             start_str = params.get("range_start", [""])[0]
             end_str = params.get("range_end", [""])[0]
             if not cat_name or not start_str or not end_str:
-                self._json_response({"error": "category, range_start, range_end required"})
+                self._json_response({"error": "category, range_start, range_end required"}, 400)
                 return
             try:
                 rs, re = int(start_str), int(end_str)
             except ValueError:
-                self._json_response({"error": "range values must be integers"})
+                self._json_response({"error": "range values must be integers"}, 400)
                 return
             if rs >= re:
-                self._json_response({"error": "range_start must be < range_end"})
+                self._json_response({"error": "range_start must be < range_end"}, 400)
                 return
             self._update_fb_toml(fb_path, "update_range", cat_name=cat_name, range_start=rs, range_end=re)
             self._json_response({"ok": True, "action": action})
@@ -3703,10 +3703,10 @@ a:hover{{text-decoration:underline}}
             tier_name = params.get("tier", [""])[0]
             actions_str = params.get("actions", [""])[0]
             if not tier_name or not actions_str:
-                self._json_response({"error": "tier and actions required"})
+                self._json_response({"error": "tier and actions required"}, 400)
                 return
             if tier_name not in cfg.fleet_boundaries.tiers:
-                self._json_response({"error": f"Unknown tier: {tier_name}"})
+                self._json_response({"error": f"Unknown tier: {tier_name}"}, 404)
                 return
             actions_list = [a.strip() for a in actions_str.split(",") if a.strip()]
             valid_actions = {
@@ -3723,13 +3723,13 @@ a:hover{{text-decoration:underline}}
             }
             invalid = [a for a in actions_list if a not in valid_actions]
             if invalid:
-                self._json_response({"error": f"Invalid actions: {', '.join(invalid)}"})
+                self._json_response({"error": f"Invalid actions: {', '.join(invalid)}"}, 400)
                 return
             self._update_fb_toml(fb_path, "update_tier_actions", tier_name=tier_name, actions=actions_list)
             self._json_response({"ok": True, "action": action, "tier": tier_name, "actions": actions_list})
 
         else:
-            self._json_response({"error": f"Unknown action: {action}"})
+            self._json_response({"error": f"Unknown action: {action}"}, 400)
 
     def _update_fb_toml(self, path, op, **kw):
         """Read-modify-write fleet-boundaries.toml. Preserves comments and structure."""
@@ -3839,7 +3839,7 @@ a:hover{{text-decoration:underline}}
         """
         role, err = _check_session_role(self, "admin")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
 
         params = _parse_query(self)
@@ -3847,7 +3847,7 @@ a:hover{{text-decoration:underline}}
         new_type = params.get("type", [""])[0]
         new_groups = params.get("groups", [""])[0] if "groups" in params else None
         if not label:
-            self._json_response({"error": "label required"})
+            self._json_response({"error": "label required"}, 400)
             return
 
         cfg = load_config()
@@ -3857,7 +3857,7 @@ a:hover{{text-decoration:underline}}
             with open(hosts_path) as f:
                 lines = f.readlines()
         except FileNotFoundError:
-            self._json_response({"error": "hosts.conf not found"})
+            self._json_response({"error": "hosts.conf not found"}, 404)
             return
 
         found = False
@@ -3881,7 +3881,7 @@ a:hover{{text-decoration:underline}}
                 break
 
         if not found:
-            self._json_response({"error": f"Host '{label}' not found in hosts.conf"})
+            self._json_response({"error": f"Host '{label}' not found in hosts.conf"}, 404)
             return
 
         try:
@@ -3918,7 +3918,7 @@ a:hover{{text-decoration:underline}}
             ).communicate()
             self._json_response({"ok": True, "output": out})
         except Exception as e:
-            self._json_response({"error": str(e)})
+            self._json_response({"error": str(e)}, 500)
 
     def _serve_watch_stop(self):
         """Stop the FREQ watch daemon."""
@@ -3928,19 +3928,19 @@ a:hover{{text-decoration:underline}}
             ).communicate()
             self._json_response({"ok": True, "output": out})
         except Exception as e:
-            self._json_response({"error": str(e)})
+            self._json_response({"error": str(e)}, 500)
 
     def _serve_dns_lookup(self):
         """Resolve a hostname."""
         query = _parse_query(self)
         host = query.get("host", [""])[0]
         if not host:
-            self._json_response({"error": "host required"})
+            self._json_response({"error": "host required"}, 400)
             return
         import re as _re
 
         if not _re.match(r"^[a-zA-Z0-9._-]+$", host):
-            self._json_response({"error": "Invalid hostname"})
+            self._json_response({"error": "Invalid hostname"}, 400)
             return
         try:
             import socket
@@ -3949,7 +3949,7 @@ a:hover{{text-decoration:underline}}
             ips = sorted(set(r[4][0] for r in results))
             self._json_response({"host": host, "ips": ips, "count": len(ips)})
         except socket.gaierror:
-            self._json_response({"host": host, "ips": [], "error": "DNS resolution failed"})
+            self._json_response({"host": host, "ips": [], "error": "DNS resolution failed"}, 400)
 
     def _serve_portscan(self):
         """Scan ports on a host."""
@@ -3957,12 +3957,12 @@ a:hover{{text-decoration:underline}}
         host = query.get("host", [""])[0]
         ports_str = query.get("ports", [""])[0]
         if not host or not ports_str:
-            self._json_response({"error": "host and ports required"})
+            self._json_response({"error": "host and ports required"}, 400)
             return
         import re as _re, socket
 
         if not _re.match(r"^[a-zA-Z0-9._-]+$", host):
-            self._json_response({"error": "Invalid hostname"})
+            self._json_response({"error": "Invalid hostname"}, 400)
             return
         results = []
         for p in ports_str.split(","):
@@ -4004,7 +4004,7 @@ a:hover{{text-decoration:underline}}
         """Restart/stop/start a container on a Docker host."""
         role, err = _check_session_role(self, "operator")
         if err:
-            self._json_response({"error": err})
+            self._json_response({"error": err}, 403)
             return
         cfg = load_config()
         query = _parse_query(self)
@@ -4012,22 +4012,22 @@ a:hover{{text-decoration:underline}}
         name = query.get("name", [""])[0]
         action = query.get("action", ["restart"])[0]
         if not host or not name:
-            self._json_response({"error": "host and name required"})
+            self._json_response({"error": "host and name required"}, 400)
             return
         if action not in ("restart", "stop", "start"):
-            self._json_response({"error": "action must be restart, stop, or start"})
+            self._json_response({"error": "action must be restart, stop, or start"}, 400)
             return
         import re as _re
 
         if not _re.match(r"^[a-zA-Z0-9._-]+$", name):
-            self._json_response({"error": "Invalid container name"})
+            self._json_response({"error": "Invalid container name"}, 400)
             return
         from freq.core.ssh import run as ssh_single
         from freq.core.resolve import by_target
 
         h = by_target(cfg.hosts, host)
         if not h:
-            self._json_response({"error": f"Host not found: {host}"})
+            self._json_response({"error": f"Host not found: {host}"}, 404)
             return
         r = ssh_single(
             host=h.ip,
@@ -4057,19 +4057,19 @@ a:hover{{text-decoration:underline}}
         name = query.get("name", [""])[0]
         lines = min(int(query.get("lines", ["50"])[0]), 200)
         if not host or not name:
-            self._json_response({"error": "host and name required"})
+            self._json_response({"error": "host and name required"}, 400)
             return
         import re as _re
 
         if not _re.match(r"^[a-zA-Z0-9._-]+$", name):
-            self._json_response({"error": "Invalid container name"})
+            self._json_response({"error": "Invalid container name"}, 400)
             return
         from freq.core.ssh import run as ssh_single
         from freq.core.resolve import by_target
 
         h = by_target(cfg.hosts, host)
         if not h:
-            self._json_response({"error": f"Host not found: {host}"})
+            self._json_response({"error": f"Host not found: {host}"}, 404)
             return
         r = ssh_single(
             host=h.ip,
@@ -4136,14 +4136,14 @@ a:hover{{text-decoration:underline}}
         query = _parse_query(self)
         target = query.get("target", [""])[0]
         if not target:
-            self._json_response({"error": "target required"})
+            self._json_response({"error": "target required"}, 400)
             return
         from freq.core.ssh import run as ssh_single
         from freq.core.resolve import by_target
 
         h = by_target(cfg.hosts, target)
         if not h:
-            self._json_response({"error": f"Host not found: {target}"})
+            self._json_response({"error": f"Host not found: {target}"}, 404)
             return
         cmd = (
             'echo "=== SYSTEM ===" && hostname -f && cat /etc/os-release 2>/dev/null | grep PRETTY && uname -r '
