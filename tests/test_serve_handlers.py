@@ -577,6 +577,37 @@ class TestOpenAPITruthfulness:
                 assert "400" in responses, f"POST {path} missing 400 response"
                 assert "403" in responses, f"POST {path} missing 403 response"
 
+    def test_auth_logout_documented_as_post(self):
+        """Logout must appear as POST in the spec."""
+        spec = self._get_spec()
+        assert "/api/auth/logout" in spec["paths"]
+        assert "post" in spec["paths"]["/api/auth/logout"]
+
+    def test_spec_has_security_schemes(self):
+        """OpenAPI spec must document bearer and cookie auth."""
+        spec = self._get_spec()
+        schemes = spec.get("components", {}).get("securitySchemes", {})
+        assert "bearerAuth" in schemes, "Spec must document bearerAuth"
+        assert "cookieAuth" in schemes, "Spec must document cookieAuth"
+        assert schemes["cookieAuth"]["name"] == "freq_session"
+
+    def test_no_internal_method_names_in_summaries(self):
+        """Spec summaries must not contain _serve_ method names."""
+        spec = self._get_spec()
+        for path, methods in spec["paths"].items():
+            for method, detail in methods.items():
+                summary = detail.get("summary", "")
+                assert not summary.startswith("_serve_"), \
+                    f"{path} leaks internal method name: {summary}"
+
+    def test_no_url_token_in_spec(self):
+        """Spec must not document ?token= query parameter auth."""
+        import json
+        spec = self._get_spec()
+        spec_str = json.dumps(spec)
+        assert "?token=" not in spec_str, "Spec must not reference ?token= auth"
+        assert "X-Session" not in spec_str, "Spec must not reference X-Session header"
+
     def test_every_endpoint_has_summary(self):
         """Every endpoint in spec has a non-empty summary."""
         spec = self._get_spec()

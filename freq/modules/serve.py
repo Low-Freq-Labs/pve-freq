@@ -2056,7 +2056,7 @@ a:hover{{text-decoration:underline}}
         routes["/api/comms/{path}"] = "_proxy_watchdog"
         routes["/api/watch/{path}"] = "_proxy_watchdog"
 
-        _POST_KEYWORDS = ("create", "update", "delete", "reset", "login",
+        _POST_KEYWORDS = ("create", "update", "delete", "reset", "login", "logout",
                           "change", "complete", "generate", "deploy",
                           "rollback", "power", "boot", "clear", "wol",
                           "bench", "reboot", "add", "remove")
@@ -2088,9 +2088,16 @@ a:hover{{text-decoration:underline}}
                 responses["403"] = {"description": "Insufficient permissions"}
             responses["500"] = {"description": "Internal server error"}
 
+            # Clean up summary — don't expose internal method names
+            summary = desc
+            if not summary or summary.startswith("_serve_"):
+                # Derive a readable summary from the path
+                parts = path.strip("/").split("/")
+                summary = " ".join(parts[1:]).replace("-", " ").replace("_", " ").title()
+
             paths[path] = {
                 method: {
-                    "summary": desc or (handler_ref if isinstance(handler_ref, str) else handler_ref.__name__),
+                    "summary": summary,
                     "responses": responses,
                 }
             }
@@ -2104,6 +2111,22 @@ a:hover{{text-decoration:underline}}
             },
             "servers": [{"url": "/"}],
             "paths": paths,
+            "components": {
+                "securitySchemes": {
+                    "bearerAuth": {
+                        "type": "http",
+                        "scheme": "bearer",
+                        "description": "Session token from POST /api/auth/login",
+                    },
+                    "cookieAuth": {
+                        "type": "apiKey",
+                        "in": "cookie",
+                        "name": "freq_session",
+                        "description": "HttpOnly session cookie set on login",
+                    },
+                },
+            },
+            "security": [{"bearerAuth": []}, {"cookieAuth": []}],
         }
         self._json_response(spec)
 
