@@ -4374,6 +4374,17 @@ def cmd_serve(cfg, pack, args) -> int:
     proto = "https" if use_tls else "http"
     logger.info("dashboard_start", port=port, host="0.0.0.0", tls=use_tls)
     print(f"  \033[38;5;82m✔\033[0m Dashboard running at {proto}://0.0.0.0:{port}")
+    # First-run hint: if users exist but no passwords set, first login sets password
+    try:
+        from freq.modules.users import _load_users
+        users = _load_users(cfg)
+        if users:
+            from freq.modules.vault import vault_get
+            no_pw = [u["username"] for u in users if not vault_get(cfg, "auth", f"password_{u['username']}")]
+            if no_pw:
+                print(f"  \033[38;5;220m⚠\033[0m First login sets password for: {', '.join(no_pw)}")
+    except Exception:
+        pass
     print(f"  \033[38;5;245mPress Ctrl+C to stop\033[0m\n")
     try:
         httpd.serve_forever()

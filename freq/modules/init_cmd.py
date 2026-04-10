@@ -5472,6 +5472,8 @@ def _phase_summary(cfg, ctx, verified, pack=None):
     # Next steps
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}Next steps:{fmt.C.RESET}")
+    if deploy_failures:
+        fmt.line(f"    freq init --fix      — {fmt.C.YELLOW}retry {deploy_failures} failed host(s){fmt.C.RESET}")
     fmt.line(f"    freq serve           — start the dashboard")
     fmt.line(f"    freq fleet status    — check fleet connectivity")
     fmt.line(f"    freq vm list         — see all VMs across cluster")
