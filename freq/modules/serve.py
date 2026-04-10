@@ -3362,6 +3362,7 @@ a:hover{{text-decoration:underline}}
         # Derive from health cache — already has docker counts per host
         with _bg_lock:
             health = _bg_cache.get("health")
+            _health_ts = _bg_cache_ts.get("health", 0)
 
         total = sum(len(vm.containers) for vm in cfg.container_vms.values())
         running = 0
@@ -3391,12 +3392,16 @@ a:hover{{text-decoration:underline}}
                     except ValueError:
                         pass
 
+        age = round(time.time() - _health_ts, 1) if health else None
         self._json_response(
             {
                 "containers_total": total,
                 "containers_running": running,
                 "containers_down": total - running,
                 "vm_count": len(cfg.container_vms),
+                "cached": health is not None,
+                "age_seconds": age,
+                "source": "health_cache" if health else "live_probe",
             }
         )
 
