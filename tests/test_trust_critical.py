@@ -1400,6 +1400,37 @@ class TestErrorPropagation(unittest.TestCase):
         self.assertEqual(len(missing), 0,
                          f"JS mutation calls missing POST: {missing}")
 
+    def test_js_string_literal_mutations_use_post(self):
+        """JS string-literal mutation URLs must also use POST.
+
+        Catches mutation calls that use string URLs instead of API constants
+        (which the API constant guard test doesn't cover).
+        """
+        import os, re
+        js_path = os.path.join(os.path.dirname(__file__), "..", "freq", "data", "web", "js", "app.js")
+        with open(js_path) as f:
+            src = f.read()
+        # Known mutation URL patterns (string literals, not API constants)
+        mutation_urls = [
+            "/api/gitops/sync", "/api/gitops/apply", "/api/gitops/rollback",
+            "/api/gitops/init",
+            "/api/federation/toggle", "/api/federation/unregister",
+            "/api/federation/register", "/api/federation/poll",
+            "/api/auth/logout", "/api/auth/login",
+            "/api/watch/start", "/api/watch/stop",
+            "/api/setup/create-admin", "/api/setup/configure",
+            "/api/setup/generate-key", "/api/setup/complete",
+        ]
+        missing = []
+        for url in mutation_urls:
+            pattern = rf"_authFetch\('[^']*{re.escape(url)}[^;]*?\.then"
+            matches = re.findall(pattern, src)
+            for m in matches:
+                if "method:'POST'" not in m:
+                    missing.append(f"{url}: {m[:60]}")
+        self.assertEqual(len(missing), 0,
+                         f"JS string-literal mutation calls missing POST: {missing}")
+
     def test_no_method_post_inside_encodeuri(self):
         """JS must not pass {method:'POST'} inside encodeURIComponent.
 
