@@ -1260,7 +1260,7 @@ var _evtSource=null;
 function startSSE(){
   if(typeof EventSource==='undefined')return;/* browser doesn't support SSE */
   if(_evtSource)_evtSource.close();
-  _evtSource=new EventSource(API.EVENTS+(_authToken?'?token='+encodeURIComponent(_authToken):''));
+  _evtSource=new EventSource(API.EVENTS);/* auth via cookie */
 
   _evtSource.addEventListener('cache_update',function(e){
     var d=JSON.parse(e.data);

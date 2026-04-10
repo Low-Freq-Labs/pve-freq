@@ -89,8 +89,13 @@ def check_session_role(handler, min_role="operator"):
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
     if not token:
-        params = parse_qs(urlparse(handler.path).query)
-        token = params.get("token", [""])[0]
+        # Cookie fallback for SSE (EventSource can't set headers)
+        cookie_header = handler.headers.get("Cookie", "")
+        for part in cookie_header.split(";"):
+            part = part.strip()
+            if part.startswith("freq_session="):
+                token = part[len("freq_session="):]
+                break
     if not token:
         return None, "Authentication required"
     with _auth_lock:
@@ -174,14 +179,22 @@ def handle_auth_login(handler):
             "role": user["role"],
             "ts": time.time(),
         }
-    handler._json_response(
-        {
-            "ok": True,
-            "token": token,
-            "user": username,
-            "role": user["role"],
-        }
-    )
+    # Set auth cookie for SSE and cookie-based auth (HttpOnly, SameSite=Strict)
+    handler.send_response(200)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Set-Cookie", f"freq_session={token}; HttpOnly; SameSite=Strict; Path=/")
+    origin = handler.headers.get("Origin", "")
+    if origin:
+        handler.send_header("Access-Control-Allow-Origin", origin)
+        handler.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        handler.send_header("Vary", "Origin")
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    import json as _json
+    body = _json.dumps({"ok": True, "token": token, "user": username, "role": user["role"]}).encode()
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
 
 
 def handle_auth_verify(handler):
@@ -191,8 +204,12 @@ def handle_auth_verify(handler):
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
     if not token:
-        params = parse_qs(urlparse(handler.path).query)
-        token = params.get("token", [""])[0]
+        cookie_header = handler.headers.get("Cookie", "")
+        for part in cookie_header.split(";"):
+            part = part.strip()
+            if part.startswith("freq_session="):
+                token = part[len("freq_session="):]
+                break
     with _auth_lock:
         session = _auth_tokens.get(token)
         if not session:
@@ -218,8 +235,12 @@ def handle_auth_change_password(handler):
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
     if not token:
-        params = parse_qs(urlparse(handler.path).query)
-        token = params.get("token", [""])[0]
+        cookie_header = handler.headers.get("Cookie", "")
+        for part in cookie_header.split(";"):
+            part = part.strip()
+            if part.startswith("freq_session="):
+                token = part[len("freq_session="):]
+                break
     if handler.command != "POST":
         handler._json_response({"error": "Use POST to change password"}, 405)
         return

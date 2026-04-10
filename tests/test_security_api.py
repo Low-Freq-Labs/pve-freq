@@ -76,11 +76,24 @@ class TestAuthBypass:
         role, err = check_session_role(handler)
         assert role != "admin"
 
-    def test_invalid_token_rejected(self):
-        handler = _mock_handler(path="/api/test?token=fake123")
+    def test_invalid_cookie_token_rejected(self):
+        handler = _mock_handler(path="/api/test")
+        handler.headers.get = lambda key, default="": {
+            "Authorization": "",
+            "Cookie": "freq_session=fake123",
+            "Origin": "",
+            "Content-Length": "0",
+        }.get(key, default)
         role, err = check_session_role(handler)
         assert role is None
         assert "expired or invalid" in err
+
+    def test_query_param_token_rejected(self):
+        """?token= in URL must NOT authenticate — tokens belong in headers/cookies only."""
+        handler = _mock_handler(path="/api/test?token=fake123")
+        role, err = check_session_role(handler)
+        assert role is None
+        assert err == "Authentication required"
 
     def test_valid_token_returns_role(self):
         with _auth_lock:
@@ -235,12 +248,19 @@ class TestBearerTokenAuth:
         assert role == "admin"
         assert err is None
 
-    def test_query_param_fallback(self):
+    def test_cookie_fallback(self):
+        """Cookie-based auth works when no Bearer header is present."""
         with _auth_lock:
-            _auth_tokens["query-token"] = {
+            _auth_tokens["cookie-token"] = {
                 "user": "op", "role": "operator", "ts": time.time(),
             }
-        handler = _mock_handler(path="/api/test?token=query-token")
+        handler = _mock_handler(path="/api/test")
+        handler.headers.get = lambda key, default="": {
+            "Authorization": "",
+            "Cookie": "freq_session=cookie-token",
+            "Origin": "",
+            "Content-Length": "0",
+        }.get(key, default)
         role, err = check_session_role(handler)
         assert role == "operator"
         assert err is None
