@@ -704,6 +704,60 @@ class TestDestructiveEndpointSafety(unittest.TestCase):
                        "VM delete snapshot must enforce POST")
 
 
+class TestAnonymousAccessRejected(unittest.TestCase):
+    """Trust-critical API endpoints must reject unauthenticated requests."""
+
+    def _make_handler(self, path):
+        handler = MagicMock()
+        handler.command = "GET"
+        handler.path = path
+        handler.headers = {}  # No auth headers
+        captured = {"status": None, "data": None}
+
+        def mock_send(code, msg=None):
+            captured["status"] = code
+
+        handler.send_response = mock_send
+        handler.send_header = MagicMock()
+        handler.end_headers = MagicMock()
+        handler.wfile = MagicMock()
+        return handler, captured
+
+    def test_health_api_rejects_anonymous(self):
+        """GET /api/health without auth must return 403."""
+        from freq.api.fleet import handle_health_api
+        from freq.api.auth import check_session_role
+
+        handler, captured = self._make_handler("/api/health")
+        role, err = check_session_role(handler, "viewer")
+        self.assertIsNotNone(err, "Anonymous request should fail auth")
+
+    def test_fleet_overview_behind_global_gate(self):
+        """/api/fleet/overview is not in auth whitelist — global gate rejects anonymous."""
+        from freq.modules.serve import FreqHandler
+        self.assertNotIn("/api/fleet/overview", FreqHandler._AUTH_WHITELIST)
+
+    def test_events_not_in_whitelist(self):
+        """/api/events is not in auth whitelist."""
+        from freq.modules.serve import FreqHandler
+        self.assertNotIn("/api/events", FreqHandler._AUTH_WHITELIST)
+
+    def test_config_view_not_in_whitelist(self):
+        """/api/config/view is not in auth whitelist."""
+        from freq.modules.serve import FreqHandler
+        self.assertNotIn("/api/config/view", FreqHandler._AUTH_WHITELIST)
+
+    def test_watchdog_proxy_is_whitelisted(self):
+        """Document: /api/watch/ and /api/comms/ are intentionally unauthenticated.
+
+        The dashboard SPA loads before login and needs watchdog data
+        for the loading screen. This is a known design decision.
+        """
+        from freq.modules.serve import FreqHandler
+        self.assertIn("/api/watch/", FreqHandler._AUTH_WHITELIST_PREFIXES)
+        self.assertIn("/api/comms/", FreqHandler._AUTH_WHITELIST_PREFIXES)
+
+
 class TestRouteIntegrity(unittest.TestCase):
     """Every registered route must point at a callable handler."""
 
