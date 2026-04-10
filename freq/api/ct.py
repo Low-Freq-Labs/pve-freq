@@ -13,7 +13,7 @@ import json
 import time
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_params
+from freq.api.helpers import require_post,  json_response, get_params
 from freq.core.config import load_config
 from freq.core.validate import (
     label as valid_label,
@@ -167,6 +167,8 @@ def handle_ct_create(handler):
 
 def handle_ct_destroy(handler):
     """POST /api/ct/destroy — destroy an LXC container."""
+    if require_post(handler, "Container destroy"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -472,6 +474,8 @@ def handle_ct_snapshots(handler):
 
 def handle_ct_delete_snapshot(handler):
     """POST /api/ct/delete-snapshot — delete a container snapshot."""
+    if require_post(handler, "Snapshot delete"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)

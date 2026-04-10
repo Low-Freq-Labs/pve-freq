@@ -15,7 +15,7 @@ import os
 import re
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_params
+from freq.api.helpers import require_post,  json_response, get_params
 from freq.core.config import load_config
 from freq.modules.serve import (
     _check_session_role,
@@ -133,6 +133,8 @@ def handle_rules_update(handler):
 
 def handle_rules_delete(handler):
     """GET /api/rules/delete — delete an alert rule."""
+    if require_post(handler, "Rule delete"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

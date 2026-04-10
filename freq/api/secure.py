@@ -15,7 +15,7 @@ import os
 import time
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_params
+from freq.api.helpers import require_post,  json_response, get_params
 from freq.core.config import load_config
 from freq.core import resolve as res
 from freq.core.ssh import run_many as ssh_run_many, result_for
@@ -70,6 +70,8 @@ def handle_vault_set(handler):
 
 def handle_vault_delete(handler):
     """POST /api/vault/delete — delete a vault entry."""
+    if require_post(handler, "Vault delete"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

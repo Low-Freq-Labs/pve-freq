@@ -684,6 +684,26 @@ class TestAPIStatusCodeTruth(unittest.TestCase):
         self.assertEqual(bare, [], f"v1 API has bare error→200: {bare}")
 
 
+class TestDestructiveEndpointSafety(unittest.TestCase):
+    """Destructive API endpoints must enforce POST method."""
+
+    def test_vm_destroy_enforces_post(self):
+        """VM destroy must reject GET requests."""
+        import inspect
+        from freq.api.vm import handle_vm_destroy
+        src = inspect.getsource(handle_vm_destroy)
+        self.assertIn("_require_post", src,
+                       "VM destroy must enforce POST")
+
+    def test_vm_delete_snapshot_enforces_post(self):
+        """VM delete snapshot must reject GET requests."""
+        import inspect
+        from freq.api.vm import handle_vm_delete_snapshot
+        src = inspect.getsource(handle_vm_delete_snapshot)
+        self.assertIn("_require_post", src,
+                       "VM delete snapshot must enforce POST")
+
+
 class TestRouteIntegrity(unittest.TestCase):
     """Every registered route must point at a callable handler."""
 

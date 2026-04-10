@@ -21,7 +21,7 @@ _SAFE_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 import urllib.request
 import urllib.error
 
-from freq.api.helpers import json_response, get_json_body
+from freq.api.helpers import require_post,  json_response, get_json_body
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
 from freq.modules.vault import vault_get
@@ -438,6 +438,8 @@ def handle_opnsense_rule_delete(handler):
 
     Uses the savepoint safety pattern: savepoint -> delRule -> apply -> cancelRollback.
     """
+    if require_post(handler, "Firewall rule delete"):
+        return
     cfg, ok = _require_opnsense(handler)
     if not ok:
         return
@@ -537,6 +539,8 @@ def handle_opnsense_dhcp_delete(handler):
 
     Deletes the reservation then reconfigures the Kea service to apply.
     """
+    if require_post(handler, "DHCP reservation delete"):
+        return
     cfg, ok = _require_opnsense(handler)
     if not ok:
         return
@@ -655,6 +659,8 @@ def handle_opnsense_dns_delete(handler):
 
     Deletes the override then reconfigures Unbound to apply.
     """
+    if require_post(handler, "DNS override delete"):
+        return
     cfg, ok = _require_opnsense(handler)
     if not ok:
         return

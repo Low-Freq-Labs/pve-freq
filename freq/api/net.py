@@ -10,7 +10,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 import re
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_param, get_json_body
+from freq.api.helpers import require_post,  json_response, get_param, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single, result_for
 from freq.modules.serve import _parse_query, _check_session_role
@@ -399,6 +399,8 @@ def handle_switch_vlan_delete(handler):
 
     Body: {"target": "switch-label", "vlan_id": 100}
     """
+    if require_post(handler, "VLAN delete"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

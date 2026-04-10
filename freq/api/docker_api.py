@@ -10,7 +10,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 import os
 
 from freq.core import log as logger
-from freq.api.helpers import json_response
+from freq.api.helpers import require_post,  json_response
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single, result_for
 from freq.modules.serve import (
@@ -106,6 +106,8 @@ def handle_containers_rescan(handler):
 
 def handle_containers_delete(handler):
     """POST /api/containers/delete -- remove a container from the registry."""
+    if require_post(handler, "Container delete"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)

@@ -89,6 +89,14 @@ def require_role(min_role="operator"):
     return decorator
 
 
+def require_post(handler, action="this operation"):
+    """Reject non-POST requests for destructive operations."""
+    if handler.command != "POST":
+        json_response(handler, {"error": f"{action} requires POST"}, 405)
+        return True
+    return False
+
+
 def get_cfg():
     """Load FREQ config (convenience wrapper)."""
     return load_config()
