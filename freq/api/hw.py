@@ -10,7 +10,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 import json
 
 from freq.core import log as logger
-from freq.api.helpers import json_response
+from freq.api.helpers import require_post, json_response
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import (
@@ -284,7 +284,9 @@ def handle_cost_compare(handler):
 
 
 def handle_gwipe(handler):
-    """GET /api/gwipe -- FREQ WIPE station status and operations."""
+    """POST /api/gwipe -- FREQ WIPE station status and operations."""
+    if require_post(handler, "GWIPE operation"):
+        return
     cfg = load_config()
     role, err = _check_session_role(handler, "admin")
     if err:
