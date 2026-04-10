@@ -3136,6 +3136,14 @@ a:hover{{text-decoration:underline}}
         self._json_response({"ok": True, "name": name, "vmid": vmid})
 
     def _serve_notify_test(self):
+        """POST /api/notify/test — send a test notification to configured channels."""
+        if self.command != "POST":
+            self._json_response({"error": "Notify test requires POST"}, 405)
+            return
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}, 403)
+            return
         cfg = load_config()
         results = jarvis_notify(cfg, "Test notification from FREQ Web UI", severity="info")
         self._json_response(
