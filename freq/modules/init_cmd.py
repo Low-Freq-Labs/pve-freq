@@ -6162,8 +6162,16 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets):
                 ed_key = fallback_key
                 has_ed_key = True
             else:
-                fmt.step_warn("No FREQ SSH keys found — skipping remote hosts")
-                fmt.line(f"  {fmt.C.DIM}Remote accounts must be removed manually.{fmt.C.RESET}")
+                fmt.step_warn("No FREQ SSH keys found — cannot reach remote hosts")
+                fmt.blank()
+                fmt.line(f"  {fmt.C.YELLOW}Remote cleanup must be done manually on each host:{fmt.C.RESET}")
+                fmt.line(f"  {fmt.C.DIM}  sudo userdel -r {svc_name}{fmt.C.RESET}")
+                fmt.line(f"  {fmt.C.DIM}  sudo rm -f /etc/sudoers.d/freq-{svc_name}{fmt.C.RESET}")
+                fmt.blank()
+                fmt.line(f"  {fmt.C.DIM}Affected hosts ({len(targets)}):{fmt.C.RESET}")
+                for ip, htype, label in targets:
+                    fmt.line(f"    {fmt.C.DIM}{label}{fmt.C.RESET}")
+                fmt.blank()
                 skip = len(targets)
 
         if has_ed_key or has_rsa_key:
