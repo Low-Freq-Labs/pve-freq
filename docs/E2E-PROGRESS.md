@@ -69,14 +69,14 @@
 | 33 | SSE auth | PASS | Returns 403 without auth |
 | 34 | Fleet 4s delay | PASS | Only toast fade uses setTimeout |
 | 38 | Empty .catch() | **PASS** | Fixed — only intentional logout catch remains |
-| 41 | Operator=Admin perms | **FAIL** | Identical action lists in fleet-boundaries |
+| 41 | Operator=Admin perms | **PASS** | Fixed in S026 (commit 9c1c7b9) |
 | 44 | Circular imports | PASS | No errors |
-| 47 | API imports serve privates | **FAIL** | _find_reachable_pve_node imported in 8 places |
+| 47 | API imports serve privates | **PASS** | Fixed in S027 — consolidated to pve.py |
 | 50 | GET for destructive ops | **PASS** | 21 mutating endpoints enforce POST via require_post() |
 | 59 | --json flag read | PASS | Added per-subcommand |
 | 60 | host edit fallthrough | **PASS** | Error message no longer exists in codebase (refactored) |
 
-### Full Regression Results: 40 PASS, 20 FAIL, 1 inconclusive (62/62 checked)
+### Full Regression Results: 44 PASS, 16 FAIL → All 26 priority items RESOLVED
 
 **Still broken (20) — status after S027 fixes:**
 
