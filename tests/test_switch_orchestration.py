@@ -2,7 +2,9 @@
 
 Covers: Cisco IOS output parsers, target resolution, CLI subcommand registration.
 """
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from dataclasses import dataclass
@@ -778,14 +780,43 @@ class TestCLIProfileRegistration(unittest.TestCase):
 class TestProfileLoading(unittest.TestCase):
     """Test profile TOML loading from disk."""
 
-    def test_load_profiles_from_conf(self):
-        """Load the bundled switch-profiles.toml."""
-        import os
-        import sys
+    _FIXTURE_PROFILES = """\
+[profile.access-default]
+description = "Standard access port"
+mode = "access"
+vlan = 1
+spanning_tree = "portfast"
 
-        # Point cfg.conf_dir at our real conf directory
+[profile.trunk-uplink]
+description = "Uplink to distribution switch"
+mode = "trunk"
+allowed_vlans = [1, 5, 10, 25, 50, 2550]
+native_vlan = 1
+
+[profile.camera]
+description = "IP camera — isolated VLAN, PoE enabled"
+mode = "access"
+vlan = 50
+poe = true
+port_security = { max_mac = 1, violation = "restrict" }
+spanning_tree = "portfast"
+
+[profile.dead]
+description = "Unused port — shutdown"
+shutdown = true
+"""
+
+    def _make_profile_dir(self):
+        import tempfile
+        tmpdir = tempfile.mkdtemp()
+        with open(os.path.join(tmpdir, "switch-profiles.toml"), "w") as f:
+            f.write(self._FIXTURE_PROFILES)
+        return tmpdir
+
+    def test_load_profiles_from_conf(self):
+        """Load switch profiles from fixture TOML."""
         cfg = MockConfig()
-        cfg.conf_dir = os.path.join(os.path.dirname(__file__), "..", "conf")
+        cfg.conf_dir = self._make_profile_dir()
 
         from freq.modules.switch_orchestration import _load_profiles
         profiles = _load_profiles(cfg)
@@ -795,9 +826,8 @@ class TestProfileLoading(unittest.TestCase):
         self.assertIn("access-default", profiles)
 
     def test_camera_profile_structure(self):
-        import os
         cfg = MockConfig()
-        cfg.conf_dir = os.path.join(os.path.dirname(__file__), "..", "conf")
+        cfg.conf_dir = self._make_profile_dir()
 
         from freq.modules.switch_orchestration import _load_profiles
         profiles = _load_profiles(cfg)
