@@ -14,7 +14,7 @@ function that receives the HTTP handler as its first argument.
 import time
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_params
+from freq.api.helpers import require_post, json_response, get_params
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single, result_for
 from freq.modules.serve import (
@@ -99,7 +99,9 @@ def handle_trend_data(handler):
 
 
 def handle_trend_snapshot(handler):
-    """GET /api/trend/snapshot — take a trend snapshot."""
+    """POST /api/trend/snapshot — take a trend snapshot."""
+    if require_post(handler, "Trend snapshot"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -167,7 +169,9 @@ def handle_capacity(handler):
 
 
 def handle_capacity_snapshot(handler):
-    """GET /api/capacity/snapshot — force a capacity snapshot now (admin only)."""
+    """POST /api/capacity/snapshot — force a capacity snapshot now (admin only)."""
+    if require_post(handler, "Capacity snapshot"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

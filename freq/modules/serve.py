@@ -3406,7 +3406,10 @@ a:hover{{text-decoration:underline}}
         )
 
     def _serve_media_restart(self):
-        """Restart a container (GET with ?name=xxx)."""
+        """POST /api/media/restart — restart a container."""
+        if self.command != "POST":
+            self._json_response({"error": "Container restart requires POST"}, 405)
+            return
         role, err = _check_session_role(self, "operator")
         if err:
             self._json_response({"error": err}, 403)
