@@ -4912,7 +4912,7 @@ function labExec(host,cmd){
 function _labExecRun(host,cmd){
   var out=document.getElementById('ft-lab-out');
   if(out)out.innerHTML='<div class="c-yellow">Running on '+host+'...</div>';
-  _authFetch(API.EXEC+'?target='+encodeURIComponent(host,{method:'POST'})+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(host)+'&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results)d.results.forEach(function(r){txt+=r.output+'\n';});
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--text);white-space:pre-wrap;margin:0">'+host.toUpperCase()+': '+(txt||'OK')+'</pre>';
   });
@@ -5191,7 +5191,7 @@ function fleetNewUser(){
     toast('Creating '+user+' ('+role+') across fleet...','info');
     var cmd=_fleetUserCmd(user,pass,role,key);
     var out=document.getElementById('ft-nu-out');out.innerHTML='<div class="skeleton"></div>';
-    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd,{method:'POST'})).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       d.results.forEach(function(r,i){h+='<tr><td><strong>'+_esc(r.host).toUpperCase()+'</strong></td><td>'+(r.ok?'<span class="c-green">DEPLOYED</span>':'<span class="c-red">'+_esc(r.error)+'</span>')+'</td></tr>';});
       h+='</tbody></table>';out.innerHTML=h;
@@ -5214,7 +5214,7 @@ function fleetPasswdUpdate(){
     var passB64=_b64(user+':'+pass);
     var cmd='echo \''+passB64+'\' | base64 -d | chpasswd && echo OK || echo FAIL';
     var out=document.getElementById('ft-pw-out');out.innerHTML='<div class="skeleton"></div>';
-    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd,{method:'POST'})).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
@@ -5237,7 +5237,7 @@ function fleetSshKeyDeploy(){
     toast('Deploying SSH key for '+user+'...','info');
     var cmd='mkdir -p /home/\''+user+'\'/.ssh; echo \''+key+'\' >> /home/\''+user+'\'/.ssh/authorized_keys; chmod 700 /home/\''+user+'\'/.ssh; chmod 600 /home/\''+user+'\'/.ssh/authorized_keys; chown -R \''+user+'\':\''+user+'\' /home/\''+user+'\'/.ssh && echo OK || echo FAIL';
     var out=document.getElementById('ft-sk-out');out.innerHTML='<div class="skeleton"></div>';
-    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd,{method:'POST'})).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       var h='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
@@ -5279,7 +5279,7 @@ function _sshdRestart(hosts){
   var out=document.getElementById('ft-sshd-out');out.innerHTML='<div class="skeleton"></div>';
   var done=0,total=hosts.length,html='<table class="w-full"><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
   hosts.forEach(function(h){
-    _authFetch(API.EXEC+'?target='+encodeURIComponent(h,{method:'POST'})+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       var ok=d.results&&d.results[0]&&d.results[0].ok&&d.results[0].output.trim()==='OK';
       html+='<tr><td><strong>'+h.toUpperCase()+'</strong></td><td>'+(ok?'<span class="c-green">RESTARTED</span>':'<span class="c-red">FAILED</span>')+'</td></tr>';
       done++;if(done===total){html+='</tbody></table>';var cb='<button class="fleet-btn my-8" onclick="document.getElementById(\'ft-sshd-out\').innerHTML=\'\'" >CLOSE RESULTS</button>';out.innerHTML=cb+html+cb;toast('SSHD restarted on '+done+' hosts','success');}
@@ -5310,7 +5310,7 @@ function ntpFixHost(label){
   confirmAction('Fix NTP sync on <strong>'+label.toUpperCase()+'</strong>?',function(){
     toast('Fixing NTP on '+label+'...','info');
     var cmd='timedatectl set-ntp true 2>/dev/null; systemctl restart systemd-timesyncd 2>/dev/null || systemctl restart chronyd 2>/dev/null || ntpd -gq 2>/dev/null; sleep 2; timedatectl status 2>&1 | head -5';
-    _authFetch(API.EXEC+'?target='+encodeURIComponent(label,{method:'POST'})+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       var ok=d.results&&d.results[0]&&d.results[0].ok;
       toast(label.toUpperCase()+': '+(ok?'NTP sync restored':'Fix failed — check manually'),ok?'success':'error');
       fleetTool('ntp');
@@ -5325,7 +5325,7 @@ function ntpFixSelected(){
     hosts.forEach(function(h){ntpFixHost.__skip_confirm=true;
       toast('Fixing NTP on '+h+'...','info');
       var cmd='timedatectl set-ntp true 2>/dev/null; systemctl restart systemd-timesyncd 2>/dev/null || systemctl restart chronyd 2>/dev/null; sleep 2; timedatectl status 2>&1 | head -3';
-      _authFetch(API.EXEC+'?target='+encodeURIComponent(h,{method:'POST'})+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+      _authFetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
         var ok=d.results&&d.results[0]&&d.results[0].ok;
         toast(h.toUpperCase()+': '+(ok?'NTP fixed':'Failed'),ok?'success':'error');
       });
@@ -5340,7 +5340,7 @@ function ntpFixAll(){
   confirmAction('Fix NTP on ALL <strong>'+hosts.length+'</strong> unsynced hosts?',function(){
     hosts.forEach(function(h){
       var cmd='timedatectl set-ntp true 2>/dev/null; systemctl restart systemd-timesyncd 2>/dev/null || systemctl restart chronyd 2>/dev/null; sleep 2; timedatectl status 2>&1 | head -3';
-      _authFetch(API.EXEC+'?target='+encodeURIComponent(h,{method:'POST'})+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+      _authFetch(API.EXEC+'?target='+encodeURIComponent(h)+'&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
         var ok=d.results&&d.results[0]&&d.results[0].ok;
         toast(h.toUpperCase()+': '+(ok?'NTP fixed':'Failed'),ok?'success':'error');
       });
@@ -5399,7 +5399,7 @@ function ftRunExec(){
   hideExecDropdown();
   var cmd=document.getElementById('ft-exec-cmd').value;if(!cmd){toast('Enter a command','error');return;}
   document.getElementById('ft-exec-out').textContent='Running: '+cmd+' ...';
-  _authFetch(API.EXEC+'?target='+encodeURIComponent(target,{method:'POST'})+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(target)+'&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results){d.results.forEach(function(r){txt+=(r.host?r.host.toUpperCase()+': ':'')+r.output+'\n';});}
     document.getElementById('ft-exec-out').textContent=txt||'(No Output)';
   }).catch(function(e){document.getElementById('ft-exec-out').textContent='Error: '+e;});
@@ -5427,7 +5427,7 @@ function runHostUpdate(label){
   confirmAction('Run OS updates on <strong>'+label+'</strong>? This may take several minutes.',function(){
     toast('Updating '+label+'...','info');
     var cmd='apt-get update -qq && apt-get upgrade -y -qq 2>&1 | tail -5 || dnf update -y -q 2>&1 | tail -5 || zypper update -y 2>&1 | tail -5';
-    _authFetch(API.EXEC+'?target='+encodeURIComponent(label,{method:'POST'})+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       var out=d.results&&d.results[0]?d.results[0].output:'no output';
       toast(label+': '+out.substring(0,80),d.results&&d.results[0]&&d.results[0].ok?'success':'error');
       loadFleetPage();
@@ -6179,7 +6179,7 @@ function runAuditCheck(type){
   var html='';var done=0;
   checks.forEach(function(key){
     var chk=AUDIT_CHECKS[key];if(!chk)return;
-    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(chk.cmd,{method:'POST'})).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(chk.cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       html+='<h3 style="color:var(--purple-light);margin:12px 0 8px">'+chk.name+'</h3><table><thead><tr><th>HOST</th><th>VALUE</th><th>STATUS</th></tr></thead><tbody>';
       d.results.forEach(function(r,i){
         var val=r.ok?r.output.trim():'error';
@@ -6206,7 +6206,7 @@ function hardenAction(action){
   confirmAction('Run <strong>'+c.name+'</strong> on ALL fleet hosts?<br><br>This modifies system configuration.',function(){
     toast('Running '+c.name+'...','info');
     var out=document.getElementById('harden-c');out.innerHTML='<div class="skeleton"></div>';
-    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(c.cmd,{method:'POST'})).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(c.cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       var html='<h3 style="color:var(--purple-light);margin-bottom:8px">'+c.name+'</h3><table><thead><tr><th>HOST</th><th>RESULT</th></tr></thead><tbody>';
       var ok=0;
       d.results.forEach(function(r,i){
@@ -6225,7 +6225,7 @@ function runSshSweep(){
   var checks=[{name:'SSH: Password Auth',cmd:"grep -c '^PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null||echo 0"},{name:'SSH: Root Login',cmd:"grep -c '^PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null||echo 0"},{name:'SSH: Empty Passwords',cmd:"grep -c '^PermitEmptyPasswords no' /etc/ssh/sshd_config 2>/dev/null||echo 0"}];
   var html='';var done=0;
   checks.forEach(function(chk){
-    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(chk.cmd,{method:'POST'})).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.EXEC+'?target=all&cmd='+encodeURIComponent(chk.cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       html+='<h3 style="color:var(--purple-light);margin:12px 0 8px">'+chk.name+'</h3><table><thead><tr><th>Host</th><th>Result</th><th>Status</th></tr></thead><tbody>';
       d.results.forEach(function(r,i){
         var val=r.ok?r.output.trim():'error';
@@ -7177,7 +7177,7 @@ function _runPveNodeCmd(label,ip,cmd){
   var o=document.getElementById('hd-infra-out');
   o.style.display='block';
   o.innerHTML='<span class="c-dim">Querying '+label.toUpperCase()+'...</span>';
-  _authFetch(API.EXEC+'?target='+encodeURIComponent(label,{method:'POST'})+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(label)+'&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     var out='';
     if(d.results){d.results.forEach(function(r){out+=r.output+'\n';});}
     o.innerHTML=_infraPre(label.toUpperCase(),out||'No output');
@@ -7217,7 +7217,7 @@ function hdRestart(){
 function hdRunCmd(){
   var cmd=document.getElementById('hd-cmd').value;if(!cmd)return;
   document.getElementById('hd-exec-out').textContent='Running: '+cmd+' ...';
-  _authFetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host,{method:'POST'})+'&cmd='+encodeURIComponent(cmd)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     var txt='';if(d.results){d.results.forEach(function(r){txt+=r.output+'\n';});}document.getElementById('hd-exec-out').textContent=txt||'(no output)';
   }).catch(function(e){document.getElementById('hd-exec-out').textContent='Error: '+e;});
 }

@@ -1367,6 +1367,22 @@ class TestErrorPropagation(unittest.TestCase):
         self.assertIn("stale", src,
                        "Heatmap must expose stale flag")
 
+    def test_no_method_post_inside_encodeuri(self):
+        """JS must not pass {method:'POST'} inside encodeURIComponent.
+
+        This bug caused exec calls to silently send GET instead of POST.
+        encodeURIComponent(x, {method:'POST'}) ignores the second argument.
+        """
+        import os, re
+        js_path = os.path.join(os.path.dirname(__file__), "..", "freq", "data", "web", "js", "app.js")
+        with open(js_path) as f:
+            src = f.read()
+        # Pattern: encodeURIComponent(anything, {method:'POST'})
+        broken = re.findall(r"encodeURIComponent\([^)]+,\s*\{method:", src)
+        self.assertEqual(len(broken), 0,
+                         f"Found {len(broken)} encodeURIComponent calls with {{method}} inside: "
+                         f"this sends GET instead of POST")
+
     def test_sse_broadcasts_probe_errors(self):
         """SSE event stream must broadcast probe errors in real-time."""
         import os
