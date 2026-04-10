@@ -1973,12 +1973,14 @@ def _phase_pve_api_token(cfg, ctx):
 
     # Step 6: Verify token works via REST API
     fmt.step_start("Verifying PVE API token...")
+    ctx["api_token_verified"] = False
     try:
         from freq.modules.pve import _pve_api_call
         result, ok = _pve_api_call(cfg, first_node, "/version")
         if ok:
             ver = result.get("version", "unknown") if isinstance(result, dict) else "unknown"
             fmt.step_ok(f"PVE REST API verified (PVE {ver})")
+            ctx["api_token_verified"] = True
         else:
             fmt.step_warn("Token saved but API test failed — will fall back to SSH")
     except Exception as e:
@@ -5455,8 +5457,11 @@ def _phase_summary(cfg, ctx, verified, pack=None):
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}API Access:{fmt.C.RESET}")
     token_id = getattr(cfg, "pve_api_token_id", "")
-    if token_id:
-        fmt.line(f"    PVE API:   {fmt.C.GREEN}enabled{fmt.C.RESET} ({token_id})")
+    api_verified = ctx.get("api_token_verified", False)
+    if token_id and api_verified:
+        fmt.line(f"    PVE API:   {fmt.C.GREEN}verified{fmt.C.RESET} ({token_id})")
+    elif token_id:
+        fmt.line(f"    PVE API:   {fmt.C.YELLOW}configured (unverified){fmt.C.RESET} ({token_id}) — will fall back to SSH")
     else:
         fmt.line(f"    PVE API:   {fmt.C.YELLOW}SSH-only{fmt.C.RESET} (no token configured)")
 

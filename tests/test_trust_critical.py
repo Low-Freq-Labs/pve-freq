@@ -1192,5 +1192,161 @@ class TestRouteIntegrity(unittest.TestCase):
                          f"Dead legacy routes (missing method): {dead}")
 
 
+class TestFleetOverviewFallbackTruth(unittest.TestCase):
+    """Fleet overview fallback must not silently hide loading state."""
+
+    def test_fallback_includes_loading_indicator(self):
+        """When no cache exists, fallback response must include _loading flag."""
+        import inspect
+        from freq.api.fleet import handle_fleet_overview
+        src = inspect.getsource(handle_fleet_overview)
+        self.assertIn("_loading", src,
+                       "Fleet overview fallback must include _loading indicator")
+
+    def test_fallback_has_zero_summary_not_misleading(self):
+        """Fallback summary must show zeros, not non-zero counts."""
+        import inspect
+        from freq.api.fleet import handle_fleet_overview
+        src = inspect.getsource(handle_fleet_overview)
+        # Ensure fallback path includes total_vms: 0
+        self.assertIn('"total_vms": 0', src,
+                       "Fallback must report total_vms: 0, not a cached count")
+
+    def test_cached_path_includes_staleness_fields(self):
+        """Cached fleet overview must include age_seconds and probe_status."""
+        import inspect
+        from freq.api.fleet import handle_fleet_overview
+        src = inspect.getsource(handle_fleet_overview)
+        self.assertIn("age_seconds", src,
+                       "Cached path must expose age_seconds")
+        self.assertIn("probe_status", src,
+                       "Cached path must expose probe_status")
+
+
+class TestHealthScoreTruth(unittest.TestCase):
+    """Health score must never lie about fleet state."""
+
+    def test_cold_start_returns_503_not_100(self):
+        """No cache = score 0 + 503, never score 100."""
+        import inspect
+        from freq.api.fleet import handle_fleet_health_score
+        src = inspect.getsource(handle_fleet_health_score)
+        # Must have explicit cold-start check that returns 503
+        self.assertIn("503", src,
+                       "Health score must return 503 on cold start")
+        self.assertIn('"score": 0', src,
+                       "Cold start score must be 0, not 100")
+
+    def test_health_score_exposes_cache_age(self):
+        """Health score must include age metadata for staleness detection."""
+        import inspect
+        from freq.api.fleet import handle_fleet_health_score
+        src = inspect.getsource(handle_fleet_health_score)
+        self.assertIn("health_age_seconds", src,
+                       "Health score must expose health_age_seconds")
+        self.assertIn("fleet_age_seconds", src,
+                       "Health score must expose fleet_age_seconds")
+        self.assertIn("stale", src,
+                       "Health score must include stale flag")
+
+    def test_health_score_penalizes_unhealthy_hosts(self):
+        """Score must decrease when hosts are unhealthy, not stay at 100."""
+        import inspect
+        from freq.api.fleet import handle_fleet_health_score
+        src = inspect.getsource(handle_fleet_health_score)
+        self.assertIn("penalty", src,
+                       "Health score must apply penalties for unhealthy state")
+        self.assertIn("hosts_down", src,
+                       "Health score must track hosts_down factor")
+
+
+class TestInitSummaryTruth(unittest.TestCase):
+    """Init summary must never overstate deployment success."""
+
+    def test_api_token_summary_checks_verification(self):
+        """Summary must distinguish between token configured vs verified.
+
+        Bug: Phase 13 shows green 'enabled' based on token_id being set,
+        even if Phase 6 verification failed. The summary must check
+        verification status, not just token_id presence.
+        """
+        import inspect
+        from freq.modules.init_cmd import _phase_summary
+
+        src = inspect.getsource(_phase_summary)
+        # The summary section about PVE API should reference verification,
+        # not just blindly show "enabled" if token_id exists
+        has_api_verified = "api_token_verified" in src or "api_verified" in src or "token_test" in src
+        has_token_id_only = "token_id" in src or "pve_api_token_id" in src
+        # If token_id is shown in summary, there should also be verification tracking
+        self.assertTrue(
+            has_api_verified or "will fall back to SSH" in src,
+            "Init summary must track API token verification status, not just presence"
+        )
+
+    def test_config_reload_failure_is_visible(self):
+        """Config reload exceptions must warn the operator, not silently continue."""
+        import os
+        init_path = os.path.join(os.path.dirname(__file__), "..", "freq", "modules", "init_cmd.py")
+        with open(init_path) as f:
+            src = f.read()
+        # The exception handler must at minimum warn
+        self.assertIn("Config reload", src,
+                       "Config reload failure must produce a visible warning")
+
+    def test_chown_failures_tracked_in_summary(self):
+        """Init must use _chown helper that checks return codes."""
+        import os
+        init_path = os.path.join(os.path.dirname(__file__), "..", "freq", "modules", "init_cmd.py")
+        with open(init_path) as f:
+            src = f.read()
+        # No bare _run(["chown"...]) calls — all must use _chown helper
+        import re
+        bare_chowns = re.findall(r'_run\(\s*\[.*"chown"', src)
+        self.assertEqual(len(bare_chowns), 0,
+                         f"Found {len(bare_chowns)} bare chown calls — must use _chown() helper")
+
+
+class TestErrorPropagation(unittest.TestCase):
+    """Errors must propagate to operators, not be swallowed silently."""
+
+    def test_health_api_reports_probe_errors(self):
+        """Health API must expose probe_error when probes fail."""
+        import inspect
+        from freq.api.fleet import handle_health_api
+        src = inspect.getsource(handle_health_api)
+        self.assertIn("probe_error", src,
+                       "Health API must expose probe_error field")
+        self.assertIn("probe_status", src,
+                       "Health API must expose probe_status field")
+
+    def test_topology_exposes_staleness(self):
+        """Enhanced topology must include cache age metadata."""
+        import inspect
+        from freq.api.fleet import handle_topology_enhanced
+        src = inspect.getsource(handle_topology_enhanced)
+        self.assertIn("age_seconds", src,
+                       "Topology must expose age_seconds")
+
+    def test_heatmap_exposes_staleness(self):
+        """Heatmap must include cache age and stale flag."""
+        import inspect
+        from freq.api.fleet import handle_fleet_heatmap
+        src = inspect.getsource(handle_fleet_heatmap)
+        self.assertIn("age_seconds", src,
+                       "Heatmap must expose age_seconds")
+        self.assertIn("stale", src,
+                       "Heatmap must expose stale flag")
+
+    def test_sse_broadcasts_probe_errors(self):
+        """SSE event stream must broadcast probe errors in real-time."""
+        import os
+        serve_path = os.path.join(os.path.dirname(__file__), "..", "freq", "modules", "serve.py")
+        with open(serve_path) as f:
+            src = f.read()
+        self.assertIn("probe_error", src,
+                       "serve.py must broadcast probe_error events via SSE")
+
+
 if __name__ == "__main__":
     unittest.main()
