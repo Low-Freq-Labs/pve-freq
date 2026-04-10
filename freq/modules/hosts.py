@@ -565,6 +565,38 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                 "all_ips": e.get("all_ips", []),
             }
 
+    # ── Step 6b: Dedup by hostname across VLANs ──
+    # When the same label appears with different IPs (e.g. VM on mgmt + lab VLAN),
+    # keep only the highest-priority entry.
+    _source_rank = {"existing": 0, "pve": 1, "pve-node": 1, "fleet-boundaries": 2, "manual": 3}
+    by_label = {}
+    for ip, d in discovered.items():
+        label = d["label"]
+        if label not in by_label:
+            by_label[label] = ip
+        else:
+            prev_ip = by_label[label]
+            prev = discovered[prev_ip]
+            # Compare: lower source rank wins; on tie, prefer mgmt VLAN
+            prev_rank = _source_rank.get(prev["source"], 9)
+            curr_rank = _source_rank.get(d["source"], 9)
+            if curr_rank < prev_rank:
+                by_label[label] = ip
+            elif curr_rank == prev_rank:
+                # Prefer management VLAN IP
+                prev_mgmt = any(prev_ip.startswith(p) for p in mgmt_prefixes)
+                curr_mgmt = any(ip.startswith(p) for p in mgmt_prefixes)
+                if curr_mgmt and not prev_mgmt:
+                    by_label[label] = ip
+
+    # Remove duplicate entries (keep winner for each label)
+    keep_ips = set(by_label.values())
+    dup_removed = {ip: d for ip, d in discovered.items() if ip in keep_ips}
+    if len(dup_removed) < len(discovered):
+        removed_count = len(discovered) - len(dup_removed)
+        logger.info(f"hosts_sync_dedup: removed {removed_count} duplicate entries by hostname")
+    discovered = dup_removed
+
     # ── Step 7: Diff and report ──
     new_hosts = [ip for ip in discovered if ip not in existing]
     removed_hosts = [ip for ip in existing if ip not in discovered]
