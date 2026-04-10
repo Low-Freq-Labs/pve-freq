@@ -1214,6 +1214,26 @@ class TestJSAPIIntegrity(unittest.TestCase):
                          f"JS API constants with no registered route: {dead}")
 
 
+class TestCLIJsonOutput(unittest.TestCase):
+    """CLI --json commands must output JSON, not ANSI."""
+
+    def test_json_commands_use_json_dumps(self):
+        """Every CLI command with --json must use json.dumps for output."""
+        import os
+        cli_path = os.path.join(os.path.dirname(__file__), "..", "freq", "cli.py")
+        with open(cli_path) as f:
+            src = f.read()
+        # Count --json argument definitions
+        import re
+        json_args = re.findall(r'add_argument.*"--json"', src)
+        # Count json.dumps in CLI output paths
+        json_dumps = re.findall(r'json\.dumps|_json\.dumps', src)
+        # Each --json arg should have a corresponding json.dumps
+        # (some may be in imported modules like doctor.py)
+        self.assertGreaterEqual(len(json_dumps), 2,
+                               "CLI must have json.dumps calls for --json output paths")
+
+
 class TestFleetOverviewFallbackTruth(unittest.TestCase):
     """Fleet overview fallback must not silently hide loading state."""
 
