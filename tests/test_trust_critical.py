@@ -1367,6 +1367,39 @@ class TestErrorPropagation(unittest.TestCase):
         self.assertIn("stale", src,
                        "Heatmap must expose stale flag")
 
+    def test_js_mutation_calls_use_post(self):
+        """All JS calls to mutation endpoints must include {method:'POST'}.
+
+        Scans app.js for _authFetch calls to known mutation API constants
+        and verifies they include the POST method option.
+        """
+        import os, re
+        js_path = os.path.join(os.path.dirname(__file__), "..", "freq", "data", "web", "js", "app.js")
+        with open(js_path) as f:
+            src = f.read()
+        # Known mutation API constants that must use POST
+        mutation_apis = [
+            "API.EXEC", "API.VM_CREATE", "API.VM_DESTROY", "API.VM_CLONE",
+            "API.VM_MIGRATE", "API.VM_POWER", "API.VM_SNAPSHOT",
+            "API.VM_DELETE_SNAP", "API.VM_RESIZE", "API.VM_RENAME",
+            "API.VM_CHANGE_ID", "API.VM_ADD_NIC", "API.VM_CLEAR_NICS",
+            "API.VM_CHANGE_IP", "API.VM_ADD_DISK", "API.VM_TAG",
+            "API.CT_POWER", "API.CT_DESTROY",
+            "API.USERS_CREATE", "API.USERS_PROMOTE", "API.USERS_DEMOTE",
+            "API.VAULT_SET", "API.VAULT_DELETE",
+            "API.GWIPE",
+        ]
+        missing = []
+        for api in mutation_apis:
+            # Find all _authFetch calls using this API constant (exact match)
+            pattern = rf"_authFetch\({re.escape(api)}(?![A-Z_])[^;]*?\.then"
+            matches = re.findall(pattern, src)
+            for m in matches:
+                if "method:'POST'" not in m and '{method:"POST"}' not in m:
+                    missing.append(f"{api}: {m[:60]}")
+        self.assertEqual(len(missing), 0,
+                         f"JS mutation calls missing POST: {missing}")
+
     def test_no_method_post_inside_encodeuri(self):
         """JS must not pass {method:'POST'} inside encodeURIComponent.
 

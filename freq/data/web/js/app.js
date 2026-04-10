@@ -123,7 +123,7 @@ document.addEventListener('click',function(e){
     if(a==='vmPower'){vmPower(+da.dataset.vmid,g);return;}
     if(a==='vmDestroy'){vmDestroy(+da.dataset.vmid);return;}
     if(a==='vmSnap'){vmSnap(+da.dataset.vmid);return;}
-    if(a==='vmQuickTag'){var tags=prompt('Enter tags for VM '+da.dataset.vmid+' (comma-separated):');if(tags!==null)_authFetch(API.VM_TAG+'?vmid='+da.dataset.vmid+'&tags='+encodeURIComponent(tags)).then(function(r){return r.json()}).then(function(d){if(d.ok)toast('Tags updated','success');else toast(d.error,'error');});return;}
+    if(a==='vmQuickTag'){var tags=prompt('Enter tags for VM '+da.dataset.vmid+' (comma-separated):');if(tags!==null)_authFetch(API.VM_TAG+'?vmid='+da.dataset.vmid+'&tags='+encodeURIComponent(tags),{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(d.ok)toast('Tags updated','success');else toast(d.error,'error');});return;}
     if(a==='openVmInfo'){openVmInfo(da.dataset.label,'',+da.dataset.vmid);return;}
     if(a==='vaultReveal'){vaultReveal(da.dataset.uid,da.dataset.host,da.dataset.key);return;}
     if(a==='vaultCopy'){vaultCopy(da.dataset.host,da.dataset.key);return;}
@@ -4576,7 +4576,7 @@ function vmtAddDisk(){
   if(!vmid){toast('Select a VM','error');return;}
   if(!size||+size<1){toast('Enter a valid disk size','error');return;}
   var out=document.getElementById('vmt-ad-out');if(out)out.innerHTML='<div class="c-yellow">Adding '+size+unit+' disk to VM '+vmid+'...</div>';
-  _authFetch(API.VM_ADD_DISK+'?vmid='+vmid+'&size='+size+unit+'&storage='+encodeURIComponent(storage)).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_ADD_DISK+'?vmid='+vmid+'&size='+size+unit+'&storage='+encodeURIComponent(storage),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Disk '+d.disk+' added to VM '+vmid,'success');if(out)out.innerHTML='<div class="c-green">Added '+d.size+' disk as '+d.disk+' on '+d.storage+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   }).catch(function(e){toast('Add disk failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -4586,7 +4586,7 @@ function vmtTag(){
   var tags=(document.getElementById('vmt-tag-tags')||{}).value;
   if(!vmid){toast('Select a VM','error');return;}
   var out=document.getElementById('vmt-tag-out');if(out)out.innerHTML='<div class="c-yellow">Setting tags on VM '+vmid+'...</div>';
-  _authFetch(API.VM_TAG+'?vmid='+vmid+'&tags='+encodeURIComponent(tags||'')).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_TAG+'?vmid='+vmid+'&tags='+encodeURIComponent(tags||''),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Tags updated on VM '+vmid,'success');if(out)out.innerHTML='<div class="c-green">VM '+vmid+' tags set to: '+(d.tags||'(cleared)')+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   }).catch(function(e){toast('Tag update failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -6077,7 +6077,7 @@ function loadVault(){
 function vaultSet(){
   var k=document.getElementById('v-key').value;var v=document.getElementById('v-val').value;var h=document.getElementById('v-host').value;
   if(!k||!v){toast('Key and value required','error');return;}
-  _authFetch(API.VAULT_SET+'?key='+encodeURIComponent(k)+'&value='+encodeURIComponent(v)+'&host='+h).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VAULT_SET+'?key='+encodeURIComponent(k)+'&value='+encodeURIComponent(v)+'&host='+h,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){document.getElementById('v-key').value='';document.getElementById('v-val').value='';toast('Credential stored','success');loadVault();}else toast(d.error,'error');
   });
 }
@@ -6427,7 +6427,7 @@ function _vmRename(vmid){
   if(!name){toast('Enter a name','error');return;}
   var out=document.getElementById('vm-ctrl-out');if(out)out.innerHTML='<span class="c-yellow">Renaming...</span>';
   confirmAction('Rename VM <strong>'+vmid+'</strong> to <strong>'+name+'</strong>?',function(){
-    _authFetch(API.VM_RENAME+'?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_RENAME+'?vmid='+vmid+'&name='+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('VM '+vmid+' renamed to '+name,'success');if(out)out.innerHTML='<span class="c-green">Renamed to '+name+'</span>';document.getElementById('hd-title').textContent=name.toUpperCase();}
       else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
@@ -6438,7 +6438,7 @@ function _vmChangeId(vmid){
   if(!newid){toast('Enter a new VMID','error');return;}
   var out=document.getElementById('vm-ctrl-out');if(out)out.innerHTML='<span class="c-yellow">Changing VMID...</span>';
   confirmAction('Change VMID <strong>'+vmid+'</strong> to <strong>'+newid+'</strong>?<br><span class="c-yellow">VM must be stopped. This clones to the new ID and destroys the old one.</span>',function(){
-    _authFetch(API.VM_CHANGE_ID+'?vmid='+vmid+'&newid='+newid).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_CHANGE_ID+'?vmid='+vmid+'&newid='+newid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('VMID changed: '+vmid+' \u2192 '+newid,'success');if(out)out.innerHTML='<span class="c-green">VMID changed to '+newid+'</span>';closeHost();}
       else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
@@ -6479,7 +6479,7 @@ function _vmListSnaps(vmid){
 function _vmDelSnap(vmid,name){
   confirmAction('Delete snapshot <strong>'+name+'</strong> from VM '+vmid+'?',function(){
     toast('Deleting snapshot '+name+'...','info');
-    _authFetch(API.VM_DELETE_SNAP+'?vmid='+vmid+'&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_DELETE_SNAP+'?vmid='+vmid+'&name='+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('Snapshot '+name+' deleted','success');_vmListSnaps(vmid);}
       else{toast('Error: '+d.error,'error');}
     });
@@ -6491,7 +6491,7 @@ function _vmDelAllSnaps(vmid){
     _authFetch(API.VM_SNAPSHOTS+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
       var chain=Promise.resolve();
       d.snapshots.forEach(function(s){
-        chain=chain.then(function(){return _authFetch(API.VM_DELETE_SNAP+'?vmid='+vmid+'&name='+encodeURIComponent(s)).then(function(r){return r.json()});});
+        chain=chain.then(function(){return _authFetch(API.VM_DELETE_SNAP+'?vmid='+vmid+'&name='+encodeURIComponent(s),{method:'POST'}).then(function(r){return r.json()});});
       });
       chain.then(function(){toast('All snapshots deleted \u2014 live migration restored','success');_vmListSnaps(vmid);});
     });
@@ -6516,7 +6516,7 @@ function _vmDoResize(vmid){
   var out=document.getElementById('vm-ctrl-out');
   confirmAction('Resize VM <strong>'+vmid+'</strong> to '+desc.join(', ')+'?',function(){
     if(out)out.innerHTML='<span class="c-yellow">Resizing...</span>';
-    _authFetch(API.VM_RESIZE+'?vmid='+vmid+(cores?'&cores='+cores:'')+(ram?'&ram='+ram:'')).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_RESIZE+'?vmid='+vmid+(cores?'&cores='+cores:'')+(ram?'&ram='+ram:''),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('VM '+vmid+' resized','success');if(out)out.innerHTML='<span class="c-green">Resized \u2014 reboot to apply</span>';}
       else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
     });
@@ -6595,7 +6595,7 @@ function _vmCheckAndAddNic(vmid){
     var cidr=opt.getAttribute('data-cidr')||'24';
     confirmAction('Add NIC to VM <strong>'+vmid+'</strong>:<br><span style="font-family:monospace">'+opt.textContent+' \u2192 '+ip+'/'+cidr+'</span>'+(gw?'<br><span style="font-family:monospace;color:var(--text-dim)">gw '+gw+'</span>':'')+'<br><br><span class="c-dim">This adds a new NIC without touching existing ones. Reboot to activate.</span>',function(){
       if(status)status.innerHTML='<span class="c-yellow">Adding NIC...</span>';
-      _authFetch(API.VM_ADD_NIC+'?vmid='+vmid+'&ip='+encodeURIComponent(ip+'/'+cidr)+'&gw='+encodeURIComponent(gw)+'&vlan='+vlan).then(function(r){return r.json()}).then(function(d2){
+      _authFetch(API.VM_ADD_NIC+'?vmid='+vmid+'&ip='+encodeURIComponent(ip+'/'+cidr)+'&gw='+encodeURIComponent(gw)+'&vlan='+vlan,{method:'POST'}).then(function(r){return r.json()}).then(function(d2){
         if(d2.ok){
           toast(d2.nic+' added: '+ip,'success');
           if(status)status.innerHTML='<span class="c-green">'+d2.nic+' added \u2014 reboot to activate</span>';
@@ -6622,12 +6622,12 @@ function _vmApplyNicCombo(vmid){
   var out=document.getElementById('vm-ctrl-out');
   confirmAction('<strong>Set VM '+vmid+' network ('+configs.length+' NIC'+(configs.length>1?'s':'')+')</strong><br><br><span style="font-family:monospace;line-height:1.8">'+desc+'</span><br><br><span class="c-yellow">All existing NICs will be CLEARED first.</span><br><span class="c-dim">Reboot required to activate.</span>',function(){
     if(out)out.innerHTML='<span class="c-yellow">Clearing existing NICs...</span>';
-    _authFetch(API.VM_CLEAR_NICS+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.VM_CLEAR_NICS+'?vmid='+vmid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(out)out.innerHTML='<span class="c-yellow">Applying '+configs.length+' NICs...</span>';
       var chain=Promise.resolve();
       configs.forEach(function(c){
         chain=chain.then(function(){
-          return _authFetch(API.VM_CHANGE_IP+'?vmid='+vmid+'&ip='+encodeURIComponent(c.ip)+'&gw='+encodeURIComponent(c.gw)+'&nic='+c.nic+'&vlan='+c.vlan).then(function(r){return r.json();});
+          return _authFetch(API.VM_CHANGE_IP+'?vmid='+vmid+'&ip='+encodeURIComponent(c.ip)+'&gw='+encodeURIComponent(c.gw)+'&nic='+c.nic+'&vlan='+c.vlan,{method:'POST'}).then(function(r){return r.json();});
         });
       });
       return chain;
