@@ -563,7 +563,11 @@ class TestOpenAPITruthfulness:
         spec = self._get_spec()
         post_keywords = ("create", "update", "delete", "reset", "login",
                          "change", "complete", "generate", "deploy", "rollback")
+        # Read-only endpoints that have keyword matches but are genuinely GET
+        get_overrides = {"/api/fleet/updates", "/api/redfish/power-usage"}
         for path, methods in spec["paths"].items():
+            if path in get_overrides:
+                continue
             path_tail = path.rsplit("/", 1)[-1]
             if any(kw in path_tail for kw in post_keywords):
                 assert "post" in methods, f"{path} should be POST but is {list(methods.keys())}"

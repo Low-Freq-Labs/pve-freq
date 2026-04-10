@@ -2066,6 +2066,8 @@ a:hover{{text-decoration:underline}}
                           "change", "complete", "generate", "deploy",
                           "rollback", "power", "boot", "clear", "wol",
                           "bench", "reboot", "add", "remove")
+        # Paths that contain POST keywords but are actually GET (read-only)
+        _GET_OVERRIDES = {"/api/fleet/updates", "/api/redfish/power-usage"}
 
         paths = {}
         for path, handler_ref in sorted(routes.items()):
@@ -2081,7 +2083,9 @@ a:hover{{text-decoration:underline}}
             # Detect HTTP method from path name or docstring
             path_tail = path.rsplit("/", 1)[-1]
             doc_lower = desc.lower()
-            if any(kw in path_tail for kw in _POST_KEYWORDS) or doc_lower.startswith("post "):
+            if path in _GET_OVERRIDES:
+                method = "get"
+            elif any(kw in path_tail for kw in _POST_KEYWORDS) or doc_lower.startswith("post "):
                 method = "post"
             else:
                 method = "get"
@@ -3742,10 +3746,13 @@ a:hover{{text-decoration:underline}}
         )
 
     def _serve_admin_fleet_boundaries_update(self):
-        """GET /api/admin/fleet-boundaries/update — update fleet-boundaries.toml.
+        """POST /api/admin/fleet-boundaries/update — update fleet-boundaries.toml.
 
         Params: action=update_category|update_range|update_tier|add_vmid|remove_vmid
         """
+        if self.command != "POST":
+            self._json_response({"error": "fleet-boundaries update requires POST"}, 405)
+            return
         role, err = _check_session_role(self, "admin")
         if err:
             self._json_response({"error": err}, 403)
@@ -3952,10 +3959,13 @@ a:hover{{text-decoration:underline}}
         self._json_response({"ok": True})
 
     def _serve_admin_hosts_update(self):
-        """GET /api/admin/hosts/update — update host type or groups in hosts.conf.
+        """POST /api/admin/hosts/update — update host type or groups in hosts.conf.
 
         Params: label, type (optional), groups (optional)
         """
+        if self.command != "POST":
+            self._json_response({"error": "hosts update requires POST"}, 405)
+            return
         role, err = _check_session_role(self, "admin")
         if err:
             self._json_response({"error": err}, 403)
