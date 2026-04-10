@@ -15,7 +15,7 @@
 | 3 | Security/observe/state | DONE — vault, boundaries, doctor | S027 |
 | 4 | Auto/DR/media/gitops/RBAC | DONE — 18 containers, 7 hosts | S027 |
 | 5 | Dashboard API | DONE — auth, POST, config security all pass | S027 |
-| 6 | Dashboard data quality (29 pages) | NOT STARTED |
+| 6 | Dashboard data quality (29 pages) | DONE — 19 browser tests pass on live 5005 | S029 |
 
 ## Bugs Found
 
