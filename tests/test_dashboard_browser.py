@@ -339,7 +339,6 @@ class TestDashboardFreshness(unittest.TestCase):
     def setUpClass(cls):
         cls.pw = sync_playwright().start()
         cls.browser = cls.pw.chromium.launch(headless=True)
-        cls.token = _login_api()
 
     @classmethod
     def tearDownClass(cls):
@@ -347,14 +346,18 @@ class TestDashboardFreshness(unittest.TestCase):
         cls.pw.stop()
 
     def _auth_page(self):
+        """Create page with fresh auth token (avoids expiry in long runs)."""
+        token = _login_api()
         ctx = self.browser.new_context()
         ctx.add_cookies([{
             "name": "freq_session",
-            "value": self.token,
+            "value": token,
             "domain": "10.25.255.55",
             "path": "/",
         }])
-        return ctx.new_page()
+        page = ctx.new_page()
+        page._freq_token = token  # stash for evaluate calls
+        return page
 
     def test_fleet_overview_age_label_in_source(self):
         """Dashboard JS must compute and render age labels for fleet data.
@@ -380,12 +383,13 @@ class TestDashboardFreshness(unittest.TestCase):
         page = self._auth_page()
         page.goto(DASHBOARD_URL)
         page.wait_for_load_state("networkidle")
+        token = page._freq_token
         response = page.evaluate("""async () => {
             const resp = await fetch('/api/fleet/overview', {
                 headers: {'Authorization': 'Bearer %s'}
             });
             return await resp.json();
-        }""" % self.token)
+        }""" % token)
         page.close()
 
         # Response must have either cached path metadata or loading indicator
@@ -400,12 +404,13 @@ class TestDashboardFreshness(unittest.TestCase):
         page = self._auth_page()
         page.goto(DASHBOARD_URL)
         page.wait_for_load_state("networkidle")
+        token = page._freq_token
         response = page.evaluate("""async () => {
             const resp = await fetch('/api/fleet/health-score', {
                 headers: {'Authorization': 'Bearer %s'}
             });
             return {status: resp.status, body: await resp.json()};
-        }""" % self.token)
+        }""" % token)
         page.close()
 
         body = response["body"]
@@ -462,6 +467,7 @@ class TestDashboardFreshness(unittest.TestCase):
         page.wait_for_load_state("networkidle")
 
         # Hit a nonexistent API endpoint
+        token = page._freq_token
         response = page.evaluate("""async () => {
             const resp = await fetch('/api/nonexistent-endpoint-test', {
                 headers: {'Authorization': 'Bearer %s'}
@@ -469,7 +475,7 @@ class TestDashboardFreshness(unittest.TestCase):
             const text = await resp.text();
             try { JSON.parse(text); return {is_json: true, status: resp.status}; }
             catch(e) { return {is_json: false, status: resp.status, preview: text.substring(0, 100)}; }
-        }""" % self.token)
+        }""" % token)
         page.close()
 
         # 404 is expected — but response should be JSON, not HTML
