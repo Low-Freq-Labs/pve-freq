@@ -123,7 +123,11 @@ def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = PVE_CMD
         htype="pve",
         use_sudo=True,
     )
-    return r.stdout, r.returncode == 0
+    # On failure, include stderr in stdout so callers see the real error
+    output = r.stdout
+    if r.returncode != 0 and r.stderr and not r.stdout.strip():
+        output = r.stderr
+    return output, r.returncode == 0
 
 
 def _find_reachable_node(cfg: FreqConfig) -> str:
