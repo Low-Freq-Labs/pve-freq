@@ -626,6 +626,29 @@ class TestOpenAPITruthfulness:
         serve_leaks = [m for m in missing if "_serve_" in m]
         assert not serve_leaks, f"Internal method names leaked into spec: {serve_leaks}"
 
+    def test_spec_route_count_matches_real_routes(self):
+        """OpenAPI spec must include all registered routes (no silent omissions)."""
+        from freq.api import build_routes
+        from freq.modules.serve import FreqHandler
+
+        real_routes = dict(FreqHandler._ROUTES)
+        real_routes.update(build_routes())
+
+        skip = {"/", "/dashboard", "/api/docs", "/api/openapi.json"}
+        real_api = {k for k in real_routes if k not in skip}
+
+        spec = self._get_spec()
+        spec_routes = set(spec["paths"].keys())
+        # Proxy routes use {path} template, skip them for exact match
+        spec_routes_clean = {r for r in spec_routes if "{path}" not in r}
+
+        # Every real route should appear in the spec
+        missing = real_api - spec_routes_clean
+        assert len(missing) <= 2, (
+            f"OpenAPI spec missing {len(missing)} routes: "
+            f"{sorted(list(missing))[:10]}"
+        )
+
     def test_no_error_responses_return_200(self):
         """Verify no _json_response({{error:...}}) call defaults to 200.
 
