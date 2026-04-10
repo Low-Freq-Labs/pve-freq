@@ -5463,7 +5463,9 @@ def _phase_summary(cfg, ctx, verified, pack=None):
     # Component ports
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}Services:{fmt.C.RESET}")
-    fmt.line(f"    Dashboard: http://localhost:{getattr(cfg, 'dashboard_port', 8888)}")
+    tls_cert = getattr(cfg, "tls_cert", "")
+    dash_scheme = "https" if tls_cert and os.path.isfile(tls_cert) else "http"
+    fmt.line(f"    Dashboard: {dash_scheme}://localhost:{getattr(cfg, 'dashboard_port', 8888)}")
     fmt.line(f"    Watchdog:  port {getattr(cfg, 'watchdog_port', 9900)}")
     fmt.line(f"    Agent:     port {getattr(cfg, 'agent_port', 9990)}")
 
