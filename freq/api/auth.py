@@ -186,7 +186,9 @@ def handle_auth_login(handler):
     cfg = load_config()
     tls_cert = os.path.join(cfg.conf_dir, "..", "tls", "cert.pem") if hasattr(cfg, "conf_dir") else ""
     secure_flag = "; Secure" if os.path.isfile(tls_cert) else ""
-    handler.send_header("Set-Cookie", f"freq_session={token}; HttpOnly; SameSite=Strict; Path=/{secure_flag}")
+    handler.send_header("Set-Cookie",
+                        f"freq_session={token}; HttpOnly; SameSite=Strict; Path=/; "
+                        f"Max-Age={SESSION_TIMEOUT_SECONDS}{secure_flag}")
     origin = handler.headers.get("Origin", "")
     if origin:
         handler.send_header("Access-Control-Allow-Origin", origin)
@@ -196,6 +198,35 @@ def handle_auth_login(handler):
     handler.send_header("X-Frame-Options", "DENY")
     import json as _json
     body = _json.dumps({"ok": True, "token": token, "user": username, "role": user["role"]}).encode()
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def handle_auth_logout(handler):
+    """POST /api/auth/logout — invalidate session and clear cookie."""
+    token = ""
+    auth_header = handler.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+    if not token:
+        cookie_header = handler.headers.get("Cookie", "")
+        for part in cookie_header.split(";"):
+            part = part.strip()
+            if part.startswith("freq_session="):
+                token = part[len("freq_session="):]
+                break
+
+    if token:
+        with _auth_lock:
+            _auth_tokens.pop(token, None)
+
+    # Clear cookie by setting Max-Age=0
+    handler.send_response(200)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Set-Cookie", "freq_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0")
+    import json as _json
+    body = _json.dumps({"ok": True, "message": "Logged out"}).encode()
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)

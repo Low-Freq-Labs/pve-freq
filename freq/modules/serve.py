@@ -1444,6 +1444,7 @@ from freq.api.auth import (
     hash_password as _hash_password,
     check_session_role as _check_session_role,
     handle_auth_login,
+    handle_auth_logout,
     handle_auth_verify,
     handle_auth_change_password,
 )
@@ -1605,6 +1606,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/pve/metrics": "_serve_pve_metrics",
         "/api/pve/rrd": "_serve_pve_rrd",
         "/api/auth/login": "_serve_auth_login",
+        "/api/auth/logout": "_serve_auth_logout",
         "/api/auth/verify": "_serve_auth_verify",
         "/api/auth/change-password": "_serve_auth_change_password",
         # ── Admin (stays in serve.py) ─────────────────────────────────
@@ -3642,6 +3644,9 @@ a:hover{{text-decoration:underline}}
 
     def _serve_auth_login(self):
         handle_auth_login(self)
+
+    def _serve_auth_logout(self):
+        handle_auth_logout(self)
 
     def _serve_auth_verify(self):
         handle_auth_verify(self)
