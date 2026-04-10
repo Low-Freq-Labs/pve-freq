@@ -1192,6 +1192,28 @@ class TestRouteIntegrity(unittest.TestCase):
                          f"Dead legacy routes (missing method): {dead}")
 
 
+class TestJSAPIIntegrity(unittest.TestCase):
+    """JS API constants must point at real registered routes."""
+
+    def test_api_constants_resolve_to_routes(self):
+        """Every API.* constant in app.js must have a registered route."""
+        import os, re
+        from freq.api import build_routes
+        from freq.modules.serve import FreqHandler
+
+        all_routes = set(FreqHandler._ROUTES.keys())
+        all_routes.update(build_routes().keys())
+
+        js_path = os.path.join(os.path.dirname(__file__), "..", "freq", "data", "web", "js", "app.js")
+        with open(js_path) as f:
+            src = f.read()
+
+        consts = re.findall(r"\w+:'(/api/[^']+)'", src[:2000])  # API block is near top
+        dead = [c for c in consts if c not in all_routes]
+        self.assertEqual(len(dead), 0,
+                         f"JS API constants with no registered route: {dead}")
+
+
 class TestFleetOverviewFallbackTruth(unittest.TestCase):
     """Fleet overview fallback must not silently hide loading state."""
 
