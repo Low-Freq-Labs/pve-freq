@@ -227,7 +227,9 @@ def handle_playbooks(handler):
 
 
 def handle_playbooks_run(handler):
-    """GET /api/playbooks/run — run all steps of a playbook (non-confirm steps only)."""
+    """POST /api/playbooks/run — run all steps of a playbook (non-confirm steps only)."""
+    if require_post(handler, "Playbook run"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -279,7 +281,9 @@ def handle_playbooks_run(handler):
 
 
 def handle_playbooks_step(handler):
-    """GET /api/playbooks/step — run a single step of a playbook by index."""
+    """POST /api/playbooks/step — run a single step of a playbook by index."""
+    if require_post(handler, "Playbook step"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -373,7 +377,9 @@ def handle_chaos_types(handler):
 
 
 def handle_chaos_run(handler):
-    """GET /api/chaos/run — run a chaos experiment (admin only)."""
+    """POST /api/chaos/run — run a chaos experiment (admin only)."""
+    if require_post(handler, "Chaos experiment"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
