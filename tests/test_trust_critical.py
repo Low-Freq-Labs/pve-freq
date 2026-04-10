@@ -571,6 +571,37 @@ class TestStaleCacheRegressions(unittest.TestCase):
             _bg_cache_errors.pop("health", None)
 
 
+class TestHealthScoreColdStart(unittest.TestCase):
+    """health-score must not return 100/A when no data exists."""
+
+    def test_no_cache_returns_503_not_perfect_score(self):
+        """With empty cache, health-score must return 503, not score=100."""
+        from freq.api.fleet import handle_fleet_health_score, _bg_cache, _bg_cache_ts, _bg_lock
+
+        handler = MagicMock()
+        handler.path = "/api/fleet/health-score"
+        captured = {}
+
+        def mock_json_resp(h, data, status=200):
+            captured["data"] = data
+            captured["status"] = status
+
+        # Clear both caches
+        with _bg_lock:
+            _bg_cache["health"] = None
+            _bg_cache["fleet_overview"] = None
+
+        with patch("freq.api.fleet.json_response", mock_json_resp):
+            handle_fleet_health_score(handler)
+
+        self.assertEqual(captured["status"], 503,
+                         "health-score with no data must return 503")
+        self.assertNotEqual(captured["data"].get("score"), 100,
+                            "health-score must NOT be 100 with no data")
+        self.assertNotEqual(captured["data"].get("grade"), "A",
+                            "grade must NOT be A with no data")
+
+
 class TestAPIStatusCodeTruth(unittest.TestCase):
     """API error responses must never return 200.
 

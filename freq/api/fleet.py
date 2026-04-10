@@ -835,6 +835,14 @@ def handle_fleet_health_score(handler):
         health = _bg_cache.get("health")
         fleet = _bg_cache.get("fleet_overview")
 
+    if not health and not fleet:
+        json_response(handler, {
+            "score": 0, "grade": "?", "factors": [],
+            "max_score": 100, "error": "No health data available yet",
+            "cached": False, "stale": True,
+        }, 503)
+        return
+
     score = 100
     factors = []
 
