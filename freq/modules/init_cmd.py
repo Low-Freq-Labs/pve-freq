@@ -586,7 +586,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
 
     # Fix post-init ownership: ensure data dirs are usable by the service account
     svc_name = ctx["svc_name"]
-    for d in [cfg.data_dir, cfg.key_dir, cfg.vault_file, cfg.log_dir]:
+    for d in [cfg.data_dir, cfg.key_dir, cfg.vault_file, cfg.log_dir, cfg.conf_dir]:
         d_path = d if os.path.isdir(d) else os.path.dirname(d)
         if d_path and os.path.exists(d_path):
             try:
