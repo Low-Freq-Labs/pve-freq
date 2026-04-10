@@ -28,6 +28,7 @@ def _make_cfg(tmpdir, hosts=None, pve_nodes=None, pve_node_names=None, fleet_bou
     cfg.hosts = hosts or []
     cfg.pve_nodes = pve_nodes or []
     cfg.pve_node_names = pve_node_names or []
+    cfg.conf_dir = tmpdir
     cfg.ssh_key_path = "/tmp/fake-key"
     cfg.fleet_boundaries = fleet_boundaries or FleetBoundaries()
     # Write initial hosts.conf (including all_ips column 5 when present)
