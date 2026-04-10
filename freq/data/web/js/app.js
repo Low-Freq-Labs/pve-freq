@@ -1733,7 +1733,7 @@ function _getComposeVmId(){var v=(document.getElementById('compose-vm-select')||
 function composeUp(){
   var vmid=_getComposeVmId();if(!vmid)return;
   var out=document.getElementById('compose-out');if(out)out.innerHTML='<span class="c-yellow">Running compose up on VM '+vmid+'...</span>';
-  _authFetch(API.COMPOSE_UP+'?vm_id='+vmid).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.COMPOSE_UP+'?vm_id='+vmid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Compose up complete on '+d.vm,'success');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--green);white-space:pre-wrap;margin:0">'+_esc(d.output||'Compose up complete')+'</pre>';}
     else{toast('Compose up failed','error');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--red);white-space:pre-wrap;margin:0">'+_esc(d.error||'Unknown error')+'</pre>';}
   }).catch(function(e){toast('Compose up failed','error');if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
@@ -1742,7 +1742,7 @@ function composeDown(){
   var vmid=_getComposeVmId();if(!vmid)return;
   confirmAction('Bring down all compose services on VM <strong>'+vmid+'</strong>?',function(){
     var out=document.getElementById('compose-out');if(out)out.innerHTML='<span class="c-yellow">Running compose down on VM '+vmid+'...</span>';
-    _authFetch(API.COMPOSE_DOWN+'?vm_id='+vmid).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.COMPOSE_DOWN+'?vm_id='+vmid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast('Compose down complete on '+d.vm,'success');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--green);white-space:pre-wrap;margin:0">'+_esc(d.output||'Compose down complete')+'</pre>';}
       else{toast('Compose down failed','error');if(out)out.innerHTML='<pre style="font-size:11px;color:var(--red);white-space:pre-wrap;margin:0">'+_esc(d.error||'Unknown error')+'</pre>';}
     }).catch(function(e){toast('Compose down failed','error');if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
@@ -4719,14 +4719,14 @@ function monRunDoctor(){
 }
 function monWatchStart(){
   var out=document.getElementById('mon-w-out');if(out)out.textContent='Starting watch daemon...';
-  _authFetch('/api/watch/start').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/watch/start',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     var txt=d.output||d.error||'';
     if(out)out.textContent=txt||'Watch started.';
   });
 }
 function monWatchStop(){
   var out=document.getElementById('mon-w-out');if(out)out.textContent='Stopping watch daemon...';
-  _authFetch('/api/watch/stop').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/watch/stop',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     var txt=d.output||d.error||'';
     if(out)out.textContent=txt||'Watch stopped.';
   });
@@ -5533,7 +5533,7 @@ function loadStreams(){
 }
 function mediaRestart(name){
   confirmAction('Restart container <strong>'+name+'</strong>?',function(){
-    _authFetch(API.MEDIA_RESTART+'?name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.MEDIA_RESTART+'?name='+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       toast(d.ok?name+' restarted':'Restart failed: '+(d.error||'unknown'),d.ok?'success':'error');loadContainerSection();
     });
   });
@@ -6389,7 +6389,7 @@ function loadNotify(){
     document.getElementById('notify-status').innerHTML=html;
   });
 }
-function testNotify(){_authFetch(API.NOTIFY_TEST).then(function(r){return r.json()}).then(function(d){document.getElementById('notify-result').innerHTML='<p class="c-dim">'+JSON.stringify(d)+'</p>';toast('Test notification sent','info');});}
+function testNotify(){_authFetch(API.NOTIFY_TEST,{method:'POST'}).then(function(r){return r.json()}).then(function(d){document.getElementById('notify-result').innerHTML='<p class="c-dim">'+JSON.stringify(d)+'</p>';toast('Test notification sent','info');});}
 
 /* ═══════════════════════════════════════════════════════════════════
    VM ACTIONS (toast + modal)
@@ -8356,7 +8356,7 @@ function loadFederation(){
 }
 function fedPoll(){
   toast('Polling all sites...','info');
-  _authFetch('/api/federation/poll').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/federation/poll',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast('Poll complete','success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadFederation();
