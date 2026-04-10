@@ -1473,6 +1473,7 @@ function _getMediaTags(){if(_serverMediaTags!==null)return _serverMediaTags;try{
 function _setMediaTags(tags){_serverMediaTags=tags;localStorage.setItem('freq_media_tags',JSON.stringify(tags));_authFetch('/api/media/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tags:tags})}).catch(function(e){console.error('media tags error:',e);});}
 function _loadServerMediaTags(){_authFetch('/api/media/tags').then(function(r){return r.json()}).then(function(d){if(d.tags&&d.tags.length){_serverMediaTags=d.tags;localStorage.setItem('freq_media_tags',JSON.stringify(d.tags));}}).catch(function(e){console.error('media tags error:',e);});}
 var _mediaCache=null;/* cached /api/media/status response */
+var _mediaCacheTs=0;/* timestamp when media cache was last fetched */
 function toggleMediaTag(name){
   var tags=_getMediaTags();
   var idx=tags.indexOf(name);
@@ -1507,15 +1508,17 @@ function _renderAllFromCache(){
   document.getElementById('container-cards').innerHTML=html||'<div class="empty-state"><div class="es-icon">▶</div><p>No containers found.</p></div>';
 }
 function loadMediaContainers(){
-  if(_mediaCache){_renderMediaFromCache();return;}
+  var stale=_mediaCache&&(Date.now()/1000-_mediaCacheTs)>60;
+  if(_mediaCache&&!stale){_renderMediaFromCache();return;}
   _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
-    _mediaCache=d;_renderMediaFromCache();
+    _mediaCache=d;_mediaCacheTs=Date.now()/1000;_renderMediaFromCache();
   });
 }
 function loadServiceContainers(){
-  if(_mediaCache){_renderServicesFromCache();return;}
+  var stale=_mediaCache&&(Date.now()/1000-_mediaCacheTs)>60;
+  if(_mediaCache&&!stale){_renderServicesFromCache();return;}
   _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
-    _mediaCache=d;_renderServicesFromCache();
+    _mediaCache=d;_mediaCacheTs=Date.now()/1000;_renderServicesFromCache();
   });
 }
 var _httpsContainers=JSON.parse(localStorage.getItem('freq_https_containers')||'[]');
