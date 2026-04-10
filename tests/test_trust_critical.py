@@ -1203,6 +1203,17 @@ class TestFleetOverviewFallbackTruth(unittest.TestCase):
         self.assertIn("_loading", src,
                        "Fleet overview fallback must include _loading indicator")
 
+    def test_fallback_includes_cache_metadata(self):
+        """Fallback response must include cached/age_seconds/probe_status."""
+        import inspect
+        from freq.api.fleet import handle_fleet_overview
+        src = inspect.getsource(handle_fleet_overview)
+        # The fallback (else) path must include staleness metadata
+        self.assertIn('"cached": False', src,
+                       "Fallback must include cached: False")
+        self.assertIn('"probe_status": "loading"', src,
+                       "Fallback must include probe_status: loading")
+
     def test_fallback_has_zero_summary_not_misleading(self):
         """Fallback summary must show zeros, not non-zero counts."""
         import inspect

@@ -298,6 +298,9 @@ def handle_fleet_overview(handler):
                 },
                 "duration": 0,
                 "_loading": True,
+                "cached": False,
+                "age_seconds": None,
+                "probe_status": "loading",
             },
         )
 
