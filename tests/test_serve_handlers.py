@@ -580,19 +580,38 @@ class TestOpenAPITruthfulness:
     def test_no_error_responses_return_200(self):
         """Verify no _json_response({{error:...}}) call defaults to 200.
 
-        This is a source-level check — grep serve.py for the anti-pattern.
+        Checks both single-line and multi-line patterns in serve.py.
         """
         import re
         serve_path = os.path.join(os.path.dirname(__file__), "..", "freq", "modules", "serve.py")
         with open(serve_path) as f:
-            lines = f.readlines()
+            content = f.read()
+            lines = content.splitlines(True)
+
         bad_lines = []
+        # Single-line check
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
             if '_json_response({"error"' in stripped and stripped.endswith("})"):
-                # Check it doesn't have a status code: should end with }, NNN)
                 if not re.search(r'},\s*\d+\)$', stripped):
                     bad_lines.append(i)
+
+        # Multi-line check: _json_response(\n...{"error": <only field>...}\n)
+        # Skip mixed payloads (data + error field) — those are partial-success
+        for m in re.finditer(
+            r'_json_response\(\s*\n\s*(\{[^)]*"error"[^)]*\})\s*\n\s*\)',
+            content,
+        ):
+            lineno = content[:m.start()].count('\n') + 1
+            payload = m.group(1)
+            # Count top-level keys — if "error" is the only key (or with simple
+            # metadata), it's an error-only response. Mixed payloads have 3+ keys.
+            key_count = len(re.findall(r'"[a-z_]+":', payload))
+            if key_count <= 2:  # error + at most one metadata key
+                match_text = m.group()
+                if not re.search(r'},\s*\d+\s*\n\s*\)', match_text):
+                    bad_lines.append(lineno)
+
         assert not bad_lines, f"Lines returning error with implicit 200: {bad_lines}"
 
     def test_no_v1_api_error_responses_return_200(self):
