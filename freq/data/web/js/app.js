@@ -709,7 +709,9 @@ function _loadHomeFleetStats(){
     var _d=function(l,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+l+'</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'</span><span class="label-hint">'+l1+'</span></span><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'</span><span class="label-hint">'+l2+'</span></span></div></div>';};
     var el=document.getElementById('hw-fleet-stats');if(!el)return;
     var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<5?'LIVE':_age<60?_age+'s AGO':Math.round(_age/60)+'m AGO';var _ageClr=hd.probe_status==='error'?'var(--red)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';var _probeLbl=hd.probe_status==='error'?'PROBE ERROR':'';var _probeClr='var(--red)';
-    el.innerHTML=_d('STATUS',up,'ONLINE','var(--green)',totalOff,'OFFLINE','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'ONLINE','var(--cyan)')+_d('LIVE DATA',_ageLbl,'',_ageClr,_probeLbl,'',_probeClr)+st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
+    var _sseClr=_evtSource&&_evtSource.readyState===1?'var(--green)':'var(--yellow)';var _sseLbl=_evtSource&&_evtSource.readyState===1?'LIVE':'POLLING';
+    var _ldStat='<div class="st"><div class="lb">LIVE DATA</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+_ageClr+'">'+_ageLbl+'</span><span class="label-hint"></span></span><span class="stat-pair"><span id="sse-conn-status" style="font-size:20px;font-weight:700;color:'+(_probeLbl?_probeClr:_sseClr)+'">'+(_probeLbl||_sseLbl)+'</span><span class="label-hint"></span></span></div></div>';
+    el.innerHTML=_d('STATUS',up,'ONLINE','var(--green)',totalOff,'OFFLINE','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'ONLINE','var(--cyan)')+_ldStat+st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
     _authFetch(API.VMS).then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
       var c=el.querySelector('.st:nth-child(5)');if(c)c.innerHTML='<div class="lb">VMs</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+run+'</span><span class="label-hint">RUN</span></span><span class="stat-pair"><span class="stat-big-red">'+stop+'</span><span class="label-hint">STOP</span></span></div>';}).catch(function(e){console.error('API error:',e);});
     _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
@@ -1021,7 +1023,7 @@ function _silentHealthRefresh(){
     /* Update LIVE DATA freshness indicator */
     var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<5?'LIVE':_age<60?_age+'s AGO':Math.round(_age/60)+'m AGO';var _ageClr=hd.probe_status==='error'?'var(--red)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';
     var ldEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:first-child span:first-child');if(ldEl){ldEl.textContent=_ageLbl;ldEl.style.color=_ageClr;}
-    if(hd.probe_status==='error'){var peEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:last-child span:first-child');if(peEl){peEl.textContent='PROBE ERROR';peEl.style.color='var(--red)';}}
+    var ci=document.getElementById('sse-conn-status');if(ci){if(hd.probe_status==='error'){ci.textContent='PROBE ERROR';ci.style.color='var(--red)';}else{var _live=_evtSource&&_evtSource.readyState===1;ci.textContent=_live?'LIVE':'POLLING';ci.style.color=_live?'var(--green)':'var(--yellow)';}}
   }).catch(function(){_healthInFlight=false;});
 }
 function _silentFleetRefresh(){
@@ -1285,8 +1287,8 @@ function startSSE(){
     /* Update LIVE DATA indicator if visible */
     var ldEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:first-child span:first-child');
     if(ldEl){ldEl.textContent='STALE';ldEl.style.color='var(--red)';}
-    var peEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:last-child span:first-child');
-    if(peEl){peEl.textContent='PROBE ERROR';peEl.style.color='var(--red)';}
+    var ci=document.getElementById('sse-conn-status');
+    if(ci){ci.textContent='PROBE ERROR';ci.style.color='var(--red)';}
   });
 
   _evtSource.addEventListener('vm_state',function(e){
@@ -1333,6 +1335,11 @@ function startSSE(){
     if(_fleetTimer)clearInterval(_fleetTimer);
     _healthTimer=setInterval(_silentHealthRefresh,30000);
     _fleetTimer=setInterval(_silentFleetRefresh,90000);
+    /* Catch up on any events missed during disconnect gap */
+    _silentHealthRefresh();_silentFleetRefresh();
+    /* Update connection indicator */
+    var ci=document.getElementById('sse-conn-status');
+    if(ci){ci.textContent='LIVE';ci.style.color='var(--green)';}
   };
 
   _evtSource.onerror=function(){
@@ -1341,6 +1348,9 @@ function startSSE(){
     if(_fleetTimer)clearInterval(_fleetTimer);
     _healthTimer=setInterval(_silentHealthRefresh,10000);
     _fleetTimer=setInterval(_silentFleetRefresh,45000);
+    /* Update connection indicator */
+    var ci=document.getElementById('sse-conn-status');
+    if(ci){ci.textContent='POLLING';ci.style.color='var(--yellow)';}
   };
 }
 startSSE();
