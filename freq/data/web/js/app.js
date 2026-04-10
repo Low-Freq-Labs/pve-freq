@@ -1076,6 +1076,19 @@ function _silentFleetRefresh(){
 }
 startSilentRefresh();
 
+/* === Skeleton Timeout ===
+   If any skeleton loader is still visible after 15s, the API call failed
+   silently (no .catch handler). Replace with a "Load failed" message so
+   the operator knows something is wrong, not staring at an eternal spinner. */
+setInterval(function(){
+  document.querySelectorAll('.skeleton').forEach(function(el){
+    if(!el.dataset.skelTs){el.dataset.skelTs=Date.now();return;}
+    if(Date.now()-parseInt(el.dataset.skelTs)>15000){
+      el.outerHTML='<span style="color:var(--text-dim);font-size:11px">Load failed — refresh to retry</span>';
+    }
+  });
+},5000);
+
 /* === PVE Node Real-Time Metrics ===
    Polls /api/pve/metrics every 5s for live CPU/RAM/DISK from PVE API.
    Updates node card progress bars in-place — smooth, no flicker. */
