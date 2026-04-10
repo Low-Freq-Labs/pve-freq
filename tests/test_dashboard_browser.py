@@ -61,7 +61,7 @@ class TestDashboardAuth(unittest.TestCase):
         """Without auth, dashboard must show login form, not fleet data."""
         page = self.browser.new_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
 
         # Should see login form elements
         body = page.content()
@@ -81,7 +81,7 @@ class TestDashboardAuth(unittest.TestCase):
         """Bad password must NOT grant access."""
         page = self.browser.new_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
 
         # Try to login via API with bad password
         response = page.evaluate("""async () => {
@@ -103,7 +103,7 @@ class TestDashboardAuth(unittest.TestCase):
         """Empty password must NOT grant access."""
         page = self.browser.new_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
         response = page.evaluate("""async () => {
             const resp = await fetch('/api/auth/login', {
                 method: 'POST',
@@ -121,7 +121,7 @@ class TestDashboardAuth(unittest.TestCase):
         """Successful login must return ok:true and a token."""
         page = self.browser.new_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
 
         response = page.evaluate("""async () => {
             const resp = await fetch('/api/auth/login', {
@@ -180,7 +180,7 @@ class TestDashboardContent(unittest.TestCase):
         """Authenticated user sees dashboard, not login form."""
         page = self._auth_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
         page.wait_for_timeout(2000)  # Allow JS rendering
 
         body = page.content()
@@ -203,7 +203,7 @@ class TestDashboardContent(unittest.TestCase):
         """Fleet overview API returns real data when authenticated."""
         page = self._auth_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
         response = page.evaluate("""async () => {
             const resp = await fetch('/api/fleet/overview', {
                 headers: {'Authorization': 'Bearer %s'}
@@ -224,7 +224,7 @@ class TestDashboardContent(unittest.TestCase):
         """Health API must return host data when authenticated."""
         page = self._auth_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
         response = page.evaluate("""async () => {
             const resp = await fetch('/api/health', {
                 headers: {'Authorization': 'Bearer %s'}
@@ -249,7 +249,7 @@ class TestDashboardContent(unittest.TestCase):
         """
         page = self._auth_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
         response = page.evaluate("""async () => {
             const resp = await fetch('/api/exec', {
                 headers: {'Authorization': 'Bearer %s'}
@@ -320,7 +320,7 @@ class TestDashboardSecurity(unittest.TestCase):
         """Fleet API without auth must return 403, not 200."""
         page = self.browser.new_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
         response = page.evaluate("""async () => {
             const resp = await fetch('/api/fleet/overview');
             return {status: resp.status};
@@ -382,7 +382,7 @@ class TestDashboardFreshness(unittest.TestCase):
         """Fleet overview API response must include cache metadata fields."""
         page = self._auth_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
         token = page._freq_token
         response = page.evaluate("""async () => {
             const resp = await fetch('/api/fleet/overview', {
@@ -403,7 +403,7 @@ class TestDashboardFreshness(unittest.TestCase):
         """Health score API must return a grade and score, never silently empty."""
         page = self._auth_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
         token = page._freq_token
         response = page.evaluate("""async () => {
             const resp = await fetch('/api/fleet/health-score', {
@@ -441,7 +441,7 @@ class TestDashboardFreshness(unittest.TestCase):
         """After logout, dashboard must not show cached fleet data."""
         page = self._auth_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
         page.wait_for_timeout(2000)
 
         # Perform logout via API
@@ -464,7 +464,7 @@ class TestDashboardFreshness(unittest.TestCase):
         """API error responses must be JSON, not HTML error pages."""
         page = self._auth_page()
         page.goto(DASHBOARD_URL)
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded")
 
         # Hit a nonexistent API endpoint
         token = page._freq_token
