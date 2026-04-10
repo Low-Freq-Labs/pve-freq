@@ -384,9 +384,11 @@ def handle_stack_status(handler):
     )
 
     stacks = []
+    unreachable = []
     for h in hosts:
         r = result_for(results, h)
         if not r or r.returncode != 0:
+            unreachable.append({"label": h.label, "ip": h.ip, "error": r.stderr.strip()[:120] if r else "no response"})
             continue
         try:
             host_stacks = _json.loads(r.stdout.strip())
@@ -407,7 +409,7 @@ def handle_stack_status(handler):
                 }
             )
 
-    json_response(handler, {"stacks": stacks, "total": len(stacks)})
+    json_response(handler, {"stacks": stacks, "total": len(stacks), "unreachable": unreachable, "hosts_queried": len(hosts), "hosts_failed": len(unreachable)})
 
 
 def handle_stack_health(handler):
@@ -434,9 +436,11 @@ def handle_stack_health(handler):
     containers = []
     healthy = 0
     unhealthy = 0
+    unreachable_health = []
     for h in hosts:
         r = result_for(results, h)
         if not r or r.returncode != 0 or not r.stdout.strip():
+            unreachable_health.append({"label": h.label, "ip": h.ip, "error": r.stderr.strip()[:120] if r and r.stderr else "no response"})
             continue
         for line in r.stdout.strip().split("\n"):
             parts = line.split("|", 2)
@@ -465,6 +469,9 @@ def handle_stack_health(handler):
             "total": len(containers),
             "healthy": healthy,
             "unhealthy": unhealthy,
+            "unreachable": unreachable_health,
+            "hosts_queried": len(hosts),
+            "hosts_failed": len(unreachable_health),
         },
     )
 
