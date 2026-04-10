@@ -3994,9 +3994,9 @@ function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDur
     _fDual('FLEET SPLIT',summary.prod_count||0,'PROD','var(--purple-light)',summary.lab_count||0,'LAB','var(--cyan)')+
     _fDual('FLEET',prodCount,'PROD','var(--purple-light)',labCount,'LAB','var(--cyan)')+
     _fDual('PVE NODES',prodPveNodes,'PROD','var(--purple-light)',labPveNodes,'LAB','var(--cyan)')+
-    st('RESPONSE',responseDur+'s','b')+
     _fDual('STATUS',totalUp,'ONLINE','var(--green)',totalDown,'OFFLINE','var(--red)')+
     _fDual('VMs',vmRunning,'RUN','var(--green)',vmStopped,'STOP','var(--red)')+
+    _fDual('DATA',ageLabel,'AGE',ageColor,responseDur+'s','RESPONSE','var(--text-dim)')+
     st('CONTAINERS','...','p')+
     st('ACTIVITY','...','p');
   _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
