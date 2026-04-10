@@ -38,9 +38,9 @@
 ### CLI (Tier 1)
 | # | Bug | Fixed? |
 |---|---|---|
-| 13 | `init --check --json` outputs ANSI, not JSON | No |
-| 14 | `fleet status --json` outputs ANSI, not JSON | No |
-| 15 | `host list --json` outputs ANSI, not JSON | No |
+| 13 | `init --check --json` outputs ANSI, not JSON | **Yes** (commit d509506) |
+| 14 | `fleet status --json` outputs ANSI, not JSON | **Yes** (commit 3f53f23) |
+| 15 | `host list --json` outputs ANSI, not JSON | **Yes** (commit 31e3c76) |
 | 15b | `vm config` can't find VMs on remote nodes | No |
 | 16 | `vm clone` fails silently with empty error message | No |
 | 17 | Global `--yes` flag ignored by VM subcommand prompts | No |
