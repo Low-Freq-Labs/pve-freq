@@ -1074,5 +1074,80 @@ class TestValidateExtended(unittest.TestCase):
         # No assertion — just proving no crash
 
 
+# ---------------------------------------------------------------------------
+# Duplicate-label callers — result_for() usage
+# ---------------------------------------------------------------------------
+
+class TestDupLabelCallers(unittest.TestCase):
+    """Callers that read run_many results must use result_for(), not bare label."""
+
+    @patch("freq.api.logs.ssh_run_many")
+    def test_log_query_uses_result_for_on_dup_labels(self, mock_run_many):
+        """_log_query must not drop results when two hosts share a label."""
+        from freq.api.logs import _log_query
+
+        h1 = Host(ip="10.0.0.1", label="webserver", htype="linux")
+        h2 = Host(ip="10.0.0.2", label="webserver", htype="linux")
+
+        # Simulate run_many with dup-label keys (label@ip)
+        mock_run_many.return_value = {
+            "webserver@10.0.0.1": CmdResult(stdout="error log host1", stderr="", returncode=0, duration=0.1),
+            "webserver@10.0.0.2": CmdResult(stdout="error log host2", stderr="", returncode=0, duration=0.1),
+            "10.0.0.1": CmdResult(stdout="error log host1", stderr="", returncode=0, duration=0.1),
+            "10.0.0.2": CmdResult(stdout="error log host2", stderr="", returncode=0, duration=0.1),
+        }
+
+        cfg = MagicMock()
+        cfg.hosts = [h1, h2]
+        cfg.ssh_key_path = "/tmp/key"
+        cfg.ssh_connect_timeout = 3
+        cfg.ssh_max_parallel = 10
+
+        results = _log_query(cfg, "journalctl -p err -n 5")
+        # Both hosts must appear — bare-label access would return 0 results
+        self.assertEqual(len(results), 2)
+        hosts_seen = {r["host"] for r in results}
+        self.assertEqual(hosts_seen, {"webserver"})
+
+    @patch("freq.api.secure.ssh_run_many")
+    def test_harden_check_uses_result_for_on_dup_labels(self, mock_run_many):
+        """handle_harden must check both hosts when labels collide."""
+        from freq.api.secure import handle_harden
+
+        h1 = Host(ip="10.0.0.1", label="webserver", htype="linux")
+        h2 = Host(ip="10.0.0.2", label="webserver", htype="linux")
+
+        # Each check_cmd call returns dup-label keys
+        mock_run_many.return_value = {
+            "webserver@10.0.0.1": CmdResult(stdout="1", stderr="", returncode=0, duration=0.1),
+            "webserver@10.0.0.2": CmdResult(stdout="0", stderr="", returncode=0, duration=0.1),
+            "10.0.0.1": CmdResult(stdout="1", stderr="", returncode=0, duration=0.1),
+            "10.0.0.2": CmdResult(stdout="0", stderr="", returncode=0, duration=0.1),
+        }
+
+        handler = MagicMock()
+        handler.headers = {"Authorization": "Bearer test-token"}
+
+        captured = {}
+        def fake_json_response(h, data, status=200):
+            captured["data"] = data
+            captured["status"] = status
+
+        with patch("freq.api.secure._check_session_role", return_value=("admin", None)), \
+             patch("freq.api.secure.get_params", return_value={"target": ["all"]}), \
+             patch("freq.api.secure.load_config") as mock_cfg, \
+             patch("freq.api.secure.json_response", side_effect=fake_json_response):
+            mock_cfg.return_value.hosts = [h1, h2]
+            handle_harden(handler)
+
+        # 3 checks × 2 hosts = 6 results
+        self.assertEqual(len(captured["data"]["results"]), 6)
+        # h1 returns "1" (ok=True), h2 returns "0" (ok=False)
+        ok_count = sum(1 for r in captured["data"]["results"] if r["ok"])
+        fail_count = sum(1 for r in captured["data"]["results"] if not r["ok"])
+        self.assertEqual(ok_count, 3)  # h1 passes all 3 checks
+        self.assertEqual(fail_count, 3)  # h2 fails all 3 checks
+
+
 if __name__ == "__main__":
     unittest.main()

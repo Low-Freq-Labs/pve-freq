@@ -129,7 +129,7 @@ def handle_harden(handler):
             use_sudo=True,
         )
         for h in hosts:
-            host_res = r.get(h.label)
+            host_res = result_for(r, h)
             ok = host_res and host_res.returncode == 0 and host_res.stdout.strip() != "0"
             results.append({"host": h.label, "check": name, "ok": ok})
     json_response(handler, {"results": results, "hosts": len(hosts)})

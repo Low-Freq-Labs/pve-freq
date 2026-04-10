@@ -12,7 +12,7 @@ import re
 from freq.core import log as logger
 from freq.api.helpers import json_response, get_param, get_param_int
 from freq.core.config import load_config
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 # Shell-safe pattern: only allow alphanumeric, spaces, hyphens, dots, colons
 _SAFE_SHELL_RE = re.compile(r"^[a-zA-Z0-9 _\-.:,/]+$")
@@ -42,7 +42,7 @@ def _log_query(cfg, command, target=None, max_hosts=50):
 
     results = []
     for h in hosts[:max_hosts]:
-        r = results_raw.get(h.label)
+        r = result_for(results_raw, h)
         if not r:
             continue
         output = r.stdout.strip() if r.returncode == 0 else ""
