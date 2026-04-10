@@ -392,3 +392,12 @@ class TestProjectFiles:
         conf_dir = os.path.join(PROJECT_ROOT, "conf")
         assert os.path.isfile(os.path.join(conf_dir, "freq.toml.example"))
         assert os.path.isfile(os.path.join(conf_dir, "hosts.toml.example"))
+
+    def test_systemd_service_not_root(self):
+        """Systemd service must not run as root — use freq-admin."""
+        svc = os.path.join(PROJECT_ROOT, "contrib", "freq-serve.service")
+        assert os.path.isfile(svc), "contrib/freq-serve.service missing"
+        with open(svc) as f:
+            content = f.read()
+        assert "User=root" not in content, "Dashboard service must not run as root"
+        assert "User=freq-admin" in content, "Dashboard service should run as freq-admin"
