@@ -2732,9 +2732,16 @@ a:hover{{text-decoration:underline}}
 
         cfg = load_config()
         from freq.jarvis.learn import _init_db, _seed_db, _search, _load_knowledge
+        import sqlite3
 
         db_path = os.path.join(cfg.data_dir, "jarvis", "knowledge.db")
-        conn = _init_db(db_path)
+        try:
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+            conn = _init_db(db_path)
+        except (OSError, sqlite3.OperationalError):
+            fallback = os.path.join(os.path.expanduser("~"), ".freq", "knowledge.db")
+            os.makedirs(os.path.dirname(fallback), exist_ok=True)
+            conn = _init_db(fallback)
         lessons_data, gotchas_data = _load_knowledge(cfg)
         _seed_db(conn, lessons_data, gotchas_data)
         lessons, gotchas = _search(conn, query)
