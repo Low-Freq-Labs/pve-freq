@@ -42,7 +42,7 @@
 | 14 | `fleet status --json` outputs ANSI, not JSON | **Yes** (commit 3f53f23) |
 | 15 | `host list --json` outputs ANSI, not JSON | **Yes** (commit 31e3c76) |
 | 15b | `vm config` can't find VMs on remote nodes | No |
-| 16 | `vm clone` fails silently with empty error message | No |
+| 16 | `vm clone` fails silently with empty error message | **Yes** (commit b659bc2 — _pve_cmd returns stderr on failure) |
 | 17 | Global `--yes` flag ignored by VM subcommand prompts | No |
 
 ### Pattern: --json flag broken on fleet/host/init commands (systematic bug)
