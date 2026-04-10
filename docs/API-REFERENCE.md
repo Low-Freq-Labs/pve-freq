@@ -2,7 +2,7 @@
 
 146 REST API endpoints served by `freq serve` at `http://localhost:8888`.
 
-All endpoints return JSON. Most require session authentication via the `X-Session` header (obtained from `/api/auth/login`).
+All endpoints return JSON. Most require session authentication via `Authorization: Bearer <token>` header or `freq_session` HttpOnly cookie (both set automatically on login).
 
 ---
 
@@ -11,6 +11,7 @@ All endpoints return JSON. Most require session authentication via the `X-Sessio
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/auth/login` | Authenticate and receive session token |
+| POST | `/api/auth/logout` | Invalidate session token + clear cookie |
 | POST | `/api/auth/change-password` | Change password for authenticated user |
 | GET | `/api/auth/verify` | Verify a session token is still valid |
 
