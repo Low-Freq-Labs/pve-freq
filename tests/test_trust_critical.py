@@ -287,5 +287,87 @@ class TestDrVerifyMultiNode(unittest.TestCase):
         self.assertEqual(result.returncode, 0, f"Bash syntax error: {result.stderr}")
 
 
+class TestAPIStatusCodeTruth(unittest.TestCase):
+    """API error responses must never return 200.
+
+    These tests verify the operator-visible HTTP contract:
+    if the response body says error, the status code must not say success.
+    """
+
+    def _make_mock_handler(self, path="/api/test"):
+        handler = MagicMock()
+        handler.command = "GET"
+        handler.path = path
+        handler.headers = {}
+        handler.wfile = MagicMock()
+        handler._headers_buffer = []
+        captured = {"status": None, "data": None}
+
+        def mock_send_response(code, msg=None):
+            captured["status"] = code
+
+        handler.send_response = mock_send_response
+        handler.send_header = MagicMock()
+        handler.end_headers = MagicMock()
+        return handler, captured
+
+    def test_unauthenticated_api_returns_403_not_200(self):
+        """An API request without auth must get 403, never 200 with error body."""
+        from freq.api.helpers import json_response
+        from freq.api.auth import check_session_role
+
+        handler, captured = self._make_mock_handler("/api/fleet/overview")
+        # No auth headers → check_session_role should fail
+        handler.headers = {}
+        role, err = check_session_role(handler, "admin")
+        if err:
+            json_response(handler, {"error": err}, 403)
+        self.assertIsNotNone(err, "Missing auth should produce an error")
+        self.assertEqual(captured["status"], 403, "Auth failure must return 403, not 200")
+
+    def test_validation_error_returns_400_not_200(self):
+        """A missing required parameter must get 400, never 200 with error body."""
+        from freq.api.helpers import json_response
+
+        handler, captured = self._make_mock_handler("/api/vm/create?name=")
+        # Simulate validation failure
+        json_response(handler, {"error": "name parameter required"}, 400)
+        self.assertEqual(captured["status"], 400, "Validation error must return 400, not 200")
+
+    def test_not_found_returns_404_not_200(self):
+        """A missing resource must get 404, never 200 with error body."""
+        from freq.api.helpers import json_response
+
+        handler, captured = self._make_mock_handler("/api/agent/status?name=ghost")
+        json_response(handler, {"error": "Agent not found: ghost"}, 404)
+        self.assertEqual(captured["status"], 404, "Not found must return 404, not 200")
+
+    def test_source_level_no_bare_errors_in_serve(self):
+        """serve.py must have zero json_response(error) without status code."""
+        import os, re
+        serve_path = os.path.join(os.path.dirname(__file__), "..", "freq", "modules", "serve.py")
+        with open(serve_path) as f:
+            lines = f.readlines()
+        bare = [i for i, l in enumerate(lines, 1)
+                if '_json_response({"error"' in l.strip() and l.strip().endswith("})")
+                and not re.search(r'},\s*\d+\)$', l.strip())]
+        self.assertEqual(bare, [], f"serve.py has bare error→200 at lines: {bare}")
+
+    def test_source_level_no_bare_errors_in_v1_api(self):
+        """freq/api/*.py must have zero json_response(handler, {{error}}) without status code."""
+        import os, re, glob
+        api_dir = os.path.join(os.path.dirname(__file__), "..", "freq", "api")
+        bare = []
+        for fpath in sorted(glob.glob(os.path.join(api_dir, "*.py"))):
+            fname = os.path.basename(fpath)
+            with open(fpath) as f:
+                for i, line in enumerate(f, 1):
+                    s = line.strip()
+                    if 'json_response(handler, {"error"' in s and s.endswith("})"):
+                        if not re.search(r'},\s*\d+\)$', s):
+                            bare.append(f"{fname}:{i}")
+        self.assertEqual(bare, [], f"v1 API has bare error→200: {bare}")
+
+
 if __name__ == "__main__":
     unittest.main()
