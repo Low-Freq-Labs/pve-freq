@@ -22,6 +22,7 @@ from freq.modules.serve import (
     _bg_cache,
     _bg_lock,
     _bg_cache_ts,
+    _bg_cache_errors,
     _get_fleet_vms,
     _get_discovered_nodes,
     _get_discovered_node_ips,
@@ -108,9 +109,20 @@ def handle_health_api(handler):
     with _bg_lock:
         cached = _bg_cache.get("health")
     if cached:
-        cached["cached"] = True
-        cached["age"] = round(time.time() - _bg_cache_ts.get("health", 0), 1)
-        json_response(handler, cached)
+        age_seconds = round(time.time() - _bg_cache_ts.get("health", 0), 1)
+        response = dict(cached)
+        response["cached"] = True
+        response["age"] = age_seconds
+        response["age_seconds"] = age_seconds
+        probe_err = _bg_cache_errors.get("health")
+        if probe_err:
+            response["probe_status"] = "error"
+            response["probe_error"] = probe_err["error"]
+            response["probe_failed_at"] = probe_err["failed_at"]
+            response["probe_consecutive_failures"] = probe_err["consecutive"]
+        else:
+            response["probe_status"] = "ok"
+        json_response(handler, response)
         return
     # Fallback: no cache yet (first few seconds after cold start)
     cfg = load_config()
@@ -254,6 +266,12 @@ def handle_fleet_overview(handler):
         response["cached"] = True
         response["age"] = age_seconds
         response["age_seconds"] = age_seconds
+        probe_err = _bg_cache_errors.get("fleet_overview")
+        if probe_err:
+            response["probe_status"] = "error"
+            response["probe_error"] = probe_err["error"]
+        else:
+            response["probe_status"] = "ok"
         json_response(handler, response)
     else:
         json_response(
@@ -853,6 +871,10 @@ def handle_fleet_health_score(handler):
     score = max(0, min(100, score))
     grade = "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F"
 
+    health_age = round(time.time() - _bg_cache_ts.get("health", 0), 1) if health else None
+    fleet_age = round(time.time() - _bg_cache_ts.get("fleet_overview", 0), 1) if fleet else None
+    stale = (health_age is not None and health_age > 120) or (fleet_age is not None and fleet_age > 120)
+
     json_response(
         handler,
         {
@@ -860,6 +882,10 @@ def handle_fleet_health_score(handler):
             "grade": grade,
             "factors": factors,
             "max_score": 100,
+            "cached": True,
+            "health_age_seconds": health_age,
+            "fleet_age_seconds": fleet_age,
+            "stale": stale,
         },
     )
 

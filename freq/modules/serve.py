@@ -122,6 +122,7 @@ _bg_cache_ts = {
     "pve_nodes": 0,
     "vm_tags": 0,
 }
+_bg_cache_errors = {}  # key -> {"error": str, "failed_at": float, "consecutive": int}
 UPDATE_CHECK_INTERVAL = 6 * 3600  # 6 hours
 HOSTS_SYNC_INTERVAL = 3600  # 1 hour — keep hosts.conf in sync with PVE
 NODE_DISCOVERY_INTERVAL = 300  # 5 min — discover PVE cluster nodes
@@ -1281,15 +1282,45 @@ def _evaluate_alert_rules(cfg, health_data):
         logger.warn(f"Alert rule evaluation failed: {e}")
 
 
+def _record_probe_error(cache_key, error):
+    """Record a probe failure so API responses can report stale/error state."""
+    with _bg_lock:
+        prev = _bg_cache_errors.get(cache_key, {})
+        _bg_cache_errors[cache_key] = {
+            "error": str(error)[:200],
+            "failed_at": time.time(),
+            "consecutive": prev.get("consecutive", 0) + 1,
+        }
+
+
+def _clear_probe_error(cache_key):
+    """Clear probe error on successful run."""
+    with _bg_lock:
+        _bg_cache_errors.pop(cache_key, None)
+
+
 def _bg_health_loop():
     """Fast health-only loop — runs every 15s for live dashboard bars."""
     while True:
         logger.debug("bg_loop_cycle", loop="health")
         try:
             _bg_probe_health()
+            _clear_probe_error("health")
         except Exception as e:
             logger.error(f"bg health probe failed: {e}")
+            _record_probe_error("health", e)
         time.sleep(BG_CACHE_REFRESH_INTERVAL)
+
+
+# Cache key mapping for slow loop probes
+_SLOW_PROBE_CACHE_KEYS = {
+    "node discovery": "pve_nodes",
+    "tag fetch": "vm_tags",
+    "infra probe": "infra_quick",
+    "fleet overview": "fleet_overview",
+    "update check": "update",
+    "hosts sync": "hosts_sync",
+}
 
 
 def _bg_slow_loop():
@@ -1306,8 +1337,14 @@ def _bg_slow_loop():
         ]:
             try:
                 fn()
+                cache_key = _SLOW_PROBE_CACHE_KEYS.get(label)
+                if cache_key:
+                    _clear_probe_error(cache_key)
             except Exception as e:
                 logger.error(f"bg {label} failed: {e}")
+                cache_key = _SLOW_PROBE_CACHE_KEYS.get(label)
+                if cache_key:
+                    _record_probe_error(cache_key, e)
         time.sleep(60)
 
 
