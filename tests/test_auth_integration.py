@@ -59,6 +59,12 @@ def _get_header(h, name):
 class TestFullAuthLifecycle(unittest.TestCase):
     """End-to-end auth flow: login → cookie → API → SSE → logout."""
 
+    def tearDown(self):
+        """Clean up shared auth state after each test."""
+        from freq.api.auth import _auth_tokens, _auth_lock
+        with _auth_lock:
+            _auth_tokens.clear()
+
     def _login(self):
         """Simulate login and return (token, cookie_header)."""
         from freq.api.auth import handle_auth_login, _auth_tokens, _auth_lock
@@ -190,6 +196,12 @@ class TestFullAuthLifecycle(unittest.TestCase):
 
 class TestSessionExpiry(unittest.TestCase):
     """Session tokens must expire and be consistently rejected."""
+
+    def tearDown(self):
+        """Clean up shared auth state after each test."""
+        from freq.api.auth import _auth_tokens, _auth_lock
+        with _auth_lock:
+            _auth_tokens.clear()
 
     def test_expired_token_rejected(self):
         """A token past SESSION_TIMEOUT must return error."""
