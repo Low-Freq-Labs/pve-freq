@@ -1665,7 +1665,7 @@ def _phase_ssh_keys(cfg, ctx):
     svc_name = ctx["svc_name"]
     for f in [key_dir, ed_key, f"{ed_key}.pub", rsa_key, f"{rsa_key}.pub"]:
         if os.path.exists(f):
-            _run(["chown", f"{svc_name}:{svc_name}", f])
+            _chown(f"{svc_name}:{svc_name}", f)
     fmt.step_ok(f"Key ownership set to {svc_name}")
 
     # Read public keys
@@ -1688,7 +1688,7 @@ def _phase_ssh_keys(cfg, ctx):
         auth_keys = os.path.join(ssh_dir, "authorized_keys")
 
         os.makedirs(ssh_dir, mode=0o700, exist_ok=True)
-        _run(["chown", f"{svc_name}:{svc_name}", ssh_dir])
+        _chown(f"{svc_name}:{svc_name}", ssh_dir)
 
         if ctx["pubkey"]:
             # Check if already in authorized_keys
@@ -1700,7 +1700,7 @@ def _phase_ssh_keys(cfg, ctx):
                 with open(auth_keys, "a") as f:
                     f.write(ctx["pubkey"] + "\n")
             os.chmod(auth_keys, 0o600)
-            _run(["chown", f"{svc_name}:{svc_name}", auth_keys])
+            _chown(f"{svc_name}:{svc_name}", auth_keys)
             fmt.step_ok(f"ed25519 public key deployed to local {svc_name}")
 
     # Also copy keys to service account's .ssh for outbound SSH
@@ -1715,7 +1715,7 @@ def _phase_ssh_keys(cfg, ctx):
             shutil.copy2(ctx["key_path"], svc_ed)
             shutil.copy2(f"{ctx['key_path']}.pub", f"{svc_ed}.pub")
             os.chmod(svc_ed, 0o600)
-            _run(["chown", f"{svc_name}:{svc_name}", svc_ed, f"{svc_ed}.pub"])
+            _chown(f"{svc_name}:{svc_name}", svc_ed, f"{svc_ed}.pub")
             fmt.step_ok(f"ed25519 private key copied to {svc_name}/.ssh/")
 
         # RSA (legacy)
@@ -1725,7 +1725,7 @@ def _phase_ssh_keys(cfg, ctx):
                 shutil.copy2(rsa_key, svc_rsa)
                 shutil.copy2(f"{rsa_key}.pub", f"{svc_rsa}.pub")
                 os.chmod(svc_rsa, 0o600)
-                _run(["chown", f"{svc_name}:{svc_name}", svc_rsa, f"{svc_rsa}.pub"])
+                _chown(f"{svc_name}:{svc_name}", svc_rsa, f"{svc_rsa}.pub")
                 fmt.step_ok(f"RSA private key copied to {svc_name}/.ssh/")
 
     # RSA key status for legacy devices
@@ -1948,7 +1948,7 @@ def _phase_pve_api_token(cfg, ctx):
             f.write(token_secret)
         os.chmod(cred_path, 0o600)
         # Dashboard runs as svc_name — must be able to read token
-        _run(["chown", "-R", f"{svc_name}:{svc_name}", cred_dir])
+        _chown(f"{svc_name}:{svc_name}", cred_dir, recursive=True)
         fmt.step_ok(f"Token secret saved to {cred_path}")
     except OSError as e:
         fmt.step_fail(f"Failed to save token secret: {e}")
@@ -4135,9 +4135,9 @@ def _phase_fleet_configure(cfg, ctx):
     for subdir in ["data/keys", "data/log", "data/vault", "data/cache", "credentials", "tls"]:
         target = os.path.join(install_dir, subdir)
         if os.path.isdir(target):
-            _run(["chown", "-R", f"{svc_name}:{svc_name}", target])
+            _chown(f"{svc_name}:{svc_name}", target, recursive=True)
     # conf/ must be readable by dashboard (freq.toml, hosts.toml, etc.)
-    _run(["chown", "-R", f"{svc_name}:{svc_name}", cfg.conf_dir])
+    _chown(f"{svc_name}:{svc_name}", cfg.conf_dir, recursive=True)
     fmt.step_ok(f"Dashboard data directories owned by {svc_name}")
     logger.info("init_phase_complete: Phase 9 - fleet_configure", phase=9)
 

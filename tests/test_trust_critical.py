@@ -354,11 +354,11 @@ class TestInitOwnershipContract(unittest.TestCase):
     4. dashboard starts as freq-admin, can't read root-owned files
     """
 
-    def test_chown_calls_are_not_checked(self):
-        """Source-level check: find _run(['chown'...]) calls that discard return code.
+    def test_no_unchecked_chown_calls(self):
+        """All chown operations must use _chown() helper which checks return codes.
 
-        This documents the current gap. Once fixed, this test should be updated
-        to assert zero unchecked chown calls.
+        No bare _run(["chown"...]) calls should exist — they discard rc and
+        silently leave root-owned files that freq-admin can't read.
         """
         import os
         init_path = os.path.join(os.path.dirname(__file__), "..", "freq", "modules", "init_cmd.py")
@@ -368,15 +368,16 @@ class TestInitOwnershipContract(unittest.TestCase):
         unchecked_chowns = []
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
-            # Pattern: bare _run(["chown"...]) not assigned to a variable
             if stripped.startswith("_run([") and '"chown"' in stripped:
                 unchecked_chowns.append(i)
 
-        # Document the gap — these are known unchecked chown calls
-        # This test serves as a registry. When ownership checking is added,
-        # update this test to assert unchecked_chowns == []
-        self.assertTrue(len(unchecked_chowns) > 0,
-                        "Expected unchecked chown calls in init_cmd.py (known gap)")
+        self.assertEqual(unchecked_chowns, [],
+                         f"Unchecked _run(['chown'...]) at lines: {unchecked_chowns}")
+
+    def test_chown_helper_exists(self):
+        """_chown() helper must exist and check return codes."""
+        from freq.modules.init_cmd import _chown
+        self.assertTrue(callable(_chown))
 
     def test_ownership_directories_are_documented(self):
         """The list of directories that need freq-admin ownership must be explicit."""
