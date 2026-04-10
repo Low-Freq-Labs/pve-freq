@@ -97,6 +97,11 @@ def check_session_role(handler, min_role="operator"):
                 token = part[len("freq_session="):]
                 break
     if not token:
+        # Query param fallback for SSE (EventSource can't set headers or cookies)
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(handler.path).query)
+        token = qs.get("token", [""])[0]
+    if not token:
         return None, "Authentication required"
     with _auth_lock:
         session = _auth_tokens.get(token)
