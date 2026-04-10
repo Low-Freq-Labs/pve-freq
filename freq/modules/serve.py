@@ -4089,6 +4089,10 @@ a:hover{{text-decoration:underline}}
         if self.command != "POST":
             self._json_response({"error": "Watch start requires POST"}, 405)
             return
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}, 403)
+            return
         try:
             r = subprocess.run(
                 ["freq", "watch", "start"], capture_output=True, text=True, timeout=10
@@ -4101,6 +4105,10 @@ a:hover{{text-decoration:underline}}
         """POST /api/watch/stop — stop the FREQ watch daemon."""
         if self.command != "POST":
             self._json_response({"error": "Watch stop requires POST"}, 405)
+            return
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}, 403)
             return
         try:
             r = subprocess.run(
@@ -4132,7 +4140,14 @@ a:hover{{text-decoration:underline}}
             self._json_response({"host": host, "ips": [], "error": "DNS resolution failed"}, 400)
 
     def _serve_portscan(self):
-        """Scan ports on a host."""
+        """POST /api/net/portscan — scan ports on a host."""
+        if self.command != "POST":
+            self._json_response({"error": "Port scan requires POST"}, 405)
+            return
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}, 403)
+            return
         query = _parse_query(self)
         host = query.get("host", [""])[0]
         ports_str = query.get("ports", [""])[0]
