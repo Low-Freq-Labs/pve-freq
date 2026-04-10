@@ -47,7 +47,7 @@ def handle_containers_rescan(handler):
     """POST /api/containers/rescan -- SSH into docker VMs, discover containers."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     cfg = load_config()
     discovered = {}
@@ -108,7 +108,7 @@ def handle_containers_delete(handler):
     """POST /api/containers/delete -- remove a container from the registry."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     query = _parse_query_flat(handler.path)
     name = query.get("name", "")
@@ -140,7 +140,7 @@ def handle_containers_add(handler):
     """POST /api/containers/add -- add a container to the registry."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     query = _parse_query_flat(handler.path)
     name = query.get("name", "").strip()
@@ -178,7 +178,7 @@ def handle_containers_edit(handler):
     """POST /api/containers/edit -- edit a container in the registry."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     query = _parse_query_flat(handler.path)
     name = query.get("name", "").strip()
@@ -238,7 +238,7 @@ def handle_containers_compose_up(handler):
     """POST /api/containers/compose-up -- start a Docker Compose stack."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     cfg = load_config()
     query = _parse_query_flat(handler.path)
@@ -277,7 +277,7 @@ def handle_containers_compose_down(handler):
     """POST /api/containers/compose-down -- stop a Docker Compose stack."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     cfg = load_config()
     query = _parse_query_flat(handler.path)

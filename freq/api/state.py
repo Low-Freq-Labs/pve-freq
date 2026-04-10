@@ -65,7 +65,7 @@ def handle_policy_fix(handler):
     cfg = load_config()
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     query = _parse_query(handler)
     policy = query.get("policy", [""])[0]
@@ -147,7 +147,7 @@ def handle_gitops_sync(handler):
     """POST /api/gitops/sync -- trigger a sync (fetch) from remote."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.gitops import load_gitops_config, sync, state_to_dict
 
@@ -164,7 +164,7 @@ def handle_gitops_apply(handler):
     """POST /api/gitops/apply -- apply pending changes (pull)."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.gitops import load_gitops_config, apply_changes, load_state, state_to_dict
 
@@ -211,7 +211,7 @@ def handle_gitops_rollback(handler):
     """POST /api/gitops/rollback -- rollback config to a specific commit."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.gitops import rollback
 
@@ -229,7 +229,7 @@ def handle_gitops_init(handler):
     """POST /api/gitops/init -- initialize the gitops repo clone."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.gitops import load_gitops_config, init_repo
 

@@ -170,7 +170,7 @@ def handle_capacity_snapshot(handler):
     """GET /api/capacity/snapshot — force a capacity snapshot now (admin only)."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.capacity import save_snapshot
 

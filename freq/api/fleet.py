@@ -1199,7 +1199,7 @@ def handle_discover(handler):
     cfg = load_config()
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     query = _parse_query(handler)
     subnet = query.get("subnet", [""])[0]
@@ -1267,7 +1267,7 @@ def handle_federation_register(handler):
     """POST /api/federation/register -- register a new remote FREQ site."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.federation import register_site
 
@@ -1287,7 +1287,7 @@ def handle_federation_unregister(handler):
     """POST /api/federation/unregister -- remove a registered remote site."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.federation import unregister_site
 
@@ -1305,7 +1305,7 @@ def handle_federation_poll(handler):
     """POST /api/federation/poll -- trigger a poll of all remote sites."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.federation import poll_all_sites, sites_to_dicts, federation_summary
 
@@ -1325,7 +1325,7 @@ def handle_federation_toggle(handler):
     """POST /api/federation/toggle -- enable or disable a registered site."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.federation import load_sites, save_sites
 

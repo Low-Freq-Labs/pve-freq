@@ -288,7 +288,7 @@ def handle_gwipe(handler):
     cfg = load_config()
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     import re
 

@@ -136,7 +136,7 @@ def handle_sweep(handler):
     cfg = load_config()
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     params = get_params(handler)
     do_fix = params.get("fix", ["false"])[0].lower() == "true"

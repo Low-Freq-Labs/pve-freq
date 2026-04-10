@@ -56,7 +56,7 @@ def handle_rules_create(handler):
     """GET /api/rules/create — create a new alert rule."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.rules import Rule, load_rules, save_rules
 
@@ -97,7 +97,7 @@ def handle_rules_update(handler):
     """GET /api/rules/update — update an existing alert rule (enable/disable/modify)."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.rules import load_rules, save_rules
 
@@ -135,7 +135,7 @@ def handle_rules_delete(handler):
     """GET /api/rules/delete — delete an alert rule."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.rules import load_rules, save_rules
 
@@ -224,7 +224,7 @@ def handle_playbooks_run(handler):
     """GET /api/playbooks/run — run all steps of a playbook (non-confirm steps only)."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     params = _get_params_flat(handler)
     filename = params.get("filename", "")
@@ -276,7 +276,7 @@ def handle_playbooks_step(handler):
     """GET /api/playbooks/step — run a single step of a playbook by index."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     params = _get_params_flat(handler)
     filename = params.get("filename", "")
@@ -323,7 +323,7 @@ def handle_playbooks_create(handler):
     """GET /api/playbooks/create — create a new playbook from parameters."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     params = _get_params_flat(handler)
     name = params.get("name", "").strip()
@@ -357,7 +357,7 @@ def handle_chaos_types(handler):
     """GET /api/chaos/types — list available chaos experiment types."""
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.chaos import list_experiment_types
 
@@ -368,7 +368,7 @@ def handle_chaos_run(handler):
     """GET /api/chaos/run — run a chaos experiment (admin only)."""
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.chaos import Experiment, run_experiment, result_to_dict
     from freq.core.ssh import run as ssh_run

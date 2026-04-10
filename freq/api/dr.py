@@ -109,7 +109,7 @@ def handle_backup_create(handler):
     cfg = load_config()
     role, err = _check_session_role(handler, "operator")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
 
     query = _parse_query_flat(handler.path)
@@ -157,7 +157,7 @@ def handle_backup_restore(handler):
     cfg = load_config()
     role, err = _check_session_role(handler, "admin")
     if err:
-        json_response(handler, {"error": err})
+        json_response(handler, {"error": err}, 403)
         return
 
     query = _parse_query_flat(handler.path)
