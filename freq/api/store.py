@@ -11,7 +11,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 import re
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_json_body
+from freq.api.helpers import require_post, json_response, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_run_fn
 from freq.modules.serve import _check_session_role
@@ -153,6 +153,8 @@ def handle_truenas_snapshot(handler):
 
     Body: {"action": "create|delete|rollback", "dataset": "pool/ds", "name": "snap1"}
     """
+    if require_post(handler, "TrueNAS snapshot"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -238,6 +240,8 @@ def handle_truenas_service(handler):
 
     Body: {"action": "start|stop|restart", "service": "smb"}
     """
+    if require_post(handler, "TrueNAS service"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -283,6 +287,8 @@ def handle_truenas_scrub(handler):
 
     Body: {"pool": "tank"}
     """
+    if require_post(handler, "TrueNAS scrub"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -320,6 +326,8 @@ def handle_truenas_reboot(handler):
 
     Body: {"confirm": true}
     """
+    if require_post(handler, "TrueNAS reboot"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -348,6 +356,8 @@ def handle_truenas_dataset(handler):
     Body: {"action": "list|create|delete|set",
            "dataset": "pool/ds", "properties": {"compression": "lz4", "quota": "100G"}}
     """
+    if require_post(handler, "TrueNAS dataset"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -458,6 +468,8 @@ def handle_truenas_share(handler):
            "name": "share_name", "path": "/mnt/pool/dataset",
            "options": {...}}
     """
+    if require_post(handler, "TrueNAS share"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -561,6 +573,8 @@ def handle_truenas_replication(handler):
 
     Body: {"action": "list|run", "id": 1}
     """
+    if require_post(handler, "TrueNAS replication"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -622,6 +636,8 @@ def handle_truenas_app(handler):
 
     Body: {"action": "list|start|stop", "name": "app_name", "replicas": 1}
     """
+    if require_post(handler, "TrueNAS app"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

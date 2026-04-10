@@ -1016,6 +1016,24 @@ class TestPOSTEnforcementGap(unittest.TestCase):
             self.assertIn("require_post", src,
                            f"{handler.__name__} must enforce POST")
 
+    def test_batch2_storage_endpoints_enforce_post(self):
+        """TrueNAS storage mutation endpoints must enforce POST."""
+        import inspect
+        from freq.api.store import (
+            handle_truenas_snapshot, handle_truenas_service,
+            handle_truenas_scrub, handle_truenas_reboot,
+            handle_truenas_dataset, handle_truenas_share,
+            handle_truenas_replication, handle_truenas_app,
+        )
+
+        for handler in [handle_truenas_snapshot, handle_truenas_service,
+                        handle_truenas_scrub, handle_truenas_reboot,
+                        handle_truenas_dataset, handle_truenas_share,
+                        handle_truenas_replication, handle_truenas_app]:
+            src = inspect.getsource(handler)
+            self.assertIn("require_post", src,
+                           f"{handler.__name__} must enforce POST")
+
     def test_helpers_require_post_exists(self):
         """require_post helper must exist in helpers.py for shared use."""
         from freq.api.helpers import require_post
@@ -1044,9 +1062,10 @@ class TestPOSTEnforcementGap(unittest.TestCase):
                         unprotected.append(f"{fname}:{func}")
         # Gap tracker: ceiling tightens as batches ship
         # Batch 1 fixed 7: user promote/demote, vault set, wol, bench run/netspeed, acl
+        # Batch 2 fixed 8: truenas snapshot/service/scrub/reboot/dataset/share/replication/app
         # (includes some false positives from multi-line docstring detection)
         # This test will fail if the count INCREASES (new unprotected handler added)
-        self.assertLessEqual(len(unprotected), 53,
+        self.assertLessEqual(len(unprotected), 45,
                              f"POST enforcement gap grew: {len(unprotected)} unprotected. "
                              f"New handlers must use require_post().")
 
