@@ -2558,7 +2558,10 @@ a:hover{{text-decoration:underline}}
             self._json_response({"ok": False, "host": host, "error": str(e)[:200]}, 502)
 
     def _serve_setup_reset(self):
-        """Reset setup wizard — admin only. Deletes setup-complete marker."""
+        """POST /api/setup/reset — reset setup wizard. Admin only. Deletes setup-complete marker."""
+        if self.command != "POST":
+            self._json_response({"error": "Setup reset requires POST"}, 405)
+            return
         cfg = load_config()
 
         # This endpoint requires admin auth (NOT gated by _is_first_run)
@@ -3049,6 +3052,10 @@ a:hover{{text-decoration:underline}}
         self._json_response({"distros": distros, "count": len(distros)})
 
     def _serve_agent_create(self):
+        """POST /api/agent/create — create a new agent VM."""
+        if self.command != "POST":
+            self._json_response({"error": "Agent create requires POST"}, 405)
+            return
         role, err = _check_session_role(self, "admin")
         if err:
             self._json_response({"error": err}, 403)
@@ -3100,6 +3107,10 @@ a:hover{{text-decoration:underline}}
         self._json_response({"ok": True, "name": name, "vmid": vmid, "template": template})
 
     def _serve_agent_destroy(self):
+        """POST /api/agent/destroy — destroy an agent VM."""
+        if self.command != "POST":
+            self._json_response({"error": "Agent destroy requires POST"}, 405)
+            return
         role, err = _check_session_role(self, "admin")
         if err:
             self._json_response({"error": err}, 403)
