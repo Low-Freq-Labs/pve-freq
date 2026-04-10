@@ -2227,18 +2227,20 @@ a:hover{{text-decoration:underline}}
     def _serve_setup_configure(self):
         """Save cluster configuration during first-run setup.
 
-        Updates freq.toml in-place, preserving existing config sections.
-        Only modifies cluster_name, timezone, and pve.nodes.
+        POST body: {"cluster_name": "...", "timezone": "...", "pve_nodes": [...]}
         """
         if not _is_first_run():
             self._json_response({"error": "Setup already complete"}, 403)
             return
 
-        body = self._request_body() if self.command == "POST" else {}
-        params = _parse_query(self)
-        cluster_name = str(body.get("cluster_name", params.get("cluster_name", [""])[0])).strip()
-        timezone = str(body.get("timezone", params.get("timezone", ["UTC"])[0])).strip()
-        pve_nodes_value = body.get("pve_nodes", params.get("pve_nodes", [""])[0])
+        if self.command != "POST":
+            self._json_response({"error": "Use POST with JSON body"}, 405)
+            return
+
+        body = self._request_body()
+        cluster_name = str(body.get("cluster_name", "")).strip()
+        timezone = str(body.get("timezone", "UTC")).strip()
+        pve_nodes_value = body.get("pve_nodes", [])
         if isinstance(pve_nodes_value, list):
             node_ips = [str(ip).strip() for ip in pve_nodes_value if str(ip).strip()]
         else:
@@ -2322,9 +2324,13 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": f"Failed to write config: {e}"}, 500)
 
     def _serve_setup_generate_key(self):
-        """Generate SSH keypair during first-run setup."""
+        """Generate SSH keypair during first-run setup. POST only."""
         if not _is_first_run():
             self._json_response({"error": "Setup already complete"}, 403)
+            return
+
+        if self.command != "POST":
+            self._json_response({"error": "Use POST to generate keys"}, 405)
             return
 
         cfg = load_config()
@@ -2398,6 +2404,10 @@ a:hover{{text-decoration:underline}}
         """Mark setup as complete — writes marker file."""
         if not _is_first_run():
             self._json_response({"error": "Setup already complete"}, 403)
+            return
+
+        if self.command != "POST":
+            self._json_response({"error": "Use POST to complete setup"}, 405)
             return
 
         if not _setup_lock.acquire(blocking=False):

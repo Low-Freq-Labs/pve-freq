@@ -35,10 +35,8 @@ function nextStep(){
     var cluster=document.getElementById('s-cluster').value.trim();
     var tz=document.getElementById('s-tz').value.trim()||'UTC';
     var nodes=document.getElementById('s-nodes').value.trim();
-    var q='timezone='+encodeURIComponent(tz);
-    if(cluster)q+='&cluster_name='+encodeURIComponent(cluster);
-    if(nodes)q+='&pve_nodes='+encodeURIComponent(nodes);
-    fetch('/api/setup/configure?'+q).then(function(r){return r.json()}).then(function(d){
+    
+    fetch('/api/setup/configure',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cluster_name:cluster,timezone:tz,pve_nodes:nodes?nodes.split(',').map(function(s){return s.trim()}):[]})}).then(function(r){return r.json()}).then(function(d){
       if(d.error){err(1,d.error);return}
       clusterConfigured=true;step=2;show(2);checkKey();
     }).catch(function(e){err(1,'Request failed: '+e)});
@@ -65,7 +63,7 @@ function checkKey(){
 
 function genKey(){
   var btn=document.getElementById('btn-keygen');btn.disabled=true;btn.textContent='Generating...';
-  fetch('/api/setup/generate-key').then(function(r){return r.json()}).then(function(d){
+  fetch('/api/setup/generate-key',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.error){err(2,d.error);btn.disabled=false;btn.textContent='Generate SSH Key';return}
     keyGenerated=true;
     document.getElementById('key-status').innerHTML='<div class="ok">SSH keypair generated: '+_esc(d.key_path)+'</div>';
@@ -87,5 +85,5 @@ function renderSummary(){
 }
 
 function launch(){
-  fetch('/api/setup/complete').then(function(){window.location.href='/'}).catch(function(){window.location.href='/'});
+  fetch('/api/setup/complete',{method:'POST'}).then(function(){window.location.href='/'}).catch(function(){window.location.href='/'});
 }
