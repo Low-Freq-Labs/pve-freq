@@ -910,6 +910,14 @@ class TestSecurityHeaders(unittest.TestCase):
         src = inspect.getsource(FreqHandler._send_security_headers)
         self.assertIn("Content-Security-Policy", src)
 
+    def test_csp_allows_cdn_for_xterm(self):
+        """CSP must allow cdn.jsdelivr.net for xterm.js terminal support."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        src = inspect.getsource(FreqHandler._send_security_headers)
+        self.assertIn("cdn.jsdelivr.net", src,
+                       "CSP must allow cdn.jsdelivr.net for xterm.js")
+
     def test_cookie_has_httponly_samesite(self):
         """Session cookie must have HttpOnly and SameSite=Strict."""
         import inspect
