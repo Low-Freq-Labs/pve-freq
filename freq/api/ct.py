@@ -45,7 +45,7 @@ def handle_ct_list(handler):
     cfg = load_config()
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"containers": [], "error": "No PVE node reachable"})
+        json_response(handler, {"containers": [], "error": "No PVE node reachable"}, 503)
         return
 
     stdout, ok = _pve_cmd(
@@ -55,14 +55,14 @@ def handle_ct_list(handler):
         timeout=15,
     )
     if not ok:
-        json_response(handler, {"containers": [], "error": "Failed to query cluster"})
+        json_response(handler, {"containers": [], "error": "Failed to query cluster"}, 502)
         return
 
     try:
         resources = json.loads(stdout)
     except (json.JSONDecodeError, ValueError) as e:
         logger.warn(f"api_ct: invalid PVE response in ct/list: {e}")
-        json_response(handler, {"containers": [], "error": "Invalid response from PVE"})
+        json_response(handler, {"containers": [], "error": "Invalid response from PVE"}, 502)
         return
 
     containers = []
@@ -465,7 +465,7 @@ def handle_ct_snapshots(handler):
 
     stdout, ok = _pve_cmd(cfg, node_ip, f"pct listsnapshot {ctid}", timeout=10)
     if not ok:
-        json_response(handler, {"snapshots": [], "error": stdout})
+        json_response(handler, {"snapshots": [], "error": stdout}, 502)
         return
 
     snaps = []
@@ -690,7 +690,7 @@ def handle_ct_templates(handler):
     cfg = load_config()
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"templates": [], "error": "No PVE node reachable"})
+        json_response(handler, {"templates": [], "error": "No PVE node reachable"}, 503)
         return
 
     # List templates from all storages

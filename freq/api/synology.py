@@ -141,7 +141,7 @@ def handle_synology_status(handler):
 
     data, err = _syn_request(ip, "SYNO.DSM.Info", 2, "getinfo")
     if err:
-        json_response(handler, {"ok": False, "error": err})
+        json_response(handler, {"ok": False, "error": err}, 502)
         return
 
     json_response(
@@ -167,7 +167,7 @@ def handle_synology_storage(handler):
 
     data, err = _syn_request(ip, "SYNO.Storage.CGI.Storage", 1, "load_info")
     if err:
-        json_response(handler, {"ok": False, "error": err})
+        json_response(handler, {"ok": False, "error": err}, 502)
         return
 
     volumes = []
@@ -207,7 +207,7 @@ def handle_synology_shares(handler):
 
     data, err = _syn_request(ip, "SYNO.FileStation.List", 2, "list_share")
     if err:
-        json_response(handler, {"ok": False, "error": err})
+        json_response(handler, {"ok": False, "error": err}, 502)
         return
 
     shares = []
@@ -232,7 +232,7 @@ def handle_synology_docker(handler):
     # Docker Manager API — may not be available on all models
     data, err = _syn_request(ip, "SYNO.Docker.Container", 1, "list", {"limit": 50, "offset": 0})
     if err:
-        json_response(handler, {"ok": False, "error": f"Docker API unavailable: {err}"})
+        json_response(handler, {"ok": False, "error": f"Docker API unavailable: {err}"}, 502)
         return
 
     containers = []
@@ -257,7 +257,7 @@ def handle_synology_packages(handler):
 
     data, err = _syn_request(ip, "SYNO.Core.Package", 1, "list", {"additional": '["description"]'})
     if err:
-        json_response(handler, {"ok": False, "error": err})
+        json_response(handler, {"ok": False, "error": err}, 502)
         return
 
     packages = []
@@ -301,7 +301,7 @@ def handle_synology_service(handler):
 
     data, err = _syn_request(ip, "SYNO.Core.Package.Control", 1, action, {"id": package})
     if err:
-        json_response(handler, {"ok": False, "error": err})
+        json_response(handler, {"ok": False, "error": err}, 502)
     else:
         json_response(handler, {"ok": True, "action": action, "package": package})
 
@@ -324,7 +324,7 @@ def handle_synology_reboot(handler):
 
     _, err = _syn_request(ip, "SYNO.DSM.System", 1, "reboot")
     if err:
-        json_response(handler, {"ok": False, "error": err})
+        json_response(handler, {"ok": False, "error": err}, 502)
     else:
         json_response(handler, {"ok": True, "message": "Reboot command sent"})
 
