@@ -17,7 +17,7 @@ from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
 from freq.core import resolve as res
 from freq.core import log as logger
-from freq.core.ssh import run as ssh_single, run_many as ssh_run_many
+from freq.core.ssh import run as ssh_single, run_many as ssh_run_many, result_for
 from freq.modules.serve import (
     _bg_cache,
     _bg_lock,
@@ -62,7 +62,7 @@ def handle_status(handler):
     host_data = []
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0:
             up += 1
             uptime = r.stdout.strip().replace("up ", "")[:40]
@@ -289,7 +289,7 @@ def handle_fleet_ntp(handler):
         use_sudo=False,
     )
     for h in cfg.hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0:
             lines = r.stdout.strip().split("\n")
             synced = lines[0].strip() == "yes" if lines else False
@@ -322,7 +322,7 @@ def handle_fleet_updates(handler):
         use_sudo=False,
     )
     for h in cfg.hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0:
             lines = r.stdout.strip().split("\n")
             count = lines[0].strip() if lines else "0"
@@ -430,7 +430,7 @@ def handle_exec(handler):
 
     result_list = []
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0:
             result_list.append({"host": h.label, "ok": True, "output": r.stdout, "error": ""})
         else:
@@ -629,7 +629,7 @@ def handle_infra_overview(handler):
 
     layers = []
     for h in cfg.hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0 and r.stdout:
             parts = r.stdout.split("|")
             layers.append(
@@ -1059,7 +1059,7 @@ def handle_docker_fleet(handler):
     """GET /api/docker-fleet -- fleet-wide container inventory."""
     cfg = load_config()
     from freq.core.resolve import by_type
-    from freq.core.ssh import run_many as ssh_run_many_fn
+    from freq.core.ssh import run_many as ssh_run_many_fn, result_for
 
     docker_hosts = by_type(cfg.hosts, "docker")
     if not docker_hosts:
@@ -1079,7 +1079,7 @@ def handle_docker_fleet(handler):
     hosts_data = []
     total = 0
     for host in docker_hosts:
-        r = results.get(host.label)
+        r = result_for(results, host)
         containers = []
         if r and r.returncode == 0 and r.stdout.strip():
             for line in r.stdout.strip().split("\n"):

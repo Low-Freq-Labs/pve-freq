@@ -26,7 +26,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
 
 # Report storage
 REPORT_DIR = "reports"
@@ -81,7 +81,7 @@ def _gather_fleet_health(cfg: FreqConfig) -> dict:
     total_containers = 0
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         entry = {"label": h.label, "ip": h.ip, "type": h.htype, "status": "down"}
 
         if r and r.returncode == 0:

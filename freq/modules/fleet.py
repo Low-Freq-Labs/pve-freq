@@ -27,7 +27,7 @@ import time
 from freq.core import fmt
 from freq.core import resolve
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
 
 # ─────────────────────────────────────────────────────────────
 # CONSTANTS — Timeouts for fleet SSH operations
@@ -86,7 +86,7 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
 
         fleet_data = []
         for h in hosts:
-            r = results.get(h.label)
+            r = result_for(results, h)
             if r and r.returncode == 0:
                 fleet_data.append({
                     "label": h.label, "ip": h.ip, "type": h.htype,
@@ -117,7 +117,7 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
     up = 0
     down = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0:
             up += 1
             uptime = r.stdout.strip().replace("up ", "")
@@ -247,7 +247,7 @@ def cmd_exec(cfg: FreqConfig, pack, args) -> int:
     ok_count = 0
     fail_count = 0
     for i, h in enumerate(hosts):
-        r = results.get(h.label)
+        r = result_for(results, h)
         color = host_colors[i % len(host_colors)]
         prefix = f"{color}{h.label:>14}{fmt.C.RESET}"
 
@@ -605,7 +605,7 @@ def cmd_dashboard(cfg: FreqConfig, pack, args) -> int:
     up = 0
     down = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0 and r.stdout:
             up += 1
             parts = r.stdout.split("|")
@@ -790,7 +790,7 @@ def cmd_docker_fleet(cfg: FreqConfig, pack, args) -> int:
     total_containers = 0
 
     for host in docker_hosts:
-        r = results.get(host.label)
+        r = result_for(results, host)
         if not r or r.returncode != 0:
             fmt.line(f"  {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {host.label}: unreachable")
             continue
@@ -1046,7 +1046,7 @@ def cmd_ssh_host(cfg: FreqConfig, pack, args) -> int:
         fmt.error(f"Host not found: {target}")
         return 1
 
-    from freq.core.ssh import PLATFORM_SSH
+    from freq.core.ssh import PLATFORM_SSH, result_for
 
     platform = PLATFORM_SSH.get(host.htype, PLATFORM_SSH["linux"])
     user = platform["user"]
@@ -1133,7 +1133,7 @@ def _keys_list(cfg: FreqConfig) -> int:
 
     deployed = 0
     for h in cfg.hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0:
             if pub_key_data and pub_key_data in r.stdout:
                 deployed += 1
@@ -1192,7 +1192,7 @@ def _keys_deploy(cfg: FreqConfig, args) -> int:
     fmt.blank()
     fmt.step_start(f"Deploying key to {host.label}")
 
-    from freq.core.ssh import PLATFORM_SSH
+    from freq.core.ssh import PLATFORM_SSH, result_for
 
     platform = PLATFORM_SSH.get(host.htype, PLATFORM_SSH["linux"])
     user = platform["user"]
@@ -1316,7 +1316,7 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
         if h.htype in ("switch", "idrac"):
             continue  # Skip non-Linux hosts
         fmt.step_start(f"Deploying to {h.label} ({h.ip})")
-        from freq.core.ssh import run as ssh_run
+        from freq.core.ssh import run as ssh_run, result_for
 
         # Use the backup key to add the new key
         escaped = new_pubkey.replace('"', '\\"')
@@ -1352,7 +1352,7 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
             for h in cfg.hosts:
                 if h.htype in ("switch", "idrac"):
                     continue
-                from freq.core.ssh import run as ssh_run
+                from freq.core.ssh import run as ssh_run, result_for
 
                 old_escaped = old_pubkey.replace("/", "\\/").replace(".", "\\.")
                 rm_cmd = f"sed -i '/{old_escaped}/d' ~/.ssh/authorized_keys 2>/dev/null; echo OK"
@@ -1418,7 +1418,7 @@ def cmd_ntp(cfg: FreqConfig, pack, args) -> int:
     )
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0 and r.stdout:
             lines = r.stdout.strip().split("\n")
             synced = lines[0].strip() if lines else "?"
@@ -1476,7 +1476,7 @@ def _ntp_fix(cfg, hosts) -> int:
 
     fixed = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and "NTP_FIXED" in r.stdout:
             fixed += 1
             fmt.step_ok(f"{h.label} NTP enabled")
@@ -1526,7 +1526,7 @@ def cmd_fleet_update(cfg: FreqConfig, pack, args) -> int:
 
     total_updates = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode in (0, 100) and r.stdout:
             lines = r.stdout.strip().split("\n")
             count = lines[0].strip() if lines else "?"
@@ -1584,7 +1584,7 @@ def _fleet_update_apply(cfg, hosts) -> int:
 
     ok = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and "UPDATE_OK" in r.stdout:
             ok += 1
             fmt.step_ok(f"{h.label} updated")

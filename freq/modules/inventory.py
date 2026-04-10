@@ -26,7 +26,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
 
 # Timeouts
 INV_CMD_TIMEOUT = 15
@@ -75,7 +75,7 @@ def _gather_hosts(cfg: FreqConfig) -> list:
 
     inventory = []
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         entry = {
             "label": h.label,
             "ip": h.ip,
@@ -206,7 +206,7 @@ def _gather_containers(cfg: FreqConfig) -> list:
 
     containers = []
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0 and r.stdout.strip():
             for line in r.stdout.strip().split("\n"):
                 parts = line.split("|", 3)

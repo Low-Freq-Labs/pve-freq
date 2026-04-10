@@ -21,7 +21,7 @@ Design decisions:
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 DB_CMD_TIMEOUT = 15
 
@@ -60,7 +60,7 @@ def _detect_and_report(cfg: FreqConfig) -> list:
 
     db_hosts = []
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             continue
 

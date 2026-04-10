@@ -16,7 +16,7 @@ import time
 from freq.core import log as logger
 from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
-from freq.core.ssh import run as ssh_single
+from freq.core.ssh import run as ssh_single, result_for
 from freq.modules.serve import (
     _bg_cache,
     _bg_lock,
@@ -326,7 +326,7 @@ def handle_db_status(handler):
         'elif docker ps --format "{{.Names}}" 2>/dev/null | grep -qi -e mysql -e mariadb; then MY="docker"; fi; '
         'echo "${PG}|${MY}|${CONNS}|${SIZE}"'
     )
-    from freq.core.ssh import run_many as ssh_run_many
+    from freq.core.ssh import run_many as ssh_run_many, result_for
 
     results = ssh_run_many(
         hosts=hosts,
@@ -341,7 +341,7 @@ def handle_db_status(handler):
     databases = []
     unreachable = []
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             unreachable.append(h.label)
             continue
@@ -392,7 +392,7 @@ def handle_logs_stats(handler):
         f"journalctl --no-pager --since '-{since}' --priority err --output cat 2>/dev/null | "
         "sort | uniq -c | sort -rn | head -15"
     )
-    from freq.core.ssh import run_many as ssh_run_many
+    from freq.core.ssh import run_many as ssh_run_many, result_for
 
     results = ssh_run_many(
         hosts=hosts,
@@ -406,7 +406,7 @@ def handle_logs_stats(handler):
 
     pattern_counts = {}
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0 or not r.stdout.strip():
             continue
         for line in r.stdout.strip().split("\n"):

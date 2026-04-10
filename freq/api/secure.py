@@ -18,7 +18,7 @@ from freq.core import log as logger
 from freq.api.helpers import json_response, get_params
 from freq.core.config import load_config
 from freq.core import resolve as res
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 from freq.modules.vault import vault_set, vault_init, vault_list, vault_delete
 from freq.api.auth import check_session_role as _check_session_role
 
@@ -214,7 +214,7 @@ def handle_patch_compliance(handler):
     compliant = 0
     total_reachable = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode not in (0, 100):
             host_results.append({"host": h.label, "status": "unreachable", "updates": 0})
             continue
@@ -318,7 +318,7 @@ def handle_proxy_status_api(handler):
 
     proxy_hosts = []
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             continue
         parts = r.stdout.strip().split("|")

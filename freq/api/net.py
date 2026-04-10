@@ -12,7 +12,7 @@ import re
 from freq.core import log as logger
 from freq.api.helpers import json_response, get_param, get_json_body
 from freq.core.config import load_config
-from freq.core.ssh import run as ssh_single
+from freq.core.ssh import run as ssh_single, result_for
 from freq.modules.serve import _parse_query, _check_session_role
 
 
@@ -228,7 +228,7 @@ def handle_netmon_interfaces(handler):
         return
 
     command = "ip -j addr show 2>/dev/null || echo '[]'"
-    from freq.core.ssh import run_many as ssh_run_many
+    from freq.core.ssh import run_many as ssh_run_many, result_for
 
     results = ssh_run_many(
         hosts=hosts,
@@ -243,7 +243,7 @@ def handle_netmon_interfaces(handler):
     all_hosts = []
     total = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             continue
         try:

@@ -11,7 +11,7 @@ from freq.core import log as logger
 from freq.api.helpers import json_response
 from freq.core.config import load_config
 from freq.core import resolve as res
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 
 # -- Handlers ----------------------------------------------------------------
@@ -32,7 +32,7 @@ def handle_keys(handler):
     )
     keys = []
     for h in cfg.hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         err = r.stderr or "" if r else ""
         down = (
             r is None

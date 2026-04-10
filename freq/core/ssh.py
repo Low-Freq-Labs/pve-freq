@@ -420,6 +420,15 @@ async def async_run_many(
     return results
 
 
+def result_for(results: dict, host) -> "CmdResult | None":
+    """Look up a host's result from run_many output.
+
+    Handles both unique labels (keyed by label) and duplicate labels
+    (keyed by label@ip). Falls back to IP lookup.
+    """
+    return results.get(host.label) or results.get(f"{host.label}@{host.ip}") or results.get(host.ip)
+
+
 def run_many(
     hosts: list,
     command: str,

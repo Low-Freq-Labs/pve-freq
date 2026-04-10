@@ -26,7 +26,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 # Storage
 TREND_DIR = "trends"
@@ -103,7 +103,7 @@ def _take_snapshot(cfg: FreqConfig) -> dict:
 
     load_ratios = []
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             continue
 

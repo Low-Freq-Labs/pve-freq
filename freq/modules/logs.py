@@ -24,7 +24,7 @@ import re
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 LOGS_CMD_TIMEOUT = 15
 LOGS_SEARCH_TIMEOUT = 30
@@ -82,7 +82,7 @@ def _cmd_tail(cfg: FreqConfig, args) -> int:
     reachable = 0
     unreachable = []
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             unreachable.append(h.label)
             continue
@@ -161,7 +161,7 @@ def _cmd_search(cfg: FreqConfig, args) -> int:
     reachable = 0
     unreachable = []
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             unreachable.append(h.label)
         else:
@@ -175,7 +175,7 @@ def _cmd_search(cfg: FreqConfig, args) -> int:
 
     total_matches = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0 or not r.stdout.strip():
             continue
 
@@ -249,7 +249,7 @@ def _cmd_stats(cfg: FreqConfig, args) -> int:
     # Aggregate patterns across hosts
     pattern_counts = {}
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0 or not r.stdout.strip():
             continue
 
@@ -313,7 +313,7 @@ def _cmd_export(cfg: FreqConfig, args) -> int:
 
     export = {"period": since, "hosts": {}}
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0 and r.stdout.strip():
             entries = []
             for line in r.stdout.strip().split("\n"):

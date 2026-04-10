@@ -25,7 +25,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 MAP_DIR = "depmap"
 MAP_FILE = "dependency-map.json"
@@ -92,7 +92,7 @@ def _discover_connections(cfg: FreqConfig) -> dict:
     edges = []
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             continue
 

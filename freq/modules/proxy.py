@@ -25,7 +25,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 PROXY_CMD_TIMEOUT = 15
 PROXY_DIR = "proxy"
@@ -109,7 +109,7 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
     fmt.table_header(("HOST", 14), ("NGINX", 8), ("CADDY", 8), ("TRAEFIK", 10), ("HAPROXY", 10))
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             continue
 

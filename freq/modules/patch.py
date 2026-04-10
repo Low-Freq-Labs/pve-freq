@@ -25,7 +25,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
 
 # Storage
 PATCH_DIR = "patches"
@@ -158,7 +158,7 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
 
     needs_reboot = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             fmt.table_row(
                 (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 14),
@@ -239,7 +239,7 @@ def _cmd_check(cfg: FreqConfig, args) -> int:
     fmt.table_header(("HOST", 16), ("UPDATES", 10), ("STATUS", 12))
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode not in (0, 100):  # yum returns 100 when updates available
             fmt.table_row(
                 (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
@@ -441,7 +441,7 @@ def _cmd_compliance(cfg: FreqConfig, args) -> int:
     compliant = 0
     total_reachable = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode in (0, 100):
             total_reachable += 1
             try:

@@ -30,7 +30,7 @@ from freq.core import fmt
 from freq.core import validate
 from freq.core import log as logger
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 # User management timeouts
 USER_CMD_TIMEOUT = 15
@@ -371,7 +371,7 @@ def cmd_passwd(cfg: FreqConfig, pack, args) -> int:
     ok = 0
     fail = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0:
             ok += 1
             fmt.step_ok(f"{h.label}")
@@ -425,7 +425,7 @@ def cmd_install_user(cfg: FreqConfig, pack, args) -> int:
     exists = 0
     fail = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0:
             if "EXISTS" in (r.stdout or ""):
                 exists += 1

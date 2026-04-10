@@ -26,7 +26,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 # Storage
 SLA_DIR = "sla"
@@ -83,7 +83,7 @@ def _record_check(cfg: FreqConfig):
     }
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         check["results"][h.label] = 1 if (r and r.returncode == 0) else 0
 
     data = _load_sla_data(cfg)

@@ -29,7 +29,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 # Storage
 CERT_DIR = "certs"
@@ -199,7 +199,7 @@ def _scan_fleet_certs_via_ssh(cfg: FreqConfig) -> list:
 
     certs = []
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0 or not r.stdout.strip():
             continue
 

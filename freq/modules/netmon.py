@@ -26,7 +26,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 NETMON_DIR = "netmon"
 NETMON_DATA = "interface-data.json"
@@ -113,7 +113,7 @@ def _cmd_interfaces(cfg: FreqConfig, args) -> int:
 
     total_ifaces = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             continue
 
@@ -211,7 +211,7 @@ def _cmd_poll(cfg: FreqConfig, args) -> int:
     fmt.table_header(("HOST", 14), ("IFACE", 10), ("RX", 10), ("TX", 10), ("STATE", 8))
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             continue
 
@@ -337,7 +337,7 @@ def _cmd_topology(cfg: FreqConfig, args) -> int:
 
     has_data = False
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0 or "no-lldp" in r.stdout:
             continue
 

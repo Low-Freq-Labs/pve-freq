@@ -24,7 +24,7 @@ import json
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
 
 COST_CMD_TIMEOUT = 15
 PVE_CMD_TIMEOUT = 30
@@ -230,7 +230,7 @@ def _cmd_density(cfg: FreqConfig, args) -> int:
     fmt.table_header(("HOST", 14), ("CORES", 6), ("RAM", 10), ("USED%", 8), ("LOAD", 8), ("DENSITY", 10))
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             continue
 

@@ -26,7 +26,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 COMPLY_DIR = "compliance"
 COMPLY_RESULTS = "scan-results.json"
@@ -252,7 +252,7 @@ def _cmd_scan(cfg: FreqConfig, args) -> int:
     total_checks = 0
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             fmt.line(f"  {fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET} {h.label}: unreachable")
             continue

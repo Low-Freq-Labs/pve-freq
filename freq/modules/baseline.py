@@ -26,7 +26,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 # Baseline storage
 BASELINE_DIR = "baselines"
@@ -171,7 +171,7 @@ def _cmd_capture(cfg: FreqConfig, args) -> int:
 
     captured = 0
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if r and r.returncode == 0:
             sections = _parse_sections(r.stdout)
             baseline["hosts"][h.label] = sections
@@ -258,7 +258,7 @@ def _cmd_compare(cfg: FreqConfig, args) -> int:
     baseline_hosts = baseline.get("hosts", {})
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         saved = baseline_hosts.get(h.label, {})
 
         if not saved:

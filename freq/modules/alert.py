@@ -27,7 +27,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 # ─────────────────────────────────────────────────────────────
 # CONSTANTS — File paths, timeouts, severity levels, condition types
@@ -209,7 +209,7 @@ def _evaluate_fleet(cfg: FreqConfig, rules: list) -> list:
     # Parse results into per-host metrics
     metrics = {}
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         m = {"reachable": False, "label": h.label, "ip": h.ip, "type": h.htype}
         if r and r.returncode == 0:
             m["reachable"] = True

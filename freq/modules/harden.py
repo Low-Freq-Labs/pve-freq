@@ -23,7 +23,7 @@ Design decisions:
 from freq.core import fmt
 from freq.core import resolve
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
 
 # Harden timeouts
 HARDEN_CHECK_TIMEOUT = 10
@@ -146,7 +146,7 @@ def cmd_harden(cfg: FreqConfig, pack, args) -> int:
             use_sudo=True,
         )
         for h in restart_hosts:
-            r = results.get(h.label)
+            r = result_for(results, h)
             if r and r.returncode == 0:
                 fmt.step_ok(f"{h.label}: SSH restarted")
             else:

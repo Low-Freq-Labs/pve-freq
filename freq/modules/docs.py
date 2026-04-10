@@ -26,7 +26,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 DOCS_DIR = "docs"
 RUNBOOK_DIR = "runbooks"
@@ -75,7 +75,7 @@ def _gather_fleet_data(cfg: FreqConfig) -> dict:
 
     host_data = []
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         entry = {"label": h.label, "ip": h.ip, "type": h.htype, "reachable": False}
 
         if r and r.returncode == 0:

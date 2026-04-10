@@ -25,7 +25,7 @@ import os
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run as ssh_run, run_many as ssh_run_many
+from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
 
 STACK_CMD_TIMEOUT = 30
 STACK_DEPLOY_TIMEOUT = 300
@@ -126,7 +126,7 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
     fmt.table_header(("HOST", 14), ("STACK", 20), ("STATUS", 12), ("SERVICES", 8))
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             continue
 
@@ -272,7 +272,7 @@ def _cmd_health(cfg: FreqConfig, args) -> int:
     fmt.table_header(("HOST", 14), ("CONTAINER", 22), ("STATUS", 18), ("IMAGE", 20))
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0 or not r.stdout.strip():
             continue
 

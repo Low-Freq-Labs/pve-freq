@@ -23,7 +23,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
-from freq.core.ssh import run_many as ssh_run_many
+from freq.core.ssh import run_many as ssh_run_many, result_for
 
 # Health check thresholds
 HEALTH_CMD_TIMEOUT = 15
@@ -97,7 +97,7 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
     critical = 0
 
     for h in hosts:
-        r = results.get(h.label)
+        r = result_for(results, h)
         if not r or r.returncode != 0:
             critical += 1
             fmt.table_row(
