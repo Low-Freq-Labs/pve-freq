@@ -461,6 +461,116 @@ class TestCacheStalenessVisibility(unittest.TestCase):
                        "health API must include probe_status")
 
 
+class TestStaleCacheRegressions(unittest.TestCase):
+    """Cache-backed API responses must never show stale data as fresh.
+
+    These tests verify that endpoints which read from _bg_cache include
+    staleness metadata. If a background probe dies, the dashboard must
+    know the data is old.
+    """
+
+    def test_fleet_overview_includes_age_in_cached_response(self):
+        """When fleet_overview cache exists, response must include age_seconds."""
+        from freq.api.fleet import handle_fleet_overview, _bg_cache, _bg_cache_ts, _bg_lock
+        import time
+
+        handler = MagicMock()
+        handler.command = "GET"
+        handler.path = "/api/fleet/overview"
+        handler.headers = {}
+        captured = {}
+
+        def mock_json_resp(h, data, status=200):
+            captured["data"] = data
+            captured["status"] = status
+
+        # Seed cache with data from 60 seconds ago
+        with _bg_lock:
+            _bg_cache["fleet_overview"] = {
+                "vms": [], "physical": [], "pve_nodes": [],
+                "vlans": [], "nic_profiles": {}, "categories": {},
+                "summary": {"total_vms": 0, "running": 0, "stopped": 0,
+                            "prod_count": 0, "lab_count": 0, "template_count": 0},
+                "duration": 0.5,
+            }
+            _bg_cache_ts["fleet_overview"] = time.time() - 60
+
+        with patch("freq.api.fleet.json_response", mock_json_resp):
+            handle_fleet_overview(handler)
+
+        self.assertIn("age_seconds", captured["data"],
+                       "Cached fleet overview must include age_seconds")
+        self.assertIn("cached", captured["data"],
+                       "Cached fleet overview must include cached flag")
+        self.assertGreaterEqual(captured["data"]["age_seconds"], 59,
+                                "age_seconds must reflect real cache age")
+
+    def test_health_api_includes_probe_status(self):
+        """When health cache exists, response must include probe_status."""
+        from freq.api.fleet import handle_health_api, _bg_cache, _bg_cache_ts, _bg_cache_errors, _bg_lock
+        import time
+
+        handler = MagicMock()
+        handler.command = "GET"
+        handler.path = "/api/health"
+        handler.headers = {"Authorization": "Bearer test"}
+        captured = {}
+
+        def mock_json_resp(h, data, status=200):
+            captured["data"] = data
+            captured["status"] = status
+
+        with _bg_lock:
+            _bg_cache["health"] = {"hosts": [], "duration": 0.1}
+            _bg_cache_ts["health"] = time.time() - 30
+            _bg_cache_errors.pop("health", None)
+
+        with patch("freq.api.fleet._check_session_role", return_value=("viewer", None)), \
+             patch("freq.api.fleet.json_response", mock_json_resp):
+            handle_health_api(handler)
+
+        self.assertIn("probe_status", captured["data"],
+                       "Health API must include probe_status")
+        self.assertEqual(captured["data"]["probe_status"], "ok")
+        self.assertIn("age_seconds", captured["data"])
+
+    def test_health_api_reports_probe_error_when_probe_failed(self):
+        """When probe has consecutive failures, health API must report it."""
+        from freq.api.fleet import handle_health_api, _bg_cache, _bg_cache_ts, _bg_cache_errors, _bg_lock
+        import time
+
+        handler = MagicMock()
+        handler.command = "GET"
+        handler.path = "/api/health"
+        handler.headers = {"Authorization": "Bearer test"}
+        captured = {}
+
+        def mock_json_resp(h, data, status=200):
+            captured["data"] = data
+
+        with _bg_lock:
+            _bg_cache["health"] = {"hosts": [], "duration": 0.1}
+            _bg_cache_ts["health"] = time.time() - 300  # 5 min stale
+            _bg_cache_errors["health"] = {
+                "error": "SSH timeout to all hosts",
+                "failed_at": time.time() - 120,
+                "consecutive": 5,
+            }
+
+        with patch("freq.api.fleet._check_session_role", return_value=("viewer", None)), \
+             patch("freq.api.fleet.json_response", mock_json_resp):
+            handle_health_api(handler)
+
+        self.assertEqual(captured["data"]["probe_status"], "error",
+                         "Must report probe_status=error when probe has failures")
+        self.assertIn("probe_error", captured["data"])
+        self.assertEqual(captured["data"]["probe_consecutive_failures"], 5)
+
+        # Cleanup
+        with _bg_lock:
+            _bg_cache_errors.pop("health", None)
+
+
 class TestAPIStatusCodeTruth(unittest.TestCase):
     """API error responses must never return 200.
 
