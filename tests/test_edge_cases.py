@@ -769,6 +769,56 @@ class TestSSHTransportEdgeCases(unittest.TestCase):
         result = run_many(hosts=[], command="uptime")
         self.assertEqual(result, {})
 
+    @patch("freq.core.ssh.async_run")
+    def test_run_many_duplicate_labels_both_get_ip_keys(self, mock_run):
+        """Duplicate host labels must both get label@ip keys, not silent overwrite."""
+        from freq.core.ssh import run_many
+        from freq.core.types import Host, CmdResult
+
+        h1 = Host(ip="10.0.0.1", label="webserver", htype="linux")
+        h2 = Host(ip="10.0.0.2", label="webserver", htype="linux")
+        r1 = CmdResult(stdout="host1", stderr="", returncode=0, duration=0.1)
+        r2 = CmdResult(stdout="host2", stderr="", returncode=0, duration=0.1)
+
+        async def fake_run(host, command, **kw):
+            return r1 if host == "10.0.0.1" else r2
+
+        mock_run.side_effect = fake_run
+        result = run_many(hosts=[h1, h2], command="hostname")
+
+        # Both must be accessible — neither silently overwrites the other
+        self.assertIn("webserver@10.0.0.1", result)
+        self.assertIn("webserver@10.0.0.2", result)
+        self.assertEqual(result["webserver@10.0.0.1"].stdout, "host1")
+        self.assertEqual(result["webserver@10.0.0.2"].stdout, "host2")
+        # Bare label should NOT exist when duplicated
+        self.assertNotIn("webserver", result)
+        # IP keys still work
+        self.assertIn("10.0.0.1", result)
+        self.assertIn("10.0.0.2", result)
+
+    @patch("freq.core.ssh.async_run")
+    def test_run_many_unique_labels_use_bare_label(self, mock_run):
+        """Unique host labels keep bare label keys (no regression)."""
+        from freq.core.ssh import run_many
+        from freq.core.types import Host, CmdResult
+
+        h1 = Host(ip="10.0.0.1", label="web", htype="linux")
+        h2 = Host(ip="10.0.0.2", label="db", htype="linux")
+        r1 = CmdResult(stdout="web", stderr="", returncode=0, duration=0.1)
+        r2 = CmdResult(stdout="db", stderr="", returncode=0, duration=0.1)
+
+        async def fake_run(host, command, **kw):
+            return r1 if host == "10.0.0.1" else r2
+
+        mock_run.side_effect = fake_run
+        result = run_many(hosts=[h1, h2], command="hostname")
+
+        self.assertIn("web", result)
+        self.assertIn("db", result)
+        self.assertEqual(result["web"].stdout, "web")
+        self.assertEqual(result["db"].stdout, "db")
+
 
 # ---------------------------------------------------------------------------
 # 8. PVE API Fallback Edge Cases

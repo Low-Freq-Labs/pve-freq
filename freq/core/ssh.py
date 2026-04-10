@@ -390,6 +390,12 @@ async def async_run_many(
     semaphore = asyncio.Semaphore(max_parallel)
     results = {}
 
+    # Pre-scan for duplicate labels so BOTH colliders get label@ip keys
+    label_counts = {}
+    for h in hosts:
+        label_counts[h.label] = label_counts.get(h.label, 0) + 1
+    dup_labels = {label for label, count in label_counts.items() if count > 1}
+
     async def _run_one(host: Host) -> None:
         async with semaphore:
             result = await async_run(
@@ -402,10 +408,10 @@ async def async_run_many(
                 use_sudo=use_sudo,
                 cfg=cfg,
             )
-            if host.label not in results:
-                results[host.label] = result
-            else:
+            if host.label in dup_labels:
                 results[f"{host.label}@{host.ip}"] = result
+            else:
+                results[host.label] = result
             results[host.ip] = result
 
     tasks = [asyncio.create_task(_run_one(h)) for h in hosts]
