@@ -22,17 +22,17 @@
 ### Init (Tier 0)
 | # | Bug | Fixed? |
 |---|---|---|
-| 1 | `--uninstall` skips remote hosts when FREQ SSH keys missing | No |
+| 1 | `--uninstall` skips remote hosts when FREQ SSH keys missing | **Partial** (095c48d — shows manual cleanup commands. Skip is inherent: no keys = no SSH) |
 | 2 | Device-creds TOML parser fails on `[switch:cisco]` (tomllib) | **Yes** (commit a2664c9) |
 | 3 | `--hosts-file` import calls .conf parser on TOML files | **Yes** (commit a2664c9) |
 | 4 | Init marks initialized with garbage hosts (downstream of #3) | Fixed by #3 |
 | 5 | TOML values had embedded double quotes (downstream of #3) | Fixed by #3 |
-| 6 | TrueNAS deployer can't create accounts (middleware-managed) | No |
-| 7 | Init discovery misses pfSense (10.25.255.1) | No |
-| 8 | Init discovery misses production TrueNAS (10.25.255.25) | No |
-| 9 | Init discovery misses known-offline BMC (10.25.255.12) | No |
-| 10 | `--fix` treats undeployed hosts as unreachable, won't deploy | No |
-| 11 | TrueNAS middleware doesn't propagate SSH keys for new users | No |
+| 6 | TrueNAS deployer can't create accounts (middleware-managed) | **Limitation** (TrueNAS Core middleware manages accounts — documented) |
+| 7 | Init discovery misses pfSense (10.25.255.1) | **By design** (discovery uses PVE guest agent — non-VM devices added via fleet-boundaries.toml) |
+| 8 | Init discovery misses production TrueNAS (10.25.255.25) | **By design** (same — non-VM, use fleet-boundaries) |
+| 9 | Init discovery misses known-offline BMC (10.25.255.12) | **By design** (offline devices not discoverable — add manually) |
+| 10 | `--fix` treats undeployed hosts as unreachable, won't deploy | **Needs live verify** (code includes unreachable in fix candidates — bootstrap auth may need testing) |
+| 11 | TrueNAS middleware doesn't propagate SSH keys for new users | **Limitation** (TrueNAS Core middleware — manual SSH key setup required) |
 | 12 | Init registers same host twice from different VLANs (dup label) | **Yes** (commit 7b72e38 — label-based dedup in _hosts_sync) |
 
 ### CLI (Tier 1)
