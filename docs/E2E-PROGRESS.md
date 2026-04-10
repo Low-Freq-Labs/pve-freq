@@ -33,7 +33,7 @@
 | 9 | Init discovery misses known-offline BMC (10.25.255.12) | No |
 | 10 | `--fix` treats undeployed hosts as unreachable, won't deploy | No |
 | 11 | TrueNAS middleware doesn't propagate SSH keys for new users | No |
-| 12 | Init registers same host twice from different VLANs (dup label) | No |
+| 12 | Init registers same host twice from different VLANs (dup label) | **Yes** (commit 7b72e38 — label-based dedup in _hosts_sync) |
 
 ### CLI (Tier 1)
 | # | Bug | Fixed? |
