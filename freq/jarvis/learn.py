@@ -215,8 +215,8 @@ def cmd_learn(cfg: FreqConfig, pack, args) -> int:
     try:
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         conn = _init_db(db_path)
-    except OSError:
-        # Fall back to user-local path if data dir is not writable
+    except (OSError, sqlite3.OperationalError):
+        # Fall back to user-local path if data dir or DB is not writable
         fallback = os.path.join(os.path.expanduser("~"), ".freq", "knowledge.db")
         os.makedirs(os.path.dirname(fallback), exist_ok=True)
         conn = _init_db(fallback)
