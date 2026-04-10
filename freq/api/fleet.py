@@ -108,13 +108,15 @@ def handle_health_api(handler):
         return
     with _bg_lock:
         cached = _bg_cache.get("health")
+        _health_ts = _bg_cache_ts.get("health", 0)
+        _health_err = _bg_cache_errors.get("health")
     if cached:
-        age_seconds = round(time.time() - _bg_cache_ts.get("health", 0), 1)
+        age_seconds = round(time.time() - _health_ts, 1)
         response = dict(cached)
         response["cached"] = True
         response["age"] = age_seconds
         response["age_seconds"] = age_seconds
-        probe_err = _bg_cache_errors.get("health")
+        probe_err = _health_err
         if probe_err:
             response["probe_status"] = "error"
             response["probe_error"] = probe_err["error"]
@@ -260,13 +262,15 @@ def handle_fleet_overview(handler):
     """GET /api/fleet/overview -- master endpoint, served from background cache."""
     with _bg_lock:
         cached = _bg_cache.get("fleet_overview")
+        _fleet_ts = _bg_cache_ts.get("fleet_overview", 0)
+        _fleet_err = _bg_cache_errors.get("fleet_overview")
     if cached:
-        age_seconds = round(time.time() - _bg_cache_ts.get("fleet_overview", 0), 1)
+        age_seconds = round(time.time() - _fleet_ts, 1)
         response = dict(cached)
         response["cached"] = True
         response["age"] = age_seconds
         response["age_seconds"] = age_seconds
-        probe_err = _bg_cache_errors.get("fleet_overview")
+        probe_err = _fleet_err
         if probe_err:
             response["probe_status"] = "error"
             response["probe_error"] = probe_err["error"]
@@ -734,13 +738,15 @@ def handle_infra_quick(handler):
     """GET /api/infra/quick -- infra device summary from background cache."""
     with _bg_lock:
         cached = _bg_cache.get("infra_quick")
+        _infra_ts = _bg_cache_ts.get("infra_quick", 0)
+        _infra_err = _bg_cache_errors.get("infra_quick")
     if cached:
-        age_seconds = round(time.time() - _bg_cache_ts.get("infra_quick", 0), 1)
+        age_seconds = round(time.time() - _infra_ts, 1)
         response = dict(cached)
         response["cached"] = True
         response["age"] = age_seconds
         response["age_seconds"] = age_seconds
-        probe_err = _bg_cache_errors.get("infra_quick")
+        probe_err = _infra_err
         if probe_err:
             response["probe_status"] = "error"
             response["probe_error"] = probe_err["error"]
@@ -838,6 +844,8 @@ def handle_fleet_health_score(handler):
     with _bg_lock:
         health = _bg_cache.get("health")
         fleet = _bg_cache.get("fleet_overview")
+        _health_ts = _bg_cache_ts.get("health", 0)
+        _fleet_ts = _bg_cache_ts.get("fleet_overview", 0)
 
     if not health and not fleet:
         json_response(handler, {
@@ -892,8 +900,8 @@ def handle_fleet_health_score(handler):
     score = max(0, min(100, score))
     grade = "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F"
 
-    health_age = round(time.time() - _bg_cache_ts.get("health", 0), 1) if health else None
-    fleet_age = round(time.time() - _bg_cache_ts.get("fleet_overview", 0), 1) if fleet else None
+    health_age = round(time.time() - _health_ts, 1) if health else None
+    fleet_age = round(time.time() - _fleet_ts, 1) if fleet else None
     stale = (health_age is not None and health_age > 120) or (fleet_age is not None and fleet_age > 120)
 
     json_response(
@@ -917,6 +925,8 @@ def handle_topology_enhanced(handler):
     with _bg_lock:
         fleet = _bg_cache.get("fleet_overview")
         health = _bg_cache.get("health")
+        _health_ts = _bg_cache_ts.get("health", 0)
+        _fleet_ts = _bg_cache_ts.get("fleet_overview", 0)
 
     vlan_groups = {}
     for vlan in cfg.vlans:
@@ -972,8 +982,8 @@ def handle_topology_enhanced(handler):
             if vm.get("status") == "running":
                 nodes[node]["running"] += 1
 
-    health_age = round(time.time() - _bg_cache_ts.get("health", 0), 1) if health else None
-    fleet_age = round(time.time() - _bg_cache_ts.get("fleet_overview", 0), 1) if fleet else None
+    health_age = round(time.time() - _health_ts, 1) if health else None
+    fleet_age = round(time.time() - _fleet_ts, 1) if fleet else None
     json_response(
         handler,
         {
@@ -993,6 +1003,7 @@ def handle_fleet_heatmap(handler):
     """GET /api/fleet/heatmap -- resource usage per host for heatmap viz."""
     with _bg_lock:
         health = _bg_cache.get("health")
+        _health_ts = _bg_cache_ts.get("health", 0)
 
     heatmap = []
     if health and isinstance(health, dict):
@@ -1016,7 +1027,7 @@ def handle_fleet_heatmap(handler):
                 }
             )
 
-    health_age = round(time.time() - _bg_cache_ts.get("health", 0), 1) if health else None
+    health_age = round(time.time() - _health_ts, 1) if health else None
     json_response(handler, {
         "hosts": heatmap,
         "count": len(heatmap),
