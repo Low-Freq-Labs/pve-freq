@@ -1948,9 +1948,12 @@ class FreqHandler(BaseHTTPRequestHandler):
                 cat = "System"
             else:
                 cat = "Other"
-            # Get docstring from handler
-            handler = getattr(self, method_name, None)
-            desc = (handler.__doc__ or "").strip().split("\n")[0] if handler else ""
+            # Get docstring from handler (method name or callable)
+            if callable(method_name):
+                desc = (method_name.__doc__ or "").strip().split("\n")[0]
+            else:
+                handler = getattr(self, method_name, None)
+                desc = (handler.__doc__ or "").strip().split("\n")[0] if handler else ""
             categories.setdefault(cat, []).append({"path": path, "description": desc})
 
         # Build HTML

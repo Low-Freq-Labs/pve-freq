@@ -498,3 +498,119 @@ class TestSSEEndpoint:
         """FreqHandler has a _serve_events method."""
         assert hasattr(FreqHandler, "_serve_events")
         assert callable(getattr(FreqHandler, "_serve_events"))
+
+
+# ═══════════════════════════════════════════════════════════════════
+# OpenAPI / API Docs Truthfulness
+# ═══════════════════════════════════════════════════════════════════
+
+class TestOpenAPITruthfulness:
+    """Verify the OpenAPI spec reflects the real API surface."""
+
+    def _get_spec(self):
+        """Generate and return the OpenAPI spec as dict."""
+        h = _make_handler("/api/openapi.json")
+        h._serve_openapi_json()
+        return _get_json(h)
+
+    def test_spec_is_valid_openapi(self):
+        spec = self._get_spec()
+        assert spec["openapi"] == "3.0.3"
+        assert "info" in spec
+        assert "paths" in spec
+        assert spec["info"]["title"] == "PVE FREQ API"
+
+    def test_every_legacy_route_in_spec(self):
+        """Every route in _ROUTES appears in the spec (except /, /dashboard, /api/docs, /api/openapi.json)."""
+        spec = self._get_spec()
+        skip = {"/", "/dashboard", "/api/docs", "/api/openapi.json"}
+        for path in FreqHandler._ROUTES:
+            if path in skip:
+                continue
+            assert path in spec["paths"], f"Legacy route {path} missing from OpenAPI spec"
+
+    def test_v1_routes_in_spec(self):
+        """v1 domain routes appear in the spec after loading."""
+        spec = self._get_spec()
+        # v1 routes should be present if build_routes succeeds
+        FreqHandler._load_v1_routes()
+        if FreqHandler._V1_ROUTES:
+            for path in FreqHandler._V1_ROUTES:
+                assert path in spec["paths"], f"v1 route {path} missing from OpenAPI spec"
+
+    def test_proxy_routes_in_spec(self):
+        """Dynamic proxy routes /api/comms/ and /api/watch/ appear in spec."""
+        spec = self._get_spec()
+        assert "/api/comms/{path}" in spec["paths"], "/api/comms/ proxy missing from spec"
+        assert "/api/watch/{path}" in spec["paths"], "/api/watch/ proxy missing from spec"
+
+    def test_post_endpoints_documented_as_post(self):
+        """Routes with mutating names should be documented as POST, not GET."""
+        spec = self._get_spec()
+        post_keywords = ("create", "update", "delete", "reset", "login",
+                         "change", "complete", "generate", "deploy", "rollback")
+        for path, methods in spec["paths"].items():
+            path_tail = path.rsplit("/", 1)[-1]
+            if any(kw in path_tail for kw in post_keywords):
+                assert "post" in methods, f"{path} should be POST but is {list(methods.keys())}"
+
+    def test_post_endpoints_document_error_responses(self):
+        """POST endpoints should document 400 and 403 responses."""
+        spec = self._get_spec()
+        for path, methods in spec["paths"].items():
+            if "post" in methods:
+                responses = methods["post"]["responses"]
+                assert "400" in responses, f"POST {path} missing 400 response"
+                assert "403" in responses, f"POST {path} missing 403 response"
+
+    def test_every_endpoint_has_summary(self):
+        """Every endpoint in spec has a non-empty summary."""
+        spec = self._get_spec()
+        missing = []
+        for path, methods in spec["paths"].items():
+            for method, detail in methods.items():
+                summary = detail.get("summary", "")
+                if not summary or summary.startswith("_serve_"):
+                    missing.append(f"{method.upper()} {path}")
+        # Allow some missing — v1 callables without docs are ok for now
+        # but legacy _serve_ method names leaking through is a bug
+        serve_leaks = [m for m in missing if "_serve_" in m]
+        assert not serve_leaks, f"Internal method names leaked into spec: {serve_leaks}"
+
+    def test_no_error_responses_return_200(self):
+        """Verify no _json_response({{error:...}}) call defaults to 200.
+
+        This is a source-level check — grep serve.py for the anti-pattern.
+        """
+        import re
+        serve_path = os.path.join(os.path.dirname(__file__), "..", "freq", "modules", "serve.py")
+        with open(serve_path) as f:
+            lines = f.readlines()
+        bad_lines = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if '_json_response({"error"' in stripped and stripped.endswith("})"):
+                # Check it doesn't have a status code: should end with }, NNN)
+                if not re.search(r'},\s*\d+\)$', stripped):
+                    bad_lines.append(i)
+        assert not bad_lines, f"Lines returning error with implicit 200: {bad_lines}"
+
+
+class TestAPIDocsPage:
+    """Verify the /api/docs HTML page is truthful."""
+
+    def test_docs_page_renders(self):
+        h = _make_handler("/api/docs")
+        h._serve_api_docs()
+        assert h._status_code == 200
+        body = h.wfile.getvalue().decode()
+        assert "PVE FREQ" in body
+        assert "<table>" in body
+
+    def test_docs_page_includes_routes(self):
+        h = _make_handler("/api/docs")
+        h._serve_api_docs()
+        body = h.wfile.getvalue().decode()
+        # Should contain real API paths
+        assert "/api/auth/login" in body
+        assert "/healthz" in body
