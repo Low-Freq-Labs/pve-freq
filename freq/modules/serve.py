@@ -1363,8 +1363,14 @@ def _bg_initial_probe():
     ]:
         try:
             fn()
+            cache_key = _SLOW_PROBE_CACHE_KEYS.get(label)
+            if cache_key:
+                _clear_probe_error(cache_key)
         except Exception as e:
             logger.error(f"bg initial {label} failed: {e}")
+            cache_key = _SLOW_PROBE_CACHE_KEYS.get(label)
+            if cache_key:
+                _record_probe_error(cache_key, e)
 
 
 def start_background_cache():
