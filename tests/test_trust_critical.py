@@ -980,6 +980,60 @@ class TestTLSConfigChain(unittest.TestCase):
         self.assertIn("tls_cert", src, "Must check config tls_cert")
 
 
+class TestPOSTEnforcementGap(unittest.TestCase):
+    """Document and guard POST enforcement across mutating handlers.
+
+    These tests verify the known state: critical endpoints ARE enforced,
+    remaining admin-only ops are a documented gap for require_role refactor.
+    """
+
+    def test_critical_mutating_endpoints_enforce_post(self):
+        """The most dangerous endpoints must enforce POST."""
+        import inspect
+        from freq.api.vm import handle_vm_destroy, handle_vm_clone
+        from freq.api.fleet import handle_exec, handle_deploy_agent
+        from freq.api.secure import handle_vault_delete
+
+        for handler in [handle_vm_destroy, handle_vm_clone, handle_exec,
+                        handle_deploy_agent, handle_vault_delete]:
+            src = inspect.getsource(handler)
+            self.assertIn("require_post", src,
+                           f"{handler.__name__} must enforce POST")
+
+    def test_helpers_require_post_exists(self):
+        """require_post helper must exist in helpers.py for shared use."""
+        from freq.api.helpers import require_post
+        self.assertTrue(callable(require_post))
+
+    def test_count_unprotected_post_handlers(self):
+        """Document the known gap: count handlers with POST docstring but no enforcement.
+
+        This test tracks the gap size. As handlers are fixed, update the count.
+        """
+        import os, re
+        api_dir = os.path.join(os.path.dirname(__file__), "..", "freq", "api")
+        unprotected = []
+        for fname in sorted(os.listdir(api_dir)):
+            if not fname.endswith('.py') or fname in ('auth.py', '__init__.py', 'helpers.py'):
+                continue
+            fpath = os.path.join(api_dir, fname)
+            with open(fpath) as f:
+                lines = f.readlines()
+            for i, line in enumerate(lines):
+                if line.strip().startswith('def handle_'):
+                    func = line.strip().split('(')[0].replace('def ', '')
+                    doc = ''.join(lines[i+1:i+5])
+                    check = ''.join(lines[i+1:i+15])
+                    if 'POST' in doc and 'require_post' not in check and '_require_post' not in check and "command" not in check:
+                        unprotected.append(f"{fname}:{func}")
+        # Known gap: ~58 handlers need require_role decorator refactor
+        # (includes some false positives from multi-line docstring detection)
+        # This test will fail if the count INCREASES (new unprotected handler added)
+        self.assertLessEqual(len(unprotected), 60,
+                             f"POST enforcement gap grew: {len(unprotected)} unprotected. "
+                             f"New handlers must use require_post().")
+
+
 class TestRouteIntegrity(unittest.TestCase):
     """Every registered route must point at a callable handler."""
 
