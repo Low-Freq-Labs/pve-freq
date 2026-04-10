@@ -953,6 +953,14 @@ class TestSecurityHeaders(unittest.TestCase):
         self.assertIn("fonts.gstatic.com", src,
                        "CSP font-src must allow fonts.gstatic.com")
 
+    def test_auth_reads_query_param_token(self):
+        """check_session_role must read ?token= for SSE EventSource support."""
+        import inspect
+        from freq.api.auth import check_session_role
+        src = inspect.getsource(check_session_role)
+        self.assertIn("parse_qs", src,
+                       "check_session_role must parse query string for token fallback")
+
     def test_cookie_has_httponly_samesite(self):
         """Session cookie must have HttpOnly and SameSite=Strict."""
         import inspect
