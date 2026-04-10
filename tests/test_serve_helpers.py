@@ -301,11 +301,19 @@ class TestCheckSessionRole(unittest.TestCase):
         self.auth_mod._auth_tokens.clear()
         self.auth_mod._auth_tokens.update(self._orig_tokens)
 
-    def _handler(self, path):
+    def _handler(self, path, token=None):
         """Create a mock handler with proper headers dict for auth checks."""
         h = MagicMock()
         h.path = path
         h.headers = {}  # real dict so .get("Authorization", "") works correctly
+        # Extract token from query string for backward compat with tests,
+        # but set it as Bearer header (URL token auth was removed for security)
+        if token:
+            h.headers["Authorization"] = f"Bearer {token}"
+        elif "?token=" in path:
+            t = path.split("?token=")[1].split("&")[0]
+            if t:
+                h.headers["Authorization"] = f"Bearer {t}"
         return h
 
     def test_no_token_requires_auth(self):
