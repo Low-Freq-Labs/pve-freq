@@ -684,5 +684,34 @@ class TestAPIStatusCodeTruth(unittest.TestCase):
         self.assertEqual(bare, [], f"v1 API has bare error→200: {bare}")
 
 
+class TestRouteIntegrity(unittest.TestCase):
+    """Every registered route must point at a callable handler."""
+
+    def test_all_v1_routes_are_callable(self):
+        """Every route in the v1 route table must be a callable function."""
+        from freq.api import build_routes
+
+        routes = build_routes()
+        dead = []
+        for path, handler in routes.items():
+            if not callable(handler):
+                dead.append(path)
+
+        self.assertEqual(dead, [],
+                         f"Dead v1 routes (not callable): {dead}")
+
+    def test_all_legacy_routes_resolve(self):
+        """Every route in _ROUTES must resolve via getattr."""
+        from freq.modules.serve import FreqHandler
+
+        dead = []
+        for path, method_name in FreqHandler._ROUTES.items():
+            if not hasattr(FreqHandler, method_name):
+                dead.append(f"{path} -> {method_name}")
+
+        self.assertEqual(dead, [],
+                         f"Dead legacy routes (missing method): {dead}")
+
+
 if __name__ == "__main__":
     unittest.main()
