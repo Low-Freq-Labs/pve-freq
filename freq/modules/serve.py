@@ -4057,7 +4057,10 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": f"Doctor failed: {e}"}, 500)
 
     def _serve_watch_start(self):
-        """Start the FREQ watch daemon."""
+        """POST /api/watch/start — start the FREQ watch daemon."""
+        if self.command != "POST":
+            self._json_response({"error": "Watch start requires POST"}, 405)
+            return
         try:
             rc, out, _ = subprocess.Popen(
                 ["freq", "watch", "start"], capture_output=True, text=True, timeout=10
@@ -4067,7 +4070,10 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": str(e)}, 500)
 
     def _serve_watch_stop(self):
-        """Stop the FREQ watch daemon."""
+        """POST /api/watch/stop — stop the FREQ watch daemon."""
+        if self.command != "POST":
+            self._json_response({"error": "Watch stop requires POST"}, 405)
+            return
         try:
             rc, out, _ = subprocess.Popen(
                 ["freq", "watch", "stop"], capture_output=True, text=True, timeout=10
