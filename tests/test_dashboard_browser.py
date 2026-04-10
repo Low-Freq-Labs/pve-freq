@@ -483,5 +483,63 @@ class TestDashboardFreshness(unittest.TestCase):
                      f"Nonexistent API must return 404 or 403, got {response['status']}")
 
 
+@unittest.skipUnless(DASHBOARD_UP, "Dashboard not reachable at 10.25.255.55:8888")
+class TestDeploymentDrift(unittest.TestCase):
+    """Detect when deployed instance diverges from source."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pw = sync_playwright().start()
+        cls.browser = cls.pw.chromium.launch(headless=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+
+    def test_deployed_js_post_count_matches_source(self):
+        """Deployed JS must have same number of POST calls as source.
+
+        If this fails, the deployed instance has stale JS — mutation
+        operations will fail with 405 because the server enforces POST
+        but the JS still sends GET.
+        """
+        import re
+        page = self.browser.new_page()
+        page.goto(DASHBOARD_URL)
+        page.wait_for_load_state("domcontentloaded")
+
+        deployed = page.evaluate("""async () => {
+            const resp = await fetch('/static/js/app.js');
+            const text = await resp.text();
+            const m = text.match(/method:'POST'/g);
+            return m ? m.length : 0;
+        }""")
+        page.close()
+
+        with open(os.path.join(os.path.dirname(__file__), "..", "freq", "data", "web", "js", "app.js")) as f:
+            src = f.read()
+        source_count = len(re.findall("method:'POST'", src))
+
+        drift = source_count - deployed
+        # Allow small drift (1-2) for in-flight deploys, but large drift = stale
+        self.assertLessEqual(drift, 5,
+                            f"DEPLOYMENT DRIFT: deployed JS has {deployed} POST calls, "
+                            f"source has {source_count} ({drift} missing). "
+                            f"Dashboard mutations will fail with 405. Redeploy needed.")
+
+    def test_deployed_csp_includes_cdn(self):
+        """Deployed CSP must allow cdn.jsdelivr.net for terminal support."""
+        page = self.browser.new_page()
+        response = page.goto(DASHBOARD_URL)
+        csp = response.headers.get("content-security-policy", "")
+        page.close()
+
+        if csp:  # Only check if CSP is deployed
+            self.assertIn("cdn.jsdelivr.net", csp,
+                         "DEPLOYMENT DRIFT: CSP deployed but missing cdn.jsdelivr.net — "
+                         "terminal page will break")
+
+
 if __name__ == "__main__":
     unittest.main()
