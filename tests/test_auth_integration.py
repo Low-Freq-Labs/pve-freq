@@ -188,5 +188,100 @@ class TestFullAuthLifecycle(unittest.TestCase):
                                      f"{path} must reject GET with 405")
 
 
+class TestSessionExpiry(unittest.TestCase):
+    """Session tokens must expire and be consistently rejected."""
+
+    def test_expired_token_rejected(self):
+        """A token past SESSION_TIMEOUT must return error."""
+        from freq.api.auth import check_session_role, _auth_tokens, _auth_lock, SESSION_TIMEOUT_SECONDS
+
+        token = "expired-test-token"
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": time.time() - SESSION_TIMEOUT_SECONDS - 1,
+            }
+
+        h = MagicMock()
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": f"Bearer {token}",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+        h.path = "/api/fleet/overview"
+
+        role, err = check_session_role(h, "viewer")
+        self.assertIsNone(role)
+        self.assertIn("expired", err.lower())
+
+        # Token should be cleaned up
+        with _auth_lock:
+            self.assertNotIn(token, _auth_tokens)
+
+    def test_post_logout_token_rejected(self):
+        """After logout, the same token must be rejected."""
+        from freq.api.auth import (
+            handle_auth_logout, check_session_role,
+            _auth_tokens, _auth_lock
+        )
+
+        token = "logout-test-token"
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": time.time(),
+            }
+
+        # Verify token works before logout
+        h = MagicMock()
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": f"Bearer {token}",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+        h.path = "/api/test"
+
+        role, err = check_session_role(h, "viewer")
+        self.assertEqual(role, "admin")
+
+        # Logout
+        logout_h = _make_handler("/api/auth/logout", method="POST",
+                                 headers={"Authorization": f"Bearer {token}",
+                                          "Cookie": "", "Origin": "",
+                                          "Content-Length": "0"})
+        logout_h.headers = MagicMock()
+        logout_h.headers.get = lambda key, default="": {
+            "Authorization": f"Bearer {token}",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+        handle_auth_logout(logout_h)
+
+        # Verify token is now rejected
+        role2, err2 = check_session_role(h, "viewer")
+        self.assertIsNone(role2)
+        self.assertIn("expired or invalid", err2)
+
+    def test_login_cookie_has_max_age(self):
+        """Login cookie must include Max-Age matching session timeout."""
+        import inspect
+        from freq.api.auth import handle_auth_login
+        src = inspect.getsource(handle_auth_login)
+        self.assertIn("Max-Age=", src,
+                       "Login cookie must include Max-Age")
+        self.assertIn("SESSION_TIMEOUT_SECONDS", src,
+                       "Cookie Max-Age must reference SESSION_TIMEOUT_SECONDS")
+
+    def test_logout_clears_cookie(self):
+        """Logout must set cookie Max-Age=0 to clear it."""
+        import inspect
+        from freq.api.auth import handle_auth_logout
+        src = inspect.getsource(handle_auth_logout)
+        self.assertIn("Max-Age=0", src,
+                       "Logout must clear cookie via Max-Age=0")
+
+
 if __name__ == "__main__":
     unittest.main()
