@@ -1066,6 +1066,12 @@ function _silentFleetRefresh(){
           }
         });
     });
+    /* Fleet data freshness — show probe errors on fleet overview */
+    if(fo.probe_status==='error'){
+      toast('Fleet probe failed'+(fo.probe_error?' — '+fo.probe_error:''),'error');
+      var ci=document.getElementById('sse-conn-status');
+      if(ci){ci.textContent='PROBE ERROR';ci.style.color='var(--red)';}
+    }
   }).catch(function(){_fleetInFlight=false;});
 }
 startSilentRefresh();
@@ -1409,6 +1415,11 @@ function _loadFleetOverviewMedia(){
 }
 function _renderFleetOverview(fo){
     if(!fo)return;
+    /* Show fleet probe error if present */
+    if(fo.probe_status==='error'){
+      var ci=document.getElementById('sse-conn-status');
+      if(ci){ci.textContent='PROBE ERROR';ci.style.color='var(--red)';}
+    }
     fo.summary=fo.summary||{};fo.pve_nodes=fo.pve_nodes||[];fo.physical=fo.physical||[];
     /* PVE summary */
     var nodeCount=fo.pve_nodes?fo.pve_nodes.length:0;
