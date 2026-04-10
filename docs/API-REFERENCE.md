@@ -1,6 +1,6 @@
 # API Reference — PVE FREQ
 
-146 REST API endpoints served by `freq serve` at `http://localhost:8888`.
+332+ REST API endpoints served by `freq serve` at `http://localhost:8888`.
 
 All endpoints return JSON. Most require session authentication via `Authorization: Bearer <token>` header or `freq_session` HttpOnly cookie (both set automatically on login).
 
@@ -21,8 +21,8 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 |--------|----------|-------------|
 | GET | `/api/users` | List all users |
 | POST | `/api/users/create` | Create a new user |
-| GET | `/api/users/promote` | Promote user role |
-| GET | `/api/users/demote` | Demote user role |
+| POST | `/api/users/promote` | Promote user role |
+| POST | `/api/users/demote` | Demote user role |
 | GET | `/api/keys` | SSH key management |
 | GET | `/api/vault` | Retrieve vault secrets |
 | POST | `/api/vault/set` | Set vault secret |
@@ -34,13 +34,13 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 |--------|----------|-------------|
 | GET | `/api/fleet/overview` | Master fleet status (hosts, VMs, health) |
 | GET | `/api/fleet/ntp` | Fleet NTP status |
-| POST | `/api/fleet/updates` | Fleet OS update status |
+| GET | `/api/fleet/updates` | Fleet OS update status |
 | GET | `/api/status` | Fleet health (cached) |
 | GET | `/api/health` | Comprehensive fleet health |
 | GET | `/api/agents` | Agent registry |
 | GET | `/api/pool` | List PVE pools |
 | GET | `/api/discover` | Discover hosts on network |
-| GET | `/api/exec` | Execute command across fleet |
+| POST | `/api/exec` | Execute command across fleet |
 
 ## VM Management
 
@@ -48,21 +48,21 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 |--------|----------|-------------|
 | GET | `/api/vms` | VM inventory from PVE cluster |
 | POST | `/api/vm/create` | Create a new VM |
-| GET | `/api/vm/destroy` | Destroy a VM |
-| GET | `/api/vm/clone` | Clone a VM |
+| POST | `/api/vm/destroy` | Destroy a VM |
+| POST | `/api/vm/clone` | Clone a VM |
 | POST | `/api/vm/snapshot` | Create snapshot |
 | GET | `/api/vm/snapshots` | List snapshots |
 | POST | `/api/vm/delete-snapshot` | Delete snapshot |
-| GET | `/api/vm/power` | Control power state (start/stop/reboot/shutdown) |
-| GET | `/api/vm/resize` | Resize VM resources |
-| GET | `/api/vm/rename` | Rename VM |
-| GET | `/api/vm/migrate` | Migrate VM to another node |
+| POST | `/api/vm/power` | Control power state (start/stop/reboot/shutdown) |
+| POST | `/api/vm/resize` | Resize VM resources |
+| POST | `/api/vm/rename` | Rename VM |
+| POST | `/api/vm/migrate` | Migrate VM to another node |
 | GET | `/api/vm/template` | Convert VM to template |
-| GET | `/api/vm/tag` | Set PVE tags |
-| GET | `/api/vm/add-nic` | Add network interface |
-| GET | `/api/vm/clear-nics` | Clear all NICs |
+| POST | `/api/vm/tag` | Set PVE tags |
+| POST | `/api/vm/add-nic` | Add network interface |
+| POST | `/api/vm/clear-nics` | Clear all NICs |
 | POST | `/api/vm/change-ip` | Change VM IP |
-| GET | `/api/vm/add-disk` | Add disk to VM |
+| POST | `/api/vm/add-disk` | Add disk to VM |
 | POST | `/api/vm/change-id` | Change VMID |
 | GET | `/api/vm/check-ip` | Check IP availability |
 | GET | `/api/vm/push-key` | Push SSH key to VM |
@@ -88,7 +88,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | GET | `/api/infra/idrac` | iDRAC data (sensors, power, firmware) |
 | GET | `/api/host/detail` | Deep host detail |
 | GET | `/api/watchdog/health` | Watchdog health proxy |
-| GET | `/api/deploy-agent` | Deploy agent to hosts |
+| POST | `/api/deploy-agent` | Deploy agent to hosts |
 | GET | `/api/specialists` | Specialist/agent listing |
 | GET | `/api/notify/test` | Test notification delivery |
 | GET | `/api/topology` | Network topology for visualization |
@@ -99,10 +99,10 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 |--------|----------|-------------|
 | GET | `/api/containers/registry` | List registered containers |
 | GET | `/api/containers/rescan` | Discover running containers |
-| GET | `/api/containers/add` | Add container to registry |
+| POST | `/api/containers/add` | Add container to registry |
 | POST | `/api/containers/delete` | Remove container from registry |
-| GET | `/api/containers/edit` | Edit container config |
-| GET | `/api/containers/compose-up` | Start Docker Compose stack |
+| POST | `/api/containers/edit` | Edit container config |
+| POST | `/api/containers/compose-up` | Start Docker Compose stack |
 | POST | `/api/containers/compose-down` | Stop Docker Compose stack |
 | GET | `/api/containers/compose-view` | View docker-compose.yml |
 
@@ -180,7 +180,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 |--------|----------|-------------|
 | POST | `/api/federation/register` | Register remote site |
 | POST | `/api/federation/unregister` | Unregister site |
-| GET | `/api/federation/poll` | Poll remote sites |
+| POST | `/api/federation/poll` | Poll remote sites |
 | POST | `/api/federation/toggle` | Enable/disable site |
 
 ## Playbooks
@@ -190,7 +190,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | GET | `/api/playbooks` | List playbooks |
 | POST | `/api/playbooks/run` | Run playbook |
 | POST | `/api/playbooks/create` | Create playbook |
-| GET | `/api/playbooks/step` | Run single playbook step |
+| POST | `/api/playbooks/step` | Run single playbook step |
 
 ## Chaos Engineering
 
@@ -205,7 +205,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/agent/create` | Create agent |
-| GET | `/api/agent/destroy` | Destroy agent |
+| POST | `/api/agent/destroy` | Destroy agent |
 
 ## Setup & Administration
 
