@@ -879,6 +879,46 @@ class TestAnonymousAccessRejected(unittest.TestCase):
                              "/api/comms/ must not be in auth whitelist")
 
 
+class TestSecurityHeaders(unittest.TestCase):
+    """All responses must include security headers."""
+
+    def test_json_response_has_security_headers(self):
+        """_json_response must call _send_security_headers."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        src = inspect.getsource(FreqHandler._json_response)
+        self.assertIn("_send_security_headers", src)
+
+    def test_app_html_has_security_headers(self):
+        """_serve_app must call _send_security_headers."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        src = inspect.getsource(FreqHandler._serve_app)
+        self.assertIn("_send_security_headers", src)
+
+    def test_sse_has_security_headers(self):
+        """_serve_events must call _send_security_headers."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        src = inspect.getsource(FreqHandler._serve_events)
+        self.assertIn("_send_security_headers", src)
+
+    def test_security_headers_include_csp(self):
+        """_send_security_headers must include Content-Security-Policy."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        src = inspect.getsource(FreqHandler._send_security_headers)
+        self.assertIn("Content-Security-Policy", src)
+
+    def test_cookie_has_httponly_samesite(self):
+        """Session cookie must have HttpOnly and SameSite=Strict."""
+        import inspect
+        from freq.api.auth import handle_auth_login
+        src = inspect.getsource(handle_auth_login)
+        self.assertIn("HttpOnly", src)
+        self.assertIn("SameSite=Strict", src)
+
+
 class TestRouteIntegrity(unittest.TestCase):
     """Every registered route must point at a callable handler."""
 

@@ -1787,6 +1787,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
         self.send_header("X-Accel-Buffering", "no")
+        self._send_security_headers()
         self.end_headers()
 
         q = _sse_subscribe()
@@ -2684,10 +2685,7 @@ a:hover{{text-decoration:underline}}
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
         self.send_header("Pragma", "no-cache")
         self.send_header("Connection", "close")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "DENY")
-        self.send_header("X-XSS-Protection", "1; mode=block")
-        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        self._send_security_headers()
         self.end_headers()
         self.wfile.write(body)
 
@@ -4267,6 +4265,17 @@ a:hover{{text-decoration:underline}}
         except (json.JSONDecodeError, ValueError):
             return {}
 
+    def _send_security_headers(self):
+        """Centralized security headers for all response types."""
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("X-XSS-Protection", "1; mode=block")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        self.send_header("Content-Security-Policy",
+                         "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+                         "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                         "connect-src 'self'; font-src 'self'")
+
     def _json_response(self, data, status=200):
         """Send a JSON response."""
         body = json.dumps(data).encode()
@@ -4278,8 +4287,7 @@ a:hover{{text-decoration:underline}}
             self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
             self.send_header("Vary", "Origin")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "DENY")
+        self._send_security_headers()
         self.end_headers()
         self.wfile.write(body)
 

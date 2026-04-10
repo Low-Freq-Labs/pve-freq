@@ -182,7 +182,11 @@ def handle_auth_login(handler):
     # Set auth cookie for SSE and cookie-based auth (HttpOnly, SameSite=Strict)
     handler.send_response(200)
     handler.send_header("Content-Type", "application/json")
-    handler.send_header("Set-Cookie", f"freq_session={token}; HttpOnly; SameSite=Strict; Path=/")
+    # Add Secure flag when TLS is configured
+    cfg = load_config()
+    tls_cert = os.path.join(cfg.conf_dir, "..", "tls", "cert.pem") if hasattr(cfg, "conf_dir") else ""
+    secure_flag = "; Secure" if os.path.isfile(tls_cert) else ""
+    handler.send_header("Set-Cookie", f"freq_session={token}; HttpOnly; SameSite=Strict; Path=/{secure_flag}")
     origin = handler.headers.get("Origin", "")
     if origin:
         handler.send_header("Access-Control-Allow-Origin", origin)
