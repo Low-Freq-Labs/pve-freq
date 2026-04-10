@@ -82,9 +82,15 @@ def _record_check(cfg: FreqConfig):
         "results": {},
     }
 
+    label_counts = {}
+    for h in hosts:
+        label_counts[h.label] = label_counts.get(h.label, 0) + 1
+    dup_labels = {label for label, count in label_counts.items() if count > 1}
+
     for h in hosts:
         r = result_for(results, h)
-        check["results"][h.label] = 1 if (r and r.returncode == 0) else 0
+        key = f"{h.label}@{h.ip}" if h.label in dup_labels else h.label
+        check["results"][key] = 1 if (r and r.returncode == 0) else 0
 
     data = _load_sla_data(cfg)
     data["checks"].append(check)
