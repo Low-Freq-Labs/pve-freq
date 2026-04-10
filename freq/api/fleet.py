@@ -951,6 +951,8 @@ def handle_topology_enhanced(handler):
             if vm.get("status") == "running":
                 nodes[node]["running"] += 1
 
+    health_age = round(time.time() - _bg_cache_ts.get("health", 0), 1) if health else None
+    fleet_age = round(time.time() - _bg_cache_ts.get("fleet_overview", 0), 1) if fleet else None
     json_response(
         handler,
         {
@@ -958,6 +960,10 @@ def handle_topology_enhanced(handler):
             "nodes": list(nodes.values()),
             "total_hosts": len(health_hosts),
             "total_vlans": len(cfg.vlans),
+            "cached": True,
+            "health_age_seconds": health_age,
+            "fleet_age_seconds": fleet_age,
+            "stale": (health_age is not None and health_age > 120) or (fleet_age is not None and fleet_age > 120),
         },
     )
 
@@ -989,7 +995,14 @@ def handle_fleet_heatmap(handler):
                 }
             )
 
-    json_response(handler, {"hosts": heatmap, "count": len(heatmap)})
+    health_age = round(time.time() - _bg_cache_ts.get("health", 0), 1) if health else None
+    json_response(handler, {
+        "hosts": heatmap,
+        "count": len(heatmap),
+        "cached": True,
+        "age_seconds": health_age,
+        "stale": health_age is not None and health_age > 120,
+    })
 
 
 def handle_topology(handler):

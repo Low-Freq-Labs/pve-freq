@@ -406,6 +406,61 @@ class TestInitOwnershipContract(unittest.TestCase):
                        "RSA key must have chmod 600")
 
 
+class TestCacheStalenessVisibility(unittest.TestCase):
+    """Cached API endpoints must expose staleness to the operator.
+
+    If background probes die, the dashboard must not silently show
+    stale data as if it's fresh. Every cache-backed endpoint must
+    include age_seconds and stale flag.
+    """
+
+    def test_fleet_health_score_exposes_staleness(self):
+        """health-score must include cache age and stale flag."""
+        import inspect
+        from freq.api.fleet import handle_fleet_health_score
+        src = inspect.getsource(handle_fleet_health_score)
+        self.assertIn("age_seconds", src,
+                       "health-score must include age_seconds in response")
+        self.assertIn("stale", src,
+                       "health-score must include stale flag in response")
+
+    def test_fleet_heatmap_exposes_staleness(self):
+        """heatmap must include cache age and stale flag."""
+        import inspect
+        from freq.api.fleet import handle_fleet_heatmap
+        src = inspect.getsource(handle_fleet_heatmap)
+        self.assertIn("age_seconds", src,
+                       "heatmap must include age_seconds in response")
+        self.assertIn("stale", src,
+                       "heatmap must include stale flag in response")
+
+    def test_fleet_topology_exposes_staleness(self):
+        """topology-enhanced must include cache age and stale flag."""
+        import inspect
+        from freq.api.fleet import handle_topology_enhanced
+        src = inspect.getsource(handle_topology_enhanced)
+        self.assertIn("age_seconds", src,
+                       "topology must include age_seconds in response")
+        self.assertIn("stale", src,
+                       "topology must include stale flag in response")
+
+    def test_fleet_overview_exposes_staleness(self):
+        """fleet overview must include cache age (already has it — regression guard)."""
+        import inspect
+        from freq.api.fleet import handle_fleet_overview
+        src = inspect.getsource(handle_fleet_overview)
+        self.assertIn("age_seconds", src,
+                       "fleet overview must include age_seconds")
+
+    def test_health_api_exposes_probe_status(self):
+        """health API must include probe_status (already has it — regression guard)."""
+        import inspect
+        from freq.api.fleet import handle_health_api
+        src = inspect.getsource(handle_health_api)
+        self.assertIn("probe_status", src,
+                       "health API must include probe_status")
+
+
 class TestAPIStatusCodeTruth(unittest.TestCase):
     """API error responses must never return 200.
 
