@@ -1000,6 +1000,22 @@ class TestPOSTEnforcementGap(unittest.TestCase):
             self.assertIn("require_post", src,
                            f"{handler.__name__} must enforce POST")
 
+    def test_batch1_privilege_endpoints_enforce_post(self):
+        """Privilege escalation + vault write + remote exec endpoints must enforce POST."""
+        import inspect
+        from freq.api.user import handle_user_promote, handle_user_demote
+        from freq.api.secure import handle_vault_set
+        from freq.api.bench import handle_wol, handle_bench_run, handle_bench_netspeed
+        from freq.api.net import handle_switch_acl
+
+        for handler in [handle_user_promote, handle_user_demote,
+                        handle_vault_set,
+                        handle_wol, handle_bench_run, handle_bench_netspeed,
+                        handle_switch_acl]:
+            src = inspect.getsource(handler)
+            self.assertIn("require_post", src,
+                           f"{handler.__name__} must enforce POST")
+
     def test_helpers_require_post_exists(self):
         """require_post helper must exist in helpers.py for shared use."""
         from freq.api.helpers import require_post
@@ -1026,10 +1042,11 @@ class TestPOSTEnforcementGap(unittest.TestCase):
                     check = ''.join(lines[i+1:i+15])
                     if 'POST' in doc and 'require_post' not in check and '_require_post' not in check and "command" not in check:
                         unprotected.append(f"{fname}:{func}")
-        # Known gap: ~58 handlers need require_role decorator refactor
+        # Gap tracker: ceiling tightens as batches ship
+        # Batch 1 fixed 7: user promote/demote, vault set, wol, bench run/netspeed, acl
         # (includes some false positives from multi-line docstring detection)
         # This test will fail if the count INCREASES (new unprotected handler added)
-        self.assertLessEqual(len(unprotected), 60,
+        self.assertLessEqual(len(unprotected), 53,
                              f"POST enforcement gap grew: {len(unprotected)} unprotected. "
                              f"New handlers must use require_post().")
 

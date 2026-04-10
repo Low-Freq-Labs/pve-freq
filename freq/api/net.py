@@ -441,6 +441,8 @@ def handle_switch_acl(handler):
            "entries": ["permit tcp any host 10.0.0.1 eq 80"],
            "port": "GigabitEthernet1/0/1", "direction": "in"}
     """
+    if require_post(handler, "ACL management"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

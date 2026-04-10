@@ -139,6 +139,8 @@ def handle_wol(handler):
     The broadcast field is optional (defaults to 255.255.255.255).
     Use a directed broadcast for cross-VLAN WoL (e.g., 10.25.10.255).
     """
+    if require_post(handler, "Wake-on-LAN"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -195,6 +197,8 @@ def handle_bench_run(handler):
     Type defaults to "all" if not specified.
     Results are stored in conf/bench/ and returned in the response.
     """
+    if require_post(handler, "Benchmark run"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -309,6 +313,8 @@ def handle_bench_netspeed(handler):
     Starts iperf3 server on target, runs client from source.
     Results are stored in conf/bench/ and returned in the response.
     """
+    if require_post(handler, "Network speed test"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

@@ -51,6 +51,8 @@ def handle_user_create(handler):
 
 def handle_user_promote(handler):
     """POST /api/users/promote -- promote a user."""
+    if require_post(handler, "User promote"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -75,6 +77,8 @@ def handle_user_promote(handler):
 
 def handle_user_demote(handler):
     """POST /api/users/demote -- demote a user."""
+    if require_post(handler, "User demote"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

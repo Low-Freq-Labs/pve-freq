@@ -50,6 +50,8 @@ def handle_vault(handler):
 
 def handle_vault_set(handler):
     """POST /api/vault/set — set a vault entry."""
+    if require_post(handler, "Vault set"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
