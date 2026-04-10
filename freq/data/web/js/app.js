@@ -82,7 +82,8 @@ function _authFetch(url, opts) {
     if (!opts.headers) opts.headers = {};
     if (_authToken) opts.headers['Authorization'] = 'Bearer ' + _authToken;
     return fetch(url, opts).then(function(r){
-      if(!r.ok&&r.status!==403){toast('API error: '+url.replace('/api/','')+ ' ('+r.status+')','error');}
+      if(r.status===403||r.status===401){doLogout();return r;}
+      if(!r.ok){toast('API error: '+url.replace('/api/','')+ ' ('+r.status+')','error');}
       return r;
     });
 }
