@@ -287,6 +287,124 @@ class TestDrVerifyMultiNode(unittest.TestCase):
         self.assertEqual(result.returncode, 0, f"Bash syntax error: {result.stderr}")
 
 
+class TestInitSummaryHonesty(unittest.TestCase):
+    """Init summary must not claim success when verification failed."""
+
+    def _make_cfg(self, **overrides):
+        cfg = MagicMock()
+        cfg.version = "1.0.0"
+        cfg.key_dir = "/tmp/fake-keys"
+        cfg.vault_file = "/tmp/fake-vault"
+        cfg.conf_dir = "/tmp/fake-conf"
+        cfg.pve_nodes = ["10.0.0.1"]
+        cfg.pve_node_names = ["pve01"]
+        cfg.hosts = []
+        cfg.pve_api_token_id = ""
+        cfg.dashboard_port = 8888
+        cfg.watchdog_port = 9900
+        cfg.agent_port = 9990
+        cfg.pfsense_ip = ""
+        cfg.truenas_ip = ""
+        cfg.switch_ip = ""
+        cfg.vlans = []
+        cfg.ssh_service_account = "freq-admin"
+        for k, v in overrides.items():
+            setattr(cfg, k, v)
+        return cfg
+
+    @patch("freq.modules.init_cmd.fmt")
+    def test_summary_says_partially_configured_when_not_verified(self, mock_fmt):
+        """If verified=False, summary must say 'partially configured', not 'ready'."""
+        from freq.modules.init_cmd import _phase_summary
+
+        cfg = self._make_cfg()
+        ctx = {"svc_name": "freq-admin"}
+        _phase_summary(cfg, ctx, verified=False)
+
+        # Check that fmt.line was called with 'partially configured'
+        all_calls = [str(c) for c in mock_fmt.line.call_args_list]
+        combined = " ".join(all_calls)
+        self.assertIn("partially configured", combined,
+                       "Summary must say 'partially configured' when verified=False")
+        self.assertNotIn("is ready", combined,
+                         "Summary must NOT say 'ready' when verified=False")
+
+    @patch("freq.modules.init_cmd.fmt")
+    def test_summary_says_ready_when_verified(self, mock_fmt):
+        """If verified=True, summary should say 'ready'."""
+        from freq.modules.init_cmd import _phase_summary
+
+        cfg = self._make_cfg()
+        ctx = {"svc_name": "freq-admin"}
+        _phase_summary(cfg, ctx, verified=True)
+
+        all_calls = [str(c) for c in mock_fmt.line.call_args_list]
+        combined = " ".join(all_calls)
+        self.assertIn("is ready", combined,
+                       "Summary must say 'ready' when verified=True")
+
+
+class TestInitOwnershipContract(unittest.TestCase):
+    """Init must not silently ignore chown failures.
+
+    The 'worked once as root, broken as freq-ops' trap happens when:
+    1. init runs as root, creates files with root:root ownership
+    2. chown to freq-admin fails silently (user doesn't exist, etc.)
+    3. init reports success
+    4. dashboard starts as freq-admin, can't read root-owned files
+    """
+
+    def test_chown_calls_are_not_checked(self):
+        """Source-level check: find _run(['chown'...]) calls that discard return code.
+
+        This documents the current gap. Once fixed, this test should be updated
+        to assert zero unchecked chown calls.
+        """
+        import os
+        init_path = os.path.join(os.path.dirname(__file__), "..", "freq", "modules", "init_cmd.py")
+        with open(init_path) as f:
+            lines = f.readlines()
+
+        unchecked_chowns = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            # Pattern: bare _run(["chown"...]) not assigned to a variable
+            if stripped.startswith("_run([") and '"chown"' in stripped:
+                unchecked_chowns.append(i)
+
+        # Document the gap — these are known unchecked chown calls
+        # This test serves as a registry. When ownership checking is added,
+        # update this test to assert unchecked_chowns == []
+        self.assertTrue(len(unchecked_chowns) > 0,
+                        "Expected unchecked chown calls in init_cmd.py (known gap)")
+
+    def test_ownership_directories_are_documented(self):
+        """The list of directories that need freq-admin ownership must be explicit."""
+        import os
+        init_path = os.path.join(os.path.dirname(__file__), "..", "freq", "modules", "init_cmd.py")
+        with open(init_path) as f:
+            content = f.read()
+
+        # Phase 9m ownership fix should cover these critical directories
+        critical_dirs = ["data/keys", "data/log", "data/vault", "credentials"]
+        for d in critical_dirs:
+            self.assertIn(d, content,
+                          f"Critical directory '{d}' not found in init ownership fix")
+
+    def test_key_permissions_are_enforced(self):
+        """SSH key files must have chmod 600 enforced in init."""
+        import os
+        init_path = os.path.join(os.path.dirname(__file__), "..", "freq", "modules", "init_cmd.py")
+        with open(init_path) as f:
+            content = f.read()
+
+        # ed25519 and RSA keys must have 600 permissions
+        self.assertIn("os.chmod(ed_key, 0o600)", content,
+                       "ed25519 key must have chmod 600")
+        self.assertIn("os.chmod(rsa_key, 0o600)", content,
+                       "RSA key must have chmod 600")
+
+
 class TestAPIStatusCodeTruth(unittest.TestCase):
     """API error responses must never return 200.
 
