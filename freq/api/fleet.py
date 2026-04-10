@@ -1323,7 +1323,7 @@ def handle_watchdog_health(handler):
             json_response(handler, data, resp.status)
     except urllib.error.URLError:
         json_response(
-            handler, {"error": f"WATCHDOG daemon not reachable at localhost:{wd_port}", "watchdog_down": True}
+            handler, {"error": f"WATCHDOG daemon not reachable at localhost:{wd_port}", "watchdog_down": True}, 503
         )
     except Exception as e:
         logger.error(f"api_fleet_error: watchdog proxy error: {e}", endpoint="watchdog/health")
