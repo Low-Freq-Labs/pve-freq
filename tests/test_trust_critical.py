@@ -952,6 +952,34 @@ class TestDashboardSessionExpiry(unittest.TestCase):
         self.assertIn("warming_up", src, "readyz must report warming_up status")
 
 
+class TestTLSConfigChain(unittest.TestCase):
+    """TLS config chain must be consistent: init writes → config reads → serve uses."""
+
+    def test_serve_reads_tls_from_config(self):
+        """cmd_serve checks cfg.tls_cert and cfg.tls_key for TLS enablement."""
+        import inspect
+        from freq.modules.serve import cmd_serve
+        src = inspect.getsource(cmd_serve)
+        self.assertIn("cfg.tls_cert", src, "serve must read tls_cert from config")
+        self.assertIn("cfg.tls_key", src, "serve must read tls_key from config")
+
+    def test_config_loader_reads_tls(self):
+        """Config loader must populate tls_cert and tls_key from [services]."""
+        from freq.core.config import FreqConfig
+        cfg = FreqConfig()
+        self.assertTrue(hasattr(cfg, "tls_cert"))
+        self.assertTrue(hasattr(cfg, "tls_key"))
+        self.assertEqual(cfg.tls_cert, "", "Default tls_cert should be empty")
+
+    def test_cookie_secure_flag_uses_config_tls(self):
+        """Cookie Secure flag must check cfg.tls_cert, not hardcoded path."""
+        import inspect
+        from freq.api.auth import handle_auth_login
+        src = inspect.getsource(handle_auth_login)
+        self.assertNotIn("cert.pem", src, "Must not hardcode cert.pem filename")
+        self.assertIn("tls_cert", src, "Must check config tls_cert")
+
+
 class TestRouteIntegrity(unittest.TestCase):
     """Every registered route must point at a callable handler."""
 
