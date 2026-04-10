@@ -918,6 +918,16 @@ class TestSecurityHeaders(unittest.TestCase):
         self.assertIn("cdn.jsdelivr.net", src,
                        "CSP must allow cdn.jsdelivr.net for xterm.js")
 
+    def test_csp_allows_google_fonts(self):
+        """CSP must allow Google Fonts (used by app.css Outfit + JetBrains Mono)."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        src = inspect.getsource(FreqHandler._send_security_headers)
+        self.assertIn("fonts.googleapis.com", src,
+                       "CSP style-src must allow fonts.googleapis.com")
+        self.assertIn("fonts.gstatic.com", src,
+                       "CSP font-src must allow fonts.gstatic.com")
+
     def test_cookie_has_httponly_samesite(self):
         """Session cookie must have HttpOnly and SameSite=Strict."""
         import inspect

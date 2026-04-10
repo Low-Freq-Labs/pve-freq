@@ -4346,9 +4346,10 @@ a:hover{{text-decoration:underline}}
         self.send_header("Content-Security-Policy",
                          "default-src 'self'; "
                          "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-                         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
                          "img-src 'self' data:; "
-                         "connect-src 'self'; font-src 'self'")
+                         "connect-src 'self'; "
+                         "font-src 'self' https://fonts.gstatic.com")
 
     def _json_response(self, data, status=200):
         """Send a JSON response."""
