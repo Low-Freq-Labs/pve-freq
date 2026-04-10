@@ -5480,6 +5480,7 @@ def _phase_summary(cfg, ctx, verified, pack=None):
     fmt.line(f"    freq doctor          — verify FREQ is healthy")
 
     fmt.blank()
+    fmt.line(f"  {fmt.C.DIM}Dashboard login: first login sets your password (any password accepted).{fmt.C.RESET}")
     fmt.line(f"  {fmt.C.DIM}Break-glass access: su - {svc_name}{fmt.C.RESET}")
     fmt.blank()
 
