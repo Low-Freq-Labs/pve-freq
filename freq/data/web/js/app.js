@@ -188,6 +188,9 @@ function doLogin(){
 }
 
 function doLogout(){
+  /* Invalidate server-side session + clear cookie */
+  _authFetch('/api/auth/logout',{method:'POST'}).catch(function(){});
+
   _authToken='';_currentUser='';_currentRole='operator';
   /* Clear any legacy storage tokens */
   try{sessionStorage.removeItem('freq_auth_token');sessionStorage.removeItem('freq_auth_user');}catch(e){}
