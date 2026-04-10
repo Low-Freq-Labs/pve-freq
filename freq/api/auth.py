@@ -184,8 +184,8 @@ def handle_auth_login(handler):
     handler.send_header("Content-Type", "application/json")
     # Add Secure flag when TLS is configured
     cfg = load_config()
-    tls_cert = os.path.join(cfg.conf_dir, "..", "tls", "cert.pem") if hasattr(cfg, "conf_dir") else ""
-    secure_flag = "; Secure" if os.path.isfile(tls_cert) else ""
+    tls_cert = getattr(cfg, "tls_cert", "")
+    secure_flag = "; Secure" if tls_cert and os.path.isfile(tls_cert) else ""
     handler.send_header("Set-Cookie",
                         f"freq_session={token}; HttpOnly; SameSite=Strict; Path=/; "
                         f"Max-Age={SESSION_TIMEOUT_SECONDS}{secure_flag}")
