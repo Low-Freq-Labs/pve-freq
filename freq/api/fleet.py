@@ -408,7 +408,9 @@ def handle_info(handler):
 
 
 def handle_exec(handler):
-    """GET /api/exec -- execute a command across fleet hosts via API."""
+    """POST /api/exec -- execute a command across fleet hosts via API."""
+    if require_post(handler, "Fleet exec"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
