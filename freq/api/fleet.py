@@ -519,7 +519,7 @@ def handle_deploy_agent(handler):
         host_result["steps"].append({"step": "upload", "ok": True})
 
         # Step 3: chmod + systemd unit
-        ssh_single(
+        r = ssh_single(
             host=h.ip,
             command=f"chmod +x {remote_path}",
             key_path=cfg.ssh_key_path,
@@ -528,7 +528,12 @@ def handle_deploy_agent(handler):
             htype=h.htype,
             use_sudo=True,
         )
-        host_result["steps"].append({"step": "chmod", "ok": True})
+        host_result["steps"].append({"step": "chmod", "ok": r.returncode == 0, "error": r.stderr if r.returncode != 0 else ""})
+        if r.returncode != 0:
+            host_result["status"] = "failed"
+            host_result["error"] = "chmod failed"
+            results.append(host_result)
+            continue
 
         unit = (
             f"[Unit]\nDescription=FREQ Metrics Agent\nAfter=network.target\n\n"
@@ -536,7 +541,7 @@ def handle_deploy_agent(handler):
             f"Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=multi-user.target\n"
         )
         svc_cmd = f"cat > /etc/systemd/system/{service_name}.service << 'FREQSVCEOF'\n{unit}\nFREQSVCEOF"
-        ssh_single(
+        r = ssh_single(
             host=h.ip,
             command=svc_cmd,
             key_path=cfg.ssh_key_path,
@@ -545,10 +550,15 @@ def handle_deploy_agent(handler):
             htype=h.htype,
             use_sudo=True,
         )
-        host_result["steps"].append({"step": "systemd_unit", "ok": True})
+        host_result["steps"].append({"step": "systemd_unit", "ok": r.returncode == 0, "error": r.stderr if r.returncode != 0 else ""})
+        if r.returncode != 0:
+            host_result["status"] = "failed"
+            host_result["error"] = "systemd unit creation failed"
+            results.append(host_result)
+            continue
 
         # Step 4: Enable and start
-        ssh_single(
+        r = ssh_single(
             host=h.ip,
             command=f"systemctl daemon-reload && systemctl enable {service_name} && systemctl restart {service_name}",
             key_path=cfg.ssh_key_path,
@@ -557,7 +567,12 @@ def handle_deploy_agent(handler):
             htype=h.htype,
             use_sudo=True,
         )
-        host_result["steps"].append({"step": "start", "ok": True})
+        host_result["steps"].append({"step": "start", "ok": r.returncode == 0, "error": r.stderr if r.returncode != 0 else ""})
+        if r.returncode != 0:
+            host_result["status"] = "failed"
+            host_result["error"] = "service start failed"
+            results.append(host_result)
+            continue
 
         # Step 5: Verify
         time.sleep(1)
@@ -576,7 +591,7 @@ def handle_deploy_agent(handler):
         host_result["agent_port"] = agent_port
         results.append(host_result)
 
-    deployed = sum(1 for r in results if "deployed" in r.get("status", ""))
+    deployed = sum(1 for r in results if r.get("status") == "deployed")
     failed = sum(1 for r in results if r.get("status") == "failed")
     json_response(
         handler,
