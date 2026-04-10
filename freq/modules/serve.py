@@ -2004,18 +2004,46 @@ a:hover{{text-decoration:underline}}
         from freq import __version__
 
         routes = self._documented_routes()
+        # Add proxy routes not in static tables
+        routes["/api/comms/{path}"] = "_proxy_watchdog"
+        routes["/api/watch/{path}"] = "_proxy_watchdog"
+
+        _POST_KEYWORDS = ("create", "update", "delete", "reset", "login",
+                          "change", "complete", "generate", "deploy",
+                          "rollback", "power", "boot", "clear", "wol",
+                          "bench", "reboot", "add", "remove")
+
         paths = {}
-        for path, method_name in sorted(routes.items()):
+        for path, handler_ref in sorted(routes.items()):
             if path in ("/", "/dashboard", "/api/docs", "/api/openapi.json"):
                 continue
-            handler = getattr(self, method_name, None)
-            desc = (handler.__doc__ or "").strip().split("\n")[0] if handler else ""
+            # Resolve description from method or callable
+            if callable(handler_ref):
+                desc = (handler_ref.__doc__ or "").strip().split("\n")[0]
+            else:
+                handler = getattr(self, handler_ref, None)
+                desc = (handler.__doc__ or "").strip().split("\n")[0] if handler else ""
+
+            # Detect HTTP method from path name or docstring
+            path_tail = path.rsplit("/", 1)[-1]
+            doc_lower = desc.lower()
+            if any(kw in path_tail for kw in _POST_KEYWORDS) or doc_lower.startswith("post "):
+                method = "post"
+            else:
+                method = "get"
+
+            responses = {
+                "200": {"description": "Successful response", "content": {"application/json": {}}},
+            }
+            if method == "post":
+                responses["400"] = {"description": "Validation error"}
+                responses["403"] = {"description": "Insufficient permissions"}
+            responses["500"] = {"description": "Internal server error"}
+
             paths[path] = {
-                "get": {
-                    "summary": desc or method_name,
-                    "responses": {
-                        "200": {"description": "Successful response", "content": {"application/json": {}}},
-                    },
+                method: {
+                    "summary": desc or (handler_ref if isinstance(handler_ref, str) else handler_ref.__name__),
+                    "responses": responses,
                 }
             }
 
