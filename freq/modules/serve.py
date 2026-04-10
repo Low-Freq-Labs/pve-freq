@@ -4070,10 +4070,10 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": "Watch start requires POST"}, 405)
             return
         try:
-            rc, out, _ = subprocess.Popen(
+            r = subprocess.run(
                 ["freq", "watch", "start"], capture_output=True, text=True, timeout=10
-            ).communicate()
-            self._json_response({"ok": True, "output": out})
+            )
+            self._json_response({"ok": r.returncode == 0, "output": r.stdout})
         except Exception as e:
             self._json_response({"error": str(e)}, 500)
 
@@ -4083,10 +4083,10 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": "Watch stop requires POST"}, 405)
             return
         try:
-            rc, out, _ = subprocess.Popen(
+            r = subprocess.run(
                 ["freq", "watch", "stop"], capture_output=True, text=True, timeout=10
-            ).communicate()
-            self._json_response({"ok": True, "output": out})
+            )
+            self._json_response({"ok": r.returncode == 0, "output": r.stdout})
         except Exception as e:
             self._json_response({"error": str(e)}, 500)
 
