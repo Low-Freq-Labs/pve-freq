@@ -77,6 +77,8 @@ def handle_pfsense_service(handler):
 
     Body: {"service": "dhcpd", "action": "restart"}
     """
+    if require_post(handler, "pfSense service"):
+        return
     cfg, ok = _require_pfsense(handler)
     if not ok:
         return
@@ -123,6 +125,8 @@ def handle_pfsense_dhcp_reservation(handler):
     Body: {"action": "list|add|delete", "mac": "...", "ip": "...",
            "hostname": "...", "description": "...", "interface": "lan"}
     """
+    if require_post(handler, "pfSense DHCP"):
+        return
     cfg, ok = _require_pfsense(handler)
     if not ok:
         return
@@ -273,6 +277,8 @@ def handle_pfsense_config_backup(handler):
 
     Body: {"action": "download|create|list"}
     """
+    if require_post(handler, "pfSense config backup"):
+        return
     cfg, ok = _require_pfsense(handler)
     if not ok:
         return
@@ -327,6 +333,8 @@ def handle_pfsense_reboot(handler):
 
     Body: {"confirm": true}
     """
+    if require_post(handler, "pfSense reboot"):
+        return
     cfg, ok = _require_pfsense(handler)
     if not ok:
         return
@@ -350,6 +358,8 @@ def handle_pfsense_rules(handler):
     List returns parsed pfctl output.
     Add/delete modify config.xml via PHP.
     """
+    if require_post(handler, "pfSense rules"):
+        return
     cfg, ok = _require_pfsense(handler)
     if not ok:
         return
@@ -495,6 +505,8 @@ def handle_pfsense_nat(handler):
 
     Body: {"action": "list|add|delete", ...}
     """
+    if require_post(handler, "pfSense NAT"):
+        return
     cfg, ok = _require_pfsense(handler)
     if not ok:
         return
@@ -623,6 +635,8 @@ def handle_pfsense_wg_peer(handler):
            "public_key": "...", "allowed_ips": "10.25.100.x/32",
            "endpoint": "1.2.3.4:51820", "description": "..."}
     """
+    if require_post(handler, "WireGuard peer"):
+        return
     cfg, ok = _require_pfsense(handler)
     if not ok:
         return

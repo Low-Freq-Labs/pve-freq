@@ -1034,6 +1034,24 @@ class TestPOSTEnforcementGap(unittest.TestCase):
             self.assertIn("require_post", src,
                            f"{handler.__name__} must enforce POST")
 
+    def test_batch3_firewall_endpoints_enforce_post(self):
+        """pfSense firewall mutation endpoints must enforce POST."""
+        import inspect
+        from freq.api.fw import (
+            handle_pfsense_service, handle_pfsense_dhcp_reservation,
+            handle_pfsense_config_backup, handle_pfsense_reboot,
+            handle_pfsense_rules, handle_pfsense_nat,
+            handle_pfsense_wg_peer,
+        )
+
+        for handler in [handle_pfsense_service, handle_pfsense_dhcp_reservation,
+                        handle_pfsense_config_backup, handle_pfsense_reboot,
+                        handle_pfsense_rules, handle_pfsense_nat,
+                        handle_pfsense_wg_peer]:
+            src = inspect.getsource(handler)
+            self.assertIn("require_post", src,
+                           f"{handler.__name__} must enforce POST")
+
     def test_helpers_require_post_exists(self):
         """require_post helper must exist in helpers.py for shared use."""
         from freq.api.helpers import require_post
@@ -1063,9 +1081,10 @@ class TestPOSTEnforcementGap(unittest.TestCase):
         # Gap tracker: ceiling tightens as batches ship
         # Batch 1 fixed 7: user promote/demote, vault set, wol, bench run/netspeed, acl
         # Batch 2 fixed 8: truenas snapshot/service/scrub/reboot/dataset/share/replication/app
+        # Batch 3 fixed 7: pfsense service/dhcp/config/reboot/rules/nat/wg
         # (includes some false positives from multi-line docstring detection)
         # This test will fail if the count INCREASES (new unprotected handler added)
-        self.assertLessEqual(len(unprotected), 45,
+        self.assertLessEqual(len(unprotected), 38,
                              f"POST enforcement gap grew: {len(unprotected)} unprotected. "
                              f"New handlers must use require_post().")
 
