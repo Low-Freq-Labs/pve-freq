@@ -731,9 +731,18 @@ def handle_infra_quick(handler):
     with _bg_lock:
         cached = _bg_cache.get("infra_quick")
     if cached:
-        cached["cached"] = True
-        cached["age"] = round(time.time() - _bg_cache_ts.get("infra_quick", 0), 1)
-        json_response(handler, cached)
+        age_seconds = round(time.time() - _bg_cache_ts.get("infra_quick", 0), 1)
+        response = dict(cached)
+        response["cached"] = True
+        response["age"] = age_seconds
+        response["age_seconds"] = age_seconds
+        probe_err = _bg_cache_errors.get("infra_quick")
+        if probe_err:
+            response["probe_status"] = "error"
+            response["probe_error"] = probe_err["error"]
+        else:
+            response["probe_status"] = "ok"
+        json_response(handler, response)
         return
     json_response(handler, {"devices": [], "duration": 0, "warming": True})
 
