@@ -321,6 +321,8 @@ def handle_opnsense_service_action(handler):
     Supported actions: start, stop, restart.
     Calls the OPNsense core service control API.
     """
+    if require_post(handler, "OPNsense service"):
+        return
     cfg, ok = _require_opnsense(handler)
     if not ok:
         return
@@ -369,6 +371,8 @@ def handle_opnsense_rule_add(handler):
     Uses the savepoint safety pattern: savepoint -> addRule -> apply -> cancelRollback.
     If apply fails, OPNsense automatically rolls back to the savepoint.
     """
+    if require_post(handler, "OPNsense rule add"):
+        return
     cfg, ok = _require_opnsense(handler)
     if not ok:
         return
@@ -474,6 +478,8 @@ def handle_opnsense_dhcp_add(handler):
 
     Adds the reservation then reconfigures the Kea service to apply.
     """
+    if require_post(handler, "OPNsense DHCP add"):
+        return
     cfg, ok = _require_opnsense(handler)
     if not ok:
         return
@@ -591,6 +597,8 @@ def handle_opnsense_dns_add(handler):
 
     Adds the override then reconfigures Unbound to apply.
     """
+    if require_post(handler, "OPNsense DNS add"):
+        return
     cfg, ok = _require_opnsense(handler)
     if not ok:
         return
@@ -716,6 +724,8 @@ def handle_opnsense_wg_add(handler):
 
     Adds the peer then reconfigures WireGuard to apply.
     """
+    if require_post(handler, "WireGuard peer add"):
+        return
     cfg, ok = _require_opnsense(handler)
     if not ok:
         return
@@ -788,6 +798,8 @@ def handle_opnsense_reboot(handler):
     Requires explicit confirmation to prevent accidental reboots.
     This will take down the firewall and all network services.
     """
+    if require_post(handler, "OPNsense reboot"):
+        return
     cfg, ok = _require_opnsense(handler)
     if not ok:
         return

@@ -140,6 +140,8 @@ def handle_containers_delete(handler):
 
 def handle_containers_add(handler):
     """POST /api/containers/add -- add a container to the registry."""
+    if require_post(handler, "Container add"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -178,6 +180,8 @@ def handle_containers_add(handler):
 
 def handle_containers_edit(handler):
     """POST /api/containers/edit -- edit a container in the registry."""
+    if require_post(handler, "Container edit"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -238,6 +242,8 @@ def handle_containers_edit(handler):
 
 def handle_containers_compose_up(handler):
     """POST /api/containers/compose-up -- start a Docker Compose stack."""
+    if require_post(handler, "Docker Compose up"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -277,6 +283,8 @@ def handle_containers_compose_up(handler):
 
 def handle_containers_compose_down(handler):
     """POST /api/containers/compose-down -- stop a Docker Compose stack."""
+    if require_post(handler, "Docker Compose down"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)

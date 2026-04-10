@@ -1052,6 +1052,28 @@ class TestPOSTEnforcementGap(unittest.TestCase):
             self.assertIn("require_post", src,
                            f"{handler.__name__} must enforce POST")
 
+    def test_batch4_opnsense_docker_enforce_post(self):
+        """OPNsense + Docker mutation endpoints must enforce POST."""
+        import inspect
+        from freq.api.opnsense import (
+            handle_opnsense_service_action, handle_opnsense_rule_add,
+            handle_opnsense_dhcp_add, handle_opnsense_dns_add,
+            handle_opnsense_wg_add, handle_opnsense_reboot,
+        )
+        from freq.api.docker_api import (
+            handle_containers_add, handle_containers_edit,
+            handle_containers_compose_up, handle_containers_compose_down,
+        )
+
+        for handler in [handle_opnsense_service_action, handle_opnsense_rule_add,
+                        handle_opnsense_dhcp_add, handle_opnsense_dns_add,
+                        handle_opnsense_wg_add, handle_opnsense_reboot,
+                        handle_containers_add, handle_containers_edit,
+                        handle_containers_compose_up, handle_containers_compose_down]:
+            src = inspect.getsource(handler)
+            self.assertIn("require_post", src,
+                           f"{handler.__name__} must enforce POST")
+
     def test_helpers_require_post_exists(self):
         """require_post helper must exist in helpers.py for shared use."""
         from freq.api.helpers import require_post
@@ -1082,9 +1104,10 @@ class TestPOSTEnforcementGap(unittest.TestCase):
         # Batch 1 fixed 7: user promote/demote, vault set, wol, bench run/netspeed, acl
         # Batch 2 fixed 8: truenas snapshot/service/scrub/reboot/dataset/share/replication/app
         # Batch 3 fixed 7: pfsense service/dhcp/config/reboot/rules/nat/wg
+        # Batch 4 fixed 10: opnsense service/rule/dhcp/dns/wg/reboot + docker add/edit/up/down
         # (includes some false positives from multi-line docstring detection)
         # This test will fail if the count INCREASES (new unprotected handler added)
-        self.assertLessEqual(len(unprotected), 38,
+        self.assertLessEqual(len(unprotected), 28,
                              f"POST enforcement gap grew: {len(unprotected)} unprotected. "
                              f"New handlers must use require_post().")
 
