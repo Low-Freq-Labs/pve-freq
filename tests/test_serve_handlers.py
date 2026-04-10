@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -183,6 +184,50 @@ class TestDoGetRouting:
         h._serve_app = lambda: called.append(True)
         h.do_GET()
         assert called == [True]
+
+
+class TestFleetOverviewApi:
+    """Test /api/fleet/overview cache metadata."""
+
+    def test_cached_response_includes_age_seconds(self):
+        from freq.api.fleet import handle_fleet_overview
+        from freq.modules.serve import _bg_cache, _bg_cache_ts, _bg_lock
+
+        h = _make_handler("/api/fleet/overview")
+        now = time.time()
+
+        with _bg_lock:
+            _bg_cache["fleet_overview"] = {
+                "vms": [],
+                "vm_nics": {},
+                "physical": [],
+                "pve_nodes": [],
+                "vlans": [],
+                "nic_profiles": {},
+                "categories": {},
+                "summary": {
+                    "total_vms": 0,
+                    "running": 0,
+                    "stopped": 0,
+                    "prod_count": 0,
+                    "lab_count": 0,
+                    "template_count": 0,
+                },
+                "duration": 0.2,
+            }
+            _bg_cache_ts["fleet_overview"] = now - 123.4
+
+        handle_fleet_overview(h)
+        data = _get_json(h)
+
+        assert data["cached"] is True
+        assert isinstance(data["age_seconds"], float)
+        assert round(data["age_seconds"], 1) == 123.4
+        assert data["age"] == data["age_seconds"]
+
+        with _bg_lock:
+            assert "cached" not in _bg_cache["fleet_overview"]
+            assert "age_seconds" not in _bg_cache["fleet_overview"]
 
 
 # ══════════════════════════════════════════════════════════════════════════

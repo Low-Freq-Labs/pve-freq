@@ -249,8 +249,12 @@ def handle_fleet_overview(handler):
     with _bg_lock:
         cached = _bg_cache.get("fleet_overview")
     if cached:
-        cached["age"] = round(time.time() - _bg_cache_ts.get("fleet_overview", 0), 1)
-        json_response(handler, cached)
+        age_seconds = round(time.time() - _bg_cache_ts.get("fleet_overview", 0), 1)
+        response = dict(cached)
+        response["cached"] = True
+        response["age"] = age_seconds
+        response["age_seconds"] = age_seconds
+        json_response(handler, response)
     else:
         json_response(
             handler,
