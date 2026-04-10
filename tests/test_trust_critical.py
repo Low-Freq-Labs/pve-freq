@@ -1345,6 +1345,20 @@ class TestInitSummaryTruth(unittest.TestCase):
             "Init summary must track API token verification status, not just presence"
         )
 
+    def test_fix_includes_unreachable_hosts(self):
+        """--fix must include unreachable hosts as deployment candidates.
+
+        Bug #10: --fix previously skipped unreachable hosts, leaving them
+        permanently broken. Fixed: unreachable_list extends fail_list.
+        """
+        import inspect
+        from freq.modules.init_cmd import _init_fix
+        src = inspect.getsource(_init_fix)
+        self.assertIn("unreachable_list", src,
+                       "--fix must track unreachable hosts separately")
+        self.assertIn("fail_list.extend(unreachable_list)", src,
+                       "--fix must include unreachable hosts in fix candidates")
+
     def test_config_reload_failure_is_visible(self):
         """Config reload exceptions must warn the operator, not silently continue."""
         import os
