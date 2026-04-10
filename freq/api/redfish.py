@@ -24,7 +24,7 @@ import urllib.error
 import urllib.request
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_json_body, get_param
+from freq.api.helpers import require_post, json_response, get_json_body, get_param
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
 from freq.modules.vault import vault_get
@@ -490,6 +490,8 @@ def handle_redfish_power(handler):
 
     Posts ResetType to /redfish/v1/Systems/1/Actions/ComputerSystem.Reset.
     """
+    if require_post(handler, "Redfish power"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

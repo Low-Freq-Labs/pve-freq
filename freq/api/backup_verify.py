@@ -10,7 +10,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 import re
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_json_body
+from freq.api.helpers import require_post, json_response, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import _check_session_role
@@ -61,6 +61,8 @@ def handle_backup_verify(handler):
     Body: {"vmid": 100, "node": "pve01", "storage": "local", "file": "vzdump-qemu-100-..."}
     Runs qmrestore --verify (or vzdump --verify if available).
     """
+    if require_post(handler, "Backup verify"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

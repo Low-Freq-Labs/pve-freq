@@ -1325,6 +1325,8 @@ def handle_federation_status(handler):
 
 def handle_federation_register(handler):
     """POST /api/federation/register -- register a new remote FREQ site."""
+    if require_post(handler, "Federation register"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -1345,6 +1347,8 @@ def handle_federation_register(handler):
 
 def handle_federation_unregister(handler):
     """POST /api/federation/unregister -- remove a registered remote site."""
+    if require_post(handler, "Federation unregister"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -1363,6 +1367,8 @@ def handle_federation_unregister(handler):
 
 def handle_federation_poll(handler):
     """POST /api/federation/poll -- trigger a poll of all remote sites."""
+    if require_post(handler, "Federation poll"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -1383,6 +1389,8 @@ def handle_federation_poll(handler):
 
 def handle_federation_toggle(handler):
     """POST /api/federation/toggle -- enable or disable a registered site."""
+    if require_post(handler, "Federation toggle"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

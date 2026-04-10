@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_json_body
+from freq.api.helpers import require_post, json_response, get_json_body
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
 from freq.modules.vault import vault_get
@@ -282,6 +282,8 @@ def handle_synology_service(handler):
 
     Body: {"package": "ContainerManager", "action": "start|stop"}
     """
+    if require_post(handler, "Synology service"):
+        return
     cfg, ip, ok = _require_synology(handler, admin=True)
     if not ok:
         return
@@ -309,6 +311,8 @@ def handle_synology_reboot(handler):
 
     Body: {"confirm": true}
     """
+    if require_post(handler, "Synology reboot"):
+        return
     cfg, ip, ok = _require_synology(handler, admin=True)
     if not ok:
         return

@@ -639,7 +639,9 @@ def handle_vm_check_ip(handler):
 
 
 def handle_vm_add_nic(handler):
-    """GET /api/vm/add-nic — add a NIC to a VM without clearing existing ones."""
+    """POST /api/vm/add-nic — add a NIC to a VM without clearing existing ones."""
+    if _require_post(handler, "VM add NIC"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -945,7 +947,9 @@ def handle_vm_push_key(handler):
 
 
 def handle_vm_add_disk(handler):
-    """GET /api/vm/add-disk — add a disk to a VM."""
+    """POST /api/vm/add-disk — add a disk to a VM."""
+    if _require_post(handler, "VM add disk"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

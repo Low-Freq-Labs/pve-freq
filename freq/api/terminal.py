@@ -30,7 +30,7 @@ import threading
 import time
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_params
+from freq.api.helpers import require_post, json_response, get_params
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
 
@@ -72,6 +72,8 @@ def _kill_session(sid):
 
 def handle_terminal_open(handler):
     """POST /api/terminal/open — create a new terminal session."""
+    if require_post(handler, "Terminal open"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -236,6 +238,8 @@ def handle_terminal_open(handler):
 
 def handle_terminal_close(handler):
     """POST /api/terminal/close — close a terminal session."""
+    if require_post(handler, "Terminal close"):
+        return
     params = get_params(handler)
     session_id = params.get("session", [""])[0]
     with _sessions_lock:
@@ -246,6 +250,8 @@ def handle_terminal_close(handler):
 
 def handle_terminal_resize(handler):
     """POST /api/terminal/resize — resize terminal."""
+    if require_post(handler, "Terminal resize"):
+        return
     params = get_params(handler)
     session_id = params.get("session", [""])[0]
     cols = int(params.get("cols", ["120"])[0])

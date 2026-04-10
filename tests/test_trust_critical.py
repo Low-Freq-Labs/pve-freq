@@ -1090,6 +1090,39 @@ class TestPOSTEnforcementGap(unittest.TestCase):
             self.assertIn("require_post", src,
                            f"{handler.__name__} must enforce POST")
 
+    def test_batch6_remaining_endpoints_enforce_post(self):
+        """All remaining mutating endpoints must enforce POST."""
+        import inspect
+        from freq.api.backup_verify import handle_backup_verify
+        from freq.api.dr import handle_backup_restore
+        from freq.api.fleet import (
+            handle_federation_register, handle_federation_unregister,
+            handle_federation_poll, handle_federation_toggle,
+        )
+        from freq.api.ipmi import handle_ipmi_power, handle_ipmi_boot, handle_ipmi_sel_clear
+        from freq.api.redfish import handle_redfish_power
+        from freq.api.state import (
+            handle_policy_fix, handle_gitops_sync,
+            handle_gitops_apply, handle_gitops_init,
+        )
+        from freq.api.synology import handle_synology_service, handle_synology_reboot
+        from freq.api.terminal import handle_terminal_open, handle_terminal_close, handle_terminal_resize
+        from freq.api.vm import handle_vm_add_nic, handle_vm_add_disk
+
+        for handler in [handle_backup_verify, handle_backup_restore,
+                        handle_federation_register, handle_federation_unregister,
+                        handle_federation_poll, handle_federation_toggle,
+                        handle_ipmi_power, handle_ipmi_boot, handle_ipmi_sel_clear,
+                        handle_redfish_power,
+                        handle_policy_fix, handle_gitops_sync,
+                        handle_gitops_apply, handle_gitops_init,
+                        handle_synology_service, handle_synology_reboot,
+                        handle_terminal_open, handle_terminal_close, handle_terminal_resize,
+                        handle_vm_add_nic, handle_vm_add_disk]:
+            src = inspect.getsource(handler)
+            self.assertIn("require_post", src,
+                           f"{handler.__name__} must enforce POST")
+
     def test_helpers_require_post_exists(self):
         """require_post helper must exist in helpers.py for shared use."""
         from freq.api.helpers import require_post
@@ -1113,7 +1146,7 @@ class TestPOSTEnforcementGap(unittest.TestCase):
                 if line.strip().startswith('def handle_'):
                     func = line.strip().split('(')[0].replace('def ', '')
                     doc = ''.join(lines[i+1:i+5])
-                    check = ''.join(lines[i+1:i+15])
+                    check = ''.join(lines[i+1:i+20])
                     if 'POST' in doc and 'require_post' not in check and '_require_post' not in check and "command" not in check:
                         unprotected.append(f"{fname}:{func}")
         # Gap tracker: ceiling tightens as batches ship
@@ -1122,9 +1155,10 @@ class TestPOSTEnforcementGap(unittest.TestCase):
         # Batch 3 fixed 7: pfsense service/dhcp/config/reboot/rules/nat/wg
         # Batch 4 fixed 10: opnsense service/rule/dhcp/dns/wg/reboot + docker add/edit/up/down
         # Batch 5 fixed 7: ct power/set/snapshot/clone/migrate/resize/exec
-        # (includes some false positives from multi-line docstring detection)
+        # Batch 6 fixed 21: remaining (backup/dr/fleet/ipmi/redfish/state/synology/terminal/vm)
+        # Remaining 1 is a false positive: opnsense_rules is GET but mentions POST in docstring
         # This test will fail if the count INCREASES (new unprotected handler added)
-        self.assertLessEqual(len(unprotected), 21,
+        self.assertLessEqual(len(unprotected), 1,
                              f"POST enforcement gap grew: {len(unprotected)} unprotected. "
                              f"New handlers must use require_post().")
 

@@ -20,7 +20,7 @@ import os
 import subprocess
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_json_body, get_param
+from freq.api.helpers import require_post, json_response, get_json_body, get_param
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
 from freq.modules.vault import vault_get
@@ -278,6 +278,8 @@ def handle_ipmi_power(handler):
 
     Maps to: ipmitool chassis power {action}
     """
+    if require_post(handler, "IPMI power"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -319,6 +321,8 @@ def handle_ipmi_boot(handler):
 
     Maps to: ipmitool chassis bootdev {device}
     """
+    if require_post(handler, "IPMI boot device"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -360,6 +364,8 @@ def handle_ipmi_sel_clear(handler):
 
     Maps to: ipmitool sel clear
     """
+    if require_post(handler, "IPMI SEL clear"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

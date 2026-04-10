@@ -156,6 +156,8 @@ def handle_backup_create(handler):
 
 def handle_backup_restore(handler):
     """POST /api/backup/restore -- rollback a VM to a snapshot."""
+    if require_post(handler, "Backup restore"):
+        return
     cfg = load_config()
     role, err = _check_session_role(handler, "admin")
     if err:

@@ -62,6 +62,8 @@ def handle_policy_check(handler):
 
 def handle_policy_fix(handler):
     """POST /api/policy/fix -- apply policy remediation."""
+    if require_post(handler, "Policy fix"):
+        return
     cfg = load_config()
     role, err = _check_session_role(handler, "admin")
     if err:
@@ -145,6 +147,8 @@ def handle_gitops_status(handler):
 
 def handle_gitops_sync(handler):
     """POST /api/gitops/sync -- trigger a sync (fetch) from remote."""
+    if require_post(handler, "GitOps sync"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -162,6 +166,8 @@ def handle_gitops_sync(handler):
 
 def handle_gitops_apply(handler):
     """POST /api/gitops/apply -- apply pending changes (pull)."""
+    if require_post(handler, "GitOps apply"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -229,6 +235,8 @@ def handle_gitops_rollback(handler):
 
 def handle_gitops_init(handler):
     """POST /api/gitops/init -- initialize the gitops repo clone."""
+    if require_post(handler, "GitOps init"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
