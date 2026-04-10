@@ -240,6 +240,20 @@ def _run(cmd, timeout=DEFAULT_CMD_TIMEOUT):
         return 1, "", str(e)
 
 
+def _chown(owner, *paths, recursive=False):
+    """chown with return-code check. Returns True on success, False on failure."""
+    cmd = ["chown"]
+    if recursive:
+        cmd.append("-R")
+    cmd.append(owner)
+    cmd.extend(paths)
+    rc, _, err = _run(cmd)
+    if rc != 0:
+        logger.error(f"chown failed: {' '.join(cmd)}: {err.strip()}")
+        fmt.step_fail(f"Ownership change failed: {' '.join(str(p) for p in paths)}")
+    return rc == 0
+
+
 def _run_with_input(cmd, input_text, timeout=DEFAULT_CMD_TIMEOUT):
     """Run a command with stdin input, return (rc, stdout, stderr).
 
@@ -569,6 +583,17 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     _t = time.monotonic()
     _phase_summary(cfg, ctx, verified, pack)
     logger.perf("init_phase", time.monotonic() - _t, phase=13, name="summary")
+
+    # Fix post-init ownership: ensure data dirs are usable by the service account
+    svc_name = ctx["svc_name"]
+    for d in [cfg.data_dir, cfg.key_dir, cfg.vault_file, cfg.log_dir]:
+        d_path = d if os.path.isdir(d) else os.path.dirname(d)
+        if d_path and os.path.exists(d_path):
+            try:
+                subprocess.run(["chown", "-R", f"{svc_name}:{svc_name}", d_path],
+                               capture_output=True, timeout=5)
+            except Exception:
+                pass
 
     logger.perf("init_total", time.monotonic() - init_start, phases=total)
 
@@ -5383,6 +5408,18 @@ def _phase_summary(cfg, ctx, verified, pack=None):
     fmt.line(f"    SSH key (legacy):  {rsa_key}")
     fmt.line(f"    Vault: {cfg.vault_file}")
     fmt.line(f"    SSH mode: sudo (via {svc_name})")
+
+    # Deployment scorecard
+    deployed_count = len(ctx.get("deployed_ips", set()))
+    deploy_failures = ctx.get("fleet_deploy_failures", 0)
+    total_hosts = len(cfg.hosts)
+    skipped = total_hosts - deployed_count - deploy_failures
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Deployment:{fmt.C.RESET}")
+    fmt.line(f"    {fmt.C.GREEN}{deployed_count} deployed{fmt.C.RESET}, "
+             f"{fmt.C.RED}{deploy_failures} failed{fmt.C.RESET}, "
+             f"{fmt.C.YELLOW}{skipped} skipped{fmt.C.RESET} "
+             f"({total_hosts} total hosts)")
 
     # Fleet topology
     fmt.blank()
