@@ -701,7 +701,8 @@ function _loadHomeFleetStats(){
     var totalOff=down;var prodCount=totalAll-lab;var pveCount=PROD_HOSTS.filter(function(h){return h.type==='pve';}).length||pve;
     var _d=function(l,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+l+'</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'</span><span class="label-hint">'+l1+'</span></span><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'</span><span class="label-hint">'+l2+'</span></span></div></div>';};
     var el=document.getElementById('hw-fleet-stats');if(!el)return;
-    el.innerHTML=_d('STATUS',up,'ONLINE','var(--green)',totalOff,'OFFLINE','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'ONLINE','var(--cyan)')+_d('RESPONSE',hd.duration+'s','','var(--blue)','','','var(--text-dim)')+st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
+    var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<5?'LIVE':_age<60?_age+'s AGO':Math.round(_age/60)+'m AGO';var _ageClr=hd.probe_status==='error'?'var(--red)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';var _probeLbl=hd.probe_status==='error'?'PROBE ERROR':'';var _probeClr='var(--red)';
+    el.innerHTML=_d('STATUS',up,'ONLINE','var(--green)',totalOff,'OFFLINE','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'ONLINE','var(--cyan)')+_d('LIVE DATA',_ageLbl,'',_ageClr,_probeLbl,'',_probeClr)+st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
     _authFetch(API.VMS).then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
       var c=el.querySelector('.st:nth-child(5)');if(c)c.innerHTML='<div class="lb">VMs</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+run+'</span><span class="label-hint">RUN</span></span><span class="stat-pair"><span class="stat-big-red">'+stop+'</span><span class="label-hint">STOP</span></span></div>';}).catch(function(e){console.error('API error:',e);});
     _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
@@ -1010,6 +1011,10 @@ function _silentHealthRefresh(){
     var up=0,down=0;hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;});
     var sumEl=document.getElementById('metrics-summary');
     if(sumEl){var sts=sumEl.querySelectorAll('.st .vl');if(sts.length>=2){sts[0].textContent=up;sts[1].textContent=down;}}
+    /* Update LIVE DATA freshness indicator */
+    var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<5?'LIVE':_age<60?_age+'s AGO':Math.round(_age/60)+'m AGO';var _ageClr=hd.probe_status==='error'?'var(--red)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';
+    var ldEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:first-child span:first-child');if(ldEl){ldEl.textContent=_ageLbl;ldEl.style.color=_ageClr;}
+    if(hd.probe_status==='error'){var peEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:last-child span:first-child');if(peEl){peEl.textContent='PROBE ERROR';peEl.style.color='var(--red)';}}
   }).catch(function(){_healthInFlight=false;});
 }
 function _silentFleetRefresh(){
