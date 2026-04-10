@@ -161,15 +161,29 @@ class TestDoGetRouting:
         h = _make_handler("/api/watch/something")
         called = []
         h._proxy_watchdog = lambda: called.append(True)
-        h.do_GET()
+        with patch("freq.modules.serve._check_session_role", return_value=("viewer", None)):
+            h.do_GET()
         assert called == [True]
 
     def test_comms_proxy_route(self):
         h = _make_handler("/api/comms/test")
         called = []
         h._proxy_watchdog = lambda: called.append(True)
-        h.do_GET()
+        with patch("freq.modules.serve._check_session_role", return_value=("viewer", None)):
+            h.do_GET()
         assert called == [True]
+
+    def test_watchdog_proxy_rejects_anonymous(self):
+        """Watchdog proxy must reject unauthenticated requests."""
+        h = _make_handler("/api/watch/status")
+        h.do_GET()
+        assert h._status_code == 403
+
+    def test_comms_proxy_rejects_anonymous(self):
+        """Comms proxy must reject unauthenticated requests."""
+        h = _make_handler("/api/comms/test")
+        h.do_GET()
+        assert h._status_code == 403
 
     def test_root_serves_app(self):
         h = _make_handler("/")

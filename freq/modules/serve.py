@@ -1706,7 +1706,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/openapi.json",
     })
     # Path prefixes that don't require authentication
-    _AUTH_WHITELIST_PREFIXES = ("/static/", "/dashboard", "/api/watch/", "/api/comms/")
+    _AUTH_WHITELIST_PREFIXES = ("/static/", "/dashboard")
 
     def _dispatch(self):
         """Route request to handler method or callable by path.

@@ -747,15 +747,14 @@ class TestAnonymousAccessRejected(unittest.TestCase):
         from freq.modules.serve import FreqHandler
         self.assertNotIn("/api/config/view", FreqHandler._AUTH_WHITELIST)
 
-    def test_watchdog_proxy_is_whitelisted(self):
-        """Document: /api/watch/ and /api/comms/ are intentionally unauthenticated.
-
-        The dashboard SPA loads before login and needs watchdog data
-        for the loading screen. This is a known design decision.
-        """
+    def test_watchdog_proxy_requires_auth(self):
+        """Watchdog proxy must NOT be in auth whitelist — fleet data requires auth."""
         from freq.modules.serve import FreqHandler
-        self.assertIn("/api/watch/", FreqHandler._AUTH_WHITELIST_PREFIXES)
-        self.assertIn("/api/comms/", FreqHandler._AUTH_WHITELIST_PREFIXES)
+        for prefix in FreqHandler._AUTH_WHITELIST_PREFIXES:
+            self.assertNotIn("watch", prefix,
+                             "/api/watch/ must not be in auth whitelist")
+            self.assertNotIn("comms", prefix,
+                             "/api/comms/ must not be in auth whitelist")
 
 
 class TestRouteIntegrity(unittest.TestCase):
