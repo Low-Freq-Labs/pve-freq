@@ -704,6 +704,78 @@ class TestDestructiveEndpointSafety(unittest.TestCase):
                        "VM delete snapshot must enforce POST")
 
 
+class TestSetupTrustBoundaries(unittest.TestCase):
+    """Setup endpoints must not leak or mutate state after setup is complete."""
+
+    def test_all_setup_endpoints_check_first_run(self):
+        """Every write-capable setup endpoint must check _is_first_run()."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        write_handlers = [
+            "_serve_setup_create_admin",
+            "_serve_setup_configure",
+            "_serve_setup_generate_key",
+            "_serve_setup_complete",
+        ]
+        for name in write_handlers:
+            src = inspect.getsource(getattr(FreqHandler, name))
+            self.assertIn("_is_first_run", src,
+                          f"{name} must check _is_first_run()")
+
+    def test_setup_complete_has_lock(self):
+        """setup_complete must use a lock to prevent race conditions."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        src = inspect.getsource(FreqHandler._serve_setup_complete)
+        self.assertIn("_setup_lock", src,
+                       "setup_complete must use _setup_lock")
+
+    def test_setup_complete_double_checks_after_lock(self):
+        """setup_complete must re-check _is_first_run() after acquiring lock."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        src = inspect.getsource(FreqHandler._serve_setup_complete)
+        # Should have at least 2 _is_first_run calls (before lock + after lock)
+        count = src.count("_is_first_run()")
+        self.assertGreaterEqual(count, 2,
+                                "setup_complete must double-check _is_first_run() after lock")
+
+    def test_setup_reset_requires_admin(self):
+        """setup_reset must require admin auth, not just _is_first_run()."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        src = inspect.getsource(FreqHandler._serve_setup_reset)
+        self.assertIn("check_session_role", src,
+                       "setup_reset must require admin auth")
+        # Must not CALL _is_first_run() — comment references are OK
+        lines = [l.strip() for l in src.split('\n') if not l.strip().startswith('#')]
+        code_only = '\n'.join(lines)
+        self.assertNotIn("_is_first_run()", code_only,
+                         "setup_reset must NOT call _is_first_run() (admin-only)")
+
+    @patch("freq.modules.serve._is_first_run", return_value=False)
+    def test_setup_create_admin_blocked_after_setup(self, _mock):
+        """create-admin must return 403 when setup is already complete."""
+        import io
+        from freq.modules.serve import FreqHandler
+
+        h = FreqHandler.__new__(FreqHandler)
+        h.path = "/api/setup/create-admin"
+        h.command = "POST"
+        h.wfile = io.BytesIO()
+        h.rfile = io.BytesIO(b'{"username":"hacker","password":"pwned123"}')
+        h.headers = {"Content-Length": "50"}
+        h._headers_buffer = []
+        h._status = None
+        h.send_response = lambda code, msg=None: setattr(h, '_status', code)
+        h.send_header = lambda k, v: None
+        h.end_headers = lambda: None
+
+        h._serve_setup_create_admin()
+        self.assertEqual(h._status, 403,
+                         "create-admin must be blocked after setup completes")
+
+
 class TestAnonymousAccessRejected(unittest.TestCase):
     """Trust-critical API endpoints must reject unauthenticated requests."""
 
