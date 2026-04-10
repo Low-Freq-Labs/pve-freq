@@ -48,6 +48,32 @@ scp -q "$BUNDLE" "${USER}@${TARGET}:/tmp/"
 echo "[4/4] Applying..."
 ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git pull /tmp/pve-freq-deploy-bundle.git HEAD --ff-only"
 
+# Sync to runtime install path if it exists
+RUNTIME_DIR="/opt/pve-freq"
+echo "[5/6] Syncing to runtime install..."
+ssh -n "${USER}@${TARGET}" "
+if [ -d ${RUNTIME_DIR}/freq ]; then
+    sudo rsync -a --delete \
+        --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' \
+        --exclude='conf/' --exclude='data/' \
+        ${REMOTE_DIR}/ ${RUNTIME_DIR}/
+    echo 'Runtime synced'
+else
+    echo 'No runtime install at ${RUNTIME_DIR} — skipped'
+fi
+"
+
+# Restart dashboard service if running
+echo "[6/6] Restarting dashboard..."
+ssh -n "${USER}@${TARGET}" "
+if sudo systemctl is-active freq-dashboard >/dev/null 2>&1; then
+    sudo systemctl restart freq-dashboard
+    echo 'Dashboard restarted'
+else
+    echo 'Dashboard service not running — skipped'
+fi
+"
+
 # Verify
 FINAL=$(ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git rev-parse --short HEAD")
 echo ""
