@@ -1279,6 +1279,16 @@ function startSSE(){
     toast(d.host+' is now '+label,d['new']==='healthy'?'success':'error');
   });
 
+  _evtSource.addEventListener('probe_error',function(e){
+    var d=JSON.parse(e.data);
+    toast('Probe failed: '+d.key+(d.consecutive>1?' ('+d.consecutive+'x)':''),'error');
+    /* Update LIVE DATA indicator if visible */
+    var ldEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:first-child span:first-child');
+    if(ldEl){ldEl.textContent='STALE';ldEl.style.color='var(--red)';}
+    var peEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:last-child span:first-child');
+    if(peEl){peEl.textContent='PROBE ERROR';peEl.style.color='var(--red)';}
+  });
+
   _evtSource.addEventListener('vm_state',function(e){
     var d=JSON.parse(e.data);
     var label=d.name||('VM '+d.vmid);

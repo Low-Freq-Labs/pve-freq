@@ -1291,6 +1291,12 @@ def _record_probe_error(cache_key, error):
             "failed_at": time.time(),
             "consecutive": prev.get("consecutive", 0) + 1,
         }
+    _sse_broadcast("probe_error", {
+        "key": cache_key,
+        "error": str(error)[:200],
+        "consecutive": prev.get("consecutive", 0) + 1,
+        "ts": time.time(),
+    })
 
 
 def _clear_probe_error(cache_key):
