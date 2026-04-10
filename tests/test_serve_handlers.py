@@ -614,3 +614,55 @@ class TestAPIDocsPage:
         # Should contain real API paths
         assert "/api/auth/login" in body
         assert "/healthz" in body
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Auth Whitelist Correctness
+# ═══════════════════════════════════════════════════════════════════
+
+class TestAuthWhitelist:
+    """Verify auth whitelist covers required public endpoints."""
+
+    def test_setup_endpoints_whitelisted_for_first_run(self):
+        """All setup wizard endpoints must be in auth whitelist so first-run works."""
+        setup_routes = [
+            "/api/setup/status",
+            "/api/setup/create-admin",
+            "/api/setup/configure",
+            "/api/setup/generate-key",
+            "/api/setup/test-ssh",
+            "/api/setup/complete",
+        ]
+        for route in setup_routes:
+            assert route in FreqHandler._AUTH_WHITELIST, \
+                f"Setup route {route} missing from auth whitelist — first-run will 403"
+
+    def test_auth_endpoints_whitelisted(self):
+        """Auth login and verify must be public."""
+        assert "/api/auth/login" in FreqHandler._AUTH_WHITELIST
+        assert "/api/auth/verify" in FreqHandler._AUTH_WHITELIST
+
+    def test_health_probes_whitelisted(self):
+        """Orchestration probes must not require auth."""
+        assert "/healthz" in FreqHandler._AUTH_WHITELIST
+        assert "/readyz" in FreqHandler._AUTH_WHITELIST
+
+    def test_docs_endpoints_whitelisted(self):
+        """API documentation should be publicly accessible."""
+        assert "/api/docs" in FreqHandler._AUTH_WHITELIST
+        assert "/api/openapi.json" in FreqHandler._AUTH_WHITELIST
+
+    def test_setup_reset_not_whitelisted(self):
+        """Setup reset requires admin auth — must NOT be in whitelist."""
+        assert "/api/setup/reset" not in FreqHandler._AUTH_WHITELIST
+
+    def test_destructive_endpoints_not_whitelisted(self):
+        """Mutating endpoints must never be in whitelist."""
+        dangerous = [
+            "/api/admin/fleet-boundaries/update",
+            "/api/admin/hosts/update",
+            "/api/config",
+        ]
+        for route in dangerous:
+            assert route not in FreqHandler._AUTH_WHITELIST, \
+                f"Dangerous route {route} should NOT be in auth whitelist"
