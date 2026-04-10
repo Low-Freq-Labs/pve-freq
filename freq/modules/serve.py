@@ -1829,6 +1829,10 @@ class FreqHandler(BaseHTTPRequestHandler):
 
     def _serve_media_tags(self):
         """GET/POST /api/media/tags — persist media container tags server-side."""
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}, 403)
+            return
         cfg = load_config()
         tags_file = os.path.join(cfg.data_dir, "cache", "media_tags.json")
         if self.command == "POST":
@@ -3490,7 +3494,10 @@ a:hover{{text-decoration:underline}}
         )
 
     def _serve_media_update(self):
-        """Update a container (GET with ?name=xxx)."""
+        """POST /api/media/update — pull latest image for a container."""
+        if self.command != "POST":
+            self._json_response({"error": "Media update requires POST"}, 405)
+            return
         role, err = _check_session_role(self, "admin")
         if err:
             self._json_response({"error": err}, 403)
