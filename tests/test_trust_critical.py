@@ -918,6 +918,31 @@ class TestSecurityHeaders(unittest.TestCase):
         self.assertIn("cdn.jsdelivr.net", src,
                        "CSP must allow cdn.jsdelivr.net for xterm.js")
 
+    def test_csp_covers_all_external_resources(self):
+        """CSP must allow every external origin used by web assets."""
+        import os, re, inspect
+        from freq.modules.serve import FreqHandler
+        csp_src = inspect.getsource(FreqHandler._send_security_headers)
+
+        web_dir = os.path.join(os.path.dirname(__file__), "..", "freq", "data", "web")
+        external_origins = set()
+        for root, dirs, files in os.walk(web_dir):
+            for fname in files:
+                if not fname.endswith(('.html', '.css', '.js')):
+                    continue
+                fpath = os.path.join(root, fname)
+                with open(fpath) as f:
+                    content = f.read()
+                for url in re.findall(r'https://([a-zA-Z0-9._-]+\.[a-z]{2,})', content):
+                    # Skip XML namespaces, local domains, and placeholders
+                    if url in ('www.w3.org',) or 'example' in url or '.dc' in url:
+                        continue
+                    external_origins.add(url)
+
+        missing = [o for o in external_origins if o not in csp_src]
+        self.assertEqual(len(missing), 0,
+                         f"CSP missing external origins used by web assets: {missing}")
+
     def test_csp_allows_google_fonts(self):
         """CSP must allow Google Fonts (used by app.css Outfit + JetBrains Mono)."""
         import inspect
