@@ -2905,7 +2905,7 @@ function ctPower(ctid,action){
   if(action==='start')msg='Start';
   confirmAction(msg+' container <strong>CT '+ctid+'</strong>?',function(){
     toast(msg+'ing CT '+ctid+'...','info');
-    _authFetch(API.CT_POWER+'?ctid='+ctid+'&action='+action).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.CT_POWER+'?ctid='+ctid+'&action='+action,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok)toast('CT '+ctid+' '+action+' OK','success');
       else toast(d.error||'Failed','error');
       setTimeout(loadLxcContainers,1500);
@@ -2915,7 +2915,7 @@ function ctPower(ctid,action){
 function ctDestroy(ctid,name){
   confirmAction('Destroy container <strong>CT '+ctid+' ('+_esc(name)+')</strong>? This cannot be undone.',function(){
     toast('Destroying CT '+ctid+'...','info');
-    _authFetch(API.CT_DESTROY+'?ctid='+ctid).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.CT_DESTROY+'?ctid='+ctid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok)toast('CT '+ctid+' destroyed','success');
       else toast(d.error||'Failed','error');
       setTimeout(loadLxcContainers,1500);
@@ -4595,7 +4595,7 @@ function vmtSnapshot(){
   var src=(document.getElementById('vmt-s-source')||{}).value;
   if(!src){toast('Select a VM','error');return;}
   var out=document.getElementById('vmt-s-out');if(out)out.innerHTML='<div class="c-yellow">Creating snapshot...</div>';
-  _authFetch(API.VM_SNAPSHOT+'?vmid='+src).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_SNAPSHOT+'?vmid='+src,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Snapshot "'+d.snapshot+'" created','success');if(out)out.innerHTML='<div class="c-green">Snapshot "'+d.snapshot+'" created for VM '+src+'</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
@@ -5152,14 +5152,14 @@ function vaultCopy(host,key){
 /* Promote/demote functions */
 function promoteUser(username){
   confirmAction('Promote <strong>'+username.toUpperCase()+'</strong> to the next role level?',function(){
-    _authFetch(API.USERS_PROMOTE+'?username='+username).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.USERS_PROMOTE+'?username='+username,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast(username+' promoted','success');fleetTool('promote');}else toast(d.error||'Failed','error');
     });
   });
 }
 function demoteUser(username){
   confirmAction('Demote <strong>'+username.toUpperCase()+'</strong> to a lower role level?',function(){
-    _authFetch(API.USERS_DEMOTE+'?username='+username).then(function(r){return r.json()}).then(function(d){
+    _authFetch(API.USERS_DEMOTE+'?username='+username,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok){toast(username+' demoted','success');fleetTool('promote');}else toast(d.error||'Failed','error');
     });
   });
@@ -6134,18 +6134,18 @@ function filterUsers(role,btn){
 function userCreate(){
   var n=document.getElementById('u-name').value;var r=document.getElementById('u-role').value;
   if(!n){toast('Username required','error');return;}
-  _authFetch(API.USERS_CREATE+'?username='+n+'&role='+r).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.USERS_CREATE+'?username='+n+'&role='+r,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){document.getElementById('u-name').value='';toast('User created','success');loadUsers();}else toast(d.error,'error');
   });
 }
 function userPromote(u){
   confirmAction('Promote <strong>'+u+'</strong>?',function(){
-    _authFetch(API.USERS_PROMOTE+'?username='+u).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' promoted','success');loadUsers();}else toast(d.error,'error');});
+    _authFetch(API.USERS_PROMOTE+'?username='+u,{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' promoted','success');loadUsers();}else toast(d.error,'error');});
   });
 }
 function userDemote(u){
   confirmAction('Demote <strong>'+u+'</strong>?',function(){
-    _authFetch(API.USERS_DEMOTE+'?username='+u).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' demoted','success');loadUsers();}else toast(d.error,'error');});
+    _authFetch(API.USERS_DEMOTE+'?username='+u,{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' demoted','success');loadUsers();}else toast(d.error,'error');});
   });
 }
 function loadKeys(){
@@ -6402,12 +6402,12 @@ function vmDestroy(vmid){
   });
 }
 function vmSnap(vmid){
-  _authFetch(API.VM_SNAPSHOT+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_SNAPSHOT+'?vmid='+vmid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast('Snapshot "'+d.snapshot+'" created','success');else toast('Error: '+d.error,'error');
   });
 }
 function vmPower(vmid,action){
-  _authFetch(API.VM_POWER+'?vmid='+vmid+'&action='+action).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.VM_POWER+'?vmid='+vmid+'&action='+action,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     toast(d.action+': '+(d.ok?d.output:d.error),d.ok?'success':'error');refreshCurrentView();
   });
 }
@@ -6451,7 +6451,7 @@ function _vmSnapWarn(vmid,isRunning){
     '<span class="c-dim">Live migration requires zero snapshots. If you need to migrate this VM later, you will need to delete all snapshots first.</span><br><br>'+
     'Continue?',
     function(){
-      _authFetch(API.VM_SNAPSHOT+'?vmid='+vmid).then(function(r){return r.json()}).then(function(d){
+      _authFetch(API.VM_SNAPSHOT+'?vmid='+vmid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
         if(d.ok){toast('Snapshot "'+d.snapshot+'" created — live migration DISABLED until deleted','success');}
         else{toast('Error: '+d.error,'error');}
       });
@@ -8533,7 +8533,7 @@ function addHostManual(){
 function loadGwipe(action){
   var out=document.getElementById('gwipe-out');if(!out)return;
   out.innerHTML='<span class="text-dim">Loading GWIPE '+action+'...</span>';
-  _authFetch(API.GWIPE+'?action='+action).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.GWIPE+'?action='+action,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
     var data=d.data||{};
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(JSON.stringify(data,null,2))+'</pre>';
