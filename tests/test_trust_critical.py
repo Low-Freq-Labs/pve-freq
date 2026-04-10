@@ -776,6 +776,56 @@ class TestSetupTrustBoundaries(unittest.TestCase):
                          "create-admin must be blocked after setup completes")
 
 
+class TestDashboardShellSafety(unittest.TestCase):
+    """Dashboard SPA shell must not embed fleet data for anonymous users."""
+
+    def test_app_html_does_not_contain_fleet_data(self):
+        """The static HTML shell must not contain real fleet IPs or hostnames."""
+        import re
+        from freq.modules.web_ui import APP_HTML
+        # The HTML is a SPA shell — data comes from authenticated API calls
+        # Full IPs (x.x.x.x) should not appear except in placeholder examples
+        real_ips = re.findall(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', APP_HTML)
+        # Filter out example/placeholder IPs
+        suspicious = [ip for ip in real_ips if not ip.startswith("0.") and ip != "127.0.0.1"]
+        self.assertEqual(suspicious, [],
+                         f"APP_HTML contains real-looking IPs: {suspicious}")
+
+    def test_first_run_serves_setup_html(self):
+        """On first run, the dashboard serves setup wizard, not fleet UI."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        src = inspect.getsource(FreqHandler._serve_app)
+        self.assertIn("_is_first_run()", src)
+        self.assertIn("SETUP_HTML", src)
+
+
+class TestCreateAdminCredentialSafety(unittest.TestCase):
+    """create-admin must never accept credentials via URL query params."""
+
+    @patch("freq.modules.serve._is_first_run", return_value=True)
+    def test_get_with_query_params_rejected(self, _mock):
+        """GET /api/setup/create-admin?username=x&password=y must be rejected."""
+        import io
+        from freq.modules.serve import FreqHandler
+
+        h = FreqHandler.__new__(FreqHandler)
+        h.path = "/api/setup/create-admin?username=admin&password=secret123"
+        h.command = "GET"
+        h.wfile = io.BytesIO()
+        h.rfile = io.BytesIO()
+        h.headers = {}
+        h._headers_buffer = []
+        h._status = None
+        h.send_response = lambda code, msg=None: setattr(h, '_status', code)
+        h.send_header = lambda k, v: None
+        h.end_headers = lambda: None
+
+        h._serve_setup_create_admin()
+        self.assertEqual(h._status, 405,
+                         "create-admin must reject GET (credentials in URL)")
+
+
 class TestAnonymousAccessRejected(unittest.TestCase):
     """Trust-critical API endpoints must reject unauthenticated requests."""
 

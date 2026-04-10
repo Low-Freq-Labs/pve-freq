@@ -2162,28 +2162,25 @@ a:hover{{text-decoration:underline}}
     def _serve_setup_create_admin(self):
         """Create admin account during first-run setup.
 
-        Accepts POST with JSON body (preferred) or GET with query params (legacy).
+        Accepts POST with JSON body only. Credentials must not be in URLs.
         POST body: {"username": "...", "password": "..."}
         """
         if not _is_first_run():
             self._json_response({"error": "Setup already complete"}, 403)
             return
 
-        # Prefer POST body (credentials should not be in URLs)
+        if self.command != "POST":
+            self._json_response({"error": "Use POST with JSON body"}, 405)
+            return
+
         username = ""
         password = ""
-        if self.command == "POST":
-            try:
-                body = self._request_body()
-                username = body.get("username", "").strip().lower()
-                password = body.get("password", "")
-            except Exception:
-                pass
-        if not username or not password:
-            # Fall back to query params for legacy compatibility
-            params = _parse_query(self)
-            username = username or params.get("username", [""])[0].strip().lower()
-            password = password or params.get("password", [""])[0]
+        try:
+            body = self._request_body()
+            username = body.get("username", "").strip().lower()
+            password = body.get("password", "")
+        except Exception:
+            pass
 
         if not username or not password:
             self._json_response({"error": "Username and password required"}, 400)
