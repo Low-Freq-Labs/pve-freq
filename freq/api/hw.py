@@ -8,6 +8,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
 import json
+import time
 
 from freq.core import log as logger
 from freq.api.helpers import require_post, json_response
@@ -15,6 +16,7 @@ from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import (
     _bg_cache,
+    _bg_cache_ts,
     _bg_lock,
     _parse_query,
     _check_session_role,
@@ -125,6 +127,7 @@ def handle_cost(handler):
     cost_cfg = load_cost_config(cfg.conf_dir)
     with _bg_lock:
         health = _bg_cache.get("health")
+        _health_ts = _bg_cache_ts.get("health", 0)
     if not health:
         json_response(handler, {"error": "No health data available yet"}, 503)
         return
@@ -143,11 +146,14 @@ def handle_cost(handler):
 
     costs = compute_costs(health, idrac_power, cost_cfg)
     summary = fleet_summary(costs, cost_cfg)
+    age = round(time.time() - _health_ts, 1)
     json_response(
         handler,
         {
             "hosts": costs_to_dicts(costs),
             "summary": summary,
+            "cached": True,
+            "age_seconds": age,
         },
     )
 
