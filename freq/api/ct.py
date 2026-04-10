@@ -331,6 +331,10 @@ def handle_ct_set(handler):
 
 def handle_ct_snapshot(handler):
     """POST /api/ct/snapshot — create a container snapshot."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
     if require_post(handler, "Container snapshot"):
         return
     cfg = load_config()
