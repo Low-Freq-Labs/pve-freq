@@ -1302,6 +1302,8 @@ def handle_pool(handler):
 
 def handle_rollback(handler):
     """POST /api/rollback — roll back a VM to a snapshot (admin only)."""
+    if _require_post(handler, "VM rollback"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

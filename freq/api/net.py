@@ -354,6 +354,8 @@ def handle_switch_vlan_create(handler):
 
     Body: {"target": "switch-label", "vlan_id": 100, "name": "SERVERS"}
     """
+    if require_post(handler, "VLAN create"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

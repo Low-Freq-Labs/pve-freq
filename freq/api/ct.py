@@ -103,6 +103,8 @@ def handle_ct_list(handler):
 
 def handle_ct_create(handler):
     """POST /api/ct/create — create a new LXC container."""
+    if require_post(handler, "Container create"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -356,6 +358,8 @@ def handle_ct_snapshot(handler):
 
 def handle_ct_rollback(handler):
     """POST /api/ct/rollback — roll back a container to a snapshot."""
+    if require_post(handler, "Container rollback"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

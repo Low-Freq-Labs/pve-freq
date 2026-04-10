@@ -10,7 +10,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 import json
 import os
 
-from freq.api.helpers import json_response
+from freq.api.helpers import require_post,  json_response
 from freq.core.config import load_config
 from freq.core import log as logger
 from freq.modules.serve import (
@@ -106,6 +106,8 @@ def handle_backup_list(handler):
 
 def handle_backup_create(handler):
     """POST /api/backup/create -- create a VM snapshot."""
+    if require_post(handler, "Backup create"):
+        return
     cfg = load_config()
     role, err = _check_session_role(handler, "operator")
     if err:

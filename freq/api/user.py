@@ -8,7 +8,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
 from freq.core import log as logger
-from freq.api.helpers import json_response
+from freq.api.helpers import require_post,  json_response
 from freq.api.auth import check_session_role as _check_session_role
 from freq.core.config import load_config
 from freq.modules.users import _load_users, _save_users, _role_level, ROLE_HIERARCHY
@@ -27,6 +27,8 @@ def handle_users(handler):
 
 def handle_user_create(handler):
     """POST /api/users/create -- create a new user."""
+    if require_post(handler, "User create"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

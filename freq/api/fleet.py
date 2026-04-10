@@ -13,7 +13,7 @@ import re
 import time
 import concurrent.futures
 
-from freq.api.helpers import json_response, get_params
+from freq.api.helpers import require_post,  json_response, get_params
 from freq.core.config import load_config
 from freq.core import resolve as res
 from freq.core import log as logger
@@ -466,6 +466,8 @@ def handle_exec(handler):
 
 def handle_deploy_agent(handler):
     """POST /api/deploy-agent -- deploy FREQ metrics agent to fleet hosts (admin only)."""
+    if require_post(handler, "Agent deploy"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)

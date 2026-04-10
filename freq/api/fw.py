@@ -11,7 +11,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 import re
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_json_body
+from freq.api.helpers import require_post,  json_response, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import _check_session_role
@@ -714,6 +714,8 @@ def handle_pfsense_updates(handler):
 
     Body: {"action": "check"}
     """
+    if require_post(handler, "pfSense update"):
+        return
     cfg, ok = _require_pfsense(handler)
     if not ok:
         return

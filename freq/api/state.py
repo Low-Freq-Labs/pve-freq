@@ -8,7 +8,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
 from freq.core import log as logger
-from freq.api.helpers import json_response
+from freq.api.helpers import require_post,  json_response
 from freq.core.config import load_config
 from freq.modules.serve import (
     _parse_query,
@@ -209,6 +209,8 @@ def handle_gitops_log(handler):
 
 def handle_gitops_rollback(handler):
     """POST /api/gitops/rollback -- rollback config to a specific commit."""
+    if require_post(handler, "GitOps rollback"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
