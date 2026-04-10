@@ -757,7 +757,10 @@ def handle_infra_quick(handler):
             response["probe_status"] = "ok"
         json_response(handler, response)
         return
-    json_response(handler, {"devices": [], "duration": 0, "warming": True})
+    json_response(handler, {
+        "devices": [], "duration": 0, "warming": True,
+        "cached": False, "age_seconds": None, "probe_status": "loading",
+    })
 
 
 def handle_diagnose(handler):
@@ -1045,6 +1048,7 @@ def handle_topology(handler):
     with _bg_lock:
         health = _bg_cache.get("health")
         fo_cached = _bg_cache.get("infra_quick")
+        _health_ts = _bg_cache_ts.get("health", 0)
 
     health_map = {}
     if health and "hosts" in health:
@@ -1111,6 +1115,7 @@ def handle_topology(handler):
             }
         )
 
+    health_age = round(time.time() - _health_ts, 1) if health else None
     json_response(
         handler,
         {
@@ -1118,6 +1123,9 @@ def handle_topology(handler):
             "links": links,
             "pve_count": len(_get_discovered_nodes()),
             "vm_count": len(vm_list),
+            "cached": health is not None,
+            "age_seconds": health_age,
+            "stale": health_age is not None and health_age > 120,
         },
     )
 

@@ -1339,6 +1339,24 @@ class TestErrorPropagation(unittest.TestCase):
         self.assertIn("age_seconds", src,
                        "Topology must expose age_seconds")
 
+    def test_basic_topology_exposes_staleness(self):
+        """Basic topology must include cache age and stale flag."""
+        import inspect
+        from freq.api.fleet import handle_topology
+        src = inspect.getsource(handle_topology)
+        self.assertIn("age_seconds", src,
+                       "Basic topology must expose age_seconds")
+        self.assertIn("stale", src,
+                       "Basic topology must expose stale flag")
+
+    def test_infra_quick_fallback_has_staleness(self):
+        """Infra quick fallback must include probe_status."""
+        import inspect
+        from freq.api.fleet import handle_infra_quick
+        src = inspect.getsource(handle_infra_quick)
+        self.assertIn("probe_status", src,
+                       "Infra quick must include probe_status in both cached and fallback paths")
+
     def test_heatmap_exposes_staleness(self):
         """Heatmap must include cache age and stale flag."""
         import inspect
