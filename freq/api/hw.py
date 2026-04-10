@@ -301,7 +301,7 @@ def handle_gwipe(handler):
         host = vault_get(cfg, "gwipe", "gwipe_host") or ""
         key = vault_get(cfg, "gwipe", "gwipe_api_key") or ""
         if not host or not key:
-            json_response(handler, {"error": "GWIPE station not configured in vault"})
+            json_response(handler, {"error": "GWIPE station not configured in vault"}, 400)
             return
         import urllib.request, urllib.error
 

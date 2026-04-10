@@ -154,7 +154,7 @@ def handle_gitops_sync(handler):
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)
     if not go_cfg.enabled:
-        json_response(handler, {"error": "GitOps not configured -- set repo_url in freq.toml [gitops]"})
+        json_response(handler, {"error": "GitOps not configured -- set repo_url in freq.toml [gitops]"}, 400)
         return
     state = sync(cfg.data_dir, go_cfg.branch)
     json_response(handler, {"ok": True, "state": state_to_dict(state)})
@@ -171,7 +171,7 @@ def handle_gitops_apply(handler):
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)
     if not go_cfg.enabled:
-        json_response(handler, {"error": "GitOps not configured"})
+        json_response(handler, {"error": "GitOps not configured"}, 400)
         return
     ok, msg = apply_changes(cfg.data_dir, go_cfg.branch)
     state = load_state(cfg.data_dir)
@@ -219,7 +219,7 @@ def handle_gitops_rollback(handler):
     params = _parse_query_flat(handler.path)
     commit = params.get("commit", "").strip()
     if not commit:
-        json_response(handler, {"error": "Missing commit parameter"})
+        json_response(handler, {"error": "Missing commit parameter"}, 400)
         return
     ok, msg = rollback(cfg.data_dir, commit)
     json_response(handler, {"ok": ok, "message": msg})
@@ -236,7 +236,7 @@ def handle_gitops_init(handler):
     cfg = load_config()
     go_cfg = load_gitops_config(cfg.conf_dir)
     if not go_cfg.repo_url:
-        json_response(handler, {"error": "No repo_url configured in freq.toml [gitops]"})
+        json_response(handler, {"error": "No repo_url configured in freq.toml [gitops]"}, 400)
         return
     ok, msg = init_repo(cfg.data_dir, go_cfg.repo_url, go_cfg.branch)
     json_response(handler, {"ok": ok, "message": msg})

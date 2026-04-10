@@ -117,24 +117,24 @@ def handle_backup_create(handler):
     snap_name = query.get("name", f"freq-snap-{vmid}")
 
     if not vmid:
-        json_response(handler, {"error": "vmid required"})
+        json_response(handler, {"error": "vmid required"}, 400)
         return
 
     allowed, err_msg = _check_vm_permission(cfg, vmid, "snapshot")
     if not allowed:
-        json_response(handler, {"error": err_msg})
+        json_response(handler, {"error": err_msg}, 400)
         return
 
     import re as _re
 
     if not _re.match(r"^[a-zA-Z0-9_-]+$", snap_name):
-        json_response(handler, {"error": f"Invalid snapshot name: {snap_name}"})
+        json_response(handler, {"error": f"Invalid snapshot name: {snap_name}"}, 400)
         return
 
     try:
         node_ip = _find_reachable_node(cfg)
         if not node_ip:
-            json_response(handler, {"error": "No PVE node reachable"})
+            json_response(handler, {"error": "No PVE node reachable"}, 400)
             return
         cmd = f"qm snapshot {vmid} {snap_name} --description 'Created by FREQ dashboard'"
         stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=120)
@@ -149,7 +149,7 @@ def handle_backup_create(handler):
         )
     except Exception as e:
         logger.error(f"api_dr_error: snapshot create failed: {e}", endpoint="backup/create")
-        json_response(handler, {"error": f"Snapshot failed: {e}"})
+        json_response(handler, {"error": f"Snapshot failed: {e}"}, 500)
 
 
 def handle_backup_restore(handler):
@@ -165,24 +165,24 @@ def handle_backup_restore(handler):
     snap_name = query.get("name", "")
 
     if not vmid or not snap_name:
-        json_response(handler, {"error": "vmid and name required"})
+        json_response(handler, {"error": "vmid and name required"}, 400)
         return
 
     allowed, err_msg = _check_vm_permission(cfg, vmid, "configure")
     if not allowed:
-        json_response(handler, {"error": err_msg})
+        json_response(handler, {"error": err_msg}, 400)
         return
 
     import re as _re
 
     if not _re.match(r"^[a-zA-Z0-9_-]+$", snap_name):
-        json_response(handler, {"error": f"Invalid snapshot name: {snap_name}"})
+        json_response(handler, {"error": f"Invalid snapshot name: {snap_name}"}, 400)
         return
 
     try:
         node_ip = _find_reachable_node(cfg)
         if not node_ip:
-            json_response(handler, {"error": "No PVE node reachable"})
+            json_response(handler, {"error": "No PVE node reachable"}, 400)
             return
         cmd = f"qm rollback {vmid} {snap_name}"
         stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=300)
@@ -197,7 +197,7 @@ def handle_backup_restore(handler):
         )
     except Exception as e:
         logger.error(f"api_dr_error: restore failed: {e}", endpoint="backup/restore")
-        json_response(handler, {"error": f"Restore failed: {e}"})
+        json_response(handler, {"error": f"Restore failed: {e}"}, 500)
 
 
 def handle_backup_policy_list(handler):
@@ -248,7 +248,7 @@ def handle_migrate_plan(handler):
 
         node_ip = _find_reachable_node(cfg)
         if not node_ip:
-            json_response(handler, {"error": "Cannot reach any PVE node", "nodes": [], "recommendations": []})
+            json_response(handler, {"error": "Cannot reach any PVE node", "nodes": [], "recommendations": []}, 502)
             return
 
         nodes = _gather_node_resources(cfg, node_ip)

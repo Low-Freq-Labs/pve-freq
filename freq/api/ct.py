@@ -126,21 +126,21 @@ def handle_ct_create(handler):
         )
         return
     if not hostname:
-        json_response(handler, {"error": "hostname parameter required"})
+        json_response(handler, {"error": "hostname parameter required"}, 400)
         return
     if not valid_label(hostname):
-        json_response(handler, {"error": "Invalid hostname (alphanumeric + hyphens only)"})
+        json_response(handler, {"error": "Invalid hostname (alphanumeric + hyphens only)"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     # Get next ID
     stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
     if not ok:
-        json_response(handler, {"error": "Cannot allocate container ID"})
+        json_response(handler, {"error": "Cannot allocate container ID"}, 400)
         return
     ctid = int(stdout.strip())
 
@@ -176,16 +176,16 @@ def handle_ct_destroy(handler):
     params = get_params(handler)
     ctid = _ct_id(params)
     if not ctid:
-        json_response(handler, {"error": "ctid parameter required"})
+        json_response(handler, {"error": "ctid parameter required"}, 400)
         return
 
     if is_protected_vmid(ctid, cfg.protected_vmids, cfg.protected_ranges):
-        json_response(handler, {"error": f"Container {ctid} is PROTECTED"})
+        json_response(handler, {"error": f"Container {ctid} is PROTECTED"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     # Stop first if running
@@ -207,17 +207,17 @@ def handle_ct_power(handler):
     action = params.get("action", ["status"])[0]
 
     if not ctid:
-        json_response(handler, {"error": "ctid parameter required"})
+        json_response(handler, {"error": "ctid parameter required"}, 400)
         return
 
     valid_actions = {"start", "stop", "shutdown", "reboot", "status"}
     if action not in valid_actions:
-        json_response(handler, {"error": f"Invalid action. Valid: {', '.join(sorted(valid_actions))}"})
+        json_response(handler, {"error": f"Invalid action. Valid: {', '.join(sorted(valid_actions))}"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     if action == "status":
@@ -244,17 +244,17 @@ def handle_ct_config(handler):
     params = get_params(handler)
     ctid = _ct_id(params)
     if not ctid:
-        json_response(handler, {"error": "ctid parameter required"})
+        json_response(handler, {"error": "ctid parameter required"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     stdout, ok = _pve_cmd(cfg, node_ip, f"pct config {ctid}", timeout=10)
     if not ok:
-        json_response(handler, {"error": f"Cannot read config for CT {ctid}"})
+        json_response(handler, {"error": f"Cannot read config for CT {ctid}"}, 400)
         return
 
     config = {}
@@ -277,7 +277,7 @@ def handle_ct_set(handler):
     params = get_params(handler)
     ctid = _ct_id(params)
     if not ctid:
-        json_response(handler, {"error": "ctid parameter required"})
+        json_response(handler, {"error": "ctid parameter required"}, 400)
         return
 
     # Build pct set arguments from params
@@ -308,12 +308,12 @@ def handle_ct_set(handler):
             parts.append(f"--{key} {val}")
 
     if not parts:
-        json_response(handler, {"error": "No config changes specified"})
+        json_response(handler, {"error": "No config changes specified"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     cmd = f"pct set {ctid} {' '.join(parts)}"
@@ -329,15 +329,15 @@ def handle_ct_snapshot(handler):
     snap_name = params.get("name", [f"freq-snap-{ctid}"])[0]
 
     if not ctid:
-        json_response(handler, {"error": "ctid parameter required"})
+        json_response(handler, {"error": "ctid parameter required"}, 400)
         return
     if not valid_label(snap_name):
-        json_response(handler, {"error": "Invalid snapshot name"})
+        json_response(handler, {"error": "Invalid snapshot name"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     stdout, ok = _pve_cmd(cfg, node_ip, f"pct snapshot {ctid} {snap_name}", timeout=120)
@@ -366,18 +366,18 @@ def handle_ct_rollback(handler):
     start_after = params.get("start", ["true"])[0].lower() != "false"
 
     if not ctid:
-        json_response(handler, {"error": "ctid parameter required"})
+        json_response(handler, {"error": "ctid parameter required"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     # List snapshots
     snap_out, snap_ok = _pve_cmd(cfg, node_ip, f"pct listsnapshot {ctid}", timeout=10)
     if not snap_ok:
-        json_response(handler, {"error": f"Cannot list snapshots for CT {ctid}"})
+        json_response(handler, {"error": f"Cannot list snapshots for CT {ctid}"}, 400)
         return
 
     snaps = []
@@ -389,13 +389,13 @@ def handle_ct_rollback(handler):
                 snaps.append(parts[0])
 
     if not snaps:
-        json_response(handler, {"error": f"No snapshots for CT {ctid}"})
+        json_response(handler, {"error": f"No snapshots for CT {ctid}"}, 404)
         return
 
     if not snap_name:
         snap_name = snaps[-1]
     elif snap_name not in snaps:
-        json_response(handler, {"error": f"Snapshot '{snap_name}' not found", "available": snaps})
+        json_response(handler, {"error": f"Snapshot '{snap_name}' not found", "available": snaps}, 404)
         return
 
     # Stop if running
@@ -412,7 +412,7 @@ def handle_ct_rollback(handler):
     # Rollback
     rb_out, rb_ok = _pve_cmd(cfg, node_ip, f"pct rollback {ctid} {snap_name}", timeout=120)
     if not rb_ok:
-        json_response(handler, {"error": f"Rollback failed: {rb_out}"})
+        json_response(handler, {"error": f"Rollback failed: {rb_out}"}, 500)
         return
 
     # Start if requested
@@ -439,12 +439,12 @@ def handle_ct_snapshots(handler):
     params = get_params(handler)
     ctid = _ct_id(params)
     if not ctid:
-        json_response(handler, {"error": "ctid parameter required"})
+        json_response(handler, {"error": "ctid parameter required"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     stdout, ok = _pve_cmd(cfg, node_ip, f"pct listsnapshot {ctid}", timeout=10)
@@ -483,12 +483,12 @@ def handle_ct_delete_snapshot(handler):
     snap_name = params.get("name", [""])[0]
 
     if not ctid or not snap_name:
-        json_response(handler, {"error": "ctid and name required"})
+        json_response(handler, {"error": "ctid and name required"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     stdout, ok = _pve_cmd(cfg, node_ip, f"pct delsnapshot {ctid} {snap_name}", timeout=120)
@@ -508,18 +508,18 @@ def handle_ct_clone(handler):
     new_name = params.get("name", params.get("hostname", [""]))[0]
 
     if not ctid:
-        json_response(handler, {"error": "ctid parameter required"})
+        json_response(handler, {"error": "ctid parameter required"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     # Get next ID
     stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
     if not ok:
-        json_response(handler, {"error": "Cannot allocate container ID"})
+        json_response(handler, {"error": "Cannot allocate container ID"}, 400)
         return
     new_id = int(stdout.strip())
 
@@ -554,12 +554,12 @@ def handle_ct_migrate(handler):
     restart = params.get("restart", ["false"])[0].lower() == "true"
 
     if not ctid or not target_node:
-        json_response(handler, {"error": "ctid and target node required"})
+        json_response(handler, {"error": "ctid and target node required"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     cmd = f"pct migrate {ctid} {target_node}"
@@ -592,12 +592,12 @@ def handle_ct_resize(handler):
     size = params.get("size", [""])[0]
 
     if not ctid or not size:
-        json_response(handler, {"error": "ctid and size required (e.g. size=+5G)"})
+        json_response(handler, {"error": "ctid and size required (e.g. size=+5G)"}, 400)
         return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     stdout, ok = _pve_cmd(cfg, node_ip, f"pct resize {ctid} {disk} {size}", timeout=60)
@@ -626,19 +626,19 @@ def handle_ct_exec(handler):
     command = params.get("command", params.get("cmd", [""]))[0]
 
     if not ctid or not command:
-        json_response(handler, {"error": "ctid and command required"})
+        json_response(handler, {"error": "ctid and command required"}, 400)
         return
 
     # Safety: reject obviously dangerous commands
     dangerous = ["rm -rf /", "mkfs", "dd if=", "> /dev/sd"]
     for d in dangerous:
         if d in command:
-            json_response(handler, {"error": f"Blocked dangerous command pattern: {d}"})
+            json_response(handler, {"error": f"Blocked dangerous command pattern: {d}"}, 400)
             return
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:
-        json_response(handler, {"error": "No PVE node reachable"})
+        json_response(handler, {"error": "No PVE node reachable"}, 400)
         return
 
     stdout, ok = _pve_cmd(

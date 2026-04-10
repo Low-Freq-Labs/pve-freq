@@ -24,7 +24,7 @@ def handle_truenas(handler):
     """GET /api/infra/truenas -- TrueNAS overview."""
     cfg = load_config()
     if not cfg.truenas_ip:
-        json_response(handler, {"error": "TrueNAS not configured", "configured": False})
+        json_response(handler, {"error": "TrueNAS not configured", "configured": False}, 400)
         return
     # Basic SSH probe for TrueNAS status
     r = ssh_run_fn(
@@ -37,7 +37,7 @@ def handle_truenas(handler):
         use_sudo=False,
     )
     if r.returncode != 0:
-        json_response(handler, {"error": "TrueNAS unreachable", "configured": True, "ip": cfg.truenas_ip})
+        json_response(handler, {"error": "TrueNAS unreachable", "configured": True, "ip": cfg.truenas_ip}, 502)
         return
     lines = r.stdout.strip().split("\n")
     json_response(handler, {"configured": True, "ip": cfg.truenas_ip, "hostname": lines[0] if lines else "", "raw": r.stdout.strip()})

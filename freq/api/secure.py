@@ -60,7 +60,7 @@ def handle_vault_set(handler):
     value = params.get("value", [""])[0]
     host = params.get("host", ["DEFAULT"])[0]
     if not key or not value:
-        json_response(handler, {"error": "Key and value required"})
+        json_response(handler, {"error": "Key and value required"}, 400)
         return
     if not os.path.exists(cfg.vault_file):
         vault_init(cfg)

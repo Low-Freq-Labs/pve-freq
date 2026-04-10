@@ -36,11 +36,11 @@ def handle_user_create(handler):
     username = params.get("username", [""])[0]
     role = params.get("role", ["operator"])[0]
     if not username:
-        json_response(handler, {"error": "Username required"})
+        json_response(handler, {"error": "Username required"}, 400)
         return
     users = _load_users(cfg)
     if any(u["username"] == username for u in users):
-        json_response(handler, {"error": f"User '{username}' already exists"})
+        json_response(handler, {"error": f"User '{username}' already exists"}, 409)
         return
     users.append({"username": username, "role": role, "groups": ""})
     ok = _save_users(cfg, users)
@@ -59,11 +59,11 @@ def handle_user_promote(handler):
     users = _load_users(cfg)
     user = next((u for u in users if u["username"] == username), None)
     if not user:
-        json_response(handler, {"error": f"User not found: {username}"})
+        json_response(handler, {"error": f"User not found: {username}"}, 404)
         return
     lvl = _role_level(user["role"])
     if lvl >= _role_level("admin"):
-        json_response(handler, {"error": "Already at max role"})
+        json_response(handler, {"error": "Already at max role"}, 409)
         return
     old = user["role"]
     user["role"] = ROLE_HIERARCHY[lvl + 1]
@@ -83,11 +83,11 @@ def handle_user_demote(handler):
     users = _load_users(cfg)
     user = next((u for u in users if u["username"] == username), None)
     if not user:
-        json_response(handler, {"error": f"User not found: {username}"})
+        json_response(handler, {"error": f"User not found: {username}"}, 404)
         return
     lvl = _role_level(user["role"])
     if lvl <= 0:
-        json_response(handler, {"error": "Already at min role"})
+        json_response(handler, {"error": "Already at min role"}, 409)
         return
     old = user["role"]
     user["role"] = ROLE_HIERARCHY[lvl - 1]

@@ -115,20 +115,20 @@ def handle_containers_delete(handler):
     try:
         vm_id = int(query.get("vm_id", "0"))
     except (ValueError, TypeError):
-        json_response(handler, {"error": "Invalid vm_id"})
+        json_response(handler, {"error": "Invalid vm_id"}, 400)
         return
     if not name or not vm_id:
-        json_response(handler, {"error": "name and vm_id required"})
+        json_response(handler, {"error": "name and vm_id required"}, 400)
         return
 
     cfg = load_config()
     toml_path = os.path.join(cfg.conf_dir, "containers.toml")
     vm = cfg.container_vms.get(vm_id)
     if not vm:
-        json_response(handler, {"error": f"VM {vm_id} not in registry"})
+        json_response(handler, {"error": f"VM {vm_id} not in registry"}, 404)
         return
     if name not in vm.containers:
-        json_response(handler, {"error": f"Container {name} not found on VM {vm_id}"})
+        json_response(handler, {"error": f"Container {name} not found on VM {vm_id}"}, 404)
         return
 
     del vm.containers[name]
@@ -147,24 +147,24 @@ def handle_containers_add(handler):
     try:
         vm_id = int(query.get("vm_id", "0"))
     except (ValueError, TypeError):
-        json_response(handler, {"error": "Invalid vm_id"})
+        json_response(handler, {"error": "Invalid vm_id"}, 400)
         return
     try:
         port = int(query.get("port", "0"))
     except (ValueError, TypeError):
         port = 0
     if not name or not vm_id:
-        json_response(handler, {"error": "name and vm_id required"})
+        json_response(handler, {"error": "name and vm_id required"}, 400)
         return
 
     cfg = load_config()
     toml_path = os.path.join(cfg.conf_dir, "containers.toml")
     vm = cfg.container_vms.get(vm_id)
     if not vm:
-        json_response(handler, {"error": f"VM {vm_id} not in registry"})
+        json_response(handler, {"error": f"VM {vm_id} not in registry"}, 404)
         return
     if name in vm.containers:
-        json_response(handler, {"error": f"Container {name} already registered on VM {vm_id}"})
+        json_response(handler, {"error": f"Container {name} already registered on VM {vm_id}"}, 409)
         return
 
     from freq.core.config import Container
@@ -185,12 +185,12 @@ def handle_containers_edit(handler):
     try:
         old_vm_id = int(query.get("old_vm_id", "0"))
     except (ValueError, TypeError):
-        json_response(handler, {"error": "Invalid old_vm_id"})
+        json_response(handler, {"error": "Invalid old_vm_id"}, 400)
         return
     try:
         new_vm_id = int(query.get("new_vm_id", "0"))
     except (ValueError, TypeError):
-        json_response(handler, {"error": "Invalid new_vm_id"})
+        json_response(handler, {"error": "Invalid new_vm_id"}, 400)
         return
     try:
         port = int(query.get("port", "0"))
@@ -198,14 +198,14 @@ def handle_containers_edit(handler):
         port = 0
     api_path = query.get("api_path", "")
     if not name or not old_vm_id or not new_vm_id:
-        json_response(handler, {"error": "name, old_vm_id, new_vm_id required"})
+        json_response(handler, {"error": "name, old_vm_id, new_vm_id required"}, 400)
         return
 
     cfg = load_config()
     toml_path = os.path.join(cfg.conf_dir, "containers.toml")
     old_vm = cfg.container_vms.get(old_vm_id)
     if not old_vm or name not in old_vm.containers:
-        json_response(handler, {"error": f"Container {name} not found on VM {old_vm_id}"})
+        json_response(handler, {"error": f"Container {name} not found on VM {old_vm_id}"}, 404)
         return
 
     if old_vm_id == new_vm_id:
@@ -215,10 +215,10 @@ def handle_containers_edit(handler):
     else:
         new_vm = cfg.container_vms.get(new_vm_id)
         if not new_vm:
-            json_response(handler, {"error": f"VM {new_vm_id} not in registry"})
+            json_response(handler, {"error": f"VM {new_vm_id} not in registry"}, 404)
             return
         if name in new_vm.containers:
-            json_response(handler, {"error": f"Container {name} already exists on VM {new_vm_id}"})
+            json_response(handler, {"error": f"Container {name} already exists on VM {new_vm_id}"}, 409)
             return
         from freq.core.config import Container
 
@@ -246,7 +246,7 @@ def handle_containers_compose_up(handler):
 
     vm = cfg.container_vms.get(vm_id)
     if not vm:
-        json_response(handler, {"error": f"VM {vm_id} not in container registry"})
+        json_response(handler, {"error": f"VM {vm_id} not in container registry"}, 404)
         return
 
     compose_path = vm.compose_path or f"{cfg.docker_config_base}/{vm.label}"
@@ -285,7 +285,7 @@ def handle_containers_compose_down(handler):
 
     vm = cfg.container_vms.get(vm_id)
     if not vm:
-        json_response(handler, {"error": f"VM {vm_id} not in container registry"})
+        json_response(handler, {"error": f"VM {vm_id} not in container registry"}, 404)
         return
 
     compose_path = vm.compose_path or f"{cfg.docker_config_base}/{vm.label}"
@@ -324,7 +324,7 @@ def handle_containers_compose_view(handler):
 
     vm = cfg.container_vms.get(vm_id)
     if not vm:
-        json_response(handler, {"error": f"VM {vm_id} not in container registry"})
+        json_response(handler, {"error": f"VM {vm_id} not in container registry"}, 404)
         return
 
     compose_path = vm.compose_path or f"{cfg.docker_config_base}/{vm.label}"

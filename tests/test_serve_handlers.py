@@ -595,6 +595,24 @@ class TestOpenAPITruthfulness:
                     bad_lines.append(i)
         assert not bad_lines, f"Lines returning error with implicit 200: {bad_lines}"
 
+    def test_no_v1_api_error_responses_return_200(self):
+        """Verify no v1 API json_response(handler, {{error:...}}) defaults to 200.
+
+        Source-level guard across all freq/api/*.py files.
+        """
+        import re, glob
+        api_dir = os.path.join(os.path.dirname(__file__), "..", "freq", "api")
+        bad = []
+        for fpath in sorted(glob.glob(os.path.join(api_dir, "*.py"))):
+            fname = os.path.basename(fpath)
+            with open(fpath) as f:
+                for i, line in enumerate(f, 1):
+                    stripped = line.strip()
+                    if 'json_response(handler, {"error"' in stripped and stripped.endswith("})"):
+                        if not re.search(r'},\s*\d+\)$', stripped):
+                            bad.append(f"{fname}:{i}")
+        assert not bad, f"v1 API lines returning error with implicit 200: {bad}"
+
 
 class TestAPIDocsPage:
     """Verify the /api/docs HTML page is truthful."""

@@ -400,7 +400,7 @@ def handle_exec(handler):
     cmd = params.get("cmd", [""])[0]
 
     if not cmd:
-        json_response(handler, {"error": "No command specified"})
+        json_response(handler, {"error": "No command specified"}, 400)
         return
 
     cfg = load_config()
@@ -420,7 +420,7 @@ def handle_exec(handler):
                 hosts = [host] if host else []
 
     if not hosts:
-        json_response(handler, {"error": f"No hosts matched: {target}", "results": []})
+        json_response(handler, {"error": f"No hosts matched: {target}", "results": []}, 400)
         return
 
     results = ssh_run_many(
@@ -463,7 +463,7 @@ def handle_deploy_agent(handler):
     else:
         h = res.by_target(cfg.hosts, target)
         if not h:
-            json_response(handler, {"error": f"Host not found: {target}"})
+            json_response(handler, {"error": f"Host not found: {target}"}, 404)
             return
         hosts = [h]
 
@@ -726,12 +726,12 @@ def handle_diagnose(handler):
     query = _parse_query(handler)
     target = query.get("target", [""])[0]
     if not target:
-        json_response(handler, {"error": "target parameter required"})
+        json_response(handler, {"error": "target parameter required"}, 400)
         return
     try:
         host = res.by_target(cfg.hosts, target)
         if not host:
-            json_response(handler, {"error": f"Unknown host: {target}"})
+            json_response(handler, {"error": f"Unknown host: {target}"}, 404)
             return
         checks = {}
         cmds = {
@@ -769,12 +769,12 @@ def handle_log(handler):
     lines = int(query.get("lines", ["50"])[0])
     unit = query.get("unit", [""])[0]
     if not target:
-        json_response(handler, {"error": "target parameter required"})
+        json_response(handler, {"error": "target parameter required"}, 400)
         return
     try:
         host = res.by_target(cfg.hosts, target)
         if not host:
-            json_response(handler, {"error": f"Unknown host: {target}"})
+            json_response(handler, {"error": f"Unknown host: {target}"}, 404)
             return
         cmd = f"journalctl --no-pager -n {min(lines, 500)}"
         if unit:
@@ -1245,7 +1245,7 @@ def handle_watchdog_health(handler):
         )
     except Exception as e:
         logger.error(f"api_fleet_error: watchdog proxy error: {e}", endpoint="watchdog/health")
-        json_response(handler, {"error": f"Proxy error: {e}"})
+        json_response(handler, {"error": f"Proxy error: {e}"}, 502)
 
 
 def handle_federation_status(handler):
@@ -1277,7 +1277,7 @@ def handle_federation_register(handler):
     url = params.get("url", "").strip()
     secret = params.get("secret", "")
     if not name or not url:
-        json_response(handler, {"error": "Missing name or url parameter"})
+        json_response(handler, {"error": "Missing name or url parameter"}, 400)
         return
     ok, msg = register_site(cfg.data_dir, name, url, secret)
     json_response(handler, {"ok": ok, "message": msg})
@@ -1295,7 +1295,7 @@ def handle_federation_unregister(handler):
     params = _parse_query_flat(handler.path)
     name = params.get("name", "").strip()
     if not name:
-        json_response(handler, {"error": "Missing name parameter"})
+        json_response(handler, {"error": "Missing name parameter"}, 400)
         return
     ok, msg = unregister_site(cfg.data_dir, name)
     json_response(handler, {"ok": ok, "message": msg})
@@ -1333,7 +1333,7 @@ def handle_federation_toggle(handler):
     params = _parse_query_flat(handler.path)
     name = params.get("name", "").strip()
     if not name:
-        json_response(handler, {"error": "Missing name parameter"})
+        json_response(handler, {"error": "Missing name parameter"}, 400)
         return
     sites = load_sites(cfg.data_dir)
     found = False
@@ -1345,7 +1345,7 @@ def handle_federation_toggle(handler):
             found = True
             break
     if not found:
-        json_response(handler, {"error": f"Site '{name}' not found"})
+        json_response(handler, {"error": f"Site '{name}' not found"}, 404)
         return
     save_sites(cfg.data_dir, sites)
     json_response(handler, {"ok": True, "enabled": enabled})
@@ -1359,7 +1359,7 @@ def handle_host_detail(handler):
 
     host = res.by_target(cfg.hosts, label)
     if not host:
-        json_response(handler, {"error": f"Host not found: {label}"})
+        json_response(handler, {"error": f"Host not found: {label}"}, 404)
         return
 
     def _cmd(command, timeout=10):

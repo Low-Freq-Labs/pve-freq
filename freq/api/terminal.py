@@ -93,17 +93,17 @@ def handle_terminal_open(handler):
     rows = int(params.get("rows", ["30"])[0])
 
     if not target:
-        json_response(handler, {"error": "target parameter required"})
+        json_response(handler, {"error": "target parameter required"}, 400)
         return
 
     # Validate target — must be IP or numeric VMID/CTID, no shell metacharacters
     import re as _re
 
     if not _re.match(r"^[a-zA-Z0-9._:-]+$", target):
-        json_response(handler, {"error": "Invalid target (alphanumeric, dots, colons, hyphens only)"})
+        json_response(handler, {"error": "Invalid target (alphanumeric, dots, colons, hyphens only)"}, 400)
         return
     if node and not _re.match(r"^[a-zA-Z0-9._:-]+$", node):
-        json_response(handler, {"error": "Invalid node parameter"})
+        json_response(handler, {"error": "Invalid node parameter"}, 400)
         return
 
     # Resolve target IP for VMs (target can be IP or VMID)
@@ -135,7 +135,7 @@ def handle_terminal_open(handler):
                     resolved_ip = out.strip().split("\n")[0]
 
         if resolved_ip == target:
-            json_response(handler, {"error": f"Cannot resolve IP for VMID {vmid}. Run 'freq discover' to populate hosts.toml with VMIDs."})
+            json_response(handler, {"error": f"Cannot resolve IP for VMID {vmid}. Run 'freq discover' to populate hosts.toml with VMIDs."}, 400)
             return
 
     # Build SSH command with device-type-aware options
@@ -179,7 +179,7 @@ def handle_terminal_open(handler):
 
             node = _find_reachable_node(cfg)
             if not node:
-                json_response(handler, {"error": "No PVE node reachable"})
+                json_response(handler, {"error": "No PVE node reachable"}, 400)
                 return
         cmd = f"ssh {ssh_opts} {ssh_user}@{node} sudo pct enter {target}"
     else:
@@ -254,7 +254,7 @@ def handle_terminal_resize(handler):
     with _sessions_lock:
         s = _sessions.get(session_id)
         if not s:
-            json_response(handler, {"error": "Session not found"})
+            json_response(handler, {"error": "Session not found"}, 404)
             return
         try:
             import fcntl
@@ -266,7 +266,7 @@ def handle_terminal_resize(handler):
             s["rows"] = rows
         except Exception as e:
             logger.warn(f"api_terminal: resize failed: {e}", endpoint="terminal/resize")
-            json_response(handler, {"error": str(e)})
+            json_response(handler, {"error": str(e)}, 400)
             return
 
     json_response(handler, {"ok": True})

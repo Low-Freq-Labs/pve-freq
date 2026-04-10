@@ -65,15 +65,15 @@ def handle_rules_create(handler):
     name = params.get("name", [""])[0].strip()
     condition = params.get("condition", [""])[0].strip()
     if not name or not condition:
-        json_response(handler, {"error": "name and condition required"})
+        json_response(handler, {"error": "name and condition required"}, 400)
         return
     valid_conditions = ("host_unreachable", "cpu_above", "ram_above", "disk_above", "docker_down")
     if condition not in valid_conditions:
-        json_response(handler, {"error": f"Invalid condition. Valid: {', '.join(valid_conditions)}"})
+        json_response(handler, {"error": f"Invalid condition. Valid: {', '.join(valid_conditions)}"}, 400)
         return
     rules = load_rules(cfg.conf_dir)
     if any(r.name == name for r in rules):
-        json_response(handler, {"error": f"Rule '{name}' already exists"})
+        json_response(handler, {"error": f"Rule '{name}' already exists"}, 409)
         return
     rules.append(
         Rule(
@@ -105,12 +105,12 @@ def handle_rules_update(handler):
     params = get_params(handler)
     name = params.get("name", [""])[0].strip()
     if not name:
-        json_response(handler, {"error": "name required"})
+        json_response(handler, {"error": "name required"}, 400)
         return
     rules = load_rules(cfg.conf_dir)
     rule = next((r for r in rules if r.name == name), None)
     if not rule:
-        json_response(handler, {"error": f"Rule '{name}' not found"})
+        json_response(handler, {"error": f"Rule '{name}' not found"}, 404)
         return
     # Update fields if provided
     if "enabled" in params:
@@ -143,13 +143,13 @@ def handle_rules_delete(handler):
     params = get_params(handler)
     name = params.get("name", [""])[0].strip()
     if not name:
-        json_response(handler, {"error": "name required"})
+        json_response(handler, {"error": "name required"}, 400)
         return
     rules = load_rules(cfg.conf_dir)
     before = len(rules)
     rules = [r for r in rules if r.name != name]
     if len(rules) == before:
-        json_response(handler, {"error": f"Rule '{name}' not found"})
+        json_response(handler, {"error": f"Rule '{name}' not found"}, 404)
         return
     if save_rules(cfg.conf_dir, rules):
         json_response(handler, {"ok": True, "deleted": name})
@@ -229,7 +229,7 @@ def handle_playbooks_run(handler):
     params = _get_params_flat(handler)
     filename = params.get("filename", "")
     if not filename or "/" in filename or "\\" in filename or ".." in filename:
-        json_response(handler, {"error": "Invalid or missing filename"})
+        json_response(handler, {"error": "Invalid or missing filename"}, 400)
         return
 
     from freq.jarvis.playbook import load_playbooks, run_step, result_to_dict
@@ -239,7 +239,7 @@ def handle_playbooks_run(handler):
     playbooks = load_playbooks(cfg.conf_dir)
     pb = next((p for p in playbooks if p.filename == filename), None)
     if not pb:
-        json_response(handler, {"error": f"Playbook '{filename}' not found"})
+        json_response(handler, {"error": f"Playbook '{filename}' not found"}, 404)
         return
 
     results = []
@@ -282,16 +282,16 @@ def handle_playbooks_step(handler):
     filename = params.get("filename", "")
     step_idx = params.get("step", "")
     if not filename or "/" in filename or "\\" in filename or ".." in filename:
-        json_response(handler, {"error": "Invalid or missing filename"})
+        json_response(handler, {"error": "Invalid or missing filename"}, 400)
         return
     if step_idx == "":
-        json_response(handler, {"error": "Missing step parameter"})
+        json_response(handler, {"error": "Missing step parameter"}, 400)
         return
 
     try:
         step_idx = int(step_idx)
     except ValueError:
-        json_response(handler, {"error": "step must be an integer"})
+        json_response(handler, {"error": "step must be an integer"}, 400)
         return
 
     from freq.jarvis.playbook import load_playbooks, run_step, result_to_dict
@@ -301,10 +301,10 @@ def handle_playbooks_step(handler):
     playbooks = load_playbooks(cfg.conf_dir)
     pb = next((p for p in playbooks if p.filename == filename), None)
     if not pb:
-        json_response(handler, {"error": f"Playbook '{filename}' not found"})
+        json_response(handler, {"error": f"Playbook '{filename}' not found"}, 404)
         return
     if step_idx < 0 or step_idx >= len(pb.steps):
-        json_response(handler, {"error": f"Step index {step_idx} out of range"})
+        json_response(handler, {"error": f"Step index {step_idx} out of range"}, 400)
         return
 
     r = run_step(pb.steps[step_idx], ssh_run, cfg)
@@ -328,7 +328,7 @@ def handle_playbooks_create(handler):
     params = _get_params_flat(handler)
     name = params.get("name", "").strip()
     if not name:
-        json_response(handler, {"error": "Missing playbook name"})
+        json_response(handler, {"error": "Missing playbook name"}, 400)
         return
 
     filename = re.sub(r"[^a-z0-9_-]", "-", name.lower()) + ".toml"
@@ -337,7 +337,7 @@ def handle_playbooks_create(handler):
     os.makedirs(pb_dir, exist_ok=True)
     path = os.path.join(pb_dir, filename)
     if os.path.exists(path):
-        json_response(handler, {"error": f"Playbook '{filename}' already exists"})
+        json_response(handler, {"error": f"Playbook '{filename}' already exists"}, 409)
         return
 
     description = params.get("description", "")
@@ -382,11 +382,11 @@ def handle_chaos_run(handler):
     try:
         duration = int(params.get("duration", "60"))
     except (ValueError, TypeError):
-        json_response(handler, {"error": "duration must be an integer"})
+        json_response(handler, {"error": "duration must be an integer"}, 400)
         return
 
     if not name or not exp_type or not target:
-        json_response(handler, {"error": "Missing name, type, or target parameter"})
+        json_response(handler, {"error": "Missing name, type, or target parameter"}, 400)
         return
 
     exp = Experiment(
