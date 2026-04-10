@@ -5122,7 +5122,7 @@ function demoteUser(username){
 }
 /* Fleet user/password/key — input validation to prevent shell injection */
 function _validUnixUser(s){return /^[a-z_][a-z0-9_-]{0,31}$/.test(s);}
-function _validSshKey(s){return /^ssh-(ed25519|rsa|ecdsa|dsa)\s+[A-Za-z0-9+\/=]+/.test(s);}
+function _validSshKey(s){return /^ssh-(ed25519|rsa|ecdsa|dsa)\s+[A-Za-z0-9+\/=]+(\s+[A-Za-z0-9@._-]+)?$/.test(s);}
 function _b64(s){try{return btoa(unescape(encodeURIComponent(s)));}catch(e){return '';}}
 function _fleetUserCmd(user,pass,role,key){
   /* Build shell command with base64-encoded password to avoid injection */
