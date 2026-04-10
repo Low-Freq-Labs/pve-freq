@@ -8223,7 +8223,7 @@ function loadGitops(){
 }
 function gitopsFetch(){
   toast('Syncing...','info');
-  _authFetch('/api/gitops/sync').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/gitops/sync',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast('Sync complete','success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadGitops();
@@ -8231,7 +8231,7 @@ function gitopsFetch(){
 }
 function gitopsApply(){
   toast('Applying changes...','info');
-  _authFetch('/api/gitops/apply').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/gitops/apply',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast(d.message||'Applied','success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadGitops();
@@ -8251,7 +8251,7 @@ function gitopsDiff(){
 }
 function gitopsRollback(hash){
   if(!confirm('Roll back config to commit '+hash+'?'))return;
-  _authFetch('/api/gitops/rollback?commit='+encodeURIComponent(hash)).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/gitops/rollback?commit='+encodeURIComponent(hash),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast(d.message||'Rolled back','success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadGitops();
@@ -8376,7 +8376,7 @@ function fedRegister(){
   }).catch(function(e){toast('Failed: '+e,'error');});
 }
 function fedToggle(name){
-  _authFetch('/api/federation/toggle?name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/federation/toggle?name='+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast(name+' '+(d.enabled?'enabled':'disabled'),'success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadFederation();
@@ -8384,7 +8384,7 @@ function fedToggle(name){
 }
 function fedRemove(name){
   if(!confirm('Remove site "'+name+'"?'))return;
-  _authFetch('/api/federation/unregister?name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/federation/unregister?name='+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast(d.message||'Removed','success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadFederation();
