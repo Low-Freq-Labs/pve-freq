@@ -919,6 +919,39 @@ class TestSecurityHeaders(unittest.TestCase):
         self.assertIn("SameSite=Strict", src)
 
 
+class TestDashboardSessionExpiry(unittest.TestCase):
+    """Dashboard must redirect to login on 403/401, never show stale data."""
+
+    def test_authfetch_handles_403(self):
+        """_authFetch in app.js must call doLogout() on 403."""
+        import os
+        app_path = os.path.join(os.path.dirname(__file__), "..", "freq", "data", "web", "js", "app.js")
+        with open(app_path) as f:
+            content = f.read()
+        # Must detect 403 and call doLogout
+        self.assertIn("r.status===403", content,
+                       "_authFetch must check for 403")
+        self.assertIn("doLogout()", content.split("_authFetch")[1][:500],
+                       "_authFetch must call doLogout on auth failure")
+
+    def test_authfetch_handles_401(self):
+        """_authFetch in app.js must call doLogout() on 401."""
+        import os
+        app_path = os.path.join(os.path.dirname(__file__), "..", "freq", "data", "web", "js", "app.js")
+        with open(app_path) as f:
+            content = f.read()
+        self.assertIn("r.status===401", content,
+                       "_authFetch must check for 401")
+
+    def test_readyz_returns_503_on_cold_start(self):
+        """readyz must return 503 when background cache hasn't run yet."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        src = inspect.getsource(FreqHandler._serve_readyz)
+        self.assertIn("503", src, "readyz must return 503 when not ready")
+        self.assertIn("warming_up", src, "readyz must report warming_up status")
+
+
 class TestRouteIntegrity(unittest.TestCase):
     """Every registered route must point at a callable handler."""
 
