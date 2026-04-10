@@ -1074,6 +1074,22 @@ class TestPOSTEnforcementGap(unittest.TestCase):
             self.assertIn("require_post", src,
                            f"{handler.__name__} must enforce POST")
 
+    def test_batch5_container_endpoints_enforce_post(self):
+        """LXC container mutation endpoints must enforce POST."""
+        import inspect
+        from freq.api.ct import (
+            handle_ct_power, handle_ct_set, handle_ct_snapshot,
+            handle_ct_clone, handle_ct_migrate, handle_ct_resize,
+            handle_ct_exec,
+        )
+
+        for handler in [handle_ct_power, handle_ct_set, handle_ct_snapshot,
+                        handle_ct_clone, handle_ct_migrate, handle_ct_resize,
+                        handle_ct_exec]:
+            src = inspect.getsource(handler)
+            self.assertIn("require_post", src,
+                           f"{handler.__name__} must enforce POST")
+
     def test_helpers_require_post_exists(self):
         """require_post helper must exist in helpers.py for shared use."""
         from freq.api.helpers import require_post
@@ -1105,9 +1121,10 @@ class TestPOSTEnforcementGap(unittest.TestCase):
         # Batch 2 fixed 8: truenas snapshot/service/scrub/reboot/dataset/share/replication/app
         # Batch 3 fixed 7: pfsense service/dhcp/config/reboot/rules/nat/wg
         # Batch 4 fixed 10: opnsense service/rule/dhcp/dns/wg/reboot + docker add/edit/up/down
+        # Batch 5 fixed 7: ct power/set/snapshot/clone/migrate/resize/exec
         # (includes some false positives from multi-line docstring detection)
         # This test will fail if the count INCREASES (new unprotected handler added)
-        self.assertLessEqual(len(unprotected), 28,
+        self.assertLessEqual(len(unprotected), 21,
                              f"POST enforcement gap grew: {len(unprotected)} unprotected. "
                              f"New handlers must use require_post().")
 

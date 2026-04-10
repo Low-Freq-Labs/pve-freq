@@ -201,6 +201,8 @@ def handle_ct_destroy(handler):
 
 def handle_ct_power(handler):
     """POST /api/ct/power — start/stop/shutdown/reboot a container."""
+    if require_post(handler, "Container power"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -272,6 +274,8 @@ def handle_ct_config(handler):
 
 def handle_ct_set(handler):
     """POST /api/ct/set — modify container configuration."""
+    if require_post(handler, "Container config set"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -327,6 +331,8 @@ def handle_ct_set(handler):
 
 def handle_ct_snapshot(handler):
     """POST /api/ct/snapshot — create a container snapshot."""
+    if require_post(handler, "Container snapshot"):
+        return
     cfg = load_config()
     params = get_params(handler)
     ctid = _ct_id(params)
@@ -505,6 +511,8 @@ def handle_ct_delete_snapshot(handler):
 
 def handle_ct_clone(handler):
     """POST /api/ct/clone — clone a container."""
+    if require_post(handler, "Container clone"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -550,6 +558,8 @@ def handle_ct_clone(handler):
 
 def handle_ct_migrate(handler):
     """POST /api/ct/migrate — migrate a container to another node."""
+    if require_post(handler, "Container migrate"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -588,6 +598,8 @@ def handle_ct_migrate(handler):
 
 def handle_ct_resize(handler):
     """POST /api/ct/resize — resize container disk."""
+    if require_post(handler, "Container resize"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -623,6 +635,8 @@ def handle_ct_resize(handler):
 
 def handle_ct_exec(handler):
     """POST /api/ct/exec — execute a command inside a container."""
+    if require_post(handler, "Container exec"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
