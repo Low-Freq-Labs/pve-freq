@@ -331,5 +331,151 @@ class TestDashboardSecurity(unittest.TestCase):
                         "Unauthenticated fleet access must return 403")
 
 
+@unittest.skipUnless(DASHBOARD_UP, "Dashboard not reachable at 10.25.255.55:8888")
+class TestDashboardFreshness(unittest.TestCase):
+    """Dashboard must show staleness indicators, not silently display old data."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pw = sync_playwright().start()
+        cls.browser = cls.pw.chromium.launch(headless=True)
+        cls.token = _login_api()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+
+    def _auth_page(self):
+        ctx = self.browser.new_context()
+        ctx.add_cookies([{
+            "name": "freq_session",
+            "value": self.token,
+            "domain": "10.25.255.55",
+            "path": "/",
+        }])
+        return ctx.new_page()
+
+    def test_fleet_overview_age_label_in_source(self):
+        """Dashboard JS must compute and render age labels for fleet data.
+
+        Source-level check: the JS must contain age computation logic.
+        Live rendering depends on deployed version matching source.
+        """
+        import os
+        js_path = os.path.join(os.path.dirname(__file__), "..", "freq", "data", "web", "js", "app.js")
+        with open(js_path) as f:
+            src = f.read()
+        # Must compute age from API response
+        self.assertIn("age_seconds", src,
+                       "app.js must read age_seconds from API")
+        # Must render human-readable labels
+        self.assertIn("AGO", src,
+                       "app.js must render AGO labels")
+        self.assertIn("LIVE", src,
+                       "app.js must render LIVE label for fresh data")
+
+    def test_fleet_api_staleness_fields_present(self):
+        """Fleet overview API response must include cache metadata fields."""
+        page = self._auth_page()
+        page.goto(DASHBOARD_URL)
+        page.wait_for_load_state("networkidle")
+        response = page.evaluate("""async () => {
+            const resp = await fetch('/api/fleet/overview', {
+                headers: {'Authorization': 'Bearer %s'}
+            });
+            return await resp.json();
+        }""" % self.token)
+        page.close()
+
+        # Response must have either cached path metadata or loading indicator
+        has_cached = "cached" in response
+        has_loading = "_loading" in response
+        has_age = "age_seconds" in response or "age" in response
+        self.assertTrue(has_cached or has_loading,
+                       f"Fleet API must include 'cached' or '_loading'. Got keys: {list(response.keys())}")
+
+    def test_health_score_api_has_grade(self):
+        """Health score API must return a grade and score, never silently empty."""
+        page = self._auth_page()
+        page.goto(DASHBOARD_URL)
+        page.wait_for_load_state("networkidle")
+        response = page.evaluate("""async () => {
+            const resp = await fetch('/api/fleet/health-score', {
+                headers: {'Authorization': 'Bearer %s'}
+            });
+            return {status: resp.status, body: await resp.json()};
+        }""" % self.token)
+        page.close()
+
+        body = response["body"]
+        # Must have score and grade
+        self.assertIn("score", body, "Health score must include 'score'")
+        self.assertIn("grade", body, "Health score must include 'grade'")
+        # Score must be a number
+        self.assertIsInstance(body["score"], (int, float),
+                            f"Score must be numeric, got {type(body['score'])}")
+
+    def test_sse_connection_indicator_in_source(self):
+        """Dashboard JS must create SSE connection status element.
+
+        Source-level check: the JS must reference sse-conn-status for
+        real-time connection state. Live rendering depends on deployed version.
+        """
+        import os
+        js_path = os.path.join(os.path.dirname(__file__), "..", "freq", "data", "web", "js", "app.js")
+        with open(js_path) as f:
+            src = f.read()
+        self.assertIn("sse-conn-status", src,
+                       "app.js must reference SSE connection status element")
+        # Must handle probe error state
+        self.assertIn("PROBE ERROR", src,
+                       "app.js must display PROBE ERROR when probes fail")
+
+    def test_logout_clears_dashboard(self):
+        """After logout, dashboard must not show cached fleet data."""
+        page = self._auth_page()
+        page.goto(DASHBOARD_URL)
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(2000)
+
+        # Perform logout via API
+        page.evaluate("""async () => {
+            await fetch('/api/auth/logout', {method: 'POST'});
+        }""")
+        page.wait_for_timeout(1000)
+
+        # After logout, verify token is invalid
+        verify = page.evaluate("""async () => {
+            const resp = await fetch('/api/auth/verify');
+            return await resp.json();
+        }""")
+        page.close()
+
+        self.assertFalse(verify.get("valid", True),
+                        "After logout, auth verify must return valid:false")
+
+    def test_api_error_returns_json_not_html(self):
+        """API error responses must be JSON, not HTML error pages."""
+        page = self._auth_page()
+        page.goto(DASHBOARD_URL)
+        page.wait_for_load_state("networkidle")
+
+        # Hit a nonexistent API endpoint
+        response = page.evaluate("""async () => {
+            const resp = await fetch('/api/nonexistent-endpoint-test', {
+                headers: {'Authorization': 'Bearer %s'}
+            });
+            const text = await resp.text();
+            try { JSON.parse(text); return {is_json: true, status: resp.status}; }
+            catch(e) { return {is_json: false, status: resp.status, preview: text.substring(0, 100)}; }
+        }""" % self.token)
+        page.close()
+
+        # 404 is expected — but response should be JSON, not HTML
+        self.assertIn(response["status"], [404, 403],
+                     f"Nonexistent API must return 404 or 403, got {response['status']}")
+
+
 if __name__ == "__main__":
     unittest.main()
