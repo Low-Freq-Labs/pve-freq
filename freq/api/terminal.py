@@ -240,6 +240,10 @@ def handle_terminal_close(handler):
     """POST /api/terminal/close — close a terminal session."""
     if require_post(handler, "Terminal close"):
         return
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
     params = get_params(handler)
     session_id = params.get("session", [""])[0]
     with _sessions_lock:
