@@ -71,7 +71,7 @@ def cmd_vpn_wg_status(cfg: FreqConfig, pack, args) -> int:
     """Show WireGuard tunnel status."""
     ip = _get_vpn_host(cfg)
     if not ip:
-        fmt.error("No VPN host configured (need pfsense_ip or a pfsense host in hosts.conf)")
+        fmt.error("No VPN host configured (need pfsense_ip or a pfsense host in hosts.toml)")
         return 1
 
     fmt.header("WireGuard Status", breadcrumb="FREQ > VPN > WireGuard")

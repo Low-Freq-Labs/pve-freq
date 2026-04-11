@@ -179,14 +179,14 @@ def cmd_idrac(cfg: FreqConfig, pack, args) -> int:
     fmt.header("iDRAC")
     fmt.blank()
 
-    # iDRAC targets from hosts.conf (type=idrac)
+    # iDRAC targets from hosts.toml (type=idrac)
     targets = {}
     for h in cfg.hosts:
         if getattr(h, "htype", "") == "idrac":
             targets[h.label] = h.ip
     if not targets:
-        fmt.line(f"  {fmt.C.YELLOW}No iDRAC hosts in hosts.conf (type: idrac){fmt.C.RESET}")
-        fmt.info("Add hosts with type 'idrac' to conf/hosts.conf")
+        fmt.line(f"  {fmt.C.YELLOW}No iDRAC hosts in hosts.toml (type: idrac){fmt.C.RESET}")
+        fmt.info("Add hosts with type 'idrac' to conf/hosts.toml")
         fmt.blank()
         return 1
 

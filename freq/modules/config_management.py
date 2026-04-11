@@ -148,7 +148,7 @@ def _backup_all(cfg):
 
     switches = _get_switch_hosts(cfg)
     if not switches:
-        fmt.error("No switches in hosts.conf")
+        fmt.error("No switches in hosts.toml")
         return 1
 
     fmt.header("Config Backup: All Switches", breadcrumb="FREQ > Net > Config")

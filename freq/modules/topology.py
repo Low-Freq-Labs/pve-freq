@@ -12,7 +12,7 @@ Architecture:
     - Diff compares current vs stored topology to find changes
 Design decisions:
     - Graph is edge-list, not adjacency matrix. Simpler to serialize/diff.
-    - Crawl is breadth-first from known switches in hosts.conf.
+    - Crawl is breadth-first from known switches in hosts.toml.
     - DOT export for Graphviz rendering — ops teams already use it.
     - No external graph library. Dict-based adjacency is enough.
 """

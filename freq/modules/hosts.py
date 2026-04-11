@@ -2,7 +2,7 @@
 
 Domain: freq host <list|add|remove|sync|groups-list|groups-add|groups-remove>
 
-Manages the fleet host registry (hosts.conf). Add, remove, list, and group
+Manages the fleet host registry (hosts.toml). Add, remove, list, and group
 hosts. Sync auto-discovers hosts from PVE cluster API and agent endpoints.
 Groups enable targeted operations (e.g., freq fleet exec --group prod).
 
@@ -10,14 +10,14 @@ Replaces: Ansible inventory files ($0 but hand-maintained YAML/INI),
           /etc/hosts management scripts
 
 Architecture:
-    - Host registry stored in conf/hosts.conf (label|ip|type|groups format)
+    - Host registry stored in conf/hosts.toml (TOML format, [[host]] array)
     - PVE sync queries pvesh for VM/container IPs on cluster nodes
     - Agent sync polls freq-agent endpoints for self-reported hosts
     - Validation via freq/core/validate.py (IP format, label uniqueness)
 
 Design decisions:
-    - hosts.conf is a flat file, not TOML/YAML. Easy to grep, easy to edit
-      by hand, easy to version control. Structured formats add no value here.
+    - hosts.toml uses TOML format. Easy to grep, easy to edit
+      by hand, easy to version control. Migrated from flat hosts.conf to TOML.
 """
 
 import json
@@ -288,10 +288,10 @@ def _is_docker_bridge_ip(ip):
 
 
 def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
-    """Sync hosts.conf from PVE API + fleet-boundaries.
+    """Sync hosts.toml from PVE API + fleet-boundaries.
 
     Queries PVE for all running VMs, gets IPs via qm agent, classifies type,
-    merges physical devices from fleet-boundaries.toml, and updates hosts.conf.
+    merges physical devices from fleet-boundaries.toml, and updates hosts.toml.
 
     Preserves: comments, manual group assignments, manually-added hosts.
     Adds: new VMs discovered in PVE, physical devices from fleet-boundaries.
@@ -302,7 +302,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
     fmt.header("Hosts Sync")
     fmt.blank()
 
-    # ── Step 1: Read existing hosts.conf ──
+    # ── Step 1: Read existing hosts.toml ──
     existing = {}  # ip -> {label, htype, groups, all_ips}
     for h in cfg.hosts:
         existing[h.ip] = {
@@ -312,7 +312,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             "all_ips": getattr(h, "all_ips", []) or [],
         }
 
-    fmt.step_ok(f"Current hosts.conf: {len(existing)} hosts")
+    fmt.step_ok(f"Current hosts.toml: {len(existing)} hosts")
 
     # ── Step 2: Query PVE API for all VMs ──
     fmt.step_start("Querying PVE cluster")
@@ -417,7 +417,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             continue
 
         # Smart IP selection:
-        # 1. If any IP matches an existing hosts.conf entry, use that (avoid duplicates)
+        # 1. If any IP matches an existing hosts.toml entry, use that (avoid duplicates)
         # 2. Prefer management VLAN (same subnet as PVE nodes)
         # 3. Fall back to any known VLAN prefix
         # 4. Last resort: first non-Docker-bridge IP
@@ -541,7 +541,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                     "all_ips": e.get("all_ips", []),
                 }
             elif ip not in discovered:
-                # Sanitize label — hosts.conf uses whitespace as delimiter
+                # Sanitize label — hosts.toml labels should be simple identifiers
                 safe_label = dev.label.replace(" ", "-").lower()
                 discovered[ip] = {
                     "label": safe_label,
@@ -616,7 +616,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
         fmt.blank()
 
     if removed_hosts:
-        fmt.line(f"  {fmt.C.RED}Hosts no longer in PVE (kept in hosts.conf):{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.RED}Hosts no longer in PVE (kept in hosts.toml):{fmt.C.RESET}")
         for ip in sorted(removed_hosts):
             e = existing[ip]
             fmt.line(f"    {fmt.C.YELLOW}?{fmt.C.RESET} {ip}  {e['label']}  [{e['htype']}]")
@@ -629,7 +629,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
         fmt.blank()
 
     if not new_hosts and not removed_hosts:
-        fmt.step_ok("hosts.conf is up to date — no changes needed")
+        fmt.step_ok("hosts.toml is up to date — no changes needed")
         _auto_populate_fleet_boundaries(cfg, discovered)
         fmt.blank()
         fmt.footer()
@@ -879,7 +879,7 @@ def update_host_label(cfg: FreqConfig, target_ip: str, new_label: str) -> bool:
 
 
 def resolve_host_ip(cfg: FreqConfig, label: str) -> str:
-    """Look up a host's IP from hosts.conf by label.
+    """Look up a host's IP from hosts.toml by label.
 
     Used by container probing to resolve label → IP at probe time
     instead of relying on hardcoded IPs in containers.toml.

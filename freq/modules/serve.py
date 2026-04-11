@@ -124,7 +124,7 @@ _bg_cache_ts = {
 }
 _bg_cache_errors = {}  # key -> {"error": str, "failed_at": float, "consecutive": int}
 UPDATE_CHECK_INTERVAL = 6 * 3600  # 6 hours
-HOSTS_SYNC_INTERVAL = 3600  # 1 hour — keep hosts.conf in sync with PVE
+HOSTS_SYNC_INTERVAL = 3600  # 1 hour — keep hosts.toml in sync with PVE
 NODE_DISCOVERY_INTERVAL = 300  # 5 min — discover PVE cluster nodes
 VM_TAGS_INTERVAL = 300  # 5 min — refresh PVE VM tags
 _bg_lock = threading.Lock()
@@ -688,7 +688,7 @@ def _bg_probe_health():
     try:
         # Build IP→docker count from health data
         ip_docker = {h["ip"]: int(h.get("docker", 0)) for h in host_data if h.get("type") == "docker"}
-        # Build vm_id→IP from container_vms config (resolved from hosts.conf)
+        # Build vm_id→IP from container_vms config (resolved from hosts.toml)
         vmid_to_ip = {vm.vm_id: _resolve_container_vm_ip(vm) for vm in cfg.container_vms.values()}
         # Read WATCHDOG for vm_id→node mapping
         wd_path = "/var/lib/freq-watchdog/status.json"
@@ -1176,9 +1176,9 @@ def is_vm_tagged(vmid: int, tag: str) -> bool:
 
 
 def _bg_sync_hosts():
-    """Auto-sync hosts.conf from PVE every hour.
+    """Auto-sync hosts.toml from PVE every hour.
 
-    Keeps hosts.conf labels in sync with PVE VM names so the dashboard,
+    Keeps hosts.toml labels in sync with PVE VM names so the dashboard,
     SSH keys, and fleet data all use the same names. Users never need to
     run 'freq host sync' manually.
     """
@@ -1521,10 +1521,10 @@ def _parse_query(handler):
 
 
 def _resolve_container_vm_ip(vm) -> str:
-    """Resolve container VM IP from hosts.conf by label, falling back to hardcoded IP.
+    """Resolve container VM IP from hosts.toml by label, falling back to hardcoded IP.
 
     This eliminates hardcoded IPs in containers.toml — if the VM gets re-IPed,
-    the hourly hosts.conf sync picks up the new IP, and container probes
+    the hourly hosts.toml sync picks up the new IP, and container probes
     automatically use it.
     """
     if vm.label:
@@ -4072,7 +4072,7 @@ a:hover{{text-decoration:underline}}
         self._json_response({"ok": True})
 
     def _serve_admin_hosts_update(self):
-        """POST /api/admin/hosts/update — update host type or groups in hosts.conf.
+        """POST /api/admin/hosts/update — update host type or groups in hosts.toml.
 
         Params: label, type (optional), groups (optional)
         """
@@ -4099,7 +4099,7 @@ a:hover{{text-decoration:underline}}
             with open(hosts_path) as f:
                 lines = f.readlines()
         except FileNotFoundError:
-            self._json_response({"error": "hosts.conf not found"}, 404)
+            self._json_response({"error": "hosts.toml not found"}, 404)
             return
 
         found = False
@@ -4123,14 +4123,14 @@ a:hover{{text-decoration:underline}}
                 break
 
         if not found:
-            self._json_response({"error": f"Host '{label}' not found in hosts.conf"}, 404)
+            self._json_response({"error": f"Host '{label}' not found in hosts.toml"}, 404)
             return
 
         try:
             with open(hosts_path, "w") as f:
                 f.writelines(lines)
         except OSError as e:
-            self._json_response({"error": f"Failed to write hosts.conf: {e}"}, 500)
+            self._json_response({"error": f"Failed to write hosts.toml: {e}"}, 500)
             return
         self._json_response({"ok": True, "label": label})
 

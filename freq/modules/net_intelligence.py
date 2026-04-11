@@ -43,7 +43,7 @@ def cmd_find_mac(cfg: FreqConfig, pack, args) -> int:
     mac_clean = mac_query.lower().replace(":", "").replace("-", "").replace(".", "")
     switches = _get_switch_hosts(cfg)
     if not switches:
-        fmt.error("No switches in hosts.conf")
+        fmt.error("No switches in hosts.toml")
         return 1
 
     all_matches = []
@@ -354,7 +354,7 @@ def cmd_ip_conflict(cfg: FreqConfig, pack, args) -> int:
 
     switches = _get_switch_hosts(cfg)
     if not switches:
-        fmt.error("No switches in hosts.conf")
+        fmt.error("No switches in hosts.toml")
         return 1
 
     fmt.step_start("Scanning ARP tables across all switches")

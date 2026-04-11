@@ -9,7 +9,7 @@ Architecture:
     - SSH-based commands via freq/core/ssh.py (htype=pfsense)
     - Future: REST API via urllib.request for pfrest/OPNsense API
     - Rule/config backups stored in conf/firewall/
-    - Vendor detection from host type in hosts.conf
+    - Vendor detection from host type in hosts.toml
 Design decisions:
     - SSH first, REST later. SSH works on every pfSense/OPNsense box.
     - Rule export/import as XML fragments for backup/restore.
@@ -47,7 +47,7 @@ def _fw_ssh(ip, cmd, cfg, timeout=15):
 
 
 def _get_fw_ip(cfg):
-    """Get firewall IP from config or hosts.conf."""
+    """Get firewall IP from config or hosts.toml."""
     if cfg.pfsense_ip:
         return cfg.pfsense_ip
     for h in cfg.hosts:
