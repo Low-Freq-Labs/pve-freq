@@ -1,6 +1,6 @@
 # API Reference — PVE FREQ
 
-332+ REST API endpoints served by `freq serve` at `http://localhost:8888`.
+336 REST API endpoints served by `freq serve` at `http://localhost:8888`.
 
 All endpoints return JSON. Most require session authentication via `Authorization: Bearer <token>` header or `freq_session` HttpOnly cookie (both set automatically on login).
 
@@ -57,7 +57,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | POST | `/api/vm/resize` | Resize VM resources |
 | POST | `/api/vm/rename` | Rename VM |
 | POST | `/api/vm/migrate` | Migrate VM to another node |
-| GET | `/api/vm/template` | Convert VM to template |
+| POST | `/api/vm/template` | Convert VM to template |
 | POST | `/api/vm/tag` | Set PVE tags |
 | POST | `/api/vm/add-nic` | Add network interface |
 | POST | `/api/vm/clear-nics` | Clear all NICs |
@@ -90,7 +90,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | GET | `/api/watchdog/health` | Watchdog health proxy |
 | POST | `/api/deploy-agent` | Deploy agent to hosts |
 | GET | `/api/specialists` | Specialist/agent listing |
-| GET | `/api/notify/test` | Test notification delivery |
+| POST | `/api/notify/test` | Test notification delivery |
 | GET | `/api/topology` | Network topology for visualization |
 
 ## Container Management
@@ -98,7 +98,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/containers/registry` | List registered containers |
-| GET | `/api/containers/rescan` | Discover running containers |
+| POST | `/api/containers/rescan` | Discover running containers |
 | POST | `/api/containers/add` | Add container to registry |
 | POST | `/api/containers/delete` | Remove container from registry |
 | POST | `/api/containers/edit` | Edit container config |
@@ -115,7 +115,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | GET | `/api/media/downloads` | Active downloads (qBit/SABnzbd) |
 | GET | `/api/media/streams` | Active Plex streams |
 | GET | `/api/media/dashboard` | Aggregate media dashboard |
-| GET | `/api/media/restart` | Restart a media container |
+| POST | `/api/media/restart` | Restart a media container |
 | GET | `/api/media/logs` | Container logs |
 | POST | `/api/media/update` | Update container image |
 
@@ -139,7 +139,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | GET | `/api/metrics/prometheus` | Prometheus-format metrics |
 | GET | `/api/risk` | Risk analysis data |
 | GET | `/api/capacity` | Capacity projections |
-| GET | `/api/capacity/snapshot` | Force capacity snapshot |
+| POST | `/api/capacity/snapshot` | Force capacity snapshot |
 | GET | `/api/federation/status` | Federation status |
 | GET | `/api/lab/status` | Lab fleet status |
 
@@ -160,7 +160,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | GET | `/api/cost/config` | Cost configuration |
 | GET | `/api/journal` | Operation journal/logs |
 | GET | `/api/lab-tool/config` | Lab tool config |
-| GET | `/api/lab-tool/save-config` | Save lab tool config |
+| POST | `/api/lab-tool/save-config` | Save lab tool config |
 
 ## GitOps & Automation
 
@@ -220,7 +220,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | POST | `/api/setup/test-ssh` | Test SSH connectivity |
 | POST | `/api/setup/reset` | Reset setup wizard |
 | POST | `/api/setup/configure` | Save cluster config |
-| POST | `/api/setup/status` | Setup state |
+| GET | `/api/setup/status` | Setup state |
 
 ## Diagnostics & Info
 
@@ -233,7 +233,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | GET | `/api/learn` | Knowledge base search |
 | GET | `/api/docs` | API documentation page |
 | GET | `/api/openapi.json` | OpenAPI 3.0 spec |
-| POST | `/api/update/check` | Check for updates |
+| GET | `/api/update/check` | Check for updates |
 
 ## Server-Sent Events
 
@@ -271,4 +271,4 @@ es.addEventListener('cache_update', (e) => {
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/gwipe` | WIPE station status |
+| POST | `/api/gwipe` | WIPE station status |
