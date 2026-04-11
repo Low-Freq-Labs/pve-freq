@@ -240,6 +240,36 @@ def _run(cmd, timeout=DEFAULT_CMD_TIMEOUT):
         return 1, "", str(e)
 
 
+# sshpass exit codes → human-readable explanations
+_SSHPASS_ERRORS = {
+    1: "invalid command line argument",
+    2: "conflicting arguments",
+    3: "runtime error",
+    4: "unrecognized response from ssh",
+    5: "wrong password",
+    6: "host key unknown (sshpass cannot verify)",
+}
+
+
+def _ssh_error_msg(rc, err):
+    """Return a human-readable SSH error string.
+
+    When sshpass fails (e.g. wrong password), stderr is often empty.
+    This translates sshpass exit codes into actionable messages so
+    users don't see 'Cannot connect ()'.
+    """
+    msg = (err or "").strip()[:60]
+    if msg:
+        return msg
+    # stderr is empty — check for sshpass exit codes
+    sshpass_msg = _SSHPASS_ERRORS.get(rc)
+    if sshpass_msg:
+        return sshpass_msg
+    if rc != 0:
+        return f"SSH failed (exit {rc})"
+    return "unknown error"
+
+
 def _chown(owner, *paths, recursive=False):
     """chown with return-code check. Returns True on success, False on failure."""
     cmd = ["chown"]
@@ -4333,8 +4363,8 @@ def _deploy_linux(ip, ctx, auth_pass, auth_key, auth_user, htype="linux"):
     # Test connectivity
     rc, out, err = _ssh("echo OK")
     if rc != 0:
-        fmt.step_fail(f"Cannot connect ({err[:60]})")
-        logger.error(f"deploy_failed: {ip}", host=ip, error=err[:120])
+        fmt.step_fail(f"Cannot connect ({_ssh_error_msg(rc, err)})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=_ssh_error_msg(rc, err))
         audit.record("deploy_user", ip, "failed", user=svc_name, error="connect_failed")
         return False
     fmt.step_ok("Connected")
@@ -4491,8 +4521,8 @@ def _deploy_pfsense(ip, ctx, auth_pass, auth_key, auth_user):
     # Test connectivity
     rc, out, err = _ssh("echo OK")
     if rc != 0:
-        fmt.step_fail(f"Cannot connect ({err[:60]})")
-        logger.error(f"deploy_failed: {ip}", host=ip, error=err[:120])
+        fmt.step_fail(f"Cannot connect ({_ssh_error_msg(rc, err)})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=_ssh_error_msg(rc, err))
         audit.record("deploy_user", ip, "failed", user=svc_name, error="connect_failed")
         return False
     fmt.step_ok("Connected")
@@ -4600,8 +4630,8 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     # Test connectivity with legacy ciphers
     rc, out, err = _ssh("racadm getsysinfo", extra_opts=extra_opts)
     if rc != 0:
-        fmt.step_fail(f"Cannot connect ({err[:60]})")
-        logger.error(f"deploy_failed: {ip}", host=ip, error=err[:120])
+        fmt.step_fail(f"Cannot connect ({_ssh_error_msg(rc, err)})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=_ssh_error_msg(rc, err))
         audit.record("deploy_user", ip, "failed", user=svc_name, error="connect_failed")
         return False
     fmt.step_ok("Connected to iDRAC")
@@ -4694,8 +4724,8 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     # Test connectivity
     rc, out, err = _ssh("show version | include uptime", extra_opts=extra_opts)
     if rc != 0:
-        fmt.step_fail(f"Cannot connect ({err[:60]})")
-        logger.error(f"deploy_failed: {ip}", host=ip, error=err[:120])
+        fmt.step_fail(f"Cannot connect ({_ssh_error_msg(rc, err)})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=_ssh_error_msg(rc, err))
         audit.record("deploy_user", ip, "failed", user=svc_name, error="connect_failed")
         return False
     fmt.step_ok("Connected to switch")
@@ -6935,11 +6965,12 @@ def _headless_fleet_deploy(
                 except OSError:
                     pass
             if rc != 0:
-                if _is_skip_error(err):
-                    fmt.step_warn(f"{label} ({ip}) — {_skip_reason(err)} (skipped)")
+                if _is_skip_error(err) or rc == 5:
+                    reason = _skip_reason(err) if err.strip() else _ssh_error_msg(rc, err)
+                    fmt.step_warn(f"{label} ({ip}) — {reason} (skipped)")
                     skip += 1
                 else:
-                    fmt.step_fail(f"Cannot connect ({err.strip()[:60]})")
+                    fmt.step_fail(f"Cannot connect ({_ssh_error_msg(rc, err)})")
                     fail += 1
                 continue
 
