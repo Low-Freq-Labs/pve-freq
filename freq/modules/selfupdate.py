@@ -82,14 +82,18 @@ def cmd_update(cfg: FreqConfig, pack, args) -> int:
     fmt.line(f"  {fmt.C.BOLD}Install dir:{fmt.C.RESET}      {cfg.install_dir}")
     fmt.blank()
 
-    if method == "git":
+    if method in ("git", "git-release"):
+        # Both dev checkout and git-release installs can pull from remote
         return _update_git(cfg)
     elif method == "dpkg":
         fmt.line(f"  {fmt.C.GRAY}Update via apt: sudo apt update && sudo apt upgrade pve-freq{fmt.C.RESET}")
     elif method == "rpm":
         fmt.line(f"  {fmt.C.GRAY}Update via dnf: sudo dnf update pve-freq{fmt.C.RESET}")
+    elif method in ("tarball", "local"):
+        fmt.line(f"  {fmt.C.GRAY}Installed via {method}. Re-run the installer to update:{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}  curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq/main/install.sh | sudo bash{fmt.C.RESET}")
     else:
-        fmt.line(f"  {fmt.C.GRAY}Manual install detected.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}Unknown install method: {method}{fmt.C.RESET}")
         fmt.line(f"  {fmt.C.GRAY}Re-run the installer: sudo bash install.sh{fmt.C.RESET}")
 
     fmt.blank()
