@@ -477,6 +477,16 @@ class TestFleetBoundaries(unittest.TestCase):
     def test_is_prod_unknown(self):
         self.assertFalse(self.fb.is_prod(9999))
 
+    def test_is_prod_production_category(self):
+        """'production' category from init auto-categorization must be prod."""
+        from freq.core.types import FleetBoundaries
+        fb = FleetBoundaries(
+            tiers={"operator": ["view", "start"]},
+            categories={"production": {"tier": "operator", "vmids": [300, 301]}},
+        )
+        self.assertTrue(fb.is_prod(300),
+                        "'production' category must be recognized as prod")
+
     def test_is_protected_personal(self):
         self.assertTrue(self.fb.is_protected(100))
 

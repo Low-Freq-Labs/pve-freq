@@ -293,9 +293,16 @@ class FleetBoundaries:
         return list(self.tiers.get(tier, ["view"]))
 
     def is_prod(self, vmid: int) -> bool:
-        """True if this VMID belongs to a production category."""
+        """True if this VMID belongs to a production category.
+
+        Matches both enum values (infrastructure, prod_media, prod_other) and
+        the auto-categorized name 'production' from init's _categorize_vms.
+        """
         cat, _ = self.categorize(vmid)
-        return cat in (VMCategory.INFRASTRUCTURE.value, VMCategory.PROD_MEDIA.value, VMCategory.PROD_OTHER.value)
+        return cat in (
+            VMCategory.INFRASTRUCTURE.value, VMCategory.PROD_MEDIA.value,
+            VMCategory.PROD_OTHER.value, "production",
+        )
 
     def is_protected(self, vmid: int) -> bool:
         """True if this VMID belongs to a category that should not be casually modified."""
@@ -305,6 +312,7 @@ class FleetBoundaries:
             VMCategory.INFRASTRUCTURE.value,
             VMCategory.PROD_MEDIA.value,
             VMCategory.PROD_OTHER.value,
+            "production",
         )
 
     def can_action(self, vmid: int, action: str) -> bool:

@@ -372,11 +372,11 @@ class TestDashboardFreshness(unittest.TestCase):
         # Must compute age from API response
         self.assertIn("age_seconds", src,
                        "app.js must read age_seconds from API")
-        # Must render human-readable labels
-        self.assertIn("AGO", src,
-                       "app.js must render AGO labels")
-        self.assertIn("LIVE", src,
-                       "app.js must render LIVE label for fresh data")
+        # Must render human-readable probe age labels
+        self.assertIn("PROBE AGE", src,
+                       "app.js must render probe age section")
+        self.assertIn("SSE", src,
+                       "app.js must render SSE transport label")
 
     def test_fleet_api_staleness_fields_present(self):
         """Fleet overview API response must include cache metadata fields."""
