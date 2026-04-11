@@ -40,7 +40,10 @@ def handle_containers_registry(handler):
                     "api_path": c.api_path,
                 }
             )
-    json_response(handler, {"containers": entries})
+    json_response(handler, {
+        "containers": entries,
+        "registry_configured": bool(cfg.container_vms),
+    })
 
 
 def handle_containers_rescan(handler):

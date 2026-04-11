@@ -3181,6 +3181,7 @@ a:hover{{text-decoration:underline}}
     def _serve_media_status(self):
         """All containers across all VMs."""
         cfg = load_config()
+        registry_configured = bool(cfg.container_vms)
         containers = []
         for vm in sorted(cfg.container_vms.values(), key=lambda v: v.vm_id):
             resolved_ip = _resolve_container_vm_ip(vm)
@@ -3218,7 +3219,11 @@ a:hover{{text-decoration:underline}}
                         "detail": status,
                     }
                 )
-        self._json_response({"containers": containers, "count": len(containers)})
+        self._json_response({
+            "containers": containers,
+            "count": len(containers),
+            "registry_configured": registry_configured,
+        })
 
     def _serve_media_health(self):
         """API health for all media services."""
@@ -3430,12 +3435,14 @@ a:hover{{text-decoration:underline}}
                         pass
 
         age = round(time.time() - _health_ts, 1) if health else None
+        registry_configured = bool(cfg.container_vms)
         self._json_response(
             {
                 "containers_total": total,
                 "containers_running": running,
                 "containers_down": total - running,
                 "vm_count": len(cfg.container_vms),
+                "registry_configured": registry_configured,
                 "cached": health is not None,
                 "age_seconds": age,
                 "source": "health_cache" if health else "live_probe",

@@ -1659,7 +1659,7 @@ function loadContainerRegistry(){
   if(!tbl)return;
   tbl.innerHTML='<div class="skeleton"></div>';
   _authFetch('/api/containers/registry').then(function(r){return r.json()}).then(function(d){
-    if(!d.containers||d.containers.length===0){tbl.innerHTML='<span class="c-dim-fs12">No containers registered</span>';return;}
+    if(!d.containers||d.containers.length===0){tbl.innerHTML=d.registry_configured===false?'<span class="c-dim-fs12">Container registry not configured — populate <code>conf/containers.toml</code></span>':'<span class="c-dim-fs12">No containers registered</span>';return;}
     /* Build unique VM list for dropdowns */
     var seen={};_regVMs=[];
     d.containers.forEach(function(c){if(!seen[c.vm_id]){seen[c.vm_id]=true;_regVMs.push({id:c.vm_id,label:c.vm_label,ip:c.vm_ip});}});
@@ -5501,10 +5501,12 @@ function loadVMs(){
 function loadContainerSection(){
   var cards=document.getElementById('container-cards');if(cards&&!cards.innerHTML.trim())cards.innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
+    if(d.registry_configured===false){document.getElementById('container-stats').innerHTML='<span class="c-dim-fs12">Container registry not configured — populate containers.toml or use Docker Fleet Inventory</span>';return;}
     var _coff=Math.max(0,d.containers_down||0);document.getElementById('container-stats').innerHTML=st('Total',d.containers_total,'p')+st('Online',d.containers_running,'g')+st('Offline',_coff,_coff>0?'r':'g')+st('VMs',d.vm_count,'b');
   }).catch(function(){document.getElementById('container-stats').innerHTML='<span class="c-red">Failed to load stats</span>';});
   _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
-    _mediaCache=d;_renderAllFromCache();
+    _mediaCache=d;if(d.registry_configured===false&&(!d.containers||d.containers.length===0)){var cards=document.getElementById('container-cards');if(cards)cards.innerHTML='<div class="exec-out">No container registry configured. Add containers to <code>conf/containers.toml</code> or use the Docker Fleet Inventory tab to view live containers.</div>';return;}
+    _renderAllFromCache();
   }).catch(function(){toast('Failed to load containers','error');});
 }
 function loadDownloads(){

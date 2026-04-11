@@ -1206,11 +1206,14 @@ def handle_docker_fleet(handler):
             }
         )
 
+    running = sum(1 for h in hosts_data for c in h["containers"] if "Up" in c.get("status", ""))
     json_response(
         handler,
         {
+            "vms": hosts_data,
             "hosts": hosts_data,
             "total_containers": total,
+            "running": running,
             "total_hosts": len(docker_hosts),
         },
     )
