@@ -3959,7 +3959,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
       nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
       nodeCard+='</div>';
       nodeCard+='<div id="pve-live-'+nodeName+'" style="margin:6px 0;padding:6px 8px;background:rgba(248,81,73,0.05);border:1px dashed var(--border);border-radius:6px;text-align:center">';
-      nodeCard+='<span style="font-size:12px;color:var(--red);letter-spacing:0.5px">LIVE METRICS: OFFLINE</span>';
+      nodeCard+='<span style="font-size:12px;color:var(--red);letter-spacing:0.5px">PVE METRICS: NOT REACHABLE</span>';
       nodeCard+='<div class="fs-12-dim-mt2">Deploy to same network for real-time CPU load, RAM usage, storage pools, cluster health</div>';
       nodeCard+='</div>';
     }
@@ -4378,7 +4378,7 @@ function _fleetToolInner(tool,panel,content){
   } else if(tool==='updates'){
     _toolUpdates(content);
   } else if(tool==='monitoring'){
-    _buildToolTabs('MONITORING',[{id:'monhealth',label:'HEALTH CHECK'},{id:'mondoctor',label:'DOCTOR'},{id:'monjournal',label:'JOURNAL'},{id:'monwatch',label:'WATCH'}],'mon-tab','switchMonitoring','mon-subtitle','mon-form',content);return;
+    _buildToolTabs('MONITORING',[{id:'monhealth',label:'HEALTH PROBE'},{id:'mondoctor',label:'DOCTOR'},{id:'monjournal',label:'JOURNAL'},{id:'monwatch',label:'WATCH'}],'mon-tab','switchMonitoring','mon-subtitle','mon-form',content);return;
   } else if(tool==='network'){
     _buildToolTabs('NETWORK',[{id:'netvlan',label:'VLAN OVERVIEW'},{id:'netdns',label:'DNS CHECK'},{id:'netping',label:'CONNECTIVITY'},{id:'netports',label:'PORT SCAN'}],'net-tab','switchNetwork','net-subtitle','net-form',content);return;
   } else if(tool==='backup'){
@@ -4677,7 +4677,7 @@ function vmtResize(){
   });
 }
 /* ── MONITORING ─────────────────────────────────────────────────── */
-var _monLabels={monhealth:'HEALTH CHECK',mondoctor:'DOCTOR',monjournal:'JOURNAL',monwatch:'WATCH'};
+var _monLabels={monhealth:'HEALTH PROBE',mondoctor:'DOCTOR',monjournal:'JOURNAL',monwatch:'WATCH'};
 function switchMonitoring(tab){
   document.querySelectorAll('.mon-tab').forEach(function(b){b.classList.remove('active-view');});
   var active=document.querySelector('.mon-tab[data-montab="'+tab+'"]');if(active)active.classList.add('active-view');
@@ -4992,7 +4992,7 @@ function openNewTool(){
   if(typeof LAB_TOOLS!=='undefined'&&LAB_TOOLS.length){
     LAB_TOOLS.forEach(function(t){
       var connected=false;for(var k in _ltState){if(k.indexOf(t.id)>=0&&_ltState[k])connected=true;}
-      var dotColor=connected?'var(--green)':'var(--text-dim)';var statusText=connected?'CONNECTED':'OFFLINE';
+      var dotColor=connected?'var(--green)':'var(--text-dim)';var statusText=connected?'CONNECTED':'NOT CONNECTED';
       h+='<div style="display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">';
       h+='<span style="width:10px;height:10px;border-radius:50%;background:'+dotColor+';flex-shrink:0"></span>';
       h+='<div class="flex-1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+t.name+'</div><div class="text-meta">'+t.subtitle+'</div></div>';
