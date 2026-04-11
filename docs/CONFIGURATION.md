@@ -36,7 +36,6 @@ The primary config file. Controls cluster settings, SSH, VM defaults, safety rul
 |-----|------|---------|-------------|
 | `nodes` | list | `[]` | Proxmox node IP addresses |
 | `node_names` | list | `[]` | Proxmox node hostnames |
-| `ssh_user` | string | `"freq-admin"` | SSH user for PVE operations (legacy) |
 | `api_token_id` | string | `""` | PVE API token ID (e.g. `"freq@pve!dashboard"`) |
 | `api_token_secret_path` | string | `""` | Path to file containing PVE API token secret |
 | `api_verify_ssl` | bool | `false` | Verify SSL for PVE API (false for self-signed certs) |
