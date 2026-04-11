@@ -5176,11 +5176,16 @@ def _phase_admin_setup(cfg, ctx):
     fmt.line(f"  {fmt.C.DIM}Current user: {fmt.C.BOLD}{current_user}{fmt.C.RESET}")
     fmt.blank()
 
-    with open(roles_file) as f:
-        roles_data = f.read()
+    def _active_roles(path):
+        """Read roles.conf and return only uncommented entries."""
+        if not os.path.isfile(path):
+            return []
+        with open(path) as f:
+            return [l.strip() for l in f if l.strip() and not l.strip().startswith("#")]
 
     # Add current user as admin
-    if f"{current_user}:" in roles_data:
+    active = _active_roles(roles_file)
+    if any(l.startswith(f"{current_user}:") for l in active):
         fmt.step_ok(f"{current_user} already in roles.conf")
     else:
         with open(roles_file, "a") as f:
@@ -5189,9 +5194,8 @@ def _phase_admin_setup(cfg, ctx):
 
     # Add service account as admin
     svc_name = ctx["svc_name"]
-    with open(roles_file) as f:
-        roles_data = f.read()
-    if f"{svc_name}:" not in roles_data:
+    active = _active_roles(roles_file)
+    if not any(l.startswith(f"{svc_name}:") for l in active):
         with open(roles_file, "a") as f:
             f.write(f"{svc_name}:admin\n")
         fmt.step_ok(f"Added {svc_name} as admin")
@@ -5212,9 +5216,8 @@ def _phase_admin_setup(cfg, ctx):
             role_choice = _input("Role", "O").upper()
             role = "admin" if role_choice == "A" else "operator"
 
-            with open(roles_file) as f:
-                roles_data = f.read()
-            if f"{username}:" in roles_data:
+            active = _active_roles(roles_file)
+            if any(l.startswith(f"{username}:") for l in active):
                 fmt.line(f"  {fmt.C.DIM}{username} already in roles.conf{fmt.C.RESET}")
             else:
                 with open(roles_file, "a") as f:
@@ -6927,18 +6930,21 @@ def _init_headless(cfg, args):
     # ── Phase 11: RBAC ──
     _phase(11, headless_total, "RBAC Setup")
     roles_file = os.path.join(cfg.conf_dir, "roles.conf")
-    existing = ""
+    existing_lines = []
     if os.path.isfile(roles_file):
         with open(roles_file) as f:
-            existing = f.read()
+            existing_lines = f.readlines()
+    # Only check uncommented lines — template comments like '# freq-admin:admin'
+    # must not fool the presence check
+    active_roles = [l.strip() for l in existing_lines if l.strip() and not l.strip().startswith("#")]
     with open(roles_file, "a") as f:
-        if f"{bootstrap_user}:" not in existing:
+        if not any(l.startswith(f"{bootstrap_user}:") for l in active_roles):
             f.write(f"{bootstrap_user}:admin\n")
             fmt.step_ok(f"Added {bootstrap_user} as admin")
         else:
             fmt.step_ok(f"{bootstrap_user} already in roles")
         svc_name = ctx["svc_name"]
-        if f"{svc_name}:" not in existing:
+        if not any(l.startswith(f"{svc_name}:") for l in active_roles):
             f.write(f"{svc_name}:admin\n")
             fmt.step_ok(f"Added {svc_name} as admin")
         else:
