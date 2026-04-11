@@ -3197,30 +3197,35 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                 fmt.step_ok(f"Explicit hosts file provided — skipped auto-registration of {len(discovered)} discovered host(s)")
             else:
                 # Auto-register all in headless mode
+                # Use save (overwrite) instead of append to prevent duplicates
+                # from seeded template files or repeated runs
+                from freq.core.config import save_hosts_toml
                 for ip, d in discovered.items():
                     host = Host(ip=ip, label=d["label"], htype=d["htype"], groups=d.get("groups", ""))
-                    append_host_toml(cfg.hosts_file, host)
                     cfg.hosts.append(host)
+                save_hosts_toml(cfg.hosts_file, cfg.hosts)
                 fmt.step_ok(f"Auto-registered {len(discovered)} host(s)")
         else:
             # Interactive: confirm registration
             if _confirm(f"Register all {len(discovered)} discovered hosts?", default=True):
+                from freq.core.config import save_hosts_toml
                 for ip, d in discovered.items():
                     host = Host(ip=ip, label=d["label"], htype=d["htype"], groups=d.get("groups", ""))
-                    append_host_toml(cfg.hosts_file, host)
                     cfg.hosts.append(host)
+                save_hosts_toml(cfg.hosts_file, cfg.hosts)
                 fmt.step_ok(f"Registered {len(discovered)} host(s)")
             else:
                 # One-by-one confirmation
+                from freq.core.config import save_hosts_toml
                 registered = 0
                 for ip, d in discovered.items():
                     if _confirm(f"  Register {d['label']} ({ip}) [{d['htype']}]?", default=True):
                         label = _input(f"    Label", d["label"])
                         htype = _input(f"    Type", d["htype"])
                         host = Host(ip=ip, label=label, htype=htype, groups=d.get("groups", ""))
-                        append_host_toml(cfg.hosts_file, host)
                         cfg.hosts.append(host)
                         registered += 1
+                save_hosts_toml(cfg.hosts_file, cfg.hosts)
                 fmt.step_ok(f"Registered {registered}/{len(discovered)} host(s)")
 
         # Offer to add non-discoverable devices manually
