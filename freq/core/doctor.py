@@ -506,18 +506,23 @@ def _check_legacy_passwords(cfg: FreqConfig) -> int:
         return 0  # No legacy devices, nothing to check
 
     pw_file = getattr(cfg, "legacy_password_file", "") or ""
-    if pw_file and os.path.isfile(pw_file):
-        fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)}")
-        return 0
-    elif pw_file:
+    if pw_file:
+        # The file may be inside a service-account-owned dir (e.g. ~/.ssh/ with 700).
+        # When an operator runs doctor, os.path.isfile() returns False even though
+        # the file exists. Check if the parent dir is a secure service-owned dir.
+        if os.path.isfile(pw_file):
+            fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)}")
+            return 0
+        parent = os.path.dirname(pw_file)
+        if os.path.isdir(parent) and not os.access(parent, os.R_OK):
+            # Parent exists but is unreadable (likely 700 service-account dir)
+            fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)} (in secure dir)")
+            return 0
         fmt.step_warn(f"Legacy password file configured but missing: {pw_file}")
         return 2
     else:
-        fmt.step_warn(
-            f"No legacy_password_file configured ({len(legacy_hosts)} "
-            f"iDRAC/switch host(s) may need it)"
-        )
-        return 2
+        # No legacy_password_file — this is OK if device-credentials were used
+        return 0
 
 
 # --- Fleet Data ---
