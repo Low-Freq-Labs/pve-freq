@@ -15,7 +15,7 @@ import os
 import time
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_json_body, get_param
+from freq.api.helpers import json_response, get_json_body, get_param, require_post
 from freq.modules.serve import _check_session_role
 from freq.core.config import load_config
 from freq.core import resolve as res
