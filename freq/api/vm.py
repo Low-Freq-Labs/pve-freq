@@ -388,6 +388,7 @@ def handle_vm_template(handler):
             command_timeout=120,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         _respond_operation(
             handler,
@@ -438,6 +439,7 @@ def handle_vm_rename(handler):
             command_timeout=30,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         _respond_operation(
             handler,
@@ -469,6 +471,7 @@ def handle_vm_snapshots(handler):
         command_timeout=15,
         htype="pve",
         use_sudo=False,
+        cfg=cfg,
     )
     snaps = []
     if r.returncode == 0:
@@ -520,6 +523,7 @@ def handle_vm_delete_snapshot(handler):
             command_timeout=120,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         _respond_operation(
             handler,
@@ -577,6 +581,7 @@ def handle_vm_change_id(handler):
             command_timeout=10,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         if "running" in (r.stdout or ""):
             json_response(handler, {"error": f"VM {vmid} must be stopped first"}, 409)
@@ -591,12 +596,13 @@ def handle_vm_change_id(handler):
             command_timeout=300,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         if r.returncode != 0:
             json_response(handler, {"error": f"Clone failed: {r.stderr or r.stdout}"}, 502)
             return
 
-        # Destroy old VM
+        # Destroy old
         r2 = ssh_single(
             host=node_ip,
             command=f"sudo qm destroy {vmid} --purge",
@@ -605,6 +611,7 @@ def handle_vm_change_id(handler):
             command_timeout=120,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         _respond_operation(
             handler,
@@ -688,6 +695,7 @@ def handle_vm_add_nic(handler):
             command_timeout=15,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         next_nic = 0
         if r.returncode == 0:
@@ -714,6 +722,7 @@ def handle_vm_add_nic(handler):
             command_timeout=30,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         # Set ipconfig
         r2 = ssh_single(
@@ -724,6 +733,7 @@ def handle_vm_add_nic(handler):
             command_timeout=30,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         ok = r1.returncode == 0 and r2.returncode == 0
         err = ""
@@ -775,6 +785,7 @@ def handle_vm_clear_nics(handler):
             command_timeout=15,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
 
         deleted = []
@@ -793,6 +804,7 @@ def handle_vm_clear_nics(handler):
                         command_timeout=15,
                         htype="pve",
                         use_sudo=False,
+                        cfg=cfg,
                     )
                     if r2.returncode == 0:
                         deleted.append(key)
@@ -860,6 +872,7 @@ def handle_vm_change_ip(handler):
             command_timeout=30,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         # Set cloud-init ipconfig
         r2 = ssh_single(
@@ -870,6 +883,7 @@ def handle_vm_change_ip(handler):
             command_timeout=30,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         ok = r1.returncode == 0 and r2.returncode == 0
         err = ""
@@ -929,6 +943,7 @@ def handle_vm_push_key(handler):
         command_timeout=15,
         htype="linux",
         use_sudo=False,
+        cfg=cfg,
     )
     if r.returncode != 0:
         json_response(handler, {"error": f"Key push failed: {r.stderr or r.stdout}"}, 502)
@@ -943,6 +958,7 @@ def handle_vm_push_key(handler):
         command_timeout=5,
         htype="docker",
         use_sudo=False,
+        cfg=cfg,
     )
     verified = r2.returncode == 0 and "ok" in (r2.stdout or "")
     json_response(handler, {"ok": True, "verified": verified, "ip": target_ip})
@@ -1296,6 +1312,7 @@ def handle_pool(handler):
             command_timeout=15,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         if r.returncode == 0:
             try:
@@ -1422,6 +1439,7 @@ def handle_snapshots_stale(handler):
             command_timeout=30,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         if r.returncode != 0:
             continue
@@ -1442,6 +1460,7 @@ def handle_snapshots_stale(handler):
                 command_timeout=15,
                 htype="pve",
                 use_sudo=False,
+                cfg=cfg,
             )
             if sr.returncode != 0 or not sr.stdout.strip():
                 continue

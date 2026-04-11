@@ -29,6 +29,7 @@ def _pve_ssh(cfg, node_ip, cmd, timeout=60):
         command_timeout=timeout,
         htype="pve",
         use_sudo=True,
+        cfg=cfg,
     )
 
 

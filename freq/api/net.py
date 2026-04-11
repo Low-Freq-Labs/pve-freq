@@ -178,6 +178,7 @@ def handle_switch(handler):
         command_timeout=15,
         htype="switch",
         use_sudo=False,
+        cfg=cfg,
     )
     json_response(
         handler,
@@ -238,6 +239,7 @@ def handle_netmon_interfaces(handler):
         command_timeout=15,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     all_hosts = []

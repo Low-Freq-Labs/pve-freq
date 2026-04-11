@@ -970,6 +970,7 @@ def _bg_discover_pve_nodes():
                 command_timeout=5,
                 htype="pve",
                 use_sudo=False,
+                cfg=cfg,
             )
             if r.returncode == 0:
                 seed_ip = ip
@@ -1477,6 +1478,7 @@ def _find_reachable_pve_node(cfg):
             command_timeout=10,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         if r.returncode == 0:
             return ip
@@ -1877,6 +1879,7 @@ class FreqHandler(BaseHTTPRequestHandler):
                     command_timeout=10,
                     htype=h.get("type", "linux"),
                     use_sudo=False,
+                    cfg=cfg,
                 )
                 if r.returncode == 0 and r.stdout.strip() == "1":
                     tdarr_data["status"] = "running"
@@ -1909,6 +1912,7 @@ class FreqHandler(BaseHTTPRequestHandler):
                     command_timeout=10,
                     htype="docker",
                     use_sudo=False,
+                    cfg=cfg,
                 )
                 if r.returncode == 0 and "no-dl-client" not in r.stdout:
                     lines = [l for l in r.stdout.split("\n") if l.strip()]
@@ -3188,6 +3192,7 @@ a:hover{{text-decoration:underline}}
                 command_timeout=10,
                 htype="docker",
                 use_sudo=False,
+                cfg=cfg,
             )
             running = {}
             if r.returncode == 0 and r.stdout:
@@ -3277,6 +3282,7 @@ a:hover{{text-decoration:underline}}
                         command_timeout=10,
                         htype="docker",
                         use_sudo=False,
+                        cfg=cfg,
                     )
                     if r.returncode == 0:
                         # Response may have "Ok.\n" or "Fails.\n" prefix from login
@@ -3314,6 +3320,7 @@ a:hover{{text-decoration:underline}}
                         command_timeout=10,
                         htype="docker",
                         use_sudo=False,
+                        cfg=cfg,
                     )
                     if r.returncode == 0:
                         try:
@@ -3365,6 +3372,7 @@ a:hover{{text-decoration:underline}}
                 command_timeout=10,
                 htype="docker",
                 use_sudo=False,
+                cfg=cfg,
             )
             if r.returncode == 0:
                 try:
@@ -3413,6 +3421,7 @@ a:hover{{text-decoration:underline}}
                     command_timeout=10,
                     htype="docker",
                     use_sudo=False,
+                    cfg=cfg,
                 )
                 if r.returncode == 0:
                     try:
@@ -3463,6 +3472,7 @@ a:hover{{text-decoration:underline}}
             command_timeout=60,
             htype="docker",
             use_sudo=False,
+            cfg=cfg,
         )
         self._json_response(
             {
@@ -3500,6 +3510,7 @@ a:hover{{text-decoration:underline}}
             command_timeout=15,
             htype="docker",
             use_sudo=False,
+            cfg=cfg,
         )
         self._json_response(
             {
@@ -3542,6 +3553,7 @@ a:hover{{text-decoration:underline}}
             command_timeout=120,
             htype="docker",
             use_sudo=False,
+            cfg=cfg,
         )
         self._json_response(
             {
@@ -3596,6 +3608,7 @@ a:hover{{text-decoration:underline}}
             command_timeout=10,
             htype="docker",
             use_sudo=False,
+            cfg=cfg,
         )
         if r.returncode == 0 and r.stdout:
             for line in r.stdout.strip().split("\n"):

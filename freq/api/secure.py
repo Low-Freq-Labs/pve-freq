@@ -127,6 +127,7 @@ def handle_harden(handler):
             command_timeout=10,
             max_parallel=10,
             use_sudo=True,
+            cfg=cfg,
         )
         for h in hosts:
             host_res = result_for(r, h)
@@ -212,6 +213,7 @@ def handle_patch_compliance(handler):
         command_timeout=30,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=True,
+        cfg=cfg,
     )
 
     host_results = []
@@ -318,6 +320,7 @@ def handle_proxy_status_api(handler):
         command_timeout=15,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     proxy_hosts = []

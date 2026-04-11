@@ -319,6 +319,7 @@ def handle_fleet_ntp(handler):
         command_timeout=10,
         max_parallel=10,
         use_sudo=False,
+        cfg=cfg,
     )
     for h in cfg.hosts:
         r = result_for(results, h)
@@ -352,6 +353,7 @@ def handle_fleet_updates(handler):
         command_timeout=30,
         max_parallel=10,
         use_sudo=False,
+        cfg=cfg,
     )
     for h in cfg.hosts:
         r = result_for(results, h)
@@ -460,6 +462,7 @@ def handle_exec(handler):
         command_timeout=15,
         max_parallel=10,
         use_sudo=False,
+        cfg=cfg,
     )
 
     result_list = []
@@ -526,6 +529,7 @@ def handle_deploy_agent(handler):
             command_timeout=10,
             htype=h.htype,
             use_sudo=True,
+            cfg=cfg,
         )
         if r.returncode != 0:
             host_result["status"] = "failed"
@@ -545,6 +549,7 @@ def handle_deploy_agent(handler):
             command_timeout=30,
             htype=h.htype,
             use_sudo=True,
+            cfg=cfg,
         )
         if r.returncode != 0:
             host_result["status"] = "failed"
@@ -563,6 +568,7 @@ def handle_deploy_agent(handler):
             command_timeout=5,
             htype=h.htype,
             use_sudo=True,
+            cfg=cfg,
         )
         host_result["steps"].append({"step": "chmod", "ok": r.returncode == 0, "error": r.stderr if r.returncode != 0 else ""})
         if r.returncode != 0:
@@ -585,6 +591,7 @@ def handle_deploy_agent(handler):
             command_timeout=10,
             htype=h.htype,
             use_sudo=True,
+            cfg=cfg,
         )
         host_result["steps"].append({"step": "systemd_unit", "ok": r.returncode == 0, "error": r.stderr if r.returncode != 0 else ""})
         if r.returncode != 0:
@@ -602,6 +609,7 @@ def handle_deploy_agent(handler):
             command_timeout=30,
             htype=h.htype,
             use_sudo=True,
+            cfg=cfg,
         )
         host_result["steps"].append({"step": "start", "ok": r.returncode == 0, "error": r.stderr if r.returncode != 0 else ""})
         if r.returncode != 0:
@@ -620,6 +628,7 @@ def handle_deploy_agent(handler):
             command_timeout=5,
             htype=h.htype,
             use_sudo=False,
+            cfg=cfg,
         )
         healthy = r.returncode == 0 and "ok" in r.stdout
         host_result["steps"].append({"step": "verify", "ok": healthy})
@@ -661,6 +670,7 @@ def handle_infra_overview(handler):
         command_timeout=10,
         max_parallel=10,
         use_sudo=False,
+        cfg=cfg,
     )
 
     layers = []
@@ -703,6 +713,7 @@ def handle_infra_overview(handler):
             command_timeout=10,
             htype="pve",
             use_sudo=True,
+            cfg=cfg,
         )
         if r.returncode == 0 and r.stdout:
             try:
@@ -799,6 +810,7 @@ def handle_diagnose(handler):
                 command_timeout=15,
                 htype=host.htype,
                 use_sudo=False,
+                cfg=cfg,
             )
             checks[label] = r.stdout if r.returncode == 0 else f"ERROR: {r.stderr or r.stdout}"
         json_response(handler, {"host": target, "ip": host.ip, "checks": checks})
@@ -833,6 +845,7 @@ def handle_log(handler):
             command_timeout=15,
             htype=host.htype,
             use_sudo=True,
+            cfg=cfg,
         )
         json_response(
             handler,
@@ -1164,6 +1177,7 @@ def handle_docker_fleet(handler):
         command_timeout=30,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     hosts_data = []
@@ -1464,6 +1478,7 @@ def handle_host_detail(handler):
             command_timeout=timeout,
             htype=host.htype,
             use_sudo=False,
+            cfg=cfg,
         )
         return r.stdout.strip() if r.returncode == 0 else ""
 

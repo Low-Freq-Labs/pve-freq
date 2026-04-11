@@ -38,6 +38,7 @@ def _log_query(cfg, command, target=None, max_hosts=50):
         command_timeout=15,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=True,
+        cfg=cfg,
     )
 
     results = []

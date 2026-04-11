@@ -105,6 +105,7 @@ def handle_idrac(handler):
             command_timeout=15,
             htype="idrac",
             use_sudo=False,
+            cfg=cfg,
         )
         results.append(
             {

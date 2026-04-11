@@ -60,6 +60,7 @@ def handle_containers_rescan(handler):
             command_timeout=10,
             htype="docker",
             use_sudo=False,
+            cfg=cfg,
         )
         names = []
         if r.returncode == 0 and r.stdout:
@@ -268,6 +269,7 @@ def handle_containers_compose_up(handler):
         command_timeout=120,
         htype="docker",
         use_sudo=False,
+        cfg=cfg,
     )
     json_response(
         handler,
@@ -309,6 +311,7 @@ def handle_containers_compose_down(handler):
         command_timeout=120,
         htype="docker",
         use_sudo=False,
+        cfg=cfg,
     )
     json_response(
         handler,
@@ -348,6 +351,7 @@ def handle_containers_compose_view(handler):
         command_timeout=10,
         htype="docker",
         use_sudo=False,
+        cfg=cfg,
     )
     if r.returncode == 0 and r.stdout:
         json_response(
@@ -391,6 +395,7 @@ def handle_stack_status(handler):
         command_timeout=30,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     stacks = []
@@ -441,6 +446,7 @@ def handle_stack_health(handler):
         command_timeout=30,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     containers = []
