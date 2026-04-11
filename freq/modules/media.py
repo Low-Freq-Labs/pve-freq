@@ -881,9 +881,10 @@ def _cmd_doctor(cfg, args) -> int:
     for vm in _all_vms(cfg):
         running = _get_containers_status(cfg, vm)
         for cname in vm.containers:
-            found = any(cname.lower() in rn.lower() for rn in running)
+            cn = cname.lower().replace("-", "_").replace(" ", "_")
+            found = any(cn in rn.lower().replace("-", "_") for rn in running)
             if found:
-                status = next((v for k, v in running.items() if cname.lower() in k.lower()), "")
+                status = next((v for k, v in running.items() if cn in k.lower().replace("-", "_")), "")
                 if "Up" in status:
                     print(f"    {fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET} {cname} ({vm.label})")
                 else:

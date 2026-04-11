@@ -3261,8 +3261,12 @@ a:hover{{text-decoration:underline}}
 
             for cname, container in vm.containers.items():
                 status = "not found"
+                # Normalize hyphens/underscores for matching — init may discover
+                # "tdarr_node" but Docker names it "tdarr-node"
+                cn = cname.lower().replace("-", "_").replace(" ", "_")
                 for rn, rs in running.items():
-                    if cname.lower() in rn.lower():
+                    rn_norm = rn.lower().replace("-", "_").replace(" ", "_")
+                    if cn in rn_norm or rn_norm in cn:
                         status = rs
                         break
                 containers.append(
