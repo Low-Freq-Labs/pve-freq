@@ -503,7 +503,11 @@ post_install() {
     echo -e "  ${C_BOLD}Next steps:${C_RESET}"
     echo -e "    1. Run ${C_CYAN}sudo freq init${C_RESET} — discovers your cluster and deploys fleet access"
     echo -e "    2. Run ${C_CYAN}freq doctor${C_RESET} to verify everything is healthy"
-    echo -e "    3. Run ${C_CYAN}freq serve${C_RESET} to start the dashboard"
+    if [[ "$WITH_SYSTEMD" == true ]]; then
+        echo -e "    3. Run ${C_CYAN}systemctl start freq-serve${C_RESET} to start the dashboard"
+    else
+        echo -e "    3. Run ${C_CYAN}freq serve${C_RESET} to start the dashboard"
+    fi
     echo ""
     echo -e "  ${C_GRAY}Documentation: ${REPO_URL}${C_RESET}"
     echo ""
