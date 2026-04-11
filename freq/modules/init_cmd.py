@@ -648,9 +648,17 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
             except Exception:
                 pass
     # conf/ should be readable by operators (not just service account)
+    # Files inside conf/ must not be world-writable (init runs as root with umask 000)
     if cfg.conf_dir and os.path.exists(cfg.conf_dir):
         try:
             subprocess.run(["chmod", "755", cfg.conf_dir], capture_output=True, timeout=5)
+            # Config files: owner rw, group/other read-only
+            for f in os.listdir(cfg.conf_dir):
+                fpath = os.path.join(cfg.conf_dir, f)
+                if os.path.isfile(fpath):
+                    os.chmod(fpath, 0o644)
+                elif os.path.isdir(fpath):
+                    os.chmod(fpath, 0o755)
         except Exception:
             pass
 
@@ -6926,6 +6934,35 @@ def _init_headless(cfg, args):
             fmt.step_ok(f"Dashboard password set for {svc_name}")
     except Exception as e:
         fmt.step_warn(f"Could not set dashboard password: {e}")
+
+    # ── Post-init permissions ──
+    # Config files must not be world-writable (init runs as root, umask may be 000)
+    if cfg.conf_dir and os.path.exists(cfg.conf_dir):
+        try:
+            subprocess.run(["chmod", "755", cfg.conf_dir], capture_output=True, timeout=5)
+            for f in os.listdir(cfg.conf_dir):
+                fpath = os.path.join(cfg.conf_dir, f)
+                if os.path.isfile(fpath):
+                    os.chmod(fpath, 0o644)
+                elif os.path.isdir(fpath):
+                    os.chmod(fpath, 0o755)
+            fmt.step_ok("Config file permissions hardened (644)")
+        except Exception:
+            pass
+    # data/ subdirs: log/cache 755, keys/vault 700
+    for d in [cfg.log_dir, os.path.join(cfg.data_dir, "cache")]:
+        d_path = d if os.path.isdir(d) else os.path.dirname(d)
+        if d_path and os.path.exists(d_path):
+            try:
+                subprocess.run(["chmod", "755", d_path], capture_output=True, timeout=5)
+            except Exception:
+                pass
+    for d in [os.path.join(cfg.data_dir, "keys"), os.path.join(cfg.data_dir, "vault")]:
+        if os.path.isdir(d):
+            try:
+                subprocess.run(["chmod", "700", d], capture_output=True, timeout=5)
+            except Exception:
+                pass
 
     # ── Phase 12: Verification ──
     _phase(12, headless_total, "Verification")
