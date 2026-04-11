@@ -3690,6 +3690,9 @@ a:hover{{text-decoration:underline}}
 
     def _serve_lab_tool_save_config(self):
         """Save lab tool connection config to vault."""
+        if self.command != "POST":
+            self._json_response({"error": "Use POST to save config"}, 405)
+            return
         role, err = _check_session_role(self, "admin")
         if err:
             self._json_response({"error": err}, 403)

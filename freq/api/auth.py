@@ -97,10 +97,12 @@ def check_session_role(handler, min_role="operator"):
                 token = part[len("freq_session="):]
                 break
     if not token:
-        # Query param fallback for SSE (EventSource can't set headers or cookies)
+        # Query param fallback — SSE only (EventSource can't set headers or cookies)
         from urllib.parse import urlparse, parse_qs
-        qs = parse_qs(urlparse(handler.path).query)
-        token = qs.get("token", [""])[0]
+        parsed = urlparse(handler.path)
+        if parsed.path == "/api/events":
+            qs = parse_qs(parsed.query)
+            token = qs.get("token", [""])[0]
     if not token:
         return None, "Authentication required"
     with _auth_lock:
@@ -210,6 +212,9 @@ def handle_auth_login(handler):
 
 def handle_auth_logout(handler):
     """POST /api/auth/logout — invalidate session and clear cookie."""
+    if handler.command != "POST":
+        handler._json_response({"error": "Use POST for logout"}, 405)
+        return
     token = ""
     auth_header = handler.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
