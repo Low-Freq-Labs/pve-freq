@@ -1,59 +1,54 @@
 var HC=['#58a6ff','#3fb950','#d29922','#f778ba','#79c0ff','#d2a8ff','#ff7b72','#ffa657','#7ee787'];
 var quotes=[
-  '"the bass is the foundation. so is this tool." — freq',
-  '"SSH in. Crush it. Log out." — freq',
-  '"everything is going to be okay. the cluster is healthy." — freq doctor',
   '"snapshot before you experiment." — freq',
-  '"objects in the mirror are closer than they appear." — mac miller',
-  '"the ones who know, know." — underground bass & sysadmins',
-  '"you built this. it works. that means something." — freq',
-  '"every great homelab started with a single qm create." — freq',
-  '"things are gonna get easier." — mac miller',
-  '"we love bass. we also love uptime." — freq',
   '"the goal every single time: clean." — freq doctor',
-  '"no matter where life takes me, find me with a smile." — mac miller'
+  '"measure twice, deploy once." — freq',
+  '"trust the probes, verify the state." — freq',
+  '"if it works in curl but not the browser, it does not work." — freq',
+  '"healthy fleet, quiet dashboard." — freq',
+  '"the config is the contract." — freq',
+  '"no surprises in production." — freq'
 ];
 var taglines={
   home:[
-    'Drop the bass, not the uptime.','Low frequency. High efficiency.',
-    'Bass-boosted infrastructure.','Feel the rumble. Deploy the fleet.',
-    'Built different. Built heavy.','Headphones on. VMs deployed.',
-    'Sub-zero latency, sub-bass energy.','Where the subs hit and the servers sit.'
+    'Fleet overview.','All systems reporting.',
+    'Operational status.','DC01 dashboard.',
+    'Current state.','Fleet health summary.'
   ],
   fleet:[
-    'Eyes on every node.','Fleet-wide. Real-time. No exceptions.',
-    'One dashboard. Every host.','The fleet is alive.',
-    'Cluster heartbeat: strong.','Monitor everything. Miss nothing.'
+    'Host inventory.','Fleet-wide status.',
+    'All hosts reporting.','Cluster state.',
+    'Real-time fleet data.','Host health overview.'
   ],
   docker:[
-    'Containers up. Worries down.','Stack healthy. Coffee ready.',
-    'Compose, deploy, forget.','Every container accounted for.',
-    'Docker fleet at your fingertips.','Containers are cattle, not pets.'
+    'Container status.','Stack overview.',
+    'Container inventory.','Docker fleet state.',
+    'All containers reporting.','Compose stack health.'
   ],
   media:[
-    'Streams flowing. Library growing.','Plex is happy. You should be too.',
-    'The media never stops.','Transcode. Organize. Enjoy.',
-    'Entertainment infrastructure.','Content delivery: operational.'
+    'Media stack status.','Stream health.',
+    'Container services.','Media inventory.',
+    'Service state.','Media fleet overview.'
   ],
   security:[
-    'Trust nothing. Verify everything.','Locked down. Eyes open.',
-    'Security is not optional.','Audit. Harden. Sleep better.',
-    'Your firewall thanks you.','Compliance is a lifestyle.'
+    'Security posture.','Access control.',
+    'Audit status.','Compliance state.',
+    'Hardening overview.','Security inventory.'
   ],
   tools:[
-    'The right tool for the right job.','Automate the boring stuff.',
-    'Playbooks loaded. Standing by.','Chaos is a feature, not a bug.',
-    'Incident response: ready.','Measure twice. Deploy once.'
+    'System tools.','Operational utilities.',
+    'Automation status.','Tool inventory.',
+    'Diagnostics ready.','System operations.'
   ],
   lab:[
-    'Break things here, not in prod.','The lab is where magic happens.',
-    'Experiment. Learn. Iterate.','Sandbox mode: engaged.',
-    'Test in lab. Deploy with confidence.','Every prod fix started in a lab.'
+    'Lab environment.','Test infrastructure.',
+    'Lab inventory.','Development hosts.',
+    'Lab fleet status.','Non-production state.'
   ],
   settings:[
-    'Fine-tune the machine.','Preferences saved. Moving on.',
-    'Configuration is power.','Dial it in.',
-    'Your dashboard, your rules.','Customize everything.'
+    'Configuration.','Dashboard preferences.',
+    'System settings.','User preferences.',
+    'Dashboard configuration.','Settings overview.'
   ]
 };
 var _lastTagline='',_lastQuote='';
@@ -1965,7 +1960,7 @@ function _populateCompareDropdowns(){
 }
 function loadLabPage(){loadLabTools();}
 function loadSettingsPage(){loadCosts();loadFederation();_loadSettingsPrefs();_loadLabAssignments();}
-/* ── v3.0.0 Domain Dashboard Loaders ── */
+/* ── Domain Dashboard Loaders ── */
 function loadNetworkPage(){
   _fetchAndRender('/api/v1/net/switches','net-switch-tbl',function(d){
     var stats=d.stats||{};

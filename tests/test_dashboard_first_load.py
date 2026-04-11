@@ -83,5 +83,42 @@ class TestServeHandlerContract(unittest.TestCase):
         self.assertIn("/static/", src, "Must have static asset route")
 
 
+class TestDashboardTone(unittest.TestCase):
+    """Dashboard voice must be calm DC01 operator tone, not playful."""
+
+    BANNED_PHRASES = [
+        "Drop the bass", "bass-boosted", "Feel the rumble",
+        "Plex is happy", "magic happens", "Chaos is a feature",
+        "MISSION CONTROL", "v3.0.0",
+    ]
+
+    def test_no_playful_taglines(self):
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        tagline_block = src.split("var taglines=")[1].split("};")[0]
+        for phrase in self.BANNED_PHRASES:
+            self.assertNotIn(phrase, tagline_block,
+                             f"Taglines must not contain playful phrase: {phrase}")
+
+    def test_no_playful_quotes(self):
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        quote_block = src.split("var quotes=")[1].split("];")[0]
+        for phrase in self.BANNED_PHRASES:
+            self.assertNotIn(phrase, quote_block,
+                             f"Quotes must not contain playful phrase: {phrase}")
+
+    def test_css_no_stale_version(self):
+        with open(os.path.join(REPO_ROOT, "freq/data/web/css/app.css")) as f:
+            header = f.read()[:300]
+        self.assertNotIn("v3.0.0", header, "CSS header must not have stale version")
+        self.assertNotIn("MISSION CONTROL", header, "CSS header must not say MISSION CONTROL")
+
+    def test_js_no_stale_version_comments(self):
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        self.assertNotIn("v3.0.0", src, "JS must not have stale v3.0.0 references")
+
+
 if __name__ == "__main__":
     unittest.main()
