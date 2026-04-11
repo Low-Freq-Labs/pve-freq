@@ -979,7 +979,12 @@ def load_fleet_boundaries(path: str) -> FleetBoundaries:
 
 
 def _detect_ssh_key(cfg: FreqConfig) -> str:
-    """Find the primary (ed25519) SSH key in priority order."""
+    """Find the primary (ed25519) SSH key in priority order.
+
+    Only returns keys that exist AND are readable by the current user.
+    In repo-backed installs, keys created by another user (e.g. rick-ops
+    creates freq_id_rsa but morty-ops runs freq serve) are skipped.
+    """
     candidates = [
         os.path.join(cfg.key_dir, "freq_id_ed25519"),
         os.path.expanduser("~/.ssh/id_ed25519"),
@@ -990,18 +995,21 @@ def _detect_ssh_key(cfg: FreqConfig) -> str:
         os.path.expanduser("~/.ssh/id_rsa"),
     ]
     for path in candidates:
-        if os.path.isfile(path):
+        if os.path.isfile(path) and os.access(path, os.R_OK):
             return path
     return ""
 
 
 def _detect_rsa_key(cfg: FreqConfig) -> str:
-    """Find the RSA SSH key for legacy devices (iDRAC, switch)."""
+    """Find the RSA SSH key for legacy devices (iDRAC, switch).
+
+    Only returns keys readable by the current user.
+    """
     candidates = [
         os.path.join(cfg.key_dir, "freq_id_rsa"),
         os.path.expanduser("~/.ssh/id_rsa"),
     ]
     for path in candidates:
-        if os.path.isfile(path):
+        if os.path.isfile(path) and os.access(path, os.R_OK):
             return path
     return ""

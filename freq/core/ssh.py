@@ -135,7 +135,7 @@ def _resolve_legacy_key(key_path: str) -> str:
         os.path.join(key_dir, "id_rsa"),
     ]
     for rsa_path in rsa_candidates:
-        if os.path.isfile(rsa_path):
+        if os.path.isfile(rsa_path) and os.access(rsa_path, os.R_OK):
             return rsa_path
 
     # No RSA key found — return original (will likely fail, but at least
