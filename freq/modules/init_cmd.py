@@ -6904,16 +6904,26 @@ def _init_headless(cfg, args):
         else:
             fmt.step_ok(f"{svc_name} already in roles")
 
-    # Seed dashboard password for bootstrap user so web login works post-init
+    # Seed dashboard passwords so web login works post-init
+    # Bootstrap user (freq-ops) uses bootstrap password (--bootstrap-password-file)
+    # Service account (freq-admin) uses service password (--password-file)
     try:
         from freq.modules.vault import vault_init, vault_set
         from freq.api.auth import hash_password
         if not os.path.exists(cfg.vault_file):
             vault_init(cfg)
+        boot_pass = ctx.get("bootstrap_pass", "")
         svc_pass = ctx.get("svc_pass", "")
-        if svc_pass and bootstrap_user:
-            vault_set(cfg, "auth", f"password_{bootstrap_user}", hash_password(svc_pass))
-            fmt.step_ok(f"Dashboard password set for {bootstrap_user}")
+        svc_name = ctx["svc_name"]
+        if bootstrap_user:
+            # Use bootstrap password when available, fall back to svc_pass for key-based bootstrap
+            user_pass = boot_pass or svc_pass
+            if user_pass:
+                vault_set(cfg, "auth", f"password_{bootstrap_user}", hash_password(user_pass))
+                fmt.step_ok(f"Dashboard password set for {bootstrap_user}")
+        if svc_pass and svc_name != bootstrap_user:
+            vault_set(cfg, "auth", f"password_{svc_name}", hash_password(svc_pass))
+            fmt.step_ok(f"Dashboard password set for {svc_name}")
     except Exception as e:
         fmt.step_warn(f"Could not set dashboard password: {e}")
 
