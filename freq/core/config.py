@@ -471,13 +471,13 @@ def validate_config(cfg: FreqConfig) -> list:
             seen_labels.add(h.label)
 
     # Check legacy password file if iDRAC/switch hosts exist
+    # Note: device credentials can also be provided at runtime via --device-credentials
     legacy_hosts = [h for h in cfg.hosts if h.htype in ("idrac", "switch")]
     if legacy_hosts:
         pw_file = getattr(cfg, "legacy_password_file", "")
-        if not pw_file:
-            issues.append(f"{len(legacy_hosts)} iDRAC/switch host(s) but no legacy_password_file configured")
-        elif not os.path.isfile(pw_file):
+        if pw_file and not os.path.isfile(pw_file):
             issues.append(f"legacy_password_file not found: {pw_file}")
+        # Not having legacy_password_file is OK — runtime --device-credentials covers it
 
     # Check PVE nodes
     if cfg.pve_nodes:
@@ -487,16 +487,23 @@ def validate_config(cfg: FreqConfig) -> list:
                 issues.append(f"Invalid PVE node IP: {ip}")
 
     # Check required directories
+    # Note: keys/ and vault/ are intentionally 700 owned by the service account.
+    # When an operator runs validate, these dirs are not readable — that's correct.
+    secure_dirs = {"keys", "vault"}
     for name, path in [("conf", cfg.conf_dir), ("data", cfg.data_dir), ("keys", cfg.key_dir)]:
         if not os.path.isdir(path):
             issues.append(f"Directory missing: {name} ({path})")
-        elif not os.access(path, os.R_OK):
+        elif not os.access(path, os.R_OK) and name not in secure_dirs:
             issues.append(f"Directory not readable: {name} ({path})")
 
-    # Check log file writable
+    # Check log file writable — only flag if running as the service account
+    # Operators don't need log write access; the service does
     log_dir = os.path.dirname(cfg.log_file)
     if os.path.isdir(log_dir) and not os.access(log_dir, os.W_OK):
-        issues.append(f"Log directory not writable: {log_dir}")
+        import getpass
+        current_user = getpass.getuser()
+        if current_user == cfg.ssh_service_account:
+            issues.append(f"Log directory not writable: {log_dir}")
 
     # Check ports
     from freq.core.validate import port as valid_port
