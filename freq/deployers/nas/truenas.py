@@ -120,17 +120,17 @@ if result.returncode != 0:
 
 print("ACCOUNT_OK")
 PY
-    test "$(midclt call user.query "[[\\"username\\",\\"=\\",\\"{svc_name}\\"]]" | python3 -c 'import json,sys; data=json.load(sys.stdin); print("1" if data else "")')" = "1" || {{ echo ACCOUNT_MISSING; exit 1; }}
+    test "$(midclt call user.query "[[\\"username\\",\\"=\\",\\"{svc_name}\\"]]" | python3 -c 'import json,sys; data=json.load(sys.stdin); print("1" if data else "")')" = "1" || { echo ACCOUNT_MISSING; exit 1; }
 elif [ "$VARIANT" = "core" ]; then
     if ! id '%(svc_name)s' >/dev/null 2>&1; then
-        pw useradd '%(svc_name)s' -m -s /bin/sh -c "FREQ Service Account" || {{ echo USERADD_FAIL; exit 1; }}
+        pw useradd '%(svc_name)s' -m -s /bin/sh -c "FREQ Service Account" || { echo USERADD_FAIL; exit 1; }
     fi
     _pass=$(echo '%(pass_b64)s' | base64 -d)
     echo "$_pass" | pw usermod '%(svc_name)s' -h 0 || echo CHPASSWD_FAIL
     unset _pass
 else
     if ! id '%(svc_name)s' >/dev/null 2>&1; then
-        useradd -m -s /bin/bash '%(svc_name)s' || {{ echo USERADD_FAIL; exit 1; }}
+        useradd -m -s /bin/bash '%(svc_name)s' || { echo USERADD_FAIL; exit 1; }
     fi
     _pass=$(echo '%(pass_b64)s' | base64 -d)
     printf '%%s:%%s\\n' '%(svc_name)s' "$_pass" | chpasswd 2>/dev/null || echo CHPASSWD_FAIL
@@ -138,7 +138,7 @@ else
 fi
 
 if [ "$VARIANT" != "scale" ]; then
-    id '%(svc_name)s' >/dev/null 2>&1 || {{ echo ACCOUNT_MISSING; exit 1; }}
+    id '%(svc_name)s' >/dev/null 2>&1 || { echo ACCOUNT_MISSING; exit 1; }
 fi
 
 if [ "$VARIANT" != "scale" ]; then
