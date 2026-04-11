@@ -970,6 +970,8 @@ def _detect_ssh_key(cfg: FreqConfig) -> str:
     candidates = [
         os.path.join(cfg.key_dir, "freq_id_ed25519"),
         os.path.expanduser("~/.ssh/id_ed25519"),
+        # Fleet key (deployed by infrastructure agent across all hosts)
+        os.path.expanduser("~/.ssh/fleet_key"),
         # Fallback to RSA if no ed25519 exists
         os.path.join(cfg.key_dir, "freq_id_rsa"),
         os.path.expanduser("~/.ssh/id_rsa"),
