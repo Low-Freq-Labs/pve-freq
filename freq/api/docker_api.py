@@ -21,6 +21,29 @@ from freq.modules.serve import (
 )
 
 
+# -- Helpers -----------------------------------------------------------------
+
+
+def _lookup_vm(container_vms: dict, vm_id_or_key: str):
+    """Look up a ContainerVM by vm_id (int) or vm_key (string label).
+
+    Host-format entries (from freq init) are keyed by label string.
+    Legacy entries are keyed by vm_id int. This helper tries both.
+    Returns (key, ContainerVM) or (None, None).
+    """
+    # Try int key first (legacy format)
+    try:
+        vm_id = int(vm_id_or_key)
+        if vm_id in container_vms:
+            return vm_id, container_vms[vm_id]
+    except (ValueError, TypeError):
+        pass
+    # Try string key (host format from init)
+    if vm_id_or_key in container_vms:
+        return vm_id_or_key, container_vms[vm_id_or_key]
+    return None, None
+
+
 # -- Handlers ----------------------------------------------------------------
 
 
@@ -28,12 +51,13 @@ def handle_containers_registry(handler):
     """GET /api/containers/registry -- list all registered containers."""
     cfg = load_config()
     entries = []
-    for vm in sorted(cfg.container_vms.values(), key=lambda v: v.vm_id):
+    for key, vm in sorted(cfg.container_vms.items(), key=lambda kv: str(kv[0])):
         for cname, c in vm.containers.items():
             entries.append(
                 {
                     "name": cname,
                     "vm_id": vm.vm_id,
+                    "vm_key": str(key),
                     "vm_label": vm.label,
                     "vm_ip": vm.ip,
                     "port": c.port,
@@ -118,28 +142,24 @@ def handle_containers_delete(handler):
         return
     query = _parse_query_flat(handler.path)
     name = query.get("name", "")
-    try:
-        vm_id = int(query.get("vm_id", "0"))
-    except (ValueError, TypeError):
-        json_response(handler, {"error": "Invalid vm_id"}, 400)
-        return
-    if not name or not vm_id:
-        json_response(handler, {"error": "name and vm_id required"}, 400)
+    vm_id_or_key = query.get("vm_key", "") or query.get("vm_id", "")
+    if not name or not vm_id_or_key:
+        json_response(handler, {"error": "name and vm_id/vm_key required"}, 400)
         return
 
     cfg = load_config()
     toml_path = os.path.join(cfg.conf_dir, "containers.toml")
-    vm = cfg.container_vms.get(vm_id)
+    key, vm = _lookup_vm(cfg.container_vms, vm_id_or_key)
     if not vm:
-        json_response(handler, {"error": f"VM {vm_id} not in registry"}, 404)
+        json_response(handler, {"error": f"VM {vm_id_or_key} not in registry"}, 404)
         return
     if name not in vm.containers:
-        json_response(handler, {"error": f"Container {name} not found on VM {vm_id}"}, 404)
+        json_response(handler, {"error": f"Container {name} not found on VM {vm_id_or_key}"}, 404)
         return
 
     del vm.containers[name]
     _write_containers_toml(toml_path, cfg.container_vms)
-    json_response(handler, {"ok": True, "deleted": name, "vm_id": vm_id})
+    json_response(handler, {"ok": True, "deleted": name, "vm_key": str(key)})
 
 
 def handle_containers_add(handler):
@@ -152,34 +172,30 @@ def handle_containers_add(handler):
         return
     query = _parse_query_flat(handler.path)
     name = query.get("name", "").strip()
-    try:
-        vm_id = int(query.get("vm_id", "0"))
-    except (ValueError, TypeError):
-        json_response(handler, {"error": "Invalid vm_id"}, 400)
-        return
+    vm_id_or_key = query.get("vm_key", "") or query.get("vm_id", "")
     try:
         port = int(query.get("port", "0"))
     except (ValueError, TypeError):
         port = 0
-    if not name or not vm_id:
-        json_response(handler, {"error": "name and vm_id required"}, 400)
+    if not name or not vm_id_or_key:
+        json_response(handler, {"error": "name and vm_id/vm_key required"}, 400)
         return
 
     cfg = load_config()
     toml_path = os.path.join(cfg.conf_dir, "containers.toml")
-    vm = cfg.container_vms.get(vm_id)
+    key, vm = _lookup_vm(cfg.container_vms, vm_id_or_key)
     if not vm:
-        json_response(handler, {"error": f"VM {vm_id} not in registry"}, 404)
+        json_response(handler, {"error": f"VM {vm_id_or_key} not in registry"}, 404)
         return
     if name in vm.containers:
-        json_response(handler, {"error": f"Container {name} already registered on VM {vm_id}"}, 409)
+        json_response(handler, {"error": f"Container {name} already registered on VM {vm_id_or_key}"}, 409)
         return
 
     from freq.core.config import Container
 
-    vm.containers[name] = Container(name=name, vm_id=vm_id, port=port)
+    vm.containers[name] = Container(name=name, vm_id=vm.vm_id, port=port)
     _write_containers_toml(toml_path, cfg.container_vms)
-    json_response(handler, {"ok": True, "added": name, "vm_id": vm_id})
+    json_response(handler, {"ok": True, "added": name, "vm_key": str(key)})
 
 
 def handle_containers_edit(handler):
@@ -192,56 +208,48 @@ def handle_containers_edit(handler):
         return
     query = _parse_query_flat(handler.path)
     name = query.get("name", "").strip()
-    try:
-        old_vm_id = int(query.get("old_vm_id", "0"))
-    except (ValueError, TypeError):
-        json_response(handler, {"error": "Invalid old_vm_id"}, 400)
-        return
-    try:
-        new_vm_id = int(query.get("new_vm_id", "0"))
-    except (ValueError, TypeError):
-        json_response(handler, {"error": "Invalid new_vm_id"}, 400)
-        return
+    old_key_str = query.get("old_vm_key", "") or query.get("old_vm_id", "")
+    new_key_str = query.get("new_vm_key", "") or query.get("new_vm_id", "")
     try:
         port = int(query.get("port", "0"))
     except (ValueError, TypeError):
         port = 0
     api_path = query.get("api_path", "")
-    if not name or not old_vm_id or not new_vm_id:
-        json_response(handler, {"error": "name, old_vm_id, new_vm_id required"}, 400)
+    if not name or not old_key_str or not new_key_str:
+        json_response(handler, {"error": "name, old_vm_key, new_vm_key required"}, 400)
         return
 
     cfg = load_config()
     toml_path = os.path.join(cfg.conf_dir, "containers.toml")
-    old_vm = cfg.container_vms.get(old_vm_id)
+    old_key, old_vm = _lookup_vm(cfg.container_vms, old_key_str)
     if not old_vm or name not in old_vm.containers:
-        json_response(handler, {"error": f"Container {name} not found on VM {old_vm_id}"}, 404)
+        json_response(handler, {"error": f"Container {name} not found on VM {old_key_str}"}, 404)
         return
 
-    if old_vm_id == new_vm_id:
+    if old_key_str == new_key_str:
         c = old_vm.containers[name]
         c.port = port
         c.api_path = api_path
     else:
-        new_vm = cfg.container_vms.get(new_vm_id)
+        new_key, new_vm = _lookup_vm(cfg.container_vms, new_key_str)
         if not new_vm:
-            json_response(handler, {"error": f"VM {new_vm_id} not in registry"}, 404)
+            json_response(handler, {"error": f"VM {new_key_str} not in registry"}, 404)
             return
         if name in new_vm.containers:
-            json_response(handler, {"error": f"Container {name} already exists on VM {new_vm_id}"}, 409)
+            json_response(handler, {"error": f"Container {name} already exists on VM {new_key_str}"}, 409)
             return
         from freq.core.config import Container
 
         new_vm.containers[name] = Container(
             name=name,
-            vm_id=new_vm_id,
+            vm_id=new_vm.vm_id,
             port=port,
             api_path=api_path,
         )
         del old_vm.containers[name]
 
     _write_containers_toml(toml_path, cfg.container_vms)
-    json_response(handler, {"ok": True, "name": name, "vm_id": new_vm_id})
+    json_response(handler, {"ok": True, "name": name, "vm_key": new_key_str})
 
 
 def handle_containers_compose_up(handler):
@@ -254,11 +262,10 @@ def handle_containers_compose_up(handler):
         return
     cfg = load_config()
     query = _parse_query_flat(handler.path)
-    vm_id = int(query.get("vm_id", "0"))
-
-    vm = cfg.container_vms.get(vm_id)
+    vm_id_or_key = query.get("vm_key", "") or query.get("vm_id", "0")
+    key, vm = _lookup_vm(cfg.container_vms, vm_id_or_key)
     if not vm:
-        json_response(handler, {"error": f"VM {vm_id} not in container registry"}, 404)
+        json_response(handler, {"error": f"VM {vm_id_or_key} not in container registry"}, 404)
         return
 
     compose_path = vm.compose_path or f"{cfg.docker_config_base}/{vm.label}"
@@ -296,11 +303,10 @@ def handle_containers_compose_down(handler):
         return
     cfg = load_config()
     query = _parse_query_flat(handler.path)
-    vm_id = int(query.get("vm_id", "0"))
-
-    vm = cfg.container_vms.get(vm_id)
+    vm_id_or_key = query.get("vm_key", "") or query.get("vm_id", "0")
+    key, vm = _lookup_vm(cfg.container_vms, vm_id_or_key)
     if not vm:
-        json_response(handler, {"error": f"VM {vm_id} not in container registry"}, 404)
+        json_response(handler, {"error": f"VM {vm_id_or_key} not in container registry"}, 404)
         return
 
     compose_path = vm.compose_path or f"{cfg.docker_config_base}/{vm.label}"
@@ -336,11 +342,10 @@ def handle_containers_compose_view(handler):
         return
     cfg = load_config()
     query = _parse_query_flat(handler.path)
-    vm_id = int(query.get("vm_id", "0"))
-
-    vm = cfg.container_vms.get(vm_id)
+    vm_id_or_key = query.get("vm_key", "") or query.get("vm_id", "0")
+    key, vm = _lookup_vm(cfg.container_vms, vm_id_or_key)
     if not vm:
-        json_response(handler, {"error": f"VM {vm_id} not in container registry"}, 404)
+        json_response(handler, {"error": f"VM {vm_id_or_key} not in container registry"}, 404)
         return
 
     compose_path = vm.compose_path or f"{cfg.docker_config_base}/{vm.label}"

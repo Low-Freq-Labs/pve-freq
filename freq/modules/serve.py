@@ -3289,7 +3289,11 @@ a:hover{{text-decoration:underline}}
                         "port": container.port,
                     }
                 )
-        self._json_response({"services": results, "skipped": skipped})
+        self._json_response({
+            "services": results,
+            "skipped": skipped,
+            "registry_configured": bool(cfg.container_vms),
+        })
 
     def _serve_media_downloads(self):
         """Active downloads from qBit + SABnzbd."""
