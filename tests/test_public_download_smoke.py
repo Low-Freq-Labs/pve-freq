@@ -149,5 +149,34 @@ class TestInstallPromises(unittest.TestCase):
         self.assertIn("freq.cli:main", toml)
 
 
+class TestVersionConsistency(unittest.TestCase):
+    """All version surfaces must agree."""
+
+    def test_version_flag_matches_module(self):
+        """freq --version must show freq.__version__."""
+        from freq import __version__
+        rc, out, _ = _freq("--version")
+        self.assertIn(__version__, out)
+
+    def test_config_version_matches_module(self):
+        """freq.toml version must match freq.__version__."""
+        from freq import __version__
+        import tomllib
+        with open(os.path.join(REPO_ROOT, "conf", "freq.toml"), "rb") as f:
+            cfg = tomllib.load(f)
+        self.assertEqual(cfg["freq"]["version"], __version__,
+                         f"freq.toml says {cfg['freq']['version']} but "
+                         f"__version__ is {__version__}")
+
+    def test_changelog_latest_matches_module(self):
+        """CHANGELOG latest version must match freq.__version__."""
+        from freq import __version__
+        with open(os.path.join(REPO_ROOT, "CHANGELOG.md")) as f:
+            content = f.read()
+        match = re.search(r"## \[(\d+\.\d+\.\d+)\]", content)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), __version__)
+
+
 if __name__ == "__main__":
     unittest.main()
