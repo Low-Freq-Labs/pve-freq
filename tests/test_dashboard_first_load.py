@@ -134,6 +134,33 @@ class TestDashboardTone(unittest.TestCase):
             src = f.read()
         self.assertNotIn("MEDIA STACK", src, "HTML must not use MEDIA STACK")
 
+    def test_fleet_stats_show_probe_evidence(self):
+        """Fleet stats must label status as SSH PROBE, not bare ONLINE."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        # The stats card builder for fleet must say SSH PROBE or PROBE AGE
+        self.assertIn("SSH PROBE", src,
+                       "Fleet stats must label status as SSH PROBE result")
+        self.assertIn("PROBE AGE", src,
+                       "Fleet stats must show probe age, not LIVE DATA")
+
+    def test_no_bare_live_label(self):
+        """Must not show bare 'LIVE' as a status label without age context."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        # The age label should always show seconds/minutes, not claim LIVE
+        self.assertNotIn("'LIVE'", src.split("var _ageLbl")[1].split(";")[0] if "var _ageLbl" in src else "",
+                          "Age label must show actual seconds, not claim LIVE")
+
+    def test_watchdog_shows_evidence(self):
+        """Watchdog must show hosts checked count, not bare OK."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        # The watchdog render block starts at the comment and ends at the catch
+        watchdog_block = src.split("Watchdog health check")[1].split(".catch")[0]
+        self.assertIn("hosts checked", watchdog_block,
+                       "Watchdog must show what was checked")
+
 
 if __name__ == "__main__":
     unittest.main()
