@@ -6415,7 +6415,7 @@ function vmPower(vmid,action){
 }
 function vmPushKey(ip){
   if(!ip){toast('No IP available for this VM','error');return;}
-  confirmAction('Push freq SSH key to <strong>'+ip+'</strong>?<br><span class="text-sm text-dim">Deploys the freq-admin authorized_keys so FREQ can manage this host.</span>',function(){
+  confirmAction('Push freq SSH key to <strong>'+ip+'</strong>?<br><span class="text-sm text-dim">Deploys the FREQ service account authorized_keys so FREQ can manage this host.</span>',function(){
     toast('Pushing key to '+ip+'...','info');
     _authFetch('/api/vm/push-key?ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
       if(d.error){toast('Key push failed: '+d.error,'error');return;}
