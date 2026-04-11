@@ -42,7 +42,6 @@ FREQ is organized around domain commands. Run `freq help` for the live command m
 | `freq event` | Event network lifecycle | `freq event list` |
 | `freq specialist` | Specialist environment operations | `freq specialist <action>` |
 | `freq lab` | Lab environments and tooling | `freq lab list` |
-| `freq engine` | Policy engine commands | `freq engine list` |
 | `freq plugin` | Plugin discovery, install, update, creation | `freq plugin list` |
 | `freq config` | Configuration validation | `freq config validate` |
 
