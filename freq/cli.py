@@ -1679,7 +1679,7 @@ def _register_dns(sub):
     p.add_argument("hostname", help="Hostname to remove")
     p.set_defaults(func=_cmd_dns_internal_remove)
 
-    p = int_sub.add_parser("sync", help="Sync DNS from hosts.conf")
+    p = int_sub.add_parser("sync", help="Sync DNS from hosts.toml")
     p.set_defaults(func=_cmd_dns_internal_sync)
 
     p = int_sub.add_parser("audit", help="Audit DNS resolution")

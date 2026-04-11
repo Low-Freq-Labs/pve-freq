@@ -2,7 +2,7 @@
 
 Domain: freq state gitops
 
-Points FREQ at a git repo holding config files (freq.toml, hosts.conf,
+Points FREQ at a git repo holding config files (freq.toml, hosts.toml,
 rules.toml, playbooks/). Auto-pulls on a schedule, shows diffs, and supports
 rollback to any commit.
 

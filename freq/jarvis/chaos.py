@@ -35,7 +35,7 @@ class Experiment:
 
     name: str
     experiment_type: str  # service_kill, service_restart, network_delay, disk_fill, cpu_stress
-    target_host: str  # host label from hosts.conf
+    target_host: str  # host label from hosts.toml
     target_service: str = ""  # container or service name
     duration: int = 60  # seconds
     parameters: dict = field(default_factory=dict)

@@ -2,7 +2,7 @@
 
 Provides: load_config() → FreqConfig dataclass with ~40 fields.
 
-Reads freq.toml (primary) and legacy bash-style configs (hosts.conf, vlans.conf).
+Reads freq.toml (primary), hosts.toml, and other TOML configs.
 Hosts, VLANs, distros, fleet boundaries, monitors — everything the CLI and
 web dashboard need to operate. Safe defaults set BEFORE loading any config so
 FREQ runs even with a broken or missing config file.
@@ -12,7 +12,7 @@ Replaces: Ansible inventory files + group_vars + host_vars ($0 but complex),
 
 Architecture:
     - TOML parsing via tomllib (stdlib 3.11+)
-    - Legacy hosts.conf/vlans.conf parsed as key=value for migration
+    - Legacy hosts.conf/vlans.conf auto-migrated to TOML on first load
     - FreqConfig is a frozen-ish dataclass — loaded once, passed everywhere
     - Config paths: /etc/freq/ (system) or ./conf/ (dev/local)
     - Credentials NEVER in config — always vault paths or file references
