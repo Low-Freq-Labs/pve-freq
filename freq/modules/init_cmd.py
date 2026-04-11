@@ -5756,13 +5756,25 @@ def _init_check(cfg, json_output=False):
 
     key_file = os.path.join(cfg.key_dir, "freq_id_ed25519")
     rsa_file = os.path.join(cfg.key_dir, "freq_id_rsa")
-    # Also check fleet_key as fallback (deployed by infra agent)
     fleet_key = os.path.expanduser("~/.ssh/fleet_key")
+    # Check for SSH key: init-generated OR fleet_key OR key_dir exists but is secure (700)
     has_ssh_key = os.path.isfile(key_file) or os.path.isfile(fleet_key)
-    _chk("SSH ed25519 key (modern hosts)", "pass" if has_ssh_key else fleet_severity)
-    _chk("SSH RSA key (iDRAC + switch)", "pass" if os.path.isfile(rsa_file) else "warn")
+    key_dir_secure = os.path.isdir(cfg.key_dir) and not os.access(cfg.key_dir, os.R_OK)
+    # Use resolved key (what ssh.run actually uses)
+    resolved_key = cfg.ssh_key_path
+    has_any_key = has_ssh_key or key_dir_secure or (resolved_key and os.path.isfile(resolved_key))
+    _chk("SSH key available", "pass" if has_any_key else fleet_severity)
+    _chk("SSH RSA key (iDRAC + switch)", "pass" if os.path.isfile(rsa_file) or key_dir_secure else "warn")
 
-    _chk("Vault file exists", "pass" if os.path.isfile(cfg.vault_file) else "fail")
+    # Vault may be in a 700 directory (service-account only) — check parent dir
+    vault_dir = os.path.dirname(cfg.vault_file)
+    if os.path.isfile(cfg.vault_file):
+        _chk("Vault file exists", "pass")
+    elif os.path.isdir(vault_dir) and not os.access(vault_dir, os.R_OK):
+        # Can't read vault dir (700 owned by service account) — that's correct security
+        _chk(f"Vault directory secure ({svc_name} only)", "pass")
+    else:
+        _chk("Vault file exists", "fail")
 
     toml_path = os.path.join(cfg.conf_dir, "freq.toml")
     _chk("freq.toml exists", "pass" if os.path.isfile(toml_path) else "fail")
