@@ -5701,18 +5701,28 @@ def _init_check(cfg, json_output=False):
         fmt.blank()
 
     marker = os.path.join(cfg.conf_dir, ".initialized")
+    web_only = False
     if os.path.isfile(marker):
         with open(marker) as f:
-            _chk(f"Initialized: {f.read().strip()}", "pass")
+            marker_content = f.read().strip()
+        web_only = "web setup" in marker_content.lower()
+        _chk(f"Initialized: {marker_content}", "pass")
     else:
         _chk("Not initialized (.initialized file missing)", "warn")
 
+    # Service account and SSH keys are required for full init but not for
+    # web-only setup (dashboard works without fleet SSH access)
+    fleet_severity = "warn" if web_only else "fail"
+
     rc, _, _ = _run(["id", svc_name])
-    _chk(f"Service account '{svc_name}' exists", "pass" if rc == 0 else "fail")
+    _chk(f"Service account '{svc_name}' exists", "pass" if rc == 0 else fleet_severity)
 
     key_file = os.path.join(cfg.key_dir, "freq_id_ed25519")
     rsa_file = os.path.join(cfg.key_dir, "freq_id_rsa")
-    _chk("SSH ed25519 key (modern hosts)", "pass" if os.path.isfile(key_file) else "fail")
+    # Also check fleet_key as fallback (deployed by infra agent)
+    fleet_key = os.path.expanduser("~/.ssh/fleet_key")
+    has_ssh_key = os.path.isfile(key_file) or os.path.isfile(fleet_key)
+    _chk("SSH ed25519 key (modern hosts)", "pass" if has_ssh_key else fleet_severity)
     _chk("SSH RSA key (iDRAC + switch)", "pass" if os.path.isfile(rsa_file) else "warn")
 
     _chk("Vault file exists", "pass" if os.path.isfile(cfg.vault_file) else "fail")

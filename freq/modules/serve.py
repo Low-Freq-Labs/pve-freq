@@ -2523,7 +2523,8 @@ a:hover{{text-decoration:underline}}
             with open(marker, "w") as f:
                 f.write(f"Setup completed: {datetime.datetime.now().isoformat()}\n")
 
-            # Also write CLI-compatible .initialized marker so freq init --check passes
+            # Write .initialized marker for CLI detection (web setup only —
+            # freq init --check may still report missing keys/service account)
             try:
                 os.makedirs(cfg.conf_dir, exist_ok=True)
                 init_marker = os.path.join(cfg.conf_dir, ".initialized")
