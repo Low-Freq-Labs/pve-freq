@@ -3775,8 +3775,35 @@ def _phase_fleet_configure(cfg, ctx):
     if categories:
         fb_path = os.path.join(cfg.conf_dir, "fleet-boundaries.toml")
         try:
-            with open(fb_path, "a") as f:
-                f.write("\n# Auto-categorized VM groups\n")
+            # Strip old [categories.*] sections before writing to prevent
+            # duplicate TOML table headers on re-run (append is not idempotent)
+            try:
+                with open(fb_path) as _fb:
+                    _fb_lines = _fb.readlines()
+            except FileNotFoundError:
+                _fb_lines = []
+            _fb_clean = []
+            _fb_skip = False
+            for _ln in _fb_lines:
+                _s = _ln.strip()
+                if _s.startswith("[categories."):
+                    _fb_skip = True
+                    continue
+                if _fb_skip:
+                    if _s.startswith("[") and not _s.startswith("[categories."):
+                        _fb_skip = False
+                        _fb_clean.append(_ln)
+                    else:
+                        continue
+                else:
+                    if _s == "# Auto-categorized VM groups":
+                        continue
+                    _fb_clean.append(_ln)
+            while _fb_clean and _fb_clean[-1].strip() == "":
+                _fb_clean.pop()
+            with open(fb_path, "w") as f:
+                f.writelines(_fb_clean)
+                f.write("\n\n# Auto-categorized VM groups\n")
                 for cat_name, cat_data in sorted(categories.items()):
                     vmids = cat_data["vmids"]
                     if not vmids:
@@ -5259,9 +5286,23 @@ def _phase_verify(cfg, ctx):
     log_dir = os.path.dirname(cfg.log_file)
     _check("Log dir writable", os.access(log_dir, os.W_OK))
 
-    # Hosts
-    if cfg.hosts:
-        _check(f"hosts.toml: {len(cfg.hosts)} hosts", True)
+    # Hosts — verify disk file exists and is parseable, not just memory state
+    hosts_path = cfg.hosts_file if hasattr(cfg, "hosts_file") else os.path.join(cfg.conf_dir, "hosts.toml")
+    hosts_file_ok = False
+    if os.path.isfile(hosts_path):
+        if tomllib:
+            try:
+                with open(hosts_path, "rb") as f:
+                    tomllib.load(f)
+                hosts_file_ok = True
+            except Exception:
+                pass
+        else:
+            hosts_file_ok = True
+    if cfg.hosts and hosts_file_ok:
+        _check(f"hosts.toml: {len(cfg.hosts)} hosts (file valid)", True)
+    elif cfg.hosts and not hosts_file_ok:
+        _check(f"hosts.toml: {len(cfg.hosts)} in memory but file missing or malformed", False)
     else:
         fmt.step_warn("hosts.toml is empty — use 'freq host add' or 'freq host discover'")
 
@@ -5339,20 +5380,65 @@ def _phase_verify(cfg, ctx):
     else:
         fmt.step_warn("vlans.toml is empty — run 'freq host discover' to scan VLANs")
 
-    # fleet-boundaries.toml populated
+    # fleet-boundaries.toml — verify file is parseable TOML with real entries
     fb_path = os.path.join(cfg.conf_dir, "fleet-boundaries.toml")
-    fb_populated = False
+    fb_ok = False
+    fb_msg = ""
     if os.path.isfile(fb_path):
-        try:
-            with open(fb_path) as f:
-                fb_content = f.read()
-            fb_populated = "[physical]" in fb_content or "[categories." in fb_content or "[pve_nodes]" in fb_content
-        except OSError:
-            pass
-    if fb_populated:
-        _check("fleet-boundaries.toml: populated", True)
+        if tomllib:
+            try:
+                with open(fb_path, "rb") as f:
+                    fb_data = tomllib.load(f)
+                phys = fb_data.get("physical", {})
+                pve = fb_data.get("pve_nodes", {})
+                cats = {k: v for k, v in fb_data.items() if k.startswith("categories") or (k == "categories" and isinstance(v, dict))}
+                cat_count = len(fb_data.get("categories", {})) if isinstance(fb_data.get("categories"), dict) else 0
+                entry_count = len(phys) + len(pve) + cat_count
+                if entry_count > 0:
+                    fb_ok = True
+                    fb_msg = f"{len(phys)} physical, {len(pve)} PVE, {cat_count} categories"
+            except Exception:
+                fb_msg = "malformed TOML"
+        else:
+            try:
+                with open(fb_path) as f:
+                    c = f.read()
+                fb_ok = "[physical]" in c or "[pve_nodes]" in c or "[categories." in c
+                fb_msg = "sections present"
+            except OSError:
+                pass
+    if fb_ok:
+        _check(f"fleet-boundaries.toml: {fb_msg}", True)
+    elif fb_msg:
+        _check(f"fleet-boundaries.toml: {fb_msg}", False)
     else:
         fmt.step_warn("fleet-boundaries.toml is empty — no device categories configured")
+
+    # containers.toml — verify file is parseable if it was generated
+    ct_path = os.path.join(cfg.conf_dir, "containers.toml")
+    docker_hosts = [h for h in cfg.hosts if h.htype == "docker"] if cfg.hosts else []
+    if os.path.isfile(ct_path):
+        ct_ok = False
+        ct_msg = ""
+        if tomllib:
+            try:
+                with open(ct_path, "rb") as f:
+                    ct_data = tomllib.load(f)
+                host_section = ct_data.get("host", {})
+                total_ct = sum(len(v.get("containers", {})) for v in host_section.values() if isinstance(v, dict))
+                ct_ok = len(host_section) > 0
+                ct_msg = f"{total_ct} containers across {len(host_section)} hosts"
+            except Exception:
+                ct_msg = "malformed TOML"
+        else:
+            ct_ok = True
+            ct_msg = "file present"
+        if ct_ok:
+            _check(f"containers.toml: {ct_msg}", True)
+        else:
+            _check(f"containers.toml: {ct_msg}", False)
+    elif docker_hosts:
+        fmt.step_warn(f"containers.toml missing — {len(docker_hosts)} docker host(s) expected it")
 
     # freq.toml [infrastructure]
     infra_configured = any([
