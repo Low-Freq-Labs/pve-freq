@@ -26,13 +26,12 @@ class TestServiceFileContract(unittest.TestCase):
             os.path.isfile(os.path.join(REPO_ROOT, "contrib/freq-serve.service"))
         )
 
-    def test_uses_freq_ops_user(self):
-        """Service must run as freq-ops (not legacy freq-admin)."""
+    def test_uses_code_default_user(self):
+        """Static template uses code default (freq-admin). install.sh overrides from freq.toml."""
         src = self._service_src()
-        self.assertIn("User=freq-ops", src,
-                       "Service must use freq-ops user")
-        self.assertNotIn("freq-admin", src,
-                          "Service must not reference legacy freq-admin")
+        self.assertIn("User=freq-admin", src,
+                       "Static template must use code default (freq-admin)")
+        # install.sh templates the real configured value at install time
 
     def test_has_restart_policy(self):
         src = self._service_src()
@@ -70,9 +69,12 @@ class TestInstallerSystemdMessaging(unittest.TestCase):
         src = self._installer_src()
         self.assertIn("freq serve", src)
 
-    def test_installer_copies_correct_service_file(self):
+    def test_installer_generates_service_file(self):
+        """Installer must generate service file (templates from freq.toml)."""
         src = self._installer_src()
-        self.assertIn("contrib/freq-serve.service", src)
+        self.assertIn("freq-serve.service", src)
+        self.assertIn("svc_user", src,
+                       "Installer must detect service account from freq.toml")
 
 
 if __name__ == "__main__":

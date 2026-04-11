@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=freq-ops
-Group=freq-ops
+User=freq-admin
+Group=freq-admin
 Environment=FREQ_DIR=/opt/pve-freq
 ExecStart=/usr/local/bin/freq serve
 Restart=on-failure
