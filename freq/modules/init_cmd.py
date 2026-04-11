@@ -6794,8 +6794,10 @@ def _init_headless(cfg, args):
         with open(bootstrap_pass_file) as f:
             bootstrap_pass = f.read().strip()
 
-    # Auto-detect bootstrap key if not specified
-    if not bootstrap_key:
+    # Auto-detect bootstrap key only when NO password was provided.
+    # If --bootstrap-password-file is given, honor password-first — don't
+    # silently switch to key auth just because a local key happens to exist.
+    if not bootstrap_key and not bootstrap_pass:
         for candidate in [
             f"/home/{bootstrap_user}/.ssh/id_ed25519",
             f"/home/{bootstrap_user}/.ssh/id_rsa",
