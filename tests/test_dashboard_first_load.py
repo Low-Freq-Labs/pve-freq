@@ -89,7 +89,8 @@ class TestDashboardTone(unittest.TestCase):
     BANNED_PHRASES = [
         "Drop the bass", "bass-boosted", "Feel the rumble",
         "Plex is happy", "magic happens", "Chaos is a feature",
-        "MISSION CONTROL", "v3.0.0",
+        "MISSION CONTROL", "v3.0.0", "INITIALIZING",
+        "FLEET ONLINE", "MEDIA STACK",
     ]
 
     def test_no_playful_taglines(self):
@@ -118,6 +119,20 @@ class TestDashboardTone(unittest.TestCase):
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
             src = f.read()
         self.assertNotIn("v3.0.0", src, "JS must not have stale v3.0.0 references")
+
+    def test_load_states_factual(self):
+        """Load progress states must be factual, not theatrical."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        self.assertNotIn("INITIALIZING", src, "Use LOADING not INITIALIZING")
+        self.assertNotIn("FLEET ONLINE", src, "Use FLEET not FLEET ONLINE")
+        self.assertNotIn("MEDIA STACK", src, "Use MEDIA not MEDIA STACK")
+        self.assertNotIn("Welcome,", src, "No Welcome greeting in load state")
+
+    def test_no_theatrical_load_in_html(self):
+        with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
+            src = f.read()
+        self.assertNotIn("MEDIA STACK", src, "HTML must not use MEDIA STACK")
 
 
 if __name__ == "__main__":

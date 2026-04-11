@@ -330,9 +330,9 @@ function _showApp(){
   /* Show loading screen while prefetching data */
   var login=document.getElementById('login-overlay');
   login.innerHTML='<div class="text-center"><pre style="font-family:\'Courier New\',monospace;font-size:10px;line-height:1.1;color:var(--purple-light);display:inline-block;text-align:left;margin-bottom:24px"> \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557   \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557\n \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d   \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\n \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551   \u2588\u2588\u2551\n \u2588\u2588\u2554\u2550\u2550\u2550\u255d \u255a\u2588\u2588\u2557 \u2588\u2588\u2554\u255d\u2588\u2588\u2554\u2550\u2550\u255d     \u2588\u2588\u2554\u2550\u2550\u255d  \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u255d  \u2588\u2588\u2551\u2584\u2584 \u2588\u2588\u2551\n \u2588\u2588\u2551      \u255a\u2588\u2588\u2588\u2588\u2554\u255d \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2551     \u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\n \u255a\u2550\u255d       \u255a\u2550\u2550\u2550\u255d  \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d   \u255a\u2550\u255d     \u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u2550\u255d\u2550\u2550\u255d</pre>'+
-    '<div id="load-status" style="color:var(--purple-light);font-size:13px;font-weight:600;letter-spacing:1px;margin-bottom:16px">INITIALIZING</div>'+
+    '<div id="load-status" style="color:var(--purple-light);font-size:13px;font-weight:600;letter-spacing:1px;margin-bottom:16px">LOADING</div>'+
     '<div style="width:200px;height:4px;background:var(--input-border);border-radius:2px;margin:0 auto;overflow:hidden"><div id="load-bar" style="width:0%;height:100%;background:var(--purple);border-radius:2px;transition:width 0.4s ease"></div></div>'+
-    '<div id="load-detail" style="color:var(--text-dim);font-size:11px;margin-top:12px">Connecting to fleet...</div></div>';
+    '<div id="load-detail" style="color:var(--text-dim);font-size:11px;margin-top:12px">Fetching fleet data...</div></div>';
 
   var bar=document.getElementById('load-bar');
   var status=document.getElementById('load-status');
@@ -341,7 +341,7 @@ function _showApp(){
 
   _p(10,'CONNECTING','Fetching fleet data...');
   var p1=_authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
-    _fleetCache.fo=fo;_initFleetData(fo);_p(40,'FLEET ONLINE',fo.summary.total_vms+' VMs across '+fo.pve_nodes.length+' nodes');
+    _fleetCache.fo=fo;_initFleetData(fo);_p(40,'FLEET',fo.summary.total_vms+' VMs, '+fo.pve_nodes.length+' nodes');
     return fo;
   }).catch(function(){_p(40,'FLEET','Fleet overview unavailable');return null;});
 
@@ -353,12 +353,12 @@ function _showApp(){
   }).catch(function(){_p(70,'HEALTH','Health check unavailable');return null;});
 
   var p3=_authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
-    _p(85,'MEDIA STACK',md.containers_running+' containers running');
+    _p(85,'MEDIA',md.containers_running+' containers');
     return md;
   }).catch(function(){return null;});
 
   Promise.all([p1,p2,p3]).then(function(){
-    _p(100,'READY','Welcome, '+_currentUser);
+    _p(100,'LOADED','Dashboard ready');
     setTimeout(function(){
       var body=document.getElementById('mn-body');if(body)body.style.display='';
       login.style.display='none';
@@ -439,7 +439,7 @@ var WIDGET_REGISTRY=[
     var g='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">';
     g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">PVE NODES</h3><div class="host-meta"><span>HYPERVISOR</span></div></div><div class="divider-light"><div id="hw-pve-sum"><div class="skeleton h-60" ></div></div></div></div>';
     g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PROXMOX</span></div></div><div class="divider-light"><div id="hw-vms"><div class="skeleton h-60" ></div></div></div></div>';
-    g+='<div class="host-card"><div class="host-head"><h3 class="c-green">MEDIA STACK</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div><div class="divider-light"><div id="hw-media"><div class="skeleton h-60" ></div></div></div></div></div>';
+    g+='<div class="host-card"><div class="host-head"><h3 class="c-green">MEDIA</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div><div class="divider-light"><div id="hw-media"><div class="skeleton h-60" ></div></div></div></div></div>';
     /* Infrastructure device cards — responsive grid */
     g+='<div id="hw-physical-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px"></div>';
     el.innerHTML=g;
