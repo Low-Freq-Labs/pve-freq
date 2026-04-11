@@ -5,7 +5,7 @@
 
 [tiers]
 probe    = ["view"]
-operator = ["view", "start", "stop", "restart", "snapshot", "clone", "resize"]
+operator = ["view", "start", "stop", "restart", "snapshot", "destroy", "clone", "resize", "migrate", "configure"]
 admin    = ["view", "start", "stop", "restart", "snapshot", "destroy", "clone", "resize", "migrate", "configure"]
 
 # Define categories for your VMs:

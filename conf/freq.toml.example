@@ -10,7 +10,7 @@ ascii = false               # true = ASCII box drawing (PuTTY-safe)
 debug = false
 
 [ssh]
-service_account = "freq-admin"    # default — customize during freq init
+service_account = "freq-admin"
 connect_timeout = 5
 max_parallel = 5
 mode = "sudo"               # "root" = SSH as root, "sudo" = SSH as service account + sudo
@@ -20,8 +20,11 @@ mode = "sudo"               # "root" = SSH as root, "sudo" = SSH as service acco
 # PVE nodes — add your Proxmox host IPs here
 nodes = []
 node_names = []
-# api_token_id = "freq-admin@pam!freq-rw"
-# api_token_secret_path = "/etc/freq/credentials/pve-token-rw"
+
+# PVE API token auth (optional — uses REST API instead of SSH for VM ops)
+# api_token_id = "freq@pve!dashboard"
+# api_token_secret_path = "/etc/freq/credentials/pve-token"
+# api_verify_ssl = false
 
 # Per-node storage configuration (uncomment and edit for each node)
 # [pve.storage.node1]
@@ -48,10 +51,13 @@ cluster_name = ""
 timezone = "UTC"
 # truenas_ip = ""
 # pfsense_ip = ""
+# opnsense_ip = ""
+# synology_ip = ""
 # switch_ip = ""
 # docker_dev_ip = ""
 # docker_config_base = ""
 # docker_backup_dir = ""
+# snmp_community = "public"
 
 [templates.profiles]
 minimal = { cores = 1, ram = 1024, disk = 8 }
@@ -80,6 +86,9 @@ mtu = 1500
 dashboard_port = 8888
 watchdog_port = 9900
 agent_port = 9990
+# TLS — optional, omit for plaintext HTTP
+# tls_cert = "/etc/freq/tls/cert.pem"
+# tls_key = "/etc/freq/tls/key.pem"
 
 [notifications]
 discord_webhook = ""
@@ -99,3 +108,20 @@ slack_webhook = ""
 # pushover_user = ""
 # pushover_token = ""
 # webhook_url = ""
+
+# Inline user definitions (optional — replaces users.conf)
+# [users.freq-admin]
+# role = "admin"
+# groups = ""
+#
+# [users.operator1]
+# role = "operator"
+# groups = "fleet"
+
+# HTTP monitors — dashboard health checks
+# [[monitor]]
+# name = "Dashboard"
+# url = "http://10.0.0.50:8888/healthz"
+# interval = 60
+# timeout = 10
+# expected_status = 200
