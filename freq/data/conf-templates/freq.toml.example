@@ -20,7 +20,6 @@ mode = "sudo"               # "root" = SSH as root, "sudo" = SSH as service acco
 # PVE nodes — add your Proxmox host IPs here
 nodes = []
 node_names = []
-ssh_user = "freq-admin"
 
 # PVE API token auth (optional — uses REST API instead of SSH for VM ops)
 # api_token_id = "freq@pve!dashboard"
@@ -39,11 +38,8 @@ disk = 32
 cpu = "x86-64-v2-AES"
 machine = "q35"
 scsihw = "virtio-scsi-single"
-bios = "seabios"
-domain = "cluster.local"
 gateway = ""                # REQUIRED — set to your gateway IP
 nameserver = "1.1.1.1"
-ci_user = "freq-admin"
 
 [safety]
 protected_vmids = []
