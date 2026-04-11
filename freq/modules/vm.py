@@ -1172,9 +1172,9 @@ def cmd_file_send(cfg: FreqConfig, pack, args) -> int:
         fmt.error(f"Host not found: {host_label}")
         return 1
 
-    from freq.core.ssh import PLATFORM_SSH
+    from freq.core.ssh import get_platform_ssh
 
-    platform = PLATFORM_SSH.get(host.htype, PLATFORM_SSH["linux"])
+    platform = get_platform_ssh(host.htype, cfg)
     user = platform["user"]
 
     scp_cmd = ["scp"]

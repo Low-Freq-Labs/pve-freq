@@ -1046,9 +1046,9 @@ def cmd_ssh_host(cfg: FreqConfig, pack, args) -> int:
         fmt.error(f"Host not found: {target}")
         return 1
 
-    from freq.core.ssh import PLATFORM_SSH, result_for
+    from freq.core.ssh import get_platform_ssh, result_for
 
-    platform = PLATFORM_SSH.get(host.htype, PLATFORM_SSH["linux"])
+    platform = get_platform_ssh(host.htype, cfg)
     user = platform["user"]
 
     ssh_cmd = ["ssh"]
@@ -1192,9 +1192,9 @@ def _keys_deploy(cfg: FreqConfig, args) -> int:
     fmt.blank()
     fmt.step_start(f"Deploying key to {host.label}")
 
-    from freq.core.ssh import PLATFORM_SSH, result_for
+    from freq.core.ssh import get_platform_ssh, result_for
 
-    platform = PLATFORM_SSH.get(host.htype, PLATFORM_SSH["linux"])
+    platform = get_platform_ssh(host.htype, cfg)
     user = platform["user"]
 
     r = subprocess.run(
