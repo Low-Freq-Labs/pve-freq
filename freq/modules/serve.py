@@ -2243,14 +2243,32 @@ a:hover{{text-decoration:underline}}
         from freq import __version__
 
         cfg = load_config()
-        ed_key = os.path.join(cfg.key_dir, "freq_id_ed25519")
+        # Use the actual resolved key path, not a hardcoded ed25519 assumption
+        key_path = cfg.ssh_key_path
+        key_exists = bool(key_path and os.path.isfile(key_path))
+        key_readable = key_exists and os.access(key_path, os.R_OK)
+        has_hosts = bool(cfg.hosts)
+        has_nodes = bool(cfg.pve_nodes)
+
+        # Honest health: configured vs partially configured vs broken
+        if key_readable and has_hosts and has_nodes:
+            setup_health = "configured"
+        elif key_exists or has_hosts or has_nodes:
+            setup_health = "partial"
+        else:
+            setup_health = "unconfigured"
+
         self._json_response(
             {
                 "first_run": _is_first_run(),
                 "version": __version__,
-                "ssh_key_exists": os.path.isfile(ed_key),
-                "ssh_key_path": ed_key,
-                "pve_nodes_configured": bool(cfg.pve_nodes),
+                "ssh_key_exists": key_exists,
+                "ssh_key_readable": key_readable,
+                "ssh_key_path": key_path or "",
+                "pve_nodes_configured": has_nodes,
+                "hosts_configured": has_hosts,
+                "host_count": len(cfg.hosts),
+                "setup_health": setup_health,
             }
         )
 
