@@ -286,6 +286,13 @@ def _check_data_dirs(cfg: FreqConfig) -> int:
                 fmt.step_fail(f"Cannot create: {name}")
                 return 1
 
+    # Check if logs are going to expected path or diverted to fallback
+    from freq.core.log import _LOG_FILE
+    expected_log_dir = os.path.dirname(cfg.log_file)
+    if _LOG_FILE and not _LOG_FILE.startswith(expected_log_dir):
+        fmt.step_warn(f"Logs diverted to {_LOG_FILE} (expected {expected_log_dir})")
+        all_ok = False
+
     if all_ok:
         fmt.step_ok("Data directories")
     return 0 if all_ok else 2
@@ -328,15 +335,32 @@ def _check_ssh_key(cfg: FreqConfig) -> int:
         key_file = os.path.basename(cfg.ssh_key_path)
         # Check permissions
         mode = oct(os.stat(cfg.ssh_key_path).st_mode)[-3:]
-        if mode in ("600", "400"):
-            fmt.step_ok(f"SSH key: {key_file} ({mode})")
-            return 0
-        else:
+        if mode not in ("600", "400"):
             fmt.step_warn(f"SSH key: {key_file} (permissions {mode}, should be 600)")
             return 2
+        # Check readability — key might have correct perms but be owned by another user
+        if not os.access(cfg.ssh_key_path, os.R_OK):
+            key_owner = _get_file_owner(cfg.ssh_key_path)
+            fmt.step_warn(f"SSH key: {key_file} ({mode}) — not readable by current user (owned by {key_owner})")
+            return 2
+        fmt.step_ok(f"SSH key: {key_file} ({mode})")
+        return 0
     else:
         fmt.step_warn("SSH key: not found (fleet operations will fail)")
         return 2
+
+
+def _get_file_owner(path: str) -> str:
+    """Get file owner name, fallback to UID."""
+    try:
+        import pwd
+        st = os.stat(path)
+        return pwd.getpwuid(st.st_uid).pw_name
+    except (KeyError, OSError):
+        try:
+            return str(os.stat(path).st_uid)
+        except OSError:
+            return "unknown"
 
 
 def _check_fleet_connectivity(cfg: FreqConfig) -> int:
