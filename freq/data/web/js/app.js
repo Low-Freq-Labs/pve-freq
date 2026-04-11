@@ -3367,11 +3367,14 @@ function updatePref(key,val){
 /* ── Lab Assignment — tag fleet members as LAB ── */
 var _labAssignments;try{_labAssignments=JSON.parse(localStorage.getItem('freq_lab_assign')||'{}');}catch(e){_labAssignments={};}
 function _getLabLabels(healthHosts){
-  /* Merge: server-side groups + client-side overrides */
+  /* Merge: server-side groups + label matching + client-side overrides */
   var labels={};
   if(healthHosts){healthHosts.forEach(function(h){
     if(h.groups&&h.groups.indexOf('lab')>=0)labels[h.label]=true;
+    else if(h.label&&h.label.toLowerCase().indexOf('lab')>=0)labels[h.label]=true;
   });}
+  /* Also tag VMs in fleet-boundaries lab category */
+  PROD_VMS.forEach(function(v){if(v.category==='lab')labels[v.label]=true;});
   /* Apply user overrides from Settings */
   if(_labAssignments&&typeof _labAssignments==='object'){Object.keys(_labAssignments).forEach(function(k){
     if(_labAssignments[k])labels[k]=true;

@@ -3642,7 +3642,22 @@ a:hover{{text-decoration:underline}}
         """Lab fleet status."""
         cfg = load_config()
 
-        lab_hosts = [h for h in cfg.hosts if "lab" in (h.groups or "").split(",")]
+        def _is_lab_host(h):
+            """Identify lab hosts by group, label, or fleet-boundaries VMID range."""
+            # Explicit group assignment (manual or VLAN-scan)
+            if "lab" in (h.groups or "").split(","):
+                return True
+            # Label contains "lab" (init-discovered: lab-pve1, pfsense-lab, etc.)
+            if "lab" in h.label.lower():
+                return True
+            # VMID falls in fleet-boundaries lab category range
+            if getattr(h, "vmid", 0):
+                cat, _ = cfg.fleet_boundaries.categorize(h.vmid)
+                if cat == "lab":
+                    return True
+            return False
+
+        lab_hosts = [h for h in cfg.hosts if _is_lab_host(h)]
 
         hosts = []
         for h in lab_hosts:

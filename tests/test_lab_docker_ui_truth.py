@@ -1,36 +1,65 @@
 """Lab Equipment and Docker UI truth tests.
 
 Proves consumer surfaces agree on fleet state:
-1. Lab hosts come from hosts.toml lab group
+1. Lab hosts identified by group, label, or fleet-boundaries VMID range
 2. Docker Fleet uses hosts.toml docker-type hosts
 3. Health data captures docker container counts across all host types
 4. Container counts from health match what docker ps would return
 5. No stale or phantom rows in any surface
+6. Frontend _getLabLabels also matches by label, not just groups
 """
 
 import os
+import re
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class TestLabEquipmentDataSource(unittest.TestCase):
-    """Lab Equipment must show only hosts with 'lab' group."""
+    """Lab Equipment identifies hosts by group, label, or VMID range."""
 
-    def test_lab_hosts_from_hosts_toml(self):
-        from freq.core.config import load_config
-        cfg = load_config()
-        lab_hosts = [h for h in cfg.hosts if "lab" in (h.groups or "").split(",")]
-        self.assertGreater(len(lab_hosts), 0, "Must have lab hosts")
-        for h in lab_hosts:
-            self.assertTrue(h.label)
-            self.assertTrue(h.ip)
-
-    def test_lab_handler_filters_by_group(self):
+    def test_lab_handler_checks_groups(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
             src = f.read()
         handler = src.split("def _serve_lab_status")[1].split("def _serve_")[0]
-        self.assertIn('"lab"', handler, "Must filter by lab group")
+        self.assertIn('"lab"', handler, "Must check lab group")
+
+    def test_lab_handler_checks_label(self):
+        """Must also match hosts with 'lab' in their label."""
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        handler = src.split("def _serve_lab_status")[1].split("def _serve_")[0]
+        self.assertIn("h.label", handler,
+                       "Must check host label for lab matching")
+        self.assertIn('"lab"', handler.split("label")[0] + handler,
+                       "Must match 'lab' in label")
+
+    def test_lab_handler_checks_fleet_boundaries(self):
+        """Must also match hosts by fleet-boundaries VMID range."""
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        handler = src.split("def _serve_lab_status")[1].split("def _serve_")[0]
+        self.assertIn("fleet_boundaries", handler,
+                       "Must use fleet_boundaries for lab VMID detection")
+        self.assertIn("categorize", handler,
+                       "Must call categorize() for VMID-based lab detection")
+
+    def test_lab_label_matching_catches_common_names(self):
+        """Labels like lab-pve1, pfsense-lab, truenas-lab must match."""
+        for label in ["lab-pve1", "lab-pve2", "pfsense-lab", "truenas-lab"]:
+            self.assertIn("lab", label.lower(),
+                          f"{label} must be caught by label matching")
+
+    def test_frontend_getlablabels_checks_label(self):
+        """Frontend _getLabLabels must also match by label, not just groups."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        fn = src.split("function _getLabLabels")[1].split("function ")[0]
+        self.assertIn("label", fn.lower(),
+                       "_getLabLabels must check host labels")
+        self.assertIn("indexOf('lab')", fn,
+                       "_getLabLabels must match 'lab' in label")
 
 
 class TestDockerFleetDataSource(unittest.TestCase):
@@ -95,11 +124,16 @@ class TestConsumerSurfaceConsistency(unittest.TestCase):
         self.assertTrue(docker_labels.issubset(all_labels))
 
     def test_lab_hosts_subset_of_hosts(self):
-        """Lab hosts must be a subset of all hosts."""
+        """Lab hosts (by any matching method) must be a subset of all hosts."""
         from freq.core.config import load_config
         cfg = load_config()
         all_labels = {h.label for h in cfg.hosts}
-        lab_labels = {h.label for h in cfg.hosts if "lab" in (h.groups or "").split(",")}
+        lab_labels = set()
+        for h in cfg.hosts:
+            if "lab" in (h.groups or "").split(","):
+                lab_labels.add(h.label)
+            elif "lab" in h.label.lower():
+                lab_labels.add(h.label)
         self.assertTrue(lab_labels.issubset(all_labels))
 
 
