@@ -2243,8 +2243,13 @@ a:hover{{text-decoration:underline}}
         from freq import __version__
 
         cfg = load_config()
-        # Use the actual resolved key path, not a hardcoded ed25519 assumption
+        # Use the actual resolved key path — re-detect on each call so we
+        # catch keys created after serve started (e.g., init runs post-serve)
         key_path = cfg.ssh_key_path
+        if not key_path or not os.path.isfile(key_path):
+            # Re-detect in case key was created after load_config cached the path
+            from freq.core.config import _detect_ssh_key
+            key_path = _detect_ssh_key(cfg) or key_path
         key_exists = bool(key_path and os.path.isfile(key_path))
         key_readable = key_exists and os.access(key_path, os.R_OK)
         has_hosts = bool(cfg.hosts)

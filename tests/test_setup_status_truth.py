@@ -29,6 +29,12 @@ class TestSetupStatusKeyTruth(unittest.TestCase):
         self.assertNotIn("freq_id_ed25519", src,
                           "Must not hardcode ed25519 key name")
 
+    def test_redetects_key_if_missing(self):
+        """Must re-detect key path if cached path is stale (key created after serve start)."""
+        src = self._handler_src()
+        self.assertIn("_detect_ssh_key", src,
+                       "Must re-detect key if initial path is missing")
+
     def test_reports_key_readable(self):
         """Must check if current user can READ the key, not just if file exists."""
         src = self._handler_src()
