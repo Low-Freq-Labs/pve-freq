@@ -246,10 +246,13 @@ def bootstrap_conf(install_dir: str) -> bool:
 
     Returns True if bootstrap happened, False if conf/ already exists.
     Idempotent — never overwrites existing files.
+
+    When conf/ already has files (e.g. repo checkout), still seeds missing
+    subdirectories like personality/ and plugins/ so doctor doesn't warn
+    about missing pack files that are available in package templates.
     """
     conf_dir = os.path.join(install_dir, "conf")
-    if os.path.isdir(conf_dir) and os.listdir(conf_dir):
-        return False  # Already has config files
+    full_bootstrap = not (os.path.isdir(conf_dir) and os.listdir(conf_dir))
 
     try:
         from freq.data import get_data_path
@@ -265,32 +268,42 @@ def bootstrap_conf(install_dir: str) -> bool:
     except PermissionError:
         return False  # Non-root user — bootstrap deferred to freq init
 
-    # Copy all template files (*.example, *.toml, *.conf)
-    for src in templates.iterdir():
-        if src.is_file():
-            dst = os.path.join(conf_dir, src.name)
-            if not os.path.exists(dst):
-                shutil.copy2(str(src), dst)
+    # Copy all template files (*.example, *.toml, *.conf) — only on full bootstrap
+    if full_bootstrap:
+        for src in templates.iterdir():
+            if src.is_file():
+                dst = os.path.join(conf_dir, src.name)
+                if not os.path.exists(dst):
+                    shutil.copy2(str(src), dst)
 
-    # Copy personality/
+    # Copy personality/ — always seed if missing (even with existing conf/)
     personality_src = templates / "personality"
     if personality_src.is_dir():
         personality_dst = os.path.join(conf_dir, "personality")
-        os.makedirs(personality_dst, exist_ok=True)
-        for src in personality_src.glob("*.toml"):
-            dst = os.path.join(personality_dst, src.name)
-            if not os.path.exists(dst):
-                shutil.copy2(str(src), dst)
+        try:
+            os.makedirs(personality_dst, exist_ok=True)
+            for src in personality_src.glob("*.toml"):
+                dst = os.path.join(personality_dst, src.name)
+                if not os.path.exists(dst):
+                    shutil.copy2(str(src), dst)
+        except PermissionError:
+            pass  # Non-root user — personality will use built-in defaults
 
-    # Copy plugins/
+    # Copy plugins/ — always seed if missing (even with existing conf/)
     plugins_src = templates / "plugins"
     if plugins_src.is_dir():
         plugins_dst = os.path.join(conf_dir, "plugins")
-        os.makedirs(plugins_dst, exist_ok=True)
-        for src in plugins_src.glob("*.py"):
-            dst = os.path.join(plugins_dst, src.name)
-            if not os.path.exists(dst):
-                shutil.copy2(str(src), dst)
+        try:
+            os.makedirs(plugins_dst, exist_ok=True)
+            for src in plugins_src.glob("*.py"):
+                dst = os.path.join(plugins_dst, src.name)
+                if not os.path.exists(dst):
+                    shutil.copy2(str(src), dst)
+        except PermissionError:
+            pass  # Non-root user — plugins will use built-in defaults
+
+    if not full_bootstrap:
+        return False  # Incremental seed only — not a full bootstrap
 
     # Create data directories
     for subdir in ("log", "vault", "keys", "cache", "knowledge"):
