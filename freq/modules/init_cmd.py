@@ -64,6 +64,7 @@ SWITCH_CONFIG_TIMEOUT = 30
 QUICK_CHECK_TIMEOUT = 10
 PING_TIMEOUT = 5
 VERIFY_TIMEOUT = 20
+DEVICE_DEPLOY_TIMEOUT = 120  # Total timeout for iDRAC/switch deploy (all steps combined)
 
 # iDRAC user slot range (slots 1-2 are reserved by Dell for root/admin)
 IDRAC_SLOT_MIN = 3
@@ -4690,12 +4691,22 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     """Deploy service account to Dell iDRAC.
 
     Uses racadm commands. RSA key only. Password auth for initial connect.
+    Bounded by DEVICE_DEPLOY_TIMEOUT to prevent indefinite hangs.
     Returns True on success.
     """
+    deploy_start = time.monotonic()
     svc_name = ctx["svc_name"]
     svc_pass = ctx["svc_pass"]
     rsa_pubkey = ctx.get("rsa_pubkey", "")
     logger.info(f"deploy_start: {ip} [idrac]", host=ip, htype="idrac")
+
+    def _check_timeout(step=""):
+        elapsed = time.monotonic() - deploy_start
+        if elapsed > DEVICE_DEPLOY_TIMEOUT:
+            fmt.step_fail(f"iDRAC deploy timeout ({elapsed:.0f}s > {DEVICE_DEPLOY_TIMEOUT}s) at {step}")
+            logger.error(f"deploy_timeout: {ip}", host=ip, elapsed=elapsed, step=step)
+            return True
+        return False
 
     # Dry-run: show what would be done without making changes
     if ctx.get("dry_run"):
@@ -4721,8 +4732,14 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
         return False
     fmt.step_ok("Connected to iDRAC")
 
+    if _check_timeout("slot_query"):
+        return False
+
     # Find an empty user slot (slots 3-16, 1-2 are reserved)
     target_slot, existing_slot = _query_idrac_slots(_ssh, extra_opts, svc_name)
+
+    if _check_timeout("after_slot_query"):
+        return False
 
     if existing_slot:
         fmt.step_ok(f"Account '{svc_name}' already in slot {existing_slot}")
@@ -4742,6 +4759,8 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
         f"racadm set iDRAC.Users.{target_slot}.IpmiLanPrivilege 4",
     )
     for cmd in setup_cmds:
+        if _check_timeout("user_setup"):
+            return False
         ok_cmd, details = _run_idrac_command(_ssh, extra_opts, cmd, timeout=IDRAC_SETUP_TIMEOUT)
         if not ok_cmd:
             fmt.step_fail(f"iDRAC user setup failed ({details.strip()[:80]})")
@@ -4749,6 +4768,9 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
             audit.record("deploy_user", ip, "failed", user=svc_name, error="racadm_setup")
             return False
     fmt.step_ok(f"iDRAC user '{svc_name}' configured (slot {target_slot})")
+
+    if _check_timeout("key_deploy"):
+        return False
 
     # Deploy RSA public key
     ok_cmd, details = _run_idrac_command(
@@ -4784,8 +4806,10 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     """Deploy service account to Cisco IOS switch.
 
     Uses IOS config commands. RSA key only. Password auth for initial connect.
+    Bounded by DEVICE_DEPLOY_TIMEOUT to prevent indefinite hangs.
     Returns True on success.
     """
+    deploy_start = time.monotonic()
     svc_name = ctx["svc_name"]
     svc_pass = ctx["svc_pass"]
     rsa_pubkey = ctx.get("rsa_pubkey", "")
