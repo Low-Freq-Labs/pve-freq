@@ -8,7 +8,7 @@ You built a homelab because you love this stuff. You shouldn't need 12 different
 
 [![Tests](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml/badge.svg)](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-8b5cf6.svg)](https://www.python.org/downloads/)
-[![LOC](https://img.shields.io/badge/lines_of_code-84K-8b5cf6.svg)](#)
+[![LOC](https://img.shields.io/badge/lines_of_code-76K-8b5cf6.svg)](#)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL_v3-8b5cf6.svg)](LICENSE)
 [![20 Distros](https://img.shields.io/badge/tested_on-20_distros-8b5cf6.svg)](#every-linux-distro)
 
@@ -143,7 +143,7 @@ FREQ uses **only the Python standard library**. Every single import is stdlib. N
 
 Why? Because the machine running FREQ is your management host. It has SSH keys to your entire fleet. It should have the smallest possible attack surface.
 
-80K+ lines of Python. Zero external dependencies. Auditable by one person.
+76K lines of Python. Zero external dependencies. Auditable by one person.
 
 ---
 
