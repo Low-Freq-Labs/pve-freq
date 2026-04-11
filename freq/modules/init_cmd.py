@@ -6890,6 +6890,19 @@ def _init_headless(cfg, args):
         else:
             fmt.step_ok(f"{svc_name} already in roles")
 
+    # Seed dashboard password for bootstrap user so web login works post-init
+    try:
+        from freq.modules.vault import vault_init, vault_set
+        from freq.api.auth import hash_password
+        if not os.path.exists(cfg.vault_file):
+            vault_init(cfg)
+        svc_pass = ctx.get("svc_pass", "")
+        if svc_pass and bootstrap_user:
+            vault_set(cfg, "auth", f"password_{bootstrap_user}", hash_password(svc_pass))
+            fmt.step_ok(f"Dashboard password set for {bootstrap_user}")
+    except Exception as e:
+        fmt.step_warn(f"Could not set dashboard password: {e}")
+
     # ── Phase 12: Verification ──
     _phase(12, headless_total, "Verification")
     verified = _phase_verify(cfg, ctx)
