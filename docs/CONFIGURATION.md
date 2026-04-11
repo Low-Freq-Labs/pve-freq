@@ -58,11 +58,8 @@ The primary config file. Controls cluster settings, SSH, VM defaults, safety rul
 | `cpu` | string | `"x86-64-v2-AES"` | CPU type/emulation |
 | `machine` | string | `"q35"` | Machine type |
 | `scsihw` | string | `"virtio-scsi-single"` | SCSI hardware controller |
-| `bios` | string | `"seabios"` | BIOS type (`"seabios"` or `"ovmf"`) |
-| `domain` | string | `"cluster.local"` | Default domain suffix |
 | `gateway` | string | `""` | Default gateway IP (**required**) |
 | `nameserver` | string | `"1.1.1.1"` | Default DNS nameserver |
-| `ci_user` | string | `"freq-admin"` | Default cloud-init user |
 
 ### [safety] — Safety Rules
 

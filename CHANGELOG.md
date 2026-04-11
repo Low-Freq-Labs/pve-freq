@@ -15,8 +15,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Phase 0 — Foundation
 - **Domain dispatch CLI** — `freq <domain> <action>` replaces 126 flat commands with 25 organized domains
 - **Platform abstraction layer** — `freq/core/platform.py`, `remote_platform.py`, `packages.py`, `services.py` for multi-distro support
-- **Domain-based API router** — `freq/api/` with 15 domain modules, 163+ routes extracted from serve.py
-- **SOURCE-CODE-STANDARDS** — 5-question header docstrings applied to all 91 .py files
+- **Domain-based API router** — `freq/api/` with 26 domain modules, 275+ routes extracted from serve.py
+- **SOURCE-CODE-STANDARDS** — 5-question header docstrings applied across 176 .py source files
 
 #### Phase 1 — The Network (WS1-2)
 - `freq net switch` — 10 switch management commands (facts, interfaces, vlans, mac, arp, neighbors, config, environment, exec, save)
@@ -66,7 +66,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Every view has stat cards, tables, and API-driven data loading
 
 #### Phase 9 — The Proof (WS21)
-- E2E test framework with 75 tests covering all 22 domains
+- E2E test framework with 2,700+ tests covering all 23 domains
 - Domain --help smoke tests, dispatch verification, convergence checks
 - Module import validation for all 23 new modules
 - API route completeness verification

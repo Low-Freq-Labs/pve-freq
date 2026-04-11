@@ -71,7 +71,7 @@ No external dependencies. No pip packages. No node_modules. No Docker required. 
 
 ## What You Get
 
-### 25 Domains. 300+ Commands. Everything.
+### 23 Domains. 300+ Commands. Everything.
 
 | Domain | What It Does | Try It |
 |--------|-------------|--------|
