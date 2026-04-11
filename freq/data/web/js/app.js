@@ -348,7 +348,7 @@ function _showApp(){
   var p2=_authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
     _fleetCache.hd=hd;
     var up=0;hd.hosts.forEach(function(h){if(h.status==='healthy')up++;});
-    _p(70,'HEALTH CHECK',up+' of '+hd.hosts.length+' hosts online');
+    _p(70,'HEALTH',up+'/'+hd.hosts.length+' hosts responded');
     return hd;
   }).catch(function(){_p(70,'HEALTH','Health check unavailable');return null;});
 
@@ -747,7 +747,7 @@ function _loadWidgetOverview(){
   /* Media */
   _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
     var run=d.containers_running||0,tot=d.containers_total||0,dn=Math.max(0,tot-run);
-    var h='';h+=_mrow('ONLINE',run+' / '+tot,0,'var(--green)');h+=_mrow('OFFLINE',dn,0,dn>0?'var(--red)':'var(--green)');h+=_mrow('VMs',d.vm_count,0,'var(--blue)');
+    var h='';h+=_mrow('UP',run+' / '+tot,0,'var(--green)');h+=_mrow('DOWN',dn,0,dn>0?'var(--red)':'var(--green)');h+=_mrow('VMs',d.vm_count,0,'var(--blue)');
     var me=document.getElementById('hw-media');if(me)me.innerHTML=h;
   }).catch(function(e){console.error('API error:',e);});
 }
@@ -1022,10 +1022,10 @@ function _silentHealthRefresh(){
     var up=0,down=0;hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;});
     var sumEl=document.getElementById('metrics-summary');
     if(sumEl){var sts=sumEl.querySelectorAll('.st .vl');if(sts.length>=2){sts[0].textContent=up;sts[1].textContent=down;}}
-    /* Update LIVE DATA freshness indicator */
-    var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<5?'LIVE':_age<60?_age+'s AGO':Math.round(_age/60)+'m AGO';var _ageClr=hd.probe_status==='error'?'var(--red)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';
+    /* Update probe age indicator */
+    var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<60?_age+'s':Math.round(_age/60)+'m';var _ageClr=hd.probe_status==='error'?'var(--red)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';
     var ldEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:first-child span:first-child');if(ldEl){ldEl.textContent=_ageLbl;ldEl.style.color=_ageClr;}
-    var ci=document.getElementById('sse-conn-status');if(ci){if(hd.probe_status==='error'){ci.textContent='PROBE ERROR';ci.style.color='var(--red)';}else{var _live=_evtSource&&_evtSource.readyState===1;ci.textContent=_live?'LIVE':'POLLING';ci.style.color=_live?'var(--green)':'var(--yellow)';}}
+    var ci=document.getElementById('sse-conn-status');if(ci){if(hd.probe_status==='error'){ci.textContent='PROBE ERROR';ci.style.color='var(--red)';}else{var _live=_evtSource&&_evtSource.readyState===1;ci.textContent=_live?'SSE':'POLL';ci.style.color=_live?'var(--green)':'var(--yellow)';}}
   }).catch(function(){_healthInFlight=false;});
 }
 function _silentFleetRefresh(){
@@ -1360,7 +1360,7 @@ function startSSE(){
     _silentHealthRefresh();_silentFleetRefresh();
     /* Update connection indicator */
     var ci=document.getElementById('sse-conn-status');
-    if(ci){ci.textContent='LIVE';ci.style.color='var(--green)';}
+    if(ci){ci.textContent='SSE';ci.style.color='var(--green)';}
   };
 
   _evtSource.onerror=function(){
@@ -1371,7 +1371,7 @@ function startSSE(){
     _fleetTimer=setInterval(_silentFleetRefresh,45000);
     /* Update connection indicator */
     var ci=document.getElementById('sse-conn-status');
-    if(ci){ci.textContent='POLLING';ci.style.color='var(--yellow)';}
+    if(ci){ci.textContent='POLL';ci.style.color='var(--yellow)';}
   };
 }
 startSSE();
@@ -1422,8 +1422,8 @@ function _loadFleetOverviewMedia(){
   _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
     var h='';
     var _dn=Math.max(0,d.containers_total-d.containers_running);
-    h+=_mrow('ONLINE',d.containers_running+' / '+d.containers_total,0,'var(--green)');
-    h+=_mrow('OFFLINE',_dn,0,_dn>0?'var(--red)':'var(--green)');
+    h+=_mrow('UP',d.containers_running+' / '+d.containers_total,0,'var(--green)');
+    h+=_mrow('DOWN',_dn,0,_dn>0?'var(--red)':'var(--green)');
     h+=_mrow('VMs',d.vm_count,0,'var(--blue)');
     var me=document.getElementById('home-media');if(me)me.innerHTML=h;
   }).catch(function(){var me=document.getElementById('home-media');if(me)me.innerHTML='<span class="c-dim-fs12">NO MEDIA DATA</span>';});
@@ -1448,12 +1448,12 @@ function _renderFleetOverview(fo){
     /* pfSense */
     var pfDev=fo.physical?fo.physical.find(function(p){return p.type==='pfsense'}):null;
     var pf='';
-    if(pfDev){pf+=_mrow('DEVICE',pfDev.detail,0,'var(--purple-light)');pf+=_mrow('IP',pfDev.ip,0,'var(--purple-light)');pf+=_mrow('STATUS',pfDev.reachable?'ONLINE':'OFFLINE',0,pfDev.reachable?'var(--green)':'var(--red)');}
+    if(pfDev){pf+=_mrow('DEVICE',pfDev.detail,0,'var(--purple-light)');pf+=_mrow('IP',pfDev.ip,0,'var(--purple-light)');pf+=_mrow('STATUS',pfDev.reachable?'REACHABLE':'UNREACHABLE',0,pfDev.reachable?'var(--green)':'var(--red)');}
     var pfe=document.getElementById('home-pfsense');if(pfe)pfe.innerHTML=pf||'<span class="c-dim-fs12">N/A</span>';
     /* TrueNAS */
     var tnDev=fo.physical?fo.physical.find(function(p){return p.type==='truenas'}):null;
     var tn='';
-    if(tnDev){tn+=_mrow('DEVICE',tnDev.detail,0,'var(--purple-light)');tn+=_mrow('IP',tnDev.ip,0,'var(--purple-light)');tn+=_mrow('STATUS',tnDev.reachable?'ONLINE':'OFFLINE',0,tnDev.reachable?'var(--green)':'var(--red)');}
+    if(tnDev){tn+=_mrow('DEVICE',tnDev.detail,0,'var(--purple-light)');tn+=_mrow('IP',tnDev.ip,0,'var(--purple-light)');tn+=_mrow('STATUS',tnDev.reachable?'REACHABLE':'UNREACHABLE',0,tnDev.reachable?'var(--green)':'var(--red)');}
     var tne=document.getElementById('home-truenas');if(tne)tne.innerHTML=tn||'<span class="c-dim-fs12">N/A</span>';
     /* VMs card */
     var vi='';
@@ -3705,7 +3705,7 @@ function _infraRoleCard(ph,healthMap){
   /* Device name + status */
   c+='<div class="flex-between">';
   c+='<h3 class="device-name">'+ph.label+'</h3>';
-  c+='<span id="infra-status-'+safeId+'" style="font-size:11px;font-weight:600;display:flex;align-items:center"><span class="status-dot '+(up?'up':'down')+'"></span>'+(up?'ONLINE':'OFFLINE')+'</span>';
+  c+='<span id="infra-status-'+safeId+'" style="font-size:11px;font-weight:600;display:flex;align-items:center"><span class="status-dot '+(up?'up':'down')+'"></span>'+(up?'REACHABLE':'UNREACHABLE')+'</span>';
   c+='</div>';
   /* Vendor/model subtitle */
   c+='<div class="device-sub">'+ph.detail+' \u00b7 '+ph.ip+'</div>';
@@ -3740,7 +3740,7 @@ function _enrichInfraCards(){
     var ageEl=document.getElementById('core-systems-age');
     if(ageEl&&d.age!==undefined){
       var a=Math.round(d.age);
-      ageEl.textContent=a<5?'LIVE':a<60?a+'s AGO':Math.round(a/60)+'m AGO';
+      ageEl.textContent=a<60?a+'s':Math.round(a/60)+'m';
       ageEl.style.color=a<30?'var(--green)':a<120?'var(--yellow)':'var(--red)';
     }
     d.devices.forEach(function(dev){
@@ -3750,7 +3750,7 @@ function _enrichInfraCards(){
       if(!el)return;
       /* Update status dot */
       if(statusEl){
-        statusEl.innerHTML='<span class="status-dot '+(dev.reachable?'up':'down')+'"></span>'+(dev.reachable?'ONLINE':'OFFLINE');
+        statusEl.innerHTML='<span class="status-dot '+(dev.reachable?'up':'down')+'"></span>'+(dev.reachable?'REACHABLE':'UNREACHABLE');
       }
       if(!dev.reachable){
         var roleInfo=INFRA_ROLES[dev.type]||{};
@@ -3765,7 +3765,7 @@ function _enrichInfraCards(){
           if(m.interfaces)h+=_m(m.interfaces,'IFACES','var(--text)');
           if(m.uptime){var pfUp=m.uptime.replace(/^up\s+/i,'').replace(/,\s*\d+:\d+$/,'');h+=_m(pfUp,'UPTIME','var(--green)');}
         } else {
-          h+=_m('ONLINE','GATEWAY','var(--green)');
+          h+=_m('REACHABLE','GATEWAY','var(--green)');
           h+=_m('No SSH','METRICS','var(--text-dim)');
         }
       } else if(dev.type==='truenas'||dev.type==='synology'||dev.type==='unraid'){
@@ -3940,7 +3940,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
       var ramColor=ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';
       nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
       nodeCard+=_fGrp('UTILIZATION',2,_fStat('...','CPU LOAD','var(--text-dim)')+_fStat('...','RAM USED','var(--text-dim)'));
-      nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'ONLINE','var(--green)')+_fStat(nOffline,'OFFLINE','var(--red)'));
+      nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'RUNNING','var(--green)')+_fStat(nOffline,'STOPPED','var(--red)'));
       nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
       nodeCard+='</div>';
       nodeCard+='<div style="margin:6px 0">';
@@ -3952,7 +3952,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
     } else {
       nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
       nodeCard+=_fGrp('PVE NODE',2,_fStat(nCores,'CPU ALLOC','var(--purple-light)')+_fStat(nRamGb+'<span class="fs-12-fade">GB</span>','RAM ALLOC','var(--purple-light)'));
-      nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'ONLINE','var(--green)')+_fStat(nOffline,'OFFLINE','var(--red)'));
+      nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'RUNNING','var(--green)')+_fStat(nOffline,'STOPPED','var(--red)'));
       nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
       nodeCard+='</div>';
       nodeCard+='<div id="pve-live-'+nodeName+'" style="margin:6px 0;padding:6px 8px;background:rgba(248,81,73,0.05);border:1px dashed var(--border);border-radius:6px;text-align:center">';
@@ -4006,7 +4006,7 @@ function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDur
   var prodPveNodes=pveNodes.length;
   var responseDur=Math.max(foDuration,hdDuration);
   var hdAge=hd&&hd.age!==undefined?Math.round(hd.age):0;
-  var ageLabel=hdAge<5?'LIVE':hdAge<60?hdAge+'s':Math.round(hdAge/60)+'m';
+  var ageLabel=hdAge<60?hdAge+'s':Math.round(hdAge/60)+'m';
   var ageColor=hdAge<30?'var(--green)':hdAge<120?'var(--yellow)':'var(--red)';
   var vmRunning=summary.running||0;var vmStopped=summary.stopped||0;
   var sumEl=document.getElementById('metrics-summary');
@@ -4014,7 +4014,7 @@ function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDur
     _fDual('FLEET SPLIT',summary.prod_count||0,'PROD','var(--purple-light)',summary.lab_count||0,'LAB','var(--cyan)')+
     _fDual('FLEET',prodCount,'PROD','var(--purple-light)',labCount,'LAB','var(--cyan)')+
     _fDual('PVE NODES',prodPveNodes,'PROD','var(--purple-light)',labPveNodes,'LAB','var(--cyan)')+
-    _fDual('STATUS',totalUp,'ONLINE','var(--green)',totalDown,'OFFLINE','var(--red)')+
+    _fDual('SSH PROBE',totalUp,'UP','var(--green)',totalDown,'DOWN','var(--red)')+
     _fDual('VMs',vmRunning,'RUN','var(--green)',vmStopped,'STOP','var(--red)')+
     _fDual('DATA',ageLabel,'AGE',ageColor,responseDur+'s','RESPONSE','var(--text-dim)')+
     st('CONTAINERS','...','p')+
@@ -4260,7 +4260,7 @@ function _toolLabCtrl(content){
   content.innerHTML='<h3 class="section-label-pl">LAB CONTROL</h3><div id="ft-lab-c" class="c-dim"><div class="skeleton"></div></div>';
   _authFetch(API.LAB_STATUS).then(function(r){return r.json()}).then(function(d){
     var up=0,dn=0;d.hosts.forEach(function(x){if(x.status==='up')up++;else dn++;});
-    var h='<div class="stats mb-12" >'+st('HOSTS',d.hosts.length,'p')+st('ONLINE',up,'g')+st('OFFLINE',dn,dn>0?'r':'g');
+    var h='<div class="stats mb-12" >'+st('HOSTS',d.hosts.length,'p')+st('UP',up,'g')+st('DOWN',dn,dn>0?'r':'g');
     if(d.docker)h+=st('CONTAINERS',d.docker.length,'b');
     h+='</div>';
     h+='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>ROLE</th><th>UPTIME</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>';
@@ -6731,7 +6731,7 @@ function renderPveNodeCard(config){
   var up=live&&live.status==='healthy';
   document.getElementById('hd-subtitle').textContent=ip+' \u00b7 HYPERVISOR'+(pn?' \u00b7 '+pn.detail:'');
   var stats='';
-  stats+=st('STATUS',up?'ONLINE':'OFFLINE',up?'g':'r');
+  stats+=st('STATUS',up?'REACHABLE':'UNREACHABLE',up?'g':'r');
   if(up&&live){
     var cores=parseInt(live.cores)||0;var loadVal=parseFloat(live.load)||0;
     var loadPct=cores>0?Math.round(loadVal/cores*100):0;
@@ -6783,7 +6783,7 @@ function renderInfraCard(config){
   var stats='';
   var live=_fleetCache.hd?(_fleetCache.hd.hosts||[]).find(function(h){return h.label===label;}):null;
   var up=ph&&ph.reachable;if(live&&live.status==='healthy')up=true;
-  stats+=st('STATUS',up?'ONLINE':'OFFLINE',up?'g':'r');
+  stats+=st('STATUS',up?'REACHABLE':'UNREACHABLE',up?'g':'r');
   if(live){
     if(live.cores)stats+=st('CPU',live.cores+' Cores','p');
     if(live.ram)stats+=st('RAM',_ramStr(live.ram),'b');
