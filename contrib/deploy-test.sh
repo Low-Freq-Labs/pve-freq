@@ -1,55 +1,56 @@
 #!/usr/bin/env bash
-# deploy-test.sh — sync dev repo to E2E test VM via git bundle
+# deploy-test.sh — sync dev repo to E2E test VM
 #
 # Usage: ./contrib/deploy-test.sh [host_ip]
 # Default: 10.25.255.55 (VM 5005)
 #
-# Creates a git bundle of commits since the target's HEAD,
-# copies it via scp, and applies via fast-forward merge.
-# No SSH keys to GitHub needed on the target.
+# Clean target: full rsync (bootstraps source tree)
+# Existing target: git bundle (incremental, fast)
+# Then syncs to /opt/pve-freq runtime install if present.
 
 set -euo pipefail
 
 TARGET="${1:-10.25.255.55}"
 USER="freq-ops"
 REMOTE_DIR="/tmp/pve-freq-dev"
+RUNTIME_DIR="/opt/pve-freq"
 BUNDLE="/tmp/pve-freq-deploy-bundle.git"
 
 echo "=== Deploy to ${USER}@${TARGET}:${REMOTE_DIR} ==="
 
-# Get target's current HEAD
-echo "[1/4] Checking target HEAD..."
-TARGET_HEAD=$(ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git rev-parse HEAD" 2>/dev/null)
+# Check if target has an existing source tree
+TARGET_HEAD=$(ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git rev-parse HEAD 2>/dev/null" 2>/dev/null || echo "")
+
 if [ -z "$TARGET_HEAD" ]; then
-    echo "ERROR: Could not read HEAD from ${TARGET}:${REMOTE_DIR}"
-    exit 1
+    # Clean target — full rsync bootstrap
+    echo "[1/4] Clean target — bootstrapping source tree..."
+    ssh -n "${USER}@${TARGET}" "mkdir -p ${REMOTE_DIR}"
+    rsync -az --delete \
+        --exclude='__pycache__' --exclude='*.pyc' \
+        --exclude='.venv/' --exclude='.ruff_cache/' --exclude='~freq-ops/' --exclude='/data/cache/' \
+        ./ "${USER}@${TARGET}:${REMOTE_DIR}/"
+    echo "  Full source synced to ${REMOTE_DIR}"
+else
+    LOCAL_HEAD=$(git rev-parse HEAD)
+    if [ "$TARGET_HEAD" = "$LOCAL_HEAD" ]; then
+        echo "Already up to date (${LOCAL_HEAD:0:8})"
+    else
+        BEHIND=$(git log --oneline "${TARGET_HEAD}..HEAD" | wc -l)
+        echo "[1/4] Target at ${TARGET_HEAD:0:8}, source at ${LOCAL_HEAD:0:8} (${BEHIND} commits behind)"
+
+        # Create and apply bundle
+        echo "[2/4] Creating bundle..."
+        git bundle create "$BUNDLE" "${TARGET_HEAD}..HEAD"
+        echo "[3/4] Copying bundle..."
+        scp -q "$BUNDLE" "${USER}@${TARGET}:/tmp/"
+        echo "[4/4] Applying..."
+        ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git pull /tmp/pve-freq-deploy-bundle.git HEAD --ff-only"
+        rm -f "$BUNDLE"
+        ssh -n "${USER}@${TARGET}" "rm -f /tmp/pve-freq-deploy-bundle.git" 2>/dev/null || true
+    fi
 fi
-
-LOCAL_HEAD=$(git rev-parse HEAD)
-if [ "$TARGET_HEAD" = "$LOCAL_HEAD" ]; then
-    echo "Already up to date (${LOCAL_HEAD:0:8})"
-    exit 0
-fi
-
-BEHIND=$(git log --oneline "${TARGET_HEAD}..HEAD" | wc -l)
-echo "  Target: ${TARGET_HEAD:0:8}"
-echo "  Source: ${LOCAL_HEAD:0:8}"
-echo "  Behind: ${BEHIND} commits"
-
-# Create bundle
-echo "[2/4] Creating bundle..."
-git bundle create "$BUNDLE" "${TARGET_HEAD}..HEAD"
-
-# Copy to target
-echo "[3/4] Copying bundle..."
-scp -q "$BUNDLE" "${USER}@${TARGET}:/tmp/"
-
-# Apply on target
-echo "[4/4] Applying..."
-ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git pull /tmp/pve-freq-deploy-bundle.git HEAD --ff-only"
 
 # Sync to runtime install path if it exists
-RUNTIME_DIR="/opt/pve-freq"
 echo "[5/6] Syncing to runtime install..."
 ssh -n "${USER}@${TARGET}" "
 if [ -d ${RUNTIME_DIR}/freq ]; then
@@ -75,10 +76,6 @@ fi
 "
 
 # Verify
-FINAL=$(ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git rev-parse --short HEAD")
+FINAL=$(ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git rev-parse --short HEAD 2>/dev/null || echo 'no-git'")
 echo ""
-echo "=== Done: ${TARGET} now at ${FINAL} (was ${TARGET_HEAD:0:8}) ==="
-
-# Cleanup
-rm -f "$BUNDLE"
-ssh -n "${USER}@${TARGET}" "rm -f /tmp/pve-freq-deploy-bundle.git" 2>/dev/null || true
+echo "=== Done: ${TARGET} now at ${FINAL} ==="
