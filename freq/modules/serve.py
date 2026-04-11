@@ -1541,32 +1541,35 @@ def _resolve_container_vm_ip(vm) -> str:
 
 
 def _is_first_run():
-    """Detect if this is the first run (no admin exists, no setup markers).
+    """Detect if this is the first run or if setup is incomplete.
 
-    Returns True if:
-      1. No data/setup-complete marker exists (Web UI), AND
-      2. No conf/.initialized marker exists (CLI init), AND
-      3. No users exist in users.conf (or file doesn't exist)
+    Returns True if no users exist — even if init markers are present.
+    An init without dashboard users is incomplete: the operator cannot
+    log in and would be stranded between "setup complete" and
+    "invalid credentials". The setup wizard must remain available
+    until at least one user exists.
     """
     cfg = load_config()
 
-    # Check Web UI marker (fast path)
+    # Users are the ultimate gate — no users means setup is incomplete
+    # regardless of markers. This prevents the post-init dead-end where
+    # .initialized exists but users.conf is empty.
+    try:
+        users = _load_users(cfg)
+        if not users:
+            return True
+    except Exception as e:
+        logger.warning(f"_is_first_run: failed to check users: {e}")
+        return True  # If we can't check, safer to show setup wizard
+
+    # If users exist, check markers to determine if setup completed
     if os.path.isfile(os.path.join(cfg.data_dir, "setup-complete")):
         return False
-
-    # Check CLI init marker (so CLI-initialized systems skip the wizard)
     if os.path.isfile(os.path.join(cfg.conf_dir, ".initialized")):
         return False
 
-    # Check if any users exist
-    try:
-        users = _load_users(cfg)
-        if users:
-            return False
-    except Exception as e:
-        logger.warning(f"_is_first_run: failed to check users: {e}")
-
-    return True
+    # Users exist but no markers — treat as configured (user added manually)
+    return False
 
 
 def _get_fleet_vms(cfg):

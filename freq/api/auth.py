@@ -148,6 +148,12 @@ def handle_auth_login(handler):
 
     cfg = load_config()
     users = _load_users(cfg)
+    if not users:
+        handler._json_response(
+            {"error": "No users configured. Complete setup at /setup or run: freq init"},
+            401,
+        )
+        return
     user = next((u for u in users if u["username"] == username), None)
     if not user:
         record_login_attempt(client_ip, False)
