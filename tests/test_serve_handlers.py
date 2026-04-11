@@ -43,6 +43,7 @@ def _make_handler(path="/api/info"):
     h.path = path
     h.wfile = MockWfile()
     h.rfile = io.BytesIO()
+    h.command = "GET"
     h.requestline = f"GET {path} HTTP/1.1"
     h.client_address = ("127.0.0.1", 9999)
     h.request_version = "HTTP/1.1"
