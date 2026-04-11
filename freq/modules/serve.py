@@ -3816,7 +3816,7 @@ a:hover{{text-decoration:underline}}
                 self._json_response(data, resp.status)
         except urllib.error.URLError:
             self._json_response(
-                {"error": f"WATCHDOG daemon not reachable at localhost:{wd_port}", "watchdog_down": True}, 502
+                {"error": f"WATCHDOG daemon not reachable at localhost:{wd_port}", "watchdog_down": True}, 503
             )
         except Exception as e:
             self._json_response({"error": f"Proxy error: {e}"}, 502)
