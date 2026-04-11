@@ -2266,8 +2266,15 @@ a:hover{{text-decoration:underline}}
         has_hosts = bool(cfg.hosts)
         has_nodes = bool(cfg.pve_nodes)
 
-        # Honest health: configured vs partially configured vs broken
-        if key_readable and has_hosts and has_nodes:
+        # Check .initialized marker — only written when init completes with 0 failures
+        initialized_marker = os.path.join(cfg.conf_dir, ".initialized")
+        is_initialized = os.path.isfile(initialized_marker)
+
+        # Honest health: must factor in .initialized marker
+        # "configured" = init completed successfully (.initialized exists + config items)
+        # "partial" = config items exist but init didn't complete (or never ran)
+        # "unconfigured" = nothing configured yet
+        if is_initialized and key_readable and has_hosts and has_nodes:
             setup_health = "configured"
         elif key_exists or has_hosts or has_nodes:
             setup_health = "partial"
@@ -2285,6 +2292,7 @@ a:hover{{text-decoration:underline}}
                 "hosts_configured": has_hosts,
                 "host_count": len(cfg.hosts),
                 "setup_health": setup_health,
+                "initialized": is_initialized,
             }
         )
 

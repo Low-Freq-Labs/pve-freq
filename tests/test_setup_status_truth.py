@@ -5,6 +5,8 @@ Proves:
 2. Setup status reports key readability (not just existence)
 3. Setup status includes setup_health summary
 4. Setup health distinguishes configured/partial/unconfigured
+5. "configured" requires .initialized marker (not just config items)
+6. Response includes initialized field for partial-init distinction
 """
 
 import os
@@ -69,9 +71,29 @@ class TestSetupHealthSummary(unittest.TestCase):
         src = self._handler_src()
         # The if-block leading to setup_health = "configured" must check key + hosts
         config_block_idx = src.index('"configured"')
-        preceding = src[max(0, config_block_idx - 200):config_block_idx]
+        preceding = src[max(0, config_block_idx - 500):config_block_idx]
         self.assertIn("key_readable", preceding)
         self.assertIn("has_hosts", preceding)
+
+    def test_configured_requires_initialized_marker(self):
+        """'configured' must require .initialized — partial init is NOT configured."""
+        src = self._handler_src()
+        config_block_idx = src.index('"configured"')
+        preceding = src[max(0, config_block_idx - 200):config_block_idx]
+        self.assertIn("is_initialized", preceding,
+                       "'configured' state must check .initialized marker")
+
+    def test_response_includes_initialized_field(self):
+        """Response must include 'initialized' boolean for UI truth."""
+        src = self._handler_src()
+        self.assertIn('"initialized"', src,
+                       "Response must include initialized field")
+
+    def test_checks_initialized_marker_file(self):
+        """Must check .initialized file in conf_dir."""
+        src = self._handler_src()
+        self.assertIn(".initialized", src,
+                       "Must check .initialized marker file")
 
 
 if __name__ == "__main__":
