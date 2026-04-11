@@ -88,7 +88,7 @@ Use `docs/API-REFERENCE.md` and the route handlers under `freq/api/` for the ful
 
 **PVE Nodes:**
 - `pvesh get /cluster/resources --type vm --output-format json` from any node returns cluster-wide VM state.
-- `freq-admin` should have passwordless sudo where deployment is healthy.
+- The FREQ service account (default: `freq-admin`, check `freq.toml [ssh].service_account`) should have passwordless sudo where deployment is healthy.
 
 ## Common operations
 ```bash

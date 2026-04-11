@@ -56,11 +56,11 @@ freq init --deploy-keys
 
 ```bash
 # Test individual host connectivity
-ssh -o ConnectTimeout=5 freq-admin@<host-ip> "hostname"
+ssh -o ConnectTimeout=5 <service-account>@<host-ip> "hostname"
 
 # Check if it's a network issue or auth issue
 # Network: ping <host-ip>
-# Auth: ssh -v freq-admin@<host-ip>
+# Auth: ssh -v <service-account>@<host-ip>
 
 # Common fixes:
 # - Firewall rule changed: check pfSense/OPNsense rules
