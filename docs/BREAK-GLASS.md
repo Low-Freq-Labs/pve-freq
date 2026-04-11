@@ -37,15 +37,15 @@ freq doctor
 **Symptom:** Fleet commands fail with "Permission denied" or "No such file".
 
 ```bash
-# Regenerate FREQ SSH keys
-freq init --regenerate-keys
-
-# Or manually:
+# Regenerate FREQ SSH keys manually
 ssh-keygen -t ed25519 -f /opt/pve-freq/data/keys/freq_id_ed25519 -N ""
 ssh-keygen -t rsa -b 4096 -f /opt/pve-freq/data/keys/freq_id_rsa -N ""
 
-# Re-deploy to fleet
-freq init --deploy-keys
+# Deploy keys to fleet hosts
+freq host keys deploy
+
+# Or re-run init to redeploy everything
+freq init --fix
 ```
 
 ---
