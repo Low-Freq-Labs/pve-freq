@@ -198,6 +198,11 @@ class FreqConfig:
     # Fleet boundaries (loaded from fleet-boundaries.toml)
     fleet_boundaries: FleetBoundaries = field(default_factory=FleetBoundaries)
 
+    @property
+    def log_dir(self) -> str:
+        """Compatibility shim for callers that still expect cfg.log_dir."""
+        return os.path.dirname(self.log_file) if self.log_file else ""
+
 
 def resolve_install_dir() -> str:
     """Find the FREQ install directory.

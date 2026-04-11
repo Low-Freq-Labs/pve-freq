@@ -1794,22 +1794,24 @@ def _phase_ssh_keys(cfg, ctx):
 
         # ed25519 (primary)
         svc_ed = os.path.join(svc_ssh, "id_ed25519")
-        if not os.path.isfile(svc_ed):
-            shutil.copy2(ctx["key_path"], svc_ed)
-            shutil.copy2(f"{ctx['key_path']}.pub", f"{svc_ed}.pub")
-            os.chmod(svc_ed, 0o600)
-            _chown(f"{svc_name}:{svc_name}", svc_ed, f"{svc_ed}.pub")
-            fmt.step_ok(f"ed25519 private key copied to {svc_name}/.ssh/")
+        shutil.copy2(ctx["key_path"], svc_ed)
+        shutil.copy2(f"{ctx['key_path']}.pub", f"{svc_ed}.pub")
+        os.chmod(svc_ed, 0o600)
+        _chown(f"{svc_name}:{svc_name}", svc_ed, f"{svc_ed}.pub")
+        ctx["key_path"] = svc_ed
+        cfg.ssh_key_path = svc_ed  # Keep cfg in sync for phases that read cfg directly
+        fmt.step_ok(f"ed25519 private key synced to {svc_name}/.ssh/")
 
         # RSA (legacy)
         if os.path.isfile(rsa_key):
             svc_rsa = os.path.join(svc_ssh, "id_rsa")
-            if not os.path.isfile(svc_rsa):
-                shutil.copy2(rsa_key, svc_rsa)
-                shutil.copy2(f"{rsa_key}.pub", f"{svc_rsa}.pub")
-                os.chmod(svc_rsa, 0o600)
-                _chown(f"{svc_name}:{svc_name}", svc_rsa, f"{svc_rsa}.pub")
-                fmt.step_ok(f"RSA private key copied to {svc_name}/.ssh/")
+            shutil.copy2(rsa_key, svc_rsa)
+            shutil.copy2(f"{rsa_key}.pub", f"{svc_rsa}.pub")
+            os.chmod(svc_rsa, 0o600)
+            _chown(f"{svc_name}:{svc_name}", svc_rsa, f"{svc_rsa}.pub")
+            ctx["rsa_key_path"] = svc_rsa
+            cfg.ssh_rsa_key_path = svc_rsa  # Keep cfg in sync
+            fmt.step_ok(f"RSA private key synced to {svc_name}/.ssh/")
 
     # RSA key status for legacy devices
     if os.path.isfile(rsa_pub):
