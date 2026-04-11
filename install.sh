@@ -482,18 +482,40 @@ post_install() {
         echo ""
     fi
 
-    # Install systemd unit if requested
+    # Install systemd unit if requested — templated to match actual install dir
     if [[ "$WITH_SYSTEMD" == true ]]; then
-        if [[ -f "$INSTALL_DIR/contrib/freq-serve.service" ]]; then
-            step "Installing systemd unit"
-            cp "$INSTALL_DIR/contrib/freq-serve.service" /etc/systemd/system/
-            systemctl daemon-reload
-            systemctl enable freq-serve
-            ok "Systemd unit installed (freq-serve.service)"
-            info "Start with: systemctl start freq-serve"
-        else
-            warn "Systemd unit not found at $INSTALL_DIR/contrib/freq-serve.service"
+        step "Installing systemd unit"
+        # Detect service account (match what init creates)
+        local svc_user="freq-ops"
+        if grep -q '^service_account' "$INSTALL_DIR/conf/freq.toml" 2>/dev/null; then
+            svc_user=$(grep '^service_account' "$INSTALL_DIR/conf/freq.toml" | head -1 | sed 's/.*=\s*"\(.*\)"/\1/')
         fi
+        cat > /etc/systemd/system/freq-serve.service << UNIT
+[Unit]
+Description=PVE FREQ Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${svc_user}
+Group=${svc_user}
+Environment=FREQ_DIR=${INSTALL_DIR}
+ExecStart=/usr/local/bin/freq serve
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=freq-serve
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+        systemctl daemon-reload
+        systemctl enable freq-serve
+        ok "Systemd unit installed (freq-serve.service)"
+        info "  User=\${svc_user}, FREQ_DIR=\${INSTALL_DIR}"
+        info "Start with: systemctl start freq-serve"
         echo ""
     fi
 
