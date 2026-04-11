@@ -561,7 +561,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     _phase(5, total, "PVE Node Deployment")
     _t = time.monotonic()
     _phase_pve_deploy(cfg, ctx, args)
-    # Retry VLAN discovery if skipped in Phase 2 (now freq-admin key is available)
+    # Retry VLAN discovery if skipped in Phase 2 (now service account key is available)
     if not (getattr(cfg, "vlans", None)):
         _discover_vlans_from_pve(cfg, ctx)
     logger.perf("init_phase", time.monotonic() - _t, phase=5, name="pve_deploy")
@@ -1291,7 +1291,7 @@ def _discover_vlans_from_pve(cfg, ctx):
     if not cfg.pve_nodes:
         return
 
-    # Determine SSH method: bootstrap creds or freq-admin key
+    # Determine SSH method: bootstrap creds or service account key
     key_path = ctx.get("key_path", "") or cfg.ssh_key_path
     svc_name = ctx.get("svc_name", cfg.ssh_service_account)
     bootstrap_key = ctx.get("bootstrap_key", "")
@@ -1691,7 +1691,7 @@ def _phase_ssh_keys(cfg, ctx):
     ctx["rsa_key_path"] = rsa_key
 
     # Fix ownership — init runs as root but keys need to be readable by
-    # the service account (freq-admin) that runs the dashboard.
+    # the service account that runs the dashboard.
     svc_name = ctx["svc_name"]
     for f in [key_dir, ed_key, f"{ed_key}.pub", rsa_key, f"{rsa_key}.pub"]:
         if os.path.exists(f):
@@ -1892,7 +1892,7 @@ def _phase_pve_api_token(cfg, ctx):
             break
 
     if not first_node:
-        fmt.step_warn("No PVE nodes reachable via freq-admin — skipping API token")
+        fmt.step_warn("No PVE nodes reachable via service account key — skipping API token")
         return
 
     ssh_base = [
@@ -2419,7 +2419,7 @@ def _pdm_create_pve_token(pve_ip, ctx):
     Returns (token_id, token_secret) or (None, None).
     """
     key_path = ctx.get("key_path", "")
-    svc_name = ctx.get("svc_name", "freq-admin")
+    svc_name = ctx.get("svc_name", cfg.ssh_service_account if hasattr(cfg, "ssh_service_account") else "freq-admin")
 
     ssh_base = [
         "ssh",
@@ -3535,7 +3535,7 @@ def _phase_fleet_configure(cfg, ctx):
             # Check docker is installed
             rc, out, _ = _run(ssh_cmd + ["docker --version 2>/dev/null"], timeout=QUICK_CHECK_TIMEOUT)
             if rc == 0 and "Docker" in out:
-                # Add freq-admin to docker group
+                # Add service account to docker group
                 _run(
                     ssh_cmd + [f"sudo usermod -aG docker {svc_name} 2>/dev/null"],
                     timeout=QUICK_CHECK_TIMEOUT,
@@ -3566,7 +3566,7 @@ def _phase_fleet_configure(cfg, ctx):
                     timeout=DEFAULT_CMD_TIMEOUT,
                 )
                 if rc != 0 or not out.strip():
-                    # Try without sudo (freq-admin may already be in docker group from a prior init)
+                    # Try without sudo (service account may already be in docker group from a prior init)
                     rc, out, _ = _run(
                         ssh_cmd + [
                             "docker ps --format '{{json .}}' 2>/dev/null"
@@ -4188,7 +4188,7 @@ def _phase_fleet_configure(cfg, ctx):
         fmt.step_ok("TLS certificate already exists")
 
     # ── 9m: Fix ownership for dashboard ───────────────────────────
-    # Dashboard runs as svc_name (freq-admin). Init runs as root.
+    # Dashboard runs as the service account. Init runs as root.
     # Every directory the dashboard needs must be owned by svc_name.
     install_dir = os.path.dirname(cfg.conf_dir)
     for subdir in ["data/keys", "data/log", "data/vault", "data/cache", "credentials", "tls"]:
@@ -5623,7 +5623,7 @@ def _phase_summary(cfg, ctx, verified, pack=None):
 
 
 def _scan_fleet(cfg):
-    """Test freq-admin SSH to all hosts. Returns (ok_list, fail_list, unreachable_list).
+    """Test service account SSH to all hosts. Returns (ok_list, fail_list, unreachable_list).
 
     Each entry is a dict: {host, ip, htype, error}.
     Shared by --check and --fix.
@@ -5857,10 +5857,10 @@ def _init_check(cfg, json_output=False):
 
 
 def _init_fix(cfg, args):
-    """Scan fleet, find broken hosts, redeploy freq-admin.
+    """Scan fleet, find broken hosts, redeploy service account.
 
     Uses bootstrap auth (password or existing key) to reach hosts where
-    freq-admin is broken/missing, then deploys using the same machinery
+    service account is broken/missing, then deploys using the same machinery
     as the full init wizard.
     """
     fmt.header("Init Fix — Repair Broken Hosts")
@@ -7084,7 +7084,7 @@ def _headless_fleet_deploy(
             if t["htype"] in ("idrac", "switch") and t["htype"] in device_creds
         }
         if device_passwords and len(device_passwords) == 1:
-            _persist_legacy_password_file(cfg, ctx.get("svc_name", "freq-admin"), next(iter(device_passwords)))
+            _persist_legacy_password_file(cfg, ctx.get("svc_name", cfg.ssh_service_account if hasattr(cfg, "ssh_service_account") else "freq-admin"), next(iter(device_passwords)))
         elif len(device_passwords) > 1:
             fmt.step_warn("Multiple distinct iDRAC/switch passwords used — legacy password fallback not persisted")
 

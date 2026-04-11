@@ -95,7 +95,7 @@ def get_platform_ssh(htype: str, cfg=None) -> dict:
     """Return platform SSH config for the given host type.
 
     Merges base config with dynamic values from FreqConfig:
-    - user: from cfg.ssh_service_account (default: freq-admin)
+    - user: from cfg.ssh_service_account (default from _DEFAULTS)
     - password_file: from cfg.legacy_password_file for idrac/switch
     """
     base = _PLATFORM_SSH_BASE.get(htype, _PLATFORM_SSH_BASE["linux"]).copy()

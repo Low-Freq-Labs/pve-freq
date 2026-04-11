@@ -274,7 +274,7 @@ def _bg_probe_infra():
     fleet_key = os.path.join(cfg.key_dir, "fleet_key")
     if not os.path.isfile(fleet_key):
         fleet_key = cfg.ssh_key_path  # fallback to service account key
-    bootstrap_user = os.environ.get("SUDO_USER") or cfg.ssh_service_account or "freq-admin"
+    bootstrap_user = os.environ.get("SUDO_USER") or cfg.ssh_service_account
 
     def _probe_device(key, dev):
         d = {"key": key, "label": dev.label, "type": dev.device_type, "ip": dev.ip, "reachable": False, "metrics": {}}
