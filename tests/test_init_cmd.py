@@ -356,8 +356,8 @@ password_file = "{sw_pass}"
         except (KeyError, ValueError):
             pass  # Raising is acceptable for missing required field
 
-    def test_missing_password_file_field(self):
-        """Device section without 'password_file' field — should handle gracefully."""
+    def test_missing_password_and_password_file_field(self):
+        """Device section with no password or password_file — should skip."""
         toml_content = """
 [switch]
 user = "admin"
@@ -366,9 +366,73 @@ user = "admin"
         try:
             result = self._load(cred_file)
             if "switch" in result:
-                self.fail("Expected switch to be skipped when password_file field missing")
+                self.fail("Expected switch to be skipped when both password and password_file missing")
         except (KeyError, ValueError):
             pass  # Raising is acceptable
+
+    def test_inline_password_honored(self):
+        """Inline 'password' field should be used when no password_file."""
+        toml_content = """
+[switch]
+user = "gigecolo"
+password = "inline_secret"
+"""
+        cred_file = self._write_file("creds.toml", toml_content)
+        result = self._load(cred_file)
+        self.assertIn("switch", result)
+        self.assertEqual(result["switch"]["user"], "gigecolo")
+        self.assertEqual(result["switch"]["password"], "inline_secret")
+
+    def test_inline_password_all_device_types(self):
+        """All device types honor inline password."""
+        toml_content = """
+[pfsense]
+user = "root"
+password = "pf_inline"
+
+[switch]
+user = "gigecolo"
+password = "sw_inline"
+
+[idrac]
+user = "root"
+password = "id_inline"
+"""
+        cred_file = self._write_file("creds.toml", toml_content)
+        result = self._load(cred_file)
+        self.assertIn("pfsense", result)
+        self.assertEqual(result["pfsense"]["password"], "pf_inline")
+        self.assertIn("switch", result)
+        self.assertEqual(result["switch"]["password"], "sw_inline")
+        self.assertIn("idrac", result)
+        self.assertEqual(result["idrac"]["password"], "id_inline")
+
+    def test_password_file_takes_priority_over_inline(self):
+        """password_file is preferred over inline password when both exist."""
+        sw_pass = self._write_file("sw-pass", "file_secret")
+        toml_content = f"""
+[switch]
+user = "admin"
+password_file = "{sw_pass}"
+password = "inline_secret"
+"""
+        cred_file = self._write_file("creds.toml", toml_content)
+        result = self._load(cred_file)
+        self.assertIn("switch", result)
+        self.assertEqual(result["switch"]["password"], "file_secret")
+
+    def test_unreadable_password_file_falls_back_to_inline(self):
+        """When password_file exists but is unreadable, fall back to inline password."""
+        toml_content = """
+[idrac]
+user = "root"
+password_file = "/nonexistent/idrac-pass"
+password = "fallback_inline"
+"""
+        cred_file = self._write_file("creds.toml", toml_content)
+        result = self._load(cred_file)
+        self.assertIn("idrac", result)
+        self.assertEqual(result["idrac"]["password"], "fallback_inline")
 
     def test_returns_dict_type(self):
         """Return type is always a dict."""

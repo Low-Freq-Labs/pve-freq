@@ -343,19 +343,33 @@ def _load_device_credentials(cred_file):
             return result
 
     def _read_entry(entry, label):
-        """Extract user + password from a credential entry."""
+        """Extract user + password from a credential entry.
+
+        Supports two password sources (priority order):
+            1. password_file = "/path/to/file"  — read password from file
+            2. password = "inline"              — inline password value
+
+        At least one must be present. password_file takes priority when both exist.
+        """
         user = entry.get("user", "root")
         pw_file = entry.get("password_file", "")
-        if not pw_file:
-            fmt.step_warn(f"Device '{label}' has no password_file — skipped")
-            return None
-        try:
-            with open(pw_file) as f:
-                password = f.read().strip()
-        except (OSError, IOError) as e:
-            fmt.step_warn(f"Cannot read {label} password from {pw_file}: {e}")
-            return None
-        return {"user": user, "password": password}
+        inline_pw = entry.get("password", "")
+        if pw_file:
+            try:
+                with open(pw_file) as f:
+                    password = f.read().strip()
+            except (OSError, IOError) as e:
+                if inline_pw:
+                    # password_file unreadable but inline password available — use it
+                    fmt.step_warn(f"Cannot read {label} password from {pw_file}, using inline password")
+                    return {"user": user, "password": inline_pw}
+                fmt.step_warn(f"Cannot read {label} password from {pw_file}: {e}")
+                return None
+            return {"user": user, "password": password}
+        if inline_pw:
+            return {"user": user, "password": inline_pw}
+        fmt.step_warn(f"Device '{label}' has no password or password_file — skipped")
+        return None
 
     # Build lookup: check all three formats per device type
     for legacy_htype, (category, vendor) in HTYPE_COMPAT.items():
