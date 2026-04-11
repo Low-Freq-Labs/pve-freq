@@ -1,7 +1,7 @@
 # Fleet State — Reference
 
-> After running `freq init`, your fleet state is tracked in `conf/hosts.conf`.
-> Use `freq hosts list` to view the current fleet, or `freq doctor` to verify connectivity.
+> After running `freq init`, your fleet state lives in `conf/hosts.conf` and related config under `conf/`.
+> Use `freq host list` to review registered hosts, or `freq doctor` to verify local setup and connectivity.
 
 ## Example Fleet Layout
 
@@ -23,12 +23,12 @@
 | radarr | 7878 | X-Api-Key header |
 | prowlarr | 9696 | X-Api-Key header |
 | qbittorrent | 8080 | Session cookie |
-| sabnzbd | 8085 | apikey parameter |
-| tdarr | 8265 | x-api-key header |
+| sabnzbd | 8085 | `apikey` query parameter |
+| tdarr | 8265 | X-Api-Key header |
 
 ## PVE API
 
-```
+```bash
 # Auth: POST /api2/json/access/ticket (root@pam + password)
 # Then: Cookie: PVEAuthCookie=<ticket>, CSRFPreventionToken header
 curl -sk https://<pve-ip>:8006/api2/json/version
@@ -37,8 +37,8 @@ curl -sk https://<pve-ip>:8006/api2/json/version
 ## Useful Commands
 
 ```bash
-freq hosts list          # Show all fleet hosts
-freq doctor              # Verify fleet connectivity
-freq hosts sync          # Sync hosts.conf from PVE
-freq exec all "hostname" # Run command across fleet
+freq host list                  # Show registered fleet hosts
+freq doctor                     # Verify local install and connectivity
+freq fleet test <host>          # Test connectivity to a specific host
+freq fleet exec all "hostname" # Run a command across fleet targets
 ```

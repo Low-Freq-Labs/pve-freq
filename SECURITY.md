@@ -2,7 +2,7 @@
 
 ## Reporting Vulnerabilities
 
-If you find a security vulnerability in PVE FREQ, please report it through [GitHub's private vulnerability reporting](https://github.com/Low-Freq-Labs/pve-freq-dev/security/advisories/new).
+If you find a security vulnerability in PVE FREQ, please report it through [GitHub's private vulnerability reporting](https://github.com/Low-Freq-Labs/pve-freq/security/advisories/new).
 
 Do not open a public issue for security vulnerabilities.
 

@@ -142,7 +142,7 @@ async def _identify_host(ip: str, key_path: str, cfg=None) -> dict:
 def scan_and_identify(prefix: str, key_path: str, start: int = 1, end: int = 254, cfg=None) -> tuple:
     """Scan a subnet and identify hosts. Returns (alive_ips, hosts_info).
 
-    Reusable core — called by both `freq discover` and `freq init` Phase 7.
+    Reusable core — called by both `freq host discover` and `freq init` Phase 7.
     cfg is needed so SSH uses the correct service account (not hardcoded default).
     """
     fmt.step_start("Ping sweep")
@@ -300,7 +300,7 @@ def cmd_discover(cfg: FreqConfig, pack, args) -> int:
         f"{new_count} new (not in fleet)"
     )
     if new_count > 0:
-        fmt.line(f"  {fmt.C.GRAY}Add new hosts with: freq hosts add{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}Add new hosts with: freq host add{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
 

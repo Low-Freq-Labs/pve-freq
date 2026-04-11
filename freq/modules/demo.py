@@ -305,9 +305,9 @@ def _demo_dashboard():
     fmt.line("{p}Web Dashboard{r}".format(p=fmt.C.PURPLE_BOLD, r=fmt.C.RESET))
     print()
     fmt.line(
-        "  {b}89 API endpoints{r}  |  {b}7 views{r}  |  {b}Zero JS dependencies{r}".format(b=fmt.C.BOLD, r=fmt.C.RESET)
+        "  {b}Dashboard API{r}  |  {b}7 navigation groups{r}  |  {b}No frontend build step{r}".format(b=fmt.C.BOLD, r=fmt.C.RESET)
     )
-    fmt.line("  {dim}Single-file SPA served by Python's http.server{r}".format(dim=fmt.C.DIM, r=fmt.C.RESET))
+    fmt.line("  {dim}Embedded web assets served by Python's HTTP server{r}".format(dim=fmt.C.DIM, r=fmt.C.RESET))
     print()
     fmt.line("  {cyan}Start it:{r}  freq serve".format(cyan=fmt.C.CYAN, r=fmt.C.RESET))
     fmt.line("  {cyan}Open:{r}      http://localhost:8888".format(cyan=fmt.C.CYAN, r=fmt.C.RESET))
@@ -326,7 +326,7 @@ def _demo_closing(pack):
             p=fmt.C.PURPLE_BOLD, dim=fmt.C.DIM, r=fmt.C.RESET
         )
     )
-    print("  {dim}https://github.com/Low-Freq-Labs/pve-freq-dev{r}".format(dim=fmt.C.DIM, r=fmt.C.RESET))
+    print("  {dim}https://github.com/Low-Freq-Labs/pve-freq{r}".format(dim=fmt.C.DIM, r=fmt.C.RESET))
     print()
 
 

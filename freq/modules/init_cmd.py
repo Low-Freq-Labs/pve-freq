@@ -2088,7 +2088,7 @@ def _discover_and_register(cfg, ctx):
             svc = cfg.ssh_service_account or "freq-admin"
             fmt.line(f"  {fmt.C.YELLOW}No hosts could be identified via SSH.{fmt.C.RESET}")
             fmt.line(f"  {fmt.C.DIM}Tried connecting as '{svc}'. Hosts need this account + key first.{fmt.C.RESET}")
-            fmt.line(f"  {fmt.C.DIM}Use 'freq hosts add' to register hosts manually, then deploy keys.{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.DIM}Use 'freq host add' to register hosts manually, then deploy keys.{fmt.C.RESET}")
         else:
             fmt.line(f"  {fmt.C.GREEN}All discovered hosts are already registered.{fmt.C.RESET}")
         return
@@ -2909,7 +2909,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     else:
         fmt.blank()
         fmt.line(f"  {fmt.C.DIM}No VLANs configured — skipping multi-VLAN scan.{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}Run 'freq discover' later to scan subnets manually.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Run 'freq host discover' later to scan subnets manually.{fmt.C.RESET}")
 
     # ── Step 3: Infrastructure Auto-Detection ──────────────────────
     fmt.blank()
@@ -3069,7 +3069,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
     if not infra_truenas and not infra_switch and not infra_idrac_ips:
         fmt.line(f"  {fmt.C.DIM}No additional infrastructure devices auto-detected.{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}Add manually later with 'freq hosts add'.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Add manually later with 'freq host add'.{fmt.C.RESET}")
 
     # ── Step 4: Register discovered hosts ──────────────────────────
     fmt.blank()
@@ -3079,7 +3079,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     if not discovered:
         fmt.line(f"  {fmt.C.DIM}No new hosts discovered.{fmt.C.RESET}")
         if not cfg.hosts:
-            fmt.line(f"  {fmt.C.DIM}Add hosts manually with 'freq hosts add' or 'freq discover'.{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.DIM}Add hosts manually with 'freq host add' or 'freq host discover'.{fmt.C.RESET}")
     else:
         headless = getattr(args, "headless", False) if args else False
 
@@ -3229,7 +3229,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
 
     if not cfg.hosts:
         fmt.line(f"  {fmt.C.DIM}No hosts registered — nothing to deploy.{fmt.C.RESET}")
-        fmt.line(f"  {fmt.C.DIM}Add hosts with 'freq hosts add' or re-run 'freq init'.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Add hosts with 'freq host add' or re-run 'freq init'.{fmt.C.RESET}")
         return
 
     # Group hosts by auth category (using deployer registry)
@@ -5233,7 +5233,7 @@ def _phase_verify(cfg, ctx):
     if cfg.hosts:
         _check(f"hosts.toml: {len(cfg.hosts)} hosts", True)
     else:
-        fmt.step_warn("hosts.toml is empty — use 'freq hosts add' or 'freq discover'")
+        fmt.step_warn("hosts.toml is empty — use 'freq host add' or 'freq host discover'")
 
     # Timezone
     tz = "unknown"
@@ -5307,7 +5307,7 @@ def _phase_verify(cfg, ctx):
     if vlans:
         _check(f"vlans.toml: {len(vlans)} VLANs discovered", True)
     else:
-        fmt.step_warn("vlans.toml is empty — run 'freq discover' to scan VLANs")
+        fmt.step_warn("vlans.toml is empty — run 'freq host discover' to scan VLANs")
 
     # fleet-boundaries.toml populated
     fb_path = os.path.join(cfg.conf_dir, "fleet-boundaries.toml")

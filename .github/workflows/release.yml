@@ -53,7 +53,7 @@ jobs:
             freq/ conf/*.example conf/plugins/ conf/playbooks/ \
             contrib/ docs/ \
             pyproject.toml install.sh README.md LICENSE CHANGELOG.md \
-            ARCHITECTURE.md CONTRIBUTING.md SECURITY.md \
+            CONTRIBUTING.md SECURITY.md \
             Dockerfile docker-compose.yml docker-entrypoint.sh \
             --exclude='__pycache__' --exclude='*.pyc'
           sha256sum pve-freq-${VERSION}.tar.gz > pve-freq-${VERSION}.tar.gz.sha256

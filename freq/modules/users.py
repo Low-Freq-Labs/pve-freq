@@ -129,7 +129,7 @@ def cmd_users(cfg: FreqConfig, pack, args) -> int:
     users = _load_users(cfg)
     if not users:
         fmt.line(f"{fmt.C.YELLOW}No users registered.{fmt.C.RESET}")
-        fmt.line(f"{fmt.C.GRAY}Add users with: freq new-user <username>{fmt.C.RESET}")
+        fmt.line(f"{fmt.C.GRAY}Add users with: freq user create <username>{fmt.C.RESET}")
         fmt.blank()
         fmt.footer()
         return 0
@@ -203,7 +203,7 @@ def cmd_new_user(cfg: FreqConfig, pack, args) -> int:
         return 1
 
     fmt.blank()
-    fmt.line(f"{fmt.C.GRAY}Deploy to fleet with: freq install-user {username}{fmt.C.RESET}")
+    fmt.line(f"{fmt.C.GRAY}Deploy to fleet with: freq user install {username}{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 0
@@ -252,7 +252,7 @@ def cmd_promote(cfg: FreqConfig, pack, args) -> int:
     """Promote a user to the next role level."""
     username = getattr(args, "username", None)
     if not username:
-        fmt.error("Usage: freq promote <username>")
+        fmt.error("Usage: freq user promote <username>")
         return 1
 
     users = _load_users(cfg)
@@ -286,7 +286,7 @@ def cmd_demote(cfg: FreqConfig, pack, args) -> int:
     """Demote a user to the previous role level."""
     username = getattr(args, "username", None)
     if not username:
-        fmt.error("Usage: freq demote <username>")
+        fmt.error("Usage: freq user demote <username>")
         return 1
 
     users = _load_users(cfg)
@@ -321,7 +321,7 @@ def cmd_passwd(cfg: FreqConfig, pack, args) -> int:
     """Change a user's password on fleet hosts."""
     username = getattr(args, "username", None)
     if not username:
-        fmt.error("Usage: freq passwd <username>")
+        fmt.error("Usage: freq user passwd <username>")
         return 1
 
     if not validate.username(username):
@@ -391,7 +391,7 @@ def cmd_install_user(cfg: FreqConfig, pack, args) -> int:
     """Create a user account across all fleet hosts."""
     username = getattr(args, "username", None)
     if not username:
-        fmt.error("Usage: freq install-user <username>")
+        fmt.error("Usage: freq user install <username>")
         return 1
 
     if not validate.username(username):

@@ -52,7 +52,7 @@ freq init --deploy-keys
 
 ## Scenario 3: Fleet Connectivity Down
 
-**Symptom:** `freq exec all "hostname"` returns all failures.
+**Symptom:** `freq fleet exec all "hostname"` returns all failures.
 
 ```bash
 # Test individual host connectivity

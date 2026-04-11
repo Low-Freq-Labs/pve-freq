@@ -137,15 +137,15 @@ def _cmd_scan(cfg: FreqConfig, args) -> int:
         fmt.line(f"  In vSphere: Right-click VM → Export → OVA")
         fmt.blank()
         fmt.line(f"  {fmt.C.PURPLE_BOLD}Step 2: Scan{fmt.C.RESET}")
-        fmt.line(f"  freq migrate-vmware scan /path/to/ova-files/")
-        fmt.line(f"  freq migrate-vmware scan /path/to/vm.ova")
+        fmt.line(f"  freq dr migrate-vmware scan /path/to/ova-files/")
+        fmt.line(f"  freq dr migrate-vmware scan /path/to/vm.ova")
         fmt.blank()
         fmt.line(f"  {fmt.C.PURPLE_BOLD}Step 3: Import{fmt.C.RESET}")
-        fmt.line(f"  freq migrate-vmware import /path/to/vm.ova --vmid 200 --node pve01")
+        fmt.line(f"  freq dr migrate-vmware import /path/to/vm.ova --vmid 200 --node pve01")
         fmt.blank()
         fmt.line(f"  {fmt.C.PURPLE_BOLD}Step 4: Verify{fmt.C.RESET}")
         fmt.line(f"  freq list --node pve01")
-        fmt.line(f"  freq power start 200")
+        fmt.line(f"  freq vm power start 200")
         fmt.blank()
         fmt.line(f"  {fmt.C.DIM}Supported formats: {', '.join(DISK_FORMATS)}{fmt.C.RESET}")
         fmt.blank()
@@ -198,7 +198,7 @@ def _scan_directory(cfg: FreqConfig, directory: str) -> int:
     _save_state(cfg, state)
 
     fmt.blank()
-    fmt.line(f"  {fmt.C.DIM}Import: freq migrate-vmware import <file> --vmid <id> --node <node>{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.DIM}Import: freq dr migrate-vmware import <file> --vmid <id> --node <node>{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 0
@@ -235,7 +235,7 @@ def _scan_file(cfg: FreqConfig, filepath: str) -> int:
             fmt.line(f"  {fmt.C.DIM}Connect to PVE node for deeper analysis{fmt.C.RESET}")
 
     fmt.blank()
-    fmt.line(f"  {fmt.C.DIM}Import: freq migrate-vmware import {filepath} --vmid <id>{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.DIM}Import: freq dr migrate-vmware import {filepath} --vmid <id>{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 0
@@ -245,7 +245,7 @@ def _cmd_import(cfg: FreqConfig, args) -> int:
     """Import a VMware VM into Proxmox."""
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq migrate-vmware import <file.ova> --vmid <id> [--node <node>]")
+        fmt.error("Usage: freq dr migrate-vmware import <file.ova> --vmid <id> [--node <node>]")
         return 1
 
     if not os.path.exists(target):
@@ -331,9 +331,9 @@ def _cmd_import(cfg: FreqConfig, args) -> int:
     fmt.line(f"  {fmt.C.GREEN}{fmt.S.TICK} Import complete.{fmt.C.RESET}")
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}Next steps:{fmt.C.RESET}")
-    fmt.line(f"  {fmt.C.DIM}  1. Review config: freq vmconfig {vmid}{fmt.C.RESET}")
-    fmt.line(f"  {fmt.C.DIM}  2. Update networking: freq nic add {vmid} --ip <ip>{fmt.C.RESET}")
-    fmt.line(f"  {fmt.C.DIM}  3. Start VM: freq power start {vmid}{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.DIM}  1. Review config: freq vm config {vmid}{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.DIM}  2. Update networking: freq vm nic add {vmid} --ip <ip>{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.DIM}  3. Start VM: freq vm power start {vmid}{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 0
@@ -343,7 +343,7 @@ def _cmd_convert(cfg: FreqConfig, args) -> int:
     """Convert a VMDK to QCOW2 format."""
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq migrate-vmware convert <file.vmdk>")
+        fmt.error("Usage: freq dr migrate-vmware convert <file.vmdk>")
         return 1
 
     if not os.path.exists(target):

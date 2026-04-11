@@ -368,7 +368,7 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
     """
     source = getattr(args, "source", None)
     if not source:
-        fmt.error("Usage: freq clone <source_vmid> [--name <name>] [--vmid <new_vmid>] [--ip <ip>] [--vlan <vlan>]")
+        fmt.error("Usage: freq vm clone <source_vmid> [--name <name>] [--vmid <new_vmid>] [--ip <ip>] [--vlan <vlan>]")
         return 1
 
     try:
@@ -519,7 +519,7 @@ def cmd_destroy(cfg: FreqConfig, pack, args) -> int:
     """Destroy a VM with safety checks."""
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq destroy <vmid>")
+        fmt.error("Usage: freq vm destroy <vmid>")
         return 1
 
     try:
@@ -614,7 +614,7 @@ def cmd_resize(cfg: FreqConfig, pack, args) -> int:
     """Resize a VM's CPU, RAM, or disk."""
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq resize <vmid> [--cores N] [--ram MB] [--disk GB]")
+        fmt.error("Usage: freq vm resize <vmid> [--cores N] [--ram MB] [--disk GB]")
         return 1
 
     try:
@@ -1292,7 +1292,7 @@ def cmd_migrate(cfg: FreqConfig, pack, args) -> int:
     skip_confirm = getattr(args, "yes", False)
 
     if not target or not target_node:
-        fmt.error("Usage: freq migrate <vmid> --node <target_node> [--storage <pool>]")
+        fmt.error("Usage: freq vm migrate <vmid> --node <target_node> [--storage <pool>]")
         return 1
 
     try:
@@ -1465,7 +1465,7 @@ def _nic_add(cfg: FreqConfig, args) -> int:
     vlan = getattr(args, "vlan", None)
 
     if not target or not ip:
-        fmt.error("Usage: freq nic add <vmid> --ip <ip> [--gw <gateway>] [--vlan <vlan>]")
+        fmt.error("Usage: freq vm nic add <vmid> --ip <ip> [--gw <gateway>] [--vlan <vlan>]")
         return 1
 
     if not validate.ip(ip.split("/")[0]):

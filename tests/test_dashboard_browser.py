@@ -5,7 +5,7 @@ sees in the browser matches the product's real state. These catch bugs
 that source-level tests cannot: CSS hiding errors, JS rendering failures,
 stale data without visual indicators, auth bypass in the browser.
 
-Target: VM 5005 (10.25.255.55:8888) — freq installed from dev repo.
+Target: VM 5005 (10.25.255.55:8888) — freq installed from a local checkout.
 """
 
 import json

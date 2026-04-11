@@ -80,7 +80,7 @@ function renderSummary(){
     s+='<span class="check">&#10003;</span> Timezone: <b>'+tz+'</b>\n';
   }
   s+='<span class="check">&#10003;</span> SSH key: '+(keyGenerated?'<b>configured</b>':'<b>skipped</b> (configure later)')+'\n';
-  s+='\nNext steps:\n  - Add PVE nodes in System &gt; Config\n  - Add fleet hosts via freq hosts add\n  - Run freq doctor to verify';
+  s+='\nNext steps:\n  - Add PVE nodes in System &gt; Config\n  - Add fleet hosts via freq host add\n  - Run freq doctor to verify';
   document.getElementById('summary').innerHTML=s;
 }
 

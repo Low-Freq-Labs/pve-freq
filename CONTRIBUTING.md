@@ -5,7 +5,7 @@ Thanks for looking at the code. Here's how to work with it.
 ## Development Setup
 
 ```bash
-git clone https://github.com/Low-Freq-Labs/pve-freq-dev.git
+git clone https://github.com/Low-Freq-Labs/pve-freq.git
 cd pve-freq
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
@@ -25,7 +25,7 @@ Run tests:
 python3 -m pytest tests/ -v
 ```
 
-All 1,300 tests run without a fleet — SSH calls are mocked, configs are synthetic.
+The test suite runs without a fleet — SSH calls are mocked, configs are synthetic.
 
 ## Project Structure
 
@@ -33,7 +33,7 @@ All 1,300 tests run without a fleet — SSH calls are mocked, configs are synthe
 freq/
 ├── __init__.py              # Version string + brand constants
 ├── __main__.py              # Entry point for python -m freq
-├── cli.py                   # CLI dispatcher — argparse, 88 commands, plugin discovery
+├── cli.py                   # CLI dispatcher — argparse, domain routing, plugin discovery
 │
 ├── core/                    # THE SPINE — survives everything
 │   ├── config.py            # FreqConfig dataclass, TOML loader, safe defaults
@@ -57,18 +57,15 @@ freq/
 │   ├── users.py             # User management and RBAC
 │   ├── infrastructure.py    # pfSense, TrueNAS, iDRAC, switches
 │   ├── media.py             # Media stack: Plex, Sonarr, Radarr, etc.
-│   ├── serve.py             # HTTP server: dashboard, 146 API endpoints
-│   ├── web_ui.py            # Web UI asset loading
+│   ├── serve.py             # HTTP server: dashboard and API routing
 │   ├── init_cmd.py          # freq init — setup wizard
-│   ├── harden.py            # Security hardening
-│   ├── audit.py             # Security audit
-│   ├── vault.py             # Encrypted credential store
-│   ├── backup.py            # Backup operations
-│   ├── health.py            # Health checks
-│   ├── discover.py          # Network auto-discovery
-│   ├── bootstrap.py         # Host bootstrapping
 │   ├── demo.py              # Demo mode
 │   └── ...                  # More feature modules
+│
+├── data/web/                # Embedded dashboard assets
+│   ├── app.html             # Dashboard shell
+│   ├── css/app.css          # Dashboard styles
+│   └── js/app.js            # Dashboard client logic
 │
 ├── engine/                  # THE BRAIN — policy engine
 │   ├── policy.py            # PolicyExecutor: discover → desired → compare → fix

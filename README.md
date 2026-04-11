@@ -10,7 +10,7 @@ You built a homelab because you love this stuff. You shouldn't need 12 different
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-8b5cf6.svg)](https://www.python.org/downloads/)
 [![LOC](https://img.shields.io/badge/lines_of_code-84K-8b5cf6.svg)](#)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL_v3-8b5cf6.svg)](LICENSE)
-[![21 Distros](https://img.shields.io/badge/tested_on-21_distros-8b5cf6.svg)](#every-linux-distro)
+[![20 Distros](https://img.shields.io/badge/tested_on-20_distros-8b5cf6.svg)](#every-linux-distro)
 
 </div>
 
@@ -71,26 +71,26 @@ No external dependencies. No pip packages. No node_modules. No Docker required. 
 
 ## What You Get
 
-### 25 Domains. 301 Commands. Everything.
+### 25 Domains. 300+ Commands. Everything.
 
 | Domain | What It Does | Try It |
 |--------|-------------|--------|
 | `freq vm` | Create, clone, migrate, snapshot VMs | `freq vm create --name dev --cores 4 --ram 8192` |
 | `freq fleet` | Fleet-wide operations and health | `freq fleet status` |
-| `freq docker` | Stack deployment across your fleet | `freq docker fleet ps` |
-| `freq net` | Switches, VLANs, SNMP, topology, IPAM | `freq net switch vlans sw1` |
-| `freq fw` | Firewall rules, NAT, states | `freq fw rules list` |
+| `freq docker` | Container discovery, fleet views, and stack operations | `freq docker containers <host>` |
+| `freq net` | Switches, network mapping, and IPAM | `freq net ip list` |
+| `freq fw` | Firewall operations across supported platforms | `freq fw <action>` |
 | `freq dns` | Internal DNS management | `freq dns scan` |
-| `freq vpn` | WireGuard and OpenVPN tunnels | `freq vpn wg peers` |
+| `freq vpn` | VPN peer management | `freq vpn list` |
 | `freq cert` | TLS certificate tracking and renewal | `freq cert scan --expiring 30` |
-| `freq store` | TrueNAS, ZFS, storage health | `freq store nas status` |
-| `freq dr` | Backups, policies, SLA, runbooks | `freq dr sla status` |
+| `freq store` | TrueNAS and storage operations | `freq store nas <action>` |
+| `freq dr` | Backups, policies, journals, and migration tooling | `freq dr backup list` |
 | `freq observe` | Metrics, logs, monitors, alerts | `freq observe alert list` |
-| `freq secure` | Vuln scanning, CIS, FIM, hardening | `freq secure comply scan` |
-| `freq ops` | Incidents, changes, on-call | `freq ops incident create "Disk failure"` |
-| `freq hw` | iDRAC, IPMI, SMART, UPS, power | `freq hw smart` |
-| `freq state` | IaC, plan/apply, drift detection | `freq state drift` |
-| `freq event` | Live event network lifecycle | `freq event deploy --site stadium-a` |
+| `freq secure` | Audit, hardening, secrets, and compliance work | `freq secure audit` |
+| `freq ops` | On-call and operational risk analysis | `freq ops risk <target>` |
+| `freq hw` | iDRAC access, power cost, and drive wiping | `freq hw cost` |
+| `freq state` | Baselines, plan/apply, and policy checks | `freq state policies` |
+| `freq event` | Event network lifecycle management | `freq event list` |
 | `freq media` | Media stack management (40+ subcommands) | `freq media status` |
 
 Plus `freq proxy`, `freq auto`, `freq user`, `freq plugin`, `freq lab`, `freq agent`, and more.
@@ -107,7 +107,7 @@ If it has an IP address, FREQ can probably talk to it.
 
 `freq serve` gives you a full web dashboard at `localhost:8888`. Seven navigation groups. Live updates via Server-Sent Events. Fleet health, VM management, Docker stacks, network topology, security posture — all in one view.
 
-Single-file SPA. Zero JavaScript dependencies. Pure Python HTTP server.
+Embedded web assets. No frontend build step. Pure Python HTTP server.
 
 ### Interactive TUI
 
@@ -143,13 +143,13 @@ FREQ uses **only the Python standard library**. Every single import is stdlib. N
 
 Why? Because the machine running FREQ is your management host. It has SSH keys to your entire fleet. It should have the smallest possible attack surface.
 
-82K lines of Python. Zero external dependencies. Auditable by one person.
+80K+ lines of Python. Zero external dependencies. Auditable by one person.
 
 ---
 
 ## Every Linux Distro
 
-Tested on **21 distributions** in CI, every single push:
+Tested on **20 distributions** in CI on `main` pushes and nightly runs:
 
 **Debian** 12 · 13 · sid | **Ubuntu** 24.04 · 25.04 | **Rocky** 8 · 9 | **Alma** 8 · 9 | **CentOS** Stream 9 | **Oracle** 8 · 9 | **Fedora** 40 · 41 · 42 | **Arch** (rolling) | **openSUSE** Tumbleweed | **Alpine** 3.19 · 3.20 · 3.21
 
@@ -162,11 +162,11 @@ If Python 3.11 runs on it, FREQ runs on it. Platform abstraction handles package
 ```
 freq/
 ├── core/           # SSH transport, config, platform detection, formatting
-├── modules/        # 81 CLI command modules (one per feature area)
+├── modules/        # 80+ CLI feature modules
 ├── deployers/      # Device-specific drivers (cisco, pfsense, truenas, ...)
 ├── engine/         # Declarative policy compliance engine
 ├── jarvis/         # Smart operations (chaos, capacity, federation)
-├── api/            # 16 REST API domain handlers
+├── api/            # REST API domain handlers
 ├── tui/            # Interactive terminal menu system
 └── data/web/       # Dashboard SPA (HTML + CSS + JS)
 ```
@@ -299,10 +299,10 @@ Clean removal. No orphaned configs. No leftover services.
 
 | Doc | Description |
 |-----|-------------|
-| [CLI Reference](docs/CLI-REFERENCE.md) | All 301 commands with examples |
+| [CLI Reference](docs/CLI-REFERENCE.md) | CLI commands with examples |
 | [API Reference](docs/API-REFERENCE.md) | REST API endpoints |
 | [Configuration](docs/CONFIGURATION.md) | Every config key documented |
-| [Architecture](ARCHITECTURE.md) | Design philosophy and code structure |
+| [Codebase Standard](docs/CODEBASE-STANDARD-2026.md) | Design standards and code structure guidance |
 | [Quick Reference](docs/QUICK-REFERENCE.md) | Common commands cheat sheet |
 | [Changelog](CHANGELOG.md) | Version history |
 | [Contributing](CONTRIBUTING.md) | Development setup and guidelines |

@@ -1,5 +1,7 @@
 <!-- INTERNAL — Not for public distribution -->
 
+> Historical snapshot: this audit captures the repo state and command surface as of April 2, 2026. Old command names, counts, and gaps are preserved here as audit evidence, not current operator guidance. Use current docs and `freq help` for the shipped interface.
+
 # FREQ ATOMIC AUDIT — April 2, 2026
 
 **Audited by:** Morty (20 parallel agents, 14+ hours of analysis)

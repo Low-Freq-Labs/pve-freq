@@ -215,7 +215,7 @@ def cmd_onboard(cfg: FreqConfig, pack, args) -> int:
 
     fmt.blank()
     fmt.line(f"  {fmt.C.GREEN}Host onboarded: {label} ({target}){fmt.C.RESET}")
-    fmt.line(f"  {fmt.C.GRAY}Run 'freq status' to verify fleet health.{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.GRAY}Run 'freq fleet status' to verify fleet health.{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
 

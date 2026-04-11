@@ -56,7 +56,7 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
             return 0
         fmt.header("Fleet Status")
         fmt.blank()
-        fmt.line(f"{fmt.C.YELLOW}No hosts registered. Run: freq hosts add{fmt.C.RESET}")
+        fmt.line(f"{fmt.C.YELLOW}No hosts registered. Run: freq host add{fmt.C.RESET}")
         fmt.blank()
         fmt.footer()
         return 0
@@ -164,10 +164,10 @@ def cmd_exec(cfg: FreqConfig, pack, args) -> int:
     cmd_parts = getattr(args, "cmd", [])
 
     if not cmd_parts:
-        fmt.error("Usage: freq exec <target> <command>")
+        fmt.error("Usage: freq fleet exec <target> <command>")
         fmt.info("  target: host label, group name, or 'all'")
-        fmt.info("  Example: freq exec all uptime")
-        fmt.info("  Example: freq exec distro 'cat /etc/os-release | head -1'")
+        fmt.info("  Example: freq fleet exec all uptime")
+        fmt.info("  Example: freq fleet exec distro 'cat /etc/os-release | head -1'")
         return 1
 
     command = " ".join(cmd_parts)
@@ -209,7 +209,7 @@ def cmd_exec(cfg: FreqConfig, pack, args) -> int:
         available = sorted(set(_host_groups)) if _host_groups else []
         if available:
             fmt.info("Available groups: {}".format(", ".join(available)))
-        fmt.info("Try: freq hosts list")
+        fmt.info("Try: freq host list")
         return 1
 
     fmt.header("Fleet Exec")
@@ -283,7 +283,7 @@ def cmd_info(cfg: FreqConfig, pack, args) -> int:
     """System info for a single host."""
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq info <host>")
+        fmt.error("Usage: freq fleet info <host>")
         return 1
 
     host = resolve.by_target(cfg.hosts, target)
@@ -359,7 +359,7 @@ def cmd_detail(cfg: FreqConfig, pack, args) -> int:
     """Deep host detail — full system inventory (mirrors /api/host/detail)."""
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq detail <host>")
+        fmt.error("Usage: freq fleet detail <host>")
         return 1
 
     host = resolve.by_target(cfg.hosts, target)
@@ -879,7 +879,7 @@ def cmd_diagnose(cfg: FreqConfig, pack, args) -> int:
     """Deep diagnostic for a single host — hardware, network, services, security."""
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq diagnose <host>")
+        fmt.error("Usage: freq fleet diagnose <host>")
         return 1
 
     host = resolve.by_target(cfg.hosts, target)
@@ -966,7 +966,7 @@ def cmd_log(cfg: FreqConfig, pack, args) -> int:
     """View recent logs from a host via journalctl."""
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq log <host> [--lines N] [--unit <service>]")
+        fmt.error("Usage: freq fleet log <host> [--lines N] [--unit <service>]")
         return 1
 
     host = resolve.by_target(cfg.hosts, target)
@@ -1038,7 +1038,7 @@ def cmd_ssh_host(cfg: FreqConfig, pack, args) -> int:
 
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq ssh <host>")
+        fmt.error("Usage: freq fleet ssh <host>")
         return 1
 
     host = resolve.by_target(cfg.hosts, target)

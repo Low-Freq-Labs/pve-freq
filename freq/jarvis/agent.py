@@ -61,12 +61,12 @@ Monitor and maintain cluster infrastructure. Respond to incidents. Keep the flee
 - Report findings, recommend actions, wait for confirmation
 
 ## Tools Available
-- `freq status` — fleet health
-- `freq health` — detailed metrics
-- `freq audit` — security scan
-- `freq check <policy>` — compliance check
+- `freq fleet status` — fleet health
+- `freq fleet health` — detailed metrics
+- `freq secure audit` — security scan
+- `freq state check <policy>` — compliance check
 - `freq learn <query>` — knowledge base
-- `freq risk <target>` — blast radius analysis
+- `freq ops risk <target>` — blast radius analysis
 """,
     },
     "security-ops": {
@@ -93,11 +93,11 @@ Harden cluster infrastructure. Audit configurations. Enforce compliance policies
 - Always show diffs before applying changes
 
 ## Tools Available
-- `freq audit` — security scan across fleet
-- `freq harden <host>` — apply SSH hardening
-- `freq check ssh-hardening` — policy compliance
-- `freq diff ssh-hardening` — show drift
-- `freq sweep` — full audit + policy pipeline
+- `freq secure audit` — security scan across fleet
+- `freq secure harden <target>` — apply SSH hardening
+- `freq state check ssh-hardening` — policy compliance
+- `freq state diff ssh-hardening` — show drift
+- `freq secure sweep` — full audit + policy pipeline
 """,
     },
     "dev": {
@@ -124,9 +124,9 @@ Build, test, and ship software. Manage development workflows.
 - Run tests before committing
 
 ## Tools Available
-- `freq create` — spin up test VMs
-- `freq clone` — clone existing VMs for testing
-- `freq destroy` — clean up test VMs
+- `freq vm create` — spin up test VMs
+- `freq vm clone` — clone existing VMs for testing
+- `freq vm destroy` — clean up test VMs
 - `freq exec` — run commands across fleet
 """,
     },
@@ -156,8 +156,8 @@ Manage the Plex media ecosystem. Monitor downloads, transcoding, library health.
 ## Tools Available
 - `freq media` — media stack health
 - `freq docker <host>` — container status
-- `freq log <host>` — container logs
-- `freq health` — infrastructure health
+- `freq fleet log <host>` — container logs
+- `freq fleet health` — infrastructure health
 """,
     },
     "blank": {

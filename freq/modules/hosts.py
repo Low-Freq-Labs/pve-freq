@@ -95,8 +95,8 @@ def _hosts_list(cfg: FreqConfig, args=None) -> int:
 
     if not hosts:
         fmt.line(f"{fmt.C.YELLOW}No hosts registered.{fmt.C.RESET}")
-        fmt.line(f"{fmt.C.GRAY}Add hosts with: freq hosts add{fmt.C.RESET}")
-        fmt.line(f"{fmt.C.GRAY}Or discover with: freq discover{fmt.C.RESET}")
+        fmt.line(f"{fmt.C.GRAY}Add hosts with: freq host add{fmt.C.RESET}")
+        fmt.line(f"{fmt.C.GRAY}Or discover with: freq host discover{fmt.C.RESET}")
         fmt.blank()
         fmt.footer()
         return 0
@@ -904,7 +904,7 @@ def _groups_list(cfg: FreqConfig) -> int:
     groups = resolve.all_groups(cfg.hosts)
     if not groups:
         fmt.line(f"{fmt.C.YELLOW}No groups defined.{fmt.C.RESET}")
-        fmt.line(f"{fmt.C.GRAY}Assign groups when adding hosts: freq hosts add{fmt.C.RESET}")
+        fmt.line(f"{fmt.C.GRAY}Assign groups when adding hosts: freq host add{fmt.C.RESET}")
         fmt.blank()
         fmt.footer()
         return 0

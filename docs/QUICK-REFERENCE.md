@@ -10,38 +10,38 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/
 # Should print: 200
 ```
 
-## How to test a change
-1. Edit `freq/modules/web_ui.py` or `freq/modules/serve.py`
-2. Restart server (above)
-3. Hard refresh browser (Ctrl+Shift+R)
-4. If serve.py syntax is bad: `python3 -c "import freq.modules.serve"` to check
+## How to test a dashboard change
+1. Edit `freq/modules/serve.py`, `freq/data/web/js/app.js`, `freq/data/web/css/app.css`, or `freq/data/web/app.html`.
+2. Restart the dashboard server.
+3. Hard refresh the browser (`Ctrl+Shift+R`).
+4. If `serve.py` changed, run `python3 -c "import freq.modules.serve"` to catch syntax errors fast.
 
 ## Key files
 
-| File | Lines | What |
-|------|-------|------|
-| `freq/modules/web_ui.py` | 7,234 | Single-file SPA (HTML/CSS/JS) |
-| `freq/modules/serve.py` | 6,323 | HTTP server, 100+ API endpoints |
-| `freq/cli.py` | 1,148 | Argparse dispatcher, 88 commands |
-| `freq/tui/menu.py` | 1,315 | Interactive TUI, 168 entries, 15 submenus |
-| `freq/modules/init_cmd.py` | ~3,800 | 10-phase deployment wizard |
-| `freq/core/config.py` | ~580 | Config loader, bootstrap, FreqConfig dataclass |
+| File | What |
+|------|------|
+| `freq/modules/serve.py` | Dashboard server and API routing |
+| `freq/data/web/js/app.js` | Main dashboard client logic |
+| `freq/data/web/css/app.css` | Dashboard styling |
+| `freq/data/web/app.html` | Dashboard shell and view layout |
+| `freq/cli.py` | CLI entrypoint and command registration |
+| `freq/tui/menu.py` | Interactive terminal UI |
+| `freq/modules/init_cmd.py` | `freq init` bootstrap flow |
+| `freq/core/config.py` | Config loading and validation |
 
-## API endpoints (serve.py — 100+ endpoints)
+## Dashboard/API landmarks
 
-Core endpoints:
+Core surfaces:
 ```
-/                           Main page (web UI)
-/healthz                    Health check (for Docker/orchestrators)
+/                           Main dashboard
+/healthz                    Health check
 /api/status                 Fleet status summary
-/api/health                 Fleet health (background cache, instant)
-/api/vms                    VM list from PVE API
-/api/fleet/overview         Fleet overview (VMs + physical + nodes)
-/api/fleet/ntp              NTP status across fleet
-/api/fleet/updates          OS update status across fleet
-/api/host/detail            Deep SSH probe of single host
-/api/exec                   Run command on fleet host(s)
-/api/info                   Host info
+/api/health                 Fleet health
+/api/vms                    VM list
+/api/fleet/overview         Fleet overview
+/api/fleet/updates          OS update status
+/api/host/detail            Deep host probe
+/api/exec                   Fleet command execution
 /api/metrics                Metrics data
 ```
 
@@ -49,114 +49,64 @@ VM management:
 ```
 /api/vm/create              Create VM
 /api/vm/destroy             Destroy VM
-/api/vm/clone               Clone VM (dedicated endpoint)
-/api/vm/migrate             Migrate VM (with live migration option)
-/api/vm/snapshot            Take snapshot
+/api/vm/clone               Clone VM
+/api/vm/migrate             Migrate VM
+/api/vm/snapshot            Create snapshot
 /api/vm/snapshots           List snapshots
 /api/vm/delete-snapshot     Delete snapshot
 /api/vm/resize              Resize VM disk
 /api/vm/power               Start/stop/reboot VM
 /api/vm/template            Convert to template
 /api/vm/rename              Rename VM
-/api/vm/change-id           Change VMID
-/api/vm/check-ip            Check if IP is available
-/api/vm/add-nic             Add NIC to VM
-/api/vm/clear-nics          Remove all NICs
-/api/vm/change-ip           Change VM IP
-/api/vm/add-disk            Add disk to VM
-/api/vm/tag                 Set VM tags
 ```
 
-Docker & Compose:
-```
-/api/containers/compose-up      Compose up for a Docker VM
-/api/containers/compose-down    Compose down for a Docker VM
-/api/containers/compose-view    View compose.yml content
-```
+Use `docs/API-REFERENCE.md` and the route handlers under `freq/api/` for the full surface.
 
-Backup:
-```
-/api/backup/list            List snapshots and exports
-/api/backup/create          Create backup/snapshot
-/api/backup/restore         Restore from backup/snapshot
-```
-
-Setup:
-```
-/api/setup/test-ssh         Test SSH connectivity to a host
-/api/setup/reset            Reset setup wizard
-```
-
-Infrastructure, media, security, vault, users, and more — see `serve.py` for the full list.
-
-## Host quirks (things that WILL bite you)
+## Host quirks
 
 **pfSense (FreeBSD):**
-- Sudoers get WIPED on pfSense updates. Must re-deploy after every upgrade.
-- FreeBSD paths differ: `/bin/cat`, `/sbin/pfctl`, `/bin/ls` (not `/usr/bin/`)
-- Shell is `/bin/sh` or `/bin/tcsh`, NOT bash
-- `pfctl -sr` output is HUGE — always pipe through grep/head
-- sshguard/PerSourcePenalties can lock you out if you SSH as wrong user repeatedly
+- Sudoers can be reset on updates. Re-deploy after upgrades.
+- Paths differ from Linux (`/bin/cat`, `/sbin/pfctl`, `/bin/ls`).
+- Shell is `/bin/sh` or `/bin/tcsh`, not bash.
+- `pfctl -sr` output is huge; filter aggressively.
 
 **TrueNAS:**
-- Sudoers stored in middleware DB, NOT filesystem. Changes via `midclt call user.update` only.
-- `/etc/sudoers.d/` changes get OVERWRITTEN on reboot
-- `midclt call` is the primary API — not REST, not CLI tools
-- ZFS commands need sudo: `zpool`, `zfs`
-- System logs are verbose JSON blobs — truncate with `cut -c1-200`
+- User and sudo behavior is middleware-managed.
+- Filesystem edits under `/etc/sudoers.d/` do not persist reliably.
+- `midclt call` is the source of truth for system-managed changes.
 
 **Cisco Switch:**
-- Password auth only (no SSH keys on IOS)
-- Uses `sshpass -f <password-file>` for authentication
-- Legacy crypto required: `KexAlgorithms=+diffie-hellman-group14-sha1`
-- One command per session works best
-- `show` commands don't need enable mode if user has privilege 15
+- Password auth is common.
+- Some devices require legacy SSH crypto.
+- One command per session is often safest.
 
 **iDRAC (7/8):**
-- Password auth only (same sshpass as switch)
-- Legacy crypto required (same as switch)
-- ONE command per SSH session — multi-command strings FAIL
-- `racadm` is the CLI: `getversion`, `getsysinfo`, `getsensorinfo`
-- Some iDRAC units may be unreachable if on a separate management network.
-- ControlMaster must be disabled (`-o ControlMaster=no`)
+- Password auth is common.
+- Legacy SSH crypto may be required.
+- `racadm` is the CLI.
+- Some units sit on separate management networks.
 
 **PVE Nodes:**
-- `pvesh get /cluster/resources --type vm --output-format json` from ANY node returns ALL VMs cluster-wide
-- No need to query each node separately
-- freq-admin has NOPASSWD:ALL sudo
-
-## Design tokens (the Diamond Standard look)
-```css
---purple: #7B2FBE       /* brand color */
---purple-light: #9B4FDE /* accents */
---bg: #0a0d12           /* page background */
---card: #141920         /* card background */
---border: #1e2530       /* subtle borders */
-Card border: 2px solid #384450
-Border radius: 8px
-Font: Inter / system-ui
-Mono: Fira Code / Cascadia Code / JetBrains Mono
-Min font: 12px (nothing smaller)
-Stats: .st cards with .lb label + .vl value
-```
+- `pvesh get /cluster/resources --type vm --output-format json` from any node returns cluster-wide VM state.
+- `freq-admin` should have passwordless sudo where deployment is healthy.
 
 ## Common operations
 ```bash
-# Check server is up
+# Check dashboard is up
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/
 
-# Test SSH to a fleet host
-ssh -o ConnectTimeout=5 freq-admin@<host-ip> "hostname"
+# Show current command map
+PYTHONPATH=/data/projects/pve-freq python3 -m freq help
 
-# Test a pfSense command raw
-ssh -o ConnectTimeout=5 freq-admin@<pfsense-ip> "sudo pfctl -sr | head -10"
+# Test connectivity to a host
+freq fleet test <host>
 
-# Test a TrueNAS command raw
-ssh -o ConnectTimeout=5 freq-admin@<truenas-ip> "sudo zpool list"
+# Run a command across fleet targets
+freq fleet exec all "hostname"
 
-# Validate Python syntax
-python3 -c "import freq.modules.serve; import freq.modules.web_ui"
+# Validate Python syntax for dashboard code
+python3 -c "import freq.modules.serve"
 
-# Run test suite
-python3 -m pytest tests/ -v --tb=short
+# Run a focused test file
+PYTHONPATH=/data/projects/pve-freq python3 tests/test_trust_critical.py
 ```

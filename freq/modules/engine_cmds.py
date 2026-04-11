@@ -75,7 +75,7 @@ def cmd_policies(cfg: FreqConfig, pack, args) -> int:
 
     fmt.blank()
     fmt.line(f"  {fmt.C.GRAY}{len(policies)} policy(ies) available{fmt.C.RESET}")
-    fmt.line(f"  {fmt.C.GRAY}Usage: freq check <policy> [--hosts label1,label2]{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.GRAY}Usage: freq state check <policy> [--hosts label1,label2]{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 0
@@ -85,8 +85,8 @@ def cmd_check(cfg: FreqConfig, pack, args) -> int:
     """Check policy compliance (dry run)."""
     policy_name = getattr(args, "policy", None)
     if not policy_name:
-        fmt.error("Usage: freq check <policy> [--hosts host1,host2]")
-        fmt.info("Run 'freq policies' to see available policies.")
+        fmt.error("Usage: freq state check <policy> [--hosts host1,host2]")
+        fmt.info("Run 'freq state policies' to see available policies.")
         return 1
 
     store = _build_store()
@@ -167,7 +167,7 @@ def cmd_fix(cfg: FreqConfig, pack, args) -> int:
     """Apply policy remediation."""
     policy_name = getattr(args, "policy", None)
     if not policy_name:
-        fmt.error("Usage: freq fix <policy> [--hosts host1,host2]")
+        fmt.error("Usage: freq state fix <policy> [--hosts host1,host2]")
         return 1
 
     store = _build_store()
@@ -233,7 +233,7 @@ def cmd_diff(cfg: FreqConfig, pack, args) -> int:
     """Show policy drift as git-style diff."""
     policy_name = getattr(args, "policy", None)
     if not policy_name:
-        fmt.error("Usage: freq diff <policy> [--hosts host1,host2]")
+        fmt.error("Usage: freq state diff <policy> [--hosts host1,host2]")
         return 1
 
     store = _build_store()

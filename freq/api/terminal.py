@@ -137,7 +137,7 @@ def handle_terminal_open(handler):
                     resolved_ip = out.strip().split("\n")[0]
 
         if resolved_ip == target:
-            json_response(handler, {"error": f"Cannot resolve IP for VMID {vmid}. Run 'freq discover' to populate hosts.toml with VMIDs."}, 400)
+            json_response(handler, {"error": f"Cannot resolve IP for VMID {vmid}. Run 'freq host discover' to populate hosts.toml with VMIDs."}, 400)
             return
 
     # Build SSH command with device-type-aware options

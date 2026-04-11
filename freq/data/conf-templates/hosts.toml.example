@@ -1,8 +1,8 @@
 # FREQ Fleet Registry (TOML format)
 # Preferred format — replaces hosts.toml
 #
-# Add hosts with: freq hosts add
-# Discover hosts: freq discover
+# Add hosts with: freq host add
+# Discover hosts: freq host discover
 #
 # Types: linux, pve, truenas, pfsense, idrac, switch, docker
 

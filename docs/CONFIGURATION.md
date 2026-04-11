@@ -87,7 +87,7 @@ The primary config file. Controls cluster settings, SSH, VM defaults, safety rul
 
 ### [templates.profiles] — VM Profiles
 
-Named presets for `freq create --profile <name>`:
+Named presets for `freq vm create --profile <name>`:
 
 | Profile | Cores | RAM | Disk |
 |---------|-------|-----|------|
@@ -245,7 +245,7 @@ prefix = "192.168.30"
 
 ## distros.toml — Cloud Image Catalog
 
-Pre-populated with 10+ distributions. Used by `freq import` and `freq create --distro`.
+Pre-populated with 10+ distributions. Used by `freq vm import` and `freq vm create --image`.
 
 ```toml
 [distro.ubuntu-2404]

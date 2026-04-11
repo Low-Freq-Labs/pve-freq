@@ -312,7 +312,7 @@ def cmd_vmconfig(cfg: FreqConfig, pack, args) -> int:
     """View VM configuration."""
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq vmconfig <vmid>")
+        fmt.error("Usage: freq vm config <vmid>")
         return 1
 
     try:
@@ -371,7 +371,7 @@ def cmd_snapshot(cfg: FreqConfig, pack, args) -> int:
 
     # Default: create
     if not target:
-        fmt.error("Usage: freq snapshot <vmid> [--name <snap_name>]")
+        fmt.error("Usage: freq vm snapshot create <vmid> --name <snap_name>")
         return 1
 
     try:
@@ -412,7 +412,7 @@ def cmd_snapshot_list(cfg: FreqConfig, pack, args) -> int:
     """List all snapshots for a VM."""
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq snapshot list <vmid>")
+        fmt.error("Usage: freq vm snapshot list <vmid>")
         return 1
 
     try:
@@ -477,7 +477,7 @@ def cmd_snapshot_delete(cfg: FreqConfig, pack, args) -> int:
     snap_name = getattr(args, "name", None)
 
     if not target or not snap_name:
-        fmt.error("Usage: freq snapshot delete <vmid> --name <snapshot_name>")
+        fmt.error("Usage: freq vm snapshot delete <vmid> --name <snapshot_name>")
         return 1
 
     try:
@@ -536,7 +536,7 @@ def cmd_power(cfg: FreqConfig, pack, args) -> int:
     target = getattr(args, "target", None)
 
     if not action or not target:
-        fmt.error("Usage: freq power <start|stop|reboot|shutdown|status> <vmid>")
+        fmt.error("Usage: freq vm power <start|stop|reboot|shutdown|status> <vmid>")
         return 1
 
     try:

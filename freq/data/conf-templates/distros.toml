@@ -1,5 +1,5 @@
 # FREQ Cloud Image Definitions
-# Used by: freq create --image <distro>
+# Used by: freq vm create --image <distro>
 
 [distro.ubuntu-2404]
 name = "Ubuntu 24.04 LTS Noble"

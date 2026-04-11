@@ -49,7 +49,7 @@ def cmd_distros(cfg: FreqConfig, pack, args) -> int:
 
     total = len(cfg.distros)
     fmt.line(f"{fmt.C.BOLD}{total} cloud images available{fmt.C.RESET}")
-    fmt.line(f"{fmt.C.DIM}Use with: freq create --image <key>{fmt.C.RESET}")
+    fmt.line(f"{fmt.C.DIM}Use with: freq vm create --image <key>{fmt.C.RESET}")
     fmt.blank()
 
     for tier_name, tier_distros in tiers.items():

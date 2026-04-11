@@ -27,7 +27,7 @@ freq menu
 ### 3. CLI Fleet Status (`cli-status.png`)
 
 ```bash
-freq status
+freq fleet status
 # Screenshot showing the fleet table with colored badges
 ```
 

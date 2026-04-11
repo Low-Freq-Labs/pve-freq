@@ -337,8 +337,8 @@ def _cmd_runbook(cfg: FreqConfig, args) -> int:
             fmt.line(f"  {fmt.C.DIM}Example runbook (disk-cleanup.json):{fmt.C.RESET}")
             fmt.line(f'  {fmt.C.DIM}{{"name": "disk-cleanup",{fmt.C.RESET}')
             fmt.line(f'  {fmt.C.DIM} "description": "Clean up disk space",{fmt.C.RESET}')
-            fmt.line(f'  {fmt.C.DIM} "steps": [{{"command": "freq health"}},{fmt.C.RESET}')
-            fmt.line(f'  {fmt.C.DIM}           {{"command": "freq exec all \'apt clean\'"}}]{fmt.C.RESET}')
+            fmt.line(f'  {fmt.C.DIM} "steps": [{{"command": "freq fleet health"}},{fmt.C.RESET}')
+            fmt.line(f'  {fmt.C.DIM}           {{"command": "freq fleet exec all \'apt clean\'"}}]{fmt.C.RESET}')
             fmt.line(f"  {fmt.C.DIM}}}{fmt.C.RESET}")
         else:
             for rb in runbooks:

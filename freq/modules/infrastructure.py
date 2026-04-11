@@ -269,7 +269,7 @@ def cmd_rescue(cfg: FreqConfig, pack, args) -> int:
     """Rescue a stuck VM — force stop and console access."""
     target = getattr(args, "target", None)
     if not target:
-        fmt.error("Usage: freq rescue <vmid>")
+        fmt.error("Usage: freq vm rescue <vmid>")
         return 1
 
     try:

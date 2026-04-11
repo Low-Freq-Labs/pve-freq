@@ -1,3 +1,5 @@
+> Historical snapshot: this audit captures the repo state and command surface as of April 2, 2026. Old command names, counts, and gaps are preserved here as audit evidence, not current operator guidance. Use current docs and `freq help` for the shipped interface.
+
 # Deep Audit Findings — S017
 
 **Date:** 2026-04-03

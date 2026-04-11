@@ -3197,7 +3197,7 @@ function loadVmwareMigration(){
   el.innerHTML='<div class="skeleton h-40"></div>';
   _authFetch(API.MIGRATE_VMWARE).then(function(r){return r.json()}).then(function(d){
     var scans=d.scans||[];var imports=d.imports||[];
-    if(!scans.length&&!imports.length){el.innerHTML='<div class="exec-out">No VMware migration data. Run <code>freq migrate-vmware scan</code> to discover.</div>';return;}
+    if(!scans.length&&!imports.length){el.innerHTML='<div class="exec-out">No VMware migration data. Run <code>freq dr migrate-vmware scan</code> to discover.</div>';return;}
     var h='';
     if(scans.length){h+='<h4 style="font-size:11px;color:var(--text-dim);margin-bottom:8px">SCANS</h4><pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:200px;overflow:auto">'+_esc(JSON.stringify(scans,null,2))+'</pre>';}
     if(imports.length){h+='<h4 style="font-size:11px;color:var(--text-dim);margin:12px 0 8px">IMPORTS</h4><pre style="font-size:11px;background:var(--bg2);padding:12px;border-radius:6px;max-height:200px;overflow:auto">'+_esc(JSON.stringify(imports,null,2))+'</pre>';}
@@ -6151,7 +6151,7 @@ function userDemote(u){
 function loadKeys(){
   document.getElementById('keys-c').innerHTML='<div class="skeleton"></div>';
   _authFetch(API.KEYS).then(function(r){return r.json()}).then(function(d){
-    if(!d.hosts||!d.hosts.length){document.getElementById('keys-c').innerHTML='<p class="c-dim-fs12">No hosts registered. Add hosts with <code>freq hosts add</code>.</p>';return;}
+    if(!d.hosts||!d.hosts.length){document.getElementById('keys-c').innerHTML='<p class="c-dim-fs12">No hosts registered. Add hosts with <code>freq host add</code>.</p>';return;}
     var html='<p class="c-dim-mb12-fs12">SSH key: <code>'+d.ssh_key+'</code></p>';
     html+='<table><thead><tr><th>Host</th><th>IP</th><th>Reachable</th><th>Auth Keys</th></tr></thead><tbody>';
     d.hosts.forEach(function(h){
@@ -7210,7 +7210,7 @@ function hdDiagnose(btn){
 function hdRestart(){
   confirmAction('Restart services on <strong>'+_cardState.host+'</strong>?',function(){
     document.getElementById('hd-tool-panel').style.display='block';
-    document.getElementById('hd-exec-out').textContent='Use CLI: freq exec '+_cardState.host+' sudo systemctl restart <service>';
+    document.getElementById('hd-exec-out').textContent='Use CLI: freq fleet exec '+_cardState.host+' sudo systemctl restart <service>';
     toast('Use CLI for service restarts','info');
   });
 }
