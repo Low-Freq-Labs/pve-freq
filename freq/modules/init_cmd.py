@@ -3784,8 +3784,9 @@ def _phase_fleet_configure(cfg, ctx):
                     f"sudo chmod +x {AGENT_REMOTE_PATH}"
                 )
                 try:
+                    # No -n flag here — we pipe agent_code via stdin to tee
                     r = subprocess.run(
-                        ["ssh", "-n"] + ssh_base_opts + [ssh_target, setup_script],
+                        ["ssh"] + ssh_base_opts + [ssh_target, setup_script],
                         input=agent_code, capture_output=True, text=True, timeout=DEFAULT_CMD_TIMEOUT,
                     )
                     if r.returncode != 0:
