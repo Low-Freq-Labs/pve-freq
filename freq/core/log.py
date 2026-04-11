@@ -145,6 +145,25 @@ def _get_db() -> sqlite3.Connection | None:
     return _db_conn
 
 
+def shutdown() -> None:
+    """Close the metrics DB connection cleanly.
+
+    Called automatically via atexit, or explicitly during test teardown.
+    Safe to call multiple times.
+    """
+    global _db_conn
+    if _db_conn is not None:
+        try:
+            _db_conn.close()
+        except sqlite3.Error:
+            pass
+        _db_conn = None
+
+
+import atexit as _atexit
+_atexit.register(shutdown)
+
+
 # ── Log rotation ─────────────────────────────────────────────────────
 
 def _maybe_rotate() -> None:
