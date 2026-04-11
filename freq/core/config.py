@@ -1003,18 +1003,35 @@ def _detect_ssh_key(cfg: FreqConfig) -> str:
     """Find the primary (ed25519) SSH key in priority order.
 
     Only returns keys that exist AND are readable by the current user.
-    In repo-backed installs, keys created by another user (e.g. rick-ops
-    creates freq_id_rsa but morty-ops runs freq serve) are skipped.
+    Checks service account's home dir before current user's home —
+    operators running CLI commands need the service account's deployed key,
+    not their own personal key (which isn't deployed to fleet hosts).
     """
+    svc_home = ""
+    svc = cfg.ssh_service_account
+    if svc:
+        try:
+            import pwd
+            svc_home = pwd.getpwnam(svc).pw_dir
+        except (KeyError, ImportError):
+            svc_home = f"/home/{svc}"
+
     candidates = [
         os.path.join(cfg.key_dir, "freq_id_ed25519"),
+    ]
+    # Service account's key (synced there by init Phase 4)
+    if svc_home:
+        candidates.append(os.path.join(svc_home, ".ssh", "id_ed25519"))
+    candidates.extend([
         os.path.expanduser("~/.ssh/id_ed25519"),
-        # Fleet key (deployed by infrastructure agent across all hosts)
         os.path.expanduser("~/.ssh/fleet_key"),
         # Fallback to RSA if no ed25519 exists
         os.path.join(cfg.key_dir, "freq_id_rsa"),
-        os.path.expanduser("~/.ssh/id_rsa"),
-    ]
+    ])
+    if svc_home:
+        candidates.append(os.path.join(svc_home, ".ssh", "id_rsa"))
+    candidates.append(os.path.expanduser("~/.ssh/id_rsa"))
+
     for path in candidates:
         if os.path.isfile(path) and os.access(path, os.R_OK):
             return path
@@ -1025,10 +1042,23 @@ def _detect_rsa_key(cfg: FreqConfig) -> str:
     """Find the RSA SSH key for legacy devices (iDRAC, switch).
 
     Only returns keys readable by the current user.
+    Checks service account's home dir before current user's home.
     """
+    svc_home = ""
+    svc = cfg.ssh_service_account
+    if svc:
+        try:
+            import pwd
+            svc_home = pwd.getpwnam(svc).pw_dir
+        except (KeyError, ImportError):
+            svc_home = f"/home/{svc}"
+
     candidates = [
         os.path.join(cfg.key_dir, "freq_id_rsa"),
-        os.path.expanduser("~/.ssh/id_rsa"),
+    ]
+    if svc_home:
+        candidates.append(os.path.join(svc_home, ".ssh", "id_rsa"))
+    candidates.append(os.path.expanduser("~/.ssh/id_rsa"))
     ]
     for path in candidates:
         if os.path.isfile(path) and os.access(path, os.R_OK):
