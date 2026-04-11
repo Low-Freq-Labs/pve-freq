@@ -387,7 +387,14 @@ function _checkForUpdate(){
       var banner=document.getElementById('update-banner');
       var text=document.getElementById('update-banner-text');
       if(banner&&text){
-        text.innerHTML='<strong>Update Available:</strong> v'+_esc(d.latest)+' &mdash; Pull latest: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">docker compose pull && docker compose up -d</code>';
+        var method=window._freqInstallMethod||'unknown';
+        var cmd='freq update';
+        if(method==='git')cmd='cd /opt/pve-freq && git pull';
+        else if(method==='docker')cmd='docker compose pull && docker compose up -d';
+        else if(method==='dpkg')cmd='sudo apt update && sudo apt upgrade pve-freq';
+        else if(method==='rpm')cmd='sudo dnf update pve-freq';
+        else cmd='sudo bash install.sh';
+        text.innerHTML='<strong>Update Available:</strong> v'+_esc(d.latest)+' &mdash; <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">'+_esc(cmd)+'</code>';
         banner.style.display='block';
       }
     }
@@ -3630,6 +3637,7 @@ function loadHome(){
   _renderHomeWidgets();
   _authFetch(API.INFO).then(function(r){return r.json()}).then(function(d){
     document.getElementById('nav-ver').textContent='V'+d.version;
+    if(d.install_method)window._freqInstallMethod=d.install_method;
     var vf=document.getElementById('home-ver-footer');if(vf)vf.textContent='V'+d.version;
     var st=document.getElementById('home-subtitle');if(st&&d.brand)st.textContent=d.brand;
     document.title=(d.brand||'PVE FREQ')+' Dashboard';
