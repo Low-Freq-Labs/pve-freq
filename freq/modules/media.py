@@ -287,10 +287,13 @@ def _cmd_status(cfg, args) -> int:
 
         for cname, container in sorted(vm.containers.items()):
             total_containers += 1
-            # Find matching running container
+            # Find matching running container — normalize hyphens/underscores
+            # so init-discovered "tdarr_node" matches Docker "tdarr-node-cpu-2"
             cstatus = None
+            cn = cname.lower().replace("-", "_").replace(" ", "_")
             for rname, rstatus in running.items():
-                if cname.lower() in rname.lower() or rname.lower() in cname.lower():
+                rn = rname.lower().replace("-", "_").replace(" ", "_")
+                if cn in rn or rn in cn:
                     cstatus = rstatus
                     break
 
@@ -1940,8 +1943,10 @@ def _cmd_dashboard(cfg, args) -> int:
         statuses = _get_containers_status(cfg, vm)
         total += len(vm.containers)
         for cname in vm.containers:
+            cn = cname.lower().replace("-", "_").replace(" ", "_")
             for rname, rstatus in statuses.items():
-                if cname.lower() in rname.lower() and "Up" in rstatus:
+                rn = rname.lower().replace("-", "_").replace(" ", "_")
+                if cn in rn and "Up" in rstatus:
                     running += 1
                     break
 
@@ -2017,8 +2022,10 @@ def _cmd_report(cfg, args) -> int:
         report_lines.append("-" * 40)
         for cname in sorted(vm.containers):
             found = False
+            cn = cname.lower().replace("-", "_").replace(" ", "_")
             for rname, rstatus in statuses.items():
-                if cname.lower() in rname.lower():
+                rn = rname.lower().replace("-", "_").replace(" ", "_")
+                if cn in rn or rn in cn:
                     report_lines.append(f"  {cname}: {rstatus}")
                     found = True
                     break
