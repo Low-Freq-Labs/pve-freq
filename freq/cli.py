@@ -252,7 +252,7 @@ def _register_utilities(sub):
     p.add_argument("--port", type=int, default=None, help="Port number (default: from freq.toml or 8888)")
     p.set_defaults(func=_cmd_serve)
 
-    p = sub.add_parser("update", help="Check for updates and upgrade FREQ")
+    p = sub.add_parser("update", help="Check for updates (git installs can auto-upgrade)")
     p.set_defaults(func=_cmd_update)
 
     p = sub.add_parser("learn", help="Search Proxmox operational knowledge base")
