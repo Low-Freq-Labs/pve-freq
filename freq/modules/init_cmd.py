@@ -6921,8 +6921,6 @@ def _headless_fleet_deploy(
                     "-o",
                     "ConnectTimeout=5",
                     "-o",
-                    "BatchMode=yes",
-                    "-o",
                     "StrictHostKeyChecking=accept-new",
                     "-o",
                     "PubkeyAuthentication=no",
