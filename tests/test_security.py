@@ -6,10 +6,9 @@ shell interpolation.
 """
 import os
 import sys
+import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -18,7 +17,7 @@ from freq.core import validate
 
 # ── shell_safe_name ─────────────────────────────────────────────────────
 
-class TestShellSafeName:
+class TestShellSafeName(unittest.TestCase):
     """VM names must be safe for shell interpolation."""
 
     def test_simple_name(self):
@@ -78,7 +77,7 @@ class TestShellSafeName:
 
 # ── bay_device ──────────────────────────────────────────────────────────
 
-class TestBayDevice:
+class TestBayDevice(unittest.TestCase):
     """Block device names for gwipe path traversal prevention."""
 
     def test_sda(self):
@@ -136,7 +135,7 @@ def _make_cfg():
     return cfg
 
 
-class TestCreateRejectsBadName:
+class TestCreateRejectsBadName(unittest.TestCase):
     """cmd_create must reject invalid names before calling _pve_cmd."""
 
     @patch("freq.modules.vm._find_node", return_value="192.168.255.1")
@@ -167,7 +166,7 @@ class TestCreateRejectsBadName:
         assert mock_pve.called
 
 
-class TestCloneRejectsBadInput:
+class TestCloneRejectsBadInput(unittest.TestCase):
     """cmd_clone must reject invalid names, IPs, and VLANs."""
 
     @patch("freq.modules.vm._find_vm_node", return_value="192.168.255.1")
@@ -230,7 +229,7 @@ class TestCloneRejectsBadInput:
         assert mock_pve.called
 
 
-class TestRenameRejectsBadName:
+class TestRenameRejectsBadName(unittest.TestCase):
     """cmd_rename must reject invalid names."""
 
     @patch("freq.modules.vm._find_vm_node", return_value="192.168.255.1")
@@ -244,7 +243,7 @@ class TestRenameRejectsBadName:
         mock_pve.assert_not_called()
 
 
-class TestNicAddRejectsBadInput:
+class TestNicAddRejectsBadInput(unittest.TestCase):
     """_nic_add must reject invalid IPs and VLANs."""
 
     def test_bad_ip_rejected(self):
@@ -262,7 +261,7 @@ class TestNicAddRejectsBadInput:
         assert result == 1
 
 
-class TestNicChangeIpRejectsBadInput:
+class TestNicChangeIpRejectsBadInput(unittest.TestCase):
     """_nic_change_ip must reject invalid IPs and VLANs."""
 
     def test_bad_ip_rejected(self):
@@ -282,7 +281,7 @@ class TestNicChangeIpRejectsBadInput:
 
 # ── gwipe bay_device validation ─────────────────────────────────────────
 
-class TestGwipeBayValidation:
+class TestGwipeBayValidation(unittest.TestCase):
     """gwipe must reject path traversal in bay targets."""
 
     def test_traversal_rejected(self):
@@ -311,7 +310,7 @@ class TestGwipeBayValidation:
 
 # ── Policy sed escaping ─────────────────────────────────────────────────
 
-class TestPolicySedEscaping:
+class TestPolicySedEscaping(unittest.TestCase):
     """Policy fix_commands must escape regex metacharacters in keys."""
 
     def test_escape_sed_dots(self):
@@ -347,10 +346,10 @@ class TestPolicySedEscaping:
         assert r"net\.ipv4\.ip_forward" in commands[0]
 
 
-class TestPolicyMissingName:
+class TestPolicyMissingName(unittest.TestCase):
     """PolicyExecutor must raise ValueError when 'name' is missing."""
 
     def test_missing_name_raises(self):
         from freq.engine.policy import PolicyExecutor
-        with pytest.raises(ValueError, match="missing required 'name'"):
+        with self.assertRaisesRegex(ValueError, "missing required 'name'"):
             PolicyExecutor({})

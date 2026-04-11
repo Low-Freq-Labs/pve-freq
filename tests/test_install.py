@@ -8,10 +8,11 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
+import unittest
+from pathlib import Path
 from unittest.mock import patch, MagicMock
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -21,7 +22,7 @@ INSTALL_SCRIPT = os.path.join(PROJECT_ROOT, "install.sh")
 
 # ── Pre-flight module tests ──────────────────────────────────────────────
 
-class TestPreflightPythonVersion:
+class TestPreflightPythonVersion(unittest.TestCase):
     """Test check_python_version from preflight module."""
 
     def test_current_python_passes(self):
@@ -41,7 +42,7 @@ class TestPreflightPythonVersion:
         assert ver in msg
 
 
-class TestPreflightPlatform:
+class TestPreflightPlatform(unittest.TestCase):
     """Test check_platform from preflight module."""
 
     def test_detects_linux(self):
@@ -60,7 +61,7 @@ class TestPreflightPlatform:
         assert "family" in info
 
 
-class TestPreflightDiskSpace:
+class TestPreflightDiskSpace(unittest.TestCase):
     """Test check_disk_space from preflight module."""
 
     def test_root_has_space(self):
@@ -80,7 +81,7 @@ class TestPreflightDiskSpace:
         assert ok is False
 
 
-class TestPreflightBinaries:
+class TestPreflightBinaries(unittest.TestCase):
     """Test binary detection from preflight module."""
 
     def test_required_binaries_found(self):
@@ -98,7 +99,7 @@ class TestPreflightBinaries:
         assert isinstance(missing, list)
 
 
-class TestPreflightInstallHint:
+class TestPreflightInstallHint(unittest.TestCase):
     """Test install hint generation."""
 
     def test_debian_python_hint(self):
@@ -122,7 +123,7 @@ class TestPreflightInstallHint:
         assert "Install" in hint or "install" in hint
 
 
-class TestPreflightRunAll:
+class TestPreflightRunAll(unittest.TestCase):
     """Test the run_preflight aggregator."""
 
     def test_run_preflight_quiet(self):
@@ -138,7 +139,7 @@ class TestPreflightRunAll:
 
 # ── Install script syntax tests ──────────────────────────────────────────
 
-class TestInstallScript:
+class TestInstallScript(unittest.TestCase):
     """Verify install.sh is syntactically valid bash."""
 
     def test_script_exists(self):
@@ -185,7 +186,7 @@ class TestInstallScript:
 
 # ── Doctor integration tests ─────────────────────────────────────────────
 
-class TestDoctorUsesPreflight:
+class TestDoctorUsesPreflight(unittest.TestCase):
     """Verify doctor.py delegates to preflight module."""
 
     def test_doctor_check_python_imports_preflight(self):
@@ -211,47 +212,55 @@ class TestDoctorUsesPreflight:
 
 # ── Selfupdate marker detection ─────────────────────────────────────────
 
-class TestSelfupdateMarker:
+class TestSelfupdateMarker(unittest.TestCase):
     """Test .install-method marker detection in selfupdate."""
 
-    def test_detect_tarball_marker(self, tmp_path):
+    def test_detect_tarball_marker(self):
         from freq.modules.selfupdate import _detect_install_method
-        marker = tmp_path / ".install-method"
-        marker.write_text("tarball")
-        cfg = MagicMock()
-        cfg.install_dir = str(tmp_path)
-        assert _detect_install_method(cfg) == "tarball"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            marker = tmp_path / ".install-method"
+            marker.write_text("tarball")
+            cfg = MagicMock()
+            cfg.install_dir = str(tmp_path)
+            assert _detect_install_method(cfg) == "tarball"
 
-    def test_detect_git_release_marker(self, tmp_path):
+    def test_detect_git_release_marker(self):
         from freq.modules.selfupdate import _detect_install_method
-        marker = tmp_path / ".install-method"
-        marker.write_text("git-release")
-        cfg = MagicMock()
-        cfg.install_dir = str(tmp_path)
-        assert _detect_install_method(cfg) == "git-release"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            marker = tmp_path / ".install-method"
+            marker.write_text("git-release")
+            cfg = MagicMock()
+            cfg.install_dir = str(tmp_path)
+            assert _detect_install_method(cfg) == "git-release"
 
-    def test_detect_local_marker(self, tmp_path):
+    def test_detect_local_marker(self):
         from freq.modules.selfupdate import _detect_install_method
-        marker = tmp_path / ".install-method"
-        marker.write_text("local")
-        cfg = MagicMock()
-        cfg.install_dir = str(tmp_path)
-        assert _detect_install_method(cfg) == "local"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            marker = tmp_path / ".install-method"
+            marker.write_text("local")
+            cfg = MagicMock()
+            cfg.install_dir = str(tmp_path)
+            assert _detect_install_method(cfg) == "local"
 
-    def test_no_marker_falls_through(self, tmp_path):
+    def test_no_marker_falls_through(self):
         from freq.modules.selfupdate import _detect_install_method
-        cfg = MagicMock()
-        cfg.install_dir = str(tmp_path)
-        # No marker, no .git — falls through to dpkg/rpm check then manual
-        result = _detect_install_method(cfg)
-        # Result depends on system packages; just verify it returns a string
-        assert isinstance(result, str)
-        assert len(result) > 0
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            cfg = MagicMock()
+            cfg.install_dir = str(tmp_path)
+            # No marker, no .git — falls through to dpkg/rpm check then manual
+            result = _detect_install_method(cfg)
+            # Result depends on system packages; just verify it returns a string
+            assert isinstance(result, str)
+            assert len(result) > 0
 
 
 # ── Entry point tests ────────────────────────────────────────────────────
 
-class TestEntryPoint:
+class TestEntryPoint(unittest.TestCase):
     """Verify freq entry point works."""
 
     def test_main_module_file_exists(self):
@@ -285,7 +294,7 @@ class TestEntryPoint:
 
 # ── Project files tests ──────────────────────────────────────────────────
 
-class TestProjectFiles:
+class TestProjectFiles(unittest.TestCase):
     """Verify distribution files exist and are correct."""
 
     def test_license_exists(self):

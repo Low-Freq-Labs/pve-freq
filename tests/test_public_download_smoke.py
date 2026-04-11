@@ -152,6 +152,16 @@ class TestInstallPromises(unittest.TestCase):
 class TestVersionConsistency(unittest.TestCase):
     """All version surfaces must agree."""
 
+    def _assert_toml_version_matches_module(self, rel_path):
+        from freq import __version__
+        import tomllib
+
+        with open(os.path.join(REPO_ROOT, rel_path), "rb") as f:
+            cfg = tomllib.load(f)
+        self.assertEqual(cfg["freq"]["version"], __version__,
+                         f"{rel_path} says {cfg['freq']['version']} but "
+                         f"__version__ is {__version__}")
+
     def test_version_flag_matches_module(self):
         """freq --version must show freq.__version__."""
         from freq import __version__
@@ -159,14 +169,20 @@ class TestVersionConsistency(unittest.TestCase):
         self.assertIn(__version__, out)
 
     def test_config_version_matches_module(self):
-        """freq.toml version must match freq.__version__."""
-        from freq import __version__
-        import tomllib
-        with open(os.path.join(REPO_ROOT, "conf", "freq.toml"), "rb") as f:
-            cfg = tomllib.load(f)
-        self.assertEqual(cfg["freq"]["version"], __version__,
-                         f"freq.toml says {cfg['freq']['version']} but "
-                         f"__version__ is {__version__}")
+        """The operator config version must match freq.__version__."""
+        self._assert_toml_version_matches_module(os.path.join("conf", "freq.toml"))
+
+    def test_example_config_version_matches_module(self):
+        """The user-facing example config must match freq.__version__."""
+        self._assert_toml_version_matches_module(
+            os.path.join("conf", "freq.toml.example")
+        )
+
+    def test_runtime_template_version_matches_module(self):
+        """The shipped init template must match freq.__version__."""
+        self._assert_toml_version_matches_module(
+            os.path.join("freq", "data", "conf-templates", "freq.toml.example")
+        )
 
     def test_changelog_latest_matches_module(self):
         """CHANGELOG latest version must match freq.__version__."""

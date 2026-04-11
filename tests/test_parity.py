@@ -7,10 +7,9 @@ import io
 import json
 import os
 import sys
+import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -115,7 +114,7 @@ def _mock_args(**overrides):
 # Phase 1: CLI — VM Power
 # ═══════════════════════════════════════════════════════════════════
 
-class TestCmdPower:
+class TestCmdPower(unittest.TestCase):
     """Test cmd_power in pve.py."""
 
     @patch("freq.modules.pve._pve_cmd", return_value=("OK", True))
@@ -179,7 +178,7 @@ class TestCmdPower:
 # Phase 1: CLI — Snapshot List/Delete
 # ═══════════════════════════════════════════════════════════════════
 
-class TestCmdSnapshotList:
+class TestCmdSnapshotList(unittest.TestCase):
     """Test snapshot list action."""
 
     @patch("freq.modules.pve._pve_cmd", return_value=(
@@ -213,7 +212,7 @@ class TestCmdSnapshotList:
         assert result == 1
 
 
-class TestCmdSnapshotDelete:
+class TestCmdSnapshotDelete(unittest.TestCase):
     """Test snapshot delete action."""
 
     @patch("freq.modules.pve._pve_cmd", return_value=("", True))
@@ -246,7 +245,7 @@ class TestCmdSnapshotDelete:
         assert result == 1
 
 
-class TestCmdSnapshotDispatch:
+class TestCmdSnapshotDispatch(unittest.TestCase):
     """Test snapshot command dispatch to subactions."""
 
     @patch("freq.modules.pve.cmd_snapshot_list", return_value=0)
@@ -270,7 +269,7 @@ class TestCmdSnapshotDispatch:
 # Phase 1: CLI — NIC Management
 # ═══════════════════════════════════════════════════════════════════
 
-class TestCmdNic:
+class TestCmdNic(unittest.TestCase):
     """Test cmd_nic dispatch and operations."""
 
     def test_nic_no_action(self):
@@ -375,7 +374,7 @@ class TestCmdNic:
 # Phase 1: CLI Parser Registration
 # ═══════════════════════════════════════════════════════════════════
 
-class TestCLIParserParity:
+class TestCLIParserParity(unittest.TestCase):
     """Verify new commands are registered in argparse (under domain subcommands)."""
 
     def test_power_registered(self):
@@ -439,7 +438,7 @@ class TestCLIParserParity:
 # are tested via the V1 API route handlers.
 
 
-class TestServeDoctor:
+class TestServeDoctor(unittest.TestCase):
     """Test /api/doctor endpoint."""
 
     @patch("freq.core.doctor.run", return_value=0)
@@ -461,7 +460,7 @@ class TestServeDoctor:
 # Phase 2: Web UI — API Constants
 # ═══════════════════════════════════════════════════════════════════
 
-class TestWebUIApiConstants:
+class TestWebUIApiConstants(unittest.TestCase):
     """Verify all new API constants are present in app.js."""
 
     def test_api_constants_present(self):
@@ -484,7 +483,7 @@ class TestWebUIApiConstants:
             assert constant in app_js, f"Missing API constant: {constant}"
 
 
-class TestWebUIViews:
+class TestWebUIViews(unittest.TestCase):
     """Verify new view containers exist in web_ui.py."""
 
     def test_security_view_exists(self):
@@ -503,7 +502,7 @@ class TestWebUIViews:
         assert "'tools'" in APP_HTML
 
 
-class TestWebUIJsFunctions:
+class TestWebUIJsFunctions(unittest.TestCase):
     """Verify new JS functions exist in app.js."""
 
     def test_policy_functions(self):
@@ -530,7 +529,7 @@ class TestWebUIJsFunctions:
 # Phase 3: Serve.py Route Coverage
 # ═══════════════════════════════════════════════════════════════════
 
-class TestRouteRegistration:
+class TestRouteRegistration(unittest.TestCase):
     """Verify all new endpoints are registered in _ROUTES or _V1_ROUTES."""
 
     def test_new_routes_registered(self):
@@ -552,7 +551,7 @@ class TestRouteRegistration:
 
 # ── Phase 1D: detail + boundaries CLI ────────────────────────────────
 
-class TestCmdDetail:
+class TestCmdDetail(unittest.TestCase):
     """Tests for cmd_detail — deep host inventory."""
 
     def _make_cfg(self):
@@ -590,7 +589,7 @@ class TestCmdDetail:
         assert not mock_ssh.called
 
 
-class TestCmdBoundaries:
+class TestCmdBoundaries(unittest.TestCase):
     """Tests for cmd_boundaries — fleet permission tiers."""
 
     def _make_cfg(self):
@@ -652,7 +651,7 @@ class TestCmdBoundaries:
         assert rc == 1
 
 
-class TestCLIParserPhase1D:
+class TestCLIParserPhase1D(unittest.TestCase):
     """Verify detail + boundaries are registered in argparse (under fleet domain)."""
 
     def test_detail_registered(self):

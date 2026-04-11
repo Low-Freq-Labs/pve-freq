@@ -6,17 +6,18 @@ PolicyExecutor validation, and personality exception handling.
 import os
 import socket
 import sys
+import tempfile
+import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 # ── Config type coercion ────────────────────────────────────────────────
 
-class TestConfigSafeInt:
+class TestConfigSafeInt(unittest.TestCase):
     """_safe_int must coerce gracefully."""
 
     def test_valid_int(self):
@@ -48,7 +49,7 @@ class TestConfigSafeInt:
         assert _safe_int([1, 2], 10) == 10
 
 
-class TestConfigApplyTomlCoercion:
+class TestConfigApplyTomlCoercion(unittest.TestCase):
     """_apply_toml must handle bad types without crashing."""
 
     def test_bad_int_in_ssh_uses_default(self):
@@ -74,7 +75,7 @@ class TestConfigApplyTomlCoercion:
 
 # ── FleetBoundaries ─────────────────────────────────────────────────────
 
-class TestFleetBoundariesFixes:
+class TestFleetBoundariesFixes(unittest.TestCase):
     """FleetBoundaries hardening: missing tier, is_prod vs is_protected."""
 
     def test_categorize_missing_tier(self):
@@ -137,12 +138,12 @@ class TestFleetBoundariesFixes:
 
 # ── PolicyExecutor validation ───────────────────────────────────────────
 
-class TestPolicyExecutorValidation:
+class TestPolicyExecutorValidation(unittest.TestCase):
     """PolicyExecutor must validate required keys."""
 
     def test_missing_name_raises(self):
         from freq.engine.policy import PolicyExecutor
-        with pytest.raises(ValueError, match="missing required 'name'"):
+        with self.assertRaisesRegex(ValueError, "missing required 'name'"):
             PolicyExecutor({})
 
     def test_valid_policy_creates(self):
@@ -159,29 +160,32 @@ class TestPolicyExecutorValidation:
 
 # ── Personality exception handling ──────────────────────────────────────
 
-class TestPersonalityExceptionHandling:
+class TestPersonalityExceptionHandling(unittest.TestCase):
     """Personality pack loading must handle corrupt files gracefully."""
 
-    def test_bad_toml_returns_default(self, tmp_path):
+    def test_bad_toml_returns_default(self):
         from freq.core.personality import load_pack
-        # Create a corrupt TOML file
-        pack_dir = tmp_path / "personality"
-        pack_dir.mkdir()
-        corrupt = pack_dir / "broken.toml"
-        corrupt.write_text("this is [not valid toml {{{}}}}")
-        pack = load_pack(str(tmp_path), "broken")
-        assert pack.name == "broken"
-        # Should return defaults, not crash
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            # Create a corrupt TOML file
+            pack_dir = tmp_path / "personality"
+            pack_dir.mkdir()
+            corrupt = pack_dir / "broken.toml"
+            corrupt.write_text("this is [not valid toml {{{}}}}")
+            pack = load_pack(str(tmp_path), "broken")
+            assert pack.name == "broken"
+            # Should return defaults, not crash
 
-    def test_missing_file_returns_default(self, tmp_path):
+    def test_missing_file_returns_default(self):
         from freq.core.personality import load_pack
-        pack = load_pack(str(tmp_path), "nonexistent")
-        assert pack.name == "nonexistent"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pack = load_pack(tmpdir, "nonexistent")
+            assert pack.name == "nonexistent"
 
 
 # ── freq why command ────────────────────────────────────────────────────
 
-class TestWhyCommand:
+class TestWhyCommand(unittest.TestCase):
     """freq why <vmid> must display category, tier, and permissions."""
 
     def test_known_vmid_returns_ok(self):
@@ -238,7 +242,7 @@ class TestWhyCommand:
 
 # ── freq test-connection command ────────────────────────────────────────
 
-class TestTestConnection:
+class TestTestConnection(unittest.TestCase):
     """freq test-connection must test TCP, SSH, and sudo in sequence."""
 
     def test_no_target_returns_1(self):

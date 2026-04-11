@@ -5,9 +5,8 @@ Tests the require_role() decorator from freq/api/helpers.py.
 import os
 import sys
 import time
+import unittest
 from unittest.mock import MagicMock
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -39,10 +38,10 @@ def _mock_handler(auth_header=""):
 
 # ── Tests ────────────────────────────────────────────────────────────
 
-class TestRequireRole:
+class TestRequireRole(unittest.TestCase):
     """@require_role decorator must enforce auth before handler runs."""
 
-    def setup_method(self):
+    def setUp(self):
         _clear_tokens()
 
     def test_blocks_no_token(self):

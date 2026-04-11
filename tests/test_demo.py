@@ -1,15 +1,14 @@
 """Tests for freq demo command."""
 import os
 import sys
+import unittest
 from io import StringIO
 from unittest.mock import MagicMock
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
-class TestDemoRun:
+class TestDemoRun(unittest.TestCase):
     """Test that the demo command runs successfully."""
 
     def _run_demo(self, pack=None):
