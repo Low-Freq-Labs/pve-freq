@@ -221,6 +221,8 @@ class Container:
     name: str
     vm_id: int
     port: int = 0
+    image: str = ""  # Docker image (e.g. "linuxserver/sonarr")
+    status: str = ""  # Docker status (e.g. "running")
     api_path: str = ""
     auth_type: str = ""  # "header", "param", "cookie", ""
     auth_header: str = ""  # e.g. "X-Api-Key", "X-Plex-Token"

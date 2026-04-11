@@ -1414,29 +1414,59 @@ def _parse_query_flat(path_str):
 
 
 def _write_containers_toml(path: str, container_vms: dict):
-    """Write container registry back to containers.toml."""
+    """Write container registry back to containers.toml.
+
+    Preserves the canonical format based on key type:
+    - String keys → [host.<label>] format (init-generated)
+    - Int keys → [vm.<id>] format (legacy/dashboard-created)
+    """
     lines = ["# FREQ Container Registry\n"]
-    for vm_id in sorted(container_vms.keys()):
-        vm = container_vms[vm_id]
-        lines.append(f"\n[vm.{vm_id}]")
-        if vm.ip:
-            lines.append(f'ip = "{vm.ip}"')
-        if vm.label:
-            lines.append(f'label = "{vm.label}"')
-        if vm.compose_path:
-            lines.append(f'compose_path = "{vm.compose_path}"')
-        for cname, c in sorted(vm.containers.items()):
-            lines.append(f"\n[vm.{vm_id}.containers.{cname}]")
-            if c.port:
-                lines.append(f"port = {c.port}")
-            if c.api_path:
-                lines.append(f'api_path = "{c.api_path}"')
-            if c.auth_type:
-                lines.append(f'auth_type = "{c.auth_type}"')
-            if c.auth_header:
-                lines.append(f'auth_header = "{c.auth_header}"')
-            if c.vault_key:
-                lines.append(f'vault_key = "{c.vault_key}"')
+
+    def _write_container_fields(c):
+        if c.name:
+            lines.append(f'name = "{c.name}"')
+        if getattr(c, "image", ""):
+            lines.append(f'image = "{c.image}"')
+        if getattr(c, "status", ""):
+            lines.append(f'status = "{c.status}"')
+        if c.port:
+            lines.append(f"port = {c.port}")
+        if c.api_path:
+            lines.append(f'api_path = "{c.api_path}"')
+        if c.auth_type:
+            lines.append(f'auth_type = "{c.auth_type}"')
+        if c.auth_header:
+            lines.append(f'auth_header = "{c.auth_header}"')
+        if c.vault_key:
+            lines.append(f'vault_key = "{c.vault_key}"')
+
+    for key in sorted(container_vms.keys(), key=str):
+        vm = container_vms[key]
+        if isinstance(key, str):
+            # Host-format (init-generated): [host.<label>]
+            lines.append(f"\n[host.{key}]")
+            if vm.ip:
+                lines.append(f'ip = "{vm.ip}"')
+            if vm.label and vm.label != key:
+                lines.append(f'label = "{vm.label}"')
+            if vm.compose_path:
+                lines.append(f'compose_path = "{vm.compose_path}"')
+            for cname, c in sorted(vm.containers.items()):
+                lines.append(f"\n[host.{key}.containers.{cname}]")
+                _write_container_fields(c)
+        else:
+            # Legacy format: [vm.<id>]
+            lines.append(f"\n[vm.{key}]")
+            if vm.ip:
+                lines.append(f'ip = "{vm.ip}"')
+            if vm.label:
+                lines.append(f'label = "{vm.label}"')
+            if vm.compose_path:
+                lines.append(f'compose_path = "{vm.compose_path}"')
+            for cname, c in sorted(vm.containers.items()):
+                lines.append(f"\n[vm.{key}.containers.{cname}]")
+                _write_container_fields(c)
+
     lines.append("")
     with open(path, "w") as f:
         f.write("\n".join(lines))
