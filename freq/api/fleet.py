@@ -23,6 +23,7 @@ from freq.modules.serve import (
     _bg_lock,
     _bg_cache_ts,
     _bg_cache_errors,
+    _bg_cache_from_disk,
     _get_fleet_vms,
     _get_discovered_nodes,
     _get_discovered_node_ips,
@@ -111,17 +112,22 @@ def handle_health_api(handler):
         _health_ts = _bg_cache_ts.get("health", 0)
         _health_err = _bg_cache_errors.get("health")
     if cached:
+        from_disk = "health" in _bg_cache_from_disk
         age_seconds = round(time.time() - _health_ts, 1)
         response = dict(cached)
         response["cached"] = True
         response["age"] = age_seconds
         response["age_seconds"] = age_seconds
+        response["from_disk_cache"] = from_disk
         probe_err = _health_err
         if probe_err:
             response["probe_status"] = "error"
             response["probe_error"] = probe_err["error"]
             response["probe_failed_at"] = probe_err["failed_at"]
             response["probe_consecutive_failures"] = probe_err["consecutive"]
+        elif from_disk:
+            response["probe_status"] = "stale"
+            response["probe_error"] = "Data from previous server instance — waiting for fresh probe"
         else:
             response["probe_status"] = "ok"
         json_response(handler, response)

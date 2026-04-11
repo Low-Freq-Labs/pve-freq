@@ -125,6 +125,7 @@ _bg_cache_ts = {
     "vm_tags": 0,
 }
 _bg_cache_errors = {}  # key -> {"error": str, "failed_at": float, "consecutive": int}
+_bg_cache_from_disk = set()  # keys loaded from disk (not yet re-probed this instance)
 UPDATE_CHECK_INTERVAL = 6 * 3600  # 6 hours
 HOSTS_SYNC_INTERVAL = 3600  # 1 hour — keep hosts.toml in sync with PVE
 NODE_DISCOVERY_INTERVAL = 300  # 5 min — discover PVE cluster nodes
@@ -213,7 +214,12 @@ def _cache_path(name):
 
 
 def _load_disk_cache():
-    """Load cached probe data from disk — instant startup."""
+    """Load cached probe data from disk — instant startup.
+
+    Marks all loaded entries in _bg_cache_from_disk so API consumers
+    know the data is from a previous server instance and may reflect
+    a different probe configuration (e.g., different SSH user).
+    """
     global CACHE_DIR
     if CACHE_DIR is None:
         _init_cache_dir()
@@ -227,6 +233,7 @@ def _load_disk_cache():
                 with _bg_lock:
                     _bg_cache[name] = data.get("data")
                     _bg_cache_ts[name] = data.get("ts", 0)
+                    _bg_cache_from_disk.add(name)
             except (json.JSONDecodeError, OSError) as e:
                 logger.warn(f"cache load failed: {name}: {e}")
 
@@ -724,6 +731,7 @@ def _bg_probe_health():
         old_health = _bg_cache.get("health")
         _bg_cache["health"] = result
         _bg_cache_ts["health"] = time.time()
+        _bg_cache_from_disk.discard("health")  # Fresh probe replaces stale disk data
     _save_disk_cache("health", result)
 
     # SSE: broadcast cache_update + per-host health_change events

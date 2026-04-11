@@ -295,6 +295,74 @@ class TestHealthApiStalenessContract(unittest.TestCase):
         self.assertGreater(data["age_seconds"], 50)
 
 
+class TestHealthDiskCacheStaleness(unittest.TestCase):
+    """Health from disk cache must report probe_status=stale, not ok."""
+
+    def setUp(self):
+        from freq.modules import serve
+        self._orig_cache = {}
+        self._orig_ts = {}
+        self._orig_errors = {}
+        self._orig_from_disk = set()
+        with serve._bg_lock:
+            self._orig_cache.update(serve._bg_cache)
+            self._orig_ts.update(serve._bg_cache_ts)
+            self._orig_errors.update(serve._bg_cache_errors)
+            self._orig_from_disk = set(serve._bg_cache_from_disk)
+
+    def tearDown(self):
+        from freq.modules import serve
+        with serve._bg_lock:
+            serve._bg_cache.update(self._orig_cache)
+            serve._bg_cache_ts.update(self._orig_ts)
+            serve._bg_cache_errors.clear()
+            serve._bg_cache_errors.update(self._orig_errors)
+            serve._bg_cache_from_disk.clear()
+            serve._bg_cache_from_disk.update(self._orig_from_disk)
+
+    def test_disk_cache_reports_stale(self):
+        """Health loaded from disk must have probe_status=stale."""
+        from freq.modules import serve
+        from freq.api.fleet import handle_health_api
+
+        now = time.time()
+        with serve._bg_lock:
+            serve._bg_cache["health"] = {
+                "hosts": [{"host": "test", "status": "healthy"}],
+                "total": 1, "healthy": 1,
+            }
+            serve._bg_cache_ts["health"] = now - 300  # 5 min old
+            serve._bg_cache_errors.pop("health", None)
+            serve._bg_cache_from_disk.add("health")  # Loaded from disk
+
+        h = _make_handler("/api/health")
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": "Bearer fake", "Cookie": "", "Origin": "",
+        }.get(key, default)
+
+        with patch("freq.api.fleet._check_session_role", return_value=("admin", None)):
+            handle_health_api(h)
+
+        data = _get_json(h)
+        self.assertEqual(data["probe_status"], "stale",
+                         "Disk-loaded health must report probe_status=stale")
+        self.assertTrue(data["from_disk_cache"])
+        self.assertIn("previous server instance", data.get("probe_error", ""))
+
+    def test_fresh_probe_clears_disk_flag(self):
+        """After a fresh probe, disk flag must be cleared."""
+        from freq.modules import serve
+        with serve._bg_lock:
+            serve._bg_cache_from_disk.add("health")
+        # Simulate fresh probe writing to cache
+        with serve._bg_lock:
+            serve._bg_cache["health"] = {"hosts": [], "duration": 0.1}
+            serve._bg_cache_ts["health"] = time.time()
+            serve._bg_cache_from_disk.discard("health")
+        self.assertNotIn("health", serve._bg_cache_from_disk)
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # /api/fleet/health-score — stale flag at 120s, regression guard
 # ══════════════════════════════════════════════════════════════════════════
