@@ -10,7 +10,7 @@ ascii = false               # true = ASCII box drawing (PuTTY-safe)
 debug = false
 
 [ssh]
-service_account = "freq-admin"
+service_account = "freq-ops"
 connect_timeout = 5
 max_parallel = 5
 mode = "sudo"               # "root" = SSH as root, "sudo" = SSH as service account + sudo
@@ -20,9 +20,9 @@ mode = "sudo"               # "root" = SSH as root, "sudo" = SSH as service acco
 # PVE nodes — add your Proxmox host IPs here
 nodes = []
 node_names = []
-ssh_user = "freq-admin"
-# api_token_id = "freq-ops@pam!freq-rw"         # PVE API token for real-time metrics
-# api_token_secret_path = "/etc/freq/credentials/pve-token-rw"
+ssh_user = "freq-ops"
+# token_id = "freq-ops@pam!freq-rw"
+# token_secret_file = "/etc/freq/credentials/pve-token-rw"
 
 # Per-node storage configuration (uncomment and edit for each node)
 # [pve.storage.node1]
@@ -40,7 +40,7 @@ bios = "seabios"
 domain = "cluster.local"
 gateway = ""                # REQUIRED — set to your gateway IP
 nameserver = "1.1.1.1"
-ci_user = "freq-admin"
+ci_user = "freq-ops"
 
 [safety]
 protected_vmids = []
