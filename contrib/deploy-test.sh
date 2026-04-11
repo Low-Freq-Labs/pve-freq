@@ -56,7 +56,7 @@ ssh -n "${USER}@${TARGET}" "
 if [ -d ${RUNTIME_DIR}/freq ]; then
     sudo rsync -a --delete \
         --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' \
-        --exclude='/conf/' --exclude='/data/' \
+        --exclude='/conf/' --exclude='/data/' --exclude='/tls/' \
         ${REMOTE_DIR}/ ${RUNTIME_DIR}/
     echo 'Runtime synced'
 else
