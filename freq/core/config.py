@@ -721,6 +721,9 @@ def load_hosts_toml(path: str) -> list:
         all_ips = entry.get("all_ips", [])
         if isinstance(all_ips, str):
             all_ips = [ip for ip in all_ips.split(",") if ip]
+        managed = entry.get("managed", True)
+        if isinstance(managed, str):
+            managed = managed.lower() not in ("false", "0", "no")
         hosts.append(
             Host(
                 ip=entry.get("ip", ""),
@@ -728,6 +731,7 @@ def load_hosts_toml(path: str) -> list:
                 htype=entry.get("type", "linux"),
                 groups=entry.get("groups", ""),
                 vmid=_safe_int(entry.get("vmid", 0), 0),
+                managed=managed,
                 all_ips=all_ips,
             )
         )
@@ -749,6 +753,8 @@ def save_hosts_toml(path: str, hosts: list) -> None:
             lines.append(f'groups = "{h.groups}"\n')
         if h.vmid:
             lines.append(f"vmid = {h.vmid}\n")
+        if not getattr(h, "managed", True):
+            lines.append("managed = false\n")
         if h.all_ips:
             ips_str = ", ".join(f'"{ip}"' for ip in h.all_ips)
             lines.append(f"all_ips = [{ips_str}]\n")
@@ -770,6 +776,8 @@ def append_host_toml(path: str, host) -> None:
         lines.append(f'groups = "{host.groups}"\n')
     if host.vmid:
         lines.append(f"vmid = {host.vmid}\n")
+    if not getattr(host, "managed", True):
+        lines.append("managed = false\n")
     if host.all_ips:
         ips_str = ", ".join(f'"{ip}"' for ip in host.all_ips)
         lines.append(f"all_ips = [{ips_str}]\n")

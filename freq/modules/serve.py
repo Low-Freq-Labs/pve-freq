@@ -610,6 +610,9 @@ def _bg_probe_health():
     active_hosts = []
     skipped_hosts = []
     for h in cfg.hosts:
+        # Skip unmanaged hosts (discovered but not deployed to)
+        if not getattr(h, "managed", True):
+            continue
         # Skip hosts in circuit-breaker backoff
         if _host_backoff_until.get(h.ip, 0) > now:
             skipped_hosts.append(h)

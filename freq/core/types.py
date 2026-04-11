@@ -101,6 +101,7 @@ class Host:
     htype: str
     groups: str = ""
     vmid: int = 0
+    managed: bool = True  # False = discovered but not deployed to (no service account)
     all_ips: list = field(default_factory=list)
     phase: Phase = Phase.PENDING
     current: dict = field(default_factory=dict)

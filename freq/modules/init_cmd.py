@@ -2715,7 +2715,10 @@ def _classify_host_by_name(name):
         return "switch"
     if "pfsense" in name_lower or "opnsense" in name_lower:
         return "pfsense"
-    if "truenas" in name_lower or "freenas" in name_lower:
+    if "truenas" in name_lower or "freenas" in name_lower or "nexus" in name_lower:
+        return "truenas"
+    # NAS-like hostnames (standalone "nas" as whole name or hyphen-delimited segment)
+    if name_lower == "nas" or name_lower.startswith("nas-") or "-nas-" in name_lower or name_lower.endswith("-nas"):
         return "truenas"
     # Docker before PVE (a "pve-docker" host is a docker host)
     if any(k in name_lower for k in ("docker", "plex", "arr", "qbit", "tdarr", "sabnzbd", "portainer")):
@@ -5700,9 +5703,9 @@ def _scan_fleet(cfg):
     for ip in cfg.pve_nodes or []:
         all_hosts.append({"label": ip, "ip": ip, "htype": "pve"})
 
-    # Fleet hosts (skip PVE nodes already covered)
+    # Fleet hosts (skip PVE nodes already covered, skip unmanaged hosts)
     for h in cfg.hosts:
-        if h.ip not in pve_set:
+        if h.ip not in pve_set and getattr(h, "managed", True):
             all_hosts.append({"label": h.label, "ip": h.ip, "htype": h.htype})
 
     ok_list = []
