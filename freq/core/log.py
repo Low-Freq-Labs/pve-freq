@@ -229,7 +229,9 @@ def init(log_file: str, stderr: bool = False) -> None:
         fallback_dir = os.path.join(os.environ.get("HOME", tempfile.gettempdir()), ".freq", "log")
         os.makedirs(fallback_dir, exist_ok=True)
         _LOG_FILE = os.path.join(fallback_dir, "freq.log")
-        print(f"  WARNING: Cannot write to {log_dir}, logging to {_LOG_FILE}", file=sys.stderr)
+        # Only warn if running interactively — don't spam operator commands
+        if hasattr(sys.stderr, "isatty") and sys.stderr.isatty():
+            print(f"  WARNING: Cannot write to {log_dir}, logging to {_LOG_FILE}", file=sys.stderr)
 
     # Initialize SQLite for metrics
     _init_db(os.path.dirname(_LOG_FILE))

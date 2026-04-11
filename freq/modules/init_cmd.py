@@ -614,7 +614,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     _phase_summary(cfg, ctx, verified, pack)
     logger.perf("init_phase", time.monotonic() - _t, phase=13, name="summary")
 
-    # Fix post-init ownership: ensure data dirs are usable by the service account
+    # Fix post-init ownership: service account owns data dirs, operator can read
     svc_name = ctx["svc_name"]
     for d in [cfg.data_dir, cfg.key_dir, cfg.vault_file, cfg.log_dir, cfg.conf_dir]:
         d_path = d if os.path.isdir(d) else os.path.dirname(d)
@@ -624,6 +624,21 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
                                capture_output=True, timeout=5)
             except Exception:
                 pass
+    # Make log/ and cache/ world-readable so operator commands don't warn.
+    # Keep keys/ and vault/ at 700 (service-account only — security-sensitive).
+    for d in [cfg.log_dir, os.path.join(cfg.data_dir, "cache")]:
+        d_path = d if os.path.isdir(d) else os.path.dirname(d)
+        if d_path and os.path.exists(d_path):
+            try:
+                subprocess.run(["chmod", "755", d_path], capture_output=True, timeout=5)
+            except Exception:
+                pass
+    # conf/ should be readable by operators (not just service account)
+    if cfg.conf_dir and os.path.exists(cfg.conf_dir):
+        try:
+            subprocess.run(["chmod", "755", cfg.conf_dir], capture_output=True, timeout=5)
+        except Exception:
+            pass
 
     logger.perf("init_total", time.monotonic() - init_start, phases=total)
 
