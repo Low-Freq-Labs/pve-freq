@@ -461,14 +461,23 @@ def _check_service_account(cfg: FreqConfig) -> int:
         return h, ok, r.stderr.strip()[:60] if not ok else ""
 
     issues = []
+    unreachable = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
         for h, ok, err in pool.map(lambda h: _test(h), sample):
             if not ok and h.htype not in ("idrac", "switch"):
-                issues.append(f"{h.label}: {err or 'account/sudo missing'}")
+                # Distinguish unreachable (SSH connection failure) from account issues
+                if "Permission denied" in err or "Connection refused" in err or "No route" in err or "timed out" in err or "connect to host" in err:
+                    unreachable.append(h.label)
+                else:
+                    issues.append(f"{h.label}: {err or 'account/sudo missing'}")
 
-    if not issues:
+    verified = len(sample) - len(issues) - len(unreachable)
+    if not issues and not unreachable:
         fmt.step_ok(f"Service account '{svc}': verified on {len(sample)} sampled hosts")
         return 0
+    elif not issues and unreachable:
+        fmt.step_warn(f"Service account '{svc}': {verified} verified, {len(unreachable)} unreachable ({', '.join(unreachable[:3])})")
+        return 2
     else:
         fmt.step_fail(f"Service account: {len(issues)} issue(s) — {issues[0]}")
         return 1
