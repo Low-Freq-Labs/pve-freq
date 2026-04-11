@@ -92,8 +92,14 @@ def cmd_update(cfg: FreqConfig, pack, args) -> int:
     elif method in ("tarball", "local"):
         fmt.line(f"  {fmt.C.GRAY}Installed via {method}. Re-run the installer to update:{fmt.C.RESET}")
         fmt.line(f"  {fmt.C.GRAY}  curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq/main/install.sh | sudo bash{fmt.C.RESET}")
+    elif method == "manual":
+        fmt.line(f"  {fmt.C.GRAY}Manual install — no automatic update path available.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}To update, replace the install directory with a newer release:{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}  Option 1: git clone and replace {cfg.install_dir}{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}  Option 2: Run the installer to switch to a managed install:{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}    curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq/main/install.sh | sudo bash{fmt.C.RESET}")
     else:
-        fmt.line(f"  {fmt.C.GRAY}Unknown install method: {method}{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GRAY}Unrecognized install method: {method}{fmt.C.RESET}")
         fmt.line(f"  {fmt.C.GRAY}Re-run the installer: sudo bash install.sh{fmt.C.RESET}")
 
     fmt.blank()

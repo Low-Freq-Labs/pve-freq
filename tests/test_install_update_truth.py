@@ -53,8 +53,20 @@ class TestUpdateMethodDetection(unittest.TestCase):
         self.assertIn("apt", update_fn)
         # rpm path should say "use dnf"
         self.assertIn("dnf", update_fn)
-        # manual path should say "Re-run" installer
+        # manual path should mention installer option
         self.assertIn("install.sh", update_fn)
+
+    def test_manual_not_classified_as_unknown(self):
+        """'manual' must have its own explicit branch, not fall through to 'Unknown'."""
+        with open(os.path.join(REPO_ROOT, "freq/modules/selfupdate.py")) as f:
+            src = f.read()
+        update_fn = src.split("def cmd_update")[1].split("\ndef _update_git")[0]
+        # Must have explicit 'manual' handling
+        self.assertIn('"manual"', update_fn,
+                       "cmd_update must have an explicit branch for 'manual' method")
+        # Must NOT say "Unknown install method: manual"
+        self.assertNotIn("Unknown install method", update_fn,
+                          "Must not call a detected method 'Unknown'")
 
 
 class TestInstallShExists(unittest.TestCase):
