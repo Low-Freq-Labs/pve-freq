@@ -153,40 +153,41 @@ Before submitting: verify your code imports nothing outside the Python standard 
 
 ## Adding a New API Endpoint
 
-API endpoints are defined in `freq/modules/serve.py`. The pattern is:
+New API endpoints go in `freq/api/` domain modules (not in `serve.py` directly).
 
-1. **Add the route** to the `_ROUTES` dict:
+1. **Add the handler** in the appropriate `freq/api/<domain>.py` module:
 
    ```python
-   _ROUTES = {
-       # ...existing routes...
-       "/api/my-feature": ("_handle_my_feature", ["GET"]),
-   }
+   def handle_my_feature(handler):
+       """GET /api/my-feature -- description of what it does."""
+       role, err = _check_session_role(handler, "operator")
+       if err:
+           json_response(handler, {"error": err}, 403)
+           return
+       # For POST endpoints, add method check first:
+       # if require_post(handler, "My feature"):
+       #     return
+       result = {"status": "ok", "data": []}
+       json_response(handler, result)
    ```
 
-2. **Write the handler** method on the HTTP handler class:
+2. **Register the route** in the module's `build_routes()` function:
 
    ```python
-   def _handle_my_feature(self, params):
-       """Handle GET /api/my-feature."""
-       # params = parsed query string dict
-       cfg = self.server.cfg
-       pack = self.server.pack
-
-       # Do work
-       result = {"status": "ok", "data": [...]}
-
-       self._json_response(result)
+   def build_routes():
+       routes = {}
+       routes["/api/my-feature"] = handle_my_feature
+       return routes
    ```
 
-3. **Add tests** in `tests/test_serve_handlers.py`:
+3. **Add tests** in `tests/`:
 
    ```python
-   def test_my_feature_endpoint(self):
-       handler = self._make_handler("/api/my-feature")
-       handler._handle_my_feature({})
-       response = handler._get_response()
-       self.assertEqual(response["status"], "ok")
+   def test_my_feature_rejects_get(self):
+       # For POST endpoints: verify method enforcement
+       h = _make_handler(method="GET")
+       handle_my_feature(h)
+       self.assertEqual(h._status, 405)
    ```
 
 4. **Update docs** — add the endpoint to `docs/API-REFERENCE.md`.
