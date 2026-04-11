@@ -400,6 +400,8 @@ def handle_info(handler):
     from freq.core.personality import load_pack
 
     pack = load_pack(cfg.conf_dir, cfg.build)
+    from freq.modules.selfupdate import _detect_install_method
+
     json_response(
         handler,
         {
@@ -410,6 +412,7 @@ def handle_info(handler):
             "pve_nodes": len(_get_discovered_nodes()),
             "cluster": cfg.cluster_name,
             "install_dir": cfg.install_dir,
+            "install_method": _detect_install_method(cfg),
             "subtitle": getattr(pack, "subtitle", cfg.brand) if pack else cfg.brand,
             "dashboard_header": getattr(pack, "dashboard_header", "PVE FREQ Dashboard")
             if pack
