@@ -301,8 +301,8 @@ def handle_auth_change_password(handler):
     if not session:
         handler._json_response({"error": "Not authenticated"}, 401)
         return
-    if not new_password or len(new_password) < 6:
-        handler._json_response({"error": "Password must be at least 6 characters"}, 400)
+    if not new_password or len(new_password) < 8:
+        handler._json_response({"error": "Password must be at least 8 characters"}, 400)
         return
 
     username = session["user"]

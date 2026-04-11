@@ -390,8 +390,8 @@ def _read_password(prompt="Password"):
         if p1 != p2:
             fmt.step_fail("Passwords do not match")
             return None
-        if len(p1) < 4:
-            fmt.step_fail("Password too short (min 4 characters)")
+        if len(p1) < 8:
+            fmt.step_fail("Password too short (min 8 characters)")
             return None
         return p1
     except (EOFError, KeyboardInterrupt):
@@ -1461,8 +1461,8 @@ def _phase_service_account(cfg, ctx, args=None):
             if not file_pass:
                 fmt.step_fail(f"Password file is empty: {pw_file}")
                 return False
-            if len(file_pass) < 4:
-                fmt.step_fail("Password too short (min 4 characters)")
+            if len(file_pass) < 8:
+                fmt.step_fail("Password too short (min 8 characters)")
                 return False
             fmt.step_ok(f"Password loaded from {pw_file}")
         else:
@@ -6694,8 +6694,8 @@ def _init_headless(cfg, args):
 
     with open(password_file) as f:
         svc_pass = f.read().strip()
-    if len(svc_pass) < 4:
-        fmt.line(f"  {fmt.C.RED}Password too short (min 4 chars){fmt.C.RESET}")
+    if len(svc_pass) < 8:
+        fmt.line(f"  {fmt.C.RED}Password too short (min 8 chars){fmt.C.RESET}")
         return 1
 
     ctx = {
