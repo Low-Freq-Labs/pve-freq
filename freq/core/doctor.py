@@ -296,6 +296,10 @@ def _check_personality(cfg: FreqConfig) -> int:
     if os.path.isfile(pack_path):
         fmt.step_ok(f"Personality: {cfg.build} pack")
         return 0
+    elif cfg.build == "default":
+        # Built-in default pack is always available — no file needed
+        fmt.step_ok("Personality: built-in default")
+        return 0
     else:
         fmt.step_warn(f"Personality: {cfg.build} pack not found")
         return 2
