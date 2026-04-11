@@ -270,6 +270,7 @@ def handle_fleet_overview(handler):
         response["cached"] = True
         response["age"] = age_seconds
         response["age_seconds"] = age_seconds
+        response["stale"] = age_seconds > 120
         probe_err = _fleet_err
         if probe_err:
             response["probe_status"] = "error"
@@ -300,6 +301,7 @@ def handle_fleet_overview(handler):
                 "_loading": True,
                 "cached": False,
                 "age_seconds": None,
+                "stale": True,
                 "probe_status": "loading",
             },
         )
@@ -749,6 +751,7 @@ def handle_infra_quick(handler):
         response["cached"] = True
         response["age"] = age_seconds
         response["age_seconds"] = age_seconds
+        response["stale"] = age_seconds > 120
         probe_err = _infra_err
         if probe_err:
             response["probe_status"] = "error"
@@ -759,7 +762,7 @@ def handle_infra_quick(handler):
         return
     json_response(handler, {
         "devices": [], "duration": 0, "warming": True,
-        "cached": False, "age_seconds": None, "probe_status": "loading",
+        "cached": False, "age_seconds": None, "stale": True, "probe_status": "loading",
     })
 
 
