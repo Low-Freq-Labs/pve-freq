@@ -267,6 +267,9 @@ def _check_config(cfg: FreqConfig) -> int:
 
 
 def _check_data_dirs(cfg: FreqConfig) -> int:
+    # Secure dirs are intentionally 700 owned by the service account.
+    # Operator can't write to them — that's correct, not a defect.
+    secure_dir_names = {"data/vault", "data/keys"}
     dirs = [
         ("data", cfg.data_dir),
         ("data/log", os.path.dirname(cfg.log_file)),
@@ -274,11 +277,20 @@ def _check_data_dirs(cfg: FreqConfig) -> int:
         ("data/keys", cfg.key_dir),
     ]
     all_ok = True
+    import getpass
+    current_user = getpass.getuser()
+    is_service_account = current_user == cfg.ssh_service_account
+
     for name, path in dirs:
         if os.path.isdir(path):
             if not os.access(path, os.W_OK):
-                fmt.step_warn(f"Dir not writable: {name}")
-                all_ok = False
+                if name in secure_dir_names and not is_service_account:
+                    pass  # Expected: secure dirs not writable by operators
+                elif name == "data/log" and not is_service_account:
+                    pass  # Operator doesn't write logs; service account does
+                else:
+                    fmt.step_warn(f"Dir not writable: {name}")
+                    all_ok = False
         else:
             try:
                 os.makedirs(path, exist_ok=True)
@@ -287,11 +299,15 @@ def _check_data_dirs(cfg: FreqConfig) -> int:
                 return 1
 
     # Check if logs are going to expected path or diverted to fallback
+    # This is expected behavior for operators — they log to ~/.freq/log/
+    # Only flag as a warning when the service account's logs are diverted
     from freq.core.log import _LOG_FILE
     expected_log_dir = os.path.dirname(cfg.log_file)
     if _LOG_FILE and not _LOG_FILE.startswith(expected_log_dir):
-        fmt.step_warn(f"Logs diverted to {_LOG_FILE} (expected {expected_log_dir})")
-        all_ok = False
+        if is_service_account:
+            fmt.step_warn(f"Logs diverted to {_LOG_FILE} (expected {expected_log_dir})")
+            all_ok = False
+        # Operator log diversion to ~/.freq/log/ is normal — not flagged
 
     if all_ok:
         fmt.step_ok("Data directories")
