@@ -2170,13 +2170,25 @@ a:hover{{text-decoration:underline}}
             self._json_response({"status": "warming_up", "version": __version__}, 503)
 
     def _serve_update_check(self):
-        """Return cached update check result."""
+        """Return cached update check result with staleness metadata."""
         from freq import __version__
 
         with _bg_lock:
             update = _bg_cache.get("update")
+            update_ts = _bg_cache_ts.get("update", 0)
+            update_err = _bg_cache_errors.get("update")
         if update:
-            self._json_response(update)
+            response = dict(update)
+            age = round(time.time() - update_ts, 1) if update_ts else None
+            response["cached"] = True
+            response["age_seconds"] = age
+            response["stale"] = age is not None and age > UPDATE_CHECK_INTERVAL + 600
+            if update_err:
+                response["probe_status"] = "error"
+                response["probe_error"] = update_err["error"]
+            else:
+                response["probe_status"] = "ok"
+            self._json_response(response)
         else:
             self._json_response(
                 {
@@ -2184,6 +2196,9 @@ a:hover{{text-decoration:underline}}
                     "latest": "",
                     "update_available": False,
                     "checked_at": 0,
+                    "cached": False,
+                    "stale": True,
+                    "probe_status": "pending",
                 }
             )
 
