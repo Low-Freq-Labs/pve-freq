@@ -1059,7 +1059,6 @@ def _detect_rsa_key(cfg: FreqConfig) -> str:
     if svc_home:
         candidates.append(os.path.join(svc_home, ".ssh", "id_rsa"))
     candidates.append(os.path.expanduser("~/.ssh/id_rsa"))
-    ]
     for path in candidates:
         if os.path.isfile(path) and os.access(path, os.R_OK):
             return path

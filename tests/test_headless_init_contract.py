@@ -269,17 +269,9 @@ class TestVerificationDiskContract(unittest.TestCase):
 class TestBootstrapPasswordSource(unittest.TestCase):
     """Headless init must seed dashboard password from the correct source.
 
-    Bug: Phase 11 seeded password_{bootstrap_user} from ctx["svc_pass"]
-    (--password-file, the service account password) instead of
-    ctx["bootstrap_pass"] (--bootstrap-password-file, the bootstrap password).
-
-    This worked in earlier E2E only because both passwords were the same.
-    When they differ, bootstrap user (freq-ops) couldn't log in to the
-    dashboard because their password was seeded from the wrong source.
-
     Contract:
     - bootstrap_user gets bootstrap_pass (from --bootstrap-password-file)
-    - svc_name gets svc_pass (from --password-file)
+    - Service account does NOT get a web login (it runs the dashboard, not uses it)
     - Key-based bootstrap (no bootstrap_pass) falls back to svc_pass
     """
 
@@ -288,21 +280,17 @@ class TestBootstrapPasswordSource(unittest.TestCase):
         src = (Path(__file__).parent.parent / "freq" / "modules" / "init_cmd.py").read_text()
         # Must reference bootstrap_pass for the bootstrap user password
         self.assertIn('boot_pass = ctx.get("bootstrap_pass"', src)
-        # Must NOT use svc_pass directly for bootstrap_user anymore
-        # The old bug was: vault_set(cfg, "auth", f"password_{bootstrap_user}", hash_password(svc_pass))
-        # Now it should be: hash_password(user_pass) where user_pass = boot_pass or svc_pass
 
-    def test_service_account_gets_svc_pass(self):
-        """Service account (freq-admin) dashboard password uses svc_pass."""
+    def test_service_account_no_web_login(self):
+        """Service account must NOT get a dashboard password."""
         src = (Path(__file__).parent.parent / "freq" / "modules" / "init_cmd.py").read_text()
-        self.assertIn(f'password_{{svc_name}}', src)
-        self.assertIn('hash_password(svc_pass)', src)
+        # Must NOT seed password for service account
+        self.assertNotIn('password_{svc_name}', src)
 
-    def test_both_users_seeded(self):
-        """Both bootstrap_user and svc_name should get dashboard passwords."""
+    def test_only_bootstrap_user_seeded(self):
+        """Only bootstrap_user should get a dashboard password."""
         src = (Path(__file__).parent.parent / "freq" / "modules" / "init_cmd.py").read_text()
         self.assertIn('password_{bootstrap_user}', src)
-        self.assertIn('password_{svc_name}', src)
 
     def test_key_based_bootstrap_fallback(self):
         """When bootstrap_pass is empty (key-based), falls back to svc_pass."""
