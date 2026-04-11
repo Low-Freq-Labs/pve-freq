@@ -1,7 +1,7 @@
-"""FREQ hosts sync tests — _hosts_sync() logic, TOML merge, label sanitization, backup, diff.
+"""FREQ hosts sync tests — _hosts_sync() logic, TOML format, label sanitization, backup, diff.
 
-Tests the auto-sync pipeline that populates hosts.conf from PVE API +
-fleet-boundaries.toml. All SSH/PVE calls are mocked.
+Tests the auto-sync pipeline that populates hosts.toml (TOML format) from
+PVE API + fleet-boundaries.toml. All SSH/PVE calls are mocked.
 """
 import json
 import os
@@ -24,26 +24,20 @@ def _make_cfg(tmpdir, hosts=None, pve_nodes=None, pve_node_names=None, fleet_bou
     """Build a minimal FreqConfig-like object for _hosts_sync."""
     from freq.core.config import FreqConfig
     cfg = FreqConfig()
-    cfg.hosts_file = os.path.join(tmpdir, "hosts.conf")
+    cfg.hosts_file = os.path.join(tmpdir, "hosts.toml")
     cfg.hosts = hosts or []
     cfg.pve_nodes = pve_nodes or []
     cfg.pve_node_names = pve_node_names or []
     cfg.conf_dir = tmpdir
     cfg.ssh_key_path = "/tmp/fake-key"
     cfg.fleet_boundaries = fleet_boundaries or FleetBoundaries()
-    # Write initial hosts.conf (including all_ips column 5 when present)
-    with open(cfg.hosts_file, "w") as f:
-        f.write("# FREQ Fleet Registry\n")
-        for h in cfg.hosts:
-            line = f"{h.ip}  {h.label}  {h.htype}"
-            if h.groups:
-                line += f"  {h.groups}"
-            all_ips = getattr(h, "all_ips", []) or []
-            if all_ips:
-                if not h.groups:
-                    line += "  "  # empty groups column placeholder
-                line += f"  {','.join(all_ips)}"
-            f.write(line + "\n")
+    # Write initial hosts.toml in TOML format (v1 contract)
+    from freq.core.config import save_hosts_toml
+    if cfg.hosts:
+        save_hosts_toml(cfg.hosts_file, cfg.hosts)
+    else:
+        with open(cfg.hosts_file, "w") as f:
+            f.write("# FREQ Fleet Registry\n")
     return cfg
 
 
@@ -91,7 +85,7 @@ def _qm_agent_json(ips):
 # ═══════════════════════════════════════════════════════════════════
 
 class TestHostsSync(unittest.TestCase):
-    """Test the PVE + fleet-boundaries → hosts.conf sync pipeline."""
+    """Test the PVE + fleet-boundaries → hosts.toml sync pipeline."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix="freq-test-sync-")
@@ -100,12 +94,12 @@ class TestHostsSync(unittest.TestCase):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def _read_hosts_conf(self, cfg):
-        """Read hosts.conf and return non-comment, non-empty lines."""
+        """Read hosts.toml and return non-comment, non-empty lines."""
         with open(cfg.hosts_file) as f:
             return [l.strip() for l in f if l.strip() and not l.strip().startswith("#")]
 
     def _read_hosts_conf_raw(self, cfg):
-        """Read full hosts.conf content."""
+        """Read full hosts.toml content."""
         with open(cfg.hosts_file) as f:
             return f.read()
 
@@ -120,7 +114,7 @@ class TestHostsSync(unittest.TestCase):
 
     @patch("freq.core.ssh.run")
     def test_discovers_new_vm_from_pve(self, mock_ssh):
-        """New VM found in PVE gets added to hosts.conf."""
+        """New VM found in PVE gets added to hosts.toml."""
         cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
         cluster_json = _pve_cluster_json([
@@ -275,7 +269,7 @@ class TestHostsSync(unittest.TestCase):
 
     @patch("freq.core.ssh.run")
     def test_creates_backup_before_write(self, mock_ssh):
-        """hosts.conf.bak is created before overwriting."""
+        """hosts.toml.bak is created before overwriting."""
         existing = [Host(ip="192.168.255.30", label="plex", htype="docker", groups="prod,media")]
         cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
 
@@ -307,7 +301,7 @@ class TestHostsSync(unittest.TestCase):
 
     @patch("freq.core.ssh.run")
     def test_preserves_manually_added_hosts(self, mock_ssh):
-        """Hosts in hosts.conf but not in PVE or fleet-boundaries are kept."""
+        """Hosts in hosts.toml but not in PVE or fleet-boundaries are kept."""
         existing = [
             Host(ip="192.168.255.8", label="gigenet", htype="linux", groups="prod,network"),
         ]
@@ -331,7 +325,7 @@ class TestHostsSync(unittest.TestCase):
 
     @patch("freq.core.ssh.run")
     def test_dry_run_does_not_modify_file(self, mock_ssh):
-        """--dry-run reports changes but doesn't write hosts.conf."""
+        """--dry-run reports changes but doesn't write hosts.toml."""
         cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
         original_content = self._read_hosts_conf_raw(cfg)
 
@@ -363,7 +357,7 @@ class TestHostsSync(unittest.TestCase):
 
     @patch("freq.core.ssh.run")
     def test_adds_pve_nodes_themselves(self, mock_ssh):
-        """PVE hypervisor nodes are added to hosts.conf."""
+        """PVE hypervisor nodes are added to hosts.toml."""
         cfg = _make_cfg(self.tmpdir, pve_nodes=["192.168.255.26", "192.168.255.27"], pve_node_names=["pve01", "pve02"])
 
         def ssh_side_effect(host, command, **kwargs):
@@ -386,7 +380,7 @@ class TestHostsSync(unittest.TestCase):
 
     @patch("freq.core.ssh.run")
     def test_no_changes_when_already_synced(self, mock_ssh):
-        """When all hosts are already in hosts.conf, returns 0 with no write."""
+        """When all hosts are already in hosts.toml, returns 0 with no write."""
         existing = [Host(ip="192.168.255.26", label="pve01", htype="pve", groups="prod,cluster")]
         cfg = _make_cfg(self.tmpdir, hosts=existing, pve_nodes=["192.168.255.26"], pve_node_names=["pve01"])
         mtime_before = os.path.getmtime(cfg.hosts_file)
@@ -643,10 +637,10 @@ class TestHostsSync(unittest.TestCase):
     # ── Backwards compatibility ──
 
     def test_parse_old_format_without_all_ips(self):
-        """Old 4-column hosts.conf entries parse fine with empty all_ips."""
+        """Old 4-column hosts.toml entries parse fine with empty all_ips."""
         from freq.core.config import load_hosts
 
-        hosts_file = os.path.join(self.tmpdir, "hosts.conf")
+        hosts_file = os.path.join(self.tmpdir, "hosts.toml")
         with open(hosts_file, "w") as f:
             f.write("192.168.255.30  plex  docker  prod,media\n")
             f.write("192.168.255.26  pve01  pve  prod,cluster\n")
@@ -658,10 +652,10 @@ class TestHostsSync(unittest.TestCase):
         self.assertEqual(hosts[1].all_ips, [])
 
     def test_parse_new_format_with_all_ips(self):
-        """5-column hosts.conf entries parse all_ips correctly."""
+        """5-column hosts.toml entries parse all_ips correctly."""
         from freq.core.config import load_hosts
 
-        hosts_file = os.path.join(self.tmpdir, "hosts.conf")
+        hosts_file = os.path.join(self.tmpdir, "hosts.toml")
         with open(hosts_file, "w") as f:
             f.write("192.168.255.30  plex  docker  prod,media  192.168.255.30,192.168.5.30,192.168.25.30\n")
 
@@ -674,7 +668,7 @@ class TestHostsSync(unittest.TestCase):
         """Minimal 3-column entries (no groups, no all_ips) still parse."""
         from freq.core.config import load_hosts
 
-        hosts_file = os.path.join(self.tmpdir, "hosts.conf")
+        hosts_file = os.path.join(self.tmpdir, "hosts.toml")
         with open(hosts_file, "w") as f:
             f.write("192.168.255.30  plex  docker\n")
 
@@ -687,7 +681,7 @@ class TestHostsSync(unittest.TestCase):
         """Hosts file with both old and new format entries."""
         from freq.core.config import load_hosts
 
-        hosts_file = os.path.join(self.tmpdir, "hosts.conf")
+        hosts_file = os.path.join(self.tmpdir, "hosts.toml")
         with open(hosts_file, "w") as f:
             f.write("# Mixed format\n")
             f.write("192.168.255.30  plex  docker  prod,media  192.168.255.30,192.168.5.30\n")
