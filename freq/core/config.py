@@ -637,9 +637,10 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.tls_key = services.get("tls_key", cfg.tls_key)
 
     # PVE API token auth (optional — alternative to SSH)
-    cfg.pve_api_token_id = pve.get("api_token_id", cfg.pve_api_token_id)
+    # Support both canonical names (api_token_id) and legacy aliases (token_id)
+    cfg.pve_api_token_id = pve.get("api_token_id", "") or pve.get("token_id", "") or cfg.pve_api_token_id
     cfg.pve_api_verify_ssl = pve.get("api_verify_ssl", cfg.pve_api_verify_ssl)
-    token_secret_path = pve.get("api_token_secret_path", "")
+    token_secret_path = pve.get("api_token_secret_path", "") or pve.get("token_secret_file", "")
     if token_secret_path and os.path.isfile(token_secret_path):
         try:
             with open(token_secret_path) as f:
