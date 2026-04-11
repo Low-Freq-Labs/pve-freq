@@ -1179,7 +1179,7 @@ def _bg_sync_hosts():
 
     Keeps hosts.conf labels in sync with PVE VM names so the dashboard,
     SSH keys, and fleet data all use the same names. Users never need to
-    run 'freq hosts sync' manually.
+    run 'freq host sync' manually.
     """
     with _bg_lock:
         last_sync = _bg_cache_ts.get("hosts_sync", 0)

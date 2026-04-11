@@ -327,7 +327,7 @@ def _cmd_status(cfg: FreqConfig, args) -> int:
     fmt.line(f"  Checks:    {len(CIS_CHECKS)} CIS Level 1")
     fmt.line(f"  Benchmark: Debian/Ubuntu CIS Level 1")
     fmt.blank()
-    fmt.line(f"  {fmt.C.DIM}Run scan: freq comply scan{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.DIM}Run scan: freq secure comply scan{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 0
@@ -337,7 +337,7 @@ def _cmd_report(cfg: FreqConfig, args) -> int:
     """Generate compliance report."""
     results = _load_results(cfg)
     if not results.get("scans"):
-        fmt.error("No scan data. Run: freq comply scan")
+        fmt.error("No scan data. Run: freq secure comply scan")
         return 1
 
     if getattr(args, "json", False):

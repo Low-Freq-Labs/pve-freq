@@ -247,7 +247,7 @@ def _cmd_poll(cfg: FreqConfig, args) -> int:
 
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}Snapshot #{len(data['snapshots'])} recorded{fmt.C.RESET}")
-    fmt.line(f"  {fmt.C.DIM}View bandwidth: freq netmon bandwidth{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.DIM}View bandwidth: freq net netmon bandwidth{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 0
@@ -264,7 +264,7 @@ def _cmd_bandwidth(cfg: FreqConfig, args) -> int:
     if len(snapshots) < 2:
         fmt.line(f"  {fmt.C.YELLOW}Need at least 2 polls for bandwidth data.{fmt.C.RESET}")
         fmt.blank()
-        fmt.line(f"  {fmt.C.DIM}Run: freq netmon poll (twice, with interval){fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Run: freq net netmon poll (twice, with interval){fmt.C.RESET}")
         fmt.blank()
         fmt.footer()
         return 0
