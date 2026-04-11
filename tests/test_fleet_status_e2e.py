@@ -92,11 +92,11 @@ class TestFleetStatusE2E(unittest.TestCase):
                 offline.append((h.label, h.htype, err))
         return offline
 
-    def test_at_least_13_hosts_online(self):
-        """At least 13 of 14 registered hosts must respond to fleet status."""
+    def test_all_14_hosts_online(self):
+        """All 14 registered hosts must respond to fleet status."""
         online = self._online_hosts()
-        self.assertGreaterEqual(
-            len(online), 13,
+        self.assertEqual(
+            len(online), 14,
             f"Only {len(online)}/14 online. Offline: {self._offline_hosts()}")
 
     def test_all_pve_nodes_online(self):
@@ -145,25 +145,21 @@ class TestFleetStatusE2E(unittest.TestCase):
             os.path.isfile(self.cfg.ssh_key_path),
             f"SSH key not found: {self.cfg.ssh_key_path}")
 
-    def test_switch_offline_reason_is_credential_access(self):
-        """Switch offline status must be due to credential file permissions,
-        not network or config error."""
+    def test_switch_online(self):
+        """Switch must be online via sshpass + legacy ciphers."""
         switch_hosts = [h for h in self.hosts if h.htype == "switch"]
         if not switch_hosts:
             self.skipTest("No switch in fleet")
         h = switch_hosts[0]
         r = self._result_for(self.results, h)
-        if r and r.returncode == 0:
-            return  # Switch is online — no blocker
-        # Verify: it's a permission denied (credential), not connection refused (network)
-        err = r.stderr if r else ""
-        self.assertIn("Permission denied", err,
-                      f"Switch failure is not auth-related: {err[:80]}")
-        # Verify the password file exists but isn't readable
+        self.assertIsNotNone(r, "No result for switch")
+        self.assertEqual(r.returncode, 0,
+                         f"Switch offline: {r.stderr.strip()[:80]}")
+        # Verify the password file is readable (required for sshpass)
         pw_file = self.cfg.legacy_password_file
         if pw_file:
-            self.assertFalse(os.access(pw_file, os.R_OK),
-                             "Switch password file is readable — sshpass should have worked")
+            self.assertTrue(os.access(pw_file, os.R_OK),
+                            "Switch password file must be readable for sshpass")
 
 
 if __name__ == "__main__":
