@@ -902,7 +902,9 @@ def _phase_configure(cfg, args=None):
             cfg.pve_nodes = []  # force re-prompt below
         # else keep existing
 
-    if not cfg.pve_nodes and not cli_pve_nodes:
+    if not cfg.pve_nodes and not cli_pve_nodes and headless:
+        fmt.step_warn("No PVE nodes configured — use --pve-nodes in headless mode")
+    elif not cfg.pve_nodes and not cli_pve_nodes:
         fmt.line(f"  {fmt.C.DIM}Enter your Proxmox VE node IPs (space-separated).{fmt.C.RESET}")
         fmt.line(f"  {fmt.C.DIM}Example: 192.168.1.10 192.168.1.11 192.168.1.12{fmt.C.RESET}")
         node_input = _input("PVE node IPs")
@@ -979,6 +981,20 @@ def _phase_configure(cfg, args=None):
             fmt.step_ok(f"Gateway (from CLI): {cli_gateway}")
     elif cfg.vm_gateway:
         fmt.step_ok(f"Gateway: {cfg.vm_gateway}")
+    elif headless:
+        # Auto-derive gateway from first PVE node IP (.1 on same subnet)
+        if cfg.pve_nodes:
+            parts = cfg.pve_nodes[0].rsplit(".", 1)
+            auto_gw = f"{parts[0]}.1" if len(parts) == 2 else ""
+            if auto_gw and _val.ip(auto_gw):
+                content = _update_toml_value(content, "gateway", auto_gw)
+                cfg.vm_gateway = auto_gw
+                changed = True
+                fmt.step_ok(f"Gateway: {auto_gw} (auto-derived from PVE node)")
+            else:
+                fmt.step_warn("No gateway set — could not auto-derive from PVE nodes")
+        else:
+            fmt.step_warn("No gateway set — no PVE nodes to derive from")
     else:
         fmt.line(f"  {fmt.C.DIM}Your network gateway IP (for VM networking).{fmt.C.RESET}")
         gw = _input("Gateway IP")
