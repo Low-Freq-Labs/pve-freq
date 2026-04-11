@@ -60,6 +60,8 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """Multi-threaded HTTP server — won't block on slow API calls."""
 
     daemon_threads = True
+    allow_reuse_address = True
+    allow_reuse_port = False
 
 
 # ── CONSTANTS ────────────────────────────────────────────────────────────
@@ -517,7 +519,10 @@ def _bg_probe_health():
     def _probe_host(h):
         htype = h.htype
         cmd = HEALTH_CMDS.get(htype, HEALTH_CMDS["linux"])
-        use_sudo = htype not in ("switch", "idrac")
+        # Health status commands are read-only (hostname, nproc, free, df,
+        # loadavg, docker ps count) — no sudo needed. This must match
+        # the CLI fleet status path to avoid auth parity drift.
+        use_sudo = False
         probe_key = (cfg.ssh_rsa_key_path or cfg.ssh_key_path) if htype in ("idrac", "switch") else cfg.ssh_key_path
         r = ssh_single(
             host=h.ip,
@@ -4549,12 +4554,24 @@ a:hover{{text-decoration:underline}}
 
 def cmd_serve(cfg, pack, args) -> int:
     """Start the FREQ web dashboard."""
+    import signal
+
     port = getattr(args, "port", None) or cfg.dashboard_port or 8888
     print(f"\n  \033[38;5;93mPVE FREQ → Dashboard\033[0m")
     print(f"  Starting on port {port}...\n")
     start_background_cache()
 
     httpd = ThreadedHTTPServer(("0.0.0.0", port), FreqHandler)
+
+    # SIGTERM handler — systemctl restart sends SIGTERM, not SIGINT.
+    # Without this, serve_forever() is killed abruptly and the socket
+    # can linger in a broken state, causing ConnectionResetError on the
+    # next process's requests.
+    def _sigterm_handler(signum, frame):
+        logger.info("dashboard_stop", reason="SIGTERM")
+        httpd.shutdown()
+
+    signal.signal(signal.SIGTERM, _sigterm_handler)
 
     # Wrap in TLS if certs exist
     use_tls = False
@@ -4590,4 +4607,5 @@ def cmd_serve(cfg, pack, args) -> int:
         print(f"\n  \033[38;5;220mDashboard stopped.\033[0m")
     finally:
         httpd.server_close()
+        logger.info("dashboard_stopped")
     return 0
