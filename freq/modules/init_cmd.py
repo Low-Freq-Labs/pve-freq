@@ -5198,10 +5198,11 @@ def _verify_host(ip, htype, svc_name, key_path, rsa_key_path, cfg=None):
     else:
         return False, f"unknown htype: {htype}"
 
-    if not key or not os.path.isfile(key):
+    if not key or not os.path.isfile(key) or not os.access(key, os.R_OK):
         # For legacy devices, missing key is OK if password file exists
         if htype not in ("idrac", "switch"):
-            return False, f"key not found: {key}"
+            reason = "not readable" if key and os.path.isfile(key) else "not found"
+            return False, f"key {reason}: {key}"
 
     ssh_cmd = (
         [
@@ -5265,10 +5266,13 @@ def _phase_verify(cfg, ctx):
     rc, _, _ = _run(["id", svc_name])
     _check("Service account exists locally", rc == 0)
 
-    # SSH keys
+    # SSH keys — check init-generated keys AND resolved runtime key
     key_file = os.path.join(cfg.key_dir, "freq_id_ed25519")
     rsa_file = os.path.join(cfg.key_dir, "freq_id_rsa")
-    _check("FREQ ed25519 key exists (modern hosts)", os.path.isfile(key_file))
+    # Use resolved key for fleet verification (may be fleet_key or ~/.ssh/)
+    resolved_key = cfg.ssh_key_path if cfg.ssh_key_path else key_file
+    _check("FREQ ed25519 key exists (modern hosts)",
+           os.path.isfile(key_file) or (cfg.ssh_key_path and os.path.isfile(cfg.ssh_key_path)))
     _check("FREQ RSA key exists (iDRAC + switch)", os.path.isfile(rsa_file))
 
     # Vault
@@ -5316,11 +5320,12 @@ def _phase_verify(cfg, ctx):
         pass  # timedatectl may not be available on all systems
     fmt.line(f"  {fmt.C.GREEN}✔{fmt.C.RESET} Timezone: {tz}")
 
-    # PVE connectivity
+    # PVE connectivity — use resolved key (may be fleet_key if init key missing)
     warns = 0
-    if cfg.pve_nodes and os.path.isfile(key_file):
+    verify_key = resolved_key if os.path.isfile(resolved_key) else key_file
+    if cfg.pve_nodes and os.path.isfile(verify_key):
         for ip in cfg.pve_nodes:
-            ok, err = _verify_host(ip, "pve", svc_name, key_file, rsa_file, cfg=cfg)
+            ok, err = _verify_host(ip, "pve", svc_name, verify_key, rsa_file, cfg=cfg)
             if ok:
                 _check(f"PVE {ip}: SSH + sudo as {svc_name}", True)
             elif _is_skip_error(err):
@@ -5348,7 +5353,7 @@ def _phase_verify(cfg, ctx):
                 warns += 1
                 continue
 
-            ok, err = _verify_host(h.ip, h.htype, svc_name, key_file, rsa_file, cfg=cfg)
+            ok, err = _verify_host(h.ip, h.htype, svc_name, verify_key, rsa_file, cfg=cfg)
             if ok:
                 _check(check_label, True)
             elif h.ip in deployed_ips:
@@ -5631,8 +5636,9 @@ def _scan_fleet(cfg):
     import concurrent.futures
 
     svc_name = cfg.ssh_service_account
-    key_file = os.path.join(cfg.key_dir, "freq_id_ed25519")
-    rsa_file = os.path.join(cfg.key_dir, "freq_id_rsa")
+    # Use the resolved key path (may be fleet_key, not just key_dir/freq_id_ed25519)
+    key_file = cfg.ssh_key_path
+    rsa_file = cfg.ssh_rsa_key_path if hasattr(cfg, "ssh_rsa_key_path") else os.path.join(cfg.key_dir, "freq_id_rsa")
 
     pve_set = set(cfg.pve_nodes) if cfg.pve_nodes else set()
     all_hosts = []
@@ -5780,7 +5786,7 @@ def _init_check(cfg, json_output=False):
             fmt.line(f"  {fmt.C.DIM}Verifying service account + agent on reachable hosts...{fmt.C.RESET}")
             fmt.blank()
 
-        key_file = os.path.join(cfg.key_dir, "freq_id_ed25519")
+        key_file = cfg.ssh_key_path
 
         def _deep_check(entry):
             ip, htype, label = entry["ip"], entry["htype"], entry["label"]
@@ -5867,8 +5873,9 @@ def _init_fix(cfg, args):
     fmt.blank()
 
     svc_name = cfg.ssh_service_account
-    key_file = os.path.join(cfg.key_dir, "freq_id_ed25519")
-    rsa_file = os.path.join(cfg.key_dir, "freq_id_rsa")
+    # Use resolved key path (may be fleet_key or ~/.ssh/)
+    key_file = cfg.ssh_key_path or os.path.join(cfg.key_dir, "freq_id_ed25519")
+    rsa_file = cfg.ssh_rsa_key_path if hasattr(cfg, "ssh_rsa_key_path") else os.path.join(cfg.key_dir, "freq_id_rsa")
 
     # Need the FREQ keys to exist
     if not os.path.isfile(key_file):
