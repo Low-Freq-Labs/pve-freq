@@ -1149,5 +1149,79 @@ class TestDupLabelCallers(unittest.TestCase):
         self.assertEqual(fail_count, 3)  # h2 fails all 3 checks
 
 
+class TestMutationGuards(unittest.TestCase):
+    """Mutating API handlers must enforce POST and auth checks."""
+
+    def test_vm_template_requires_post(self):
+        """handle_vm_template must reject GET requests."""
+        from freq.api.vm import handle_vm_template
+
+        handler = MagicMock()
+        handler.command = "GET"
+        handler.headers = {}
+
+        captured = {}
+        def mock_send(code):
+            captured["status"] = code
+        def mock_end_headers():
+            pass
+        def mock_write(data):
+            pass
+        def mock_wfile():
+            m = MagicMock()
+            m.write = mock_write
+            return m
+
+        handler.send_response = mock_send
+        handler.send_header = MagicMock()
+        handler.end_headers = mock_end_headers
+        handler.wfile = mock_wfile()
+
+        handle_vm_template(handler)
+        self.assertEqual(captured["status"], 405)
+
+    def test_terminal_resize_requires_auth(self):
+        """handle_terminal_resize must check session role."""
+        from freq.api.terminal import handle_terminal_resize
+
+        handler = MagicMock()
+        handler.command = "POST"
+        handler.headers = {}  # no auth token
+
+        captured = {}
+        def mock_send(code):
+            captured["status"] = code
+        handler.send_response = mock_send
+        handler.send_header = MagicMock()
+        handler.end_headers = MagicMock()
+        handler.wfile = MagicMock()
+
+        with patch("freq.api.terminal._check_session_role", return_value=(None, "Not authenticated")):
+            handle_terminal_resize(handler)
+        self.assertEqual(captured["status"], 403)
+
+    def test_vm_template_docstring_says_post(self):
+        """Docstring must declare POST, not GET."""
+        from freq.api.vm import handle_vm_template
+        self.assertIn("POST", handle_vm_template.__doc__)
+        self.assertNotIn("GET", handle_vm_template.__doc__)
+
+    def test_auto_rules_docstrings_say_post(self):
+        """All mutating auto.py handlers must declare POST in docstring."""
+        from freq.api.auto import (
+            handle_rules_create, handle_rules_update,
+            handle_rules_delete, handle_playbooks_create,
+        )
+        for fn in [handle_rules_create, handle_rules_update,
+                   handle_rules_delete, handle_playbooks_create]:
+            self.assertIn("POST", fn.__doc__,
+                          f"{fn.__name__} docstring missing POST")
+
+    def test_vm_migrate_docstring_says_post(self):
+        """handle_vm_migrate docstring must declare POST."""
+        from freq.api.vm import handle_vm_migrate
+        self.assertIn("POST", handle_vm_migrate.__doc__)
+
+
 if __name__ == "__main__":
     unittest.main()

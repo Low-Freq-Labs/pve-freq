@@ -257,7 +257,7 @@ def _bg_probe_infra():
         cfg = load_config()
     except Exception as e:
         logger.error(f"bg_probe_infra: failed to load config: {e}")
-        raise  # Let loop record the error — don't silently clear probe status
+        return  # Config load failure should not crash background probes
     fb = cfg.fleet_boundaries
     start = time.monotonic()
 
@@ -492,7 +492,7 @@ def _bg_probe_health():
         cfg = load_config()
     except Exception as e:
         logger.error(f"bg_probe_health: failed to load config: {e}")
-        raise  # Let loop record the error — don't silently clear probe status
+        return  # Config load failure should not crash background probes
     logger.debug("health_probe_start", host_count=len(cfg.hosts))
     start = time.monotonic()
 
@@ -754,7 +754,7 @@ def _bg_probe_fleet_overview():
         cfg = load_config()
     except Exception as e:
         logger.error(f"bg_probe_fleet_overview: config load failed: {e}")
-        raise  # Let loop record the error — don't silently clear probe status
+        return  # Config load failure should not crash background probes
     fb = cfg.fleet_boundaries
     start = time.monotonic()
 

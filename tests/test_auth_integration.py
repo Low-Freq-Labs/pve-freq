@@ -154,6 +154,23 @@ class TestFullAuthLifecycle(unittest.TestCase):
         role, err = check_session_role(h, "viewer")
         self.assertIsNotNone(err, "Query param token must NOT authenticate")
 
+    def test_sse_query_param_token_authenticates(self):
+        """?token= on /api/events (SSE) must authenticate — EventSource can't set headers."""
+        from freq.api.auth import check_session_role
+
+        token, _ = self._login()
+        h = _make_handler(path=f"/api/events?token={token}")
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": "",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+
+        role, err = check_session_role(h, "viewer")
+        self.assertIsNone(err, "SSE query param token must authenticate")
+        self.assertIsNotNone(role)
+
     def test_anonymous_request_rejected(self):
         """Request with no auth at all must fail."""
         from freq.api.auth import check_session_role

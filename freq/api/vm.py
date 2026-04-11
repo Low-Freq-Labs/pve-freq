@@ -355,7 +355,9 @@ def handle_vm_power(handler):
 
 
 def handle_vm_template(handler):
-    """GET /api/vm/template — convert VM to template."""
+    """POST /api/vm/template — convert VM to template."""
+    if _require_post(handler, "VM template"):
+        return
     role, err = _check_session_role(handler, "admin")
     if err:
         json_response(handler, {"error": err}, 403)
@@ -1152,7 +1154,7 @@ def handle_vm_clone(handler):
 
 
 def handle_vm_migrate(handler):
-    """GET /api/vm/migrate — live migrate a VM to another node.
+    """POST /api/vm/migrate — live migrate a VM to another node.
 
     Uses --with-local-disks for direct node-to-node transfer.
     Auto-detects best local storage on target. Checks for snapshots

@@ -47,6 +47,9 @@ cold-storage/
 resume-state.md
 reference/
 scripts/
+!scripts/release.sh
+!scripts/sync-public.sh
+!scripts/public-exclude.txt
 templates/
 
 # Credentials and sensitive data (never commit)

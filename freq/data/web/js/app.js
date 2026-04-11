@@ -8059,7 +8059,7 @@ function _miniSparkline(data){
   return'<svg width="'+w+'" height="'+ht+'" style="vertical-align:middle"><polyline points="'+pts+'" fill="none" stroke="#9B4FDE" stroke-width="1.5"/></svg>';
 }
 function forceCapSnapshot(){
-  _authFetch('/api/capacity/snapshot').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/capacity/snapshot',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast('Snapshot saved: '+d.snapshot,'success');
     else toast('Error: '+(d.error||'unknown'),'error');
     loadCapacity();

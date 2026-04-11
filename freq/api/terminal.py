@@ -252,6 +252,10 @@ def handle_terminal_resize(handler):
     """POST /api/terminal/resize — resize terminal."""
     if require_post(handler, "Terminal resize"):
         return
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
     params = get_params(handler)
     session_id = params.get("session", [""])[0]
     cols = int(params.get("cols", ["120"])[0])

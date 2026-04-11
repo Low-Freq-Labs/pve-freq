@@ -53,7 +53,7 @@ def handle_rules(handler):
 
 
 def handle_rules_create(handler):
-    """GET /api/rules/create — create a new alert rule."""
+    """POST /api/rules/create — create a new alert rule."""
     if require_post(handler, "Rule create"):
         return
     role, err = _check_session_role(handler, "admin")
@@ -96,7 +96,7 @@ def handle_rules_create(handler):
 
 
 def handle_rules_update(handler):
-    """GET /api/rules/update — update an existing alert rule (enable/disable/modify)."""
+    """POST /api/rules/update — update an existing alert rule (enable/disable/modify)."""
     if require_post(handler, "Rule update"):
         return
     role, err = _check_session_role(handler, "admin")
@@ -136,7 +136,7 @@ def handle_rules_update(handler):
 
 
 def handle_rules_delete(handler):
-    """GET /api/rules/delete — delete an alert rule."""
+    """POST /api/rules/delete — delete an alert rule."""
     if require_post(handler, "Rule delete"):
         return
     role, err = _check_session_role(handler, "admin")
@@ -330,7 +330,7 @@ def handle_playbooks_step(handler):
 
 
 def handle_playbooks_create(handler):
-    """GET /api/playbooks/create — create a new playbook from parameters."""
+    """POST /api/playbooks/create — create a new playbook from parameters."""
     if require_post(handler, "Playbook create"):
         return
     role, err = _check_session_role(handler, "admin")

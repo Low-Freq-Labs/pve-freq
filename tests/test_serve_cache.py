@@ -521,9 +521,12 @@ class TestCacheConstants(unittest.TestCase):
         self.assertEqual(BG_CACHE_REFRESH_INTERVAL, 15)
 
     def test_cache_dir_is_string_path(self):
-        from freq.modules.serve import CACHE_DIR
-        self.assertIsInstance(CACHE_DIR, str)
-        self.assertTrue(CACHE_DIR.endswith(os.path.join("data", "cache")))
+        from freq.modules.serve import _init_cache_dir, CACHE_DIR
+        if CACHE_DIR is None:
+            _init_cache_dir()
+        from freq.modules.serve import CACHE_DIR as resolved
+        self.assertIsInstance(resolved, str)
+        self.assertTrue(resolved.endswith(os.path.join("data", "cache")))
 
     def test_bg_cache_has_expected_keys(self):
         from freq.modules.serve import _bg_cache

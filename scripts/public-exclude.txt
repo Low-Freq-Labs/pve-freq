@@ -1,0 +1,9 @@
+docs/ATOMIC-AUDIT-2026-04-02.md
+docs/CODEBASE-STANDARD-2026.md
+docs/DEEP-AUDIT-FINDINGS.md
+docs/E2E-PROGRESS.md
+docs/ULTIMATE-ATOMIC-AUDIT-2026-04-02.md
+docs/fleet-state.md
+docs/network-topology.md
+docs/v1-library-reference.md
+~freq-ops/.ssh/switch-pass
