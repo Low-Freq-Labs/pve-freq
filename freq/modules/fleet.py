@@ -77,6 +77,7 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
         command_timeout=FLEET_QUICK_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
     total_duration = time.monotonic() - start
 
@@ -227,6 +228,7 @@ def cmd_exec(cfg: FreqConfig, pack, args) -> int:
         command_timeout=FLEET_SLOW_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
     total_duration = time.monotonic() - start
 
@@ -318,6 +320,7 @@ def cmd_info(cfg: FreqConfig, pack, args) -> int:
             connect_timeout=cfg.ssh_connect_timeout,
             htype=host.htype,
             use_sudo=False,
+            cfg=cfg,
         )
         info[key] = r.stdout if r.returncode == 0 else "—"
 
@@ -378,6 +381,7 @@ def cmd_detail(cfg: FreqConfig, pack, args) -> int:
             connect_timeout=cfg.ssh_connect_timeout,
             htype=host.htype,
             use_sudo=False,
+            cfg=cfg,
         )
         return r.stdout.strip() if r.returncode == 0 else "—"
 
@@ -589,6 +593,7 @@ def cmd_dashboard(cfg: FreqConfig, pack, args) -> int:
         command_timeout=FLEET_CMD_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
     total_duration = time.monotonic() - start
 
@@ -694,6 +699,7 @@ def cmd_docker(cfg: FreqConfig, pack, args) -> int:
         command_timeout=FLEET_CMD_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
+        cfg=cfg,
     )
 
     if r.returncode != 0:
@@ -785,6 +791,7 @@ def cmd_docker_fleet(cfg: FreqConfig, pack, args) -> int:
         command_timeout=30,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     total_containers = 0
@@ -944,6 +951,7 @@ def cmd_diagnose(cfg: FreqConfig, pack, args) -> int:
                 command_timeout=FLEET_QUICK_TIMEOUT,
                 htype=host.htype,
                 use_sudo=False,
+                cfg=cfg,
             )
             value = r.stdout.strip() if r.returncode == 0 else f"{fmt.C.RED}error{fmt.C.RESET}"
             label = check_name.replace("_", " ").title()
@@ -993,6 +1001,7 @@ def cmd_log(cfg: FreqConfig, pack, args) -> int:
         command_timeout=FLEET_CMD_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
+        cfg=cfg,
     )
     if r.returncode != 0 and "password" not in r.stderr:
         # Try with sudo
@@ -1004,6 +1013,7 @@ def cmd_log(cfg: FreqConfig, pack, args) -> int:
             command_timeout=FLEET_CMD_TIMEOUT,
             htype=host.htype,
             use_sudo=True,
+            cfg=cfg,
         )
 
     if r.returncode != 0:
@@ -1129,6 +1139,7 @@ def _keys_list(cfg: FreqConfig) -> int:
         command_timeout=FLEET_QUICK_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     deployed = 0
@@ -1333,6 +1344,7 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
             command_timeout=15,
             htype=h.htype,
             use_sudo=False,
+            cfg=cfg,
         )
         if result.returncode == 0:
             fmt.step_ok(f"Deployed to {h.label}")
@@ -1364,6 +1376,7 @@ def _keys_rotate(cfg: FreqConfig, args) -> int:
                     command_timeout=15,
                     htype=h.htype,
                     use_sudo=False,
+                    cfg=cfg,
                 )
                 if result.returncode == 0:
                     fmt.step_ok(f"Old key removed from {h.label}")
@@ -1415,6 +1428,7 @@ def cmd_ntp(cfg: FreqConfig, pack, args) -> int:
         command_timeout=FLEET_QUICK_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     for h in hosts:
@@ -1472,6 +1486,7 @@ def _ntp_fix(cfg, hosts) -> int:
         command_timeout=FLEET_CMD_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     fixed = 0
@@ -1522,6 +1537,7 @@ def cmd_fleet_update(cfg: FreqConfig, pack, args) -> int:
         command_timeout=FLEET_SLOW_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     total_updates = 0
@@ -1580,6 +1596,7 @@ def _fleet_update_apply(cfg, hosts) -> int:
         command_timeout=FLEET_EXEC_TIMEOUT,
         max_parallel=3,  # Don't slam all hosts at once
         use_sudo=False,
+        cfg=cfg,
     )
 
     ok = 0

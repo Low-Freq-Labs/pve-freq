@@ -20,6 +20,7 @@ CONSUMER_FILES = [
     "freq/api/hw.py",
     "freq/api/net.py",
     "freq/modules/serve.py",
+    "freq/modules/fleet.py",
 ]
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,7 +29,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 class _CfgChecker(ast.NodeVisitor):
     """AST visitor that finds ssh_single/run_many calls missing cfg=."""
 
-    SSH_FUNCS = {"ssh_single", "ssh_run_many", "run_many", "ssh_run_many_fn", "ssh_fn"}
+    SSH_FUNCS = {"ssh_single", "ssh_run_many", "run_many", "ssh_run_many_fn", "ssh_fn", "ssh_run"}
 
     def __init__(self):
         self.missing = []  # (lineno, func_name, file)
@@ -109,6 +110,41 @@ class TestSSHCfgPropagation(unittest.TestCase):
         if not has_real_entries:
             self.assertEqual(len(cfg.container_vms), 0,
                              "containers.toml is all comments → container_vms must be empty")
+
+
+class TestHealthApiCLIParity(unittest.TestCase):
+    """Health API probe and CLI fleet status must use the same auth path."""
+
+    def test_health_probe_no_sudo(self):
+        """Health status commands are read-only — must not use sudo."""
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        probe = src.split("def _bg_probe_health")[1].split("\ndef _bg_")[0]
+        # The probe_host inner function should set use_sudo = False
+        self.assertIn("use_sudo = False", probe,
+                       "Health probe must not use sudo for read-only status commands")
+
+    def test_fleet_status_has_cfg(self):
+        """CLI fleet status must pass cfg=cfg for consistent user resolution."""
+        with open(os.path.join(REPO_ROOT, "freq/modules/fleet.py")) as f:
+            src = f.read()
+        status_fn = src.split("def cmd_status")[1].split("\ndef ")[0]
+        self.assertIn("cfg=cfg", status_fn,
+                       "fleet status ssh_run_many must pass cfg=cfg")
+
+    def test_both_paths_no_sudo(self):
+        """Both CLI fleet status and API health must use use_sudo=False."""
+        with open(os.path.join(REPO_ROOT, "freq/modules/fleet.py")) as f:
+            fleet_src = f.read()
+        status_fn = fleet_src.split("def cmd_status")[1].split("\ndef ")[0]
+        self.assertIn("use_sudo=False", status_fn,
+                       "CLI fleet status must not use sudo")
+
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            serve_src = f.read()
+        probe = serve_src.split("def _bg_probe_health")[1].split("\ndef _bg_")[0]
+        self.assertIn("use_sudo = False", probe,
+                       "API health probe must not use sudo")
 
 
 if __name__ == "__main__":
