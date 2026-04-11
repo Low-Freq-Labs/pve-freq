@@ -3641,15 +3641,18 @@ function loadHome(){
     document.title=(d.brand||'PVE FREQ')+' Dashboard';
     var cr=document.getElementById('about-credits');if(cr)cr.textContent=(d.cluster||'')+(d.cluster?' · ':'')+(d.brand||'PVE FREQ');
   });
-  /* Watchdog health check */
+  /* Watchdog probe status */
   _authFetch(API.WATCHDOG_HEALTH).then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('watchdog-status');if(!el)return;
-    if(d.error){el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: no response</span>';return;}
-    var status=d.status||'unknown';var hosts=d.hosts||0;var age=d.age_seconds?Math.round(d.age_seconds)+'s ago':'';
-    var clr=status==='ok'||status==='healthy'?'green':'yellow';
-    el.innerHTML='<span style="color:var(--'+clr+');font-size:11px;font-weight:600">Watchdog: '+hosts+' hosts checked</span>';
-    if(age)el.innerHTML+='<span style="color:var(--text-dim);font-size:11px;margin-left:8px">('+age+')</span>';
-  }).catch(function(){var el=document.getElementById('watchdog-status');if(el)el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: not reachable</span>';});
+    if(d.error){el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: daemon returned error — '+_esc(d.error).substring(0,60)+'</span>';return;}
+    var hosts=d.hosts||0;var errors=d.errors||0;var age=d.age_seconds?Math.round(d.age_seconds):null;
+    var clr=errors>0?'yellow':hosts>0?'green':'text-dim';
+    var parts=[];
+    parts.push(hosts+' hosts probed');
+    if(errors>0)parts.push(errors+' errors');
+    if(age!==null)parts.push(age+'s ago');
+    el.innerHTML='<span style="color:var(--'+clr+');font-size:11px;font-weight:600">Watchdog: '+parts.join(' · ')+'</span>';
+  }).catch(function(){var el=document.getElementById('watchdog-status');if(el)el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: daemon not reachable (port closed or not running)</span>';});
 }
 
 /* ═══════════════════════════════════════════════════════════════════

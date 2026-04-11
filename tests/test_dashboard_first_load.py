@@ -153,13 +153,19 @@ class TestDashboardTone(unittest.TestCase):
                           "Age label must show actual seconds, not claim LIVE")
 
     def test_watchdog_shows_evidence(self):
-        """Watchdog must show hosts checked count, not bare OK."""
+        """Watchdog must show probe evidence, not bare verdicts."""
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
             src = f.read()
         # The watchdog render block starts at the comment and ends at the catch
-        watchdog_block = src.split("Watchdog health check")[1].split(".catch")[0]
-        self.assertIn("hosts checked", watchdog_block,
-                       "Watchdog must show what was checked")
+        watchdog_block = src.split("Watchdog probe status")[1].split(".catch")[0]
+        self.assertIn("hosts probed", watchdog_block,
+                       "Watchdog must show what was probed")
+        self.assertIn("errors", watchdog_block,
+                       "Watchdog must surface error count")
+        self.assertNotIn("WATCHDOG: OK", watchdog_block,
+                          "Must not show bare OK verdict")
+        self.assertNotIn("WATCHDOG: offline", watchdog_block,
+                          "Must not show bare offline verdict")
 
 
 if __name__ == "__main__":
