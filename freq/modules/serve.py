@@ -2231,6 +2231,11 @@ a:hover{{text-decoration:underline}}
             if update_err:
                 response["probe_status"] = "error"
                 response["probe_error"] = update_err["error"]
+            elif response.get("error"):
+                # Probe ran but GitHub was unreachable — error is in the
+                # cached result, not in _bg_cache_errors (graceful degradation)
+                response["probe_status"] = "error"
+                response["probe_error"] = response["error"]
             else:
                 response["probe_status"] = "ok"
             self._json_response(response)

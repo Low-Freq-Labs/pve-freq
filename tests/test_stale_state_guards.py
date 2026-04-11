@@ -159,6 +159,37 @@ class TestUpdateCheckStaleness(unittest.TestCase):
         self.assertIn("probe_error", data)
         self.assertEqual(data["probe_error"], "Could not reach GitHub")
 
+    def test_graceful_github_error_not_ok(self):
+        """Cached result with error field must NOT report probe_status=ok.
+
+        When _bg_check_update catches a GitHub error gracefully, it stores
+        error='Could not reach GitHub' in the result but does NOT populate
+        _bg_cache_errors. The handler must check the result's error field too.
+        """
+        from freq.modules import serve
+        from freq import __version__
+
+        now = time.time()
+        with serve._bg_lock:
+            serve._bg_cache["update"] = {
+                "current": __version__,
+                "latest": "",
+                "update_available": False,
+                "checked_at": now,
+                "error": "Could not reach GitHub",
+            }
+            serve._bg_cache_ts["update"] = now
+            serve._bg_cache_errors.pop("update", None)  # No probe crash
+
+        h = _make_handler("/api/update/check")
+        h._serve_update_check()
+        data = _get_json(h)
+
+        self.assertEqual(data["probe_status"], "error",
+                         "Must not report ok when result has error field")
+        self.assertIn("probe_error", data)
+        self.assertEqual(data["probe_error"], "Could not reach GitHub")
+
     def test_no_cache_returns_pending(self):
         """When no cache exists yet, must return probe_status=pending + stale=True."""
         from freq.modules import serve
