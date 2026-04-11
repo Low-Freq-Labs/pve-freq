@@ -504,6 +504,8 @@ Environment=FREQ_DIR=${INSTALL_DIR}
 ExecStart=/usr/local/bin/freq serve
 Restart=on-failure
 RestartSec=5
+TimeoutStopSec=10
+KillMode=mixed
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=freq-serve

@@ -32,7 +32,7 @@ class TestServeSigtermHandler(unittest.TestCase):
     def test_sigterm_calls_shutdown(self):
         """SIGTERM handler must call httpd.shutdown() not sys.exit()."""
         src = (FREQ_ROOT / "freq" / "modules" / "serve.py").read_text()
-        self.assertIn("httpd.shutdown()", src)
+        self.assertIn("httpd.shutdown", src)
 
     def test_no_sys_exit_in_sigterm(self):
         """SIGTERM handler should not call sys.exit — use shutdown() instead."""
@@ -86,6 +86,30 @@ class TestSystemdUnitContract(unittest.TestCase):
         self.assertIsNotNone(match)
         restart_sec = int(match.group(1))
         self.assertGreaterEqual(restart_sec, 5)
+
+    def test_init_unit_has_timeout_stop_sec(self):
+        """Systemd unit must have TimeoutStopSec to prevent stop hangs."""
+        src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
+        self.assertIn("TimeoutStopSec=", src)
+
+    def test_init_unit_has_kill_mode_mixed(self):
+        """Systemd unit must have KillMode=mixed for clean thread teardown."""
+        src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
+        self.assertIn("KillMode=mixed", src)
+
+    def test_install_unit_has_timeout_stop_sec(self):
+        """install.sh systemd unit must also have TimeoutStopSec."""
+        src = (FREQ_ROOT / "install.sh").read_text()
+        self.assertIn("TimeoutStopSec=", src)
+
+
+class TestSigtermNonBlocking(unittest.TestCase):
+    """SIGTERM handler must not deadlock with serve_forever."""
+
+    def test_shutdown_in_thread(self):
+        """SIGTERM handler must call shutdown() from a thread, not inline."""
+        src = (FREQ_ROOT / "freq" / "modules" / "serve.py").read_text()
+        self.assertIn("threading.Thread(target=httpd.shutdown", src)
 
 
 if __name__ == "__main__":

@@ -4184,6 +4184,8 @@ def _phase_fleet_configure(cfg, ctx):
             f"ExecStart={freq_bin} serve --port {dashboard_port}\n"
             "Restart=always\n"
             "RestartSec=10\n"
+            "TimeoutStopSec=10\n"
+            "KillMode=mixed\n"
             f"User={svc_name}\n"
             f"WorkingDirectory={work_dir}\n"
             f"Environment=FREQ_DIR={work_dir}\n"

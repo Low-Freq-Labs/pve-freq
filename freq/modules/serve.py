@@ -4570,9 +4570,12 @@ def cmd_serve(cfg, pack, args) -> int:
     # Without this, serve_forever() is killed abruptly and the socket
     # can linger in a broken state, causing ConnectionResetError on the
     # next process's requests.
+    # Note: shutdown() blocks waiting for serve_forever() to acknowledge,
+    # but serve_forever() is paused while the signal handler runs.
+    # Use a thread to avoid deadlock.
     def _sigterm_handler(signum, frame):
         logger.info("dashboard_stop", reason="SIGTERM")
-        httpd.shutdown()
+        threading.Thread(target=httpd.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, _sigterm_handler)
 
