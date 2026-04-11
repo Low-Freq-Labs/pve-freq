@@ -37,7 +37,7 @@ def deploy(ip, ctx, auth_pass, auth_key, auth_user, htype="truenas"):
     pass_b64 = base64.b64encode(svc_pass.encode()).decode()
     pubkey_b64 = base64.b64encode((pubkey or "").encode()).decode()
 
-    deploy_script = f"""set -e
+    deploy_script = """set -e
 if command -v midclt >/dev/null 2>&1; then
     VARIANT="scale"
 elif command -v pw >/dev/null 2>&1; then
@@ -54,9 +54,9 @@ if [ "$VARIANT" = "scale" ]; then
     else
         HOME_PARENT="/var/empty"
     fi
-    export FREQ_USER='{svc_name}'
-    export FREQ_PASS_B64='{pass_b64}'
-    export FREQ_PUBKEY_B64='{pubkey_b64}'
+    export FREQ_USER='%(svc_name)s'
+    export FREQ_PASS_B64='%(pass_b64)s'
+    export FREQ_PUBKEY_B64='%(pubkey_b64)s'
     export FREQ_HOME_PARENT="$HOME_PARENT"
     python3 - <<'PY'
 import base64
@@ -122,59 +122,59 @@ print("ACCOUNT_OK")
 PY
     test "$(midclt call user.query "[[\\"username\\",\\"=\\",\\"{svc_name}\\"]]" | python3 -c 'import json,sys; data=json.load(sys.stdin); print("1" if data else "")')" = "1" || {{ echo ACCOUNT_MISSING; exit 1; }}
 elif [ "$VARIANT" = "core" ]; then
-    if ! id '{svc_name}' >/dev/null 2>&1; then
-        pw useradd '{svc_name}' -m -s /bin/sh -c "FREQ Service Account" || {{ echo USERADD_FAIL; exit 1; }}
+    if ! id '%(svc_name)s' >/dev/null 2>&1; then
+        pw useradd '%(svc_name)s' -m -s /bin/sh -c "FREQ Service Account" || {{ echo USERADD_FAIL; exit 1; }}
     fi
-    _pass=$(echo '{pass_b64}' | base64 -d)
-    echo "$_pass" | pw usermod '{svc_name}' -h 0 || echo CHPASSWD_FAIL
+    _pass=$(echo '%(pass_b64)s' | base64 -d)
+    echo "$_pass" | pw usermod '%(svc_name)s' -h 0 || echo CHPASSWD_FAIL
     unset _pass
 else
-    if ! id '{svc_name}' >/dev/null 2>&1; then
-        useradd -m -s /bin/bash '{svc_name}' || {{ echo USERADD_FAIL; exit 1; }}
+    if ! id '%(svc_name)s' >/dev/null 2>&1; then
+        useradd -m -s /bin/bash '%(svc_name)s' || {{ echo USERADD_FAIL; exit 1; }}
     fi
-    _pass=$(echo '{pass_b64}' | base64 -d)
-    printf '%s:%s\\n' '{svc_name}' "$_pass" | chpasswd 2>/dev/null || echo CHPASSWD_FAIL
+    _pass=$(echo '%(pass_b64)s' | base64 -d)
+    printf '%%s:%%s\\n' '%(svc_name)s' "$_pass" | chpasswd 2>/dev/null || echo CHPASSWD_FAIL
     unset _pass
 fi
 
 if [ "$VARIANT" != "scale" ]; then
-    id '{svc_name}' >/dev/null 2>&1 || {{ echo ACCOUNT_MISSING; exit 1; }}
+    id '%(svc_name)s' >/dev/null 2>&1 || {{ echo ACCOUNT_MISSING; exit 1; }}
 fi
 
 if [ "$VARIANT" != "scale" ]; then
     svc_home=""
     if command -v getent >/dev/null 2>&1; then
-        svc_home=$(getent passwd '{svc_name}' | cut -d: -f6 2>/dev/null)
+        svc_home=$(getent passwd '%(svc_name)s' | cut -d: -f6 2>/dev/null)
     fi
     if [ -z "$svc_home" ] && command -v pw >/dev/null 2>&1; then
-        svc_home=$(pw usershow '{svc_name}' | cut -d: -f9 2>/dev/null)
+        svc_home=$(pw usershow '%(svc_name)s' | cut -d: -f9 2>/dev/null)
     fi
     if [ -z "$svc_home" ]; then
         svc_home="/home/{svc_name}"
     fi
     mkdir -p "$svc_home/.ssh"
     chmod 700 "$svc_home/.ssh"
-    if [ -n '{pubkey}' ]; then
-        grep -qF '{pubkey}' "$svc_home/.ssh/authorized_keys" 2>/dev/null || echo '{pubkey}' >> "$svc_home/.ssh/authorized_keys"
+    if [ -n '%(pubkey)s' ]; then
+        grep -qF '%(pubkey)s' "$svc_home/.ssh/authorized_keys" 2>/dev/null || echo '%(pubkey)s' >> "$svc_home/.ssh/authorized_keys"
         chmod 600 "$svc_home/.ssh/authorized_keys"
-        chown -R '{svc_name}' "$svc_home/.ssh"
+        chown -R '%(svc_name)s' "$svc_home/.ssh"
     fi
 fi
 
 if [ "$VARIANT" = "core" ] && [ -d /usr/local/etc/sudoers.d ]; then
-    echo '{svc_name} ALL=(ALL) NOPASSWD: ALL' > '/usr/local/etc/sudoers.d/freq-{svc_name}'
-    chmod 440 '/usr/local/etc/sudoers.d/freq-{svc_name}'
+    echo '{svc_name} ALL=(ALL) NOPASSWD: ALL' > '/usr/local/etc/sudoers.d/freq-%(svc_name)s'
+    chmod 440 '/usr/local/etc/sudoers.d/freq-%(svc_name)s'
 elif [ "$VARIANT" != "scale" ] && [ -d /etc/sudoers.d ]; then
-    echo '{svc_name} ALL=(ALL) NOPASSWD: ALL' > '/etc/sudoers.d/freq-{svc_name}'
-    chmod 440 '/etc/sudoers.d/freq-{svc_name}'
-    visudo -cf '/etc/sudoers.d/freq-{svc_name}' 2>/dev/null || true
+    echo '{svc_name} ALL=(ALL) NOPASSWD: ALL' > '/etc/sudoers.d/freq-%(svc_name)s'
+    chmod 440 '/etc/sudoers.d/freq-%(svc_name)s'
+    visudo -cf '/etc/sudoers.d/freq-%(svc_name)s' 2>/dev/null || true
 fi
 
 echo DEPLOY_OK
 """
-    rc, out, err = _ssh(deploy_script, as_root=True)
+    rc, out, err = _ssh(deploy_script % {"svc_name": svc_name, "pass_b64": pass_b64, "pubkey_b64": pubkey_b64, "pubkey": pubkey}, as_root=True)
     if "USERADD_FAIL" in out or "ACCOUNT_MISSING" in out:
-        fmt.step_fail(f"Failed to create account '{svc_name}'")
+        fmt.step_fail(f"Failed to create account '%(svc_name)s'")
         return False
     elif MARKER_DEPLOY_OK not in out:
         fmt.step_fail(f"Deploy script failed ({(err or out)[:80]})")
@@ -253,13 +253,13 @@ if command -v midclt >/dev/null 2>&1; then
     fi
 elif command -v pw >/dev/null 2>&1; then
     # TrueNAS CORE (FreeBSD)
-    pw userdel '{svc_name}' -r 2>/dev/null; echo REMOVE_OK
+    pw userdel '%(svc_name)s' -r 2>/dev/null; echo REMOVE_OK
 else
     # Linux fallback
-    userdel -r '{svc_name}' 2>/dev/null; echo REMOVE_OK
+    userdel -r '%(svc_name)s' 2>/dev/null; echo REMOVE_OK
 fi
 # Clean up sudoers
-rm -f /etc/sudoers.d/freq-{svc_name} /usr/local/etc/sudoers.d/freq-{svc_name} 2>/dev/null
+rm -f /etc/sudoers.d/freq-%(svc_name)s /usr/local/etc/sudoers.d/freq-%(svc_name)s 2>/dev/null
 """
     r = ssh_run(
         host=ip,
