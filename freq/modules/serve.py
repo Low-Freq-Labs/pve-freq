@@ -131,6 +131,7 @@ NODE_DISCOVERY_INTERVAL = 300  # 5 min — discover PVE cluster nodes
 VM_TAGS_INTERVAL = 300  # 5 min — refresh PVE VM tags
 _bg_lock = threading.Lock()
 _setup_lock = threading.Lock()
+_shutdown_flag = threading.Event()  # Set on SIGTERM to stop background loops
 
 # ── SSE EVENT BUS ────────────────────────────────────────────────────────
 # Lightweight pub/sub: each connected EventSource client gets a Queue.
@@ -1316,7 +1317,7 @@ def _clear_probe_error(cache_key):
 
 def _bg_health_loop():
     """Fast health-only loop — runs every 15s for live dashboard bars."""
-    while True:
+    while not _shutdown_flag.is_set():
         logger.debug("bg_loop_cycle", loop="health")
         try:
             _bg_probe_health()
@@ -1324,7 +1325,7 @@ def _bg_health_loop():
         except Exception as e:
             logger.error(f"bg health probe failed: {e}")
             _record_probe_error("health", e)
-        time.sleep(BG_CACHE_REFRESH_INTERVAL)
+        _shutdown_flag.wait(BG_CACHE_REFRESH_INTERVAL)
 
 
 # Cache key mapping for slow loop probes
@@ -1340,7 +1341,7 @@ _SLOW_PROBE_CACHE_KEYS = {
 
 def _bg_slow_loop():
     """Slower loop for fleet overview, infra, tags, updates — runs every 60s."""
-    while True:
+    while not _shutdown_flag.is_set():
         logger.debug("bg_loop_cycle", loop="slow")
         for fn, label in [
             (_bg_discover_pve_nodes, "node discovery"),
@@ -1350,6 +1351,8 @@ def _bg_slow_loop():
             (_bg_check_update, "update check"),
             (_bg_sync_hosts, "hosts sync"),
         ]:
+            if _shutdown_flag.is_set():
+                break
             try:
                 fn()
                 cache_key = _SLOW_PROBE_CACHE_KEYS.get(label)
@@ -1360,7 +1363,7 @@ def _bg_slow_loop():
                 cache_key = _SLOW_PROBE_CACHE_KEYS.get(label)
                 if cache_key:
                     _record_probe_error(cache_key, e)
-        time.sleep(60)
+        _shutdown_flag.wait(60)
 
 
 def _bg_initial_probe():
@@ -1393,6 +1396,31 @@ def start_background_cache():
     t0.start()
     t1.start()
     t2.start()
+
+
+def _cleanup_ssh_mux(cfg):
+    """Kill SSH ControlMaster mux sockets on shutdown.
+
+    Background probes use SSH with ControlMaster=auto and ControlPersist=300.
+    These mux master processes outlive the daemon threads and prevent
+    systemd from cleanly stopping the service (they're children of the
+    main process). Closing them ensures clean shutdown.
+    """
+    import glob
+    svc_name = cfg.ssh_service_account
+    mux_dir = os.path.expanduser(f"~{svc_name}/.ssh/freq-mux")
+    if not os.path.isdir(mux_dir):
+        return
+    mux_sockets = glob.glob(os.path.join(mux_dir, "*"))
+    for sock in mux_sockets:
+        try:
+            # ssh -O exit closes the mux master cleanly
+            subprocess.run(
+                ["ssh", "-O", "exit", "-o", f"ControlPath={sock}", "dummy"],
+                capture_output=True, timeout=3,
+            )
+        except Exception:
+            pass  # Best effort — systemd SIGKILL handles stragglers
 
 
 # Legacy DASHBOARD_HTML removed — 240 lines of dead embedded HTML
@@ -4588,6 +4616,7 @@ def cmd_serve(cfg, pack, args) -> int:
     # Use a thread to avoid deadlock.
     def _sigterm_handler(signum, frame):
         logger.info("dashboard_stop", reason="SIGTERM")
+        _shutdown_flag.set()  # Signal background loops to stop
         threading.Thread(target=httpd.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, _sigterm_handler)
@@ -4626,5 +4655,9 @@ def cmd_serve(cfg, pack, args) -> int:
         print(f"\n  \033[38;5;220mDashboard stopped.\033[0m")
     finally:
         httpd.server_close()
+        # Kill SSH ControlMaster mux sockets left by background probes.
+        # These are forked processes that outlive daemon threads and prevent
+        # systemd from cleanly stopping the service.
+        _cleanup_ssh_mux(cfg)
         logger.info("dashboard_stopped")
     return 0
