@@ -1713,7 +1713,7 @@ function saveContainerEdit(name,oldVmId){
   var pu=(document.getElementById('edit-public-url').value||'').trim();
   if(pu){_publicUrls[name]=pu;}else{delete _publicUrls[name];}
   localStorage.setItem('freq_public_urls',JSON.stringify(_publicUrls));
-  _authFetch('/api/containers/edit?name='+encodeURIComponent(name)+'&old_vm_id='+oldVmId+'&new_vm_id='+newVmId+'&port='+port+'&api_path='+encodeURIComponent(apiPath))
+  _authFetch('/api/containers/edit?name='+encodeURIComponent(name)+'&old_vm_id='+oldVmId+'&new_vm_id='+newVmId+'&port='+port+'&api_path='+encodeURIComponent(apiPath),{method:'POST'})
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){toast(d.error,'error');return;}
     toast(name+' updated','success');closeModal();_mediaCache=null;loadContainerRegistry();loadContainerSection();
@@ -1760,7 +1760,7 @@ function rescanContainers(){
   var st=document.getElementById('registry-status');
   var res=document.getElementById('rescan-results');
   if(st)st.textContent='Scanning fleet...';
-  _authFetch('/api/containers/rescan').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/containers/rescan',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(st)st.textContent='Scan complete';
     if(!res)return;
     var h='';
@@ -1786,7 +1786,7 @@ function rescanContainers(){
 }
 function deleteContainer(name,vmId){
   if(!confirm('Remove "'+name+'" from registry?'))return;
-  _authFetch('/api/containers/delete?name='+encodeURIComponent(name)+'&vm_id='+vmId)
+  _authFetch('/api/containers/delete?name='+encodeURIComponent(name)+'&vm_id='+vmId,{method:'POST'})
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){toast(d.error,'error');return;}
     toast(name+' removed','success');_mediaCache=null;loadContainerRegistry();loadContainerSection();
@@ -1798,7 +1798,7 @@ function addContainer(){
   var port=document.getElementById('reg-port').value||'0';
   var msg=document.getElementById('reg-msg');
   if(!name||!vmId){if(msg)msg.innerHTML='<span class="c-red">Name and VM required</span>';return;}
-  _authFetch('/api/containers/add?name='+encodeURIComponent(name)+'&vm_id='+vmId+'&port='+port)
+  _authFetch('/api/containers/add?name='+encodeURIComponent(name)+'&vm_id='+vmId+'&port='+port,{method:'POST'})
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){if(msg)msg.innerHTML='<span class="c-red">'+d.error+'</span>';return;}
     if(msg)msg.innerHTML='<span class="c-green">Added</span>';
@@ -1807,7 +1807,7 @@ function addContainer(){
   });
 }
 function addContainerQuick(name,vmId){
-  _authFetch('/api/containers/add?name='+encodeURIComponent(name)+'&vm_id='+vmId+'&port=0')
+  _authFetch('/api/containers/add?name='+encodeURIComponent(name)+'&vm_id='+vmId+'&port=0',{method:'POST'})
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){toast(d.error,'error');return;}
     toast(name+' registered','success');_mediaCache=null;loadContainerRegistry();rescanContainers();

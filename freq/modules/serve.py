@@ -2784,6 +2784,7 @@ a:hover{{text-decoration:underline}}
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache, must-revalidate")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(body)
