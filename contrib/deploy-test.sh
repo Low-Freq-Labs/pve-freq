@@ -33,20 +33,30 @@ if [ -z "$TARGET_HEAD" ]; then
 else
     LOCAL_HEAD=$(git rev-parse HEAD)
     if [ "$TARGET_HEAD" = "$LOCAL_HEAD" ]; then
-        echo "Already up to date (${LOCAL_HEAD:0:8})"
+        echo "[1/4] Already up to date (${LOCAL_HEAD:0:8}) — skipping bundle"
     else
-        BEHIND=$(git log --oneline "${TARGET_HEAD}..HEAD" | wc -l)
-        echo "[1/4] Target at ${TARGET_HEAD:0:8}, source at ${LOCAL_HEAD:0:8} (${BEHIND} commits behind)"
+        # Count commits between target and source. If git log fails (target commit
+        # unknown locally), BEHIND=0 and we skip the bundle path to avoid empty bundles.
+        BEHIND=0
+        if git rev-parse --quiet --verify "${TARGET_HEAD}" >/dev/null 2>&1; then
+            BEHIND=$(git log --oneline "${TARGET_HEAD}..HEAD" 2>/dev/null | wc -l)
+        fi
 
-        # Create and apply bundle
-        echo "[2/4] Creating bundle..."
-        git bundle create "$BUNDLE" "${TARGET_HEAD}..HEAD"
-        echo "[3/4] Copying bundle..."
-        scp -q "$BUNDLE" "${USER}@${TARGET}:/tmp/"
-        echo "[4/4] Applying..."
-        ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git pull /tmp/pve-freq-deploy-bundle.git HEAD --ff-only"
-        rm -f "$BUNDLE"
-        ssh -n "${USER}@${TARGET}" "rm -f /tmp/pve-freq-deploy-bundle.git" 2>/dev/null || true
+        if [ "$BEHIND" -eq 0 ]; then
+            echo "[1/4] Target ${TARGET_HEAD:0:8} unknown or equal to source — skipping bundle"
+        else
+            echo "[1/4] Target at ${TARGET_HEAD:0:8}, source at ${LOCAL_HEAD:0:8} (${BEHIND} commits behind)"
+
+            # Create and apply bundle
+            echo "[2/4] Creating bundle..."
+            git bundle create "$BUNDLE" "${TARGET_HEAD}..HEAD"
+            echo "[3/4] Copying bundle..."
+            scp -q "$BUNDLE" "${USER}@${TARGET}:/tmp/"
+            echo "[4/4] Applying..."
+            ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git pull /tmp/pve-freq-deploy-bundle.git HEAD --ff-only"
+            rm -f "$BUNDLE"
+            ssh -n "${USER}@${TARGET}" "rm -f /tmp/pve-freq-deploy-bundle.git" 2>/dev/null || true
+        fi
     fi
 fi
 
