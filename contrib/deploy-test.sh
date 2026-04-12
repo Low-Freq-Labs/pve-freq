@@ -64,9 +64,12 @@ fi
 echo "[5/6] Syncing to runtime install..."
 ssh -n "${USER}@${TARGET}" "
 if [ -d ${RUNTIME_DIR}/freq ]; then
+    # Clean stale setuptools build artifacts that could survive rsync
+    # and leak contaminated assets into the import path
+    sudo rm -rf ${RUNTIME_DIR}/build 2>/dev/null || true
     sudo rsync -a --delete \
         --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' \
-        --exclude='/conf/' --exclude='/data/' --exclude='/tls/' \
+        --exclude='/conf/' --exclude='/data/' --exclude='/tls/' --exclude='/build/' \
         ${REMOTE_DIR}/ ${RUNTIME_DIR}/
     echo 'Runtime synced'
 else
