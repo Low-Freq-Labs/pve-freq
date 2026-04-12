@@ -147,6 +147,16 @@ def handle_auth_login(handler):
         return
 
     cfg = load_config()
+
+    # Service account is not a web principal — it runs the dashboard but
+    # cannot log into it. This blocks both first-login (which would set a
+    # password on demand) and normal login with a seeded password.
+    if cfg.ssh_service_account and username == cfg.ssh_service_account.lower():
+        record_login_attempt(client_ip, False)
+        logger.warn(f"auth_failed: service account login blocked '{username}'", ip=client_ip)
+        handler._json_response({"error": "Invalid credentials"}, 401)
+        return
+
     users = _load_users(cfg)
     if not users:
         handler._json_response(
