@@ -74,6 +74,7 @@ _DEFAULTS = {
     "timezone": "UTC",
     "dashboard_port": 8888,
     "watchdog_port": 9900,
+    "watchdog_enabled": False,  # Watchdog is an optional add-on, not installed by default
     "agent_port": 9990,
 }
 
@@ -189,6 +190,7 @@ class FreqConfig:
     # Service ports
     dashboard_port: int = _DEFAULTS["dashboard_port"]
     watchdog_port: int = _DEFAULTS["watchdog_port"]
+    watchdog_enabled: bool = _DEFAULTS["watchdog_enabled"]
     agent_port: int = _DEFAULTS["agent_port"]
 
     # TLS (optional — omit for plaintext HTTP)
@@ -644,6 +646,7 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     services = data.get("services", {})
     cfg.dashboard_port = _safe_int(services.get("dashboard_port"), cfg.dashboard_port)
     cfg.watchdog_port = _safe_int(services.get("watchdog_port"), cfg.watchdog_port)
+    cfg.watchdog_enabled = bool(services.get("watchdog_enabled", cfg.watchdog_enabled))
     cfg.agent_port = _safe_int(services.get("agent_port"), cfg.agent_port)
     cfg.tls_cert = services.get("tls_cert", cfg.tls_cert)
     cfg.tls_key = services.get("tls_key", cfg.tls_key)

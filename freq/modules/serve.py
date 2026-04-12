@@ -3944,8 +3944,18 @@ a:hover{{text-decoration:underline}}
         handle_auth_change_password(self)
 
     def _proxy_watchdog(self):
-        """Proxy requests to FREQ WATCHDOG daemon."""
+        """Proxy requests to FREQ WATCHDOG daemon.
+
+        Watchdog is an optional add-on. If not enabled in config, returns 501
+        (not implemented) with a truthful message rather than a misleading 503.
+        """
         cfg = load_config()
+        if not getattr(cfg, "watchdog_enabled", False):
+            self._json_response(
+                {"error": "Watchdog is not installed on this host", "watchdog_installed": False},
+                501,
+            )
+            return
         wd_port = cfg.watchdog_port
         parsed = urlparse(self.path)
         target_url = f"http://127.0.0.1:{wd_port}{parsed.path}"

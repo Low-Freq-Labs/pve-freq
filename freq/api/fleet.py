@@ -1333,12 +1333,23 @@ def handle_discover(handler):
 
 
 def handle_watchdog_health(handler):
-    """GET /api/watchdog/health -- proxy to WATCHDOG daemon."""
+    """GET /api/watchdog/health -- proxy to WATCHDOG daemon.
+
+    Watchdog is an optional add-on. If not enabled in config, returns 501
+    (not implemented) with a truthful message rather than a misleading 503.
+    """
     import urllib.request
     import urllib.error
     from urllib.parse import urlparse as _urlparse
 
     cfg = load_config()
+    if not getattr(cfg, "watchdog_enabled", False):
+        json_response(
+            handler,
+            {"error": "Watchdog is not installed on this host", "watchdog_installed": False},
+            501,
+        )
+        return
     wd_port = cfg.watchdog_port
     parsed = _urlparse(handler.path)
     target_url = f"http://127.0.0.1:{wd_port}{parsed.path}"
