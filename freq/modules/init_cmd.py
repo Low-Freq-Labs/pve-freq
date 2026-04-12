@@ -4225,6 +4225,7 @@ def _phase_fleet_configure(cfg, ctx):
     cert_dir = os.path.join(os.path.dirname(cfg.conf_dir), "tls")
     cert_path = os.path.join(cert_dir, "freq.crt")
     key_path_tls = os.path.join(cert_dir, "freq.key")
+    cert_generated = False
     if not os.path.isfile(cert_path):
         os.makedirs(cert_dir, mode=0o700, exist_ok=True)
         # Generate self-signed cert
@@ -4239,21 +4240,34 @@ def _phase_fleet_configure(cfg, ctx):
         )
         if rc == 0:
             os.chmod(key_path_tls, 0o600)
-            # Update freq.toml with TLS paths
-            try:
-                with open(toml_path) as f:
-                    content = f.read()
-                content = _update_toml_value(content, "tls_cert", cert_path)
-                content = _update_toml_value(content, "tls_key", key_path_tls)
-                with open(toml_path, "w") as f:
-                    f.write(content)
-                fmt.step_ok(f"Self-signed TLS cert generated (10-year, {cert_path})")
-            except OSError:
-                fmt.step_ok(f"TLS cert generated but could not update freq.toml")
+            cert_generated = True
+            fmt.step_ok(f"Self-signed TLS cert generated (10-year, {cert_path})")
         else:
             fmt.step_warn(f"Could not generate TLS cert: {err.strip()[:100]}")
     else:
         fmt.step_ok("TLS certificate already exists")
+
+    # Always update freq.toml with TLS paths when cert is present on disk.
+    # Previous behavior only updated when generating a new cert — if the
+    # cert existed from a prior init but freq.toml had been reset/re-seeded,
+    # the dashboard would run HTTP instead of HTTPS.
+    if os.path.isfile(cert_path) and os.path.isfile(key_path_tls):
+        try:
+            with open(toml_path) as f:
+                content = f.read()
+            needs_update = (
+                cert_generated
+                or "tls_cert" not in content
+                or "tls_key" not in content
+            )
+            if needs_update:
+                content = _update_toml_value(content, "tls_cert", cert_path)
+                content = _update_toml_value(content, "tls_key", key_path_tls)
+                with open(toml_path, "w") as f:
+                    f.write(content)
+                fmt.step_ok("freq.toml updated with TLS cert paths")
+        except OSError as e:
+            fmt.step_warn(f"Could not update freq.toml with TLS paths: {e}")
 
     # ── 9m: Fix ownership for dashboard ───────────────────────────
     # Dashboard runs as the service account. Init runs as root.
