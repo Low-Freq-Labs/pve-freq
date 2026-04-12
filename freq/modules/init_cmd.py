@@ -5244,6 +5244,7 @@ def _is_skip_error(err):
         s in err_l
         for s in [
             "no route to host",
+            "network is unreachable",
             "connection timed out",
             "connection refused",
             "permission denied",
@@ -5254,10 +5255,20 @@ def _is_skip_error(err):
 
 
 def _skip_reason(err):
-    """Return a human-readable reason for skipping a host."""
+    """Return a human-readable reason for skipping a host.
+
+    More specific than just "unreachable" — the underlying error helps
+    operators distinguish routing/firewall/host-down cases.
+    """
     err_l = err.lower()
-    if "no route to host" in err_l or "connection timed out" in err_l or "connection refused" in err_l:
-        return "unreachable"
+    if "no route to host" in err_l:
+        return "no route to host (check VLAN/routing)"
+    if "network is unreachable" in err_l:
+        return "network unreachable (no route configured)"
+    if "connection timed out" in err_l:
+        return "connection timed out (host down or firewalled)"
+    if "connection refused" in err_l:
+        return "connection refused (SSH port closed)"
     if "permission denied" in err_l or "authentication" in err_l:
         return "auth failed"
     if "host key verification" in err_l:
