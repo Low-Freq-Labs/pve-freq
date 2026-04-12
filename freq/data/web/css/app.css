@@ -1,7 +1,5 @@
-/* ╔══════════════════════════════════════════════════════════════════╗
-   ║  PVE FREQ — DC01 Fleet Dashboard                                 ║
-   ║  Dark cockpit. Calm when healthy. Loud when broken.              ║
-   ╚══════════════════════════════════════════════════════════════════╝ */
+/* PVE FREQ — DC01 Fleet Dashboard
+ * Dark theme, evidence-first status surfaces, calm operational tone. */
 
 /* ── Fonts ── */
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
@@ -45,7 +43,7 @@
   --cyan: #06B6D4;
   --orange: #F97316;
 
-  /* Status glows — for dark cockpit alerts */
+  /* Status glows — alert colors on dark theme */
   --green-glow: rgba(34,197,94,0.12);
   --red-glow: rgba(239,68,68,0.15);
   --yellow-glow: rgba(234,179,8,0.12);
@@ -242,7 +240,7 @@ tr:hover td { background: var(--card-hover); }
 .badge.unknown { background: rgba(255,255,255,0.04); color: var(--text-dim); }
 .badge.MEDIUM { background: var(--blue-glow); color: var(--blue); }
 
-/* Dark cockpit — critical status: very subtle pulse, not distracting */
+/* Critical status indicator — subtle pulse, not theatrical */
 @keyframes pulseGlow {
   0%, 100% { box-shadow: none; }
   50% { box-shadow: 0 0 6px rgba(239,68,68,0.15); }

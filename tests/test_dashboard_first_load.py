@@ -218,6 +218,32 @@ class TestDashboardTone(unittest.TestCase):
         self.assertNotIn("'LIVE'", src.split("var _ageLbl")[1].split(";")[0] if "var _ageLbl" in src else "",
                           "Age label must show actual seconds, not claim LIVE")
 
+    def test_no_ascii_logos_in_html(self):
+        """ASCII art logos removed — plain text wordmarks only."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
+            src = f.read()
+        # ASCII art box characters that made up the FREQ logo
+        self.assertNotIn("██████╗", src,
+                          "HTML must not contain ASCII art logo characters")
+        self.assertNotIn("╚══════╝", src,
+                          "HTML must not contain ASCII art logo characters")
+
+    def test_no_ascii_logos_in_js(self):
+        """Loading screen ASCII logo removed."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        self.assertNotIn("\\u2588\\u2588\\u2588", src,
+                          "JS must not contain escaped ASCII block art")
+
+    def test_no_cockpit_branding_comments(self):
+        """Cockpit metaphor removed from CSS comments."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/css/app.css")) as f:
+            src = f.read()
+        self.assertNotIn("Dark cockpit", src,
+                          "CSS must not use cockpit metaphor")
+        self.assertNotIn("cockpit alerts", src.lower(),
+                          "CSS comments must not reference cockpit")
+
     def test_badge_preserves_distinct_states(self):
         """badge() must not collapse distinct operational states into up/ok."""
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:

@@ -21,13 +21,8 @@
 <!-- Login Overlay -->
 <div id="login-overlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
   <div style="width:380px;text-align:center">
-    <pre style="font-family:'Courier New',monospace;font-size:10px;line-height:1.1;margin:0 auto 24px;color:var(--purple-light);display:inline-block;text-align:left"> ██████╗ ██╗   ██╗███████╗   ███████╗██████╗ ███████╗ ██████╗
- ██╔══██╗██║   ██║██╔════╝   ██╔════╝██╔══██╗██╔════╝██╔═══██╗
- ██████╔╝██║   ██║█████╗     █████╗  ██████╔╝█████╗  ██║   ██║
- ██╔═══╝ ╚██╗ ██╔╝██╔══╝     ██╔══╝  ██╔══██╗██╔══╝  ██║▄▄ ██║
- ██║      ╚████╔╝ ███████╗   ██║     ██║  ██║███████╗╚██████╔╝
- ╚═╝       ╚═══╝  ╚══════╝   ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝</pre>
-    <div style="font-size:12px;color:var(--text-dim);letter-spacing:2px;margin-bottom:32px">DATACENTER MANAGEMENT</div>
+    <div style="font-size:32px;font-weight:700;letter-spacing:8px;color:var(--text);margin:0 auto 8px">PVE FREQ</div>
+    <div style="font-size:11px;color:var(--text-dim);letter-spacing:3px;margin-bottom:32px">FLEET DASHBOARD</div>
     <div style="background:var(--card);border:2px solid var(--input-border);border-radius:12px;padding:28px">
       <div style="display:flex;flex-direction:column;gap:12px">
         <input id="login-user" placeholder="Username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:12px 16px;border-radius:8px;font-size:13px;font-family:inherit;width:100%;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'">
@@ -43,12 +38,7 @@
 <div class="mn">
 <div class="mn-header">
   <div class="flex-gap-16-center">
-    <pre data-view="home" style="font-family:'Courier New',monospace;font-size:5px;line-height:1.1;margin:0;color:var(--purple-light);cursor:pointer;opacity:0.9"> ██████╗ ██╗   ██╗███████╗   ███████╗██████╗ ███████╗ ██████╗
- ██╔══██╗██║   ██║██╔════╝   ██╔════╝██╔══██╗██╔════╝██╔═══██╗
- ██████╔╝██║   ██║█████╗     █████╗  ██████╔╝█████╗  ██║   ██║
- ██╔═══╝ ╚██╗ ██╔╝██╔══╝     ██╔══╝  ██╔══██╗██╔══╝  ██║▄▄ ██║
- ██║      ╚████╔╝ ███████╗   ██║     ██║  ██║███████╗╚██████╔╝
- ╚═╝       ╚═══╝  ╚══════╝   ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝</pre><span style="font-size:12px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase" id="nav-ver"></span>
+    <div data-view="home" style="font-size:16px;font-weight:700;letter-spacing:3px;color:var(--text);cursor:pointer;user-select:none">PVE FREQ</div><span style="font-size:12px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase" id="nav-ver"></span>
     <div style="width:1px;height:24px;background:var(--border)"></div>
     <div><h1 id="page-title" style="font-size:16px">Home</h1><div class="tagline fs-11" id="header-tagline" ></div></div>
   </div>
@@ -58,7 +48,7 @@
     <span style="font-family:'Courier New',monospace;font-size:20px;font-weight:700;color:var(--purple-light);letter-spacing:2px;opacity:0.7;animation:none;text-shadow:none" id="header-time"></span>
   </div>
 </div>
-<div id="update-banner" style="display:none;background:linear-gradient(135deg,rgba(123,47,190,0.15),rgba(168,85,247,0.1));border-bottom:1px solid var(--purple);padding:10px 32px;font-size:13px;color:var(--text)">
+<div id="update-banner" style="display:none;background:var(--card);border-bottom:1px solid var(--border);padding:10px 32px;font-size:13px;color:var(--text)">
   <span id="update-banner-text"></span>
   <button onclick="document.getElementById('update-banner').style.display='none';sessionStorage.setItem('freq_update_dismissed','1')" style="float:right;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button>
 </div>
@@ -67,13 +57,9 @@
 <!-- ════════ HOME ════════ -->
 <div id="p-home" class="page active">
 <!-- Hero -->
-<div style="text-align:center;padding:8px 0 12px">
-  <pre style="font-family:'Courier New',monospace;font-size:12px;line-height:1.1;margin:0 auto;color:var(--purple-light);opacity:0.9;cursor:pointer;display:inline-block;text-align:left" data-view="home"> ██████╗ ██╗   ██╗███████╗   ███████╗██████╗ ███████╗ ██████╗
- ██╔══██╗██║   ██║██╔════╝   ██╔════╝██╔══██╗██╔════╝██╔═══██╗
- ██████╔╝██║   ██║█████╗     █████╗  ██████╔╝█████╗  ██║   ██║
- ██╔═══╝ ╚██╗ ██╔╝██╔══╝     ██╔══╝  ██╔══██╗██╔══╝  ██║▄▄ ██║
- ██║      ╚████╔╝ ███████╗   ██║     ██║  ██║███████╗╚██████╔╝
- ╚═╝       ╚═══╝  ╚══════╝   ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝</pre>
+<div style="text-align:center;padding:12px 0 8px">
+  <div style="font-size:18px;font-weight:700;letter-spacing:6px;color:var(--text)">PVE FREQ</div>
+  <div style="font-size:10px;color:var(--text-dim);letter-spacing:3px;margin-top:2px">FLEET DASHBOARD</div>
 </div>
 <!-- Toolbar -->
 <div style="border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:12px">
