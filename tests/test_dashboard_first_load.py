@@ -179,6 +179,38 @@ class TestDashboardTone(unittest.TestCase):
         self.assertNotIn("'LIVE'", src.split("var _ageLbl")[1].split(";")[0] if "var _ageLbl" in src else "",
                           "Age label must show actual seconds, not claim LIVE")
 
+    def test_badge_preserves_distinct_states(self):
+        """badge() must not collapse distinct operational states into up/ok."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        badge_fn = src.split("function badge(s)")[1].split("\nfunction ")[0]
+        # Must map distinct states to distinct classes
+        self.assertIn("unreachable:'unreachable'", badge_fn,
+                       "unreachable must have its own class, not collapse to down")
+        self.assertIn("auth_failed:", badge_fn,
+                       "auth_failed must be a recognized state")
+        self.assertIn("stale:", badge_fn,
+                       "stale must be a recognized state")
+        self.assertIn("probe_error:", badge_fn,
+                       "probe_error must be a recognized state")
+
+    def test_fleet_stats_surface_probe_status(self):
+        """Fleet stats must annotate SSH PROBE label with non-ok probe_status."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        fn = src.split("function _loadHomeFleetStats")[1].split("\nfunction ")[0]
+        # Must read probe_status from response
+        self.assertIn("probe_status", fn,
+                       "Fleet stats must read probe_status")
+        # Must recognize stale and error as distinct from ok
+        self.assertIn("'stale'", fn,
+                       "Fleet stats must check for stale probe_status")
+        self.assertIn("'error'", fn,
+                       "Fleet stats must check for error probe_status")
+        # Must annotate SSH PROBE label when not ok
+        self.assertIn("SSH PROBE (", fn,
+                       "Fleet stats must annotate SSH PROBE label with probe_status")
+
     def test_watchdog_shows_evidence(self):
         """Watchdog must show probe evidence, not bare verdicts."""
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:

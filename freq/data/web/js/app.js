@@ -13,7 +13,21 @@ var _viewLabels={
   settings:'settings'
 };
 function rt(view){return _viewLabels[view]||_viewLabels.home;}
-function badge(s){var c={up:'up',running:'up',online:'up',ok:'ok',healthy:'ok',down:'down',stopped:'down',unreachable:'down',CRITICAL:'CRITICAL',HIGH:'HIGH',MEDIUM:'MEDIUM',created:'created',remote:'remote',paused:'paused',unknown:'unknown'}[s]||'warn';return '<span class="badge '+c+'">'+s.toUpperCase()+'</span>';}
+/* Badge helper — preserve distinct backend states instead of collapsing
+ * everything into up/down. Each source state maps to a dedicated CSS class
+ * so degraded/stale/auth-failed states don't render as plain green or red. */
+function badge(s){var c={
+  up:'up',running:'up',online:'up',healthy:'ok',ok:'ok',
+  down:'down',stopped:'down',
+  unreachable:'unreachable',
+  auth_failed:'warn',
+  stale:'warn',
+  probe_error:'warn',
+  pending:'warn',
+  warming:'warn',
+  CRITICAL:'CRITICAL',HIGH:'HIGH',MEDIUM:'MEDIUM',
+  created:'created',remote:'remote',paused:'paused',unknown:'unknown'
+}[s]||'warn';var label=String(s).replace(/_/g,' ').toUpperCase();return '<span class="badge '+c+'">'+label+'</span>';}
 function s(l,v,c){return '<div class="st"><div class="lb">'+l+'</div><div class="vl '+c+'">'+v+'</div></div>';}
 var st=s;
 function _pbar(pct,color){var p=pct||0;var c=p>=90?'var(--red)':p>=75?'var(--yellow)':color||'var(--purple-light)';return '<div class="pbar"><div class="pbar-fill" style="width:'+p+'%;background:'+c+'"></div></div>';}
@@ -669,10 +683,19 @@ function _loadHomeFleetStats(){
     var totalOff=down;var prodCount=totalAll-lab;var pveCount=PROD_HOSTS.filter(function(h){return h.type==='pve';}).length||pve;
     var _d=function(l,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+l+'</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'</span><span class="label-hint">'+l1+'</span></span><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'</span><span class="label-hint">'+l2+'</span></span></div></div>';};
     var el=document.getElementById('hw-fleet-stats');if(!el)return;
-    var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<60?_age+'s':Math.round(_age/60)+'m';var _ageClr=hd.probe_status==='error'?'var(--red)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';var _probeLbl=hd.probe_status==='error'?'PROBE ERROR':'';var _probeClr='var(--red)';
+    var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<60?_age+'s':Math.round(_age/60)+'m';
+    /* Preserve distinct probe states — don't collapse stale/error/disk_cache into "ok" */
+    var _ps=hd.probe_status||'ok';
+    var _ageClr=_ps==='error'?'var(--red)':_ps==='stale'?'var(--yellow)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';
+    var _probeLbl=_ps==='error'?'PROBE ERROR':_ps==='stale'?'STALE CACHE':_ps==='pending'?'WARMING':'';
+    var _probeClr=_ps==='error'?'var(--red)':_ps==='stale'?'var(--yellow)':'var(--red)';
     var _sseClr=_evtSource&&_evtSource.readyState===1?'var(--green)':'var(--yellow)';var _sseLbl=_evtSource&&_evtSource.readyState===1?'SSE':'POLL';
     var _ldStat='<div class="st"><div class="lb">PROBE AGE</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+_ageClr+'">'+_ageLbl+'</span><span class="label-hint"></span></span><span class="stat-pair"><span id="sse-conn-status" style="font-size:20px;font-weight:700;color:'+(_probeLbl?_probeClr:_sseClr)+'">'+(_probeLbl||_sseLbl)+'</span><span class="label-hint"></span></span></div></div>';
-    el.innerHTML=_d('SSH PROBE',up,'UP','var(--green)',totalOff,'DOWN','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'UP','var(--cyan)')+_ldStat+st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
+    /* When probe state is stale/error, SSH PROBE label also gets dimmed so UP count
+     * doesn't read as genuine-good. Operators must consult PROBE AGE for freshness. */
+    var _probeCountLbl=_ps==='ok'?'SSH PROBE':'SSH PROBE ('+_ps+')';
+    var _upClr=_ps==='ok'?'var(--green)':'var(--yellow)';
+    el.innerHTML=_d(_probeCountLbl,up,'UP',_upClr,totalOff,'DOWN','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'UP','var(--cyan)')+_ldStat+st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
     _authFetch(API.VMS).then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
       var c=el.querySelector('.st:nth-child(5)');if(c)c.innerHTML='<div class="lb">VMs</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+run+'</span><span class="label-hint">RUN</span></span><span class="stat-pair"><span class="stat-big-red">'+stop+'</span><span class="label-hint">STOP</span></span></div>';}).catch(function(e){console.error('API error:',e);});
     _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
