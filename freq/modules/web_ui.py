@@ -34,8 +34,15 @@ def _load_setup_html() -> str:
 
 
 def _load_app_html() -> str:
-    """Load main dashboard — HTML with linked CSS and JS."""
-    return _read_asset("app.html")
+    """Load main dashboard — HTML with linked CSS and JS.
+
+    Substitutes {{VERSION}} placeholders in asset cache-bust tokens with
+    the actual product version so cache busters never drift from real
+    versioning. Operators reading view-source see one true version.
+    """
+    html = _read_asset("app.html")
+    from freq import __version__
+    return html.replace("{{VERSION}}", __version__)
 
 
 # Module-level __getattr__ returns a FRESH read each time.

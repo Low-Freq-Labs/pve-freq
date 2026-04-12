@@ -83,6 +83,45 @@ class TestServeHandlerContract(unittest.TestCase):
         self.assertIn("/static/", src, "Must have static asset route")
 
 
+class TestAssetVersionTruth(unittest.TestCase):
+    """Served HTML must align asset cache-bust versions with real product version."""
+
+    def test_app_html_uses_version_placeholder(self):
+        """Raw app.html must use {{VERSION}} placeholder, not a hardcoded version."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
+            raw = f.read()
+        self.assertIn("{{VERSION}}", raw,
+                       "app.html must use {{VERSION}} placeholder for cache-bust tokens")
+        self.assertNotIn("?v=3.0.1", raw, "Must not hardcode stale 3.0.1")
+        self.assertNotIn("?v=3.0.0", raw, "Must not hardcode stale 3.0.0")
+
+    def test_served_app_html_injects_real_version(self):
+        """_load_app_html() must substitute {{VERSION}} with freq.__version__."""
+        from freq.modules.web_ui import _load_app_html
+        from freq import __version__
+        html = _load_app_html()
+        self.assertNotIn("{{VERSION}}", html,
+                          "Placeholder must be substituted on load")
+        self.assertIn(f"?v={__version__}", html,
+                       f"Served HTML must use real version {__version__}")
+
+    def test_no_stale_3_0_versions_in_static(self):
+        """No stale 3.0.x version strings in any static asset."""
+        for fname in ("app.html", "app.css", "app.js"):
+            path = None
+            for sub in ("", "css/", "js/"):
+                candidate = os.path.join(REPO_ROOT, "freq/data/web", sub, fname)
+                if os.path.isfile(candidate):
+                    path = candidate
+                    break
+            if not path:
+                continue
+            with open(path) as f:
+                src = f.read()
+            self.assertNotIn("3.0.1", src, f"{fname} must not have stale 3.0.1")
+            self.assertNotIn("3.0.0", src, f"{fname} must not have stale 3.0.0")
+
+
 class TestDashboardTone(unittest.TestCase):
     """Dashboard voice must be calm DC01 operator tone, not playful."""
 
