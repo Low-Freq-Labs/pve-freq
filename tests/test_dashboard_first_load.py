@@ -93,21 +93,48 @@ class TestDashboardTone(unittest.TestCase):
         "FLEET ONLINE", "MEDIA STACK",
     ]
 
-    def test_no_playful_taglines(self):
+    def test_no_quote_roulette(self):
+        """No random quote rotation at all — not even operational ones."""
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
             src = f.read()
-        tagline_block = src.split("var taglines=")[1].split("};")[0]
-        for phrase in self.BANNED_PHRASES:
-            self.assertNotIn(phrase, tagline_block,
-                             f"Taglines must not contain playful phrase: {phrase}")
+        self.assertNotIn("var quotes=", src,
+                          "Must not define a quotes array")
+        self.assertNotIn("function rq(", src,
+                          "Must not define a quote rotator")
+        self.assertNotIn("home-quote-footer", src,
+                          "Must not reference home-quote-footer element")
 
-    def test_no_playful_quotes(self):
+    def test_quote_footer_removed_from_html(self):
+        """HTML must not have the quote footer element."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
+            src = f.read()
+        self.assertNotIn("home-quote-footer", src,
+                          "HTML must not contain the quote footer element")
+
+    def test_taglines_deterministic(self):
+        """Taglines must be deterministic (single string per view), not a random pool."""
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
             src = f.read()
-        quote_block = src.split("var quotes=")[1].split("];")[0]
-        for phrase in self.BANNED_PHRASES:
-            self.assertNotIn(phrase, quote_block,
-                             f"Quotes must not contain playful phrase: {phrase}")
+        # Should have _viewLabels map, not a taglines array-of-arrays
+        self.assertIn("_viewLabels", src,
+                       "Must use deterministic _viewLabels, not a random taglines pool")
+        self.assertNotIn("var taglines=", src,
+                          "Must not define a taglines pool with multiple options per view")
+
+    def test_no_soft_reassurance_copy(self):
+        """No soft marketing-style reassurance copy."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        banned = [
+            "All systems reporting",
+            "Fleet health summary",
+            "Container status",
+            "Operational status",
+            "Current state",
+        ]
+        for phrase in banned:
+            self.assertNotIn(phrase, src,
+                              f"Must not contain soft reassurance: {phrase}")
 
     def test_css_no_stale_version(self):
         with open(os.path.join(REPO_ROOT, "freq/data/web/css/app.css")) as f:

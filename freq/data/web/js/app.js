@@ -1,59 +1,18 @@
 var HC=['#58a6ff','#3fb950','#d29922','#f778ba','#79c0ff','#d2a8ff','#ff7b72','#ffa657','#7ee787'];
-var quotes=[
-  '"snapshot before you experiment." — freq',
-  '"the goal every single time: clean." — freq doctor',
-  '"measure twice, deploy once." — freq',
-  '"trust the probes, verify the state." — freq',
-  '"if it works in curl but not the browser, it does not work." — freq',
-  '"healthy fleet, quiet dashboard." — freq',
-  '"the config is the contract." — freq',
-  '"no surprises in production." — freq'
-];
-var taglines={
-  home:[
-    'Fleet overview.','All systems reporting.',
-    'Operational status.','DC01 dashboard.',
-    'Current state.','Fleet health summary.'
-  ],
-  fleet:[
-    'Host inventory.','Fleet-wide status.',
-    'All hosts reporting.','Cluster state.',
-    'Real-time fleet data.','Host health overview.'
-  ],
-  docker:[
-    'Container status.','Stack overview.',
-    'Container inventory.','Docker fleet state.',
-    'All containers reporting.','Compose stack health.'
-  ],
-  media:[
-    'Media stack status.','Stream health.',
-    'Container services.','Media inventory.',
-    'Service state.','Media fleet overview.'
-  ],
-  security:[
-    'Security posture.','Access control.',
-    'Audit status.','Compliance state.',
-    'Hardening overview.','Security inventory.'
-  ],
-  tools:[
-    'System tools.','Operational utilities.',
-    'Automation status.','Tool inventory.',
-    'Diagnostics ready.','System operations.'
-  ],
-  lab:[
-    'Lab environment.','Test infrastructure.',
-    'Lab inventory.','Development hosts.',
-    'Lab fleet status.','Non-production state.'
-  ],
-  settings:[
-    'Configuration.','Dashboard preferences.',
-    'System settings.','User preferences.',
-    'Dashboard configuration.','Settings overview.'
-  ]
+/* Deterministic per-view subtitles — no randomization, no comfort copy.
+ * Each label names the domain the page covers. State/counts come from
+ * the actual probes, not flavor text. */
+var _viewLabels={
+  home:'fleet',
+  fleet:'hosts',
+  docker:'containers',
+  media:'media stack',
+  security:'security',
+  tools:'tools',
+  lab:'lab',
+  settings:'settings'
 };
-var _lastTagline='',_lastQuote='';
-function rq(){var q;do{q=quotes[Math.floor(Math.random()*quotes.length)];}while(q===_lastQuote&&quotes.length>1);_lastQuote=q;return q;}
-function rt(view){var pool=taglines[view]||taglines.home;var t;do{t=pool[Math.floor(Math.random()*pool.length)];}while(t===_lastTagline&&pool.length>1);_lastTagline=t;return t;}
+function rt(view){return _viewLabels[view]||_viewLabels.home;}
 function badge(s){var c={up:'up',running:'up',online:'up',ok:'ok',healthy:'ok',down:'down',stopped:'down',unreachable:'down',CRITICAL:'CRITICAL',HIGH:'HIGH',MEDIUM:'MEDIUM',created:'created',remote:'remote',paused:'paused',unknown:'unknown'}[s]||'warn';return '<span class="badge '+c+'">'+s.toUpperCase()+'</span>';}
 function s(l,v,c){return '<div class="st"><div class="lb">'+l+'</div><div class="vl '+c+'">'+v+'</div></div>';}
 var st=s;
@@ -903,7 +862,6 @@ function filterFleetCards(q){
 
 /* === Navigation === */
 document.getElementById('header-tagline').textContent=rt('home');
-var qf=document.getElementById('home-quote-footer');if(qf)qf.textContent=rq();
 
 var _currentView='home';
 var _viewCleanup=[];
@@ -962,8 +920,6 @@ function switchView(view, skipPush){
      They never show the same text because they pull from different pools. */
   var tl=document.getElementById('header-tagline');
   if(tl)tl.textContent=rt(navGroup);
-  var qf=document.getElementById('home-quote-footer');
-  if(qf)qf.textContent=rq();
   /* Make sure we're on p-home */
   document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active')});
   document.getElementById('p-home').classList.add('active');
