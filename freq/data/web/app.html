@@ -21,8 +21,8 @@
 <!-- Login Overlay -->
 <div id="login-overlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
   <div style="width:380px;text-align:center">
-    <div style="font-size:32px;font-weight:700;letter-spacing:8px;color:var(--text);margin:0 auto 8px">PVE FREQ</div>
-    <div style="font-size:11px;color:var(--text-dim);letter-spacing:3px;margin-bottom:32px">FLEET DASHBOARD</div>
+    <div style="font-size:22px;font-weight:700;letter-spacing:6px;color:var(--text);margin:0 auto 4px">PVE FREQ</div>
+    <div style="font-size:10px;color:var(--text-dim);letter-spacing:2px;margin-bottom:20px">FLEET DASHBOARD</div>
     <div style="background:var(--card);border:2px solid var(--input-border);border-radius:12px;padding:28px">
       <div style="display:flex;flex-direction:column;gap:12px">
         <input id="login-user" placeholder="Username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:12px 16px;border-radius:8px;font-size:13px;font-family:inherit;width:100%;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'">
@@ -56,11 +56,6 @@
 
 <!-- ════════ HOME ════════ -->
 <div id="p-home" class="page active">
-<!-- Hero -->
-<div style="text-align:center;padding:12px 0 8px">
-  <div style="font-size:18px;font-weight:700;letter-spacing:6px;color:var(--text)">PVE FREQ</div>
-  <div style="font-size:10px;color:var(--text-dim);letter-spacing:3px;margin-top:2px">FLEET DASHBOARD</div>
-</div>
 <!-- Toolbar -->
 <div style="border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:12px">
 <div style="display:flex;gap:4px;align-items:center;min-height:32px;flex-wrap:wrap">
@@ -88,10 +83,9 @@
   <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.6">Click LAYOUT to add widgets from Fleet, Docker, Security, and Lab Tools. Or hit Quick Start for a ready-made dashboard.</div>
   <button class="fleet-btn c-purple-active" data-action="openLayoutConfig" >&#9776; CONFIGURE DASHBOARD</button>
 </div>
-<!-- Footer -->
-<div style="text-align:center;padding:32px 0 16px;border-top:1px solid var(--border);margin-top:24px">
-  <div id="home-subtitle" style="font-size:12px;letter-spacing:4px;color:var(--text-dim);text-transform:uppercase">PVE FREQ</div>
-  <div id="home-ver-footer" style="font-size:13px;color:var(--text);margin-top:4px;opacity:0.5"></div>
+<!-- Footer —  subordinate version marker, no repeated branding -->
+<div style="text-align:center;padding:16px 0 12px;border-top:1px solid var(--border);margin-top:16px">
+  <div id="home-ver-footer" style="font-size:11px;color:var(--text-dim);letter-spacing:1px"></div>
 </div>
 </div><!-- close home-view -->
 <!-- FLEET VIEW (hidden by default) -->

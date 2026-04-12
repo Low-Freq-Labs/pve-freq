@@ -3616,8 +3616,7 @@ function loadHome(){
   _authFetch(API.INFO).then(function(r){return r.json()}).then(function(d){
     document.getElementById('nav-ver').textContent='V'+d.version;
     if(d.install_method)window._freqInstallMethod=d.install_method;
-    var vf=document.getElementById('home-ver-footer');if(vf)vf.textContent='V'+d.version;
-    var st=document.getElementById('home-subtitle');if(st&&d.brand)st.textContent=d.brand;
+    var vf=document.getElementById('home-ver-footer');if(vf)vf.textContent='v'+d.version;
     document.title=(d.brand||'PVE FREQ')+' Dashboard';
     var cr=document.getElementById('about-credits');if(cr)cr.textContent=(d.cluster||'')+(d.cluster?' · ':'')+(d.brand||'PVE FREQ');
   });

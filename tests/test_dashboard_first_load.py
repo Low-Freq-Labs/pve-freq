@@ -218,6 +218,26 @@ class TestDashboardTone(unittest.TestCase):
         self.assertNotIn("'LIVE'", src.split("var _ageLbl")[1].split(";")[0] if "var _ageLbl" in src else "",
                           "Age label must show actual seconds, not claim LIVE")
 
+    def test_home_hero_removed(self):
+        """Home page must not repeat the wordmark — nav already has it."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
+            src = f.read()
+        # The home hero section should be gone; toolbar comes right after login overlay end
+        home_section = src.split('id="p-home"')[1].split('<!-- close home-view -->')[0]
+        self.assertNotIn("<!-- Hero -->", home_section,
+                          "Home must not have a hero branding section")
+        # Count PVE FREQ occurrences in home section — should be 0 (nav has it, footer has version only)
+        hero_block = home_section.split("<!-- Toolbar -->")[0]
+        self.assertNotIn("PVE FREQ", hero_block,
+                          "Home page content above toolbar must not repeat wordmark")
+
+    def test_home_footer_no_brand_repetition(self):
+        """Home footer must not repeat the brand wordmark."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
+            src = f.read()
+        self.assertNotIn('id="home-subtitle"', src,
+                          "Redundant home-subtitle element must be removed")
+
     def test_no_ascii_logos_in_html(self):
         """ASCII art logos removed — plain text wordmarks only."""
         with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
