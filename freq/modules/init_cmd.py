@@ -351,8 +351,9 @@ def _load_device_credentials(cred_file):
             2. password = "inline"              — inline password value
 
         At least one must be present. password_file takes priority when both exist.
+        Accepts both 'user' and 'username' as key for the account name.
         """
-        user = entry.get("user", "root")
+        user = entry.get("user") or entry.get("username") or "root"
         pw_file = entry.get("password_file", "")
         inline_pw = entry.get("password", "")
         if pw_file:
@@ -7172,7 +7173,10 @@ def _headless_fleet_deploy(
                 auth_pass = ""
                 auth_key = bootstrap_key
         elif htype == "truenas":
-            # TrueNAS: use bootstrap creds by default, device_creds override if present
+            # TrueNAS: prefer device_creds, fall back to bootstrap creds only
+            # if the user deployed the same key/user to the NAS manually.
+            # If neither works, the connectivity check below produces a
+            # truthful 'auth failed' message.
             if bootstrap_key:
                 auth_pass = ""
                 auth_key = bootstrap_key
@@ -7240,6 +7244,9 @@ def _headless_fleet_deploy(
             if rc != 0:
                 if _is_skip_error(err) or rc == 5:
                     reason = _skip_reason(err) if err.strip() else _ssh_error_msg(rc, err)
+                    # TrueNAS uses its own root account — add specific hint
+                    if htype == "truenas" and "auth failed" in reason:
+                        reason = "auth failed (add [truenas] to --device-credentials with root user)"
                     fmt.step_warn(f"{label} ({ip}) — {reason} (skipped)")
                     skip += 1
                 else:
