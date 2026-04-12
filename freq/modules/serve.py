@@ -286,8 +286,17 @@ def _bg_probe_infra():
         fleet_key = cfg.ssh_key_path  # fallback to service account key
     bootstrap_user = os.environ.get("SUDO_USER") or cfg.ssh_service_account
 
+    def _is_auth_failure(stderr):
+        """Detect SSH permission denied in stderr — means credential is wrong,
+        not that the host is unreachable. Health probe reports this as
+        unreachable, so infra_quick must agree."""
+        if not stderr:
+            return False
+        s = stderr.lower()
+        return "permission denied" in s or "publickey" in s
+
     def _probe_device(key, dev):
-        d = {"key": key, "label": dev.label, "type": dev.device_type, "ip": dev.ip, "reachable": False, "metrics": {}}
+        d = {"key": key, "label": dev.label, "type": dev.device_type, "ip": dev.ip, "reachable": False, "auth_failed": False, "probe_method": "none", "metrics": {}}
         dt = dev.device_type
         try:
             if dt == "pfsense":
@@ -304,6 +313,7 @@ def _bg_probe_infra():
                 )
                 if r.returncode == 0 and r.stdout.strip():
                     d["reachable"] = True
+                    d["probe_method"] = "ssh"
                     m = d["metrics"]
                     parts = r.stdout.strip().split("|", 2)
                     if parts[0].strip():
@@ -317,8 +327,14 @@ def _bg_probe_infra():
                             i for i in parts[2].strip().split() if not i.startswith(("lo", "enc", "pflog", "pfsync"))
                         ]
                         m["interfaces"] = str(len(ifaces))
+                elif _is_auth_failure(r.stderr):
+                    # Auth failure ≠ reachable. Agrees with health probe.
+                    d["auth_failed"] = True
+                    d["probe_method"] = "ssh_auth_failed"
+                    d["metrics"]["note"] = "SSH auth failed — credentials rejected"
                 else:
                     d["reachable"] = _ping_check(dev.ip)
+                    d["probe_method"] = "ping" if d["reachable"] else "none"
             elif dt == "truenas":
                 # Two quick SSH calls: zpool for pool status, midclt for alert count
                 r = ssh_single(
@@ -345,6 +361,7 @@ def _bg_probe_infra():
                 )
                 if r.returncode == 0:
                     d["reachable"] = True
+                    d["probe_method"] = "ssh"
                     m = d["metrics"]
                     if r.stdout.strip():
                         pools = []
@@ -384,8 +401,13 @@ def _bg_probe_infra():
                         m["alerts"] = len(alerts) if isinstance(alerts, list) else 0
                     except (json.JSONDecodeError, ValueError):
                         m["alerts"] = 0
+                elif _is_auth_failure(r.stderr):
+                    d["auth_failed"] = True
+                    d["probe_method"] = "ssh_auth_failed"
+                    d["metrics"]["note"] = "SSH auth failed — credentials rejected"
                 else:
                     d["reachable"] = _ping_check(dev.ip)
+                    d["probe_method"] = "ping" if d["reachable"] else "none"
             elif dt == "switch":
                 # Switch: password auth via sshpass (Cisco IOS needs legacy ciphers)
                 sw_pass_file = os.path.join(os.path.dirname(cfg.conf_dir), "credentials", "switch-password")
@@ -414,12 +436,18 @@ def _bg_probe_infra():
                     )
                 if r.returncode == 0 and r.stdout.strip():
                     d["reachable"] = True
+                    d["probe_method"] = "ssh"
                     d["metrics"]["uptime"] = r.stdout.strip()
+                elif _is_auth_failure(r.stderr):
+                    d["auth_failed"] = True
+                    d["probe_method"] = "ssh_auth_failed"
+                    d["metrics"]["note"] = "SSH auth failed — credentials rejected"
                 else:
                     pr = subprocess.run(["ping", "-c", "1", "-W", "1", dev.ip], capture_output=True, timeout=2)
                     d["reachable"] = pr.returncode == 0
+                    d["probe_method"] = "ping" if d["reachable"] else "none"
                     if d["reachable"]:
-                        d["metrics"]["note"] = "Reachable (no SSH)"
+                        d["metrics"]["note"] = "Ping reachable, no SSH"
             elif dt == "idrac":
                 # iDRAC: password auth via sshpass (same cred file as switch)
                 idrac_pass_file = os.path.join(os.path.dirname(cfg.conf_dir), "credentials", "switch-password")
@@ -452,6 +480,7 @@ def _bg_probe_infra():
                     )
                 if r.returncode == 0 and r.stdout.strip():
                     d["reachable"] = True
+                    d["probe_method"] = "ssh"
                     m = d["metrics"]
                     for line in r.stdout.strip().split("\n"):
                         low = line.lower()
@@ -464,15 +493,26 @@ def _bg_probe_infra():
                             )
                         elif "system model" in low:
                             m["model"] = line.split("=")[-1].strip() if "=" in line else line.split(":")[-1].strip()
+                elif _is_auth_failure(r.stderr):
+                    d["auth_failed"] = True
+                    d["probe_method"] = "ssh_auth_failed"
+                    d["metrics"]["note"] = "SSH auth failed — credentials rejected"
                 else:
-                    # SSH failed — fall back to ping so we don't mark a reachable iDRAC as offline
+                    # SSH failed without auth error — fall back to ping so we don't mark a reachable iDRAC as offline
                     pr = subprocess.run(["ping", "-c", "1", "-W", "1", dev.ip], capture_output=True, timeout=2)
                     d["reachable"] = pr.returncode == 0
+                    d["probe_method"] = "ping" if d["reachable"] else "none"
                     if d["reachable"]:
-                        d["metrics"]["note"] = "Reachable (no SSH)"
+                        d["metrics"]["note"] = "Ping reachable, no SSH"
             else:
+                # Unknown device type — ping-only probe. The health probe
+                # may have more authoritative data if this device is also
+                # in cfg.hosts; operators should check both surfaces.
                 pr = subprocess.run(["ping", "-c", "1", "-W", "1", dev.ip], capture_output=True, timeout=2)
                 d["reachable"] = pr.returncode == 0
+                d["probe_method"] = "ping" if d["reachable"] else "none"
+                if d["reachable"]:
+                    d["metrics"]["note"] = "Ping only — see /api/health for SSH probe state"
         except Exception as e:
             logger.warning(f"bg_probe_infra: probe failed for {key} ({dev.ip}): {e}")
         return d
