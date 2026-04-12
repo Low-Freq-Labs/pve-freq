@@ -417,28 +417,41 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
             use_sudo=False,
             cfg=cfg,
         )
-        return h, r.returncode == 0
+        # Operator-context auth issue: legacy device failed with permission
+        # denied. This is not 'down' — it's that the operator doesn't have
+        # the service account's RSA key. CLI should reflect this honestly.
+        err_l = (r.stderr or "").lower()
+        operator_auth = is_legacy and ("permission denied" in err_l or "publickey" in err_l)
+        return h, r.returncode == 0, operator_auth
 
     reachable = 0
     unreachable = []
+    na = 0
     total = len(cfg.hosts)
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
-        for h, ok in pool.map(lambda h: _test(h), cfg.hosts):
+        for h, ok, operator_auth in pool.map(lambda h: _test(h), cfg.hosts):
             if ok:
                 reachable += 1
+            elif operator_auth:
+                na += 1  # Don't count as down — operator context mismatch
             else:
                 unreachable.append(h.label)
 
-    if reachable == total:
-        fmt.step_ok(f"Fleet SSH: {reachable}/{total} hosts reachable")
+    total_checkable = total - na
+    if reachable == total_checkable and total_checkable > 0:
+        if na:
+            fmt.step_ok(f"Fleet SSH: {reachable}/{total_checkable} reachable ({na} n/a — need svc account)")
+        else:
+            fmt.step_ok(f"Fleet SSH: {reachable}/{total} hosts reachable")
         return 0
     elif reachable > 0:
         down = ", ".join(unreachable[:5])
         suffix = f" +{len(unreachable)-5} more" if len(unreachable) > 5 else ""
-        fmt.step_warn(f"Fleet SSH: {reachable}/{total} reachable (down: {down}{suffix})")
+        na_suffix = f" ({na} n/a)" if na else ""
+        fmt.step_warn(f"Fleet SSH: {reachable}/{total_checkable} reachable (down: {down}{suffix}){na_suffix}")
         return 2
     else:
-        fmt.step_fail(f"Fleet SSH: 0/{total} reachable")
+        fmt.step_fail(f"Fleet SSH: 0/{total_checkable} reachable")
         return 1
 
 

@@ -67,18 +67,45 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
         fmt.line(f"{fmt.C.BOLD}Checking {len(hosts)} hosts...{fmt.C.RESET}")
         fmt.blank()
 
-    # Parallel ping all hosts (no sudo needed for uptime)
+    # Device-appropriate verify commands. Legacy devices (iDRAC, switch)
+    # don't have 'uptime' — racadm and IOS shells have their own syntax.
+    # Running a generic SSH command produces false DOWN for successfully
+    # deployed devices.
+    VERIFY_CMDS = {
+        "linux": "uptime -p 2>/dev/null || uptime",
+        "pve": "uptime -p 2>/dev/null || uptime",
+        "docker": "uptime -p 2>/dev/null || uptime",
+        "truenas": "uptime -p 2>/dev/null || uptime",
+        "pfsense": "uptime",
+        "idrac": "racadm getsysinfo -s",
+        "switch": "show version | include uptime",
+    }
+
+    # Parallel ping all hosts — split by htype so each class gets its own verify command.
     start = time.monotonic()
-    results = ssh_run_many(
-        hosts=hosts,
-        command="uptime -p 2>/dev/null || uptime",
-        key_path=cfg.ssh_key_path,
-        connect_timeout=cfg.ssh_connect_timeout,
-        command_timeout=FLEET_QUICK_TIMEOUT,
-        max_parallel=cfg.ssh_max_parallel,
-        use_sudo=False,
-        cfg=cfg,
-    )
+    results = {}
+    from collections import defaultdict
+    by_cmd = defaultdict(list)
+    for h in hosts:
+        cmd = VERIFY_CMDS.get(h.htype, "uptime -p 2>/dev/null || uptime")
+        by_cmd[cmd].append(h)
+    for cmd, cmd_hosts in by_cmd.items():
+        # Legacy devices use RSA key, not ed25519
+        is_legacy = cmd_hosts and cmd_hosts[0].htype in ("idrac", "switch")
+        key = (cfg.ssh_rsa_key_path or cfg.ssh_key_path) if is_legacy else cfg.ssh_key_path
+        ct = 10 if is_legacy else cfg.ssh_connect_timeout
+        cmd_timeout = 15 if is_legacy else FLEET_QUICK_TIMEOUT
+        batch = ssh_run_many(
+            hosts=cmd_hosts,
+            command=cmd,
+            key_path=key,
+            connect_timeout=ct,
+            command_timeout=cmd_timeout,
+            max_parallel=cfg.ssh_max_parallel,
+            use_sudo=False,
+            cfg=cfg,
+        )
+        results.update(batch)
     total_duration = time.monotonic() - start
 
     # JSON output mode
@@ -117,6 +144,7 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
 
     up = 0
     down = 0
+    na = 0
     for h in hosts:
         r = result_for(results, h)
         if r and r.returncode == 0:
@@ -131,23 +159,43 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
                 (f"{r.duration:.1f}s", 6),
             )
         else:
-            down += 1
             err = r.stderr[:30] if r else "no response"
-            fmt.table_row(
-                (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
-                (fmt.badge("down"), 10),
-                (f"{fmt.C.RED}{err}{fmt.C.RESET}", 30),
-                (f"{r.duration:.1f}s" if r else "—", 6),
+            # Legacy device auth failures when operator lacks the service
+            # account's RSA key are not real DOWN — they're operator context
+            # mismatches. Mark as n/a so CLI doesn't contradict /api/health.
+            is_legacy = h.htype in ("idrac", "switch")
+            err_l = (r.stderr.lower() if r else "") if r else ""
+            operator_auth_issue = is_legacy and (
+                "permission denied" in err_l or "publickey" in err_l
             )
+            if operator_auth_issue:
+                na += 1
+                fmt.table_row(
+                    (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
+                    (f"{fmt.C.DIM}n/a{fmt.C.RESET}", 10),
+                    (f"{fmt.C.DIM}needs svc account{fmt.C.RESET}", 30),
+                    (f"{r.duration:.1f}s" if r else "—", 6),
+                )
+            else:
+                down += 1
+                fmt.table_row(
+                    (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
+                    (fmt.badge("down"), 10),
+                    (f"{fmt.C.RED}{err}{fmt.C.RESET}", 30),
+                    (f"{r.duration:.1f}s" if r else "—", 6),
+                )
 
     fmt.blank()
     fmt.divider("Summary")
     fmt.blank()
-    fmt.line(
+    summary = (
         f"  {fmt.C.GREEN}{up}{fmt.C.RESET} up  "
         f"{fmt.C.RED}{down}{fmt.C.RESET} down  "
-        f"({len(hosts)} total, {total_duration:.1f}s)"
     )
+    if na:
+        summary += f"{fmt.C.DIM}{na}{fmt.C.RESET} n/a  "
+    summary += f"({len(hosts)} total, {total_duration:.1f}s)"
+    fmt.line(summary)
     fmt.blank()
     fmt.footer()
 
