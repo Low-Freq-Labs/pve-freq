@@ -76,12 +76,22 @@ class TestPrimaryLayoutDensity(unittest.TestCase):
 
     def test_body_line_height_dense(self):
         """body line-height must be <=1.55 — dense desktop reading, not
-        1.65+ prose-style spacing."""
-        rule = _extract_first_rule(_css(), "body")
-        m = re.search(r"line-height\s*:\s*([\d.]+)", rule)
-        self.assertIsNotNone(m, "body must declare line-height")
-        self.assertLessEqual(float(m.group(1)), 1.55,
-                              f"body line-height must be <=1.55 (got {m.group(1)})")
+        1.65+ prose-style spacing. There can be multiple `body { }` rules
+        in app.css (e.g. a FOUC-prevention rule and the main typography
+        rule). Scan all of them and assert the main rule declares a
+        tight line-height."""
+        css = _css()
+        # Find all body { ... } blocks
+        found = False
+        for m in re.finditer(r"(?:^|\n)body\s*\{([^}]*)\}", css):
+            body_rule = m.group(1)
+            lh = re.search(r"line-height\s*:\s*([\d.]+)", body_rule)
+            if lh:
+                found = True
+                self.assertLessEqual(float(lh.group(1)), 1.55,
+                                      f"body line-height must be <=1.55 (got {lh.group(1)})")
+        self.assertTrue(found,
+                         "at least one body rule must declare line-height")
 
 
 class TestTopOfScreenStatsDensity(unittest.TestCase):

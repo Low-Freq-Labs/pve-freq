@@ -385,14 +385,50 @@ function openUserMenu(){
   ov.style.display='flex';
 }
 
-/* Auth: always require login on page load — no stored sessions.
-   Tokens live only in JS memory; refresh = re-authenticate. */
+/* Auth re-entry: the server session cookie (freq_session HttpOnly) is
+ * sent automatically by the browser on same-origin fetches, so a
+ * refresh/tab re-entry doesn't have to re-type credentials. We call
+ * /api/auth/verify first. If the cookie is still valid, rehydrate
+ * _currentUser / _currentRole from the response and hand off to
+ * _showApp(). If it's not valid (expired, missing, or reject), fall
+ * through to the login overlay.
+ *
+ * Legacy JS-stored tokens (freq_auth_token / freq_auth_user) are
+ * still cleared — we never trusted those for auth, they were a
+ * remnant of an older persistence scheme.
+ */
 function _checkSession(){
-  /* Clear any legacy stored tokens */
+  /* Clear any legacy stored tokens — never trusted for auth */
   try{sessionStorage.removeItem('freq_auth_token');sessionStorage.removeItem('freq_auth_user');}catch(e){}
   try{localStorage.removeItem('freq_auth_token');localStorage.removeItem('freq_auth_user');}catch(e){}
-  document.getElementById('login-overlay').style.display='flex';
-  document.getElementById('login-user').focus();
+
+  /* Verify the server session cookie. Browser attaches it automatically. */
+  fetch(API.AUTH_VERIFY,{credentials:'same-origin'}).then(function(r){
+    if(!r.ok)throw new Error('verify http '+r.status);
+    return r.json();
+  }).then(function(d){
+    if(d&&d.valid){
+      /* Session is still live — rehydrate and launch straight into
+       * the app without forcing re-auth. */
+      _currentUser=d.user||'';
+      _currentRole=d.role||'operator';
+      _showApp();
+      return;
+    }
+    /* Verify said invalid — show login overlay */
+    _showLoginOverlay();
+  }).catch(function(){
+    /* Network / server down — fall through to login so the operator
+     * isn't stuck staring at a spinner. */
+    _showLoginOverlay();
+  });
+}
+
+function _showLoginOverlay(){
+  var ov=document.getElementById('login-overlay');
+  if(ov)ov.style.display='flex';
+  var u=document.getElementById('login-user');
+  if(u)u.focus();
 }
 
 function _applyRoleUI(){
