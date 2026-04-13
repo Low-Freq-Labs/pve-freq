@@ -28,7 +28,19 @@ from datetime import datetime, timezone
 # ── Redaction ────────────────────────────────────────────────────────
 
 _REDACT_PATTERNS = [
-    re.compile(r"(password|passwd|secret|token|apikey|api_key)([=: ]+)\S+", re.IGNORECASE),
+    # Catches common credential/identifier query and config formats.
+    # Bias toward false positives in logs — F13 of
+    # R-SECURITY-TRUST-AUDIT-20260413P. Notably:
+    #   key=        — used by /api/lab-tool/proxy (lab tool API key in URL).
+    #   session=    — used by /api/terminal/ws (terminal session id; the
+    #                 hijack channel from F8 relies on this not being
+    #                 grep-able in freq.log).
+    #   pass=, pw=  — short forms in scripts and CLI flags.
+    #   auth=       — generic.
+    re.compile(
+        r"(password|passwd|pass|pw|secret|token|apikey|api_key|key|session|auth)([=: ]+)\S+",
+        re.IGNORECASE,
+    ),
     re.compile(r"(sshpass\s+-p\s+)\S+"),
     re.compile(r"(Bearer\s+)\S+", re.IGNORECASE),
     re.compile(r"(ghp_|gho_|github_pat_)\S+"),

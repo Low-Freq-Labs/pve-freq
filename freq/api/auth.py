@@ -172,19 +172,48 @@ def handle_auth_login(handler):
         return
 
     stored_hash = ""
+    vault_read_failed = False
     try:
         stored_hash = vault_get(cfg, "auth", f"password_{username}") or ""
     except Exception as e:
         logger.warn(f"vault read failed for auth: {e}")
+        vault_read_failed = True
 
-    if stored_hash and not verify_password(password, stored_hash):
+    # CRITICAL: refuse login when no stored hash is available.
+    # Pre-fix, the verify_password check below was guarded by "if stored_hash
+    # and ..." which short-circuited on empty hash and dropped through to the
+    # "first login sets password" block — letting any caller seed an arbitrary
+    # password for any user listed in users.conf with no vault entry yet, OR
+    # for any user whose vault read transiently failed. That was a trust-on-
+    # first-use account takeover (R-SECURITY-TRUST-AUDIT-20260413P F1).
+    # Initial admin creation is handled by /api/setup/create-admin during the
+    # first-run window — NOT by a silent re-seed in the login path.
+    if not stored_hash:
+        record_login_attempt(client_ip, False)
+        if vault_read_failed:
+            logger.error(
+                f"auth_failed: vault unreadable for '{username}' — refusing login",
+                ip=client_ip,
+            )
+        else:
+            logger.warn(
+                f"auth_failed: no password set for '{username}' — use setup wizard or admin invite",
+                ip=client_ip,
+            )
+        handler._json_response({"error": "Invalid credentials"}, 401)
+        return
+
+    if not verify_password(password, stored_hash):
         record_login_attempt(client_ip, False)
         logger.warn(f"auth_failed: invalid password for '{username}'", ip=client_ip)
         handler._json_response({"error": "Invalid credentials"}, 401)
         return
 
-    # First login sets password / migrate legacy SHA256 to PBKDF2
-    if not stored_hash or ("$" not in stored_hash):
+    # Legacy SHA256 -> PBKDF2 migration. Only fires when verify_password
+    # already succeeded against a non-empty legacy hash above (i.e. the user
+    # has a real password on file in the old format, and they typed it
+    # correctly). Never fires on an empty stored_hash.
+    if "$" not in stored_hash:
         pw_hash = hash_password(password)
         try:
             if not os.path.exists(cfg.vault_file):
@@ -250,10 +279,20 @@ def handle_auth_logout(handler):
         with _auth_lock:
             _auth_tokens.pop(token, None)
 
-    # Clear cookie by setting Max-Age=0
+    # Clear cookie by setting Max-Age=0. Mirror the same Secure flag the
+    # login path applies (auth.py:212-214) so strict cookie auditors and
+    # any clients enforcing Secure-flag symmetry get the matching directive.
+    # Browsers honor Max-Age=0 regardless of Secure, so this is correctness
+    # rather than functional — F10 in R-SECURITY-TRUST-AUDIT-20260413P.
+    import ssl as _ssl
+    is_tls = isinstance(getattr(handler, "request", None), _ssl.SSLSocket)
+    secure_flag = "; Secure" if is_tls else ""
     handler.send_response(200)
     handler.send_header("Content-Type", "application/json")
-    handler.send_header("Set-Cookie", "freq_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0")
+    handler.send_header(
+        "Set-Cookie",
+        f"freq_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0{secure_flag}",
+    )
     import json as _json
     body = _json.dumps({"ok": True, "message": "Logged out"}).encode()
     handler.send_header("Content-Length", str(len(body)))

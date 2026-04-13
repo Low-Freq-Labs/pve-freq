@@ -2381,20 +2381,33 @@ a:hover{{text-decoration:underline}}
         else:
             setup_health = "unconfigured"
 
-        self._json_response(
-            {
-                "first_run": _is_first_run(),
-                "version": __version__,
-                "ssh_key_exists": key_exists,
-                "ssh_key_readable": key_readable,
-                "ssh_key_path": key_path or "",
-                "pve_nodes_configured": has_nodes,
-                "hosts_configured": has_hosts,
-                "host_count": len(cfg.hosts),
-                "setup_health": setup_health,
-                "initialized": is_initialized,
-            }
-        )
+        # F11 of R-SECURITY-TRUST-AUDIT-20260413P: this endpoint is in the
+        # AUTH_WHITELIST so an unauth caller hits it during setup wizard
+        # bootstrap. Don't leak the absolute SSH key filesystem path —
+        # ssh_key_exists / ssh_key_readable carry the same UI information
+        # without naming the on-disk location an attacker would target if
+        # they later got a foothold. Same reason version + host_count are
+        # gated to authenticated responses below.
+        is_authed = False
+        try:
+            authed_role, authed_err = _check_session_role(self, "viewer")
+            is_authed = authed_err is None
+        except Exception:
+            is_authed = False
+        payload = {
+            "first_run": _is_first_run(),
+            "ssh_key_exists": key_exists,
+            "ssh_key_readable": key_readable,
+            "pve_nodes_configured": has_nodes,
+            "hosts_configured": has_hosts,
+            "setup_health": setup_health,
+            "initialized": is_initialized,
+        }
+        if is_authed:
+            payload["version"] = __version__
+            payload["ssh_key_path"] = key_path or ""
+            payload["host_count"] = len(cfg.hosts)
+        self._json_response(payload)
 
     def _serve_setup_create_admin(self):
         """Create admin account during first-run setup.
