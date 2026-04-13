@@ -3,7 +3,12 @@ var HC=['#58a6ff','#3fb950','#d29922','#f778ba','#79c0ff','#d2a8ff','#ff7b72','#
  * Each label names the domain the page covers. State/counts come from
  * the actual probes, not flavor text. */
 var _viewLabels={
-  home:'fleet',
+  /* 'fleet' conflicted with the FLEET top-nav button — operators
+   * reading 'HOME / fleet' couldn't tell if the tagline meant the
+   * domain the page covered or the nav group they were in. 'overview'
+   * is unambiguous and says exactly what HOME shows (a per-widget
+   * overview of the fleet/docker/security/lab surfaces). */
+  home:'overview',
   fleet:'hosts',
   docker:'containers',
   media:'media stack',

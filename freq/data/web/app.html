@@ -75,17 +75,19 @@
 <div id="home-view">
 <!-- Widget dashboard -->
 <div id="home-widgets"></div>
-<!-- Empty state -->
-<div id="home-empty" style="text-align:center;padding:40px 0;display:none">
-  <div style="font-size:36px;opacity:0.15;margin-bottom:16px">&#9776;</div>
-  <div style="font-size:16px;color:var(--text);margin-bottom:8px">no widgets configured</div>
-  <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.6">LAYOUT adds fleet, docker, security, and lab widgets. QUICK START preloads a default widget set.</div>
+<!-- Empty state — dense card, no decorative ghost glyph. The old
+     36px hamburger at opacity 0.15 was pure chrome; the home page
+     reads the same state without it, faster. -->
+<div id="home-empty" style="padding:24px 20px;display:none;border:1px dashed var(--input-border);border-radius:6px;margin-top:4px;max-width:560px;margin-left:auto;margin-right:auto">
+  <div style="font-size:13px;color:var(--text);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">no widgets configured</div>
+  <div style="font-size:12px;color:var(--text-dim);line-height:1.7;margin-bottom:14px">LAYOUT picks individual widgets from fleet / docker / security / lab. QUICK START loads the default set.</div>
   <button class="fleet-btn c-purple-active" data-action="openLayoutConfig" >&#9776; CONFIGURE DASHBOARD</button>
 </div>
-<!-- Footer —  subordinate version marker, no repeated branding -->
-<div style="text-align:center;padding:16px 0 12px;border-top:1px solid var(--border);margin-top:16px">
-  <div id="home-ver-footer" style="font-size:11px;color:var(--text-dim);letter-spacing:1px"></div>
-</div>
+<!-- Version is already rendered in the top header (nav-ver: V1.0.0 · DC01),
+     so the old home-only footer was redundant chrome on every cold load.
+     Kept the element id so any code still setting its textContent stays
+     harmless, but it no longer draws a border row on the empty home. -->
+<div id="home-ver-footer" style="display:none"></div>
 </div><!-- close home-view -->
 <!-- FLEET VIEW (hidden by default) -->
 <div id="fleet-view" class="d-none">
