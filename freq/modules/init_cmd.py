@@ -4261,6 +4261,7 @@ def _phase_fleet_configure(cfg, ctx):
     # Previous behavior only updated when generating a new cert — if the
     # cert existed from a prior init but freq.toml had been reset/re-seeded,
     # the dashboard would run HTTP instead of HTTPS.
+    tls_config_changed = False
     if os.path.isfile(cert_path) and os.path.isfile(key_path_tls):
         try:
             with open(toml_path) as f:
@@ -4276,8 +4277,22 @@ def _phase_fleet_configure(cfg, ctx):
                 with open(toml_path, "w") as f:
                     f.write(content)
                 fmt.step_ok("freq.toml updated with TLS cert paths")
+                tls_config_changed = True
         except OSError as e:
             fmt.step_warn(f"Could not update freq.toml with TLS paths: {e}")
+
+    # If we just wrote TLS cert paths to freq.toml, the dashboard process
+    # (started earlier in Phase 9 before TLS was configured) is still
+    # serving plain HTTP with the stale config in memory. Restart it so
+    # the new TLS config takes effect.
+    if tls_config_changed:
+        rc_restart, _, _ = _run(["systemctl", "is-active", "freq-dashboard"])
+        if rc_restart == 0:
+            rc_r, _, _ = _run(["systemctl", "restart", "freq-dashboard"])
+            if rc_r == 0:
+                fmt.step_ok("Dashboard restarted to pick up TLS config")
+            else:
+                fmt.step_warn("Dashboard restart failed — HTTPS may not be active until manual restart")
 
     # ── 9m: Fix ownership for dashboard ───────────────────────────
     # Dashboard runs as the service account. Init runs as root.
