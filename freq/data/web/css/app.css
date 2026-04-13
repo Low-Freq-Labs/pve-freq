@@ -1,8 +1,11 @@
 /* PVE FREQ — DC01 Fleet Dashboard
  * Dark theme, evidence-first status surfaces, calm operational tone. */
 
-/* ── Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+/* ── Fonts ──
+ * No runtime dependency on Google Fonts or any external font host.
+ * The UI falls back through the platform's system sans and mono
+ * stacks — kept in the font-family vars below so users who have
+ * Outfit or JetBrains Mono installed locally still pick them up. */
 
 /* ── Tokens ── */
 :root {
@@ -54,9 +57,9 @@
   --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 20px;
 
   /* Typography */
-  --font-ui: 'Outfit', -apple-system, 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  --font-display: 'Courier New', monospace;
+  --font-ui: 'Outfit', -apple-system, 'SF Pro Display', 'Segoe UI', Roboto, Ubuntu, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  --font-display: 'SF Mono', Menlo, Consolas, 'Courier New', monospace;
 
   /* Shadows — layered depth */
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.15);
