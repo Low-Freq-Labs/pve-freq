@@ -6994,12 +6994,14 @@ def _init_headless(cfg, args):
     # ── Phase 11: RBAC ──
     _phase(11, headless_total, "RBAC Setup")
     roles_file = os.path.join(cfg.conf_dir, "roles.conf")
+    users_file = os.path.join(cfg.conf_dir, "users.conf")
+    svc_name = ctx["svc_name"]
+
+    # Write roles.conf — append real entries after any template comments
     existing_lines = []
     if os.path.isfile(roles_file):
         with open(roles_file) as f:
             existing_lines = f.readlines()
-    # Only check uncommented lines — template comments like '# freq-admin:admin'
-    # must not fool the presence check
     active_roles = [l.strip() for l in existing_lines if l.strip() and not l.strip().startswith("#")]
     with open(roles_file, "a") as f:
         if not any(l.startswith(f"{bootstrap_user}:") for l in active_roles):
@@ -7007,12 +7009,27 @@ def _init_headless(cfg, args):
             fmt.step_ok(f"Added {bootstrap_user} as admin")
         else:
             fmt.step_ok(f"{bootstrap_user} already in roles")
-        svc_name = ctx["svc_name"]
         if not any(l.startswith(f"{svc_name}:") for l in active_roles):
             f.write(f"{svc_name}:admin\n")
             fmt.step_ok(f"Added {svc_name} as admin")
         else:
             fmt.step_ok(f"{svc_name} already in roles")
+
+    # Write users.conf with the same users (space-delimited: USERNAME ROLE).
+    # Keeps users.conf and roles.conf consistent so partial-init states
+    # (e.g. Phase 12 hang) don't leave the dashboard unable to identify
+    # authorized users even though roles.conf has them.
+    users_existing = []
+    if os.path.isfile(users_file):
+        with open(users_file) as f:
+            users_existing = f.readlines()
+    users_active = [l.strip() for l in users_existing if l.strip() and not l.strip().startswith("#")]
+    with open(users_file, "a") as f:
+        if not any(l.split()[0] == bootstrap_user for l in users_active if l.split()):
+            f.write(f"{bootstrap_user} admin\n")
+        if not any(l.split()[0] == svc_name for l in users_active if l.split()):
+            f.write(f"{svc_name} admin\n")
+    fmt.step_ok("users.conf seeded with bootstrap + service account")
 
     # Seed dashboard password for bootstrap user (the human operator).
     # The service account (freq-admin) does NOT get a web login — it runs
