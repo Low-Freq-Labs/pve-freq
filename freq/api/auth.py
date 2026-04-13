@@ -205,10 +205,13 @@ def handle_auth_login(handler):
     # Set auth cookie for SSE and cookie-based auth (HttpOnly, SameSite=Strict)
     handler.send_response(200)
     handler.send_header("Content-Type", "application/json")
-    # Add Secure flag when TLS is configured
-    cfg = load_config()
-    tls_cert = getattr(cfg, "tls_cert", "")
-    secure_flag = "; Secure" if tls_cert and os.path.isfile(tls_cert) else ""
+    # Add Secure flag only when THIS request arrived over TLS. Setting Secure
+    # based on tls_cert config is wrong: if the dashboard has tls_cert set but
+    # the client talked to it over HTTP (e.g. TLS wrap failed, or reverse proxy),
+    # the Secure cookie is dropped by the client and session persistence breaks.
+    import ssl as _ssl
+    is_tls = isinstance(getattr(handler, "request", None), _ssl.SSLSocket)
+    secure_flag = "; Secure" if is_tls else ""
     handler.send_header("Set-Cookie",
                         f"freq_session={token}; HttpOnly; SameSite=Strict; Path=/; "
                         f"Max-Age={SESSION_TIMEOUT_SECONDS}{secure_flag}")
