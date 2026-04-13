@@ -521,16 +521,25 @@ def _check_legacy_passwords(cfg: FreqConfig) -> int:
     pw_file = getattr(cfg, "legacy_password_file", "") or ""
     if pw_file:
         # The file may be inside a service-account-owned dir (e.g. ~/.ssh/ with 700).
-        # When an operator runs doctor, os.path.isfile() returns False even though
-        # the file exists. Check if the parent dir is a secure service-owned dir.
+        # When an operator runs doctor, os.path.isfile() AND os.path.isdir(parent)
+        # both return False because stat fails through the 700 dir. Walk upward
+        # to find the first accessible ancestor and check if any intermediate
+        # directory is the service account's home dir.
         if os.path.isfile(pw_file):
             fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)}")
             return 0
-        parent = os.path.dirname(pw_file)
-        if os.path.isdir(parent) and not os.access(parent, os.R_OK):
-            # Parent exists but is unreadable (likely 700 service-account dir)
-            fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)} (in secure dir)")
-            return 0
+        # Check if path is under service account home — if yes, file is
+        # (very likely) in a secure 700 dir we can't stat from operator context.
+        svc = getattr(cfg, "ssh_service_account", "") or ""
+        if svc:
+            try:
+                import pwd
+                svc_home = pwd.getpwnam(svc).pw_dir
+            except (KeyError, ImportError):
+                svc_home = f"/home/{svc}"
+            if svc_home and pw_file.startswith(svc_home + os.sep):
+                fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)} (in secure svc dir)")
+                return 0
         fmt.step_warn(f"Legacy password file configured but missing: {pw_file}")
         return 2
     else:
