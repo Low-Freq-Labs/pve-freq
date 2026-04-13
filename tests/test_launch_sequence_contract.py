@@ -121,23 +121,35 @@ class TestStageVocabulary(unittest.TestCase):
 class TestHeaderUserButtonChrome(unittest.TestCase):
     """The header user button appears only post-login — it's the first
     piece of post-auth chrome the operator sees, so it must also drop
-    the purple hover and thick 2px border branding."""
+    the purple hover and thick 2px border branding.
+
+    After R-WEB-CSP-INLINE-CONTRACT-20260413M handler extraction the
+    inline style moved into app.css .header-user-btn, so these
+    assertions target the CSS rule, not the app.html attribute."""
+
+    def _header_btn_rule(self):
+        with open(os.path.join(REPO_ROOT, "freq/data/web/css/app.css")) as f:
+            css = f.read()
+        idx = css.index(".header-user-btn {")
+        end = css.index("}", idx)
+        return css[idx: end]
+
+    def _header_btn_hover_rule(self):
+        with open(os.path.join(REPO_ROOT, "freq/data/web/css/app.css")) as f:
+            css = f.read()
+        idx = css.index(".header-user-btn:hover")
+        end = css.index("}", idx)
+        return css[idx: end]
 
     def test_user_button_no_purple_hover(self):
-        with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
-            src = f.read()
-        idx = src.index('id="header-user-btn"')
-        btn = src[idx: src.index("</button>", idx)]
-        self.assertNotIn("var(--purple)", btn,
-                          "header-user-btn must not hover to purple")
+        rule = self._header_btn_hover_rule()
+        self.assertNotIn("var(--purple)", rule,
+                          "header-user-btn:hover must not set purple border")
 
     def test_user_button_thin_border(self):
-        with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
-            src = f.read()
-        idx = src.index('id="header-user-btn"')
-        btn = src[idx: src.index("</button>", idx)]
-        self.assertIn("border:1px solid", btn,
-                       "header-user-btn must use 1px border, not 2px branded accent")
+        rule = self._header_btn_rule()
+        self.assertIn("border: 1px solid", rule,
+                       "header-user-btn must declare 1px border in CSS")
 
 
 if __name__ == "__main__":

@@ -13,18 +13,19 @@
 </head>
 <body>
 
-<!-- Login Overlay -->
-<div id="login-overlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
-  <div style="width:380px;text-align:center">
-    <div style="font-size:22px;font-weight:700;letter-spacing:6px;color:var(--text);margin:0 auto 4px">PVE FREQ</div>
-    <div style="font-size:10px;color:var(--text-dim);letter-spacing:2px;margin-bottom:20px">operator console</div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:4px;padding:24px">
-      <div style="display:flex;flex-direction:column;gap:12px">
-        <input id="login-user" placeholder="Username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()" style="background:var(--bg);border:1px solid var(--input-border);color:var(--text);padding:12px 16px;border-radius:4px;font-size:13px;font-family:inherit;width:100%;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--text-dim)'" onblur="this.style.borderColor='var(--input-border)'">
-        <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="background:var(--bg);border:1px solid var(--input-border);color:var(--text);padding:12px 16px;border-radius:4px;font-size:13px;font-family:inherit;width:100%;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--text-dim)'" onblur="this.style.borderColor='var(--input-border)'">
-        <button onclick="doLogin()" style="background:var(--text);color:var(--bg);border:none;padding:12px;border-radius:4px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;letter-spacing:1px;transition:opacity 0.2s" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">LOG IN</button>
+<!-- Login Overlay — inline handlers extracted to app.js delegator +
+     CSS (.login-input, .login-submit-btn). See app.js registerLoginBindings() -->
+<div id="login-overlay" class="login-overlay">
+  <div class="login-card">
+    <div class="login-wordmark">PVE FREQ</div>
+    <div class="login-tagline">operator console</div>
+    <div class="login-form">
+      <div class="login-fields">
+        <input id="login-user" class="login-input" placeholder="Username" autocomplete="username">
+        <input id="login-pass" class="login-input" type="password" placeholder="Password" autocomplete="current-password">
+        <button id="login-submit-btn" class="login-submit-btn" data-action="doLogin">LOG IN</button>
       </div>
-      <div id="login-error" style="margin-top:12px;font-size:12px;color:var(--red);display:none"></div>
+      <div id="login-error" class="login-error"></div>
     </div>
   </div>
 </div>
@@ -39,13 +40,13 @@
   </div>
   <div class="flex-gap-16-center">
     <span id="watchdog-status"></span>
-    <button id="header-user-btn" onclick="openUserMenu()" style="display:none;background:var(--card);border:1px solid var(--input-border);color:var(--text);padding:5px 12px;border-radius:4px;font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--text-dim)'" onmouseout="this.style.borderColor='var(--input-border)'"><span id="header-user-icon" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></span><span id="header-user-name" style="font-weight:600;text-transform:uppercase;letter-spacing:0.5px"></span><span id="header-user-role" style="font-size:10px;color:var(--text-dim)"></span></button>
+    <button id="header-user-btn" class="header-user-btn" data-action="openUserMenu" style="display:none"><span id="header-user-icon" class="header-user-icon"></span><span id="header-user-name" class="header-user-name"></span><span id="header-user-role" class="header-user-role"></span></button>
     <span style="font-family:'Courier New',monospace;font-size:14px;font-weight:500;color:var(--text-dim);letter-spacing:1px" id="header-time"></span>
   </div>
 </div>
-<div id="update-banner" style="display:none;background:var(--card);border-bottom:1px solid var(--border);padding:10px 32px;font-size:13px;color:var(--text)">
+<div id="update-banner" class="update-banner" style="display:none">
   <span id="update-banner-text"></span>
-  <button onclick="document.getElementById('update-banner').style.display='none';sessionStorage.setItem('freq_update_dismissed','1')" style="float:right;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button>
+  <button class="update-banner-dismiss" data-action="dismissUpdateBanner">&times;</button>
 </div>
 <div class="mn-body" style="display:none" id="mn-body">
 

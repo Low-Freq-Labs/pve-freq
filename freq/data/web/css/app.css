@@ -1239,6 +1239,70 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   LOGIN OVERLAY + HEADER CHROME — extracted from inline handlers
+   (R-WEB-CSP-INLINE-CONTRACT-20260413M highest-value surfaces)
+   ═══════════════════════════════════════════════════════════════════ */
+.login-overlay {
+  position: fixed; inset: 0; background: var(--bg);
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
+}
+.login-card { width: 380px; text-align: center; }
+.login-wordmark {
+  font-size: 22px; font-weight: 700; letter-spacing: 6px;
+  color: var(--text); margin: 0 auto 4px;
+}
+.login-tagline {
+  font-size: 10px; color: var(--text-dim); letter-spacing: 2px; margin-bottom: 20px;
+}
+.login-form {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 4px; padding: 24px;
+}
+.login-fields { display: flex; flex-direction: column; gap: 12px; }
+.login-input {
+  background: var(--bg); border: 1px solid var(--input-border);
+  color: var(--text); padding: 12px 16px; border-radius: 4px;
+  font-size: 13px; font-family: inherit; width: 100%;
+  outline: none; transition: border-color var(--duration-fast);
+}
+.login-input:focus { border-color: var(--text-dim); }
+.login-submit-btn {
+  background: var(--text); color: var(--bg); border: none;
+  padding: 12px; border-radius: 4px; font-size: 13px;
+  font-weight: 600; font-family: inherit; cursor: pointer;
+  letter-spacing: 1px; transition: opacity var(--duration-fast);
+}
+.login-submit-btn:hover { opacity: 0.85; }
+.login-error {
+  margin-top: 12px; font-size: 12px; color: var(--red); display: none;
+}
+
+.header-user-btn {
+  background: var(--card); border: 1px solid var(--input-border);
+  color: var(--text); padding: 5px 12px; border-radius: 4px;
+  font-size: 12px; font-family: inherit; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  transition: border-color var(--duration-fast);
+}
+.header-user-btn:hover { border-color: var(--text-dim); }
+.header-user-icon {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+}
+.header-user-name {
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.header-user-role { font-size: 10px; color: var(--text-dim); }
+
+.update-banner {
+  background: var(--card); border-bottom: 1px solid var(--border);
+  padding: 10px 32px; font-size: 13px; color: var(--text);
+}
+.update-banner-dismiss {
+  float: right; background: none; border: none;
+  color: var(--text-dim); cursor: pointer; font-size: 14px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    COMPACT MODE
    ═══════════════════════════════════════════════════════════════════ */
 body.compact .mn-body { padding: 8px 14px; }

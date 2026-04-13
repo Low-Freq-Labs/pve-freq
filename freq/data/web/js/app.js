@@ -102,7 +102,7 @@ document.addEventListener('click',function(e){
     if(a==='hdDiagnose'){hdDiagnose(da);return;}
     if(a==='togglePveGroup'){togglePveGroup(da);return;}
     if(a==='clearHarden'){document.getElementById('harden-c').innerHTML='';return;}
-    var fns={sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,vmtRollback:vmtRollback,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll,pfWriteService:pfWriteService,pfWriteDhcp:pfWriteDhcp,pfWriteRule:pfWriteRule,pfWriteNat:pfWriteNat,pfWriteWgPeer:pfWriteWgPeer,pfBackupNow:pfBackupNow,pfCheckUpdates:pfCheckUpdates,pfReboot:pfReboot,tnWriteService:tnWriteService,tnWriteScrub:tnWriteScrub,tnWriteShare:tnWriteShare,tnWriteReplication:tnWriteReplication,tnReboot:tnReboot,swWriteAcl:swWriteAcl,opnWriteService:opnWriteService,opnWriteRule:opnWriteRule,opnDeleteRule:opnDeleteRule,opnWriteDhcp:opnWriteDhcp,opnWriteDns:opnWriteDns,opnWriteWg:opnWriteWg,opnReboot:opnReboot,ipmiClearSel:ipmiClearSel,synWriteService:synWriteService,synReboot:synReboot};
+    var fns={doLogin:doLogin,openUserMenu:openUserMenu,dismissUpdateBanner:dismissUpdateBanner,sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,vmtRollback:vmtRollback,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll,pfWriteService:pfWriteService,pfWriteDhcp:pfWriteDhcp,pfWriteRule:pfWriteRule,pfWriteNat:pfWriteNat,pfWriteWgPeer:pfWriteWgPeer,pfBackupNow:pfBackupNow,pfCheckUpdates:pfCheckUpdates,pfReboot:pfReboot,tnWriteService:tnWriteService,tnWriteScrub:tnWriteScrub,tnWriteShare:tnWriteShare,tnWriteReplication:tnWriteReplication,tnReboot:tnReboot,swWriteAcl:swWriteAcl,opnWriteService:opnWriteService,opnWriteRule:opnWriteRule,opnDeleteRule:opnDeleteRule,opnWriteDhcp:opnWriteDhcp,opnWriteDns:opnWriteDns,opnWriteWg:opnWriteWg,opnReboot:opnReboot,ipmiClearSel:ipmiClearSel,synWriteService:synWriteService,synReboot:synReboot};
     if(fns[a]){fns[a]();return;}
     var argFns={tnAction:tnAction,swAction:swAction,pfAction:pfAction,idracAction:idracAction,idracWrite:idracWrite,opnAction:opnAction,ipmiAction:ipmiAction,ipmiWrite:ipmiWrite,ipmiWriteBoot:ipmiWriteBoot,redfishAction:redfishAction,redfishWrite:redfishWrite,synAction:synAction,tnWriteSnapshot:tnWriteSnapshot,tnWriteDataset:tnWriteDataset,swWriteVlan:swWriteVlan,switchVaultTab:switchVaultTab,switchDockerSub:switchDockerSub,toggleMediaTag:toggleMediaTag,runHostUpdate:runHostUpdate,sshdRestartHost:sshdRestartHost,ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart};
     if(argFns[a]){argFns[a](g);return;}
@@ -430,6 +430,37 @@ function _showLoginOverlay(){
   var u=document.getElementById('login-user');
   if(u)u.focus();
 }
+
+/* Dismiss the update banner. data-action='dismissUpdateBanner'
+ * branch in the delegator replaces the old inline onclick that
+ * was blocking the script-src 'unsafe-inline' drop. */
+function dismissUpdateBanner(){
+  var b=document.getElementById('update-banner');
+  if(b)b.style.display='none';
+  try{sessionStorage.setItem('freq_update_dismissed','1');}catch(e){}
+}
+
+/* Login input Enter-key bindings. The old inline onkeydown handlers
+ * ran 'if event.key==Enter focus next' / 'if event.key==Enter
+ * doLogin()', which blocked the script-src 'unsafe-inline' drop.
+ * Same behavior, registered via addEventListener. */
+function registerLoginBindings(){
+  var u=document.getElementById('login-user');
+  var p=document.getElementById('login-pass');
+  if(u&&!u._freqBound){
+    u.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){e.preventDefault();if(p)p.focus();}
+    });
+    u._freqBound=true;
+  }
+  if(p&&!p._freqBound){
+    p.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){e.preventDefault();doLogin();}
+    });
+    p._freqBound=true;
+  }
+}
+registerLoginBindings();
 
 function _applyRoleUI(){
   var roleSelect=document.getElementById('ft-nu-sudo');
