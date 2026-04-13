@@ -37,6 +37,22 @@ if [ -z "$TARGET_HEAD" ]; then
     echo "  Full source synced to ${REMOTE_DIR}"
 else
     LOCAL_HEAD=$(git rev-parse HEAD)
+
+    # Dirty-target self-heal. /tmp/pve-freq-dev on the E2E VM is a
+    # disposable dev tree — any uncommitted local edits there are
+    # leftovers from the previous run (e.g. mid-test diagnostics or
+    # a hot-patch). If we leave them in place, `git pull --ff-only`
+    # during the bundle apply aborts with "Your local changes to the
+    # following files would be overwritten by merge", and the whole
+    # E2E run is blocked. Reset hard + clean so the fast-path becomes
+    # deterministic regardless of what state the dev tree was in.
+    TARGET_DIRTY=$(ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git status --porcelain 2>/dev/null" || echo "")
+    if [ -n "$TARGET_DIRTY" ]; then
+        echo "[1/4] Target tree dirty — resetting ${REMOTE_DIR} to ${TARGET_HEAD:0:8}"
+        echo "$TARGET_DIRTY" | sed 's/^/    /'
+        ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git reset --hard HEAD && git clean -fd"
+    fi
+
     if [ "$TARGET_HEAD" = "$LOCAL_HEAD" ]; then
         echo "[1/4] Already up to date (${LOCAL_HEAD:0:8}) — skipping bundle"
     else
