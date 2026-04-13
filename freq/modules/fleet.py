@@ -20,6 +20,7 @@ Design decisions:
       if sudo is broken on a host. Diagnose uses sudo for deeper checks.
 """
 
+import os
 import socket
 import subprocess
 import time
@@ -42,6 +43,34 @@ FLEET_EXEC_TIMEOUT = 600
 # ─────────────────────────────────────────────────────────────
 # FLEET STATUS — Health check and dashboard overview
 # ─────────────────────────────────────────────────────────────
+
+
+def _load_dashboard_health_cache(cfg: FreqConfig) -> dict:
+    """Read the dashboard's cached health data for legacy devices.
+
+    The dashboard runs as the service account and has SSH key access
+    to iDRAC/switch that operator CLI doesn't. Its background probe
+    writes results to data/cache/health.json. Operators can read this
+    (cache files are chmod 644) and merge it with their own SSH results.
+
+    Returns dict keyed by IP → {status, cores, ram, disk, load, uptime, ...}
+    or empty dict if cache is missing/stale (>120s old).
+    """
+    import json as _json
+    try:
+        cache_path = os.path.join(cfg.data_dir, "cache", "health.json")
+        if not os.path.isfile(cache_path):
+            return {}
+        with open(cache_path) as f:
+            entry = _json.load(f)
+        ts = entry.get("ts", 0)
+        if time.time() - ts > 120:
+            return {}  # Too stale — prefer direct SSH
+        data = entry.get("data", {})
+        hosts_list = data.get("hosts", [])
+        return {h.get("ip"): h for h in hosts_list if h.get("ip")}
+    except (OSError, _json.JSONDecodeError, Exception):
+        return {}
 
 
 def cmd_status(cfg: FreqConfig, pack, args) -> int:
@@ -142,6 +171,10 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
         ("TIME", 6),
     )
 
+    # Load dashboard's cached health data — service-account-authoritative
+    # source for devices operator CLI can't directly reach.
+    dashboard_health = _load_dashboard_health_cache(cfg)
+
     up = 0
     down = 0
     na = 0
@@ -162,13 +195,27 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
             err = r.stderr[:30] if r else "no response"
             # Legacy device auth failures when operator lacks the service
             # account's RSA key are not real DOWN — they're operator context
-            # mismatches. Mark as n/a so CLI doesn't contradict /api/health.
+            # mismatches. Use the dashboard's cached health data as the
+            # authoritative source for these devices, falling back to n/a
+            # only when no cache entry exists.
             is_legacy = h.htype in ("idrac", "switch")
             err_l = (r.stderr.lower() if r else "") if r else ""
             operator_auth_issue = is_legacy and (
                 "permission denied" in err_l or "publickey" in err_l
             )
-            if operator_auth_issue:
+            cached = dashboard_health.get(h.ip) if operator_auth_issue else None
+            if cached and cached.get("status") == "healthy":
+                # Dashboard verified this device healthy — show it as up
+                up += 1
+                # Prefer cached uptime/load as the displayed metric
+                detail = cached.get("load", "") or cached.get("ram", "") or "healthy"
+                fmt.table_row(
+                    (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
+                    (fmt.badge("up"), 10),
+                    (f"{fmt.C.DIM}via dashboard: {detail}{fmt.C.RESET}"[:30], 30),
+                    (f"{r.duration:.1f}s" if r else "—", 6),
+                )
+            elif operator_auth_issue:
                 na += 1
                 fmt.table_row(
                     (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),

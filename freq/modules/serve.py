@@ -239,7 +239,12 @@ def _load_disk_cache():
 
 
 def _save_disk_cache(name, data):
-    """Persist to disk atomically so next server start is instant."""
+    """Persist to disk atomically so next server start is instant.
+
+    Cache files are chmod 644 so operator CLI commands (running as a
+    non-service-account user) can read them. The cache contains host
+    health/metrics data — no secrets — so world-readable is safe.
+    """
     global CACHE_DIR
     if CACHE_DIR is None:
         _init_cache_dir()
@@ -250,6 +255,7 @@ def _save_disk_cache(name, data):
         try:
             with os.fdopen(fd, "w") as f:
                 json.dump({"data": data, "ts": time.time()}, f)
+            os.chmod(tmp, 0o644)
             os.replace(tmp, target)
         except BaseException:
             try:
