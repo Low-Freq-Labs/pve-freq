@@ -19,10 +19,10 @@
     <div class="step-dot" id="dot-3"></div>
   </div>
 
-  <!-- Step 0: Dashboard admin account -->
+  <!-- Step 0: First operator login -->
   <div class="pane active" id="pane-0">
-    <h2>Dashboard admin account</h2>
-    <p class="desc">First account for dashboard login. Stored in users.conf. Password hashed with PBKDF2.</p>
+    <h2>First operator login</h2>
+    <p class="desc">Creates the first web operator. Seeds users.conf with a PBKDF2 hash. Fleet service account freq-admin is deployed later by freq init over SSH — this step only covers the dashboard login.</p>
     <label>Username</label>
     <input type="text" id="s-user" placeholder="admin" autocomplete="username">
     <label>Password</label>
@@ -67,7 +67,7 @@
   <!-- Step 3: Done -->
   <div class="pane" id="pane-3">
     <h2>First-run setup complete</h2>
-    <p class="desc">Dashboard admin is configured. Run freq init for fleet discovery, service-account deployment, and host registration. The dashboard will show partial setup_health until init completes.</p>
+    <p class="desc">Web login is ready. freq init still has to run to deploy the freq-admin service account over SSH, register hosts, and write the .initialized marker. setup_health will report "partial" until that completes.</p>
     <div class="result" id="summary"></div>
     <div class="btn-row"><button class="btn" onclick="launch()">Launch dashboard</button></div>
   </div>

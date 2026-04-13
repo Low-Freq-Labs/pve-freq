@@ -59,20 +59,26 @@ class TestSetupUXHonesty(unittest.TestCase):
         self.assertNotIn("Your FREQ instance is ready", src,
                           "Setup must not claim full readiness — fleet config still needed")
 
-    def test_setup_html_says_initial(self):
-        """Setup heading must indicate this is initial, not complete setup."""
+    def test_setup_html_says_first_run(self):
+        """Setup heading must indicate this is the first-run pass, not a
+        full init. Current DC01 tone uses 'first-run' lowercase."""
         with open(os.path.join(REPO_ROOT, "freq/data/web/setup.html")) as f:
             src = f.read()
-        self.assertIn("Initial Setup", src,
-                       "Setup heading must say 'Initial Setup' not just 'Setup Complete'")
+        self.assertIn("first-run", src.lower(),
+                       "Setup heading must say 'first-run' not just 'complete'")
 
-    def test_setup_summary_shows_next_steps(self):
-        """Setup JS summary must show next steps for fleet configuration."""
+    def test_setup_summary_points_to_init(self):
+        """Setup JS summary must show the next lifecycle step: freq init.
+        (Old guidance pointed at freq doctor; the real lifecycle is now
+        bootstrap -> web setup -> freq init -> .initialized marker.)"""
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/setup.js")) as f:
             src = f.read()
-        self.assertIn("Next steps", src)
-        self.assertIn("freq doctor", src,
-                       "Summary must tell user to run freq doctor")
+        self.assertIn("Next", src,
+                       "Summary must show a 'Next' step")
+        self.assertIn("freq init", src,
+                       "Summary must tell user to run freq init")
+        self.assertNotIn("freq doctor", src,
+                          "Old 'freq doctor' guidance must be gone — init is the next step")
 
     def test_setup_html_mentions_fleet_discovery(self):
         """Setup completion text must mention fleet discovery is separate."""

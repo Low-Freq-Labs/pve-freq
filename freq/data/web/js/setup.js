@@ -72,7 +72,7 @@ function genKey(){
 }
 
 function renderSummary(){
-  var s='<span class="check">&#10003;</span> Dashboard admin: <b>'+adminUser+'</b> (role: admin)\n';
+  var s='<span class="check">&#10003;</span> Operator: <b>'+adminUser+'</b> (role: admin)\n';
   if(clusterConfigured){
     var c=document.getElementById('s-cluster').value.trim();
     var tz=document.getElementById('s-tz').value.trim()||'UTC';
@@ -80,7 +80,7 @@ function renderSummary(){
     s+='<span class="check">&#10003;</span> Timezone: <b>'+tz+'</b>\n';
   }
   s+='<span class="check">&#10003;</span> SSH key: '+(keyGenerated?'<b>written</b>':'<b>skipped</b> — run freq init later')+'\n';
-  s+='\nNext: run freq init for fleet discovery, service-account deployment,\nand host registration. Dashboard will report setup_health="partial"\nuntil init writes .initialized.';
+  s+='\nNext: run freq init. init deploys the freq-admin service account\nover SSH, runs fleet discovery, registers hosts, and writes\n.initialized. setup_health stays "partial" until init finishes.';
   document.getElementById('summary').innerHTML=s;
 }
 
