@@ -255,6 +255,44 @@ class TestDashboardTone(unittest.TestCase):
         self.assertNotIn("\\u2588\\u2588\\u2588", src,
                           "JS must not contain escaped ASCII block art")
 
+    def test_favicon_not_purple_gradient(self):
+        """Favicon must not use purple linear gradient."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
+            src = f.read()
+        head = src[:2000]
+        # The old favicon had a linearGradient with purple stops
+        self.assertNotIn("linearGradient", head,
+                          "Favicon must not use a gradient")
+        self.assertNotIn("9B4FDE", head, "Favicon must not use purple stops")
+
+    def test_no_italic_tagline(self):
+        """mn-header .tagline must not use font-style: italic."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/css/app.css")) as f:
+            src = f.read()
+        tagline_rules = [m for m in src.split("\n") if ".tagline" in m and ".mn-header" in m]
+        for rule in tagline_rules:
+            self.assertNotIn("italic", rule,
+                              f"Tagline rule must not use italic: {rule}")
+
+    def test_no_ascii_logo_glow_block(self):
+        """CSS must not define the ASCII Logo ambient glow block."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/css/app.css")) as f:
+            src = f.read()
+        self.assertNotIn("logoBreath", src,
+                          "logoBreath animation must be removed")
+        self.assertNotIn("ASCII Logo", src,
+                          "'ASCII Logo' comment block must be removed")
+
+    def test_login_shell_neutral(self):
+        """Login button must not use purple background."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/app.html")) as f:
+            src = f.read()
+        login_block = src.split('id="login-overlay"')[1].split("</div>\n</div>")[0]
+        # Login button background must not be var(--purple)
+        btn = [line for line in login_block.split("\n") if "doLogin()" in line and "background:var(--purple)" in line]
+        self.assertEqual(btn, [],
+                         "Login button must not use var(--purple) background")
+
     def test_no_cockpit_branding_comments(self):
         """Cockpit metaphor removed from CSS comments."""
         with open(os.path.join(REPO_ROOT, "freq/data/web/css/app.css")) as f:

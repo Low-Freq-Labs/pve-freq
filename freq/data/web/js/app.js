@@ -940,8 +940,7 @@ function switchView(view, skipPush){
   if(activeBtn)activeBtn.classList.add('active-view');
   /* Update title */
   document.getElementById('page-title').textContent=NAV_TITLES[navGroup]||VIEW_TITLES[view]||view;
-  /* Update quotes — header gets tab-specific tagline, footer gets random quote.
-     They never show the same text because they pull from different pools. */
+  /* Update header subtitle — deterministic per-view label from _viewLabels */
   var tl=document.getElementById('header-tagline');
   if(tl)tl.textContent=rt(navGroup);
   /* Make sure we're on p-home */
