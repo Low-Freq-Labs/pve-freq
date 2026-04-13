@@ -300,8 +300,7 @@ class TestDashboardTone(unittest.TestCase):
         """Watchdog must show probe evidence, not bare verdicts."""
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
             src = f.read()
-        # The watchdog render block starts at the comment and ends at the catch
-        watchdog_block = src.split("Watchdog probe status")[1].split(".catch")[0]
+        watchdog_block = src.split("Watchdog probe status")[1].split("status unavailable")[0]
         self.assertIn("hosts probed", watchdog_block,
                        "Watchdog must show what was probed")
         self.assertIn("errors", watchdog_block,
@@ -310,6 +309,35 @@ class TestDashboardTone(unittest.TestCase):
                           "Must not show bare OK verdict")
         self.assertNotIn("WATCHDOG: offline", watchdog_block,
                           "Must not show bare offline verdict")
+
+    def test_watchdog_distinguishes_not_installed(self):
+        """Watchdog UI must distinguish 501 not-installed from 503 daemon-down."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        watchdog_block = src.split("Watchdog probe status")[1].split("status unavailable")[0]
+        # Must branch on 501 status or watchdog_installed=false
+        self.assertIn("501", watchdog_block,
+                       "Must check HTTP 501 for not-installed state")
+        self.assertIn("watchdog_installed", watchdog_block,
+                       "Must check watchdog_installed field")
+        self.assertIn("not installed", watchdog_block,
+                       "Must say 'not installed' for 501 case")
+        # Must branch on 503 for down state
+        self.assertIn("503", watchdog_block,
+                       "Must check HTTP 503 for daemon-down state")
+        self.assertIn("watchdog_down", watchdog_block,
+                       "Must check watchdog_down field")
+
+    def test_watchdog_no_daemon_drama(self):
+        """Watchdog UI must not use dramatic failure language for optional add-on."""
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        watchdog_block = src.split("Watchdog probe status")[1].split("status unavailable")[0]
+        # These were the old dramatic strings
+        self.assertNotIn("daemon returned error", watchdog_block,
+                          "Must not show 'daemon returned error' for unconditional case")
+        self.assertNotIn("port closed or not running", watchdog_block,
+                          "Must not show 'port closed or not running' for unconditional case")
 
 
 if __name__ == "__main__":

@@ -3620,10 +3620,29 @@ function loadHome(){
     document.title=(d.brand||'PVE FREQ')+' Dashboard';
     var cr=document.getElementById('about-credits');if(cr)cr.textContent=(d.cluster||'')+(d.cluster?' · ':'')+(d.brand||'PVE FREQ');
   });
-  /* Watchdog probe status */
-  _authFetch(API.WATCHDOG_HEALTH).then(function(r){return r.json()}).then(function(d){
+  /* Watchdog probe status — distinguish not-installed (501), down (503), and working (200) */
+  _authFetch(API.WATCHDOG_HEALTH).then(function(r){
+    var status=r.status;
+    return r.json().then(function(d){return{status:status,data:d};}).catch(function(){return{status:status,data:{}};});
+  }).then(function(res){
     var el=document.getElementById('watchdog-status');if(!el)return;
-    if(d.error){el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: daemon returned error — '+_esc(d.error).substring(0,60)+'</span>';return;}
+    var d=res.data||{};
+    /* Not installed (501) — optional add-on, render plainly */
+    if(res.status===501||d.watchdog_installed===false){
+      el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: not installed (optional add-on)</span>';
+      return;
+    }
+    /* Installed but daemon unreachable (503) */
+    if(res.status===503||d.watchdog_down){
+      el.innerHTML='<span style="color:var(--yellow);font-size:11px;font-weight:600">Watchdog: daemon not reachable</span>';
+      return;
+    }
+    /* Error from daemon itself */
+    if(d.error){
+      el.innerHTML='<span style="color:var(--yellow);font-size:11px;font-weight:600">Watchdog: '+_esc(String(d.error)).substring(0,60)+'</span>';
+      return;
+    }
+    /* Working — show probe evidence */
     var hosts=d.hosts||0;var errors=d.errors||0;var age=d.age_seconds?Math.round(d.age_seconds):null;
     var clr=errors>0?'yellow':hosts>0?'green':'text-dim';
     var parts=[];
@@ -3631,7 +3650,7 @@ function loadHome(){
     if(errors>0)parts.push(errors+' errors');
     if(age!==null)parts.push(age+'s ago');
     el.innerHTML='<span style="color:var(--'+clr+');font-size:11px;font-weight:600">Watchdog: '+parts.join(' · ')+'</span>';
-  }).catch(function(){var el=document.getElementById('watchdog-status');if(el)el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: daemon not reachable (port closed or not running)</span>';});
+  }).catch(function(){var el=document.getElementById('watchdog-status');if(el)el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: status unavailable</span>';});
 }
 
 /* ═══════════════════════════════════════════════════════════════════
