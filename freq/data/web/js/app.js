@@ -688,9 +688,9 @@ function _loadHomeFleetStats(){
     /* Preserve distinct probe states — don't collapse stale/error/disk_cache into "ok" */
     var _ps=hd.probe_status||'ok';
     var _ageClr=_ps==='error'?'var(--red)':_ps==='stale'?'var(--yellow)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';
-    var _probeLbl=_ps==='error'?'PROBE ERROR':_ps==='stale'?'STALE CACHE':_ps==='pending'?'WARMING':'';
+    var _probeLbl=_ps==='error'?'PROBE FAILED':_ps==='stale'?'STALE':_ps==='pending'?'CACHE WARMING':'';
     var _probeClr=_ps==='error'?'var(--red)':_ps==='stale'?'var(--yellow)':'var(--red)';
-    var _sseClr=_evtSource&&_evtSource.readyState===1?'var(--green)':'var(--yellow)';var _sseLbl=_evtSource&&_evtSource.readyState===1?'SSE':'POLL';
+    var _sseClr=_evtSource&&_evtSource.readyState===1?'var(--green)':'var(--yellow)';var _sseLbl=_evtSource&&_evtSource.readyState===1?'LIVE':'CACHED';
     var _ldStat='<div class="st"><div class="lb">PROBE AGE</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+_ageClr+'">'+_ageLbl+'</span><span class="label-hint"></span></span><span class="stat-pair"><span id="sse-conn-status" style="font-size:20px;font-weight:700;color:'+(_probeLbl?_probeClr:_sseClr)+'">'+(_probeLbl||_sseLbl)+'</span><span class="label-hint"></span></span></div></div>';
     /* When probe state is stale/error, SSH PROBE label also gets dimmed so UP count
      * doesn't read as genuine-good. Operators must consult PROBE AGE for freshness. */
@@ -1004,7 +1004,7 @@ function _silentHealthRefresh(){
     /* Update probe age indicator */
     var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<60?_age+'s':Math.round(_age/60)+'m';var _ageClr=hd.probe_status==='error'?'var(--red)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';
     var ldEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:first-child span:first-child');if(ldEl){ldEl.textContent=_ageLbl;ldEl.style.color=_ageClr;}
-    var ci=document.getElementById('sse-conn-status');if(ci){if(hd.probe_status==='error'){ci.textContent='PROBE ERROR';ci.style.color='var(--red)';}else{var _live=_evtSource&&_evtSource.readyState===1;ci.textContent=_live?'SSE':'POLL';ci.style.color=_live?'var(--green)':'var(--yellow)';}}
+    var ci=document.getElementById('sse-conn-status');if(ci){if(hd.probe_status==='error'){ci.textContent='PROBE FAILED';ci.style.color='var(--red)';}else{var _live=_evtSource&&_evtSource.readyState===1;ci.textContent=_live?'LIVE':'CACHED';ci.style.color=_live?'var(--green)':'var(--yellow)';}}
   }).catch(function(){_healthInFlight=false;});
 }
 function _silentFleetRefresh(){
@@ -1051,7 +1051,7 @@ function _silentFleetRefresh(){
     if(fo.probe_status==='error'){
       toast('Fleet probe failed'+(fo.probe_error?' — '+fo.probe_error:''),'error');
       var ci=document.getElementById('sse-conn-status');
-      if(ci){ci.textContent='PROBE ERROR';ci.style.color='var(--red)';}
+      if(ci){ci.textContent='PROBE FAILED';ci.style.color='var(--red)';}
     }
   }).catch(function(){_fleetInFlight=false;});
 }
@@ -1288,7 +1288,7 @@ function startSSE(){
     var ldEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:first-child span:first-child');
     if(ldEl){ldEl.textContent='STALE';ldEl.style.color='var(--red)';}
     var ci=document.getElementById('sse-conn-status');
-    if(ci){ci.textContent='PROBE ERROR';ci.style.color='var(--red)';}
+    if(ci){ci.textContent='PROBE FAILED';ci.style.color='var(--red)';}
   });
 
   _evtSource.addEventListener('vm_state',function(e){
@@ -1339,7 +1339,7 @@ function startSSE(){
     _silentHealthRefresh();_silentFleetRefresh();
     /* Update connection indicator */
     var ci=document.getElementById('sse-conn-status');
-    if(ci){ci.textContent='SSE';ci.style.color='var(--green)';}
+    if(ci){ci.textContent='LIVE';ci.style.color='var(--green)';}
   };
 
   _evtSource.onerror=function(){
@@ -1350,7 +1350,7 @@ function startSSE(){
     _fleetTimer=setInterval(_silentFleetRefresh,45000);
     /* Update connection indicator */
     var ci=document.getElementById('sse-conn-status');
-    if(ci){ci.textContent='POLL';ci.style.color='var(--yellow)';}
+    if(ci){ci.textContent='CACHED';ci.style.color='var(--yellow)';}
   };
 }
 startSSE();
@@ -1412,7 +1412,7 @@ function _renderFleetOverview(fo){
     /* Show fleet probe error if present */
     if(fo.probe_status==='error'){
       var ci=document.getElementById('sse-conn-status');
-      if(ci){ci.textContent='PROBE ERROR';ci.style.color='var(--red)';}
+      if(ci){ci.textContent='PROBE FAILED';ci.style.color='var(--red)';}
     }
     fo.summary=fo.summary||{};fo.pve_nodes=fo.pve_nodes||[];fo.physical=fo.physical||[];
     /* PVE summary */
@@ -3731,13 +3731,16 @@ function _roleOfflineMetrics(type,roleInfo){
 }
 function _enrichInfraCards(){
   _authFetch(API.INFRA_QUICK).then(function(r){return r.json()}).then(function(d){
+    var ageEl=document.getElementById('core-systems-age');
     if(d.warming){
-      /* Cache still warming — retry in 3s */
+      /* Cache still warming — tell the operator instead of silently
+       * retrying. "CACHE WARMING" is the operator-facing state; the
+       * 3s retry still runs in the background. */
+      if(ageEl){ageEl.textContent='CACHE WARMING';ageEl.style.color='var(--yellow)';}
       setTimeout(_enrichInfraCards,3000);
       return;
     }
     /* Show freshness on CORE SYSTEMS header */
-    var ageEl=document.getElementById('core-systems-age');
     if(ageEl&&d.age!==undefined){
       var a=Math.round(d.age);
       ageEl.textContent=a<60?a+'s':Math.round(a/60)+'m';
