@@ -4628,9 +4628,23 @@ a:hover{{text-decoration:underline}}
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         # Web UI is self-contained: xterm is vendored under /static/vendor/xterm,
         # fonts use platform stacks only, no public CDN or font host references.
-        # 'unsafe-inline' for script/style remains because app.html still ships
-        # inline handlers and <style> blocks; R-WEB-CSP-INLINE-CONTRACT-20260413M
-        # tracks removing those and dropping 'unsafe-inline'.
+        #
+        # Honest limits on 'unsafe-inline' (as of R-WEB-CSP-INLINE-CONTRACT-20260413M):
+        #   script-src: inline <script> blocks are zero in app.html, but the page
+        #     still carries ~355 inline event handlers (onclick/onkeydown/onfocus/
+        #     onblur/onchange/oninput/onmouseover/onmouseout). Inline handlers count
+        #     as inline script under CSP, so dropping 'unsafe-inline' would break
+        #     almost every button/modal interaction. R-WEB-CSP-INLINE-CONTRACT-20260413M
+        #     removes the login/header/update-banner subset; the long tail across
+        #     fleet cards, modal dialogs, wizards, and detail panels is a separate
+        #     larger refactor.
+        #   style-src: ~275 inline style="…" attrs across the shipped UI. Removing
+        #     them needs either a large CSS-class refactor or a nonce-based CSP.
+        #     Not in scope for 20260413M; 'unsafe-inline' stays until then.
+        #
+        # No host names appear below. An air-gapped dashboard MUST NOT fetch any
+        # asset off-box — that's what R-WEB-EXTERNAL-ASSET-CONTRACT-20260413L
+        # closed. This CSP is the policy enforcement.
         self.send_header("Content-Security-Policy",
                          "default-src 'self'; "
                          "script-src 'self' 'unsafe-inline'; "

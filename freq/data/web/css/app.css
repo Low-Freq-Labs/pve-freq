@@ -7,6 +7,15 @@
  * stacks — kept in the font-family vars below so users who have
  * Outfit or JetBrains Mono installed locally still pick them up. */
 
+/* ── FOUC prevention ──
+ * Body fades in on page load so operators don't see an unstyled
+ * flash before the main stylesheet parses. Previously lived as an
+ * inline <style> block in app.html; moved here so the shipped
+ * dashboard has one fewer inline style surface blocking a tighter
+ * CSP. */
+body { opacity: 0; animation: bodyFadeIn 0.3s 0.1s forwards; }
+@keyframes bodyFadeIn { to { opacity: 1; } }
+
 /* ── Tokens ── */
 :root {
   /* Purple palette — the brand */
