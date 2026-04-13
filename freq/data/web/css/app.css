@@ -628,6 +628,36 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 }
 .no-hover-fx .host-card { transition: none; }
 .no-hover-fx .host-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-sm); transform: none; }
+/* Drilldown affordance: any host-card wired for drilldown (onclick,
+ * data-action, or cursor-ptr) gets a visible pointer cursor and a
+ * subtle chevron hint on hover. Datadog/Grafana-style: the operator
+ * can see at a glance that a tile is navigable to detail. */
+.host-card[onclick],
+.host-card.cursor-ptr,
+.host-card[data-action] {
+  cursor: pointer;
+}
+.host-card[onclick]::after,
+.host-card.cursor-ptr::after,
+.host-card[data-action]::after {
+  content: '\203A'; /* ›  single right-pointing angle */
+  position: absolute;
+  top: 6px;
+  right: 9px;
+  font-size: 13px;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity var(--duration-fast), transform var(--duration-fast);
+  pointer-events: none;
+  line-height: 1;
+}
+.host-card[onclick]:hover::after,
+.host-card.cursor-ptr:hover::after,
+.host-card[data-action]:hover::after {
+  opacity: 0.85;
+  transform: translateX(2px);
+  color: var(--purple-light);
+}
 .host-card .host-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .host-card .host-head h3 { font-size: 12px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
 .host-card .host-head .host-meta { font-size: 9px; color: var(--text); display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
@@ -902,6 +932,25 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   transform: translateY(-2px);
 }
 .infra-role-card:hover::before { opacity: 0.6; }
+/* Drilldown chevron — same affordance language as host-card so operators
+ * learn once and apply everywhere in the fleet surface. */
+.infra-role-card::after {
+  content: '\203A';
+  position: absolute;
+  top: 8px;
+  right: 11px;
+  font-size: 14px;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity var(--duration-fast), transform var(--duration-fast);
+  pointer-events: none;
+  line-height: 1;
+}
+.infra-role-card:hover::after {
+  opacity: 0.85;
+  transform: translateX(2px);
+  color: var(--purple-light);
+}
 .no-hover-fx .infra-role-card { transition: none; }
 .no-hover-fx .infra-role-card:hover { border-color: var(--border-hover); box-shadow: none; transform: none; }
 .infra-role-card .role-label {
