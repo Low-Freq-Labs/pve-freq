@@ -401,12 +401,42 @@ def handle_agents(handler):
 
 
 def handle_info(handler):
-    """GET /api/info -- FREQ installation info."""
+    """GET /api/info -- FREQ installation info.
+
+    dashboard_header and subtitle are context-aware by default:
+    - dashboard_header carries the cluster name (or 'operator console'
+      when cluster_name is empty), not the generic 'PVE FREQ Dashboard'
+    - subtitle reports factual host + pve-node counts so the login/home
+      shell tells the operator what they're logged into at a glance
+
+    Personality packs can still override either field via pack.subtitle
+    or pack.dashboard_header — operators that want custom chrome opt
+    into it by shipping a pack, not by default.
+    """
     cfg = load_config()
     from freq.core.personality import load_pack
 
     pack = load_pack(cfg.conf_dir, cfg.build)
     from freq.modules.selfupdate import _detect_install_method
+
+    host_count = len(cfg.hosts)
+    node_count = len(_get_discovered_nodes())
+    cluster = (cfg.cluster_name or "").strip()
+
+    # Context-aware defaults (pack can override)
+    default_header = f"{cfg.brand} \u00b7 {cluster}" if cluster else f"{cfg.brand} \u00b7 operator console"
+    default_subtitle = f"{host_count} hosts \u00b7 {node_count} pve nodes"
+
+    dashboard_header = default_header
+    subtitle = default_subtitle
+    if pack:
+        pack_header = getattr(pack, "dashboard_header", "") or ""
+        pack_subtitle = getattr(pack, "subtitle", "") or ""
+        # Only honor pack overrides when they are non-empty and non-generic
+        if pack_header and pack_header != "PVE FREQ Dashboard":
+            dashboard_header = pack_header
+        if pack_subtitle and pack_subtitle != cfg.brand:
+            subtitle = pack_subtitle
 
     json_response(
         handler,
@@ -414,15 +444,13 @@ def handle_info(handler):
             "version": freq.__version__,
             "brand": cfg.brand,
             "build": cfg.build,
-            "hosts": len(cfg.hosts),
-            "pve_nodes": len(_get_discovered_nodes()),
+            "hosts": host_count,
+            "pve_nodes": node_count,
             "cluster": cfg.cluster_name,
             "install_dir": cfg.install_dir,
             "install_method": _detect_install_method(cfg),
-            "subtitle": getattr(pack, "subtitle", cfg.brand) if pack else cfg.brand,
-            "dashboard_header": getattr(pack, "dashboard_header", "PVE FREQ Dashboard")
-            if pack
-            else "PVE FREQ Dashboard",
+            "subtitle": subtitle,
+            "dashboard_header": dashboard_header,
         },
     )
 

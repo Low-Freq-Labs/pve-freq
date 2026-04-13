@@ -3617,8 +3617,19 @@ function loadHome(){
     document.getElementById('nav-ver').textContent='V'+d.version;
     if(d.install_method)window._freqInstallMethod=d.install_method;
     var vf=document.getElementById('home-ver-footer');if(vf)vf.textContent='v'+d.version;
-    document.title=(d.brand||'PVE FREQ')+' Dashboard';
-    var cr=document.getElementById('about-credits');if(cr)cr.textContent=(d.cluster||'')+(d.cluster?' · ':'')+(d.brand||'PVE FREQ');
+    /* Tab title + about credits carry cluster-aware header, not a
+     * generic "Dashboard" suffix. dashboard_header comes from
+     * /api/info and already carries cluster/mode truth. */
+    document.title=d.dashboard_header||d.brand||'PVE FREQ';
+    var cr=document.getElementById('about-credits');if(cr)cr.textContent=(d.cluster||'')+(d.cluster?' \u00b7 ':'')+(d.brand||'PVE FREQ');
+    /* Stamp cluster + host/node count into the header tagline so the
+     * operator sees what they're logged into at a glance. Keep the
+     * deterministic per-view tagline as a fallback when info is
+     * slower than the first page switch. */
+    if(d.dashboard_header){
+      var nv=document.getElementById('nav-ver');
+      if(nv)nv.textContent='V'+d.version+' \u00b7 '+d.dashboard_header.replace(/^PVE FREQ\s*\u00b7\s*/,'');
+    }
   });
   /* Watchdog probe status — distinguish not-installed (501), down (503), and working (200) */
   _authFetch(API.WATCHDOG_HEALTH).then(function(r){
