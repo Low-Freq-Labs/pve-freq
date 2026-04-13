@@ -4626,13 +4626,18 @@ a:hover{{text-decoration:underline}}
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("X-XSS-Protection", "1; mode=block")
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        # Web UI is self-contained: xterm is vendored under /static/vendor/xterm,
+        # fonts use platform stacks only, no public CDN or font host references.
+        # 'unsafe-inline' for script/style remains because app.html still ships
+        # inline handlers and <style> blocks; R-WEB-CSP-INLINE-CONTRACT-20260413M
+        # tracks removing those and dropping 'unsafe-inline'.
         self.send_header("Content-Security-Policy",
                          "default-src 'self'; "
-                         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-                         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+                         "script-src 'self' 'unsafe-inline'; "
+                         "style-src 'self' 'unsafe-inline'; "
                          "img-src 'self' data:; "
                          "connect-src 'self'; "
-                         "font-src 'self' https://fonts.gstatic.com")
+                         "font-src 'self'")
 
     def _json_response(self, data, status=200):
         """Send a JSON response."""
