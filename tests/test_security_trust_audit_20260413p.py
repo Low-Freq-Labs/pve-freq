@@ -7,6 +7,7 @@ so the underlying gap can never silently regress.
 Covered:
   - F1   trust-on-first-use account takeover (auth.py login refuses
          empty stored_hash + refuses on vault read failure).
+  - F4   vault openssl key passed via inherited pipe FD, not argv.
   - F5   /api/ct/create reads password from JSON body, not query string.
   - F6   /api/federation/register reads HMAC secret from JSON body.
   - F7   check_session_role drops the SSE query-string token fallback.
@@ -382,6 +383,64 @@ class TestF8TerminalSessionCreatorBinding(unittest.TestCase):
         self.assertIn("creator != requesting_user", block,
                       "WS handler must compare creator against requester")
         self.assertIn("Session belongs to another user", block)
+
+
+class TestF4VaultKeyNotInArgv(unittest.TestCase):
+    """F4 — vault openssl invocations must NOT carry the key in argv.
+
+    Pre-fix the key landed in /proc/<pid>/cmdline as `pass:KEY`. Fix
+    moves the key to an inherited pipe FD via subprocess.pass_fds.
+    """
+
+    def test_vault_source_uses_pass_fd_helper(self):
+        src = (REPO_ROOT / "freq" / "modules" / "vault.py").read_text()
+        # The new fd-passing helper must exist.
+        self.assertIn("def _run_openssl_with_key", src)
+        self.assertIn("pass_fds=[r_fd]", src)
+        self.assertIn('f"fd:{r_fd}"', src)
+        # The pre-fix `-pass`, `pass:{key}` shape must be gone from the
+        # _encrypt and _decrypt callers (the helper builds the -pass
+        # arg itself, so the literal string `pass:` should not appear).
+        self.assertNotIn('f"pass:{key}"', src,
+                         "pass:KEY argv form must not return — F4 regression")
+
+    def test_vault_round_trip_works(self):
+        """Behavioral: encrypt then decrypt must round-trip."""
+        import os
+        import tempfile
+        from freq.modules.vault import _encrypt, _decrypt
+
+        with tempfile.NamedTemporaryFile(suffix=".vault", delete=False) as f:
+            path = f.name
+        try:
+            key = "abcdef0123456789" * 4  # 64 chars, like the real machine-id derivation
+            payload = "host|key|value\nfoo|bar|baz\n"
+            self.assertTrue(_encrypt(payload, key, path),
+                            "encrypt must succeed via fd-passing")
+            self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o600",
+                             "vault file mode must be 0600 after encrypt")
+            self.assertEqual(_decrypt(key, path), payload,
+                             "decrypt must round-trip the encrypted plaintext")
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_wrong_key_does_not_decrypt(self):
+        """Sanity: openssl is actually doing the encryption."""
+        import os
+        import tempfile
+        from freq.modules.vault import _encrypt, _decrypt
+
+        with tempfile.NamedTemporaryFile(suffix=".vault", delete=False) as f:
+            path = f.name
+        try:
+            self.assertTrue(_encrypt("secret data", "key-one" * 8, path))
+            wrong = _decrypt("key-two" * 8, path)
+            self.assertEqual(wrong, "",
+                             "decrypt with wrong key must return empty string")
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
 
 
 class TestF15CtCreatePasswordShellQuoted(unittest.TestCase):

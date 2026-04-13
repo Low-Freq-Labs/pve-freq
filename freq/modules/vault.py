@@ -49,14 +49,47 @@ def _vault_key() -> str:
     return ""
 
 
+def _run_openssl_with_key(args: list, key: str, stdin_data: bytes = b"") -> subprocess.CompletedProcess:
+    """Run openssl with the password supplied via an inherited pipe FD.
+
+    F4 of R-SECURITY-TRUST-AUDIT-20260413P. Pre-fix the vault key was
+    interpolated into the openssl command line as `-pass pass:KEY`, which
+    landed the key in argv → /proc/<pid>/cmdline → world-readable on
+    Linux. Even though the vault's documented threat model already says
+    any local FREQ user can derive the key from /etc/machine-id, the
+    cmdline form added a window where any non-FREQ process scraping
+    /proc/<pid>/cmdline could grab the key without ever touching the
+    machine-id file.
+
+    The fd: form passes the key via an inherited pipe descriptor:
+    openssl reads it from FD N, never sees argv. The descriptor is
+    passed via subprocess.pass_fds so the child inherits it.
+    """
+    r_fd, w_fd = os.pipe()
+    try:
+        os.write(w_fd, key.encode() + b"\n")
+        os.close(w_fd)
+        w_fd = -1
+        return subprocess.run(
+            args + ["-pass", f"fd:{r_fd}"],
+            input=stdin_data,
+            capture_output=True,
+            timeout=VAULT_CRYPTO_TIMEOUT,
+            pass_fds=[r_fd],
+        )
+    finally:
+        if w_fd != -1:
+            os.close(w_fd)
+        os.close(r_fd)
+
+
 def _encrypt(plaintext: str, key: str, vault_path: str) -> bool:
     """Encrypt plaintext and write to vault file."""
     try:
-        r = subprocess.run(
-            ["openssl", "enc", "-aes-256-cbc", "-salt", "-pbkdf2", "-pass", f"pass:{key}", "-out", vault_path],
-            input=plaintext.encode(),
-            capture_output=True,
-            timeout=VAULT_CRYPTO_TIMEOUT,
+        r = _run_openssl_with_key(
+            ["openssl", "enc", "-aes-256-cbc", "-salt", "-pbkdf2", "-out", vault_path],
+            key,
+            stdin_data=plaintext.encode(),
         )
         if r.returncode == 0:
             os.chmod(vault_path, 0o600)
@@ -73,10 +106,9 @@ def _decrypt(key: str, vault_path: str) -> str:
     if not os.path.exists(vault_path):
         return ""
     try:
-        r = subprocess.run(
-            ["openssl", "enc", "-aes-256-cbc", "-d", "-salt", "-pbkdf2", "-pass", f"pass:{key}", "-in", vault_path],
-            capture_output=True,
-            timeout=VAULT_CRYPTO_TIMEOUT,
+        r = _run_openssl_with_key(
+            ["openssl", "enc", "-aes-256-cbc", "-d", "-salt", "-pbkdf2", "-in", vault_path],
+            key,
         )
         if r.returncode == 0:
             return r.stdout.decode()
