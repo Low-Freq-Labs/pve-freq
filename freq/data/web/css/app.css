@@ -401,9 +401,15 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   box-shadow: 0 0 0 3px var(--purple-glow), var(--shadow-purple);
 }
 
-/* ── Sub-tabs — pill navigation ── */
+/* ── Sub-tabs — pill navigation ──
+ * flex-wrap:wrap so mobile (390px) doesn't horizontal-scroll the
+ * security cluster (8 sub-tabs: Overview/Hardening/Access/Vault/
+ * Compliance/Firewall/Certs/VPN = 711px of nav row) or the system
+ * cluster (9 sub-tabs = 876px). The row just spans two lines
+ * instead, keeping every tab reachable without scroll. */
 .sub-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   margin-bottom: var(--gap-sm);
   padding: 2px;
