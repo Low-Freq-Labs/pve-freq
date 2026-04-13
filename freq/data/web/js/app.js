@@ -545,7 +545,7 @@ var WIDGET_REGISTRY=[
     el.innerHTML='<div id="hw-stale-snaps"><div class="skeleton"></div></div>';
     _authFetch('/api/snapshots/stale?days=30').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-stale-snaps');if(!t)return;
-      if(!d.stale||!d.stale.length){t.innerHTML='<div style="color:var(--green);padding:8px 0">\u2705 No stale snapshots</div>';return;}
+      if(!d.stale||!d.stale.length){t.innerHTML='<div style="color:var(--text-dim);padding:8px 0;font-size:11px">0 snapshots older than 30d</div>';return;}
       var h='<div class="text-sm text-dim mb-sm">'+d.count+' snapshot(s) found</div>';
       d.stale.slice(0,20).forEach(function(s){
         h+='<div class="text-sm" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">';
@@ -867,7 +867,7 @@ function dropHomeWidget(targetId){
 function quickStartHome(){
   _saveHomeWidgetConfig(QUICK_START_WIDGETS.slice());
   _renderHomeWidgets();openHomeWidgetConfig();
-  toast('Quick Start dashboard loaded','success');
+  toast(QUICK_START_WIDGETS.length+' widgets loaded','info');
 }
 /* old _applyHomeLayout removed — generic system handles it */
 function togglePveGroup(tab){
@@ -2574,7 +2574,7 @@ function loadCapRecommend(){
   if(el)el.innerHTML='<div class="skeleton h-40"></div>';
   _authFetch(API.CAPACITY_RECOMMEND).then(function(r){return r.json()}).then(function(d){
     var recs=d.recommendations||[];
-    if(!recs.length){if(el)el.innerHTML='<div class="exec-out" style="color:var(--green)">No optimization recommendations. Fleet is balanced.</div>';return;}
+    if(!recs.length){if(el)el.innerHTML='<div class="exec-out" style="color:var(--text-dim);font-size:11px">0 recommendations at current thresholds</div>';return;}
     var h=_statCards([{l:'Recommendations',v:d.count||recs.length},{l:'Critical',v:d.critical||0,c:'red'},{l:'Warning',v:d.warning||0,c:'yellow'}]);
     h+='<div style="margin-top:12px">';
     recs.forEach(function(r){
@@ -3170,7 +3170,7 @@ function loadMigratePlan(){
         h+='</div>';
       });
     }else if(nodes.length){
-      h+='<div class="exec-out" style="color:var(--green);margin-top:12px">Fleet is balanced — no migrations needed.</div>';
+      h+='<div class="exec-out" style="color:var(--text-dim);margin-top:12px;font-size:11px">0 migration candidates at current mem thresholds across '+nodes.length+' nodes</div>';
     }
     el.innerHTML=h;
   }).catch(function(e){el.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
