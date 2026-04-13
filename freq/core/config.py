@@ -288,13 +288,21 @@ def bootstrap_conf(install_dir: str) -> bool:
     except PermissionError:
         return False  # Non-root user — bootstrap deferred to freq init
 
-    # Copy all template files (*.example, *.toml, *.conf) — only on full bootstrap
-    if full_bootstrap:
-        for src in templates.iterdir():
-            if src.is_file():
-                dst = os.path.join(conf_dir, src.name)
-                if not os.path.exists(dst):
+    # Copy all template files (*.example, *.toml, *.conf). Run on every
+    # bootstrap, not only the full-empty case: a partially populated conf_dir
+    # (e.g. a prior init left only personality/ behind, or a manual cleanup
+    # removed freq.toml.example without removing the rest) would otherwise
+    # never get the missing template back, and Phase 1 _seed_config_files
+    # would have nothing to copy from. The inner exists() check makes this
+    # idempotent and safe to re-run on every freq command.
+    for src in templates.iterdir():
+        if src.is_file():
+            dst = os.path.join(conf_dir, src.name)
+            if not os.path.exists(dst):
+                try:
                     shutil.copy2(str(src), dst)
+                except (OSError, PermissionError):
+                    pass  # Best-effort heal — Phase 1 will retry / report.
 
     # Copy personality/ — always seed if missing (even with existing conf/)
     personality_src = templates / "personality"

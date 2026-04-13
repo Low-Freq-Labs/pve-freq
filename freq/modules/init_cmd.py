@@ -764,6 +764,12 @@ def _seed_config_files(cfg):
 
     Only copies when the live file does not exist — never overwrites.
     This gives fresh installs a working starting point.
+
+    Two-stage seed: first try the in-conf .example; if that's missing too,
+    fall back to the packaged template under freq/data/conf-templates/. This
+    closes the gap where a partially populated conf_dir survived an earlier
+    run with the .example file absent, which previously left Phase 7 Step 6
+    unable to read freq.toml during the [infrastructure] update.
     """
     examples = [
         "freq.toml",
@@ -776,13 +782,37 @@ def _seed_config_files(cfg):
         "containers.toml",
     ]
 
+    pkg_templates = None
+    try:
+        from freq.data import get_data_path
+        candidate = get_data_path() / "conf-templates"
+        if candidate.is_dir():
+            pkg_templates = candidate
+    except ImportError:
+        pkg_templates = None
+
     seeded = 0
     for name in examples:
         live = os.path.join(cfg.conf_dir, name)
+        if os.path.isfile(live):
+            continue
+
         example = f"{live}.example"
-        if not os.path.isfile(live) and os.path.isfile(example):
-            shutil.copy2(example, live)
+        source = example if os.path.isfile(example) else None
+
+        if source is None and pkg_templates is not None:
+            pkg_example = pkg_templates / f"{name}.example"
+            if pkg_example.is_file():
+                source = str(pkg_example)
+
+        if source is None:
+            continue
+
+        try:
+            shutil.copy2(source, live)
             seeded += 1
+        except (OSError, PermissionError) as e:
+            fmt.step_warn(f"Could not seed {name}: {e}")
 
     if seeded:
         fmt.step_ok(f"Seeded {seeded} config file(s) from .example templates")
@@ -3266,7 +3296,16 @@ def _phase_fleet_discover(cfg, ctx, args=None):
         fmt.step_warn(f"Could not update fleet-boundaries: {e}")
 
     # ── Step 6: Update freq.toml [infrastructure] ──────────────────
+    # Self-heal: if freq.toml is missing here it means an earlier seed step
+    # didn't run (or its .example wasn't present at the time). Re-seed from
+    # the in-conf .example or the packaged template before reading, so a
+    # green init never carries the "Could not update freq.toml infrastructure:
+    # ENOENT" warning. The seed is idempotent — never overwrites an existing
+    # live file. R-E2E-INFRA-CONFIG-WRITE-WARNING-20260413N.
     toml_path = os.path.join(cfg.conf_dir, "freq.toml")
+    if not os.path.isfile(toml_path):
+        _seed_config_files(cfg)
+
     infra_updated = False
     try:
         with open(toml_path) as f:
