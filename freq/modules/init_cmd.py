@@ -3542,12 +3542,13 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                 else:
                     fmt.step_warn("Skipping device hosts")
 
-    # Persist device (iDRAC/switch) password for ongoing SSH access
-    if device_hosts and ok > 0 and legacy_passwords:
-        if len(legacy_passwords) == 1:
-            _persist_legacy_password_file(cfg, ctx["svc_name"], next(iter(legacy_passwords)))
-        else:
-            fmt.step_warn("Multiple distinct iDRAC/switch passwords used — legacy password fallback not persisted")
+    # Persist the SERVICE ACCOUNT password for ongoing iDRAC/switch SSH access.
+    # After deploy, the device has freq-admin configured with ctx["svc_pass"]
+    # as the password. The legacy_passwords set collected the OLD device auth
+    # passwords used to connect for deploy — those don't belong to freq-admin.
+    svc_pass_value = ctx.get("svc_pass", "")
+    if device_hosts and ok > 0 and svc_pass_value:
+        _persist_legacy_password_file(cfg, ctx["svc_name"], svc_pass_value)
 
     # Store deployed IPs for Phase 12 — deployed hosts MUST pass verification
     ctx["deployed_ips"] = deployed_ips
@@ -6924,6 +6925,10 @@ def _init_headless(cfg, args):
     _phase(4, headless_total, "SSH Key Generation")
     _phase_ssh_keys(cfg, ctx)
 
+    # Seed dashboard auth before the long fleet phases so a partial run remains
+    # recoverable instead of falling back to setup with no viable login path.
+    _seed_headless_dashboard_auth(cfg, bootstrap_user, bootstrap_pass, ctx["svc_name"], verbose=False)
+
     # ── Phase 5: PVE Node Deployment ──
     _phase(5, headless_total, "PVE Node Deployment")
     _headless_fleet_deploy(
@@ -6993,63 +6998,13 @@ def _init_headless(cfg, args):
 
     # ── Phase 11: RBAC ──
     _phase(11, headless_total, "RBAC Setup")
-    roles_file = os.path.join(cfg.conf_dir, "roles.conf")
-    users_file = os.path.join(cfg.conf_dir, "users.conf")
-    svc_name = ctx["svc_name"]
-
-    # Write roles.conf — append real entries after any template comments
-    existing_lines = []
-    if os.path.isfile(roles_file):
-        with open(roles_file) as f:
-            existing_lines = f.readlines()
-    active_roles = [l.strip() for l in existing_lines if l.strip() and not l.strip().startswith("#")]
-    with open(roles_file, "a") as f:
-        if not any(l.startswith(f"{bootstrap_user}:") for l in active_roles):
-            f.write(f"{bootstrap_user}:admin\n")
-            fmt.step_ok(f"Added {bootstrap_user} as admin")
-        else:
-            fmt.step_ok(f"{bootstrap_user} already in roles")
-        if not any(l.startswith(f"{svc_name}:") for l in active_roles):
-            f.write(f"{svc_name}:admin\n")
-            fmt.step_ok(f"Added {svc_name} as admin")
-        else:
-            fmt.step_ok(f"{svc_name} already in roles")
-
-    # Write users.conf with the same users (space-delimited: USERNAME ROLE).
-    # Keeps users.conf and roles.conf consistent so partial-init states
-    # (e.g. Phase 12 hang) don't leave the dashboard unable to identify
-    # authorized users even though roles.conf has them.
-    users_existing = []
-    if os.path.isfile(users_file):
-        with open(users_file) as f:
-            users_existing = f.readlines()
-    users_active = [l.strip() for l in users_existing if l.strip() and not l.strip().startswith("#")]
-    with open(users_file, "a") as f:
-        if not any(l.split()[0] == bootstrap_user for l in users_active if l.split()):
-            f.write(f"{bootstrap_user} admin\n")
-        if not any(l.split()[0] == svc_name for l in users_active if l.split()):
-            f.write(f"{svc_name} admin\n")
-    fmt.step_ok("users.conf seeded with bootstrap + service account")
-
-    # Seed dashboard password for bootstrap user (the human operator).
-    # The service account (freq-admin) does NOT get a web login — it runs
-    # the dashboard process but doesn't authenticate to it. Only the
-    # bootstrap user (freq-ops) should be able to log in.
-    try:
-        from freq.modules.vault import vault_init, vault_set
-        from freq.api.auth import hash_password
-        if not os.path.exists(cfg.vault_file):
-            vault_init(cfg)
-        boot_pass = ctx.get("bootstrap_pass", "")
-        svc_pass = ctx.get("svc_pass", "")
-        if bootstrap_user:
-            # Use bootstrap password when available, fall back to svc_pass for key-based bootstrap
-            user_pass = boot_pass or svc_pass
-            if user_pass:
-                vault_set(cfg, "auth", f"password_{bootstrap_user}", hash_password(user_pass))
-                fmt.step_ok(f"Dashboard password set for {bootstrap_user}")
-    except Exception as e:
-        fmt.step_warn(f"Could not set dashboard password: {e}")
+    _seed_headless_dashboard_auth(
+        cfg,
+        bootstrap_user,
+        ctx.get("bootstrap_pass", "") or ctx.get("svc_pass", ""),
+        ctx["svc_name"],
+        verbose=True,
+    )
 
     # ── Post-init permissions ──
     # Config files must not be world-writable (init runs as root, umask may be 000)
@@ -7142,6 +7097,67 @@ def _headless_local_account(cfg, ctx):
     fmt.step_ok(f"Config: service_account = {svc_name}")
 
     return True
+
+
+def _seed_headless_dashboard_auth(cfg, bootstrap_user, bootstrap_pass, svc_name, verbose=True):
+    """Seed roles/users and bootstrap web auth early so partial init states remain recoverable.
+
+    Headless init can spend a long time in fleet deploy / verification. If the run stalls
+    before the RBAC phase, the dashboard may already be serving while users.conf and the
+    bootstrap password are still unset, which leaves operators stuck in setup with no
+    viable login path. Seed these artifacts idempotently before the long phases begin,
+    then the RBAC phase can safely re-run the same helper for final consistency.
+    """
+    roles_file = os.path.join(cfg.conf_dir, "roles.conf")
+    users_file = os.path.join(cfg.conf_dir, "users.conf")
+
+    existing_lines = []
+    if os.path.isfile(roles_file):
+        with open(roles_file) as f:
+            existing_lines = f.readlines()
+    active_roles = [l.strip() for l in existing_lines if l.strip() and not l.strip().startswith("#")]
+    with open(roles_file, "a") as f:
+        if not any(l.startswith(f"{bootstrap_user}:") for l in active_roles):
+            f.write(f"{bootstrap_user}:admin\n")
+            if verbose:
+                fmt.step_ok(f"Added {bootstrap_user} as admin")
+        elif verbose:
+            fmt.step_ok(f"{bootstrap_user} already in roles")
+        if not any(l.startswith(f"{svc_name}:") for l in active_roles):
+            f.write(f"{svc_name}:admin\n")
+            if verbose:
+                fmt.step_ok(f"Added {svc_name} as admin")
+        elif verbose:
+            fmt.step_ok(f"{svc_name} already in roles")
+
+    users_existing = []
+    if os.path.isfile(users_file):
+        with open(users_file) as f:
+            users_existing = f.readlines()
+    users_active = [l.strip() for l in users_existing if l.strip() and not l.strip().startswith("#")]
+    with open(users_file, "a") as f:
+        if not any(l.split()[0] == bootstrap_user for l in users_active if l.split()):
+            f.write(f"{bootstrap_user} admin\n")
+        if not any(l.split()[0] == svc_name for l in users_active if l.split()):
+            f.write(f"{svc_name} admin\n")
+    if verbose:
+        fmt.step_ok("users.conf seeded with bootstrap + service account")
+
+    # Only the bootstrap user gets a dashboard password. The service account runs
+    # the dashboard but is not a web principal.
+    try:
+        from freq.modules.vault import vault_init, vault_set
+        from freq.api.auth import hash_password
+
+        if not os.path.exists(cfg.vault_file):
+            vault_init(cfg)
+        if bootstrap_user and bootstrap_pass:
+            vault_set(cfg, "auth", f"password_{bootstrap_user}", hash_password(bootstrap_pass))
+            if verbose:
+                fmt.step_ok(f"Dashboard password set for {bootstrap_user}")
+    except Exception as e:
+        if verbose:
+            fmt.step_warn(f"Could not set dashboard password: {e}")
 
 
 def _headless_fleet_deploy(
@@ -7321,18 +7337,20 @@ def _headless_fleet_deploy(
         else:
             fail += 1
 
-    # Persist device password for ongoing iDRAC/switch SSH access
+    # Persist the SERVICE ACCOUNT password for ongoing iDRAC/switch SSH access.
+    # After deploy, the device has freq-admin configured with ctx["svc_pass"] as
+    # the password. The device_creds password is for the OLD admin user used
+    # to authenticate into the device for deploy — it's not freq-admin's
+    # password. Using device_creds here breaks Phase 12 verification because
+    # sshpass auth uses the wrong password.
     has_devices = any(t["htype"] in ("idrac", "switch") for t in targets)
-    if has_devices and ok > 0:
-        device_passwords = {
-            device_creds[t["htype"]]["password"]
-            for t in targets
-            if t["htype"] in ("idrac", "switch") and t["htype"] in device_creds
-        }
-        if device_passwords and len(device_passwords) == 1:
-            _persist_legacy_password_file(cfg, ctx.get("svc_name", cfg.ssh_service_account if hasattr(cfg, "ssh_service_account") else "freq-admin"), next(iter(device_passwords)))
-        elif len(device_passwords) > 1:
-            fmt.step_warn("Multiple distinct iDRAC/switch passwords used — legacy password fallback not persisted")
+    svc_pass_value = ctx.get("svc_pass", "")
+    if has_devices and ok > 0 and svc_pass_value:
+        _persist_legacy_password_file(
+            cfg,
+            ctx.get("svc_name", cfg.ssh_service_account if hasattr(cfg, "ssh_service_account") else "freq-admin"),
+            svc_pass_value,
+        )
 
     fmt.blank()
     fmt.line(
