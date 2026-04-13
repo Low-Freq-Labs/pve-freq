@@ -58,7 +58,7 @@
 <!-- Toolbar -->
 <div style="border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:12px">
 <div style="display:flex;gap:4px;align-items:center;min-height:32px;flex-wrap:wrap">
-  <button class="mobile-menu-btn" onclick="document.getElementById('nav-items').classList.toggle('open')" aria-label="Menu">&#9776;</button>
+  <button class="mobile-menu-btn" data-action="toggleNavItems" aria-label="Menu">&#9776;</button>
   <div id="nav-items" class="nav-toolbar" style="display:contents">
   <button class="fleet-btn view-btn active-view" data-view="home">HOME</button>
   <button class="fleet-btn view-btn" data-view="fleet">FLEET</button>
@@ -90,10 +90,10 @@
 <!-- FLEET VIEW (hidden by default) -->
 <div id="fleet-view" class="d-none">
 <div class="sub-tabs" id="subtabs-fleet">
-  <button class="sub-tab active-sub" onclick="switchView('fleet')">Fleet</button>
-  <button class="sub-tab" onclick="switchView('topology')">Topology</button>
-  <button class="sub-tab" onclick="switchView('capacity')">Capacity</button>
-  <button class="sub-tab" onclick="switchView('network')">Network</button>
+  <button class="sub-tab active-sub" data-view="fleet">Fleet</button>
+  <button class="sub-tab" data-view="topology">Topology</button>
+  <button class="sub-tab" data-view="capacity">Capacity</button>
+  <button class="sub-tab" data-view="network">Network</button>
 </div>
 <!-- Fleet Stats group -->
 <div class="section layout-section" id="fleet-sec-stats">
@@ -104,7 +104,7 @@
 </div>
 <!-- Hosts & VMs & LXC group -->
 <div class="section layout-section" id="fleet-sec-infra">
-  <div class="section-header"><h3 class="cursor-ptr">Hosts &amp; VMs &amp; LXC</h3><div class="flex-1"></div><input id="fleet-filter" placeholder="&#128269; Filter..." oninput="filterFleetCards(this.value)" onclick="event.stopPropagation()" style="background:var(--bg);border:2px solid var(--input-border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:11px;font-family:inherit;width:180px;outline:none;transition:border-color 0.25s ease" onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--input-border)'"><span class="chev" style="cursor:pointer;margin-left:8px">▾</span></div>
+  <div class="section-header"><h3 class="cursor-ptr">Hosts &amp; VMs &amp; LXC</h3><div class="flex-1"></div><input id="fleet-filter" class="fleet-filter-input" placeholder="&#128269; Filter..."><span class="chev" style="cursor:pointer;margin-left:8px">▾</span></div>
   <div class="section-body"><div id="metrics-cards"></div></div>
 </div>
 <!-- Quick Terminal -->
@@ -115,7 +115,7 @@
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
       <div>
         <label class="c-dim-fs12">Type</label>
-        <select id="term-type" class="input" style="width:120px" onchange="updateTermTargets()">
+        <select id="term-type" class="input" style="width:120px">
           <option value="node">PVE Node</option>
           <option value="vm">VM</option>
           <option value="ct">Container</option>
@@ -130,14 +130,14 @@
         <label class="c-dim-fs12">Target</label>
         <select id="term-target" class="input" style="width:260px"><option value="">Select...</option></select>
       </div>
-      <button class="fleet-btn c-purple-active" onclick="launchTermFromPicker()" style="color:var(--cyan)">&#9002; OPEN TERMINAL</button>
+      <button class="fleet-btn c-purple-active" data-action="launchTermFromPicker" style="color:var(--cyan)">&#9002; OPEN TERMINAL</button>
     </div>
   </div>
 </div>
 <!-- LXC Containers -->
 <div class="section layout-section" id="fleet-sec-ct">
   <div class="section-header"><h3>LXC Containers</h3><div class="flex-1"></div>
-    <button class="fleet-btn" onclick="loadLxcContainers()">REFRESH</button>
+    <button class="fleet-btn" data-action="loadLxcContainers">REFRESH</button>
     <span class="chev" style="margin-left:8px">▾</span>
   </div>
   <div class="section-body">
@@ -146,15 +146,15 @@
     <div style="margin-top:16px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
       <h4 style="font-size:11px;color:var(--text-dim);margin-bottom:8px">CONTAINER MANAGEMENT</h4>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-        <button class="fleet-btn" onclick="openCtTool('create')">CREATE</button>
-        <button class="fleet-btn" onclick="openCtTool('clone')">CLONE</button>
-        <button class="fleet-btn" onclick="openCtTool('migrate')">MIGRATE</button>
-        <button class="fleet-btn" onclick="openCtTool('resize')">RESIZE DISK</button>
-        <button class="fleet-btn" onclick="openCtTool('snapshot')">SNAPSHOT</button>
-        <button class="fleet-btn" onclick="openCtTool('rollback')">ROLLBACK</button>
-        <button class="fleet-btn" onclick="openCtTool('exec')">EXEC</button>
-        <button class="fleet-btn" onclick="openCtTool('config')">CONFIG</button>
-        <button class="fleet-btn" onclick="openCtTool('templates')">TEMPLATES</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="create">CREATE</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="clone">CLONE</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="migrate">MIGRATE</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="resize">RESIZE DISK</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="snapshot">SNAPSHOT</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="rollback">ROLLBACK</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="exec">EXEC</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="config">CONFIG</button>
+        <button class="fleet-btn" data-action="openCtTool" data-arg="templates">TEMPLATES</button>
       </div>
       <div id="ct-tool-form"></div>
       <div id="ct-tool-out"></div>
@@ -229,8 +229,8 @@
     <!-- SERVICES sub-view (default) -->
     <div id="docker-sub-services">
       <div style="display:flex;gap:8px;margin-bottom:8px">
-        <button class="fleet-btn" onclick="loadStackInfo('status')">STACK STATUS</button>
-        <button class="fleet-btn" onclick="loadStackInfo('health')">STACK HEALTH</button>
+        <button class="fleet-btn" data-action="loadStackInfo" data-arg="status">STACK STATUS</button>
+        <button class="fleet-btn" data-action="loadStackInfo" data-arg="health">STACK HEALTH</button>
       </div>
       <div id="stack-info" style="margin-bottom:12px"></div>
       <div id="services-container-cards" class="cards"></div>
@@ -243,8 +243,8 @@
     <!-- REGISTRY sub-view -->
     <div id="docker-sub-registry" class="d-none">
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-        <button class="fleet-btn c-purple-active" onclick="rescanContainers()">RESCAN FLEET</button>
-        <button class="fleet-btn" onclick="loadContainerRegistry()">REFRESH</button>
+        <button class="fleet-btn c-purple-active" data-action="rescanContainers">RESCAN FLEET</button>
+        <button class="fleet-btn" data-action="loadContainerRegistry">REFRESH</button>
         <span id="registry-status" class="text-meta"></span>
       </div>
       <div id="rescan-results" style="display:none;margin-bottom:12px"></div>
@@ -255,7 +255,7 @@
           <input class="input" id="reg-name" placeholder="Container name" style="width:160px">
           <select class="input" id="reg-vmid" style="width:160px"><option value="">Select VM...</option></select>
           <input class="input" id="reg-port" placeholder="Port (optional)" style="width:100px" type="number">
-          <button class="fleet-btn" onclick="addContainer()">ADD</button>
+          <button class="fleet-btn" data-action="addContainer">ADD</button>
           <span id="reg-msg" class="text-meta"></span>
         </div>
       </div>
@@ -265,9 +265,9 @@
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Manage Docker Compose stacks per VM. Select a VM to bring stacks up/down or view compose files.</div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
         <select id="compose-vm-select" class="input" style="width:240px"><option value="">Select Docker VM...</option></select>
-        <button class="fleet-btn" onclick="composeUp()">COMPOSE UP</button>
-        <button class="fleet-btn" onclick="composeDown()" style="color:var(--red);border-color:var(--red)">COMPOSE DOWN</button>
-        <button class="fleet-btn" onclick="composeView()">VIEW COMPOSE</button>
+        <button class="fleet-btn" data-action="composeUp">COMPOSE UP</button>
+        <button class="fleet-btn" data-action="composeDown" style="color:var(--red);border-color:var(--red)">COMPOSE DOWN</button>
+        <button class="fleet-btn" data-action="composeView">VIEW COMPOSE</button>
       </div>
       <div id="compose-out" class="exec-out" style="min-height:80px">Select a Docker VM and an action.</div>
     </div>
@@ -275,7 +275,7 @@
     <div id="docker-sub-fleet-inv" class="d-none">
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Live fleet-wide container inventory via SSH. Shows all Docker containers across all VMs.</div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
-        <button class="fleet-btn c-purple-active" onclick="loadDockerFleet()">SCAN FLEET</button>
+        <button class="fleet-btn c-purple-active" data-action="loadDockerFleet">SCAN FLEET</button>
       </div>
       <div id="docker-fleet-stats" style="margin-bottom:12px"></div>
       <div id="docker-fleet-table"><div class="exec-out">Click SCAN FLEET to discover containers across all Docker VMs.</div></div>
@@ -295,7 +295,7 @@
   <div id="media-container-cards" class="cards mb-16"></div>
   <!-- Downloads -->
   <div class="section">
-    <div class="section-header"><h3>Downloads</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadDownloadDetail()">DETAIL VIEW</button><span class="chev">▾</span></div>
+    <div class="section-header"><h3>Downloads</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDownloadDetail">DETAIL VIEW</button><span class="chev">▾</span></div>
     <div class="section-body">
       <div class="stats" id="dl-stats"></div>
       <div id="dl-detail" style="margin-bottom:8px"></div>
@@ -315,14 +315,14 @@
 <!-- SECURITY VIEW — Overview -->
 <div id="security-view" class="d-none">
 <div class="sub-tabs" id="subtabs-security">
-  <button class="sub-tab active-sub" onclick="switchView('security')">Overview</button>
-  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
-  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
-  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
-  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
-  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
-  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
-  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
+  <button class="sub-tab active-sub" data-view="security">Overview</button>
+  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
+  <button class="sub-tab" data-view="sec-access">Access</button>
+  <button class="sub-tab" data-view="sec-vault">Vault</button>
+  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
+  <button class="sub-tab" data-view="firewall">Firewall</button>
+  <button class="sub-tab" data-view="certs">Certs</button>
+  <button class="sub-tab" data-view="vpn">VPN</button>
 </div>
 <div class="section layout-section" id="sec-risk">
   <div class="section-header"><h3>Risk Analysis</h3><span class="chev">▾</span></div>
@@ -345,8 +345,8 @@
         <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">SECRETS AUDIT</h4>
         <div id="sec-secrets-audit"><div class="exec-out">Loading...</div></div>
         <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="fleet-btn" onclick="loadSecretsLeases()">VIEW LEASES</button>
-          <button class="fleet-btn" onclick="loadSecretsScan()">SCAN RESULTS</button>
+          <button class="fleet-btn" data-action="loadSecretsLeases">VIEW LEASES</button>
+          <button class="fleet-btn" data-action="loadSecretsScan">SCAN RESULTS</button>
         </div>
         <div id="sec-secrets-detail" style="margin-top:8px"></div>
       </div>
@@ -370,14 +370,14 @@
 <!-- SECURITY — Hardening -->
 <div id="sec-hardening-view" class="d-none">
 <div class="sub-tabs">
-  <button class="sub-tab" onclick="switchView('security')">Overview</button>
-  <button class="sub-tab active-sub" onclick="switchView('sec-hardening')">Hardening</button>
-  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
-  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
-  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
-  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
-  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
-  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
+  <button class="sub-tab" data-view="security">Overview</button>
+  <button class="sub-tab active-sub" data-view="sec-hardening">Hardening</button>
+  <button class="sub-tab" data-view="sec-access">Access</button>
+  <button class="sub-tab" data-view="sec-vault">Vault</button>
+  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
+  <button class="sub-tab" data-view="firewall">Firewall</button>
+  <button class="sub-tab" data-view="certs">Certs</button>
+  <button class="sub-tab" data-view="vpn">VPN</button>
 </div>
 <div class="section layout-section" id="sec-audit">
   <div class="section-header"><h3>Audit</h3><span class="chev">▾</span></div>
@@ -390,7 +390,7 @@
       <button class="fleet-btn" data-audit="ports">OPEN PORTS</button>
       <button class="fleet-btn" data-audit="failed">FAILED SERVICES</button>
       <button class="fleet-btn" data-audit="firewall">FIREWALL STATUS</button>
-      <button class="fleet-btn" onclick="runSshSweep()">POLICY SWEEP</button>
+      <button class="fleet-btn" data-action="runSshSweep">POLICY SWEEP</button>
     </div>
     <div id="audit-c"></div>
     <div id="sweep-c" class="mt-12"></div>
@@ -401,11 +401,11 @@
   <div class="section-body">
     <div class="flex-wrap-8-mb12-wrap">
       <button class="fleet-btn c-purple-active" data-action="runHarden" >FULL HARDENING AUDIT</button>
-      <button class="fleet-btn" onclick="hardenAction('disable-root')">DISABLE ROOT SSH</button>
-      <button class="fleet-btn" onclick="hardenAction('key-only')">ENFORCE KEY-ONLY AUTH</button>
-      <button class="fleet-btn" onclick="hardenAction('disable-empty')">BLOCK EMPTY PASSWORDS</button>
-      <button class="fleet-btn" onclick="hardenAction('auto-updates')">ENABLE AUTO UPDATES</button>
-      <button class="fleet-btn" onclick="sshdPanel('harden-c')">RESTART SSHD</button>
+      <button class="fleet-btn" data-action="hardenAction" data-arg="disable-root">DISABLE ROOT SSH</button>
+      <button class="fleet-btn" data-action="hardenAction" data-arg="key-only">ENFORCE KEY-ONLY AUTH</button>
+      <button class="fleet-btn" data-action="hardenAction" data-arg="disable-empty">BLOCK EMPTY PASSWORDS</button>
+      <button class="fleet-btn" data-action="hardenAction" data-arg="auto-updates">ENABLE AUTO UPDATES</button>
+      <button class="fleet-btn" data-action="sshdPanel" data-arg="harden-c">RESTART SSHD</button>
     </div>
     <div id="harden-c"></div>
   </div>
@@ -415,14 +415,14 @@
 <!-- SECURITY — Access -->
 <div id="sec-access-view" class="d-none">
 <div class="sub-tabs">
-  <button class="sub-tab" onclick="switchView('security')">Overview</button>
-  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
-  <button class="sub-tab active-sub" onclick="switchView('sec-access')">Access</button>
-  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
-  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
-  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
-  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
-  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
+  <button class="sub-tab" data-view="security">Overview</button>
+  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
+  <button class="sub-tab active-sub" data-view="sec-access">Access</button>
+  <button class="sub-tab" data-view="sec-vault">Vault</button>
+  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
+  <button class="sub-tab" data-view="firewall">Firewall</button>
+  <button class="sub-tab" data-view="certs">Certs</button>
+  <button class="sub-tab" data-view="vpn">VPN</button>
 </div>
 <div class="section layout-section" id="sec-users">
   <div class="section-header"><h3>Users</h3><span class="chev">▾</span></div>
@@ -447,14 +447,14 @@
 <!-- SECURITY — Vault -->
 <div id="sec-vault-view" class="d-none">
 <div class="sub-tabs">
-  <button class="sub-tab" onclick="switchView('security')">Overview</button>
-  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
-  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
-  <button class="sub-tab active-sub" onclick="switchView('sec-vault')">Vault</button>
-  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
-  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
-  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
-  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
+  <button class="sub-tab" data-view="security">Overview</button>
+  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
+  <button class="sub-tab" data-view="sec-access">Access</button>
+  <button class="sub-tab active-sub" data-view="sec-vault">Vault</button>
+  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
+  <button class="sub-tab" data-view="firewall">Firewall</button>
+  <button class="sub-tab" data-view="certs">Certs</button>
+  <button class="sub-tab" data-view="vpn">VPN</button>
 </div>
 <div class="section layout-section border-red" id="sec-vault-section">
   <div class="section-header"><h3 style="background:rgba(248,81,73,0.15)">&#128274; Vault</h3><span class="chev">▾</span></div>
@@ -466,7 +466,7 @@
         <div style="font-size:11px;color:var(--text-dim);margin-bottom:16px">Admin credentials required to access sensitive data</div>
         <div style="max-width:300px;margin:0 auto;display:flex;flex-direction:column;gap:8px">
           <input id="vault-auth-user" placeholder="Admin username" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
-          <input id="vault-auth-pass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')unlockVault()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
+          <input id="vault-auth-pass" type="password" placeholder="Password" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
           <button class="fleet-btn" data-action="unlockVault" style="color:var(--red);border-color:var(--red)">UNLOCK VAULT</button>
         </div>
       </div>
@@ -478,7 +478,7 @@
         <button class="fleet-btn vault-tab" data-vtab="apikeys" data-action="switchVaultTab" data-arg="apikeys">API KEYS</button>
         <button class="fleet-btn vault-tab" data-vtab="all" data-action="switchVaultTab" data-arg="all">ALL</button>
         <div class="flex-1"></div>
-        <button class="fleet-btn" onclick="lockVault()" style="padding:3px 10px;font-size:12px;color:var(--red)">LOCK</button>
+        <button class="fleet-btn" data-action="lockVault" style="padding:3px 10px;font-size:12px;color:var(--red)">LOCK</button>
       </div>
       <div id="vault-sensitive-c"></div>
     </div>
@@ -491,19 +491,19 @@
 <!-- SECURITY — Compliance -->
 <div id="sec-compliance-view" class="d-none">
 <div class="sub-tabs">
-  <button class="sub-tab" onclick="switchView('security')">Overview</button>
-  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
-  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
-  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
-  <button class="sub-tab active-sub" onclick="switchView('sec-compliance')">Compliance</button>
+  <button class="sub-tab" data-view="security">Overview</button>
+  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
+  <button class="sub-tab" data-view="sec-access">Access</button>
+  <button class="sub-tab" data-view="sec-vault">Vault</button>
+  <button class="sub-tab active-sub" data-view="sec-compliance">Compliance</button>
 </div>
 <div class="section">
   <div class="section-header"><h3>Policy Compliance</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn" onclick="policyAction('check')">CHECK COMPLIANCE</button>
-      <button class="fleet-btn" onclick="policyAction('diff')">SHOW DRIFT</button>
-      <button class="fleet-btn c-red" onclick="policyAction('fix')">APPLY FIX</button>
+      <button class="fleet-btn" data-action="policyAction" data-arg="check">CHECK COMPLIANCE</button>
+      <button class="fleet-btn" data-action="policyAction" data-arg="diff">SHOW DRIFT</button>
+      <button class="fleet-btn c-red" data-action="policyAction" data-arg="fix">APPLY FIX</button>
     </div>
     <div class="exec-out" id="policy-out">Run a compliance check to see policy status.</div>
   </div>
@@ -512,8 +512,8 @@
   <div class="section-header"><h3>Compliance Scan</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn" onclick="runSweep(false)">DRY RUN</button>
-      <button class="fleet-btn c-red" onclick="runSweep(true)">SWEEP + FIX</button>
+      <button class="fleet-btn" data-action="runSweepDry">DRY RUN</button>
+      <button class="fleet-btn c-red" data-action="runSweepFix">SWEEP + FIX</button>
     </div>
     <div class="exec-out" id="sweep-out">Click to run a full audit sweep.</div>
   </div>
@@ -521,8 +521,8 @@
 <div class="section collapsed">
   <div class="section-header"><h3>Continuous Monitoring</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <button class="fleet-btn" onclick="loadPatrolStatus()">CHECK STATUS</button>
-    <button class="fleet-btn" onclick="loadPatchCompliance()" style="margin-left:4px">PATCH COMPLIANCE</button>
+    <button class="fleet-btn" data-action="loadPatrolStatus">CHECK STATUS</button>
+    <button class="fleet-btn" data-action="loadPatchCompliance" style="margin-left:4px">PATCH COMPLIANCE</button>
     <div class="exec-out" id="patrol-out">Click to check current compliance status.</div>
   </div>
 </div>
@@ -535,25 +535,25 @@
      ============================================================ -->
 <div id="tools-view" class="d-none">
 <div class="sub-tabs" id="subtabs-tools">
-  <button class="sub-tab active-sub" onclick="switchView('tools')">Overview</button>
-  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
-  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
-  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
-  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
-  <button class="sub-tab" onclick="switchView('dr')">DR</button>
-  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
-  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
-  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
-  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+  <button class="sub-tab active-sub" data-view="tools">Overview</button>
+  <button class="sub-tab" data-view="playbooks">Playbooks</button>
+  <button class="sub-tab" data-view="gitops">Config Sync</button>
+  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" data-view="dns">DNS</button>
+  <button class="sub-tab" data-view="dr">DR</button>
+  <button class="sub-tab" data-view="incidents">Incidents</button>
+  <button class="sub-tab" data-view="metrics">Metrics</button>
+  <button class="sub-tab" data-view="automation">Automation</button>
+  <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
 <!-- Diagnostics — health checks and host diagnosis -->
 <div class="section">
   <div class="section-header"><h3>Diagnostics</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn" onclick="runDoctor()">RUN DOCTOR</button>
+      <button class="fleet-btn" data-action="runDoctor">RUN DOCTOR</button>
       <select id="diag-host" class="input-field" style="width:180px"><option value="">Select host...</option></select>
-      <button class="fleet-btn" onclick="runDiagnose()">DIAGNOSE HOST</button>
+      <button class="fleet-btn" data-action="runDiagnose">DIAGNOSE HOST</button>
     </div>
     <div class="exec-out" id="diag-out">Run self-diagnostic or diagnose a specific host.</div>
   </div>
@@ -566,7 +566,7 @@
       <select id="log-host" class="input-field" style="width:180px"><option value="">Select host...</option></select>
       <input type="text" id="log-unit" placeholder="Unit (optional)..." class="input-field" style="width:180px">
       <input type="number" id="log-lines" placeholder="Lines" value="50" class="input-field" style="width:80px">
-      <button class="fleet-btn" onclick="fetchLogs()">FETCH LOGS</button>
+      <button class="fleet-btn" data-action="fetchLogs">FETCH LOGS</button>
     </div>
     <div class="exec-out" id="log-out" style="max-height:400px;overflow-y:auto">Enter a host to view its logs.</div>
   </div>
@@ -577,14 +577,14 @@
   <div class="section-body">
     <div style="margin-bottom:16px">
       <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">ZFS POOLS</h4>
-      <button class="fleet-btn" onclick="loadZfs()">LOAD ZFS STATUS</button>
+      <button class="fleet-btn" data-action="loadZfs">LOAD ZFS STATUS</button>
       <div class="exec-out" id="zfs-out" style="margin-top:8px">Click to load ZFS pool status.</div>
     </div>
     <div>
       <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">BACKUPS</h4>
       <div class="flex-wrap-8-mb12">
-        <button class="fleet-btn" onclick="loadBackups('list')">LIST</button>
-        <button class="fleet-btn" onclick="loadBackups('status')">STATUS</button>
+        <button class="fleet-btn" data-action="loadBackups" data-arg="list">LIST</button>
+        <button class="fleet-btn" data-action="loadBackups" data-arg="status">STATUS</button>
       </div>
       <div class="exec-out" id="backup-out">Click to view backup status.</div>
     </div>
@@ -597,7 +597,7 @@
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Discover hosts on your network, add them to the fleet, and onboard with SSH key deployment.</div>
     <div class="flex-wrap-8-mb12">
       <input type="text" id="discover-subnet" placeholder="Subnet (e.g. 192.168.1)" class="input-field" style="width:200px">
-      <button class="fleet-btn c-purple-active" onclick="runDiscover()">SCAN NETWORK</button>
+      <button class="fleet-btn c-purple-active" data-action="runDiscover">SCAN NETWORK</button>
     </div>
     <div class="exec-out" id="discover-out">Enter a subnet to discover hosts.</div>
     <div style="margin-top:16px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
@@ -615,7 +615,7 @@
           <option value="bmc">BMC</option>
         </select>
         <input class="input" id="add-host-groups" placeholder="Groups (optional)" style="width:160px">
-        <button class="fleet-btn" onclick="addHostManual()">ADD HOST</button>
+        <button class="fleet-btn" data-action="addHostManual">ADD HOST</button>
         <span id="add-host-msg" class="text-meta"></span>
       </div>
     </div>
@@ -623,14 +623,14 @@
 </div>
 <!-- Fleet Inventory (CMDB) -->
 <div class="section">
-  <div class="section-header"><h3>Fleet Inventory</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadInventory()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Fleet Inventory</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadInventory">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn c-purple-active" onclick="loadInventory()">FULL CMDB</button>
-      <button class="fleet-btn" onclick="loadInventoryView('hosts')">HOSTS ONLY</button>
-      <button class="fleet-btn" onclick="loadInventoryView('vms')">VMS ONLY</button>
-      <button class="fleet-btn" onclick="loadInventoryView('containers')">CONTAINERS ONLY</button>
-      <button class="fleet-btn" onclick="generateReport()">FLEET REPORT</button>
+      <button class="fleet-btn c-purple-active" data-action="loadInventory">FULL CMDB</button>
+      <button class="fleet-btn" data-action="loadInventoryView" data-arg="hosts">HOSTS ONLY</button>
+      <button class="fleet-btn" data-action="loadInventoryView" data-arg="vms">VMS ONLY</button>
+      <button class="fleet-btn" data-action="loadInventoryView" data-arg="containers">CONTAINERS ONLY</button>
+      <button class="fleet-btn" data-action="generateReport">FLEET REPORT</button>
     </div>
     <div id="inventory-out"><div class="exec-out">Click to load fleet inventory.</div></div>
   </div>
@@ -640,12 +640,12 @@
   <div class="section-header"><h3>System Info</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn" onclick="loadSysInfo('db')">DB STATUS</button>
-      <button class="fleet-btn" onclick="loadSysInfo('logs')">LOG STATS</button>
-      <button class="fleet-btn" onclick="loadSysInfo('proxy')">PROXY LIST</button>
-      <button class="fleet-btn" onclick="loadSysInfo('pool')">STORAGE POOLS</button>
-      <button class="fleet-btn" onclick="deployAgent('all')">DEPLOY AGENT</button>
-      <button class="fleet-btn" onclick="loadSysInfo('setup')">SETUP STATUS</button>
+      <button class="fleet-btn" data-action="loadSysInfo" data-arg="db">DB STATUS</button>
+      <button class="fleet-btn" data-action="loadSysInfo" data-arg="logs">LOG STATS</button>
+      <button class="fleet-btn" data-action="loadSysInfo" data-arg="proxy">PROXY LIST</button>
+      <button class="fleet-btn" data-action="loadSysInfo" data-arg="pool">STORAGE POOLS</button>
+      <button class="fleet-btn" data-action="deployAgent" data-arg="all">DEPLOY AGENT</button>
+      <button class="fleet-btn" data-action="loadSysInfo" data-arg="setup">SETUP STATUS</button>
     </div>
     <div id="sysinfo-out"><div class="exec-out">Select a category above.</div></div>
   </div>
@@ -659,7 +659,7 @@
       <select id="compare-host-a" class="input-field" style="width:180px"><option value="">Host A...</option></select>
       <span style="color:var(--text-dim)">vs</span>
       <select id="compare-host-b" class="input-field" style="width:180px"><option value="">Host B...</option></select>
-      <button class="fleet-btn" onclick="runHostCompare()">COMPARE</button>
+      <button class="fleet-btn" data-action="runHostCompare">COMPARE</button>
     </div>
     <div id="compare-out"><div class="exec-out">Select two hosts and click COMPARE.</div></div>
   </div>
@@ -671,9 +671,9 @@
      ============================================================ -->
 <div id="lab-view" class="d-none">
 <div class="sub-tabs" id="subtabs-lab">
-  <button class="sub-tab active-sub" onclick="switchView('lab')">Tools</button>
-  <button class="sub-tab" onclick="openManageTools()">Manage</button>
-  <button class="sub-tab" onclick="openAddTool()" style="color:var(--green)">+ Add Tool</button>
+  <button class="sub-tab active-sub" data-view="lab">Tools</button>
+  <button class="sub-tab" data-action="openManageTools">Manage</button>
+  <button class="sub-tab" data-action="openAddTool" style="color:var(--green)">+ Add Tool</button>
 </div>
 <div id="lab-tools-container"></div>
 </div><!-- close lab-view -->
@@ -681,17 +681,17 @@
 <!-- TOPOLOGY VIEW -->
 <div id="topology-view" class="d-none">
 <div class="sub-tabs" id="subtabs-topology">
-  <button class="sub-tab" onclick="switchView('fleet')">Fleet</button>
-  <button class="sub-tab active-sub" onclick="switchView('topology')">Topology</button>
-  <button class="sub-tab" onclick="switchView('capacity')">Capacity</button>
-  <button class="sub-tab" onclick="switchView('network')">Network</button>
+  <button class="sub-tab" data-view="fleet">Fleet</button>
+  <button class="sub-tab active-sub" data-view="topology">Topology</button>
+  <button class="sub-tab" data-view="capacity">Capacity</button>
+  <button class="sub-tab" data-view="network">Network</button>
 </div>
 <div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">Network Topology</h3>
     <span style="font-size:11px;color:var(--text-dim);margin-right:8px">Drag nodes to rearrange</span>
-    <button class="fleet-btn" onclick="resetTopoLayout()" style="margin-right:4px">RESET LAYOUT</button>
-    <button class="fleet-btn" onclick="loadTopology()">REFRESH</button>
+    <button class="fleet-btn" data-action="resetTopoLayout" style="margin-right:4px">RESET LAYOUT</button>
+    <button class="fleet-btn" data-action="loadTopology">REFRESH</button>
   </div>
   <div id="topo-legend" style="font-size:11px;color:var(--text-dim);margin-bottom:8px">
     <span style="color:var(--purple-light)">&#9632;</span> PVE Node &nbsp;
@@ -708,17 +708,17 @@
 <!-- CAPACITY VIEW -->
 <div id="capacity-view" class="d-none">
 <div class="sub-tabs" id="subtabs-capacity">
-  <button class="sub-tab" onclick="switchView('fleet')">Fleet</button>
-  <button class="sub-tab" onclick="switchView('topology')">Topology</button>
-  <button class="sub-tab active-sub" onclick="switchView('capacity')">Capacity</button>
-  <button class="sub-tab" onclick="switchView('network')">Network</button>
+  <button class="sub-tab" data-view="fleet">Fleet</button>
+  <button class="sub-tab" data-view="topology">Topology</button>
+  <button class="sub-tab active-sub" data-view="capacity">Capacity</button>
+  <button class="sub-tab" data-view="network">Network</button>
 </div>
 <div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">Capacity Planner</h3>
     <div style="display:flex;gap:8px">
-      <button class="fleet-btn" onclick="forceCapSnapshot()">TAKE SNAPSHOT</button>
-      <button class="fleet-btn" onclick="loadCapacity()">REFRESH</button>
+      <button class="fleet-btn" data-action="forceCapSnapshot">TAKE SNAPSHOT</button>
+      <button class="fleet-btn" data-action="loadCapacity">REFRESH</button>
     </div>
   </div>
   <div id="cap-info" style="font-size:12px;color:var(--text-dim);margin-bottom:12px"></div>
@@ -727,14 +727,14 @@
 <div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">Capacity Trends</h3>
-    <div style="display:flex;gap:8px"><button class="fleet-btn" onclick="takeTrendSnapshot()">TAKE SNAPSHOT</button><button class="fleet-btn" onclick="loadTrendData()">LOAD TRENDS</button></div>
+    <div style="display:flex;gap:8px"><button class="fleet-btn" data-action="takeTrendSnapshot">TAKE SNAPSHOT</button><button class="fleet-btn" data-action="loadTrendData">LOAD TRENDS</button></div>
   </div>
   <div id="trend-data"><div class="exec-out">Click to load trend data.</div></div>
 </div>
 <div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">Migration Recommendations</h3>
-    <button class="fleet-btn" onclick="loadCapRecommend()">ANALYZE</button>
+    <button class="fleet-btn" data-action="loadCapRecommend">ANALYZE</button>
   </div>
   <div id="cap-recommend"><div class="exec-out">Click ANALYZE to get optimization suggestions.</div></div>
 </div>
@@ -743,27 +743,27 @@
 <!-- PLAYBOOKS VIEW -->
 <div id="playbooks-view" class="d-none">
 <div class="sub-tabs" id="subtabs-playbooks">
-  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
-  <button class="sub-tab active-sub" onclick="switchView('playbooks')">Playbooks</button>
-  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
-  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
-  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
-  <button class="sub-tab" onclick="switchView('dr')">DR</button>
-  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
-  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
-  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
-  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+  <button class="sub-tab" data-view="tools">Overview</button>
+  <button class="sub-tab active-sub" data-view="playbooks">Playbooks</button>
+  <button class="sub-tab" data-view="gitops">Config Sync</button>
+  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" data-view="dns">DNS</button>
+  <button class="sub-tab" data-view="dr">DR</button>
+  <button class="sub-tab" data-view="incidents">Incidents</button>
+  <button class="sub-tab" data-view="metrics">Metrics</button>
+  <button class="sub-tab" data-view="automation">Automation</button>
+  <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
 <div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">Incident Playbooks</h3>
-    <button class="fleet-btn" onclick="loadPlaybooks()">REFRESH</button>
+    <button class="fleet-btn" data-action="loadPlaybooks">REFRESH</button>
   </div>
   <div id="pb-list"></div>
   <div id="pb-runner" class="d-none" style="margin-top:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <h4 id="pb-runner-title" style="font-size:13px;color:var(--text)"></h4>
-      <button class="fleet-btn" onclick="closePbRunner()">CLOSE</button>
+      <button class="fleet-btn" data-action="closePbRunner">CLOSE</button>
     </div>
     <div id="pb-steps"></div>
   </div>
@@ -773,7 +773,7 @@
       <input class="input" id="pb-create-name" placeholder="Playbook name" style="width:180px">
       <input class="input" id="pb-create-desc" placeholder="Description" style="width:240px">
       <input class="input" id="pb-create-trigger" placeholder="Trigger (optional)" style="width:160px">
-      <button class="fleet-btn" onclick="createPlaybook()">CREATE</button>
+      <button class="fleet-btn" data-action="createPlaybook">CREATE</button>
       <span id="pb-create-msg" class="text-meta"></span>
     </div>
   </div>
@@ -783,30 +783,30 @@
 <!-- GITOPS VIEW -->
 <div id="gitops-view" class="d-none">
 <div class="sub-tabs" id="subtabs-gitops">
-  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
-  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
-  <button class="sub-tab active-sub" onclick="switchView('gitops')">Config Sync</button>
-  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
-  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
-  <button class="sub-tab" onclick="switchView('dr')">DR</button>
-  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
-  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
-  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
-  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+  <button class="sub-tab" data-view="tools">Overview</button>
+  <button class="sub-tab" data-view="playbooks">Playbooks</button>
+  <button class="sub-tab active-sub" data-view="gitops">Config Sync</button>
+  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" data-view="dns">DNS</button>
+  <button class="sub-tab" data-view="dr">DR</button>
+  <button class="sub-tab" data-view="incidents">Incidents</button>
+  <button class="sub-tab" data-view="metrics">Metrics</button>
+  <button class="sub-tab" data-view="automation">Automation</button>
+  <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
 <div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--purple-light)">GitOps Config Sync</h3>
     <div style="display:flex;gap:8px">
-      <button class="fleet-btn" onclick="gitopsInit()">INIT</button>
-      <button class="fleet-btn" onclick="gitopsFetch()">SYNC</button>
-      <button class="fleet-btn" onclick="loadGitops()">REFRESH</button>
+      <button class="fleet-btn" data-action="gitopsInit">INIT</button>
+      <button class="fleet-btn" data-action="gitopsFetch">SYNC</button>
+      <button class="fleet-btn" data-action="loadGitops">REFRESH</button>
     </div>
   </div>
   <div id="go-status" style="font-size:12px;color:var(--text-dim);margin-bottom:12px"></div>
   <div id="go-actions" class="d-none" style="gap:8px;margin-bottom:12px">
-    <button class="fleet-btn" onclick="gitopsApply()">APPLY CHANGES</button>
-    <button class="fleet-btn" onclick="gitopsDiff()">VIEW DIFF</button>
+    <button class="fleet-btn" data-action="gitopsApply">APPLY CHANGES</button>
+    <button class="fleet-btn" data-action="gitopsDiff">VIEW DIFF</button>
   </div>
   <div id="go-diff" class="d-none" style="margin-bottom:12px">
     <pre id="go-diff-content" style="font-size:11px;color:var(--text);background:rgba(0,0,0,0.3);padding:12px;border-radius:6px;white-space:pre-wrap;max-height:300px;overflow-y:auto"></pre>
@@ -822,21 +822,21 @@
 <!-- CHAOS VIEW -->
 <div id="chaos-view" class="d-none">
 <div class="sub-tabs" id="subtabs-chaos">
-  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
-  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
-  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
-  <button class="sub-tab active-sub" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
-  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
-  <button class="sub-tab" onclick="switchView('dr')">DR</button>
-  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
-  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
-  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
-  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+  <button class="sub-tab" data-view="tools">Overview</button>
+  <button class="sub-tab" data-view="playbooks">Playbooks</button>
+  <button class="sub-tab" data-view="gitops">Config Sync</button>
+  <button class="sub-tab active-sub" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" data-view="dns">DNS</button>
+  <button class="sub-tab" data-view="dr">DR</button>
+  <button class="sub-tab" data-view="incidents">Incidents</button>
+  <button class="sub-tab" data-view="metrics">Metrics</button>
+  <button class="sub-tab" data-view="automation">Automation</button>
+  <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
 <div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h3 style="font-size:14px;color:var(--red)">Chaos Engineering</h3>
-    <button class="fleet-btn" onclick="loadChaos()">REFRESH</button>
+    <button class="fleet-btn" data-action="loadChaos">REFRESH</button>
   </div>
   <div style="background:rgba(255,60,60,0.08);border:1px solid rgba(255,60,60,0.3);border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text-dim)">
     Chaos experiments intentionally disrupt services to test recovery. Production hosts are blocked by safety gates. Use only on lab/dev infrastructure.
@@ -856,7 +856,7 @@
       <select id="chaos-target" class="freq-input" style="flex:1;min-width:100px"><option value="">Select host...</option></select>
       <input id="chaos-service" placeholder="Service/container" class="freq-input" style="flex:1;min-width:100px">
       <input id="chaos-duration" placeholder="Duration (s)" type="number" value="60" class="freq-input" style="width:100px">
-      <button class="fleet-btn" style="background:var(--red);color:#fff" onclick="chaosRun()">INJECT</button>
+      <button class="fleet-btn" style="background:var(--red);color:#fff" data-action="chaosRun">INJECT</button>
     </div>
   </div>
   <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">EXPERIMENT LOG</h4>
@@ -876,8 +876,8 @@
     <div class="section-body">
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Configure which widgets appear on your HOME dashboard and reorder sections on any view.</div>
       <div class="flex-wrap-8-mb12">
-        <button class="fleet-btn" onclick="openHomeWidgetConfig()">CONFIGURE HOME WIDGETS</button>
-        <button class="fleet-btn" onclick="openLayoutConfig()">CONFIGURE CURRENT VIEW</button>
+        <button class="fleet-btn" data-action="openHomeWidgetConfig">CONFIGURE HOME WIDGETS</button>
+        <button class="fleet-btn" data-action="openLayoutConfig">CONFIGURE CURRENT VIEW</button>
       </div>
     </div>
   </div>
@@ -887,7 +887,7 @@
     <div class="section-body">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <span style="font-size:12px;color:var(--text-dim)">Track infrastructure costs across the fleet.</span>
-        <div style="display:flex;gap:4px"><button class="fleet-btn" onclick="showCostConfig()">CONFIG</button><button class="fleet-btn" onclick="loadCosts()">REFRESH</button></div>
+        <div style="display:flex;gap:4px"><button class="fleet-btn" data-action="showCostConfig">CONFIG</button><button class="fleet-btn" data-action="loadCosts">REFRESH</button></div>
       </div>
       <div id="cost-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
       <div id="cost-table"></div>
@@ -900,8 +900,8 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <span style="font-size:12px;color:var(--text-dim)">Connect and manage multiple FREQ instances.</span>
         <div style="display:flex;gap:8px">
-          <button class="fleet-btn" onclick="fedPoll()">POLL ALL</button>
-          <button class="fleet-btn" onclick="loadFederation()">REFRESH</button>
+          <button class="fleet-btn" data-action="fedPoll">POLL ALL</button>
+          <button class="fleet-btn" data-action="loadFederation">REFRESH</button>
         </div>
       </div>
       <div id="fed-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
@@ -912,7 +912,7 @@
           <input id="fed-name" placeholder="Site name" style="flex:1;min-width:100px" class="freq-input">
           <input id="fed-url" placeholder="https://freq.dc02:8888" style="flex:2;min-width:200px" class="freq-input">
           <input id="fed-secret" placeholder="Shared secret (optional)" type="password" style="flex:1;min-width:100px" class="freq-input">
-          <button class="fleet-btn" onclick="fedRegister()">REGISTER</button>
+          <button class="fleet-btn" data-action="fedRegister">REGISTER</button>
         </div>
       </div>
     </div>
@@ -930,8 +930,8 @@
     <div class="section-header"><h3>Cost Analysis</h3><span class="chev">▾</span></div>
     <div class="section-body">
       <div class="flex-wrap-8-mb12">
-        <button class="fleet-btn" onclick="loadCostAnalysis('compare')">COMPARE COSTS</button>
-        <button class="fleet-btn" onclick="loadCostAnalysis('waste')">WASTE DETECTION</button>
+        <button class="fleet-btn" data-action="loadCostAnalysis" data-arg="compare">COMPARE COSTS</button>
+        <button class="fleet-btn" data-action="loadCostAnalysis" data-arg="waste">WASTE DETECTION</button>
       </div>
       <div id="cost-analysis-out"><div class="exec-out">Analyze fleet costs — find waste and compare spending.</div></div>
     </div>
@@ -941,9 +941,9 @@
     <div class="section-header"><h3>API</h3><span class="chev">▾</span></div>
     <div class="section-body">
       <div class="flex-wrap-8-mb12">
-        <button class="fleet-btn" onclick="openApiDocs()">API DOCS</button>
-        <button class="fleet-btn" onclick="loadOpenApi()">OPENAPI SPEC</button>
-        <button class="fleet-btn" onclick="loadPrometheus()">PROMETHEUS METRICS</button>
+        <button class="fleet-btn" data-action="openApiDocs">API DOCS</button>
+        <button class="fleet-btn" data-action="loadOpenApi">OPENAPI SPEC</button>
+        <button class="fleet-btn" data-action="loadPrometheus">PROMETHEUS METRICS</button>
       </div>
       <div id="api-docs-out"><div class="exec-out">View API documentation, OpenAPI spec, or Prometheus metrics.</div></div>
     </div>
@@ -955,7 +955,7 @@
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
         <div>
           <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block">Auto-Refresh Interval</label>
-          <select id="pref-refresh" class="input-field" style="width:100%" onchange="updatePref('refresh',this.value)">
+          <select id="pref-refresh" class="input-field" style="width:100%">
             <option value="0">Disabled</option>
             <option value="10">10 seconds</option>
             <option value="30" selected>30 seconds</option>
@@ -965,7 +965,7 @@
         </div>
         <div>
           <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block">UI Density</label>
-          <select id="pref-density" class="input-field" style="width:100%" onchange="updatePref('density',this.value)">
+          <select id="pref-density" class="input-field" style="width:100%">
             <option value="compact">Compact</option>
             <option value="normal" selected>Normal</option>
             <option value="comfortable">Comfortable</option>
@@ -981,13 +981,13 @@
      ============================================================ -->
 <div id="network-view" class="d-none">
 <div class="sub-tabs" id="subtabs-network">
-  <button class="sub-tab" onclick="switchView('fleet')">Fleet</button>
-  <button class="sub-tab" onclick="switchView('topology')">Topology</button>
-  <button class="sub-tab" onclick="switchView('capacity')">Capacity</button>
-  <button class="sub-tab active-sub" onclick="switchView('network')">Network</button>
+  <button class="sub-tab" data-view="fleet">Fleet</button>
+  <button class="sub-tab" data-view="topology">Topology</button>
+  <button class="sub-tab" data-view="capacity">Capacity</button>
+  <button class="sub-tab active-sub" data-view="network">Network</button>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Switch Fleet</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadNetworkPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Switch Fleet</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadNetworkPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="net-switch-stats"></div>
     <table><thead><tr><th>Switch</th><th>Model</th><th>Firmware</th><th>Ports</th><th>Uptime</th><th>Status</th></tr></thead><tbody id="net-switch-tbl"></tbody></table>
@@ -1001,14 +1001,14 @@
   <div class="section-header"><h3>Switch Detail</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn c-purple-active" onclick="loadSwitchData('show')">OVERVIEW</button>
-      <button class="fleet-btn" onclick="loadSwitchData('facts')">FACTS</button>
-      <button class="fleet-btn" onclick="loadSwitchData('interfaces')">INTERFACES</button>
-      <button class="fleet-btn" onclick="loadSwitchData('vlans')">VLANS</button>
-      <button class="fleet-btn" onclick="loadSwitchData('mac')">MAC TABLE</button>
-      <button class="fleet-btn" onclick="loadSwitchData('arp')">ARP TABLE</button>
-      <button class="fleet-btn" onclick="loadSwitchData('neighbors')">NEIGHBORS</button>
-      <button class="fleet-btn" onclick="loadSwitchData('environment')">ENVIRONMENT</button>
+      <button class="fleet-btn c-purple-active" data-action="loadSwitchData" data-arg="show">OVERVIEW</button>
+      <button class="fleet-btn" data-action="loadSwitchData" data-arg="facts">FACTS</button>
+      <button class="fleet-btn" data-action="loadSwitchData" data-arg="interfaces">INTERFACES</button>
+      <button class="fleet-btn" data-action="loadSwitchData" data-arg="vlans">VLANS</button>
+      <button class="fleet-btn" data-action="loadSwitchData" data-arg="mac">MAC TABLE</button>
+      <button class="fleet-btn" data-action="loadSwitchData" data-arg="arp">ARP TABLE</button>
+      <button class="fleet-btn" data-action="loadSwitchData" data-arg="neighbors">NEIGHBORS</button>
+      <button class="fleet-btn" data-action="loadSwitchData" data-arg="environment">ENVIRONMENT</button>
     </div>
     <div class="exec-out" id="switch-detail-out">Select a data view to query the switch.</div>
   </div>
@@ -1017,9 +1017,9 @@
   <div class="section-header"><h3>Config Backups</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn" onclick="loadConfigHistory()">BACKUP HISTORY</button>
+      <button class="fleet-btn" data-action="loadConfigHistory">BACKUP HISTORY</button>
       <input type="text" id="config-search-input" placeholder="Search configs (regex)..." class="input-field" style="width:200px">
-      <button class="fleet-btn" onclick="searchConfigs()">SEARCH</button>
+      <button class="fleet-btn" data-action="searchConfigs">SEARCH</button>
     </div>
     <div class="exec-out" id="config-backup-out">View config backup history or search across saved configs.</div>
   </div>
@@ -1028,9 +1028,9 @@
   <div class="section-header"><h3>Dependency Map</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn c-purple-active" onclick="loadDepMap()">LOAD MAP</button>
+      <button class="fleet-btn c-purple-active" data-action="loadDepMap">LOAD MAP</button>
       <input type="text" id="impact-host-input" placeholder="Host for impact analysis..." class="input-field" style="width:200px">
-      <button class="fleet-btn" onclick="runImpactAnalysis()">IMPACT ANALYSIS</button>
+      <button class="fleet-btn" data-action="runImpactAnalysis">IMPACT ANALYSIS</button>
     </div>
     <div id="dep-map-out"><div class="exec-out">Load the dependency map to see infrastructure relationships.</div></div>
   </div>
@@ -1038,8 +1038,8 @@
 <div class="section">
   <div class="section-header"><h3>Network Monitoring</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
-    <button class="fleet-btn" onclick="loadNetmonData()">POLL DATA</button>
-    <button class="fleet-btn" onclick="loadNetmonInterfaces()">INTERFACES</button>
+    <button class="fleet-btn" data-action="loadNetmonData">POLL DATA</button>
+    <button class="fleet-btn" data-action="loadNetmonInterfaces">INTERFACES</button>
     <div class="exec-out" id="netmon-out" style="margin-top:8px">Click to load network monitoring data.</div>
   </div>
 </div>
@@ -1047,9 +1047,9 @@
   <div class="section-header"><h3>SNMP Discovery</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn" onclick="runNetScan('snmp')">SCAN SNMP</button>
-      <button class="fleet-btn" onclick="runNetScan('mac')">FIND MAC</button>
-      <button class="fleet-btn" onclick="runNetScan('arp')">ARP TABLE</button>
+      <button class="fleet-btn" data-action="runNetScan" data-arg="snmp">SCAN SNMP</button>
+      <button class="fleet-btn" data-action="runNetScan" data-arg="mac">FIND MAC</button>
+      <button class="fleet-btn" data-action="runNetScan" data-arg="arp">ARP TABLE</button>
     </div>
     <div class="exec-out" id="net-snmp-out">Click a scan button to query network devices.</div>
   </div>
@@ -1061,17 +1061,17 @@
      ============================================================ -->
 <div id="firewall-view" class="d-none">
 <div class="sub-tabs" id="subtabs-firewall">
-  <button class="sub-tab" onclick="switchView('security')">Overview</button>
-  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
-  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
-  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
-  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
-  <button class="sub-tab active-sub" onclick="switchView('firewall')">Firewall</button>
-  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
-  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
+  <button class="sub-tab" data-view="security">Overview</button>
+  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
+  <button class="sub-tab" data-view="sec-access">Access</button>
+  <button class="sub-tab" data-view="sec-vault">Vault</button>
+  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
+  <button class="sub-tab active-sub" data-view="firewall">Firewall</button>
+  <button class="sub-tab" data-view="certs">Certs</button>
+  <button class="sub-tab" data-view="vpn">VPN</button>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Firewall Overview</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadFirewallPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Firewall Overview</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadFirewallPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="fw-stats"></div>
     <div id="fw-interfaces"></div>
@@ -1081,9 +1081,9 @@
   <div class="section-header"><h3>Filter Rules</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn" onclick="loadFwRules()">LOAD RULES</button>
-      <button class="fleet-btn" onclick="loadFwNat()">NAT RULES</button>
-      <button class="fleet-btn" onclick="loadFwStates()">ACTIVE STATES</button>
+      <button class="fleet-btn" data-action="loadFwRules">LOAD RULES</button>
+      <button class="fleet-btn" data-action="loadFwNat">NAT RULES</button>
+      <button class="fleet-btn" data-action="loadFwStates">ACTIVE STATES</button>
     </div>
     <div id="fw-rules-content"><div class="exec-out">Click to load firewall rules.</div></div>
   </div>
@@ -1095,17 +1095,17 @@
      ============================================================ -->
 <div id="certs-view" class="d-none">
 <div class="sub-tabs" id="subtabs-certs">
-  <button class="sub-tab" onclick="switchView('security')">Overview</button>
-  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
-  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
-  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
-  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
-  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
-  <button class="sub-tab active-sub" onclick="switchView('certs')">Certs</button>
-  <button class="sub-tab" onclick="switchView('vpn')">VPN</button>
+  <button class="sub-tab" data-view="security">Overview</button>
+  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
+  <button class="sub-tab" data-view="sec-access">Access</button>
+  <button class="sub-tab" data-view="sec-vault">Vault</button>
+  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
+  <button class="sub-tab" data-view="firewall">Firewall</button>
+  <button class="sub-tab active-sub" data-view="certs">Certs</button>
+  <button class="sub-tab" data-view="vpn">VPN</button>
 </div>
 <div class="section">
-  <div class="section-header"><h3>TLS Certificate Inventory</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadCertsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>TLS Certificate Inventory</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadCertsPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="cert-stats"></div>
     <table><thead><tr><th>Domain</th><th>Issuer</th><th>Expires</th><th>Days Left</th><th>Status</th></tr></thead><tbody id="cert-tbl"></tbody></table>
@@ -1118,19 +1118,19 @@
      ============================================================ -->
 <div id="dns-view" class="d-none">
 <div class="sub-tabs" id="subtabs-dns">
-  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
-  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
-  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
-  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
-  <button class="sub-tab active-sub" onclick="switchView('dns')">DNS</button>
-  <button class="sub-tab" onclick="switchView('dr')">DR</button>
-  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
-  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
-  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
-  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+  <button class="sub-tab" data-view="tools">Overview</button>
+  <button class="sub-tab" data-view="playbooks">Playbooks</button>
+  <button class="sub-tab" data-view="gitops">Config Sync</button>
+  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab active-sub" data-view="dns">DNS</button>
+  <button class="sub-tab" data-view="dr">DR</button>
+  <button class="sub-tab" data-view="incidents">Incidents</button>
+  <button class="sub-tab" data-view="metrics">Metrics</button>
+  <button class="sub-tab" data-view="automation">Automation</button>
+  <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
 <div class="section">
-  <div class="section-header"><h3>DNS Health</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadDnsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>DNS Health</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDnsPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="dns-stats"></div>
     <div id="dns-records"></div>
@@ -1141,13 +1141,13 @@
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
       <input type="text" id="dns-query-input" placeholder="Domain to check..." class="input-field" style="width:240px">
-      <button class="fleet-btn" onclick="runDnsCheck()">CHECK</button>
+      <button class="fleet-btn" data-action="runDnsCheck">CHECK</button>
     </div>
     <div class="exec-out" id="dns-check-out">Enter a domain to check DNS resolution.</div>
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>DNS Inventory</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadDnsInventory()">SCAN</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>DNS Inventory</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDnsInventory">SCAN</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="dns-inventory-out"><div class="exec-out">Click SCAN to discover fleet DNS records.</div></div>
   </div>
@@ -1159,17 +1159,17 @@
      ============================================================ -->
 <div id="vpn-view" class="d-none">
 <div class="sub-tabs" id="subtabs-vpn">
-  <button class="sub-tab" onclick="switchView('security')">Overview</button>
-  <button class="sub-tab" onclick="switchView('sec-hardening')">Hardening</button>
-  <button class="sub-tab" onclick="switchView('sec-access')">Access</button>
-  <button class="sub-tab" onclick="switchView('sec-vault')">Vault</button>
-  <button class="sub-tab" onclick="switchView('sec-compliance')">Compliance</button>
-  <button class="sub-tab" onclick="switchView('firewall')">Firewall</button>
-  <button class="sub-tab" onclick="switchView('certs')">Certs</button>
-  <button class="sub-tab active-sub" onclick="switchView('vpn')">VPN</button>
+  <button class="sub-tab" data-view="security">Overview</button>
+  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
+  <button class="sub-tab" data-view="sec-access">Access</button>
+  <button class="sub-tab" data-view="sec-vault">Vault</button>
+  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
+  <button class="sub-tab" data-view="firewall">Firewall</button>
+  <button class="sub-tab" data-view="certs">Certs</button>
+  <button class="sub-tab active-sub" data-view="vpn">VPN</button>
 </div>
 <div class="section">
-  <div class="section-header"><h3>VPN Tunnels</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadVpnPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>VPN Tunnels</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadVpnPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="vpn-stats"></div>
     <h4 style="font-size:12px;color:var(--text-dim);margin:12px 0 8px">WIREGUARD</h4>
@@ -1185,19 +1185,19 @@
      ============================================================ -->
 <div id="dr-view" class="d-none">
 <div class="sub-tabs" id="subtabs-dr">
-  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
-  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
-  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
-  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
-  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
-  <button class="sub-tab active-sub" onclick="switchView('dr')">DR</button>
-  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
-  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
-  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
-  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+  <button class="sub-tab" data-view="tools">Overview</button>
+  <button class="sub-tab" data-view="playbooks">Playbooks</button>
+  <button class="sub-tab" data-view="gitops">Config Sync</button>
+  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" data-view="dns">DNS</button>
+  <button class="sub-tab active-sub" data-view="dr">DR</button>
+  <button class="sub-tab" data-view="incidents">Incidents</button>
+  <button class="sub-tab" data-view="metrics">Metrics</button>
+  <button class="sub-tab" data-view="automation">Automation</button>
+  <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Backup Status</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadDrPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Backup Status</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDrPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="dr-stats"></div>
     <table><thead><tr><th>Host</th><th>Last Backup</th><th>Size</th><th>Policy</th><th>Status</th></tr></thead><tbody id="dr-backup-tbl"></tbody></table>
@@ -1219,14 +1219,14 @@
   <div class="section-header"><h3>Migration Planning</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <button class="fleet-btn" onclick="loadMigratePlan()">MIGRATION PLAN</button>
-      <button class="fleet-btn" onclick="loadVmwareMigration()">VMWARE STATUS</button>
+      <button class="fleet-btn" data-action="loadMigratePlan">MIGRATION PLAN</button>
+      <button class="fleet-btn" data-action="loadVmwareMigration">VMWARE STATUS</button>
     </div>
     <div id="migrate-plan-out"><div class="exec-out">Click to load migration planning data.</div></div>
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Backup Policies</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadBackupPolicies()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Backup Policies</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadBackupPolicies">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="backup-policy-stats" style="margin-bottom:12px"></div>
     <div id="backup-policy-list"><div class="exec-out">Loading backup policies...</div></div>
@@ -1239,26 +1239,26 @@
      ============================================================ -->
 <div id="incidents-view" class="d-none">
 <div class="sub-tabs" id="subtabs-incidents">
-  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
-  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
-  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
-  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
-  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
-  <button class="sub-tab" onclick="switchView('dr')">DR</button>
-  <button class="sub-tab active-sub" onclick="switchView('incidents')">Incidents</button>
-  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
-  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
-  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+  <button class="sub-tab" data-view="tools">Overview</button>
+  <button class="sub-tab" data-view="playbooks">Playbooks</button>
+  <button class="sub-tab" data-view="gitops">Config Sync</button>
+  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" data-view="dns">DNS</button>
+  <button class="sub-tab" data-view="dr">DR</button>
+  <button class="sub-tab active-sub" data-view="incidents">Incidents</button>
+  <button class="sub-tab" data-view="metrics">Metrics</button>
+  <button class="sub-tab" data-view="automation">Automation</button>
+  <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Active Incidents</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadIncidentsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Active Incidents</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadIncidentsPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="incident-stats"></div>
     <table><thead><tr><th>ID</th><th>Severity</th><th>Summary</th><th>Opened</th><th>Status</th></tr></thead><tbody id="incident-tbl"></tbody></table>
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>On-Call</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadOncallSchedule()">FULL SCHEDULE</button><button class="fleet-btn" onclick="loadOncall()" style="margin-left:4px">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>On-Call</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadOncallSchedule">FULL SCHEDULE</button><button class="fleet-btn" data-action="loadOncall" style="margin-left:4px">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="oncall-info"><div class="exec-out">Loading on-call info...</div></div>
     <div id="oncall-schedule-detail" style="margin-top:8px"></div>
@@ -1283,32 +1283,32 @@
      ============================================================ -->
 <div id="metrics-view" class="d-none">
 <div class="sub-tabs" id="subtabs-metrics">
-  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
-  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
-  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
-  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
-  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
-  <button class="sub-tab" onclick="switchView('dr')">DR</button>
-  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
-  <button class="sub-tab active-sub" onclick="switchView('metrics')">Metrics</button>
-  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
-  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+  <button class="sub-tab" data-view="tools">Overview</button>
+  <button class="sub-tab" data-view="playbooks">Playbooks</button>
+  <button class="sub-tab" data-view="gitops">Config Sync</button>
+  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" data-view="dns">DNS</button>
+  <button class="sub-tab" data-view="dr">DR</button>
+  <button class="sub-tab" data-view="incidents">Incidents</button>
+  <button class="sub-tab active-sub" data-view="metrics">Metrics</button>
+  <button class="sub-tab" data-view="automation">Automation</button>
+  <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Fleet Metrics</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadMetricsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Fleet Metrics</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadMetricsPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="metrics-top-stats"></div>
     <div id="metrics-charts"></div>
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Synthetic Monitors</h3><div class="flex-1"></div><button class="fleet-btn" onclick="runMonitorCheck()">CHECK NOW</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Synthetic Monitors</h3><div class="flex-1"></div><button class="fleet-btn" data-action="runMonitorCheck">CHECK NOW</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="synth-monitors"><div class="exec-out">HTTP/TCP endpoint monitors will display here.</div></div>
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Alert Rules</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadMetricAlerts()">REFRESH</button><button class="fleet-btn" onclick="runAlertCheck()" style="margin-left:4px">EVALUATE</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Alert Rules</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadMetricAlerts">REFRESH</button><button class="fleet-btn" data-action="runAlertCheck" style="margin-left:4px">EVALUATE</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="metric-alert-rules"><div class="exec-out">Loading alert rules...</div></div>
     <div id="metric-alert-triggered" style="margin-top:12px"></div>
@@ -1321,7 +1321,7 @@
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>SLA / Uptime</h3><div class="flex-1"></div><button class="fleet-btn" onclick="recordSlaCheck()">RECORD CHECK</button><button class="fleet-btn" onclick="loadSlaData()" style="margin-left:4px">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>SLA / Uptime</h3><div class="flex-1"></div><button class="fleet-btn" data-action="recordSlaCheck">RECORD CHECK</button><button class="fleet-btn" data-action="loadSlaData" style="margin-left:4px">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="sla-data"><div class="exec-out">Loading SLA data...</div></div>
   </div>
@@ -1333,19 +1333,19 @@
      ============================================================ -->
 <div id="automation-view" class="d-none">
 <div class="sub-tabs" id="subtabs-automation">
-  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
-  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
-  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
-  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
-  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
-  <button class="sub-tab" onclick="switchView('dr')">DR</button>
-  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
-  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
-  <button class="sub-tab active-sub" onclick="switchView('automation')">Automation</button>
-  <button class="sub-tab" onclick="switchView('plugins')">Plugins</button>
+  <button class="sub-tab" data-view="tools">Overview</button>
+  <button class="sub-tab" data-view="playbooks">Playbooks</button>
+  <button class="sub-tab" data-view="gitops">Config Sync</button>
+  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" data-view="dns">DNS</button>
+  <button class="sub-tab" data-view="dr">DR</button>
+  <button class="sub-tab" data-view="incidents">Incidents</button>
+  <button class="sub-tab" data-view="metrics">Metrics</button>
+  <button class="sub-tab active-sub" data-view="automation">Automation</button>
+  <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Automation Engine</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadAutomationPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Automation Engine</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadAutomationPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="auto-stats"></div>
     <h4 style="font-size:12px;color:var(--text-dim);margin:12px 0 8px">ACTIVE REACTORS</h4>
@@ -1357,7 +1357,7 @@
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Job Scheduler</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadScheduleJobs()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Job Scheduler</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadScheduleJobs">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="schedule-jobs"><div class="exec-out">Loading scheduled jobs...</div></div>
     <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">JOB TEMPLATES</h4>
@@ -1367,7 +1367,7 @@
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Webhooks</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadWebhooks()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Webhooks</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadWebhooks">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="webhook-list"><div class="exec-out">Loading webhooks...</div></div>
     <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">WEBHOOK LOG</h4>
@@ -1381,19 +1381,19 @@
      ============================================================ -->
 <div id="plugins-view" class="d-none">
 <div class="sub-tabs" id="subtabs-plugins">
-  <button class="sub-tab" onclick="switchView('tools')">Overview</button>
-  <button class="sub-tab" onclick="switchView('playbooks')">Playbooks</button>
-  <button class="sub-tab" onclick="switchView('gitops')">Config Sync</button>
-  <button class="sub-tab" onclick="switchView('chaos')" style="color:var(--red)">Chaos</button>
-  <button class="sub-tab" onclick="switchView('dns')">DNS</button>
-  <button class="sub-tab" onclick="switchView('dr')">DR</button>
-  <button class="sub-tab" onclick="switchView('incidents')">Incidents</button>
-  <button class="sub-tab" onclick="switchView('metrics')">Metrics</button>
-  <button class="sub-tab" onclick="switchView('automation')">Automation</button>
-  <button class="sub-tab active-sub" onclick="switchView('plugins')">Plugins</button>
+  <button class="sub-tab" data-view="tools">Overview</button>
+  <button class="sub-tab" data-view="playbooks">Playbooks</button>
+  <button class="sub-tab" data-view="gitops">Config Sync</button>
+  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab" data-view="dns">DNS</button>
+  <button class="sub-tab" data-view="dr">DR</button>
+  <button class="sub-tab" data-view="incidents">Incidents</button>
+  <button class="sub-tab" data-view="metrics">Metrics</button>
+  <button class="sub-tab" data-view="automation">Automation</button>
+  <button class="sub-tab active-sub" data-view="plugins">Plugins</button>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Installed Plugins</h3><div class="flex-1"></div><button class="fleet-btn" onclick="loadPluginsPage()">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Installed Plugins</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadPluginsPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="plugin-stats"></div>
     <div id="plugin-list"></div>
@@ -1413,7 +1413,7 @@
 <div id="p-infra" class="page">
 <div class="flex-row-8-mb16-center">
   <button class="fleet-btn c-purple-active" data-view="home" >&#9664; HOME</button>
-  <button class="fleet-btn" onclick="loadInfraPage()">REFRESH</button>
+  <button class="fleet-btn" data-action="loadInfraPage">REFRESH</button>
 </div>
 <div class="section">
   <div class="section-header"><h3>Overview</h3><span class="chev">▾</span></div>
@@ -1426,7 +1426,7 @@
 <div class="section collapsed">
   <div class="section-header"><h3>pfSense <span id="pf-meta" class="fs-12-dim">FIREWALL</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="flex-wrap-8-mb12"><button class="fleet-btn" data-action="pfAction" data-arg="status">STATUS</button><button class="fleet-btn" data-action="pfAction" data-arg="rules">RULES</button><button class="fleet-btn" data-action="pfAction" data-arg="nat">NAT</button><button class="fleet-btn" onclick="pfAction('states')">STATES</button><button class="fleet-btn" onclick="pfAction('interfaces')">INTERFACES</button></div>
+    <div class="flex-wrap-8-mb12"><button class="fleet-btn" data-action="pfAction" data-arg="status">STATUS</button><button class="fleet-btn" data-action="pfAction" data-arg="rules">RULES</button><button class="fleet-btn" data-action="pfAction" data-arg="nat">NAT</button><button class="fleet-btn" data-action="pfAction" data-arg="states">STATES</button><button class="fleet-btn" data-action="pfAction" data-arg="interfaces">INTERFACES</button></div>
     <div class="exec-out" id="pf-out">Click an action above.</div>
   </div>
 </div>
@@ -1440,14 +1440,14 @@
 <div class="section collapsed">
   <div class="section-header"><h3>iDRAC <span class="fs-12-dim">BMC Management</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="flex-wrap-8-mb12"><button class="fleet-btn" onclick="idracAction('status')">SYSTEM INFO</button><button class="fleet-btn" onclick="idracAction('sensors')">SENSORS</button><button class="fleet-btn" data-action="idracAction" data-arg="power">POWER</button><button class="fleet-btn" onclick="idracAction('sel')">EVENT LOG</button></div>
+    <div class="flex-wrap-8-mb12"><button class="fleet-btn" data-action="idracAction" data-arg="status">SYSTEM INFO</button><button class="fleet-btn" data-action="idracAction" data-arg="sensors">SENSORS</button><button class="fleet-btn" data-action="idracAction" data-arg="power">POWER</button><button class="fleet-btn" data-action="idracAction" data-arg="sel">EVENT LOG</button></div>
     <div id="idrac-out"></div>
   </div>
 </div>
 <div class="section collapsed">
   <div class="section-header"><h3>Switch <span id="sw-meta" class="fs-12-dim">L3 SWITCH</span></h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="flex-wrap-8-mb12"><button class="fleet-btn" data-action="swAction" data-arg="status">STATUS</button><button class="fleet-btn" data-action="swAction" data-arg="vlans">VLANS</button><button class="fleet-btn" onclick="swAction('interfaces')">INTERFACES</button><button class="fleet-btn" data-action="swAction" data-arg="mac">MAC TABLE</button></div>
+    <div class="flex-wrap-8-mb12"><button class="fleet-btn" data-action="swAction" data-arg="status">STATUS</button><button class="fleet-btn" data-action="swAction" data-arg="vlans">VLANS</button><button class="fleet-btn" data-action="swAction" data-arg="interfaces">INTERFACES</button><button class="fleet-btn" data-action="swAction" data-arg="mac">MAC TABLE</button></div>
     <div class="exec-out" id="sw-out">Click an action above.</div>
   </div>
 </div>
@@ -1457,7 +1457,7 @@
 <div id="p-system" class="page">
 <div class="flex-row-8-mb16-center">
   <button class="fleet-btn c-purple-active" data-view="home" >&#9664; HOME</button>
-  <button class="fleet-btn" onclick="loadSystemPage()">REFRESH</button>
+  <button class="fleet-btn" data-action="loadSystemPage">REFRESH</button>
 </div>
 <!-- Global Settings -->
 <div class="section" id="sys-settings-section">
@@ -1480,7 +1480,7 @@
 <div class="section">
   <div class="section-header"><h3>Doctor</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="display:flex;gap:8px;margin-bottom:16px"><button class="fleet-btn c-purple-active" onclick="runSysInfo()" >RUN SELF-DIAGNOSTIC</button><button class="fleet-btn" onclick="runBackup()">EXPORT CONFIG BACKUP</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px"><button class="fleet-btn c-purple-active" data-action="runSysInfo" >RUN SELF-DIAGNOSTIC</button><button class="fleet-btn" data-action="runBackup">EXPORT CONFIG BACKUP</button></div>
     <div id="doctor-c"></div>
     <div id="backup-c" class="mt-12"></div>
   </div>
@@ -1492,7 +1492,7 @@
 <div class="section">
   <div class="section-header"><h3>Knowledge Base</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <input class="search" id="learn-q" placeholder="Search knowledge base — try: nfs stale, docker gluetun, pfsense reboot" onkeydown="if(event.key==='Enter')searchLearn()">
+    <input class="search" id="learn-q" placeholder="Search knowledge base — try: nfs stale, docker gluetun, pfsense reboot">
     <div id="learn-r"></div>
   </div>
 </div>
@@ -1519,7 +1519,7 @@
         <div><label class="label-sub-10">Cooldown (s)</label><input id="rule-cooldown" class="input-sm" style="width:100%" value="300" type="number"></div>
         <div><label class="label-sub-10">Severity</label><select id="rule-severity" class="input-sm" style="width:100%"><option value="warning">Warning</option><option value="critical">Critical</option><option value="info">Info</option></select></div>
       </div>
-      <button class="fleet-btn mt-12" onclick="createRule()">CREATE RULE</button>
+      <button class="fleet-btn mt-12" data-action="createRule">CREATE RULE</button>
       <div id="rule-create-msg" class="mt-8"></div>
     </div>
     <div style="margin-top:16px">
@@ -1570,7 +1570,7 @@
       <h1 id="hd-title"></h1>
       <div id="hd-subtitle" style="font-size:13px;color:var(--text);margin-top:2px"></div>
     </div>
-    <button class="ho-close" onclick="closeCard()">&#10005;</button>
+    <button class="ho-close" data-action="closeCard">&#10005;</button>
   </div></div>
   <div class="ho-body">
     <div id="hd-loading" style="color:var(--text-dim);padding:60px 0;text-align:center">
@@ -1594,9 +1594,9 @@
         <span id="terminal-title" style="color:var(--text);font-size:12px;font-family:var(--font-mono)"></span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <button class="fleet-btn" onclick="termCopy()" style="font-size:9px;padding:2px 8px">COPY</button>
-        <button class="fleet-btn" onclick="termPaste()" style="font-size:9px;padding:2px 8px">PASTE</button>
-        <button class="fleet-btn" onclick="closeTerminal()" style="font-size:9px;padding:2px 8px;color:var(--red)">CLOSE</button>
+        <button class="fleet-btn" data-action="termCopy" style="font-size:9px;padding:2px 8px">COPY</button>
+        <button class="fleet-btn" data-action="termPaste" style="font-size:9px;padding:2px 8px">PASTE</button>
+        <button class="fleet-btn" data-action="closeTerminal" style="font-size:9px;padding:2px 8px;color:var(--red)">CLOSE</button>
       </div>
     </div>
     <div id="terminal-container" style="flex:1;padding:8px 20px 20px;overflow:hidden"></div>
@@ -1604,10 +1604,10 @@
 </div>
 
 <!-- Global Search Overlay -->
-<div id="search-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;padding-top:15vh" onclick="closeSearch()">
-  <div style="max-width:560px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:12px;overflow:hidden" onclick="event.stopPropagation()">
+<div id="search-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;padding-top:15vh" data-action="closeSearch">
+  <div style="max-width:560px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:12px;overflow:hidden" data-action="modalNoop">
     <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
-      <input id="search-input" type="text" placeholder="Search or type > for actions..." style="width:100%;background:transparent;border:none;outline:none;color:var(--text);font-size:16px;font-family:var(--font-ui)" oninput="_globalSearchFilter(this.value)" onkeydown="_globalSearchKeydown(event)">
+      <input id="search-input" type="text" placeholder="Search or type > for actions..." style="width:100%;background:transparent;border:none;outline:none;color:var(--text);font-size:16px;font-family:var(--font-ui)">
     </div>
     <div id="search-results" style="max-height:420px;overflow-y:auto;padding:4px 0"></div>
     <div style="padding:8px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-dim);display:flex;gap:16px">
@@ -1620,8 +1620,8 @@
 </div>
 
 <!-- Keyboard Shortcuts Help -->
-<div id="shortcuts-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10001;padding-top:15vh" onclick="document.getElementById('shortcuts-modal').style.display='none'">
-  <div style="max-width:400px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:24px" onclick="event.stopPropagation()">
+<div id="shortcuts-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10001;padding-top:15vh" data-action="hideShortcutsModal">
+  <div style="max-width:400px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:24px" data-action="modalNoop">
     <h3 style="margin:0 0 16px;color:var(--purple-light)">Keyboard Shortcuts</h3>
     <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px">
       <kbd style="padding:2px 6px;border:1px solid var(--border);border-radius:3px">Ctrl+K</kbd><span>Global search</span>

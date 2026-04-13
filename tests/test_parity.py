@@ -497,9 +497,13 @@ class TestWebUIViews(unittest.TestCase):
         assert 'data-view="tools"' in APP_HTML
 
     def test_view_ids_includes_new(self):
+        """Token O swept inline `onclick="switchView('X')"` to
+        `data-view="X"`. The view-id presence test now checks for the
+        new attribute marker — sub-tab buttons still exist, they just
+        bind via the existing data-view delegator instead of inline JS."""
         from freq.modules.web_ui import APP_HTML
-        assert "'security'" in APP_HTML
-        assert "'tools'" in APP_HTML
+        assert 'data-view="security"' in APP_HTML
+        assert 'data-view="tools"' in APP_HTML
 
 
 class TestWebUIJsFunctions(unittest.TestCase):

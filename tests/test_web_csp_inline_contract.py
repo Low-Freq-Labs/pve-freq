@@ -1,30 +1,29 @@
 """Tests for the CSP inline-surface contract and honest limits.
 
-R-WEB-CSP-INLINE-CONTRACT-20260413M final state:
-  - Inline <style> FOUC block moved from app.html to app.css (d5dfbb9).
+R-WEB-INLINE-CSP-CLEANUP-20260413O final state:
+  - Inline <style> FOUC block moved from app.html to app.css (d5dfbb9, M).
   - login/header/update-banner inline handlers extracted to delegated
-    data-action bindings (Morty 347d123) — login form wrapper rework
-    in e361cb2 dropped a few more.
-  - serve.py CSP comment carries the concrete post-extract inventory
-    (342 inline event handlers, 267 inline style attrs) and explains
-    why 'unsafe-inline' must stay on both script-src and style-src
-    until the long tail is also extracted.
-  - Regression guards: shipped web UI must not reintroduce any new
-    inline <script> block or any external @import / stylesheet link,
-    and the inline handler / style counts in app.html must not silently
-    grow past the numbers serve.py documents.
+    data-action bindings (Morty 347d123, M) and login-form wrapper
+    rework in e361cb2 (M).
+  - Long-tail extract under O: 178 onclick=switchView swept to
+    data-view, 145 simple onclick patterns swept to data-action /
+    data-arg, 19 stragglers migrated to addEventListener bindings or
+    data-action shims, fleet-filter focus/blur moved to CSS :focus.
+  - app.html now ships ZERO inline event handlers and ZERO inline
+    <script> blocks, so the CSP drops 'unsafe-inline' from script-src
+    entirely. Style attrs are still 266 (styles long tail not in
+    scope for O), so style-src keeps 'unsafe-inline' until a follow-up.
 
-The inline handler long tail (modals, wizards, fleet cards, detail
-panels) is explicitly out of scope for token M and stays for a later
-cleanup token. Dropping 'unsafe-inline' on script-src or style-src
-before that lands would break almost every button in the dashboard.
-
-Why the honest limit matters: this test file fails the moment the
-documented count and the actual count diverge. That guarantees the
-CSP comment, the test, and the shipped HTML never drift apart. If
-someone extracts more handlers, they MUST update the comment + this
-test together; if someone reintroduces inline handlers, the test
-catches it before it reaches master.
+This test file pins all five guarantees so the moment any of them
+drifts the CSP / serve.py / app.html / app.js / app.css move back
+in lock-step:
+  1. No inline <script> blocks (guard from token M).
+  2. No external asset hosts referenced (guard from token L).
+  3. serve.py CSP comment names the concrete inventory numbers.
+  4. app.html inline handler / style counts equal the documented values.
+  5. CSP header carries the right (un)safe-inline directive for the
+     current handler / style state — script-src dropped it, style-src
+     keeps it while styles > 0.
 """
 import re
 import sys
@@ -131,8 +130,8 @@ class TestNoExternalStylesheet(unittest.TestCase):
                              f"setup.html references external host {host}")
 
 
-EXPECTED_INLINE_HANDLERS = 342
-EXPECTED_INLINE_STYLES = 267
+EXPECTED_INLINE_HANDLERS = 0
+EXPECTED_INLINE_STYLES = 266
 
 INLINE_HANDLER_RE = re.compile(r" on[a-z]+=")
 INLINE_STYLE_RE = re.compile(r' style="')
@@ -177,7 +176,10 @@ class TestCspHonestLimitDocumented(unittest.TestCase):
 
     def test_csp_comment_references_follow_up_token(self):
         window = self._comment_window()
-        self.assertIn("R-WEB-CSP-INLINE-CONTRACT-20260413M", window)
+        # The comment must name the token that owns the current state
+        # so a future reader can grep back to the rationale. Token O
+        # is the long-tail extract that dropped script-src 'unsafe-inline'.
+        self.assertIn("R-WEB-INLINE-CSP-CLEANUP-20260413O", window)
 
     def test_app_html_inline_handler_count_matches_documented(self):
         """app.html actual handler count must equal what serve.py claims.
@@ -209,15 +211,29 @@ class TestCspHonestLimitDocumented(unittest.TestCase):
             "These MUST stay in sync — update both together."
         )
 
-    def test_csp_still_carries_unsafe_inline_until_long_tail_extracted(self):
-        """While the inline handler / style counts are non-zero, the CSP
-        header MUST keep 'unsafe-inline' on both script-src and style-src.
-        Dropping it now would break the dashboard at runtime.
-        """
-        self.assertIn("script-src 'self' 'unsafe-inline'", self.src)
+    def test_script_src_dropped_unsafe_inline(self):
+        """Now that inline handler count is zero, script-src MUST NOT
+        carry 'unsafe-inline'. If someone reintroduces inline handlers
+        the count guard above fires first; this guard pins the
+        directive so the CSP stays tight independently."""
+        self.assertIn("script-src 'self'; ", self.src)
+        # Make sure 'unsafe-inline' didn't sneak back into the script-src
+        # token (style-src is allowed to keep it).
+        idx = self.src.find("script-src ")
+        self.assertNotEqual(idx, -1)
+        # Slice up to the next ';' which terminates this directive.
+        end = self.src.find(';', idx)
+        script_src_directive = self.src[idx:end]
+        self.assertNotIn(
+            "'unsafe-inline'", script_src_directive,
+            "script-src must not carry 'unsafe-inline' — inline handler "
+            "count is zero, so the directive must stay tight"
+        )
+
+    def test_style_src_keeps_unsafe_inline_while_styles_present(self):
+        """Inline style attrs are still > 0, so style-src MUST keep
+        'unsafe-inline' until the styles long tail is extracted."""
         self.assertIn("style-src 'self' 'unsafe-inline'", self.src)
-        # Sanity: counts are still > 0, so the rule above is load-bearing.
-        self.assertGreater(_count_inline_handlers(self.html), 0)
         self.assertGreater(_count_inline_styles(self.html), 0)
 
 

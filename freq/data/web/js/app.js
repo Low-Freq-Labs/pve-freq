@@ -93,8 +93,22 @@ function closeModal(){document.getElementById('modal-container').style.display='
 function toggleSection(el){el.closest('.section').classList.toggle('collapsed');}
 /* Delegated listeners — replaces inline onclick for high-frequency patterns */
 document.addEventListener('click',function(e){
+  /* Section-header collapse only fires when the click is on the bare
+   * header chrome (h3 title, chevron, flex spacer) — never on an
+   * interactive form control or a data-action element nested inside it.
+   * Before the long-tail extract, REFRESH buttons inside section-headers
+   * had inline onclick="..." that fired in the target phase (so the
+   * refresh ran), then bubbled to the document delegator which also
+   * collapsed the section — both behaviors fired. Now that those
+   * buttons go through the same document delegator via data-action,
+   * we must explicitly skip the collapse when the click is on the
+   * inner interactive element so the data-action branch below can
+   * own the click. R-WEB-INLINE-CSP-CLEANUP-20260413O. */
   var sh=e.target.closest('.section-header');
-  if(sh){toggleSection(sh);return;}
+  if(sh && !e.target.closest('[data-action], button, input, select, a')){
+    toggleSection(sh);
+    return;
+  }
   var sv=e.target.closest('[data-view]');
   if(sv){switchView(sv.dataset.view);return;}
   var ft=e.target.closest('[data-fqc]');
@@ -120,9 +134,95 @@ document.addEventListener('click',function(e){
     if(a==='hdDiagnose'){hdDiagnose(da);return;}
     if(a==='togglePveGroup'){togglePveGroup(da);return;}
     if(a==='clearHarden'){document.getElementById('harden-c').innerHTML='';return;}
-    var fns={doLogin:doLogin,openUserMenu:openUserMenu,dismissUpdateBanner:dismissUpdateBanner,sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,vmtRollback:vmtRollback,unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll,pfWriteService:pfWriteService,pfWriteDhcp:pfWriteDhcp,pfWriteRule:pfWriteRule,pfWriteNat:pfWriteNat,pfWriteWgPeer:pfWriteWgPeer,pfBackupNow:pfBackupNow,pfCheckUpdates:pfCheckUpdates,pfReboot:pfReboot,tnWriteService:tnWriteService,tnWriteScrub:tnWriteScrub,tnWriteShare:tnWriteShare,tnWriteReplication:tnWriteReplication,tnReboot:tnReboot,swWriteAcl:swWriteAcl,opnWriteService:opnWriteService,opnWriteRule:opnWriteRule,opnDeleteRule:opnDeleteRule,opnWriteDhcp:opnWriteDhcp,opnWriteDns:opnWriteDns,opnWriteWg:opnWriteWg,opnReboot:opnReboot,ipmiClearSel:ipmiClearSel,synWriteService:synWriteService,synReboot:synReboot};
+    /* Long-tail inline-handler extraction landed under
+     * R-WEB-INLINE-CSP-CLEANUP-20260413O. Every function listed below
+     * was previously bound via inline onclick="..." in app.html and is
+     * now reachable via data-action="<name>". The two maps are the
+     * allow-list — only listed functions can be invoked through the
+     * delegator, so a stray data-action attribute can't reach arbitrary
+     * globals. Zero-arg functions go in fns, single-arg (string) go in
+     * argFns. Anything that takes a structured arg has its own explicit
+     * branch above. */
+    var fns={
+      doLogin:doLogin,openUserMenu:openUserMenu,dismissUpdateBanner:dismissUpdateBanner,
+      sshdRestartSelected:sshdRestartSelected,sshdRestartAll:sshdRestartAll,
+      openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,
+      vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,
+      vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,vmtRollback:vmtRollback,
+      unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,
+      vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll,
+      pfWriteService:pfWriteService,pfWriteDhcp:pfWriteDhcp,pfWriteRule:pfWriteRule,
+      pfWriteNat:pfWriteNat,pfWriteWgPeer:pfWriteWgPeer,pfBackupNow:pfBackupNow,
+      pfCheckUpdates:pfCheckUpdates,pfReboot:pfReboot,
+      tnWriteService:tnWriteService,tnWriteScrub:tnWriteScrub,tnWriteShare:tnWriteShare,
+      tnWriteReplication:tnWriteReplication,tnReboot:tnReboot,swWriteAcl:swWriteAcl,
+      opnWriteService:opnWriteService,opnWriteRule:opnWriteRule,opnDeleteRule:opnDeleteRule,
+      opnWriteDhcp:opnWriteDhcp,opnWriteDns:opnWriteDns,opnWriteWg:opnWriteWg,
+      opnReboot:opnReboot,ipmiClearSel:ipmiClearSel,
+      synWriteService:synWriteService,synReboot:synReboot,
+      /* 20260413O additions — long-tail extract */
+      addContainer:addContainer,addHostManual:addHostManual,chaosRun:chaosRun,
+      closeCard:closeCard,closePbRunner:closePbRunner,closeSearch:closeSearch,
+      closeTerminal:closeTerminal,composeDown:composeDown,composeUp:composeUp,
+      composeView:composeView,createPlaybook:createPlaybook,createRule:createRule,
+      fedPoll:fedPoll,fedRegister:fedRegister,fetchLogs:fetchLogs,
+      forceCapSnapshot:forceCapSnapshot,generateReport:generateReport,
+      gitopsApply:gitopsApply,gitopsDiff:gitopsDiff,gitopsFetch:gitopsFetch,
+      gitopsInit:gitopsInit,launchTermFromPicker:launchTermFromPicker,
+      loadAutomationPage:loadAutomationPage,loadBackupPolicies:loadBackupPolicies,
+      loadCapacity:loadCapacity,loadCapRecommend:loadCapRecommend,
+      loadCertsPage:loadCertsPage,loadChaos:loadChaos,loadConfigHistory:loadConfigHistory,
+      loadContainerRegistry:loadContainerRegistry,loadCosts:loadCosts,
+      loadDepMap:loadDepMap,loadDnsInventory:loadDnsInventory,loadDnsPage:loadDnsPage,
+      loadDockerFleet:loadDockerFleet,loadDownloadDetail:loadDownloadDetail,
+      loadDrPage:loadDrPage,loadFederation:loadFederation,loadFirewallPage:loadFirewallPage,
+      loadFwNat:loadFwNat,loadFwRules:loadFwRules,loadFwStates:loadFwStates,
+      loadGitops:loadGitops,loadIncidentsPage:loadIncidentsPage,loadInfraPage:loadInfraPage,
+      loadInventory:loadInventory,loadLxcContainers:loadLxcContainers,
+      loadMetricAlerts:loadMetricAlerts,loadMetricsPage:loadMetricsPage,
+      loadMigratePlan:loadMigratePlan,loadNetmonData:loadNetmonData,
+      loadNetmonInterfaces:loadNetmonInterfaces,loadNetworkPage:loadNetworkPage,
+      loadOncall:loadOncall,loadOncallSchedule:loadOncallSchedule,loadOpenApi:loadOpenApi,
+      loadPatchCompliance:loadPatchCompliance,loadPatrolStatus:loadPatrolStatus,
+      loadPlaybooks:loadPlaybooks,loadPluginsPage:loadPluginsPage,
+      loadPrometheus:loadPrometheus,loadScheduleJobs:loadScheduleJobs,
+      loadSecretsLeases:loadSecretsLeases,loadSecretsScan:loadSecretsScan,
+      loadSlaData:loadSlaData,loadSystemPage:loadSystemPage,loadTopology:loadTopology,
+      loadTrendData:loadTrendData,loadVmwareMigration:loadVmwareMigration,
+      loadVpnPage:loadVpnPage,loadWebhooks:loadWebhooks,loadZfs:loadZfs,
+      lockVault:lockVault,openAddTool:openAddTool,openApiDocs:openApiDocs,
+      openHomeWidgetConfig:openHomeWidgetConfig,openManageTools:openManageTools,
+      recordSlaCheck:recordSlaCheck,rescanContainers:rescanContainers,
+      resetTopoLayout:resetTopoLayout,runAlertCheck:runAlertCheck,runBackup:runBackup,
+      runDiagnose:runDiagnose,runDiscover:runDiscover,runDnsCheck:runDnsCheck,
+      runDoctor:runDoctor,runHostCompare:runHostCompare,runImpactAnalysis:runImpactAnalysis,
+      runMonitorCheck:runMonitorCheck,runSshSweep:runSshSweep,runSysInfo:runSysInfo,
+      searchConfigs:searchConfigs,showCostConfig:showCostConfig,
+      takeTrendSnapshot:takeTrendSnapshot,termCopy:termCopy,termPaste:termPaste,
+      /* Inline shims that used to live as inline JS in app.html */
+      toggleNavItems:function(){var n=document.getElementById('nav-items');if(n)n.classList.toggle('open');},
+      runSweepDry:function(){runSweep(false);},
+      runSweepFix:function(){runSweep(true);},
+      modalNoop:function(){},
+      hideShortcutsModal:function(){var m=document.getElementById('shortcuts-modal');if(m)m.style.display='none';}
+    };
     if(fns[a]){fns[a]();return;}
-    var argFns={tnAction:tnAction,swAction:swAction,pfAction:pfAction,idracAction:idracAction,idracWrite:idracWrite,opnAction:opnAction,ipmiAction:ipmiAction,ipmiWrite:ipmiWrite,ipmiWriteBoot:ipmiWriteBoot,redfishAction:redfishAction,redfishWrite:redfishWrite,synAction:synAction,tnWriteSnapshot:tnWriteSnapshot,tnWriteDataset:tnWriteDataset,swWriteVlan:swWriteVlan,switchVaultTab:switchVaultTab,switchDockerSub:switchDockerSub,toggleMediaTag:toggleMediaTag,runHostUpdate:runHostUpdate,sshdRestartHost:sshdRestartHost,ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart};
+    var argFns={
+      tnAction:tnAction,swAction:swAction,pfAction:pfAction,idracAction:idracAction,
+      idracWrite:idracWrite,opnAction:opnAction,ipmiAction:ipmiAction,ipmiWrite:ipmiWrite,
+      ipmiWriteBoot:ipmiWriteBoot,redfishAction:redfishAction,redfishWrite:redfishWrite,
+      synAction:synAction,tnWriteSnapshot:tnWriteSnapshot,tnWriteDataset:tnWriteDataset,
+      swWriteVlan:swWriteVlan,switchVaultTab:switchVaultTab,switchDockerSub:switchDockerSub,
+      toggleMediaTag:toggleMediaTag,runHostUpdate:runHostUpdate,sshdRestartHost:sshdRestartHost,
+      ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,
+      updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart,
+      /* 20260413O additions */
+      deployAgent:deployAgent,hardenAction:hardenAction,loadBackups:loadBackups,
+      loadCostAnalysis:loadCostAnalysis,loadInventoryView:loadInventoryView,
+      loadStackInfo:loadStackInfo,loadSwitchData:loadSwitchData,loadSysInfo:loadSysInfo,
+      openCtTool:openCtTool,policyAction:policyAction,runNetScan:runNetScan,
+      sshdPanel:sshdPanel
+    };
     if(argFns[a]){argFns[a](g);return;}
   }
 });
@@ -587,6 +687,38 @@ function registerLoginBindings(){
   }
 }
 registerLoginBindings();
+
+/* Bindings for inputs and selects whose old inline on*= handlers
+ * couldn't be expressed via the click delegator (input, change,
+ * keydown events). All idempotent via _freqBound flags so re-running
+ * is safe. Landed under R-WEB-INLINE-CSP-CLEANUP-20260413O so the
+ * shipped HTML can carry zero inline event handlers and CSP can drop
+ * 'unsafe-inline' on script-src. */
+function registerInlineHandlerBindings(){
+  function bind(id,evt,fn){
+    var el=document.getElementById(id);
+    if(el&&!el['_freqBound_'+evt]){
+      el.addEventListener(evt,fn);
+      el['_freqBound_'+evt]=true;
+    }
+  }
+  bind('term-type','change',function(){updateTermTargets();});
+  bind('pref-refresh','change',function(){updatePref('refresh',this.value);});
+  bind('pref-density','change',function(){updatePref('density',this.value);});
+  bind('vault-auth-pass','keydown',function(e){if(e.key==='Enter')unlockVault();});
+  bind('learn-q','keydown',function(e){if(e.key==='Enter')searchLearn();});
+  bind('search-input','input',function(){_globalSearchFilter(this.value);});
+  bind('search-input','keydown',function(e){_globalSearchKeydown(e);});
+  bind('fleet-filter','input',function(){filterFleetCards(this.value);});
+}
+registerInlineHandlerBindings();
+/* Belt-and-suspenders re-bind on DOMContentLoaded for the case where
+ * app.js gets loaded before the input elements parse (shouldn't
+ * happen because the <script> tag is at the bottom of <body>, but
+ * the bind helper is idempotent so the extra call is free). */
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',registerInlineHandlerBindings);
+}
 
 function _applyRoleUI(){
   var roleSelect=document.getElementById('ft-nu-sudo');

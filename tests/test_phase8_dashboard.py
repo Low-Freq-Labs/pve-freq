@@ -190,41 +190,48 @@ class TestDashboardJS(unittest.TestCase):
 
 
 class TestDashboardSubTabs(unittest.TestCase):
-    """Verify sub-tab navigation buttons exist for new views."""
+    """Verify sub-tab navigation buttons exist for the listed views.
+
+    Buttons used to be inline `onclick="switchView('X')"`; under
+    R-WEB-INLINE-CSP-CLEANUP-20260413O they were swept to
+    `data-view="X"` so the existing app.js delegator picks them up
+    via `e.target.closest('[data-view]')`. The tab still has to
+    exist — we just look for the new attribute marker.
+    """
 
     @classmethod
     def setUpClass(cls):
         cls.html = (WEB_DIR / "app.html").read_text()
 
     def test_fleet_network_tab(self):
-        self.assertIn("switchView('network')", self.html)
+        self.assertIn('data-view="network"', self.html)
 
     def test_security_firewall_tab(self):
-        self.assertIn("switchView('firewall')", self.html)
+        self.assertIn('data-view="firewall"', self.html)
 
     def test_security_certs_tab(self):
-        self.assertIn("switchView('certs')", self.html)
+        self.assertIn('data-view="certs"', self.html)
 
     def test_security_vpn_tab(self):
-        self.assertIn("switchView('vpn')", self.html)
+        self.assertIn('data-view="vpn"', self.html)
 
     def test_tools_dns_tab(self):
-        self.assertIn("switchView('dns')", self.html)
+        self.assertIn('data-view="dns"', self.html)
 
     def test_tools_dr_tab(self):
-        self.assertIn("switchView('dr')", self.html)
+        self.assertIn('data-view="dr"', self.html)
 
     def test_tools_incidents_tab(self):
-        self.assertIn("switchView('incidents')", self.html)
+        self.assertIn('data-view="incidents"', self.html)
 
     def test_tools_metrics_tab(self):
-        self.assertIn("switchView('metrics')", self.html)
+        self.assertIn('data-view="metrics"', self.html)
 
     def test_tools_automation_tab(self):
-        self.assertIn("switchView('automation')", self.html)
+        self.assertIn('data-view="automation"', self.html)
 
     def test_tools_plugins_tab(self):
-        self.assertIn("switchView('plugins')", self.html)
+        self.assertIn('data-view="plugins"', self.html)
 
 
 class TestAPIRoutes(unittest.TestCase):

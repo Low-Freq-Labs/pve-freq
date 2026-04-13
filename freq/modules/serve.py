@@ -4629,29 +4629,29 @@ a:hover{{text-decoration:underline}}
         # Web UI is self-contained: xterm is vendored under /static/vendor/xterm,
         # fonts use platform stacks only, no public CDN or font host references.
         #
-        # Honest limits on 'unsafe-inline' (as of R-WEB-CSP-INLINE-CONTRACT-20260413M):
-        #   script-src: inline <script> blocks are zero in app.html, but the page
-        #     still carries 342 inline event handlers (onclick/onkeydown/onfocus/
-        #     onblur/onchange/oninput/onmouseover/onmouseout). Inline handlers count
-        #     as inline script under CSP, so dropping 'unsafe-inline' would break
-        #     almost every button/modal interaction. The login/header/update-banner
-        #     subset (~11 handlers) was extracted by 347d123, and the login form
-        #     wrapper rework in e361cb2 dropped a few more — count fell from 355
-        #     to 342. The long tail across fleet cards, modal dialogs, wizards,
-        #     and detail panels is a separate larger refactor under a follow-up
-        #     token, and 'unsafe-inline' on script-src must stay until that lands.
-        #   style-src: 267 inline style="…" attrs across the shipped UI (was 275;
-        #     347d123 collapsed login + header + update-banner inline styles into
-        #     CSS classes). Removing the rest needs either a large CSS-class
-        #     refactor or a nonce-based CSP. Not in scope for 20260413M;
-        #     'unsafe-inline' on style-src stays until then.
+        # Honest limits on 'unsafe-inline' (as of R-WEB-INLINE-CSP-CLEANUP-20260413O):
+        #   script-src: ZERO inline event handlers, ZERO inline <script> blocks,
+        #     ZERO javascript: URLs. The long-tail extract under
+        #     R-WEB-INLINE-CSP-CLEANUP-20260413O closed the remaining 342 inline
+        #     handlers (178 switchView via the existing data-view delegator, 145
+        #     simple onclick patterns via data-action/data-arg, plus 19 stragglers
+        #     migrated to addEventListener bindings or data-action shims). The
+        #     CSP can therefore drop 'unsafe-inline' from script-src entirely —
+        #     attempts to reintroduce inline handlers will be blocked at the
+        #     browser. Regression guarded by test_web_csp_inline_contract.py.
+        #   style-src: 266 inline style="…" attrs across the shipped UI (was 275
+        #     before token M, 267 after M, 266 after O — the fleet-filter input
+        #     dropped its inline style during the long-tail extract). Removing
+        #     the rest needs either a large CSS-class refactor or a nonce/hash-
+        #     based CSP. Not in scope for 20260413O; 'unsafe-inline' on
+        #     style-src stays until a follow-up token tackles the long tail.
         #
         # No host names appear below. An air-gapped dashboard MUST NOT fetch any
         # asset off-box — that's what R-WEB-EXTERNAL-ASSET-CONTRACT-20260413L
         # closed. This CSP is the policy enforcement.
         self.send_header("Content-Security-Policy",
                          "default-src 'self'; "
-                         "script-src 'self' 'unsafe-inline'; "
+                         "script-src 'self'; "
                          "style-src 'self' 'unsafe-inline'; "
                          "img-src 'self' data:; "
                          "connect-src 'self'; "
