@@ -22,12 +22,17 @@ echo "=== Deploy to ${USER}@${TARGET}:${REMOTE_DIR} ==="
 TARGET_HEAD=$(ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git rev-parse HEAD 2>/dev/null" 2>/dev/null || echo "")
 
 if [ -z "$TARGET_HEAD" ]; then
-    # Clean target — full rsync bootstrap
+    # Clean target — full rsync bootstrap.
+    # Exclude runtime-state directories entirely. Developer workspaces may
+    # contain keys/vault files with 0600 perms owned by a different user,
+    # which would fail rsync with 'permission denied' (exit code 23).
+    # Only the source code tree should be synced to the dev target.
     echo "[1/4] Clean target — bootstrapping source tree..."
     ssh -n "${USER}@${TARGET}" "mkdir -p ${REMOTE_DIR}"
     rsync -az --delete \
         --exclude='__pycache__' --exclude='*.pyc' \
-        --exclude='.venv/' --exclude='.ruff_cache/' --exclude='~freq-ops/' --exclude='/data/cache/' \
+        --exclude='.venv/' --exclude='.ruff_cache/' --exclude='~freq-ops/' \
+        --exclude='/data/' --exclude='/tls/' --exclude='/build/' \
         ./ "${USER}@${TARGET}:${REMOTE_DIR}/"
     echo "  Full source synced to ${REMOTE_DIR}"
 else
