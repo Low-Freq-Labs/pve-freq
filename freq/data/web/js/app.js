@@ -6805,7 +6805,13 @@ function vmPushKey(ip){
   if(!ip){toast('No IP available for this VM','error');return;}
   confirmAction('Push freq SSH key to <strong>'+ip+'</strong>?<br><span class="text-sm text-dim">Deploys the FREQ service account authorized_keys so FREQ can manage this host.</span>',function(){
     toast('Pushing key to '+ip+'...','info');
-    _authFetch('/api/vm/push-key?ip='+encodeURIComponent(ip)).then(function(r){return r.json()}).then(function(d){
+    /* POST + JSON body. R-SECURITY-TRUST-AUDIT-20260413P F18: the
+     * pre-fix GET form mutated remote SSH state, leaked the target IP
+     * via URL log channels, and depended entirely on SameSite=Strict
+     * for CSRF mitigation. Server now requires POST and reads ip from
+     * the JSON body. */
+    _authFetch('/api/vm/push-key',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ip:ip})}).then(function(r){return r.json()}).then(function(d){
       if(d.error){toast('Key push failed: '+d.error,'error');return;}
       toast('Key deployed to '+ip+(d.verified?' — verified':''),'success');
     }).catch(function(e){toast('Key push failed: '+e,'error');});

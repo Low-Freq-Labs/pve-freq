@@ -1643,6 +1643,35 @@ def _resolve_container_vm_ip(vm) -> str:
     return vm.ip
 
 
+_DNS_LOOKUP_LOG: dict = {}  # {ip: [(ts), ...]}
+_DNS_LOOKUP_LOCK = threading.Lock()
+_DNS_LOOKUP_WINDOW = 300   # 5 minutes
+_DNS_LOOKUP_MAX = 30       # per window per source IP
+
+
+def _dns_lookup_rate_limit(client_ip: str) -> bool:
+    """Return True if a DNS lookup from client_ip is allowed.
+
+    F17 of R-SECURITY-TRUST-AUDIT-20260413P. Caps the per-source
+    DNS lookup volume so an authenticated viewer can't use the
+    dashboard's resolver as a covert exfiltration channel
+    (encoding payload bytes as subdomains of an attacker-controlled
+    nameserver). 30 lookups per 5 minutes is enough for legitimate
+    operator use of the DNS lookup tile while making any meaningful
+    exfil throughput impractical.
+    """
+    now = time.time()
+    with _DNS_LOOKUP_LOCK:
+        bucket = _DNS_LOOKUP_LOG.get(client_ip, [])
+        bucket = [t for t in bucket if now - t < _DNS_LOOKUP_WINDOW]
+        if len(bucket) >= _DNS_LOOKUP_MAX:
+            _DNS_LOOKUP_LOG[client_ip] = bucket
+            return False
+        bucket.append(now)
+        _DNS_LOOKUP_LOG[client_ip] = bucket
+        return True
+
+
 def _is_first_run():
     """Detect if this is the first run or if setup is incomplete.
 
@@ -4377,11 +4406,37 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": str(e)}, 500)
 
     def _serve_dns_lookup(self):
-        """Resolve a hostname."""
+        """Resolve a hostname.
+
+        F17 of R-SECURITY-TRUST-AUDIT-20260413P: tightened from
+        viewer to operator role and rate-limited per source IP.
+        Pre-fix any logged-in viewer could submit any hostname and
+        the dashboard would issue a DNS query for it via the host's
+        resolver — a low-bandwidth covert exfiltration channel for
+        an attacker with viewer credentials. The IP-based rate
+        limit caps lookups at 30 per 5 minutes per source.
+        """
+        # Operator-only — viewer-role accounts must not trigger
+        # outbound DNS queries through the dashboard.
+        role, err = _check_session_role(self, "operator")
+        if err:
+            self._json_response({"error": err}, 403)
+            return
+        # Rate limit per source IP (best-effort in-process tracker).
+        client_ip = self.client_address[0] if self.client_address else "unknown"
+        if not _dns_lookup_rate_limit(client_ip):
+            self._json_response(
+                {"error": "Too many DNS lookups. Try again in 5 minutes."},
+                429,
+            )
+            return
         query = _parse_query(self)
         host = query.get("host", [""])[0]
         if not host:
             self._json_response({"error": "host required"}, 400)
+            return
+        if len(host) > 253:
+            self._json_response({"error": "Hostname too long"}, 400)
             return
         import re as _re
 

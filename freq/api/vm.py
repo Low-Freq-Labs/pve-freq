@@ -16,7 +16,7 @@ import re
 import subprocess
 
 from freq.core import log as logger
-from freq.api.helpers import json_response, get_params
+from freq.api.helpers import json_response, get_params, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
 from freq.core.validate import (
@@ -898,19 +898,28 @@ def handle_vm_change_ip(handler):
 
 
 def handle_vm_push_key(handler):
-    """GET /api/vm/push-key — push the freq SSH key to a target VM."""
+    """POST /api/vm/push-key — push the freq SSH key to a target VM.
+
+    Body: JSON {"ip": "<target>"}. F18 of
+    R-SECURITY-TRUST-AUDIT-20260413P moved this from GET to POST
+    because the handler modifies remote state (writes
+    authorized_keys on target_ip) and a GET endpoint that mutates
+    state violates the HTTP semantic contract: a stray operator
+    visiting a malicious link triggered the push, the target IP
+    landed in URL leak channels, and CSRF mitigation depended
+    entirely on SameSite=Strict instead of being defense-in-depth.
+    """
+    if _require_post(handler, "VM push key"):
+        return
     role, err = _check_session_role(handler, "operator")
     if err:
         json_response(handler, {"error": err}, 403)
         return
     cfg = load_config()
-    from urllib.parse import urlparse, parse_qs
-
-    raw = parse_qs(urlparse(handler.path).query)
-    query = {k: v[0] if v else "" for k, v in raw.items()}
-    target_ip = query.get("ip", "")
+    body = get_json_body(handler)
+    target_ip = str(body.get("ip", "")).strip()
     if not target_ip or not valid_ip(target_ip):
-        json_response(handler, {"error": "Valid IP required"}, 400)
+        json_response(handler, {"error": "Valid IP required in JSON body {\"ip\": ...}"}, 400)
         return
 
     # Read the public key

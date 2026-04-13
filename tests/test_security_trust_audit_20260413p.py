@@ -17,6 +17,8 @@ Covered:
          from unauth callers.
   - F13  log redaction covers key= / session= / pass= / pw= / auth=.
   - F15  ct/create password is shlex.quoted before shell interpolation.
+  - F17  /api/dns/lookup tightened to operator + per-IP rate limit.
+  - F18  /api/vm/push-key migrated from GET to POST + JSON body.
 """
 import re
 import sys
@@ -464,6 +466,97 @@ class TestF15CtCreatePasswordShellQuoted(unittest.TestCase):
             "--password {password}",
             block,
             "raw unquoted --password {password} interpolation must not return",
+        )
+
+
+class TestF17DnsLookupRateLimited(unittest.TestCase):
+    """F17 — /api/dns/lookup tightened to operator + per-IP rate limit."""
+
+    def test_handler_requires_operator(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        idx = src.find("def _serve_dns_lookup")
+        self.assertNotEqual(idx, -1)
+        end = src.find("def _serve_portscan", idx)
+        block = src[idx:end]
+        self.assertIn('_check_session_role(self, "operator")', block,
+                      "dns lookup must require operator role, not viewer")
+        self.assertIn("_dns_lookup_rate_limit", block,
+                      "dns lookup must run through the rate limiter")
+
+    def test_rate_limiter_caps_at_max(self):
+        from freq.modules.serve import (
+            _dns_lookup_rate_limit, _DNS_LOOKUP_MAX, _DNS_LOOKUP_LOG,
+        )
+        # Use a unique IP so other tests don't pollute this bucket.
+        ip = "203.0.113.99"
+        with patch.dict(_DNS_LOOKUP_LOG, {ip: []}, clear=False):
+            _DNS_LOOKUP_LOG[ip] = []
+            for i in range(_DNS_LOOKUP_MAX):
+                self.assertTrue(
+                    _dns_lookup_rate_limit(ip),
+                    f"lookup #{i + 1} must be allowed (under cap)",
+                )
+            # The (cap + 1)-th lookup must be denied.
+            self.assertFalse(
+                _dns_lookup_rate_limit(ip),
+                "lookup beyond the cap must be denied",
+            )
+            _DNS_LOOKUP_LOG.pop(ip, None)
+
+    def test_rate_limiter_per_ip_isolated(self):
+        from freq.modules.serve import (
+            _dns_lookup_rate_limit, _DNS_LOOKUP_MAX, _DNS_LOOKUP_LOG,
+        )
+        ip_a = "203.0.113.10"
+        ip_b = "203.0.113.20"
+        _DNS_LOOKUP_LOG[ip_a] = []
+        _DNS_LOOKUP_LOG[ip_b] = []
+        try:
+            for _ in range(_DNS_LOOKUP_MAX):
+                self.assertTrue(_dns_lookup_rate_limit(ip_a))
+            self.assertFalse(_dns_lookup_rate_limit(ip_a))
+            # ip_b's bucket is independent — must still be allowed.
+            self.assertTrue(
+                _dns_lookup_rate_limit(ip_b),
+                "rate limit must be per-source-IP, not global",
+            )
+        finally:
+            _DNS_LOOKUP_LOG.pop(ip_a, None)
+            _DNS_LOOKUP_LOG.pop(ip_b, None)
+
+
+class TestF18VmPushKeyIsPost(unittest.TestCase):
+    """F18 — /api/vm/push-key now requires POST and reads ip from body."""
+
+    def test_handler_requires_post(self):
+        src = (REPO_ROOT / "freq" / "api" / "vm.py").read_text()
+        idx = src.find("def handle_vm_push_key")
+        self.assertNotEqual(idx, -1)
+        end = src.find("\ndef ", idx + 1)
+        block = src[idx:end]
+        self.assertIn("_require_post(handler", block,
+                      "vm push-key must call _require_post")
+        self.assertIn("get_json_body(handler)", block,
+                      "vm push-key must read ip from JSON body")
+        self.assertNotIn(
+            'parse_qs(urlparse(handler.path).query)',
+            block,
+            "vm push-key must not pull the target IP from the query string",
+        )
+
+    def test_dashboard_js_uses_post_body(self):
+        js = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+        idx = js.find("function vmPushKey")
+        self.assertNotEqual(idx, -1)
+        end = js.find("\nfunction ", idx + 1)
+        block = js[idx:end]
+        self.assertIn("'/api/vm/push-key'", block,
+                      "vmPushKey must POST to /api/vm/push-key")
+        self.assertIn("method:'POST'", block)
+        self.assertNotIn(
+            "/api/vm/push-key?ip=",
+            block,
+            "vmPushKey must not put target ip in the query string",
         )
 
 
