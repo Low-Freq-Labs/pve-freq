@@ -524,6 +524,15 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
         if not yes_flag and not _confirm("Re-run initialization wizard?"):
             return 0
 
+    # Clear any stale marker. If THIS run succeeds, _phase_verify re-writes
+    # it. If THIS run fails, no marker will exist — preventing contradiction
+    # between printed result and filesystem state.
+    try:
+        if os.path.isfile(INIT_MARKER):
+            os.unlink(INIT_MARKER)
+    except OSError:
+        pass
+
     # State passed between phases
     ctx = {
         "svc_name": cfg.ssh_service_account,
@@ -6829,6 +6838,16 @@ def _init_headless(cfg, args):
     """
     global INIT_MARKER
     INIT_MARKER = os.path.join(cfg.conf_dir, ".initialized")
+
+    # Clear any stale marker from a previous run. If THIS run succeeds,
+    # _phase_verify will re-write the marker. If THIS run fails, no marker
+    # will exist — preventing contradiction between printed result and
+    # filesystem state.
+    try:
+        if os.path.isfile(INIT_MARKER):
+            os.unlink(INIT_MARKER)
+    except OSError:
+        pass
 
     if os.geteuid() != 0:
         fmt.blank()
