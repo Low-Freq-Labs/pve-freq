@@ -300,31 +300,33 @@ var API={
 var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switch */
 
 function _showApp(){
-  /* Show loading screen while prefetching data */
+  /* Post-login launch sequence: evidence-first, each stage reports
+   * what was actually fetched from the API so the operator sees a
+   * boot log, not a marketing spinner. */
   var login=document.getElementById('login-overlay');
   login.innerHTML='<div class="text-center"><div style="font-size:32px;font-weight:700;letter-spacing:8px;color:var(--text);margin-bottom:8px">PVE FREQ</div>'+
     '<div style="font-size:11px;color:var(--text-dim);letter-spacing:3px;margin-bottom:24px">operator console</div>'+
-    '<div id="load-status" style="color:var(--text);font-size:13px;font-weight:600;letter-spacing:1px;margin-bottom:16px">LOADING</div>'+
-    '<div style="width:200px;height:4px;background:var(--input-border);border-radius:2px;margin:0 auto;overflow:hidden"><div id="load-bar" style="width:0%;height:100%;background:var(--purple);border-radius:2px;transition:width 0.4s ease"></div></div>'+
-    '<div id="load-detail" style="color:var(--text-dim);font-size:11px;margin-top:12px">Fetching fleet data...</div></div>';
+    '<div id="load-status" style="color:var(--text);font-size:13px;font-weight:600;letter-spacing:1px;margin-bottom:16px">COLD START</div>'+
+    '<div style="width:220px;height:2px;background:var(--input-border);border-radius:1px;margin:0 auto;overflow:hidden"><div id="load-bar" style="width:0%;height:100%;background:var(--text);border-radius:1px;transition:width 0.4s ease"></div></div>'+
+    '<div id="load-detail" style="color:var(--text-dim);font-size:11px;margin-top:12px">awaiting fleet overview</div></div>';
 
   var bar=document.getElementById('load-bar');
   var status=document.getElementById('load-status');
   var detail=document.getElementById('load-detail');
   var _p=function(pct,s,d){bar.style.width=pct+'%';status.textContent=s;detail.textContent=d;};
 
-  _p(10,'CONNECTING','Fetching fleet data...');
+  _p(10,'CONNECTING','awaiting fleet overview');
   var p1=_authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
     _fleetCache.fo=fo;_initFleetData(fo);_p(40,'FLEET',fo.summary.total_vms+' VMs, '+fo.pve_nodes.length+' nodes');
     return fo;
-  }).catch(function(){_p(40,'FLEET','Fleet overview unavailable');return null;});
+  }).catch(function(){_p(40,'FLEET','fleet overview unavailable');return null;});
 
   var p2=_authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
     _fleetCache.hd=hd;
     var up=0;hd.hosts.forEach(function(h){if(h.status==='healthy')up++;});
     _p(70,'HEALTH',up+'/'+hd.hosts.length+' hosts responded');
     return hd;
-  }).catch(function(){_p(70,'HEALTH','Health check unavailable');return null;});
+  }).catch(function(){_p(70,'HEALTH','health probe unavailable');return null;});
 
   var p3=_authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
     _p(85,'MEDIA',md.containers_running+' containers');
@@ -332,7 +334,7 @@ function _showApp(){
   }).catch(function(){return null;});
 
   Promise.all([p1,p2,p3]).then(function(){
-    _p(100,'LOADED','Dashboard ready');
+    _p(100,'ONLINE','operator console live');
     setTimeout(function(){
       var body=document.getElementById('mn-body');if(body)body.style.display='';
       login.style.display='none';
