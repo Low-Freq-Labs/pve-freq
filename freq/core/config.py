@@ -211,20 +211,33 @@ def resolve_install_dir() -> str:
 
     Priority:
     1. FREQ_DIR environment variable
-    2. Directory containing this source (development mode)
-    3. /opt/pve-freq (production install)
+    2. /opt/pve-freq if it has conf/ and freq/ (production install present)
+    3. Directory containing this source (development mode via walk-up to pyproject.toml)
+    4. /opt/pve-freq (production default)
+
+    Prefer production over source-tree walk-up because editable pip installs
+    (pip install -e /tmp/pve-freq-dev) create site-packages finders that make
+    freq.__file__ resolve to /tmp/... even when /opt/pve-freq has the real
+    runtime state. Walking up from __file__ then incorrectly returns /tmp/,
+    causing CLI surfaces (doctor, init --check) to read empty state from a
+    dev tree instead of the live install.
     """
     env_dir = os.environ.get("FREQ_DIR")
     if env_dir and os.path.isdir(env_dir):
         return env_dir
+
+    # Production install present? Prefer it over any shadowed source tree.
+    prod = "/opt/pve-freq"
+    if os.path.isdir(os.path.join(prod, "conf")) and os.path.isdir(os.path.join(prod, "freq")):
+        return prod
 
     # Development: walk up from this file to find pyproject.toml
     src_dir = Path(__file__).resolve().parent.parent.parent
     if (src_dir / "pyproject.toml").exists():
         return str(src_dir)
 
-    # Production default — always use /opt/pve-freq for pip installs
-    return "/opt/pve-freq"
+    # Production default
+    return prod
 
 
 def _resolve_paths(cfg: FreqConfig) -> None:

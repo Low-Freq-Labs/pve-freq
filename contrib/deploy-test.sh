@@ -65,6 +65,21 @@ else
     fi
 fi
 
+# Remove any editable pip install that shadows /opt/pve-freq with /tmp/
+# paths. These finders install at site-packages level and override
+# freq.__file__ even when PYTHONPATH is set correctly, causing CLI
+# surfaces (doctor, init --check) to read the wrong install dir.
+echo "[5a/6] Removing editable pip installs (if any)..."
+ssh -n "${USER}@${TARGET}" "
+for SITE in /usr/local/lib/python3.*/dist-packages /home/*/.local/lib/python3.*/site-packages; do
+    if [ -d \"\$SITE\" ]; then
+        sudo find \"\$SITE\" -maxdepth 1 -name '__editable__*pve*' -delete 2>/dev/null || true
+        sudo find \"\$SITE\" -maxdepth 1 -name '__editable___pve*' -delete 2>/dev/null || true
+    fi
+done
+echo 'Editable shadows cleared'
+"
+
 # Sync to runtime install path if it exists
 echo "[5/6] Syncing to runtime install..."
 ssh -n "${USER}@${TARGET}" "
