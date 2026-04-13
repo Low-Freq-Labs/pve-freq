@@ -455,35 +455,48 @@ def _bg_probe_infra():
                     if d["reachable"]:
                         d["metrics"]["note"] = "Ping reachable, no SSH"
             elif dt == "idrac":
-                # iDRAC: password auth via sshpass (same cred file as switch)
-                idrac_pass_file = os.path.join(os.path.dirname(cfg.conf_dir), "credentials", "switch-password")
-                if os.path.isfile(idrac_pass_file):
-                    idrac_cmd = [
-                        "sshpass", "-f", idrac_pass_file, "ssh", "-n",
-                        "-o", "ConnectTimeout=3",
-                        "-o", "StrictHostKeyChecking=accept-new",
-                        "-o", "KexAlgorithms=+diffie-hellman-group14-sha1",
-                        "-o", "HostKeyAlgorithms=+ssh-rsa",
-                        "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
-                        f"{bootstrap_user}@{dev.ip}",
-                        "racadm getsysinfo -s",
-                    ]
-                    proc = subprocess.run(idrac_cmd, capture_output=True, text=True, timeout=15)
-                    r = type("R", (), {"returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})()
-                else:
-                    # Fallback: try RSA key
-                    idrac_key = cfg.ssh_rsa_key_path or fleet_key
-                    r = ssh_single(
-                        host=dev.ip,
-                        command="racadm getsysinfo -s",
-                        key_path=idrac_key,
-                        user="root",
-                        connect_timeout=3,
-                        command_timeout=8,
-                        htype="idrac",
-                        use_sudo=False,
-                        cfg=cfg,
-                    )
+                # iDRAC probe MUST match init's verify path for parity with
+                # `freq init --check` and `freq fleet status`. Init verifies
+                # BMCs as the service account (freq-admin) via the RSA key
+                # with iDRAC cipher options, falling back to sshpass with
+                # cfg.legacy_password_file only if key auth fails. The old
+                # code did the opposite — sshpass first with SUDO_USER (the
+                # calling operator, not the BMC account) then root@ via key
+                # — which left /api/infra/quick reporting auth_failed on
+                # BMCs that the CLI had verified green.
+                from freq.core.ssh import PLATFORM_SSH as _PLATFORM_SSH_LOCAL
+                svc_user = cfg.ssh_service_account
+                idrac_key = cfg.ssh_rsa_key_path or fleet_key
+                idrac_opts = _PLATFORM_SSH_LOCAL.get("idrac", {}).get("extra_opts", [])
+                idrac_cmd = [
+                    "ssh", "-n",
+                    "-o", "ConnectTimeout=3",
+                    "-o", "BatchMode=yes",
+                    "-o", "StrictHostKeyChecking=accept-new",
+                    "-i", idrac_key,
+                ] + idrac_opts + [
+                    f"{svc_user}@{dev.ip}",
+                    "racadm getsysinfo -s",
+                ]
+                proc = subprocess.run(idrac_cmd, capture_output=True, text=True, timeout=15)
+                r = type("R", (), {"returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})()
+
+                # Fallback: if key auth hit a permission-denied, try sshpass
+                # with cfg.legacy_password_file (still as svc_user). Matches
+                # init._verify_host's two-stage verification order.
+                if r.returncode != 0 and _is_auth_failure(r.stderr):
+                    pw_file = getattr(cfg, "legacy_password_file", "") or ""
+                    if pw_file and os.path.isfile(pw_file):
+                        sshpass_cmd = [
+                            "sshpass", "-f", pw_file, "ssh", "-n",
+                            "-o", "ConnectTimeout=3",
+                            "-o", "StrictHostKeyChecking=accept-new",
+                        ] + idrac_opts + [
+                            f"{svc_user}@{dev.ip}",
+                            "racadm getsysinfo -s",
+                        ]
+                        proc2 = subprocess.run(sshpass_cmd, capture_output=True, text=True, timeout=15)
+                        r = type("R", (), {"returncode": proc2.returncode, "stdout": proc2.stdout, "stderr": proc2.stderr})()
                 if r.returncode == 0 and r.stdout.strip():
                     d["reachable"] = True
                     d["probe_method"] = "ssh"
