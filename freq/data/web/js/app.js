@@ -54,10 +54,22 @@ function _esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(
  * turned into a recursive logout storm (hundreds of POST /api/auth/logout
  * per second). The guard flag ensures exactly one doLogout() per auth
  * failure across every concurrent in-flight _authFetch, and doLogout()
- * itself uses bare fetch() so it cannot re-enter this path. */
+ * itself uses bare fetch() so it cannot re-enter this path.
+ *
+ * Error toasting: non-ok responses surface a red corner toast by
+ * default. Two escape hatches:
+ *   - pass {silent:true} in opts to suppress the toast entirely
+ *     (for endpoints where the caller renders error state itself,
+ *     e.g. loadHome watchdog probe, loadChaos log fetch)
+ *   - 501 Not Implemented is never toasted — it always means the
+ *     feature is an optional add-on, not a real error
+ * The silent flag is stripped before the fetch call so it doesn't
+ * show up as an unknown fetch option. */
 var _authFailing=false;
 function _authFetch(url, opts) {
     opts = opts || {};
+    var silent = opts.silent === true;
+    if (silent) delete opts.silent;
     if (!opts.headers) opts.headers = {};
     if (_authToken) opts.headers['Authorization'] = 'Bearer ' + _authToken;
     if (!opts.credentials) opts.credentials = 'same-origin';
@@ -69,7 +81,9 @@ function _authFetch(url, opts) {
         }
         return r;
       }
-      if(!r.ok){toast('API error: '+url.replace('/api/','')+ ' ('+r.status+')','error');}
+      if(!r.ok && !silent && r.status!==501){
+        toast('API error: '+url.replace('/api/','')+ ' ('+r.status+')','error');
+      }
       return r;
     });
 }
@@ -3962,8 +3976,10 @@ function loadHome(){
       if(nv)nv.textContent='V'+d.version+' \u00b7 '+d.dashboard_header.replace(/^PVE FREQ\s*\u00b7\s*/,'');
     }
   });
-  /* Watchdog probe status — distinguish not-installed (501), down (503), and working (200) */
-  _authFetch(API.WATCHDOG_HEALTH).then(function(r){
+  /* Watchdog probe status — distinguish not-installed (501), down (503), and working (200).
+   * silent:true because this endpoint renders its own UI state for each status
+   * code below; the generic _authFetch toast would overlap with the inline label. */
+  _authFetch(API.WATCHDOG_HEALTH,{silent:true}).then(function(r){
     var status=r.status;
     return r.json().then(function(d){return{status:status,data:d};}).catch(function(){return{status:status,data:{}};});
   }).then(function(res){
@@ -7636,7 +7652,19 @@ function _ltGenerateHTML(toolId,pfx,hideBtn){
     '<div id="'+pfx+'lt-controls" style="display:none;margin-bottom:16px"><div style="display:flex;gap:8px;flex-wrap:wrap">'+(t.renderControls?t.renderControls(pfx):'')+'</div></div>'+
     '<div id="'+pfx+'lt-content"></div>'+
     '<div id="'+pfx+'lt-extra"></div>'+
-    '<div id="'+pfx+'lt-offline" class="text-center" style="padding:60px 0"><div style="font-size:48px;opacity:0.15;margin-bottom:16px;font-weight:900;letter-spacing:4px;background:linear-gradient(135deg,var(--purple-light),var(--purple-dark));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">'+t.name+'</div><div class="mb-sm" style="font-size:15px;color:var(--text)">Station Offline</div><div class="text-sm text-dim" style="max-width:420px;margin:0 auto;line-height:1.7">'+(t.offlineHint||'Enter the IP and API key above to connect.')+'</div></div>';
+    /* Offline card — evidence-first. The old layout rendered a 48px
+     * gradient ghost of the tool name with opacity 0.15 on a black
+     * field; that read as marketing hero, not an ops console. The
+     * replacement is a single dense card: a monospace status tag
+     * ([STATION OFFLINE]), the tool name, and the vault/API bootstrap
+     * hint — same information, zero decorative chrome. */
+    '<div id="'+pfx+'lt-offline" style="padding:24px 20px;border:1px dashed var(--input-border);border-radius:6px;margin-top:4px">'+
+      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">'+
+        '<span style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--red);padding:2px 8px;border:1px solid var(--red);border-radius:3px">STATION OFFLINE</span>'+
+        '<span style="font-size:13px;font-weight:600;color:var(--text);letter-spacing:1px">'+t.name.toUpperCase()+'</span>'+
+      '</div>'+
+      '<div style="font-size:12px;color:var(--text-dim);line-height:1.7">'+(t.offlineHint||'Enter the IP and API key above to connect.')+'</div>'+
+    '</div>';
 }
 
 function ltLoad(toolId,pfx){
@@ -8760,9 +8788,18 @@ function loadChaos(){
       });
     });
   }
-  // Load experiment log
+  // Load experiment log. silent:true — this loader renders its own
+  // "log unavailable" state on failure, so the generic _authFetch toast
+  // would just overlay redundant chrome on top of the inline message.
   log.innerHTML='<div class="skeleton"></div>';
-  _authFetch('/api/chaos/log').then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/chaos/log',{silent:true}).then(function(r){
+    if(!r.ok){
+      log.innerHTML='<div class="c-dim-fs12 text-center" style="padding:20px">experiment log unavailable ('+r.status+')</div>';
+      return null;
+    }
+    return r.json();
+  }).then(function(d){
+    if(d===null)return;
     var exps=d.experiments||[];
     if(exps.length===0){log.innerHTML='<div class="c-dim-fs12 text-center" style="padding:20px">No experiments run yet.</div>';return;}
     var h='<table><tr><th>Name</th><th>Type</th><th>Target</th><th>Status</th><th>Duration</th><th>Recovery</th><th>Error</th></tr>';
