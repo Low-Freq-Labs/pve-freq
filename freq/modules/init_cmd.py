@@ -5453,26 +5453,57 @@ def _phase_verify(cfg, ctx):
             else:
                 _check(f"PVE {ip}: SSH + sudo as {svc_name}", False)
 
-    # Fleet host connectivity — ALL platform types
+    # Fleet host connectivity — ALL platform types.
+    # Parallelized to bound total verification time. Serial loops over ~22
+    # hosts × 20s worst-case timeout = 440s; with 8 workers + 60s cap, the
+    # phase completes in bounded time even when some hosts are slow.
     deployed_ips = ctx.get("deployed_ips", set())
     if cfg.hosts:
+        import concurrent.futures
         pve_set = set(cfg.pve_nodes) if cfg.pve_nodes else set()
-        fleet_hosts = [h for h in cfg.hosts if h.ip not in pve_set]
+        fleet_hosts = [h for h in cfg.hosts if h.ip not in pve_set
+                       and getattr(h, "managed", True)]
 
-        for h in fleet_hosts:
-            # Platform-appropriate label
+        def _label_for(h):
             if h.htype in ("linux", "pve", "docker", "truenas"):
-                check_label = f"Fleet {h.label} ({h.ip}): SSH + sudo as {svc_name}"
-            elif h.htype == "pfsense":
-                check_label = f"Fleet {h.label} ({h.ip}): SSH as {svc_name} (no sudo)"
-            elif h.htype in ("idrac", "switch"):
-                check_label = f"Fleet {h.label} ({h.ip}): SSH as {svc_name} [{h.htype}]"
-            else:
+                return f"Fleet {h.label} ({h.ip}): SSH + sudo as {svc_name}"
+            if h.htype == "pfsense":
+                return f"Fleet {h.label} ({h.ip}): SSH as {svc_name} (no sudo)"
+            if h.htype in ("idrac", "switch"):
+                return f"Fleet {h.label} ({h.ip}): SSH as {svc_name} [{h.htype}]"
+            return None
+
+        def _verify_one(h):
+            label = _label_for(h)
+            if label is None:
+                return (h, None, None, None)
+            try:
+                ok, err = _verify_host(h.ip, h.htype, svc_name, verify_key, rsa_file, cfg=cfg)
+                return (h, label, ok, err)
+            except Exception as e:
+                return (h, label, False, str(e))
+
+        # Cap total phase time: 60s is enough for ~22 hosts at 8 workers
+        # with 20s per-host timeout. Any stragglers get reported as timeout.
+        PHASE12_FLEET_TIMEOUT = 90
+        results_list = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            futures = {pool.submit(_verify_one, h): h for h in fleet_hosts}
+            try:
+                for fut in concurrent.futures.as_completed(futures, timeout=PHASE12_FLEET_TIMEOUT):
+                    results_list.append(fut.result())
+            except concurrent.futures.TimeoutError:
+                # Record unfinished futures as 'timeout'
+                done_hosts = {r[0].ip for r in results_list}
+                for h in fleet_hosts:
+                    if h.ip not in done_hosts:
+                        results_list.append((h, _label_for(h), False, "Phase 12 timeout"))
+
+        for h, check_label, ok, err in results_list:
+            if check_label is None:
                 fmt.step_warn(f"Fleet {h.label} ({h.ip}): unknown type '{h.htype}' (skipped)")
                 warns += 1
                 continue
-
-            ok, err = _verify_host(h.ip, h.htype, svc_name, verify_key, rsa_file, cfg=cfg)
             if ok:
                 _check(check_label, True)
             elif h.ip in deployed_ips:
