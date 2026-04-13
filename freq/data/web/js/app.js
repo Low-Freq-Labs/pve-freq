@@ -44,13 +44,31 @@ setInterval(upTime,1000);upTime();
 
 /* === Utility === */
 function _esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
-/* Authenticated fetch — sends token via Authorization header instead of query string */
+/* Authenticated fetch — sends token via Authorization header. Cookie
+ * auth is also supported server-side, so we set credentials:'same-origin'
+ * explicitly and don't need the bearer for cookie-rehydrated sessions.
+ *
+ * 401/403 handling: route through _authFailing once. Prior versions
+ * called doLogout() directly on every 401/403, and doLogout() itself
+ * called _authFetch('/api/auth/logout'), so a single pre-auth 403
+ * turned into a recursive logout storm (hundreds of POST /api/auth/logout
+ * per second). The guard flag ensures exactly one doLogout() per auth
+ * failure across every concurrent in-flight _authFetch, and doLogout()
+ * itself uses bare fetch() so it cannot re-enter this path. */
+var _authFailing=false;
 function _authFetch(url, opts) {
     opts = opts || {};
     if (!opts.headers) opts.headers = {};
     if (_authToken) opts.headers['Authorization'] = 'Bearer ' + _authToken;
+    if (!opts.credentials) opts.credentials = 'same-origin';
     return fetch(url, opts).then(function(r){
-      if(r.status===403||r.status===401){doLogout();return r;}
+      if(r.status===403||r.status===401){
+        if(!_authFailing){
+          _authFailing=true;
+          doLogout();
+        }
+        return r;
+      }
       if(!r.ok){toast('API error: '+url.replace('/api/','')+ ' ('+r.status+')','error');}
       return r;
     });
@@ -152,27 +170,101 @@ function doLogin(){
   var pass=passEl.value;
   if(!user||!pass){if(errEl){errEl.textContent='Enter username and password';errEl.style.display='block';}return;}
   if(errEl)errEl.style.display='none';
-  var btn=document.querySelector('#login-overlay button');if(btn){btn.textContent='LOGGING IN...';btn.disabled=true;}
-  _authFetch(API.AUTH_LOGIN,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})}).then(function(r){return r.json()}).then(function(d){
+  var btn=document.getElementById('login-submit-btn');if(btn){btn.textContent='LOGGING IN...';btn.disabled=true;}
+  /* Bare fetch — login is the credential-carrying endpoint, so routing it
+   * through _authFetch was wrong: a wrong-password 401 would fall into
+   * _authFetch's auth-failure branch and call doLogout(), kicking off a
+   * logout storm instead of surfacing the error. credentials:'same-origin'
+   * lets the browser persist the freq_session Set-Cookie response. */
+  fetch(API.AUTH_LOGIN,{
+    method:'POST',
+    credentials:'same-origin',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username:user,password:pass})
+  }).then(function(r){
+    return r.json().then(function(d){return{status:r.status,data:d};}).catch(function(){return{status:r.status,data:{}};});
+  }).then(function(res){
     if(btn){btn.textContent='LOG IN';btn.disabled=false;}
-    if(d.error){if(errEl){errEl.textContent=d.error;errEl.style.display='block';}passEl.value='';return;}
+    var d=res.data||{};
+    if(res.status!==200||d.error){
+      if(errEl){errEl.textContent=d.error||('Login failed ('+res.status+')');errEl.style.display='block';}
+      if(passEl)passEl.value='';
+      return;
+    }
     _authToken=d.token;_currentUser=d.user;_currentRole=d.role;
+    /* Fresh session — clear the auth-failing guard so _authFetch is armed
+     * again for subsequent 401/403 surfacing. */
+    _authFailing=false;
     _showApp();
-  }).catch(function(e){if(btn){btn.textContent='LOG IN';btn.disabled=false;}if(errEl){errEl.textContent='Connection failed: '+e;errEl.style.display='block';}});
+  }).catch(function(e){
+    if(btn){btn.textContent='LOG IN';btn.disabled=false;}
+    if(errEl){errEl.textContent='Connection failed: '+e;errEl.style.display='block';}
+  });
+}
+
+/* Captured once at first DOMContentLoaded so mid-session logout can
+ * restore the login form HTML after _showApp() replaced the overlay
+ * body with the COLD START → ONLINE launch sequence. Without the
+ * capture, a session-expired event left the overlay showing the boot
+ * log with no way to re-enter credentials. */
+var _loginOverlayHTML=null;
+function _captureLoginOverlay(){
+  if(_loginOverlayHTML!==null)return;
+  var ov=document.getElementById('login-overlay');
+  if(ov)_loginOverlayHTML=ov.innerHTML;
+}
+function _restoreLoginCard(){
+  var ov=document.getElementById('login-overlay');
+  if(ov&&_loginOverlayHTML!==null){
+    ov.innerHTML=_loginOverlayHTML;
+    /* New DOM nodes → new ._freqBound flags → registerLoginBindings
+     * re-attaches the submit and keydown listeners. */
+    registerLoginBindings();
+  }
 }
 
 function doLogout(){
-  /* Invalidate server-side session + clear cookie */
-  _authFetch('/api/auth/logout',{method:'POST'}).catch(function(){});
+  /* Raise _authFailing BEFORE anything else so background loops
+   * (startSparklines / _silentHealthRefresh / _silentFleetRefresh)
+   * that fire _authFetch during or after the teardown see the flag
+   * and skip the recursive doLogout branch. Without this, a 60s
+   * rrd tick right after a deliberate logout would 403 and re-enter
+   * doLogout, clearing the login inputs the user had just refilled. */
+  _authFailing=true;
+  /* Stop all background fetchers — EventSource, rrd sparkline,
+   * silent health/fleet refresh — so the login overlay isn't racing
+   * against stale polling traffic. */
+  try{if(_evtSource){_evtSource.close();_evtSource=null;}}catch(e){}
+  try{if(_rrdTimer){clearInterval(_rrdTimer);_rrdTimer=null;}}catch(e){}
+  try{if(_healthTimer){clearInterval(_healthTimer);_healthTimer=null;}}catch(e){}
+  try{if(_fleetTimer){clearInterval(_fleetTimer);_fleetTimer=null;}}catch(e){}
+  /* Bare fetch for the server-side invalidation. Routing through
+   * _authFetch used to recurse: the logout endpoint requires auth, so
+   * a stale/missing session returned 403, which re-entered _authFetch's
+   * 401/403 branch and called doLogout() again — hundreds of POST
+   * /api/auth/logout per second until the tab hung. Bare fetch returns
+   * the response untouched. */
+  try{
+    var _hdrs={};
+    if(_authToken)_hdrs['Authorization']='Bearer '+_authToken;
+    fetch('/api/auth/logout',{method:'POST',credentials:'same-origin',headers:_hdrs}).catch(function(){});
+  }catch(e){}
 
   _authToken='';_currentUser='';_currentRole='operator';
   /* Clear any legacy storage tokens */
   try{sessionStorage.removeItem('freq_auth_token');sessionStorage.removeItem('freq_auth_user');}catch(e){}
   try{localStorage.removeItem('freq_auth_token');localStorage.removeItem('freq_auth_user');}catch(e){}
-  document.getElementById('login-overlay').style.display='flex';
-  document.getElementById('login-user').value='';
-  document.getElementById('login-pass').value='';
-  document.getElementById('login-user').focus();
+  /* Tear down the authenticated app chrome so mid-session logout
+   * doesn't leave the header user button or fleet cards visible
+   * behind the restored overlay. */
+  var body=document.getElementById('mn-body');if(body)body.style.display='none';
+  var hbtn=document.getElementById('header-user-btn');if(hbtn)hbtn.style.display='none';
+  _restoreLoginCard();
+  var ov=document.getElementById('login-overlay');
+  if(ov){ov.style.display='flex';ov.style.pointerEvents='';}
+  var u=document.getElementById('login-user');if(u){u.value='';try{u.focus();}catch(e){}}
+  var p=document.getElementById('login-pass');if(p)p.value='';
+  var errEl=document.getElementById('login-error');if(errEl){errEl.textContent='';errEl.style.display='none';}
 }
 
 /* API endpoint constants — single source of truth for all fetch paths */
@@ -308,6 +400,9 @@ function _showApp(){
   /* Post-login launch sequence: evidence-first, each stage reports
    * what was actually fetched from the API so the operator sees a
    * boot log, not a marketing spinner. */
+  /* Capture the original login overlay HTML before we replace it with
+   * the COLD START sequence — doLogout() restores from this snapshot. */
+  _captureLoginOverlay();
   var login=document.getElementById('login-overlay');
   login.innerHTML='<div class="text-center"><div style="font-size:32px;font-weight:700;letter-spacing:8px;color:var(--text);margin-bottom:8px">PVE FREQ</div>'+
     '<div style="font-size:11px;color:var(--text-dim);letter-spacing:3px;margin-bottom:24px">operator console</div>'+
@@ -357,6 +452,19 @@ function _showApp(){
       _applyRoleUI();
       _renderHomeWidgets();
       _checkForUpdate();
+      /* Background data loops — gated behind successful auth so the
+       * bootstrap fetchers never fire unauthenticated and kick
+       * _authFetch's 401/403 handler. Previously startSparklines /
+       * startSSE / loadHome all ran at script load synchronously,
+       * producing a pre-auth logout storm on top of EventSource
+       * 403-retry noise. */
+      try{startSparklines();}catch(e){console.error('startSparklines failed:',e);}
+      try{startSSE();}catch(e){console.error('startSSE failed:',e);}
+      try{
+        var _initPath=window.location.pathname.replace('/dashboard/','').replace('/','');
+        if(_initPath&&VIEW_LOADERS[_initPath])switchView(_initPath);
+        else loadHome();
+      }catch(e){console.error('initial route failed:',e);}
     },600);
   });
 }
@@ -1335,14 +1443,17 @@ function _renderSparklines(){
   });
 }
 function startSparklines(){
-  /* Delay 5s — let node cards render first */
+  /* Delay 5s — let node cards render first. Called from _showApp()
+   * after successful auth. Not called at script load; the old
+   * unconditional call fired _authFetch('/api/pve/rrd') 5s after page
+   * load regardless of session state, contributing to the pre-auth
+   * 403 storm. */
   setTimeout(function(){
     _fetchRrdData();
     if(_rrdTimer)clearInterval(_rrdTimer);
     _rrdTimer=setInterval(_fetchRrdData,60000);/* refresh every 60s */
   },5000);
 }
-startSparklines();
 
 /* === SSE Live Updates ===
    EventSource connects to /api/events for push updates.
@@ -1439,7 +1550,10 @@ function startSSE(){
     if(ci){ci.textContent='CACHED';ci.style.color='var(--yellow)';}
   };
 }
-startSSE();
+/* startSSE() is called from _showApp() once auth is confirmed. The
+ * previous unconditional call at script load opened EventSource
+ * against /api/events before login, which 403d and produced noisy
+ * auto-retry traffic in the network panel. */
 
 /* === Page composite loaders === */
 function renderGlobalSettings(){
@@ -8865,9 +8979,8 @@ document.addEventListener('keydown',function(e){
 window.addEventListener('popstate',function(e){
   if(e.state&&e.state.view&&VIEW_LOADERS[e.state.view])switchView(e.state.view,true);
 });
-try{
-  var _initPath=window.location.pathname.replace('/dashboard/','').replace('/','');
-  if(_initPath&&VIEW_LOADERS[_initPath])switchView(_initPath);
-  else loadHome();
-  renderGlobalSettings();
-}catch(e){console.error(e);}
+/* Unauthenticated bootstrap — only touch things that read local state
+ * (settings from localStorage). Authenticated work (loadHome, initial
+ * view routing) lives inside _showApp() so it can't fire before the
+ * user has a valid session. */
+try{renderGlobalSettings();}catch(e){console.error(e);}
