@@ -10,7 +10,7 @@
 <div class="setup">
   <div class="logo">
     <h1>PVE FREQ</h1>
-    <p>Datacenter management CLI for homelabbers</p>
+    <p>Fleet dashboard — first-run setup</p>
   </div>
   <div class="steps">
     <div class="step-dot active" id="dot-0"></div>
@@ -19,30 +19,30 @@
     <div class="step-dot" id="dot-3"></div>
   </div>
 
-  <!-- Step 0: Welcome + Admin -->
+  <!-- Step 0: Dashboard admin account -->
   <div class="pane active" id="pane-0">
-    <h2>Create Admin Account</h2>
-    <p class="desc">This account controls your FREQ dashboard and fleet operations.</p>
+    <h2>Dashboard admin account</h2>
+    <p class="desc">First account for dashboard login. Stored in users.conf. Password hashed with PBKDF2.</p>
     <label>Username</label>
     <input type="text" id="s-user" placeholder="admin" autocomplete="username">
     <label>Password</label>
-    <input type="password" id="s-pass" placeholder="Choose a strong password" autocomplete="new-password">
-    <label>Confirm Password</label>
-    <input type="password" id="s-pass2" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')nextStep()">
+    <input type="password" id="s-pass" placeholder="Minimum 8 characters" autocomplete="new-password">
+    <label>Confirm password</label>
+    <input type="password" id="s-pass2" placeholder="Re-enter password" autocomplete="new-password" onkeydown="if(event.key==='Enter')nextStep()">
     <div class="err" id="err-0"></div>
-    <div class="btn-row"><button class="btn" onclick="nextStep()">Create Account</button></div>
+    <div class="btn-row"><button class="btn" onclick="nextStep()">Create account</button></div>
   </div>
 
-  <!-- Step 1: Cluster Basics -->
+  <!-- Step 1: Cluster identity -->
   <div class="pane" id="pane-1">
-    <h2>Cluster Configuration</h2>
-    <p class="desc">Basic settings for your Proxmox cluster. All optional — you can change these later.</p>
-    <label>Cluster Name</label>
-    <input type="text" id="s-cluster" placeholder="homelab">
+    <h2>Cluster identity</h2>
+    <p class="desc">Optional — written to freq.toml. PVE node IPs are used by the API poller. All fields can be changed later with freq config.</p>
+    <label>Cluster name</label>
+    <input type="text" id="s-cluster" placeholder="dc01">
     <label>Timezone</label>
     <input type="text" id="s-tz" placeholder="UTC" value="UTC">
-    <label>PVE Node IPs (comma-separated, optional)</label>
-    <input type="text" id="s-nodes" placeholder="192.168.1.10, 192.168.1.11">
+    <label>PVE node IPs (comma-separated)</label>
+    <input type="text" id="s-nodes" placeholder="10.25.255.26, 10.25.255.27, 10.25.255.28">
     <div class="err" id="err-1"></div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="prevStep()">Back</button>
@@ -50,26 +50,26 @@
     </div>
   </div>
 
-  <!-- Step 2: SSH Key -->
+  <!-- Step 2: SSH key -->
   <div class="pane" id="pane-2">
-    <h2>SSH Key Setup</h2>
-    <p class="desc">FREQ uses SSH to manage your fleet. Generate a new keypair or skip if you'll configure SSH later.</p>
+    <h2>Service-account SSH key</h2>
+    <p class="desc">ed25519 keypair for fleet SSH. Generate now, or skip and run freq init later to deploy the real service account.</p>
     <div id="key-status"></div>
     <div class="err" id="err-2"></div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="prevStep()">Back</button>
-      <button class="btn" id="btn-keygen" onclick="genKey()">Generate SSH Key</button>
+      <button class="btn" id="btn-keygen" onclick="genKey()">Generate keypair</button>
       <button class="btn" onclick="nextStep()">Continue</button>
     </div>
-    <div class="skip" onclick="nextStep()">Skip — I'll set up SSH later</div>
+    <div class="skip" onclick="nextStep()">Skip — configure via freq init</div>
   </div>
 
   <!-- Step 3: Done -->
   <div class="pane" id="pane-3">
-    <h2>Initial Setup Complete</h2>
-    <p class="desc">Dashboard access is configured. Fleet discovery and host registration happen next.</p>
+    <h2>First-run setup complete</h2>
+    <p class="desc">Dashboard admin is configured. Run freq init for fleet discovery, service-account deployment, and host registration. The dashboard will show partial setup_health until init completes.</p>
     <div class="result" id="summary"></div>
-    <div class="btn-row"><button class="btn" onclick="launch()">Launch Dashboard</button></div>
+    <div class="btn-row"><button class="btn" onclick="launch()">Launch dashboard</button></div>
   </div>
 </div>
 

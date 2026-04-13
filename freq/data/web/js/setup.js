@@ -25,10 +25,10 @@ function nextStep(){
     var btn=document.querySelector('#pane-0 .btn');btn.disabled=true;btn.textContent='Creating...';
     fetch('/api/setup/create-admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})})
     .then(function(r){return r.json()}).then(function(d){
-      btn.disabled=false;btn.textContent='Create Account';
+      btn.disabled=false;btn.textContent='Create account';
       if(d.error){err(0,d.error);return}
       adminUser=u;adminCreated=true;step=1;show(1);
-    }).catch(function(e){btn.disabled=false;btn.textContent='Create Account';err(0,'Request failed: '+e)});
+    }).catch(function(e){btn.disabled=false;btn.textContent='Create account';err(0,'Request failed: '+e)});
     return;
   }
   if(step===1){
@@ -51,12 +51,12 @@ function checkKey(){
   fetch('/api/setup/status').then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('key-status');
     if(d.ssh_key_exists){
-      el.innerHTML='<div class="ok">SSH key already exists at '+_esc(d.ssh_key_path)+'</div>';
+      el.innerHTML='<div class="ok">Key present: '+_esc(d.ssh_key_path)+'</div>';
       keyGenerated=true;
-      document.getElementById('btn-keygen').textContent='Key Exists';
+      document.getElementById('btn-keygen').textContent='Key present';
       document.getElementById('btn-keygen').disabled=true;
     } else {
-      el.innerHTML='<div style="color:var(--dim);font-size:12px">No SSH key found. Click "Generate SSH Key" to create one.</div>';
+      el.innerHTML='<div style="color:var(--dim);font-size:12px">No key at cfg.ssh_key_path. Click Generate keypair to create one.</div>';
     }
   });
 }
@@ -64,23 +64,23 @@ function checkKey(){
 function genKey(){
   var btn=document.getElementById('btn-keygen');btn.disabled=true;btn.textContent='Generating...';
   fetch('/api/setup/generate-key',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
-    if(d.error){err(2,d.error);btn.disabled=false;btn.textContent='Generate SSH Key';return}
+    if(d.error){err(2,d.error);btn.disabled=false;btn.textContent='Generate keypair';return}
     keyGenerated=true;
-    document.getElementById('key-status').innerHTML='<div class="ok">SSH keypair generated: '+_esc(d.key_path)+'</div>';
-    btn.textContent='Key Generated';
-  }).catch(function(e){err(2,'Failed: '+e);btn.disabled=false;btn.textContent='Generate SSH Key'});
+    document.getElementById('key-status').innerHTML='<div class="ok">Keypair written: '+_esc(d.key_path)+'</div>';
+    btn.textContent='Key written';
+  }).catch(function(e){err(2,'Failed: '+e);btn.disabled=false;btn.textContent='Generate keypair'});
 }
 
 function renderSummary(){
-  var s='<span class="check">&#10003;</span> Admin account: <b>'+adminUser+'</b> (admin role)\n';
+  var s='<span class="check">&#10003;</span> Dashboard admin: <b>'+adminUser+'</b> (role: admin)\n';
   if(clusterConfigured){
     var c=document.getElementById('s-cluster').value.trim();
     var tz=document.getElementById('s-tz').value.trim()||'UTC';
-    if(c)s+='<span class="check">&#10003;</span> Cluster: <b>'+c+'</b>\n';
+    if(c)s+='<span class="check">&#10003;</span> Cluster name: <b>'+c+'</b>\n';
     s+='<span class="check">&#10003;</span> Timezone: <b>'+tz+'</b>\n';
   }
-  s+='<span class="check">&#10003;</span> SSH key: '+(keyGenerated?'<b>configured</b>':'<b>skipped</b> (configure later)')+'\n';
-  s+='\nNext steps:\n  - Add PVE nodes in System &gt; Config\n  - Add fleet hosts via freq host add\n  - Run freq doctor to verify';
+  s+='<span class="check">&#10003;</span> SSH key: '+(keyGenerated?'<b>written</b>':'<b>skipped</b> — run freq init later')+'\n';
+  s+='\nNext: run freq init for fleet discovery, service-account deployment,\nand host registration. Dashboard will report setup_health="partial"\nuntil init writes .initialized.';
   document.getElementById('summary').innerHTML=s;
 }
 
