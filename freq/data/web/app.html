@@ -22,7 +22,7 @@
 <div id="login-overlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
   <div style="width:380px;text-align:center">
     <div style="font-size:22px;font-weight:700;letter-spacing:6px;color:var(--text);margin:0 auto 4px">PVE FREQ</div>
-    <div style="font-size:10px;color:var(--text-dim);letter-spacing:2px;margin-bottom:20px">FLEET DASHBOARD</div>
+    <div style="font-size:10px;color:var(--text-dim);letter-spacing:2px;margin-bottom:20px">operator console</div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:4px;padding:24px">
       <div style="display:flex;flex-direction:column;gap:12px">
         <input id="login-user" placeholder="Username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()" style="background:var(--bg);border:1px solid var(--input-border);color:var(--text);padding:12px 16px;border-radius:4px;font-size:13px;font-family:inherit;width:100%;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--text-dim)'" onblur="this.style.borderColor='var(--input-border)'">
@@ -79,8 +79,8 @@
 <!-- Empty state -->
 <div id="home-empty" style="text-align:center;padding:40px 0;display:none">
   <div style="font-size:36px;opacity:0.15;margin-bottom:16px">&#9776;</div>
-  <div style="font-size:16px;color:var(--text);margin-bottom:8px">Your Dashboard is Empty</div>
-  <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.6">Click LAYOUT to add widgets from Fleet, Docker, Security, and Lab Tools. Or hit Quick Start for a ready-made dashboard.</div>
+  <div style="font-size:16px;color:var(--text);margin-bottom:8px">no widgets configured</div>
+  <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.6">LAYOUT adds fleet, docker, security, and lab widgets. QUICK START preloads a default widget set.</div>
   <button class="fleet-btn c-purple-active" data-action="openLayoutConfig" >&#9776; CONFIGURE DASHBOARD</button>
 </div>
 <!-- Footer —  subordinate version marker, no repeated branding -->

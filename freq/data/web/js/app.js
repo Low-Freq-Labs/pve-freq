@@ -303,7 +303,7 @@ function _showApp(){
   /* Show loading screen while prefetching data */
   var login=document.getElementById('login-overlay');
   login.innerHTML='<div class="text-center"><div style="font-size:32px;font-weight:700;letter-spacing:8px;color:var(--text);margin-bottom:8px">PVE FREQ</div>'+
-    '<div style="font-size:11px;color:var(--text-dim);letter-spacing:3px;margin-bottom:24px">FLEET DASHBOARD</div>'+
+    '<div style="font-size:11px;color:var(--text-dim);letter-spacing:3px;margin-bottom:24px">operator console</div>'+
     '<div id="load-status" style="color:var(--text);font-size:13px;font-weight:600;letter-spacing:1px;margin-bottom:16px">LOADING</div>'+
     '<div style="width:200px;height:4px;background:var(--input-border);border-radius:2px;margin:0 auto;overflow:hidden"><div id="load-bar" style="width:0%;height:100%;background:var(--purple);border-radius:2px;transition:width 0.4s ease"></div></div>'+
     '<div id="load-detail" style="color:var(--text-dim);font-size:11px;margin-top:12px">Fetching fleet data...</div></div>';
