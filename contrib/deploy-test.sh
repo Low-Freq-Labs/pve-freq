@@ -108,6 +108,18 @@ if [ -d ${RUNTIME_DIR}/freq ]; then
         --exclude='/conf/' --exclude='/data/' --exclude='/tls/' --exclude='/build/' \
         ${REMOTE_DIR}/ ${RUNTIME_DIR}/
     echo 'Runtime synced'
+
+    # Ensure pve-freq.pth exists in every /usr/local/lib/python3.*/dist-packages
+    # so plain 'sudo python3 -m freq ...' works on the installed VM without
+    # the /usr/local/bin/freq wrapper. install.sh drops this during fresh
+    # installs; deploy-test refreshes it on every fast-path so pre-existing
+    # VMs (installed before this commit) also get the contract.
+    for SITE in /usr/local/lib/python3.*/dist-packages; do
+        if [ -d \"\$SITE\" ]; then
+            echo '${RUNTIME_DIR}' | sudo tee \"\$SITE/pve-freq.pth\" >/dev/null
+        fi
+    done
+    echo 'pve-freq.pth refreshed'
 else
     echo 'No runtime install at ${RUNTIME_DIR} — skipped'
 fi

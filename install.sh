@@ -423,43 +423,48 @@ do_install() {
     echo ""
 
     # Set up entry point
+    #
+    # Two pieces, both always applied:
+    #   1. /usr/local/bin/freq wrapper — canonical CLI entrypoint. Sets
+    #      FREQ_DIR and PYTHONPATH to $INSTALL_DIR so the wrapper is
+    #      self-contained and never depends on site-packages state.
+    #   2. pve-freq.pth file in every /usr/local/lib/python3.*/dist-packages
+    #      directory — exposes $INSTALL_DIR on sys.path globally, so plain
+    #      `python3 -m freq …` and `python3 -c 'import freq'` work from any
+    #      shell on the installed VM (post-init CLI sweeps, ad-hoc ops).
+    #
+    # We do NOT use `pip install` here. On modern Debian (PEP 668 /
+    # EXTERNALLY-MANAGED), pip install into the system Python refuses
+    # unless --break-system-packages is passed, and even when it works
+    # it copies files into site-packages that go stale when $INSTALL_DIR
+    # changes. A .pth file pointing at $INSTALL_DIR stays live with every
+    # runtime sync and survives apt upgrades cleanly.
     step "Setting up 'freq' command"
-    local freq_ready=false
 
-    # Strategy A: pip install (preferred)
-    if command -v pip3 &>/dev/null; then
-        if pip3 install --no-deps --root-user-action=ignore -q "$INSTALL_DIR" 2>/dev/null; then
-            if command -v freq &>/dev/null; then
-                ok "Installed via pip ($(which freq))"
-                freq_ready=true
-            fi
-        fi
-    fi
-
-    # Strategy B: python3 -m pip
-    if [[ "$freq_ready" == false ]] && command -v python3 &>/dev/null; then
-        if python3 -m pip install --no-deps --root-user-action=ignore -q "$INSTALL_DIR" 2>/dev/null; then
-            if command -v freq &>/dev/null; then
-                ok "Installed via python3 -m pip ($(which freq))"
-                freq_ready=true
-            fi
-        fi
-    fi
-
-    # Strategy C: symlink wrapper (no pip)
-    if [[ "$freq_ready" == false ]]; then
-        cat > /usr/local/bin/freq << WRAPPER
+    # Wrapper (canonical)
+    cat > /usr/local/bin/freq << WRAPPER
 #!/bin/sh
 FREQ_DIR="${INSTALL_DIR}" PYTHONPATH="${INSTALL_DIR}" exec python3 -m freq "\$@"
 WRAPPER
-        chmod 755 /usr/local/bin/freq
-        if /usr/local/bin/freq --version &>/dev/null; then
-            ok "Installed via wrapper script (/usr/local/bin/freq)"
-            freq_ready=true
-        else
-            fail "Could not set up freq command"
-            exit 1
+    chmod 755 /usr/local/bin/freq
+    if ! /usr/local/bin/freq --version &>/dev/null; then
+        fail "Could not set up freq command"
+        exit 1
+    fi
+    ok "Installed wrapper (/usr/local/bin/freq)"
+
+    # .pth file (makes `python3 -m freq` work without the wrapper)
+    local pth_written=0
+    for site_dir in /usr/local/lib/python3.*/dist-packages; do
+        if [[ -d "$site_dir" ]]; then
+            echo "$INSTALL_DIR" > "$site_dir/pve-freq.pth"
+            pth_written=$((pth_written + 1))
         fi
+    done
+    if [[ $pth_written -gt 0 ]]; then
+        ok "Exposed freq on sys.path via pve-freq.pth (${pth_written} site-packages)"
+    else
+        warn "No /usr/local/lib/python3.*/dist-packages found — python3 -m freq will only work via the wrapper"
     fi
 
     echo ""
