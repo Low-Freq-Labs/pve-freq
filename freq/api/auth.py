@@ -78,40 +78,68 @@ def verify_password(password: str, stored: str) -> bool:
 # ── Session Check ─────────────────────────────────────────────────────────
 
 
+def _extract_session_token(handler) -> str:
+    """Pull the session token from Authorization header or cookie.
+
+    F7 of R-SECURITY-TRUST-AUDIT-20260413P removed the previous
+    query-string fallback for the SSE event stream. EventSource
+    on a same-origin URL sends cookies by default, so the cookie
+    fallback below is sufficient for SSE; the query-string
+    fallback was a leak channel (URLs land in browser history,
+    reverse proxy access logs, JS instrumentation reading
+    window.location) with no remaining purpose.
+    """
+    auth_header = handler.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header[7:]
+    cookie_header = handler.headers.get("Cookie", "")
+    for part in cookie_header.split(";"):
+        part = part.strip()
+        if part.startswith("freq_session="):
+            return part[len("freq_session="):]
+    return ""
+
+
+def _lookup_session(token: str):
+    """Return the session dict for a token, or None on miss/expiry.
+    Side-effect: removes expired entries from the in-memory store."""
+    if not token:
+        return None
+    with _auth_lock:
+        session = _auth_tokens.get(token)
+        if not session:
+            return None
+        if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
+            del _auth_tokens[token]
+            return None
+        return session
+
+
+def current_user(handler) -> str:
+    """Return the username for the request's session, or "" if none.
+
+    Used by handlers that need to bind ownership to a created resource
+    (e.g. terminal session creator pinning, F8 of
+    R-SECURITY-TRUST-AUDIT-20260413P) WITHOUT also enforcing a
+    role minimum — the role check is the caller's job.
+    """
+    token = _extract_session_token(handler)
+    session = _lookup_session(token)
+    return session["user"] if session else ""
+
+
 def check_session_role(handler, min_role="operator"):
     """Check if the request has a valid session with sufficient role.
 
     Role hierarchy: viewer < operator < admin.
     Returns (role_str, None) if ok, or (None, error_str) if blocked.
     """
-    token = ""
-    auth_header = handler.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-    if not token:
-        # Cookie fallback for SSE (EventSource can't set headers)
-        cookie_header = handler.headers.get("Cookie", "")
-        for part in cookie_header.split(";"):
-            part = part.strip()
-            if part.startswith("freq_session="):
-                token = part[len("freq_session="):]
-                break
-    if not token:
-        # Query param fallback — SSE only (EventSource can't set headers or cookies)
-        from urllib.parse import urlparse, parse_qs
-        parsed = urlparse(handler.path)
-        if parsed.path == "/api/events":
-            qs = parse_qs(parsed.query)
-            token = qs.get("token", [""])[0]
+    token = _extract_session_token(handler)
     if not token:
         return None, "Authentication required"
-    with _auth_lock:
-        session = _auth_tokens.get(token)
-        if not session:
-            return None, "Session expired or invalid"
-        if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
-            del _auth_tokens[token]
-            return None, "Session expired"
+    session = _lookup_session(token)
+    if not session:
+        return None, "Session expired or invalid"
     role_order = {"viewer": 0, "operator": 1, "admin": 2, "protected": 3}
     if role_order.get(session["role"], 0) < role_order.get(min_role, 1):
         return None, f"Requires {min_role} role (you are {session['role']})"
@@ -263,17 +291,7 @@ def handle_auth_logout(handler):
     if handler.command != "POST":
         handler._json_response({"error": "Use POST for logout"}, 405)
         return
-    token = ""
-    auth_header = handler.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-    if not token:
-        cookie_header = handler.headers.get("Cookie", "")
-        for part in cookie_header.split(";"):
-            part = part.strip()
-            if part.startswith("freq_session="):
-                token = part[len("freq_session="):]
-                break
+    token = _extract_session_token(handler)
 
     if token:
         with _auth_lock:
@@ -302,26 +320,11 @@ def handle_auth_logout(handler):
 
 def handle_auth_verify(handler):
     """GET /api/auth/verify — check if session token is valid."""
-    token = ""
-    auth_header = handler.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-    if not token:
-        cookie_header = handler.headers.get("Cookie", "")
-        for part in cookie_header.split(";"):
-            part = part.strip()
-            if part.startswith("freq_session="):
-                token = part[len("freq_session="):]
-                break
-    with _auth_lock:
-        session = _auth_tokens.get(token)
-        if not session:
-            handler._json_response({"valid": False})
-            return
-        if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
-            del _auth_tokens[token]
-            handler._json_response({"valid": False})
-            return
+    token = _extract_session_token(handler)
+    session = _lookup_session(token)
+    if not session:
+        handler._json_response({"valid": False})
+        return
     handler._json_response(
         {
             "valid": True,
@@ -333,20 +336,10 @@ def handle_auth_verify(handler):
 
 def handle_auth_change_password(handler):
     """POST /api/auth/change-password — change password for authenticated user."""
-    token = ""
-    auth_header = handler.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-    if not token:
-        cookie_header = handler.headers.get("Cookie", "")
-        for part in cookie_header.split(";"):
-            part = part.strip()
-            if part.startswith("freq_session="):
-                token = part[len("freq_session="):]
-                break
     if handler.command != "POST":
         handler._json_response({"error": "Use POST to change password"}, 405)
         return
+    token = _extract_session_token(handler)
     try:
         body = handler._request_body()
         new_password = body.get("password", "")
@@ -354,8 +347,7 @@ def handle_auth_change_password(handler):
         logger.warn(f"api_auth: failed to parse password change body: {e}")
         new_password = ""
 
-    with _auth_lock:
-        session = _auth_tokens.get(token)
+    session = _lookup_session(token)
     if not session:
         handler._json_response({"error": "Not authenticated"}, 401)
         return

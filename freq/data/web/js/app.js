@@ -3194,7 +3194,15 @@ function loadLxcContainers(){
   var cards=document.getElementById('ct-cards');
   if(stats)stats.innerHTML='<div class="skeleton h-40"></div>';
   if(cards)cards.innerHTML='<div class="skeleton h-60"></div>';
-  _authFetch(API.CT_LIST).then(function(r){return r.json()}).then(function(d){
+  /* silent:true — when LXC isn't installed on the cluster (5xx), the
+   * section is hidden entirely below. The generic 'API error: ct/list'
+   * toast would flash once per fleet load, which reads as a defect
+   * rather than a graceful not-installed signal. */
+  _authFetch(API.CT_LIST,{silent:true}).then(function(r){
+    if(!r.ok){if(section)section.style.display='none';return null;}
+    return r.json();
+  }).then(function(d){
+    if(d===null)return;
     var cts=d.containers||[];
     if(!cts.length){if(section)section.style.display='none';return;}
     if(section)section.style.display='';
@@ -3302,7 +3310,13 @@ function doCtCreate(){
   var out=document.getElementById('ct-tool-out');
   if(!tpl||!name){toast('Template and hostname required','error');return;}
   if(out)out.innerHTML='<div class="c-yellow">Creating container...</div>';
-  _authFetch(API.CT_CREATE+'?template='+encodeURIComponent(tpl)+'&hostname='+encodeURIComponent(name)+'&cores='+cores+'&ram='+ram+'&disk='+disk)
+  /* POST + JSON body. Pre-fix this used GET ?template=...&hostname=... which
+   * always 405d because the server requires POST. R-SECURITY-TRUST-AUDIT-20260413P
+   * F5 fixed both: server reads from JSON body so the optional password field
+   * never lands in URL leak channels, and the dashboard finally talks to it
+   * with the right method. */
+  _authFetch(API.CT_CREATE,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({template:tpl,hostname:name,cores:cores,ram:ram,disk:disk})})
   .then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('CT '+d.ctid+' created','success');if(out)out.innerHTML='<div class="c-green">Container CT '+d.ctid+' ('+_esc(d.hostname)+') created.</div>';loadLxcContainers();}
     else{toast(d.error||'Failed','error');if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
@@ -8750,9 +8764,12 @@ function fedRegister(){
   var url=document.getElementById('fed-url').value.trim();
   var secret=document.getElementById('fed-secret').value;
   if(!name||!url){toast('Name and URL required','error');return;}
-  var q='/api/federation/register?name='+encodeURIComponent(name)+'&url='+encodeURIComponent(url);
-  if(secret)q+='&secret='+encodeURIComponent(secret);
-  _authFetch(q).then(function(r){return r.json()}).then(function(d){
+  /* POST + JSON body so the HMAC secret never lands in URL leak channels
+   * (browser history, reverse proxy logs, etc). Pre-fix this used a GET
+   * URL with the secret in the query string AND the server required POST
+   * so the dashboard never worked. R-SECURITY-TRUST-AUDIT-20260413P F6. */
+  _authFetch('/api/federation/register',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name:name,url:url,secret:secret||''})}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast(d.message||'Registered','success');document.getElementById('fed-name').value='';document.getElementById('fed-url').value='';document.getElementById('fed-secret').value='';}
     else toast('Error: '+(d.error||'unknown'),'error');
     loadFederation();

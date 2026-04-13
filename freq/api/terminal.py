@@ -31,6 +31,7 @@ import time
 
 from freq.core import log as logger
 from freq.api.helpers import require_post, json_response, get_params
+from freq.api.auth import current_user
 from freq.core.config import load_config
 from freq.modules.serve import _check_session_role
 
@@ -212,6 +213,12 @@ def handle_terminal_open(handler):
     except Exception:
         pass
 
+    # F8 of R-SECURITY-TRUST-AUDIT-20260413P: bind the session to the
+    # creator's username so the WS endpoint can refuse cross-user binds.
+    # Pre-fix any logged-in operator who captured another operator's
+    # session id (via URL-history / proxy-log leakage) could hijack the
+    # PTY and inherit the device credentials it was opened with.
+    creator = current_user(handler)
     session_id = secrets.token_urlsafe(24)
     with _sessions_lock:
         _sessions[session_id] = {
@@ -223,6 +230,7 @@ def handle_terminal_open(handler):
             "last_active": time.time(),
             "cols": cols,
             "rows": rows,
+            "user": creator,
         }
 
     json_response(
@@ -320,8 +328,23 @@ def handle_terminal_ws(handler):
 
     Hijacks the HTTP connection: sends 101 via raw socket sendall(),
     drains any data buffered by rfile, then bridges PTY ↔ WebSocket.
+
+    F8 of R-SECURITY-TRUST-AUDIT-20260413P: the WS endpoint MUST
+    refuse to bind a session that wasn't created by the same logged-
+    in user. Without this check, any operator who captured another
+    operator's session id (URL history, proxy logs, dev-tools
+    network panel) could hijack the PTY.
     """
     from urllib.parse import urlparse, parse_qs
+
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        handler.send_error(403, err)
+        return
+    requesting_user = current_user(handler)
+    if not requesting_user:
+        handler.send_error(403, "Authentication required")
+        return
 
     parsed = urlparse(handler.path)
     qs = parse_qs(parsed.query)
@@ -331,6 +354,15 @@ def handle_terminal_ws(handler):
         session = _sessions.get(session_id)
         if not session:
             handler.send_error(404, "Session not found")
+            return
+        creator = session.get("user", "")
+        if creator and creator != requesting_user:
+            logger.warn(
+                f"api_terminal: cross-user WS bind refused — session creator "
+                f"{creator!r}, requester {requesting_user!r}",
+                endpoint="terminal/ws",
+            )
+            handler.send_error(403, "Session belongs to another user")
             return
         fd = session["fd"]
 

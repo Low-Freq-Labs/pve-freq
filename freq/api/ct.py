@@ -13,7 +13,7 @@ import json
 import time
 
 from freq.core import log as logger
-from freq.api.helpers import require_post,  json_response, get_params
+from freq.api.helpers import require_post,  json_response, get_params, get_json_body
 from freq.core.config import load_config
 from freq.core.validate import (
     label as valid_label,
@@ -102,7 +102,13 @@ def handle_ct_list(handler):
 
 
 def handle_ct_create(handler):
-    """POST /api/ct/create — create a new LXC container."""
+    """POST /api/ct/create — create a new LXC container.
+
+    Body: JSON with template, hostname (or name), cores, ram, disk,
+    storage, password, net. F5 of R-SECURITY-TRUST-AUDIT-20260413P
+    moved password from query params to JSON body so the secret never
+    lands in URL-leak channels (browser history, reverse proxy logs).
+    """
     if require_post(handler, "Container create"):
         return
     role, err = _check_session_role(handler, "operator")
@@ -110,16 +116,27 @@ def handle_ct_create(handler):
         json_response(handler, {"error": err}, 403)
         return
 
+    import shlex
+
     cfg = load_config()
+    body = get_json_body(handler)
+    # Other (non-secret) params still tolerate query-string for backward
+    # compat with any external scripts; secret-bearing fields (password)
+    # are body-only.
     params = get_params(handler)
-    template = params.get("template", [""])[0]
-    hostname = params.get("hostname", params.get("name", [""]))[0]
-    cores = params.get("cores", ["1"])[0]
-    ram = params.get("ram", ["512"])[0]
-    disk = params.get("disk", ["8"])[0]
-    storage = params.get("storage", ["local-lvm"])[0]
-    password = params.get("password", [""])[0]
-    net = params.get("net", ["name=eth0,bridge=vmbr0,ip=dhcp"])[0]
+
+    def _q(key, default=""):
+        return str(body.get(key, params.get(key, [default])[0])).strip()
+
+    template = _q("template")
+    hostname = _q("hostname") or _q("name")
+    cores = _q("cores", "1")
+    ram = _q("ram", "512")
+    disk = _q("disk", "8")
+    storage = _q("storage", "local-lvm")
+    net = _q("net", "name=eth0,bridge=vmbr0,ip=dhcp")
+    # password is body-ONLY — do NOT fall back to query params.
+    password = str(body.get("password", "")).strip()
 
     if not template:
         json_response(
@@ -152,7 +169,16 @@ def handle_ct_create(handler):
         f"--rootfs {storage}:{disk} --net0 {net}"
     )
     if password:
-        cmd += f" --password {password}"
+        # F15 of R-SECURITY-TRUST-AUDIT-20260413P: shlex.quote the password
+        # before interpolating into the shell command line. Pre-fix the raw
+        # value was concatenated unquoted, so any operator who passed a
+        # password containing shell metacharacters got arbitrary command
+        # execution on the PVE node as the freq service account. Operator
+        # role already has /api/ct/exec for legitimate exec, so this is
+        # not a privilege escalation, but it does turn a legitimate
+        # password value (with quotes / dollar signs / backticks) into a
+        # broken create + an injection.
+        cmd += f" --password {shlex.quote(password)}"
     cmd += " --unprivileged 1 --start 0"
 
     stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=120)

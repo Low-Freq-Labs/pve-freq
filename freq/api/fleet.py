@@ -1414,7 +1414,15 @@ def handle_federation_status(handler):
 
 
 def handle_federation_register(handler):
-    """POST /api/federation/register -- register a new remote FREQ site."""
+    """POST /api/federation/register -- register a new remote FREQ site.
+
+    Body: JSON with name, url, secret. F6 of
+    R-SECURITY-TRUST-AUDIT-20260413P moved the HMAC secret out of
+    query params so it never lands in URL-leak channels (browser
+    history, reverse proxy logs). name and url still tolerate query
+    strings for backward compat with external scripts; secret is
+    body-only.
+    """
     if require_post(handler, "Federation register"):
         return
     role, err = _check_session_role(handler, "admin")
@@ -1422,12 +1430,15 @@ def handle_federation_register(handler):
         json_response(handler, {"error": err}, 403)
         return
     from freq.jarvis.federation import register_site
+    from freq.api.helpers import get_json_body
 
     cfg = load_config()
+    body = get_json_body(handler)
     params = _parse_query_flat(handler.path)
-    name = params.get("name", "").strip()
-    url = params.get("url", "").strip()
-    secret = params.get("secret", "")
+    name = str(body.get("name", params.get("name", ""))).strip()
+    url = str(body.get("url", params.get("url", ""))).strip()
+    # secret is body-ONLY — do NOT fall back to query params.
+    secret = str(body.get("secret", "")).strip()
     if not name or not url:
         json_response(handler, {"error": "Missing name or url parameter"}, 400)
         return

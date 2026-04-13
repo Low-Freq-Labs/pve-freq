@@ -4,13 +4,18 @@ Each TestCase pins one finding from
 /opt/freq-devs/rick/findings/R-SECURITY-TRUST-AUDIT-20260413P.md
 so the underlying gap can never silently regress.
 
-This first batch covers:
+Covered:
   - F1   trust-on-first-use account takeover (auth.py login refuses
          empty stored_hash + refuses on vault read failure).
+  - F5   /api/ct/create reads password from JSON body, not query string.
+  - F6   /api/federation/register reads HMAC secret from JSON body.
+  - F7   check_session_role drops the SSE query-string token fallback.
+  - F8   terminal session creator binding — WS refuses cross-user binds.
   - F10  logout cookie clear matches login Secure-flag symmetry.
   - F11  /api/setup/status hides ssh_key_path / version / host_count
          from unauth callers.
   - F13  log redaction covers key= / session= / pass= / pw= / auth=.
+  - F15  ct/create password is shlex.quoted before shell interpolation.
 """
 import re
 import sys
@@ -258,6 +263,149 @@ class TestF13LogRedactionCoversNewParams(unittest.TestCase):
         msg = "?password=qwerty12345"
         out = freq_log._redact(msg)
         self.assertNotIn("qwerty12345", out)
+
+
+class TestF5CtCreatePasswordFromBody(unittest.TestCase):
+    """F5 — ct/create reads password from JSON body, not query string."""
+
+    def test_source_reads_password_from_body_only(self):
+        src = (REPO_ROOT / "freq" / "api" / "ct.py").read_text()
+        # Anchor on the handler.
+        idx = src.find("def handle_ct_create")
+        self.assertNotEqual(idx, -1)
+        end = src.find("def handle_ct_destroy", idx)
+        block = src[idx:end]
+        # Password must be read from body, not via the params/query path.
+        self.assertIn(
+            'password = str(body.get("password", "")).strip()',
+            block,
+            "password must be read from JSON body only, not query params",
+        )
+        # Pre-fix shape must be gone.
+        self.assertNotIn(
+            'params.get("password"',
+            block,
+            "params.get(\"password\"...) leak channel must be removed",
+        )
+
+    def test_dashboard_js_sends_post_json_body(self):
+        js = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+        idx = js.find("function doCtCreate")
+        self.assertNotEqual(idx, -1)
+        end = js.find("function doCtClone", idx)
+        block = js[idx:end]
+        self.assertIn("API.CT_CREATE", block)
+        self.assertIn("method:'POST'", block)
+        self.assertIn("Content-Type", block)
+        # Must NOT pass template/hostname via query string.
+        self.assertNotIn(
+            "API.CT_CREATE+'?",
+            block,
+            "doCtCreate must POST a JSON body, not a query string",
+        )
+
+
+class TestF6FederationRegisterSecretFromBody(unittest.TestCase):
+    """F6 — federation/register reads HMAC secret from JSON body."""
+
+    def test_source_reads_secret_from_body_only(self):
+        src = (REPO_ROOT / "freq" / "api" / "fleet.py").read_text()
+        idx = src.find("def handle_federation_register")
+        self.assertNotEqual(idx, -1)
+        end = src.find("def handle_federation_unregister", idx)
+        block = src[idx:end]
+        self.assertIn(
+            'secret = str(body.get("secret", "")).strip()',
+            block,
+            "secret must be read from JSON body only",
+        )
+        self.assertNotIn(
+            'params.get("secret"',
+            block,
+            "params.get(\"secret\"...) leak channel must be removed",
+        )
+
+    def test_dashboard_js_sends_post_json_body(self):
+        js = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+        idx = js.find("function fedRegister")
+        self.assertNotEqual(idx, -1)
+        end = js.find("\nfunction ", idx + 1)
+        block = js[idx:end]
+        self.assertIn("'/api/federation/register'", block)
+        self.assertIn("method:'POST'", block)
+        self.assertNotIn(
+            "?secret=",
+            block,
+            "fedRegister must NOT put secret in the URL query string",
+        )
+
+
+class TestF7SseQueryTokenFallbackRemoved(unittest.TestCase):
+    """F7 — check_session_role no longer falls back to query-string token."""
+
+    def test_source_drops_query_token_path(self):
+        src = (REPO_ROOT / "freq" / "api" / "auth.py").read_text()
+        # The pre-fix shape was a parse_qs against handler.path checking
+        # parsed.path == "/api/events" and reading qs.get("token", ...).
+        # All three should be gone from the auth file now.
+        self.assertNotIn("/api/events", src,
+                         "auth.py must not name /api/events directly")
+        self.assertNotIn('qs.get("token"', src,
+                         "auth.py must not pull token from query string")
+        # The cookie + bearer header path must still exist.
+        self.assertIn("Bearer ", src)
+        self.assertIn("freq_session=", src)
+
+
+class TestF8TerminalSessionCreatorBinding(unittest.TestCase):
+    """F8 — terminal sessions are bound to their creator and the WS
+    refuses to bind a session that belongs to another user."""
+
+    def test_session_dict_carries_user(self):
+        src = (REPO_ROOT / "freq" / "api" / "terminal.py").read_text()
+        idx = src.find("def handle_terminal_open")
+        self.assertNotEqual(idx, -1)
+        end = src.find("def handle_terminal_close", idx)
+        block = src[idx:end]
+        self.assertIn("creator = current_user(handler)", block,
+                      "open handler must capture the creating user")
+        self.assertIn('"user": creator', block,
+                      "session dict must store the creator's username")
+
+    def test_ws_handler_refuses_cross_user_bind(self):
+        src = (REPO_ROOT / "freq" / "api" / "terminal.py").read_text()
+        idx = src.find("def handle_terminal_ws")
+        self.assertNotEqual(idx, -1)
+        end = src.find("def _ws_bridge", idx)
+        block = src[idx:end]
+        self.assertIn("requesting_user = current_user(handler)", block)
+        self.assertIn("creator != requesting_user", block,
+                      "WS handler must compare creator against requester")
+        self.assertIn("Session belongs to another user", block)
+
+
+class TestF15CtCreatePasswordShellQuoted(unittest.TestCase):
+    """F15 — ct/create password is shlex.quoted before shell interpolation."""
+
+    def test_password_shell_quoted(self):
+        src = (REPO_ROOT / "freq" / "api" / "ct.py").read_text()
+        idx = src.find("def handle_ct_create")
+        end = src.find("def handle_ct_destroy", idx)
+        block = src[idx:end]
+        self.assertIn("import shlex", block,
+                      "ct.handle_ct_create must import shlex for password quoting")
+        self.assertIn(
+            "--password {shlex.quote(password)}",
+            block,
+            "password must be shlex.quoted before interpolation into the "
+            "pct create shell command",
+        )
+        # The unquoted form must be gone.
+        self.assertNotIn(
+            "--password {password}",
+            block,
+            "raw unquoted --password {password} interpolation must not return",
+        )
 
 
 if __name__ == "__main__":
