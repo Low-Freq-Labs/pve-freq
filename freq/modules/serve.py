@@ -4631,16 +4631,20 @@ a:hover{{text-decoration:underline}}
         #
         # Honest limits on 'unsafe-inline' (as of R-WEB-CSP-INLINE-CONTRACT-20260413M):
         #   script-src: inline <script> blocks are zero in app.html, but the page
-        #     still carries ~355 inline event handlers (onclick/onkeydown/onfocus/
+        #     still carries 342 inline event handlers (onclick/onkeydown/onfocus/
         #     onblur/onchange/oninput/onmouseover/onmouseout). Inline handlers count
         #     as inline script under CSP, so dropping 'unsafe-inline' would break
-        #     almost every button/modal interaction. R-WEB-CSP-INLINE-CONTRACT-20260413M
-        #     removes the login/header/update-banner subset; the long tail across
-        #     fleet cards, modal dialogs, wizards, and detail panels is a separate
-        #     larger refactor.
-        #   style-src: ~275 inline style="…" attrs across the shipped UI. Removing
-        #     them needs either a large CSS-class refactor or a nonce-based CSP.
-        #     Not in scope for 20260413M; 'unsafe-inline' stays until then.
+        #     almost every button/modal interaction. The login/header/update-banner
+        #     subset (~11 handlers) was extracted by 347d123, and the login form
+        #     wrapper rework in e361cb2 dropped a few more — count fell from 355
+        #     to 342. The long tail across fleet cards, modal dialogs, wizards,
+        #     and detail panels is a separate larger refactor under a follow-up
+        #     token, and 'unsafe-inline' on script-src must stay until that lands.
+        #   style-src: 267 inline style="…" attrs across the shipped UI (was 275;
+        #     347d123 collapsed login + header + update-banner inline styles into
+        #     CSS classes). Removing the rest needs either a large CSS-class
+        #     refactor or a nonce-based CSP. Not in scope for 20260413M;
+        #     'unsafe-inline' on style-src stays until then.
         #
         # No host names appear below. An air-gapped dashboard MUST NOT fetch any
         # asset off-box — that's what R-WEB-EXTERNAL-ASSET-CONTRACT-20260413L

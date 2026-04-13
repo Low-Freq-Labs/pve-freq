@@ -1,22 +1,30 @@
 """Tests for the CSP inline-surface contract and honest limits.
 
-This is the partial-progress tranche of R-WEB-CSP-INLINE-CONTRACT-20260413M:
-  - Inline <style> FOUC block moved from app.html to app.css.
-  - serve.py CSP comment expanded with concrete inventory numbers and
-    explicit honest limits on 'unsafe-inline'.
+R-WEB-CSP-INLINE-CONTRACT-20260413M final state:
+  - Inline <style> FOUC block moved from app.html to app.css (d5dfbb9).
+  - login/header/update-banner inline handlers extracted to delegated
+    data-action bindings (Morty 347d123) — login form wrapper rework
+    in e361cb2 dropped a few more.
+  - serve.py CSP comment carries the concrete post-extract inventory
+    (342 inline event handlers, 267 inline style attrs) and explains
+    why 'unsafe-inline' must stay on both script-src and style-src
+    until the long tail is also extracted.
   - Regression guards: shipped web UI must not reintroduce any new
-    inline <script> block or any external @import / stylesheet link.
+    inline <script> block or any external @import / stylesheet link,
+    and the inline handler / style counts in app.html must not silently
+    grow past the numbers serve.py documents.
 
-Not in this tranche (depends on Morty's app.html handler extraction
-after his AB work lands):
-  - Dropping 'unsafe-inline' from script-src once login/header/update-
-    banner inline handlers are gone.
+The inline handler long tail (modals, wizards, fleet cards, detail
+panels) is explicitly out of scope for token M and stays for a later
+cleanup token. Dropping 'unsafe-inline' on script-src or style-src
+before that lands would break almost every button in the dashboard.
 
-Why the honest limit matters: if this test file fails because
-'unsafe-inline' disappeared, that's a signal the other tranche landed
-and the CSP can tighten — update both the CSP and this file together.
-If the test passes without anyone touching it, the limit is honest and
-the code matches the documented reality.
+Why the honest limit matters: this test file fails the moment the
+documented count and the actual count diverge. That guarantees the
+CSP comment, the test, and the shipped HTML never drift apart. If
+someone extracts more handlers, they MUST update the comment + this
+test together; if someone reintroduces inline handlers, the test
+catches it before it reaches master.
 """
 import re
 import sys
@@ -123,35 +131,94 @@ class TestNoExternalStylesheet(unittest.TestCase):
                              f"setup.html references external host {host}")
 
 
+EXPECTED_INLINE_HANDLERS = 342
+EXPECTED_INLINE_STYLES = 267
+
+INLINE_HANDLER_RE = re.compile(r" on[a-z]+=")
+INLINE_STYLE_RE = re.compile(r' style="')
+
+
+def _count_inline_handlers(html: str) -> int:
+    return len(INLINE_HANDLER_RE.findall(html))
+
+
+def _count_inline_styles(html: str) -> int:
+    return len(INLINE_STYLE_RE.findall(html))
+
+
 class TestCspHonestLimitDocumented(unittest.TestCase):
-    """serve.py CSP must document WHY 'unsafe-inline' is still present."""
+    """serve.py CSP must document WHY 'unsafe-inline' is still present
+    AND the documented number must match the live shipped HTML."""
 
     def setUp(self):
         self.src = (FREQ_ROOT / "freq" / "modules" / "serve.py").read_text()
+        self.html = (WEB_DIR / "app.html").read_text()
 
-    def test_csp_comment_names_inline_handler_count(self):
-        """The comment must reference the concrete handler count so
-        anyone reading can verify the limit matches reality."""
-        # Look for the section comment near _send_security_headers
+    def _comment_window(self) -> str:
         idx = self.src.find("Honest limits on 'unsafe-inline'")
         self.assertNotEqual(
             idx, -1,
             "serve.py CSP missing 'Honest limits' honest-limit comment"
         )
-        window = self.src[idx:idx + 2000]
-        # The concrete number ~355 should appear so readers can grep
-        # the current file and verify.
-        self.assertIn("355", window,
-                      "honest-limit comment must name the inline handler count")
-        self.assertIn("275", window,
-                      "honest-limit comment must name the inline style attr count")
+        return self.src[idx:idx + 2000]
+
+    def test_csp_comment_names_inline_handler_count(self):
+        window = self._comment_window()
+        self.assertIn(
+            str(EXPECTED_INLINE_HANDLERS), window,
+            f"honest-limit comment must name the inline handler count "
+            f"({EXPECTED_INLINE_HANDLERS})"
+        )
+        self.assertIn(
+            str(EXPECTED_INLINE_STYLES), window,
+            f"honest-limit comment must name the inline style attr count "
+            f"({EXPECTED_INLINE_STYLES})"
+        )
 
     def test_csp_comment_references_follow_up_token(self):
-        """Must name the follow-up token so the TODO is traceable."""
-        idx = self.src.find("Honest limits on 'unsafe-inline'")
-        self.assertNotEqual(idx, -1)
-        window = self.src[idx:idx + 2000]
+        window = self._comment_window()
         self.assertIn("R-WEB-CSP-INLINE-CONTRACT-20260413M", window)
+
+    def test_app_html_inline_handler_count_matches_documented(self):
+        """app.html actual handler count must equal what serve.py claims.
+
+        If this fails because the actual count is LOWER, that's good news:
+        someone extracted more handlers. Update EXPECTED_INLINE_HANDLERS
+        and the serve.py comment together. If the count is HIGHER, that
+        means inline handlers were reintroduced — fix the regression
+        before it ships and CSP can never tighten.
+        """
+        actual = _count_inline_handlers(self.html)
+        self.assertEqual(
+            actual, EXPECTED_INLINE_HANDLERS,
+            f"app.html inline handler count is {actual}, "
+            f"serve.py documents {EXPECTED_INLINE_HANDLERS}. "
+            "These MUST stay in sync — update both together."
+        )
+
+    def test_app_html_inline_style_count_matches_documented(self):
+        """app.html actual inline style="…" count must equal what
+        serve.py claims. Same drift-prevention contract as the
+        handler count above.
+        """
+        actual = _count_inline_styles(self.html)
+        self.assertEqual(
+            actual, EXPECTED_INLINE_STYLES,
+            f"app.html inline style= count is {actual}, "
+            f"serve.py documents {EXPECTED_INLINE_STYLES}. "
+            "These MUST stay in sync — update both together."
+        )
+
+    def test_csp_still_carries_unsafe_inline_until_long_tail_extracted(self):
+        """While the inline handler / style counts are non-zero, the CSP
+        header MUST keep 'unsafe-inline' on both script-src and style-src.
+        Dropping it now would break the dashboard at runtime.
+        """
+        self.assertIn("script-src 'self' 'unsafe-inline'", self.src)
+        self.assertIn("style-src 'self' 'unsafe-inline'", self.src)
+        # Sanity: counts are still > 0, so the rule above is load-bearing.
+        self.assertGreater(_count_inline_handlers(self.html), 0)
+        self.assertGreater(_count_inline_styles(self.html), 0)
 
 
 if __name__ == "__main__":
