@@ -14,19 +14,22 @@
 <body>
 
 <!-- Login Overlay — inline handlers extracted to app.js delegator +
-     CSS (.login-input, .login-submit-btn). See app.js registerLoginBindings() -->
+     CSS (.login-input, .login-submit-btn). Wrapped in a real <form>
+     with method=post action=# so browser autofill populates .value
+     reliably AND so onsubmit goes through a single entry point. See
+     registerLoginBindings() for the submit handler. -->
 <div id="login-overlay" class="login-overlay">
   <div class="login-card">
     <div class="login-wordmark">PVE FREQ</div>
     <div class="login-tagline">operator console</div>
-    <div class="login-form">
+    <form id="login-form" class="login-form" method="post" action="#" autocomplete="on">
       <div class="login-fields">
-        <input id="login-user" class="login-input" placeholder="Username" autocomplete="username">
-        <input id="login-pass" class="login-input" type="password" placeholder="Password" autocomplete="current-password">
-        <button id="login-submit-btn" class="login-submit-btn" data-action="doLogin">LOG IN</button>
+        <input id="login-user" class="login-input" name="username" placeholder="Username" autocomplete="username">
+        <input id="login-pass" class="login-input" name="password" type="password" placeholder="Password" autocomplete="current-password">
+        <button id="login-submit-btn" class="login-submit-btn" type="submit">LOG IN</button>
       </div>
       <div id="login-error" class="login-error"></div>
-    </div>
+    </form>
   </div>
 </div>
 

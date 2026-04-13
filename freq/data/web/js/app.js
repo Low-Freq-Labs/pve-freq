@@ -140,9 +140,14 @@ function doLogin(){
   var userEl=document.getElementById('login-user');
   var passEl=document.getElementById('login-pass');
   var errEl=document.getElementById('login-error');
-  /* Force browser to flush autofill values */
-  userEl.dispatchEvent(new Event('input',{bubbles:true}));
-  passEl.dispatchEvent(new Event('input',{bubbles:true}));
+  /* Read .value directly. The old "Force browser to flush autofill
+   * values" dispatchEvent hack was a READ-only trick that happened to
+   * help in some autofill situations, but it also hid a deeper bug:
+   * chromium holds .value in the autofill layer for inputs with
+   * autocomplete=username / current-password until a real form
+   * submission reads them. Wrapping these inputs in a real <form>
+   * (see app.html #login-form) lets the browser resolve .value on
+   * submit reliably — no hack needed. */
   var user=userEl.value.trim();
   var pass=passEl.value;
   if(!user||!pass){if(errEl){errEl.textContent='Enter username and password';errEl.style.display='block';}return;}
@@ -335,6 +340,11 @@ function _showApp(){
 
   Promise.all([p1,p2,p3]).then(function(){
     _p(100,'ONLINE','operator console live');
+    /* Drop pointer interception immediately so clicks on mn-body don't
+     * get intercepted during the 600ms hand-off animation. Without
+     * this, playwright and screen-readers both see the overlay stealing
+     * hit-tests even after the app is technically ready. */
+    login.style.pointerEvents='none';
     setTimeout(function(){
       var body=document.getElementById('mn-body');if(body)body.style.display='';
       login.style.display='none';
@@ -440,24 +450,32 @@ function dismissUpdateBanner(){
   try{sessionStorage.setItem('freq_update_dismissed','1');}catch(e){}
 }
 
-/* Login input Enter-key bindings. The old inline onkeydown handlers
- * ran 'if event.key==Enter focus next' / 'if event.key==Enter
- * doLogin()', which blocked the script-src 'unsafe-inline' drop.
- * Same behavior, registered via addEventListener. */
+/* Login form binding. The old inline onkeydown handlers ('if event.key
+ * ==Enter focus next' / 'if event.key==Enter doLogin()') blocked the
+ * script-src 'unsafe-inline' drop. With the login inputs now wrapped
+ * in a real <form>, Enter-key submission and password-manager autofill
+ * both route through the form onsubmit handler, which calls doLogin()
+ * after preventing the default POST. This also fixes the chromium
+ * autofill .value-reset quirk that plagued synthetic input testing. */
 function registerLoginBindings(){
+  var f=document.getElementById('login-form');
+  if(f&&!f._freqBound){
+    f.addEventListener('submit',function(e){
+      e.preventDefault();
+      doLogin();
+    });
+    f._freqBound=true;
+  }
   var u=document.getElementById('login-user');
-  var p=document.getElementById('login-pass');
   if(u&&!u._freqBound){
     u.addEventListener('keydown',function(e){
-      if(e.key==='Enter'){e.preventDefault();if(p)p.focus();}
+      if(e.key==='Enter'){
+        e.preventDefault();
+        var p=document.getElementById('login-pass');
+        if(p)p.focus();
+      }
     });
     u._freqBound=true;
-  }
-  if(p&&!p._freqBound){
-    p.addEventListener('keydown',function(e){
-      if(e.key==='Enter'){e.preventDefault();doLogin();}
-    });
-    p._freqBound=true;
   }
 }
 registerLoginBindings();
