@@ -83,7 +83,7 @@ body {
   min-height: 100vh;
   font-size: 11.5px;
   font-weight: 400;
-  line-height: 1.65;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -111,7 +111,7 @@ body::before {
 .mn { min-height: 100vh; position: relative; z-index: 1; }
 
 .mn-header {
-  padding: 10px 40px;
+  padding: 6px 24px;
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
@@ -121,9 +121,9 @@ body::before {
   top: 0;
   z-index: 50;
 }
-.mn-header h1 { font-size: 14px; font-weight: 700; color: var(--text-bright); letter-spacing: 1.5px; }
+.mn-header h1 { font-size: 13px; font-weight: 700; color: var(--text-bright); letter-spacing: 1.5px; }
 .mn-header .tagline { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-transform: lowercase; }
-.mn-body { padding: 28px 48px; max-width: 1540px; margin: 0 auto; }
+.mn-body { padding: 14px 28px; max-width: 1680px; margin: 0 auto; }
 .page { display: none; }
 .page.active { display: block; animation: pageEnter var(--duration-slow) var(--ease-out); }
 @keyframes pageEnter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
@@ -133,18 +133,18 @@ body::before {
 .stats {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--gap-sm);
-  margin-bottom: var(--gap-lg);
-  justify-content: center;
+  gap: var(--gap-xs);
+  margin-bottom: var(--gap-sm);
+  justify-content: flex-start;
 }
-.stats .st { min-width: 120px; max-width: 160px; flex: 0 1 160px; }
+.stats .st { min-width: 108px; max-width: 148px; flex: 0 1 148px; }
 .st {
   background: var(--glass);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -238,9 +238,9 @@ tr:hover td { background: var(--card-hover); }
 /* ── Cards — glassmorphism ── */
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--gap-md);
-  margin-bottom: var(--gap-md);
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-sm);
   align-items: stretch;
 }
 .crd {
@@ -248,8 +248,8 @@ tr:hover td { background: var(--card-hover); }
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
   transition: all var(--duration-normal) var(--ease-out);
   box-shadow: var(--shadow-sm);
   position: relative;
@@ -393,11 +393,11 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 .sub-tabs {
   display: flex;
   gap: 2px;
-  margin-bottom: var(--gap-lg);
-  padding: 3px;
+  margin-bottom: var(--gap-sm);
+  padding: 2px;
   background: var(--glass);
   backdrop-filter: blur(8px);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--glass-border);
 }
 .sub-tab {
@@ -614,8 +614,8 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  padding: 7px 11px;
   overflow: hidden;
   transition: all var(--duration-normal) var(--ease-out);
   box-shadow: var(--shadow-sm);
@@ -721,8 +721,8 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  margin-bottom: 28px;
+  border-radius: var(--radius-md);
+  margin-bottom: 14px;
   overflow: hidden;
   transition: border-color var(--duration-normal), box-shadow var(--duration-normal);
 }
@@ -731,7 +731,7 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
+  padding: 7px 14px;
   cursor: pointer;
   user-select: none;
 }
@@ -751,7 +751,7 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 .section-header .chev { color: var(--text-dim); font-size: 13px; transition: transform var(--duration-normal) var(--ease-out); }
 .section.collapsed .section-body { display: none; }
 .section.collapsed .chev { transform: rotate(-90deg); }
-.section-body { padding: 0 16px 16px; }
+.section-body { padding: 0 14px 12px; }
 
 /* ── Toast Notifications ── */
 .toast-container {
@@ -878,8 +878,8 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   background: var(--glass);
   backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: 16px 18px;
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
   cursor: pointer;
   transition: all var(--duration-normal) var(--ease-out);
   position: relative;
