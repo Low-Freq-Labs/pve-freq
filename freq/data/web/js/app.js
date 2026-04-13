@@ -433,7 +433,7 @@ var WIDGET_REGISTRY=[
     });
     _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).then(function(d){
       var h='';d.containers.forEach(function(c){h+=_containerCard(c,'');});
-      var el2=document.getElementById('hw-ctr-cards');if(el2)el2.innerHTML=h||'<div class="empty-state"><p>No containers.</p></div>';
+      var el2=document.getElementById('hw-ctr-cards');if(el2)el2.innerHTML=h||'<div class="empty-state"><p>0 containers</p></div>';
     });
   }},
   {id:'w-sec-users',page:'SECURITY',label:'Users',ref:'sec-users',preload:function(){loadUsers();}},
@@ -475,7 +475,7 @@ var WIDGET_REGISTRY=[
     el.innerHTML='<div id="hw-vlan-topo"><div class="skeleton"></div></div>';
     _authFetch('/api/fleet/topology-enhanced').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-vlan-topo');if(!t)return;
-      if(!d.vlans||!d.vlans.length){t.innerHTML='<div class="empty-state"><p>No VLANs configured</p></div>';return;}
+      if(!d.vlans||!d.vlans.length){t.innerHTML='<div class="empty-state"><p>0 VLANs configured</p></div>';return;}
       var h='';
       d.vlans.forEach(function(v){
         if(!v.hosts||!v.hosts.length)return;
@@ -506,7 +506,7 @@ var WIDGET_REGISTRY=[
     el.innerHTML='<div id="hw-ntp"><div class="skeleton"></div></div>';
     _authFetch('/api/fleet/ntp').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-ntp');if(!t)return;
-      if(!d.hosts||!d.hosts.length){t.innerHTML='<div class="empty-state"><p>No NTP data</p></div>';return;}
+      if(!d.hosts||!d.hosts.length){t.innerHTML='<div class="empty-state"><p>NTP probe returned 0 hosts</p></div>';return;}
       var h='';var synced=0;
       d.hosts.forEach(function(host){
         var ok=host.synced||host.status==='synced';if(ok)synced++;
@@ -518,13 +518,13 @@ var WIDGET_REGISTRY=[
       });
       h='<div class="text-sm text-dim mb-sm">'+synced+'/'+d.hosts.length+' synced</div>'+h;
       t.innerHTML=h;
-    }).catch(function(e){var t=document.getElementById('hw-ntp');if(t)t.innerHTML='<div class="empty-state"><p>NTP check failed</p></div>';});
+    }).catch(function(e){var t=document.getElementById('hw-ntp');if(t)t.innerHTML='<div class="empty-state"><p>NTP probe failed \u2014 check /api/fleet/ntp</p></div>';});
   }},
   {id:'w-resource-heatmap',page:'FLEET',label:'Resource Heatmap',loader:function(el){
     el.innerHTML='<div id="hw-heatmap"><div class="skeleton"></div></div>';
     _authFetch('/api/fleet/heatmap').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-heatmap');if(!t)return;
-      if(!d.hosts||!d.hosts.length){t.innerHTML='<div class="empty-state"><p>No data</p></div>';return;}
+      if(!d.hosts||!d.hosts.length){t.innerHTML='<div class="empty-state"><p>0 hosts in heatmap</p></div>';return;}
       var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px">';
       d.hosts.forEach(function(host){
         var maxPct=Math.max(host.ram_pct,host.disk_pct);
@@ -539,7 +539,7 @@ var WIDGET_REGISTRY=[
       });
       h+='</div>';
       t.innerHTML=h;
-    }).catch(function(e){var t=document.getElementById('hw-heatmap');if(t)t.innerHTML='<div class="empty-state"><p>Heatmap unavailable</p></div>';});
+    }).catch(function(e){var t=document.getElementById('hw-heatmap');if(t)t.innerHTML='<div class="empty-state"><p>heatmap probe failed \u2014 check /api/fleet/heatmap</p></div>';});
   }},
   {id:'w-stale-snapshots',page:'FLEET',label:'Stale Snapshots',loader:function(el){
     el.innerHTML='<div id="hw-stale-snaps"><div class="skeleton"></div></div>';
@@ -555,13 +555,13 @@ var WIDGET_REGISTRY=[
       });
       if(d.count>20)h+='<div style="font-size:11px;color:var(--text-dim);margin-top:4px">+'+(d.count-20)+' more</div>';
       t.innerHTML=h;
-    }).catch(function(e){var t=document.getElementById('hw-stale-snaps');if(t)t.innerHTML='<div class="empty-state"><p>Snapshot check failed</p></div>';});
+    }).catch(function(e){var t=document.getElementById('hw-stale-snaps');if(t)t.innerHTML='<div class="empty-state"><p>snapshot probe failed \u2014 check /api/snapshots/stale</p></div>';});
   }},
   {id:'w-storage-health',page:'STORAGE',label:'Storage Health',loader:function(el){
     el.innerHTML='<div id="hw-storage-pools"><div class="skeleton"></div></div>';
     _authFetch('/api/storage/health').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-storage-pools');if(!t)return;
-      if(!d.pools||!d.pools.length){t.innerHTML='<div class="empty-state"><p>No storage pools detected</p></div>';return;}
+      if(!d.pools||!d.pools.length){t.innerHTML='<div class="empty-state"><p>0 storage pools detected</p></div>';return;}
       var h='<div class="text-sm text-dim mb-sm">'+d.total_tb+'TB total \u2022 '+d.used_tb+'TB used</div>';
       d.pools.forEach(function(p){
         var color=p.used_pct>=80?'var(--red)':p.used_pct>=60?'var(--orange)':'var(--green)';
@@ -575,28 +575,27 @@ var WIDGET_REGISTRY=[
         h+='</div>';
       });
       t.innerHTML=h;
-    }).catch(function(e){var t=document.getElementById('hw-storage-pools');if(t)t.innerHTML='<div class="empty-state"><p>Storage check failed</p></div>';});
+    }).catch(function(e){var t=document.getElementById('hw-storage-pools');if(t)t.innerHTML='<div class="empty-state"><p>storage probe failed \u2014 check /api/storage/health</p></div>';});
   }},
   {id:'w-tdarr',page:'MEDIA',label:'Tdarr Transcode',loader:function(el){
     el.innerHTML='<div id="hw-tdarr"><div class="skeleton"></div></div>';
     _authFetch('/api/media/tdarr').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-tdarr');if(!t)return;
-      if(d.status==='not_configured'){t.innerHTML='<div class="empty-state"><p>Tdarr not detected</p></div>';return;}
+      if(d.status==='not_configured'){t.innerHTML='<div class="empty-state"><p>tdarr not installed</p></div>';return;}
       var h='<div style="display:flex;align-items:center;gap:8px;padding:8px 0">';
-      h+='<span style="color:var(--green)">\u2705</span>';
-      h+='<span style="font-weight:500">Tdarr Running</span>';
+      h+='<span style="font-weight:500">tdarr up</span>';
       if(d.host)h+='<span class="text-sm text-dim">on '+_esc(d.host)+'</span>';
       h+='</div>';
-      if(d.queue>0)h+='<div>Queue: '+d.queue+' files</div>';
-      if(d.processed>0)h+='<div>Processed: '+d.processed+'</div>';
+      if(d.queue>0)h+='<div>queue: '+d.queue+' files</div>';
+      if(d.processed>0)h+='<div>processed: '+d.processed+'</div>';
       t.innerHTML=h;
-    }).catch(function(e){var t=document.getElementById('hw-tdarr');if(t)t.innerHTML='<div class="empty-state"><p>Tdarr unavailable</p></div>';});
+    }).catch(function(e){var t=document.getElementById('hw-tdarr');if(t)t.innerHTML='<div class="empty-state"><p>tdarr probe failed \u2014 check /api/media/tdarr</p></div>';});
   }},
   {id:'w-deploy-log',page:'OPS',label:'Deploy Log',loader:function(el){
     el.innerHTML='<div id="hw-deploy-log"><div class="skeleton"></div></div>';
     _authFetch('/api/deploy/log').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-deploy-log');if(!t)return;
-      if(!d.commits||!d.commits.length){t.innerHTML='<div class="empty-state"><p>No deploy history</p></div>';return;}
+      if(!d.commits||!d.commits.length){t.innerHTML='<div class="empty-state"><p>0 deploys recorded</p></div>';return;}
       var h='';d.commits.forEach(function(c){
         h+='<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">';
         h+='<code style="color:var(--purple-light);flex-shrink:0">'+c.hash+'</code>';
@@ -605,7 +604,7 @@ var WIDGET_REGISTRY=[
         h+='</div>';
       });
       t.innerHTML=h;
-    }).catch(function(e){var t=document.getElementById('hw-deploy-log');if(t)t.innerHTML='<div class="empty-state"><p>Deploy log unavailable</p></div>';});
+    }).catch(function(e){var t=document.getElementById('hw-deploy-log');if(t)t.innerHTML='<div class="empty-state"><p>deploy log probe failed \u2014 check /api/deploy/log</p></div>';});
   }},
   {id:'w-config-viewer',page:'OPS',label:'Config Viewer',loader:function(el){
     el.innerHTML='<div id="hw-config-view"><div class="skeleton"></div></div>';
@@ -620,7 +619,7 @@ var WIDGET_REGISTRY=[
       h+=kv('VM Defaults',c.vm_defaults.cores+' cores / '+(c.vm_defaults.ram/1024)+'GB / '+c.vm_defaults.disk+'GB');
       h+=kv('Hosts',c.hosts_count);h+=kv('VLANs',c.vlans_count);h+=kv('Monitors',c.monitors_count);
       t.innerHTML=h;
-    }).catch(function(e){var t=document.getElementById('hw-config-view');if(t)t.innerHTML='<div class="empty-state"><p>Config unavailable</p></div>';});
+    }).catch(function(e){var t=document.getElementById('hw-config-view');if(t)t.innerHTML='<div class="empty-state"><p>config probe failed \u2014 check /api/config/view</p></div>';});
   }},
   {id:'w-vm-wizard',page:'FLEET',label:'VM Wizard',loader:function(el){
     el.innerHTML='<div id="hw-vm-wizard"><div class="skeleton"></div></div>';
@@ -640,7 +639,7 @@ var WIDGET_REGISTRY=[
       h+='<div id="hw-vm-wizard-sel" style="margin-top:8px;font-size:12px;color:var(--purple-light)"></div>';
       h+='<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Nodes: '+(d.nodes?d.nodes.join(', '):'?')+' \u2022 '+d.distros.length+' images available</div>';
       t.innerHTML=h;
-    }).catch(function(e){var t=document.getElementById('hw-vm-wizard');if(t)t.innerHTML='<div class="empty-state"><p>Wizard unavailable</p></div>';});
+    }).catch(function(e){var t=document.getElementById('hw-vm-wizard');if(t)t.innerHTML='<div class="empty-state"><p>wizard probe failed \u2014 check /api/vm/wizard-defaults</p></div>';});
   }},
   {id:'w-monitors',page:'OPS',label:'HTTP Monitors',loader:function(el){
     el.innerHTML='<div id="hw-monitors-list"><div class="skeleton"></div></div>';
@@ -1522,7 +1521,7 @@ function _renderMediaFromCache(){
   if(!_mediaCache)return;
   var tags=_getMediaTags();var html='';
   _mediaCache.containers.forEach(function(c){if(tags.indexOf(c.name)<0)return;html+=_containerCard(c,'');});
-  document.getElementById('media-container-cards').innerHTML=html||'<div class="empty-state"><div class="es-icon">▶</div><p>No containers tagged as media.<br>Tag containers from the ALL CONTAINERS view.</p></div>';
+  document.getElementById('media-container-cards').innerHTML=html||'<div class="empty-state"><p>0 containers tagged media. tag from ALL CONTAINERS view.</p></div>';
 }
 function _renderServicesFromCache(){
   if(!_mediaCache)return;
@@ -1530,7 +1529,7 @@ function _renderServicesFromCache(){
   _mediaCache.containers.forEach(function(c){if(tags.indexOf(c.name)>=0)return;
     var tagBtn='<button data-action="toggleMediaTag" data-arg="'+c.name+'" style="background:none;border:2px solid var(--input-border);border-radius:6px;padding:4px 6px;cursor:pointer;font-size:14px;margin-left:auto;opacity:0.4;transition:opacity 0.2s" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\'0.4\'" title="Tag as media">&#127909;</button>';
     html+=_containerCard(c,tagBtn);});
-  document.getElementById('services-container-cards').innerHTML=html||'<div class="empty-state"><div class="es-icon">&#9881;</div><p>All containers are tagged as media.</p></div>';
+  document.getElementById('services-container-cards').innerHTML=html||'<div class="empty-state"><p>0 service containers \u2014 all containers carry media tags</p></div>';
 }
 function _renderAllFromCache(){
   if(!_mediaCache)return;
@@ -1539,7 +1538,7 @@ function _renderAllFromCache(){
     var isMedia=_getMediaTags().indexOf(c.name)>=0;
     var tagBtn='<button data-action="toggleMediaTag" data-arg="'+c.name+'" style="background:none;border:2px solid '+(isMedia?'var(--purple)':'var(--input-border)')+';border-radius:6px;padding:4px 6px;cursor:pointer;font-size:14px;margin-left:auto;opacity:'+(isMedia?'1':'0.4')+';transition:opacity 0.2s" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\''+(isMedia?'1':'0.4')+'\'" title="'+(isMedia?'Remove media tag':'Tag as media')+'">&#127909;</button>';
     html+=_containerCard(c,tagBtn);});
-  document.getElementById('container-cards').innerHTML=html||'<div class="empty-state"><div class="es-icon">▶</div><p>No containers found.</p></div>';
+  document.getElementById('container-cards').innerHTML=html||'<div class="empty-state"><p>0 containers returned by probe</p></div>';
 }
 function loadMediaContainers(){
   var stale=_mediaCache&&(Date.now()/1000-_mediaCacheTs)>60;
@@ -4148,7 +4147,7 @@ function loadMetrics(){
   content.innerHTML='<h3 class="section-label-pl">DEEP SCAN</h3><div class="skeleton"></div><div class="skeleton"></div><p class="c-dim-fs11-mt8">Collecting deep metrics from all reachable hosts...</p>';
   _authFetch(API.METRICS).then(function(r){return r.json()}).then(function(d){
     var html='<h3 class="section-label-pl">DEEP SCAN — '+d.hosts.length+' HOSTS</h3>';
-    if(!d.hosts.length){html+='<div class="empty-state"><div class="es-icon">&#9881;</div><p>No hosts returned deep metrics. Deploy agents or check connectivity.</p></div>';}
+    if(!d.hosts.length){html+='<div class="empty-state"><p>0 hosts returned deep metrics \u2014 check agent deploy and connectivity</p></div>';}
     d.hosts.forEach(function(m,i){
       var hn=m.hostname||m.system&&m.system.hostname||'unknown';var cpu=m.cpu||{};var mem=m.memory||{};var cl=HC[i%HC.length];
       html+='<div class="crd mb-12" ><h3 style="color:'+cl+'">'+hn+' <span class="text-meta">via '+m.source+'</span></h3>';
@@ -4824,7 +4823,7 @@ function switchBackup(tab){
         h+='<table class="w-full"><thead><tr><th>VMID</th><th>VM NAME</th><th>SNAPSHOT</th><th>ACTION</th></tr></thead><tbody>';
         snaps.forEach(function(s){h+='<tr><td><strong>'+s.vmid+'</strong></td><td>'+_esc(s.vm_name)+'</td><td>'+_esc(s.snapshot)+'</td><td><button class="fleet-btn pill-xs" onclick="bkRestoreSnap('+s.vmid+',\''+_esc(s.snapshot)+'\')">RESTORE</button></td></tr>';});
         h+='</tbody></table>';
-      } else {h+='<div class="empty-state"><div class="es-icon">&#128230;</div><p>No VM snapshots found. Create one from the VM SNAPSHOTS tab.</p></div>';}
+      } else {h+='<div class="empty-state"><p>0 VM snapshots \u2014 create one from VM SNAPSHOTS tab</p></div>';}
       if(exports.length){
         h+='<h4 class="text-sm text-dim" style="margin:12px 0 8px">BACKUP EXPORTS</h4>';
         h+='<table class="w-full"><thead><tr><th>FILENAME</th><th>SIZE</th></tr></thead><tbody>';
@@ -5087,7 +5086,7 @@ function renderVaultTab(){
       }
       html+='</div></div>';
     });
-    if(!users.length)html+='<div class="empty-state"><div class="es-icon">&#128100;</div><p>No users registered.</p></div>';
+    if(!users.length)html+='<div class="empty-state"><p>0 users in users.conf</p></div>';
     html+='</div>';
   } else if(_vaultTab==='apikeys'){
     var apiEntries=d.entries.filter(function(e){return !_isUserEntry(e);});
@@ -5109,7 +5108,7 @@ function renderVaultTab(){
       });
       html+='</div>';
     });
-    if(!apiEntries.length)html+='<div class="empty-state"><div class="es-icon">&#128273;</div><p>No API keys stored in vault.</p></div>';
+    if(!apiEntries.length)html+='<div class="empty-state"><p>0 API keys in vault</p></div>';
     html+='</div>';
   } else {
     /* ALL tab */
@@ -5131,7 +5130,7 @@ function renderVaultTab(){
       });
       html+='</div>';
     });
-    if(!d.entries.length)html+='<div class="empty-state"><div class="es-icon">&#128274;</div><p>Vault is empty.</p></div>';
+    if(!d.entries.length)html+='<div class="empty-state"><p>0 vault entries</p></div>';
     html+='</div>';
   }
   document.getElementById('vault-sensitive-c').innerHTML=html;
@@ -5452,7 +5451,7 @@ function loadAgents(){
     if(d.count>0){var h='<table><thead><tr><th>Name</th><th>Template</th><th>VMID</th><th>Status</th><th>Created</th></tr></thead><tbody>';
       d.agents.forEach(function(a){h+='<tr><td><strong>'+a.name+'</strong></td><td>'+a.template+'</td><td>'+a.vmid+'</td><td>'+badge(a.status)+'</td><td>'+(a.created||'')+'</td></tr>';});
       h+='</tbody></table>';document.getElementById('agent-list').innerHTML=h;
-    }else{document.getElementById('agent-list').innerHTML='<div class="empty-state"><div class="es-icon">&#9881;</div><p>No agents registered.<br><code class="c-purple">freq agent create &lt;template&gt;</code></p></div>';}
+    }else{document.getElementById('agent-list').innerHTML='<div class="empty-state"><p>0 agents registered \u2014 <code class="c-purple">freq agent create &lt;template&gt;</code></p></div>';}
   });
   var tpls=[{n:'Infra-Manager',d:'Infrastructure operator — fleet monitoring, incident response, maintenance'},{n:'Security-Ops',d:'Security specialist — auditing, hardening, compliance'},{n:'Dev',d:'Development specialist — building, testing, shipping code'},{n:'Media-Ops',d:'Media stack operator — Plex, Sonarr, Radarr, downloads'},{n:'Blank',d:'Empty template — start from scratch'}];
   var h='';tpls.forEach(function(t){h+='<div class="crd"><h3>'+t.n+'</h3><p>'+t.d+'</p></div>';});
@@ -5471,7 +5470,7 @@ function loadSpecialists(){
 function loadVMs(){
   document.getElementById('vms-c').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
-    if(!d.count){document.getElementById('vms-c').innerHTML='<div class="empty-state"><div class="es-icon">▣</div><p>No VMs found on cluster.</p></div>';document.getElementById('vm-stats').innerHTML='';return;}
+    if(!d.count){document.getElementById('vms-c').innerHTML='<div class="empty-state"><p>0 VMs on cluster</p></div>';document.getElementById('vm-stats').innerHTML='';return;}
     var running=0,stopped=0;d.vms.forEach(function(v){if(v.status==='running')running++;else stopped++;});
     document.getElementById('vm-stats').innerHTML=
       '<div class="st"><div class="lb">VMs</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:var(--purple-light)">'+d.count+'</span><span class="label-hint">TOTAL</span></span><span class="stat-pair"><span class="stat-big-green">'+running+'</span><span class="label-hint">RUN</span></span><span class="stat-pair"><span class="stat-big-red">'+stopped+'</span><span class="label-hint">STOP</span></span></div></div>';
@@ -6338,7 +6337,7 @@ function runBackup(){
 }
 function loadJournal(){
   _authFetch(API.JOURNAL).then(function(r){return r.json()}).then(function(d){
-    if(!d.entries.length){document.getElementById('journal-c').innerHTML='<div class="empty-state"><div class="es-icon">&#128221;</div><p>No journal entries yet.</p></div>';return;}
+    if(!d.entries.length){document.getElementById('journal-c').innerHTML='<div class="empty-state"><p>0 journal entries</p></div>';return;}
     var html='<table><thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Status</th><th>Detail</th></tr></thead><tbody>';
     d.entries.reverse().forEach(function(e){
       var sc={ok:'var(--green)',fail:'var(--red)',warn:'var(--yellow)'}[e.status]||'var(--text-dim)';
@@ -7480,7 +7479,7 @@ function loadLabTools(){
   var all=_allLabTools();
   var visible=all.filter(function(t){return _hiddenLabTools.indexOf(t.id)<0;});
   if(!visible.length){
-    container.innerHTML='<div class="empty-state" style="grid-column:1/-1"><div class="es-icon">&#128295;</div><p>No lab tools visible.</p><button class="fleet-btn mt-12" onclick="openManageTools()">MANAGE TOOLS</button></div>';
+    container.innerHTML='<div class="empty-state" style="grid-column:1/-1"><p>0 lab tools visible</p><button class="fleet-btn mt-12" onclick="openManageTools()">MANAGE TOOLS</button></div>';
     return;
   }
   visible.forEach(function(t){
@@ -8559,7 +8558,7 @@ function loadGwipe(action){
 function _loadActivityFeed(){
   _authFetch('/api/activity?limit=20').then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('hw-activity-list');if(!el)return;
-    if(!d.events||!d.events.length){el.innerHTML='<div class="empty-state"><p>No recent activity</p></div>';return;}
+    if(!d.events||!d.events.length){el.innerHTML='<div class="empty-state"><p>0 recent events</p></div>';return;}
     var h='';d.events.forEach(function(ev){
       var icon=ev.severity==='error'?'\u274c':ev.severity==='warning'?'\u26a0':ev.severity==='success'?'\u2705':'\u2139\ufe0f';
       var ts=new Date(ev.ts*1000);var timeStr=ts.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
@@ -8570,7 +8569,7 @@ function _loadActivityFeed(){
       h+='</div>';
     });
     el.innerHTML=h;
-  }).catch(function(e){var el=document.getElementById('hw-activity-list');if(el)el.innerHTML='<div class="empty-state"><p>Activity feed unavailable</p></div>';});
+  }).catch(function(e){var el=document.getElementById('hw-activity-list');if(el)el.innerHTML='<div class="empty-state"><p>activity probe failed \u2014 check /api/activity</p></div>';});
 }
 function _updateActivityWidget(ev){
   var el=document.getElementById('hw-activity-list');if(!el)return;
@@ -8586,7 +8585,7 @@ function _updateActivityWidget(ev){
 function _loadMonitorsWidget(){
   _authFetch('/api/monitors/check').then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('hw-monitors-list');if(!el)return;
-    if(!d.results||!d.results.length){el.innerHTML='<div class="empty-state"><p>No monitors configured</p></div>';return;}
+    if(!d.results||!d.results.length){el.innerHTML='<div class="empty-state"><p>0 monitors configured</p></div>';return;}
     var h='';d.results.forEach(function(r){
       var icon=r.ok?'\u2705':'\u274c';
       var status=r.ok?'<span style="color:var(--green)">OK</span>':'<span style="color:var(--red)">'+(r.error||'HTTP '+r.status)+'</span>';
@@ -8599,7 +8598,7 @@ function _loadMonitorsWidget(){
     });
     h+='<div class="text-sm text-dim mt-sm">'+d.healthy+'/'+d.count+' healthy</div>';
     el.innerHTML=h;
-  }).catch(function(e){var el=document.getElementById('hw-monitors-list');if(el)el.innerHTML='<div class="empty-state"><p>Monitor check failed</p></div>';});
+  }).catch(function(e){var el=document.getElementById('hw-monitors-list');if(el)el.innerHTML='<div class="empty-state"><p>monitor probe failed \u2014 check /api/monitors</p></div>';});
 }
 /* ═══════════════════════════════════════════════════════════════════
    COMMAND PALETTE (Ctrl+K)
