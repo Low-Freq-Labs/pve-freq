@@ -1529,11 +1529,18 @@ var WIDGET_REGISTRY=[
     }).catch(function(e){var t=document.getElementById('hw-stale-snaps');if(t)t.innerHTML='<div class="empty-state"><p>snapshot probe failed \u2014 check /api/snapshots/stale</p></div>';});
   }},
   {id:'w-storage-health',page:'STORAGE',label:'Storage Health',loader:function(el){
-    el.innerHTML='<div id="hw-storage-pools"><div class="skeleton"></div></div>';
+    el.innerHTML='<div id="hw-storage-pools" data-view="fleet" style="cursor:pointer"><div class="skeleton"></div></div>';
     _authFetch('/api/storage/health').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-storage-pools');if(!t)return;
       if(!d.pools||!d.pools.length){t.innerHTML='<div class="empty-state"><p>0 storage pools detected</p></div>';return;}
-      var h='<div class="text-sm text-dim mb-sm">'+d.total_tb+'TB total \u2022 '+d.used_tb+'TB used</div>';
+      /* Densification: header carries TB totals + pool count expected/
+       * actual + freshness chip + click-through. Each pool row already
+       * shows used/total which is its own actual/expected encoding. */
+      var degr=0;d.pools.forEach(function(p){if(p.used_pct>=80)degr++;});
+      var h='<div class="text-sm text-dim mb-sm" style="display:flex;justify-content:space-between;align-items:center">'+
+            '<span>'+d.total_tb+'TB total \u2022 '+d.used_tb+'TB used \u2022 '+
+            (d.pools.length-degr)+'/'+d.pools.length+' pools healthy</span>'+
+            _freshChip(_ageFromPayload(d))+'</div>';
       d.pools.forEach(function(p){
         var color=p.used_pct>=80?'var(--red)':p.used_pct>=60?'var(--orange)':'var(--green)';
         h+='<div style="padding:6px 0;border-bottom:1px solid var(--border)">';
@@ -1549,25 +1556,39 @@ var WIDGET_REGISTRY=[
     }).catch(function(e){var t=document.getElementById('hw-storage-pools');if(t)t.innerHTML='<div class="empty-state"><p>storage probe failed \u2014 check /api/storage/health</p></div>';});
   }},
   {id:'w-tdarr',page:'MEDIA',label:'Tdarr Transcode',loader:function(el){
-    el.innerHTML='<div id="hw-tdarr"><div class="skeleton"></div></div>';
+    el.innerHTML='<div id="hw-tdarr" data-view="media" style="cursor:pointer"><div class="skeleton"></div></div>';
     _authFetch('/api/media/tdarr').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-tdarr');if(!t)return;
       if(d.status==='not_configured'){t.innerHTML='<div class="empty-state"><p>tdarr not installed</p></div>';return;}
+      /* Densification: header carries status verb + host + freshness
+       * chip in one row. The bare 'tdarr up' was comfort copy — no
+       * indication of when last seen. */
+      var statusOk=d.status!=='down'&&d.status!=='error';
       var h='<div style="display:flex;align-items:center;gap:8px;padding:8px 0">';
-      h+='<span style="font-weight:500">tdarr up</span>';
+      h+='<span style="font-weight:500;color:'+(statusOk?'var(--green)':'var(--red)')+'">tdarr '+(statusOk?'up':'down')+'</span>';
       if(d.host)h+='<span class="text-sm text-dim">on '+_esc(d.host)+'</span>';
+      h+=_freshChip(_ageFromPayload(d));
       h+='</div>';
-      if(d.queue>0)h+='<div>queue: '+d.queue+' files</div>';
-      if(d.processed>0)h+='<div>processed: '+d.processed+'</div>';
+      var q=d.queue||0,proc=d.processed||0;
+      h+='<div class="text-sm" style="display:flex;gap:14px">'+
+         '<span><strong style="color:'+(q>0?'var(--yellow)':'var(--text-dim)')+'">'+q+'</strong> queued</span>'+
+         '<span><strong style="color:var(--green)">'+proc+'</strong> processed</span>'+
+         '</div>';
       t.innerHTML=h;
     }).catch(function(e){var t=document.getElementById('hw-tdarr');if(t)t.innerHTML='<div class="empty-state"><p>tdarr probe failed \u2014 check /api/media/tdarr</p></div>';});
   }},
   {id:'w-deploy-log',page:'OPS',label:'Deploy Log',loader:function(el){
-    el.innerHTML='<div id="hw-deploy-log"><div class="skeleton"></div></div>';
+    el.innerHTML='<div id="hw-deploy-log" data-view="gitops" style="cursor:pointer"><div class="skeleton"></div></div>';
     _authFetch('/api/deploy/log').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-deploy-log');if(!t)return;
       if(!d.commits||!d.commits.length){t.innerHTML='<div class="empty-state"><p>0 deploys recorded</p></div>';return;}
-      var h='';d.commits.forEach(function(c){
+      /* Densification: header carries deploy count + freshness chip.
+       * Each commit row already carries 'ago' (time-since) which is
+       * its own per-row freshness — leave intact, just add overall
+       * payload age + click-through to gitops. */
+      var h='<div class="text-sm text-dim mb-sm" style="display:flex;justify-content:space-between;align-items:center">'+
+            '<span>'+d.commits.length+' deploys recorded</span>'+_freshChip(_ageFromPayload(d))+'</div>';
+      d.commits.forEach(function(c){
         h+='<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">';
         h+='<code style="color:var(--purple-light);flex-shrink:0">'+c.hash+'</code>';
         h+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(c.message)+'</span>';
@@ -2107,6 +2128,10 @@ function _silentHealthRefresh(){
     }
     if(!hd.hosts){return;}
     _fleetCache.hd=hd;/* keep cache fresh */
+    /* Densification: refresh the per-card freshness chip on every
+     * silent tick so the operator sees the chip count down/reset
+     * without having to reload the view. Decorator is idempotent. */
+    _decorateAllHostCardsFresh(hd);
     hd.hosts.forEach(function(h){
       var card=document.querySelector('.host-card[data-host-id="'+h.label.toLowerCase()+'"]');
       if(!card)return;
@@ -2251,6 +2276,15 @@ var _pveMetricsTimer=null;
  * idempotent — same render path adds it and removes it. */
 function _markHostCardStale(card,n){
   if(!card)return;
+  /* Strip any pre-existing fresh chip first — STALE badge takes
+   * precedence and the operator must never see both at once. The
+   * race that exposed this: _decorateAllHostCardsFresh runs from
+   * _renderFleetData with the /api/health hosts list (which paints
+   * PVE nodes 'healthy'), then _pveMetricsRefresh runs and discovers
+   * the PVE cluster is actually offline — without this strip the
+   * card would carry both 'fresh 13s' and 'STALE' simultaneously. */
+  var oldChip=card.querySelector('.host-fresh-chip');
+  if(oldChip&&oldChip.parentNode)oldChip.parentNode.removeChild(oldChip);
   var badge=card.querySelector('.stale-badge');
   if(!badge){
     badge=document.createElement('span');
@@ -2275,6 +2309,66 @@ function _clearHostCardStale(card){
   if(badge&&badge.parentNode)badge.parentNode.removeChild(badge);
   card.classList.remove('host-stale');
   card.style.opacity='';
+}
+/* Decorate a healthy host card with a freshness chip so the operator
+ * sees how recent the data is at a glance. Pre-densification the
+ * absence of a STALE marker was the only signal of liveness, which
+ * is exactly the comfort-of-absence problem the product law calls
+ * out. ageSec=null renders '?' instead of pretending current. The
+ * chip is idempotent — repeated calls update text in place. */
+function _decorateHostCardFresh(card,ageSec){
+  if(!card)return;
+  /* If the card is currently stale-marked, skip — the STALE badge
+   * takes precedence over the fresh chip. Operator should never see
+   * both at once. */
+  if(card.classList.contains('host-stale'))return;
+  var chip=card.querySelector('.host-fresh-chip');
+  if(!chip){
+    chip=document.createElement('span');
+    chip.className='host-fresh-chip';
+    var hdr=card.querySelector('.host-head')||card.querySelector('.host-meta')||card.firstChild;
+    if(hdr&&hdr.appendChild)hdr.appendChild(chip);
+  }
+  var thr={green:30,yellow:120};
+  var age=ageSec==null?null:Math.max(0,Math.round(ageSec));
+  var lbl;
+  if(age==null)lbl='?';
+  else if(age<60)lbl=age+'s';
+  else if(age<3600)lbl=Math.floor(age/60)+'m';
+  else lbl=Math.floor(age/3600)+'h';
+  var clr;
+  if(age==null)clr='var(--text-dim)';
+  else if(age<=thr.green)clr='var(--green)';
+  else if(age<=thr.yellow)clr='var(--yellow)';
+  else clr='var(--red)';
+  chip.textContent=lbl;
+  chip.style.cssText='display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.5px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.04);color:'+clr+';border:1px solid '+clr+';margin-left:6px;vertical-align:middle';
+}
+/* Walk every host card after a fleet render and attach a freshness
+ * chip from the matching health-payload entry. Single decorator —
+ * called from _renderFleetData at end of render and from
+ * _silentHealthRefresh after each successful tick so the chip always
+ * reflects the most recent probe. Field-tolerant: prefers per-host
+ * probed_at, falls back to last_success_at, then to the response-
+ * level age_seconds. */
+function _decorateAllHostCardsFresh(hd){
+  if(!hd||!hd.hosts)return;
+  var topAge=_ageFromPayload(hd);
+  hd.hosts.forEach(function(h){
+    var card=document.querySelector('.host-card[data-host-id="'+String(h.label||'').toLowerCase()+'"]');
+    if(!card)return;
+    var perHostAge=null;
+    if(h.probed_at!=null)perHostAge=Math.max(0,Date.now()/1000-Number(h.probed_at));
+    else if(h.last_success_at!=null)perHostAge=Math.max(0,Date.now()/1000-Number(h.last_success_at));
+    else if(h.age_seconds!=null)perHostAge=Number(h.age_seconds);
+    var ageSec=perHostAge!=null?perHostAge:topAge;
+    if(h.status==='healthy'){
+      _clearHostCardStale(card);
+      _decorateHostCardFresh(card,ageSec);
+    }else{
+      _markHostCardStale(card,h);
+    }
+  });
 }
 function _pveMetricsRefresh(){
   _authFetch('/api/pve/metrics').then(function(r){return r.json()}).then(function(d){
@@ -5476,6 +5570,13 @@ function _renderFleetData(fo,hd,md){
     /* Assemble and render */
     document.getElementById('metrics-cards').innerHTML=_assembleFleetOutput(infraCards,nodeData,pveNodes);
     _enrichFleetNtpUpdates();
+    /* Densification: every host card gets a freshness chip in the
+     * header so the operator can see how recent the probe data is at
+     * a glance. Pre-fix only offline cards carried any timestamp
+     * indicator (the STALE marker from c5efe14) — fresh cards looked
+     * identical regardless of whether the probe was 3s or 30 minutes
+     * old. */
+    if(hd)_decorateAllHostCardsFresh(hd);
     /* Re-render sparklines after card rebuild */
     if(Object.keys(_rrdCache).length)setTimeout(_renderSparklines,200);
     /* Lab hosts section */

@@ -455,6 +455,99 @@ class TestHomeTileDensification(unittest.TestCase):
         self.assertIn("cursor:pointer", body)
 
 
+class TestFleetHostCardFreshness(unittest.TestCase):
+    """Per-host card freshness chip — every host card on the fleet
+    view must show its own data-age indicator. Pre-densification only
+    OFFLINE cards carried any timestamp (the STALE marker from
+    c5efe14); fresh cards looked identical regardless of probe age,
+    which is the comfort-of-absence problem."""
+
+    def test_decorate_host_card_fresh_helper_exists(self):
+        src = _app_js()
+        self.assertIn("function _decorateHostCardFresh(", src)
+        self.assertIn("function _decorateAllHostCardsFresh(", src)
+
+    def test_decorator_skips_stale_cards(self):
+        """A card currently marked STALE must NOT also get the fresh
+        chip. Operator should never see both at once — the stale
+        marker takes precedence."""
+        body = _fn_body(_app_js(), "_decorateHostCardFresh")
+        self.assertIn("host-stale", body,
+            "_decorateHostCardFresh must short-circuit when the card "
+            "is currently marked stale")
+
+    def test_mark_stale_strips_pre_existing_fresh_chip(self):
+        """Race between _renderFleetData (which decorates fresh from
+        /api/health hosts) and _pveMetricsRefresh (which marks stale
+        when n.online===false): without this strip the card ends up
+        with BOTH a fresh chip AND a stale badge. Pinning the strip
+        so a future refactor can't reintroduce the double-marker."""
+        body = _fn_body(_app_js(), "_markHostCardStale")
+        self.assertIn("host-fresh-chip", body,
+            "_markHostCardStale must strip any pre-existing fresh "
+            "chip so the operator never sees both markers at once")
+
+    def test_decorator_field_tolerant_for_per_host_timestamps(self):
+        """Field-tolerant: probed_at (Rick's per-host) → last_success_at
+        → top-level age_seconds. Without this fallthrough order the
+        chip would render '?' on payloads that already carry the
+        timestamps, defeating the densification."""
+        body = _fn_body(_app_js(), "_decorateAllHostCardsFresh")
+        for field in ("probed_at", "last_success_at", "age_seconds"):
+            self.assertIn(field, body,
+                "_decorateAllHostCardsFresh must inspect " + field)
+
+    def test_render_fleet_data_calls_decorator(self):
+        body = _fn_body(_app_js(), "_renderFleetData")
+        self.assertIn("_decorateAllHostCardsFresh(hd)", body,
+            "_renderFleetData must decorate cards with freshness "
+            "after the fleet output is written")
+
+    def test_silent_health_refresh_calls_decorator(self):
+        """Decorator must run on every silent tick so the chip counts
+        down without requiring a view reload."""
+        body = _fn_body(_app_js(), "_silentHealthRefresh")
+        self.assertIn("_decorateAllHostCardsFresh(hd)", body,
+            "_silentHealthRefresh must refresh the host card chips "
+            "on every successful tick")
+
+
+class TestSmallWidgetDensification(unittest.TestCase):
+    """Storage / Tdarr / Deploy widgets carry freshness chip + click-
+    through. Pre-fix these were inert and undated."""
+
+    def test_storage_widget_carries_fresh_chip_and_view(self):
+        src = _app_js()
+        # The widget loader builds with data-view="fleet" wrapper.
+        idx = src.find("'w-storage-health'")
+        self.assertGreater(idx, 0)
+        # Slice forward to find the loader body.
+        sub = src[idx:idx+3000]
+        self.assertIn('data-view="fleet"', sub,
+            "storage widget must click through to fleet view")
+        self.assertIn("_freshChip", sub,
+            "storage widget must render a freshness chip from payload age")
+        self.assertIn("/'+d.pools.length", sub,
+            "storage header must encode healthy/total pool count "
+            "as expected/actual")
+
+    def test_tdarr_widget_carries_fresh_chip_and_view(self):
+        src = _app_js()
+        idx = src.find("'w-tdarr'")
+        self.assertGreater(idx, 0)
+        sub = src[idx:idx+2000]
+        self.assertIn('data-view="media"', sub)
+        self.assertIn("_freshChip", sub)
+
+    def test_deploy_log_widget_carries_fresh_chip_and_view(self):
+        src = _app_js()
+        idx = src.find("'w-deploy-log'")
+        self.assertGreater(idx, 0)
+        sub = src[idx:idx+2000]
+        self.assertIn('data-view="gitops"', sub)
+        self.assertIn("_freshChip", sub)
+
+
 class TestPriorContractsStillGreen(unittest.TestCase):
     """The product-law fixes must not regress AI/AJ/AK/AL contracts."""
 
