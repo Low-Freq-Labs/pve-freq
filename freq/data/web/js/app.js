@@ -2205,6 +2205,11 @@ function _silentFleetRefresh(){
       _fleetFailStreak=0;_clearApiDegraded();
     }
     _fleetCache.fo=fo;/* keep cache fresh */
+    /* Densification: refresh per-VM card freshness on every silent
+     * tick so the chip counts up between probes without requiring a
+     * view reload. Decorator is idempotent and respects stale
+     * precedence (clears chip when cluster is degraded). */
+    _decorateAllVmCardsFresh(fo);
     if(!fo||!fo.vms)return;
     /* Update VM status badges + resource bars in PVE node sections */
     fo.vms.forEach(function(v){
@@ -2368,6 +2373,40 @@ function _decorateAllHostCardsFresh(hd){
     }else{
       _markHostCardStale(card,h);
     }
+  });
+}
+/* Sibling of _decorateAllHostCardsFresh for VM cards, which come from
+ * /api/fleet/overview rather than /api/health. The product-law rule
+ * for VMs differs from the rule for hosts:
+ *   - VM 'stopped' is an intentional state, NOT stale.
+ *   - VM 'stale' means the cluster was unreachable so we don't know
+ *     the current state of the VM (e.g. it could have been live-
+ *     migrated or crashed without us seeing it).
+ * So a VM card gets STALE when the fleet payload itself is structur-
+ * ally degraded (every PVE node offline), and a fresh chip otherwise.
+ * Field-tolerant for per-VM probed_at / last_seen_ts where present. */
+function _decorateAllVmCardsFresh(fo){
+  if(!fo||!fo.vms)return;
+  var topAge=_ageFromPayload(fo);
+  /* If the fleet probe itself is degraded, every VM card is stale by
+   * definition — mark them all and skip the per-VM walk. */
+  var fleetDegraded=_fleetStructurallyDegraded(fo);
+  var fps=fo.fleet_state||fo.probe_state||fo.probe_status||'';
+  if(fps==='stale'||fps==='error'||fps==='degraded'||fps==='unreachable')fleetDegraded=fleetDegraded||fps;
+  fo.vms.forEach(function(v){
+    var card=document.querySelector('.host-card[data-host-id="'+String(v.name||'').toLowerCase()+'"]');
+    if(!card)return;
+    if(fleetDegraded){
+      _markHostCardStale(card,v);
+      return;
+    }
+    var perVmAge=null;
+    if(v.probed_at!=null)perVmAge=Math.max(0,Date.now()/1000-Number(v.probed_at));
+    else if(v.last_seen_ts!=null)perVmAge=Math.max(0,Date.now()/1000-Number(v.last_seen_ts));
+    else if(v.age_seconds!=null)perVmAge=Number(v.age_seconds);
+    var ageSec=perVmAge!=null?perVmAge:topAge;
+    _clearHostCardStale(card);
+    _decorateHostCardFresh(card,ageSec);
   });
 }
 function _pveMetricsRefresh(){
@@ -3231,12 +3270,18 @@ function loadSecAccess(){loadUsers();loadKeys();}
 function loadSecVault(){loadVault();}
 function loadSecCompliance(){loadPoliciesPage();loadComplianceData();}
 function loadSecPosture(){
-  /* Secrets audit */
+  /* Secrets audit. Densification: header carries the freshness chip
+   * derived from d.checked_at / d.age_seconds when present, plus a
+   * click-through to the vault tab for the next-useful-path. The
+   * 'LAST SCAN' card already named the timestamp but as comfort copy
+   * — the chip puts color on it so an old scan reads RED. */
   _authFetch(API.SECRETS_AUDIT).then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('sec-secrets-audit');if(!el)return;
-    el.innerHTML='<div style="display:flex;gap:16px;flex-wrap:wrap">'+
+    el.setAttribute('data-view','sec-vault');el.style.cursor='pointer';
+    el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span class="c-dim-fs12">SECRETS AUDIT</span>'+_freshChip(_ageFromPayload(d))+'</div>'+
+      '<div style="display:flex;gap:16px;flex-wrap:wrap">'+
       '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700">'+d.leases+'</div><div class="c-dim-fs12">LEASES</div></div>'+
-      '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--'+(d.expired>0?'red':'green')+')">'+d.expired+'</div><div class="c-dim-fs12">EXPIRED</div></div>'+
+      '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--'+(d.expired>0?'red':'green')+')">'+d.expired+'/'+(d.leases||0)+'</div><div class="c-dim-fs12">EXPIRED</div></div>'+
       '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--'+(d.scan_findings>0?'yellow':'green')+')">'+d.scan_findings+'</div><div class="c-dim-fs12">SCAN FINDINGS</div></div>'+
       '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:14px;font-weight:600;color:var(--text-dim)">'+_esc(d.last_scan)+'</div><div class="c-dim-fs12">LAST SCAN</div></div>'+
       '</div>';
@@ -3244,27 +3289,49 @@ function loadSecPosture(){
   /* Compliance status */
   _authFetch(API.COMPLY_STATUS).then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('sec-comply-status');if(!el)return;
-    el.innerHTML='<div style="display:flex;gap:16px;flex-wrap:wrap">'+
+    el.setAttribute('data-view','sec-compliance');el.style.cursor='pointer';
+    el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span class="c-dim-fs12">COMPLIANCE</span>'+_freshChip(_ageFromPayload(d))+'</div>'+
+      '<div style="display:flex;gap:16px;flex-wrap:wrap">'+
       '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700">'+d.total_checks+'</div><div class="c-dim-fs12">CIS CHECKS</div></div>'+
       '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700">'+d.scan_count+'</div><div class="c-dim-fs12">SCANS RUN</div></div>'+
       '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:14px;font-weight:600;color:var(--text-dim)">'+_esc(d.last_scan)+'</div><div class="c-dim-fs12">LAST SCAN</div></div>'+
       '</div>';
   }).catch(function(e){var el=document.getElementById('sec-comply-status');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
-  /* Cert summary */
+  /* Cert summary. Densification: 'Valid' card now reads as
+   * "valid/total" so the operator instantly sees the contract. The
+   * remaining columns (expiring, expired) are the breakdown. */
   _authFetch(API.CERT_INVENTORY).then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('sec-cert-summary');if(!el)return;
     var certs=d.certs||[];
     var valid=certs.filter(function(c){return c.status==='valid'}).length;
     var expiring=certs.filter(function(c){return c.days_left<30&&c.days_left>=0}).length;
     var expired=certs.filter(function(c){return c.status==='expired'}).length;
-    el.innerHTML=_statCards([{l:'Certificates',v:certs.length},{l:'Valid',v:valid,c:'green'},{l:'Expiring (<30d)',v:expiring,c:'yellow'},{l:'Expired',v:expired,c:'red'}]);
+    el.setAttribute('data-view','certs');el.style.cursor='pointer';
+    el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span class="c-dim-fs12">CERT INVENTORY</span>'+_freshChip(_ageFromPayload(d))+'</div>'+
+      _statCards([
+        {l:'Certificates',v:certs.length},
+        {l:'Valid',v:valid+'/'+certs.length,c:valid===certs.length?'green':'yellow'},
+        {l:'Expiring (<30d)',v:expiring,c:expiring>0?'yellow':'green'},
+        {l:'Expired',v:expired,c:expired>0?'red':'green'},
+      ]);
   }).catch(function(e){var el=document.getElementById('sec-cert-summary');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
   /* Patch status */
   _authFetch(API.PATCH_STATUS).then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('sec-patch-status');if(!el)return;
     var hist=d.history||[];var holds=d.holds||[];
-    if(!hist.length&&!holds.length){el.innerHTML='<div class="exec-out">No patch history. Run <code>freq patch check</code> from CLI.</div>';return;}
-    var h='';
+    el.setAttribute('data-view','sec-hardening');el.style.cursor='pointer';
+    var fresh=_freshChip(_ageFromPayload(d));
+    /* Header (with chip + click-through) renders on BOTH the empty
+     * path and the populated path so the operator's freshness signal
+     * doesn't disappear just because patch history is empty. The
+     * empty path also names the next-useful CLI command, which IS
+     * the next-useful-path Finn called for. */
+    if(!hist.length&&!holds.length){
+      el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span class="c-dim-fs12">PATCH STATUS</span>'+fresh+'</div>'+
+        '<div class="exec-out">No patch history. Run <code>freq patch check</code> from CLI.</div>';
+      return;
+    }
+    var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span class="c-dim-fs12">PATCH STATUS</span>'+fresh+'</div>';
     if(holds.length)h+='<div style="margin-bottom:8px"><strong style="color:var(--yellow)">'+holds.length+' package holds active</strong></div>';
     if(hist.length){
       h+='<table><thead><tr><th>Time</th><th>Host</th><th>Packages</th><th>Status</th></tr></thead><tbody>';
@@ -5577,6 +5644,11 @@ function _renderFleetData(fo,hd,md){
      * identical regardless of whether the probe was 3s or 30 minutes
      * old. */
     if(hd)_decorateAllHostCardsFresh(hd);
+    /* Sibling decorator for VM cards. VMs come from /api/fleet/overview
+     * not /api/health, so they need their own walker. The product-law
+     * rule for VMs differs: 'stopped' is intentional (not stale),
+     * but 'cluster unreachable so we can't see the VM' IS stale. */
+    if(fo)_decorateAllVmCardsFresh(fo);
     /* Re-render sparklines after card rebuild */
     if(Object.keys(_rrdCache).length)setTimeout(_renderSparklines,200);
     /* Lab hosts section */

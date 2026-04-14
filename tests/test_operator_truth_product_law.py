@@ -512,6 +512,78 @@ class TestFleetHostCardFreshness(unittest.TestCase):
             "on every successful tick")
 
 
+class TestVmCardFreshness(unittest.TestCase):
+    """Per-VM cards on the fleet view. Different rule than host cards:
+    'stopped' is intentional (not stale), 'cluster unreachable' IS
+    stale because we can't see the VM's real state. Pre-fix the cards
+    showed cpu/ram bars with no indication of probe age."""
+
+    def test_vm_card_decorator_exists(self):
+        src = _app_js()
+        self.assertIn("function _decorateAllVmCardsFresh(", src)
+
+    def test_vm_decorator_marks_stale_when_fleet_degraded(self):
+        """When the fleet payload itself is structurally degraded
+        (every PVE node offline) every VM card must be marked STALE
+        — we can't see the VM's real state through a broken probe."""
+        body = _fn_body(_app_js(), "_decorateAllVmCardsFresh")
+        self.assertIn("_fleetStructurallyDegraded", body,
+            "VM decorator must consult structural-sanity helper")
+        self.assertIn("_markHostCardStale", body,
+            "VM decorator must mark cards stale when fleet is degraded")
+
+    def test_vm_decorator_field_tolerant(self):
+        body = _fn_body(_app_js(), "_decorateAllVmCardsFresh")
+        for field in ("probed_at", "last_seen_ts", "age_seconds"):
+            self.assertIn(field, body)
+        # Field-tolerant for the probe_state names too.
+        self.assertIn("fleet_state", body)
+        self.assertIn("probe_state", body)
+
+    def test_render_fleet_data_calls_vm_decorator(self):
+        body = _fn_body(_app_js(), "_renderFleetData")
+        self.assertIn("_decorateAllVmCardsFresh(fo)", body,
+            "_renderFleetData must decorate VM cards alongside host cards")
+
+    def test_silent_fleet_refresh_calls_vm_decorator(self):
+        body = _fn_body(_app_js(), "_silentFleetRefresh")
+        self.assertIn("_decorateAllVmCardsFresh(fo)", body,
+            "_silentFleetRefresh must refresh VM card chips on every "
+            "successful tick")
+
+
+class TestSecurityOverviewDensification(unittest.TestCase):
+    """loadSecPosture renders four operator-truth tiles (secrets audit,
+    compliance status, cert summary, patch status). Pre-fix none of
+    them carried a freshness chip — the operator could read a 6-month-
+    old 'all green' tile and trust it. None had click-through to drill
+    into the relevant tab."""
+
+    def test_load_sec_posture_threads_fresh_chip(self):
+        body = _fn_body(_app_js(), "loadSecPosture")
+        # Chip must appear at least four times — once per sub-section.
+        self.assertGreaterEqual(body.count("_freshChip"), 4,
+            "loadSecPosture must render a freshness chip for each "
+            "of secrets / compliance / cert / patch sub-sections")
+        # Field-tolerant via _ageFromPayload.
+        self.assertIn("_ageFromPayload", body)
+
+    def test_load_sec_posture_threads_view_clickthrough(self):
+        body = _fn_body(_app_js(), "loadSecPosture")
+        # Every tile becomes a button to its detail view.
+        self.assertIn("data-view", body,
+            "loadSecPosture must thread data-view click-through")
+        for view in ("'sec-vault'", "'sec-compliance'", "'certs'"):
+            self.assertIn(view, body,
+                "loadSecPosture must thread a view click-through for " + view)
+
+    def test_cert_summary_carries_expected_actual_form(self):
+        body = _fn_body(_app_js(), "loadSecPosture")
+        self.assertIn("valid+'/'+certs.length", body,
+            "Cert summary must render valid count as valid/total so "
+            "the operator instantly sees the contract")
+
+
 class TestSmallWidgetDensification(unittest.TestCase):
     """Storage / Tdarr / Deploy widgets carry freshness chip + click-
     through. Pre-fix these were inert and undated."""
