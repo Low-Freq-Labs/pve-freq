@@ -374,5 +374,133 @@ class TestHandleHealthApiFieldsStable(unittest.TestCase):
         self.assertIn('response["age_seconds"]', window)
 
 
+class TestDoctorEmitsReasonAndCheckedAt(unittest.TestCase):
+    """/api/doctor must carry a top-level `reason` + `checked_at` so
+    Morty's post-auth banner can explain *why* FREQ is degraded without
+    re-deriving it from the checks array. Existing shape (status/
+    failed/warnings/checks[].name+status) must remain stable."""
+
+    def test_doctor_source_has_reason_and_checked_at(self):
+        src = (REPO / "freq" / "core" / "doctor.py").read_text()
+        # Narrow to the json_output branch so we don't match unrelated code.
+        idx = src.find("if json_output:")
+        self.assertGreater(idx, 0)
+        tail = src[idx:idx + 4000]
+        self.assertIn('"reason": reason', tail)
+        self.assertIn('"checked_at": time.time()', tail)
+        self.assertIn('"failed_checks":', tail)
+        self.assertIn('"warning_checks":', tail)
+        # Stable shape preserved — do not rename these.
+        self.assertIn('"status": status', tail)
+        self.assertIn('"failed": failed', tail)
+        self.assertIn('"warnings": warnings', tail)
+        self.assertIn('"checks": check_results', tail)
+
+    def test_doctor_live_healthy_payload(self):
+        """A real doctor run with no failures must emit reason='all N
+        checks passed' and a checked_at timestamp within the last
+        few seconds."""
+        import io
+        import contextlib
+        import json as _json
+        import time as _time
+        from freq.core.config import load_config
+        from freq.core import doctor as _doctor
+        cfg = load_config()
+        buf = io.StringIO()
+        t0 = _time.time()
+        with contextlib.redirect_stdout(buf):
+            _doctor.run(cfg, json_output=True)
+        payload = _json.loads(buf.getvalue())
+        self.assertIn("reason", payload)
+        self.assertIn("checked_at", payload)
+        # checked_at must be roughly now, not stale.
+        self.assertGreaterEqual(payload["checked_at"], t0 - 1)
+        self.assertLessEqual(payload["checked_at"], _time.time() + 1)
+        # Stable shape still present.
+        self.assertIn("status", payload)
+        self.assertIn("failed", payload)
+        self.assertIn("warnings", payload)
+        self.assertIn("checks", payload)
+        # Reason is non-empty and actionable.
+        self.assertTrue(payload["reason"])
+
+
+class TestSetupStatusCarriesReason(unittest.TestCase):
+    """/api/setup/status must carry setup_reason naming the missing
+    artifact + checked_at timestamp. The existing setup_health + the
+    individual bool fields (ssh_key_exists, pve_nodes_configured,
+    hosts_configured, initialized) must remain stable for setup wizard
+    compatibility."""
+
+    def test_source_pins_setup_reason(self):
+        src = SERVE_PY.read_text()
+        start = src.find("def _serve_setup_status(self):")
+        self.assertGreater(start, 0)
+        end = src.find("\n    def ", start + 10)
+        window = src[start:end]
+        self.assertIn("setup_reason", window)
+        self.assertIn('"setup_reason": setup_reason', window)
+        self.assertIn('"checked_at": time.time()', window)
+        # Stable fields preserved.
+        self.assertIn('"setup_health": setup_health', window)
+        self.assertIn('"initialized": is_initialized', window)
+        self.assertIn('"ssh_key_exists": key_exists', window)
+
+
+class TestPveMetricsLastSeenTs(unittest.TestCase):
+    """/api/pve/metrics must attach last_seen_ts per node so the
+    dashboard can show 'STALE 47s' instead of a bare offline chip.
+    Online nodes get `state='live'`; offline nodes that were seen
+    previously get `state='stale'` with an age_seconds; nodes never
+    seen alive stay `state='unreachable'`."""
+
+    def test_source_pins_last_seen_tracking_dict(self):
+        src = SERVE_PY.read_text()
+        self.assertIn("_pve_last_seen_ts", src,
+                      "class-level last-seen tracking dict must exist")
+
+    def test_source_pins_online_branch_sets_live_and_ts(self):
+        src = SERVE_PY.read_text()
+        start = src.find("def _serve_pve_metrics(self):")
+        self.assertGreater(start, 0)
+        end = src.find("\n    def ", start + 10)
+        window = src[start:end]
+        self.assertIn('"state": "live"', window)
+        self.assertIn('"last_seen_ts": now_wall', window)
+        self.assertIn("FreqHandler._pve_last_seen_ts[ip] = now_wall", window)
+
+    def test_source_pins_offline_branch_distinguishes_stale_vs_unreachable(self):
+        src = SERVE_PY.read_text()
+        start = src.find("def _serve_pve_metrics(self):")
+        end = src.find("\n    def ", start + 10)
+        window = src[start:end]
+        self.assertIn('last_seen = FreqHandler._pve_last_seen_ts.get(ip)', window)
+        self.assertIn('"unreachable" if last_seen is None else "stale"', window)
+        self.assertIn("last seen", window)
+
+
+class TestFleetOverviewTopLevelState(unittest.TestCase):
+    """/api/fleet/overview must carry a top-level fleet_state + reason
+    + per-node state so the silent refresh banner stops guessing from
+    an empty vms list + undefined probe_status."""
+
+    def test_source_pins_per_node_state(self):
+        src = SERVE_PY.read_text()
+        idx = src.find("# PVE nodes — use auto-discovered nodes")
+        self.assertGreater(idx, 0)
+        end = src.find("# Category summaries", idx)
+        window = src[idx:end]
+        self.assertIn('entry["state"]', window)
+        self.assertIn('entry["reason"]', window)
+        self.assertIn('entry["last_seen_ts"]', window)
+        self.assertIn("FreqHandler._pve_last_seen_ts", window)
+
+    def test_source_pins_top_level_fleet_state(self):
+        src = SERVE_PY.read_text()
+        self.assertIn('"fleet_state": _fleet_state', src)
+        self.assertIn('"fleet_reason": _fleet_reason', src)
+
+
 if __name__ == "__main__":
     unittest.main()

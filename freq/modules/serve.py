@@ -1125,6 +1125,7 @@ def _bg_probe_fleet_overview():
     fb_detail = {n.name: n.detail for n in fb.pve_nodes.values()}
 
     pve_nodes = []
+    _now_wall = time.time()
     for dn in discovered_nodes:
         entry = {
             "name": dn.get("name", ""),
@@ -1141,6 +1142,25 @@ def _bg_probe_fleet_overview():
             from freq.modules.pve import _pve_api_call
             _, ok = _pve_api_call(cfg, entry["ip"], f"/nodes/{entry['name']}/status", timeout=3)
             entry["online"] = ok
+        # R-PRODUCT-LAW-BACKEND-TRUTH: attach six-state + reason +
+        # last_seen_ts per node. Shares the same _pve_last_seen_ts
+        # dict the live-metrics endpoint maintains, so 'STALE 47s'
+        # is consistent across /api/fleet/overview and /api/pve/metrics.
+        last_seen = FreqHandler._pve_last_seen_ts.get(entry["ip"])
+        if entry["online"]:
+            FreqHandler._pve_last_seen_ts[entry["ip"]] = _now_wall
+            entry["state"] = "live"
+            entry["reason"] = "PVE API responded"
+            entry["last_seen_ts"] = _now_wall
+        else:
+            age = round(_now_wall - last_seen, 1) if last_seen else None
+            entry["state"] = "unreachable" if last_seen is None else "stale"
+            entry["reason"] = (
+                "PVE API did not respond — node never seen alive"
+                if last_seen is None
+                else f"PVE API did not respond; last seen {age}s ago"
+            )
+            entry["last_seen_ts"] = last_seen
         pve_nodes.append(entry)
 
     # Category summaries
@@ -1209,11 +1229,32 @@ def _bg_probe_fleet_overview():
                     )
 
     duration = round(time.monotonic() - start, 2)
+    # R-PRODUCT-LAW-BACKEND-TRUTH: aggregate top-level fleet_state so
+    # the dashboard banner can stop guessing whether the fleet is OK
+    # from an empty vms list + all-offline pve_nodes + undefined
+    # probe_status. Worst PVE-node state wins for the overview.
+    _pve_states = [n.get("state", "unreachable") for n in pve_nodes] or ["degraded"]
+    if "unreachable" in _pve_states and all(s == "unreachable" for s in _pve_states):
+        _fleet_state = "unreachable"
+        _fleet_reason = "all PVE nodes unreachable"
+    elif "unreachable" in _pve_states:
+        n_bad = sum(1 for s in _pve_states if s == "unreachable")
+        _fleet_state = "degraded"
+        _fleet_reason = f"{n_bad}/{len(_pve_states)} PVE nodes unreachable"
+    elif "stale" in _pve_states:
+        n_stale = sum(1 for s in _pve_states if s == "stale")
+        _fleet_state = "stale"
+        _fleet_reason = f"{n_stale}/{len(_pve_states)} PVE nodes stale (not responding, prior evidence)"
+    else:
+        _fleet_state = "live"
+        _fleet_reason = f"all {len(_pve_states)} PVE nodes live; {total_vms} VMs tracked"
     result = {
         "vms": vm_list,
         "vm_nics": {str(k): v for k, v in vm_nics.items()},
         "physical": physical,
         "pve_nodes": pve_nodes,
+        "fleet_state": _fleet_state,
+        "fleet_reason": _fleet_reason,
         "vlans": [
             {
                 "id": v.id,
@@ -2126,6 +2167,9 @@ class FreqHandler(BaseHTTPRequestHandler):
     # Class-level caches for PVE metrics polling
     _pve_metrics_cache = None
     _pve_metrics_ts = 0
+    # R-PRODUCT-LAW-BACKEND-TRUTH: per-node last-seen tracking so the
+    # dashboard can render 'STALE 47s' instead of a bare 'offline' chip.
+    _pve_last_seen_ts: dict = {}
 
     def log_message(self, format, *args):
         """Suppress default logging."""
@@ -2761,12 +2805,28 @@ a:hover{{text-decoration:underline}}
         # "configured" = init completed successfully (.initialized exists + config items)
         # "partial" = config items exist but init didn't complete (or never ran)
         # "unconfigured" = nothing configured yet
+        # R-PRODUCT-LAW-BACKEND-TRUTH: also carry a `setup_reason` that
+        # names exactly which required artifact is missing, so the
+        # dashboard's setup banner doesn't have to re-derive it from
+        # the individual bool fields.
+        missing = []
+        if not is_initialized:
+            missing.append("init incomplete (no .initialized marker)")
+        if not key_readable:
+            missing.append("ssh key missing or unreadable")
+        if not has_nodes:
+            missing.append("no PVE nodes configured")
+        if not has_hosts:
+            missing.append("no fleet hosts configured")
         if is_initialized and key_readable and has_hosts and has_nodes:
             setup_health = "configured"
+            setup_reason = "init completed, key readable, hosts + nodes configured"
         elif key_exists or has_hosts or has_nodes:
             setup_health = "partial"
+            setup_reason = "partial setup: " + "; ".join(missing)
         else:
             setup_health = "unconfigured"
+            setup_reason = "no setup performed"
 
         # F11 of R-SECURITY-TRUST-AUDIT-20260413P: this endpoint is in the
         # AUTH_WHITELIST so an unauth caller hits it during setup wizard
@@ -2788,7 +2848,9 @@ a:hover{{text-decoration:underline}}
             "pve_nodes_configured": has_nodes,
             "hosts_configured": has_hosts,
             "setup_health": setup_health,
+            "setup_reason": setup_reason,
             "initialized": is_initialized,
+            "checked_at": time.time(),
         }
         if is_authed:
             payload["version"] = __version__
@@ -3306,11 +3368,21 @@ a:hover{{text-decoration:underline}}
 
                 iowait = round(data.get("wait", 0) * 100, 1)
 
+                # R-PRODUCT-LAW-BACKEND-TRUTH: record last-seen so a
+                # subsequent offline probe can show 'STALE Ns' instead
+                # of bare offline. Stored keyed by IP so node rename
+                # doesn't lose history.
+                now_wall = time.time()
+                FreqHandler._pve_last_seen_ts[ip] = now_wall
                 nodes.append(
                     {
                         "name": name,
                         "ip": ip,
                         "online": True,
+                        "state": "live",
+                        "reason": "PVE API responded",
+                        "last_seen_ts": now_wall,
+                        "age_seconds": 0,
                         "cpu_pct": cpu_pct,
                         "cores": cpuinfo.get("cpus", 0),
                         "model": cpuinfo.get("model", ""),
@@ -3327,7 +3399,24 @@ a:hover{{text-decoration:underline}}
                     }
                 )
             else:
-                nodes.append({"name": name, "ip": ip, "online": False})
+                last_seen = FreqHandler._pve_last_seen_ts.get(ip)
+                age = round(time.time() - last_seen, 1) if last_seen else None
+                nodes.append({
+                    "name": name,
+                    "ip": ip,
+                    "online": False,
+                    # Distinguish 'never seen alive' (unreachable) from
+                    # 'was alive, now not responding' (stale). Both render
+                    # as down but the operator sees which one it is.
+                    "state": "unreachable" if last_seen is None else "stale",
+                    "reason": (
+                        "PVE API did not respond — node never seen alive"
+                        if last_seen is None
+                        else f"PVE API did not respond; last seen {age}s ago"
+                    ),
+                    "last_seen_ts": last_seen,
+                    "age_seconds": age,
+                })
         result = {"nodes": nodes, "ts": time.time()}
         FreqHandler._pve_metrics_cache = result
         FreqHandler._pve_metrics_ts = time.time()

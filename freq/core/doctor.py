@@ -131,12 +131,37 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
 
         total = passed + failed + warnings
         status = "healthy" if failed == 0 and warnings == 0 else "degraded" if failed == 0 else "unhealthy"
+        # R-PRODUCT-LAW-BACKEND-TRUTH: doctor must carry a top-level
+        # reason so Morty's post-auth banner can explain *why* FREQ is
+        # degraded without re-deriving it from the checks array, and
+        # a checked_at timestamp so a tired operator can tell fresh
+        # data from a minute-old snapshot. Existing shape
+        # (status/failed/warnings/checks[].name+status) is preserved —
+        # fields are ADDED, never renamed.
+        failed_names = [c["name"] for c in check_results if c["status"] == "fail"]
+        warn_names = [c["name"] for c in check_results if c["status"] == "warn"]
+        if status == "healthy":
+            reason = f"all {total} checks passed"
+        elif status == "degraded":
+            shown = ", ".join(warn_names[:3])
+            more = f" +{len(warn_names) - 3} more" if len(warn_names) > 3 else ""
+            reason = f"{warnings} warning(s): {shown}{more}"
+        else:
+            shown_f = ", ".join(failed_names[:3])
+            more_f = f" +{len(failed_names) - 3} more" if len(failed_names) > 3 else ""
+            reason = f"{failed} failure(s): {shown_f}{more_f}"
+            if warn_names:
+                reason += f" (+ {warnings} warnings)"
         result = {
             "passed": passed,
             "failed": failed,
             "warnings": warnings,
             "total": total,
             "status": status,
+            "reason": reason,
+            "failed_checks": failed_names,
+            "warning_checks": warn_names,
+            "checked_at": time.time(),
             "duration": round(duration, 2),
             "checks": check_results,
         }
