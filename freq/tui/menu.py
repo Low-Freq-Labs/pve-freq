@@ -18,13 +18,16 @@ Design decisions:
     - Reimagined from v1.0.0 menu.sh (890 lines) as structured Python
 """
 
+import json as _tui_json
 import os
 import shlex
 import sys
 import termios
+import time as _tui_time
 import tty
 
 from freq.core import fmt
+from freq.core.health_state import ALL_STATES
 from freq.core.personality import splash
 
 
@@ -76,6 +79,149 @@ def _confirm(msg: str, default_yes: bool = False) -> bool:
     if not answer:
         return default_yes
     return answer in ("y", "yes")
+
+
+# --- Operator-truth helpers (TUI translation of pve-freq-product-law) ---
+
+
+def _load_probe_state_summary(cfg) -> dict:
+    """Read the dashboard's health.json cache and aggregate per-state
+    counts using the SAME six-state taxonomy as the API/CLI surfaces.
+
+    Returns:
+      {
+        "has_data": bool,
+        "total": int,
+        "counts": {state_name: count, ...},  # subset of ALL_STATES
+        "max_age_s": int | None,              # oldest probe in cache
+        "min_age_s": int | None,              # freshest probe in cache
+        "cache_age_s": int | None,            # cache file overall age
+      }
+
+    On a missing or unreadable cache, has_data=False and the operator
+    sees an honest "no probe data — run [!] dashboard" hint instead of
+    a fake-zero header.
+
+    Cross-surface invariant: the state counts come from the per-host
+    `state` field that classify_probe_failure produces — same field
+    every other observation surface reads. No sibling taxonomy.
+    """
+    try:
+        cache_path = os.path.join(cfg.data_dir, "cache", "health.json")
+    except Exception:
+        return {"has_data": False, "total": 0, "counts": {},
+                "max_age_s": None, "min_age_s": None, "cache_age_s": None}
+    if not os.path.isfile(cache_path):
+        return {"has_data": False, "total": 0, "counts": {},
+                "max_age_s": None, "min_age_s": None, "cache_age_s": None}
+    try:
+        with open(cache_path) as f:
+            entry = _tui_json.load(f)
+    except (OSError, _tui_json.JSONDecodeError):
+        return {"has_data": False, "total": 0, "counts": {},
+                "max_age_s": None, "min_age_s": None, "cache_age_s": None}
+    cache_ts = entry.get("ts", 0)
+    cache_age = max(0, int(_tui_time.time() - cache_ts)) if cache_ts else None
+    data = entry.get("data") or {}
+    hosts = data.get("hosts") or []
+    if not hosts:
+        return {"has_data": False, "total": 0, "counts": {},
+                "max_age_s": None, "min_age_s": None, "cache_age_s": cache_age}
+    counts: dict = {}
+    now = _tui_time.time()
+    ages = []
+    for h in hosts:
+        st = (h.get("state") or "").strip()
+        if st not in ALL_STATES:
+            # Unknown state value — fall back to the legacy 'status'
+            # field so old cache shapes still render. Treat 'healthy'
+            # as live, anything else as unreachable per legacy compat.
+            legacy = (h.get("status") or "").strip().lower()
+            st = "live" if legacy == "healthy" else "unreachable"
+        counts[st] = counts.get(st, 0) + 1
+        pa = h.get("probed_at")
+        if pa is not None:
+            ages.append(max(0, now - float(pa)))
+    return {
+        "has_data": True,
+        "total": len(hosts),
+        "counts": counts,
+        "max_age_s": int(max(ages)) if ages else None,
+        "min_age_s": int(min(ages)) if ages else None,
+        "cache_age_s": cache_age,
+    }
+
+
+def _render_probe_state_summary(summary: dict) -> str:
+    """Format a one-line densified fleet status from the summary dict.
+
+    Pre-densification the TUI splash showed bare 'Hosts: 14 PVE: 3'
+    with no probe state, no freshness, no failure-class breakdown.
+    Operator at 2AM had no idea which hosts were reachable, how recent
+    the data was, or what was failing. Densified form encodes:
+
+      Fleet: 13/14 live · 1 auth_failed (cached 47s)
+
+    On missing cache the line names the next-useful-path:
+
+      Fleet: 14 hosts · no probe data — run [!] dashboard to refresh
+
+    Color follows the worst state present (red for unreachable/auth_failed,
+    yellow for stale/degraded, green for all-live).
+    """
+    if not summary.get("has_data"):
+        total = summary.get("total", 0)
+        return (
+            f"{fmt.C.DIM}Fleet:{fmt.C.RESET} "
+            f"{fmt.C.BOLD}{total}{fmt.C.RESET} hosts "
+            f"{fmt.C.DIM}— no probe data — run "
+            f"{fmt.C.CYAN}[!]{fmt.C.RESET} {fmt.C.DIM}dashboard "
+            f"to refresh{fmt.C.RESET}"
+        )
+    counts = summary.get("counts") or {}
+    total = summary.get("total", sum(counts.values()))
+    live = counts.get("live", 0)
+    # Worst state present drives the color.
+    worst_red = ("unreachable", "auth_failed")
+    worst_yel = ("stale", "degraded")
+    color = fmt.C.GREEN
+    for s in worst_red:
+        if counts.get(s, 0) > 0:
+            color = fmt.C.RED
+            break
+    if color == fmt.C.GREEN:
+        for s in worst_yel:
+            if counts.get(s, 0) > 0:
+                color = fmt.C.YELLOW
+                break
+    # Build the breakdown string. Always show live/total first; append
+    # any non-live states by name in canonical priority order.
+    parts = [f"{color}{live}/{total}{fmt.C.RESET} live"]
+    priority = ("auth_failed", "unreachable", "degraded", "stale", "recovering")
+    for s in priority:
+        n = counts.get(s, 0)
+        if n > 0:
+            parts.append(f"{fmt.C.YELLOW}{n}{fmt.C.RESET} {s}")
+    sep = " " + fmt.C.DIM + "·" + fmt.C.RESET + " "
+    breakdown = " " + sep.join(parts)
+    age = summary.get("max_age_s")
+    if age is None:
+        fresh = ""
+    else:
+        if age < 60:
+            age_lbl = f"{age}s"
+        elif age < 3600:
+            age_lbl = f"{age // 60}m"
+        else:
+            age_lbl = f"{age // 3600}h"
+        if age <= 30:
+            age_color = fmt.C.GREEN
+        elif age <= 120:
+            age_color = fmt.C.YELLOW
+        else:
+            age_color = fmt.C.RED
+        fresh = f" {fmt.C.DIM}(cached{fmt.C.RESET} {age_color}{age_lbl}{fmt.C.RESET}{fmt.C.DIM}){fmt.C.RESET}"
+    return f"{fmt.C.DIM}Fleet:{fmt.C.RESET}{breakdown}{fresh}"
 
 
 # --- Risk Tags ---
@@ -1458,12 +1604,33 @@ def run(cfg, pack) -> int:
             splash(pack, cfg.version)
             print()
 
-            # Quick stats
+            # Operator-truth densified header. Pre-fix this was a bare
+            # 'Hosts: 14    PVE nodes: 3    User: morty' static line
+            # with no probe state, no freshness, no failure class. The
+            # tired operator at 2AM had no idea which hosts were
+            # reachable, when the data was last refreshed, or what was
+            # broken. The new line reads cached probe state from the
+            # SAME health.json the API and CLI surfaces consume, so
+            # the cross-surface invariant holds: TUI splash, CLI
+            # `freq fleet status`, web banner, audit.jsonl all carry
+            # the same six-state truth.
             host_count = len(cfg.hosts)
             pve_count = sum(1 for h in cfg.hosts if h.htype == "pve")
+            try:
+                _summary = _load_probe_state_summary(cfg)
+                if not _summary.get("has_data"):
+                    _summary["total"] = host_count
+                fleet_line = _render_probe_state_summary(_summary)
+            except Exception:
+                # Defensive: never let a probe-cache read failure block
+                # the TUI from rendering. Fall back to the legacy line.
+                fleet_line = (
+                    f"{fmt.C.DIM}Fleet:{fmt.C.RESET} "
+                    f"{fmt.C.BOLD}{host_count}{fmt.C.RESET} hosts"
+                )
             print(
-                f"  {fmt.C.DIM}{fmt.S.DOT} Hosts: {host_count}    "
-                f"{fmt.S.DOT} PVE nodes: {pve_count}    "
+                f"  {fleet_line}    "
+                f"{fmt.C.DIM}{fmt.S.DOT} PVE nodes: {pve_count}    "
                 f"{fmt.S.DOT} User: {os.environ.get('USER', 'unknown')}{fmt.C.RESET}"
             )
             print()
