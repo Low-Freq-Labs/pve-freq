@@ -704,7 +704,18 @@ function _showApp(){
      * hit-tests even after the app is technically ready. */
     login.style.pointerEvents='none';
     setTimeout(function(){
-      var body=document.getElementById('mn-body');if(body)body.style.display='';
+      /* M-RELEASE-UX-QA-20260413AL showstopper fix: after Rick's
+       * token Q converted the inline style="display:none" on mn-body
+       * to the .d-none utility class, this handoff's bare
+       * body.style.display='' only cleared the inline style — the
+       * class-level rule `.d-none { display: none; }` kept the body
+       * hidden. Every operator who logged in to the live deployed
+       * dashboard saw a header-only surface with the entire app
+       * body blank. Removing the class + clearing the inline style
+       * restores the expected reveal. doLogout at the top of the
+       * file re-hides via inline display, so the symmetry holds. */
+      var body=document.getElementById('mn-body');
+      if(body){body.classList.remove('d-none');body.style.display='';}
       login.style.display='none';
       /* Update header user button */
       var btn=document.getElementById('header-user-btn');if(btn)btn.style.display='flex';
