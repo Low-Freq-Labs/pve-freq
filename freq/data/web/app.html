@@ -39,19 +39,19 @@
   <div class="flex-gap-16-center">
     <div data-view="home" style="font-size:16px;font-weight:700;letter-spacing:3px;color:var(--text);cursor:pointer;user-select:none">PVE FREQ</div><span style="font-size:12px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase" id="nav-ver"></span>
     <div style="width:1px;height:24px;background:var(--border)"></div>
-    <div><h1 id="page-title" style="font-size:16px">Home</h1><div class="tagline fs-11" id="header-tagline" ></div></div>
+    <div><h1 id="page-title" class="fs-16">Home</h1><div class="tagline fs-11" id="header-tagline" ></div></div>
   </div>
   <div class="flex-gap-16-center">
     <span id="watchdog-status"></span>
-    <button id="header-user-btn" class="header-user-btn" data-action="openUserMenu" style="display:none"><span id="header-user-icon" class="header-user-icon"></span><span id="header-user-name" class="header-user-name"></span><span id="header-user-role" class="header-user-role"></span></button>
+    <button id="header-user-btn" class="header-user-btn d-none" data-action="openUserMenu"><span id="header-user-icon" class="header-user-icon"></span><span id="header-user-name" class="header-user-name"></span><span id="header-user-role" class="header-user-role"></span></button>
     <span style="font-family:'Courier New',monospace;font-size:14px;font-weight:500;color:var(--text-dim);letter-spacing:1px" id="header-time"></span>
   </div>
 </div>
-<div id="update-banner" class="update-banner" style="display:none">
+<div id="update-banner" class="update-banner d-none">
   <span id="update-banner-text"></span>
   <button class="update-banner-dismiss" data-action="dismissUpdateBanner">&times;</button>
 </div>
-<div class="mn-body" style="display:none" id="mn-body">
+<div class="mn-body d-none" id="mn-body">
 
 <!-- ════════ HOME ════════ -->
 <div id="p-home" class="page active">
@@ -87,7 +87,7 @@
      so the old home-only footer was redundant chrome on every cold load.
      Kept the element id so any code still setting its textContent stays
      harmless, but it no longer draws a border row on the empty home. -->
-<div id="home-ver-footer" style="display:none"></div>
+<div id="home-ver-footer" class="d-none"></div>
 </div><!-- close home-view -->
 <!-- FLEET VIEW (hidden by default) -->
 <div id="fleet-view" class="d-none">
@@ -111,13 +111,13 @@
 </div>
 <!-- Quick Terminal -->
 <div class="section layout-section" id="fleet-sec-terminal">
-  <div class="section-header"><h3>Terminal</h3><span class="chev" style="margin-left:8px">▾</span></div>
+  <div class="section-header"><h3>Terminal</h3><span class="chev ml-8">▾</span></div>
   <div class="section-body">
-    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Open a live SSH shell to any host, VM, or LXC container.</div>
+    <div class="helptext-sm-mb8">Open a live SSH shell to any host, VM, or LXC container.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
       <div>
         <label class="c-dim-fs12">Type</label>
-        <select id="term-type" class="input" style="width:120px">
+        <select id="term-type" class="input w-120">
           <option value="node">PVE Node</option>
           <option value="vm">VM</option>
           <option value="ct">Container</option>
@@ -130,7 +130,7 @@
       </div>
       <div>
         <label class="c-dim-fs12">Target</label>
-        <select id="term-target" class="input" style="width:260px"><option value="">Select...</option></select>
+        <select id="term-target" class="input w-260"><option value="">Select...</option></select>
       </div>
       <button class="fleet-btn c-purple-active" data-action="launchTermFromPicker" style="color:var(--cyan)">&#9002; OPEN TERMINAL</button>
     </div>
@@ -140,13 +140,13 @@
 <div class="section layout-section" id="fleet-sec-ct">
   <div class="section-header"><h3>LXC Containers</h3><div class="flex-1"></div>
     <button class="fleet-btn" data-action="loadLxcContainers">REFRESH</button>
-    <span class="chev" style="margin-left:8px">▾</span>
+    <span class="chev ml-8">▾</span>
   </div>
   <div class="section-body">
     <div class="stats" id="ct-stats"></div>
     <div id="ct-cards" class="cards"></div>
-    <div style="margin-top:16px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
-      <h4 style="font-size:11px;color:var(--text-dim);margin-bottom:8px">CONTAINER MANAGEMENT</h4>
+    <div class="card-block-bg2">
+      <h4 class="helptext-sm-mb8">CONTAINER MANAGEMENT</h4>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
         <button class="fleet-btn" data-action="openCtTool" data-arg="create">CREATE</button>
         <button class="fleet-btn" data-action="openCtTool" data-arg="clone">CLONE</button>
@@ -196,9 +196,9 @@
   <div class="section-header"><h3>Agents</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="stats" id="agent-stats"></div>
-    <h4 style="color:var(--purple-light);font-size:13px;margin:12px 0 8px">Templates</h4>
+    <h4 class="section-label-pl-md">Templates</h4>
     <div id="agent-templates" class="cards"></div>
-    <h4 style="color:var(--purple-light);font-size:13px;margin:12px 0 8px">Registered Agents</h4>
+    <h4 class="section-label-pl-md">Registered Agents</h4>
     <div id="agent-list"></div>
   </div>
 </div>
@@ -221,7 +221,7 @@
 <div class="section layout-section" id="docker-sec-containers">
   <div class="section-header"><h3>Containers</h3><div class="stats" id="container-stats" style="margin-bottom:0;flex:1;justify-content:center"></div><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="flex-row-8-center" style="margin-bottom:8px">
+    <div class="flex-row-8-center mb-8">
       <button class="fleet-btn docker-sub active-view" data-dsub="docker-services" data-action="switchDockerSub" data-arg="services">SERVICES</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-all" data-action="switchDockerSub" data-arg="all">ALL</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-registry" data-action="switchDockerSub" data-arg="registry">REGISTRY</button>
@@ -234,7 +234,7 @@
         <button class="fleet-btn" data-action="loadStackInfo" data-arg="status">STACK STATUS</button>
         <button class="fleet-btn" data-action="loadStackInfo" data-arg="health">STACK HEALTH</button>
       </div>
-      <div id="stack-info" style="margin-bottom:12px"></div>
+      <div id="stack-info" class="mb-12"></div>
       <div id="services-container-cards" class="cards"></div>
     </div>
     <!-- ALL containers sub-view -->
@@ -244,7 +244,7 @@
     </div>
     <!-- REGISTRY sub-view -->
     <div id="docker-sub-registry" class="d-none">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <div class="flex-row-8-mb12-center-wrap">
         <button class="fleet-btn c-purple-active" data-action="rescanContainers">RESCAN FLEET</button>
         <button class="fleet-btn" data-action="loadContainerRegistry">REFRESH</button>
         <span id="registry-status" class="text-meta"></span>
@@ -252,11 +252,11 @@
       <div id="rescan-results" style="display:none;margin-bottom:12px"></div>
       <div id="registry-table"></div>
       <div style="margin-top:12px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
-        <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">ADD CONTAINER</h4>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <input class="input" id="reg-name" placeholder="Container name" style="width:160px">
-          <select class="input" id="reg-vmid" style="width:160px"><option value="">Select VM...</option></select>
-          <input class="input" id="reg-port" placeholder="Port (optional)" style="width:100px" type="number">
+        <h4 class="helptext-mb8">ADD CONTAINER</h4>
+        <div class="flex-gap-8-center-wrap">
+          <input class="input w-160" id="reg-name" placeholder="Container name">
+          <select class="input w-160" id="reg-vmid"><option value="">Select VM...</option></select>
+          <input class="input w-100" id="reg-port" placeholder="Port (optional)" type="number">
           <button class="fleet-btn" data-action="addContainer">ADD</button>
           <span id="reg-msg" class="text-meta"></span>
         </div>
@@ -264,22 +264,22 @@
     </div>
     <!-- COMPOSE sub-view -->
     <div id="docker-sub-compose" class="d-none">
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Manage Docker Compose stacks per VM. Select a VM to bring stacks up/down or view compose files.</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-        <select id="compose-vm-select" class="input" style="width:240px"><option value="">Select Docker VM...</option></select>
+      <div class="helptext-mb12">Manage Docker Compose stacks per VM. Select a VM to bring stacks up/down or view compose files.</div>
+      <div class="flex-row-8-mb12-center-wrap">
+        <select id="compose-vm-select" class="input w-240"><option value="">Select Docker VM...</option></select>
         <button class="fleet-btn" data-action="composeUp">COMPOSE UP</button>
-        <button class="fleet-btn" data-action="composeDown" style="color:var(--red);border-color:var(--red)">COMPOSE DOWN</button>
+        <button class="fleet-btn text-red-border-red" data-action="composeDown">COMPOSE DOWN</button>
         <button class="fleet-btn" data-action="composeView">VIEW COMPOSE</button>
       </div>
       <div id="compose-out" class="exec-out" style="min-height:80px">Select a Docker VM and an action.</div>
     </div>
     <!-- FLEET INVENTORY sub-view -->
     <div id="docker-sub-fleet-inv" class="d-none">
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Live fleet-wide container inventory via SSH. Shows all Docker containers across all VMs.</div>
+      <div class="helptext-mb12">Live fleet-wide container inventory via SSH. Shows all Docker containers across all VMs.</div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
         <button class="fleet-btn c-purple-active" data-action="loadDockerFleet">SCAN FLEET</button>
       </div>
-      <div id="docker-fleet-stats" style="margin-bottom:12px"></div>
+      <div id="docker-fleet-stats" class="mb-12"></div>
       <div id="docker-fleet-table"><div class="exec-out">Click SCAN FLEET to discover containers across all Docker VMs.</div></div>
     </div>
   </div>
@@ -300,7 +300,7 @@
     <div class="section-header"><h3>Downloads</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDownloadDetail">DETAIL VIEW</button><span class="chev">▾</span></div>
     <div class="section-body">
       <div class="stats" id="dl-stats"></div>
-      <div id="dl-detail" style="margin-bottom:8px"></div>
+      <div id="dl-detail" class="mb-8"></div>
       <table><thead><tr><th>Name</th><th>Client</th><th>VM</th><th>Size</th><th>Progress</th><th>Speed</th></tr></thead><tbody id="dl-table"></tbody></table>
     </div>
   </div>
@@ -344,25 +344,25 @@
     <div class="stats" id="sec-posture-stats"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
       <div>
-        <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">SECRETS AUDIT</h4>
+        <h4 class="helptext-mb8">SECRETS AUDIT</h4>
         <div id="sec-secrets-audit"><div class="exec-out">Loading...</div></div>
         <div style="display:flex;gap:8px;margin-top:8px">
           <button class="fleet-btn" data-action="loadSecretsLeases">VIEW LEASES</button>
           <button class="fleet-btn" data-action="loadSecretsScan">SCAN RESULTS</button>
         </div>
-        <div id="sec-secrets-detail" style="margin-top:8px"></div>
+        <div id="sec-secrets-detail" class="mt-8"></div>
       </div>
       <div>
-        <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">COMPLIANCE STATUS</h4>
+        <h4 class="helptext-mb8">COMPLIANCE STATUS</h4>
         <div id="sec-comply-status"><div class="exec-out">Loading...</div></div>
       </div>
     </div>
-    <div style="margin-top:16px">
-      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">CERTIFICATE SUMMARY</h4>
+    <div class="mt-16">
+      <h4 class="helptext-mb8">CERTIFICATE SUMMARY</h4>
       <div id="sec-cert-summary"><div class="exec-out">Loading...</div></div>
     </div>
-    <div style="margin-top:16px">
-      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">PATCH STATUS</h4>
+    <div class="mt-16">
+      <h4 class="helptext-mb8">PATCH STATUS</h4>
       <div id="sec-patch-status"><div class="exec-out">Loading...</div></div>
     </div>
   </div>
@@ -469,7 +469,7 @@
         <div style="max-width:300px;margin:0 auto;display:flex;flex-direction:column;gap:8px">
           <input id="vault-auth-user" placeholder="Admin username" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
           <input id="vault-auth-pass" type="password" placeholder="Password" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center">
-          <button class="fleet-btn" data-action="unlockVault" style="color:var(--red);border-color:var(--red)">UNLOCK VAULT</button>
+          <button class="fleet-btn text-red-border-red" data-action="unlockVault">UNLOCK VAULT</button>
         </div>
       </div>
     </div>
@@ -527,7 +527,7 @@
   <div class="section-header"><h3>Continuous Monitoring</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <button class="fleet-btn" data-action="loadPatrolStatus">CHECK STATUS</button>
-    <button class="fleet-btn" data-action="loadPatchCompliance" style="margin-left:4px">PATCH COMPLIANCE</button>
+    <button class="fleet-btn ml-4" data-action="loadPatchCompliance">PATCH COMPLIANCE</button>
     <div class="exec-out" id="patrol-out">Click to check current compliance status.</div>
   </div>
 </div>
@@ -543,7 +543,7 @@
   <button class="sub-tab active-sub" data-view="tools">Overview</button>
   <button class="sub-tab" data-view="playbooks">Playbooks</button>
   <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
   <button class="sub-tab" data-view="dns">DNS</button>
   <button class="sub-tab" data-view="dr">DR</button>
   <button class="sub-tab" data-view="incidents">Incidents</button>
@@ -557,7 +557,7 @@
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
       <button class="fleet-btn" data-action="runDoctor">RUN DOCTOR</button>
-      <select id="diag-host" class="input-field" style="width:180px"><option value="">Select host...</option></select>
+      <select id="diag-host" class="input-field w-180"><option value="">Select host...</option></select>
       <button class="fleet-btn" data-action="runDiagnose">DIAGNOSE HOST</button>
     </div>
     <div class="exec-out" id="diag-out">Run self-diagnostic or diagnose a specific host.</div>
@@ -568,9 +568,9 @@
   <div class="section-header"><h3>Logs</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <select id="log-host" class="input-field" style="width:180px"><option value="">Select host...</option></select>
-      <input type="text" id="log-unit" placeholder="Unit (optional)..." class="input-field" style="width:180px">
-      <input type="number" id="log-lines" placeholder="Lines" value="50" class="input-field" style="width:80px">
+      <select id="log-host" class="input-field w-180"><option value="">Select host...</option></select>
+      <input type="text" id="log-unit" placeholder="Unit (optional)..." class="input-field w-180">
+      <input type="number" id="log-lines" placeholder="Lines" value="50" class="input-field w-80">
       <button class="fleet-btn" data-action="fetchLogs">FETCH LOGS</button>
     </div>
     <div class="exec-out" id="log-out" style="max-height:400px;overflow-y:auto">Enter a host to view its logs.</div>
@@ -580,13 +580,13 @@
 <div class="section">
   <div class="section-header"><h3>Storage</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="margin-bottom:16px">
-      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">ZFS POOLS</h4>
+    <div class="mb-16">
+      <h4 class="helptext-mb8">ZFS POOLS</h4>
       <button class="fleet-btn" data-action="loadZfs">LOAD ZFS STATUS</button>
-      <div class="exec-out" id="zfs-out" style="margin-top:8px">Click to load ZFS pool status.</div>
+      <div class="exec-out mt-8" id="zfs-out">Click to load ZFS pool status.</div>
     </div>
     <div>
-      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">BACKUPS</h4>
+      <h4 class="helptext-mb8">BACKUPS</h4>
       <div class="flex-wrap-8-mb12">
         <button class="fleet-btn" data-action="loadBackups" data-arg="list">LIST</button>
         <button class="fleet-btn" data-action="loadBackups" data-arg="status">STATUS</button>
@@ -599,18 +599,18 @@
 <div class="section">
   <div class="section-header"><h3>Host Discovery & Onboarding</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Discover hosts on your network, add them to the fleet, and onboard with SSH key deployment.</div>
+    <div class="helptext-mb12">Discover hosts on your network, add them to the fleet, and onboard with SSH key deployment.</div>
     <div class="flex-wrap-8-mb12">
-      <input type="text" id="discover-subnet" placeholder="Subnet (e.g. 192.168.1)" class="input-field" style="width:200px">
+      <input type="text" id="discover-subnet" placeholder="Subnet (e.g. 192.168.1)" class="input-field w-200">
       <button class="fleet-btn c-purple-active" data-action="runDiscover">SCAN NETWORK</button>
     </div>
     <div class="exec-out" id="discover-out">Enter a subnet to discover hosts.</div>
-    <div style="margin-top:16px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
-      <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">ADD HOST MANUALLY</h4>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input class="input" id="add-host-ip" placeholder="IP address" style="width:140px">
-        <input class="input" id="add-host-label" placeholder="Label (e.g. web-01)" style="width:140px">
-        <select class="input" id="add-host-type" style="width:120px">
+    <div class="card-block-bg2">
+      <h4 class="helptext-mb8">ADD HOST MANUALLY</h4>
+      <div class="flex-gap-8-center-wrap">
+        <input class="input w-140" id="add-host-ip" placeholder="IP address">
+        <input class="input w-140" id="add-host-label" placeholder="Label (e.g. web-01)">
+        <select class="input w-120" id="add-host-type">
           <option value="vm">VM</option>
           <option value="ct">Container</option>
           <option value="physical">Physical</option>
@@ -619,7 +619,7 @@
           <option value="storage">Storage</option>
           <option value="bmc">BMC</option>
         </select>
-        <input class="input" id="add-host-groups" placeholder="Groups (optional)" style="width:160px">
+        <input class="input w-160" id="add-host-groups" placeholder="Groups (optional)">
         <button class="fleet-btn" data-action="addHostManual">ADD HOST</button>
         <span id="add-host-msg" class="text-meta"></span>
       </div>
@@ -659,11 +659,11 @@
 <div class="section">
   <div class="section-header"><h3>Host Compare</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
-    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Compare two hosts side-by-side (CPU, RAM, disk, packages, services).</div>
+    <div class="helptext-sm-mb8">Compare two hosts side-by-side (CPU, RAM, disk, packages, services).</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-      <select id="compare-host-a" class="input-field" style="width:180px"><option value="">Host A...</option></select>
-      <span style="color:var(--text-dim)">vs</span>
-      <select id="compare-host-b" class="input-field" style="width:180px"><option value="">Host B...</option></select>
+      <select id="compare-host-a" class="input-field w-180"><option value="">Host A...</option></select>
+      <span class="text-dim">vs</span>
+      <select id="compare-host-b" class="input-field w-180"><option value="">Host B...</option></select>
       <button class="fleet-btn" data-action="runHostCompare">COMPARE</button>
     </div>
     <div id="compare-out"><div class="exec-out">Select two hosts and click COMPARE.</div></div>
@@ -678,7 +678,7 @@
 <div class="sub-tabs" id="subtabs-lab">
   <button class="sub-tab active-sub" data-view="lab">Tools</button>
   <button class="sub-tab" data-action="openManageTools">Manage</button>
-  <button class="sub-tab" data-action="openAddTool" style="color:var(--green)">+ Add Tool</button>
+  <button class="sub-tab text-green" data-action="openAddTool">+ Add Tool</button>
 </div>
 <div id="lab-tools-container"></div>
 </div><!-- close lab-view -->
@@ -691,22 +691,22 @@
   <button class="sub-tab" data-view="capacity">Capacity</button>
   <button class="sub-tab" data-view="network">Network</button>
 </div>
-<div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h3 style="font-size:14px;color:var(--purple-light)">Network Topology</h3>
+<div class="card-block-lg">
+  <div class="flex-between-mb12">
+    <h3 class="section-label-pl-h3">Network Topology</h3>
     <span style="font-size:11px;color:var(--text-dim);margin-right:8px">Drag nodes to rearrange</span>
-    <button class="fleet-btn" data-action="resetTopoLayout" style="margin-right:4px">RESET LAYOUT</button>
+    <button class="fleet-btn mr-4" data-action="resetTopoLayout">RESET LAYOUT</button>
     <button class="fleet-btn" data-action="loadTopology">REFRESH</button>
   </div>
-  <div id="topo-legend" style="font-size:11px;color:var(--text-dim);margin-bottom:8px">
+  <div id="topo-legend" class="helptext-sm-mb8">
     <span style="color:var(--purple-light)">&#9632;</span> PVE Node &nbsp;
-    <span style="color:var(--green)">&#9632;</span> VM (running) &nbsp;
-    <span style="color:var(--text-dim)">&#9632;</span> VM (stopped) &nbsp;
-    <span style="color:var(--red)">&#9632;</span> Unreachable &nbsp;
+    <span class="text-green">&#9632;</span> VM (running) &nbsp;
+    <span class="text-dim">&#9632;</span> VM (stopped) &nbsp;
+    <span class="c-red">&#9632;</span> Unreachable &nbsp;
     <span style="color:var(--blue)">&#9632;</span> Device
   </div>
   <svg id="topo-svg" width="calc(100% + 32px)" height="700" style="margin:0 -16px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:visible"></svg>
-  <div id="topo-info" style="margin-top:8px;font-size:12px;color:var(--text-dim)"></div>
+  <div id="topo-info" class="helptext-mt8"></div>
 </div>
 </div><!-- close topology-view -->
 
@@ -718,27 +718,27 @@
   <button class="sub-tab active-sub" data-view="capacity">Capacity</button>
   <button class="sub-tab" data-view="network">Network</button>
 </div>
-<div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h3 style="font-size:14px;color:var(--purple-light)">Capacity Planner</h3>
-    <div style="display:flex;gap:8px">
+<div class="card-block-lg">
+  <div class="flex-between-mb12">
+    <h3 class="section-label-pl-h3">Capacity Planner</h3>
+    <div class="flex-gap-8">
       <button class="fleet-btn" data-action="forceCapSnapshot">TAKE SNAPSHOT</button>
       <button class="fleet-btn" data-action="loadCapacity">REFRESH</button>
     </div>
   </div>
-  <div id="cap-info" style="font-size:12px;color:var(--text-dim);margin-bottom:12px"></div>
+  <div id="cap-info" class="helptext-mb12"></div>
   <div id="cap-table"></div>
 </div>
-<div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h3 style="font-size:14px;color:var(--purple-light)">Capacity Trends</h3>
-    <div style="display:flex;gap:8px"><button class="fleet-btn" data-action="takeTrendSnapshot">TAKE SNAPSHOT</button><button class="fleet-btn" data-action="loadTrendData">LOAD TRENDS</button></div>
+<div class="card-block-lg">
+  <div class="flex-between-mb12">
+    <h3 class="section-label-pl-h3">Capacity Trends</h3>
+    <div class="flex-gap-8"><button class="fleet-btn" data-action="takeTrendSnapshot">TAKE SNAPSHOT</button><button class="fleet-btn" data-action="loadTrendData">LOAD TRENDS</button></div>
   </div>
   <div id="trend-data"><div class="exec-out">Click to load trend data.</div></div>
 </div>
-<div style="background:var(--card);border:1px solid var(--border-light);border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h3 style="font-size:14px;color:var(--purple-light)">Migration Recommendations</h3>
+<div class="card-block-lg">
+  <div class="flex-between-mb12">
+    <h3 class="section-label-pl-h3">Migration Recommendations</h3>
     <button class="fleet-btn" data-action="loadCapRecommend">ANALYZE</button>
   </div>
   <div id="cap-recommend"><div class="exec-out">Click ANALYZE to get optimization suggestions.</div></div>
@@ -751,7 +751,7 @@
   <button class="sub-tab" data-view="tools">Overview</button>
   <button class="sub-tab active-sub" data-view="playbooks">Playbooks</button>
   <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
   <button class="sub-tab" data-view="dns">DNS</button>
   <button class="sub-tab" data-view="dr">DR</button>
   <button class="sub-tab" data-view="incidents">Incidents</button>
@@ -759,25 +759,25 @@
   <button class="sub-tab" data-view="automation">Automation</button>
   <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
-<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h3 style="font-size:14px;color:var(--purple-light)">Incident Playbooks</h3>
+<div class="card-block-thick">
+  <div class="flex-between-mb12">
+    <h3 class="section-label-pl-h3">Incident Playbooks</h3>
     <button class="fleet-btn" data-action="loadPlaybooks">REFRESH</button>
   </div>
   <div id="pb-list"></div>
-  <div id="pb-runner" class="d-none" style="margin-top:16px">
+  <div id="pb-runner" class="d-none mt-16">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <h4 id="pb-runner-title" style="font-size:13px;color:var(--text)"></h4>
       <button class="fleet-btn" data-action="closePbRunner">CLOSE</button>
     </div>
     <div id="pb-steps"></div>
   </div>
-  <div style="margin-top:16px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
-    <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">CREATE PLAYBOOK</h4>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input class="input" id="pb-create-name" placeholder="Playbook name" style="width:180px">
-      <input class="input" id="pb-create-desc" placeholder="Description" style="width:240px">
-      <input class="input" id="pb-create-trigger" placeholder="Trigger (optional)" style="width:160px">
+  <div class="card-block-bg2">
+    <h4 class="helptext-mb8">CREATE PLAYBOOK</h4>
+    <div class="flex-gap-8-center-wrap">
+      <input class="input w-180" id="pb-create-name" placeholder="Playbook name">
+      <input class="input w-240" id="pb-create-desc" placeholder="Description">
+      <input class="input w-160" id="pb-create-trigger" placeholder="Trigger (optional)">
       <button class="fleet-btn" data-action="createPlaybook">CREATE</button>
       <span id="pb-create-msg" class="text-meta"></span>
     </div>
@@ -791,7 +791,7 @@
   <button class="sub-tab" data-view="tools">Overview</button>
   <button class="sub-tab" data-view="playbooks">Playbooks</button>
   <button class="sub-tab active-sub" data-view="gitops">Config Sync</button>
-  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
   <button class="sub-tab" data-view="dns">DNS</button>
   <button class="sub-tab" data-view="dr">DR</button>
   <button class="sub-tab" data-view="incidents">Incidents</button>
@@ -799,24 +799,24 @@
   <button class="sub-tab" data-view="automation">Automation</button>
   <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
-<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h3 style="font-size:14px;color:var(--purple-light)">GitOps Config Sync</h3>
-    <div style="display:flex;gap:8px">
+<div class="card-block-thick">
+  <div class="flex-between-mb12">
+    <h3 class="section-label-pl-h3">GitOps Config Sync</h3>
+    <div class="flex-gap-8">
       <button class="fleet-btn" data-action="gitopsInit">INIT</button>
       <button class="fleet-btn" data-action="gitopsFetch">SYNC</button>
       <button class="fleet-btn" data-action="loadGitops">REFRESH</button>
     </div>
   </div>
-  <div id="go-status" style="font-size:12px;color:var(--text-dim);margin-bottom:12px"></div>
+  <div id="go-status" class="helptext-mb12"></div>
   <div id="go-actions" class="d-none" style="gap:8px;margin-bottom:12px">
     <button class="fleet-btn" data-action="gitopsApply">APPLY CHANGES</button>
     <button class="fleet-btn" data-action="gitopsDiff">VIEW DIFF</button>
   </div>
-  <div id="go-diff" class="d-none" style="margin-bottom:12px">
+  <div id="go-diff" class="d-none mb-12">
     <pre id="go-diff-content" style="font-size:11px;color:var(--text);background:rgba(0,0,0,0.3);padding:12px;border-radius:6px;white-space:pre-wrap;max-height:300px;overflow-y:auto"></pre>
   </div>
-  <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">COMMIT HISTORY</h4>
+  <h4 class="helptext-mb8">COMMIT HISTORY</h4>
   <div id="go-log"></div>
 </div>
 </div><!-- close gitops-view -->
@@ -830,7 +830,7 @@
   <button class="sub-tab" data-view="tools">Overview</button>
   <button class="sub-tab" data-view="playbooks">Playbooks</button>
   <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab active-sub" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab active-sub c-red" data-view="chaos">Chaos</button>
   <button class="sub-tab" data-view="dns">DNS</button>
   <button class="sub-tab" data-view="dr">DR</button>
   <button class="sub-tab" data-view="incidents">Incidents</button>
@@ -838,8 +838,8 @@
   <button class="sub-tab" data-view="automation">Automation</button>
   <button class="sub-tab" data-view="plugins">Plugins</button>
 </div>
-<div style="background:var(--card);border:3px solid var(--input-border);border-radius:10px;padding:16px;margin-bottom:16px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+<div class="card-block-thick">
+  <div class="flex-between-mb12">
     <h3 style="font-size:14px;color:var(--red)">Chaos Engineering</h3>
     <button class="fleet-btn" data-action="loadChaos">REFRESH</button>
   </div>
@@ -847,10 +847,10 @@
     Chaos experiments intentionally disrupt services to test recovery. Production hosts are blocked by safety gates. Use only on lab/dev infrastructure.
   </div>
   <div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--input-border)">
-    <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">NEW EXPERIMENT</h4>
+    <h4 class="helptext-mb8">NEW EXPERIMENT</h4>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-      <input id="chaos-name" placeholder="Experiment name" class="freq-input" style="flex:1;min-width:120px">
-      <select id="chaos-type" class="freq-input" style="flex:1;min-width:120px">
+      <input id="chaos-name" placeholder="Experiment name" class="freq-input flex-min-120">
+      <select id="chaos-type" class="freq-input flex-min-120">
         <option value="">Select type...</option>
         <option value="service_kill">service_kill — Stop a Docker container</option>
         <option value="service_restart">service_restart — Restart a systemd service</option>
@@ -858,13 +858,13 @@
         <option value="disk_fill">disk_fill — Simulate disk pressure</option>
         <option value="cpu_stress">cpu_stress — Spike CPU load</option>
       </select>
-      <select id="chaos-target" class="freq-input" style="flex:1;min-width:100px"><option value="">Select host...</option></select>
-      <input id="chaos-service" placeholder="Service/container" class="freq-input" style="flex:1;min-width:100px">
-      <input id="chaos-duration" placeholder="Duration (s)" type="number" value="60" class="freq-input" style="width:100px">
+      <select id="chaos-target" class="freq-input flex-min-100"><option value="">Select host...</option></select>
+      <input id="chaos-service" placeholder="Service/container" class="freq-input flex-min-100">
+      <input id="chaos-duration" placeholder="Duration (s)" type="number" value="60" class="freq-input w-100">
       <button class="fleet-btn" style="background:var(--red);color:#fff" data-action="chaosRun">INJECT</button>
     </div>
   </div>
-  <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">EXPERIMENT LOG</h4>
+  <h4 class="helptext-mb8">EXPERIMENT LOG</h4>
   <div id="chaos-log"></div>
 </div>
 </div><!-- close chaos-view -->
@@ -879,7 +879,7 @@
   <div class="section">
     <div class="section-header"><h3>Dashboard Layout</h3><span class="chev">▾</span></div>
     <div class="section-body">
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Configure which widgets appear on your HOME dashboard and reorder sections on any view.</div>
+      <div class="helptext-mb12">Configure which widgets appear on your HOME dashboard and reorder sections on any view.</div>
       <div class="flex-wrap-8-mb12">
         <button class="fleet-btn" data-action="openHomeWidgetConfig">CONFIGURE HOME WIDGETS</button>
         <button class="fleet-btn" data-action="openLayoutConfig">CONFIGURE CURRENT VIEW</button>
@@ -890,11 +890,11 @@
   <div class="section">
     <div class="section-header"><h3>Fleet Costs</h3><span class="chev">▾</span></div>
     <div class="section-body">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <span style="font-size:12px;color:var(--text-dim)">Track infrastructure costs across the fleet.</span>
+      <div class="flex-between-mb12">
+        <span class="helptext">Track infrastructure costs across the fleet.</span>
         <div style="display:flex;gap:4px"><button class="fleet-btn" data-action="showCostConfig">CONFIG</button><button class="fleet-btn" data-action="loadCosts">REFRESH</button></div>
       </div>
-      <div id="cost-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
+      <div id="cost-summary" class="flex-gap-16-wrap-mb16"></div>
       <div id="cost-table"></div>
     </div>
   </div>
@@ -902,21 +902,21 @@
   <div class="section">
     <div class="section-header"><h3>Sites</h3><span class="chev">▾</span></div>
     <div class="section-body">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <span style="font-size:12px;color:var(--text-dim)">Connect and manage multiple FREQ instances.</span>
-        <div style="display:flex;gap:8px">
+      <div class="flex-between-mb12">
+        <span class="helptext">Connect and manage multiple FREQ instances.</span>
+        <div class="flex-gap-8">
           <button class="fleet-btn" data-action="fedPoll">POLL ALL</button>
           <button class="fleet-btn" data-action="loadFederation">REFRESH</button>
         </div>
       </div>
-      <div id="fed-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px"></div>
+      <div id="fed-summary" class="flex-gap-16-wrap-mb16"></div>
       <div id="fed-sites"></div>
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--input-border)">
-        <h4 style="font-size:12px;color:var(--text-dim);margin-bottom:8px">REGISTER NEW SITE</h4>
+        <h4 class="helptext-mb8">REGISTER NEW SITE</h4>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input id="fed-name" placeholder="Site name" style="flex:1;min-width:100px" class="freq-input">
+          <input id="fed-name" placeholder="Site name" class="freq-input flex-min-100">
           <input id="fed-url" placeholder="https://freq.dc02:8888" style="flex:2;min-width:200px" class="freq-input">
-          <input id="fed-secret" placeholder="Shared secret (optional)" type="password" style="flex:1;min-width:100px" class="freq-input">
+          <input id="fed-secret" placeholder="Shared secret (optional)" type="password" class="freq-input flex-min-100">
           <button class="fleet-btn" data-action="fedRegister">REGISTER</button>
         </div>
       </div>
@@ -926,7 +926,7 @@
   <div class="section">
     <div class="section-header"><h3>Lab Assignment</h3><span class="chev">▾</span></div>
     <div class="section-body">
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Tag any host or VM as Lab Equipment. Tagged items appear in the LAB EQUIPMENT section on the Fleet page.</div>
+      <div class="helptext-mb12">Tag any host or VM as Lab Equipment. Tagged items appear in the LAB EQUIPMENT section on the Fleet page.</div>
       <div id="lab-assign-list"><div class="skeleton"></div></div>
     </div>
   </div>
@@ -959,8 +959,8 @@
     <div class="section-body">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
         <div>
-          <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block">Auto-Refresh Interval</label>
-          <select id="pref-refresh" class="input-field" style="width:100%">
+          <label class="helptext-mb4-block">Auto-Refresh Interval</label>
+          <select id="pref-refresh" class="input-field w-full">
             <option value="0">Disabled</option>
             <option value="10">10 seconds</option>
             <option value="30" selected>30 seconds</option>
@@ -969,8 +969,8 @@
           </select>
         </div>
         <div>
-          <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block">UI Density</label>
-          <select id="pref-density" class="input-field" style="width:100%">
+          <label class="helptext-mb4-block">UI Density</label>
+          <select id="pref-density" class="input-field w-full">
             <option value="compact">Compact</option>
             <option value="normal" selected>Normal</option>
             <option value="comfortable">Comfortable</option>
@@ -1023,7 +1023,7 @@
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
       <button class="fleet-btn" data-action="loadConfigHistory">BACKUP HISTORY</button>
-      <input type="text" id="config-search-input" placeholder="Search configs (regex)..." class="input-field" style="width:200px">
+      <input type="text" id="config-search-input" placeholder="Search configs (regex)..." class="input-field w-200">
       <button class="fleet-btn" data-action="searchConfigs">SEARCH</button>
     </div>
     <div class="exec-out" id="config-backup-out">View config backup history or search across saved configs.</div>
@@ -1034,7 +1034,7 @@
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
       <button class="fleet-btn c-purple-active" data-action="loadDepMap">LOAD MAP</button>
-      <input type="text" id="impact-host-input" placeholder="Host for impact analysis..." class="input-field" style="width:200px">
+      <input type="text" id="impact-host-input" placeholder="Host for impact analysis..." class="input-field w-200">
       <button class="fleet-btn" data-action="runImpactAnalysis">IMPACT ANALYSIS</button>
     </div>
     <div id="dep-map-out"><div class="exec-out">Load the dependency map to see infrastructure relationships.</div></div>
@@ -1045,7 +1045,7 @@
   <div class="section-body">
     <button class="fleet-btn" data-action="loadNetmonData">POLL DATA</button>
     <button class="fleet-btn" data-action="loadNetmonInterfaces">INTERFACES</button>
-    <div class="exec-out" id="netmon-out" style="margin-top:8px">Click to load network monitoring data.</div>
+    <div class="exec-out mt-8" id="netmon-out">Click to load network monitoring data.</div>
   </div>
 </div>
 <div class="section">
@@ -1126,7 +1126,7 @@
   <button class="sub-tab" data-view="tools">Overview</button>
   <button class="sub-tab" data-view="playbooks">Playbooks</button>
   <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
   <button class="sub-tab active-sub" data-view="dns">DNS</button>
   <button class="sub-tab" data-view="dr">DR</button>
   <button class="sub-tab" data-view="incidents">Incidents</button>
@@ -1145,7 +1145,7 @@
   <div class="section-header"><h3>Internal DNS</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <input type="text" id="dns-query-input" placeholder="Domain to check..." class="input-field" style="width:240px">
+      <input type="text" id="dns-query-input" placeholder="Domain to check..." class="input-field w-240">
       <button class="fleet-btn" data-action="runDnsCheck">CHECK</button>
     </div>
     <div class="exec-out" id="dns-check-out">Enter a domain to check DNS resolution.</div>
@@ -1177,9 +1177,9 @@
   <div class="section-header"><h3>VPN Tunnels</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadVpnPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="vpn-stats"></div>
-    <h4 style="font-size:12px;color:var(--text-dim);margin:12px 0 8px">WIREGUARD</h4>
+    <h4 class="helptext-section-tight">WIREGUARD</h4>
     <div id="vpn-wg-content"><div class="exec-out">Loading WireGuard status...</div></div>
-    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">OPENVPN</h4>
+    <h4 class="helptext-section">OPENVPN</h4>
     <div id="vpn-ovpn-content"><div class="exec-out">Loading OpenVPN status...</div></div>
   </div>
 </div>
@@ -1193,7 +1193,7 @@
   <button class="sub-tab" data-view="tools">Overview</button>
   <button class="sub-tab" data-view="playbooks">Playbooks</button>
   <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
   <button class="sub-tab" data-view="dns">DNS</button>
   <button class="sub-tab active-sub" data-view="dr">DR</button>
   <button class="sub-tab" data-view="incidents">Incidents</button>
@@ -1233,7 +1233,7 @@
 <div class="section">
   <div class="section-header"><h3>Backup Policies</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadBackupPolicies">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
-    <div id="backup-policy-stats" style="margin-bottom:12px"></div>
+    <div id="backup-policy-stats" class="mb-12"></div>
     <div id="backup-policy-list"><div class="exec-out">Loading backup policies...</div></div>
   </div>
 </div>
@@ -1247,7 +1247,7 @@
   <button class="sub-tab" data-view="tools">Overview</button>
   <button class="sub-tab" data-view="playbooks">Playbooks</button>
   <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
   <button class="sub-tab" data-view="dns">DNS</button>
   <button class="sub-tab" data-view="dr">DR</button>
   <button class="sub-tab active-sub" data-view="incidents">Incidents</button>
@@ -1263,10 +1263,10 @@
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>On-Call</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadOncallSchedule">FULL SCHEDULE</button><button class="fleet-btn" data-action="loadOncall" style="margin-left:4px">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>On-Call</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadOncallSchedule">FULL SCHEDULE</button><button class="fleet-btn ml-4" data-action="loadOncall">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="oncall-info"><div class="exec-out">Loading on-call info...</div></div>
-    <div id="oncall-schedule-detail" style="margin-top:8px"></div>
+    <div id="oncall-schedule-detail" class="mt-8"></div>
   </div>
 </div>
 <div class="section">
@@ -1291,7 +1291,7 @@
   <button class="sub-tab" data-view="tools">Overview</button>
   <button class="sub-tab" data-view="playbooks">Playbooks</button>
   <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
   <button class="sub-tab" data-view="dns">DNS</button>
   <button class="sub-tab" data-view="dr">DR</button>
   <button class="sub-tab" data-view="incidents">Incidents</button>
@@ -1313,10 +1313,10 @@
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>Alert Rules</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadMetricAlerts">REFRESH</button><button class="fleet-btn" data-action="runAlertCheck" style="margin-left:4px">EVALUATE</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>Alert Rules</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadMetricAlerts">REFRESH</button><button class="fleet-btn ml-4" data-action="runAlertCheck">EVALUATE</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="metric-alert-rules"><div class="exec-out">Loading alert rules...</div></div>
-    <div id="metric-alert-triggered" style="margin-top:12px"></div>
+    <div id="metric-alert-triggered" class="mt-12"></div>
   </div>
 </div>
 <div class="section">
@@ -1326,7 +1326,7 @@
   </div>
 </div>
 <div class="section">
-  <div class="section-header"><h3>SLA / Uptime</h3><div class="flex-1"></div><button class="fleet-btn" data-action="recordSlaCheck">RECORD CHECK</button><button class="fleet-btn" data-action="loadSlaData" style="margin-left:4px">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-header"><h3>SLA / Uptime</h3><div class="flex-1"></div><button class="fleet-btn" data-action="recordSlaCheck">RECORD CHECK</button><button class="fleet-btn ml-4" data-action="loadSlaData">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="sla-data"><div class="exec-out">Loading SLA data...</div></div>
   </div>
@@ -1341,7 +1341,7 @@
   <button class="sub-tab" data-view="tools">Overview</button>
   <button class="sub-tab" data-view="playbooks">Playbooks</button>
   <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
   <button class="sub-tab" data-view="dns">DNS</button>
   <button class="sub-tab" data-view="dr">DR</button>
   <button class="sub-tab" data-view="incidents">Incidents</button>
@@ -1353,11 +1353,11 @@
   <div class="section-header"><h3>Automation Engine</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadAutomationPage">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="stats" id="auto-stats"></div>
-    <h4 style="font-size:12px;color:var(--text-dim);margin:12px 0 8px">ACTIVE REACTORS</h4>
+    <h4 class="helptext-section-tight">ACTIVE REACTORS</h4>
     <div id="auto-reactors"><div class="exec-out">Reactors respond to fleet events automatically.</div></div>
-    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">WORKFLOWS</h4>
+    <h4 class="helptext-section">WORKFLOWS</h4>
     <div id="auto-workflows"></div>
-    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">SCHEDULED JOBS</h4>
+    <h4 class="helptext-section">SCHEDULED JOBS</h4>
     <div id="auto-jobs"></div>
   </div>
 </div>
@@ -1365,9 +1365,9 @@
   <div class="section-header"><h3>Job Scheduler</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadScheduleJobs">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="schedule-jobs"><div class="exec-out">Loading scheduled jobs...</div></div>
-    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">JOB TEMPLATES</h4>
+    <h4 class="helptext-section">JOB TEMPLATES</h4>
     <div id="schedule-templates"></div>
-    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">EXECUTION LOG</h4>
+    <h4 class="helptext-section">EXECUTION LOG</h4>
     <div id="schedule-log"></div>
   </div>
 </div>
@@ -1375,7 +1375,7 @@
   <div class="section-header"><h3>Webhooks</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadWebhooks">REFRESH</button><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div id="webhook-list"><div class="exec-out">Loading webhooks...</div></div>
-    <h4 style="font-size:12px;color:var(--text-dim);margin:16px 0 8px">WEBHOOK LOG</h4>
+    <h4 class="helptext-section">WEBHOOK LOG</h4>
     <div id="webhook-log"></div>
   </div>
 </div>
@@ -1389,7 +1389,7 @@
   <button class="sub-tab" data-view="tools">Overview</button>
   <button class="sub-tab" data-view="playbooks">Playbooks</button>
   <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab" data-view="chaos" style="color:var(--red)">Chaos</button>
+  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
   <button class="sub-tab" data-view="dns">DNS</button>
   <button class="sub-tab" data-view="dr">DR</button>
   <button class="sub-tab" data-view="incidents">Incidents</button>
@@ -1516,18 +1516,18 @@
     <div style="margin-top:16px;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
       <h4 style="font-size:13px;margin-bottom:12px;color:var(--purple-light)">Create Rule</h4>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div><label class="label-sub-10">Name</label><input id="rule-name" class="input-sm" style="width:100%" placeholder="my-rule"></div>
-        <div><label class="label-sub-10">Condition</label><select id="rule-cond" class="input-sm" style="width:100%"><option value="host_unreachable">Host Unreachable</option><option value="cpu_above">CPU Above</option><option value="ram_above">RAM Above %</option><option value="disk_above">Disk Above %</option><option value="docker_down">Docker Down</option></select></div>
-        <div><label class="label-sub-10">Target</label><input id="rule-target" class="input-sm" style="width:100%" value="*" placeholder="* or hostname"></div>
-        <div><label class="label-sub-10">Threshold</label><input id="rule-threshold" class="input-sm" style="width:100%" value="0" type="number"></div>
-        <div><label class="label-sub-10">Duration (s)</label><input id="rule-duration" class="input-sm" style="width:100%" value="0" type="number"></div>
-        <div><label class="label-sub-10">Cooldown (s)</label><input id="rule-cooldown" class="input-sm" style="width:100%" value="300" type="number"></div>
-        <div><label class="label-sub-10">Severity</label><select id="rule-severity" class="input-sm" style="width:100%"><option value="warning">Warning</option><option value="critical">Critical</option><option value="info">Info</option></select></div>
+        <div><label class="label-sub-10">Name</label><input id="rule-name" class="input-sm w-full" placeholder="my-rule"></div>
+        <div><label class="label-sub-10">Condition</label><select id="rule-cond" class="input-sm w-full"><option value="host_unreachable">Host Unreachable</option><option value="cpu_above">CPU Above</option><option value="ram_above">RAM Above %</option><option value="disk_above">Disk Above %</option><option value="docker_down">Docker Down</option></select></div>
+        <div><label class="label-sub-10">Target</label><input id="rule-target" class="input-sm w-full" value="*" placeholder="* or hostname"></div>
+        <div><label class="label-sub-10">Threshold</label><input id="rule-threshold" class="input-sm w-full" value="0" type="number"></div>
+        <div><label class="label-sub-10">Duration (s)</label><input id="rule-duration" class="input-sm w-full" value="0" type="number"></div>
+        <div><label class="label-sub-10">Cooldown (s)</label><input id="rule-cooldown" class="input-sm w-full" value="300" type="number"></div>
+        <div><label class="label-sub-10">Severity</label><select id="rule-severity" class="input-sm w-full"><option value="warning">Warning</option><option value="critical">Critical</option><option value="info">Info</option></select></div>
       </div>
       <button class="fleet-btn mt-12" data-action="createRule">CREATE RULE</button>
       <div id="rule-create-msg" class="mt-8"></div>
     </div>
-    <div style="margin-top:16px">
+    <div class="mt-16">
       <h4 style="font-size:13px;margin-bottom:8px;color:var(--purple-light)">Recent Alerts</h4>
       <div id="alert-history"><span class="c-dim-fs12">No alerts yet</span></div>
     </div>
@@ -1545,10 +1545,10 @@
   <div class="section-header"><h3>About</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="crd" style="margin-bottom:24px;border-left:3px solid var(--purple)">
-      <h3 style="font-size:16px">About PVE FREQ</h3>
+      <h3 class="fs-16">About PVE FREQ</h3>
       <p class="mt-8">FREQ is a zero-dependency Proxmox fleet management tool. Pure Python stdlib. One binary. Every command you need to manage VMs, containers, networking, storage, and monitoring across your entire cluster.</p>
       <p class="mt-8">Built from scratch — 16,000+ lines of bash rewritten into clean Python. SSH to 6 platform types. Personality system. Knowledge base. Risk analysis. Auto-audit pipeline. Agent platform for AI-driven infrastructure.</p>
-      <p style="margin-top:12px;color:var(--purple-light)"><em>"freq did not come to play."</em></p>
+      <p class="section-label-pl-mt12"><em>"freq did not come to play."</em></p>
     </div>
     <h3 style="color:var(--purple-light);font-size:14px;margin-bottom:16px">Capabilities</h3>
     <div class="timeline">
@@ -1582,13 +1582,13 @@
       <div style="font-size:28px;margin-bottom:12px;opacity:0.6">&#9881;</div>
       <div style="font-size:13px">Loading Host Details...</div>
     </div>
-    <div id="hd-content" style="display:none"></div>
+    <div id="hd-content" class="d-none"></div>
   </div>
 </div>
 
 <!-- ═══ TOAST + MODAL ═══ -->
 <div id="toast-container" class="toast-container"></div>
-<div id="modal-container" class="modal-overlay" style="display:none"></div>
+<div id="modal-container" class="modal-overlay d-none"></div>
 
 <!-- Terminal Overlay -->
 <div id="terminal-overlay" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.92);backdrop-filter:blur(8px);padding:0">
@@ -1599,8 +1599,8 @@
         <span id="terminal-title" style="color:var(--text);font-size:12px;font-family:var(--font-mono)"></span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <button class="fleet-btn" data-action="termCopy" style="font-size:9px;padding:2px 8px">COPY</button>
-        <button class="fleet-btn" data-action="termPaste" style="font-size:9px;padding:2px 8px">PASTE</button>
+        <button class="fleet-btn fs-9-px-2-8" data-action="termCopy">COPY</button>
+        <button class="fleet-btn fs-9-px-2-8" data-action="termPaste">PASTE</button>
         <button class="fleet-btn" data-action="closeTerminal" style="font-size:9px;padding:2px 8px;color:var(--red)">CLOSE</button>
       </div>
     </div>
@@ -1616,10 +1616,10 @@
     </div>
     <div id="search-results" style="max-height:420px;overflow-y:auto;padding:4px 0"></div>
     <div style="padding:8px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-dim);display:flex;gap:16px">
-      <span><kbd style="padding:1px 5px;border:1px solid var(--border);border-radius:3px;font-family:var(--font-mono);font-size:10px">&#8593;&#8595;</kbd> navigate</span>
-      <span><kbd style="padding:1px 5px;border:1px solid var(--border);border-radius:3px;font-family:var(--font-mono);font-size:10px">&#9166;</kbd> select</span>
-      <span><kbd style="padding:1px 5px;border:1px solid var(--border);border-radius:3px;font-family:var(--font-mono);font-size:10px">esc</kbd> close</span>
-      <span style="margin-left:auto"><kbd style="padding:1px 5px;border:1px solid var(--border);border-radius:3px;font-family:var(--font-mono);font-size:10px">&gt;</kbd> actions</span>
+      <span><kbd class="kbd-mono-10">&#8593;&#8595;</kbd> navigate</span>
+      <span><kbd class="kbd-mono-10">&#9166;</kbd> select</span>
+      <span><kbd class="kbd-mono-10">esc</kbd> close</span>
+      <span class="ml-auto"><kbd class="kbd-mono-10">&gt;</kbd> actions</span>
     </div>
   </div>
 </div>
@@ -1629,10 +1629,10 @@
   <div style="max-width:400px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:24px" data-action="modalNoop">
     <h3 style="margin:0 0 16px;color:var(--purple-light)">Keyboard Shortcuts</h3>
     <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px">
-      <kbd style="padding:2px 6px;border:1px solid var(--border);border-radius:3px">Ctrl+K</kbd><span>Global search</span>
-      <kbd style="padding:2px 6px;border:1px solid var(--border);border-radius:3px">1-8</kbd><span>Navigate to view</span>
-      <kbd style="padding:2px 6px;border:1px solid var(--border);border-radius:3px">Esc</kbd><span>Close overlay</span>
-      <kbd style="padding:2px 6px;border:1px solid var(--border);border-radius:3px">?</kbd><span>This help</span>
+      <kbd class="kbd-tag">Ctrl+K</kbd><span>Global search</span>
+      <kbd class="kbd-tag">1-8</kbd><span>Navigate to view</span>
+      <kbd class="kbd-tag">Esc</kbd><span>Close overlay</span>
+      <kbd class="kbd-tag">?</kbd><span>This help</span>
     </div>
   </div>
 </div>

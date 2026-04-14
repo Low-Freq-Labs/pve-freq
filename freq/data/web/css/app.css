@@ -1194,6 +1194,82 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 .toggle-sw { position: relative; width: 40px; height: 22px; cursor: pointer; display: block; flex-shrink: 0; }
 
 /* ═══════════════════════════════════════════════════════════════════
+   20260413Q UTILITY CLASSES — F16 inline-style-sweep follow-up
+   Replaces the high-frequency inline style="…" patterns identified
+   in the R-WEB-INLINE-STYLE-CSP-SWEEP-20260413Q survey. Adding them
+   as a contiguous block so the diff is greppable; existing utility
+   classes above are unchanged.
+   ═══════════════════════════════════════════════════════════════════ */
+/* Help text patterns (small dim text used as descriptions / labels) */
+.helptext-mb8 { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
+.helptext-mb12 { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
+.helptext-mb4-block { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; display: block; }
+.helptext-section { font-size: 12px; color: var(--text-dim); margin: 16px 0 8px; }
+.helptext-section-tight { font-size: 12px; color: var(--text-dim); margin: 12px 0 8px; }
+.helptext-sm-mb8 { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+.helptext-mt8 { margin-top: 8px; font-size: 12px; color: var(--text-dim); }
+.helptext { font-size: 12px; color: var(--text-dim); }
+/* Section headings in purple-light tone */
+.section-label-pl-md { color: var(--purple-light); font-size: 13px; margin: 12px 0 8px; }
+.section-label-pl-mt12 { margin-top: 12px; color: var(--purple-light); }
+.section-label-pl-h3 { font-size: 14px; color: var(--purple-light); }
+/* Width utilities for input / select sizing */
+.w-80 { width: 80px; }
+.w-100 { width: 100px; }
+.w-120 { width: 120px; }
+.w-140 { width: 140px; }
+.w-160 { width: 160px; }
+.w-180 { width: 180px; }
+.w-200 { width: 200px; }
+.w-240 { width: 240px; }
+.w-260 { width: 260px; }
+/* Flex helpers used in form rows / button groups */
+.flex-min-100 { flex: 1; min-width: 100px; }
+.flex-min-120 { flex: 1; min-width: 120px; }
+.flex-gap-8 { display: flex; gap: 8px; }
+.flex-gap-8-center-wrap { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.flex-gap-16-wrap-mb16 { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.flex-row-8-mb12-center-wrap { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+/* Margins / padding utilities not previously declared */
+.mt-16 { margin-top: 16px; }
+.ml-4 { margin-left: 4px; }
+.ml-8 { margin-left: 8px; }
+.ml-auto { margin-left: auto; }
+.mr-4 { margin-right: 4px; }
+/* Card / container patterns */
+.card-block-lg {
+  background: var(--card);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.card-block-thick {
+  background: var(--card);
+  border: 3px solid var(--input-border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.card-block-bg2 {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+/* Inline keyboard / kbd labels */
+.kbd-tag { padding: 2px 6px; border: 1px solid var(--border); border-radius: 3px; }
+.kbd-mono-10 { padding: 1px 5px; border: 1px solid var(--border); border-radius: 3px; font-family: var(--font-mono); font-size: 10px; }
+/* Misc one-shots that previously lived as inline style attrs */
+.text-red-border-red { color: var(--red); border-color: var(--red); }
+.text-green { color: var(--green); }
+.text-dim { color: var(--text-dim); }
+.fs-16 { font-size: 16px; }
+.fs-9-px-2-8 { font-size: 9px; padding: 2px 8px; }
+
+/* ═══════════════════════════════════════════════════════════════════
    MOBILE RESPONSIVE
    ═══════════════════════════════════════════════════════════════════ */
 .mobile-menu-btn {

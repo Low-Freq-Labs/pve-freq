@@ -4834,14 +4834,17 @@ a:hover{{text-decoration:underline}}
         #     CSP can therefore drop 'unsafe-inline' from script-src entirely —
         #     attempts to reintroduce inline handlers will be blocked at the
         #     browser. Regression guarded by test_web_csp_inline_contract.py.
-        #   style-src: 264 inline style="…" attrs across the shipped UI (was 275
-        #     before token M, 267 after M, 266 after O when the fleet-filter
-        #     input dropped its inline style during the long-tail extract,
-        #     264 after Morty's home empty-state cleanup at 3ae8a30). Removing
-        #     the rest needs either a large CSS-class refactor or a nonce/hash-
-        #     based CSP. Tracked as F16 of R-SECURITY-TRUST-AUDIT-20260413P,
-        #     scheduled as a separate follow-up token. 'unsafe-inline' on
-        #     style-src stays until that lands.
+        #   style-src: 90 inline style="…" attrs across the shipped UI (was 275
+        #     before token M, 267 after M, 266 after O, 264 after Morty's home
+        #     empty-state cleanup at 3ae8a30, 90 after token Q's utility-class
+        #     sweep at this commit). The remaining 90 are bespoke single-element
+        #     styles that didn't match any high-frequency pattern; reaching zero
+        #     would need either ~90 one-off classes or a nonce/hash-based CSP.
+        #     R-WEB-INLINE-STYLE-CSP-SWEEP-20260413Q tracked as the follow-up
+        #     to F16 of R-SECURITY-TRUST-AUDIT-20260413P; the bulk dedupe lands
+        #     here, the bespoke long-tail is a separate follow-up if Finn wants
+        #     style-src tightened further. 'unsafe-inline' on style-src stays
+        #     until that follow-up lands.
         #
         # No host names appear below. An air-gapped dashboard MUST NOT fetch any
         # asset off-box — that's what R-WEB-EXTERNAL-ASSET-CONTRACT-20260413L
