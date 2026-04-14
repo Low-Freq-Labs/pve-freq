@@ -501,6 +501,11 @@ function doLogout(){
   try{if(_rrdTimer){clearInterval(_rrdTimer);_rrdTimer=null;}}catch(e){}
   try{if(_healthTimer){clearInterval(_healthTimer);_healthTimer=null;}}catch(e){}
   try{if(_fleetTimer){clearInterval(_fleetTimer);_fleetTimer=null;}}catch(e){}
+  try{if(_doctorProbeTimer){clearInterval(_doctorProbeTimer);_doctorProbeTimer=null;}}catch(e){}
+  try{if(_pveMetricsTimer){clearInterval(_pveMetricsTimer);_pveMetricsTimer=null;}}catch(e){}
+  /* Reset doctor + stream freshness state so the next login doesn't
+   * inherit the previous session's stale snapshot or "LIVE 47h" badge. */
+  _doctorTruthCache=null;_lastStreamEventTs=0;_streamState='live';
   /* Bare fetch for the server-side invalidation. Routing through
    * _authFetch used to recurse: the logout endpoint requires auth, so
    * a stale/missing session returned 403, which re-entered _authFetch's
@@ -742,6 +747,12 @@ function _showApp(){
        * persistent banner can surface "setup incomplete" even after
        * a successful login. */
       _probeSetupTruth(_renderPostAuthTruthBanner);
+      /* Doctor probe runs alongside the setup-truth probe. Both feed
+       * the same operator-truth banner so a doctor failure (status:
+       * unhealthy with N failed checks) can never hide behind a
+       * "setup looks fine" payload. Cadence is 60s — see comment on
+       * _startDoctorProbe. */
+      _startDoctorProbe();
       try{
         var _initPath=window.location.pathname.replace('/dashboard/','').replace('/','');
         if(_initPath&&VIEW_LOADERS[_initPath])switchView(_initPath);
@@ -1035,6 +1046,9 @@ function _showLoginOverlay(){
  *   { first_run, initialized, setup_health, pve_nodes_configured,
  *     hosts_configured, ssh_key_exists, ssh_key_readable } */
 var _setupTruthCache=null;
+/* Cached doctor snapshot. Shape:
+ *   { status, passed, failed, warnings, total, checks:[{section,name,status}] } */
+var _doctorTruthCache=null;
 /* M-BLUETEAM-SECURITY-HARDENING-20260413AJ regression fix: the AI
  * banner used "setup_health !== 'ok' && !== 'healthy'" which marked
  * every OTHER value as degraded — including the legitimate healthy
@@ -1047,6 +1061,88 @@ function _isDegradedSetupHealth(h){
   var s=String(h).toLowerCase();
   return s==='partial'||s==='incomplete'||s==='degraded'||
          s==='error'||s==='failed'||s==='unhealthy'||s==='broken';
+}
+/* Operator-truth product law: a missing required artifact is a
+ * degradation regardless of whether the backend bothered to set
+ * setup_health. Pre-fix, the banner only inspected these subfields
+ * INSIDE the _isDegradedSetupHealth branch, so a payload that omitted
+ * setup_health (current backend default on partially-configured
+ * instances) would render "Healthy — hide banner" even when
+ * ssh_key_exists was false. SSH key missing is catastrophic for the
+ * fleet path; that is not a thing to hide behind a green absence. */
+function _missingSetupArtifacts(d){
+  if(!d)return [];
+  var missing=[];
+  if(d.pve_nodes_configured===false)missing.push('PVE nodes');
+  if(d.hosts_configured===false)missing.push('hosts');
+  if(d.ssh_key_exists===false)missing.push('SSH key');
+  else if(d.ssh_key_readable===false)missing.push('SSH key unreadable');
+  return missing;
+}
+/* Single source of truth for "what's wrong" across pre-auth and
+ * post-auth banners. Returns null if nothing is wrong, otherwise:
+ *   { isErr:bool, title:str, body:str }
+ * Both banners read this so they can never disagree about whether
+ * the system is degraded. */
+function _setupTruthSummary(d){
+  d=d||{};
+  if(d._probe_failed){
+    return {isErr:true,
+      title:'BACKEND UNREACHABLE',
+      body:'setup/status probe failed — the server may be down or stuck. '+
+        'A login attempt is likely to fail until the backend recovers.'};
+  }
+  if(d.first_run===true||d.initialized===false){
+    return {isErr:true,
+      title:'SETUP REQUIRED',
+      body:'This instance reports <strong>initialized: false</strong>. '+
+        'Complete the first-run wizard at '+
+        '<a href="/setup.html">/setup.html</a> before attempting to log in.'};
+  }
+  var missing=_missingSetupArtifacts(d);
+  var degraded=_isDegradedSetupHealth(d.setup_health);
+  if(degraded||missing.length){
+    var hdr=degraded?'SETUP INCOMPLETE ('+String(d.setup_health).toUpperCase()+')':'SETUP INCOMPLETE';
+    var detail=(degraded?'Backend setup_health='+String(d.setup_health):'Required artifacts missing');
+    return {isErr:true,
+      title:hdr,
+      body:detail+(missing.length?' — missing: '+missing.join(', '):'')+
+        '. Visit <a href="/setup.html">/setup.html</a> to finish configuration.'};
+  }
+  return null;
+}
+/* Doctor-truth summary: returns null when /api/doctor reports clean.
+ * Surfaces failed/warning check NAMES so the operator doesn't have to
+ * dig through the doctor view to see what's wrong. */
+function _doctorTruthSummary(d){
+  if(!d)return null;
+  if(d._probe_failed){
+    return {isErr:true,
+      title:'DOCTOR PROBE FAILED',
+      body:'/api/doctor unreachable — cannot confirm backend health. '+
+        'UI degradation indicators may lag reality.'};
+  }
+  var failed=parseInt(d.failed||0)||0;
+  var warns=parseInt(d.warnings||0)||0;
+  var status=String(d.status||'').toLowerCase();
+  if(failed===0&&warns===0&&status!=='unhealthy'&&status!=='degraded')return null;
+  var failNames=[],warnNames=[];
+  if(d.checks&&d.checks.length){
+    d.checks.forEach(function(c){
+      if(c.status==='fail')failNames.push(c.name);
+      else if(c.status==='warn')warnNames.push(c.name);
+    });
+  }
+  var parts=[];
+  if(failed>0)parts.push(failed+' failed');
+  if(warns>0)parts.push(warns+' warning'+(warns>1?'s':''));
+  var title='DOCTOR: '+(failed>0?'FAILING':'WARNING');
+  var body='/api/doctor reports <strong>'+(status||'degraded').toUpperCase()+'</strong>'+
+    (parts.length?' — '+parts.join(', '):'');
+  if(failNames.length)body+=' &middot; failed: '+failNames.slice(0,4).join(', ')+(failNames.length>4?'\u2026':'');
+  if(warnNames.length)body+=' &middot; warn: '+warnNames.slice(0,4).join(', ')+(warnNames.length>4?'\u2026':'');
+  body+='. Run <code>freq doctor</code> for the full report.';
+  return {isErr:failed>0,title:title,body:body};
 }
 function _probeSetupTruth(cb){
   /* Bare fetch — pre-auth surface, no bearer token needed. */
@@ -1066,76 +1162,80 @@ function _probeSetupTruth(cb){
     if(cb)cb(_setupTruthCache);
   });
 }
+/* Post-auth doctor probe. Refreshes _doctorTruthCache then re-renders
+ * the operator-truth banner so doctor degradation merges with setup
+ * degradation in a single banner the operator can't miss. */
+var _doctorProbeTimer=null;
+function _probeDoctorTruth(){
+  _authFetch(API.DOCTOR,{silent:true}).then(function(r){
+    if(!r.ok)throw new Error('doctor http '+r.status);
+    return r.json();
+  }).then(function(d){
+    _doctorTruthCache=d||{};
+    _renderPostAuthTruthBanner(_setupTruthCache);
+  }).catch(function(){
+    _doctorTruthCache={_probe_failed:true};
+    _renderPostAuthTruthBanner(_setupTruthCache);
+  });
+}
+function _startDoctorProbe(){
+  if(_doctorProbeTimer)clearInterval(_doctorProbeTimer);
+  _probeDoctorTruth();
+  /* 60s cadence — doctor walks the SSH/PVE/storage check list, expensive.
+   * Operator-truth degradation surfaces within one minute of a check
+   * starting to fail, which beats the alternative of finding out at 2AM
+   * when an automation breaks. */
+  _doctorProbeTimer=setInterval(_probeDoctorTruth,60000);
+}
 function _renderSetupTruthBanner(d){
   var el=document.getElementById('login-setup-banner');
   if(!el)return;
-  d=d||{};
-  var title='',body='',isErr=false;
-  if(d._probe_failed){
-    title='BACKEND UNREACHABLE';
-    body='setup/status probe failed — the server may be down or stuck. '+
-      'A login attempt is likely to fail until the backend recovers.';
-    isErr=true;
-  }else if(d.first_run===true||d.initialized===false){
-    title='SETUP REQUIRED';
-    body='This instance reports <strong>initialized: false</strong>. '+
-      'Complete the first-run wizard at '+
-      '<a href="/setup.html">/setup.html</a> before attempting to log in.';
-  }else if(_isDegradedSetupHealth(d.setup_health)){
-    title='SETUP INCOMPLETE ('+String(d.setup_health).toUpperCase()+')';
-    var missing=[];
-    if(d.pve_nodes_configured===false)missing.push('PVE nodes');
-    if(d.hosts_configured===false)missing.push('hosts');
-    if(d.ssh_key_exists===false)missing.push('SSH key');
-    else if(d.ssh_key_readable===false)missing.push('SSH key unreadable');
-    body='Backend setup_health='+String(d.setup_health)+
-      (missing.length?' — missing: '+missing.join(', '):'')+
-      '. Visit <a href="/setup.html">/setup.html</a> to finish configuration.';
-  }else{
-    /* Healthy — hide the banner. */
+  var summary=_setupTruthSummary(d);
+  if(!summary){
     el.className='login-setup-banner d-none';
     el.innerHTML='';
     return;
   }
-  el.className='login-setup-banner'+(isErr?' lsb-err':'');
-  el.innerHTML='<span class="lsb-title">'+title+'</span>'+
-    '<span class="lsb-body">'+body+'</span>';
+  el.className='login-setup-banner'+(summary.isErr?' lsb-err':'');
+  el.innerHTML='<span class="lsb-title">'+summary.title+'</span>'+
+    '<span class="lsb-body">'+summary.body+'</span>';
 }
-/* Post-auth sibling of the login-card banner: renders the same
- * truth into the persistent #operator-truth-banner slot in the
- * header. Called after a successful login so the operator sees the
- * same degraded-state warning AFTER they're inside the dashboard,
- * not only on the login card they just left. */
+/* Post-auth sibling of the login-card banner: renders setup AND doctor
+ * truth into the persistent #operator-truth-banner slot in the header.
+ * Called after a successful login so the operator sees degraded state
+ * AFTER they're inside the dashboard, not only on the login card they
+ * just left. Pre-fix this only consumed setup/status, which meant the
+ * doctor's "1 failed, 1 warning, status: unhealthy" never surfaced
+ * anywhere on the home page. */
 function _renderPostAuthTruthBanner(d){
   var el=document.getElementById('operator-truth-banner');
   var txt=document.getElementById('operator-truth-text');
   if(!el||!txt)return;
-  d=d||{};
-  var msg='',isErr=false;
-  if(d._probe_failed){
-    msg='Operator-truth probe failed — setup/status unreachable. UI state may be stale.';
-    isErr=true;
-  }else if(d.first_run===true||d.initialized===false){
-    msg='SETUP INCOMPLETE — backend reports initialized=false. Finish setup at <a href="/setup.html">/setup.html</a> before trusting fleet data.';
-    isErr=true;
-  }else if(_isDegradedSetupHealth(d.setup_health)){
-    var parts=[];
-    if(d.pve_nodes_configured===false)parts.push('PVE nodes');
-    if(d.hosts_configured===false)parts.push('hosts');
-    if(d.ssh_key_exists===false)parts.push('SSH key');
-    else if(d.ssh_key_readable===false)parts.push('SSH key unreadable');
-    msg='Setup health: '+String(d.setup_health).toUpperCase()+
-      (parts.length?' — missing: '+parts.join(', '):'')+
-      ' — some fleet surfaces may be degraded. Visit <a href="/setup.html">/setup.html</a> to finish.';
-  }else{
+  var setupSum=_setupTruthSummary(d);
+  var doctorSum=_doctorTruthSummary(_doctorTruthCache);
+  var apiDeg=_apiDegradedState&&_apiDegradedDetail;
+  if(!setupSum&&!doctorSum&&!apiDeg){
     el.classList.add('d-none');
     el.classList.remove('otb-err');
     txt.textContent='';
     return;
   }
+  var parts=[];
+  /* Order: API-degraded first (most actionable foreground emergency),
+   * then setup truth (background config drift), then doctor truth
+   * (subsystem detail). All three stack so a tired operator sees the
+   * full picture without having to dismiss one banner to find the
+   * other two. */
+  if(apiDeg){
+    parts.push('<strong>API DEGRADED</strong> &mdash; '+apiDeg.kind+' endpoint failing ('+apiDeg.reason+'). '+
+      'Displayed fleet data may be stale. Background retry every 10s.');
+  }
+  if(setupSum)parts.push('<strong>'+setupSum.title+'</strong> &mdash; '+setupSum.body);
+  if(doctorSum)parts.push('<strong>'+doctorSum.title+'</strong> &mdash; '+doctorSum.body);
   el.classList.remove('d-none');
-  if(isErr)el.classList.add('otb-err');else el.classList.remove('otb-err');
-  txt.innerHTML=msg;
+  var anyErr=apiDeg||(setupSum&&setupSum.isErr)||(doctorSum&&doctorSum.isErr);
+  if(anyErr)el.classList.add('otb-err');else el.classList.remove('otb-err');
+  txt.innerHTML=parts.join('<br>');
 }
 
 /* Dismiss the update banner. data-action='dismissUpdateBanner'
@@ -1785,24 +1885,29 @@ function startSilentRefresh(){
 var _healthFailStreak=0;
 var _fleetFailStreak=0;
 var _apiDegradedState=false;
+/* When the silent refresh streak trips, we record the kind+reason in
+ * _apiDegradedDetail so _renderPostAuthTruthBanner can layer the
+ * API-degraded line ON TOP of the existing setup/doctor truth instead
+ * of overwriting it. Pre-fix the API-degraded message replaced the
+ * banner content, hiding the underlying setup-incomplete / doctor-
+ * failing context the operator also needed to see. */
+var _apiDegradedDetail=null;
 function _markApiDegraded(kind, reason){
   _apiDegradedState=true;
+  _apiDegradedDetail={kind:kind,reason:reason};
   /* Force stream indicator to cached so the header shows the degrade
    * even while SSE itself is still technically open — an SSE push
    * can't rescue a backend whose polling endpoints are erroring. */
   _renderStreamStatus('cached');
-  var el=document.getElementById('operator-truth-banner');
-  var txt=document.getElementById('operator-truth-text');
-  if(!el||!txt)return;
-  el.classList.remove('d-none');
-  el.classList.add('otb-err');
-  txt.innerHTML='API DEGRADED — '+kind+' endpoint failing ('+reason+'). '+
-    'Displayed fleet data may be stale. Background retry every 10s.';
+  /* Re-render via the unified path so setup + doctor + api-degraded
+   * all stack in the same banner. */
+  _renderPostAuthTruthBanner(_setupTruthCache);
 }
 function _clearApiDegraded(){
   if(!_apiDegradedState)return;
   if(_healthFailStreak>0||_fleetFailStreak>0)return;
   _apiDegradedState=false;
+  _apiDegradedDetail=null;
   /* Restore stream to whatever SSE readyState says. */
   var rs=_evtSource?_evtSource.readyState:2;
   _renderStreamStatus(rs===1?'live':rs===2?'dead':'cached');
@@ -1811,6 +1916,33 @@ function _clearApiDegraded(){
   _probeSetupTruth(_renderPostAuthTruthBanner);
 }
 
+/* Structural sanity for /api/health responses: a 200 without
+ * probe_status doesn't mean the data is fresh — it can also mean
+ * "backend has no idea, here's an empty list". Operator-truth product
+ * law: treat structurally-empty responses as degraded so the UI never
+ * paints "0 hosts" as truth. Returns a reason string when degraded,
+ * null when the payload is honestly populated. */
+function _healthStructurallyDegraded(hd){
+  if(!hd||typeof hd!=='object')return 'empty payload';
+  if(!hd.hosts||!hd.hosts.length)return 'no hosts in payload';
+  var down=0;
+  hd.hosts.forEach(function(h){if(h.status!=='healthy')down++;});
+  if(down===hd.hosts.length)return 'every host unhealthy';
+  return null;
+}
+function _fleetStructurallyDegraded(fo){
+  if(!fo||typeof fo!=='object')return 'empty payload';
+  /* All-PVE-offline + zero VMs is a probe failure dressed up as a
+   * "no VMs configured" answer. Don't repaint the UI as if zero is
+   * the real answer. */
+  var pveNodes=fo.pve_nodes||[];
+  if(pveNodes.length){
+    var anyOnline=false;
+    for(var i=0;i<pveNodes.length;i++){if(pveNodes[i].online===true){anyOnline=true;break;}}
+    if(!anyOnline)return 'every PVE node offline';
+  }
+  return null;
+}
 function _silentHealthRefresh(){
   if(_healthInFlight)return;/* skip if previous call still running */
   _healthInFlight=true;
@@ -1820,22 +1952,37 @@ function _silentHealthRefresh(){
       return null;}
     return r.json();
   }).then(function(hd){
-    if(hd===null||!hd||!hd.hosts){_healthInFlight=false;return;}
+    if(hd===null||!hd){_healthInFlight=false;return;}
     _healthInFlight=false;
-    /* Honor probe_status even when the HTTP response is 200. A stale/
-     * error probe means the backend couldn't reach the fleet hosts even
-     * though the /api/health route itself responded — the UI must
-     * surface that degradation, not paint over it with the cached
-     * hosts list. Successful probes reset the streak. */
-    if(hd.probe_status==='stale'||hd.probe_status==='error'){
+    /* Honor probe_status / probe_state / state even when the HTTP
+     * response is 200. A stale/error probe means the backend couldn't
+     * reach the fleet hosts even though the /api/health route itself
+     * responded — the UI must surface that degradation, not paint over
+     * it with the cached hosts list. Tolerant of multiple field names:
+     * legacy probe_status, Rick's incoming probe_state / state /
+     * reason. Also runs structural sanity so the streak fires even on
+     * a clean 200 with no probe_status when the body itself proves
+     * the probe couldn't see anything. */
+    var ps=hd.probe_status||hd.probe_state||hd.state||'';
+    var psBad=(ps==='stale'||ps==='error'||ps==='degraded'||
+               ps==='unreachable'||ps==='auth_failed');
+    var structReason=_healthStructurallyDegraded(hd);
+    if(psBad||structReason){
       _healthFailStreak++;
       if(_healthFailStreak>=2){
         var _age=hd.age_seconds?Math.round(hd.age_seconds)+'s':'unknown';
-        _markApiDegraded('health probe',hd.probe_status+' ('+_age+')');
+        /* Prefer the backend's own reason — Rick's probe_reason carries
+         * the actionable detail like '1/22 auth_failed (worst: nexus —
+         * ssh auth rejected: freq-admin@10.25.255.8)' which beats any
+         * generic message we could construct here. Also accept legacy
+         * .reason if a future variant returns it. */
+        var _why=hd.probe_reason||hd.reason||(psBad?ps+' ('+_age+')':structReason);
+        _markApiDegraded('health probe',_why);
       }
     }else{
       _healthFailStreak=0;_clearApiDegraded();
     }
+    if(!hd.hosts){return;}
     _fleetCache.hd=hd;/* keep cache fresh */
     hd.hosts.forEach(function(h){
       var card=document.querySelector('.host-card[data-host-id="'+h.label.toLowerCase()+'"]');
@@ -1890,11 +2037,21 @@ function _silentFleetRefresh(){
   }).then(function(fo){
     if(fo===null){return;}
     _fleetInFlight=false;
-    /* Same probe-status honesty rule as the health path. */
-    if(fo&&(fo.probe_status==='stale'||fo.probe_status==='error')){
+    /* Same probe-status honesty rule as the health path, plus
+     * structural sanity (every PVE node offline → degrade even if
+     * probe_status is undefined). Field-tolerant for the new
+     * state/fleet_state/probe_state/reason fields landing under Rick's
+     * lane (e03b382 / 170b0c8 / 9dd8200). */
+    var fps=(fo&&(fo.probe_status||fo.probe_state||fo.fleet_state||fo.state))||'';
+    var fpsBad=(fps==='stale'||fps==='error'||fps==='degraded'||
+                fps==='unreachable'||fps==='auth_failed');
+    var foReason=_fleetStructurallyDegraded(fo);
+    if(fpsBad||foReason){
       _fleetFailStreak++;
       if(_fleetFailStreak>=2){
-        _markApiDegraded('fleet probe',fo.probe_status+(fo.probe_error?' — '+fo.probe_error:''));
+        var _why=(fo&&(fo.fleet_reason||fo.probe_reason||fo.reason))||
+                 (fpsBad?fps+(fo.probe_error?' — '+fo.probe_error:''):foReason);
+        _markApiDegraded('fleet probe',_why);
       }
     }else{
       _fleetFailStreak=0;_clearApiDegraded();
@@ -1965,14 +2122,53 @@ setInterval(function(){
    Polls /api/pve/metrics every 5s for live CPU/RAM/DISK from PVE API.
    Updates node card progress bars in-place — smooth, no flicker. */
 var _pveMetricsTimer=null;
+/* Add or update a STALE badge on an offline PVE node card so the
+ * pre-disconnect metrics don't read as live. Operator-truth product
+ * law: a frozen "RUNNING" tile is a lie at 2AM. The badge is
+ * idempotent — same render path adds it and removes it. */
+function _markHostCardStale(card,n){
+  if(!card)return;
+  var badge=card.querySelector('.stale-badge');
+  if(!badge){
+    badge=document.createElement('span');
+    badge.className='stale-badge';
+    badge.style.cssText='display:inline-block;margin-left:6px;padding:1px 6px;border-radius:3px;background:rgba(245,158,11,0.18);color:var(--yellow);font-size:10px;font-weight:700;letter-spacing:0.5px;border:1px solid var(--yellow)';
+    var hdr=card.querySelector('.host-name')||card.querySelector('.host-meta')||card.firstChild;
+    if(hdr&&hdr.appendChild)hdr.appendChild(badge);
+  }
+  /* Show "STALE 47s" when last_seen_ts is available, otherwise just STALE. */
+  var ageLbl='STALE';
+  if(n&&n.last_seen_ts){
+    var age=Math.max(0,Math.round(Date.now()/1000-n.last_seen_ts));
+    ageLbl='STALE '+(age<60?age+'s':Math.round(age/60)+'m');
+  }
+  badge.textContent=ageLbl;
+  card.classList.add('host-stale');
+  card.style.opacity='0.6';
+}
+function _clearHostCardStale(card){
+  if(!card)return;
+  var badge=card.querySelector('.stale-badge');
+  if(badge&&badge.parentNode)badge.parentNode.removeChild(badge);
+  card.classList.remove('host-stale');
+  card.style.opacity='';
+}
 function _pveMetricsRefresh(){
   _authFetch('/api/pve/metrics').then(function(r){return r.json()}).then(function(d){
     if(!d.nodes)return;
     d.nodes.forEach(function(n){
-      if(!n.online)return;
-      /* Find the host card for this PVE node by data attribute */
       var card=document.querySelector('.host-card[data-host-id="'+n.name.toLowerCase()+'"]');
       if(!card)return;
+      if(!n.online){
+        /* Mark the card stale instead of silently skipping. Pre-fix
+         * the entire forEach body was guarded by `if(!n.online)return`
+         * which meant a PVE node going offline left whatever the
+         * card was last rendering frozen on screen — operator saw
+         * "75% CPU" minutes after the cluster went down. */
+        _markHostCardStale(card,n);
+        return;
+      }
+      _clearHostCardStale(card);
         /* Update metric rows in-place — all from PVE API, same as PVE web UI */
         card.querySelectorAll('.metric-row').forEach(function(m){
           var lbl=m.querySelector('.metric-label');
@@ -2162,6 +2358,21 @@ function startSSE(){
   if(_evtSource)_evtSource.close();
   _evtSource=new EventSource(API.EVENTS);/* auth via cookie */
 
+  /* Wrap addEventListener so EVERY received event — named or
+   * default — bumps _lastStreamEventTs via _markStreamEvent. The
+   * stream-status badge then reads "LIVE 12s" or "LIVE STALE 8m"
+   * honestly instead of "LIVE" the moment the socket opened. */
+  var _origAdd=_evtSource.addEventListener.bind(_evtSource);
+  _evtSource.addEventListener=function(type,fn,opts){
+    return _origAdd(type,function(e){
+      try{_markStreamEvent();}catch(_){}
+      return fn(e);
+    },opts);
+  };
+  /* Catch the unnamed default 'message' event too (default events
+   * route through onmessage rather than addEventListener('message')). */
+  _evtSource.onmessage=function(){_markStreamEvent();};
+
   _evtSource.addEventListener('cache_update',function(e){
     var d=JSON.parse(e.data);
     if(d.key==='health')_silentHealthRefresh();
@@ -2260,8 +2471,33 @@ function startSSE(){
  * hw-fleet-stats — about whether the dashboard is reading live push
  * events or has fallen back to polled cache. The trailing state is
  * kept in _streamState so a re-render after a view switch can restore
- * the correct badge without racing the SSE event loop. */
+ * the correct badge without racing the SSE event loop.
+ *
+ * Operator-truth product law extension: track the last time we
+ * actually received an SSE event and surface it in the badge. Pre-
+ * fix the badge said "LIVE" the moment EventSource onopen fired,
+ * even if zero events came through afterward — a 2AM operator
+ * couldn't distinguish "stream is healthy and quiet" from "stream
+ * is open but the producer died 12 minutes ago". The new badge
+ * reads "LIVE 12s" on a fresh event and demotes to "LIVE STALE 8m"
+ * once the gap exceeds STREAM_STALE_AFTER_MS, without the operator
+ * having to ask the question. */
 var _streamState='live';
+var _lastStreamEventTs=0;
+var STREAM_STALE_AFTER_MS=120000;/* 2 minutes — anything beyond is suspicious */
+function _markStreamEvent(){
+  _lastStreamEventTs=Date.now();
+  /* Force a re-render so the freshness label updates immediately on
+   * the next event instead of waiting up to 5s for the tick. */
+  _renderStreamStatus();
+}
+function _formatStreamAge(ms){
+  if(ms<1000)return 'now';
+  var s=Math.round(ms/1000);
+  if(s<60)return s+'s';
+  var m=Math.floor(s/60);if(m<60)return m+'m';
+  var h=Math.floor(m/60);return h+'h';
+}
 function _renderStreamStatus(state){
   if(state)_streamState=state;
   var el=document.getElementById('stream-status');
@@ -2269,9 +2505,33 @@ function _renderStreamStatus(state){
   var s=_streamState;
   var map={live:'LIVE',cached:'CACHED',dead:'STREAM DEAD'};
   var cls={live:'s-live',cached:'s-cached',dead:'s-dead'};
+  var lbl=map[s]||'CACHED';
+  /* When live, append a freshness suffix. If we've seen at least one
+   * event since startup, show its age; if not, show "WAITING" so the
+   * operator knows the channel is open but quiet, not lying. Beyond
+   * STREAM_STALE_AFTER_MS the badge demotes to s-cached visually so
+   * the dot turns yellow even though SSE technically reports OPEN. */
+  if(s==='live'){
+    if(_lastStreamEventTs===0){
+      lbl='LIVE WAITING';
+    }else{
+      var age=Date.now()-_lastStreamEventTs;
+      if(age>STREAM_STALE_AFTER_MS){
+        lbl='LIVE STALE '+_formatStreamAge(age);
+        cls.live='s-cached';/* demote dot color */
+      }else{
+        lbl='LIVE '+_formatStreamAge(age);
+      }
+    }
+  }
   el.className='stream-status '+(cls[s]||'s-cached');
-  el.innerHTML='<span class="stream-dot"></span>'+(map[s]||'CACHED');
+  el.innerHTML='<span class="stream-dot"></span>'+lbl;
 }
+/* Tick the stream badge once every 5s so the freshness label keeps
+ * counting up without waiting for the next push event. Cheap render. */
+setInterval(function(){
+  if(_streamState==='live')_renderStreamStatus();
+},5000);
 /* startSSE() is called from _showApp() once auth is confirmed. The
  * previous unconditional call at script load opened EventSource
  * against /api/events before login, which 403d and produced noisy
@@ -5693,6 +5953,43 @@ function monRunDoctor(){
   var out=document.getElementById('mon-doc-out');if(!out)return;
   out.style.display='block';out.textContent='Running diagnostics...';
   _authFetch('/api/doctor').then(function(r){return r.json()}).then(function(d){
+    /* The structured /api/doctor response carries
+     * status/passed/failed/warnings/checks. Pre-fix this renderer
+     * only knew about d.output||d.error and fell through to "(no
+     * output)" — which meant a tired operator running doctor from
+     * the dashboard saw a blank box even when the backend was
+     * literally telling them "1 failed, 1 warning, status:
+     * unhealthy". Render the structured body when present, fall
+     * back to legacy d.output for any older/alternate shape. */
+    if(d&&(d.status!=null||d.checks||d.passed!=null||d.failed!=null)){
+      var passed=parseInt(d.passed||0)||0;
+      var failed=parseInt(d.failed||0)||0;
+      var warns=parseInt(d.warnings||0)||0;
+      var total=parseInt(d.total||(passed+failed+warns))||0;
+      var status=String(d.status||(failed>0?'unhealthy':warns>0?'degraded':'ok')).toUpperCase();
+      var lines=[];
+      lines.push('STATUS: '+status);
+      lines.push(passed+'/'+total+' passed  \u00b7  '+failed+' failed  \u00b7  '+warns+' warnings');
+      if(d.duration!=null)lines.push('duration: '+d.duration+'s');
+      if(d.checked_at)lines.push('checked_at: '+d.checked_at);
+      if(d.reason)lines.push('reason: '+d.reason);
+      lines.push('');
+      if(d.checks&&d.checks.length){
+        var bad=d.checks.filter(function(c){return c.status==='fail'||c.status==='warn';});
+        if(bad.length){
+          lines.push('--- FAILING / WARNING CHECKS ---');
+          bad.forEach(function(c){
+            lines.push('['+String(c.status||'?').toUpperCase()+'] '+
+              (c.section?c.section+' \u00b7 ':'')+(c.name||'')+
+              (c.message?'  \u2014  '+c.message:''));
+          });
+        }else{
+          lines.push('All '+total+' checks passing.');
+        }
+      }
+      out.textContent=lines.join('\n');
+      return;
+    }
     var txt=d.output||d.error||'';
     out.textContent=txt||'(no output)';
   }).catch(function(){out.textContent='Failed to run doctor';});

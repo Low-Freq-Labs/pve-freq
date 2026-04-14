@@ -113,13 +113,21 @@ class TestPreAuthSetupTruthBanner(unittest.TestCase):
                       "banner is populated every time the login card is shown")
 
     def test_banner_mentions_setup_link_and_initialized(self):
-        body = _fn_body(_app_js(), "_renderSetupTruthBanner")
-        self.assertIn("/setup.html", body,
-                      "banner body must link to /setup.html")
-        self.assertIn("initialized: false", body,
-                      "banner must name the initialized=false state verbatim")
-        self.assertIn("SETUP REQUIRED", body)
-        self.assertIn("_probe_failed", body,
+        """The setup-truth strings live in the shared _setupTruthSummary
+        helper after the product-law refactor — both pre-auth and post-
+        auth renderers consume it so they cannot disagree about state."""
+        src = _app_js()
+        renderer = _fn_body(src, "_renderSetupTruthBanner")
+        self.assertIn("_setupTruthSummary", renderer,
+                      "pre-auth renderer must read _setupTruthSummary so "
+                      "the banner content is shared with the post-auth path")
+        summary = _fn_body(src, "_setupTruthSummary")
+        self.assertIn("/setup.html", summary,
+                      "summary body must link to /setup.html")
+        self.assertIn("initialized: false", summary,
+                      "summary must name the initialized=false state verbatim")
+        self.assertIn("SETUP REQUIRED", summary)
+        self.assertIn("_probe_failed", summary,
                       "backend-unreachable branch must carry its own message")
 
 
@@ -211,10 +219,17 @@ class TestOperatorTruthBannerPostAuth(unittest.TestCase):
         src = _app_js()
         self.assertIn("function _renderPostAuthTruthBanner", src)
         body = _fn_body(src, "_renderPostAuthTruthBanner")
-        self.assertIn("/setup.html", body)
-        self.assertIn("initialized=false", body)
-        self.assertIn("SETUP INCOMPLETE", body)
+        self.assertIn("_setupTruthSummary", body,
+                      "post-auth renderer must read the shared summary so "
+                      "it cannot disagree with the pre-auth banner")
         self.assertIn("otb-err", body)
+        # The strings themselves live in _setupTruthSummary now — check
+        # them at the source rather than the renderer.
+        summary = _fn_body(src, "_setupTruthSummary")
+        self.assertIn("/setup.html", summary)
+        self.assertIn("initialized: false", summary)
+        self.assertIn("SETUP REQUIRED", summary)
+        self.assertIn("SETUP INCOMPLETE", summary)
 
     def test_show_app_triggers_post_auth_probe(self):
         body = _fn_body(_app_js(), "_showApp")
@@ -239,12 +254,25 @@ class TestApiDegradedStreakAndProbeStatus(unittest.TestCase):
         self.assertIn("var _apiDegradedState", src)
 
     def test_mark_api_degraded_flips_stream_and_banner(self):
+        """After the product-law refactor _markApiDegraded routes the
+        API-degraded line through _renderPostAuthTruthBanner so it
+        stacks on top of setup + doctor truth instead of overwriting
+        them. The intent is unchanged: stream → cached, banner → red,
+        API DEGRADED message rendered."""
         body = _fn_body(_app_js(), "_markApiDegraded")
         self.assertIn("_renderStreamStatus('cached')", body,
                       "_markApiDegraded must force stream indicator to cached")
-        self.assertIn("otb-err", body)
-        self.assertIn("API DEGRADED", body)
-        self.assertIn("operator-truth-banner", body)
+        self.assertIn("_apiDegradedDetail", body,
+                      "_markApiDegraded must record kind+reason in "
+                      "_apiDegradedDetail so the renderer can layer it")
+        self.assertIn("_renderPostAuthTruthBanner", body,
+                      "_markApiDegraded must delegate to the unified "
+                      "renderer so api/setup/doctor truth all stack")
+        # The literal strings live in the renderer now — verify there.
+        renderer = _fn_body(_app_js(), "_renderPostAuthTruthBanner")
+        self.assertIn("API DEGRADED", renderer)
+        self.assertIn("otb-err", renderer)
+        self.assertIn("operator-truth-banner", renderer)
 
     def test_health_refresh_counts_http_failures(self):
         body = _fn_body(_app_js(), "_silentHealthRefresh")
@@ -261,11 +289,17 @@ class TestApiDegradedStreakAndProbeStatus(unittest.TestCase):
         self.assertRegex(body, r"\.catch\(function\(\)\{[\s\S]*?_healthFailStreak\+\+")
 
     def test_health_refresh_honors_probe_status_stale(self):
+        """After the product-law refactor the refresher reads multiple
+        equivalent state field names (probe_status / probe_state /
+        state) into a single var, then checks for stale/error/degraded/
+        unreachable/auth_failed. The intent is unchanged: a stale probe
+        on a 200 response must still flip the streak."""
         body = _fn_body(_app_js(), "_silentHealthRefresh")
-        self.assertIn("probe_status==='stale'", body,
-                      "_silentHealthRefresh must treat probe_status=stale "
-                      "as a degraded signal even when the HTTP response is 200")
-        self.assertIn("probe_status==='error'", body)
+        self.assertIn("probe_status", body,
+                      "_silentHealthRefresh must read probe_status (legacy)")
+        self.assertIn("'stale'", body,
+                      "_silentHealthRefresh must treat 'stale' as degraded")
+        self.assertIn("'error'", body)
         self.assertRegex(body, r"_markApiDegraded\('health probe'")
 
     def test_fleet_refresh_counts_http_failures(self):
@@ -278,7 +312,8 @@ class TestApiDegradedStreakAndProbeStatus(unittest.TestCase):
 
     def test_fleet_refresh_honors_probe_status_stale(self):
         body = _fn_body(_app_js(), "_silentFleetRefresh")
-        self.assertIn("probe_status==='stale'", body)
+        self.assertIn("probe_status", body)
+        self.assertIn("'stale'", body)
         self.assertRegex(body, r"_markApiDegraded\('fleet probe'")
 
 

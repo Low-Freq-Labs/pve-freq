@@ -147,16 +147,26 @@ class TestSetupHealthDegradedAllowlist(unittest.TestCase):
                          "'configured' must NOT be in the deny-list")
 
     def test_both_banner_renderers_use_the_helper(self):
+        """After the product-law refactor both renderers consume the
+        shared _setupTruthSummary helper which calls
+        _isDegradedSetupHealth — so the deny-list allowlist applies to
+        both surfaces transitively. The anti-regression check stays:
+        the deny-by-default 'not ok and not healthy' pattern must not
+        return anywhere in the pipeline."""
         src = _app_js()
         pre_body = _fn_body(src, "_renderSetupTruthBanner")
         post_body = _fn_body(src, "_renderPostAuthTruthBanner")
-        self.assertIn("_isDegradedSetupHealth", pre_body,
-                      "pre-auth banner renderer must use _isDegradedSetupHealth")
-        self.assertIn("_isDegradedSetupHealth", post_body,
-                      "post-auth banner renderer must use _isDegradedSetupHealth")
+        summary = _fn_body(src, "_setupTruthSummary")
+        self.assertIn("_setupTruthSummary", pre_body,
+                      "pre-auth renderer must consume _setupTruthSummary")
+        self.assertIn("_setupTruthSummary", post_body,
+                      "post-auth renderer must consume _setupTruthSummary")
+        self.assertIn("_isDegradedSetupHealth", summary,
+                      "_setupTruthSummary must apply the deny-list helper "
+                      "so both renderers transitively use the allowlist")
         # Anti-regression: the old off-by-one string comparison must
-        # not return to the banner renderers.
-        for body in (pre_body, post_body):
+        # not return anywhere in the pipeline.
+        for body in (pre_body, post_body, summary):
             self.assertNotRegex(
                 body,
                 r"setup_health!=='ok'&&d\.setup_health!=='healthy'",
