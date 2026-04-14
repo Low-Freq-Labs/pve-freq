@@ -281,7 +281,9 @@ class TestStyleSrcNeverHasUnsafeInline(unittest.TestCase):
     styles are allowed via 'unsafe-hashes' + per-style sha256 tokens
     computed at startup. Pin this both at the source level (no
     static literal carries 'unsafe-inline') and at the runtime level
-    (the dynamically-built directive does not contain it)."""
+    (the dynamically-built directive does not contain it). Runtime
+    element.style mutations are permitted separately under
+    style-src-attr 'unsafe-inline'."""
 
     @classmethod
     def setUpClass(cls):
@@ -327,6 +329,14 @@ class TestStyleSrcNeverHasUnsafeInline(unittest.TestCase):
         if style_hash_tokens:
             self.assertIn("'unsafe-hashes'", style_src)
             self.assertIn("'sha256-", style_src)
+
+    def test_style_src_attr_is_explicit_runtime_escape_hatch(self):
+        self.assertIn(
+            "style-src-attr 'unsafe-inline'",
+            self.src,
+            "runtime style mutations must be explicitly allowed via "
+            "style-src-attr, not by weakening style-src",
+        )
 
 
 if __name__ == "__main__":

@@ -248,12 +248,13 @@ class TestCspHonestLimitDocumented(unittest.TestCase):
 
     def test_style_src_dropped_unsafe_inline_uses_unsafe_hashes(self):
         """R-WEB-INLINE-STYLE-CSP-SWEEP-20260413Q hybrid finish (Path 4):
-        style-src must NOT carry 'unsafe-inline'. The bespoke remaining
+        style-src must NOT carry the broad 'unsafe-inline' keyword. The bespoke remaining
         inline style="…" attrs are allowed via 'unsafe-hashes' + per-style
         sha256 tokens computed at startup by _inline_style_csp_hashes()
         in serve.py. Pin both halves: the literal directive must call
         _inline_style_csp_hashes(), and the directive must not contain
-        the unsafe-inline keyword."""
+        the old broad style-src unsafe-inline form. Runtime property
+        mutations are handled separately under style-src-attr."""
         # The directive value is built dynamically (style_hash_tokens),
         # not as a static literal — anchor on the helper invocation.
         self.assertIn(
@@ -278,6 +279,17 @@ class TestCspHonestLimitDocumented(unittest.TestCase):
             "style-src 'self' 'unsafe-inline'",
             self.src,
             "the pre-fix style-src 'unsafe-inline' literal must not return",
+        )
+
+    def test_runtime_style_attr_path_is_explicit(self):
+        """Release QA AL proved runtime element.style mutations are still
+        required. These must be opened explicitly via style-src-attr,
+        not by weakening style-src itself."""
+        self.assertIn(
+            "style-src-attr 'unsafe-inline'",
+            self.src,
+            "runtime style mutations must be permitted explicitly via "
+            "style-src-attr 'unsafe-inline'",
         )
 
 

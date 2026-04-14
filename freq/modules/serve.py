@@ -5027,11 +5027,13 @@ a:hover{{text-decoration:underline}}
         # Web UI is self-contained: xterm is vendored under /static/vendor/xterm,
         # fonts use platform stacks only, no public CDN or font host references.
         #
-        # Honest limits on 'unsafe-inline' (state after token Q hybrid + AH):
+        # Honest limits on 'unsafe-inline' and the remaining inline
+        # execution/style paths (state after token Q hybrid + AH, plus
+        # AL release-QA follow-up):
         #   script-src: ZERO inline event handlers, ZERO inline <script> blocks,
         #     ZERO javascript: URLs (closed by R-WEB-INLINE-CSP-CLEANUP-20260413O).
         #     'unsafe-inline' is dropped from script-src.
-        #   style-src: ZERO 'unsafe-inline'. The Q utility-class sweep
+        #   style-src: no broad 'unsafe-inline'. The Q utility-class sweep
         #     dropped the count from 264 to 90, the Q hybrid finish
         #     extracted 25 ID-based rules + 4 chrome semantic classes
         #     (bringing it to 61), and the AH partner pass extracted
@@ -5048,12 +5050,26 @@ a:hover{{text-decoration:underline}}
         #     hybrid finish (Path 4) + M-UI-INLINE-STYLE-REGRESSION-POLISH-
         #     20260413AH partner pass: cleanest path to zero unsafe-inline
         #     without generating opaque auto-classes for every bespoke style.
+        #   style-src-attr: runtime JS still performs a finite set of
+        #     legitimate element.style mutations (progress widths, live
+        #     indicator colors, a few dynamic visibility/layout nudges).
+        #     'unsafe-hashes' only matches static style="..." attrs parsed
+        #     from app.html; it does NOT cover runtime property mutation.
+        #     Release-QA AL proved those dynamic mutations were being
+        #     silently blocked under the tighter header. The right middle
+        #     ground is:
+        #       - keep style-src hashed/tight for elements and linked CSS
+        #       - open style-src-attr 'unsafe-inline' for runtime style
+        #         attribute/property writes only
+        #     This avoids re-opening inline <style> blocks or broad
+        #     stylesheet injection while keeping the current UI truthful.
         #
         # No host names appear below. An air-gapped dashboard MUST NOT fetch any
         # asset off-box — that's what R-WEB-EXTERNAL-ASSET-CONTRACT-20260413L
         # closed. This CSP is the policy enforcement.
         style_hash_tokens = _inline_style_csp_hashes()
         style_src = "style-src 'self' 'unsafe-hashes' " + " ".join(style_hash_tokens) if style_hash_tokens else "style-src 'self'"
+        style_src_attr = "style-src-attr 'unsafe-inline'"
         # M-BLUETEAM-SECURITY-HARDENING-20260413AJ:
         #   frame-ancestors 'none' — clickjacking defense-in-depth. The
         #     legacy X-Frame-Options: DENY header above covers older
@@ -5069,6 +5085,7 @@ a:hover{{text-decoration:underline}}
                          "default-src 'self'; "
                          "script-src 'self'; "
                          f"{style_src}; "
+                         f"{style_src_attr}; "
                          "img-src 'self' data:; "
                          "connect-src 'self'; "
                          "font-src 'self'; "
