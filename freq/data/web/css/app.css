@@ -1269,6 +1269,44 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 .fs-16 { font-size: 16px; }
 .fs-9-px-2-8 { font-size: 9px; padding: 2px 8px; }
 
+/* 20260413Q-id-rules-begin
+ * Generated during the Q hybrid finish (Path 4 per Finn's design call).
+ * Each rule corresponds to one inline style="…" attribute extracted from
+ * the element with the matching id in app.html. Bespoke styles that did
+ * not have a stable id stay inline and are allowed via 'unsafe-hashes'
+ * in the CSP header — see _send_security_headers + _inline_style_csp_hashes
+ * in freq/modules/serve.py. */
+#nav-items { display:contents }
+#home-empty { padding:24px 20px;display:none;border:1px dashed var(--input-border);border-radius:6px;margin-top:4px;max-width:560px;margin-left:auto;margin-right:auto }
+#fleet-lab-section { margin-top:20px;display:none }
+#container-stats { margin-bottom:0;flex:1;justify-content:center }
+#container-logs { margin-top:12px;min-height:100px;display:none }
+#rescan-results { display:none;margin-bottom:12px }
+#compose-out { min-height:80px }
+#vault-auth-user, #vault-auth-pass { background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:12px;font-family:inherit;text-align:center }
+#log-out { max-height:400px;overflow-y:auto }
+#topo-svg { margin:0 -16px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:visible }
+#pb-runner-title { font-size:13px;color:var(--text) }
+#go-actions { gap:8px;margin-bottom:12px }
+#go-diff-content { font-size:11px;color:var(--text);background:rgba(0,0,0,0.3);padding:12px;border-radius:6px;white-space:pre-wrap;max-height:300px;overflow-y:auto }
+#fed-url { flex:2;min-width:200px }
+#about-credits { font-size:13px;color:var(--text);margin-top:8px }
+#hd-subtitle { font-size:13px;color:var(--text);margin-top:2px }
+#hd-loading { color:var(--text-dim);padding:60px 0;text-align:center }
+#terminal-overlay { display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.92);backdrop-filter:blur(8px);padding:0 }
+#terminal-header { display:flex;justify-content:space-between;align-items:center;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0 }
+#terminal-title { color:var(--text);font-size:12px;font-family:var(--font-mono) }
+#terminal-container { flex:1;padding:8px 20px 20px;overflow:hidden }
+#search-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;padding-top:15vh }
+#search-results { max-height:420px;overflow-y:auto;padding:4px 0 }
+#shortcuts-modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10001;padding-top:15vh }
+/* Semantic chrome classes (token Q hybrid finish) */
+.pve-freq-wordmark { font-size:16px;font-weight:700;letter-spacing:3px;color:var(--text);cursor:pointer;user-select:none }
+.nav-ver-label { font-size:12px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase }
+.nav-divider { width:1px;height:24px;background:var(--border) }
+.header-time-label { font-family:'Courier New',monospace;font-size:14px;font-weight:500;color:var(--text-dim);letter-spacing:1px }
+/* 20260413Q-id-rules-end */
+
 /* ═══════════════════════════════════════════════════════════════════
    MOBILE RESPONSIVE
    ═══════════════════════════════════════════════════════════════════ */

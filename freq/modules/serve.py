@@ -1643,6 +1643,61 @@ def _resolve_container_vm_ip(vm) -> str:
     return vm.ip
 
 
+_INLINE_STYLE_CSP_HASHES: list[str] = []
+_INLINE_STYLE_CSP_LOCK = threading.Lock()
+
+
+def _inline_style_csp_hashes() -> list[str]:
+    """Return the cached list of CSP `'sha256-…'` tokens for every
+    bespoke inline style="…" attribute that ships in app.html.
+
+    The cache is built lazily on first call and reused for the lifetime
+    of the process. App.html is loaded via web_ui._read_asset so the
+    same template the server actually serves is the one we hash. The
+    SHA256 is computed over the raw attribute value (the bytes between
+    the quotes, no surrounding `style="…"` wrapper) — that's what the
+    CSP spec matches against under `'unsafe-hashes'`.
+
+    R-WEB-INLINE-STYLE-CSP-SWEEP-20260413Q hybrid finish per Finn's
+    design call: token Q's utility-class sweep extracted the high-
+    frequency patterns (264 → N), and the remaining N bespoke styles
+    are allowed via per-style hash instead of a blanket
+    `'unsafe-inline'`. The hashes are computed once at first request,
+    not per-request — the inline-style set is fixed in the static
+    asset bundle and only changes when the dashboard is re-deployed.
+    """
+    global _INLINE_STYLE_CSP_HASHES
+    with _INLINE_STYLE_CSP_LOCK:
+        if _INLINE_STYLE_CSP_HASHES:
+            return _INLINE_STYLE_CSP_HASHES
+        try:
+            from freq.modules.web_ui import _read_asset
+            html = _read_asset("app.html")
+        except Exception as e:
+            logger.error(f"inline_style_csp_hashes: failed to read app.html: {e}")
+            return []
+        import hashlib
+        import base64
+        seen: set[str] = set()
+        tokens: list[str] = []
+        # Match every style="…" attribute. Use a non-greedy capture
+        # bounded by the next " — same regex shape as the test suite
+        # uses for counting.
+        for m in re.finditer(r' style="([^"]*)"', html):
+            value = m.group(1)
+            if value in seen:
+                continue
+            seen.add(value)
+            digest = hashlib.sha256(value.encode("utf-8")).digest()
+            b64 = base64.b64encode(digest).decode("ascii")
+            tokens.append(f"'sha256-{b64}'")
+        _INLINE_STYLE_CSP_HASHES = tokens
+        logger.info(
+            f"inline_style_csp_hashes: cached {len(tokens)} unique inline style hashes for CSP"
+        )
+        return _INLINE_STYLE_CSP_HASHES
+
+
 _DNS_LOOKUP_LOG: dict = {}  # {ip: [(ts), ...]}
 _DNS_LOOKUP_LOCK = threading.Lock()
 _DNS_LOOKUP_WINDOW = 300   # 5 minutes
@@ -4824,35 +4879,32 @@ a:hover{{text-decoration:underline}}
         # Web UI is self-contained: xterm is vendored under /static/vendor/xterm,
         # fonts use platform stacks only, no public CDN or font host references.
         #
-        # Honest limits on 'unsafe-inline' (as of R-WEB-INLINE-CSP-CLEANUP-20260413O):
+        # Honest limits on 'unsafe-inline' (final state after token Q hybrid finish):
         #   script-src: ZERO inline event handlers, ZERO inline <script> blocks,
-        #     ZERO javascript: URLs. The long-tail extract under
-        #     R-WEB-INLINE-CSP-CLEANUP-20260413O closed the remaining 342 inline
-        #     handlers (178 switchView via the existing data-view delegator, 145
-        #     simple onclick patterns via data-action/data-arg, plus 19 stragglers
-        #     migrated to addEventListener bindings or data-action shims). The
-        #     CSP can therefore drop 'unsafe-inline' from script-src entirely —
-        #     attempts to reintroduce inline handlers will be blocked at the
-        #     browser. Regression guarded by test_web_csp_inline_contract.py.
-        #   style-src: 90 inline style="…" attrs across the shipped UI (was 275
-        #     before token M, 267 after M, 266 after O, 264 after Morty's home
-        #     empty-state cleanup at 3ae8a30, 90 after token Q's utility-class
-        #     sweep at this commit). The remaining 90 are bespoke single-element
-        #     styles that didn't match any high-frequency pattern; reaching zero
-        #     would need either ~90 one-off classes or a nonce/hash-based CSP.
-        #     R-WEB-INLINE-STYLE-CSP-SWEEP-20260413Q tracked as the follow-up
-        #     to F16 of R-SECURITY-TRUST-AUDIT-20260413P; the bulk dedupe lands
-        #     here, the bespoke long-tail is a separate follow-up if Finn wants
-        #     style-src tightened further. 'unsafe-inline' on style-src stays
-        #     until that follow-up lands.
+        #     ZERO javascript: URLs (closed by R-WEB-INLINE-CSP-CLEANUP-20260413O).
+        #     'unsafe-inline' is dropped from script-src.
+        #   style-src: ZERO 'unsafe-inline'. The Q utility-class sweep
+        #     dropped the count from 264 to 90, then the Q hybrid finish
+        #     extracted 25 ID-based rules + 4 chrome semantic classes,
+        #     bringing the count to 61 bespoke inline style="…" attrs.
+        #     Those 61 are allowed via 'unsafe-hashes' + per-attr SHA256
+        #     hashes computed at startup by _inline_style_csp_hashes().
+        #     'self' is kept for <link rel=stylesheet> references;
+        #     'unsafe-hashes' enables per-style hash matching; each
+        #     'sha256-…' source matches one specific bespoke inline
+        #     style attribute value. R-WEB-INLINE-STYLE-CSP-SWEEP-20260413Q
+        #     hybrid finish (Path 4) per Finn's design call: cleanest
+        #     path to zero unsafe-inline without 90 cryptic auto-classes.
         #
         # No host names appear below. An air-gapped dashboard MUST NOT fetch any
         # asset off-box — that's what R-WEB-EXTERNAL-ASSET-CONTRACT-20260413L
         # closed. This CSP is the policy enforcement.
+        style_hash_tokens = _inline_style_csp_hashes()
+        style_src = "style-src 'self' 'unsafe-hashes' " + " ".join(style_hash_tokens) if style_hash_tokens else "style-src 'self'"
         self.send_header("Content-Security-Policy",
                          "default-src 'self'; "
                          "script-src 'self'; "
-                         "style-src 'self' 'unsafe-inline'; "
+                         f"{style_src}; "
                          "img-src 'self' data:; "
                          "connect-src 'self'; "
                          "font-src 'self'")

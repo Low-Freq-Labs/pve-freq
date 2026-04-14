@@ -131,7 +131,7 @@ class TestNoExternalStylesheet(unittest.TestCase):
 
 
 EXPECTED_INLINE_HANDLERS = 0
-EXPECTED_INLINE_STYLES = 90
+EXPECTED_INLINE_STYLES = 61
 
 INLINE_HANDLER_RE = re.compile(r" on[a-z]+=")
 INLINE_STYLE_RE = re.compile(r' style="')
@@ -246,11 +246,39 @@ class TestCspHonestLimitDocumented(unittest.TestCase):
             "count is zero, so the directive must stay tight"
         )
 
-    def test_style_src_keeps_unsafe_inline_while_styles_present(self):
-        """Inline style attrs are still > 0, so style-src MUST keep
-        'unsafe-inline' until the styles long tail is extracted."""
-        self.assertIn("style-src 'self' 'unsafe-inline'", self.src)
-        self.assertGreater(_count_inline_styles(self.html), 0)
+    def test_style_src_dropped_unsafe_inline_uses_unsafe_hashes(self):
+        """R-WEB-INLINE-STYLE-CSP-SWEEP-20260413Q hybrid finish (Path 4):
+        style-src must NOT carry 'unsafe-inline'. The bespoke remaining
+        inline style="…" attrs are allowed via 'unsafe-hashes' + per-style
+        sha256 tokens computed at startup by _inline_style_csp_hashes()
+        in serve.py. Pin both halves: the literal directive must call
+        _inline_style_csp_hashes(), and the directive must not contain
+        the unsafe-inline keyword."""
+        # The directive value is built dynamically (style_hash_tokens),
+        # not as a static literal — anchor on the helper invocation.
+        self.assertIn(
+            "_inline_style_csp_hashes()",
+            self.src,
+            "style-src builder must call _inline_style_csp_hashes() to "
+            "fetch the per-style sha256 hashes",
+        )
+        self.assertIn(
+            "'unsafe-hashes'",
+            self.src,
+            "style-src must use 'unsafe-hashes' to enable per-style hash matching",
+        )
+        # The static fallback for the empty-hashes case must be tight too.
+        self.assertIn(
+            'style-src \'self\'',
+            self.src,
+            "style-src must list 'self' (for <link rel=stylesheet> + the css fallback)",
+        )
+        # The pre-fix `style-src 'self' 'unsafe-inline'` literal must be gone.
+        self.assertNotIn(
+            "style-src 'self' 'unsafe-inline'",
+            self.src,
+            "the pre-fix style-src 'unsafe-inline' literal must not return",
+        )
 
 
 if __name__ == "__main__":
