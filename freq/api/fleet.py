@@ -322,6 +322,31 @@ def handle_fleet_overview(handler):
         response["age"] = age_seconds
         response["age_seconds"] = age_seconds
         response["stale"] = age_seconds > 120
+        # R-PRODUCT-LAW-BACKEND-TRUTH: if the cached payload predates
+        # the fleet_state rollout (disk cache from an older build), or
+        # a newly-added node didn't get stamped during the last bg
+        # refresh, compute the rollup on-the-fly so the banner always
+        # has an honest top-level state to render.
+        if "fleet_state" not in response:
+            pve_nodes = response.get("pve_nodes") or []
+            states = [n.get("state") or ("live" if n.get("online") else "unreachable")
+                      for n in pve_nodes]
+            if not states:
+                response["fleet_state"] = "degraded"
+                response["fleet_reason"] = "no PVE nodes tracked"
+            elif all(s == "unreachable" for s in states):
+                response["fleet_state"] = "unreachable"
+                response["fleet_reason"] = "all PVE nodes unreachable"
+            elif "unreachable" in states:
+                n_bad = sum(1 for s in states if s == "unreachable")
+                response["fleet_state"] = "degraded"
+                response["fleet_reason"] = f"{n_bad}/{len(states)} PVE nodes unreachable"
+            elif "stale" in states:
+                response["fleet_state"] = "stale"
+                response["fleet_reason"] = f"fleet cache stale ({age_seconds}s old)"
+            else:
+                response["fleet_state"] = "live"
+                response["fleet_reason"] = f"all {len(states)} PVE nodes live"
         probe_err = _fleet_err
         if probe_err:
             response["probe_status"] = "error"
