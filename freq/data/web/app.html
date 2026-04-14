@@ -22,6 +22,7 @@
   <div class="login-card">
     <div class="login-wordmark">PVE FREQ</div>
     <div class="login-tagline">operator console</div>
+    <div id="login-setup-banner" class="login-setup-banner d-none"></div>
     <form id="login-form" class="login-form" method="post" action="#" autocomplete="on">
       <div class="login-fields">
         <input id="login-user" class="login-input" name="username" placeholder="Username" autocomplete="username">
@@ -42,6 +43,7 @@
     <div><h1 id="page-title" class="fs-16">Home</h1><div class="tagline fs-11" id="header-tagline" ></div></div>
   </div>
   <div class="flex-gap-16-center">
+    <span id="stream-status" class="stream-status"></span>
     <span id="watchdog-status"></span>
     <button id="header-user-btn" class="header-user-btn d-none" data-action="openUserMenu"><span id="header-user-icon" class="header-user-icon"></span><span id="header-user-name" class="header-user-name"></span><span id="header-user-role" class="header-user-role"></span></button>
     <span class="header-time-label" id="header-time"></span>
@@ -50,6 +52,9 @@
 <div id="update-banner" class="update-banner d-none">
   <span id="update-banner-text"></span>
   <button class="update-banner-dismiss" data-action="dismissUpdateBanner">&times;</button>
+</div>
+<div id="operator-truth-banner" class="operator-truth-banner d-none">
+  <span id="operator-truth-text"></span>
 </div>
 <div class="mn-body d-none" id="mn-body">
 

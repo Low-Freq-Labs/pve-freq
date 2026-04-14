@@ -308,6 +308,13 @@ function doLogin(){
     if(res.status!==200||d.error){
       if(errEl){errEl.textContent=d.error||('Login failed ('+res.status+')');errEl.style.display='block';}
       if(passEl)passEl.value='';
+      /* M-RESILIENCE-OPERATOR-TRUTH-20260413AI: a 401 on login is
+       * ambiguous — could be wrong password, could be that the backend
+       * reports initialized=false and has no stored hash to verify
+       * against. Re-probe setup/status so the banner reflects the
+       * current truth (the operator may have arrived at /login from a
+       * direct URL and skipped _showLoginOverlay's initial probe). */
+      if(res.status===401)_probeSetupTruth();
       return;
     }
     _authToken=d.token;_currentUser=d.user;_currentRole=d.role;
@@ -578,7 +585,15 @@ function _showApp(){
        * producing a pre-auth logout storm on top of EventSource
        * 403-retry noise. */
       try{startSparklines();}catch(e){console.error('startSparklines failed:',e);}
+      /* Seed the stream indicator before startSSE resolves so the
+       * header never shows an empty slot — EventSource onopen flips
+       * it to s-live, onerror to s-cached/s-dead. */
+      _renderStreamStatus('cached');
       try{startSSE();}catch(e){console.error('startSSE failed:',e);}
+      /* Post-auth operator-truth check: cache setup/status so a
+       * persistent banner can surface "setup incomplete" even after
+       * a successful login. */
+      _probeSetupTruth(_renderPostAuthTruthBanner);
       try{
         var _initPath=window.location.pathname.replace('/dashboard/','').replace('/','');
         if(_initPath&&VIEW_LOADERS[_initPath])switchView(_initPath);
@@ -666,6 +681,108 @@ function _showLoginOverlay(){
   if(ov)ov.style.display='flex';
   var u=document.getElementById('login-user');
   if(u)u.focus();
+  /* M-RESILIENCE-OPERATOR-TRUTH-20260413AI: pre-auth setup-truth probe.
+   * Before the operator types anything, probe /api/setup/status. If the
+   * backend reports initialized=false / first_run=true / setup_health
+   * !=ok, surface an honest SETUP REQUIRED banner pointing at /setup so
+   * a failed login isn't misread as "wrong password". The old flow left
+   * the operator guessing against a naked login form that would only
+   * ever 401, regardless of which credentials they tried. */
+  _probeSetupTruth();
+}
+
+/* Cached setup-status snapshot. null until probed. Shape:
+ *   { first_run, initialized, setup_health, pve_nodes_configured,
+ *     hosts_configured, ssh_key_exists, ssh_key_readable } */
+var _setupTruthCache=null;
+function _probeSetupTruth(cb){
+  /* Bare fetch — pre-auth surface, no bearer token needed. */
+  fetch(API.SETUP_STATUS,{credentials:'same-origin'}).then(function(r){
+    if(!r.ok)throw new Error('setup/status http '+r.status);
+    return r.json();
+  }).then(function(d){
+    _setupTruthCache=d||{};
+    _renderSetupTruthBanner(_setupTruthCache);
+    if(cb)cb(_setupTruthCache);
+  }).catch(function(){
+    /* Probe itself failed — that's also honest operator truth. Render a
+     * softer banner so the operator knows the backend is flaky, not
+     * just that their password is wrong. */
+    _setupTruthCache={_probe_failed:true};
+    _renderSetupTruthBanner(_setupTruthCache);
+    if(cb)cb(_setupTruthCache);
+  });
+}
+function _renderSetupTruthBanner(d){
+  var el=document.getElementById('login-setup-banner');
+  if(!el)return;
+  d=d||{};
+  var title='',body='',isErr=false;
+  if(d._probe_failed){
+    title='BACKEND UNREACHABLE';
+    body='setup/status probe failed — the server may be down or stuck. '+
+      'A login attempt is likely to fail until the backend recovers.';
+    isErr=true;
+  }else if(d.first_run===true||d.initialized===false){
+    title='SETUP REQUIRED';
+    body='This instance reports <strong>initialized: false</strong>. '+
+      'Complete the first-run wizard at '+
+      '<a href="/setup.html">/setup.html</a> before attempting to log in.';
+  }else if(d.setup_health&&d.setup_health!=='ok'&&d.setup_health!=='healthy'){
+    title='SETUP INCOMPLETE ('+String(d.setup_health).toUpperCase()+')';
+    var missing=[];
+    if(d.pve_nodes_configured===false)missing.push('PVE nodes');
+    if(d.hosts_configured===false)missing.push('hosts');
+    if(d.ssh_key_exists===false)missing.push('SSH key');
+    else if(d.ssh_key_readable===false)missing.push('SSH key unreadable');
+    body='Backend setup_health='+String(d.setup_health)+
+      (missing.length?' — missing: '+missing.join(', '):'')+
+      '. Visit <a href="/setup.html">/setup.html</a> to finish configuration.';
+  }else{
+    /* Healthy — hide the banner. */
+    el.className='login-setup-banner d-none';
+    el.innerHTML='';
+    return;
+  }
+  el.className='login-setup-banner'+(isErr?' lsb-err':'');
+  el.innerHTML='<span class="lsb-title">'+title+'</span>'+
+    '<span class="lsb-body">'+body+'</span>';
+}
+/* Post-auth sibling of the login-card banner: renders the same
+ * truth into the persistent #operator-truth-banner slot in the
+ * header. Called after a successful login so the operator sees the
+ * same degraded-state warning AFTER they're inside the dashboard,
+ * not only on the login card they just left. */
+function _renderPostAuthTruthBanner(d){
+  var el=document.getElementById('operator-truth-banner');
+  var txt=document.getElementById('operator-truth-text');
+  if(!el||!txt)return;
+  d=d||{};
+  var msg='',isErr=false;
+  if(d._probe_failed){
+    msg='Operator-truth probe failed — setup/status unreachable. UI state may be stale.';
+    isErr=true;
+  }else if(d.first_run===true||d.initialized===false){
+    msg='SETUP INCOMPLETE — backend reports initialized=false. Finish setup at <a href="/setup.html">/setup.html</a> before trusting fleet data.';
+    isErr=true;
+  }else if(d.setup_health&&d.setup_health!=='ok'&&d.setup_health!=='healthy'){
+    var parts=[];
+    if(d.pve_nodes_configured===false)parts.push('PVE nodes');
+    if(d.hosts_configured===false)parts.push('hosts');
+    if(d.ssh_key_exists===false)parts.push('SSH key');
+    else if(d.ssh_key_readable===false)parts.push('SSH key unreadable');
+    msg='Setup health: '+String(d.setup_health).toUpperCase()+
+      (parts.length?' — missing: '+parts.join(', '):'')+
+      ' — some fleet surfaces may be degraded. Visit <a href="/setup.html">/setup.html</a> to finish.';
+  }else{
+    el.classList.add('d-none');
+    el.classList.remove('otb-err');
+    txt.textContent='';
+    return;
+  }
+  el.classList.remove('d-none');
+  if(isErr)el.classList.add('otb-err');else el.classList.remove('otb-err');
+  txt.innerHTML=msg;
 }
 
 /* Dismiss the update banner. data-action='dismissUpdateBanner'
@@ -1308,11 +1425,64 @@ function startSilentRefresh(){
   _healthTimer=setInterval(_silentHealthRefresh,10000);
   _fleetTimer=setInterval(_silentFleetRefresh,45000);
 }
+/* M-RESILIENCE-OPERATOR-TRUTH-20260413AI: consecutive-failure streaks
+ * for the silent background pollers. After N consecutive failures the
+ * UI flips to honest-cached state via _markApiDegraded so the operator
+ * sees the degradation instead of a frozen "healthy" display. */
+var _healthFailStreak=0;
+var _fleetFailStreak=0;
+var _apiDegradedState=false;
+function _markApiDegraded(kind, reason){
+  _apiDegradedState=true;
+  /* Force stream indicator to cached so the header shows the degrade
+   * even while SSE itself is still technically open — an SSE push
+   * can't rescue a backend whose polling endpoints are erroring. */
+  _renderStreamStatus('cached');
+  var el=document.getElementById('operator-truth-banner');
+  var txt=document.getElementById('operator-truth-text');
+  if(!el||!txt)return;
+  el.classList.remove('d-none');
+  el.classList.add('otb-err');
+  txt.innerHTML='API DEGRADED — '+kind+' endpoint failing ('+reason+'). '+
+    'Displayed fleet data may be stale. Background retry every 10s.';
+}
+function _clearApiDegraded(){
+  if(!_apiDegradedState)return;
+  if(_healthFailStreak>0||_fleetFailStreak>0)return;
+  _apiDegradedState=false;
+  /* Restore stream to whatever SSE readyState says. */
+  var rs=_evtSource?_evtSource.readyState:2;
+  _renderStreamStatus(rs===1?'live':rs===2?'dead':'cached');
+  /* Re-probe setup truth so the banner reflects the steady state,
+   * not the API-degraded error we just cleared. */
+  _probeSetupTruth(_renderPostAuthTruthBanner);
+}
+
 function _silentHealthRefresh(){
   if(_healthInFlight)return;/* skip if previous call still running */
   _healthInFlight=true;
-  _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
+  _authFetch(API.HEALTH,{silent:true}).then(function(r){
+    if(!r.ok){_healthInFlight=false;_healthFailStreak++;
+      if(_healthFailStreak>=2)_markApiDegraded('health','HTTP '+r.status);
+      return null;}
+    return r.json();
+  }).then(function(hd){
+    if(hd===null||!hd||!hd.hosts){_healthInFlight=false;return;}
     _healthInFlight=false;
+    /* Honor probe_status even when the HTTP response is 200. A stale/
+     * error probe means the backend couldn't reach the fleet hosts even
+     * though the /api/health route itself responded — the UI must
+     * surface that degradation, not paint over it with the cached
+     * hosts list. Successful probes reset the streak. */
+    if(hd.probe_status==='stale'||hd.probe_status==='error'){
+      _healthFailStreak++;
+      if(_healthFailStreak>=2){
+        var _age=hd.age_seconds?Math.round(hd.age_seconds)+'s':'unknown';
+        _markApiDegraded('health probe',hd.probe_status+' ('+_age+')');
+      }
+    }else{
+      _healthFailStreak=0;_clearApiDegraded();
+    }
     _fleetCache.hd=hd;/* keep cache fresh */
     hd.hosts.forEach(function(h){
       var card=document.querySelector('.host-card[data-host-id="'+h.label.toLowerCase()+'"]');
@@ -1350,13 +1520,32 @@ function _silentHealthRefresh(){
     var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<60?_age+'s':Math.round(_age/60)+'m';var _ageClr=hd.probe_status==='error'?'var(--red)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';
     var ldEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:first-child span:first-child');if(ldEl){ldEl.textContent=_ageLbl;ldEl.style.color=_ageClr;}
     var ci=document.getElementById('sse-conn-status');if(ci){if(hd.probe_status==='error'){ci.textContent='PROBE FAILED';ci.style.color='var(--red)';}else{var _live=_evtSource&&_evtSource.readyState===1;ci.textContent=_live?'LIVE':'CACHED';ci.style.color=_live?'var(--green)':'var(--yellow)';}}
-  }).catch(function(){_healthInFlight=false;});
+  }).catch(function(){
+    _healthInFlight=false;
+    _healthFailStreak++;
+    if(_healthFailStreak>=2)_markApiDegraded('health','network');
+  });
 }
 function _silentFleetRefresh(){
   if(_fleetInFlight)return;
   _fleetInFlight=true;
-  _authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
+  _authFetch(API.FLEET_OVERVIEW,{silent:true}).then(function(r){
+    if(!r.ok){_fleetInFlight=false;_fleetFailStreak++;
+      if(_fleetFailStreak>=2)_markApiDegraded('fleet overview','HTTP '+r.status);
+      return null;}
+    return r.json();
+  }).then(function(fo){
+    if(fo===null){return;}
     _fleetInFlight=false;
+    /* Same probe-status honesty rule as the health path. */
+    if(fo&&(fo.probe_status==='stale'||fo.probe_status==='error')){
+      _fleetFailStreak++;
+      if(_fleetFailStreak>=2){
+        _markApiDegraded('fleet probe',fo.probe_status+(fo.probe_error?' — '+fo.probe_error:''));
+      }
+    }else{
+      _fleetFailStreak=0;_clearApiDegraded();
+    }
     _fleetCache.fo=fo;/* keep cache fresh */
     if(!fo||!fo.vms)return;
     /* Update VM status badges + resource bars in PVE node sections */
@@ -1398,7 +1587,11 @@ function _silentFleetRefresh(){
       var ci=document.getElementById('sse-conn-status');
       if(ci){ci.textContent='PROBE FAILED';ci.style.color='var(--red)';}
     }
-  }).catch(function(){_fleetInFlight=false;});
+  }).catch(function(){
+    _fleetInFlight=false;
+    _fleetFailStreak++;
+    if(_fleetFailStreak>=2)_markApiDegraded('fleet overview','network');
+  });
 }
 startSilentRefresh();
 
@@ -1688,6 +1881,7 @@ function startSSE(){
     /* Update connection indicator */
     var ci=document.getElementById('sse-conn-status');
     if(ci){ci.textContent='LIVE';ci.style.color='var(--green)';}
+    _renderStreamStatus('live');
   };
 
   _evtSource.onerror=function(){
@@ -1699,7 +1893,31 @@ function startSSE(){
     /* Update connection indicator */
     var ci=document.getElementById('sse-conn-status');
     if(ci){ci.textContent='CACHED';ci.style.color='var(--yellow)';}
+    /* EventSource has three readyStates: CONNECTING(0), OPEN(1), CLOSED(2).
+     * onerror fires for both transient reconnect loops (→CONNECTING) and
+     * permanent teardown (→CLOSED). Differentiate so the header indicator
+     * says RECONNECTING vs STREAM DEAD honestly. */
+    var rs=_evtSource?_evtSource.readyState:2;
+    _renderStreamStatus(rs===2?'dead':'cached');
   };
+}
+
+/* M-RESILIENCE-OPERATOR-TRUTH-20260413AI: persistent header stream
+ * indicator. Keeps the operator informed on every view — not just
+ * hw-fleet-stats — about whether the dashboard is reading live push
+ * events or has fallen back to polled cache. The trailing state is
+ * kept in _streamState so a re-render after a view switch can restore
+ * the correct badge without racing the SSE event loop. */
+var _streamState='live';
+function _renderStreamStatus(state){
+  if(state)_streamState=state;
+  var el=document.getElementById('stream-status');
+  if(!el)return;
+  var s=_streamState;
+  var map={live:'LIVE',cached:'CACHED',dead:'STREAM DEAD'};
+  var cls={live:'s-live',cached:'s-cached',dead:'s-dead'};
+  el.className='stream-status '+(cls[s]||'s-cached');
+  el.innerHTML='<span class="stream-dot"></span>'+(map[s]||'CACHED');
 }
 /* startSSE() is called from _showApp() once auth is confirmed. The
  * previous unconditional call at script load opened EventSource
