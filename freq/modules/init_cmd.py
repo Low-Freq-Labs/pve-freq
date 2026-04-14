@@ -4795,7 +4795,13 @@ echo DEPLOY_OK
     else:
         fmt.step_ok("Account, password, sudo, SSH key deployed")
 
-    # Verify FREQ key SSH access
+    # Verify FREQ key SSH access.
+    # R-RC-PHASE5-SSH-HANG-20260414X: these verify probes must be hard-bounded.
+    # ConnectTimeout=3 only caps TCP connect; post-connect banner/handshake/auth
+    # can stall indefinitely (e.g. sshd MaxStartups backoff, slow reverse DNS,
+    # authorized_keys reload race). Without an explicit _run timeout we default
+    # to 30s and Phase 5 visibly wedges. ServerAliveInterval also catches a
+    # post-auth hang while the remote is executing `echo OK`.
     success = True
     if ctx.get("key_path") and os.path.isfile(ctx["key_path"]):
         rc2, _, _ = _run(
@@ -4810,11 +4816,19 @@ echo DEPLOY_OK
                 "BatchMode=yes",
                 "-o",
                 "StrictHostKeyChecking=accept-new",
+                "-o",
+                "ServerAliveInterval=3",
+                "-o",
+                "ServerAliveCountMax=2",
                 f"{svc_name}@{ip}",
                 "echo OK",
-            ]
+            ],
+            timeout=QUICK_CHECK_TIMEOUT,
         )
-        if rc2 == 0:
+        if rc2 == 124:
+            fmt.step_fail(f"FREQ key verify TIMED OUT for {svc_name}@{ip} — sshd unresponsive")
+            success = False
+        elif rc2 == 0:
             fmt.step_ok(f"Verified: FREQ key SSH as {svc_name}")
         else:
             fmt.step_fail(f"FREQ key login FAILED as {svc_name} — check sshd + authorized_keys")
@@ -4834,11 +4848,19 @@ echo DEPLOY_OK
                     "BatchMode=yes",
                     "-o",
                     "StrictHostKeyChecking=accept-new",
+                    "-o",
+                    "ServerAliveInterval=3",
+                    "-o",
+                    "ServerAliveCountMax=2",
                     f"{svc_name}@{ip}",
                     "sudo -n true",
-                ]
+                ],
+                timeout=QUICK_CHECK_TIMEOUT,
             )
-            if rc3 == 0:
+            if rc3 == 124:
+                fmt.step_fail(f"sudo verify TIMED OUT for {svc_name}@{ip}")
+                success = False
+            elif rc3 == 0:
                 fmt.step_ok(f"Verified: NOPASSWD sudo works as {svc_name}")
             else:
                 fmt.step_fail(f"SUDO FAILED — {svc_name} cannot sudo on {ip}")
@@ -4930,7 +4952,8 @@ echo DEPLOY_OK
     else:
         fmt.step_ok("Account, password, SSH key deployed (no sudo — pfSense)")
 
-    # Verify FREQ key SSH access (no sudo on pfSense)
+    # Verify FREQ key SSH access (no sudo on pfSense).
+    # R-RC-PHASE5-SSH-HANG-20260414X: same bounded-verify contract as _deploy_linux.
     success = True
     if ctx.get("key_path") and os.path.isfile(ctx["key_path"]):
         rc2, _, _ = _run(
@@ -4945,11 +4968,19 @@ echo DEPLOY_OK
                 "BatchMode=yes",
                 "-o",
                 "StrictHostKeyChecking=accept-new",
+                "-o",
+                "ServerAliveInterval=3",
+                "-o",
+                "ServerAliveCountMax=2",
                 f"{svc_name}@{ip}",
                 "echo OK",
-            ]
+            ],
+            timeout=QUICK_CHECK_TIMEOUT,
         )
-        if rc2 == 0:
+        if rc2 == 124:
+            fmt.step_fail(f"FREQ key verify TIMED OUT for {svc_name}@{ip}")
+            success = False
+        elif rc2 == 0:
             fmt.step_ok(f"Verified: FREQ key SSH as {svc_name}")
         else:
             fmt.step_fail(f"FREQ key login FAILED as {svc_name}")
