@@ -28,10 +28,12 @@ Design decisions:
 import base64
 import datetime
 import getpass
+import math
 import os
 import re
 import secrets
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
@@ -232,13 +234,78 @@ def _persist_legacy_password_file(cfg, svc_name, password):
         fmt.step_warn(f"Could not save device password to {pass_path}: {e}")
 
 
-def _run(cmd, timeout=DEFAULT_CMD_TIMEOUT):
-    """Run a command, return (rc, stdout, stderr)."""
+def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
+    """Run a command with a HARD timeout that kills the entire process tree.
+
+    subprocess.run(timeout=) only SIGKILLs the direct child. When that
+    child is sshpass (or any wrapper), its ssh grandchild inherits the
+    pipe FDs and racadm/remote commands can keep the session alive,
+    blocking subsequent init progress. This helper:
+
+      - spawns the child with start_new_session=True so it becomes its
+        own process-group leader (sshpass gets its own pgid; forked
+        ssh inherits it).
+      - on TimeoutExpired, SIGKILLs the entire process group via
+        os.killpg so ssh/racadm die alongside sshpass.
+      - returns (124, stdout, "timed out after Ns") on timeout — the
+        rc=124 convention matches GNU timeout(1) so callers can branch
+        honestly without conflating with a real non-zero exit.
+
+    R-E2E-IDRAC-PRIVILEGE-HANG-20260413R: added because Phase 8 was
+    observed to wedge indefinitely on iDRAC racadm hangs. See that
+    token's findings file for the full root-cause narrative.
+    """
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return r.returncode, r.stdout, r.stderr
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+    except OSError as e:
+        return 1, "", str(e)
     except Exception as e:
         return 1, "", str(e)
+
+    try:
+        out, err = proc.communicate(input=input_text, timeout=timeout)
+        return proc.returncode, out or "", err or ""
+    except subprocess.TimeoutExpired:
+        # Kill the entire process group — reaches ssh grandchild too.
+        try:
+            pgid = os.getpgid(proc.pid)
+            os.killpg(pgid, signal.SIGKILL)
+        except (ProcessLookupError, OSError):
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        # Short grace drain so we don't block on already-closed pipes.
+        try:
+            out, err = proc.communicate(timeout=5)
+        except Exception:
+            out, err = "", ""
+        return 124, out or "", f"command timed out after {timeout}s"
+    except Exception as e:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, OSError):
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        return 1, "", str(e)
+
+
+def _run(cmd, timeout=DEFAULT_CMD_TIMEOUT):
+    """Run a command, return (rc, stdout, stderr).
+
+    Routes through _run_bounded so a hung grandchild process tree
+    (sshpass → ssh → racadm) gets a process-group kill on timeout.
+    """
+    return _run_bounded(cmd, timeout=timeout)
 
 
 # sshpass exit codes → human-readable explanations
@@ -289,13 +356,10 @@ def _run_with_input(cmd, input_text, timeout=DEFAULT_CMD_TIMEOUT):
     """Run a command with stdin input, return (rc, stdout, stderr).
 
     Used for IOS switch config — commands must be piped via stdin,
-    not passed as SSH exec arguments.
+    not passed as SSH exec arguments. Routes through _run_bounded so
+    hung grandchildren get a process-group kill on timeout.
     """
-    try:
-        r = subprocess.run(cmd, input=input_text, capture_output=True, text=True, timeout=timeout)
-        return r.returncode, r.stdout, r.stderr
-    except Exception as e:
-        return 1, "", str(e)
+    return _run_bounded(cmd, timeout=timeout, input_text=input_text)
 
 
 def _load_device_credentials(cred_file):
@@ -4481,16 +4545,34 @@ def _get_auth_creds(choice, label):
     return auth_pass, auth_key
 
 
-def _init_ssh(ip, auth_pass, auth_key, auth_user):
+def _init_ssh(ip, auth_pass, auth_key, auth_user, deploy_start=None, deploy_budget=None):
     """Build an SSH helper for init-time auth (before FREQ keys are deployed).
 
     Returns a function _ssh(cmd, ..., as_root=False) -> (rc, stdout, stderr).
     When as_root=True and auth_user is not root, wraps the command in sudo
     using base64 encoding to avoid quoting issues with multi-line scripts.
+
+    R-E2E-IDRAC-PRIVILEGE-HANG-20260413R: optionally clamps each step's
+    timeout to the remaining wall-clock budget of a parent deploy. When
+    deploy_start/deploy_budget are passed, every _ssh() call will:
+      - short-circuit with rc=124 if elapsed >= budget
+      - clamp its own timeout to min(requested, ceil(remaining))
+    so one hanging step cannot blow through the per-host ceiling.
     """
-    ssh_opts = ["-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=accept-new"]
+    ssh_opts = [
+        "-o", "ConnectTimeout=5",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "ServerAliveInterval=5",
+        "-o", "ServerAliveCountMax=3",
+    ]
 
     def _ssh(cmd, extra_opts=None, timeout=DEFAULT_CMD_TIMEOUT, as_root=False):
+        # Clamp to remaining per-host deploy budget when one is in force.
+        if deploy_start is not None and deploy_budget is not None:
+            remaining = deploy_budget - (time.monotonic() - deploy_start)
+            if remaining <= 0:
+                return 124, "", f"deploy budget exhausted ({deploy_budget}s)"
+            timeout = min(timeout, max(1, math.ceil(remaining)))
         # Wrap in sudo if needed (non-root user running privileged commands)
         if as_root and auth_user != "root":
             # Base64-encode the script to avoid shell quoting nightmares
@@ -4808,10 +4890,13 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
 
     # iDRAC requires legacy ciphers
     extra_opts = PLATFORM_SSH.get("idrac", {}).get("extra_opts", [])
-    _ssh = _init_ssh(ip, auth_pass, auth_key, auth_user)
+    _ssh = _init_ssh(
+        ip, auth_pass, auth_key, auth_user,
+        deploy_start=deploy_start, deploy_budget=DEVICE_DEPLOY_TIMEOUT,
+    )
 
     # Test connectivity with legacy ciphers
-    rc, out, err = _ssh("racadm getsysinfo", extra_opts=extra_opts)
+    rc, out, err = _ssh("racadm getsysinfo", extra_opts=extra_opts, timeout=IDRAC_VERIFY_TIMEOUT)
     if rc != 0:
         fmt.step_fail(f"Cannot connect ({_ssh_error_msg(rc, err)})")
         logger.error(f"deploy_failed: {ip}", host=ip, error=_ssh_error_msg(rc, err))
@@ -4915,10 +5000,13 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
 
     # Switch requires legacy ciphers
     extra_opts = PLATFORM_SSH.get("switch", {}).get("extra_opts", [])
-    _ssh = _init_ssh(ip, auth_pass, auth_key, auth_user)
+    _ssh = _init_ssh(
+        ip, auth_pass, auth_key, auth_user,
+        deploy_start=deploy_start, deploy_budget=DEVICE_DEPLOY_TIMEOUT,
+    )
 
     # Test connectivity
-    rc, out, err = _ssh("show version | include uptime", extra_opts=extra_opts)
+    rc, out, err = _ssh("show version | include uptime", extra_opts=extra_opts, timeout=IDRAC_VERIFY_TIMEOUT)
     if rc != 0:
         fmt.step_fail(f"Cannot connect ({_ssh_error_msg(rc, err)})")
         logger.error(f"deploy_failed: {ip}", host=ip, error=_ssh_error_msg(rc, err))
