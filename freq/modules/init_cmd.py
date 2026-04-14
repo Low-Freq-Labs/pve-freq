@@ -234,6 +234,106 @@ def _persist_legacy_password_file(cfg, svc_name, password):
         fmt.step_warn(f"Could not save device password to {pass_path}: {e}")
 
 
+# R-POSTINIT-CHAOS-DIR-OWNERSHIP-20260413V: canonical list of data/ subdirs
+# that the dashboard and CLI modules expect to exist after init. Each one
+# is pre-created during post-init ownership fix-up so the first runtime
+# caller never has to `os.makedirs` from the dashboard service account
+# (which may not have write on a data/ that was created by a different
+# owner in an earlier install). Keep this list in sync with the modules
+# under freq/jarvis/ and freq/api/ that dereference cfg.data_dir.
+POST_INIT_DATA_SUBDIRS = (
+    "cache",
+    "chaos",          # freq/jarvis/chaos.py _chaos_dir — fix for V
+    "backups",        # freq/api/dr.py export_dir
+    "log",            # freq/api/dr.py journal path
+    "jarvis",         # freq/jarvis/agent.py
+    "jarvis/agents",
+    "observe",        # freq/api/observe.py snapshots
+    "state",          # freq/jarvis/gitops.py local state
+    "snapshots",      # freq/jarvis/capacity.py
+    "federation",     # freq/jarvis/federation.py
+)
+
+
+def _ensure_post_init_data_ownership(cfg, svc_name):
+    """Create + chown every post-init data/ subdir to {svc_name}:{svc_name}.
+
+    R-POSTINIT-CHAOS-DIR-OWNERSHIP-20260413V: the fix Finn asked for.
+
+    The root cause: init was previously run with a different service
+    account (freq-ops), the headless post-init step only chmod'd specific
+    subdirs (keys/vault/log/cache) without a full recursive chown of
+    data/, and the dashboard later started under freq-admin unable to
+    write to /opt/pve-freq/data which was still owned by freq-ops. The
+    first time the dashboard's chaos log loader hit `os.makedirs(data/
+    chaos, exist_ok=True)` it got PermissionError and T-6 of the red-team
+    pass caught it with an empty-response fallback. That fallback is a
+    safety net, not a fix. The fix is: during every init run, recursively
+    chown data/ to the current service account AND pre-create the known
+    post-init subdirs so first-use doesn't race with dir creation.
+
+    This helper is idempotent — safe to call from both interactive and
+    headless init paths multiple times.
+    """
+    import pwd
+    try:
+        pw = pwd.getpwnam(svc_name)
+    except KeyError:
+        fmt.step_warn(
+            f"Post-init data ownership: user '{svc_name}' not found — skipping"
+        )
+        return False
+
+    uid, gid = pw.pw_uid, pw.pw_gid
+    data_dir = cfg.data_dir
+    if not data_dir:
+        return False
+
+    # 1. Create the root data_dir itself.
+    try:
+        os.makedirs(data_dir, mode=0o755, exist_ok=True)
+    except OSError as e:
+        fmt.step_warn(f"Post-init data ownership: cannot create {data_dir}: {e}")
+        return False
+
+    # 2. Pre-create every canonical post-init subdir. mode=0o755 because
+    #    operators in the svc group should be able to `ls` them without
+    #    sudo; subdirs that need tighter perms (keys, vault) are handled
+    #    elsewhere in the post-init block and we don't touch them here.
+    for sub in POST_INIT_DATA_SUBDIRS:
+        sub_path = os.path.join(data_dir, sub)
+        try:
+            os.makedirs(sub_path, mode=0o755, exist_ok=True)
+        except OSError as e:
+            logger.warn(f"post_init_subdir: cannot create {sub_path}: {e}")
+
+    # 3. Recursive chown of the whole data/ tree to svc_name:svc_name.
+    #    Use the shelling-out `chown -R` flavor because it's atomic-per-
+    #    entry and handles nested ownership discrepancies in one pass.
+    #    Falls back to a Python walk if chown(1) is unavailable.
+    rc, out, err = _run(["chown", "-R", f"{svc_name}:{svc_name}", data_dir], timeout=15)
+    if rc != 0:
+        logger.warn(f"post_init_chown_R failed: rc={rc} err={err.strip()[:120]}")
+        # Python fallback — walk the tree ourselves.
+        try:
+            os.chown(data_dir, uid, gid)
+            for root, dirs, files in os.walk(data_dir):
+                for name in dirs + files:
+                    try:
+                        os.chown(os.path.join(root, name), uid, gid)
+                    except OSError:
+                        pass
+        except OSError as e:
+            fmt.step_warn(f"Post-init data ownership fallback: {e}")
+            return False
+
+    fmt.step_ok(
+        f"Post-init data ownership: {data_dir} tree owned by {svc_name} "
+        f"({len(POST_INIT_DATA_SUBDIRS)} subdirs pre-created)"
+    )
+    return True
+
+
 def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
     """Run a command with a HARD timeout that kills the entire process tree.
 
@@ -703,9 +803,17 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     _phase_summary(cfg, ctx, verified, pack)
     logger.perf("init_phase", time.monotonic() - _t, phase=13, name="summary")
 
-    # Fix post-init ownership: service account owns data dirs, operator can read
+    # Fix post-init ownership: service account owns data dirs, operator can read.
+    # R-POSTINIT-CHAOS-DIR-OWNERSHIP-20260413V: replaced the ad-hoc chown loop
+    # with _ensure_post_init_data_ownership which also pre-creates every known
+    # post-init data subdir (chaos, backups, jarvis, observe, state, …) with
+    # correct ownership. Prevents first-runtime-caller PermissionError on
+    # data/chaos and any other canonical subdir the dashboard writes into.
     svc_name = ctx["svc_name"]
-    for d in [cfg.data_dir, cfg.key_dir, cfg.vault_file, cfg.log_dir, cfg.conf_dir]:
+    _ensure_post_init_data_ownership(cfg, svc_name)
+    # Keep the other canonical paths (keys, vault, log, conf) chowned too —
+    # these may live outside data_dir on some install layouts.
+    for d in [cfg.key_dir, cfg.vault_file, cfg.log_dir, cfg.conf_dir]:
         d_path = d if os.path.isdir(d) else os.path.dirname(d)
         if d_path and os.path.exists(d_path):
             try:
@@ -7179,6 +7287,15 @@ def _init_headless(cfg, args):
     )
 
     # ── Post-init permissions ──
+    # R-POSTINIT-CHAOS-DIR-OWNERSHIP-20260413V: headless init used to
+    # skip the recursive chown of data_dir that the interactive path
+    # does. A data/ created by a previous svc_name stayed owned by
+    # that user, and first-use `os.makedirs(data/chaos, exist_ok=True)`
+    # from the dashboard service account failed with PermissionError.
+    # Run the same helper the interactive path uses so both flows
+    # pre-create + chown every canonical post-init subdir.
+    _ensure_post_init_data_ownership(cfg, ctx["svc_name"])
+
     # Config files must not be world-writable (init runs as root, umask may be 000)
     if cfg.conf_dir and os.path.exists(cfg.conf_dir):
         try:
