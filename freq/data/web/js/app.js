@@ -36,6 +36,45 @@ function badge(s){var c={
 function s(l,v,c){return '<div class="st"><div class="lb">'+l+'</div><div class="vl '+c+'">'+v+'</div></div>';}
 var st=s;
 function _pbar(pct,color){var p=pct||0;var c=p>=90?'var(--red)':p>=75?'var(--yellow)':color||'var(--purple-light)';return '<div class="pbar"><div class="pbar-fill" style="width:'+p+'%;background:'+c+'"></div></div>';}
+/* Operator-truth product law densification: render a freshness chip
+ * for any tile/card that displays observed state. Returns a small
+ * inline span — caller decides where to attach it. opts:
+ *   thresholds: {green:30, yellow:120}   // seconds
+ *   prefix:     'updated '               // optional textual prefix
+ * Pre-fix tiles showed values without any indication of how recent
+ * they were — operator at 2AM couldn't tell if "5 UP" was 3 seconds
+ * old or 30 minutes old. Now every tile that uses this helper carries
+ * its own freshness label so the absence of a stale marker is no
+ * longer the only signal of liveness. */
+function _freshChip(ageSec,opts){
+  opts=opts||{};
+  var thr=opts.thresholds||{green:30,yellow:120};
+  var age=ageSec==null?null:Math.max(0,Math.round(ageSec));
+  var lbl;
+  if(age==null){lbl='?';}
+  else if(age<60){lbl=age+'s';}
+  else if(age<3600){lbl=Math.floor(age/60)+'m';}
+  else{lbl=Math.floor(age/3600)+'h';}
+  var clr;
+  if(age==null)clr='var(--text-dim)';
+  else if(age<=thr.green)clr='var(--green)';
+  else if(age<=thr.yellow)clr='var(--yellow)';
+  else clr='var(--red)';
+  return '<span class="fresh-chip" style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.5px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.04);color:'+clr+';border:1px solid '+clr+';margin-left:4px">'+(opts.prefix||'')+lbl+'</span>';
+}
+/* Compute observation age in seconds from a payload that may carry
+ * any of: age_seconds (legacy probe field), checked_at (Rick's
+ * unix-ts field), probed_at (per-host), last_seen_ts. Returns null
+ * when no freshness info is available, so callers can render '?' or
+ * skip the chip entirely. */
+function _ageFromPayload(d){
+  if(!d)return null;
+  if(d.age_seconds!=null)return Number(d.age_seconds);
+  if(d.checked_at!=null){return Math.max(0,Date.now()/1000-Number(d.checked_at));}
+  if(d.probed_at!=null){return Math.max(0,Date.now()/1000-Number(d.probed_at));}
+  if(d.last_seen_ts!=null){return Math.max(0,Date.now()/1000-Number(d.last_seen_ts));}
+  return null;
+}
 function _mrow(label,val,pct,color){return '<div class="metric-row"><div class="metric-top"><span class="metric-label">'+label+'</span><span class="metric-val">'+val+'</span></div>'+_pbar(pct,color)+'</div>';}
 function _ramGB(mb){mb=parseInt(mb)||0;if(mb>=1024)return (mb/1024).toFixed(1).replace(/\.0$/,'')+'GB';return mb+'MB';}
 function _ramStr(ramText){
@@ -1615,27 +1654,93 @@ function _loadHomeFleetStats(){
     hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;if(h.type==='pve')pve++;});
     var totalAll=hd.hosts.length;
     var totalOff=down;var prodCount=totalAll-lab;var pveCount=PROD_HOSTS.filter(function(h){return h.type==='pve';}).length||pve;
-    var _d=function(l,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+l+'</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'</span><span class="label-hint">'+l1+'</span></span><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'</span><span class="label-hint">'+l2+'</span></span></div></div>';};
+    /* Densified tile builder. opts:
+     *   fresh: freshness chip HTML (appended to label row)
+     *   view:  data-view target for click-through (whole tile becomes
+     *          a button to navigate into the relevant page)
+     *   exp:   expected total — when present, the first value renders
+     *          as "v1/exp" so the operator sees actual-vs-expected at
+     *          a glance instead of having to subtract one column from
+     *          the other.
+     * Pre-fix tiles only carried two raw counts side by side. The
+     * operator could read "5 UP / 0 DOWN" and infer 5/5, but a missing
+     * host (4/5 UP) and a fresh probe with everything green (5/5 UP)
+     * looked identical until you stared at the second column. The
+     * x/y form encodes the contract directly, the freshness chip
+     * confirms the data is recent, and the view click-through is the
+     * next-useful-path Finn called for. */
+    var _d=function(l,v1,l1,c1,v2,l2,c2,opts){
+      opts=opts||{};
+      var v1Disp=opts.exp!=null?(v1+'/'+opts.exp):v1;
+      var clk=opts.view?' data-view="'+opts.view+'" style="cursor:pointer"':'';
+      var freshHtml=opts.fresh||'';
+      return '<div class="st"'+clk+'>'+
+        '<div class="lb">'+l+freshHtml+'</div>'+
+        '<div class="flex-row-24">'+
+          '<span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1Disp+'</span><span class="label-hint">'+l1+'</span></span>'+
+          '<span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'</span><span class="label-hint">'+l2+'</span></span>'+
+        '</div>'+
+      '</div>';
+    };
     var el=document.getElementById('hw-fleet-stats');if(!el)return;
     var _age=Math.round(hd.age_seconds||hd.age||0);var _ageLbl=_age<60?_age+'s':Math.round(_age/60)+'m';
-    /* Preserve distinct probe states — don't collapse stale/error/disk_cache into "ok" */
-    var _ps=hd.probe_status||'ok';
+    /* Preserve distinct probe states — don't collapse stale/error/disk_cache into "ok".
+     * Field-tolerant: read probe_state (Rick's new) before falling back to legacy probe_status. */
+    var _ps=hd.probe_state||hd.probe_status||'ok';
     var _ageClr=_ps==='error'?'var(--red)':_ps==='stale'?'var(--yellow)':_age<30?'var(--green)':_age<120?'var(--yellow)':'var(--red)';
-    var _probeLbl=_ps==='error'?'PROBE FAILED':_ps==='stale'?'STALE':_ps==='pending'?'CACHE WARMING':'';
+    var _probeLbl=_ps==='error'?'PROBE FAILED':_ps==='stale'?'STALE':_ps==='pending'?'CACHE WARMING':_ps==='auth_failed'?'AUTH FAILED':_ps==='unreachable'?'UNREACHABLE':'';
     var _probeClr=_ps==='error'?'var(--red)':_ps==='stale'?'var(--yellow)':'var(--red)';
     var _sseClr=_evtSource&&_evtSource.readyState===1?'var(--green)':'var(--yellow)';var _sseLbl=_evtSource&&_evtSource.readyState===1?'LIVE':'CACHED';
+    /* Single freshness chip used by every tile in this widget — they
+     * all derive from the same /api/health probe so they share the
+     * same age. _ageFromPayload handles age_seconds/checked_at/probed_at. */
+    var _hdAgeSec=_ageFromPayload(hd);
+    var _freshHtml=_freshChip(_hdAgeSec);
     var _ldStat='<div class="st"><div class="lb">PROBE AGE</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+_ageClr+'">'+_ageLbl+'</span><span class="label-hint"></span></span><span class="stat-pair"><span id="sse-conn-status" style="font-size:20px;font-weight:700;color:'+(_probeLbl?_probeClr:_sseClr)+'">'+(_probeLbl||_sseLbl)+'</span><span class="label-hint"></span></span></div></div>';
     /* When probe state is stale/error, SSH PROBE label also gets dimmed so UP count
      * doesn't read as genuine-good. Operators must consult PROBE AGE for freshness. */
     var _probeCountLbl=_ps==='ok'?'SSH PROBE':'SSH PROBE ('+_ps+')';
     var _upClr=_ps==='ok'?'var(--green)':'var(--yellow)';
-    el.innerHTML=_d(_probeCountLbl,up,'UP',_upClr,totalOff,'DOWN','var(--red)')+_d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)')+_d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'UP','var(--cyan)')+_ldStat+st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
-    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(vd){var run=0,stop=0;vd.vms.forEach(function(v){if(v.status==='running')run++;else stop++;});
-      var c=el.querySelector('.st:nth-child(5)');if(c)c.innerHTML='<div class="lb">VMs</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+run+'</span><span class="label-hint">RUN</span></span><span class="stat-pair"><span class="stat-big-red">'+stop+'</span><span class="label-hint">STOP</span></span></div>';}).catch(function(e){console.error('API error:',e);});
+    el.innerHTML=
+      _d(_probeCountLbl,up,'UP',_upClr,totalOff,'DOWN','var(--red)',{exp:totalAll,fresh:_freshHtml,view:'fleet'})+
+      _d('FLEET',prodCount,'PROD','var(--purple-light)',lab,'LAB','var(--cyan)',{fresh:_freshHtml,view:'fleet'})+
+      _d('PVE NODES',pveCount,'NODES','var(--purple-light)',pve,'UP','var(--cyan)',{exp:pveCount,fresh:_freshHtml,view:'fleet'})+
+      _ldStat+st('VMs','...','p')+st('CONTAINERS','...','p')+st('ACTIVITY','...','p');
+    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(vd){
+      var run=0,stop=0,total=0;
+      vd.vms.forEach(function(v){total++;if(v.status==='running')run++;else stop++;});
+      var c=el.querySelector('.st:nth-child(5)');if(c){
+        c.setAttribute('data-view','fleet');c.style.cursor='pointer';
+        c.innerHTML='<div class="lb">VMs'+_freshChip(_ageFromPayload(vd))+'</div>'+
+          '<div class="flex-row-24">'+
+            '<span class="stat-pair"><span class="stat-big-green">'+run+'/'+total+'</span><span class="label-hint">RUN</span></span>'+
+            '<span class="stat-pair"><span class="stat-big-red">'+stop+'</span><span class="label-hint">STOP</span></span>'+
+          '</div>';
+      }
+    }).catch(function(e){console.error('API error:',e);});
     _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
-      var _cdn=Math.max(0,md.containers_down||0);var c=el.querySelector('.st:nth-child(6)');if(c)c.innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+(md.containers_running||0)+'</span><span class="label-hint">UP</span></span><span class="stat-pair"><span class="stat-big-red">'+_cdn+'</span><span class="label-hint">DOWN</span></span></div>';}).catch(function(e){console.error('API error:',e);});
+      var _cup=md.containers_running||0;
+      var _ctot=md.containers_total!=null?md.containers_total:(_cup+Math.max(0,md.containers_down||0));
+      var _cdn=Math.max(0,md.containers_down||0);
+      var c=el.querySelector('.st:nth-child(6)');if(c){
+        c.setAttribute('data-view','docker');c.style.cursor='pointer';
+        c.innerHTML='<div class="lb">CONTAINERS'+_freshChip(_ageFromPayload(md))+'</div>'+
+          '<div class="flex-row-24">'+
+            '<span class="stat-pair"><span class="stat-big-green">'+_cup+'/'+_ctot+'</span><span class="label-hint">UP</span></span>'+
+            '<span class="stat-pair"><span class="stat-big-red">'+_cdn+'</span><span class="label-hint">DOWN</span></span>'+
+          '</div>';
+      }
+    }).catch(function(e){console.error('API error:',e);});
     Promise.all([_authFetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return{count:0}}),_authFetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return{count:0}})]).then(function(res){
-      var c=el.querySelector('.st:nth-child(7)');if(c)c.innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-orange">'+(res[0].count||0)+'</span><span class="label-hint">DL</span></span><span class="stat-pair"><span class="stat-big-blue">'+(res[1].count||0)+'</span><span class="label-hint">STREAM</span></span></div>';});
+      var c=el.querySelector('.st:nth-child(7)');if(c){
+        c.setAttribute('data-view','media');c.style.cursor='pointer';
+        c.innerHTML='<div class="lb">ACTIVITY'+_freshChip(_ageFromPayload(res[0])||_ageFromPayload(res[1]))+'</div>'+
+          '<div class="flex-row-24">'+
+            '<span class="stat-pair"><span class="stat-big-orange">'+(res[0].count||0)+'</span><span class="label-hint">DL</span></span>'+
+            '<span class="stat-pair"><span class="stat-big-blue">'+(res[1].count||0)+'</span><span class="label-hint">STREAM</span></span>'+
+          '</div>';
+      }
+    });
   });
 }
 function _loadWidgetOverview(){

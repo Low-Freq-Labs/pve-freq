@@ -355,6 +355,106 @@ class TestStreamStatusFreshness(unittest.TestCase):
         self.assertIn("onmessage", body)
 
 
+class TestHomeTileDensification(unittest.TestCase):
+    """Per Finn's command-deck direction (Apr 14): every tile carries
+    expected-vs-actual, freshness, and a next-useful-path. Pre-fix the
+    home fleet-stats tiles showed raw counts side by side with no
+    expected total, no data age, and no click-through — the operator
+    had to mentally derive 5/5 from "5 UP / 0 DOWN" and had no way to
+    drill down without using the side nav."""
+
+    def test_fresh_chip_helper_exists(self):
+        src = _app_js()
+        self.assertIn("function _freshChip(", src)
+        body = _fn_body(src, "_freshChip")
+        # Must thread color through age thresholds (green/yellow/red).
+        self.assertIn("var(--green)", body)
+        self.assertIn("var(--yellow)", body)
+        self.assertIn("var(--red)", body)
+
+    def test_age_from_payload_helper_handles_all_field_names(self):
+        """Field-tolerant: the helper must consume any of the freshness
+        field names the backend lane has shipped under Rick's product-
+        law rollout — age_seconds (legacy), checked_at, probed_at, and
+        last_seen_ts. No silent fallthrough to 'fresh forever'."""
+        src = _app_js()
+        self.assertIn("function _ageFromPayload(", src)
+        body = _fn_body(src, "_ageFromPayload")
+        for field in ("age_seconds", "checked_at", "probed_at", "last_seen_ts"):
+            self.assertIn(field, body,
+                "_ageFromPayload must inspect " + field)
+        # Returns null (not 0, not 'now') when no freshness info exists,
+        # so the chip can render '?' instead of pretending the data is
+        # current.
+        self.assertIn("return null", body)
+
+    def test_home_fleet_stats_uses_fresh_chip(self):
+        body = _fn_body(_app_js(), "_loadHomeFleetStats")
+        self.assertIn("_freshChip", body,
+            "_loadHomeFleetStats must render a freshness chip per tile "
+            "so the operator can see how recent the data is")
+        # Field-tolerant: must read probe_state before falling back to
+        # legacy probe_status.
+        self.assertIn("probe_state", body)
+
+    def test_home_fleet_stats_carries_expected_vs_actual(self):
+        """Tiles must encode actual-vs-expected (e.g. "5/5 UP") not
+        bare counts. Pre-fix the operator had to read two columns and
+        infer the relationship."""
+        body = _fn_body(_app_js(), "_loadHomeFleetStats")
+        # The _d helper must accept an `exp` opt that renders v1 as
+        # "v1/exp" — not just two raw columns.
+        self.assertRegex(
+            body,
+            r"v1\+'/'\+opts\.exp",
+            "_d helper must thread an expected total so tiles can "
+            "render in actual/expected form",
+        )
+        # And it's actually used by the SSH PROBE / PVE NODES tiles.
+        self.assertRegex(
+            body,
+            r"exp\s*:\s*totalAll",
+            "SSH PROBE tile must encode totalAll as the expected count",
+        )
+        self.assertRegex(
+            body,
+            r"exp\s*:\s*pveCount",
+            "PVE NODES tile must encode pveCount as the expected count",
+        )
+        # VMs tile rebuilds with x/y form too.
+        self.assertIn("run+'/'+total", body,
+            "VMs tile must show running/total, not bare running count")
+        # Containers tile rebuilds with x/y form.
+        self.assertIn("_cup+'/'+_ctot", body,
+            "CONTAINERS tile must show up/total")
+
+    def test_home_fleet_stats_threads_view_clickthrough(self):
+        """Each tile must carry a data-view target so clicking it
+        navigates to the relevant page — the next-useful-path Finn
+        called for. Pre-fix tiles were inert."""
+        body = _fn_body(_app_js(), "_loadHomeFleetStats")
+        # The _d helper builds the data-view attribute when opts.view
+        # is set.
+        self.assertIn("data-view=\"'+opts.view", body,
+            "_d helper must thread opts.view into a data-view attribute")
+        # SSH PROBE / FLEET / PVE NODES tiles carry the fleet view.
+        self.assertRegex(
+            body,
+            r"view\s*:\s*'fleet'",
+            "fleet-related tiles must click through to the fleet view",
+        )
+        # CONTAINERS tile click-through to docker.
+        self.assertIn("setAttribute('data-view','docker')", body)
+        # ACTIVITY tile click-through to media.
+        self.assertIn("setAttribute('data-view','media')", body)
+
+    def test_d_helper_returns_clickable_tile_when_view_present(self):
+        body = _fn_body(_app_js(), "_loadHomeFleetStats")
+        # The cursor:pointer cue must be threaded so the tile is
+        # visibly interactive when a view target exists.
+        self.assertIn("cursor:pointer", body)
+
+
 class TestPriorContractsStillGreen(unittest.TestCase):
     """The product-law fixes must not regress AI/AJ/AK/AL contracts."""
 
