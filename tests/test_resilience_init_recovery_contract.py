@@ -127,12 +127,25 @@ class TestDashboardPasswdHandlerBehavior(unittest.TestCase):
 
             def fake_vault_init(c):
                 written["init"] = True
+                return True
 
             def fake_vault_set(c, section, key, value):
                 written.setdefault("writes", []).append((section, key, value))
+                return True
+
+            def fake_vault_get(c, section, key):
+                # R-AUTH-RESTART-DRIFT-20260413W: cmd_dashboard_passwd now
+                # round-trips the write. Return the last-written value so
+                # the round-trip verify_password passes in the happy path.
+                writes = written.get("writes", [])
+                for s, k, v in reversed(writes):
+                    if s == section and k == key:
+                        return v
+                return ""
 
             with mock.patch("freq.modules.vault.vault_init", side_effect=fake_vault_init), \
-                 mock.patch("freq.modules.vault.vault_set", side_effect=fake_vault_set):
+                 mock.patch("freq.modules.vault.vault_set", side_effect=fake_vault_set), \
+                 mock.patch("freq.modules.vault.vault_get", side_effect=fake_vault_get):
                 rc = users_mod.cmd_dashboard_passwd(cfg, None, args)
 
             self.assertEqual(rc, 0)

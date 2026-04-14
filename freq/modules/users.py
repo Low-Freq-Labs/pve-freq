@@ -460,10 +460,38 @@ def cmd_dashboard_passwd(cfg: FreqConfig, pack, args) -> int:
         fmt.error("Password must be at least 8 characters.")
         return 1
 
+    # R-AUTH-RESTART-DRIFT-20260413W: round-trip verify the write
+    # so we catch silent vault failures (returns False, or writes
+    # a hash that can't be decrypted on readback). Pre-fix the CLI
+    # returned success even if the write was a no-op.
     try:
+        from freq.modules.vault import vault_get
+        from freq.api.auth import verify_password as _verify_password
+
         if not os.path.exists(cfg.vault_file):
             vault_init(cfg)
-        vault_set(cfg, "auth", f"password_{username}", hash_password(new_pass))
+        new_hash = hash_password(new_pass)
+        write_ok = vault_set(cfg, "auth", f"password_{username}", new_hash)
+        if not write_ok:
+            fmt.error(
+                f"vault_set returned False — hash NOT written. Check vault "
+                f"file permissions and /etc/machine-id."
+            )
+            return 1
+        readback = vault_get(cfg, "auth", f"password_{username}") or ""
+        if not readback:
+            fmt.error(
+                "Round-trip readback returned empty — vault write looked "
+                "OK but the entry is not readable. Check vault ownership "
+                "and /etc/machine-id stability."
+            )
+            return 1
+        if not _verify_password(new_pass, readback):
+            fmt.error(
+                "Round-trip verify_password FAILED — stored hash does not "
+                "match the password just written. Refusing to report success."
+            )
+            return 1
     except Exception as e:
         fmt.error(f"Failed to write password hash to vault: {e}")
         return 1
@@ -471,6 +499,7 @@ def cmd_dashboard_passwd(cfg: FreqConfig, pack, args) -> int:
     fmt.header(f"Dashboard Password Set: {username}")
     fmt.blank()
     fmt.step_ok(f"PBKDF2-SHA256 hash written to vault auth/password_{username}")
+    fmt.step_ok("Round-trip verify_password confirmed — login will accept this password")
     fmt.line(f"  {fmt.C.DIM}Login at the dashboard with the new password.{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()

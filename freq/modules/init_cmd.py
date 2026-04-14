@@ -7434,16 +7434,51 @@ def _seed_headless_dashboard_auth(cfg, bootstrap_user, bootstrap_pass, svc_name,
 
     # Only the bootstrap user gets a dashboard password. The service account runs
     # the dashboard but is not a web principal.
+    #
+    # R-AUTH-RESTART-DRIFT-20260413W: the write is immediately verified by
+    # reading the hash back out of the vault AND running it through
+    # verify_password with the bootstrap password. Pre-fix, a silent
+    # vault_set failure (disk full, chown race, permission error on the
+    # tmp file, openssl binary missing) left `auth/password_<user>`
+    # either empty or stale, and init still reported OK — the operator
+    # only found out when their first login returned 401. The round-trip
+    # check closes that gap: any failure mode that prevents the hash from
+    # landing on disk in readable form trips the guard and init emits a
+    # loud step_fail instead of a silent step_ok.
     try:
-        from freq.modules.vault import vault_init, vault_set
-        from freq.api.auth import hash_password
+        from freq.modules.vault import vault_init, vault_set, vault_get
+        from freq.api.auth import hash_password, verify_password
 
         if not os.path.exists(cfg.vault_file):
             vault_init(cfg)
         if bootstrap_user and bootstrap_pass:
-            vault_set(cfg, "auth", f"password_{bootstrap_user}", hash_password(bootstrap_pass))
-            if verbose:
-                fmt.step_ok(f"Dashboard password set for {bootstrap_user}")
+            new_hash = hash_password(bootstrap_pass)
+            write_ok = vault_set(cfg, "auth", f"password_{bootstrap_user}", new_hash)
+            if not write_ok:
+                fmt.step_fail(
+                    f"Dashboard password set for {bootstrap_user} — "
+                    f"vault_set returned False (disk / perms / openssl?)"
+                )
+            else:
+                # Round-trip: read it back and verify.
+                readback = vault_get(cfg, "auth", f"password_{bootstrap_user}") or ""
+                if not readback:
+                    fmt.step_fail(
+                        f"Dashboard password set for {bootstrap_user} — "
+                        f"vault_get returned empty after successful write"
+                    )
+                elif not verify_password(bootstrap_pass, readback):
+                    fmt.step_fail(
+                        f"Dashboard password set for {bootstrap_user} — "
+                        f"round-trip verify_password FAILED; stored hash does "
+                        f"not match the password just written"
+                    )
+                else:
+                    if verbose:
+                        fmt.step_ok(
+                            f"Dashboard password set for {bootstrap_user} "
+                            f"(round-trip verified)"
+                        )
     except Exception as e:
         if verbose:
             fmt.step_warn(f"Could not set dashboard password: {e}")
