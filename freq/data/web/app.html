@@ -56,8 +56,8 @@
 <!-- ════════ HOME ════════ -->
 <div id="p-home" class="page active">
 <!-- Toolbar -->
-<div style="border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:12px">
-<div style="display:flex;gap:4px;align-items:center;min-height:32px;flex-wrap:wrap">
+<div class="view-toolbar">
+<div class="view-toolbar-row">
   <button class="mobile-menu-btn" data-action="toggleNavItems" aria-label="Menu">&#9776;</button>
   <div id="nav-items" class="nav-toolbar">
   <button class="fleet-btn view-btn active-view" data-view="home">HOME</button>
@@ -843,7 +843,7 @@
     <h3 style="font-size:14px;color:var(--red)">Chaos Engineering</h3>
     <button class="fleet-btn" data-action="loadChaos">REFRESH</button>
   </div>
-  <div style="background:rgba(255,60,60,0.08);border:1px solid rgba(255,60,60,0.3);border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text-dim)">
+  <div class="destructive-banner">
     Chaos experiments intentionally disrupt services to test recovery. Production hosts are blocked by safety gates. Use only on lab/dev infrastructure.
   </div>
   <div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--input-border)">
@@ -1592,16 +1592,16 @@
 
 <!-- Terminal Overlay -->
 <div id="terminal-overlay">
-  <div style="display:flex;flex-direction:column;height:100%;max-width:1400px;margin:0 auto">
+  <div class="term-shell-col">
     <div id="terminal-header">
-      <div style="display:flex;align-items:center;gap:12px">
-        <span style="color:var(--green);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;font-family:var(--font-ui)">&#9679; TERMINAL</span>
+      <div class="term-shell-title-row">
+        <span class="term-shell-tag">&#9679; TERMINAL</span>
         <span id="terminal-title"></span>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div class="term-shell-btn-row">
         <button class="fleet-btn fs-9-px-2-8" data-action="termCopy">COPY</button>
         <button class="fleet-btn fs-9-px-2-8" data-action="termPaste">PASTE</button>
-        <button class="fleet-btn" data-action="closeTerminal" style="font-size:9px;padding:2px 8px;color:var(--red)">CLOSE</button>
+        <button class="fleet-btn term-shell-close" data-action="closeTerminal">CLOSE</button>
       </div>
     </div>
     <div id="terminal-container"></div>
@@ -1610,12 +1610,12 @@
 
 <!-- Global Search Overlay -->
 <div id="search-overlay" data-action="closeSearch">
-  <div style="max-width:560px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:12px;overflow:hidden" data-action="modalNoop">
-    <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
-      <input id="search-input" type="text" placeholder="Search or type > for actions..." style="width:100%;background:transparent;border:none;outline:none;color:var(--text);font-size:16px;font-family:var(--font-ui)">
+  <div class="search-overlay-card" data-action="modalNoop">
+    <div class="search-overlay-input-row">
+      <input id="search-input" type="text" placeholder="Search or type > for actions..." class="search-overlay-input">
     </div>
     <div id="search-results"></div>
-    <div style="padding:8px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-dim);display:flex;gap:16px">
+    <div class="search-overlay-footer">
       <span><kbd class="kbd-mono-10">&#8593;&#8595;</kbd> navigate</span>
       <span><kbd class="kbd-mono-10">&#9166;</kbd> select</span>
       <span><kbd class="kbd-mono-10">esc</kbd> close</span>
@@ -1626,9 +1626,9 @@
 
 <!-- Keyboard Shortcuts Help -->
 <div id="shortcuts-modal" data-action="hideShortcutsModal">
-  <div style="max-width:400px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:24px" data-action="modalNoop">
-    <h3 style="margin:0 0 16px;color:var(--purple-light)">Keyboard Shortcuts</h3>
-    <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px">
+  <div class="shortcuts-card" data-action="modalNoop">
+    <h3 class="shortcuts-heading">Keyboard Shortcuts</h3>
+    <div class="shortcuts-grid">
       <kbd class="kbd-tag">Ctrl+K</kbd><span>Global search</span>
       <kbd class="kbd-tag">1-8</kbd><span>Navigate to view</span>
       <kbd class="kbd-tag">Esc</kbd><span>Close overlay</span>

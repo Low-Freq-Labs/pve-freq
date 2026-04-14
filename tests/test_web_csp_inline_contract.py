@@ -131,7 +131,7 @@ class TestNoExternalStylesheet(unittest.TestCase):
 
 
 EXPECTED_INLINE_HANDLERS = 0
-EXPECTED_INLINE_STYLES = 61
+EXPECTED_INLINE_STYLES = 46
 
 INLINE_HANDLER_RE = re.compile(r" on[a-z]+=")
 INLINE_STYLE_RE = re.compile(r' style="')

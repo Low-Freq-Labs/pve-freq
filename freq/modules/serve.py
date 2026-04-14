@@ -4879,22 +4879,27 @@ a:hover{{text-decoration:underline}}
         # Web UI is self-contained: xterm is vendored under /static/vendor/xterm,
         # fonts use platform stacks only, no public CDN or font host references.
         #
-        # Honest limits on 'unsafe-inline' (final state after token Q hybrid finish):
+        # Honest limits on 'unsafe-inline' (state after token Q hybrid + AH):
         #   script-src: ZERO inline event handlers, ZERO inline <script> blocks,
         #     ZERO javascript: URLs (closed by R-WEB-INLINE-CSP-CLEANUP-20260413O).
         #     'unsafe-inline' is dropped from script-src.
         #   style-src: ZERO 'unsafe-inline'. The Q utility-class sweep
-        #     dropped the count from 264 to 90, then the Q hybrid finish
-        #     extracted 25 ID-based rules + 4 chrome semantic classes,
-        #     bringing the count to 61 bespoke inline style="…" attrs.
-        #     Those 61 are allowed via 'unsafe-hashes' + per-attr SHA256
+        #     dropped the count from 264 to 90, the Q hybrid finish
+        #     extracted 25 ID-based rules + 4 chrome semantic classes
+        #     (bringing it to 61), and the AH partner pass extracted
+        #     15 more inner-composition semantic classes — terminal
+        #     shell, global search overlay, shortcuts modal, chaos
+        #     destructive banner, home view toolbar — bringing the
+        #     count to 46 bespoke inline style="…" attrs.
+        #     Those 46 are allowed via 'unsafe-hashes' + per-attr SHA256
         #     hashes computed at startup by _inline_style_csp_hashes().
         #     'self' is kept for <link rel=stylesheet> references;
         #     'unsafe-hashes' enables per-style hash matching; each
         #     'sha256-…' source matches one specific bespoke inline
         #     style attribute value. R-WEB-INLINE-STYLE-CSP-SWEEP-20260413Q
-        #     hybrid finish (Path 4) per Finn's design call: cleanest
-        #     path to zero unsafe-inline without 90 cryptic auto-classes.
+        #     hybrid finish (Path 4) + M-UI-INLINE-STYLE-REGRESSION-POLISH-
+        #     20260413AH partner pass: cleanest path to zero unsafe-inline
+        #     without generating opaque auto-classes for every bespoke style.
         #
         # No host names appear below. An air-gapped dashboard MUST NOT fetch any
         # asset off-box — that's what R-WEB-EXTERNAL-ASSET-CONTRACT-20260413L
