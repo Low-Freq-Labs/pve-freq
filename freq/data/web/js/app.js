@@ -175,6 +175,76 @@ function confirmAction(msg,onConfirm){
   try{confirm.focus();}catch(e){}
 }
 function closeModal(){document.getElementById('modal-container').style.display='none';}
+
+/* M-BLUETEAM-SECURITY-UX-20260413AK: type-to-confirm friction for
+ * irreversible destructive actions. Wraps confirmAction with a
+ * required text-entry field that must exactly match `expected`
+ * before the primary button enables. Prevents the "muscle-memory
+ * click-through" failure mode — operators who click Confirm
+ * without reading the dialog because every other confirm looks
+ * the same. Used by vmDestroy and gwipeWipeAll so far. */
+function confirmDestructive(msg,expected,onConfirm){
+  var ov=document.getElementById('modal-container');
+  while(ov.firstChild)ov.removeChild(ov.firstChild);
+  var modal=document.createElement('div');modal.className='modal';
+  modal.style.maxWidth='440px';
+  modal.style.borderTop='3px solid var(--red)';
+
+  var h=document.createElement('h3');h.className='m-0';
+  h.style.color='var(--red)';
+  h.textContent='DESTRUCTIVE ACTION';
+
+  var p=document.createElement('p');
+  p.appendChild(_sanitizeHtmlFragment(msg));
+
+  var warn=document.createElement('div');
+  warn.style.cssText='background:rgba(255,60,60,0.08);border:1px solid rgba(255,60,60,0.35);border-radius:6px;padding:10px 14px;margin:12px 0;font-size:12px;color:var(--text)';
+  warn.innerHTML='This cannot be undone. Type <code style="color:var(--red);font-weight:700;font-family:monospace">'+_esc(expected)+'</code> below to enable the confirm button.';
+
+  var inp=document.createElement('input');
+  inp.id='destructive-confirm-input';
+  inp.className='input-primary-lg';
+  inp.type='text';
+  inp.autocomplete='off';
+  inp.placeholder='Type to confirm';
+  inp.style.cssText='width:100%;margin-bottom:12px';
+
+  var actions=document.createElement('div');actions.className='modal-actions';
+
+  var cancel=document.createElement('button');cancel.className='btn';cancel.textContent='Cancel';
+  cancel.addEventListener('click',function(){closeModal();});
+
+  var confirmBtn=document.createElement('button');
+  confirmBtn.className='btn';
+  confirmBtn.style.cssText='background:var(--red);border:none;color:var(--text);opacity:0.4;cursor:not-allowed';
+  confirmBtn.textContent='CONFIRM';
+  confirmBtn.disabled=true;
+  confirmBtn.addEventListener('click',function(){
+    if(confirmBtn.disabled)return;
+    closeModal();
+    try{onConfirm();}catch(e){console.error(e);}
+  });
+
+  inp.addEventListener('input',function(){
+    var ok=inp.value===expected;
+    confirmBtn.disabled=!ok;
+    confirmBtn.style.opacity=ok?'1':'0.4';
+    confirmBtn.style.cursor=ok?'pointer':'not-allowed';
+  });
+  inp.addEventListener('keydown',function(e){
+    if(e.key==='Enter'&&!confirmBtn.disabled){
+      e.preventDefault();
+      confirmBtn.click();
+    }
+  });
+
+  actions.appendChild(cancel);actions.appendChild(confirmBtn);
+  modal.appendChild(h);modal.appendChild(p);modal.appendChild(warn);
+  modal.appendChild(inp);modal.appendChild(actions);
+  ov.appendChild(modal);
+  ov.style.display='flex';
+  try{inp.focus();}catch(e){}
+}
 /* === Section toggle === */
 function toggleSection(el){el.closest('.section').classList.toggle('collapsed');}
 /* Delegated listeners — replaces inline onclick for high-frequency patterns */
@@ -691,17 +761,209 @@ function _checkForUpdate(){
   }).catch(function(e){console.error('API error:',e);});
 }
 
+/* M-BLUETEAM-SECURITY-UX-20260413AK: user menu rebuilt via
+ * createElement + addEventListener. Pre-fix used innerHTML with
+ * inline onclick/onmouseover/onmouseout attributes — same footgun
+ * class I fixed in confirmAction under AJ (inline handlers ship
+ * dynamically into a strict-CSP DOM, and the innerHTML+concat
+ * pattern is one bad caller away from being an XSS sink when
+ * _currentUser/_currentRole are ever fed from untrusted state).
+ *
+ * New menu also carries:
+ *   - Session age / TTL badge from /api/auth/verify — operator
+ *     can see how fresh the current session is and when it will
+ *     expire, so they don't get kicked mid-operation.
+ *   - CHANGE PASSWORD action that opens the rotation modal below,
+ *     wiring the dashboard to the hardened /api/auth/change-
+ *     password endpoint Rick landed under T-1/T-2. Before this,
+ *     the endpoint existed with no UI — operators had to curl it
+ *     manually to rotate their own password. */
+var _sessionBadgeTimer=null;
+function _formatDuration(s){
+  s=Math.max(0,Math.round(s));
+  if(s<60)return s+'s';
+  if(s<3600)return Math.floor(s/60)+'m';
+  var h=Math.floor(s/3600);var m=Math.floor((s%3600)/60);
+  return m?h+'h '+m+'m':h+'h';
+}
 function openUserMenu(){
   var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)'};
   var ov=document.getElementById('modal-container');
-  ov.innerHTML='<div class="modal" style="max-width:340px">'+
-    '<div class="flex-between-mb16"><h3 class="m-0">Session</h3><span class="close-x">&times;</span></div>'+
-    '<div style="display:flex;align-items:center;gap:12px;padding:16px;background:var(--bg);border-radius:8px;margin-bottom:16px">'+
-    '<div style="width:40px;height:40px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--text)">'+_currentUser.charAt(0).toUpperCase()+'</div>'+
-    '<div><div style="font-size:14px;font-weight:600;color:var(--text)">'+_currentUser.toUpperCase()+'</div><div style="font-size:12px;color:'+(rc[_currentRole]||'var(--text-dim)')+';font-weight:600">'+_currentRole.toUpperCase()+'</div></div></div>'+
-    '<button onclick="closeModal();doLogout()" style="width:100%;background:none;border:2px solid var(--red);color:var(--red);padding:10px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background=\'rgba(248,81,73,0.1)\'" onmouseout="this.style.background=\'none\'">LOG OUT</button>'+
-    '</div>';
+  while(ov.firstChild)ov.removeChild(ov.firstChild);
+
+  var modal=document.createElement('div');
+  modal.className='modal';
+  modal.style.maxWidth='340px';
+
+  var hdr=document.createElement('div');hdr.className='flex-between-mb16';
+  var h3=document.createElement('h3');h3.className='m-0';h3.textContent='Session';
+  var close=document.createElement('span');close.className='close-x';close.textContent='\u00d7';
+  close.addEventListener('click',function(){closeModal();});
+  hdr.appendChild(h3);hdr.appendChild(close);
+
+  /* User identity card */
+  var card=document.createElement('div');
+  card.style.cssText='display:flex;align-items:center;gap:12px;padding:16px;background:var(--bg);border-radius:8px;margin-bottom:12px';
+  var avatar=document.createElement('div');
+  avatar.style.cssText='width:40px;height:40px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--text)';
+  avatar.textContent=(_currentUser||'?').charAt(0).toUpperCase();
+  var idcol=document.createElement('div');
+  var namediv=document.createElement('div');
+  namediv.style.cssText='font-size:14px;font-weight:600;color:var(--text)';
+  namediv.textContent=(_currentUser||'').toUpperCase();
+  var rolediv=document.createElement('div');
+  rolediv.style.cssText='font-size:12px;color:'+(rc[_currentRole]||'var(--text-dim)')+';font-weight:600';
+  rolediv.textContent=(_currentRole||'').toUpperCase();
+  idcol.appendChild(namediv);idcol.appendChild(rolediv);
+  card.appendChild(avatar);card.appendChild(idcol);
+
+  /* Session age / TTL badge — populated from /api/auth/verify */
+  var sessRow=document.createElement('div');
+  sessRow.id='user-menu-session-badge';
+  sessRow.style.cssText='font-size:11px;color:var(--text-dim);padding:10px 14px;background:var(--bg);border-radius:6px;margin-bottom:12px;font-family:var(--font-ui);letter-spacing:0.5px';
+  sessRow.textContent='SESSION: probing\u2026';
+
+  /* Change password action */
+  var chgBtn=document.createElement('button');
+  chgBtn.className='btn';
+  chgBtn.style.cssText='width:100%;background:none;border:2px solid var(--purple);color:var(--purple);padding:10px;border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;margin-bottom:10px;letter-spacing:1px';
+  chgBtn.textContent='CHANGE PASSWORD';
+  chgBtn.addEventListener('click',function(){closeModal();openChangePasswordModal();});
+
+  /* Logout action */
+  var outBtn=document.createElement('button');
+  outBtn.className='btn';
+  outBtn.style.cssText='width:100%;background:none;border:2px solid var(--red);color:var(--red);padding:10px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;letter-spacing:1px';
+  outBtn.textContent='LOG OUT';
+  outBtn.addEventListener('click',function(){closeModal();doLogout();});
+
+  modal.appendChild(hdr);
+  modal.appendChild(card);
+  modal.appendChild(sessRow);
+  modal.appendChild(chgBtn);
+  modal.appendChild(outBtn);
+  ov.appendChild(modal);
   ov.style.display='flex';
+
+  /* Fetch session age/TTL and render the badge. */
+  fetch(API.AUTH_VERIFY,{credentials:'same-origin'}).then(function(r){
+    return r.ok?r.json():null;
+  }).then(function(d){
+    var el=document.getElementById('user-menu-session-badge');
+    if(!el)return;
+    if(!d||!d.valid){el.textContent='SESSION: unknown';el.style.color='var(--yellow)';return;}
+    var age=_formatDuration(d.session_age_s||0);
+    var ttl=_formatDuration(d.session_ttl_s||0);
+    var pct=d.session_timeout_s?Math.round(100*(d.session_age_s||0)/d.session_timeout_s):0;
+    var clr=pct<50?'var(--green)':pct<85?'var(--yellow)':'var(--red)';
+    el.innerHTML='SESSION AGE <span style="color:'+clr+';font-weight:700">'+age+'</span>'+
+      ' &middot; EXPIRES IN <span style="color:'+clr+';font-weight:700">'+ttl+'</span>';
+  }).catch(function(){
+    var el=document.getElementById('user-menu-session-badge');
+    if(el){el.textContent='SESSION: probe failed';el.style.color='var(--yellow)';}
+  });
+}
+
+/* Change-password modal. Wires three inputs (current, new, confirm)
+ * to /api/auth/change-password. Surfaces a clear inline error on
+ * wrong current_password (distinct from "too short" / "mismatch"),
+ * shows the sessions_purged count on success (honest operator truth
+ * about what the rotation just did to other logged-in sessions),
+ * and toast-confirms before closing. */
+function openChangePasswordModal(){
+  var ov=document.getElementById('modal-container');
+  while(ov.firstChild)ov.removeChild(ov.firstChild);
+
+  var modal=document.createElement('div');
+  modal.className='modal';
+  modal.style.maxWidth='380px';
+
+  var hdr=document.createElement('div');hdr.className='flex-between-mb16';
+  var h3=document.createElement('h3');h3.className='m-0';h3.textContent='Change Password';
+  var close=document.createElement('span');close.className='close-x';close.textContent='\u00d7';
+  close.addEventListener('click',function(){closeModal();});
+  hdr.appendChild(h3);hdr.appendChild(close);
+
+  function _mkInput(id,ph,label){
+    var wrap=document.createElement('div');
+    wrap.style.marginBottom='12px';
+    var lab=document.createElement('label');
+    lab.className='label-sub';
+    lab.textContent=label;
+    var inp=document.createElement('input');
+    inp.id=id;inp.type='password';inp.placeholder=ph;
+    inp.className='input-primary-lg';
+    inp.autocomplete='off';
+    wrap.appendChild(lab);wrap.appendChild(inp);
+    return wrap;
+  }
+  var inCur=_mkInput('cp-current','Current password','CURRENT PASSWORD');
+  var inNew=_mkInput('cp-new','New password (min 8 chars)','NEW PASSWORD');
+  var inCfm=_mkInput('cp-confirm','Confirm new password','CONFIRM');
+
+  var errEl=document.createElement('div');
+  errEl.id='cp-err';
+  errEl.style.cssText='color:var(--red);font-size:12px;margin-bottom:10px;min-height:16px;font-weight:600';
+
+  var submit=document.createElement('button');
+  submit.className='btn btn-primary';
+  submit.style.cssText='width:100%;padding:10px;font-size:13px;font-weight:600;letter-spacing:1px';
+  submit.textContent='ROTATE PASSWORD';
+  submit.addEventListener('click',function(){_submitChangePassword(submit,errEl);});
+
+  modal.appendChild(hdr);
+  modal.appendChild(inCur);
+  modal.appendChild(inNew);
+  modal.appendChild(inCfm);
+  modal.appendChild(errEl);
+  modal.appendChild(submit);
+  ov.appendChild(modal);
+  ov.style.display='flex';
+  try{document.getElementById('cp-current').focus();}catch(e){}
+}
+function _submitChangePassword(btn,errEl){
+  var cur=document.getElementById('cp-current').value;
+  var pw=document.getElementById('cp-new').value;
+  var cfm=document.getElementById('cp-confirm').value;
+  errEl.textContent='';
+  if(!cur){errEl.textContent='Current password required';return;}
+  if(!pw||pw.length<8){errEl.textContent='New password must be at least 8 characters';return;}
+  if(pw!==cfm){errEl.textContent='New passwords do not match';return;}
+  if(pw===cur){errEl.textContent='New password must differ from current';return;}
+  btn.disabled=true;btn.textContent='ROTATING\u2026';
+  /* Bare fetch — this endpoint is authenticated but we want full
+   * control over the 401 branch so a "wrong current password" error
+   * doesn't flow through _authFetch's auth-failure teardown and kick
+   * the operator back to the login card. Only a _real_ session-
+   * expired 401 should trigger logout, and the server differentiates
+   * by error text. */
+  var hdrs={'Content-Type':'application/json'};
+  if(_authToken)hdrs['Authorization']='Bearer '+_authToken;
+  fetch(API.AUTH_CHANGE_PW,{
+    method:'POST',
+    credentials:'same-origin',
+    headers:hdrs,
+    body:JSON.stringify({current_password:cur,password:pw})
+  }).then(function(r){
+    return r.json().then(function(d){return{status:r.status,data:d};}).catch(function(){return{status:r.status,data:{}};});
+  }).then(function(res){
+    btn.disabled=false;btn.textContent='ROTATE PASSWORD';
+    var d=res.data||{};
+    if(res.status===200&&d.ok){
+      var msg='Password rotated';
+      if(typeof d.sessions_purged==='number'&&d.sessions_purged>0){
+        msg+=' \u00b7 '+d.sessions_purged+' stale session'+(d.sessions_purged===1?'':'s')+' purged';
+      }
+      toast(msg,'success');
+      closeModal();
+      return;
+    }
+    /* Error path — surface the specific message inline. */
+    errEl.textContent=d.error||('Password change failed ('+res.status+')');
+  }).catch(function(e){
+    btn.disabled=false;btn.textContent='ROTATE PASSWORD';
+    errEl.textContent='Network error: '+e;
+  });
 }
 
 /* Auth re-entry: the server session cookie (freq_session HttpOnly) is
@@ -7134,11 +7396,20 @@ function testNotify(){_authFetch(API.NOTIFY_TEST,{method:'POST'}).then(function(
    VM ACTIONS (toast + modal)
    ═══════════════════════════════════════════════════════════════════ */
 function vmDestroy(vmid){
-  confirmAction('Destroy VM <strong>'+vmid+'</strong>? This cannot be undone.',function(){
-    _authFetch(API.VM_DESTROY+'?vmid='+vmid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
-      if(d.ok)toast('VM '+vmid+' destroyed','success');else toast('Error: '+d.error,'error');refreshCurrentView();
-    });
-  });
+  /* M-BLUETEAM-SECURITY-UX-20260413AK: type-to-confirm friction.
+   * Require the operator to type the VMID before the CONFIRM button
+   * enables. Muscle-memory click-through on a run-of-the-mill modal
+   * is how operators accidentally blow away production VMs; forcing
+   * them to type the identifier defeats that failure mode. */
+  confirmDestructive(
+    'Destroy VM <strong>'+vmid+'</strong>? All disks and snapshots will be deleted.',
+    String(vmid),
+    function(){
+      _authFetch(API.VM_DESTROY+'?vmid='+vmid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+        if(d.ok)toast('VM '+vmid+' destroyed','success');else toast('Error: '+d.error,'error');refreshCurrentView();
+      });
+    }
+  );
 }
 function vmSnap(vmid){
   _authFetch(API.VM_SNAPSHOT+'?vmid='+vmid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
@@ -8328,7 +8599,15 @@ function gwipeRefreshHistory(host,key,pfx){
 }
 function gwipeAction(action,pfx){ltAction('gwipe',action,pfx);}
 function gwipeWipeAll(pfx){
-  confirmAction('<strong>WIPE ALL TESTED DRIVES?</strong> This is destructive and irreversible.',function(){ltAction('gwipe','wipe-all',pfx,true);});
+  /* M-BLUETEAM-SECURITY-UX-20260413AK: type-to-confirm for drive
+   * wipe. The station-scoped prefix (e.g. 'wipe-sda') is what the
+   * operator has to type — so they can't mis-click from the wrong
+   * station and wipe the neighbor's tray. */
+  confirmDestructive(
+    '<strong>WIPE ALL TESTED DRIVES on station '+_esc(pfx)+'?</strong><br>Every drive currently marked OK on this station will be overwritten. This is not recoverable.',
+    'WIPE '+pfx,
+    function(){ltAction('gwipe','wipe-all',pfx,true);}
+  );
 }
 function gwipeBayAction(dev,action,pfx){
   var c=_ltHostKey('gwipe',pfx);
