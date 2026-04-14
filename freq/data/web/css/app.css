@@ -1097,6 +1097,7 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
 .btn-row { display: flex; gap: var(--gap-sm); margin-top: 8px; }
 .flex-1 { flex: 1; }
 .flex-fill { flex: 1; min-width: 0; }
+.min-w-0 { min-width: 0; }
 
 /* ── Flex Utilities ── */
 .flex-row-24 { display: flex; gap: 24px; margin-top: 4px; }

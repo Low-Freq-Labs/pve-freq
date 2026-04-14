@@ -2170,7 +2170,14 @@ function loadDockerFleet(){
 }
 function loadInfraPage(){loadInfra();}
 /* Security sub-view loaders */
-function loadSecurityOverview(){loadRisk();loadSecPosture();}
+function loadSecurityOverview(){
+  /* Fill every section body on the overview page. Previously this
+   * only kicked loadRisk()+loadSecPosture(), leaving the 'Policies'
+   * section header with an empty body until the operator happened
+   * to add the widget to HOME. Loading it here keeps the overview
+   * self-contained. */
+  loadRisk();loadSecPosture();loadPolicies();
+}
 function loadSecHardening(){/* audit + hardening sections are button-triggered */}
 function loadSecAccess(){loadUsers();loadKeys();}
 function loadSecVault(){loadVault();}
@@ -4319,7 +4326,12 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
       var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
       /* Initial render — PVE API poller fills real values within 2 seconds */
       var ramColor=ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';
-      nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
+      /* auto-fill so the 3 sub-group grid collapses to 1 column inside
+       * a narrow host-card (mobile ~230px divider-light width) instead
+       * of clipping content. Previously repeat(3,1fr) forced 3 equal
+       * ~74px columns on mobile, producing 40+ clipped overflows in
+       * the fleet sweep. */
+      nodeCard+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0">';
       nodeCard+=_fGrp('UTILIZATION',2,_fStat('...','CPU LOAD','var(--text-dim)')+_fStat('...','RAM USED','var(--text-dim)'));
       nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'RUNNING','var(--green)')+_fStat(nOffline,'STOPPED','var(--red)'));
       nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
@@ -4331,7 +4343,8 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
       nodeCard+=_mrow('STORAGE','...',0,'var(--text-dim)');
       nodeCard+='</div>';
     } else {
-      nodeCard+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:6px 0">';
+      /* same auto-fill responsive grid as the live-metrics branch above */
+      nodeCard+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0">';
       nodeCard+=_fGrp('PVE NODE',2,_fStat(nCores,'CPU ALLOC','var(--purple-light)')+_fStat(nRamGb+'<span class="fs-12-fade">GB</span>','RAM ALLOC','var(--purple-light)'));
       nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'RUNNING','var(--green)')+_fStat(nOffline,'STOPPED','var(--red)'));
       nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
@@ -4350,10 +4363,15 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
   var out='';
   if(infraCards){
     var ic=(infraCards.match(/infra-role-card/g)||[]).length;
-    var cols=ic<=3?ic:3;
     out+='<div style="margin-bottom:16px;border:3px solid var(--text);border-radius:10px;background:#000000;overflow:hidden">';
     out+='<div class="flex-between-pad-top"><span style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text);opacity:0.85">CORE SYSTEMS</span><span id="core-systems-age" class="fs-10-dim-600-ls"></span></div>';
-    out+='<div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:12px;padding:12px 16px 16px">'+infraCards+'</div>';
+    /* core-systems-grid is an auto-fill grid with a 180px min track —
+     * 3 columns on a desktop 1200px column, 2 on a laptop, 1 on a
+     * mobile 390px viewport. Previously this was a fixed
+     * repeat(3,1fr) grid that crushed infra-role-cards to ~130px on
+     * mobile while their content wanted 149-215px, producing 20+
+     * clipped overflows per fleet load. */
+    out+='<div class="core-systems-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;padding:12px 16px 16px">'+infraCards+'</div>';
     out+='</div>';
   }
   var nodeOrder=pveNodes.map(function(n){return n.name;}).sort();
@@ -4366,10 +4384,13 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
     pveContent+='<div class="pve-group" style="border-left:4px solid '+nodeColor+';border-radius:6px;background:var(--bg2);overflow:hidden">';
     pveContent+='<div data-action="togglePveGroup" style="cursor:pointer;padding:8px 12px;display:flex;align-items:center;gap:8px">';
     pveContent+='<span class="pve-chev" style="color:'+nodeColor+';font-size:14px;font-weight:700">\u25b8</span>';
-    pveContent+='<div class="flex-1">'+nd.card+'</div>';
+    pveContent+='<div class="flex-1 min-w-0">'+nd.card+'</div>';
     pveContent+='</div>';
     if(nd.vms){
-      pveContent+='<div class="pve-vms" style="display:none;grid-template-columns:repeat('+cols+',1fr);gap:10px;padding:8px 12px 12px;border-top:1px solid var(--border)">'+nd.vms+'</div>';
+      /* auto-fill with a 160px min track instead of a fixed column
+       * count — lets VM cards stack cleanly on mobile (2 at 390px,
+       * 1 at 280px) while still packing 3-4 on desktop. */
+      pveContent+='<div class="pve-vms" style="display:none;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;padding:8px 12px 12px;border-top:1px solid var(--border)">'+nd.vms+'</div>';
     }
     pveContent+='</div>';
   });
@@ -8604,7 +8625,12 @@ function loadGitops(){
     if(!d.enabled){
       st.innerHTML='<div class="c-dim-fs12">GitOps not configured. Add <code>[gitops]</code> section with <code>repo_url</code> to freq.toml.</div>';
       if(acts)acts.classList.add('d-none');
-      log.innerHTML='';
+      /* Previously this left the COMMIT HISTORY section header with an
+       * empty body — visible dead space on every cold load of the
+       * gitops page. Render an inline placeholder so the section reads
+       * as evidence-first (why it's empty, how to fix) instead of
+       * broken (header followed by nothing). */
+      log.innerHTML='<div class="c-dim-fs12 text-center" style="padding:20px">Commit history is empty until gitops is configured above.</div>';
       return;
     }
     var s=d.state||{};

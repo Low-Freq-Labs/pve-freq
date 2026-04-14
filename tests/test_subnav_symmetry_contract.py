@@ -145,9 +145,11 @@ class TestClusterSubTabActiveHighlight(unittest.TestCase):
     def _assert_self_is_active(self, cluster: str, view: str):
         block = _extract_view_block(self.html, view)
         row = _sub_tab_row(block)
-        # Look for `class="sub-tab active-sub" data-view="<view>"`
+        # Look for `class="sub-tab active-sub[ extra classes]" data-view="<view>"`.
+        # Some views carry extra classes (e.g. chaos uses `c-red` tint)
+        # so the regex must allow trailing tokens inside the class attr.
         m = re.search(
-            r'class="sub-tab active-sub"\s+data-view="' + re.escape(view) + '"',
+            r'class="sub-tab active-sub(?:\s+[\w-]+)*"\s+data-view="' + re.escape(view) + '"',
             row,
         )
         self.assertIsNotNone(
