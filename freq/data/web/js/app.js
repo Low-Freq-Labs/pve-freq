@@ -1093,21 +1093,39 @@ function _setupTruthSummary(d){
         'A login attempt is likely to fail until the backend recovers.'};
   }
   if(d.first_run===true||d.initialized===false){
+    /* Append backend setup_reason so the operator sees both the
+     * call-to-action ("finish first-run wizard") AND the actionable
+     * detail ("init incomplete; ssh key missing or unreadable; ...")
+     * in one banner. The reason field beats the generic "initialized:
+     * false" boolean for naming what's actually wrong. */
+    var detailLine='This instance reports <strong>initialized: false</strong>.';
+    if(d.setup_reason)detailLine+=' Backend reason: <em>'+String(d.setup_reason)+'</em>.';
     return {isErr:true,
       title:'SETUP REQUIRED',
-      body:'This instance reports <strong>initialized: false</strong>. '+
-        'Complete the first-run wizard at '+
+      body:detailLine+
+        ' Complete the first-run wizard at '+
         '<a href="/setup.html">/setup.html</a> before attempting to log in.'};
   }
   var missing=_missingSetupArtifacts(d);
   var degraded=_isDegradedSetupHealth(d.setup_health);
   if(degraded||missing.length){
     var hdr=degraded?'SETUP INCOMPLETE ('+String(d.setup_health).toUpperCase()+')':'SETUP INCOMPLETE';
-    var detail=(degraded?'Backend setup_health='+String(d.setup_health):'Required artifacts missing');
+    /* Prefer the backend's own setup_reason (Rick's 170b0c8) — it
+     * carries the actionable detail like 'partial setup: init
+     * incomplete; ssh key missing or unreadable; no PVE nodes
+     * configured; no fleet hosts configured' verbatim. Falls back to
+     * the locally-constructed detail line for any older payload that
+     * doesn't carry setup_reason yet. */
+    var detail;
+    if(d.setup_reason){
+      detail=String(d.setup_reason);
+    }else{
+      detail=(degraded?'Backend setup_health='+String(d.setup_health):'Required artifacts missing');
+      if(missing.length)detail+=' — missing: '+missing.join(', ');
+    }
     return {isErr:true,
       title:hdr,
-      body:detail+(missing.length?' — missing: '+missing.join(', '):'')+
-        '. Visit <a href="/setup.html">/setup.html</a> to finish configuration.'};
+      body:detail+'. Visit <a href="/setup.html">/setup.html</a> to finish configuration.'};
   }
   return null;
 }

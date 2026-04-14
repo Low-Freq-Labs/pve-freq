@@ -133,6 +133,24 @@ class TestSetupTruthMissingArtifactsSurface(unittest.TestCase):
         # else swallowing the missing-artifact path).
         self.assertIn("return null", body)
 
+    def test_summary_prefers_backend_setup_reason_when_present(self):
+        """Rick's 170b0c8 ships /api/setup/status with setup_reason
+        carrying the actionable detail verbatim ('partial setup: init
+        incomplete; ssh key missing or unreadable; ...'). When that
+        field is present the banner must use it as-is — locally
+        constructed strings can never be as accurate as the backend's
+        own reason. Pre-fix the renderer always rebuilt the detail
+        line locally, throwing away the backend's authoritative form."""
+        body = _fn_body(_app_js(), "_setupTruthSummary")
+        self.assertIn("d.setup_reason", body,
+                      "_setupTruthSummary must consume backend-provided "
+                      "setup_reason verbatim when present")
+        # Local-construct fallback must remain so older payloads still
+        # render something honest.
+        self.assertIn("missing.join", body,
+                      "fallback path must still construct a detail line "
+                      "from missing artifacts when setup_reason is absent")
+
     def test_post_auth_banner_consumes_summary(self):
         body = _fn_body(_app_js(), "_renderPostAuthTruthBanner")
         self.assertIn("_setupTruthSummary", body,
