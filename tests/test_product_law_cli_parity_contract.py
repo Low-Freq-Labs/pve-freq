@@ -200,6 +200,79 @@ class TestFleetStatusLiveClassification(unittest.TestCase):
         self.assertEqual(payload["offline"], 3)
 
 
+class TestFleetDashboardCmdUsesClassifier(unittest.TestCase):
+    """freq fleet dashboard (cmd_dashboard in freq/modules/fleet.py)
+    must route every failure through classify_probe_failure so the
+    table names the failure class alongside the metric columns."""
+
+    def _fleet_src(self):
+        return FLEET_PY.read_text()
+
+    def test_cmd_dashboard_classifies_failures(self):
+        src = self._fleet_src()
+        start = src.find("def cmd_dashboard(")
+        self.assertGreater(start, 0)
+        end = src.find("\ndef ", start + 10)
+        window = src[start:end]
+        self.assertIn("classify_probe_failure(", window,
+                      "cmd_dashboard must route failures through the classifier")
+        self.assertIn("STATE_AUTH_FAILED", window)
+        self.assertIn("aggregate_probe_state(", window)
+
+    def test_cmd_dashboard_summary_surfaces_probe_state(self):
+        src = self._fleet_src()
+        start = src.find("def cmd_dashboard(")
+        end = src.find("\ndef ", start + 10)
+        window = src[start:end]
+        self.assertIn("fleet state:", window,
+                      "dashboard summary must surface probe_state parity")
+
+
+class TestFleetHealthCmdUsesClassifier(unittest.TestCase):
+    """freq fleet health (cmd_health in freq/modules/health.py) must
+    classify probe failures through the shared helper. Metric-based
+    load grading (healthy/degraded/critical) is a different axis and
+    stays as-is, but unreachable/auth_failed hosts must no longer be
+    silently collapsed into 'critical'."""
+
+    def _health_src(self):
+        return (REPO / "freq" / "modules" / "health.py").read_text()
+
+    def test_imports_classifier_and_states(self):
+        src = self._health_src()
+        self.assertIn("from freq.core.health_state import", src)
+        self.assertIn("classify_probe_failure", src)
+        self.assertIn("STATE_AUTH_FAILED", src)
+        self.assertIn("STATE_UNREACHABLE", src)
+
+    def test_failure_path_classifies(self):
+        src = self._health_src()
+        start = src.find("def cmd_health(")
+        self.assertGreater(start, 0)
+        end = src.find("\ndef ", start + 10)
+        if end < 0:
+            end = len(src)
+        window = src[start:end]
+        # Failure branch routes through the classifier.
+        self.assertIn("classify_probe_failure(rc, stderr, stdout)", window)
+        # Auth / unreachable / degraded counters exist alongside the
+        # metric grading.
+        self.assertIn("auth_failed_n", window)
+        self.assertIn("unreachable_n", window)
+        # Summary names the worst probe failure.
+        self.assertIn("worst probe:", window)
+
+    def test_return_code_escalates_on_probe_failure(self):
+        """A host that is auth_failed or unreachable must push the
+        exit code non-zero even if no host is in the 'critical' metric
+        class. This is how `freq fleet health` becomes useful in CI."""
+        src = self._health_src()
+        self.assertIn(
+            "return 1 if (critical > 0 or auth_failed_n > 0 or unreachable_n > 0) else 0",
+            src,
+        )
+
+
 class TestDoctorFleetConnectivityUsesClassifier(unittest.TestCase):
     """_check_fleet_connectivity in freq/core/doctor.py must route
     every failure through classify_probe_failure so the doctor's

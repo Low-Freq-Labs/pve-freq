@@ -801,11 +801,28 @@ def cmd_dashboard(cfg: FreqConfig, pack, args) -> int:
         ("DISK", 6),
     )
 
-    up = 0
-    down = 0
+    # R-PRODUCT-LAW-BACKEND-TRUTH: classify every failure into the
+    # shared six-state vocabulary so the fleet dashboard does not say
+    # 'down' on a host whose real problem is auth_failed or degraded.
+    # Parity with freq fleet status + freq doctor + /api/health.
+    classified = []
     for h in hosts:
         r = result_for(results, h)
         if r and r.returncode == 0 and r.stdout:
+            classified.append((h, r, STATE_LIVE, "probe OK"))
+        else:
+            rc = r.returncode if r else 1
+            stderr = (r.stderr or "") if r else "no response"
+            stdout = (r.stdout or "") if r else ""
+            state, reason = classify_probe_failure(rc, stderr, stdout)
+            classified.append((h, r, state, reason))
+
+    up = 0
+    down = 0
+    auth_failed = 0
+    degraded = 0
+    for h, r, state, reason in classified:
+        if state == STATE_LIVE:
             up += 1
             parts = r.stdout.split("|")
             os_name = parts[1][:16] if len(parts) > 1 else "?"
@@ -835,10 +852,21 @@ def cmd_dashboard(cfg: FreqConfig, pack, args) -> int:
             )
         else:
             down += 1
+            if state == STATE_AUTH_FAILED:
+                auth_failed += 1
+                badge_cell = (f"{fmt.C.RED}auth{fmt.C.RESET}", 8)
+                os_cell = (f"{fmt.C.RED}{reason[:16]}{fmt.C.RESET}", 16)
+            elif state == STATE_DEGRADED:
+                degraded += 1
+                badge_cell = (f"{fmt.C.YELLOW}degr{fmt.C.RESET}", 8)
+                os_cell = (f"{fmt.C.YELLOW}{reason[:16]}{fmt.C.RESET}", 16)
+            else:
+                badge_cell = (fmt.badge("down"), 8)
+                os_cell = (f"{fmt.C.DIM}{reason[:16]}{fmt.C.RESET}", 16)
             fmt.table_row(
                 (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 14),
-                (fmt.badge("down"), 8),
-                ("—", 16),
+                badge_cell,
+                os_cell,
                 ("—", 4),
                 ("—", 14),
                 ("—", 6),
@@ -847,10 +875,21 @@ def cmd_dashboard(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
     fmt.divider("Summary")
     fmt.blank()
+    probe_state, probe_reason = aggregate_probe_state(
+        [{"state": s, "reason": r, "label": h.label}
+         for h, _, s, r in classified]
+    )
+    summary = f"  {fmt.C.GREEN}{up}{fmt.C.RESET} up  {fmt.C.RED}{down}{fmt.C.RESET} down"
+    if auth_failed:
+        summary += f"  {fmt.C.RED}{auth_failed}{fmt.C.RESET} auth_failed"
+    if degraded:
+        summary += f"  {fmt.C.YELLOW}{degraded}{fmt.C.RESET} degraded"
+    summary += f"  ({len(hosts)} total, {total_duration:.1f}s)"
+    fmt.line(summary)
     fmt.line(
-        f"  {fmt.C.GREEN}{up}{fmt.C.RESET} up  "
-        f"{fmt.C.RED}{down}{fmt.C.RESET} down  "
-        f"({len(hosts)} total, {total_duration:.1f}s)"
+        f"  {fmt.C.DIM}fleet state:{fmt.C.RESET} "
+        f"{fmt.C.BOLD}{probe_state}{fmt.C.RESET} "
+        f"{fmt.C.DIM}— {probe_reason}{fmt.C.RESET}"
     )
     fmt.blank()
     fmt.footer()

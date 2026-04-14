@@ -23,6 +23,12 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
+from freq.core.health_state import (
+    STATE_AUTH_FAILED,
+    STATE_DEGRADED,
+    STATE_UNREACHABLE,
+    classify_probe_failure,
+)
 from freq.core.ssh import run_many as ssh_run_many, result_for
 
 # Health check thresholds
@@ -92,34 +98,70 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
         ("HEALTH", 8),
     )
 
+    # R-PRODUCT-LAW-BACKEND-TRUTH: failure paths route through the
+    # shared classifier so the fleet health table names the failure
+    # class (auth_failed / unreachable / degraded) alongside the
+    # metric-based grading. Metric axis (load/ram/disk → healthy/
+    # degraded/critical) is the load dimension — a different axis than
+    # probe outcome — and stays as-is. But a 'down' host whose probe
+    # never reached the kernel must NOT be collapsed to 'critical'
+    # silently: operators need to know whether to look at uptime graphs
+    # or ssh keys.
     healthy = 0
     degraded = 0
     critical = 0
+    auth_failed_n = 0
+    unreachable_n = 0
+    # Stash reason strings per non-live host so the summary line can
+    # name what tripped.
+    probe_reasons: dict[str, tuple[str, str]] = {}
 
     for h in hosts:
         r = result_for(results, h)
         if not r or r.returncode != 0:
-            critical += 1
+            rc = r.returncode if r else 1
+            stderr = (r.stderr or "") if r else "no response"
+            stdout = (r.stdout or "") if r else ""
+            state, reason = classify_probe_failure(rc, stderr, stdout)
+            probe_reasons[h.label] = (state, reason)
+            if state == STATE_AUTH_FAILED:
+                auth_failed_n += 1
+                badge = (f"{fmt.C.RED}auth{fmt.C.RESET}", 8)
+            elif state == STATE_UNREACHABLE:
+                unreachable_n += 1
+                badge = (fmt.badge("down"), 8)
+            else:
+                critical += 1
+                badge = (fmt.badge("fail"), 8)
+            # Dim detail — reason in the LOAD column since there are
+            # no metrics to show anyway. Truncated to the column width.
+            detail = reason[:10] if reason else "no data"
             fmt.table_row(
                 (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 14),
-                ("—", 10),
+                (f"{fmt.C.DIM}{detail}{fmt.C.RESET}", 10),
                 ("—", 14),
                 ("—", 8),
                 ("—", 8),
-                (fmt.badge("down"), 8),
+                badge,
             )
             continue
 
         parts = r.stdout.split("|")
         if len(parts) < 7:
-            critical += 1
+            # Probe ran (ssh connected) but payload is broken. Degraded,
+            # not critical — the host is alive, just returning garbage.
+            probe_reasons[h.label] = (
+                STATE_DEGRADED,
+                f"probe returned malformed payload ({len(parts)} fields, expected >=7)",
+            )
+            degraded += 1
             fmt.table_row(
                 (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 14),
-                ("parse err", 10),
+                (f"{fmt.C.YELLOW}parse err{fmt.C.RESET}", 10),
                 ("—", 14),
                 ("—", 8),
                 ("—", 8),
-                (fmt.badge("fail"), 8),
+                (f"{fmt.C.YELLOW}degraded{fmt.C.RESET}", 8),
             )
             continue
 
@@ -132,15 +174,21 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
             uptime_str = parts[5]
             sshd_status = parts[6] if len(parts) > 6 else "?"
             docker_count = parts[7].strip() if len(parts) > 7 else "0"
-        except (ValueError, IndexError):
-            critical += 1
+        except (ValueError, IndexError) as _e:
+            # Probe ran but the values aren't numeric. Same class as
+            # above — degraded, not critical.
+            probe_reasons[h.label] = (
+                STATE_DEGRADED,
+                f"probe value parse error: {str(_e)[:60]}",
+            )
+            degraded += 1
             fmt.table_row(
                 (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 14),
-                ("—", 10),
+                (f"{fmt.C.YELLOW}parse err{fmt.C.RESET}", 10),
                 ("—", 14),
                 ("—", 8),
                 ("—", 8),
-                (fmt.badge("fail"), 8),
+                (f"{fmt.C.YELLOW}degraded{fmt.C.RESET}", 8),
             )
             continue
 
@@ -219,13 +267,43 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
     fmt.divider("Health Summary")
     fmt.blank()
-    fmt.line(
+    summary = (
         f"  {fmt.C.GREEN}{healthy}{fmt.C.RESET} healthy  "
         f"{fmt.C.YELLOW}{degraded}{fmt.C.RESET} degraded  "
-        f"{fmt.C.RED}{critical}{fmt.C.RESET} critical  "
-        f"({len(hosts)} hosts, {total_duration:.1f}s)"
+        f"{fmt.C.RED}{critical}{fmt.C.RESET} critical"
     )
+    # R-PRODUCT-LAW-BACKEND-TRUTH: probe-failure classes are a
+    # different axis than load grading but must still be named so an
+    # operator knows whether a red host is overloaded or unreachable.
+    if auth_failed_n:
+        summary += f"  {fmt.C.RED}{auth_failed_n}{fmt.C.RESET} auth_failed"
+    if unreachable_n:
+        summary += f"  {fmt.C.RED}{unreachable_n}{fmt.C.RESET} unreachable"
+    summary += f"  ({len(hosts)} hosts, {total_duration:.1f}s)"
+    fmt.line(summary)
+    # Name the worst probe failure so the operator knows which host to
+    # look at first.
+    if probe_reasons:
+        worst = next(
+            iter([(lbl, s, r) for lbl, (s, r) in probe_reasons.items()
+                  if s == STATE_AUTH_FAILED]),
+            None,
+        ) or next(
+            iter([(lbl, s, r) for lbl, (s, r) in probe_reasons.items()
+                  if s == STATE_UNREACHABLE]),
+            None,
+        ) or next(
+            iter([(lbl, s, r) for lbl, (s, r) in probe_reasons.items()]),
+            None,
+        )
+        if worst:
+            fmt.line(
+                f"  {fmt.C.DIM}worst probe:{fmt.C.RESET} "
+                f"{fmt.C.BOLD}{worst[0]}{fmt.C.RESET} "
+                f"{fmt.C.DIM}— {worst[1]}: {worst[2][:80]}{fmt.C.RESET}"
+            )
     fmt.blank()
     fmt.footer()
 
-    return 1 if critical > 0 else 0
+    # Return non-zero on probe failures OR critical metric states.
+    return 1 if (critical > 0 or auth_failed_n > 0 or unreachable_n > 0) else 0
