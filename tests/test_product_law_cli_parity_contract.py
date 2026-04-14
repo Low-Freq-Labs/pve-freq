@@ -273,6 +273,67 @@ class TestFleetHealthCmdUsesClassifier(unittest.TestCase):
         )
 
 
+class TestFleetNtpCmdUsesClassifier(unittest.TestCase):
+    """freq fleet ntp check (cmd_ntp in freq/modules/fleet.py) must
+    classify probe failures through the shared helper and distinguish
+    probe-failed (auth_failed / unreachable / degraded) from ntp-drift
+    (clock not synced / timesyncd inactive), which are different
+    classes that previously collapsed into a single 'down'."""
+
+    def _fleet_src(self):
+        return FLEET_PY.read_text()
+
+    def test_cmd_ntp_classifies_probe_failures(self):
+        src = self._fleet_src()
+        start = src.find("def cmd_ntp(")
+        self.assertGreater(start, 0)
+        end = src.find("\ndef ", start + 10)
+        window = src[start:end]
+        self.assertIn("classify_probe_failure(", window)
+        self.assertIn("probe_failures", window)
+        self.assertIn("ntp_drift", window)
+
+    def test_cmd_ntp_names_worst_case(self):
+        src = self._fleet_src()
+        start = src.find("def cmd_ntp(")
+        end = src.find("\ndef ", start + 10)
+        window = src[start:end]
+        self.assertIn("worst:", window,
+                      "ntp summary must name the worst failing host + reason")
+        self.assertIn('("TIME / REASON', window)
+
+
+class TestFleetUpdateCmdUsesClassifier(unittest.TestCase):
+    """freq fleet update check (cmd_fleet_update in fleet.py) must
+    classify probe failures through the shared helper so an
+    unreachable host doesn't silently disappear into the update count."""
+
+    def _fleet_src(self):
+        return FLEET_PY.read_text()
+
+    def test_cmd_fleet_update_classifies_probe_failures(self):
+        src = self._fleet_src()
+        start = src.find("def cmd_fleet_update(")
+        self.assertGreater(start, 0)
+        end = src.find("\ndef ", start + 10)
+        window = src[start:end]
+        self.assertIn("classify_probe_failure(", window)
+        self.assertIn("probe_failures", window)
+        # REASON column added so each row can carry the state+reason.
+        self.assertIn('("REASON', window)
+
+    def test_cmd_fleet_update_summary_surfaces_probe_failures(self):
+        src = self._fleet_src()
+        start = src.find("def cmd_fleet_update(")
+        end = src.find("\ndef ", start + 10)
+        window = src[start:end]
+        self.assertIn("probe_failed — not counted", window,
+                      "update summary must call out probe_failed hosts "
+                      "separately from the update count")
+        # Non-zero exit on probe failures so CI can fail on missing data.
+        self.assertIn("return 1 if probe_failures else 0", window)
+
+
 class TestDoctorFleetConnectivityUsesClassifier(unittest.TestCase):
     """_check_fleet_connectivity in freq/core/doctor.py must route
     every failure through classify_probe_failure so the doctor's

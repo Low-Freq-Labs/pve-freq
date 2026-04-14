@@ -1647,10 +1647,21 @@ def cmd_ntp(cfg: FreqConfig, pack, args) -> int:
     if action == "fix":
         return _ntp_fix(cfg, hosts)
 
-    # Check mode
-    fmt.table_header(("HOST", 16), ("SYNCED", 8), ("TIMESYNCD", 10), ("TIME", 20))
+    # Check mode — product-law parity: any probe failure is classified
+    # through the shared helper so 'ntp broken' vs 'host unreachable'
+    # vs 'auth rejected' stop collapsing into the same red badge.
+    # REASON column added to name the exact class on failure.
+    fmt.table_header(
+        ("HOST", 16),
+        ("SYNCED", 8),
+        ("TIMESYNCD", 10),
+        ("TIME / REASON", 32),
+    )
 
     issues = 0
+    probe_failures = 0
+    ntp_drift = 0
+    probe_reasons: dict[str, tuple[str, str]] = {}
     results = ssh_run_many(
         hosts=hosts,
         command="timedatectl show --property=NTPSynchronized --value 2>/dev/null; "
@@ -1677,28 +1688,80 @@ def cmd_ntp(cfg: FreqConfig, pack, args) -> int:
 
             if synced != "yes" or service != "active":
                 issues += 1
+                ntp_drift += 1
+                # Honest reason for ntp drift — a different failure
+                # class than probe-failure, but still needs a name so
+                # the operator knows whether to check the clock or the
+                # ntp daemon.
+                if synced != "yes" and service != "active":
+                    probe_reasons[h.label] = (
+                        STATE_DEGRADED,
+                        f"not synced + timesyncd inactive ({current_time})",
+                    )
+                elif synced != "yes":
+                    probe_reasons[h.label] = (
+                        STATE_DEGRADED,
+                        f"clock not synced (timesyncd {service}, {current_time})",
+                    )
+                else:
+                    probe_reasons[h.label] = (
+                        STATE_DEGRADED,
+                        f"timesyncd {service} (clock synced, daemon down)",
+                    )
 
             fmt.table_row(
                 (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
                 (synced_badge, 8),
                 (svc_badge, 10),
-                (current_time, 20),
+                (current_time[:32], 32),
             )
         else:
             issues += 1
+            probe_failures += 1
+            rc = r.returncode if r else 1
+            stderr = (r.stderr or "") if r else "no response"
+            stdout = (r.stdout or "") if r else ""
+            state, reason = classify_probe_failure(rc, stderr, stdout)
+            probe_reasons[h.label] = (state, reason)
+            if state == STATE_AUTH_FAILED:
+                state_badge = (f"{fmt.C.RED}auth{fmt.C.RESET}", 8)
+            elif state == STATE_UNREACHABLE:
+                state_badge = (fmt.badge("down"), 8)
+            else:
+                state_badge = (f"{fmt.C.YELLOW}degr{fmt.C.RESET}", 8)
+            detail = f"{state}: {reason}"[:32]
             fmt.table_row(
                 (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
-                (fmt.badge("down"), 8),
-                (fmt.badge("down"), 10),
-                ("unreachable", 20),
+                state_badge,
+                (f"{fmt.C.DIM}—{fmt.C.RESET}", 10),
+                (f"{fmt.C.RED}{detail}{fmt.C.RESET}", 32),
             )
 
     fmt.blank()
     if issues:
-        fmt.line(f"  {fmt.C.YELLOW}{issues} host(s) with NTP issues.{fmt.C.RESET}")
-        fmt.info("Run 'freq fleet ntp fix' to remediate.")
+        summary = f"  {fmt.C.YELLOW}{issues}{fmt.C.RESET} host(s) with NTP issues"
+        if probe_failures:
+            summary += f" ({probe_failures} probe_failed, {ntp_drift} ntp_drift)"
+        fmt.line(summary)
+        # Surface the worst case so the operator reads ONE line and
+        # knows where to start.
+        worst = (
+            next(iter([(lbl, s, r) for lbl, (s, r) in probe_reasons.items()
+                       if s == STATE_AUTH_FAILED]), None)
+            or next(iter([(lbl, s, r) for lbl, (s, r) in probe_reasons.items()
+                          if s == STATE_UNREACHABLE]), None)
+            or next(iter(
+                [(lbl, s, r) for lbl, (s, r) in probe_reasons.items()]), None)
+        )
+        if worst:
+            fmt.line(
+                f"  {fmt.C.DIM}worst:{fmt.C.RESET} "
+                f"{fmt.C.BOLD}{worst[0]}{fmt.C.RESET} "
+                f"{fmt.C.DIM}— {worst[1]}: {worst[2][:80]}{fmt.C.RESET}"
+            )
+        fmt.info("Run 'freq fleet ntp fix' to remediate drift (probe failures need separate triage).")
     else:
-        fmt.line(f"  {fmt.C.GREEN}All hosts time-synced.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GREEN}All {len(hosts)} hosts time-synced.{fmt.C.RESET}")
     fmt.blank()
     fmt.footer()
     return 1 if issues else 0
@@ -1753,8 +1816,15 @@ def cmd_fleet_update(cfg: FreqConfig, pack, args) -> int:
     if action == "apply":
         return _fleet_update_apply(cfg, hosts)
 
-    # Check mode — detect package manager and count available updates
-    fmt.table_header(("HOST", 16), ("UPDATES", 10), ("PKG MGR", 8))
+    # Check mode — detect package manager and count available updates.
+    # Product-law parity: probe failures are classified so 'host down'
+    # doesn't silently replace the update-count column.
+    fmt.table_header(
+        ("HOST", 16),
+        ("UPDATES", 10),
+        ("PKG MGR", 8),
+        ("REASON", 32),
+    )
 
     results = ssh_run_many(
         hosts=hosts,
@@ -1774,6 +1844,8 @@ def cmd_fleet_update(cfg: FreqConfig, pack, args) -> int:
     )
 
     total_updates = 0
+    probe_failures = 0
+    probe_reasons: dict[str, tuple[str, str]] = {}
     for h in hosts:
         r = result_for(results, h)
         if r and r.returncode in (0, 100) and r.stdout:
@@ -1785,27 +1857,68 @@ def cmd_fleet_update(cfg: FreqConfig, pack, args) -> int:
                 total_updates += num
                 color = fmt.C.YELLOW if num > 0 else fmt.C.GREEN
                 count_str = f"{color}{num}{fmt.C.RESET}"
+                reason_cell = (f"{fmt.C.DIM}{num} pending{fmt.C.RESET}"
+                               if num > 0
+                               else f"{fmt.C.DIM}up to date{fmt.C.RESET}")
             except ValueError:
                 count_str = count
+                reason_cell = f"{fmt.C.YELLOW}parse error: {count[:20]}{fmt.C.RESET}"
+                probe_reasons[h.label] = (
+                    STATE_DEGRADED,
+                    f"update-count parse error: {count[:60]}",
+                )
             fmt.table_row(
                 (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
                 (count_str, 10),
                 (pkg_mgr, 8),
+                (reason_cell, 32),
             )
         else:
+            probe_failures += 1
+            rc = r.returncode if r else 1
+            stderr = (r.stderr or "") if r else "no response"
+            stdout = (r.stdout or "") if r else ""
+            state, reason = classify_probe_failure(rc, stderr, stdout)
+            probe_reasons[h.label] = (state, reason)
+            if state == STATE_AUTH_FAILED:
+                badge = (f"{fmt.C.RED}auth{fmt.C.RESET}", 10)
+            elif state == STATE_UNREACHABLE:
+                badge = (fmt.badge("down"), 10)
+            else:
+                badge = (f"{fmt.C.YELLOW}degr{fmt.C.RESET}", 10)
+            detail = f"{state}: {reason}"[:32]
             fmt.table_row(
                 (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
-                (fmt.badge("down"), 10),
+                badge,
                 ("?", 8),
+                (f"{fmt.C.RED}{detail}{fmt.C.RESET}", 32),
             )
 
     fmt.blank()
-    fmt.line(f"  {total_updates} update(s) available across fleet")
+    summary = f"  {total_updates} update(s) available across fleet"
+    if probe_failures:
+        summary += f" ({fmt.C.RED}{probe_failures}{fmt.C.RESET} probe_failed — not counted)"
+    fmt.line(summary)
+    if probe_failures and probe_reasons:
+        worst = (
+            next(iter([(lbl, s, r) for lbl, (s, r) in probe_reasons.items()
+                       if s == STATE_AUTH_FAILED]), None)
+            or next(iter([(lbl, s, r) for lbl, (s, r) in probe_reasons.items()
+                          if s == STATE_UNREACHABLE]), None)
+            or next(iter(
+                [(lbl, s, r) for lbl, (s, r) in probe_reasons.items()]), None)
+        )
+        if worst:
+            fmt.line(
+                f"  {fmt.C.DIM}worst probe:{fmt.C.RESET} "
+                f"{fmt.C.BOLD}{worst[0]}{fmt.C.RESET} "
+                f"{fmt.C.DIM}— {worst[1]}: {worst[2][:80]}{fmt.C.RESET}"
+            )
     if total_updates > 0:
         fmt.info("Run 'freq fleet update apply' to install.")
     fmt.blank()
     fmt.footer()
-    return 0
+    return 1 if probe_failures else 0
 
 
 def _fleet_update_apply(cfg, hosts) -> int:
