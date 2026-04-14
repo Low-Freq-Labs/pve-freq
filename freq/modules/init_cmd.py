@@ -4922,14 +4922,25 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
         fmt.step_fail("No empty iDRAC user slots (3-16 all occupied)")
         return False
 
-    # Create/update user in target slot
-    setup_cmds = (
-        f"racadm set iDRAC.Users.{target_slot}.UserName {svc_name}",
+    # Create/update user in target slot.
+    #
+    # R-RESILIENCE-INIT-RECOVERY-20260413S: on a rerun against a slot that
+    # already holds this svc_name, Dell racadm returns RAC1016 "The specified
+    # user already exists" when you re-issue `set UserName {svc_name}` — the
+    # firmware treats set-to-same as an error. Skip the UserName set when
+    # existing_slot is set; Password / Privilege / Enable / IpmiLanPrivilege
+    # are all safe to re-issue on a known-populated slot and doing so keeps
+    # the rerun idempotent (either refreshes the password or no-ops).
+    base_cmds = [
         f"racadm set iDRAC.Users.{target_slot}.Password {svc_pass}",
         f"racadm set iDRAC.Users.{target_slot}.Privilege 0x1ff",
         f"racadm set iDRAC.Users.{target_slot}.Enable 1",
         f"racadm set iDRAC.Users.{target_slot}.IpmiLanPrivilege 4",
-    )
+    ]
+    if existing_slot:
+        setup_cmds = tuple(base_cmds)
+    else:
+        setup_cmds = (f"racadm set iDRAC.Users.{target_slot}.UserName {svc_name}", *base_cmds)
     for cmd in setup_cmds:
         if _check_timeout("user_setup"):
             return False

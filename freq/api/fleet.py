@@ -152,6 +152,11 @@ def handle_health_api(handler):
             "$(sysctl -n vm.loadavg | awk '{print $2}')|0\""
         ),
         "switch": "show processes cpu | include CPU",
+        # R-RESILIENCE-INIT-RECOVERY-20260413S: iDRAC must use racadm, not
+        # the POSIX linux fallback. Parity fix with _bg_probe_health in
+        # serve.py so the fallback path (used when background cache is cold)
+        # also reports iDRACs honestly instead of flipping them unreachable.
+        "idrac": "racadm getsysinfo -s",
     }
 
     def _probe_host(h):
@@ -183,6 +188,20 @@ def handle_health_api(handler):
                 "docker": "0",
             }
 
+        if htype == "idrac":
+            # R-RESILIENCE-INIT-RECOVERY-20260413S: parity with _bg_probe_health.
+            return {
+                "label": h.label,
+                "ip": h.ip,
+                "type": htype,
+                "groups": getattr(h, "groups", "") or "",
+                "status": "healthy",
+                "cores": "-",
+                "ram": "-",
+                "disk": "-",
+                "load": "-",
+                "docker": "0",
+            }
         if htype == "switch":
             m = re.search(r"one minute:\s*(\d+)%", r.stdout)
             cpu_pct = m.group(1) if m else "0"

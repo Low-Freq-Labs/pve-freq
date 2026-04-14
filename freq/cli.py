@@ -1775,6 +1775,14 @@ def _register_user(sub):
     p.add_argument("username", nargs="?", help="Username")
     p.set_defaults(func=_cmd_passwd)
 
+    p = user_sub.add_parser(
+        "dashboard-passwd",
+        help="Set dashboard (web) password for a user — break-glass recovery",
+    )
+    p.add_argument("username", nargs="?", help="Username")
+    p.add_argument("--file", help="Read new password from file (non-interactive)")
+    p.set_defaults(func=_cmd_dashboard_passwd)
+
     p = user_sub.add_parser("roles", help="View role assignments")
     p.set_defaults(func=_cmd_roles)
 
@@ -2631,6 +2639,12 @@ def _cmd_passwd(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.users import cmd_passwd
 
     return cmd_passwd(cfg, pack, args)
+
+
+def _cmd_dashboard_passwd(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.users import cmd_dashboard_passwd
+
+    return cmd_dashboard_passwd(cfg, pack, args)
 
 
 def _cmd_roles(cfg: FreqConfig, pack, args) -> int:

@@ -387,6 +387,96 @@ def cmd_passwd(cfg: FreqConfig, pack, args) -> int:
     return 0 if fail == 0 else 1
 
 
+def cmd_dashboard_passwd(cfg: FreqConfig, pack, args) -> int:
+    """Set a dashboard (web) password for a user — break-glass recovery.
+
+    R-RESILIENCE-INIT-RECOVERY-20260413S: the /api/auth/login path stores
+    password hashes in the vault under auth/password_<user>. On forgotten
+    dashboard passwords there was no CLI recovery — `freq user passwd`
+    only touches OS chpasswd on remote hosts, it doesn't touch the web
+    auth vault. This subcommand writes a new PBKDF2-SHA256 hash to
+    vault auth/password_<user> so operators can unlock themselves out
+    of a stuck dashboard login without wiping state.
+
+    Reads the new password from --file PATH (non-interactive) or prompts
+    interactively. Requires the user to already exist in users.conf (or
+    the legacy roles.conf fallback) — refuses to seed a password for
+    unknown users to avoid bypassing the setup wizard's user creation.
+    """
+    from freq.modules.vault import vault_init, vault_set
+    from freq.api.auth import hash_password
+
+    username = getattr(args, "username", None)
+    if not username:
+        fmt.error("Usage: freq user dashboard-passwd <username> [--file PATH]")
+        return 1
+
+    if not validate.username(username):
+        fmt.error(f"Invalid username: {username}")
+        return 1
+
+    # Refuse to seed dashboard password for the OS service account —
+    # it runs the dashboard but is not a web principal (F1 of the
+    # security audit explicitly blocks service-account web login).
+    if cfg.ssh_service_account and username.lower() == cfg.ssh_service_account.lower():
+        fmt.error(
+            f"Cannot set dashboard password for service account '{username}' — "
+            f"it is not a web login principal."
+        )
+        return 1
+
+    # Refuse unknown users — don't bypass /api/setup/create-admin.
+    users = _load_users(cfg)
+    if not any(u["username"] == username for u in users):
+        fmt.error(
+            f"User '{username}' not found in users.conf. "
+            f"Add with: freq user create {username} --role admin"
+        )
+        return 1
+
+    pw_file = getattr(args, "file", None)
+    if pw_file:
+        if not os.path.isfile(pw_file):
+            fmt.error(f"--file not found: {pw_file}")
+            return 1
+        try:
+            with open(pw_file) as f:
+                new_pass = f.read().strip()
+        except OSError as e:
+            fmt.error(f"Cannot read --file {pw_file}: {e}")
+            return 1
+    else:
+        try:
+            new_pass = getpass.getpass(f"  New dashboard password for '{username}': ")
+            confirm = getpass.getpass("  Confirm password: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 1
+        if new_pass != confirm:
+            fmt.error("Passwords do not match.")
+            return 1
+
+    if len(new_pass) < 8:
+        fmt.error("Password must be at least 8 characters.")
+        return 1
+
+    try:
+        if not os.path.exists(cfg.vault_file):
+            vault_init(cfg)
+        vault_set(cfg, "auth", f"password_{username}", hash_password(new_pass))
+    except Exception as e:
+        fmt.error(f"Failed to write password hash to vault: {e}")
+        return 1
+
+    fmt.header(f"Dashboard Password Set: {username}")
+    fmt.blank()
+    fmt.step_ok(f"PBKDF2-SHA256 hash written to vault auth/password_{username}")
+    fmt.line(f"  {fmt.C.DIM}Login at the dashboard with the new password.{fmt.C.RESET}")
+    fmt.blank()
+    fmt.footer()
+    return 0
+
+
 def cmd_install_user(cfg: FreqConfig, pack, args) -> int:
     """Create a user account across all fleet hosts."""
     username = getattr(args, "username", None)

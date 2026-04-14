@@ -581,6 +581,15 @@ def _bg_probe_health():
             "$(sysctl -n vm.loadavg | awk '{print $2}')|0\""
         ),
         "switch": "show processes cpu | include CPU",
+        # R-RESILIENCE-INIT-RECOVERY-20260413S: iDRAC was previously absent
+        # from this map, so the dict-lookup fell back to HEALTH_CMDS["linux"]
+        # and the health probe tried to run a POSIX `echo "$(hostname)|..."`
+        # against a Dell racadm shell. Every probe failed → the fleet view
+        # flipped iDRAC hosts to "unreachable" minutes after each green init.
+        # Use `racadm getsysinfo -s` (read-only, fast, no side effects) for
+        # reachability — output parsing is optional since iDRACs don't have
+        # meaningful cores/ram/disk values in the fleet columns.
+        "idrac": "racadm getsysinfo -s",
     }
 
     def _probe_host(h):
@@ -616,6 +625,23 @@ def _bg_probe_health():
                 "load": "-",
                 "docker": "0",
                 "last_error": err,
+            }
+        if htype == "idrac":
+            # R-RESILIENCE-INIT-RECOVERY-20260413S: iDRAC reachability is
+            # "racadm getsysinfo -s returned something". Dashboard columns
+            # that don't apply to BMCs stay "-" — the fleet table already
+            # displays them as dim/blank for legacy-device types.
+            return {
+                "label": h.label,
+                "ip": h.ip,
+                "type": htype,
+                "groups": _groups,
+                "status": "healthy",
+                "cores": "-",
+                "ram": "-",
+                "disk": "-",
+                "load": "-",
+                "docker": "0",
             }
         if htype == "switch":
             m = re.search(r"one minute:\s*(\d+)%", r.stdout)
@@ -1472,6 +1498,14 @@ def _cleanup_ssh_mux(cfg):
     These mux master processes outlive the daemon threads and prevent
     systemd from cleanly stopping the service (they're children of the
     main process). Closing them ensures clean shutdown.
+
+    R-RESILIENCE-INIT-RECOVERY-20260413S: previously this ran `ssh -O exit`
+    serially per socket (~3s each) which meant a 20-host fleet took up to
+    60s to cool down — combined with mid-probe SSH calls still in flight
+    this reliably breached systemd's default TimeoutStopSec=90s and forced
+    SIGKILL. Parallelize via ThreadPoolExecutor, cap at a hard 8s total
+    wall-clock budget, and spawn every child with start_new_session=True so
+    if `ssh -O exit` itself hangs we pgid-kill the tree instead of leaking.
     """
     import glob
     svc_name = cfg.ssh_service_account
@@ -1479,15 +1513,53 @@ def _cleanup_ssh_mux(cfg):
     if not os.path.isdir(mux_dir):
         return
     mux_sockets = glob.glob(os.path.join(mux_dir, "*"))
-    for sock in mux_sockets:
+    if not mux_sockets:
+        return
+
+    def _exit_one(sock):
         try:
-            # ssh -O exit closes the mux master cleanly
-            subprocess.run(
+            proc = subprocess.Popen(
                 ["ssh", "-O", "exit", "-o", f"ControlPath={sock}", "dummy"],
-                capture_output=True, timeout=3,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
             )
+            try:
+                proc.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                try:
+                    import signal as _signal
+                    os.killpg(os.getpgid(proc.pid), _signal.SIGKILL)
+                except (ProcessLookupError, OSError):
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                try:
+                    proc.communicate(timeout=1)
+                except Exception:
+                    pass
         except Exception:
             pass  # Best effort — systemd SIGKILL handles stragglers
+
+    import concurrent.futures
+    budget = 8
+    started = time.monotonic()
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(16, len(mux_sockets))) as pool:
+            futures = [pool.submit(_exit_one, sock) for sock in mux_sockets]
+            for f in concurrent.futures.as_completed(futures, timeout=budget):
+                try:
+                    f.result(timeout=0.1)
+                except Exception:
+                    pass
+    except concurrent.futures.TimeoutError:
+        logger.warning(
+            f"ssh_mux cleanup exceeded {budget}s budget — leaving stragglers to systemd",
+            elapsed=round(time.monotonic() - started, 1),
+            sockets=len(mux_sockets),
+        )
 
 
 # Legacy DASHBOARD_HTML removed — 240 lines of dead embedded HTML
@@ -4994,7 +5066,17 @@ def cmd_serve(cfg, pack, args) -> int:
     proto = "https" if use_tls else "http"
     logger.info("dashboard_start", port=port, host="0.0.0.0", tls=use_tls)
     print(f"  \033[38;5;82m✔\033[0m Dashboard running at {proto}://0.0.0.0:{port}")
-    # First-run hint: if users exist but no passwords set, first login sets password
+    # Users-without-dashboard-password hint.
+    # R-SECURITY-TRUST-AUDIT-20260413P F1 removed the trust-on-first-use
+    # silent-seed path from /api/auth/login, so a user listed in users.conf
+    # with no vault entry can NO LONGER set their password by simply logging
+    # in. The pre-F1 banner line that claimed login would seed the password
+    # was a lie after F1 landed — the auth handler now returns 401 for
+    # empty stored hashes. Point operators at the break-glass recovery
+    # CLI that actually works:
+    #   sudo freq user dashboard-passwd <user>            (interactive)
+    #   sudo freq user dashboard-passwd <user> --file PW  (non-interactive)
+    # Landed under R-RESILIENCE-INIT-RECOVERY-20260413S.
     try:
         from freq.modules.users import _load_users
         users = _load_users(cfg)
@@ -5002,7 +5084,14 @@ def cmd_serve(cfg, pack, args) -> int:
             from freq.modules.vault import vault_get
             no_pw = [u["username"] for u in users if not vault_get(cfg, "auth", f"password_{u['username']}")]
             if no_pw:
-                print(f"  \033[38;5;220m⚠\033[0m First login sets password for: {', '.join(no_pw)}")
+                print(
+                    f"  \033[38;5;220m⚠\033[0m Users without dashboard password: "
+                    f"{', '.join(no_pw)}"
+                )
+                print(
+                    f"    \033[38;5;245mRecover with: "
+                    f"sudo freq user dashboard-passwd <user> [--file PATH]\033[0m"
+                )
     except Exception:
         pass
     print(f"  \033[38;5;245mPress Ctrl+C to stop\033[0m\n")
