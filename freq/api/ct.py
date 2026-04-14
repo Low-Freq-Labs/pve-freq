@@ -681,12 +681,18 @@ def handle_ct_exec(handler):
         json_response(handler, {"error": "ctid and command required"}, 400)
         return
 
-    # Safety: reject obviously dangerous commands
-    dangerous = ["rm -rf /", "mkfs", "dd if=", "> /dev/sd"]
-    for d in dangerous:
-        if d in command:
-            json_response(handler, {"error": f"Blocked dangerous command pattern: {d}"}, 400)
-            return
+    # F12 of R-SECURITY-TRUST-AUDIT-20260413P: dropped the substring
+    # blacklist that pre-fix sat here. The list (`rm -rf /`, `mkfs`,
+    # `dd if=`, `> /dev/sd`) was theatrical — trivially bypassed by
+    # double-spacing, flag re-ordering (`rm -fr /`, `rm -r -f /`),
+    # or any of the dozens of other ways to write a destructive
+    # shell command. It gave the operator a false sense of safety
+    # while protecting nothing real. ct/exec is a privileged
+    # operator surface by design (operator role already has
+    # admin-equivalent access inside the container); pretending
+    # the dashboard sandboxes it was the actual bug. Audit trail
+    # in audit.jsonl + the operator role gate are the real
+    # controls; the operator owns what they run.
 
     node_ip = _find_reachable_node(cfg)
     if not node_ip:

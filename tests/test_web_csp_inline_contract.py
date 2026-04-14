@@ -131,7 +131,7 @@ class TestNoExternalStylesheet(unittest.TestCase):
 
 
 EXPECTED_INLINE_HANDLERS = 0
-EXPECTED_INLINE_STYLES = 266
+EXPECTED_INLINE_STYLES = 264
 
 INLINE_HANDLER_RE = re.compile(r" on[a-z]+=")
 INLINE_STYLE_RE = re.compile(r' style="')
@@ -215,15 +215,31 @@ class TestCspHonestLimitDocumented(unittest.TestCase):
         """Now that inline handler count is zero, script-src MUST NOT
         carry 'unsafe-inline'. If someone reintroduces inline handlers
         the count guard above fires first; this guard pins the
-        directive so the CSP stays tight independently."""
+        directive so the CSP stays tight independently.
+
+        Anchored on the actual send_header directive literal (not
+        free-form comment text mentioning 'script-src'), so comments
+        explaining the history can use the phrase script-src
+        'unsafe-inline' for context without breaking this test.
+        """
         self.assertIn("script-src 'self'; ", self.src)
-        # Make sure 'unsafe-inline' didn't sneak back into the script-src
-        # token (style-src is allowed to keep it).
-        idx = self.src.find("script-src ")
-        self.assertNotEqual(idx, -1)
-        # Slice up to the next ';' which terminates this directive.
-        end = self.src.find(';', idx)
-        script_src_directive = self.src[idx:end]
+        # Find the actual send_header CSP literal and slice the
+        # script-src directive within it. The pre-fix anchor used
+        # find("script-src ") which now matches the comment block
+        # explaining that script-src dropped 'unsafe-inline'.
+        csp_idx = self.src.find('"Content-Security-Policy"')
+        self.assertNotEqual(csp_idx, -1)
+        # The directive value lives in the next ~6 string literals
+        # concatenated into the send_header call. Slice forward to
+        # the closing ).
+        directive_end = self.src.find(')', csp_idx)
+        directive_block = self.src[csp_idx:directive_end]
+        # script-src directive within the literal.
+        ss_idx = directive_block.find("script-src ")
+        self.assertNotEqual(ss_idx, -1,
+                            "script-src directive must exist in the CSP literal")
+        ss_end = directive_block.find(";", ss_idx)
+        script_src_directive = directive_block[ss_idx:ss_end]
         self.assertNotIn(
             "'unsafe-inline'", script_src_directive,
             "script-src must not carry 'unsafe-inline' — inline handler "

@@ -1680,6 +1680,17 @@ def _is_first_run():
     log in and would be stranded between "setup complete" and
     "invalid credentials". The setup wizard must remain available
     until at least one user exists.
+
+    F9 of R-SECURITY-TRUST-AUDIT-20260413P: this function now fails
+    CLOSED on exception. Pre-fix it returned True if _load_users
+    raised, on the reasoning "safer to show setup wizard". That was
+    wrong — fail-open meant a transient users.conf permission/IO
+    error reopened the entire setup wizard surface to unauth callers,
+    which combined with F2 (test-ssh SSRF) gave a real attack window.
+    Fail-closed on read error is the safer posture: the setup wizard
+    stays gated, the operator sees the failure via /api/setup/status
+    or freq.log, and unsticks the wizard explicitly via
+    /api/setup/reset (admin auth) once the underlying read is fixed.
     """
     cfg = load_config()
 
@@ -1691,8 +1702,11 @@ def _is_first_run():
         if not users:
             return True
     except Exception as e:
-        logger.warning(f"_is_first_run: failed to check users: {e}")
-        return True  # If we can't check, safer to show setup wizard
+        logger.error(
+            f"_is_first_run: failed to check users — failing CLOSED to keep "
+            f"setup endpoints gated: {e}"
+        )
+        return False  # Fail closed (F9): never re-open the wizard on a read error
 
     # If users exist, check markers to determine if setup completed
     if os.path.isfile(os.path.join(cfg.data_dir, "setup-complete")):
@@ -1872,6 +1886,10 @@ class FreqHandler(BaseHTTPRequestHandler):
                 cls._V1_ROUTES = {}  # Fallback — traceback logged for debugging
 
     # Paths that don't require authentication
+    # F2 of R-SECURITY-TRUST-AUDIT-20260413P removed /api/setup/test-ssh
+    # from this set: it now requires either the first-run window AND
+    # admin (post-create-admin) OR an existing admin session, scoped
+    # to the configured PVE nodes only.
     _AUTH_WHITELIST = frozenset({
         "/api/auth/login",
         "/api/auth/verify",
@@ -1879,7 +1897,6 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/setup/create-admin",
         "/api/setup/configure",
         "/api/setup/generate-key",
-        "/api/setup/test-ssh",
         "/api/setup/complete",
         "/api/docs",
         "/healthz",
@@ -2733,11 +2750,30 @@ a:hover{{text-decoration:underline}}
             _setup_lock.release()
 
     def _serve_setup_test_ssh(self):
-        """Test SSH connectivity to a PVE node during setup."""
-        if not _is_first_run():
-            self._json_response({"error": "Setup already complete"}, 403)
+        """Test SSH connectivity to a PVE node during setup.
+
+        F2 of R-SECURITY-TRUST-AUDIT-20260413P:
+        - Removed from _AUTH_WHITELIST (no longer unauth).
+        - Requires admin role from the global auth gate (the dispatch
+          gate already enforces viewer; here we tighten to admin).
+        - Validates the requested host against cfg.pve_nodes (the
+          targets the in-progress setup wizard has already declared
+          via /api/setup/configure). Hosts not in that list are
+          refused so an attacker with admin creds still cannot use
+          this endpoint as a generic SSRF.
+        Pre-fix this was an unauth IP-format-validated SSH probe
+        gateway during the first-run window, which combined with F9's
+        fail-open _is_first_run gave a real attack path.
+        """
+        # Admin role required even during first-run. The dispatch gate
+        # would already 403 unauth callers because the route is no
+        # longer whitelisted, but we tighten further to admin here.
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}, 403)
             return
 
+        cfg = load_config()
         params = _parse_query(self)
         host = params.get("host", [""])[0].strip()
 
@@ -2745,14 +2781,32 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": "host parameter required"}, 400)
             return
 
-        # Basic IP/hostname validation
+        # Basic IP/hostname validation (pre-existing).
         from freq.core import validate as _val
 
         if not (_val.ip(host) or _val.hostname(host)):
             self._json_response({"error": f"Invalid host: {host}"}, 400)
             return
 
-        cfg = load_config()
+        # F2: scope to configured PVE nodes only. The setup wizard
+        # collects PVE node IPs via /api/setup/configure before the
+        # operator hits /api/setup/test-ssh; an admin who tries to
+        # probe an arbitrary host is refused here even though they
+        # have admin role.
+        configured_targets = set(cfg.pve_nodes or [])
+        if host not in configured_targets:
+            self._json_response(
+                {
+                    "error": (
+                        f"Host {host} is not in the configured PVE node list; "
+                        f"add it via /api/setup/configure first. test-ssh is "
+                        f"scoped to setup-declared targets."
+                    ),
+                },
+                403,
+            )
+            return
+
         key_path = cfg.ssh_key_path
         user = cfg.ssh_service_account
 
@@ -3888,23 +3942,51 @@ a:hover{{text-decoration:underline}}
 
     # ── Lab Tool generic proxy ────────────────────────────────────────
 
+    # Per-tool config + endpoint allow-list. F3 of
+    # R-SECURITY-TRUST-AUDIT-20260413P. The registry now carries an
+    # explicit `endpoints` allow-list — the proxy refuses any endpoint
+    # path not in this list. Pre-fix the proxy was a generic
+    # operator-authenticated outbound HTTP gateway that took the
+    # destination host AND the path AND the HTTP method as
+    # query parameters, which made it a textbook SSRF.
     LAB_TOOL_REGISTRY = {
-        "gwipe": {"default_port": 7980, "api_base": "/api/v1", "auth_header": "X-API-Key"},
+        "gwipe": {
+            "default_port": 7980,
+            "api_base": "/api/v1",
+            "auth_header": "X-API-Key",
+            "endpoints": frozenset({
+                "status",
+                "drives",
+                "drives/list",
+                "jobs",
+                "jobs/list",
+            }),
+        },
     }
 
-    def _lab_tool_request(self, tool_id, host, key, method, endpoint, body=None):
-        """Make an HTTP request to a registered lab tool API."""
+    def _lab_tool_request(self, tool_id, host, key, endpoint):
+        """Make an HTTP GET request to a registered lab tool API.
+
+        F3 of R-SECURITY-TRUST-AUDIT-20260413P:
+        - host and key are vault-supplied by the caller; never user-
+          supplied (the proxy reads them from vault before calling
+          this helper).
+        - method is GET-only by contract (no `method` param taken
+          from the caller).
+        - endpoint must be in the per-tool allow-list (the caller
+          has already validated this; we re-validate here as
+          defense-in-depth).
+        """
         tool = self.LAB_TOOL_REGISTRY.get(tool_id)
         if not tool:
             return {"error": f"Unknown lab tool: {tool_id}"}
+        if endpoint not in tool["endpoints"]:
+            return {"error": f"Endpoint {endpoint!r} not allowed for {tool_id}"}
         port = tool["default_port"]
         base = tool["api_base"].rstrip("/")
         url = f"http://{host}:{port}{base}/{endpoint}"
-        data = json.dumps(body).encode() if body else None
-        req = urllib.request.Request(url, data=data, method=method)
+        req = urllib.request.Request(url, method="GET")
         req.add_header(tool["auth_header"], key)
-        if data:
-            req.add_header("Content-Type", "application/json")
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 return json.loads(resp.read().decode())
@@ -3920,25 +4002,70 @@ a:hover{{text-decoration:underline}}
             return {"error": str(e)}
 
     def _serve_lab_tool_proxy(self):
-        """Generic proxy for lab tool API requests (GET or POST)."""
+        """Read-only proxy for lab tool API requests.
+
+        F3 of R-SECURITY-TRUST-AUDIT-20260413P:
+        - GET-only (no method=POST/PUT/DELETE override).
+        - host and key read from vault, NOT from query params.
+        - endpoint must be in the per-tool LAB_TOOL_REGISTRY allow-list.
+        Pre-fix this was a generic SSRF: operator-controlled host +
+        operator-controlled endpoint + operator-controlled method.
+        Now operator can only hit configured-tool endpoints that the
+        registry knows about, only via GET, only against the host
+        the admin pre-saved via /api/lab-tool/save-config.
+        """
         role, err = _check_session_role(self, "operator")
         if err:
             self._json_response({"error": err}, 403)
             return
         params = _parse_query(self)
         tool = params.get("tool", [""])[0]
-        host = params.get("host", [""])[0]
-        key = params.get("key", [""])[0]
-        method = params.get("method", ["GET"])[0].upper()
         endpoint = params.get("endpoint", [""])[0]
-        confirm = params.get("confirm", [""])[0]
 
-        if not tool or not host or not key or not endpoint:
-            self._json_response({"error": "Missing parameters"}, 400)
+        if not tool or not endpoint:
+            self._json_response({"error": "Missing tool or endpoint parameter"}, 400)
             return
 
-        body = {"confirm": "YES"} if confirm == "YES" else None
-        result = self._lab_tool_request(tool, host, key, method, endpoint, body)
+        tool_def = self.LAB_TOOL_REGISTRY.get(tool)
+        if not tool_def:
+            self._json_response({"error": f"Unknown lab tool: {tool}"}, 404)
+            return
+
+        if endpoint not in tool_def["endpoints"]:
+            self._json_response(
+                {
+                    "error": (
+                        f"Endpoint {endpoint!r} is not in the allow-list for "
+                        f"tool {tool!r}. Allowed: "
+                        f"{sorted(tool_def['endpoints'])}"
+                    ),
+                },
+                403,
+            )
+            return
+
+        cfg = load_config()
+        host = ""
+        key = ""
+        try:
+            host = vault_get(cfg, tool, f"{tool}_host") or ""
+            key = vault_get(cfg, tool, f"{tool}_api_key") or ""
+        except Exception as e:
+            logger.warn(f"vault read failed for {tool}: {e}")
+
+        if not host or not key:
+            self._json_response(
+                {
+                    "error": (
+                        f"Tool {tool!r} has no saved host/key — admin must "
+                        f"call /api/lab-tool/save-config first."
+                    ),
+                },
+                503,
+            )
+            return
+
+        result = self._lab_tool_request(tool, host, key, endpoint)
         self._json_response(result)
 
     def _serve_lab_tool_config(self):
@@ -4707,12 +4834,14 @@ a:hover{{text-decoration:underline}}
         #     CSP can therefore drop 'unsafe-inline' from script-src entirely —
         #     attempts to reintroduce inline handlers will be blocked at the
         #     browser. Regression guarded by test_web_csp_inline_contract.py.
-        #   style-src: 266 inline style="…" attrs across the shipped UI (was 275
-        #     before token M, 267 after M, 266 after O — the fleet-filter input
-        #     dropped its inline style during the long-tail extract). Removing
+        #   style-src: 264 inline style="…" attrs across the shipped UI (was 275
+        #     before token M, 267 after M, 266 after O when the fleet-filter
+        #     input dropped its inline style during the long-tail extract,
+        #     264 after Morty's home empty-state cleanup at 3ae8a30). Removing
         #     the rest needs either a large CSS-class refactor or a nonce/hash-
-        #     based CSP. Not in scope for 20260413O; 'unsafe-inline' on
-        #     style-src stays until a follow-up token tackles the long tail.
+        #     based CSP. Tracked as F16 of R-SECURITY-TRUST-AUDIT-20260413P,
+        #     scheduled as a separate follow-up token. 'unsafe-inline' on
+        #     style-src stays until that lands.
         #
         # No host names appear below. An air-gapped dashboard MUST NOT fetch any
         # asset off-box — that's what R-WEB-EXTERNAL-ASSET-CONTRACT-20260413L

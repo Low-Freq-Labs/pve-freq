@@ -7746,7 +7746,13 @@ function ltRefresh(toolId,host,key,pfx){
 }
 
 function _ltProxy(toolId,method,endpoint,host,key,callback){
-  _authFetch(API.LAB_TOOL_PROXY+'?tool='+encodeURIComponent(toolId)+'&method='+method+'&endpoint='+encodeURIComponent(endpoint)+'&host='+encodeURIComponent(host)+'&key='+encodeURIComponent(key)).then(function(r){return r.json()}).then(callback).catch(function(e){callback({error:String(e)});});
+  /* R-SECURITY-TRUST-AUDIT-20260413P F3: the server now reads host
+   * and key from vault (admin-saved) and is GET-only. host/key/method
+   * are no longer passed in the URL — they would land in browser
+   * history and reverse-proxy logs as a leak channel. The host/key
+   * parameters in this function signature stay so the existing call
+   * sites compile, but they're ignored. */
+  _authFetch(API.LAB_TOOL_PROXY+'?tool='+encodeURIComponent(toolId)+'&endpoint='+encodeURIComponent(endpoint)).then(function(r){return r.json()}).then(callback).catch(function(e){callback({error:String(e)});});
 }
 
 function ltSaveConfig(toolId,pfx){

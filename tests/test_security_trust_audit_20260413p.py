@@ -7,14 +7,20 @@ so the underlying gap can never silently regress.
 Covered:
   - F1   trust-on-first-use account takeover (auth.py login refuses
          empty stored_hash + refuses on vault read failure).
+  - F2   /api/setup/test-ssh dropped from AUTH_WHITELIST + admin-only
+         + scoped to configured PVE nodes.
+  - F3   /api/lab-tool/proxy reads host/key from vault, GET-only,
+         per-tool endpoint allow-list.
   - F4   vault openssl key passed via inherited pipe FD, not argv.
   - F5   /api/ct/create reads password from JSON body, not query string.
   - F6   /api/federation/register reads HMAC secret from JSON body.
   - F7   check_session_role drops the SSE query-string token fallback.
   - F8   terminal session creator binding — WS refuses cross-user binds.
+  - F9   _is_first_run fails CLOSED on exception (not OPEN).
   - F10  logout cookie clear matches login Secure-flag symmetry.
   - F11  /api/setup/status hides ssh_key_path / version / host_count
          from unauth callers.
+  - F12  ct/exec drops the theatrical dangerous-command blacklist.
   - F13  log redaction covers key= / session= / pass= / pw= / auth=.
   - F15  ct/create password is shlex.quoted before shell interpolation.
   - F17  /api/dns/lookup tightened to operator + per-IP rate limit.
@@ -557,6 +563,187 @@ class TestF18VmPushKeyIsPost(unittest.TestCase):
             "/api/vm/push-key?ip=",
             block,
             "vmPushKey must not put target ip in the query string",
+        )
+
+
+class TestF2SetupTestSshGated(unittest.TestCase):
+    """F2 — /api/setup/test-ssh removed from AUTH_WHITELIST,
+    admin-only, scoped to configured PVE nodes."""
+
+    def setUp(self):
+        self.src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+
+    def test_not_in_auth_whitelist(self):
+        # Look at the whitelist literal block, not the entire file.
+        idx = self.src.find("_AUTH_WHITELIST = frozenset({")
+        self.assertNotEqual(idx, -1)
+        end = self.src.find("})", idx)
+        whitelist = self.src[idx:end]
+        self.assertNotIn(
+            '"/api/setup/test-ssh"',
+            whitelist,
+            "/api/setup/test-ssh must NOT be in _AUTH_WHITELIST anymore",
+        )
+
+    def test_handler_requires_admin_and_scopes_targets(self):
+        idx = self.src.find("def _serve_setup_test_ssh")
+        self.assertNotEqual(idx, -1)
+        end = self.src.find("def _serve_setup_reset", idx)
+        block = self.src[idx:end]
+        self.assertIn(
+            '_check_session_role(self, "admin")',
+            block,
+            "test-ssh must require admin role",
+        )
+        self.assertIn(
+            "configured_targets = set(cfg.pve_nodes",
+            block,
+            "test-ssh must scope host to cfg.pve_nodes",
+        )
+        self.assertIn(
+            "if host not in configured_targets",
+            block,
+            "test-ssh must refuse hosts outside the configured target list",
+        )
+
+
+class TestF3LabToolProxyHardened(unittest.TestCase):
+    """F3 — /api/lab-tool/proxy reads host/key from vault, GET-only,
+    per-tool endpoint allow-list."""
+
+    def setUp(self):
+        self.src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+
+    def test_registry_carries_endpoints_allowlist(self):
+        idx = self.src.find("LAB_TOOL_REGISTRY = {")
+        self.assertNotEqual(idx, -1)
+        end = self.src.find("}", idx + len("LAB_TOOL_REGISTRY = {"))
+        # The close brace of the dict literal — skip over inner dict.
+        # Easier to check the surrounding 1500 chars.
+        block = self.src[idx:idx + 2000]
+        self.assertIn('"endpoints":', block,
+                      "every registered tool must declare an endpoint allow-list")
+        self.assertIn("frozenset({", block,
+                      "endpoint allow-list should be a frozenset for immutability")
+
+    def test_proxy_handler_reads_from_vault_only(self):
+        idx = self.src.find("def _serve_lab_tool_proxy")
+        self.assertNotEqual(idx, -1)
+        end = self.src.find("def _serve_lab_tool_config", idx)
+        block = self.src[idx:end]
+        # Must NOT pull host/key/method from query.
+        self.assertNotIn(
+            'params.get("host"',
+            block,
+            "lab-tool/proxy must not read host from query params",
+        )
+        self.assertNotIn(
+            'params.get("key"',
+            block,
+            "lab-tool/proxy must not read key from query params",
+        )
+        self.assertNotIn(
+            'params.get("method"',
+            block,
+            "lab-tool/proxy must not read method from query params",
+        )
+        # Must read host/key from vault.
+        self.assertIn(
+            'vault_get(cfg, tool, f"{tool}_host")',
+            block,
+            "lab-tool/proxy must read host from vault",
+        )
+        self.assertIn(
+            'vault_get(cfg, tool, f"{tool}_api_key")',
+            block,
+            "lab-tool/proxy must read key from vault",
+        )
+        # Must enforce the per-tool endpoint allow-list.
+        self.assertIn(
+            'endpoint not in tool_def["endpoints"]',
+            block,
+            "lab-tool/proxy must enforce the per-tool endpoint allow-list",
+        )
+
+    def test_lab_tool_request_helper_is_get_only(self):
+        idx = self.src.find("def _lab_tool_request")
+        end = self.src.find("def _serve_lab_tool_proxy", idx)
+        block = self.src[idx:end]
+        self.assertIn('method="GET"', block,
+                      "_lab_tool_request must hardcode method=GET")
+        # Pre-fix shape with `method` parameter must be gone from the
+        # signature.
+        self.assertIn("def _lab_tool_request(self, tool_id, host, key, endpoint)", block,
+                      "helper signature must drop the method arg")
+
+
+class TestF9IsFirstRunFailsClosed(unittest.TestCase):
+    """F9 — _is_first_run returns False on exception (fail closed)."""
+
+    def test_source_returns_false_on_exception(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        idx = src.find("def _is_first_run")
+        self.assertNotEqual(idx, -1)
+        end = src.find("\ndef ", idx + 1)
+        block = src[idx:end]
+        # The pre-fix shape was `return True  # If we can't check`
+        self.assertNotIn(
+            "return True  # If we can't check",
+            block,
+            "fail-open `return True` on exception must be gone — F9 regression",
+        )
+        # Look for the explicit fail-closed return.
+        self.assertIn(
+            "return False  # Fail closed",
+            block,
+            "fail-closed `return False` must be the exception-handler return",
+        )
+
+    def test_behavioral_fail_closed_on_exception(self):
+        from freq.modules import serve as serve_mod
+        with patch("freq.modules.serve._load_users", side_effect=RuntimeError("boom")), \
+             patch("freq.modules.serve.load_config") as load_cfg:
+            load_cfg.return_value = MagicMock(
+                data_dir="/tmp/nonexistent",
+                conf_dir="/tmp/nonexistent",
+            )
+            self.assertFalse(
+                serve_mod._is_first_run(),
+                "_is_first_run must return False (fail closed) on _load_users exception",
+            )
+
+
+class TestF12CtExecBlacklistDropped(unittest.TestCase):
+    """F12 — ct/exec drops the theatrical dangerous-command blacklist."""
+
+    def test_blacklist_gone(self):
+        src = (REPO_ROOT / "freq" / "api" / "ct.py").read_text()
+        idx = src.find("def handle_ct_exec")
+        end = src.find("def handle_ct_templates", idx)
+        block = src[idx:end]
+        # Pre-fix had a `dangerous = [...]` list with these literal patterns.
+        self.assertNotIn(
+            'dangerous = [',
+            block,
+            "the theatrical blacklist must be removed entirely",
+        )
+        self.assertNotIn(
+            '"rm -rf /"',
+            block,
+            "the rm -rf / blacklist entry must be gone",
+        )
+        self.assertNotIn(
+            '"mkfs"',
+            block,
+            "the mkfs blacklist entry must be gone",
+        )
+        # The honest framing comment must reference the audit token so a
+        # future reader can understand WHY the blacklist isn't there.
+        self.assertIn(
+            "F12 of R-SECURITY-TRUST-AUDIT-20260413P",
+            block,
+            "must carry an explicit pointer to the audit token explaining "
+            "why the blacklist was dropped",
         )
 
 
