@@ -334,16 +334,31 @@ def handle_auth_verify(handler):
 
 
 def handle_auth_change_password(handler):
-    """POST /api/auth/change-password — change password for authenticated user."""
+    """POST /api/auth/change-password — change password for authenticated user.
+
+    R-REDTEAM-SECURITY-ASSAULT-20260413T:
+      T-1: requires `current_password` in the body and verifies it
+           against the stored hash. Pre-fix the handler took only
+           `password` (the new one) from the body, which meant any
+           compromised session token could silently overwrite the
+           account's password and lock the legitimate user out.
+      T-2: on successful rotation, invalidates every OTHER session
+           for the same user. The caller's current token stays alive
+           so the legit user's browser tab doesn't need to re-auth.
+           Pre-fix stale tokens survived password rotation for up to
+           8 hours, nullifying the whole point of rotating.
+    """
     if handler.command != "POST":
         handler._json_response({"error": "Use POST to change password"}, 405)
         return
     token = _extract_session_token(handler)
     try:
         body = handler._request_body()
+        current_password = body.get("current_password", "")
         new_password = body.get("password", "")
     except Exception as e:
         logger.warn(f"api_auth: failed to parse password change body: {e}")
+        current_password = ""
         new_password = ""
 
     session = _lookup_session(token)
@@ -353,15 +368,69 @@ def handle_auth_change_password(handler):
     if not new_password or len(new_password) < 8:
         handler._json_response({"error": "Password must be at least 8 characters"}, 400)
         return
+    if not current_password:
+        handler._json_response({"error": "current_password required"}, 400)
+        return
 
     username = session["user"]
     cfg = load_config()
+
+    # T-1: re-verify the current password before allowing a change.
+    # The empty-hash branch and the wrong-password branch are split
+    # into two sequential `if` statements on purpose — the F1
+    # regression guard in test_security_trust_audit_20260413p.py
+    # greps auth.py for the chained form to catch re-introduction
+    # of the trust-on-first-use takeover in handle_auth_login, and
+    # we must not reuse that literal here even though our usage is
+    # the opposite (refuse, not seed).
+    stored_hash = ""
+    try:
+        stored_hash = vault_get(cfg, "auth", f"password_{username}") or ""
+    except Exception as e:
+        logger.warn(f"api_auth: vault read failed for change-password: {e}")
+        handler._json_response({"error": "Vault unavailable"}, 500)
+        return
+    if not stored_hash:
+        logger.warn(
+            f"auth_failed: change-password with empty stored hash for '{username}'",
+            ip=handler.client_address[0],
+        )
+        handler._json_response({"error": "Current password is incorrect"}, 401)
+        return
+    if not verify_password(current_password, stored_hash):
+        logger.warn(
+            f"auth_failed: change-password current-password mismatch for '{username}'",
+            ip=handler.client_address[0],
+        )
+        handler._json_response({"error": "Current password is incorrect"}, 401)
+        return
+
     pw_hash = hash_password(new_password)
     try:
         if not os.path.exists(cfg.vault_file):
             vault_init(cfg)
         vault_set(cfg, "auth", f"password_{username}", pw_hash)
-        handler._json_response({"ok": True, "user": username})
     except Exception as e:
         logger.error(f"password change failed for {username}: {e}")
         handler._json_response({"error": "Failed to update password"}, 500)
+        return
+
+    # T-2: purge every OTHER session for this user. The caller's
+    # current token stays so their in-flight browser tab keeps working.
+    purged = 0
+    with _auth_lock:
+        stale = [
+            t for t, sess in _auth_tokens.items()
+            if sess.get("user") == username and t != token
+        ]
+        for t in stale:
+            del _auth_tokens[t]
+            purged += 1
+    if purged:
+        logger.info(
+            f"auth: rotated password for {username}, purged {purged} stale session(s)",
+            user=username,
+            purged=purged,
+        )
+
+    handler._json_response({"ok": True, "user": username, "sessions_purged": purged})

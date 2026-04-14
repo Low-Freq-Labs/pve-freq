@@ -84,20 +84,61 @@ def _run_openssl_with_key(args: list, key: str, stdin_data: bytes = b"") -> subp
 
 
 def _encrypt(plaintext: str, key: str, vault_path: str) -> bool:
-    """Encrypt plaintext and write to vault file."""
+    """Encrypt plaintext and write to vault file.
+
+    R-REDTEAM-SECURITY-ASSAULT-20260413T T-9: writes are now atomic
+    (openssl -out tmp → os.rename). Pre-fix `openssl enc -out` wrote
+    directly to the live vault path, so a concurrent reader during
+    the ~100ms encrypt window saw a half-written file and got an
+    empty decrypt — observable as transient `/api/auth/login` 401s
+    right after `freq user dashboard-passwd` landed a new password
+    hash (the 401/401/200 sequence Finn reported on 5005).
+
+    Also preserves the existing file's uid/gid before rename so a
+    sudo'd CLI write (e.g. `sudo freq user dashboard-passwd`) doesn't
+    flip ownership to root:root and lock the dashboard service account
+    out of its own vault until someone manually chowns it back.
+    """
+    tmp_path = vault_path + ".tmp"
     try:
         r = _run_openssl_with_key(
-            ["openssl", "enc", "-aes-256-cbc", "-salt", "-pbkdf2", "-out", vault_path],
+            ["openssl", "enc", "-aes-256-cbc", "-salt", "-pbkdf2", "-out", tmp_path],
             key,
             stdin_data=plaintext.encode(),
         )
-        if r.returncode == 0:
-            os.chmod(vault_path, 0o600)
-            return True
-        logger.error(f"vault encrypt failed: {r.stderr.decode()}")
-        return False
+        if r.returncode != 0:
+            logger.error(f"vault encrypt failed: {r.stderr.decode()}")
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            return False
+
+        # Preserve existing vault ownership so a sudo'd write doesn't
+        # flip uid/gid to root. First write of a fresh vault will keep
+        # the tmp file's original ownership (whatever the caller is).
+        if os.path.exists(vault_path):
+            try:
+                st = os.stat(vault_path)
+                os.chown(tmp_path, st.st_uid, st.st_gid)
+            except OSError as e:
+                logger.warn(f"vault chown preserve failed: {e}")
+
+        try:
+            os.chmod(tmp_path, 0o600)
+        except OSError as e:
+            logger.warn(f"vault chmod failed: {e}")
+
+        # Atomic rename — concurrent readers see either the old file
+        # or the new file, never a partial one.
+        os.rename(tmp_path, vault_path)
+        return True
     except (subprocess.TimeoutExpired, OSError) as e:
         logger.error(f"vault encrypt error: {e}")
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
         return False
 
 

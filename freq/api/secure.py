@@ -71,7 +71,15 @@ def handle_vault_set(handler):
 
 
 def handle_vault_delete(handler):
-    """POST /api/vault/delete — delete a vault entry."""
+    """POST /api/vault/delete — delete a vault entry.
+
+    R-REDTEAM-SECURITY-ASSAULT-20260413T T-5: must validate `key` is
+    non-empty BEFORE calling vault_delete. Pre-fix a malformed body
+    returned 200 `{"ok": false, "key": "", "host": "DEFAULT"}` which
+    is a contract lie — clients can't tell "malformed request" from
+    "entry not found". Mirror handle_vault_set (which DOES validate)
+    by returning 400 with a useful error message.
+    """
     if require_post(handler, "Vault delete"):
         return
     role, err = _check_session_role(handler, "admin")
@@ -82,6 +90,9 @@ def handle_vault_delete(handler):
     params = get_params(handler)
     key = params.get("key", [""])[0]
     host = params.get("host", ["DEFAULT"])[0]
+    if not key:
+        json_response(handler, {"error": "key required"}, 400)
+        return
     ok = vault_delete(cfg, host, key)
     json_response(handler, {"ok": ok, "key": key, "host": host})
 

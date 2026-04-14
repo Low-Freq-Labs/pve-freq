@@ -424,7 +424,21 @@ def handle_chaos_log(handler):
         count = min(int(params.get("count", "20")), 50)
     except (ValueError, TypeError):
         count = 20
-    log = load_experiment_log(cfg.data_dir, count)
+    # R-REDTEAM-SECURITY-ASSAULT-20260413T T-6: chaos log dir may not
+    # exist / not be readable by the dashboard service account yet
+    # (post-init ownership gap). Catch the expected OS errors and
+    # return an honest empty response instead of bubbling to a 500,
+    # which breaks operator-truth on a host that has simply never
+    # recorded a chaos experiment.
+    try:
+        log = load_experiment_log(cfg.data_dir, count)
+    except (PermissionError, FileNotFoundError) as e:
+        logger.warn(f"chaos/log: experiment dir unavailable: {e}")
+        json_response(
+            handler,
+            {"experiments": [], "note": "No chaos experiments recorded"},
+        )
+        return
     json_response(handler, {"experiments": log})
 
 
