@@ -28,6 +28,15 @@ import time
 from freq.core import fmt
 from freq.core import resolve
 from freq.core.config import FreqConfig
+from freq.core.health_state import (
+    STATE_LIVE,
+    STATE_STALE,
+    STATE_DEGRADED,
+    STATE_AUTH_FAILED,
+    STATE_UNREACHABLE,
+    aggregate_probe_state,
+    classify_probe_failure,
+)
 from freq.core.ssh import run as ssh_run, run_many as ssh_run_many, result_for
 
 # ─────────────────────────────────────────────────────────────
@@ -137,112 +146,202 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
         results.update(batch)
     total_duration = time.monotonic() - start
 
+    # R-PRODUCT-LAW-BACKEND-TRUTH: parity with /api/health — every
+    # failure is classified through the shared six-state classifier so
+    # the CLI surface is not vaguer than the web surface. Sonny's rule:
+    # no surface gets to be vaguer than the others.
+    #
+    # Classify every result first so both JSON and table render off the
+    # same structured dict (one source of truth inside the command).
+    dashboard_health = _load_dashboard_health_cache(cfg)
+    now_wall = time.time()
+    classified = []
+    for h in hosts:
+        r = result_for(results, h)
+        rc = r.returncode if r else 1
+        stderr = (r.stderr or "") if r else "no response"
+        stdout = (r.stdout or "") if r else ""
+        duration = round(r.duration, 2) if r else None
+        if r and rc == 0:
+            classified.append({
+                "label": h.label, "ip": h.ip, "type": h.htype,
+                "state": STATE_LIVE, "reason": "probe OK",
+                "uptime": stdout.strip(),
+                "probed_at": now_wall,
+                "duration": duration,
+                # Legacy compat for the JSON mode's prior shape.
+                "status": "online",
+            })
+            continue
+
+        state, reason = classify_probe_failure(rc, stderr, stdout)
+
+        # Legacy-device auth failures against the operator's own key
+        # are not a real DOWN — the dashboard holds the service
+        # account's cached verdict via the RSA key. If the dashboard
+        # says healthy, we trust it and flip to live-via-cache; else
+        # surface the honest reason.
+        is_legacy = h.htype in ("idrac", "switch")
+        operator_auth_issue = (
+            is_legacy and state == STATE_AUTH_FAILED
+        )
+        cached = dashboard_health.get(h.ip) if operator_auth_issue else None
+        cached_live = cached and cached.get("state") in (STATE_LIVE, "live") or (
+            cached and cached.get("status") == "healthy"
+        )
+        if cached_live:
+            detail = cached.get("load", "") or cached.get("ram", "") or "healthy"
+            classified.append({
+                "label": h.label, "ip": h.ip, "type": h.htype,
+                "state": STATE_LIVE,
+                "reason": f"via dashboard cache: {detail}",
+                "uptime": f"via dashboard: {detail}",
+                "probed_at": now_wall,
+                "duration": duration,
+                "status": "online",
+            })
+            continue
+
+        classified.append({
+            "label": h.label, "ip": h.ip, "type": h.htype,
+            "state": state, "reason": reason,
+            "uptime": "",
+            "probed_at": now_wall,
+            "duration": duration,
+            "status": "offline",
+            "operator_auth_issue": operator_auth_issue,
+        })
+
     # JSON output mode
     if json_mode:
         import json as _json
 
+        probe_state, probe_reason = aggregate_probe_state(classified)
         fleet_data = []
-        for h in hosts:
-            r = result_for(results, h)
-            if r and r.returncode == 0:
-                fleet_data.append({
-                    "label": h.label, "ip": h.ip, "type": h.htype,
-                    "status": "online", "uptime": r.stdout.strip(),
-                    "duration": round(r.duration, 2),
-                })
+        for c in classified:
+            entry = {
+                "label": c["label"], "ip": c["ip"], "type": c["type"],
+                "state": c["state"], "reason": c["reason"],
+                "probed_at": c["probed_at"],
+                "duration": c["duration"],
+                # Legacy aliases preserved for existing machine readers.
+                "status": c["status"],
+            }
+            if c["status"] == "online":
+                entry["uptime"] = c.get("uptime", "")
             else:
-                fleet_data.append({
-                    "label": h.label, "ip": h.ip, "type": h.htype,
-                    "status": "offline",
-                    "error": r.stderr.strip() if r else "no response",
-                    "duration": round(r.duration, 2) if r else None,
-                })
-        print(_json.dumps({"hosts": fleet_data, "total": len(hosts),
-                           "online": sum(1 for h in fleet_data if h["status"] == "online"),
-                           "offline": sum(1 for h in fleet_data if h["status"] == "offline"),
-                           "duration": round(total_duration, 2)}, indent=2))
+                entry["error"] = c["reason"]
+            fleet_data.append(entry)
+        online_n = sum(1 for c in classified if c["state"] == STATE_LIVE)
+        offline_n = len(classified) - online_n
+        print(_json.dumps({
+            "hosts": fleet_data,
+            "total": len(hosts),
+            "online": online_n,
+            "offline": offline_n,
+            "probe_state": probe_state,
+            "probe_reason": probe_reason,
+            "duration": round(total_duration, 2),
+        }, indent=2))
         return 0
 
-    # Display results
+    # Display results — DETAIL column now carries state+reason on
+    # failure instead of a raw stderr snippet, so an operator reading
+    # the terminal output sees WHY each host is in each state.
     fmt.table_header(
         ("HOST", 16),
         ("STATUS", 10),
-        ("UPTIME", 30),
+        ("DETAIL", 38),
         ("TIME", 6),
     )
-
-    # Load dashboard's cached health data — service-account-authoritative
-    # source for devices operator CLI can't directly reach.
-    dashboard_health = _load_dashboard_health_cache(cfg)
 
     up = 0
     down = 0
     na = 0
-    for h in hosts:
-        r = result_for(results, h)
-        if r and r.returncode == 0:
+    degraded = 0
+    auth_failed = 0
+    for c in classified:
+        duration_s = f"{c['duration']:.1f}s" if c.get("duration") is not None else "—"
+        label_cell = (f"{fmt.C.BOLD}{c['label']}{fmt.C.RESET}", 16)
+        state = c["state"]
+        reason = c["reason"]
+
+        if state == STATE_LIVE:
             up += 1
-            uptime = r.stdout.strip().replace("up ", "")
-            if len(uptime) > 30:
-                uptime = uptime[:27] + "..."
-            fmt.table_row(
-                (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
-                (fmt.badge("up"), 10),
-                (uptime, 30),
-                (f"{r.duration:.1f}s", 6),
-            )
-        else:
-            err = r.stderr[:30] if r else "no response"
-            # Legacy device auth failures when operator lacks the service
-            # account's RSA key are not real DOWN — they're operator context
-            # mismatches. Use the dashboard's cached health data as the
-            # authoritative source for these devices, falling back to n/a
-            # only when no cache entry exists.
-            is_legacy = h.htype in ("idrac", "switch")
-            err_l = (r.stderr.lower() if r else "") if r else ""
-            operator_auth_issue = is_legacy and (
-                "permission denied" in err_l or "publickey" in err_l
-            )
-            cached = dashboard_health.get(h.ip) if operator_auth_issue else None
-            if cached and cached.get("status") == "healthy":
-                # Dashboard verified this device healthy — show it as up
-                up += 1
-                # Prefer cached uptime/load as the displayed metric
-                detail = cached.get("load", "") or cached.get("ram", "") or "healthy"
-                fmt.table_row(
-                    (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
-                    (fmt.badge("up"), 10),
-                    (f"{fmt.C.DIM}via dashboard: {detail}{fmt.C.RESET}"[:30], 30),
-                    (f"{r.duration:.1f}s" if r else "—", 6),
-                )
-            elif operator_auth_issue:
+            uptime = c.get("uptime", "").replace("up ", "")
+            if len(uptime) > 38:
+                uptime = uptime[:35] + "..."
+            if uptime.startswith("via dashboard"):
+                detail_cell = (f"{fmt.C.DIM}{uptime}{fmt.C.RESET}", 38)
+            else:
+                detail_cell = (uptime, 38)
+            fmt.table_row(label_cell, (fmt.badge("up"), 10), detail_cell, (duration_s, 6))
+        elif state == STATE_AUTH_FAILED:
+            if c.get("operator_auth_issue"):
                 na += 1
                 fmt.table_row(
-                    (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
+                    label_cell,
                     (f"{fmt.C.DIM}n/a{fmt.C.RESET}", 10),
-                    (f"{fmt.C.DIM}needs svc account{fmt.C.RESET}", 30),
-                    (f"{r.duration:.1f}s" if r else "—", 6),
+                    (f"{fmt.C.DIM}needs svc account (legacy device){fmt.C.RESET}", 38),
+                    (duration_s, 6),
                 )
             else:
+                auth_failed += 1
                 down += 1
+                detail = f"auth_failed: {reason[9:]}" if reason.startswith("ssh auth ") else f"auth_failed: {reason}"
+                if len(detail) > 38:
+                    detail = detail[:35] + "..."
                 fmt.table_row(
-                    (f"{fmt.C.BOLD}{h.label}{fmt.C.RESET}", 16),
+                    label_cell,
                     (fmt.badge("down"), 10),
-                    (f"{fmt.C.RED}{err}{fmt.C.RESET}", 30),
-                    (f"{r.duration:.1f}s" if r else "—", 6),
+                    (f"{fmt.C.RED}{detail}{fmt.C.RESET}", 38),
+                    (duration_s, 6),
                 )
+        elif state == STATE_DEGRADED:
+            degraded += 1
+            detail = f"degraded: {reason}"
+            if len(detail) > 38:
+                detail = detail[:35] + "..."
+            fmt.table_row(
+                label_cell,
+                (f"{fmt.C.YELLOW}degraded{fmt.C.RESET}", 10),
+                (f"{fmt.C.YELLOW}{detail}{fmt.C.RESET}", 38),
+                (duration_s, 6),
+            )
+        else:
+            down += 1
+            detail = f"{state}: {reason}"
+            if len(detail) > 38:
+                detail = detail[:35] + "..."
+            fmt.table_row(
+                label_cell,
+                (fmt.badge("down"), 10),
+                (f"{fmt.C.RED}{detail}{fmt.C.RESET}", 38),
+                (duration_s, 6),
+            )
 
     fmt.blank()
     fmt.divider("Summary")
     fmt.blank()
+    probe_state, probe_reason = aggregate_probe_state(classified)
     summary = (
         f"  {fmt.C.GREEN}{up}{fmt.C.RESET} up  "
         f"{fmt.C.RED}{down}{fmt.C.RESET} down  "
     )
+    if auth_failed:
+        summary += f"{fmt.C.RED}{auth_failed}{fmt.C.RESET} auth_failed  "
+    if degraded:
+        summary += f"{fmt.C.YELLOW}{degraded}{fmt.C.RESET} degraded  "
     if na:
         summary += f"{fmt.C.DIM}{na}{fmt.C.RESET} n/a  "
     summary += f"({len(hosts)} total, {total_duration:.1f}s)"
     fmt.line(summary)
+    # Top-level probe_state + reason parity with /api/health.
+    fmt.line(
+        f"  {fmt.C.DIM}fleet state:{fmt.C.RESET} "
+        f"{fmt.C.BOLD}{probe_state}{fmt.C.RESET} "
+        f"{fmt.C.DIM}— {probe_reason}{fmt.C.RESET}"
+    )
     fmt.blank()
     fmt.footer()
 

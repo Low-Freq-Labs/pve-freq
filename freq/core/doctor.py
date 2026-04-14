@@ -423,6 +423,18 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
         "switch": "show version | include uptime",
     }
 
+    # R-PRODUCT-LAW-BACKEND-TRUTH: route every failure through the
+    # shared classifier so doctor surfaces the same six-state reason
+    # strings as /api/health and `freq fleet status`. Three surfaces,
+    # one truth — no surface gets to be vaguer than the others.
+    from freq.core.health_state import (
+        STATE_LIVE,
+        STATE_AUTH_FAILED,
+        STATE_UNREACHABLE,
+        STATE_DEGRADED,
+        classify_probe_failure,
+    )
+
     def _test(h):
         cmd = VERIFY_CMDS.get(h.htype, "echo ok")
         key = cfg.ssh_key_path
@@ -442,42 +454,88 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
             use_sudo=False,
             cfg=cfg,
         )
-        # Operator-context auth issue: legacy device failed with permission
-        # denied. This is not 'down' — it's that the operator doesn't have
-        # the service account's RSA key. CLI should reflect this honestly.
-        err_l = (r.stderr or "").lower()
-        operator_auth = is_legacy and ("permission denied" in err_l or "publickey" in err_l)
-        return h, r.returncode == 0, operator_auth
+        if r.returncode == 0:
+            return h, STATE_LIVE, "ssh probe OK", False
+        state, reason = classify_probe_failure(
+            r.returncode, r.stderr or "", r.stdout or ""
+        )
+        # Operator-context auth issue: legacy device auth-failed against
+        # the operator's own key. This is not a real DOWN — it means the
+        # operator doesn't have the service account's RSA key. Flag it
+        # so the summary line can surface it as n/a without lying.
+        operator_auth = is_legacy and state == STATE_AUTH_FAILED
+        return h, state, reason, operator_auth
 
     reachable = 0
     unreachable = []
+    auth_failed_hosts = []
+    degraded_hosts = []
     na = 0
     total = len(cfg.hosts)
+    # Stash worst-case reason for each non-live class so the step_*
+    # output can name the failure instead of just counting it.
+    worst_reason_by_state: dict[str, tuple[str, str]] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
-        for h, ok, operator_auth in pool.map(lambda h: _test(h), cfg.hosts):
-            if ok:
+        for h, state, reason, operator_auth in pool.map(lambda h: _test(h), cfg.hosts):
+            if state == STATE_LIVE:
                 reachable += 1
-            elif operator_auth:
+                continue
+            if operator_auth:
                 na += 1  # Don't count as down — operator context mismatch
+                continue
+            worst_reason_by_state.setdefault(state, (h.label, reason))
+            if state == STATE_AUTH_FAILED:
+                auth_failed_hosts.append(h.label)
+            elif state == STATE_DEGRADED:
+                degraded_hosts.append(h.label)
             else:
                 unreachable.append(h.label)
 
     total_checkable = total - na
+    total_bad = len(auth_failed_hosts) + len(unreachable) + len(degraded_hosts)
+
     if reachable == total_checkable and total_checkable > 0:
         if na:
-            fmt.step_ok(f"Fleet SSH: {reachable}/{total_checkable} reachable ({na} n/a — need svc account)")
+            fmt.step_ok(f"Fleet SSH: {reachable}/{total_checkable} live ({na} n/a — need svc account)")
         else:
-            fmt.step_ok(f"Fleet SSH: {reachable}/{total} hosts reachable")
+            fmt.step_ok(f"Fleet SSH: {reachable}/{total} hosts live")
         return 0
-    elif reachable > 0:
-        down = ", ".join(unreachable[:5])
-        suffix = f" +{len(unreachable)-5} more" if len(unreachable) > 5 else ""
+    if reachable > 0:
+        breakdown = []
+        if auth_failed_hosts:
+            worst = worst_reason_by_state.get(STATE_AUTH_FAILED, ("", ""))
+            breakdown.append(
+                f"{len(auth_failed_hosts)} auth_failed (worst: {worst[0]} — {worst[1][:60]})"
+            )
+        if unreachable:
+            worst = worst_reason_by_state.get(STATE_UNREACHABLE, ("", ""))
+            breakdown.append(
+                f"{len(unreachable)} unreachable (worst: {worst[0]} — {worst[1][:60]})"
+            )
+        if degraded_hosts:
+            worst = worst_reason_by_state.get(STATE_DEGRADED, ("", ""))
+            breakdown.append(
+                f"{len(degraded_hosts)} degraded (worst: {worst[0]} — {worst[1][:60]})"
+            )
         na_suffix = f" ({na} n/a)" if na else ""
-        fmt.step_warn(f"Fleet SSH: {reachable}/{total_checkable} reachable (down: {down}{suffix}){na_suffix}")
+        fmt.step_warn(
+            f"Fleet SSH: {reachable}/{total_checkable} live — "
+            + "; ".join(breakdown)
+            + na_suffix
+        )
         return 2
-    else:
-        fmt.step_fail(f"Fleet SSH: 0/{total_checkable} reachable")
-        return 1
+    # Full outage — aggregate the worst class for the fail line.
+    worst_state = (
+        STATE_AUTH_FAILED if auth_failed_hosts
+        else STATE_UNREACHABLE if unreachable
+        else STATE_DEGRADED
+    )
+    worst = worst_reason_by_state.get(worst_state, ("", "no results"))
+    fmt.step_fail(
+        f"Fleet SSH: 0/{total_checkable} live — all {worst_state} "
+        f"(worst: {worst[0]} — {worst[1][:80]})"
+    )
+    return 1
 
 
 def _check_service_account(cfg: FreqConfig) -> int:
