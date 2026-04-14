@@ -101,11 +101,78 @@ function toast(msg,type){
   setTimeout(function(){t.remove();},4000);
 }
 /* === Modal === */
+/* M-BLUETEAM-SECURITY-HARDENING-20260413AJ: safe confirmAction.
+ *
+ * The pre-fix implementation called innerHTML on an arbitrary `msg`
+ * string passed by the caller AND included an inline `onclick=
+ * "closeModal()"` attribute on the Cancel button. Both are footguns:
+ *
+ *   1. innerHTML+concat — if any caller ever passes user-controlled
+ *      content un-escaped into the msg string, the modal becomes an
+ *      XSS sink. The current 15 callers all use hardcoded HTML with
+ *      _esc'd data interpolation, but the API itself doesn't enforce
+ *      that and the next caller could silently ship the hole.
+ *   2. Inline onclick — ships an inline event-handler attribute in a
+ *      runtime-inserted DOM node. Under the strict CSP this dashboard
+ *      ships (script-src 'self', no unsafe-inline), the attribute
+ *      either fails to bind or — worse — works via the parser path
+ *      and gives attackers an exploit primitive if they can land a
+ *      string into `msg`.
+ *
+ * New shape: build the DOM with createElement/addEventListener, then
+ * parse the `msg` string through a whitelist template that only
+ * keeps <strong>/<em>/<b>/<i>/<br> and strips ALL attributes on the
+ * survivors. Every other node is replaced with its textContent, so
+ * any tag an attacker slips in (script, img onerror, iframe) is
+ * neutralized without the caller needing to know the rule. */
+function _sanitizeHtmlFragment(msg){
+  var tpl=document.createElement('template');
+  tpl.innerHTML=String(msg==null?'':msg);
+  var allowed={'STRONG':1,'EM':1,'B':1,'I':1,'BR':1};
+  function walk(node){
+    var kids=Array.prototype.slice.call(node.childNodes);
+    for(var i=0;i<kids.length;i++){
+      var k=kids[i];
+      if(k.nodeType===1){/* element */
+        if(!allowed[k.tagName]){
+          /* Not in the whitelist — replace with inert text. */
+          node.replaceChild(document.createTextNode(k.textContent||''),k);
+          continue;
+        }
+        /* Strip every attribute — no onclick, no style, no href. */
+        var attrs=Array.prototype.slice.call(k.attributes||[]);
+        for(var j=0;j<attrs.length;j++)k.removeAttribute(attrs[j].name);
+        walk(k);
+      }else if(k.nodeType===8){/* comment */
+        node.removeChild(k);
+      }
+    }
+  }
+  walk(tpl.content);
+  return tpl.content;
+}
 function confirmAction(msg,onConfirm){
   var ov=document.getElementById('modal-container');
-  ov.innerHTML='<div class="modal"><h3>Confirm Action</h3><p>'+msg+'</p><div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" id="modal-confirm-btn">Confirm</button></div></div>';
+  /* Wipe any pending modal before re-using the container. */
+  while(ov.firstChild)ov.removeChild(ov.firstChild);
+  var modal=document.createElement('div');modal.className='modal';
+  var h=document.createElement('h3');h.textContent='Confirm Action';
+  var p=document.createElement('p');p.appendChild(_sanitizeHtmlFragment(msg));
+  var actions=document.createElement('div');actions.className='modal-actions';
+  var cancel=document.createElement('button');cancel.className='btn';cancel.textContent='Cancel';
+  cancel.addEventListener('click',function(){closeModal();});
+  var confirm=document.createElement('button');
+  confirm.className='btn btn-primary';
+  confirm.id='modal-confirm-btn';
+  confirm.textContent='Confirm';
+  confirm.addEventListener('click',function(){closeModal();try{onConfirm();}catch(e){console.error(e);}});
+  actions.appendChild(cancel);actions.appendChild(confirm);
+  modal.appendChild(h);modal.appendChild(p);modal.appendChild(actions);
+  ov.appendChild(modal);
   ov.style.display='flex';
-  document.getElementById('modal-confirm-btn').onclick=function(){closeModal();onConfirm();};
+  /* Focus the Confirm button so keyboard Enter = confirm, Escape =
+   * cancel via the global Escape handler registered elsewhere. */
+  try{confirm.focus();}catch(e){}
 }
 function closeModal(){document.getElementById('modal-container').style.display='none';}
 /* === Section toggle === */
@@ -695,6 +762,19 @@ function _showLoginOverlay(){
  *   { first_run, initialized, setup_health, pve_nodes_configured,
  *     hosts_configured, ssh_key_exists, ssh_key_readable } */
 var _setupTruthCache=null;
+/* M-BLUETEAM-SECURITY-HARDENING-20260413AJ regression fix: the AI
+ * banner used "setup_health !== 'ok' && !== 'healthy'" which marked
+ * every OTHER value as degraded — including the legitimate healthy
+ * state 'configured' the backend returns on a fully set-up instance.
+ * Explicit deny-list: only treat these specific values as degraded,
+ * and let every other value (configured/ok/healthy/ready/green/etc)
+ * fall through to the "banner hidden" branch. */
+function _isDegradedSetupHealth(h){
+  if(!h)return false;
+  var s=String(h).toLowerCase();
+  return s==='partial'||s==='incomplete'||s==='degraded'||
+         s==='error'||s==='failed'||s==='unhealthy'||s==='broken';
+}
 function _probeSetupTruth(cb){
   /* Bare fetch — pre-auth surface, no bearer token needed. */
   fetch(API.SETUP_STATUS,{credentials:'same-origin'}).then(function(r){
@@ -728,7 +808,7 @@ function _renderSetupTruthBanner(d){
     body='This instance reports <strong>initialized: false</strong>. '+
       'Complete the first-run wizard at '+
       '<a href="/setup.html">/setup.html</a> before attempting to log in.';
-  }else if(d.setup_health&&d.setup_health!=='ok'&&d.setup_health!=='healthy'){
+  }else if(_isDegradedSetupHealth(d.setup_health)){
     title='SETUP INCOMPLETE ('+String(d.setup_health).toUpperCase()+')';
     var missing=[];
     if(d.pve_nodes_configured===false)missing.push('PVE nodes');
@@ -765,7 +845,7 @@ function _renderPostAuthTruthBanner(d){
   }else if(d.first_run===true||d.initialized===false){
     msg='SETUP INCOMPLETE — backend reports initialized=false. Finish setup at <a href="/setup.html">/setup.html</a> before trusting fleet data.';
     isErr=true;
-  }else if(d.setup_health&&d.setup_health!=='ok'&&d.setup_health!=='healthy'){
+  }else if(_isDegradedSetupHealth(d.setup_health)){
     var parts=[];
     if(d.pve_nodes_configured===false)parts.push('PVE nodes');
     if(d.hosts_configured===false)parts.push('hosts');
@@ -5751,15 +5831,45 @@ function renderVaultTab(){
   }
   document.getElementById('vault-sensitive-c').innerHTML=html;
 }
+/* M-BLUETEAM-SECURITY-HARDENING-20260413AJ: vault reveal auto-hide.
+ * Pre-fix, a revealed secret stayed visible until the operator clicked
+ * the button a second time. Shoulder-surfing window was effectively
+ * unbounded — a revealed password could sit on screen all day while
+ * the operator got pulled into a meeting. Now every reveal arms a
+ * 30-second timer that re-masks the field and clears the data-revealed
+ * marker. Toggling back to masked manually also clears the pending
+ * timer so a subsequent reveal gets a fresh 30s window. */
+var VAULT_REVEAL_TIMEOUT_MS=30000;
+var _vaultRevealTimers={};
+function _clearVaultRevealTimer(uid){
+  if(_vaultRevealTimers[uid]){
+    clearTimeout(_vaultRevealTimers[uid]);
+    delete _vaultRevealTimers[uid];
+  }
+}
+function _hideVaultSecret(uid,maskedValue){
+  var el=document.getElementById('vk-'+uid);
+  if(!el)return;
+  el.textContent=maskedValue;
+  el.removeAttribute('data-revealed');
+  el.style.color='var(--text-dim)';
+  _clearVaultRevealTimer(uid);
+}
 function vaultReveal(uid,host,key){
   if(!_vaultData)return;
   var entry=_vaultData.entries.find(function(e){return e.host===host&&e.key===key;});
   if(!entry)return;
   var el=document.getElementById('vk-'+uid);if(!el)return;
   if(el.getAttribute('data-revealed')){
-    el.textContent=entry.masked;el.removeAttribute('data-revealed');el.style.color='var(--text-dim)';
+    _hideVaultSecret(uid,entry.masked);
   } else {
-    el.textContent=entry.value||entry.masked;el.setAttribute('data-revealed','1');el.style.color='var(--yellow)';
+    el.textContent=entry.value||entry.masked;
+    el.setAttribute('data-revealed','1');
+    el.style.color='var(--yellow)';
+    _clearVaultRevealTimer(uid);
+    _vaultRevealTimers[uid]=setTimeout(function(){
+      _hideVaultSecret(uid,entry.masked);
+    },VAULT_REVEAL_TIMEOUT_MS);
   }
 }
 function vaultCopy(host,key){

@@ -272,11 +272,10 @@ def handle_auth_login(handler):
     handler.send_header("Set-Cookie",
                         f"freq_session={token}; HttpOnly; SameSite=Strict; Path=/; "
                         f"Max-Age={SESSION_TIMEOUT_SECONDS}{secure_flag}")
-    origin = handler.headers.get("Origin", "")
-    if origin:
-        handler.send_header("Access-Control-Allow-Origin", origin)
-        handler.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-        handler.send_header("Vary", "Origin")
+    # M-BLUETEAM-SECURITY-HARDENING-20260413AJ: reflected-origin ACAO
+    # dropped on the auth surface too. The login endpoint is the most
+    # sensitive cross-origin target in the app and must stay strictly
+    # same-origin. See serve.py _json_response for the rationale.
     handler.send_header("X-Content-Type-Options", "nosniff")
     handler.send_header("X-Frame-Options", "DENY")
     import json as _json

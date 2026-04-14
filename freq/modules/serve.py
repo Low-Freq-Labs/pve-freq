@@ -2900,6 +2900,18 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": err}, 403)
             return
 
+        # T-4 of R-REDTEAM-SECURITY-ASSAULT-20260413T: setup-wizard
+        # endpoints must not stay callable after setup completes.
+        # `freq doctor`, `freq host test`, and the dashboard health
+        # panel cover the post-init SSH-probe need — keeping
+        # test-ssh alive is unnecessary admin-only surface.
+        if not _is_first_run():
+            self._json_response(
+                {"error": "Setup already complete — use freq doctor or /api/host/test"},
+                403,
+            )
+            return
+
         cfg = load_config()
         params = _parse_query(self)
         host = params.get("host", [""])[0].strip()
@@ -4217,7 +4229,16 @@ a:hover{{text-decoration:underline}}
         self._json_response({"host": host, "key": key})
 
     def _serve_lab_tool_save_config(self):
-        """Save lab tool connection config to vault."""
+        """Save lab tool connection config to vault.
+
+        R-REDTEAM-SECURITY-ASSAULT-20260413T T-3: payload must come
+        from the POST JSON body, not the URL query string. Pre-fix
+        the handler read `tool`, `host`, `key` from query params —
+        the API key landed in browser history, proxy access logs,
+        Referer headers on dashboard navigation, and devtools HAR
+        exports. Symmetric fix with F5 (ct/create) and F6
+        (federation/register) from the P security audit.
+        """
         if self.command != "POST":
             self._json_response({"error": "Use POST to save config"}, 405)
             return
@@ -4225,13 +4246,19 @@ a:hover{{text-decoration:underline}}
         if err:
             self._json_response({"error": err}, 403)
             return
-        params = _parse_query(self)
-        tool = params.get("tool", [""])[0]
-        host = params.get("host", [""])[0]
-        key = params.get("key", [""])[0]
+        try:
+            body = self._request_body()
+            tool = (body.get("tool", "") or "").strip()
+            host = (body.get("host", "") or "").strip()
+            key = body.get("key", "") or ""
+        except Exception as e:
+            self._json_response({"error": f"Invalid request body: {e}"}, 400)
+            return
 
         if not tool or not host or not key:
-            self._json_response({"error": "Missing parameters"}, 400)
+            self._json_response(
+                {"error": "tool, host, and key required in POST JSON body"}, 400
+            )
             return
 
         cfg = load_config()
@@ -4948,6 +4975,27 @@ a:hover{{text-decoration:underline}}
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("X-XSS-Protection", "1; mode=block")
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        # M-BLUETEAM-SECURITY-HARDENING-20260413AJ: lock down the
+        # remaining browser capability surface.
+        # Permissions-Policy: explicitly deny all browser features the
+        # dashboard never uses. Kills camera/mic/geoloc/usb surface so
+        # an XSS landing can't pivot to hardware access.
+        self.send_header("Permissions-Policy",
+                         "geolocation=(), microphone=(), camera=(), "
+                         "usb=(), payment=(), accelerometer=(), "
+                         "gyroscope=(), magnetometer=(), interest-cohort=()")
+        # HSTS: only send when the current request arrived over TLS.
+        # Setting HSTS on a plain-http response is a spec violation and
+        # browsers ignore it; sending it unconditionally would also trap
+        # HTTP-only deploys in an unrecoverable redirect loop via
+        # browser pre-load. Short max-age (1 year) without preload.
+        try:
+            import ssl as _ssl
+            if isinstance(getattr(self, "request", None), _ssl.SSLSocket):
+                self.send_header("Strict-Transport-Security",
+                                 "max-age=31536000; includeSubDomains")
+        except Exception:
+            pass
         # Web UI is self-contained: xterm is vendored under /static/vendor/xterm,
         # fonts use platform stacks only, no public CDN or font host references.
         #
@@ -4978,24 +5026,43 @@ a:hover{{text-decoration:underline}}
         # closed. This CSP is the policy enforcement.
         style_hash_tokens = _inline_style_csp_hashes()
         style_src = "style-src 'self' 'unsafe-hashes' " + " ".join(style_hash_tokens) if style_hash_tokens else "style-src 'self'"
+        # M-BLUETEAM-SECURITY-HARDENING-20260413AJ:
+        #   frame-ancestors 'none' — clickjacking defense-in-depth. The
+        #     legacy X-Frame-Options: DENY header above covers older
+        #     browsers; frame-ancestors is the CSP-level equivalent and
+        #     is the spec-preferred directive for modern UAs.
+        #   base-uri 'none' — prevent an XSS from injecting a <base>
+        #     tag that rewrites all relative URLs to an attacker origin.
+        #   form-action 'self' — POST form submissions can only target
+        #     the dashboard's own origin, even though every real form
+        #     uses fetch(). Belt on braces.
+        #   object-src 'none' — no Flash/Silverlight/ActiveX/plugins.
         self.send_header("Content-Security-Policy",
                          "default-src 'self'; "
                          "script-src 'self'; "
                          f"{style_src}; "
                          "img-src 'self' data:; "
                          "connect-src 'self'; "
-                         "font-src 'self'")
+                         "font-src 'self'; "
+                         "frame-ancestors 'none'; "
+                         "base-uri 'none'; "
+                         "form-action 'self'; "
+                         "object-src 'none'")
 
     def _json_response(self, data, status=200):
         """Send a JSON response."""
         body = json.dumps(data).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        origin = self.headers.get("Origin", "")
-        if origin:
-            self.send_header("Access-Control-Allow-Origin", origin)
-            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-            self.send_header("Vary", "Origin")
+        # M-BLUETEAM-SECURITY-HARDENING-20260413AJ: reflected-origin
+        # Access-Control-Allow-Origin removed. The dashboard is same-
+        # origin by design — no cross-origin caller should be able to
+        # read these responses. Echoing the Origin header back was a
+        # classic CORS-misconfiguration antipattern that let any
+        # attacker page enumerate fleet state cross-origin (credentials
+        # were never forwarded because Allow-Credentials wasn't set,
+        # but the data read was still exposed). Same-origin requests
+        # don't need ACAO at all, so the header is dropped entirely.
         self.send_header("Content-Length", str(len(body)))
         self._send_security_headers()
         self.end_headers()

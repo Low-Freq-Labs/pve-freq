@@ -18,11 +18,9 @@ def json_response(handler, data, status=200):
     body = json.dumps(data).encode()
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
-    origin = handler.headers.get("Origin", "")
-    if origin:
-        handler.send_header("Access-Control-Allow-Origin", origin)
-        handler.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-        handler.send_header("Vary", "Origin")
+    # M-BLUETEAM-SECURITY-HARDENING-20260413AJ: reflected-origin ACAO
+    # removed — same-origin only, no cross-origin CORS exposure. See
+    # serve.py _json_response for the full rationale.
     handler.send_header("Content-Length", str(len(body)))
     handler.send_header("X-Content-Type-Options", "nosniff")
     handler.send_header("X-Frame-Options", "DENY")
