@@ -18,6 +18,14 @@ from freq.core.config import load_config
 from freq.core import resolve as res
 from freq.core import log as logger
 from freq.core.ssh import run as ssh_single, run_many as ssh_run_many, result_for
+from freq.core.health_state import (
+    STATE_LIVE,
+    STATE_DEGRADED,
+    STATE_UNREACHABLE,
+    aggregate_probe_state,
+    classify_probe_failure,
+    entry_base,
+)
 from freq.modules.serve import (
     _bg_cache,
     _bg_lock,
@@ -160,10 +168,20 @@ def handle_health_api(handler):
     }
 
     def _probe_host(h):
+        """Cold-cache fallback probe with parity to serve.py _bg_probe_health.
+
+        R-PRODUCT-LAW-BACKEND-TRUTH: must emit the same six-state
+        contract as the background probe so the operator never sees a
+        lying entry just because the cache was cold when they opened
+        the dashboard.
+        """
         htype = h.htype
         cmd = HEALTH_CMDS.get(htype, HEALTH_CMDS["linux"])
         use_sudo = htype not in ("switch", "idrac")
         probe_key = (cfg.ssh_rsa_key_path or cfg.ssh_key_path) if htype in ("idrac", "switch") else cfg.ssh_key_path
+        now = time.time()
+        _groups = getattr(h, "groups", "") or ""
+
         r = ssh_single(
             host=h.ip,
             command=cmd,
@@ -174,34 +192,29 @@ def handle_health_api(handler):
             use_sudo=use_sudo,
             cfg=cfg,
         )
+
         if r.returncode != 0 or not r.stdout.strip():
-            return {
-                "label": h.label,
-                "ip": h.ip,
-                "type": htype,
-                "groups": getattr(h, "groups", "") or "",
-                "status": "unreachable",
-                "cores": "-",
-                "ram": "-",
-                "disk": "-",
-                "load": "-",
-                "docker": "0",
-            }
+            state, reason = classify_probe_failure(
+                r.returncode, r.stderr or "", r.stdout or ""
+            )
+            entry = entry_base(
+                h, state=state, reason=reason, probed_at=now,
+                last_success_at=None, failure_count=1, groups=_groups,
+            )
+            entry.update({"cores": "-", "ram": "-", "disk": "-",
+                          "load": "-", "docker": "0", "last_error": reason})
+            return entry
 
         if htype == "idrac":
-            # R-RESILIENCE-INIT-RECOVERY-20260413S: parity with _bg_probe_health.
-            return {
-                "label": h.label,
-                "ip": h.ip,
-                "type": htype,
-                "groups": getattr(h, "groups", "") or "",
-                "status": "healthy",
-                "cores": "-",
-                "ram": "-",
-                "disk": "-",
-                "load": "-",
-                "docker": "0",
-            }
+            entry = entry_base(
+                h, state=STATE_LIVE,
+                reason="racadm getsysinfo -s returned OK",
+                probed_at=now, last_success_at=now, failure_count=0, groups=_groups,
+            )
+            entry.update({"cores": "-", "ram": "-", "disk": "-",
+                          "load": "-", "docker": "0"})
+            return entry
+
         if htype == "switch":
             m = re.search(r"one minute:\s*(\d+)%", r.stdout)
             cpu_pct = m.group(1) if m else "0"
@@ -216,6 +229,7 @@ def handle_health_api(handler):
                 cfg=cfg,
             )
             ram = "-"
+            ram_parsed = False
             if r2.returncode == 0 and r2.stdout:
                 parts = r2.stdout.split()
                 try:
@@ -224,35 +238,44 @@ def handle_health_api(handler):
                     total_mb = int(parts[idx_t]) // 1048576
                     used_mb = int(parts[idx_u]) // 1048576
                     ram = f"{used_mb}/{total_mb}MB"
+                    ram_parsed = True
                 except (ValueError, IndexError):
                     pass
             load_val = f"{float(cpu_pct) / 100:.2f}" if cpu_pct != "0" else "0.00"
-            return {
-                "label": h.label,
-                "ip": h.ip,
-                "type": htype,
-                "groups": getattr(h, "groups", "") or "",
-                "status": "healthy",
-                "cores": "1",
-                "ram": ram,
-                "disk": "-",
-                "load": load_val,
-                "docker": "0",
-            }
+            sw_state = STATE_LIVE if ram_parsed else STATE_DEGRADED
+            sw_reason = ("switch CPU+RAM probes OK" if ram_parsed
+                         else "switch CPU probe OK, RAM secondary probe missing/unparsable")
+            entry = entry_base(
+                h, state=sw_state, reason=sw_reason, probed_at=now,
+                last_success_at=now if ram_parsed else None,
+                failure_count=0 if ram_parsed else 1, groups=_groups,
+            )
+            entry.update({"cores": "1", "ram": ram, "disk": "-",
+                          "load": load_val, "docker": "0"})
+            return entry
 
         parts = r.stdout.strip().split("|")
-        return {
-            "label": h.label,
-            "ip": h.ip,
-            "type": htype,
-            "groups": getattr(h, "groups", "") or "",
-            "status": "healthy",
+        if len(parts) < 5:
+            entry = entry_base(
+                h, state=STATE_DEGRADED,
+                reason=f"probe returned malformed payload ({len(parts)} fields, expected >=5)",
+                probed_at=now, last_success_at=None, failure_count=1, groups=_groups,
+            )
+            entry.update({"cores": "-", "ram": "-", "disk": "-",
+                          "load": "-", "docker": "0"})
+            return entry
+        entry = entry_base(
+            h, state=STATE_LIVE, reason="probe OK",
+            probed_at=now, last_success_at=now, failure_count=0, groups=_groups,
+        )
+        entry.update({
             "cores": parts[1] if len(parts) > 1 else "?",
             "ram": parts[2] if len(parts) > 2 else "?",
             "disk": parts[3] if len(parts) > 3 else "?",
             "load": parts[4] if len(parts) > 4 else "?",
             "docker": parts[5].strip() if len(parts) > 5 else "0",
-        }
+        })
+        return entry
 
     host_data = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=cfg.ssh_max_parallel) as pool:
@@ -263,23 +286,26 @@ def handle_health_api(handler):
             except Exception as e:
                 h = futures[f]
                 logger.warn(f"health probe failed for {h.label}: {e}")
-                host_data.append(
-                    {
-                        "label": h.label,
-                        "ip": h.ip,
-                        "type": h.htype,
-                        "groups": getattr(h, "groups", "") or "",
-                        "status": "unreachable",
-                        "cores": "-",
-                        "ram": "-",
-                        "disk": "-",
-                        "load": "-",
-                        "docker": "0",
-                    }
+                err_entry = entry_base(
+                    h, state=STATE_DEGRADED,
+                    reason=f"probe exception: {str(e)[:120]}",
+                    probed_at=time.time(), last_success_at=None,
+                    failure_count=1,
+                    groups=getattr(h, "groups", "") or "",
                 )
+                err_entry.update({"cores": "-", "ram": "-", "disk": "-",
+                                  "load": "-", "docker": "0"})
+                host_data.append(err_entry)
 
     duration = round(time.monotonic() - start, 1)
-    result = {"duration": duration, "hosts": host_data}
+    probe_state, probe_reason = aggregate_probe_state(host_data)
+    result = {
+        "duration": duration,
+        "hosts": host_data,
+        "probed_at": time.time(),
+        "probe_state": probe_state,
+        "probe_reason": probe_reason,
+    }
     json_response(handler, result)
 
 

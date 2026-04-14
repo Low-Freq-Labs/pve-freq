@@ -41,9 +41,23 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from urllib.parse import urlparse, parse_qs
 
+from freq.core import audit
 from freq.core import log as logger
 from freq.core import resolve as res
 from freq.core.config import load_config
+from freq.core.health_state import (
+    STATE_LIVE,
+    STATE_STALE,
+    STATE_DEGRADED,
+    STATE_AUTH_FAILED,
+    STATE_UNREACHABLE,
+    STATE_RECOVERING,
+    aggregate_probe_state,
+    classify_probe_failure,
+    entry_base,
+    legacy_status_for,
+    mark_stale,
+)
 from freq.core.ssh import run as ssh_single, run_many as ssh_run_many
 from freq.core.validate import (
     label as valid_label,
@@ -77,6 +91,15 @@ CIRCUIT_BREAKER_BACKOFF = 300    # 5 minutes backoff after threshold
 _host_fail_count = {}            # ip -> consecutive failure count
 _host_backoff_until = {}         # ip -> monotonic timestamp when backoff expires
 _last_legacy_probe = 0.0         # monotonic timestamp of last legacy probe
+
+# R-PRODUCT-LAW-BACKEND-TRUTH: six-state health contract state-tracking.
+# These track per-host evidence across probe cycles so we can emit
+# reason + last_success_at + a one-cycle 'recovering' marker after a
+# circuit-breaker backoff resets. Keyed by host IP.
+_host_last_success_at = {}       # ip -> unix ts of last 'live' probe
+_host_last_error = {}            # ip -> {"state","reason","at"} last failure
+_host_backoff_started_at = {}    # ip -> unix ts when current backoff began
+_host_recovering = set()         # ip -> just came back, hold 'recovering' one cycle
 _SERVER_START_TIME = time.monotonic()
 DEFAULT_LOG_LINES = 50
 
@@ -593,13 +616,24 @@ def _bg_probe_health():
     }
 
     def _probe_host(h):
+        """Probe one host and return a six-state entry with full evidence.
+
+        R-PRODUCT-LAW-BACKEND-TRUTH: every return path carries a canonical
+        `state` token (live/stale/degraded/auth_failed/unreachable/recovering)
+        plus `reason`, `probed_at`, `last_success_at`, `failure_count`.
+        The legacy `status` field is set via legacy_status_for() so the
+        frontend's `h.status==='healthy'` checks keep working until Morty
+        migrates them to `h.state`.
+        """
         htype = h.htype
         cmd = HEALTH_CMDS.get(htype, HEALTH_CMDS["linux"])
-        # Health status commands are read-only (hostname, nproc, free, df,
-        # loadavg, docker ps count) — no sudo needed. This must match
-        # the CLI fleet status path to avoid auth parity drift.
         use_sudo = False
         probe_key = (cfg.ssh_rsa_key_path or cfg.ssh_key_path) if htype in ("idrac", "switch") else cfg.ssh_key_path
+        now = time.time()
+        _groups = getattr(h, "groups", "") or ""
+        prev_failures = _host_fail_count.get(h.ip, 0)
+        last_success_at = _host_last_success_at.get(h.ip)
+
         r = ssh_single(
             host=h.ip,
             command=cmd,
@@ -610,39 +644,62 @@ def _bg_probe_health():
             use_sudo=use_sudo,
             cfg=cfg,
         )
-        _groups = getattr(h, "groups", "") or ""
+
+        # ── Failure path ────────────────────────────────────────────
         if r.returncode != 0 or not r.stdout.strip():
-            err = r.stderr.strip()[:120] if r.stderr else "no response"
-            return {
-                "label": h.label,
-                "ip": h.ip,
-                "type": htype,
-                "groups": _groups,
-                "status": "unreachable",
-                "cores": "-",
-                "ram": "-",
-                "disk": "-",
-                "load": "-",
-                "docker": "0",
-                "last_error": err,
-            }
+            state, reason = classify_probe_failure(
+                r.returncode, r.stderr or "", r.stdout or ""
+            )
+            entry = entry_base(
+                h,
+                state=state,
+                reason=reason,
+                probed_at=now,
+                last_success_at=last_success_at,
+                failure_count=prev_failures + 1,
+                groups=_groups,
+            )
+            entry.update({
+                "cores": "-", "ram": "-", "disk": "-",
+                "load": "-", "docker": "0",
+                # Keep legacy field for any reader that still grep's it.
+                "last_error": reason,
+            })
+            return entry
+
+        # ── Success paths ───────────────────────────────────────────
+        # One-cycle 'recovering' marker: if this host was just cleared
+        # out of backoff in _host_recovering, flag it so the operator
+        # sees 'just healed' instead of a silent green return to normal.
+        success_state = (
+            STATE_RECOVERING if h.ip in _host_recovering else STATE_LIVE
+        )
+        success_reason = (
+            f"recovered from backoff (was failing for {prev_failures}x)"
+            if success_state == STATE_RECOVERING
+            else "probe OK"
+        )
+
         if htype == "idrac":
-            # R-RESILIENCE-INIT-RECOVERY-20260413S: iDRAC reachability is
-            # "racadm getsysinfo -s returned something". Dashboard columns
-            # that don't apply to BMCs stay "-" — the fleet table already
-            # displays them as dim/blank for legacy-device types.
-            return {
-                "label": h.label,
-                "ip": h.ip,
-                "type": htype,
-                "groups": _groups,
-                "status": "healthy",
-                "cores": "-",
-                "ram": "-",
-                "disk": "-",
-                "load": "-",
-                "docker": "0",
-            }
+            # iDRAC reachability = "racadm getsysinfo -s returned something".
+            # BMC-irrelevant columns stay "-"; the dashboard already
+            # renders them dim for legacy-device types.
+            entry = entry_base(
+                h,
+                state=success_state,
+                reason=(success_reason if success_state == STATE_RECOVERING
+                        else "racadm getsysinfo -s returned OK"),
+                probed_at=now,
+                last_success_at=now,
+                failure_count=0,
+                groups=_groups,
+            )
+            entry.update({
+                "cores": "-", "ram": "-", "disk": "-",
+                "load": "-", "docker": "0",
+            })
+            return entry
+
         if htype == "switch":
             m = re.search(r"one minute:\s*(\d+)%", r.stdout)
             cpu_pct = m.group(1) if m else "0"
@@ -658,6 +715,7 @@ def _bg_probe_health():
                 cfg=cfg,
             )
             ram = "-"
+            ram_parsed = False
             if r2.returncode == 0 and r2.stdout:
                 parts = r2.stdout.split()
                 try:
@@ -666,34 +724,69 @@ def _bg_probe_health():
                     total_mb = int(parts[idx_t]) // 1048576
                     used_mb = int(parts[idx_u]) // 1048576
                     ram = f"{used_mb}/{total_mb}MB"
+                    ram_parsed = True
                 except (ValueError, IndexError):
                     pass
             load_val = f"{float(cpu_pct) / 100:.2f}" if cpu_pct != "0" else "0.00"
-            return {
-                "label": h.label,
-                "ip": h.ip,
-                "type": htype,
-                "groups": _groups,
-                "status": "healthy",
-                "cores": "1",
-                "ram": ram,
-                "disk": "-",
-                "load": load_val,
-                "docker": "0",
-            }
+            # Primary probe succeeded; if the RAM secondary couldn't be
+            # parsed, surface as degraded — partial success is not full
+            # success under the product law.
+            if not ram_parsed:
+                sw_state = STATE_DEGRADED
+                sw_reason = "switch CPU probe OK, RAM secondary probe missing/unparsable"
+            else:
+                sw_state = success_state
+                sw_reason = success_reason if success_state == STATE_RECOVERING else "switch CPU+RAM probes OK"
+            entry = entry_base(
+                h,
+                state=sw_state,
+                reason=sw_reason,
+                probed_at=now,
+                last_success_at=now if sw_state != STATE_DEGRADED else last_success_at,
+                failure_count=0 if sw_state != STATE_DEGRADED else prev_failures + 1,
+                groups=_groups,
+            )
+            entry.update({
+                "cores": "1", "ram": ram, "disk": "-",
+                "load": load_val, "docker": "0",
+            })
+            return entry
+
+        # Linux / PVE / docker / truenas / pfsense — pipe-delimited parse.
         parts = r.stdout.strip().split("|")
-        return {
-            "label": h.label,
-            "ip": h.ip,
-            "type": htype,
-            "groups": _groups,
-            "status": "healthy",
+        # A too-short output string means the remote shell produced
+        # something but the metrics payload is broken. Partial success
+        # → degraded, not fake green.
+        if len(parts) < 5:
+            return entry_base(
+                h,
+                state=STATE_DEGRADED,
+                reason=f"probe returned malformed payload ({len(parts)} fields, expected >=5)",
+                probed_at=now,
+                last_success_at=last_success_at,
+                failure_count=prev_failures + 1,
+                groups=_groups,
+            ) | {
+                "cores": "-", "ram": "-", "disk": "-",
+                "load": "-", "docker": "0",
+            }
+        entry = entry_base(
+            h,
+            state=success_state,
+            reason=success_reason,
+            probed_at=now,
+            last_success_at=now,
+            failure_count=0,
+            groups=_groups,
+        )
+        entry.update({
             "cores": parts[1] if len(parts) > 1 else "?",
             "ram": parts[2] if len(parts) > 2 else "?",
             "disk": parts[3] if len(parts) > 3 else "?",
             "load": parts[4] if len(parts) > 4 else "?",
             "docker": parts[5].strip() if len(parts) > 5 else "0",
-        }
+        })
+        return entry
 
     # ── Circuit breaker: skip hosts in backoff or legacy hosts probed recently ──
     global _last_legacy_probe
@@ -701,43 +794,70 @@ def _bg_probe_health():
     probe_legacy = (now - _last_legacy_probe) >= LEGACY_PROBE_INTERVAL
 
     active_hosts = []
-    skipped_hosts = []
+    skipped_hosts = []     # (host, reason) — reason is an operator-readable string
     for h in cfg.hosts:
         # Skip unmanaged hosts (discovered but not deployed to)
         if not getattr(h, "managed", True):
             continue
         # Skip hosts in circuit-breaker backoff
         if _host_backoff_until.get(h.ip, 0) > now:
-            skipped_hosts.append(h)
+            remain = int(_host_backoff_until[h.ip] - now)
+            skipped_hosts.append((h, f"circuit breaker backoff ({remain}s remaining)"))
             continue
         # Rate-limit legacy device probes
         if h.htype in LEGACY_HTYPES and not probe_legacy:
-            skipped_hosts.append(h)
+            since = int(now - _last_legacy_probe)
+            skipped_hosts.append((h, f"legacy-device rate limit (last probe {since}s ago, interval {LEGACY_PROBE_INTERVAL}s)"))
             continue
         active_hosts.append(h)
 
     if probe_legacy and any(h.htype in LEGACY_HTYPES for h in active_hosts):
         _last_legacy_probe = now
 
-    # Reuse cached data for skipped hosts
+    # R-PRODUCT-LAW-BACKEND-TRUTH: log what we skipped this cycle.
+    # Previously the probe loop silently dropped backoff/rate-limited
+    # hosts into a local variable with no audit trail — operators had
+    # no way to reason about why a host card was stale.
+    if skipped_hosts:
+        logger.info(
+            "health_probe_skipped",
+            count=len(skipped_hosts),
+            hosts=",".join(f"{h.label}:{r}" for h, r in skipped_hosts[:8]),
+        )
+
+    # Reuse cached data for skipped hosts — but flip the cached entry
+    # to state='stale' with age_seconds so the dashboard stops lying
+    # about freshness. An old cache entry is not fresh measurement.
+    now_wall = time.time()
     host_data = []
     if skipped_hosts:
         with _bg_lock:
             cached = _bg_cache.get("health")
         cached_by_ip = {}
         if cached and isinstance(cached, dict):
-            cached_by_ip = {h["ip"]: h for h in cached.get("hosts", [])}
-        for h in skipped_hosts:
+            cached_by_ip = {h_e["ip"]: h_e for h_e in cached.get("hosts", [])}
+        for h, skip_reason in skipped_hosts:
             prev = cached_by_ip.get(h.ip)
             if prev:
-                host_data.append(prev)
+                host_data.append(mark_stale(prev, now_wall, skip_reason))
             else:
-                host_data.append({
-                    "label": h.label, "ip": h.ip, "type": h.htype,
-                    "status": "unreachable", "cores": "-", "ram": "-",
-                    "disk": "-", "load": "-", "docker": "0",
-                    "last_error": "circuit breaker / rate limited",
+                # No prior cache for this host — we genuinely have no
+                # evidence. Honest state: unreachable, not stale.
+                entry = entry_base(
+                    h,
+                    state=STATE_UNREACHABLE,
+                    reason=f"no prior probe result ({skip_reason})",
+                    probed_at=now_wall,
+                    last_success_at=_host_last_success_at.get(h.ip),
+                    failure_count=_host_fail_count.get(h.ip, 0),
+                    groups=getattr(h, "groups", "") or "",
+                )
+                entry.update({
+                    "cores": "-", "ram": "-", "disk": "-",
+                    "load": "-", "docker": "0",
+                    "last_error": skip_reason,
                 })
+                host_data.append(entry)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=cfg.ssh_max_parallel) as pool:
         futures = {pool.submit(_probe_host, h): h for h in active_hosts}
@@ -746,42 +866,117 @@ def _bg_probe_health():
             try:
                 result_entry = f.result()
                 host_data.append(result_entry)
-                # Circuit breaker: track success/failure
-                if result_entry.get("status") == "healthy":
+                entry_state = result_entry.get("state", STATE_UNREACHABLE)
+
+                # ── Circuit breaker: success/failure tracking with evidence ──
+                # R-PRODUCT-LAW-BACKEND-TRUTH: previously circuit-breaker
+                # engage and reset logged only a stderr warning. An
+                # operator reviewing audit.jsonl found nothing about the
+                # system's self-protective backoffs. Both engage and
+                # reset now emit audit events with the error class,
+                # failure count, and — on reset — the duration of the
+                # backoff episode so SLA correlation is possible.
+                if entry_state in (STATE_LIVE, STATE_RECOVERING):
                     was_in_backoff = h.ip in _host_backoff_until
+                    old_fail_count = _host_fail_count.get(h.ip, 0)
+                    backoff_started = _host_backoff_started_at.get(h.ip)
                     _host_fail_count.pop(h.ip, None)
                     _host_backoff_until.pop(h.ip, None)
+                    _host_backoff_started_at.pop(h.ip, None)
+                    _host_last_error.pop(h.ip, None)
+                    _host_last_success_at[h.ip] = now_wall
                     if was_in_backoff:
-                        logger.info("circuit_breaker_reset", host=h.ip)
+                        duration = int(now_wall - backoff_started) if backoff_started else None
+                        logger.info(
+                            "circuit_breaker_reset",
+                            host=h.ip,
+                            label=h.label,
+                            prior_failure_count=old_fail_count,
+                            backoff_duration_s=duration,
+                        )
+                        audit.record(
+                            "circuit_breaker_reset",
+                            h.ip,
+                            "recovered",
+                            label=h.label,
+                            prior_failure_count=old_fail_count,
+                            backoff_duration_s=duration,
+                            healed_with=result_entry.get("reason", ""),
+                        )
+                        _host_recovering.add(h.ip)
+                    else:
+                        # Clear any lingering recovering marker from the
+                        # prior cycle — we've had one cycle of LIVE now.
+                        _host_recovering.discard(h.ip)
                 else:
+                    # Probe failed (classified into one of the non-live
+                    # states by _probe_host). Track the error class and
+                    # bump the counter.
                     count = _host_fail_count.get(h.ip, 0) + 1
                     _host_fail_count[h.ip] = count
-                    if count >= CIRCUIT_BREAKER_THRESHOLD:
+                    _host_last_error[h.ip] = {
+                        "state": entry_state,
+                        "reason": result_entry.get("reason", ""),
+                        "at": now_wall,
+                    }
+                    if count >= CIRCUIT_BREAKER_THRESHOLD and h.ip not in _host_backoff_until:
                         _host_backoff_until[h.ip] = now + CIRCUIT_BREAKER_BACKOFF
+                        _host_backoff_started_at[h.ip] = now_wall
                         logger.warning(
                             f"circuit breaker: {h.label} ({h.ip}) failed {count}x, "
-                            f"backing off {CIRCUIT_BREAKER_BACKOFF}s"
+                            f"backing off {CIRCUIT_BREAKER_BACKOFF}s "
+                            f"(last error: {result_entry.get('reason', '')[:100]})"
+                        )
+                        audit.record(
+                            "circuit_breaker_engage",
+                            h.ip,
+                            "engaged",
+                            label=h.label,
+                            failure_count=count,
+                            error_state=entry_state,
+                            last_error=result_entry.get("reason", "")[:200],
+                            backoff_seconds=CIRCUIT_BREAKER_BACKOFF,
                         )
             except Exception as e:
                 logger.warn(f"health probe failed for {h.label}: {e}")
-                host_data.append(
-                    {
-                        "label": h.label,
-                        "ip": h.ip,
-                        "type": h.htype,
-                        "status": "unreachable",
-                        "cores": "-",
-                        "ram": "-",
-                        "disk": "-",
-                        "load": "-",
-                        "docker": "0",
-                        "last_error": str(e)[:120],
-                    }
+                # Unplanned exception path — classify as degraded so
+                # the operator knows the probe itself is broken (not
+                # the host).
+                err_entry = entry_base(
+                    h,
+                    state=STATE_DEGRADED,
+                    reason=f"probe exception: {str(e)[:120]}",
+                    probed_at=now_wall,
+                    last_success_at=_host_last_success_at.get(h.ip),
+                    failure_count=_host_fail_count.get(h.ip, 0) + 1,
+                    groups=getattr(h, "groups", "") or "",
                 )
+                err_entry.update({
+                    "cores": "-", "ram": "-", "disk": "-",
+                    "load": "-", "docker": "0",
+                    "last_error": str(e)[:120],
+                })
+                host_data.append(err_entry)
                 count = _host_fail_count.get(h.ip, 0) + 1
                 _host_fail_count[h.ip] = count
-                if count >= CIRCUIT_BREAKER_THRESHOLD:
+                _host_last_error[h.ip] = {
+                    "state": STATE_DEGRADED,
+                    "reason": f"probe exception: {str(e)[:120]}",
+                    "at": now_wall,
+                }
+                if count >= CIRCUIT_BREAKER_THRESHOLD and h.ip not in _host_backoff_until:
                     _host_backoff_until[h.ip] = now + CIRCUIT_BREAKER_BACKOFF
+                    _host_backoff_started_at[h.ip] = now_wall
+                    audit.record(
+                        "circuit_breaker_engage",
+                        h.ip,
+                        "engaged",
+                        label=h.label,
+                        failure_count=count,
+                        error_state=STATE_DEGRADED,
+                        last_error=f"probe exception: {str(e)[:200]}",
+                        backoff_seconds=CIRCUIT_BREAKER_BACKOFF,
+                    )
 
     # Aggregate container counts per PVE node.
     # Chain: container_vms (vm_id→IP) + WATCHDOG (vm_id→node) + health (IP→docker count)
@@ -805,11 +1000,19 @@ def _bg_probe_health():
     except Exception as e:
         logger.warning(f"bg_probe_health: node_containers aggregation failed: {e}")
 
+    # R-PRODUCT-LAW-BACKEND-TRUTH: aggregate a top-level probe_state so
+    # Morty's silent-refresh banner does not have to re-derive fleet
+    # health by inspecting every host entry with possibly-undefined
+    # fields. Worst state wins (auth_failed > unreachable > degraded
+    # > stale > recovering > live).
+    probe_state, probe_reason = aggregate_probe_state(host_data)
     result = {
         "duration": round(time.monotonic() - start, 1),
         "hosts": host_data,
         "probed_at": time.time(),
         "node_containers": node_containers,
+        "probe_state": probe_state,
+        "probe_reason": probe_reason,
     }
     # Snapshot old health for SSE diff
     with _bg_lock:
@@ -819,14 +1022,25 @@ def _bg_probe_health():
         _bg_cache_from_disk.discard("health")  # Fresh probe replaces stale disk data
     _save_disk_cache("health", result)
 
-    # SSE: broadcast cache_update + per-host health_change events
+    # SSE: broadcast cache_update + per-host health_change events.
+    # Use the new canonical `state` field when present, falling back to
+    # legacy `status` so old cache shape still fires events during upgrade.
     _sse_broadcast("cache_update", {"key": "health", "ts": time.time()})
     if old_health and isinstance(old_health, dict):
-        old_status = {h["label"]: h["status"] for h in old_health.get("hosts", [])}
-        for h in host_data:
-            prev = old_status.get(h["label"])
-            if prev and prev != h["status"]:
-                _sse_broadcast("health_change", {"host": h["label"], "old": prev, "new": h["status"]})
+        old_state = {
+            h_e["label"]: h_e.get("state") or h_e.get("status")
+            for h_e in old_health.get("hosts", [])
+        }
+        for h_e in host_data:
+            prev = old_state.get(h_e["label"])
+            cur = h_e.get("state") or h_e.get("status")
+            if prev and prev != cur:
+                _sse_broadcast("health_change", {
+                    "host": h_e["label"],
+                    "old": prev,
+                    "new": cur,
+                    "reason": h_e.get("reason", ""),
+                })
                 severity = "success" if h["status"] == "healthy" else "error"
                 _activity_add("health_change", f"{h['label']} is now {h['status']}", f"was {prev}", severity)
 
