@@ -2587,6 +2587,19 @@ a:hover{{text-decoration:underline}}
 
         Accepts POST with JSON body only. Credentials must not be in URLs.
         POST body: {"username": "...", "password": "..."}
+
+        T-8 of R-SECURITY-ARCH-DEBT-20260413U: wrapped in _setup_lock
+        with a double-checked _is_first_run() inside the lock. Pre-fix
+        two concurrent requests could both pass the first _is_first_run
+        check, both reach users.conf, and land two admin accounts in a
+        single first-run window. The window is narrow (first-run only)
+        but an operator running `curl &` twice during bootstrap, or an
+        attacker racing the legitimate operator, could trip it. Now:
+          - Fast-path reject before attempting the lock.
+          - Non-blocking lock acquire → 409 if another setup mutation
+            is already in flight (parity with _serve_setup_complete).
+          - Re-check _is_first_run INSIDE the lock so a racing
+            complete/create-admin can't slip through.
         """
         if not _is_first_run():
             self._json_response({"error": "Setup already complete"}, 403)
@@ -2621,31 +2634,46 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": "Password must be at least 8 characters"}, 400)
             return
 
-        cfg = load_config()
-
-        # Create user in users.conf
-        users = _load_users(cfg)
-        if any(u["username"] == username for u in users):
-            self._json_response({"error": f"User '{username}' already exists"}, 409)
+        # T-8: serialize setup mutations. Non-blocking acquire — a
+        # concurrent create-admin/configure/complete returns 409.
+        if not _setup_lock.acquire(blocking=False):
+            self._json_response({"error": "Setup already in progress"}, 409)
             return
-
-        users.append({"username": username, "role": "admin", "groups": ""})
-        os.makedirs(cfg.conf_dir, exist_ok=True)
-        if not _save_users(cfg, users):
-            self._json_response({"error": "Failed to save user"}, 500)
-            return
-
-        # Store password hash in vault
-        pw_hash = _hash_password(password)
         try:
-            if not os.path.exists(cfg.vault_file):
-                vault_init(cfg)
-            vault_set(cfg, "auth", f"password_{username}", pw_hash)
-        except Exception as e:
-            self._json_response({"error": f"Failed to store password: {e}"}, 500)
-            return
+            # Double-checked locking: another request may have completed
+            # setup between our first _is_first_run() check above and the
+            # lock acquire.
+            if not _is_first_run():
+                self._json_response({"error": "Setup already complete"}, 403)
+                return
 
-        self._json_response({"ok": True, "user": username, "role": "admin"})
+            cfg = load_config()
+
+            # Create user in users.conf
+            users = _load_users(cfg)
+            if any(u["username"] == username for u in users):
+                self._json_response({"error": f"User '{username}' already exists"}, 409)
+                return
+
+            users.append({"username": username, "role": "admin", "groups": ""})
+            os.makedirs(cfg.conf_dir, exist_ok=True)
+            if not _save_users(cfg, users):
+                self._json_response({"error": "Failed to save user"}, 500)
+                return
+
+            # Store password hash in vault
+            pw_hash = _hash_password(password)
+            try:
+                if not os.path.exists(cfg.vault_file):
+                    vault_init(cfg)
+                vault_set(cfg, "auth", f"password_{username}", pw_hash)
+            except Exception as e:
+                self._json_response({"error": f"Failed to store password: {e}"}, 500)
+                return
+
+            self._json_response({"ok": True, "user": username, "role": "admin"})
+        finally:
+            _setup_lock.release()
 
     def _serve_setup_configure(self):
         """Save cluster configuration during first-run setup.

@@ -31,29 +31,120 @@ _auth_lock = threading.Lock()
 
 
 # ── Rate Limiting ─────────────────────────────────────────────────────────
+#
+# R-SECURITY-ARCH-DEBT-20260413U T-7: dual-bucket per-IP + per-user rate
+# limiter with a trusted-proxy-aware client-IP resolver. See findings
+# file for the threat model.
 
-_login_attempts = {}  # {ip: [(timestamp, success_bool), ...]}
+_login_attempts_ip = {}    # {ip: [(timestamp, success_bool), ...]}
+_login_attempts_user = {}  # {username: [(timestamp, success_bool), ...]}
 _login_lock = threading.Lock()
 
+# Back-compat alias so any external caller / test still referencing the
+# old dict name doesn't KeyError. New code must use the per-IP/per-user
+# pair above.
+_login_attempts = _login_attempts_ip
 
-def check_rate_limit(ip: str) -> bool:
-    """Return True if login allowed, False if rate-limited."""
+_RATE_WINDOW_SECONDS = 300
+_RATE_MAX_FAILURES_IP = 10
+_RATE_MAX_FAILURES_USER = 5
+
+
+def _ip_in_cidr(ip: str, cidr: str) -> bool:
+    """Return True if `ip` is contained in `cidr`. Safe on bad input."""
+    import ipaddress
+    try:
+        return ipaddress.ip_address(ip) in ipaddress.ip_network(cidr, strict=False)
+    except (ValueError, TypeError):
+        return False
+
+
+def resolve_client_ip(handler) -> str:
+    """Resolve the real client IP, honoring trusted-proxy X-Forwarded-For.
+
+    If the socket-level peer is in cfg.trusted_proxy_cidrs, read the
+    X-Forwarded-For header and return the leftmost entry that is NOT
+    itself a trusted proxy (the real client). Otherwise return the
+    socket peer IP unchanged.
+
+    Default-deny: if trusted_proxy_cidrs is empty, the XFF header is
+    IGNORED entirely — an attacker behind a direct-serve dashboard
+    cannot spoof their source IP by setting X-Forwarded-For because
+    the resolver won't read the header unless the peer is trusted.
+    """
+    peer_ip = handler.client_address[0]
+    try:
+        cfg = load_config()
+        trusted = getattr(cfg, "trusted_proxy_cidrs", None) or []
+    except Exception:
+        trusted = []
+    if not trusted:
+        return peer_ip
+    if not any(_ip_in_cidr(peer_ip, c) for c in trusted):
+        return peer_ip
+    xff = handler.headers.get("X-Forwarded-For", "")
+    if not xff:
+        return peer_ip
+    for entry in xff.split(","):
+        candidate = entry.strip()
+        if not candidate:
+            continue
+        if any(_ip_in_cidr(candidate, c) for c in trusted):
+            continue
+        return candidate
+    return peer_ip
+
+
+def _prune_attempts(attempts_map: dict, key: str, now: float) -> list:
+    attempts = attempts_map.get(key, [])
+    attempts = [(t, s) for t, s in attempts if now - t < _RATE_WINDOW_SECONDS]
+    attempts_map[key] = attempts
+    return attempts
+
+
+def check_rate_limit(ip: str, username: str = "") -> bool:
+    """Return True if login allowed, False if rate-limited.
+
+    Checks BOTH buckets: per-IP (ceiling _RATE_MAX_FAILURES_IP) and
+    per-username (ceiling _RATE_MAX_FAILURES_USER). If either is
+    saturated, the login is refused.
+
+    R-SECURITY-ARCH-DEBT-20260413U T-7: the per-user bucket closes the
+    distributed-attacker spray path — an attacker with many source IPs
+    can stay under each per-IP ceiling but still trips the per-user
+    ceiling when brute-forcing a single target account.
+    """
     now = time.time()
-    window = 300  # 5 minutes
-    max_failures = 10
     with _login_lock:
-        attempts = _login_attempts.get(ip, [])
-        attempts = [(t, s) for t, s in attempts if now - t < window]
-        _login_attempts[ip] = attempts
-        failures = sum(1 for t, s in attempts if not s)
-        return failures < max_failures
+        ip_attempts = _prune_attempts(_login_attempts_ip, ip, now)
+        ip_failures = sum(1 for _, s in ip_attempts if not s)
+        if ip_failures >= _RATE_MAX_FAILURES_IP:
+            return False
+        if username:
+            user_attempts = _prune_attempts(_login_attempts_user, username, now)
+            user_failures = sum(1 for _, s in user_attempts if not s)
+            if user_failures >= _RATE_MAX_FAILURES_USER:
+                return False
+        return True
 
 
-def record_login_attempt(ip: str, success: bool):
+def record_login_attempt(ip: str, success: bool, username: str = ""):
+    """Log an attempt to both the per-IP and per-username buckets.
+
+    Success clears the per-user failure history — a legitimate login
+    shouldn't leave stale rate-limit state that jails the operator's
+    next typo.
+    """
     with _login_lock:
-        if ip not in _login_attempts:
-            _login_attempts[ip] = []
-        _login_attempts[ip].append((time.time(), success))
+        _login_attempts_ip.setdefault(ip, []).append((time.time(), success))
+        if username:
+            _login_attempts_user.setdefault(username, []).append(
+                (time.time(), success)
+            )
+            if success:
+                _login_attempts_user[username] = [
+                    (t, s) for t, s in _login_attempts_user[username] if s
+                ]
 
 
 # ── Password Hashing ─────────────────────────────────────────────────────
@@ -153,10 +244,11 @@ def handle_auth_login(handler):
     """POST /api/auth/login — authenticate user."""
     from freq.modules.users import _load_users
 
-    client_ip = handler.client_address[0]
-    if not check_rate_limit(client_ip):
-        handler._json_response({"error": "Too many login attempts. Try again in 5 minutes."}, 429)
-        return
+    # T-7 of R-SECURITY-ARCH-DEBT-20260413U: resolve the real client IP
+    # via trusted-proxy X-Forwarded-For handling. Default-deny: if
+    # trusted_proxy_cidrs is empty the resolver returns the peer IP
+    # unchanged (legacy direct-serve behavior).
+    client_ip = resolve_client_ip(handler)
 
     if handler.command != "POST":
         handler._json_response({"error": "Use POST with JSON body for login"}, 405)
@@ -174,13 +266,23 @@ def handle_auth_login(handler):
         handler._json_response({"error": "Username and password required"}, 400)
         return
 
+    # Dual-bucket rate limit: per-IP AND per-user. Checked AFTER
+    # username extraction so the per-user bucket gets a chance to
+    # reject, but BEFORE any vault reads or password hashing, so a
+    # saturated bucket short-circuits cheaply.
+    if not check_rate_limit(client_ip, username):
+        handler._json_response(
+            {"error": "Too many login attempts. Try again in 5 minutes."}, 429
+        )
+        return
+
     cfg = load_config()
 
     # Service account is not a web principal — it runs the dashboard but
     # cannot log into it. This blocks both first-login (which would set a
     # password on demand) and normal login with a seeded password.
     if cfg.ssh_service_account and username == cfg.ssh_service_account.lower():
-        record_login_attempt(client_ip, False)
+        record_login_attempt(client_ip, False, username)
         logger.warn(f"auth_failed: service account login blocked '{username}'", ip=client_ip)
         handler._json_response({"error": "Invalid credentials"}, 401)
         return
@@ -194,7 +296,7 @@ def handle_auth_login(handler):
         return
     user = next((u for u in users if u["username"] == username), None)
     if not user:
-        record_login_attempt(client_ip, False)
+        record_login_attempt(client_ip, False, username)
         logger.warn(f"auth_failed: unknown user '{username}'", ip=client_ip)
         handler._json_response({"error": "Invalid credentials"}, 401)
         return
@@ -217,7 +319,7 @@ def handle_auth_login(handler):
     # Initial admin creation is handled by /api/setup/create-admin during the
     # first-run window — NOT by a silent re-seed in the login path.
     if not stored_hash:
-        record_login_attempt(client_ip, False)
+        record_login_attempt(client_ip, False, username)
         if vault_read_failed:
             logger.error(
                 f"auth_failed: vault unreadable for '{username}' — refusing login",
@@ -232,7 +334,7 @@ def handle_auth_login(handler):
         return
 
     if not verify_password(password, stored_hash):
-        record_login_attempt(client_ip, False)
+        record_login_attempt(client_ip, False, username)
         logger.warn(f"auth_failed: invalid password for '{username}'", ip=client_ip)
         handler._json_response({"error": "Invalid credentials"}, 401)
         return
@@ -250,7 +352,7 @@ def handle_auth_login(handler):
         except Exception as e:
             logger.warn(f"vault write failed for auth: {e}")
 
-    record_login_attempt(client_ip, True)
+    record_login_attempt(client_ip, True, username)
 
     token = secrets.token_urlsafe(32)
     with _auth_lock:
@@ -318,17 +420,33 @@ def handle_auth_logout(handler):
 
 
 def handle_auth_verify(handler):
-    """GET /api/auth/verify — check if session token is valid."""
+    """GET /api/auth/verify — check if session token is valid.
+
+    M-BLUETEAM-SECURITY-UX-20260413AK: response now carries
+    session_age_s (seconds since the session was issued) and
+    session_ttl_s (seconds remaining before the server-side timeout
+    would reject the next request). The UI uses these to render a
+    persistent session-age badge in the user menu so the operator
+    can see at a glance how fresh their session is — pre-fix there
+    was no way to tell a new session from one that was about to
+    expire mid-keystroke."""
     token = _extract_session_token(handler)
     session = _lookup_session(token)
     if not session:
         handler._json_response({"valid": False})
         return
+    now = time.time()
+    issued = session.get("ts", now)
+    age = max(0, int(now - issued))
+    ttl = max(0, SESSION_TIMEOUT_SECONDS - age)
     handler._json_response(
         {
             "valid": True,
             "user": session["user"],
             "role": session["role"],
+            "session_age_s": age,
+            "session_ttl_s": ttl,
+            "session_timeout_s": SESSION_TIMEOUT_SECONDS,
         }
     )
 

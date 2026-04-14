@@ -197,6 +197,14 @@ class FreqConfig:
     tls_cert: str = ""
     tls_key: str = ""
 
+    # R-SECURITY-ARCH-DEBT-20260413U T-7: trusted reverse-proxy source list.
+    # When set, the dashboard's rate limiter and auth logger will read the
+    # leftmost non-trusted IP from the X-Forwarded-For header — but ONLY if
+    # the peer's socket-level IP is itself in this list. Empty by default
+    # (default-deny), so direct-serve deployments behave exactly as before.
+    # Format: list of CIDR strings, e.g. ["10.0.0.0/8", "127.0.0.1/32"].
+    trusted_proxy_cidrs: list = field(default_factory=list)
+
     # Fleet boundaries (loaded from fleet-boundaries.toml)
     fleet_boundaries: FleetBoundaries = field(default_factory=FleetBoundaries)
 
@@ -671,6 +679,16 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.agent_port = _safe_int(services.get("agent_port"), cfg.agent_port)
     cfg.tls_cert = services.get("tls_cert", cfg.tls_cert)
     cfg.tls_key = services.get("tls_key", cfg.tls_key)
+    # R-SECURITY-ARCH-DEBT-20260413U T-7: trusted reverse-proxy source list
+    # for X-Forwarded-For client-IP resolution. Accept [services] or
+    # [dashboard] table — operators reasonably expect either namespace.
+    dashboard = data.get("dashboard", {})
+    proxy_cidrs = (
+        services.get("trusted_proxy_cidrs")
+        or dashboard.get("trusted_proxy_cidrs")
+    )
+    if isinstance(proxy_cidrs, list):
+        cfg.trusted_proxy_cidrs = [str(c).strip() for c in proxy_cidrs if str(c).strip()]
 
     # PVE API token auth (optional — alternative to SSH)
     # Support both canonical names (api_token_id) and legacy aliases (token_id)
