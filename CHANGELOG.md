@@ -4,6 +4,12 @@ All notable changes to PVE FREQ will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- `/api/vm/push-key` is now `POST` (was `GET`); operators hitting this endpoint must send the target IP in the JSON body instead of a query string, so SSH-key pushes no longer leak the target IP into URLs or access logs.
+
 ## [1.0.0] - 2026-04-03
 
 ### The Conquest — Complete Platform Rewrite
