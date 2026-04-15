@@ -96,7 +96,9 @@ class TestSkipClassificationContract(unittest.TestCase):
         self.assertEqual(_skip_reason("Permission denied"), "auth failed")
 
     def test_skip_reason_unreachable(self):
-        self.assertEqual(_skip_reason("No route to host"), "unreachable")
+        reason = _skip_reason("No route to host")
+        self.assertIn("no route", reason.lower())
+        self.assertIn("vlan", reason.lower())
 
 
 # ─────────────────────────────────────────────────────────────

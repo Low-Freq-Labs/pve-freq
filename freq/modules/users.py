@@ -67,7 +67,7 @@ def _load_users(cfg: FreqConfig) -> list:
     if users:
         return users
     # Fallback: load from roles.conf (colon-delimited: USERNAME:ROLE)
-    # Init writes roles.conf but not users.conf — this bridges the gap.
+    # for legacy or partially repaired installs where users.conf is still empty.
     roles_path = os.path.join(cfg.conf_dir, "roles.conf")
     try:
         with open(roles_path) as f:

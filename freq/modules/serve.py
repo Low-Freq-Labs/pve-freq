@@ -1916,6 +1916,7 @@ def _check_vm_permission(cfg, vmid, action):
 from freq.api.auth import (
     hash_password as _hash_password,
     check_session_role as _check_session_role,
+    _request_has_query_token,
     handle_auth_login,
     handle_auth_logout,
     handle_auth_verify,
@@ -2305,7 +2306,27 @@ class FreqHandler(BaseHTTPRequestHandler):
                 and not any(path.startswith(p) for p in self._AUTH_WHITELIST_PREFIXES):
             role, err = _check_session_role(self, "viewer")
             if err:
-                self._json_response({"error": "Authentication required"}, 403)
+                # R-DC01-OPS-SURFACES-20260414A task 1: when the caller
+                # passed ?token= in the query string but no cookie or
+                # Authorization header, surface the truthful migration
+                # reason so the operator can see that query-string auth
+                # was removed (R-SECURITY-TRUST-AUDIT-20260413P F7)
+                # instead of a generic "Authentication required". The
+                # token value is not trusted or parsed — only its
+                # presence in the URL is used to select the message.
+                if _request_has_query_token(self):
+                    self._json_response({
+                        "error": (
+                            "Query-string auth removed. Use the freq_session "
+                            "cookie (same-origin EventSource sends it "
+                            "automatically) or an Authorization: Bearer "
+                            "header. See R-SECURITY-TRUST-AUDIT-20260413P F7."
+                        ),
+                        "reason": "query_token_removed",
+                        "migration": "R-SECURITY-TRUST-AUDIT-20260413P-F7",
+                    }, 403)
+                else:
+                    self._json_response({"error": "Authentication required"}, 403)
                 return
 
         # Check legacy routes first, then v1 domain routes
@@ -2358,8 +2379,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         background cache probes. Each client gets its own Queue via the
         SSE event bus. Sends keepalive comments every 15s.
         """
-        # Auth: EventSource can't send headers, so token is in query string
-        # _check_session_role already reads query string tokens (auth.py:91-92)
+        # Auth: same-origin EventSource sends the freq_session cookie.
+        # Query-string token auth was removed because it leaks into URLs/logs.
         role, err = _check_session_role(self, "viewer")
         if err:
             self.send_response(403)

@@ -514,6 +514,14 @@ class TestSSEEndpoint:
         assert hasattr(FreqHandler, "_serve_events")
         assert callable(getattr(FreqHandler, "_serve_events"))
 
+    def test_events_query_token_gets_truthful_403(self):
+        """SSE query-token callers get the migration reason, not generic auth required."""
+        h = _make_handler("/api/events?token=deadbeef")
+        h.do_GET()
+        assert h._status_code == 403
+        data = _get_json(h)
+        assert "Query-string auth" in data["error"]
+
 
 # ═══════════════════════════════════════════════════════════════════
 # OpenAPI / API Docs Truthfulness

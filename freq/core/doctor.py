@@ -23,8 +23,11 @@ Design decisions:
 
 import os
 import shutil
+import ssl
 import subprocess
 import time
+import urllib.error
+import urllib.request
 
 from freq.core.config import FreqConfig
 from freq.core import fmt
@@ -66,6 +69,8 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
                 _check_config,
                 _check_data_dirs,
                 _check_personality,
+                _check_rbac_bootstrap,
+                _check_users_conf_fallback,
             ],
         ),
         (
@@ -91,6 +96,7 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
             "PVE Cluster",
             [
                 _check_pve_nodes,
+                _check_pve_token_drift,
             ],
         ),
     ]
@@ -353,6 +359,144 @@ def _check_personality(cfg: FreqConfig) -> int:
         return 2
 
 
+def _read_active_lines(path: str):
+    """Return uncommented, non-empty lines from a file or None on read failure."""
+    try:
+        with open(path) as f:
+            return [
+                line.strip()
+                for line in f
+                if line.strip() and not line.strip().startswith("#")
+            ]
+    except FileNotFoundError:
+        return []
+    except OSError:
+        return None
+
+
+def _parse_roles_conf(path: str):
+    lines = _read_active_lines(path)
+    if lines is None:
+        return None
+    roles = {}
+    for line in lines:
+        if ":" not in line:
+            continue
+        user, role = line.split(":", 1)
+        roles[user.strip()] = role.strip()
+    return roles
+
+
+def _parse_users_conf(path: str):
+    lines = _read_active_lines(path)
+    if lines is None:
+        return None
+    users = {}
+    for line in lines:
+        parts = line.split()
+        if len(parts) >= 2:
+            users[parts[0].strip()] = parts[1].strip()
+    return users
+
+
+def _check_rbac_bootstrap(cfg: FreqConfig) -> int:
+    """Verify one non-service admin survives across roles/users/vault state."""
+    roles = _parse_roles_conf(os.path.join(cfg.conf_dir, "roles.conf"))
+    users = _parse_users_conf(os.path.join(cfg.conf_dir, "users.conf"))
+    if roles is None or users is None:
+        fmt.step_warn("RBAC bootstrap: cannot read roles.conf or users.conf")
+        return 2
+
+    svc = (getattr(cfg, "ssh_service_account", "") or "").lower()
+    role_admins = {
+        user for user, role in roles.items()
+        if role.lower() == "admin" and user.lower() != svc
+    }
+    user_admins = {
+        user for user, role in users.items()
+        if role.lower() == "admin" and user.lower() != svc
+    }
+    common = sorted(role_admins & user_admins)
+    if not user_admins:
+        fmt.step_warn(
+            "RBAC bootstrap: no non-service admin found in users.conf"
+        )
+        return 2
+
+    readable_hash_user = None
+    stored_hash = ""
+    read_error = None
+    for candidate in sorted(user_admins):
+        try:
+            from freq.modules.vault import vault_get
+
+            candidate_hash = vault_get(cfg, "auth", f"password_{candidate}") or ""
+        except Exception as e:
+            read_error = e
+            candidate_hash = ""
+        if candidate_hash:
+            readable_hash_user = candidate
+            stored_hash = candidate_hash
+            break
+
+    bootstrap_user = readable_hash_user or sorted(user_admins)[0]
+    if not roles:
+        role_state = "roles.conf missing or empty; users.conf is primary"
+    elif common:
+        bootstrap_user = common[0]
+        role_state = "roles/users agree"
+    else:
+        role_state = "roles.conf and users.conf disagree"
+
+    if not stored_hash and readable_hash_user:
+        bootstrap_user = readable_hash_user
+
+    if not readable_hash_user and read_error is not None:
+        fmt.step_warn(
+            f"RBAC bootstrap: {bootstrap_user} present in roles/users but vault is unreadable"
+        )
+        return 2
+
+    if not stored_hash:
+        fmt.step_warn(
+            "RBAC bootstrap: cannot confirm a vault hash for any non-service admin from operator context"
+        )
+        return 2
+
+    if "$" not in stored_hash and len(stored_hash) != 64:
+        fmt.step_warn(
+            f"RBAC bootstrap: {bootstrap_user} vault entry exists but hash format is unexpected"
+        )
+        return 2
+
+    if role_state == "roles/users agree":
+        fmt.step_ok(
+            f"RBAC bootstrap: {bootstrap_user} present in roles/users and vault hash exists"
+        )
+        return 0
+    fmt.step_warn(
+        f"RBAC bootstrap: {bootstrap_user} users.conf entry and vault hash exist; {role_state}"
+    )
+    return 2
+
+
+def _check_users_conf_fallback(cfg: FreqConfig) -> int:
+    """Warn when the system is still running on roles.conf fallback."""
+    roles = _parse_roles_conf(os.path.join(cfg.conf_dir, "roles.conf"))
+    users = _parse_users_conf(os.path.join(cfg.conf_dir, "users.conf"))
+    if roles is None or users is None:
+        fmt.step_warn("users.conf primary source: cannot read users.conf or roles.conf")
+        return 2
+    if roles and not users:
+        fmt.step_warn(
+            "users.conf is empty — running on legacy roles.conf fallback; re-run 'freq init' to re-run RBAC setup"
+        )
+        return 2
+    if users:
+        fmt.step_ok("users.conf primary source")
+    return 0
+
+
 # --- SSH & Connectivity ---
 
 
@@ -456,14 +600,21 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
         )
         if r.returncode == 0:
             return h, STATE_LIVE, "ssh probe OK", False
+        raw_stderr = r.stderr or ""
+        raw_stdout = r.stdout or ""
         state, reason = classify_probe_failure(
-            r.returncode, r.stderr or "", r.stdout or ""
+            r.returncode, raw_stderr, raw_stdout
         )
         # Operator-context auth issue: legacy device auth-failed against
         # the operator's own key. This is not a real DOWN — it means the
         # operator doesn't have the service account's RSA key. Flag it
         # so the summary line can surface it as n/a without lying.
-        operator_auth = is_legacy and state == STATE_AUTH_FAILED
+        raw_joined = f"{raw_stderr}\n{raw_stdout}".lower()
+        operator_auth = is_legacy and (
+            "permission denied" in raw_joined
+            or "publickey" in raw_joined
+            or state == STATE_AUTH_FAILED
+        )
         return h, state, reason, operator_auth
 
     reachable = 0
@@ -715,7 +866,27 @@ def _check_pve_nodes(cfg: FreqConfig) -> int:
 
     reachable = 0
     pve_version = ""
+    api_token_id = getattr(cfg, "pve_api_token_id", "") or "freq-ops@pam!freq-rw"
+    api_token_secret = getattr(cfg, "pve_api_token_secret", "") or _read_credential_text(
+        "/etc/freq/credentials/pve-token-rw"
+    )
     for ip in cfg.pve_nodes:
+        used_api = False
+        if api_token_id and api_token_secret:
+            code, body = _probe_pve_api_token(ip, api_token_id, api_token_secret)
+            if code == 200:
+                used_api = True
+                reachable += 1
+                if not pve_version:
+                    import json
+
+                    try:
+                        data = json.loads(body)
+                        pve_version = data.get("data", {}).get("version", "")
+                    except Exception:
+                        pass
+        if used_api:
+            continue
         r = ssh_run(
             host=ip,
             command="sudo pvesh get /version --output-format json 2>/dev/null || echo '{}'",
@@ -757,3 +928,111 @@ def _check_pve_nodes(cfg: FreqConfig) -> int:
     else:
         fmt.step_fail(f"PVE cluster: 0/{total} nodes reachable")
         return 1
+
+
+def _read_credential_text(path: str) -> str:
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except (FileNotFoundError, OSError, PermissionError):
+        pass
+    try:
+        r = subprocess.run(
+            ["sudo", "-n", "cat", path],
+            capture_output=True,
+            text=True,
+            timeout=DOCTOR_CMD_TIMEOUT,
+        )
+        if r.returncode == 0:
+            return r.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+    return ""
+
+
+def _probe_pve_api_token(node_ip: str, token_id: str, token_secret: str) -> tuple[int, str]:
+    url = f"https://{node_ip}:8006/api2/json/version"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"PVEAPIToken={token_id}={token_secret}",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        with urllib.request.urlopen(req, timeout=DOCTOR_PVE_TIMEOUT, context=ctx) as resp:
+            body = resp.read().decode(errors="replace")
+            return resp.status, body[:160]
+    except urllib.error.HTTPError as e:
+        try:
+            body = e.read().decode(errors="replace")
+        except Exception:
+            body = str(e)
+        return e.code, body[:160]
+    except Exception as e:
+        return -1, str(e)
+
+
+def _check_pve_token_drift(cfg: FreqConfig) -> int:
+    """Probe both RW and RO PVE tokens across every configured node."""
+    if not cfg.pve_nodes:
+        return 0
+
+    tokens = []
+    warnings = []
+
+    rw_secret = _read_credential_text("/etc/freq/credentials/pve-token-rw")
+    rw_id = getattr(cfg, "pve_api_token_id", "") or "freq-ops@pam!freq-rw"
+    if rw_secret:
+        tokens.append(("rw", rw_id, rw_secret))
+    else:
+        warnings.append("rw token unreadable")
+
+    ro_text = _read_credential_text("/etc/freq/credentials/pve-token")
+    if ro_text:
+        ro_map = {}
+        for line in ro_text.splitlines():
+            if "=" in line:
+                key, value = line.split("=", 1)
+                ro_map[key.strip()] = value.strip()
+        ro_id = ro_map.get("PVE_TOKEN_ID", "")
+        ro_secret = ro_map.get("PVE_TOKEN_SECRET", "")
+        if ro_id and ro_secret:
+            tokens.append(("ro", ro_id, ro_secret))
+        else:
+            warnings.append("ro token file malformed")
+    else:
+        warnings.append("ro token unreadable")
+
+    if not tokens:
+        fmt.step_warn("PVE API tokens: no readable token credentials")
+        return 2
+
+    failures = []
+    for label, token_id, token_secret in tokens:
+        for ip in cfg.pve_nodes:
+            code, reason = _probe_pve_api_token(ip, token_id, token_secret)
+            if code != 200:
+                failures.append(f"{label}@{ip}={code} ({reason[:60]})")
+
+    token_labels = ", ".join(sorted(label for label, _, _ in tokens))
+    if failures:
+        fmt.step_fail(
+            "PVE API tokens: " + "; ".join(failures[:4]) +
+            (f" +{len(failures) - 4} more" if len(failures) > 4 else "")
+        )
+        return 1
+    if warnings:
+        fmt.step_warn(
+            f"PVE API tokens: verified {token_labels} on {len(cfg.pve_nodes)} node(s); "
+            + "; ".join(warnings)
+        )
+        return 2
+    fmt.step_ok(
+        f"PVE API tokens: verified {token_labels} on {len(cfg.pve_nodes)} node(s)"
+    )
+    return 0

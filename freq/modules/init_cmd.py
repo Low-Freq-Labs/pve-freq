@@ -7309,10 +7309,17 @@ def _init_headless(cfg, args):
 
     # ── Phase 11: RBAC ──
     _phase(11, headless_total, "RBAC Setup")
+    roles_file = os.path.join(cfg.conf_dir, "roles.conf")
+    users_file = os.path.join(cfg.conf_dir, "users.conf")
+    boot_pass = ctx.get("bootstrap_pass", "")
+    svc_pass = ctx.get("svc_pass", "")
+    # Re-run the same helper after the long init phases so roles.conf,
+    # users.conf, and the bootstrap web password converge on one
+    # idempotent source of truth.
     _seed_headless_dashboard_auth(
         cfg,
         bootstrap_user,
-        ctx.get("bootstrap_pass", "") or ctx.get("svc_pass", ""),
+        boot_pass or svc_pass,
         ctx["svc_name"],
         verbose=True,
     )

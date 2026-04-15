@@ -47,20 +47,16 @@ class TestLoginEndpointContract(unittest.TestCase):
 
 
 class TestVerifyEndpointContract(unittest.TestCase):
-    """Verify checks Bearer header or cookie, not query string."""
+    """Verify uses the shared token extractor for header/cookie auth."""
 
     def _handler_src(self):
         with open(os.path.join(REPO_ROOT, "freq/api/auth.py")) as f:
             src = f.read()
         return src.split("def handle_auth_verify")[1].split("\ndef ")[0]
 
-    def test_checks_bearer_header(self):
+    def test_uses_shared_token_extractor(self):
         src = self._handler_src()
-        self.assertIn("Bearer", src)
-
-    def test_checks_cookie(self):
-        src = self._handler_src()
-        self.assertIn("freq_session", src)
+        self.assertIn("_extract_session_token", src)
 
     def test_returns_valid_field(self):
         src = self._handler_src()
@@ -68,21 +64,15 @@ class TestVerifyEndpointContract(unittest.TestCase):
 
 
 class TestSessionTokenFlow(unittest.TestCase):
-    """Session tokens must work for API calls via query string."""
+    """Session checks must use the shared extractor, not query strings."""
 
-    def test_check_session_accepts_query_token(self):
-        """_check_session_role must read token from query string."""
+    def test_check_session_uses_shared_extractor(self):
+        """check_session_role must rely on the central auth extractor."""
         with open(os.path.join(REPO_ROOT, "freq/api/auth.py")) as f:
             src = f.read()
-        self.assertIn("token", src)
-        # The session check function should read from query params
         check_fn = src.split("def check_session_role")[1].split("\ndef ")[0] if "def check_session_role" in src else ""
-        if not check_fn:
-            # Try the underscore version
-            check_fn = src.split("def _check_session_role")[1].split("\ndef ")[0] if "def _check_session_role" in src else ""
-        if check_fn:
-            self.assertIn("query", check_fn.lower(),
-                           "Session check must read token from query string")
+        self.assertIn("_extract_session_token", check_fn)
+        self.assertNotIn("parse_qs", check_fn)
 
 
 if __name__ == "__main__":

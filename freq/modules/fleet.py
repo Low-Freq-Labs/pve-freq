@@ -182,8 +182,14 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
         # says healthy, we trust it and flip to live-via-cache; else
         # surface the honest reason.
         is_legacy = h.htype in ("idrac", "switch")
-        operator_auth_issue = (
-            is_legacy and state == STATE_AUTH_FAILED
+        stderr_l = stderr.lower()
+        stdout_l = stdout.lower()
+        operator_auth_issue = is_legacy and (
+            "permission denied" in stderr_l
+            or "publickey" in stderr_l
+            or "permission denied" in stdout_l
+            or "publickey" in stdout_l
+            or state == STATE_AUTH_FAILED
         )
         cached = dashboard_health.get(h.ip) if operator_auth_issue else None
         cached_live = cached and cached.get("state") in (STATE_LIVE, "live") or (

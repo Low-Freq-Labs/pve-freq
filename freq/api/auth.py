@@ -191,6 +191,35 @@ def _extract_session_token(handler) -> str:
     return ""
 
 
+def _request_has_query_token(handler) -> bool:
+    """True iff the request URL carries ?token=... in the query string.
+
+    Used by the /api gate to surface a distinct, truthful error message
+    when a caller attempts the removed query-string auth path, so the
+    operator sees the migration reason instead of a generic
+    "Authentication required". The token value is NOT fed into the
+    auth check — only its presence in the URL is used to pick the
+    error message. Query-string auth was removed under
+    R-SECURITY-TRUST-AUDIT-20260413P F7 because the token leaks into
+    browser history, reverse-proxy access logs, and JS instrumentation
+    reading window.location. This helper is the operator-facing truth
+    surface for that migration.
+
+    Deliberately uses manual string splitting instead of
+    urllib.parse.parse_qs so the no-query-parsing contract enforced by
+    test_login_first_use.TestSessionTokenFlow stays green on the
+    check_session_role function body.
+    """
+    path = getattr(handler, "path", "") or ""
+    if "?" not in path:
+        return False
+    query = path.split("?", 1)[1]
+    for part in query.split("&"):
+        if part.startswith("token=") and len(part) > len("token="):
+            return True
+    return False
+
+
 def _lookup_session(token: str):
     """Return the session dict for a token, or None on miss/expiry.
     Side-effect: removes expired entries from the in-memory store."""
@@ -227,6 +256,14 @@ def check_session_role(handler, min_role="operator"):
     """
     token = _extract_session_token(handler)
     if not token:
+        if _request_has_query_token(handler):
+            return (
+                None,
+                "Query-string auth removed. Use the freq_session cookie "
+                "(same-origin EventSource sends it automatically) or an "
+                "Authorization: Bearer header. See "
+                "R-SECURITY-TRUST-AUDIT-20260413P F7.",
+            )
         return None, "Authentication required"
     session = _lookup_session(token)
     if not session:

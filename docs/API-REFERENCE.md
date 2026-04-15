@@ -65,7 +65,7 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | POST | `/api/vm/add-disk` | Add disk to VM |
 | POST | `/api/vm/change-id` | Change VMID |
 | GET | `/api/vm/check-ip` | Check IP availability |
-| GET | `/api/vm/push-key` | Push SSH key to VM |
+| POST | `/api/vm/push-key` | Push SSH key to VM |
 
 ## Storage & Backup
 
