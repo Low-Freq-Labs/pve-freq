@@ -89,11 +89,11 @@ class TestAuthBypass:
         assert "expired or invalid" in err
 
     def test_query_param_token_rejected(self):
-        """?token= in URL must NOT authenticate — tokens belong in headers/cookies only."""
+        """?token= in URL must NOT authenticate — removed path must return a migration message."""
         handler = _mock_handler(path="/api/test?token=fake123")
         role, err = check_session_role(handler)
         assert role is None
-        assert err == "Authentication required"
+        assert "Query-string auth removed" in err
 
     def test_valid_token_returns_role(self):
         with _auth_lock:

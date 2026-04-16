@@ -246,7 +246,7 @@ class TestT4TestSshGatedFirstRun(unittest.TestCase):
         window_end = src.find("\n    def ", idx + 50)
         window = src[idx:window_end]
         self.assertIn("_is_first_run()", window)
-        self.assertIn("Setup already complete", window)
+        self.assertIn("Setup wizard already used", window)
 
 
 class TestT5VaultDeleteValidatesKey(unittest.TestCase):

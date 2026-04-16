@@ -1,7 +1,7 @@
 """Tests for partial-init state recovery contract.
 
 Bug: When headless init hangs late in Phase 12, roles.conf has
-freq-ops:admin and freq-admin:admin but users.conf is still example-only.
+bootstrap-user:admin and service-account:admin but users.conf is still example-only.
 Web login dead-ends: first_run might flicker to True via exception paths,
 and the setup wizard misleads operators.
 
@@ -68,15 +68,15 @@ class TestLoadUsersFallback(unittest.TestCase):
         try:
             # Write users.conf with 1 entry
             with open(os.path.join(cfg.conf_dir, "users.conf"), "w") as f:
-                f.write("# FREQ Users\nfreq-ops admin\n")
+                f.write("# FREQ Users\nbootstrap-admin admin\n")
             # Write roles.conf with 2 entries
             with open(os.path.join(cfg.conf_dir, "roles.conf"), "w") as f:
-                f.write("freq-ops:admin\nfreq-admin:admin\n")
+                f.write("bootstrap-admin:admin\nfreq-admin:admin\n")
             from freq.modules.users import _load_users
             users = _load_users(cfg)
             # users.conf has 1 entry; fallback to roles.conf shouldn't happen
             self.assertEqual(len(users), 1)
-            self.assertEqual(users[0]["username"], "freq-ops")
+            self.assertEqual(users[0]["username"], "bootstrap-admin")
         finally:
             import shutil
             shutil.rmtree(cfg.conf_dir, ignore_errors=True)
@@ -97,12 +97,12 @@ class TestLoadUsersFallback(unittest.TestCase):
                 f.write("# commented entry\n# example user\n")
             # Write roles.conf with real entries
             with open(os.path.join(cfg.conf_dir, "roles.conf"), "w") as f:
-                f.write("# template\nfreq-ops:admin\nfreq-admin:admin\n")
+                f.write("# template\nbootstrap-admin:admin\nfreq-admin:admin\n")
             from freq.modules.users import _load_users
             users = _load_users(cfg)
             self.assertEqual(len(users), 2)
             usernames = [u["username"] for u in users]
-            self.assertIn("freq-ops", usernames)
+            self.assertIn("bootstrap-admin", usernames)
             self.assertIn("freq-admin", usernames)
         finally:
             import shutil

@@ -18,16 +18,29 @@ BUNDLE="/tmp/pve-freq-deploy-bundle.git"
 
 echo "=== Deploy to ${USER}@${TARGET}:${REMOTE_DIR} ==="
 
+# Dirty-tree E2E must exercise the working tree under test, not silently fall
+# back to the last commit. If local changes exist, force the full rsync path so
+# uncommitted fixes and docs are part of the deployed artifact.
+LOCAL_DIRTY=""
+if [ -n "$(git status --porcelain 2>/dev/null || true)" ]; then
+    LOCAL_DIRTY="1"
+fi
+
 # Check if target has an existing source tree
 TARGET_HEAD=$(ssh -n "${USER}@${TARGET}" "cd ${REMOTE_DIR} && git rev-parse HEAD 2>/dev/null" 2>/dev/null || echo "")
 
-if [ -z "$TARGET_HEAD" ]; then
+if [ -z "$TARGET_HEAD" ] || [ -n "$LOCAL_DIRTY" ]; then
     # Clean target — full rsync bootstrap.
     # Exclude runtime-state directories entirely. Developer workspaces may
     # contain keys/vault files with 0600 perms owned by a different user,
     # which would fail rsync with 'permission denied' (exit code 23).
     # Only the source code tree should be synced to the dev target.
-    echo "[1/4] Clean target — bootstrapping source tree..."
+    if [ -n "$LOCAL_DIRTY" ]; then
+        echo "[1/4] Local tree dirty — forcing full source sync"
+        ssh -n "${USER}@${TARGET}" "if [ -d ${REMOTE_DIR}/.git ]; then cd ${REMOTE_DIR} && git reset --hard HEAD && git clean -fd; fi"
+    else
+        echo "[1/4] Clean target — bootstrapping source tree..."
+    fi
     ssh -n "${USER}@${TARGET}" "mkdir -p ${REMOTE_DIR}"
     rsync -az --delete \
         --exclude='__pycache__' --exclude='*.pyc' \
@@ -128,8 +141,8 @@ fi
 # Restart dashboard service if running
 echo "[6/6] Restarting dashboard..."
 ssh -n "${USER}@${TARGET}" "
-if sudo systemctl is-active freq-dashboard >/dev/null 2>&1; then
-    sudo systemctl restart freq-dashboard
+if sudo systemctl is-active freq-serve >/dev/null 2>&1; then
+    sudo systemctl restart freq-serve
     echo 'Dashboard restarted'
 else
     echo 'Dashboard service not running — skipped'

@@ -755,7 +755,7 @@ class TestSetupTrustBoundaries(unittest.TestCase):
 
     @patch("freq.modules.serve._is_first_run", return_value=False)
     def test_setup_create_admin_blocked_after_setup(self, _mock):
-        """create-admin must return 403 when setup is already complete."""
+        """create-admin must return 403 when setup wizard was already used."""
         import io
         from freq.modules.serve import FreqHandler
 
@@ -910,56 +910,58 @@ class TestSecurityHeaders(unittest.TestCase):
         src = inspect.getsource(FreqHandler._send_security_headers)
         self.assertIn("Content-Security-Policy", src)
 
-    def test_csp_allows_cdn_for_xterm(self):
-        """CSP must allow cdn.jsdelivr.net for xterm.js terminal support."""
+    def test_csp_rejects_public_cdn_for_xterm(self):
+        """Terminal assets are vendored locally; CSP must not reopen a public CDN."""
         import inspect
         from freq.modules.serve import FreqHandler
         src = inspect.getsource(FreqHandler._send_security_headers)
-        self.assertIn("cdn.jsdelivr.net", src,
-                       "CSP must allow cdn.jsdelivr.net for xterm.js")
+        self.assertNotIn("cdn.jsdelivr.net", src,
+                         "CSP must not allow cdn.jsdelivr.net when xterm is vendored")
 
-    def test_csp_covers_all_external_resources(self):
-        """CSP must allow every external origin used by web assets."""
-        import os, re, inspect
-        from freq.modules.serve import FreqHandler
-        csp_src = inspect.getsource(FreqHandler._send_security_headers)
+    def test_first_party_web_assets_have_no_runtime_external_origins(self):
+        """The shipped UI is self-hosted; first-party web assets must not depend on public origins."""
+        import os, re
 
         web_dir = os.path.join(os.path.dirname(__file__), "..", "freq", "data", "web")
+        first_party = [
+            os.path.join(web_dir, "app.html"),
+            os.path.join(web_dir, "css", "app.css"),
+            os.path.join(web_dir, "js", "app.js"),
+        ]
         external_origins = set()
-        for root, dirs, files in os.walk(web_dir):
-            for fname in files:
-                if not fname.endswith(('.html', '.css', '.js')):
+        for fpath in first_party:
+            with open(fpath) as f:
+                content = f.read()
+            for url in re.findall(r'https://([a-zA-Z0-9._-]+\.[a-z]{2,})', content):
+                if url in ('www.w3.org',) or 'example' in url or '.dc' in url:
                     continue
-                fpath = os.path.join(root, fname)
-                with open(fpath) as f:
-                    content = f.read()
-                for url in re.findall(r'https://([a-zA-Z0-9._-]+\.[a-z]{2,})', content):
-                    # Skip XML namespaces, local domains, and placeholders
-                    if url in ('www.w3.org',) or 'example' in url or '.dc' in url:
-                        continue
-                    external_origins.add(url)
+                external_origins.add(url)
 
-        missing = [o for o in external_origins if o not in csp_src]
-        self.assertEqual(len(missing), 0,
-                         f"CSP missing external origins used by web assets: {missing}")
+        self.assertEqual(
+            external_origins,
+            set(),
+            f"First-party web assets must not depend on public origins: {sorted(external_origins)}",
+        )
 
-    def test_csp_allows_google_fonts(self):
-        """CSP must allow Google Fonts (used by app.css Outfit + JetBrains Mono)."""
+    def test_csp_rejects_public_google_fonts(self):
+        """Fonts are local/platform only; CSP must not allow public Google font origins."""
         import inspect
         from freq.modules.serve import FreqHandler
         src = inspect.getsource(FreqHandler._send_security_headers)
-        self.assertIn("fonts.googleapis.com", src,
-                       "CSP style-src must allow fonts.googleapis.com")
-        self.assertIn("fonts.gstatic.com", src,
-                       "CSP font-src must allow fonts.gstatic.com")
+        self.assertNotIn("fonts.googleapis.com", src,
+                         "CSP style-src must not allow fonts.googleapis.com")
+        self.assertNotIn("fonts.gstatic.com", src,
+                         "CSP font-src must not allow fonts.gstatic.com")
 
-    def test_auth_reads_query_param_token(self):
-        """check_session_role must read ?token= for SSE EventSource support."""
+    def test_auth_reports_removed_query_param_token(self):
+        """Removed query-string auth must surface a migration error instead of silently authenticating."""
         import inspect
         from freq.api.auth import check_session_role
         src = inspect.getsource(check_session_role)
-        self.assertIn("parse_qs", src,
-                       "check_session_role must parse query string for token fallback")
+        self.assertIn("_request_has_query_token", src,
+                      "check_session_role must detect removed query-token callers")
+        self.assertIn("Query-string auth removed", src,
+                      "check_session_role must return a migration message for removed query auth")
 
     def test_cookie_has_httponly_samesite(self):
         """Session cookie must have HttpOnly and SameSite=Strict."""

@@ -256,46 +256,65 @@ def run(
 
     logger.debug(f"ssh_start: {host} [{htype}]", command=command[:120])
 
+    # R-PVEFREQ-RUN6-LATE-VERIFY-HANG-20260416Z: wrap in GNU timeout for
+    # hard OS-level kill. subprocess.run(timeout=) only kills the direct
+    # child; grandchild SSH sessions (especially iDRAC racadm) can hold
+    # pipe FDs open indefinitely. GNU timeout sends SIGKILL to the process
+    # tree at the OS level. start_new_session ensures killpg reaches the
+    # full tree on the Python-side fallback path.
+    wrapped_cmd = ["timeout", "-s", "KILL", str(command_timeout)] + ssh_cmd
+    py_timeout = command_timeout + 10
+
     start = time.monotonic()
     try:
         result = subprocess.run(
-            ssh_cmd,
+            wrapped_cmd,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             encoding="utf-8",
             errors="replace",
-            timeout=command_timeout,
+            timeout=py_timeout,
+            start_new_session=True,
         )
         duration = time.monotonic() - start
 
+        rc = result.returncode
+        # GNU timeout returns 137 on SIGKILL; Python reports -9 when
+        # killpg catches the wrapper. Both mean timeout.
+        if rc in (137, -9):
+            logger.error(f"ssh_timeout: {host} [{htype}] after {command_timeout}s", command=command[:120])
+            logger.perf("ssh", duration, host=host, htype=htype, ok=False, timeout=True)
+            return CmdResult(stdout="", stderr=f"Timeout after {command_timeout}s", returncode=124, duration=duration)
+
         logger.cmd(
             f"ssh {host}: {command[:80]}",
-            exit_code=result.returncode,
+            exit_code=rc,
             duration=duration,
             htype=htype,
         )
 
-        if result.returncode != 0:
+        if rc != 0:
             stderr_snippet = (result.stderr or "").strip()[:200]
             logger.error(
-                f"ssh_failed: {host} [{htype}] rc={result.returncode}",
+                f"ssh_failed: {host} [{htype}] rc={rc}",
                 command=command[:120],
                 stderr=stderr_snippet,
                 duration=duration,
             )
 
         # Performance tracking
-        logger.perf("ssh", duration, host=host, htype=htype, ok=result.returncode == 0)
+        logger.perf("ssh", duration, host=host, htype=htype, ok=rc == 0)
 
         return CmdResult(
             stdout=result.stdout.strip(),
             stderr=result.stderr.strip(),
-            returncode=result.returncode,
+            returncode=rc,
             duration=duration,
         )
     except subprocess.TimeoutExpired:
         duration = time.monotonic() - start
-        logger.error(f"ssh_timeout: {host} [{htype}] after {command_timeout}s", command=command[:120])
+        # Python-side fallback: kill the process group
+        logger.error(f"ssh_timeout: {host} [{htype}] after {command_timeout}s (py fallback)", command=command[:120])
         logger.perf("ssh", duration, host=host, htype=htype, ok=False, timeout=True)
         return CmdResult(stdout="", stderr=f"Timeout after {command_timeout}s", returncode=124, duration=duration)
     except OSError as e:

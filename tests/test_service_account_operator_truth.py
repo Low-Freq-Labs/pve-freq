@@ -3,12 +3,13 @@
 Proves:
 1. Operator-visible CLI help does not hardcode freq-admin
 2. Dashboard key push text says "service account" not "freq-admin"
-3. Runtime config uses configured account (freq-ops), not default
-4. Code default is freq-admin (documented) but config overrides it
+3. Runtime config uses the configured account from freq.toml
+4. Code default is freq-admin (documented) when config does not override it
 """
 
 import os
 import re
+import tomllib
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -48,19 +49,21 @@ class TestRuntimeConfigTruth(unittest.TestCase):
         from freq.core.config import _DEFAULTS
         self.assertEqual(_DEFAULTS["ssh_service_account"], "freq-admin")
 
-    def test_configured_account_is_freq_ops(self):
-        """freq.toml configures freq-ops as the active service account."""
+    def test_configured_account_matches_local_config(self):
+        """Runtime config must match the local freq.toml service_account value when set."""
+        from freq.core.config import load_config
+        cfg_path = os.path.join(REPO_ROOT, "conf", "freq.toml")
+        cfg = load_config()
+        with open(cfg_path, "rb") as f:
+            data = tomllib.load(f)
+        expected = data.get("ssh", {}).get("service_account", "freq-admin")
+        self.assertEqual(cfg.ssh_service_account, expected)
+
+    def test_configured_value_is_nonempty(self):
+        """Configured runtime service account must not be empty."""
         from freq.core.config import load_config
         cfg = load_config()
-        self.assertEqual(cfg.ssh_service_account, "freq-ops")
-
-    def test_configured_overrides_default(self):
-        """Configured value must be different from code default."""
-        from freq.core.config import load_config, _DEFAULTS
-        cfg = load_config()
-        # This proves the config system works — runtime uses configured, not default
-        self.assertNotEqual(cfg.ssh_service_account, _DEFAULTS["ssh_service_account"],
-                            "If these are equal, config override is not working")
+        self.assertTrue(cfg.ssh_service_account)
 
 
 if __name__ == "__main__":

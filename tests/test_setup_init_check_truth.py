@@ -1,11 +1,11 @@
 """Setup/init-check truth tests.
 
 Proves:
-1. Web setup completion writes both markers (setup-complete + .initialized)
-2. .initialized marker content distinguishes web setup from CLI init
+1. Web setup completion writes setup-complete + .web-setup-complete (NOT .initialized)
+2. .web-setup-complete marker content distinguishes web setup from CLI init
 3. Setup UX text does NOT claim full initialization is complete
 4. Setup summary shows honest "next steps" for fleet configuration
-5. _is_first_run checks both marker paths
+5. _is_first_run checks all three marker paths
 """
 
 import os
@@ -16,7 +16,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class TestSetupCompletionMarkers(unittest.TestCase):
-    """Setup complete writes both markers for cross-tool compatibility."""
+    """Setup complete writes .web-setup-complete, NOT .initialized."""
 
     def _handler_src(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
@@ -27,26 +27,33 @@ class TestSetupCompletionMarkers(unittest.TestCase):
         src = self._handler_src()
         self.assertIn("setup-complete", src)
 
-    def test_writes_initialized_marker(self):
+    def test_writes_web_setup_marker(self):
         src = self._handler_src()
-        self.assertIn(".initialized", src)
+        self.assertIn(".web-setup-complete", src)
 
-    def test_initialized_marker_says_web_setup(self):
-        """The .initialized content must distinguish web setup from CLI init."""
+    def test_does_not_write_initialized(self):
+        """Web wizard must NOT write .initialized — only freq init does."""
+        src = self._handler_src()
+        self.assertNotIn('".initialized"', src,
+                          "Web wizard must not write .initialized marker")
+
+    def test_web_setup_marker_says_web_setup(self):
+        """The .web-setup-complete content must say 'web setup'."""
         src = self._handler_src()
         self.assertIn("web setup", src,
-                       ".initialized marker must say 'web setup' to distinguish from CLI init")
+                       ".web-setup-complete marker must say 'web setup'")
 
 
 class TestFirstRunDetection(unittest.TestCase):
-    """_is_first_run checks both setup-complete and .initialized markers."""
+    """_is_first_run checks all three markers."""
 
-    def test_checks_both_markers(self):
+    def test_checks_all_markers(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
             src = f.read()
         fn = src.split("def _is_first_run")[1].split("\ndef ")[0]
         self.assertIn("setup-complete", fn)
         self.assertIn(".initialized", fn)
+        self.assertIn(".web-setup-complete", fn)
 
 
 class TestSetupUXHonesty(unittest.TestCase):

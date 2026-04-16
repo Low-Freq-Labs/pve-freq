@@ -1,0 +1,45 @@
+# risk.toml — Infrastructure Dependency Map
+# "What breaks if X dies?" — used by `freq risk`
+#
+# Define your infrastructure components and their dependencies.
+# Run `freq risk all` to see the full map, or `freq risk <target>` for details.
+#
+# Fields:
+#   label       = Human-readable name
+#   risk        = CRITICAL | HIGH | MEDIUM | LOW
+#   impact      = List of consequences if this component fails
+#   recovery    = How to recover
+#   depends_on  = What this component needs to function
+#   depended_by = What breaks when this component fails
+
+[target.firewall]
+label = "Firewall/Gateway"
+risk = "CRITICAL"
+impact = [
+    "ALL remote management access lost",
+    "ALL inter-VLAN routing stops",
+    "ALL internet access for VMs stops",
+]
+recovery = "Physical console access required."
+depends_on = []
+depended_by = ["all hosts", "all VMs"]
+
+[target.storage]
+label = "Storage Server"
+risk = "CRITICAL"
+impact = [
+    "ALL NFS/SMB mounts go stale",
+    "VM backups fail",
+]
+recovery = "SSH or IPMI console. Check storage pool status."
+depends_on = ["firewall"]
+depended_by = ["all VMs with shared storage"]
+
+# Add your PVE nodes:
+# [target.node1]
+# label = "Proxmox Node 1"
+# risk = "HIGH"
+# impact = ["VMs on this node go down", "Cluster quorum at risk"]
+# recovery = "IPMI/iDRAC console."
+# depends_on = ["firewall", "storage"]
+# depended_by = ["VM 100", "VM 101"]

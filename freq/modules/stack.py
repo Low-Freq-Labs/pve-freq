@@ -179,7 +179,7 @@ def _cmd_update(cfg: FreqConfig, args) -> int:
 
     hosts = cfg.hosts
     if target:
-        from freq.core.resolve import host as resolve_host
+        from freq.core.resolve import by_target as resolve_host
 
         h = resolve_host(hosts, target)
         if not h:
@@ -319,7 +319,7 @@ def _cmd_logs(cfg: FreqConfig, args) -> int:
 
     hosts = cfg.hosts
     if target:
-        from freq.core.resolve import host as resolve_host
+        from freq.core.resolve import by_target as resolve_host
 
         h = resolve_host(hosts, target)
         if not h:
@@ -379,7 +379,7 @@ def _cmd_restart(cfg: FreqConfig, args) -> int:
 
     hosts = cfg.hosts
     if target:
-        from freq.core.resolve import host as resolve_host
+        from freq.core.resolve import by_target as resolve_host
 
         h = resolve_host(hosts, target)
         if not h:

@@ -23,7 +23,7 @@ FREQ_ROOT = Path(__file__).parent.parent
 
 
 class TestPhase9lRestartsDashboard(unittest.TestCase):
-    """Phase 9l must restart freq-dashboard after TLS config write."""
+    """Phase 9l must restart freq-serve after TLS config write."""
 
     def test_tracks_tls_config_changed(self):
         """Phase 9l must set a tls_config_changed flag when writing new paths."""
@@ -31,12 +31,12 @@ class TestPhase9lRestartsDashboard(unittest.TestCase):
         self.assertIn("tls_config_changed = True", src)
 
     def test_restart_on_config_change(self):
-        """If tls_config_changed is True, restart freq-dashboard."""
+        """If tls_config_changed is True, restart freq-serve."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
         idx = src.find('if tls_config_changed:')
         self.assertNotEqual(idx, -1)
         block = src[idx:idx + 1000]
-        self.assertIn('"systemctl", "restart", "freq-dashboard"', block)
+        self.assertIn('"systemctl", "restart", "freq-serve"', block)
 
     def test_checks_service_is_active_before_restart(self):
         """Must check is-active before restart to avoid stalling on dead service."""
@@ -44,7 +44,7 @@ class TestPhase9lRestartsDashboard(unittest.TestCase):
         idx = src.find('tls_config_changed:')
         self.assertNotEqual(idx, -1)
         block = src[idx:idx + 1000]
-        self.assertIn('"systemctl", "is-active", "freq-dashboard"', block)
+        self.assertIn('"systemctl", "is-active", "freq-serve"', block)
 
 
 if __name__ == "__main__":

@@ -129,7 +129,9 @@ def _make_cfg():
     cfg.vm_gateway = "192.168.10.1"
     cfg.nic_bridge = "vmbr0"
     cfg.pve_storage = {}
-    cfg.ssh_service_account = "freq-ops"
+    # R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D: freq-ops is bootstrap-only
+    # and cannot be the managed service account. Use the canonical default.
+    cfg.ssh_service_account = "freq-admin"
     cfg.protected_vmids = []
     cfg.protected_ranges = []
     return cfg

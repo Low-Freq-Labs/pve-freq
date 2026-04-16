@@ -9,6 +9,7 @@ This deployer detects which platform and uses the right tool.
 
 import base64
 import os
+import shlex
 
 from freq.core import fmt
 
@@ -150,7 +151,7 @@ if [ "$VARIANT" != "scale" ]; then
         svc_home=$(pw usershow '%(svc_name)s' | cut -d: -f9 2>/dev/null)
     fi
     if [ -z "$svc_home" ]; then
-        svc_home="/home/{svc_name}"
+        svc_home="/home/%(svc_name)s"
     fi
     mkdir -p "$svc_home/.ssh"
     chmod 700 "$svc_home/.ssh"
@@ -162,10 +163,10 @@ if [ "$VARIANT" != "scale" ]; then
 fi
 
 if [ "$VARIANT" = "core" ] && [ -d /usr/local/etc/sudoers.d ]; then
-    echo '{svc_name} ALL=(ALL) NOPASSWD: ALL' > '/usr/local/etc/sudoers.d/freq-%(svc_name)s'
+    echo '%(svc_name)s ALL=(ALL) NOPASSWD: ALL' > '/usr/local/etc/sudoers.d/freq-%(svc_name)s'
     chmod 440 '/usr/local/etc/sudoers.d/freq-%(svc_name)s'
 elif [ "$VARIANT" != "scale" ] && [ -d /etc/sudoers.d ]; then
-    echo '{svc_name} ALL=(ALL) NOPASSWD: ALL' > '/etc/sudoers.d/freq-%(svc_name)s'
+    echo '%(svc_name)s ALL=(ALL) NOPASSWD: ALL' > '/etc/sudoers.d/freq-%(svc_name)s'
     chmod 440 '/etc/sudoers.d/freq-%(svc_name)s'
     visudo -cf '/etc/sudoers.d/freq-%(svc_name)s' 2>/dev/null || true
 fi
@@ -174,7 +175,7 @@ echo DEPLOY_OK
 """
     rc, out, err = _ssh(deploy_script % {"svc_name": svc_name, "pass_b64": pass_b64, "pubkey_b64": pubkey_b64, "pubkey": pubkey}, as_root=True)
     if "USERADD_FAIL" in out or "ACCOUNT_MISSING" in out:
-        fmt.step_fail(f"Failed to create account '%(svc_name)s'")
+        fmt.step_fail(f"Failed to create account '{svc_name}'")
         return False
     elif MARKER_DEPLOY_OK not in out:
         fmt.step_fail(f"Deploy script failed ({(err or out)[:80]})")
@@ -241,25 +242,62 @@ def remove(ip, svc_name, key_path, rsa_key_path=None):
     """
     from freq.core.ssh import run as ssh_run
 
+    svc_name_q = shlex.quote(svc_name)
     remove_script = f"""
+export FREQ_USER={svc_name_q}
 # Detect TrueNAS variant
 if command -v midclt >/dev/null 2>&1; then
     # TrueNAS SCALE — use midclt
-    uid=$(midclt call user.query '[["username","=","{svc_name}"]]' 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d[0]['id'])" 2>/dev/null)
-    if [ -n "$uid" ]; then
-        midclt call user.delete "$uid" '{{"delete_group": true}}' >/dev/null 2>&1 && echo REMOVE_OK || echo REMOVE_FAIL
-    else
-        echo REMOVE_OK
-    fi
+    python3 - <<'PY'
+import json
+import os
+import subprocess
+import sys
+
+svc_name = os.environ["FREQ_USER"]
+query = subprocess.run(
+    ["midclt", "call", "user.query", json.dumps([["username", "=", svc_name]])],
+    capture_output=True,
+    text=True,
+    timeout=30,
+)
+if query.returncode != 0:
+    print("REMOVE_FAIL: " + (query.stderr or query.stdout)[:160], file=sys.stderr)
+    sys.exit(1)
+
+try:
+    users = json.loads(query.stdout or "[]")
+except json.JSONDecodeError as exc:
+    print(f"REMOVE_FAIL: {{exc}}", file=sys.stderr)
+    sys.exit(1)
+
+if not users:
+    print("REMOVE_OK")
+    sys.exit(0)
+
+uid = str(users[0]["id"])
+delete = subprocess.run(
+    ["midclt", "call", "user.delete", uid, json.dumps({{"delete_group": True}})],
+    capture_output=True,
+    text=True,
+    timeout=30,
+)
+if delete.returncode != 0:
+    print("REMOVE_FAIL: " + (delete.stderr or delete.stdout)[:160], file=sys.stderr)
+    sys.exit(1)
+print("REMOVE_OK")
+PY
 elif command -v pw >/dev/null 2>&1; then
     # TrueNAS CORE (FreeBSD)
-    pw userdel '%(svc_name)s' -r 2>/dev/null; echo REMOVE_OK
+    pw userdel "$FREQ_USER" -r >/dev/null 2>&1 || pw userdel "$FREQ_USER" >/dev/null 2>&1 || true
+    echo REMOVE_OK
 else
     # Linux fallback
-    userdel -r '%(svc_name)s' 2>/dev/null; echo REMOVE_OK
+    userdel -r "$FREQ_USER" >/dev/null 2>&1 || userdel "$FREQ_USER" >/dev/null 2>&1 || true
+    echo REMOVE_OK
 fi
 # Clean up sudoers
-rm -f /etc/sudoers.d/freq-%(svc_name)s /usr/local/etc/sudoers.d/freq-%(svc_name)s 2>/dev/null
+rm -f "/etc/sudoers.d/freq-$FREQ_USER" "/usr/local/etc/sudoers.d/freq-$FREQ_USER" 2>/dev/null
 """
     r = ssh_run(
         host=ip,

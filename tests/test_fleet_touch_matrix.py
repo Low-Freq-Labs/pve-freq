@@ -14,11 +14,23 @@ Run: pytest tests/test_fleet_touch_matrix.py -v
 import os
 import subprocess
 import sys
+import tomllib
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
+
+
+def _service_account():
+    """Resolve the configured deployed service account from freq.toml."""
+    path = os.path.join(REPO_ROOT, "conf", "freq.toml")
+    try:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+        return data.get("ssh", {}).get("service_account", "freq-admin")
+    except OSError:
+        return "freq-admin"
 
 
 def _ssh(ip, cmd, timeout=10):
@@ -43,7 +55,7 @@ def _ssh_switch(ip, cmd, password, timeout=10):
              "-o", "KexAlgorithms=+diffie-hellman-group14-sha1",
              "-o", "HostKeyAlgorithms=+ssh-rsa",
              "-o", "PubkeyAcceptedKeyTypes=+ssh-rsa",
-             f"freq-ops@{ip}", cmd],
+             f"{_service_account()}@{ip}", cmd],
             capture_output=True, text=True, timeout=timeout,
         )
         return r.returncode, r.stdout.strip(), r.stderr.strip()
@@ -156,7 +168,7 @@ class TestFleetSSHReachability(unittest.TestCase):
 
 @unittest.skipUnless(FLEET_AVAILABLE, SKIP_MSG)
 class TestFleetSudoCapability(unittest.TestCase):
-    """Linux/PVE/Docker hosts must have passwordless sudo for freq-ops."""
+    """Linux/PVE/Docker hosts must have passwordless sudo for the service account."""
 
     SUDO_TYPES = {"pve", "linux", "docker", "truenas"}
 

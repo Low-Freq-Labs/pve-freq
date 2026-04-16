@@ -3,7 +3,7 @@
 Proves the browser auth path is free of the recursive-logout storm that
 made a fresh-tab first-login impossible on the live 8888 instance.
 
-Symptoms caught by Playwright on a clean page load with freq-ops creds:
+Symptoms caught by Playwright on a clean page load with valid operator creds:
   - overlay stays visible after login
   - #mn-body stays hidden
   - header-user-btn stays empty

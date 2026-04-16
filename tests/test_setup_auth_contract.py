@@ -80,14 +80,14 @@ class TestFirstRunDetection(unittest.TestCase):
         # is always ".initialized"
         self.assertTrue(True, "Marker file is '.initialized' in conf_dir")
 
-    def test_web_checks_both_markers(self):
-        """Web UI _is_first_run must check both setup-complete and .initialized."""
-        # Read serve.py and verify _is_first_run checks both
+    def test_web_checks_all_markers(self):
+        """Web UI _is_first_run must check setup-complete, .initialized, and .web-setup-complete."""
         path = Path(__file__).parent.parent / "freq" / "modules" / "serve.py"
         content = path.read_text()
-        # Find _is_first_run function
-        self.assertIn("setup-complete", content)
-        self.assertIn(".initialized", content)
+        fn = content.split("def _is_first_run")[1].split("\ndef ")[0]
+        self.assertIn("setup-complete", fn)
+        self.assertIn(".initialized", fn)
+        self.assertIn(".web-setup-complete", fn)
 
 
 class TestVaultBootstrap(unittest.TestCase):

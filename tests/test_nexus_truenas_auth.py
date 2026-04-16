@@ -2,7 +2,7 @@
 
 Bug: Clean-5005 init skipped nexus with generic "auth failed". The
 device-creds.toml had no [truenas] section. Headless deploy fell
-through to bootstrap credentials (freq-ops@bootstrap_pass), which
+through to bootstrap credentials, which
 don't exist on TrueNAS (it uses root + its own password). The error
 message didn't tell the operator what to do.
 
@@ -93,6 +93,47 @@ class TestTruenasAuthFailedMessage(unittest.TestCase):
             src, re.DOTALL
         )
         self.assertIsNotNone(match)
+
+
+class TestTruenasDeployerTemplateTruth(unittest.TestCase):
+    """TrueNAS deployer must interpolate the real service-account name."""
+
+    def test_no_literal_percent_placeholder_in_failure_message(self):
+        src = (FREQ_ROOT / "freq" / "deployers" / "nas" / "truenas.py").read_text()
+        self.assertNotIn("Failed to create account '%(svc_name)s'", src)
+        self.assertIn("Failed to create account '{svc_name}'", src)
+
+    def test_shell_template_uses_percent_style_placeholders_consistently(self):
+        src = (FREQ_ROOT / "freq" / "deployers" / "nas" / "truenas.py").read_text()
+        self.assertNotIn('svc_home="/home/{svc_name}"', src)
+        self.assertNotIn("echo '{svc_name} ALL=(ALL) NOPASSWD: ALL'", src)
+
+    def test_remove_script_has_no_literal_percent_placeholders(self):
+        src = (FREQ_ROOT / "freq" / "deployers" / "nas" / "truenas.py").read_text()
+        remove_section = src.split("def remove(", 1)[1]
+        self.assertNotIn("%(svc_name)s", remove_section)
+
+
+class TestTruenasRemove(unittest.TestCase):
+    """TrueNAS uninstall script should interpolate safely and report success."""
+
+    def test_remove_uses_env_based_script(self):
+        from unittest.mock import patch
+        from freq.deployers.nas import truenas
+
+        with patch("freq.core.ssh.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stdout = "REMOVE_OK\n"
+            mock_run.return_value.stderr = ""
+
+            ok, reason = truenas.remove("10.0.0.8", "svc-test", "/tmp/freq_id_ed25519")
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "Account removed")
+        command = mock_run.call_args.kwargs["command"]
+        self.assertIn("export FREQ_USER=svc-test", command)
+        self.assertIn("midclt", command)
+        self.assertNotIn("%(svc_name)s", command)
 
 
 if __name__ == "__main__":

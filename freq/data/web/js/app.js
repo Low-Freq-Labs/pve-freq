@@ -60,7 +60,7 @@ function _freshChip(ageSec,opts){
   else if(age<=thr.green)clr='var(--green)';
   else if(age<=thr.yellow)clr='var(--yellow)';
   else clr='var(--red)';
-  return '<span class="fresh-chip" style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.5px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.04);color:'+clr+';border:1px solid '+clr+';margin-left:4px">'+(opts.prefix||'')+lbl+'</span>';
+  return '<span class="fresh-chip" style="display:inline-block;font-size:10px;font-weight:700;letter-spacing:0.5px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.04);color:'+clr+';border:1px solid '+clr+';margin-left:4px">'+(opts.prefix||'')+lbl+'</span>';
 }
 /* Compute observation age in seconds from a payload that may carry
  * any of: age_seconds (legacy probe field), checked_at (Rick's
@@ -1099,7 +1099,8 @@ function _isDegradedSetupHealth(h){
   if(!h)return false;
   var s=String(h).toLowerCase();
   return s==='partial'||s==='incomplete'||s==='degraded'||
-         s==='error'||s==='failed'||s==='unhealthy'||s==='broken';
+         s==='error'||s==='failed'||s==='unhealthy'||s==='broken'||
+         s==='web-setup-only';
 }
 /* Operator-truth product law: a missing required artifact is a
  * degradation regardless of whether the backend bothered to set
@@ -1131,7 +1132,7 @@ function _setupTruthSummary(d){
       body:'setup/status probe failed — the server may be down or stuck. '+
         'A login attempt is likely to fail until the backend recovers.'};
   }
-  if(d.first_run===true||d.initialized===false){
+  if(d.first_run===true||(d.initialized===false&&!d.web_setup_complete)){
     /* Append backend setup_reason so the operator sees both the
      * call-to-action ("finish first-run wizard") AND the actionable
      * detail ("init incomplete; ssh key missing or unreadable; ...")
@@ -2236,11 +2237,11 @@ function _silentFleetRefresh(){
           var lt=lbl.textContent.trim();
           if(lt==='CPU'){
             val.textContent=running?cpuPct+'% \u00b7 '+(v.cpu||0)+' Cores':(v.cpu||0)+' Cores';
-            if(bar){bar.style.width=cpuPct+'%';bar.style.background=cpuPct>=90?'var(--red)':cpuPct>=75?'var(--yellow)':'var(--green)';}
+            if(bar){bar.style.width=cpuPct+'%';bar.style.background=cpuPct>=80?'var(--red)':cpuPct>=50?'var(--yellow)':'var(--green)';}
           }
           if(lt==='RAM'){
             val.textContent=running?ramPct+'% \u00b7 '+_ramGB(v.ram_used_mb||0)+' / '+_ramGB(v.ram_mb||0):_ramGB(v.ram_mb||0);
-            if(bar){bar.style.width=ramPct+'%';bar.style.background=ramPct>=90?'var(--red)':ramPct>=75?'var(--yellow)':'var(--blue)';}
+            if(bar){bar.style.width=ramPct+'%';bar.style.background=ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';}
           }
         });
     });
@@ -2347,7 +2348,7 @@ function _decorateHostCardFresh(card,ageSec){
   else if(age<=thr.yellow)clr='var(--yellow)';
   else clr='var(--red)';
   chip.textContent=lbl;
-  chip.style.cssText='display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.5px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.04);color:'+clr+';border:1px solid '+clr+';margin-left:6px;vertical-align:middle';
+  chip.style.cssText='display:inline-block;font-size:10px;font-weight:700;letter-spacing:0.5px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.04);color:'+clr+';border:1px solid '+clr+';margin-left:6px;vertical-align:middle';
 }
 /* Walk every host card after a fleet render and attach a freshness
  * chip from the matching health-payload entry. Single decorator —
@@ -2444,7 +2445,7 @@ function _pveMetricsRefresh(){
           }
           if(lt==='DISK IO'){
             var io=n.iowait||0;
-            var ioColor=io>=50?'var(--red)':io>=20?'var(--yellow)':io>=5?'var(--orange)':'var(--cyan)';
+            var ioColor=io>=50?'var(--red)':io>=20?'var(--yellow)':'var(--cyan)';
             val.textContent=io+'% IO WAIT';
             if(bar){bar.style.width=io+'%';bar.style.background=ioColor;}
           }
@@ -4344,12 +4345,12 @@ function loadLxcContainers(){
       h+='<h3 style="margin:0">CT '+c.ctid+' — '+_esc(c.name)+'</h3>';
       h+='<div style="display:flex;gap:4px">';
       if(running){
-        h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px" onclick="ctPower('+c.ctid+',\'stop\')">STOP</button>';
-        h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px" onclick="ctPower('+c.ctid+',\'reboot\')">REBOOT</button>';
-        h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px;color:var(--cyan)" onclick="openTerminal(\'ct\',\''+c.ctid+'\',\'\',\'CT '+c.ctid+' '+_esc(c.name)+'\')">&#9002; TERM</button>';
+        h+='<button class="fleet-btn" style="font-size:10px;padding:2px 6px" onclick="ctPower('+c.ctid+',\'stop\')">STOP</button>';
+        h+='<button class="fleet-btn" style="font-size:10px;padding:2px 6px" onclick="ctPower('+c.ctid+',\'reboot\')">REBOOT</button>';
+        h+='<button class="fleet-btn" style="font-size:10px;padding:2px 6px;color:var(--cyan)" onclick="openTerminal(\'ct\',\''+c.ctid+'\',\'\',\'CT '+c.ctid+' '+_esc(c.name)+'\')">&#9002; TERM</button>';
       }else{
-        h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px;color:var(--green)" onclick="ctPower('+c.ctid+',\'start\')">START</button>';
-        h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px;color:var(--red)" onclick="ctDestroy('+c.ctid+',\''+_esc(c.name)+'\')">DESTROY</button>';
+        h+='<button class="fleet-btn" style="font-size:10px;padding:2px 6px;color:var(--green)" onclick="ctPower('+c.ctid+',\'start\')">START</button>';
+        h+='<button class="fleet-btn" style="font-size:10px;padding:2px 6px;color:var(--red)" onclick="ctDestroy('+c.ctid+',\''+_esc(c.name)+'\')">DESTROY</button>';
       }
       h+='</div></div>';
       h+='<p style="margin-top:6px">'+_statusBadge(c.status)+' &middot; '+_esc(c.node)+' &middot; CPU: '+c.maxcpu+' &middot; RAM: '+ramUsed+'/'+ramGB+' ('+c.mem_pct+'%)';
@@ -4799,7 +4800,7 @@ function loadDownloadDetail(){
 function _statCards(items){
   return '<div style="display:flex;gap:12px;flex-wrap:wrap">'+items.map(function(i){
     var color=i.c?'color:var(--'+i.c+')':'';
-    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 14px;text-align:center;min-width:85px"><div style="font-size:18px;font-weight:700;'+color+'">'+i.v+'</div><div style="font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">'+i.l+'</div></div>';
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 14px;text-align:center;min-width:85px"><div style="font-size:18px;font-weight:700;'+color+'">'+i.v+'</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px">'+i.l+'</div></div>';
   }).join('')+'</div>';
 }
 /* Helper: status badge */
@@ -6060,7 +6061,7 @@ function vmtLoadList(){
       if(acts.indexOf('start')>=0&&!isRun)h+='<button class="fleet-btn pill-ok-3-8" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="start" >START</button>';
       if(acts.indexOf('configure')>=0)h+='<button class="fleet-btn pill-xs" data-action="vmQuickTag" data-vmid="'+v.vmid+'" >TAG</button>';
       if(acts.indexOf('destroy')>=0)h+='<button class="fleet-btn pill-err-3-8" data-action="vmDestroy" data-vmid="'+v.vmid+'" >DESTROY</button>';
-      if(isRun)h+='<button class="fleet-btn" style="font-size:9px;padding:2px 6px;color:var(--cyan)" onclick="openTerminal(\'vm\',\''+v.vmid+'\',\'\',\''+_esc(v.name)+'\')">&#9002; TERM</button>';
+      if(isRun)h+='<button class="fleet-btn" style="font-size:10px;padding:2px 6px;color:var(--cyan)" onclick="openTerminal(\'vm\',\''+v.vmid+'\',\'\',\''+_esc(v.name)+'\')">&#9002; TERM</button>';
       h+='</td></tr>';
     });
     h+='</tbody></table>';el.innerHTML=h;
@@ -10366,7 +10367,7 @@ function _renderSearchResults(items){
   var h='';var idx=0;
   order.forEach(function(cat){
     if(!groups[cat])return;
-    h+='<div style="padding:4px 12px;font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-top:4px">'+(labels[cat]||cat)+'</div>';
+    h+='<div style="padding:4px 12px;font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-top:4px">'+(labels[cat]||cat)+'</div>';
     groups[cat].forEach(function(item){
       var icon=_cmdIcons[item.type]||'\u2022';
       var color=_cmdColors[item.type]||'var(--text-dim)';

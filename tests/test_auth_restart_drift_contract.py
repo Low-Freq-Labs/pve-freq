@@ -1,7 +1,7 @@
 """R-AUTH-RESTART-DRIFT-20260413W regression contract.
 
 Finn reported that on the final RC at 896f6ef, a fresh headless init
-seeded `auth/password_freq-ops` and the first login succeeded, but
+seeded `auth/password_<bootstrap-user>` and the first login succeeded, but
 after a dashboard restart the same password returned 401 — "Invalid
 credentials". I could not reproduce the specific symptom on the same
 commit at test time (repeated restart+login cycles all returned 200),

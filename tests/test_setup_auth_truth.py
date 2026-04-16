@@ -47,7 +47,7 @@ class TestSetupWizardGating(unittest.TestCase):
         src = self._serve_src()
         handler = src.split("def _serve_setup_complete")[1].split("def _serve_")[0]
         self.assertIn("setup-complete", handler)
-        self.assertIn(".initialized", handler)
+        self.assertIn(".web-setup-complete", handler)
 
 
 class TestPasswordPolicy(unittest.TestCase):

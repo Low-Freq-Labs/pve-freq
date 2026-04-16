@@ -3,7 +3,7 @@
 Findings from live 5005 churn after dfb8ced:
 
   S-1 AUTH RECOVERY GAP — /api/auth/login rejects every known password
-  for freq-ops while users/roles.conf still list it as admin. Root cause:
+  for the bootstrap admin while users/roles.conf still list it as admin. Root cause:
   headless init in bootstrap-key mode never seeds a dashboard password
   (the _seed_headless_dashboard_auth path only fires when bootstrap_pass
   is set), and F1 of the security audit removed the silent first-login
@@ -78,7 +78,7 @@ class TestDashboardPasswdHandlerBehavior(unittest.TestCase):
             ssh_service_account = "freq-admin"
             _toml_users = None
 
-        (tmp_path / "users.conf").write_text("freq-ops admin\nalice operator\n")
+        (tmp_path / "users.conf").write_text("bootstrap-admin admin\nalice operator\n")
         return Cfg()
 
     def test_rejects_service_account(self):
@@ -109,7 +109,7 @@ class TestDashboardPasswdHandlerBehavior(unittest.TestCase):
             cfg = self._make_fake_cfg(tmp)
             pwfile = tmp / "pw.txt"
             pwfile.write_text("short\n")
-            args = mock.Mock(username="freq-ops", file=str(pwfile))
+            args = mock.Mock(username="bootstrap-admin", file=str(pwfile))
             rc = users_mod.cmd_dashboard_passwd(cfg, None, args)
             self.assertEqual(rc, 1, "<8 char password must be refused")
 
@@ -121,7 +121,7 @@ class TestDashboardPasswdHandlerBehavior(unittest.TestCase):
             cfg = self._make_fake_cfg(tmp)
             pwfile = tmp / "pw.txt"
             pwfile.write_text("correct-horse-battery-staple\n")
-            args = mock.Mock(username="freq-ops", file=str(pwfile))
+            args = mock.Mock(username="bootstrap-admin", file=str(pwfile))
 
             written = {}
 
@@ -152,7 +152,7 @@ class TestDashboardPasswdHandlerBehavior(unittest.TestCase):
             self.assertEqual(len(written.get("writes", [])), 1)
             section, key, value = written["writes"][0]
             self.assertEqual(section, "auth")
-            self.assertEqual(key, "password_freq-ops")
+            self.assertEqual(key, "password_bootstrap-admin")
             # PBKDF2 format: <salt-hex>$<digest-hex>
             self.assertRegex(value, r"^[0-9a-f]+\$[0-9a-f]+$")
 

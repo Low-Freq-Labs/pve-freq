@@ -22,10 +22,12 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from freq.modules.selfupdate import _detect_install_method
+from freq.modules.selfupdate import _detect_install_method, cmd_update
 
 
 class TestInstallMethodDetection(unittest.TestCase):
@@ -112,6 +114,19 @@ class TestUpdateBehaviorContract(unittest.TestCase):
             content = f.read()
         self.assertIn('("tarball", "local")', content)
         self.assertIn("install.sh", content)
+
+    @patch("freq.modules.selfupdate._update_git")
+    @patch("freq.modules.selfupdate._detect_install_method", return_value="git")
+    @patch("freq.modules.selfupdate.fmt")
+    def test_git_update_passes_args_to_helper(self, mock_fmt, mock_detect, mock_update):
+        cfg = SimpleNamespace(install_dir="/tmp/freq")
+        args = SimpleNamespace(yes=True)
+        mock_update.return_value = 0
+
+        rc = cmd_update(cfg, None, args)
+
+        self.assertEqual(rc, 0)
+        mock_update.assert_called_once_with(cfg, args)
 
 
 class TestInstallShMarkers(unittest.TestCase):

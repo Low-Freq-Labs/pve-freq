@@ -80,7 +80,7 @@ function renderSummary(){
     s+='<span class="check">&#10003;</span> Timezone: <b>'+tz+'</b>\n';
   }
   s+='<span class="check">&#10003;</span> SSH key: '+(keyGenerated?'<b>written</b>':'<b>skipped</b> — run freq init later')+'\n';
-  s+='\nNext: run freq init. init deploys the freq-admin service account\nover SSH, runs fleet discovery, registers hosts, and writes\n.initialized. setup_health stays "partial" until init finishes.';
+  s+='\nNext: run freq init. init deploys the fleet service account\nover SSH, runs fleet discovery, registers hosts, and writes\n.initialized. The default service-account name is freq-admin unless\nyou configure a different one. setup_health stays "web-setup-only"\nuntil freq init completes.';
   document.getElementById('summary').innerHTML=s;
 }
 

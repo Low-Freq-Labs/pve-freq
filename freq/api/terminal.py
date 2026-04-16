@@ -13,9 +13,9 @@ Architecture:
     5. Cleanup on disconnect or timeout
 
 Terminal types:
-    - vm:   SSH directly to VM IP (freq-ops@<ip>)
+    - vm:   SSH directly to VM IP (service-account@<ip>)
     - ct:   SSH to PVE node, then pct exec <ctid> -- bash
-    - node: SSH directly to PVE node (freq-ops@<ip>)
+    - node: SSH directly to PVE node (service-account@<ip>)
 """
 
 import base64
@@ -143,7 +143,12 @@ def handle_terminal_open(handler):
 
     # Build SSH command with device-type-aware options
     key_path = cfg.ssh_key_path
-    ssh_user = cfg.ssh_service_account or "freq-ops"
+    # Terminal sessions must follow the configured fleet service account.
+    # freq-admin is the default only; freq-ops is not the deployed SSH user.
+    ssh_user = cfg.ssh_service_account
+    if not ssh_user:
+        ssh_user = "freq-admin"
+        logger.warning("terminal: cfg.ssh_service_account empty — falling back to freq-admin (identity contract violation)")
     htype = params.get("htype", ["linux"])[0]
 
     # Base SSH options

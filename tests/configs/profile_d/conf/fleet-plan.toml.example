@@ -1,0 +1,38 @@
+# Fleet Plan — Declarative VM Management
+# Copy to fleet-plan.toml and define your desired VM fleet.
+# Run `freq plan` to see the diff, `freq apply` to execute.
+#
+# Fields:
+#   name    = VM hostname (required, must be unique)
+#   cores   = CPU cores (default: 2)
+#   ram     = RAM in MB (default: 2048)
+#   disk    = Disk in GB (default: 32)
+#   node    = Target PVE node name (optional — uses first available)
+#   image   = Cloud image key (optional, e.g. "debian-13")
+#   vlan    = VLAN name from vlans.toml (optional)
+#   ip      = Static IP in CIDR (optional, e.g. "10.0.0.100/24")
+#   start   = Start VM after creation (default: true)
+#   tags    = PVE tags, comma-separated (optional)
+#   profile = Template profile from freq.toml (optional)
+
+# [[vm]]
+# name = "web-01"
+# cores = 4
+# ram = 4096
+# disk = 64
+# node = "pve01"
+# image = "debian-13"
+
+# [[vm]]
+# name = "db-01"
+# cores = 8
+# ram = 16384
+# disk = 256
+# node = "pve01"
+
+# [[vm]]
+# name = "dev-sandbox"
+# cores = 2
+# ram = 2048
+# disk = 32
+# start = false

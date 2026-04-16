@@ -54,8 +54,13 @@ class TestRbacBootstrapProbe(unittest.TestCase):
             result = _check_rbac_bootstrap(cfg)
             self.assertEqual(result, 2, "Pre-init state must warn, not fail")
 
-    def test_warn_when_no_non_service_admin(self):
-        """Only service account as admin → warn (no seat for operator)."""
+    def test_fail_when_no_non_service_admin(self):
+        """Only service account as admin → fail (no human can log in).
+
+        R-PVEFREQ-HIGH-DOCTOR-SEVERITY-20260416AJ: upgraded from warn(2)
+        to fail(1). No non-service admin means no human can log into the
+        web dashboard — this is a real RBAC failure, not a warning.
+        """
         from freq.core.doctor import _check_rbac_bootstrap
 
         with tempfile.TemporaryDirectory() as d:
@@ -63,7 +68,7 @@ class TestRbacBootstrapProbe(unittest.TestCase):
             _write(os.path.join(d, "users.conf"), "freq-admin admin\n")
             cfg = _make_cfg(d, svc_account="freq-admin")
             result = _check_rbac_bootstrap(cfg)
-            self.assertEqual(result, 2)
+            self.assertEqual(result, 1, "No non-service admin must fail, not warn")
 
     def test_warn_when_roles_and_users_disagree(self):
         """admin in roles.conf but not users.conf → warn (disagreement).
@@ -197,9 +202,15 @@ class TestRbacBootstrapProbe(unittest.TestCase):
 
 
 class TestPveTokenDriftProbe(unittest.TestCase):
-    """The PVE token drift probe must iterate RO and RW token pairs
-    across every configured PVE node and report per-node per-token
-    pass/fail so the operator can see exactly which combo drifted.
+    """The PVE token drift probe must iterate the runtime RW token across
+    every configured PVE node and report per-node pass/fail.
+
+    R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the doctor probe checks ONLY
+    the runtime RW token now. The legacy RO token at
+    /etc/freq/credentials/pve-token (PVE_TOKEN_ID=... format) was a
+    Jarvis (infra lane) construct and was pulled out of the product
+    runtime doctor surface — keeping it conflated two distinct trust
+    roots and trained operators to ignore "ro token unreadable" warnings.
     """
 
     def test_pass_when_no_pve_nodes(self):
@@ -210,8 +221,8 @@ class TestPveTokenDriftProbe(unittest.TestCase):
         result = _check_pve_token_drift(cfg)
         self.assertEqual(result, 0)
 
-    def test_warn_when_no_credential_files_readable(self):
-        """PVE nodes exist but no token files readable → warn."""
+    def test_warn_when_rw_credential_unreadable(self):
+        """PVE nodes exist but RW token file unreadable → warn."""
         from freq.core import doctor
 
         cfg = _make_cfg("/tmp", pve_nodes=["10.0.0.1"])
@@ -219,90 +230,44 @@ class TestPveTokenDriftProbe(unittest.TestCase):
             result = doctor._check_pve_token_drift(cfg)
         self.assertEqual(result, 2)
 
-    def test_pass_when_both_tokens_valid_on_all_nodes(self):
-        """RW + RO tokens both return 200 on every node → pass."""
+    def test_pass_when_rw_token_valid_on_all_nodes(self):
+        """RW token returns 200 on every node → pass."""
         from freq.core import doctor
 
         cfg = _make_cfg("/tmp", pve_nodes=["10.0.0.1", "10.0.0.2"])
-        cfg.pve_api_token_id = "freq-ops@pam!freq-rw"
+        cfg.ssh_service_account = "freq-admin"
+        cfg.pve_api_token_id = "freq-admin@pam!freq-rw"
 
-        def _fake_creds(path):
-            if "rw" in path:
-                return "uuid-rw-secret"
-            return "PVE_TOKEN_ID=freq-ops@pam!freq-ro\nPVE_TOKEN_SECRET=uuid-ro-secret\n"
-
-        with patch.object(doctor, "_read_credential_text", side_effect=_fake_creds), \
+        with patch.object(doctor, "_read_credential_text", return_value="uuid-rw-secret"), \
              patch.object(doctor, "_probe_pve_api_token", return_value=(200, "ok")):
             result = doctor._check_pve_token_drift(cfg)
         self.assertEqual(result, 0)
 
-    def test_fail_when_any_token_node_combo_fails(self):
-        """Any RO/RW token × node combo returning non-200 → fail."""
+    def test_fail_when_any_node_rejects_rw_token(self):
+        """Any node returning non-200 for the RW token → fail."""
         from freq.core import doctor
 
         cfg = _make_cfg("/tmp", pve_nodes=["10.0.0.1", "10.0.0.2"])
-        cfg.pve_api_token_id = "freq-ops@pam!freq-rw"
-
-        def _fake_creds(path):
-            if "rw" in path:
-                return "uuid-rw-secret"
-            return "PVE_TOKEN_ID=freq-ops@pam!freq-ro\nPVE_TOKEN_SECRET=uuid-ro-secret\n"
+        cfg.ssh_service_account = "freq-admin"
+        cfg.pve_api_token_id = "freq-admin@pam!freq-rw"
 
         def _fake_probe(ip, token_id, token_secret):
-            if ip == "10.0.0.2" and "ro" in token_id:
+            if ip == "10.0.0.2":
                 return 401, "invalid token"
             return 200, "ok"
 
-        with patch.object(doctor, "_read_credential_text", side_effect=_fake_creds), \
+        with patch.object(doctor, "_read_credential_text", return_value="uuid-rw-secret"), \
              patch.object(doctor, "_probe_pve_api_token", side_effect=_fake_probe):
             result = doctor._check_pve_token_drift(cfg)
         self.assertEqual(result, 1)
 
-    def test_warn_when_only_one_token_readable_but_valid(self):
-        """Only RW readable, RO missing, RW valid → warn (partial coverage)."""
-        from freq.core import doctor
-
-        cfg = _make_cfg("/tmp", pve_nodes=["10.0.0.1"])
-        cfg.pve_api_token_id = "freq-ops@pam!freq-rw"
-
-        def _fake_creds(path):
-            if "rw" in path:
-                return "uuid-rw-secret"
-            return ""
-
-        with patch.object(doctor, "_read_credential_text", side_effect=_fake_creds), \
-             patch.object(doctor, "_probe_pve_api_token", return_value=(200, "ok")):
-            result = doctor._check_pve_token_drift(cfg)
-        self.assertEqual(result, 2)
-
-    def test_warn_on_malformed_ro_token_file(self):
-        """RO token file present but missing PVE_TOKEN_ID/SECRET → warn."""
-        from freq.core import doctor
-
-        cfg = _make_cfg("/tmp", pve_nodes=["10.0.0.1"])
-        cfg.pve_api_token_id = "freq-ops@pam!freq-rw"
-
-        def _fake_creds(path):
-            if "rw" in path:
-                return "uuid-rw-secret"
-            return "SOME_OTHER_KEY=value\n"
-
-        with patch.object(doctor, "_read_credential_text", side_effect=_fake_creds), \
-             patch.object(doctor, "_probe_pve_api_token", return_value=(200, "ok")):
-            result = doctor._check_pve_token_drift(cfg)
-        self.assertEqual(result, 2)
-
-    def test_iterates_every_token_node_combo(self):
-        """Probe must call _probe_pve_api_token for every token × node pair."""
+    def test_iterates_every_node_for_rw_token(self):
+        """Probe must call _probe_pve_api_token for every node with the RW token."""
         from freq.core import doctor
 
         cfg = _make_cfg("/tmp", pve_nodes=["10.0.0.1", "10.0.0.2", "10.0.0.3"])
-        cfg.pve_api_token_id = "freq-ops@pam!freq-rw"
-
-        def _fake_creds(path):
-            if "rw" in path:
-                return "uuid-rw-secret"
-            return "PVE_TOKEN_ID=freq-ops@pam!freq-ro\nPVE_TOKEN_SECRET=uuid-ro-secret\n"
+        cfg.ssh_service_account = "freq-admin"
+        cfg.pve_api_token_id = "freq-admin@pam!freq-rw"
 
         calls = []
 
@@ -310,19 +275,56 @@ class TestPveTokenDriftProbe(unittest.TestCase):
             calls.append((ip, token_id))
             return 200, "ok"
 
-        with patch.object(doctor, "_read_credential_text", side_effect=_fake_creds), \
+        with patch.object(doctor, "_read_credential_text", return_value="uuid-rw-secret"), \
              patch.object(doctor, "_probe_pve_api_token", side_effect=_capturing_probe):
             doctor._check_pve_token_drift(cfg)
 
-        self.assertEqual(len(calls), 6, "2 tokens × 3 nodes = 6 probe calls")
+        self.assertEqual(len(calls), 3, "1 token × 3 nodes = 3 probe calls")
         ips = sorted({ip for ip, _ in calls})
         self.assertEqual(ips, ["10.0.0.1", "10.0.0.2", "10.0.0.3"])
-        token_ids = sorted({tid for _, tid in calls})
+        token_ids = {tid for _, tid in calls}
         self.assertEqual(
             token_ids,
-            ["freq-ops@pam!freq-ro", "freq-ops@pam!freq-rw"],
-            "Probe must hit both RO and RW token ids",
+            {"freq-admin@pam!freq-rw"},
+            "Probe must use the svc-account-derived RW token id only — "
+            "no legacy freq-ops@pam!freq-ro Jarvis token in product runtime",
         )
+
+    def test_legacy_ro_token_not_probed(self):
+        """The Jarvis-legacy RO token at /etc/freq/credentials/pve-token must not be read.
+
+        R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the RO token concept was
+        pulled out of product runtime doctor. _read_credential_text must
+        be called only for the RW token path; the RO path is gone.
+        """
+        from freq.core import doctor
+
+        cfg = _make_cfg("/tmp", pve_nodes=["10.0.0.1"])
+        cfg.ssh_service_account = "freq-admin"
+        cfg.pve_api_token_id = "freq-admin@pam!freq-rw"
+
+        read_calls = []
+
+        def _capturing_read(path):
+            read_calls.append(path)
+            return "uuid-rw-secret"
+
+        with patch.object(doctor, "_read_credential_text", side_effect=_capturing_read), \
+             patch.object(doctor, "_probe_pve_api_token", return_value=(200, "ok")):
+            doctor._check_pve_token_drift(cfg)
+
+        for path in read_calls:
+            self.assertNotIn(
+                "/etc/freq/credentials/pve-token\"",
+                f'"{path}"',
+                f"Legacy RO token path must not be read: {path}",
+            )
+            # The exact RO file path is /etc/freq/credentials/pve-token (no -rw).
+            # Distinguish from the RW path /etc/freq/credentials/pve-token-rw.
+            self.assertFalse(
+                path.endswith("/pve-token"),
+                f"Legacy RO token path must not be read: {path}",
+            )
 
 
 class TestReadCredentialTextHelper(unittest.TestCase):

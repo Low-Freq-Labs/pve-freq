@@ -71,5 +71,50 @@ class TestFirstTouchClean(unittest.TestCase):
         self.assertNotIn("Traceback", r.stderr)
 
 
+class TestInitIdentityLifecycleTruth(unittest.TestCase):
+    """E2E init planning must preserve the identity split at each stage."""
+
+    def test_e2e_progress_pins_identity_contract(self):
+        with open(os.path.join(REPO_ROOT, "docs/E2E-PROGRESS.md")) as f:
+            src = f.read()
+        self.assertIn("## Identity Contract", src)
+        self.assertIn("Bootstrap/sudo account: `freq-ops`", src)
+        self.assertIn("Deployed fleet service account: `cfg.ssh_service_account`", src)
+        self.assertIn("Default fleet service account name when unset: `freq-admin`", src)
+        # R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: PVE API identity is
+        # derived from cfg.ssh_service_account, NOT the legacy freq-ops@pam.
+        self.assertIn(
+            "PVE API identity: `{cfg.ssh_service_account}@pam!freq-rw`",
+            src,
+        )
+        # Legacy freq-ops@pam must not be re-introduced as the product token.
+        self.assertNotIn(
+            "PVE API identity: `freq-ops@pam!freq-rw`",
+            src,
+            "Legacy freq-ops@pam PVE API identity must stay out of the contract",
+        )
+
+    def test_phase_plan_keeps_service_account_and_pve_api_distinct(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:
+            src = f.read()
+        self.assertIn(
+            '("Phase 3", "Service Account", f"Create \'{cfg.ssh_service_account}\' with NOPASSWD sudo, init vault")',
+            src,
+        )
+        # R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: Phase 6 token ID is
+        # derived from cfg.ssh_service_account via an f-string so the
+        # summary line always matches the current identity contract.
+        self.assertIn(
+            '("Phase 6", "PVE API Token", f"Create {cfg.ssh_service_account}@pam!freq-rw token, save to /etc/freq/credentials/")',
+            src,
+        )
+        # The legacy hardcoded string must not return.
+        self.assertNotIn(
+            '"Create freq-ops@pam!freq-rw token',
+            src,
+            "Phase 6 plan line must not hardcode legacy freq-ops@pam identity",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

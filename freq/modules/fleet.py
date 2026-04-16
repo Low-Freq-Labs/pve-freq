@@ -1013,6 +1013,12 @@ def cmd_docker_fleet(cfg: FreqConfig, pack, args) -> int:
         service = getattr(args, "service", "") or ""
         lines = getattr(args, "lines", 20) or 20
         if service:
+            container, vm = resolve.container_by_name(cfg.container_vms, service)
+            if container and vm:
+                docker_hosts = [h for h in docker_hosts if h.ip == vm.ip]
+            elif cfg.container_vms:
+                fmt.error(f"Service not found in containers.toml: {service}")
+                return 1
             cmd = f"docker logs --tail {lines} {service} 2>&1"
         else:
             cmd = f"docker ps --format '{{{{.Names}}}}' 2>/dev/null | head -5 | while read c; do echo \"=== $c ===\"; docker logs --tail 3 $c 2>&1; done"

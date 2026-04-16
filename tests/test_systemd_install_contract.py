@@ -62,11 +62,11 @@ class TestSystemdUnitTemplate(unittest.TestCase):
 class TestContribUnitDefaults(unittest.TestCase):
     """contrib/freq-serve.service must have sane defaults for reference."""
 
-    def test_uses_freq_ops_user(self):
-        """Reference unit should use freq-ops (not freq-admin)."""
+    def test_uses_default_service_account_user(self):
+        """Reference unit should use the default service account user."""
         with open(FREQ_ROOT / "contrib" / "freq-serve.service") as f:
             content = f.read()
-        self.assertIn("User=freq-ops", content)
+        self.assertIn("User=freq-admin", content)
 
     def test_uses_opt_pve_freq(self):
         """Reference unit uses default /opt/pve-freq path."""

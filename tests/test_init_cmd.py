@@ -51,16 +51,17 @@ class TestRunWithInput(unittest.TestCase):
         self.assertEqual(len(result), 3)
 
     def test_timeout_returns_error(self):
-        """Timeout produces rc=1 and error in stderr."""
+        """Timeout produces rc=124 and error in stderr."""
         rc, out, err = _run_with_input(["sleep", "10"], "x", timeout=1)
-        self.assertEqual(rc, 1)
+        self.assertEqual(rc, 124)
         self.assertTrue(len(err) > 0)
 
     def test_invalid_command_returns_error(self):
-        """Non-existent command returns rc=1 with error message."""
+        """Non-existent command returns non-zero rc."""
         rc, out, err = _run_with_input(["__nonexistent_binary_xyz__"], "x")
-        self.assertEqual(rc, 1)
-        self.assertTrue(len(err) > 0)
+        # rc=1 (Python OSError) or rc=127 (shell "command not found" when
+        # wrapped in GNU timeout by _run_bounded).
+        self.assertNotEqual(rc, 0)
 
     def test_empty_input(self):
         """Empty string input doesn't crash."""
@@ -83,12 +84,18 @@ class TestSSHWithPass(unittest.TestCase):
         rc, out, err = _ssh_with_pass("secret", ["ssh", "user@host", "uptime"])
         self.assertEqual(rc, 0)
         mock_run.assert_called_once()
-        # Verify sshpass -f is prepended
+        # R-PVEFREQ-RUN3-IDRAC-HANG-20260415M: sshpass is now wrapped
+        # in GNU timeout for hard process-level kill. Command shape is:
+        # timeout -s KILL <N> sshpass -f <tmpfile> <ssh_cmd...>
         cmd = mock_run.call_args[0][0]
-        self.assertEqual(cmd[0], "sshpass")
-        self.assertEqual(cmd[1], "-f")
-        # Tempfile path is cmd[2], then original SSH args follow
-        self.assertEqual(cmd[3:], ["ssh", "user@host", "uptime"])
+        self.assertEqual(cmd[0], "timeout")
+        self.assertEqual(cmd[1], "-s")
+        self.assertEqual(cmd[2], "KILL")
+        # cmd[3] is the timeout value (string)
+        self.assertEqual(cmd[4], "sshpass")
+        self.assertEqual(cmd[5], "-f")
+        # cmd[6] is the tempfile path, then original SSH args follow
+        self.assertEqual(cmd[7:], ["ssh", "user@host", "uptime"])
 
     @patch("freq.modules.init_cmd._run_with_input")
     def test_calls_run_with_input_when_input_text_provided(self, mock_run_input):
@@ -109,10 +116,10 @@ class TestSSHWithPass(unittest.TestCase):
         created_files = []
 
         def capture_run(cmd, **kwargs):
-            # cmd[2] is the tempfile path
-            if len(cmd) > 2 and os.path.isfile(cmd[2]):
-                mode = os.stat(cmd[2]).st_mode
-                created_files.append((cmd[2], mode))
+            # cmd[6] is the tempfile path (after timeout -s KILL <N> sshpass -f)
+            if len(cmd) > 6 and os.path.isfile(cmd[6]):
+                mode = os.stat(cmd[6]).st_mode
+                created_files.append((cmd[6], mode))
             return (0, "", "")
 
         mock_run.side_effect = capture_run
@@ -127,8 +134,9 @@ class TestSSHWithPass(unittest.TestCase):
         contents = []
 
         def capture_run(cmd, **kwargs):
-            if len(cmd) > 2 and os.path.isfile(cmd[2]):
-                with open(cmd[2]) as f:
+            # cmd[6] is the tempfile path (after timeout -s KILL <N> sshpass -f)
+            if len(cmd) > 6 and os.path.isfile(cmd[6]):
+                with open(cmd[6]) as f:
                     contents.append(f.read())
             return (0, "", "")
 
@@ -158,8 +166,8 @@ class TestSSHWithPass(unittest.TestCase):
         tempfile_paths = []
 
         def capture_run(cmd, **kwargs):
-            if len(cmd) > 2:
-                tempfile_paths.append(cmd[2])
+            if len(cmd) > 6:
+                tempfile_paths.append(cmd[6])
             raise RuntimeError("simulated failure")
 
         mock_run.side_effect = capture_run
@@ -170,11 +178,16 @@ class TestSSHWithPass(unittest.TestCase):
 
     @patch("freq.modules.init_cmd._run")
     def test_timeout_passed_through(self, mock_run):
-        """Custom timeout is forwarded to _run."""
+        """Custom timeout is forwarded to _run with +10s buffer for GNU timeout."""
         mock_run.return_value = (0, "", "")
         _ssh_with_pass("secret", ["ssh", "host", "cmd"], timeout=60)
         call_kwargs = mock_run.call_args[1]
-        self.assertEqual(call_kwargs.get("timeout"), 60)
+        # Python-side timeout is caller_timeout + 10 (GNU timeout fires
+        # at caller_timeout; Python fallback fires 10s later as belt-and-suspenders)
+        self.assertEqual(call_kwargs.get("timeout"), 70)
+        # GNU timeout value in the command is the original caller timeout
+        cmd = mock_run.call_args[0][0]
+        self.assertEqual(cmd[3], "60")
 
 
 class TestIdracParsing(unittest.TestCase):
@@ -201,6 +214,60 @@ class TestIdracParsing(unittest.TestCase):
         target_slot, existing_slot = _parse_idrac_slots(slot_dump, "freq-admin")
         self.assertEqual(target_slot, 4)
         self.assertEqual(existing_slot, 6)
+
+    def test_query_idrac_slots_prefers_higher_automation_slots_first(self):
+        from freq.modules.init_cmd import _query_idrac_slots
+
+        seen = []
+
+        def fake_ssh(cmd, extra_opts=None, timeout=None):
+            seen.append(cmd)
+            slot = int(cmd.split(".")[2])
+            if slot == 8:
+                return 0, "[Key=iDRAC.Embedded.1#Users.8]\nUserName=\n", ""
+            return 0, f"[Key=iDRAC.Embedded.1#Users.{slot}]\nUserName=occupied\n", ""
+
+        target_slot, existing_slot = _query_idrac_slots(fake_ssh, [], "freq-admin")
+        self.assertEqual(target_slot, 8)
+        self.assertIsNone(existing_slot)
+        self.assertEqual(seen[0], "racadm get iDRAC.Users.8.UserName")
+
+
+class TestHeadlessFleetDeployTruth(unittest.TestCase):
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_truenas_probe_uses_resolved_device_credentials(self, mock_fmt, mock_run, mock_dispatch):
+        from freq.modules.init_cmd import _headless_fleet_deploy
+
+        cfg = types.SimpleNamespace(
+            pve_nodes=[],
+            pve_node_names=[],
+            hosts=[types.SimpleNamespace(ip="10.0.0.25", label="nexus", htype="truenas")],
+            ssh_service_account="freq-admin",
+        )
+        ctx = {"svc_name": "freq-admin", "svc_pass": "SvcPass2026!"}
+        mock_run.return_value = (0, "OK", "")
+        mock_dispatch.return_value = True
+
+        _headless_fleet_deploy(
+            cfg,
+            ctx,
+            bootstrap_key="/home/freq-ops/.ssh/fleet_key",
+            bootstrap_user="freq-ops",
+            bootstrap_pass="",
+            device_creds={"truenas": {"user": "root", "password": "changeme1234"}},
+            pve_only=False,
+        )
+
+        ssh_check = mock_run.call_args_list[0][0][0]
+        self.assertIn("root@10.0.0.25", ssh_check)
+        self.assertIn("sshpass", ssh_check)
+
+        dispatch_args = mock_dispatch.call_args[0]
+        self.assertEqual(dispatch_args[3], "changeme1234")
+        self.assertEqual(dispatch_args[4], "")
+        self.assertEqual(dispatch_args[5], "root")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -458,6 +525,143 @@ password_file = "{sw_pass}"
         if "metadata" in result:
             # If it appears, it shouldn't have user/password fields that would cause issues
             pass  # Not a hard requirement — depends on implementation
+
+
+class TestPfSenseUninstall(unittest.TestCase):
+    """pfSense uninstall must distinguish full removal from key-only fallback."""
+
+    @patch("freq.modules.init_cmd._uninstall_auth_ssh")
+    def test_remove_pfsense_uses_admin_auth_for_full_removal(self, mock_auth_ssh):
+        from freq.modules.init_cmd import _remove_pfsense
+
+        ssh = MagicMock(side_effect=[
+            (0, "OK\n", ""),
+            (0, "ACCOUNT_REMOVED\n", ""),
+        ])
+        mock_auth_ssh.return_value = ssh
+
+        ok, reason = _remove_pfsense(
+            "10.0.0.1",
+            "svc-test",
+            "/tmp/freq_id_ed25519",
+            admin_auth={"user": "admin", "password": "secret", "key_path": ""},
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+        mock_auth_ssh.assert_called_once_with(
+            "10.0.0.1", "admin", auth_key="", auth_pass="secret"
+        )
+
+    @patch("freq.modules.init_cmd._uninstall_ssh")
+    def test_remove_pfsense_without_admin_auth_is_key_only(self, mock_uninstall_ssh):
+        from freq.modules.init_cmd import _remove_pfsense
+
+        ssh = MagicMock(side_effect=[
+            (0, "OK\n", ""),
+            (0, "KEY_REMOVED\n", ""),
+        ])
+        mock_uninstall_ssh.return_value = ssh
+
+        ok, reason = _remove_pfsense("10.0.0.1", "svc-test", "/tmp/freq_id_ed25519")
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "key_only")
+
+
+class TestUninstallSSH(unittest.TestCase):
+    """Uninstall SSH helper must honor per-call extra SSH options."""
+
+    @patch("freq.modules.init_cmd._run")
+    def test_uninstall_ssh_accepts_call_time_extra_opts(self, mock_run):
+        from freq.modules.init_cmd import _uninstall_ssh
+
+        mock_run.return_value = (0, "OK\n", "")
+        ssh = _uninstall_ssh("10.0.0.10", "svc-test", "/tmp/freq_id_rsa")
+        ssh("echo OK", extra_opts=["-o", "KexAlgorithms=+diffie-hellman-group1-sha1"])
+
+        cmd = mock_run.call_args.args[0]
+        self.assertIn("-i", cmd)
+        self.assertIn("/tmp/freq_id_rsa", cmd)
+        self.assertIn("svc-test@10.0.0.10", cmd)
+        self.assertIn("KexAlgorithms=+diffie-hellman-group1-sha1", cmd)
+
+
+class TestUninstallLocalCleanup(unittest.TestCase):
+    """Local uninstall must stop the dashboard service before userdel."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="freq-test-uninstall-local-")
+        self.key_dir = os.path.join(self.tmpdir, "keys")
+        self.conf_dir = os.path.join(self.tmpdir, "conf")
+        os.makedirs(self.key_dir, exist_ok=True)
+        os.makedirs(self.conf_dir, exist_ok=True)
+        self.vault_file = os.path.join(self.tmpdir, "vault.enc")
+        self.ed_key = os.path.join(self.key_dir, "freq_id_ed25519")
+        self.rsa_key = os.path.join(self.key_dir, "freq_id_rsa")
+        for path in [
+            self.ed_key,
+            f"{self.ed_key}.pub",
+            self.rsa_key,
+            f"{self.rsa_key}.pub",
+            self.vault_file,
+            os.path.join(self.conf_dir, "roles.conf"),
+            os.path.join(self.conf_dir, ".initialized"),
+        ]:
+            with open(path, "w") as f:
+                f.write("x")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @patch("freq.modules.init_cmd.logger")
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.os.unlink")
+    @patch("freq.modules.init_cmd.os.path.isfile")
+    def test_uninstall_stops_service_before_userdel(self, mock_isfile, mock_unlink, mock_run, _mock_fmt, _mock_logger):
+        from freq.modules.init_cmd import _uninstall_execute
+
+        calls = []
+
+        def fake_isfile(path):
+            if path == "/etc/sudoers.d/freq-freq-admin":
+                return False
+            return os.path.exists(path)
+
+        def fake_run(cmd, *args, **kwargs):
+            calls.append(cmd)
+            if cmd[:3] == ["systemctl", "is-enabled", "freq-serve"]:
+                return (0, "enabled\n", "")
+            if cmd[:3] == ["systemctl", "is-active", "freq-serve"]:
+                return (0, "active\n", "")
+            if cmd[:3] == ["systemctl", "disable", "--now"]:
+                return (0, "", "")
+            if cmd[:2] == ["id", "freq-admin"]:
+                return (0, "uid=123\n", "")
+            if cmd[:2] == ["pkill", "-u"] or cmd[:3] == ["pkill", "-9", "-u"]:
+                return (0, "", "")
+            if cmd[:2] == ["userdel", "-r"]:
+                return (0, "", "")
+            if cmd[:3] == ["getent", "group", "freq-admin"]:
+                return (1, "", "")
+            return (1, "", "")
+
+        mock_run.side_effect = fake_run
+        mock_isfile.side_effect = fake_isfile
+
+        cfg = MagicMock()
+        cfg.key_dir = self.key_dir
+        cfg.vault_file = self.vault_file
+        cfg.conf_dir = self.conf_dir
+
+        rc = _uninstall_execute(cfg, "freq-admin", self.ed_key, self.rsa_key, [])
+
+        self.assertEqual(rc, 0)
+        disable_idx = next(i for i, cmd in enumerate(calls) if cmd[:3] == ["systemctl", "disable", "--now"])
+        userdel_idx = next(i for i, cmd in enumerate(calls) if cmd[:2] == ["userdel", "-r"])
+        self.assertLess(disable_idx, userdel_idx, "freq-serve must be stopped before userdel")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -810,7 +1014,7 @@ class TestBootstrapKey(unittest.TestCase):
         """When bootstrap_key is set, PVE deploy skips interactive auth prompts."""
         cfg = MagicMock()
         cfg.pve_nodes = ["10.0.0.1"]
-        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+        ctx = {"svc_name": "freq-admin", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
         args = self._make_args(bootstrap_key=self.key_path, bootstrap_user="root")
 
         mock_dispatch.return_value = True
@@ -844,7 +1048,7 @@ class TestBootstrapKey(unittest.TestCase):
         host = MagicMock(ip="10.0.0.10", label="testhost", htype="linux")
         host.category = "server"
         cfg.hosts = [host]
-        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+        ctx = {"svc_name": "freq-admin", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
         args = self._make_args(bootstrap_key=self.key_path, bootstrap_user="root")
 
         mock_dispatch.return_value = True
@@ -907,7 +1111,7 @@ class TestDeviceCredsInteractive(unittest.TestCase):
         mock_dispatch.return_value = True
 
         args = self._make_args(device_credentials="/fake/creds.toml")
-        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+        ctx = {"svc_name": "freq-admin", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
 
         from freq.modules.init_cmd import _phase_fleet_deploy
         _phase_fleet_deploy(cfg, ctx, args)
@@ -947,7 +1151,7 @@ class TestDeviceCredsInteractive(unittest.TestCase):
         mock_dispatch.return_value = True
 
         args = self._make_args(device_credentials="/fake/creds.toml")
-        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+        ctx = {"svc_name": "freq-admin", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
 
         from freq.modules.init_cmd import _phase_fleet_deploy
         _phase_fleet_deploy(cfg, ctx, args)
@@ -988,7 +1192,7 @@ class TestDeviceCredsInteractive(unittest.TestCase):
             bootstrap_key=self.key_path,
             bootstrap_user="root",
         )
-        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+        ctx = {"svc_name": "freq-admin", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
 
         from freq.modules.init_cmd import _phase_fleet_deploy
         _phase_fleet_deploy(cfg, ctx, args)
@@ -1023,7 +1227,7 @@ class TestDeviceCredsInteractive(unittest.TestCase):
             bootstrap_key=self.key_path,
             bootstrap_user="root",
         )
-        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+        ctx = {"svc_name": "freq-admin", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
 
         from freq.modules.init_cmd import _phase_fleet_deploy
         _phase_fleet_deploy(cfg, ctx, args)
@@ -1079,7 +1283,7 @@ class TestHostsFileImport(unittest.TestCase):
         args.bootstrap_key = None
         args.bootstrap_user = None
 
-        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+        ctx = {"svc_name": "freq-admin", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
 
         # Mock load_hosts to return parsed host objects
         host1 = MagicMock(ip="10.0.0.10", label="testhost", htype="linux")
@@ -1125,7 +1329,7 @@ class TestHostsFileImport(unittest.TestCase):
         args.bootstrap_key = None
         args.bootstrap_user = None
 
-        ctx = {"svc_name": "freq-ops", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
+        ctx = {"svc_name": "freq-admin", "svc_pass": "test", "ed25519_pub": "ssh-ed25519 AAAA"}
 
         mock_getpass.getpass.return_value = "testpass"
         mock_dispatch.return_value = True

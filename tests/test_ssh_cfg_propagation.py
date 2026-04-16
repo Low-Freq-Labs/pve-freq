@@ -1,7 +1,8 @@
 """Consumer contract test: SSH calls must propagate cfg to use configured service account.
 
 Bug fixed: 58 SSH calls across api/ and serve.py were missing cfg=cfg,
-causing them to default to 'freq-admin' instead of the configured 'freq-ops'.
+causing them to default to 'freq-admin' instead of the configured
+service account from freq.toml.
 The health background probe (which passed cfg) worked; all API endpoints did not.
 """
 
@@ -75,19 +76,21 @@ class TestSSHCfgPropagation(unittest.TestCase):
             + "\n".join(all_missing),
         )
 
-    def test_configured_user_is_not_default(self):
-        """freq.toml must set ssh service_account != hardcoded default."""
+    def test_configured_user_matches_local_config(self):
+        """Runtime ssh_service_account must match the local freq.toml value when set."""
+        import tomllib
         from freq.core.config import load_config, _DEFAULTS
 
         cfg = load_config()
+        with open(os.path.join(REPO_ROOT, "conf", "freq.toml"), "rb") as f:
+            data = tomllib.load(f)
+        expected = data.get("ssh", {}).get("service_account", _DEFAULTS["ssh_service_account"])
         self.assertNotEqual(
             cfg.ssh_service_account,
             "",
             "ssh_service_account must not be empty",
         )
-        # The configured user should match what's in freq.toml
-        self.assertEqual(cfg.ssh_service_account, "freq-ops")
-        # And the default is freq-admin — different from configured
+        self.assertEqual(cfg.ssh_service_account, expected)
         self.assertEqual(_DEFAULTS["ssh_service_account"], "freq-admin")
 
     def test_containers_toml_state_is_honest(self):

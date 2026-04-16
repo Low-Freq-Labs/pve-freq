@@ -32,6 +32,7 @@ import math
 import os
 import re
 import secrets
+import shlex
 import shutil
 import signal
 import subprocess
@@ -64,9 +65,21 @@ IDRAC_SETUP_TIMEOUT = 60
 IDRAC_VERIFY_TIMEOUT = 15
 SWITCH_CONFIG_TIMEOUT = 30
 QUICK_CHECK_TIMEOUT = 10
+# R-PVEFREQ-RUN6-IDRAC-STDIN-PIPE-RC255-20260416AE: per-slot iDRAC query
+# timeout. 10s × 14 slots = 140s consumed most of DEVICE_DEPLOY_TIMEOUT.
+# 5s × 14 = 70s, leaving 170s for setup commands. On slow BMCs, a 5s
+# timeout may miss some slots, but the RAC1016 recovery catches the case
+# where existing_slot was missed.
+IDRAC_SLOT_QUERY_TIMEOUT = 5
 PING_TIMEOUT = 5
 VERIFY_TIMEOUT = 20
-DEVICE_DEPLOY_TIMEOUT = 120  # Total timeout for iDRAC/switch deploy (all steps combined)
+#
+# Live E2E on 5005 (2026-04-15) showed the Dell iDRAC path legitimately
+# spending ~2 minutes across slot discovery + user setup on real hardware.
+# 120s was enough to keep the old hang bounded, but too low to let a healthy
+# slow path finish. Keep the deploy bounded, but give iDRAC enough wall clock
+# to complete on DC01-class hardware.
+DEVICE_DEPLOY_TIMEOUT = 240  # Total timeout for iDRAC/switch deploy (all steps combined)
 
 # iDRAC user slot range (slots 1-2 are reserved by Dell for root/admin)
 IDRAC_SLOT_MIN = 3
@@ -147,15 +160,26 @@ def _parse_idrac_slots(output, svc_name):
 
 
 def _query_idrac_slots(_ssh, extra_opts, svc_name):
-    """Query iDRAC user slots one command at a time via RACADM."""
+    """Query iDRAC user slots via per-slot RACADM calls.
+
+    R-PVEFREQ-RUN6-IDRAC-STDIN-PIPE-RC255-20260416AE: three bulk query
+    strategies were attempted and all failed on real bmc-10 firmware:
+    (1) multi-command newline exec — iDRAC rejects; (2) racadm get
+    iDRAC.Users hierarchy — returns TOC only; (3) stdin-piped interactive
+    session — sshpass pty conflicts with stdin pipe, rc=255. Per-slot
+    with IDRAC_SLOT_QUERY_TIMEOUT=5 is the pragmatic fix: 14 × 5 = 70s
+    aggregate, leaving 170s of DEVICE_DEPLOY_TIMEOUT for setup commands.
+    RAC1016 recovery catches any missed existing_slot from timed-out probes.
+    """
     target_slot = None
     existing_slot = None
 
-    for slot in range(IDRAC_SLOT_MIN, IDRAC_SLOT_MAX):
+    preferred_slots = list(range(8, IDRAC_SLOT_MAX)) + list(range(IDRAC_SLOT_MIN, 8))
+    for slot in preferred_slots:
         rc, out, err = _ssh(
             f"racadm get iDRAC.Users.{slot}.UserName",
             extra_opts=extra_opts,
-            timeout=QUICK_CHECK_TIMEOUT,
+            timeout=IDRAC_SLOT_QUERY_TIMEOUT,
         )
         if rc != 0:
             logger.warning(
@@ -199,25 +223,27 @@ def _persist_legacy_password_file(cfg, svc_name, password):
     if not password:
         return
 
-    svc_home = os.path.expanduser("~" + svc_name)
+    import pwd
+
+    try:
+        svc_home = pwd.getpwnam(svc_name).pw_dir
+    except KeyError:
+        fmt.step_fail(
+            f"Cannot persist legacy password file before service account '{svc_name}' exists"
+        )
+        return
+
     pass_path = os.path.join(svc_home, ".ssh", "switch-pass")
     try:
         os.makedirs(os.path.dirname(pass_path), mode=0o700, exist_ok=True)
         with open(pass_path, "w") as f:
             f.write(password)
         os.chmod(pass_path, 0o600)
-
-        import pwd
-
-        try:
-            pw = pwd.getpwnam(svc_name)
-            os.chown(pass_path, pw.pw_uid, pw.pw_gid)
-            os.chown(os.path.dirname(pass_path), pw.pw_uid, pw.pw_gid)
-        except (KeyError, PermissionError):
-            pass
+        pw = pwd.getpwnam(svc_name)
+        os.chown(pass_path, pw.pw_uid, pw.pw_gid)
+        os.chown(os.path.dirname(pass_path), pw.pw_uid, pw.pw_gid)
 
         cfg.legacy_password_file = pass_path
-
         toml_path = os.path.join(cfg.conf_dir, "freq.toml")
         try:
             with open(toml_path) as f:
@@ -232,6 +258,16 @@ def _persist_legacy_password_file(cfg, svc_name, password):
         audit.record("password_save", pass_path, "success")
     except OSError as e:
         fmt.step_warn(f"Could not save device password to {pass_path}: {e}")
+
+
+def _home_dir_for_user(user_name):
+    """Return a real home dir for a local account, or empty string if unknown."""
+    import pwd
+
+    try:
+        return pwd.getpwnam(user_name).pw_dir
+    except KeyError:
+        return ""
 
 
 # R-POSTINIT-CHAOS-DIR-OWNERSHIP-20260413V: canonical list of data/ subdirs
@@ -308,12 +344,12 @@ def _ensure_post_init_data_ownership(cfg, svc_name):
             logger.warn(f"post_init_subdir: cannot create {sub_path}: {e}")
 
     # 3. Recursive chown of the whole data/ tree to svc_name:svc_name.
-    #    Use the shelling-out `chown -R` flavor because it's atomic-per-
-    #    entry and handles nested ownership discrepancies in one pass.
-    #    Falls back to a Python walk if chown(1) is unavailable.
-    rc, out, err = _run(["chown", "-R", f"{svc_name}:{svc_name}", data_dir], timeout=15)
-    if rc != 0:
-        logger.warn(f"post_init_chown_R failed: rc={rc} err={err.strip()[:120]}")
+    #    Route through _chown() so return-code failures are tracked in the
+    #    init summary instead of disappearing behind a bare subprocess call.
+    #    Keep the Python walk fallback for hosts where recursive chown is not
+    #    available or fails part-way through a mixed-permission tree.
+    if not _chown(f"{svc_name}:{svc_name}", data_dir, recursive=True):
+        logger.warn(f"post_init_chown_R failed for {data_dir} — using Python fallback")
         # Python fallback — walk the tree ourselves.
         try:
             os.chown(data_dir, uid, gid)
@@ -337,24 +373,35 @@ def _ensure_post_init_data_ownership(cfg, svc_name):
 def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
     """Run a command with a HARD timeout that kills the entire process tree.
 
-    subprocess.run(timeout=) only SIGKILLs the direct child. When that
-    child is sshpass (or any wrapper), its ssh grandchild inherits the
-    pipe FDs and racadm/remote commands can keep the session alive,
-    blocking subsequent init progress. This helper:
+    Three layers of timeout enforcement (belt-and-suspenders-and-duct-tape):
 
-      - spawns the child with start_new_session=True so it becomes its
-        own process-group leader (sshpass gets its own pgid; forked
-        ssh inherits it).
-      - on TimeoutExpired, SIGKILLs the entire process group via
-        os.killpg so ssh/racadm die alongside sshpass.
-      - returns (124, stdout, "timed out after Ns") on timeout — the
-        rc=124 convention matches GNU timeout(1) so callers can branch
-        honestly without conflating with a real non-zero exit.
+      1. GNU timeout(1) wraps the command at the OS level. Sends SIGKILL
+         after `timeout` seconds regardless of Python subprocess internals.
+         This is the PRIMARY kill mechanism.
+
+      2. Python proc.communicate(timeout=timeout+10) serves as a FALLBACK
+         if GNU timeout itself somehow doesn't fire. Raises TimeoutExpired,
+         then killpg SIGKILLs the process group.
+
+      3. start_new_session=True ensures killpg reaches the entire tree
+         (sshpass → ssh → racadm) via the session group.
 
     R-E2E-IDRAC-PRIVILEGE-HANG-20260413R: added because Phase 8 was
-    observed to wedge indefinitely on iDRAC racadm hangs. See that
-    token's findings file for the full root-cause narrative.
+    observed to wedge indefinitely on iDRAC racadm hangs.
+
+    R-PVEFREQ-RUN6-IDRAC-HANG-20260416Y: GNU timeout added as the
+    outermost wrapper after the Python-only layers failed to prevent
+    >2min hangs on iDRAC SSH connections. The pipe-drain blocking
+    in proc.communicate can outlast the Python timeout when grandchild
+    processes hold FDs open past the parent's death.
     """
+    # Wrap in GNU timeout for hard OS-level kill. Avoid double-wrapping
+    # if the caller (e.g., _ssh_with_pass) already added a timeout prefix.
+    py_timeout = timeout
+    if cmd and cmd[0] != "timeout":
+        cmd = ["timeout", "-s", "KILL", str(timeout)] + list(cmd)
+        py_timeout = timeout + 10  # Python fallback fires 10s after GNU timeout
+
     try:
         proc = subprocess.Popen(
             cmd,
@@ -370,8 +417,15 @@ def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
         return 1, "", str(e)
 
     try:
-        out, err = proc.communicate(input=input_text, timeout=timeout)
-        return proc.returncode, out or "", err or ""
+        out, err = proc.communicate(input=input_text, timeout=py_timeout)
+        rc = proc.returncode
+        # GNU timeout returns 128+9=137 on SIGKILL; Python reports -9
+        # when the process group kill catches the wrapper itself. Both
+        # indicate the command was killed due to timeout — map to rc=124
+        # so callers see a consistent timeout signal.
+        if rc in (137, -9):
+            return 124, out or "", f"command timed out after {timeout}s"
+        return rc, out or "", err or ""
     except subprocess.TimeoutExpired:
         # Kill the entire process group — reaches ssh grandchild too.
         try:
@@ -646,8 +700,8 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
             return _uninstall_dry_run(cfg)
         headless = getattr(args, "headless", False)
         if headless:
-            return _uninstall_headless(cfg)
-        return _uninstall_interactive(cfg)
+            return _uninstall_headless(cfg, args)
+        return _uninstall_interactive(cfg, args)
 
     # --dry-run (no root needed)
     if dry_run:
@@ -767,6 +821,18 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     _phase_fleet_discover(cfg, ctx, args)
     logger.perf("init_phase", time.monotonic() - _t, phase=7, name="fleet_discover")
 
+    # R-PVEFREQ-FINAL-RUNTIME-TRUTH-20260416AI: quiet freq-serve during
+    # deploy/verify in interactive init (same pattern as headless path).
+    _interactive_serve_was_running = False
+    try:
+        rc_chk, _, _ = _run(["systemctl", "is-active", "freq-serve"], timeout=5)
+        if rc_chk == 0:
+            _interactive_serve_was_running = True
+            _run(["systemctl", "stop", "freq-serve"], timeout=10)
+            fmt.step_ok("Dashboard stopped for fleet deploy/verify")
+    except Exception:
+        pass
+
     # Phase 8: Fleet Deployment
     _phase(8, total, "Fleet Deployment")
     _t = time.monotonic()
@@ -796,6 +862,14 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     _t = time.monotonic()
     verified = _phase_verify(cfg, ctx)
     logger.perf("init_phase", time.monotonic() - _t, phase=12, name="verify")
+
+    # Restart freq-serve after verification
+    if _interactive_serve_was_running:
+        try:
+            _run(["systemctl", "start", "freq-serve"], timeout=10)
+            fmt.step_ok("Dashboard restarted")
+        except Exception:
+            fmt.step_warn("Could not restart dashboard — run 'sudo systemctl start freq-serve'")
 
     # Phase 13: Summary
     _phase(13, total, "Summary")
@@ -1714,6 +1788,21 @@ def _phase_service_account(cfg, ctx, args=None):
     if not _validate_username(svc_name):
         fmt.step_fail(f"Invalid username '{svc_name}' — must be lowercase, start with letter/underscore, max 32 chars")
         return 1
+    # R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D: freq-ops is the bootstrap/sudo
+    # ingress identity per docs/IDENTITY-CONTRACT.md. init must not useradd,
+    # chpasswd, sudoers-write, or otherwise manage it. Refuse the name here
+    # so the operator gets a clear contract message instead of a downstream
+    # mystery (chpasswd silently changing the bootstrap account password,
+    # sudoers file landing at /etc/sudoers.d/freq-freq-ops, etc.).
+    from freq.core.config import is_managed_service_account_name, RESERVED_SERVICE_ACCOUNT_NAMES
+    if not is_managed_service_account_name(svc_name):
+        fmt.step_fail(
+            f"'{svc_name}' is reserved as a bootstrap-only identity "
+            f"(see docs/IDENTITY-CONTRACT.md). Reserved names: "
+            f"{sorted(RESERVED_SERVICE_ACCOUNT_NAMES)}. Pick a different "
+            f"service account name (default: 'freq-admin')."
+        )
+        return 1
     ctx["svc_name"] = svc_name
     fmt.blank()
 
@@ -1849,6 +1938,15 @@ def _ssh_with_pass(password, ssh_cmd_list, timeout=DEFAULT_CMD_TIMEOUT, input_te
 
     Writes password to a chmod-600 tempfile, uses 'sshpass -f', then deletes.
     If input_text is provided, pipes it via stdin (for IOS switch config).
+
+    R-PVEFREQ-RUN3-IDRAC-HANG-20260415M: sshpass is wrapped in GNU
+    timeout(1) as a hard process-level kill. _run_bounded's Python-side
+    proc.communicate(timeout=) can fail to fire when sshpass's forkpty
+    child (ssh) holds pipe FDs open past the iDRAC RACADM session — the
+    pipe drain blocks indefinitely even after TimeoutExpired is raised.
+    GNU timeout -s KILL ensures the sshpass tree is killed at the OS
+    level regardless of Python subprocess internals.
+
     Returns (rc, stdout, stderr).
     """
     tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".freq-auth", delete=False)
@@ -1856,10 +1954,17 @@ def _ssh_with_pass(password, ssh_cmd_list, timeout=DEFAULT_CMD_TIMEOUT, input_te
         tmp.write(password)
         tmp.close()
         os.chmod(tmp.name, 0o600)
-        full_cmd = ["sshpass", "-f", tmp.name] + ssh_cmd_list
+        full_cmd = [
+            "timeout", "-s", "KILL", str(timeout),
+            "sshpass", "-f", tmp.name,
+        ] + ssh_cmd_list
+        # _run/_run_bounded gets timeout + 10 as its Python-side ceiling
+        # so GNU timeout fires first (hard kill) and _run_bounded serves
+        # as the fallback if timeout(1) itself somehow doesn't exit.
+        py_timeout = timeout + 10
         if input_text is not None:
-            return _run_with_input(full_cmd, input_text, timeout=timeout)
-        return _run(full_cmd, timeout=timeout)
+            return _run_with_input(full_cmd, input_text, timeout=py_timeout)
+        return _run(full_cmd, timeout=py_timeout)
     finally:
         try:
             os.unlink(tmp.name)
@@ -2126,11 +2231,24 @@ def _phase_pve_deploy(cfg, ctx, args=None):
 
 
 def _phase_pve_api_token(cfg, ctx):
-    """Create a FREQ-specific PVE API token for dashboard metrics.
+    """Create the runtime PVE API token for the configured service account.
 
-    Creates freq-ops@pam user with PVEAuditor+PVEVMUser roles,
-    generates an API token, saves the secret to a credential file,
-    and updates freq.toml so the dashboard can pull live PVE metrics.
+    R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the runtime PVE API token
+    belongs to cfg.ssh_service_account (default "freq-admin"), NOT the
+    legacy freq-ops@pam identity. The PVE-side identity is
+    f"{svc_name}@pam" and the token is f"{svc_name}@pam!freq-rw".
+
+    Creates {svc_name}@pam user with PVEAuditor+PVEVMUser roles on the
+    first reachable PVE node, generates the freq-rw API token, saves
+    the secret to /etc/freq/credentials/pve-token-rw, updates freq.toml
+    so the dashboard can pull live PVE metrics, and verifies the token
+    across every configured node.
+
+    The legacy freq-ops@pam PVE user (if present from a pre-svc-token
+    install) is left untouched. Operators can clean it up manually via
+    `pveum user delete freq-ops@pam` once the dashboard is confirmed
+    running under the new identity — init does not force deletion
+    because an admin may be using freq-ops@pam for other purposes.
     """
     logger.info("init_phase_start: Phase 6 - pve_api_token", phase=6)
     import json as _json
@@ -2146,6 +2264,14 @@ def _phase_pve_api_token(cfg, ctx):
     if not key_path or not os.path.isfile(key_path):
         fmt.step_warn("SSH key not available — skipping API token creation")
         return
+
+    # R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: derive the PVE-side identity
+    # and token name from the configured service account. These are the
+    # single source of truth for the rest of the phase — no hardcoded
+    # "freq-ops@pam" strings below.
+    pve_user = f"{svc_name}@pam"
+    token_name = "freq-rw"
+    full_token_id = f"{pve_user}!{token_name}"
 
     # Find first reachable PVE node
     first_node = None
@@ -2172,43 +2298,51 @@ def _phase_pve_api_token(cfg, ctx):
         f"{svc_name}@{first_node}",
     ]
 
-    # Step 1: Check if freq-ops@pam user already exists
-    fmt.step_start("Checking for existing FREQ API user...")
+    # Step 1: Check if the service-account PVE user already exists
+    fmt.step_start(f"Checking for existing PVE API user {pve_user}...")
     rc, out, _ = _run(ssh_base + ["sudo pveum user list --output-format json 2>/dev/null"])
-    user_exists = "freq-ops@pam" in out if rc == 0 else False
+    user_exists = pve_user in out if rc == 0 else False
 
     if not user_exists:
-        # Create freq-ops@pam user
-        fmt.step_start("Creating freq-ops@pam user on PVE...")
-        rc, _, err = _run(ssh_base + ["sudo pveum user add freq-ops@pam --comment 'FREQ API access'"])
-        if rc != 0:
-            fmt.step_fail(f"Failed to create freq-ops@pam: {err.strip()[:200]}")
-            return
-        fmt.step_ok("Created freq-ops@pam user")
-
-        # Grant roles
+        fmt.step_start(f"Creating {pve_user} user on PVE...")
         rc, _, err = _run(
-            ssh_base + ["sudo pveum acl modify / --roles PVEAuditor,PVEVMUser --users freq-ops@pam"]
+            ssh_base + [f"sudo pveum user add {pve_user} --comment 'FREQ API access ({svc_name})'"]
         )
         if rc != 0:
-            fmt.step_warn(f"Failed to set roles: {err.strip()[:200]}")
+            fmt.step_fail(f"Failed to create {pve_user}: {err.strip()[:200]}")
+            return
+        fmt.step_ok(f"Created {pve_user} user")
     else:
-        fmt.step_ok("freq-ops@pam user already exists")
+        fmt.step_ok(f"{pve_user} user already exists")
+
+    # R-PVEFREQ-INIT-PVEAPI-CORE-20260415B: role reconciliation runs every
+    # init, not just on user creation. A manual pveum acl delete (or a
+    # role rename on the PVE side) would silently drift the ACL and
+    # Phase 6 would print "user already exists" without re-asserting the
+    # contract.
+    fmt.step_start(f"Reconciling PVE roles (PVEAuditor, PVEVMUser) on {pve_user}...")
+    rc, _, err = _run(
+        ssh_base + [f"sudo pveum acl modify / --roles PVEAuditor,PVEVMUser --users {pve_user}"]
+    )
+    if rc != 0:
+        fmt.step_warn(f"Failed to assert roles: {err.strip()[:200]}")
+    else:
+        fmt.step_ok("Roles asserted: PVEAuditor,PVEVMUser")
 
     # Step 2: Create API token (delete+recreate to get secret)
-    fmt.step_start("Creating API token freq-ops@pam!freq-rw...")
+    fmt.step_start(f"Creating API token {full_token_id}...")
     rc, out, err = _run(
         ssh_base + [
-            "sudo pveum user token add freq-ops@pam freq-rw"
+            f"sudo pveum user token add {pve_user} {token_name}"
             " --privsep 0 --output-format json 2>&1"
         ]
     )
     if rc != 0 and "already exists" in (err + out):
         # Token exists — delete and recreate to get the secret
-        _run(ssh_base + ["sudo pveum user token remove freq-ops@pam freq-rw"])
+        _run(ssh_base + [f"sudo pveum user token remove {pve_user} {token_name}"])
         rc, out, err = _run(
             ssh_base + [
-                "sudo pveum user token add freq-ops@pam freq-rw"
+                f"sudo pveum user token add {pve_user} {token_name}"
                 " --privsep 0 --output-format json 2>&1"
             ]
         )
@@ -2216,8 +2350,9 @@ def _phase_pve_api_token(cfg, ctx):
         fmt.step_fail(f"Failed to create API token: {(err + out).strip()[:200]}")
         return
 
-    # Parse token output
-    token_id = "freq-ops@pam!freq-rw"
+    # Parse token output. The default token_id is the svc-name-derived
+    # full_token_id; pveum's full-tokenid field overrides it when present.
+    token_id = full_token_id
     token_secret = ""
     try:
         token_data = _json.loads(out)
@@ -2236,17 +2371,37 @@ def _phase_pve_api_token(cfg, ctx):
 
     fmt.step_ok(f"Token created: {token_id}")
 
-    # Step 3: Save token secret to credential file
+    # Step 3: Save token secret to credential file.
+    #
+    # R-PVEFREQ-INIT-PVEAPI-CORE-20260415B: credentials live at the
+    # FHS-canonical path /etc/freq/credentials/, not a cfg.conf_dir-
+    # derived path. Prior code wrote to <install_dir>/credentials/
+    # (e.g. /opt/pve-freq/credentials/) while doctor._check_pve_nodes
+    # and _check_pve_token_drift hard-coded /etc/freq/credentials/ for
+    # reads — the two paths never matched on a fresh install and any
+    # token doctor claimed "unreadable" was a false negative driven
+    # purely by path drift, not PVE state. This is the contract-level
+    # fix: init writes where the runtime reads.
     svc_name = ctx["svc_name"]
-    cred_dir = os.path.join(os.path.dirname(cfg.conf_dir), "credentials")
-    os.makedirs(cred_dir, mode=0o700, exist_ok=True)
+    cred_dir = "/etc/freq/credentials"
+    cred_dir_preexists = os.path.isdir(cred_dir)
+    os.makedirs(cred_dir, mode=0o750, exist_ok=True)
     cred_path = os.path.join(cred_dir, "pve-token-rw")
     try:
         with open(cred_path, "w") as f:
             f.write(token_secret)
-        os.chmod(cred_path, 0o600)
-        # Dashboard runs as svc_name — must be able to read token
-        _chown(f"{svc_name}:{svc_name}", cred_dir, recursive=True)
+        os.chmod(cred_path, 0o640)
+        # Dashboard runs as svc_name — must be able to read token.
+        # Chown the specific file we just wrote, NOT the whole dir
+        # recursively: /etc/freq/credentials/ is a shared secrets dir
+        # holding other credentials (switch-password, pfsense-password,
+        # discord-*) with their own ownership model. Recursive chown
+        # would clobber them.
+        _chown(f"root:{svc_name}", cred_path)
+        # Only adjust the directory ownership when init created it;
+        # pre-existing dirs keep their admin-chosen ownership.
+        if not cred_dir_preexists:
+            _chown(f"root:{svc_name}", cred_dir)
         fmt.step_ok(f"Token secret saved to {cred_path}")
     except OSError as e:
         fmt.step_fail(f"Failed to save token secret: {e}")
@@ -2269,23 +2424,89 @@ def _phase_pve_api_token(cfg, ctx):
     cfg.pve_api_token_id = token_id
     cfg.pve_api_token_secret = token_secret
 
-    # Step 6: Verify token works via REST API
-    fmt.step_start("Verifying PVE API token...")
+    # Step 6: Verify token works via REST API across EVERY configured
+    # node, not just the first reachable one.
+    #
+    # R-PVEFREQ-INIT-PVEAPI-CORE-20260415B: prior code verified /version
+    # on `first_node` only. A token is cluster-scoped at the ACL layer
+    # but nothing in init proved it actually resolved on every node —
+    # network reachability, per-node firewall, or a stale corosync
+    # state could reject the token on node B while node A returned 200.
+    # Cross-node verification is the product contract's live-verification
+    # requirement and it belongs here, not at doctor-time.
+    fmt.step_start(f"Verifying PVE API token across {len(pve_nodes)} node(s)...")
     ctx["api_token_verified"] = False
+    verified_nodes = []
+    failed_nodes = []
+    pve_version = ""
     try:
         from freq.modules.pve import _pve_api_call
-        result, ok = _pve_api_call(cfg, first_node, "/version")
-        if ok:
-            ver = result.get("version", "unknown") if isinstance(result, dict) else "unknown"
-            fmt.step_ok(f"PVE REST API verified (PVE {ver})")
-            ctx["api_token_verified"] = True
-        else:
-            fmt.step_warn("Token saved but API test failed — will fall back to SSH")
-    except Exception as e:
-        fmt.step_warn(f"API verification error: {e} — will fall back to SSH")
+        for node_ip in pve_nodes:
+            try:
+                result, ok = _pve_api_call(cfg, node_ip, "/version")
+            except Exception as e:
+                failed_nodes.append((node_ip, f"exception: {str(e)[:80]}"))
+                continue
+            if ok:
+                verified_nodes.append(node_ip)
+                if not pve_version and isinstance(result, dict):
+                    pve_version = result.get("version", "") or ""
+            else:
+                failed_nodes.append((node_ip, "api call returned not-ok"))
+    except ImportError as e:
+        fmt.step_warn(f"Cannot import _pve_api_call: {e} — will fall back to SSH")
+        failed_nodes = [(ip, "import error") for ip in pve_nodes]
 
+    if verified_nodes and not failed_nodes:
+        ctx["api_token_verified"] = True
+        ver_str = f" (PVE {pve_version})" if pve_version else ""
+        fmt.step_ok(f"PVE REST API verified on all {len(verified_nodes)} node(s){ver_str}")
+    elif verified_nodes:
+        # Partial — surface the failed nodes so the operator can see
+        # exactly which ones didn't accept the token. This is the
+        # honest state: the token works somewhere but not everywhere.
+        failed_str = ", ".join(f"{ip}({reason[:40]})" for ip, reason in failed_nodes[:3])
+        if len(failed_nodes) > 3:
+            failed_str += f" +{len(failed_nodes) - 3} more"
+        fmt.step_warn(
+            f"PVE API token verified on {len(verified_nodes)}/{len(pve_nodes)} node(s); "
+            f"failed: {failed_str}"
+        )
+    else:
+        fmt.step_warn(
+            f"Token saved but API failed on all {len(pve_nodes)} node(s) — will fall back to SSH"
+        )
+
+    # R-PVEFREQ-INIT-PVEAPI-CORE-20260415B: audit event reflects the
+    # real verification state, not just "create_api_token success" on
+    # every run. Prior code recorded success regardless of whether
+    # verification passed on any node — audit.jsonl was lying.
+    if ctx["api_token_verified"]:
+        audit.record(
+            "create_api_token",
+            first_node,
+            "success",
+            verified_nodes=len(verified_nodes),
+            pve_version=pve_version or "unknown",
+        )
+    elif verified_nodes:
+        audit.record(
+            "create_api_token",
+            first_node,
+            "partial",
+            verified_nodes=len(verified_nodes),
+            failed_node_count=len(failed_nodes),
+            failed_nodes=",".join(ip for ip, _ in failed_nodes[:5]),
+        )
+    else:
+        audit.record(
+            "create_api_token",
+            first_node,
+            "unverified",
+            failed_node_count=len(failed_nodes),
+            failed_nodes=",".join(ip for ip, _ in failed_nodes[:5]),
+        )
     logger.info("init_phase_complete: Phase 6 - pve_api_token", phase=6)
-    audit.record("create_api_token", first_node, "success")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -2978,6 +3199,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
     # Track all discovered hosts: ip -> {label, htype, groups, vmid, source, all_ips}
     discovered = {}
+    vmid_node_map = ctx.setdefault("vmid_node_map", {})
     existing_hosts = list(cfg.hosts)
     seen_existing = {h.ip for h in existing_hosts}
     for h in scoped_hosts:
@@ -3138,9 +3360,13 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     "htype": htype,
                     "groups": "",
                     "vmid": vmid,
+                    "pve_node": node,
+                    "pve_node_ip": node_ip,
                     "source": "pve-api",
                     "all_ips": all_ips,
                 }
+                if vmid:
+                    vmid_node_map[vmid] = node_ip
                 resolved += 1
 
         # Also add PVE nodes themselves to discovered for fleet-boundaries
@@ -3413,7 +3639,8 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                 # from seeded template files or repeated runs
                 from freq.core.config import save_hosts_toml
                 for ip, d in discovered.items():
-                    host = Host(ip=ip, label=d["label"], htype=d["htype"], groups=d.get("groups", ""))
+                    host = Host(ip=ip, label=d["label"], htype=d["htype"],
+                                groups=d.get("groups", ""), vmid=d.get("vmid", 0))
                     cfg.hosts.append(host)
                 save_hosts_toml(cfg.hosts_file, cfg.hosts)
                 fmt.step_ok(f"Auto-registered {len(discovered)} host(s)")
@@ -3422,7 +3649,8 @@ def _phase_fleet_discover(cfg, ctx, args=None):
             if _confirm(f"Register all {len(discovered)} discovered hosts?", default=True):
                 from freq.core.config import save_hosts_toml
                 for ip, d in discovered.items():
-                    host = Host(ip=ip, label=d["label"], htype=d["htype"], groups=d.get("groups", ""))
+                    host = Host(ip=ip, label=d["label"], htype=d["htype"],
+                                groups=d.get("groups", ""), vmid=d.get("vmid", 0))
                     cfg.hosts.append(host)
                 save_hosts_toml(cfg.hosts_file, cfg.hosts)
                 fmt.step_ok(f"Registered {len(discovered)} host(s)")
@@ -3434,7 +3662,8 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     if _confirm(f"  Register {d['label']} ({ip}) [{d['htype']}]?", default=True):
                         label = _input(f"    Label", d["label"])
                         htype = _input(f"    Type", d["htype"])
-                        host = Host(ip=ip, label=label, htype=htype, groups=d.get("groups", ""))
+                        host = Host(ip=ip, label=label, htype=htype,
+                                    groups=d.get("groups", ""), vmid=d.get("vmid", 0))
                         cfg.hosts.append(host)
                         registered += 1
                 save_hosts_toml(cfg.hosts_file, cfg.hosts)
@@ -3763,9 +3992,9 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                     fmt.step_warn("Skipping device hosts")
 
     # Persist the SERVICE ACCOUNT password for ongoing iDRAC/switch SSH access.
-    # After deploy, the device has freq-admin configured with ctx["svc_pass"]
+    # After deploy, the device has ctx["svc_name"] configured with ctx["svc_pass"]
     # as the password. The legacy_passwords set collected the OLD device auth
-    # passwords used to connect for deploy — those don't belong to freq-admin.
+    # passwords used to connect for deploy — those don't belong to the service account.
     svc_pass_value = ctx.get("svc_pass", "")
     if device_hosts and ok > 0 and svc_pass_value:
         _persist_legacy_password_file(cfg, ctx["svc_name"], svc_pass_value)
@@ -3787,7 +4016,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
 def _phase_fleet_configure(cfg, ctx):
     """Post-deployment fleet configuration.
 
-    9a: Verify and tag Docker hosts (add freq-admin to docker group).
+    9a: Verify and tag Docker hosts (add the deployed service account to docker group).
     9b: Deploy metrics agent to all Linux-family hosts.
     9c: Auto-categorize VMs into fleet-boundary tiers.
     """
@@ -4405,7 +4634,8 @@ def _phase_fleet_configure(cfg, ctx):
         service_unit = (
             "[Unit]\n"
             "Description=PVE FREQ Dashboard\n"
-            "After=network.target\n"
+            "After=network-online.target\n"
+            "Wants=network-online.target\n"
             "\n"
             "[Service]\n"
             "Type=simple\n"
@@ -4415,6 +4645,7 @@ def _phase_fleet_configure(cfg, ctx):
             "TimeoutStopSec=10\n"
             "KillMode=mixed\n"
             f"User={svc_name}\n"
+            f"Group={svc_name}\n"
             f"WorkingDirectory={work_dir}\n"
             f"Environment=FREQ_DIR={work_dir}\n"
             "\n"
@@ -4422,19 +4653,19 @@ def _phase_fleet_configure(cfg, ctx):
             "WantedBy=multi-user.target\n"
         )
         try:
-            service_path = "/etc/systemd/system/freq-dashboard.service"
+            service_path = "/etc/systemd/system/freq-serve.service"
             with open(service_path, "w") as f:
                 f.write(service_unit)
             _run(["systemctl", "daemon-reload"])
-            _run(["systemctl", "enable", "freq-dashboard"])
+            _run(["systemctl", "enable", "freq-serve"])
             # Actually start the service — don't make the user guess
-            rc_start, _, _ = _run(["systemctl", "start", "freq-dashboard"])
+            rc_start, _, _ = _run(["systemctl", "start", "freq-serve"])
             if rc_start == 0:
                 fmt.step_ok(f"Dashboard running on port {dashboard_port}")
             else:
                 fmt.step_ok(f"Dashboard service installed (port {dashboard_port})")
-                fmt.line(f"  {fmt.C.DIM}Start with: sudo systemctl start freq-dashboard{fmt.C.RESET}")
-            audit.record("deploy_service", "local", "success", service="freq-dashboard")
+                fmt.line(f"  {fmt.C.DIM}Start with: sudo systemctl start freq-serve{fmt.C.RESET}")
+            audit.record("deploy_service", "local", "success", service="freq-serve")
         except OSError as e:
             fmt.step_warn(f"Could not install dashboard service: {e}")
 
@@ -4497,9 +4728,9 @@ def _phase_fleet_configure(cfg, ctx):
     # serving plain HTTP with the stale config in memory. Restart it so
     # the new TLS config takes effect.
     if tls_config_changed:
-        rc_restart, _, _ = _run(["systemctl", "is-active", "freq-dashboard"])
+        rc_restart, _, _ = _run(["systemctl", "is-active", "freq-serve"])
         if rc_restart == 0:
-            rc_r, _, _ = _run(["systemctl", "restart", "freq-dashboard"])
+            rc_r, _, _ = _run(["systemctl", "restart", "freq-serve"])
             if rc_r == 0:
                 fmt.step_ok("Dashboard restarted to pick up TLS config")
             else:
@@ -4679,7 +4910,7 @@ def _init_ssh(ip, auth_pass, auth_key, auth_user, deploy_start=None, deploy_budg
         if deploy_start is not None and deploy_budget is not None:
             remaining = deploy_budget - (time.monotonic() - deploy_start)
             if remaining <= 0:
-                return 124, "", f"deploy budget exhausted ({deploy_budget}s)"
+                return 124, "", f"deploy budget exhausted ({deploy_budget}s total, {remaining:.0f}s overrun)"
             timeout = min(timeout, max(1, math.ceil(remaining)))
         # Wrap in sudo if needed (non-root user running privileged commands)
         if as_root and auth_user != "root":
@@ -4693,7 +4924,17 @@ def _init_ssh(ip, auth_pass, auth_key, auth_user, deploy_start=None, deploy_budg
             full = base + ["-o", "BatchMode=yes", "-i", auth_key, f"{auth_user}@{ip}", cmd]
             return _run(full, timeout=timeout)
         else:
-            full = base + [f"{auth_user}@{ip}", cmd]
+            # R-PVEFREQ-RUN3-PASSWORD-FIRST-20260415L: force password auth
+            # method ordering so sshpass can feed the password correctly.
+            # Proxmox 8+ (Debian 12) defaults to PasswordAuthentication=no
+            # with KbdInteractiveAuthentication=yes; without this hint SSH
+            # negotiates keyboard-interactive which sshpass may not handle,
+            # returning rc=5 even when the password is correct.
+            full = base + [
+                "-o", "PreferredAuthentications=password,keyboard-interactive",
+                "-o", "PubkeyAuthentication=no",
+                f"{auth_user}@{ip}", cmd,
+            ]
             return _ssh_with_pass(auth_pass, full, timeout=timeout)
 
     return _ssh
@@ -4826,7 +5067,7 @@ echo DEPLOY_OK
             timeout=QUICK_CHECK_TIMEOUT,
         )
         if rc2 == 124:
-            fmt.step_fail(f"FREQ key verify TIMED OUT for {svc_name}@{ip} — sshd unresponsive")
+            fmt.step_fail(f"FREQ key verify TIMED OUT for {svc_name}@{ip}")
             success = False
         elif rc2 == 0:
             fmt.step_ok(f"Verified: FREQ key SSH as {svc_name}")
@@ -5034,8 +5275,13 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
         deploy_start=deploy_start, deploy_budget=DEVICE_DEPLOY_TIMEOUT,
     )
 
-    # Test connectivity with legacy ciphers
+    # Test connectivity with legacy ciphers.
+    # R-PVEFREQ-FINAL-SQUEEZE-RUNTIME-20260416AK: retry once on "no more
+    # sessions" — iDRAC has a 2-session SSH limit. Same pattern as _verify_host.
     rc, out, err = _ssh("racadm getsysinfo", extra_opts=extra_opts, timeout=IDRAC_VERIFY_TIMEOUT)
+    if rc != 0 and "no more sessions" in (out + err).lower():
+        time.sleep(5)
+        rc, out, err = _ssh("racadm getsysinfo", extra_opts=extra_opts, timeout=IDRAC_VERIFY_TIMEOUT)
     if rc != 0:
         fmt.step_fail(f"Cannot connect ({_ssh_error_msg(rc, err)})")
         logger.error(f"deploy_failed: {ip}", host=ip, error=_ssh_error_msg(rc, err))
@@ -5046,7 +5292,8 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     if _check_timeout("slot_query"):
         return False
 
-    # Find an empty user slot (slots 3-16, 1-2 are reserved)
+    # Find an empty user slot (slots 3-16, 1-2 are reserved).
+    # IDRAC_SLOT_QUERY_TIMEOUT=5 bounds the aggregate to ~70s.
     target_slot, existing_slot = _query_idrac_slots(_ssh, extra_opts, svc_name)
 
     if _check_timeout("after_slot_query"):
@@ -5085,6 +5332,37 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
             return False
         ok_cmd, details = _run_idrac_command(_ssh, extra_opts, cmd, timeout=IDRAC_SETUP_TIMEOUT)
         if not ok_cmd:
+            # R-PVEFREQ-RUN2-IDRAC-IDEMPOTENCY-20260415K: RAC1016 "user already
+            # exists" fires when _query_idrac_slots missed the existing user
+            # (e.g., query for the occupied slot timed out on a slow BMC). The
+            # user exists in a different slot from target_slot. Re-scan to find
+            # the real slot and switch to the refresh path (password/privilege
+            # only, no UserName set).
+            if "rac1016" in details.lower() or "already exists" in details.lower():
+                fmt.step_warn(f"User '{svc_name}' already exists in another slot — re-scanning")
+                _, found_slot = _query_idrac_slots(_ssh, extra_opts, svc_name)
+                if found_slot:
+                    fmt.step_ok(f"Found '{svc_name}' in slot {found_slot} — refreshing config")
+                    target_slot = found_slot
+                    for rcmd in [
+                        f"racadm set iDRAC.Users.{found_slot}.Password {svc_pass}",
+                        f"racadm set iDRAC.Users.{found_slot}.Privilege 0x1ff",
+                        f"racadm set iDRAC.Users.{found_slot}.Enable 1",
+                        f"racadm set iDRAC.Users.{found_slot}.IpmiLanPrivilege 4",
+                    ]:
+                        if _check_timeout("user_refresh"):
+                            return False
+                        ok_r, det_r = _run_idrac_command(_ssh, extra_opts, rcmd, timeout=IDRAC_SETUP_TIMEOUT)
+                        if not ok_r:
+                            fmt.step_fail(f"iDRAC user refresh failed ({det_r.strip()[:80]})")
+                            logger.error(f"deploy_failed: {ip}", host=ip, error="idrac_refresh_failed")
+                            audit.record("deploy_user", ip, "failed", user=svc_name, error="racadm_refresh")
+                            return False
+                    break
+                fmt.step_fail(f"RAC1016 but cannot locate '{svc_name}' in any slot")
+                logger.error(f"deploy_failed: {ip}", host=ip, error="rac1016_slot_not_found")
+                audit.record("deploy_user", ip, "failed", user=svc_name, error="rac1016_orphan")
+                return False
             fmt.step_fail(f"iDRAC user setup failed ({details.strip()[:80]})")
             logger.error(f"deploy_failed: {ip}", host=ip, error="idrac_setup_failed")
             audit.record("deploy_user", ip, "failed", user=svc_name, error="racadm_setup")
@@ -5292,7 +5570,7 @@ def _deploy_to_host_dispatch(ip, htype, ctx, auth_pass, auth_key, auth_user):
 def _uninstall_ssh(ip, svc_name, key_path, extra_opts=None):
     """Build an SSH runner for uninstall — auths as the FREQ service account."""
 
-    def _ssh(cmd, timeout=DEFAULT_CMD_TIMEOUT):
+    def _ssh(cmd, extra_opts=extra_opts, timeout=DEFAULT_CMD_TIMEOUT):
         ssh_cmd = [
             "ssh",
             "-n",
@@ -5308,6 +5586,30 @@ def _uninstall_ssh(ip, svc_name, key_path, extra_opts=None):
         if extra_opts:
             ssh_cmd.extend(extra_opts)
         ssh_cmd.extend([f"{svc_name}@{ip}", cmd])
+        return _run(ssh_cmd, timeout=timeout)
+
+    return _ssh
+
+
+def _uninstall_auth_ssh(ip, auth_user, auth_key="", auth_pass="", extra_opts=None):
+    """Build an SSH runner for uninstall using bootstrap/admin auth."""
+
+    def _ssh(cmd, timeout=DEFAULT_CMD_TIMEOUT):
+        ssh_cmd = [
+            "ssh",
+            "-n",
+            "-o",
+            "ConnectTimeout=5",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+        ]
+        if auth_key and os.path.isfile(auth_key):
+            ssh_cmd[1:1] = ["-i", auth_key]
+        if extra_opts:
+            ssh_cmd.extend(extra_opts)
+        ssh_cmd.extend([f"{auth_user}@{ip}", cmd])
+        if auth_pass:
+            return _ssh_with_pass(auth_pass, ssh_cmd, timeout=timeout)
         return _run(ssh_cmd, timeout=timeout)
 
     return _ssh
@@ -5354,12 +5656,48 @@ def _remove_linux(ip, svc_name, key_path):
     return True, ""
 
 
-def _remove_pfsense(ip, svc_name, key_path):
+def _remove_pfsense(ip, svc_name, key_path, admin_auth=None):
     """Remove FREQ service account from pfSense (FreeBSD).
 
     Removes: user account + home directory.
     Returns (success, error).
     """
+    quoted_user = shlex.quote(svc_name)
+
+    if admin_auth and (admin_auth.get("password") or admin_auth.get("key_path")):
+        _ssh = _uninstall_auth_ssh(
+            ip,
+            admin_auth.get("user", "root") or "root",
+            auth_key=admin_auth.get("key_path", "") or "",
+            auth_pass=admin_auth.get("password", "") or "",
+        )
+
+        rc, out, err = _ssh("echo OK")
+        if rc != 0:
+            return False, err or out
+
+        remove_cmd = (
+            "sh -lc "
+            + shlex.quote(
+                f"if pw usershow {quoted_user} >/dev/null 2>&1; then "
+                f"pkill -u {quoted_user} >/dev/null 2>&1 || true; "
+                f"pw userdel {quoted_user} -r >/dev/null 2>&1 "
+                f"|| pw userdel {quoted_user} >/dev/null 2>&1 "
+                f"|| rmuser -y {quoted_user} >/dev/null 2>&1 "
+                f"|| exit 4; "
+                "echo ACCOUNT_REMOVED; "
+                "else echo NOT_FOUND; fi"
+            )
+        )
+        rc, out, err = _ssh(remove_cmd, timeout=QUICK_CHECK_TIMEOUT)
+        if rc != 0:
+            return False, (err or out).strip()
+        if "NOT_FOUND" in (out or ""):
+            return True, "not_found"
+        if "ACCOUNT_REMOVED" in (out or ""):
+            return True, ""
+        return False, (err or out or "unknown pfSense removal failure").strip()
+
     _ssh = _uninstall_ssh(ip, svc_name, key_path)
 
     # Test connectivity
@@ -5367,12 +5705,9 @@ def _remove_pfsense(ip, svc_name, key_path):
     if rc != 0:
         return False, err
 
-    # pfSense: no sudo, but FREQ account can't delete itself directly.
-    # We need to check if this is run as admin/root or if the account has
-    # enough privilege. On pfSense, only root/admin can pw userdel.
-    # The FREQ account does NOT have sudo on pfSense by design.
-    # This means we need root/admin creds to remove from pfSense.
-    # For now, just remove the SSH key (which the user owns).
+    # pfSense: the FREQ account cannot delete itself directly. Without
+    # bootstrap/admin credentials, remove the key to revoke access and
+    # surface the host as manual cleanup instead of claiming full uninstall.
     _ssh("rm -rf ~/.ssh/authorized_keys 2>/dev/null; echo KEY_REMOVED")
 
     return True, "key_only"
@@ -5381,7 +5716,16 @@ def _remove_pfsense(ip, svc_name, key_path):
 def _remove_idrac(ip, svc_name, key_path):
     """Remove FREQ service account from iDRAC.
 
-    Finds the user's slot, disables it, clears name + key.
+    R-PVEFREQ-RUN6-UNINSTALL-DEFECTS-20260415V: reordered so Enable=0
+    is LAST. Disabling the user immediately terminates all active iDRAC
+    sessions for that user — if Enable=0 runs first, the SSH session
+    drops and subsequent commands (UserName clear, key clear) never
+    execute. By clearing the key and username first (which don't kill
+    the session), the account is stripped of access before the final
+    disable. Connection-closed on the last command is treated as success
+    because the disable itself succeeded (the connection dropped
+    precisely because it worked).
+
     Returns (success, error).
     """
     extra_opts = PLATFORM_SSH.get("idrac", {}).get("extra_opts", [])
@@ -5393,22 +5737,28 @@ def _remove_idrac(ip, svc_name, key_path):
     if rc != 0:
         return False, err
 
-    # Find the user's slot
+    # Find the user's slot (bulk query for speed)
     _, target_slot = _query_idrac_slots(_ssh, extra_opts, svc_name)
-    # In removal, we want the existing slot (not the empty one)
-    # _parse_idrac_slots returns (empty_slot, existing_slot)
 
     if not target_slot:
         return True, "not_found"  # Already gone
 
-    remove_cmds = (
-        f"racadm set iDRAC.Users.{target_slot}.Enable 0",
-        f'racadm set iDRAC.Users.{target_slot}.UserName ""',
-        f'racadm sshpkauth -i {target_slot} -k 1 -t ""',
-    )
-    for cmd in remove_cmds:
+    # Order matters: clear key + username BEFORE disable.
+    # Enable=0 kills the SSH session, so it must be last.
+    remove_cmds = [
+        (f'racadm sshpkauth -i {target_slot} -k 1 -t ""', False),
+        (f'racadm set iDRAC.Users.{target_slot}.UserName ""', False),
+        (f"racadm set iDRAC.Users.{target_slot}.Enable 0", True),  # last — may kill session
+    ]
+    for cmd, is_final in remove_cmds:
         ok_cmd, details = _run_idrac_command(_ssh, extra_opts, cmd, timeout=30)
         if not ok_cmd:
+            # Connection-closed on the final Enable=0 is expected —
+            # the disable killed our session, which means it worked.
+            if is_final and ("timed out" in details.lower()
+                            or "connection" in details.lower()
+                            or not details.strip()):
+                break  # treat as success
             return False, f"removal failed: {details.strip()[:80]}"
 
     return True, ""
@@ -5417,7 +5767,13 @@ def _remove_idrac(ip, svc_name, key_path):
 def _remove_switch(ip, svc_name, key_path):
     """Remove FREQ service account from Cisco IOS switch.
 
-    Removes: username + pubkey-chain entry, writes config.
+    R-PVEFREQ-RUN6-UNINSTALL-DEFECTS-20260415V: IOS does not allow
+    'no username X' while logged in as X — the switch rejects it.
+    Instead, revoke the SSH public key (preventing key-based login)
+    and write config. The username entry remains but is inaccessible
+    via SSH key. Full removal requires an admin session from the
+    switch console or a different privileged user.
+
     Returns (success, error).
     """
     extra_opts = PLATFORM_SSH.get("switch", {}).get("extra_opts", [])
@@ -5429,10 +5785,11 @@ def _remove_switch(ip, svc_name, key_path):
     if rc != 0:
         return False, err
 
-    # IOS removal commands — must be sent via stdin for configure terminal
+    # Revoke SSH public key only — IOS won't let us delete our own login.
+    # This revokes key-based access; the username entry remains but is
+    # only accessible via password (if one was set) or console.
     ios_cmds = [
         "configure terminal",
-        f"no username {svc_name}",
         "ip ssh pubkey-chain",
         f"  no username {svc_name}",
         "  exit",
@@ -5440,7 +5797,6 @@ def _remove_switch(ip, svc_name, key_path):
         "write memory",
     ]
     ios_script = "\n".join(ios_cmds) + "\n"
-    # Use subprocess directly with stdin for IOS config mode
     ssh_cmd = [
         "ssh",
         "-T",
@@ -5463,14 +5819,17 @@ def _remove_switch(ip, svc_name, key_path):
     if "invalid input" in out_lower:
         return False, f"IOS error: {out.strip()[:80]}"
 
-    return True, ""
+    return True, "key_only"
 
 
-def _remove_from_host_dispatch(ip, htype, svc_name, key_path, rsa_key_path):
+def _remove_from_host_dispatch(ip, htype, svc_name, key_path, rsa_key_path, device_creds=None):
     """Route to platform-specific remover. Returns (success, error_info)."""
     from freq.deployers import resolve_htype, get_deployer, RSA_REQUIRED_CATEGORIES
 
     category, vendor = resolve_htype(htype)
+    if category == "firewall" and vendor == "pfsense":
+        pf_creds = (device_creds or {}).get("pfsense", {})
+        return _remove_pfsense(ip, svc_name, key_path, admin_auth=pf_creds)
     deployer = get_deployer(category, vendor)
     if deployer:
         use_key = rsa_key_path if category in RSA_REQUIRED_CATEGORIES else key_path
@@ -5587,7 +5946,11 @@ def _skip_reason(err):
     if "connection refused" in err_l:
         return "connection refused (SSH port closed)"
     if "permission denied" in err_l or "authentication" in err_l:
-        return "auth failed"
+        if "publickey" in err_l:
+            return "auth failed (key not accepted)"
+        if "password" in err_l:
+            return "auth failed (wrong password or password auth disabled)"
+        return "auth failed (key or password rejected)"
     if "host key verification" in err_l:
         return "host key mismatch"
     return "SSH error"
@@ -5729,7 +6092,7 @@ def _phase_verify(cfg, ctx):
     elif cfg.hosts and not hosts_file_ok:
         _check(f"hosts.toml: {len(cfg.hosts)} in memory but file missing or malformed", False)
     else:
-        fmt.step_warn("hosts.toml is empty — use 'freq host add' or 'freq host discover'")
+        fmt.line(f"  {fmt.C.DIM}hosts.toml is empty — use 'freq host add' or 'freq host discover'{fmt.C.RESET}")
 
     # Timezone
     tz = "unknown"
@@ -5779,31 +6142,57 @@ def _phase_verify(cfg, ctx):
             label = _label_for(h)
             if label is None:
                 return (h, None, None, None)
+            # R-PVEFREQ-RUN8-TRUENAS-CREDS-IGNORED-20260416AF: skip verify
+            # for hosts that were NOT deployed this run. Trying to verify
+            # as freq-admin on a host where deploy was skipped (e.g., bad
+            # device credentials) produces misleading "Permission denied"
+            # instead of the truthful "deployment was skipped."
+            if h.ip not in deployed_ips:
+                return (h, label, None, "not deployed this run")
             try:
                 ok, err = _verify_host(h.ip, h.htype, svc_name, verify_key, rsa_file, cfg=cfg)
                 return (h, label, ok, err)
             except Exception as e:
                 return (h, label, False, str(e))
 
-        # Cap total phase time: 60s is enough for ~22 hosts at 8 workers
-        # with 20s per-host timeout. Any stragglers get reported as timeout.
+        # Cap total phase time. Any stragglers get reported as timeout.
+        # R-PVEFREQ-RUN6-LATE-VERIFY-HANG-20260416Z: the ThreadPoolExecutor
+        # context manager calls pool.shutdown(wait=True) on exit, which
+        # blocks indefinitely if any worker thread is stuck in a subprocess
+        # that refuses to die. Use explicit shutdown(wait=False) instead
+        # so init can proceed honestly even when some verify probes hang.
         PHASE12_FLEET_TIMEOUT = 90
         results_list = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+        try:
             futures = {pool.submit(_verify_one, h): h for h in fleet_hosts}
             try:
                 for fut in concurrent.futures.as_completed(futures, timeout=PHASE12_FLEET_TIMEOUT):
                     results_list.append(fut.result())
             except concurrent.futures.TimeoutError:
-                # Record unfinished futures as 'timeout'
+                # R-PVEFREQ-FINAL-SQUEEZE-RUNTIME-20260416AK: log WHICH
+                # hosts stalled so the operator knows where to look.
                 done_hosts = {r[0].ip for r in results_list}
-                for h in fleet_hosts:
-                    if h.ip not in done_hosts:
-                        results_list.append((h, _label_for(h), False, "Phase 12 timeout"))
+                stalled = [h for h in fleet_hosts if h.ip not in done_hosts]
+                if stalled:
+                    stalled_labels = ", ".join(f"{h.label}({h.ip})[{h.htype}]" for h in stalled[:5])
+                    logger.warning(
+                        f"Phase 12 fleet timeout after {PHASE12_FLEET_TIMEOUT}s — "
+                        f"{len(stalled)} host(s) still verifying: {stalled_labels}"
+                    )
+                for h in stalled:
+                    results_list.append((h, _label_for(h), False, f"Phase 12 timeout ({h.htype})"))
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
 
         for h, check_label, ok, err in results_list:
             if check_label is None:
                 fmt.step_warn(f"Fleet {h.label} ({h.ip}): unknown type '{h.htype}' (skipped)")
+                warns += 1
+                continue
+            if ok is None:
+                # Host was not deployed this run — skip verify with honest message
+                fmt.step_warn(f"Fleet {h.label} ({h.ip}): {err or 'not deployed'} (verify skipped)")
                 warns += 1
                 continue
             if ok:
@@ -5828,14 +6217,14 @@ def _phase_verify(cfg, ctx):
         except Exception:
             _check("PVE API token: REST API reachable", False)
     else:
-        fmt.step_warn("PVE API token not configured — dashboard metrics will use SSH fallback")
+        fmt.line(f"  {fmt.C.DIM}PVE API token not configured — dashboard metrics will use SSH fallback{fmt.C.RESET}")
 
     # vlans.toml populated
     vlans = getattr(cfg, "vlans", []) or []
     if vlans:
         _check(f"vlans.toml: {len(vlans)} VLANs discovered", True)
     else:
-        fmt.step_warn("vlans.toml is empty — run 'freq host discover' to scan VLANs")
+        fmt.line(f"  {fmt.C.DIM}vlans.toml is empty — run 'freq host discover' to scan VLANs{fmt.C.RESET}")
 
     # fleet-boundaries.toml — verify file is parseable TOML with real entries
     fb_path = os.path.join(cfg.conf_dir, "fleet-boundaries.toml")
@@ -5869,9 +6258,12 @@ def _phase_verify(cfg, ctx):
     elif fb_msg:
         _check(f"fleet-boundaries.toml: {fb_msg}", False)
     else:
-        fmt.step_warn("fleet-boundaries.toml is empty — no device categories configured")
+        fmt.line(f"  {fmt.C.DIM}fleet-boundaries.toml is empty — no device categories configured{fmt.C.RESET}")
 
-    # containers.toml — verify file is parseable if it was generated
+    # containers.toml — verify file is parseable if it was generated.
+    # R-PVEFREQ-RUN3-CONTAINERS-VERIFY-20260415N: 0 containers across
+    # 0 hosts is a legitimate cluster state (no-docker or docker hosts
+    # with no running containers). The check is parseability, not count.
     ct_path = os.path.join(cfg.conf_dir, "containers.toml")
     docker_hosts = [h for h in cfg.hosts if h.htype == "docker"] if cfg.hosts else []
     if os.path.isfile(ct_path):
@@ -5883,7 +6275,7 @@ def _phase_verify(cfg, ctx):
                     ct_data = tomllib.load(f)
                 host_section = ct_data.get("host", {})
                 total_ct = sum(len(v.get("containers", {})) for v in host_section.values() if isinstance(v, dict))
-                ct_ok = len(host_section) > 0
+                ct_ok = True
                 ct_msg = f"{total_ct} containers across {len(host_section)} hosts"
             except Exception:
                 ct_msg = "malformed TOML"
@@ -5906,7 +6298,7 @@ def _phase_verify(cfg, ctx):
     if infra_configured:
         _check("freq.toml [infrastructure]: devices configured", True)
     else:
-        fmt.step_warn("freq.toml [infrastructure] is empty — no infrastructure IPs detected")
+        fmt.line(f"  {fmt.C.DIM}freq.toml [infrastructure] is empty — no infrastructure IPs detected{fmt.C.RESET}")
 
     # Metrics agent spot-check (first linux host)
     linux_hosts = [h for h in cfg.hosts if h.htype in ("linux", "docker")]
@@ -5923,7 +6315,7 @@ def _phase_verify(cfg, ctx):
         if agent_ok:
             _check(f"Metrics agent responding on {test_host.label}", True)
         else:
-            fmt.step_warn(f"Metrics agent not responding on {test_host.label} — may need manual start")
+            fmt.line(f"  {fmt.C.DIM}Metrics agent not responding on {test_host.label} — may need manual start{fmt.C.RESET}")
 
     # Dashboard readiness
     dashboard_ready = bool(
@@ -5945,12 +6337,12 @@ def _phase_verify(cfg, ctx):
 
     # Mark initialized — unreachable hosts are warnings, not failures
     if fails == 0:
-        marker = f"PVE FREQ {cfg.version} — initialized {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        marker = f"PVE FREQ {cfg.version} — initialized {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} ({passes} pass, {warns} unreachable)"
         with open(INIT_MARKER, "w") as f:
             f.write(marker + "\n")
         fmt.step_ok(f"Marked initialized: {INIT_MARKER}")
         if warns:
-            fmt.line(f"  {fmt.C.DIM}Re-run 'freq init' when unreachable hosts come online.{fmt.C.RESET}")
+            fmt.step_warn(f"{warns} hosts unreachable — re-run freq init when they come online")
         logger.info("init_phase_complete: Phase 12 - verify", phase=12, passes=passes, fails=fails, warns=warns)
         return True
     else:
@@ -5971,8 +6363,13 @@ def _phase_summary(cfg, ctx, verified, pack=None):
     ed_key = os.path.join(cfg.key_dir, "freq_id_ed25519")
     rsa_key = os.path.join(cfg.key_dir, "freq_id_rsa")
 
-    if verified:
-        fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ {cfg.version} is ready.{fmt.C.RESET}")
+    deployed_count = len(ctx.get("deployed_ips", set()))
+    total_hosts = len(cfg.hosts)
+    if verified and deployed_count >= total_hosts:
+        fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ {cfg.version} initialized — {deployed_count}/{total_hosts} hosts deployed.{fmt.C.RESET}")
+    elif verified:
+        fmt.line(f"  {fmt.C.YELLOW}{fmt.C.BOLD}FREQ {cfg.version} initialized — {deployed_count}/{total_hosts} hosts deployed.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.DIM}Re-run freq init when remaining hosts come online.{fmt.C.RESET}")
     else:
         fmt.line(f"  {fmt.C.YELLOW}FREQ {cfg.version} is partially configured.{fmt.C.RESET}")
 
@@ -6159,12 +6556,17 @@ def _init_check(cfg, json_output=False):
         fmt.blank()
 
     marker = os.path.join(cfg.conf_dir, ".initialized")
+    web_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
     web_only = False
     if os.path.isfile(marker):
         with open(marker) as f:
             marker_content = f.read().strip()
-        web_only = "web setup" in marker_content.lower()
         _chk(f"Initialized: {marker_content}", "pass")
+    elif os.path.isfile(web_marker):
+        web_only = True
+        with open(web_marker) as f:
+            web_content = f.read().strip()
+        _chk(f"Web setup only: {web_content} — run freq init for fleet deploy", "warn")
     else:
         _chk("Not initialized (.initialized file missing)", "warn")
 
@@ -6254,18 +6656,20 @@ def _init_check(cfg, json_output=False):
 
         def _deep_check(entry):
             ip, htype, label = entry["ip"], entry["htype"], entry["label"]
+            svc_home = _home_dir_for_user(svc_name)
+            auth_keys = os.path.join(svc_home, ".ssh", "authorized_keys") if svc_home else ""
             if htype in ("linux", "pve", "docker", "truenas"):
                 cmd = (
                     f"id {svc_name} >/dev/null 2>&1 && "
                     f"sudo -n true 2>/dev/null && "
-                    f"test -f /home/{svc_name}/.ssh/authorized_keys && "
+                    f"test -f {shlex.quote(auth_keys)} && "
                     f"echo DEEP_CHECK_OK"
                 )
                 use_key = key_file
             elif htype == "pfsense":
                 cmd = (
                     f"pw usershow {svc_name} >/dev/null 2>&1 && "
-                    f"test -f /home/{svc_name}/.ssh/authorized_keys && "
+                    f"test -f {shlex.quote(auth_keys)} && "
                     f"echo DEEP_CHECK_OK"
                 )
                 use_key = key_file
@@ -6341,9 +6745,12 @@ def _init_fix(cfg, args):
     key_file = cfg.ssh_key_path or os.path.join(cfg.key_dir, "freq_id_ed25519")
     rsa_file = cfg.ssh_rsa_key_path if hasattr(cfg, "ssh_rsa_key_path") else os.path.join(cfg.key_dir, "freq_id_rsa")
 
-    # Need the FREQ keys to exist
+    # Need at least one usable FREQ key to exist. --fix must still recover
+    # from partial init states where only the RSA fallback was generated.
+    if not os.path.isfile(key_file) and os.path.isfile(rsa_file):
+        key_file = rsa_file
     if not os.path.isfile(key_file):
-        fmt.step_fail("FREQ ed25519 key not found — run 'freq init' first")
+        fmt.step_fail("No FREQ SSH key found — run 'freq init' to generate or deploy one")
         return 1
 
     # Build deploy context (same as full init)
@@ -6366,8 +6773,8 @@ def _init_fix(cfg, args):
         "rsa_pubkey": rsa_pubkey,
     }
 
-    if not ctx["pubkey"]:
-        fmt.step_fail("FREQ ed25519 public key not found")
+    if not ctx["pubkey"] and not ctx["rsa_pubkey"]:
+        fmt.step_fail("No FREQ public key found")
         return 1
 
     # Persist the generated password in vault so it's recoverable
@@ -6620,12 +7027,14 @@ def _init_reset(cfg):
         return 0
 
     marker = os.path.join(cfg.conf_dir, ".initialized")
+    web_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
     roles_file = os.path.join(cfg.conf_dir, "roles.conf")
 
     for path, label in [
         (cfg.vault_file, "Vault"),
         (roles_file, "Roles"),
         (marker, "Init marker"),
+        (web_marker, "Web setup marker"),
     ]:
         if os.path.isfile(path):
             os.unlink(path)
@@ -6645,7 +7054,7 @@ def _init_reset(cfg):
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _uninstall_interactive(cfg):
+def _uninstall_interactive(cfg, args):
     """Interactive uninstall — remove FREQ service account from ALL hosts."""
     # Must be root
     if os.geteuid() != 0:
@@ -6707,10 +7116,10 @@ def _uninstall_interactive(cfg):
         fmt.line(f"  {fmt.C.DIM}Cancelled.{fmt.C.RESET}")
         return 0
 
-    return _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets)
+    return _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args)
 
 
-def _uninstall_headless(cfg):
+def _uninstall_headless(cfg, args):
     """Non-interactive uninstall — no prompts."""
     if os.geteuid() != 0:
         fmt.line(f"  {fmt.C.RED}freq init --uninstall --headless must be run as root.{fmt.C.RESET}")
@@ -6732,16 +7141,31 @@ def _uninstall_headless(cfg):
 
     fmt.header("Init — Uninstall (headless)")
     fmt.blank()
-    return _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets)
+    return _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args)
 
 
-def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets):
+def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
     """Execute the uninstall — shared by interactive and headless modes.
 
     Order: remote hosts first (need FREQ key), then local cleanup.
     Returns 0 on full success, 1 on partial failure.
     """
-    ok = fail = skip = 0
+    ok = fail = skip = manual = 0
+    device_creds = _load_device_credentials(getattr(args, "device_credentials", None)) if args else {}
+    if "pfsense" not in device_creds and args:
+        bootstrap_key = getattr(args, "bootstrap_key", "") or ""
+        bootstrap_user = getattr(args, "bootstrap_user", "root") or "root"
+        bootstrap_password_file = getattr(args, "bootstrap_password_file", None)
+        bootstrap_pass = ""
+        if bootstrap_password_file and os.path.isfile(bootstrap_password_file):
+            with open(bootstrap_password_file) as f:
+                bootstrap_pass = f.read().strip()
+        if bootstrap_key or bootstrap_pass:
+            device_creds["pfsense"] = {
+                "user": bootstrap_user,
+                "password": bootstrap_pass,
+                "key_path": bootstrap_key,
+            }
 
     # ── Phase 1: Remote host teardown ──
     if targets:
@@ -6791,16 +7215,21 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets):
                     svc_name,
                     ed_key,
                     rsa_key,
+                    device_creds=device_creds,
                 )
 
                 if success:
                     if err_info == "not_found":
                         fmt.step_ok(f"Account not present (already clean)")
                     elif err_info == "key_only":
-                        fmt.step_warn(f"SSH key removed (account needs manual removal — no sudo on pfSense)")
+                        fmt.step_warn(
+                            "SSH key removed, but account still needs pfSense admin cleanup "
+                            "(rerun with --device-credentials or bootstrap admin auth)"
+                        )
+                        manual += 1
                     else:
                         fmt.step_ok(f"Removed from {label}")
-                    ok += 1
+                        ok += 1
                 elif _is_skip_error(err_info):
                     fmt.step_warn(f"{_skip_reason(err_info)} — skipped")
                     skip += 1
@@ -6812,7 +7241,8 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets):
         fmt.line(
             f"  Remote: {fmt.C.GREEN}{ok} removed{fmt.C.RESET}, "
             f"{fmt.C.RED}{fail} failed{fmt.C.RESET}, "
-            f"{fmt.C.YELLOW}{skip} skipped{fmt.C.RESET}"
+            f"{fmt.C.YELLOW}{skip} skipped{fmt.C.RESET}, "
+            f"{fmt.C.YELLOW}{manual} manual{fmt.C.RESET}"
         )
 
     # ── Phase 2: Local cleanup ──
@@ -6872,11 +7302,36 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets):
     else:
         fmt.step_warn("Init marker not found")
 
+    # Local dashboard service
+    #
+    # R-PVEFREQ-RUN6-UNINSTALL-DEFECTS-20260415V:
+    # freq-serve runs as the managed service account. If we try to userdel the
+    # account while the unit is still active (or allowed to restart), systemd
+    # immediately recreates the process tree and userdel either hangs or fails
+    # with "user is currently used by process". Stop and disable it before the
+    # local account teardown.
+    rc, _, _ = _run(["systemctl", "is-enabled", "freq-serve"])
+    unit_enabled = rc == 0
+    rc, _, _ = _run(["systemctl", "is-active", "freq-serve"])
+    unit_active = rc == 0
+    if unit_active or unit_enabled:
+        _run(["systemctl", "disable", "--now", "freq-serve"], timeout=20)
+        fmt.step_ok("Local dashboard service stopped/disabled: freq-serve")
+    else:
+        fmt.step_warn("Local dashboard service not active: freq-serve")
+
     # Local service account
     rc, _, _ = _run(["id", svc_name])
     if rc == 0:
-        # Kill processes first
+        # R-PVEFREQ-RUN6-UNINSTALL-DEFECTS-20260415V: kill processes and
+        # WAIT for them to die before userdel. pkill sends SIGTERM but
+        # returns immediately; userdel fails with "user is currently used
+        # by process" if any process is still running. Grace wait + SIGKILL
+        # survivors before attempting the delete.
         _run(["pkill", "-u", svc_name])
+        time.sleep(1)
+        _run(["pkill", "-9", "-u", svc_name])
+        time.sleep(0.5)
         # Delete account + home
         rc2, _, err2 = _run(["userdel", "-r", svc_name])
         if rc2 == 0:
@@ -6907,13 +7362,24 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets):
     fmt.blank()
     fmt.divider("Uninstall Complete")
     fmt.blank()
-    if fail == 0 and skip == 0:
+    if fail == 0 and skip == 0 and manual == 0:
         fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ fully uninstalled.{fmt.C.RESET}")
+    elif fail == 0 and skip == 0:
+        fmt.line(
+            f"  {fmt.C.YELLOW}FREQ partially uninstalled ({manual} host(s) still need manual cleanup).{fmt.C.RESET}"
+        )
+        fmt.line(
+            f"  {fmt.C.DIM}For pfSense, rerun with --device-credentials or bootstrap admin auth for full removal.{fmt.C.RESET}"
+        )
     elif fail == 0:
-        fmt.line(f"  {fmt.C.YELLOW}FREQ uninstalled ({skip} host(s) skipped — unreachable).{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.YELLOW}FREQ uninstalled ({skip} host(s) skipped, {manual} manual cleanup).{fmt.C.RESET}"
+        )
         fmt.line(f"  {fmt.C.DIM}Clean up skipped hosts manually or re-run when reachable.{fmt.C.RESET}")
     else:
-        fmt.line(f"  {fmt.C.RED}FREQ partially uninstalled ({fail} failure(s), {skip} skipped).{fmt.C.RESET}")
+        fmt.line(
+            f"  {fmt.C.RED}FREQ partially uninstalled ({fail} failure(s), {skip} skipped, {manual} manual cleanup).{fmt.C.RESET}"
+        )
         fmt.line(f"  {fmt.C.DIM}Check failures above and clean up manually.{fmt.C.RESET}")
 
     fmt.blank()
@@ -6921,8 +7387,8 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets):
     fmt.blank()
     fmt.footer()
 
-    logger.info("uninstall complete", removed=ok, failed=fail, skipped=skip)
-    return 0 if fail == 0 else 1
+    logger.info("uninstall complete", removed=ok, failed=fail, skipped=skip, manual=manual)
+    return 0 if fail == 0 and manual == 0 else 1
 
 
 def _uninstall_dry_run(cfg):
@@ -6954,7 +7420,7 @@ def _uninstall_dry_run(cfg):
                 )
             elif h.htype == "pfsense":
                 steps.append(
-                    f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): SSH key only (pfSense — manual account removal)"
+                    f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): account + home with admin creds, else SSH key only [pfsense]"
                 )
             elif h.htype == "idrac":
                 steps.append(
@@ -7008,7 +7474,7 @@ def _init_dry_run(cfg):
         ("Phase 3", "Service Account", f"Create '{cfg.ssh_service_account}' with NOPASSWD sudo, init vault"),
         ("Phase 4", "SSH Keys", f"Generate ed25519 + RSA-4096 keypairs in {cfg.key_dir}/"),
         ("Phase 5", "PVE Node Deployment", f"Deploy {cfg.ssh_service_account} to {len(cfg.pve_nodes) if cfg.pve_nodes else 0} PVE node(s)"),
-        ("Phase 6", "PVE API Token", "Create freq-ops@pam!freq-rw token, save to /etc/freq/credentials/"),
+        ("Phase 6", "PVE API Token", f"Create {cfg.ssh_service_account}@pam!freq-rw token, save to /etc/freq/credentials/"),
         ("Phase 7", "Fleet Discovery", "PVE API + multi-VLAN sweep, detect infrastructure, write hosts.toml + fleet-boundaries"),
         ("Phase 8", "Fleet Deployment", f"Deploy {cfg.ssh_service_account} to all discovered hosts (Linux, pfSense, iDRAC, switch)"),
         ("Phase 9", "Fleet Configuration", "Docker host tagging, metrics agent deploy, VM categorization"),
@@ -7167,9 +7633,10 @@ def _init_headless(cfg, args):
     # If --bootstrap-password-file is given, honor password-first — don't
     # silently switch to key auth just because a local key happens to exist.
     if not bootstrap_key and not bootstrap_pass:
+        bootstrap_home = _home_dir_for_user(bootstrap_user) or os.path.expanduser(f"~{bootstrap_user}")
         for candidate in [
-            f"/home/{bootstrap_user}/.ssh/id_ed25519",
-            f"/home/{bootstrap_user}/.ssh/id_rsa",
+            os.path.join(bootstrap_home, ".ssh", "id_ed25519"),
+            os.path.join(bootstrap_home, ".ssh", "id_rsa"),
         ]:
             if os.path.isfile(candidate):
                 bootstrap_key = candidate
@@ -7261,6 +7728,22 @@ def _init_headless(cfg, args):
     # ── Phase 7: Fleet Discovery ──
     _phase(7, headless_total, "Fleet Discovery")
     _phase_fleet_discover(cfg, ctx, args)
+
+    # R-PVEFREQ-RUN8-INIT-QUIET-SERVE-20260416AG: stop freq-serve before
+    # fleet deploy/verify so background health probes and dashboard API
+    # handlers don't SSH to fleet hosts as freq-admin during init. Those
+    # bg probes are expected runtime behavior, but during init they muddy
+    # the log with misleading "Permission denied" for hosts where the
+    # service account hasn't been deployed yet. Restart after Phase 12.
+    _serve_was_running = False
+    try:
+        rc_chk, _, _ = _run(["systemctl", "is-active", "freq-serve"], timeout=5)
+        if rc_chk == 0:
+            _serve_was_running = True
+            _run(["systemctl", "stop", "freq-serve"], timeout=10)
+            fmt.step_ok("Dashboard stopped for fleet deploy/verify (will restart after Phase 12)")
+    except Exception:
+        pass
 
     # ── Phase 8: Fleet Deployment ──
     _phase(8, headless_total, "Fleet Deployment")
@@ -7366,11 +7849,27 @@ def _init_headless(cfg, args):
     _phase(12, headless_total, "Verification")
     verified = _phase_verify(cfg, ctx)
 
+    # Restart freq-serve after verification so the dashboard comes back
+    # with a clean probe cycle against the freshly-deployed fleet.
+    if _serve_was_running:
+        try:
+            _run(["systemctl", "start", "freq-serve"], timeout=10)
+            fmt.step_ok("Dashboard restarted")
+        except Exception:
+            fmt.step_warn("Could not restart dashboard — run 'sudo systemctl start freq-serve' manually")
+
     fmt.blank()
+    deployed_ips = ctx.get("deployed_ips", set())
+    deployed_count = len(deployed_ips)
+    total_hosts = len(cfg.hosts)
     if verified:
         with open(INIT_MARKER, "w") as f:
             f.write(f"{cfg.version}\n")
-        fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ initialized successfully — headless.{fmt.C.RESET}")
+        if deployed_count >= total_hosts:
+            fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ initialized — {deployed_count}/{total_hosts} hosts deployed (headless).{fmt.C.RESET}")
+        else:
+            fmt.line(f"  {fmt.C.YELLOW}{fmt.C.BOLD}FREQ initialized — {deployed_count}/{total_hosts} hosts deployed (headless).{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.DIM}Re-run freq init when remaining hosts come online.{fmt.C.RESET}")
     else:
         fmt.line(f"  {fmt.C.YELLOW}Init completed with warnings. Run 'freq init --check' to review.{fmt.C.RESET}")
     fmt.blank()
@@ -7522,6 +8021,121 @@ def _seed_headless_dashboard_auth(cfg, bootstrap_user, bootstrap_pass, svc_name,
             fmt.step_warn(f"Could not set dashboard password: {e}")
 
 
+def _mark_host_unmanaged(cfg, ip):
+    """Mark a host as unmanaged after deploy fails — prevents downstream lies."""
+    from freq.core.config import save_hosts_toml
+    for h in cfg.hosts:
+        if h.ip == ip:
+            h.managed = False
+            break
+    save_hosts_toml(cfg.hosts_file, cfg.hosts)
+
+
+def _deploy_via_guest_agent(cfg, ctx, vmid, node_ip, ip, label, htype):
+    """Deploy service account inside a VM via PVE QEMU guest agent.
+
+    Fallback path when SSH bootstrap fails: the PVE hypervisor node uses
+    the PVE REST API to run the deploy script inside the VM without
+    needing SSH access to the VM itself. Requires qemu-guest-agent
+    running in the guest.
+
+    Uses the API instead of `qm guest exec` CLI because the deploy script
+    contains shell metacharacters that get mangled through SSH → bash → qm
+    argument parsing. The API accepts the command as a JSON array, bypassing
+    all shell quoting layers.
+    """
+    svc_name = ctx["svc_name"]
+    svc_pass = ctx["svc_pass"]
+    pubkey = ctx.get("pubkey", "")
+    key_path = ctx.get("key_path", "") or cfg.ssh_key_path
+
+    if not vmid or not node_ip:
+        return False
+
+    pass_b64 = base64.b64encode(svc_pass.encode()).decode()
+
+    docker_line = ""
+    if htype == "docker":
+        docker_line = (
+            f"getent group docker >/dev/null 2>&1 && "
+            f"usermod -aG docker {svc_name} || true\n"
+        )
+
+    deploy_script = (
+        f"#!/bin/bash\n"
+        f"set -e\n"
+        f"id {svc_name} >/dev/null 2>&1 || useradd -m -s /bin/bash {svc_name}\n"
+        f"{docker_line}"
+        f"_p=$(echo {pass_b64} | base64 -d)\n"
+        f'printf "%s:%s\\n" {svc_name} "$_p" | chpasswd 2>/dev/null\n'
+        f"unset _p\n"
+        f'echo "{svc_name} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/freq-{svc_name}\n'
+        f"chmod 440 /etc/sudoers.d/freq-{svc_name}\n"
+        f"_h=$(getent passwd {svc_name} | cut -d: -f6)\n"
+        f'mkdir -p "$_h/.ssh"\n'
+        f'chmod 700 "$_h/.ssh"\n'
+    )
+    if pubkey:
+        deploy_script += (
+            f'grep -qF "{pubkey}" "$_h/.ssh/authorized_keys" 2>/dev/null '
+            f'|| echo "{pubkey}" >> "$_h/.ssh/authorized_keys"\n'
+            f'chmod 600 "$_h/.ssh/authorized_keys"\n'
+            f'chown -R {svc_name}:{svc_name} "$_h/.ssh"\n'
+        )
+    deploy_script += "echo DEPLOY_OK\n"
+
+    script_b64 = base64.b64encode(deploy_script.encode()).decode()
+
+    # Base64-encode the entire script and decode-pipe it inside the VM.
+    # This avoids all quoting issues: b64 is [A-Za-z0-9+/=], safe through
+    # SSH → remote bash → qm → guest agent. The outer double quotes protect
+    # the pipes from the remote bash that interprets the SSH command.
+    ssh_cmd = [
+        "ssh", "-n",
+        "-i", key_path,
+        "-o", "ConnectTimeout=5",
+        "-o", "BatchMode=yes",
+        "-o", "StrictHostKeyChecking=accept-new",
+        f"{svc_name}@{node_ip}",
+        f'sudo qm guest exec {vmid} -- bash -c "echo {script_b64} | base64 -d | bash"',
+    ]
+
+    rc, out, err = _run(ssh_cmd, timeout=60)
+
+    combined = (out or "") + (err or "")
+    if "QEMU guest agent is not running" in combined or "No QEMU guest agent" in combined:
+        fmt.step_warn(f"{label}: guest agent not running in VM {vmid} — cannot deploy")
+        return False
+
+    # qm guest exec returns JSON: {"exitcode": N, "out-data": "...", "err-data": "..."}
+    import json as _json
+    if rc == 0:
+        try:
+            result = _json.loads(out)
+            out_data = result.get("out-data", "")
+            exit_code = result.get("exitcode", -1)
+            if exit_code == 0 and "DEPLOY_OK" in out_data:
+                fmt.step_ok(f"Deployed via guest agent (VM {vmid} on {node_ip})")
+                return True
+            err_data = result.get("err-data", "")
+            fmt.step_warn(
+                f"{label}: guest exec exitcode={exit_code}: "
+                f"{(err_data or out_data).strip()[:80]}"
+            )
+        except (_json.JSONDecodeError, ValueError):
+            if "DEPLOY_OK" in out:
+                fmt.step_ok(f"Deployed via guest agent (VM {vmid} on {node_ip})")
+                return True
+        return False
+
+    fmt.step_warn(f"{label}: guest agent deploy failed (rc={rc})")
+    logger.warning(
+        "guest_agent_deploy_failed",
+        host=ip, vmid=vmid, node=node_ip, rc=rc, err=combined[:120],
+    )
+    return False
+
+
 def _headless_fleet_deploy(
     cfg,
     ctx,
@@ -7559,7 +8173,10 @@ def _headless_fleet_deploy(
     if not pve_only:
         for h in cfg.hosts:
             if h.ip not in seen_ips:
-                targets.append({"ip": h.ip, "label": h.label, "htype": h.htype})
+                targets.append({
+                    "ip": h.ip, "label": h.label, "htype": h.htype,
+                    "vmid": getattr(h, "vmid", 0),
+                })
                 seen_ips.add(h.ip)
 
     if not targets:
@@ -7577,6 +8194,7 @@ def _headless_fleet_deploy(
         fmt.step_ok(f"Device password loaded from {device_password_file}")
 
     ok = fail = skip = 0
+    deployed_ips = ctx.setdefault("deployed_ips", set())
     for t in targets:
         ip = t["ip"]
         label = t["label"]
@@ -7634,30 +8252,32 @@ def _headless_fleet_deploy(
                 auth_key = ""
             auth_user = bootstrap_user
 
-        # Check connectivity for Linux-family hosts (bootstrap creds)
-        # Skip for devices (iDRAC/switch) and pfSense — deployers have own checks
+        # Check connectivity for SSH-managed hosts using the auth selected above.
+        # Skip for devices (iDRAC/switch) and pfSense — deployers have own checks.
+        # TrueNAS is special here: with per-device creds we must probe root/device
+        # auth, not the bootstrap identity, or we falsely skip a reachable host.
         if htype not in ("idrac", "switch", "pfsense"):
-            if bootstrap_key:
+            if auth_key:
                 ssh_check = [
                     "ssh",
                     "-n",
                     "-i",
-                    bootstrap_key,
+                    auth_key,
                     "-o",
                     "ConnectTimeout=5",
                     "-o",
                     "BatchMode=yes",
                     "-o",
                     "StrictHostKeyChecking=accept-new",
-                    f"{bootstrap_user}@{ip}",
+                    f"{auth_user}@{ip}",
                     "echo OK",
                 ]
             else:
-                # Password-based connectivity check via sshpass (tempfile, not CLI arg)
+                # Password-based connectivity check via sshpass (tempfile, not CLI arg).
                 import tempfile
 
                 _bp_fd, _bp_path = tempfile.mkstemp(prefix="freq-bp-")
-                os.write(_bp_fd, bootstrap_pass.encode())
+                os.write(_bp_fd, auth_pass.encode())
                 os.close(_bp_fd)
                 ssh_check = [
                     "sshpass",
@@ -7671,23 +8291,44 @@ def _headless_fleet_deploy(
                     "StrictHostKeyChecking=accept-new",
                     "-o",
                     "PubkeyAuthentication=no",
-                    f"{bootstrap_user}@{ip}",
+                    f"{auth_user}@{ip}",
                     "echo OK",
                 ]
             rc, _, err = _run(ssh_check, timeout=QUICK_CHECK_TIMEOUT)
             # Clean up temp password file if created
-            if not bootstrap_key:
+            if not auth_key:
                 try:
                     os.unlink(_bp_path)
                 except OSError:
                     pass
             if rc != 0:
-                if _is_skip_error(err) or rc == 5:
-                    reason = _skip_reason(err) if err.strip() else _ssh_error_msg(rc, err)
-                    # TrueNAS uses its own root account — add specific hint
-                    if htype == "truenas" and "auth failed" in reason:
+                reason = _skip_reason(err) if err.strip() else _ssh_error_msg(rc, err)
+                # TrueNAS uses its own root account — add specific hint
+                if htype == "truenas" and "auth failed" in reason:
+                    if htype in device_creds:
+                        reason = "auth failed (credentials supplied but rejected — check [truenas] password in --device-credentials)"
+                    else:
                         reason = "auth failed (add [truenas] to --device-credentials with root user)"
+
+                # Guest agent fallback: if SSH bootstrap fails for a PVE-hosted
+                # VM, deploy via qm guest exec on the host PVE node instead.
+                vmid = t.get("vmid", 0)
+                vmid_node_map = ctx.get("vmid_node_map", {})
+                ga_node_ip = vmid_node_map.get(vmid) if vmid else None
+                if ga_node_ip and htype in ("linux", "docker", "truenas"):
+                    fmt.step_warn(f"{label} ({ip}) — {reason} — trying guest agent fallback")
+                    if _deploy_via_guest_agent(cfg, ctx, vmid, ga_node_ip, ip, label, htype):
+                        ok += 1
+                        deployed_ips.add(ip)
+                        continue
+                    # Guest agent also failed — mark unmanaged
+                    _mark_host_unmanaged(cfg, ip)
+                    skip += 1
+                    continue
+
+                if _is_skip_error(err) or rc == 5:
                     fmt.step_warn(f"{label} ({ip}) — {reason} (skipped)")
+                    _mark_host_unmanaged(cfg, ip)
                     skip += 1
                 else:
                     fmt.step_fail(f"Cannot connect ({_ssh_error_msg(rc, err)})")
@@ -7696,13 +8337,14 @@ def _headless_fleet_deploy(
 
         if _deploy_to_host_dispatch(ip, htype, ctx, auth_pass, auth_key, auth_user):
             ok += 1
+            deployed_ips.add(ip)
         else:
             fail += 1
 
     # Persist the SERVICE ACCOUNT password for ongoing iDRAC/switch SSH access.
-    # After deploy, the device has freq-admin configured with ctx["svc_pass"] as
+    # After deploy, the device has ctx["svc_name"] configured with ctx["svc_pass"] as
     # the password. The device_creds password is for the OLD admin user used
-    # to authenticate into the device for deploy — it's not freq-admin's
+    # to authenticate into the device for deploy — it's not the service account's
     # password. Using device_creds here breaks Phase 12 verification because
     # sshpass auth uses the wrong password.
     has_devices = any(t["htype"] in ("idrac", "switch") for t in targets)

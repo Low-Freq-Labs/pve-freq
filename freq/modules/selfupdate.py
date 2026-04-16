@@ -84,7 +84,7 @@ def cmd_update(cfg: FreqConfig, pack, args) -> int:
 
     if method in ("git", "git-release"):
         # Both dev checkout and git-release installs can pull from remote
-        return _update_git(cfg)
+        return _update_git(cfg, args)
     elif method == "dpkg":
         fmt.line(f"  {fmt.C.GRAY}Update via apt: sudo apt update && sudo apt upgrade pve-freq{fmt.C.RESET}")
     elif method == "rpm":
@@ -107,7 +107,7 @@ def cmd_update(cfg: FreqConfig, pack, args) -> int:
     return 0
 
 
-def _update_git(cfg: FreqConfig) -> int:
+def _update_git(cfg: FreqConfig, args) -> int:
     """Update from git (development mode)."""
     fmt.step_start("Checking for updates")
 
@@ -149,11 +149,17 @@ def _update_git(cfg: FreqConfig) -> int:
             fmt.line(f"  {fmt.C.DIM}... and {len(commits) - 5} more{fmt.C.RESET}")
         fmt.blank()
 
-        try:
-            confirm = input(f"  {fmt.C.YELLOW}Pull updates? [y/N]:{fmt.C.RESET} ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 1
+        if getattr(args, "yes", False):
+            confirm = "y"
+        else:
+            try:
+                confirm = input(f"  {fmt.C.YELLOW}Pull updates? [y/N]:{fmt.C.RESET} ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                fmt.step_warn("Update cancelled — rerun with --yes for non-interactive update")
+                fmt.blank()
+                fmt.footer()
+                return 1
         if confirm == "y":
             fmt.step_start("Pulling updates")
             r = subprocess.run(

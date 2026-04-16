@@ -120,6 +120,34 @@ warn() { echo -e "  ${C_YELLOW}[WARN]${C_RESET} $1"; }
 info() { echo -e "  ${C_CYAN}[INFO]${C_RESET} $1"; }
 step() { echo -e "  ${C_PURPLE}>>>${C_RESET}   $1"; }
 
+detect_service_account() {
+    # Default only. freq-ops is bootstrap/sudo; the deployed fleet account
+    # defaults to freq-admin unless freq.toml overrides it.
+    #
+    # R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D: if freq.toml asks for a
+    # reserved bootstrap-only name (e.g. freq-ops), reject it here and
+    # fall back to the canonical default. The systemd unit + chown
+    # paths downstream of this function would otherwise propagate the
+    # bad value into User= and ownership writes that violate the
+    # bootstrap-untouched contract.
+    local svc_user="freq-admin"
+    if [[ -f "$INSTALL_DIR/conf/freq.toml" ]] && grep -q '^service_account' "$INSTALL_DIR/conf/freq.toml" 2>/dev/null; then
+        local requested
+        requested=$(grep '^service_account' "$INSTALL_DIR/conf/freq.toml" | head -1 | sed 's/.*=\s*"\(.*\)"/\1/')
+        case "$requested" in
+            freq-ops)
+                warn "freq.toml service_account='${requested}' is reserved (bootstrap-only); using default 'freq-admin' (see docs/IDENTITY-CONTRACT.md)" >&2
+                ;;
+            "")
+                ;;
+            *)
+                svc_user="$requested"
+                ;;
+        esac
+    fi
+    printf '%s\n' "$svc_user"
+}
+
 banner() {
     echo ""
     local title="PVE FREQ v${FREQ_VERSION} Installer"
@@ -305,6 +333,9 @@ do_install() {
                 --exclude='*.pyc' \
                 --exclude='.pytest_cache' \
                 --exclude='*.egg-info' \
+                --include='conf/' \
+                --include='conf/*.example' \
+                --exclude='conf/*' \
                 --exclude='data/vault/*' \
                 --exclude='data/keys/*' \
                 --exclude='memory/' \
@@ -386,10 +417,15 @@ do_install() {
     mkdir -p "$INSTALL_DIR/data/knowledge"
     chmod 700 "$INSTALL_DIR/data/vault"
     chmod 700 "$INSTALL_DIR/data/keys"
-    # Make data dirs writable by the user who runs freq (not just root)
-    local freq_user="${SUDO_USER:-$(whoami)}"
-    if [[ -n "$freq_user" && "$freq_user" != "root" ]]; then
-        chown -R "$freq_user" "$INSTALL_DIR/data"
+    # Align initial ownership with the configured runtime account when it
+    # already exists locally. Otherwise leave the tree root-owned and let
+    # freq init perform the service-account handoff explicitly.
+    local svc_user
+    svc_user=$(detect_service_account)
+    if id "$svc_user" &>/dev/null; then
+        chown -R "$svc_user:$svc_user" "$INSTALL_DIR/data"
+    else
+        info "Data ownership deferred until init creates runtime account '${svc_user}'"
     fi
     ok "Data directories created"
 
@@ -483,7 +519,10 @@ post_install() {
     if [[ "$SKIP_DOCTOR" == false ]]; then
         echo -e "${C_BOLD}Running diagnostics...${C_RESET}"
         echo ""
-        freq doctor 2>/dev/null || true
+        if ! freq doctor; then
+            fail "Post-install verification failed"
+            exit 1
+        fi
         echo ""
     fi
 
@@ -491,10 +530,8 @@ post_install() {
     if [[ "$WITH_SYSTEMD" == true ]]; then
         step "Installing systemd unit"
         # Detect service account (match what init creates)
-        local svc_user="freq-ops"
-        if grep -q '^service_account' "$INSTALL_DIR/conf/freq.toml" 2>/dev/null; then
-            svc_user=$(grep '^service_account' "$INSTALL_DIR/conf/freq.toml" | head -1 | sed 's/.*=\s*"\(.*\)"/\1/')
-        fi
+        local svc_user
+        svc_user=$(detect_service_account)
         cat > /etc/systemd/system/freq-serve.service << UNIT
 [Unit]
 Description=PVE FREQ Dashboard
@@ -521,7 +558,7 @@ UNIT
         systemctl daemon-reload
         systemctl enable freq-serve
         ok "Systemd unit installed (freq-serve.service)"
-        info "  User=\${svc_user}, FREQ_DIR=\${INSTALL_DIR}"
+        info "  User=${svc_user}, FREQ_DIR=${INSTALL_DIR}"
         info "Start with: systemctl start freq-serve"
         echo ""
     fi
@@ -579,6 +616,27 @@ do_uninstall() {
     if [[ -f /usr/local/bin/freq ]]; then
         rm -f /usr/local/bin/freq
         ok "Removed /usr/local/bin/freq"
+    fi
+
+    # Remove site-packages .pth files that pointed python3 -m freq at the
+    # install dir. Leaving them behind breaks imports after uninstall.
+    local pth_removed=0
+    for site_dir in /usr/local/lib/python3.*/dist-packages; do
+        if [[ -f "$site_dir/pve-freq.pth" ]]; then
+            rm -f "$site_dir/pve-freq.pth"
+            pth_removed=$((pth_removed + 1))
+        fi
+    done
+    if [[ $pth_removed -gt 0 ]]; then
+        ok "Removed pve-freq.pth from ${pth_removed} site-packages path(s)"
+    fi
+
+    # Remove systemd unit if install.sh created it.
+    if [[ -f /etc/systemd/system/freq-serve.service ]]; then
+        systemctl disable --now freq-serve.service >/dev/null 2>&1 || true
+        rm -f /etc/systemd/system/freq-serve.service
+        systemctl daemon-reload
+        ok "Removed freq-serve.service"
     fi
 
     # Remove install directory

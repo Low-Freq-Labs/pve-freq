@@ -309,7 +309,7 @@ def _bg_probe_infra():
             return False
 
     # Infrastructure devices often need different credentials than the service account.
-    # Try: 1) fleet/bootstrap key with freq-ops, 2) service account key
+    # Try: 1) bootstrap/fleet key, 2) deployed service-account key
     fleet_key = os.path.join(cfg.key_dir, "fleet_key")
     if not os.path.isfile(fleet_key):
         fleet_key = cfg.ssh_key_path  # fallback to service account key
@@ -480,7 +480,7 @@ def _bg_probe_infra():
             elif dt == "idrac":
                 # iDRAC probe MUST match init's verify path for parity with
                 # `freq init --check` and `freq fleet status`. Init verifies
-                # BMCs as the service account (freq-admin) via the RSA key
+                # BMCs as the deployed service account via the RSA key
                 # with iDRAC cipher options, falling back to sshpass with
                 # cfg.legacy_password_file only if key auth fails. The old
                 # code did the opposite — sshpass first with SUDO_USER (the
@@ -1041,8 +1041,8 @@ def _bg_probe_health():
                     "new": cur,
                     "reason": h_e.get("reason", ""),
                 })
-                severity = "success" if h["status"] == "healthy" else "error"
-                _activity_add("health_change", f"{h['label']} is now {h['status']}", f"was {prev}", severity)
+                severity = "success" if h_e.get("status") == "healthy" else "error"
+                _activity_add("health_change", f"{h_e['label']} is now {h_e.get('status', '?')}", f"was {prev}", severity)
 
     # Evaluate alert rules against fresh health data
     _evaluate_alert_rules(cfg, result)
@@ -2096,6 +2096,8 @@ def _is_first_run():
         return False
     if os.path.isfile(os.path.join(cfg.conf_dir, ".initialized")):
         return False
+    if os.path.isfile(os.path.join(cfg.conf_dir, ".web-setup-complete")):
+        return False
 
     # Users exist but no markers — treat as configured (user added manually)
     return False
@@ -2326,7 +2328,7 @@ class FreqHandler(BaseHTTPRequestHandler):
                         "migration": "R-SECURITY-TRUST-AUDIT-20260413P-F7",
                     }, 403)
                 else:
-                    self._json_response({"error": "Authentication required"}, 403)
+                    self._json_response({"error": err}, 403)
                 return
 
         # Check legacy routes first, then v1 domain routes
@@ -2448,31 +2450,35 @@ class FreqHandler(BaseHTTPRequestHandler):
         """GET /api/media/tdarr — Tdarr transcoding status."""
         cfg = load_config()
         # Tdarr is typically on a docker host — query via container exec or API
-        tdarr_data = {"status": "not_configured", "queue": 0, "processed": 0, "errors": 0}
+        tdarr_data = {"status": "unknown", "queue": 0, "processed": 0, "errors": 0}
 
-        # Check if any container named tdarr exists
         with _bg_lock:
             health = _bg_cache.get("health")
-        if health:
-            for h in health.get("hosts", []):
-                if h.get("status") != "healthy":
-                    continue
+        if not health:
+            tdarr_data["status"] = "unknown"
+        else:
+            healthy_hosts = [h for h in health.get("hosts", []) if h.get("status") == "healthy"]
+            if not healthy_hosts:
+                tdarr_data["status"] = "unavailable"
+            else:
+                tdarr_data["status"] = "not_found"
                 from freq.core.ssh import run as ssh_fn
 
-                r = ssh_fn(
-                    host=h.get("ip", ""),
-                    command="docker inspect tdarr 2>/dev/null | grep -c '\"Running\": true'",
-                    key_path=cfg.ssh_key_path,
-                    connect_timeout=3,
-                    command_timeout=10,
-                    htype=h.get("type", "linux"),
-                    use_sudo=False,
-                    cfg=cfg,
-                )
-                if r.returncode == 0 and r.stdout.strip() == "1":
-                    tdarr_data["status"] = "running"
-                    tdarr_data["host"] = h.get("label", "")
-                    break
+                for h in healthy_hosts:
+                    r = ssh_fn(
+                        host=h.get("ip", ""),
+                        command="docker inspect tdarr 2>/dev/null | grep -c '\"Running\": true'",
+                        key_path=cfg.ssh_key_path,
+                        connect_timeout=3,
+                        command_timeout=10,
+                        htype=h.get("type", "linux"),
+                        use_sudo=False,
+                        cfg=cfg,
+                    )
+                    if r.returncode == 0 and r.stdout.strip() == "1":
+                        tdarr_data["status"] = "running"
+                        tdarr_data["host"] = h.get("label", "")
+                        break
 
         self._json_response(tdarr_data)
 
@@ -2818,21 +2824,22 @@ a:hover{{text-decoration:underline}}
         has_hosts = bool(cfg.hosts)
         has_nodes = bool(cfg.pve_nodes)
 
-        # Check .initialized marker — only written when init completes with 0 failures
+        # Check markers — .initialized is ONLY written by freq init (CLI).
+        # .web-setup-complete is written by the web setup wizard.
+        # The two are distinct: web setup alone does NOT mean init ran.
         initialized_marker = os.path.join(cfg.conf_dir, ".initialized")
         is_initialized = os.path.isfile(initialized_marker)
+        web_setup_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
+        is_web_setup_complete = os.path.isfile(web_setup_marker)
 
-        # Honest health: must factor in .initialized marker
-        # "configured" = init completed successfully (.initialized exists + config items)
-        # "partial" = config items exist but init didn't complete (or never ran)
+        # Honest health — four tiers:
+        # "configured" = freq init completed (.initialized) + config items
+        # "web-setup-only" = web wizard done but freq init not yet run
+        # "partial" = config items exist but neither marker
         # "unconfigured" = nothing configured yet
-        # R-PRODUCT-LAW-BACKEND-TRUTH: also carry a `setup_reason` that
-        # names exactly which required artifact is missing, so the
-        # dashboard's setup banner doesn't have to re-derive it from
-        # the individual bool fields.
         missing = []
         if not is_initialized:
-            missing.append("init incomplete (no .initialized marker)")
+            missing.append("freq init not yet run (no .initialized marker)")
         if not key_readable:
             missing.append("ssh key missing or unreadable")
         if not has_nodes:
@@ -2841,7 +2848,10 @@ a:hover{{text-decoration:underline}}
             missing.append("no fleet hosts configured")
         if is_initialized and key_readable and has_hosts and has_nodes:
             setup_health = "configured"
-            setup_reason = "init completed, key readable, hosts + nodes configured"
+            setup_reason = "freq init completed, key readable, hosts + nodes configured"
+        elif is_web_setup_complete and not is_initialized:
+            setup_health = "web-setup-only"
+            setup_reason = "web setup complete — run freq init to deploy fleet service account"
         elif key_exists or has_hosts or has_nodes:
             setup_health = "partial"
             setup_reason = "partial setup: " + "; ".join(missing)
@@ -2871,6 +2881,7 @@ a:hover{{text-decoration:underline}}
             "setup_health": setup_health,
             "setup_reason": setup_reason,
             "initialized": is_initialized,
+            "web_setup_complete": is_web_setup_complete,
             "checked_at": time.time(),
         }
         if is_authed:
@@ -2899,7 +2910,7 @@ a:hover{{text-decoration:underline}}
             complete/create-admin can't slip through.
         """
         if not _is_first_run():
-            self._json_response({"error": "Setup already complete"}, 403)
+            self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
             return
 
         if self.command != "POST":
@@ -2941,7 +2952,7 @@ a:hover{{text-decoration:underline}}
             # setup between our first _is_first_run() check above and the
             # lock acquire.
             if not _is_first_run():
-                self._json_response({"error": "Setup already complete"}, 403)
+                self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
                 return
 
             cfg = load_config()
@@ -2978,7 +2989,7 @@ a:hover{{text-decoration:underline}}
         POST body: {"cluster_name": "...", "timezone": "...", "pve_nodes": [...]}
         """
         if not _is_first_run():
-            self._json_response({"error": "Setup already complete"}, 403)
+            self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
             return
 
         if self.command != "POST":
@@ -3074,7 +3085,7 @@ a:hover{{text-decoration:underline}}
     def _serve_setup_generate_key(self):
         """Generate SSH keypair during first-run setup. POST only."""
         if not _is_first_run():
-            self._json_response({"error": "Setup already complete"}, 403)
+            self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
             return
 
         if self.command != "POST":
@@ -3151,7 +3162,7 @@ a:hover{{text-decoration:underline}}
     def _serve_setup_complete(self):
         """Mark setup as complete — writes marker file."""
         if not _is_first_run():
-            self._json_response({"error": "Setup already complete"}, 403)
+            self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
             return
 
         if self.command != "POST":
@@ -3165,7 +3176,7 @@ a:hover{{text-decoration:underline}}
         try:
             # Re-check after acquiring lock (another request may have completed setup)
             if not _is_first_run():
-                self._json_response({"error": "Setup already complete"}, 403)
+                self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
                 return
 
             cfg = load_config()
@@ -3176,18 +3187,19 @@ a:hover{{text-decoration:underline}}
             with open(marker, "w") as f:
                 f.write(f"Setup completed: {datetime.datetime.now().isoformat()}\n")
 
-            # Write .initialized marker for CLI detection (web setup only —
-            # freq init --check may still report missing keys/service account)
+            # Write .web-setup-complete marker — distinct from .initialized
+            # which is ONLY written by freq init after a successful fleet
+            # deploy. The web wizard completing does NOT mean init ran.
             try:
                 os.makedirs(cfg.conf_dir, exist_ok=True)
-                init_marker = os.path.join(cfg.conf_dir, ".initialized")
-                if not os.path.isfile(init_marker):
+                web_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
+                if not os.path.isfile(web_marker):
                     from freq import __version__
 
-                    with open(init_marker, "w") as f:
+                    with open(web_marker, "w") as f:
                         f.write(f"PVE FREQ {__version__} — web setup {datetime.datetime.now().isoformat()}\n")
             except OSError:
-                pass  # Non-fatal — web marker is primary
+                pass  # Non-fatal — setup-complete marker is primary
 
             # Auto-trigger hosts sync so fleet populates immediately
             try:
@@ -3195,7 +3207,7 @@ a:hover{{text-decoration:underline}}
             except Exception as e:
                 logger.warning(f"Post-setup hosts sync failed to start: {e}")
 
-            self._json_response({"ok": True, "message": "Setup complete — redirecting to dashboard"})
+            self._json_response({"ok": True, "message": "Web setup complete — run freq init to deploy the fleet service account"})
         except OSError as e:
             self._json_response({"error": f"Failed to write setup marker: {e}"}, 500)
         finally:
@@ -3232,7 +3244,7 @@ a:hover{{text-decoration:underline}}
         # test-ssh alive is unnecessary admin-only surface.
         if not _is_first_run():
             self._json_response(
-                {"error": "Setup already complete — use freq doctor or /api/host/test"},
+                {"error": "Setup wizard already used — use freq doctor or /api/host/test"},
                 403,
             )
             return
@@ -3328,11 +3340,13 @@ a:hover{{text-decoration:underline}}
 
         data_dir = cfg.data_dir
         marker = os.path.join(data_dir, "setup-complete")
+        web_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
 
         try:
-            if os.path.isfile(marker):
-                os.remove(marker)
-            self._json_response({"ok": True, "message": "Setup wizard re-enabled"})
+            for m in (marker, web_marker):
+                if os.path.isfile(m):
+                    os.remove(m)
+            self._json_response({"ok": True, "message": "Setup wizard re-enabled (note: freq init state is unchanged — re-run freq init if needed)"})
         except OSError as e:
             self._json_response({"error": f"Failed to reset setup: {e}"}, 500)
 

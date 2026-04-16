@@ -1,7 +1,7 @@
 """Systemd operator truth tests.
 
 Proves:
-1. Service file uses correct user (freq-ops, not freq-admin)
+1. Service file uses the default service account user (freq-admin)
 2. Installer --with-systemd messaging adapts next-steps
 3. Service file exists in contrib/
 4. Installer references correct service file path
@@ -27,11 +27,10 @@ class TestServiceFileContract(unittest.TestCase):
         )
 
     def test_uses_code_default_user(self):
-        """Static template uses code default (freq-admin). install.sh overrides from freq.toml."""
+        """Static template must match the shipped default service account."""
         src = self._service_src()
         self.assertIn("User=freq-admin", src,
                        "Static template must use code default (freq-admin)")
-        # install.sh templates the real configured value at install time
 
     def test_has_restart_policy(self):
         src = self._service_src()
@@ -75,6 +74,23 @@ class TestInstallerSystemdMessaging(unittest.TestCase):
         self.assertIn("freq-serve.service", src)
         self.assertIn("svc_user", src,
                        "Installer must detect service account from freq.toml")
+
+
+class TestInitGeneratedSystemdTruth(unittest.TestCase):
+    """init_cmd-generated service unit must match the shipped systemd contract."""
+
+    def _init_src(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:
+            return f.read()
+
+    def test_uses_network_online_target(self):
+        src = self._init_src()
+        self.assertIn("After=network-online.target", src)
+        self.assertIn("Wants=network-online.target", src)
+
+    def test_sets_group_to_service_account(self):
+        src = self._init_src()
+        self.assertIn('f"Group={svc_name}', src)
 
 
 if __name__ == "__main__":

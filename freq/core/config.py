@@ -52,12 +52,34 @@ from freq import __version__
 # --- Safe Defaults (set BEFORE config load) ---
 # These survive missing/broken config. Trap #4 lesson.
 
+# R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D: freq-ops is the bootstrap/sudo
+# ingress identity per docs/IDENTITY-CONTRACT.md and must pass through
+# `freq init` UNTOUCHED — no useradd, no chpasswd, no sudoers write, no
+# chown/chmod, no ssh-key management. cfg.ssh_service_account names the
+# managed product account and may NOT take any value in this set.
+RESERVED_SERVICE_ACCOUNT_NAMES = frozenset({"freq-ops"})
+
+
+def is_managed_service_account_name(name):
+    """True iff `name` is a valid managed service-account identity.
+
+    Bootstrap-only names (per RESERVED_SERVICE_ACCOUNT_NAMES) are excluded
+    even when they pass standard Linux username validation. The runtime
+    contract treats them as ingress credentials, not managed identities.
+    """
+    if not isinstance(name, str) or not name:
+        return False
+    return name not in RESERVED_SERVICE_ACCOUNT_NAMES
+
+
 _DEFAULTS = {
     "version": __version__,
     "brand": "PVE FREQ",
     "build": "default",
     "ascii": False,
     "debug": False,
+    # Default only. The live fleet account is cfg.ssh_service_account and may
+    # be changed by the operator during init.
     "ssh_service_account": "freq-admin",
     "ssh_connect_timeout": 5,
     "ssh_max_parallel": 5,
@@ -591,7 +613,26 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.debug = freq.get("debug", cfg.debug)
 
     ssh = data.get("ssh", {})
-    cfg.ssh_service_account = ssh.get("service_account", cfg.ssh_service_account)
+    requested_svc = ssh.get("service_account", cfg.ssh_service_account)
+    # R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D: freq-ops is bootstrap-only.
+    # If freq.toml asks for a reserved name as the managed service account,
+    # log the violation and fall back to the canonical default. We do not
+    # raise here because config.py is loaded in many contexts (CLI, daemon,
+    # tests) and a hard crash on a stale config would prevent operators
+    # from running `freq doctor` to diagnose the bad value. The override
+    # makes downstream code safe regardless.
+    if not is_managed_service_account_name(requested_svc):
+        import sys
+        print(
+            f"[freq] config: ssh.service_account={requested_svc!r} is reserved "
+            f"as a bootstrap-only identity per docs/IDENTITY-CONTRACT.md "
+            f"(R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D); "
+            f"falling back to default {_DEFAULTS['ssh_service_account']!r}",
+            file=sys.stderr,
+        )
+        cfg.ssh_service_account = _DEFAULTS["ssh_service_account"]
+    else:
+        cfg.ssh_service_account = requested_svc
     cfg.ssh_connect_timeout = _safe_int(ssh.get("connect_timeout"), cfg.ssh_connect_timeout)
     cfg.ssh_max_parallel = _safe_int(ssh.get("max_parallel"), cfg.ssh_max_parallel)
     cfg.ssh_mode = ssh.get("mode", cfg.ssh_mode)

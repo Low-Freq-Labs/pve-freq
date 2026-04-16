@@ -30,7 +30,7 @@ $ freq fleet status
    200  running  pve03   truenas
    201  running  pve03   pihole
   ─────────────────────────────────────
-  6 VMs  ·  5 running  ·  3 nodes  ·  all healthy
+  6 VMs  ·  5 running · 1 stopped  ·  3 nodes  ·  fleet reachable
 ```
 
 That's your entire fleet. One command. No YAML. No agent. No cloud account.
@@ -51,7 +51,7 @@ freq fleet status  # see everything
 freq serve         # web dashboard at localhost:8888
 ```
 
-Done. You're running.
+Check `freq fleet status` for host reachability — init deploys keys but not all hosts may be online yet.
 
 ---
 
@@ -251,7 +251,7 @@ cd /opt/pve-freq && sudo bash install.sh --from-local . --yes
 
 | | |
 |---|---|
-| **OS** | Any Linux with Python 3.11+ (see [21 tested distros](#every-linux-distro)) |
+| **OS** | Any Linux with Python 3.11+ (see [20 tested distros](#every-linux-distro)) |
 | **Python** | 3.11+ |
 | **SSH** | openssh-client (pre-installed on all Linux) |
 | **Optional** | sshpass (for initial password-based fleet deployment) |
@@ -262,7 +262,7 @@ cd /opt/pve-freq && sudo bash install.sh --from-local . --yes
 
 ```bash
 freq version        # see the branding
-freq doctor         # self-diagnostic — checks everything
+freq doctor         # 20-point self-diagnostic — system, install, SSH, fleet, PVE
 freq init           # interactive wizard — discovers your fleet
 freq fleet status   # see your entire infrastructure
 freq vm list        # every VM across every node
@@ -291,7 +291,7 @@ sudo freq init --uninstall         # remove from fleet hosts
 sudo bash install.sh --uninstall   # remove from management host
 ```
 
-Clean removal. No orphaned configs. No leftover services.
+Linux/PVE/TrueNAS/Docker hosts and iDRAC/switch devices get full removal of the FREQ service account. pfSense hosts get **full removal only when you supply admin credentials** via `--device-credentials` — without them, FREQ revokes the service-account SSH key and reports the host as needing manual cleanup (the FreeBSD account itself cannot delete itself). The management-host uninstall removes the wrapper, `pve-freq.pth` site-packages files, the `freq-serve.service` systemd unit (if installed), and `$INSTALL_DIR`.
 
 ---
 

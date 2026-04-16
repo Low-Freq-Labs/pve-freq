@@ -183,6 +183,12 @@ class TestInstallScript(unittest.TestCase):
             content = f.read()
         assert "set -euo pipefail" in content
 
+    def test_from_local_does_not_copy_live_conf_state(self):
+        with open(INSTALL_SCRIPT) as f:
+            content = f.read()
+        assert "--include='conf/*.example'" in content
+        assert "--exclude='conf/*'" in content
+
 
 # ── Doctor integration tests ─────────────────────────────────────────────
 

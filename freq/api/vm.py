@@ -958,7 +958,7 @@ def handle_vm_push_key(handler):
         json_response(handler, {"error": f"Key push failed: {r.stderr or r.stdout}"}, 502)
         return
 
-    # Verify: try connecting as freq-admin with the freq key
+    # Verify: try connecting as the deployed service account with the FREQ key
     r2 = ssh_single(
         host=target_ip,
         command="echo ok",

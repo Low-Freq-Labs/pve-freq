@@ -1,4 +1,4 @@
-"""FREQ Doctor — 17-point self-diagnostic.
+"""FREQ Doctor — 20-point self-diagnostic.
 
 Domain: freq doctor
 
@@ -418,10 +418,19 @@ def _check_rbac_bootstrap(cfg: FreqConfig) -> int:
     }
     common = sorted(role_admins & user_admins)
     if not user_admins:
-        fmt.step_warn(
-            "RBAC bootstrap: no non-service admin found in users.conf"
+        # R-PVEFREQ-HIGH-DOCTOR-SEVERITY-20260416AJ: distinguish pre-init
+        # (no files / empty files) from a real RBAC gap (files exist with
+        # entries but no non-service admin). Pre-init is a warn; RBAC gap
+        # where the only admin is the service account is a fail.
+        if not users and not roles:
+            # Both empty or both missing — pre-init state, not an RBAC failure.
+            fmt.step_warn("RBAC bootstrap: no non-service admin found (pre-init state)")
+            return 2
+        fmt.step_fail(
+            "RBAC bootstrap: no non-service admin found in users.conf — "
+            "no human can log into the web dashboard"
         )
-        return 2
+        return 1
 
     readable_hash_user = None
     stored_hash = ""
@@ -866,10 +875,26 @@ def _check_pve_nodes(cfg: FreqConfig) -> int:
 
     reachable = 0
     pve_version = ""
-    api_token_id = getattr(cfg, "pve_api_token_id", "") or "freq-ops@pam!freq-rw"
-    api_token_secret = getattr(cfg, "pve_api_token_secret", "") or _read_credential_text(
-        "/etc/freq/credentials/pve-token-rw"
-    )
+    # R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the runtime PVE token belongs
+    # to cfg.ssh_service_account (default "freq-admin"). The fallback
+    # token_id is derived from the configured identity, not the legacy
+    # freq-ops@pam name. cfg.pve_api_token_id (set by Phase 6 and loaded
+    # from freq.toml) is the authoritative source; the fallback only
+    # applies when freq.toml has no api_token_id at all.
+    # R-PVEFREQ-FINAL-RUNTIME-TRUTH-20260416AI: identity fallbacks log
+    # a warning instead of silently substituting. The cfg default for
+    # ssh_service_account is already "freq-admin" — if it's empty here,
+    # something is broken in config load and the operator must know.
+    svc_name = getattr(cfg, "ssh_service_account", "")
+    if not svc_name:
+        svc_name = "freq-admin"
+        logger.warning("doctor: cfg.ssh_service_account empty — falling back to freq-admin")
+    api_token_id = getattr(cfg, "pve_api_token_id", "") or f"{svc_name}@pam!freq-rw"
+    api_token_secret = getattr(cfg, "pve_api_token_secret", "")
+    if not api_token_secret:
+        api_token_secret = _read_credential_text("/etc/freq/credentials/pve-token-rw")
+        if api_token_secret:
+            logger.info("doctor: pve_api_token_secret loaded from credential file (not cfg)")
     for ip in cfg.pve_nodes:
         used_api = False
         if api_token_id and api_token_secret:
@@ -978,61 +1003,62 @@ def _probe_pve_api_token(node_ip: str, token_id: str, token_secret: str) -> tupl
 
 
 def _check_pve_token_drift(cfg: FreqConfig) -> int:
-    """Probe both RW and RO PVE tokens across every configured node."""
+    """Probe the runtime PVE API token across every configured node.
+
+    R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the runtime PVE token is the
+    RW token owned by cfg.ssh_service_account (default freq-admin).
+    Prior versions of this check also probed a read-only "pve-token"
+    file at /etc/freq/credentials/pve-token using an ad-hoc
+    PVE_TOKEN_ID=...\\nPVE_TOKEN_SECRET=... format. That RO token was
+    a Jarvis (infra lane) construct for a separate metrics-scraping
+    workflow and was never part of the FREQ product runtime contract.
+    Keeping it in the runtime doctor check caused two problems:
+
+      1. Every fresh install without a manual Jarvis sideload reported
+         "ro token unreadable" as a warning, training operators to
+         ignore a genuinely useful warning surface.
+      2. It conflated two distinct trust roots (product runtime vs
+         infra scraping) into one audit step, so a drift in either
+         would surface identically and the operator could not tell
+         which layer was broken.
+
+    The runtime doctor now validates only the RW token, derived from
+    cfg.ssh_service_account with the canonical freq-rw name. Anything
+    Jarvis-side lives in Jarvis's tooling, not the product runtime.
+    """
     if not cfg.pve_nodes:
         return 0
 
-    tokens = []
-    warnings = []
+    rw_secret = getattr(cfg, "pve_api_token_secret", "")
+    if not rw_secret:
+        rw_secret = _read_credential_text("/etc/freq/credentials/pve-token-rw")
+    svc_name = getattr(cfg, "ssh_service_account", "")
+    if not svc_name:
+        svc_name = "freq-admin"
+        logger.warning("doctor: cfg.ssh_service_account empty — falling back to freq-admin")
+    rw_id = getattr(cfg, "pve_api_token_id", "") or f"{svc_name}@pam!freq-rw"
 
-    rw_secret = _read_credential_text("/etc/freq/credentials/pve-token-rw")
-    rw_id = getattr(cfg, "pve_api_token_id", "") or "freq-ops@pam!freq-rw"
-    if rw_secret:
-        tokens.append(("rw", rw_id, rw_secret))
-    else:
-        warnings.append("rw token unreadable")
-
-    ro_text = _read_credential_text("/etc/freq/credentials/pve-token")
-    if ro_text:
-        ro_map = {}
-        for line in ro_text.splitlines():
-            if "=" in line:
-                key, value = line.split("=", 1)
-                ro_map[key.strip()] = value.strip()
-        ro_id = ro_map.get("PVE_TOKEN_ID", "")
-        ro_secret = ro_map.get("PVE_TOKEN_SECRET", "")
-        if ro_id and ro_secret:
-            tokens.append(("ro", ro_id, ro_secret))
-        else:
-            warnings.append("ro token file malformed")
-    else:
-        warnings.append("ro token unreadable")
-
-    if not tokens:
-        fmt.step_warn("PVE API tokens: no readable token credentials")
+    if not rw_secret:
+        fmt.step_warn(
+            f"PVE API token: secret unreadable at /etc/freq/credentials/pve-token-rw "
+            f"(expected {rw_id})"
+        )
         return 2
 
     failures = []
-    for label, token_id, token_secret in tokens:
-        for ip in cfg.pve_nodes:
-            code, reason = _probe_pve_api_token(ip, token_id, token_secret)
-            if code != 200:
-                failures.append(f"{label}@{ip}={code} ({reason[:60]})")
+    for ip in cfg.pve_nodes:
+        code, reason = _probe_pve_api_token(ip, rw_id, rw_secret)
+        if code != 200:
+            failures.append(f"{ip}={code} ({reason[:60]})")
 
-    token_labels = ", ".join(sorted(label for label, _, _ in tokens))
     if failures:
         fmt.step_fail(
-            "PVE API tokens: " + "; ".join(failures[:4]) +
+            f"PVE API token ({rw_id}): " + "; ".join(failures[:4]) +
             (f" +{len(failures) - 4} more" if len(failures) > 4 else "")
         )
         return 1
-    if warnings:
-        fmt.step_warn(
-            f"PVE API tokens: verified {token_labels} on {len(cfg.pve_nodes)} node(s); "
-            + "; ".join(warnings)
-        )
-        return 2
+
     fmt.step_ok(
-        f"PVE API tokens: verified {token_labels} on {len(cfg.pve_nodes)} node(s)"
+        f"PVE API token ({rw_id}): verified on {len(cfg.pve_nodes)} node(s)"
     )
     return 0

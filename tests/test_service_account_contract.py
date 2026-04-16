@@ -2,14 +2,14 @@
 
 Contract:
 - Default template: freq-admin (in _DEFAULTS, example configs)
-- Live identity: cfg.ssh_service_account (user-configured, e.g. freq-ops)
+- Live identity: cfg.ssh_service_account (user-configured service account)
 - Runtime code must use cfg.ssh_service_account, never hardcode freq-admin
 - Example configs document the default, not the live value
 - Doctor, init --check, fleet SSH all use the configured account
 
 Bug: Multiple code paths had hardcoded "freq-admin" fallbacks instead of
 using cfg.ssh_service_account, causing mismatches when the user configured
-a different service account (e.g. freq-ops).
+a different service account.
 """
 import sys
 import unittest
@@ -32,7 +32,6 @@ class TestServiceAccountDefault(unittest.TestCase):
         """load_config must read service_account from freq.toml."""
         from freq.core.config import load_config
         cfg = load_config()
-        # In this environment, freq.toml has service_account = "freq-ops"
         self.assertTrue(cfg.ssh_service_account, "service account must not be empty")
 
 

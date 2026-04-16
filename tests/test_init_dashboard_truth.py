@@ -67,6 +67,9 @@ def _mock_cfg(tmpdir):
         key_dir=os.path.join(tmpdir, "keys"),
         vault_file=os.path.join(tmpdir, "conf", "vault.json"),
         install_dir="/opt/freq",
+        ssh_key_path=os.path.join(tmpdir, "keys", "freq_id_ed25519"),
+        ssh_service_account="freq-admin",
+        trusted_proxy_cidrs=[],
         pve_nodes=["192.168.10.1"],
         hosts=[],
         brand="FREQ",
@@ -93,7 +96,7 @@ class TestIsFirstRunThreeMarkerLogic(unittest.TestCase):
                 self.assertTrue(_is_first_run())
 
     def test_web_marker_means_not_first_run(self):
-        """data/setup-complete marker alone must return False."""
+        """data/setup-complete marker + users must return False."""
         from freq.modules.serve import _is_first_run
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -101,12 +104,13 @@ class TestIsFirstRunThreeMarkerLogic(unittest.TestCase):
             os.makedirs(cfg.data_dir, exist_ok=True)
             with open(os.path.join(cfg.data_dir, "setup-complete"), "w") as f:
                 f.write("done\n")
+            users = [{"username": "admin", "role": "admin"}]
             with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._load_users", return_value=[]):
+                 patch("freq.modules.serve._load_users", return_value=users):
                 self.assertFalse(_is_first_run())
 
     def test_cli_marker_means_not_first_run(self):
-        """conf/.initialized marker alone must return False."""
+        """conf/.initialized marker + users must return False."""
         from freq.modules.serve import _is_first_run
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -114,8 +118,9 @@ class TestIsFirstRunThreeMarkerLogic(unittest.TestCase):
             os.makedirs(cfg.conf_dir, exist_ok=True)
             with open(os.path.join(cfg.conf_dir, ".initialized"), "w") as f:
                 f.write("done\n")
+            users = [{"username": "admin", "role": "admin"}]
             with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._load_users", return_value=[]):
+                 patch("freq.modules.serve._load_users", return_value=users):
                 self.assertFalse(_is_first_run())
 
     def test_existing_users_means_not_first_run(self):
@@ -129,16 +134,21 @@ class TestIsFirstRunThreeMarkerLogic(unittest.TestCase):
                  patch("freq.modules.serve._load_users", return_value=users):
                 self.assertFalse(_is_first_run())
 
-    def test_user_load_failure_treated_as_first_run(self):
-        """If _load_users raises, _is_first_run() must still return True (safe fallback)."""
+    def test_user_load_failure_fails_closed(self):
+        """If _load_users raises, _is_first_run() must return False (fail closed).
+
+        F9 of R-SECURITY-TRUST-AUDIT-20260413P: fail-open was wrong — a
+        transient IO error reopened the entire setup wizard surface to
+        unauth callers. Fail-closed keeps the wizard gated.
+        """
         from freq.modules.serve import _is_first_run
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg = _mock_cfg(tmpdir)
             with patch("freq.modules.serve.load_config", return_value=cfg), \
                  patch("freq.modules.serve._load_users", side_effect=Exception("disk error")):
-                self.assertTrue(_is_first_run(),
-                                "User load failure must not silently skip first-run wizard")
+                self.assertFalse(_is_first_run(),
+                                 "User load failure must fail CLOSED — never reopen wizard on read error")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -250,8 +260,8 @@ class TestSetupCompleteFinalization(unittest.TestCase):
             self.assertTrue(os.path.isfile(marker),
                             "setup/complete must create setup-complete marker file")
 
-    def test_complete_writes_cli_initialized_marker(self):
-        """setup/complete must also write .initialized for CLI compatibility."""
+    def test_complete_writes_web_setup_marker_not_initialized(self):
+        """setup/complete must write .web-setup-complete, NOT .initialized."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg = _mock_cfg(tmpdir)
             os.makedirs(cfg.data_dir, exist_ok=True)
@@ -262,12 +272,15 @@ class TestSetupCompleteFinalization(unittest.TestCase):
                  patch("freq.modules.serve._load_users", return_value=[]):
                 h._serve_setup_complete()
 
+            web_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
             init_marker = os.path.join(cfg.conf_dir, ".initialized")
-            self.assertTrue(os.path.isfile(init_marker),
-                            "setup/complete must write .initialized for CLI compatibility")
+            self.assertTrue(os.path.isfile(web_marker),
+                            "setup/complete must write .web-setup-complete")
+            self.assertFalse(os.path.isfile(init_marker),
+                             "setup/complete must NOT write .initialized — only freq init writes that")
 
     def test_second_complete_returns_403(self):
-        """After completion, second call must return 403 'already complete'."""
+        """After completion, second call must return 403 'already used'."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg = _mock_cfg(tmpdir)
             os.makedirs(cfg.data_dir, exist_ok=True)
@@ -280,17 +293,18 @@ class TestSetupCompleteFinalization(unittest.TestCase):
                 h1._serve_setup_complete()
             self.assertEqual(h1._status, 200)
 
-            # Second complete — markers now exist, _is_first_run() returns False
+            # Second complete — markers now exist + users exist, _is_first_run() returns False
+            users = [{"username": "admin", "role": "admin"}]
             h2 = _make_handler("/api/setup/complete", method="POST")
             with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._load_users", return_value=[]):
+                 patch("freq.modules.serve._load_users", return_value=users):
                 h2._serve_setup_complete()
             self.assertEqual(h2._status, 403, "Second complete must return 403")
             data = _get_json(h2)
-            self.assertIn("already complete", data["error"].lower())
+            self.assertIn("already used", data["error"].lower())
 
     def test_is_first_run_false_after_complete(self):
-        """_is_first_run() must return False after setup/complete."""
+        """_is_first_run() must return False after setup/complete + user exists."""
         from freq.modules.serve import _is_first_run
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -298,22 +312,23 @@ class TestSetupCompleteFinalization(unittest.TestCase):
             os.makedirs(cfg.data_dir, exist_ok=True)
             os.makedirs(cfg.conf_dir, exist_ok=True)
 
-            # Before: first run
+            # Before: first run (no users, no markers)
             with patch("freq.modules.serve.load_config", return_value=cfg), \
                  patch("freq.modules.serve._load_users", return_value=[]):
                 self.assertTrue(_is_first_run())
 
-            # Complete setup
+            # Complete setup (creates .web-setup-complete marker)
             h = _make_handler("/api/setup/complete", method="POST")
             with patch("freq.modules.serve.load_config", return_value=cfg), \
                  patch("freq.modules.serve._load_users", return_value=[]):
                 h._serve_setup_complete()
 
-            # After: not first run
+            # After: not first run (user created during wizard + marker exists)
+            users = [{"username": "admin", "role": "admin"}]
             with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._load_users", return_value=[]):
+                 patch("freq.modules.serve._load_users", return_value=users):
                 self.assertFalse(_is_first_run(),
-                                 "_is_first_run() must be False after setup/complete")
+                                 "_is_first_run() must be False after setup/complete with user")
 
 
 # ══════════════════════════════════════════════════════════════════════════

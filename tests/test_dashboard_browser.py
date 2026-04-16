@@ -10,6 +10,7 @@ Target: VM 5005 (10.25.255.55:8888) — freq installed from a local checkout.
 
 import json
 import os
+import tomllib
 import unittest
 
 # Skip if Playwright not available or dashboard not reachable
@@ -25,8 +26,27 @@ except ImportError:
     DASHBOARD_UP = False
 
 DASHBOARD_URL = "http://10.25.255.55:8888"
-TEST_USER = "freq-ops"
-TEST_PASS = "test123"
+
+
+def _default_test_user():
+    """Prefer an explicit env override, else first active users.conf entry."""
+    env_user = os.environ.get("FREQ_TEST_USER")
+    if env_user:
+        return env_user
+    users_path = os.path.join(os.path.dirname(__file__), "..", "conf", "users.conf")
+    try:
+        with open(users_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    return line.split()[0]
+    except OSError:
+        pass
+    return "admin"
+
+
+TEST_USER = _default_test_user()
+TEST_PASS = os.environ.get("FREQ_TEST_PASS", "test123")
 
 
 def _login_api():
@@ -88,10 +108,10 @@ class TestDashboardAuth(unittest.TestCase):
             const resp = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: 'freq-ops', password: 'wrongpassword'})
+                body: JSON.stringify({username: '%s', password: 'wrongpassword'})
             });
             return {status: resp.status, body: await resp.json()};
-        }""")
+        }""" % TEST_USER)
         page.close()
 
         self.assertNotEqual(response["status"], 200,

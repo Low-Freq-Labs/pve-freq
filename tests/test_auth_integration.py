@@ -261,9 +261,53 @@ class TestSessionExpiry(unittest.TestCase):
         self.assertIsNone(role)
         self.assertIn("expired", err.lower())
 
-        # Token should be cleaned up
+    def test_api_wrapper_preserves_expired_session_reason(self):
+        """Protected API routes must return the specific expired-session reason."""
+        from freq.api.auth import _auth_tokens, _auth_lock, SESSION_TIMEOUT_SECONDS
+
+        token = "expired-wrapper-token"
         with _auth_lock:
-            self.assertNotIn(token, _auth_tokens)
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": time.time() - SESSION_TIMEOUT_SECONDS - 1,
+            }
+
+        h = _make_handler(
+            path="/api/fleet/overview",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Cookie": "",
+                "Origin": "",
+            },
+        )
+        h.do_GET()
+
+        self.assertEqual(h._status, 403)
+        self.assertEqual(_get_json(h)["error"], "Session expired or invalid")
+
+    def test_api_wrapper_preserves_insufficient_role_reason(self):
+        """Protected API routes must return the specific role failure reason."""
+        from freq.api.auth import _auth_tokens, _auth_lock
+
+        token = "viewer-wrapper-token"
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "viewer", "role": "viewer",
+                "ts": time.time(),
+            }
+
+        h = _make_handler(
+            path="/api/admin/fleet-boundaries",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Cookie": "",
+                "Origin": "",
+            },
+        )
+        h.do_GET()
+
+        self.assertEqual(h._status, 403)
+        self.assertIn("Requires admin role", _get_json(h)["error"])
 
     def test_post_logout_token_rejected(self):
         """After logout, the same token must be rejected."""
