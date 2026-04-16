@@ -8,7 +8,7 @@ You built a homelab because you love this stuff. You shouldn't need 12 different
 
 [![Tests](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml/badge.svg)](https://github.com/Low-Freq-Labs/pve-freq/actions/workflows/test.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-8b5cf6.svg)](https://www.python.org/downloads/)
-[![LOC](https://img.shields.io/badge/lines_of_code-76K-8b5cf6.svg)](#)
+[![LOC](https://img.shields.io/badge/lines_of_code-81K-8b5cf6.svg)](#)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL_v3-8b5cf6.svg)](LICENSE)
 [![20 Distros](https://img.shields.io/badge/tested_on-20_distros-8b5cf6.svg)](#every-linux-distro)
 
@@ -65,13 +65,13 @@ Now you're managing 10 different tools with 10 different interfaces, and none of
 
 **FREQ puts all of it behind one CLI.** VMs, containers, switches, firewalls, storage, DNS, VPN, certificates, backups, security scanning, monitoring, and incident response. One tool. One config directory. One way to do things.
 
-No external dependencies. No pip packages. No node_modules. No Docker required. Just Python and SSH.
+No third-party runtime dependencies. No node_modules. No Docker required. Just Python and SSH.
 
 ---
 
 ## What You Get
 
-### 23 Domains. 300+ Commands. Everything.
+### 23 Domains. 250+ Commands. Everything.
 
 | Domain | What It Does | Try It |
 |--------|-------------|--------|
@@ -81,7 +81,7 @@ No external dependencies. No pip packages. No node_modules. No Docker required. 
 | `freq net` | Switches, network mapping, and IPAM | `freq net ip list` |
 | `freq fw` | Firewall operations across supported platforms | `freq fw <action>` |
 | `freq dns` | Internal DNS management | `freq dns scan` |
-| `freq vpn` | VPN peer management | `freq vpn list` |
+| `freq vpn` | VPN peer management | `freq vpn wg status` |
 | `freq cert` | TLS certificate tracking and renewal | `freq cert scan --expiring 30` |
 | `freq store` | TrueNAS and storage operations | `freq store nas <action>` |
 | `freq dr` | Backups, policies, journals, and migration tooling | `freq dr backup list` |
@@ -91,7 +91,7 @@ No external dependencies. No pip packages. No node_modules. No Docker required. 
 | `freq hw` | iDRAC access, power cost, and drive wiping | `freq hw cost` |
 | `freq state` | Baselines, plan/apply, and policy checks | `freq state policies` |
 | `freq event` | Event network lifecycle management | `freq event list` |
-| `freq media` | Media stack management (40+ subcommands) | `freq media status` |
+| `freq media` | Media stack management and library workflows | `freq media status` |
 
 Plus `freq proxy`, `freq auto`, `freq user`, `freq plugin`, `freq lab`, `freq agent`, and more.
 
@@ -99,19 +99,19 @@ Run `freq help` for the complete reference.
 
 ### Multi-Vendor. Out of the Box.
 
-Built-in drivers for **Cisco IOS/IOS-XE**, **pfSense**, **OPNsense**, **Dell iDRAC**, **TrueNAS**, **Synology**, and **Linux servers**. Community plugins for MikroTik, Juniper, Aruba, and more.
+Built-in support covers **Cisco IOS/IOS-XE**, **pfSense**, **Dell iDRAC**, **TrueNAS**, and **Linux servers**. Synology has API read support, and the plugin architecture allows additional vendor integrations.
 
 If it has an IP address, FREQ can probably talk to it.
 
 ### Web Dashboard
 
-`freq serve` gives you a full web dashboard at `localhost:8888`. Seven navigation groups. Live updates via Server-Sent Events. Fleet health, VM management, Docker stacks, network topology, security posture — all in one view.
+`freq serve` gives you a full web dashboard at `localhost:8888`. Eight navigation groups. Live updates via Server-Sent Events. Fleet health, VM management, Docker stacks, network topology, security posture — all in one view.
 
 Embedded web assets. No frontend build step. Pure Python HTTP server.
 
 ### Interactive TUI
 
-168 menu entries. Risk-tagged operations. Color-coded categories. Launch with `freq menu` or just `freq` with no arguments.
+200+ menu entries. Risk-tagged operations. Color-coded categories. Launch with `freq menu` or just `freq` with no arguments.
 
 ### Plugin Ecosystem
 
@@ -143,7 +143,7 @@ FREQ uses **only the Python standard library**. Every single import is stdlib. N
 
 Why? Because the machine running FREQ is your management host. It has SSH keys to your entire fleet. It should have the smallest possible attack surface.
 
-76K lines of Python. Zero external dependencies. Auditable by one person.
+81K lines of Python in `freq/`. Zero external dependencies. Auditable by one person.
 
 ---
 
@@ -302,7 +302,6 @@ Linux/PVE/TrueNAS/Docker hosts and iDRAC/switch devices get full removal of the 
 | [CLI Reference](docs/CLI-REFERENCE.md) | CLI commands with examples |
 | [API Reference](docs/API-REFERENCE.md) | REST API endpoints |
 | [Configuration](docs/CONFIGURATION.md) | Every config key documented |
-| [Codebase Standard](docs/CODEBASE-STANDARD-2026.md) | Design standards and code structure guidance |
 | [Quick Reference](docs/QUICK-REFERENCE.md) | Common commands cheat sheet |
 | [Changelog](CHANGELOG.md) | Version history |
 | [Contributing](CONTRIBUTING.md) | Development setup and guidelines |

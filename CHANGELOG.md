@@ -102,7 +102,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Python 3.11+ minimum** — tomllib, modern asyncio, all stdlib features
 - **Plugin ecosystem** — formalized interface for community extensions
 - **Universal distro support** — platform detection, package manager abstraction, init system detection
-- **License: AGPL v3** — same as Proxmox, proven by Grafana at $6B valuation
+- **License: AGPL v3** — same open-source license used by Proxmox VE and Grafana
 
 ## [2.2.0] - 2026-03-31
 
