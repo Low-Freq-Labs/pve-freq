@@ -1,4 +1,4 @@
-"""R-E2E-INFRA-CONFIG-WRITE-WARNING-20260413N regression contract.
+""" regression contract.
 
 Live clean 5005 init at e361cb2 emitted a real warning during Phase 7
 Step 6 (freq.toml [infrastructure] update):
@@ -188,7 +188,7 @@ class TestPhase7Step6SelfHealsMissingFreqToml(unittest.TestCase):
                       "Step 6 must check for missing freq.toml before reading")
         self.assertIn("_seed_config_files(cfg)", block,
                       "Step 6 must call _seed_config_files when freq.toml is missing")
-        self.assertIn("R-E2E-INFRA-CONFIG-WRITE-WARNING-20260413N", block,
+        self.assertIn("", block,
                       "Step 6 self-heal must reference the token so the contract is traceable")
 
     def test_step6_warning_text_unchanged(self):

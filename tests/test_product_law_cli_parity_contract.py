@@ -1,4 +1,4 @@
-"""R-PRODUCT-LAW-BACKEND-TRUTH — CLI / TUI parity with /api/health.
+""" — CLI / TUI parity with /api/health.
 
 Sonny's correction: "This product-law/truth model is NOT web-only.
 Raw commands and TUI are just as important. Backend work should keep

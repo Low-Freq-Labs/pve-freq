@@ -1,4 +1,4 @@
-"""R-E2E-IDRAC-PRIVILEGE-HANG-20260413R regression contract.
+""" regression contract.
 
 Final clean 5005 E2E on HEAD 285fa68 was hard-stuck in Phase 8 because
 a hung iDRAC racadm command wedged subprocess.run(timeout=) — the

@@ -84,7 +84,7 @@ class TestSSHWithPass(unittest.TestCase):
         rc, out, err = _ssh_with_pass("secret", ["ssh", "user@host", "uptime"])
         self.assertEqual(rc, 0)
         mock_run.assert_called_once()
-        # R-PVEFREQ-RUN3-IDRAC-HANG-20260415M: sshpass is now wrapped
+        # sshpass is now wrapped
         # in GNU timeout for hard process-level kill. Command shape is:
         # timeout -s KILL <N> sshpass -f <tmpfile> <ssh_cmd...>
         cmd = mock_run.call_args[0][0]

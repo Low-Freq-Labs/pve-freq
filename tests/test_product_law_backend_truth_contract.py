@@ -1,4 +1,4 @@
-"""R-PRODUCT-LAW-BACKEND-TRUTH regression contract.
+""" regression contract.
 
 Translation of pve-freq-product-law.md into enforceable tests:
 

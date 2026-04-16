@@ -52,7 +52,7 @@ from freq import __version__
 # --- Safe Defaults (set BEFORE config load) ---
 # These survive missing/broken config. Trap #4 lesson.
 
-# R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D: freq-ops is the bootstrap/sudo
+# freq-ops is the bootstrap/sudo
 # ingress identity per docs/IDENTITY-CONTRACT.md and must pass through
 # `freq init` UNTOUCHED — no useradd, no chpasswd, no sudoers write, no
 # chown/chmod, no ssh-key management. cfg.ssh_service_account names the
@@ -614,7 +614,7 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
 
     ssh = data.get("ssh", {})
     requested_svc = ssh.get("service_account", cfg.ssh_service_account)
-    # R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D: freq-ops is bootstrap-only.
+    # freq-ops is bootstrap-only.
     # If freq.toml asks for a reserved name as the managed service account,
     # log the violation and fall back to the canonical default. We do not
     # raise here because config.py is loaded in many contexts (CLI, daemon,
@@ -625,8 +625,7 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
         import sys
         print(
             f"[freq] config: ssh.service_account={requested_svc!r} is reserved "
-            f"as a bootstrap-only identity per docs/IDENTITY-CONTRACT.md "
-            f"(R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D); "
+            f"as a bootstrap-only identity per docs/IDENTITY-CONTRACT.md; "
             f"falling back to default {_DEFAULTS['ssh_service_account']!r}",
             file=sys.stderr,
         )

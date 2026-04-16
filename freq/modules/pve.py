@@ -51,7 +51,7 @@ def _pve_api_call(
     Returns (parsed_data, success_bool).
     Token auth header: PVEAPIToken=user@realm!tokenname=UUID-SECRET
     """
-    # R-PVEFREQ-FINAL-SQUEEZE-RUNTIME-20260416AK: pve.py is intentionally
+    # pve.py is intentionally
     # STRICT — both cfg attributes must be set, no file-path fallback.
     # doctor.py is intentionally LENIENT — it falls back to the credential
     # file at /etc/freq/credentials/pve-token-rw with a logged warning.

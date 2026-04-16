@@ -7,7 +7,7 @@ If code, docs, tests, or operator copy disagree with this file, they are wrong.
 ## Core Rules
 
 1. `freq-ops` is the bootstrap/sudo identity.
-It is the install-time or break-glass operator account used to run and complete `freq init`. **`freq init` MUST pass through `freq-ops` untouched** — no `useradd`, no `chpasswd`, no sudoers write, no chmod/chown, no SSH key management, no PVE token creation, nothing. `freq-ops` is bootstrap ingress only. (R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D)
+It is the install-time or break-glass operator account used to run and complete `freq init`. **`freq init` MUST pass through `freq-ops` untouched** — no `useradd`, no `chpasswd`, no sudoers write, no chmod/chown, no SSH key management, no PVE token creation, nothing. `freq-ops` is bootstrap ingress only.
 
 2. `cfg.ssh_service_account` is the deployed fleet service account.
 This is the account `freq init` creates, configures, and deploys across managed hosts. The value `freq-ops` is RESERVED and may NOT be used as a managed service-account name — `cfg.ssh_service_account` is rejected at config-load time and at the Phase 3 prompt if it equals any name in the reserved set.
@@ -16,11 +16,11 @@ This is the account `freq init` creates, configures, and deploys across managed 
 If the user does not choose another name, `cfg.ssh_service_account` defaults to `freq-admin`.
 
 4. The runtime PVE API identity is `cfg.ssh_service_account@pam!freq-rw`.
-By default this resolves to `freq-admin@pam!freq-rw`. The legacy `freq-ops@pam!freq-rw` token is a Jarvis (infra lane) construct and must not be presented as the FREQ runtime PVE API identity.
+By default this resolves to `freq-admin@pam!freq-rw`. The legacy `freq-ops@pam!freq-rw` token is an infrastructure-only construct and must not be presented as the FREQ runtime PVE API identity.
 
 ## Init Lifecycle Checkpoints
 
-These checkpoints are release-gate rules and must be verified during the E2E gauntlet.
+These checkpoints are release-gate rules and must be verified.
 
 ### Before `freq init`
 

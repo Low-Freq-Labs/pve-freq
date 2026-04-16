@@ -256,7 +256,7 @@ def run(
 
     logger.debug(f"ssh_start: {host} [{htype}]", command=command[:120])
 
-    # R-PVEFREQ-RUN6-LATE-VERIFY-HANG-20260416Z: wrap in GNU timeout for
+    # wrap in GNU timeout for
     # hard OS-level kill. subprocess.run(timeout=) only kills the direct
     # child; grandchild SSH sessions (especially iDRAC racadm) can hold
     # pipe FDs open indefinitely. GNU timeout sends SIGKILL to the process

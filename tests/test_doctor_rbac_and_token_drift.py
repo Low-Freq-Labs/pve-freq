@@ -1,6 +1,6 @@
 """Tests for the RBAC bootstrap and PVE token drift doctor probes.
 
-R-DC01-OPS-SURFACES-20260414A tasks 2 and 3: the two new doctor probes
+ tasks 2 and 3: the two new doctor probes
 added under this token pin bootstrap-user consistency across
 roles.conf / users.conf / vault and per-node per-token PVE API token
 acceptance. These tests pin the probe contracts so the operator-truth
@@ -57,7 +57,7 @@ class TestRbacBootstrapProbe(unittest.TestCase):
     def test_fail_when_no_non_service_admin(self):
         """Only service account as admin → fail (no human can log in).
 
-        R-PVEFREQ-HIGH-DOCTOR-SEVERITY-20260416AJ: upgraded from warn(2)
+        upgraded from warn(2)
         to fail(1). No non-service admin means no human can log into the
         web dashboard — this is a real RBAC failure, not a warning.
         """
@@ -205,10 +205,10 @@ class TestPveTokenDriftProbe(unittest.TestCase):
     """The PVE token drift probe must iterate the runtime RW token across
     every configured PVE node and report per-node pass/fail.
 
-    R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the doctor probe checks ONLY
+    the doctor probe checks ONLY
     the runtime RW token now. The legacy RO token at
     /etc/freq/credentials/pve-token (PVE_TOKEN_ID=... format) was a
-    Jarvis (infra lane) construct and was pulled out of the product
+    infrastructure-only construct and was pulled out of the product
     runtime doctor surface — keeping it conflated two distinct trust
     roots and trained operators to ignore "ro token unreadable" warnings.
     """
@@ -293,7 +293,7 @@ class TestPveTokenDriftProbe(unittest.TestCase):
     def test_legacy_ro_token_not_probed(self):
         """The Jarvis-legacy RO token at /etc/freq/credentials/pve-token must not be read.
 
-        R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the RO token concept was
+        the RO token concept was
         pulled out of product runtime doctor. _read_credential_text must
         be called only for the RW token path; the RO path is gone.
         """
@@ -347,7 +347,7 @@ class TestReadCredentialTextHelper(unittest.TestCase):
         from freq.core.doctor import _read_credential_text
 
         self.assertEqual(
-            _read_credential_text("/nonexistent/path/rick-test-xyz"), ""
+            _read_credential_text("/nonexistent/path/sample-test-xyz"), ""
         )
 
 

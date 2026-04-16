@@ -9,13 +9,13 @@ any external dependency.
 Replaces: Webmin / Cockpit web UI ($0 — pure terminal, works over SSH)
 
 Architecture:
-    - _getch() reads raw terminal input via termios (no curses needed)
-    - Menu items map keystroke -> label -> freq CLI command string
-    - Dispatches commands through the same CLI entrypoint as freq <domain>
+  - _getch() reads raw terminal input via termios (no curses needed)
+  - Menu items map keystroke -> label -> freq CLI command string
+  - Dispatches commands through the same CLI entrypoint as freq <domain>
 
 Design decisions:
-    - Zero-dependency TUI — works in PuTTY, xterm, any POSIX terminal
-    - Reimagined from v1.0.0 menu.sh (890 lines) as structured Python
+  - Zero-dependency TUI — works in PuTTY, xterm, any POSIX terminal
+  - Reimagined from v1.0.0 menu.sh (890 lines) as structured Python
 """
 
 import json as _tui_json
@@ -35,1771 +35,1771 @@ from freq.core.personality import splash
 
 
 def _clear():
-    """Clear screen using ANSI escape."""
-    sys.stdout.write("\033[2J\033[H")
-    sys.stdout.flush()
+  """Clear screen using ANSI escape."""
+  sys.stdout.write("\033[2J\033[H")
+  sys.stdout.flush()
 
 
 def _getch():
-    """Read a single keypress without echo."""
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
-    return ch
+  """Read a single keypress without echo."""
+  fd = sys.stdin.fileno()
+  old = termios.tcgetattr(fd)
+  try:
+    tty.setraw(fd)
+    ch = sys.stdin.read(1)
+  finally:
+    termios.tcsetattr(fd, termios.TCSADRAIN, old)
+  return ch
 
 
 def _pause():
-    """Wait for any key."""
-    print(f"\n  {fmt.C.DIM}Press any key to continue...{fmt.C.RESET}", end="", flush=True)
-    _getch()
-    print()
+  """Wait for any key."""
+  print(f"\n {fmt.C.DIM}Press any key to continue...{fmt.C.RESET}", end="", flush=True)
+  _getch()
+  print()
 
 
 def _input(prompt: str) -> str:
-    """Read a line of input with prompt."""
-    try:
-        return input(f"  {fmt.C.CYAN}{prompt}{fmt.C.RESET} ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print()
-        return ""
+  """Read a line of input with prompt."""
+  try:
+    return input(f" {fmt.C.CYAN}{prompt}{fmt.C.RESET} ").strip()
+  except (EOFError, KeyboardInterrupt):
+    print()
+    return ""
 
 
 def _confirm(msg: str, default_yes: bool = False) -> bool:
-    """Ask yes/no confirmation."""
-    suffix = "[Y/n]" if default_yes else "[y/N]"
-    try:
-        answer = input(f"  {fmt.C.YELLOW}{msg} {suffix}:{fmt.C.RESET} ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        print()
-        return False
-    if not answer:
-        return default_yes
-    return answer in ("y", "yes")
+  """Ask yes/no confirmation."""
+  suffix = "[Y/n]" if default_yes else "[y/N]"
+  try:
+    answer = input(f" {fmt.C.YELLOW}{msg} {suffix}:{fmt.C.RESET} ").strip().lower()
+  except (EOFError, KeyboardInterrupt):
+    print()
+    return False
+  if not answer:
+    return default_yes
+  return answer in ("y", "yes")
 
 
 # --- Operator-truth helpers (TUI translation of pve-freq-product-law) ---
 
 
 def _load_probe_state_summary(cfg) -> dict:
-    """Read the dashboard's health.json cache and aggregate per-state
-    counts using the SAME six-state taxonomy as the API/CLI surfaces.
+  """Read the dashboard's health.json cache and aggregate per-state
+  counts using the SAME six-state taxonomy as the API/CLI surfaces.
 
-    Returns:
-      {
-        "has_data": bool,
-        "total": int,
-        "counts": {state_name: count, ...},  # subset of ALL_STATES
-        "max_age_s": int | None,              # oldest probe in cache
-        "min_age_s": int | None,              # freshest probe in cache
-        "cache_age_s": int | None,            # cache file overall age
-      }
+  Returns:
+   {
+    "has_data": bool,
+    "total": int,
+    "counts": {state_name: count, ...}, # subset of ALL_STATES
+    "max_age_s": int | None,       # oldest probe in cache
+    "min_age_s": int | None,       # freshest probe in cache
+    "cache_age_s": int | None,      # cache file overall age
+   }
 
-    On a missing or unreadable cache, has_data=False and the operator
-    sees an honest "no probe data — run [!] dashboard" hint instead of
-    a fake-zero header.
+  On a missing or unreadable cache, has_data=False and the operator
+  sees an honest "no probe data — run [!] dashboard" hint instead of
+  a fake-zero header.
 
-    Cross-surface invariant: the state counts come from the per-host
-    `state` field that classify_probe_failure produces — same field
-    every other observation surface reads. No sibling taxonomy.
-    """
-    try:
-        cache_path = os.path.join(cfg.data_dir, "cache", "health.json")
-    except Exception:
-        return {"has_data": False, "total": 0, "counts": {},
-                "max_age_s": None, "min_age_s": None, "cache_age_s": None}
-    if not os.path.isfile(cache_path):
-        return {"has_data": False, "total": 0, "counts": {},
-                "max_age_s": None, "min_age_s": None, "cache_age_s": None}
-    try:
-        with open(cache_path) as f:
-            entry = _tui_json.load(f)
-    except (OSError, _tui_json.JSONDecodeError):
-        return {"has_data": False, "total": 0, "counts": {},
-                "max_age_s": None, "min_age_s": None, "cache_age_s": None}
-    cache_ts = entry.get("ts", 0)
-    cache_age = max(0, int(_tui_time.time() - cache_ts)) if cache_ts else None
-    data = entry.get("data") or {}
-    hosts = data.get("hosts") or []
-    if not hosts:
-        return {"has_data": False, "total": 0, "counts": {},
-                "max_age_s": None, "min_age_s": None, "cache_age_s": cache_age}
-    counts: dict = {}
-    now = _tui_time.time()
-    ages = []
-    for h in hosts:
-        st = (h.get("state") or "").strip()
-        if st not in ALL_STATES:
-            # Unknown state value — fall back to the legacy 'status'
-            # field so old cache shapes still render. Treat 'healthy'
-            # as live, anything else as unreachable per legacy compat.
-            legacy = (h.get("status") or "").strip().lower()
-            st = "live" if legacy == "healthy" else "unreachable"
-        counts[st] = counts.get(st, 0) + 1
-        pa = h.get("probed_at")
-        if pa is not None:
-            ages.append(max(0, now - float(pa)))
-    return {
-        "has_data": True,
-        "total": len(hosts),
-        "counts": counts,
-        "max_age_s": int(max(ages)) if ages else None,
-        "min_age_s": int(min(ages)) if ages else None,
-        "cache_age_s": cache_age,
-    }
+  Cross-surface invariant: the state counts come from the per-host
+  `state` field that classify_probe_failure produces — same field
+  every other observation surface reads. No sibling taxonomy.
+  """
+  try:
+    cache_path = os.path.join(cfg.data_dir, "cache", "health.json")
+  except Exception:
+    return {"has_data": False, "total": 0, "counts": {},
+        "max_age_s": None, "min_age_s": None, "cache_age_s": None}
+  if not os.path.isfile(cache_path):
+    return {"has_data": False, "total": 0, "counts": {},
+        "max_age_s": None, "min_age_s": None, "cache_age_s": None}
+  try:
+    with open(cache_path) as f:
+      entry = _tui_json.load(f)
+  except (OSError, _tui_json.JSONDecodeError):
+    return {"has_data": False, "total": 0, "counts": {},
+        "max_age_s": None, "min_age_s": None, "cache_age_s": None}
+  cache_ts = entry.get("ts", 0)
+  cache_age = max(0, int(_tui_time.time() - cache_ts)) if cache_ts else None
+  data = entry.get("data") or {}
+  hosts = data.get("hosts") or []
+  if not hosts:
+    return {"has_data": False, "total": 0, "counts": {},
+        "max_age_s": None, "min_age_s": None, "cache_age_s": cache_age}
+  counts: dict = {}
+  now = _tui_time.time()
+  ages = []
+  for h in hosts:
+    st = (h.get("state") or "").strip()
+    if st not in ALL_STATES:
+      # Unknown state value — fall back to the legacy 'status'
+      # field so old cache shapes still render. Treat 'healthy'
+      # as live, anything else as unreachable per legacy compat.
+      legacy = (h.get("status") or "").strip().lower()
+      st = "live" if legacy == "healthy" else "unreachable"
+    counts[st] = counts.get(st, 0) + 1
+    pa = h.get("probed_at")
+    if pa is not None:
+      ages.append(max(0, now - float(pa)))
+  return {
+    "has_data": True,
+    "total": len(hosts),
+    "counts": counts,
+    "max_age_s": int(max(ages)) if ages else None,
+    "min_age_s": int(min(ages)) if ages else None,
+    "cache_age_s": cache_age,
+  }
 
 
 def _render_probe_state_summary(summary: dict) -> str:
-    """Format a one-line densified fleet status from the summary dict.
+  """Format a one-line densified fleet status from the summary dict.
 
-    Pre-densification the TUI splash showed bare 'Hosts: 14 PVE: 3'
-    with no probe state, no freshness, no failure-class breakdown.
-    Operator at 2AM had no idea which hosts were reachable, how recent
-    the data was, or what was failing. Densified form encodes:
+  Pre-densification the TUI splash showed bare 'Hosts: 14 PVE: 3'
+  with no probe state, no freshness, no failure-class breakdown.
+  Operator at 2AM had no idea which hosts were reachable, how recent
+  the data was, or what was failing. Densified form encodes:
 
-      Fleet: 13/14 live · 1 auth_failed (cached 47s)
+   Fleet: 13/14 live · 1 auth_failed (cached 47s)
 
-    On missing cache the line names the next-useful-path:
+  On missing cache the line names the next-useful-path:
 
-      Fleet: 14 hosts · no probe data — run [!] dashboard to refresh
+   Fleet: 14 hosts · no probe data — run [!] dashboard to refresh
 
-    Color follows the worst state present (red for unreachable/auth_failed,
-    yellow for stale/degraded, green for all-live).
-    """
-    if not summary.get("has_data"):
-        total = summary.get("total", 0)
-        return (
-            f"{fmt.C.DIM}Fleet:{fmt.C.RESET} "
-            f"{fmt.C.BOLD}{total}{fmt.C.RESET} hosts "
-            f"{fmt.C.DIM}— no probe data — run "
-            f"{fmt.C.CYAN}[!]{fmt.C.RESET} {fmt.C.DIM}dashboard "
-            f"to refresh{fmt.C.RESET}"
-        )
-    counts = summary.get("counts") or {}
-    total = summary.get("total", sum(counts.values()))
-    live = counts.get("live", 0)
-    # Worst state present drives the color.
-    worst_red = ("unreachable", "auth_failed")
-    worst_yel = ("stale", "degraded")
-    color = fmt.C.GREEN
-    for s in worst_red:
-        if counts.get(s, 0) > 0:
-            color = fmt.C.RED
-            break
-    if color == fmt.C.GREEN:
-        for s in worst_yel:
-            if counts.get(s, 0) > 0:
-                color = fmt.C.YELLOW
-                break
-    # Build the breakdown string. Always show live/total first; append
-    # any non-live states by name in canonical priority order.
-    parts = [f"{color}{live}/{total}{fmt.C.RESET} live"]
-    priority = ("auth_failed", "unreachable", "degraded", "stale", "recovering")
-    for s in priority:
-        n = counts.get(s, 0)
-        if n > 0:
-            parts.append(f"{fmt.C.YELLOW}{n}{fmt.C.RESET} {s}")
-    sep = " " + fmt.C.DIM + "·" + fmt.C.RESET + " "
-    breakdown = " " + sep.join(parts)
-    age = summary.get("max_age_s")
-    if age is None:
-        fresh = ""
+  Color follows the worst state present (red for unreachable/auth_failed,
+  yellow for stale/degraded, green for all-live).
+  """
+  if not summary.get("has_data"):
+    total = summary.get("total", 0)
+    return (
+      f"{fmt.C.DIM}Fleet:{fmt.C.RESET} "
+      f"{fmt.C.BOLD}{total}{fmt.C.RESET} hosts "
+      f"{fmt.C.DIM}— no probe data — run "
+      f"{fmt.C.CYAN}[!]{fmt.C.RESET} {fmt.C.DIM}dashboard "
+      f"to refresh{fmt.C.RESET}"
+    )
+  counts = summary.get("counts") or {}
+  total = summary.get("total", sum(counts.values()))
+  live = counts.get("live", 0)
+  # Worst state present drives the color.
+  worst_red = ("unreachable", "auth_failed")
+  worst_yel = ("stale", "degraded")
+  color = fmt.C.GREEN
+  for s in worst_red:
+    if counts.get(s, 0) > 0:
+      color = fmt.C.RED
+      break
+  if color == fmt.C.GREEN:
+    for s in worst_yel:
+      if counts.get(s, 0) > 0:
+        color = fmt.C.YELLOW
+        break
+  # Build the breakdown string. Always show live/total first; append
+  # any non-live states by name in canonical priority order.
+  parts = [f"{color}{live}/{total}{fmt.C.RESET} live"]
+  priority = ("auth_failed", "unreachable", "degraded", "stale", "recovering")
+  for s in priority:
+    n = counts.get(s, 0)
+    if n > 0:
+      parts.append(f"{fmt.C.YELLOW}{n}{fmt.C.RESET} {s}")
+  sep = " " + fmt.C.DIM + "·" + fmt.C.RESET + " "
+  breakdown = " " + sep.join(parts)
+  age = summary.get("max_age_s")
+  if age is None:
+    fresh = ""
+  else:
+    if age < 60:
+      age_lbl = f"{age}s"
+    elif age < 3600:
+      age_lbl = f"{age // 60}m"
     else:
-        if age < 60:
-            age_lbl = f"{age}s"
-        elif age < 3600:
-            age_lbl = f"{age // 60}m"
-        else:
-            age_lbl = f"{age // 3600}h"
-        if age <= 30:
-            age_color = fmt.C.GREEN
-        elif age <= 120:
-            age_color = fmt.C.YELLOW
-        else:
-            age_color = fmt.C.RED
-        fresh = f" {fmt.C.DIM}(cached{fmt.C.RESET} {age_color}{age_lbl}{fmt.C.RESET}{fmt.C.DIM}){fmt.C.RESET}"
-    return f"{fmt.C.DIM}Fleet:{fmt.C.RESET}{breakdown}{fresh}"
+      age_lbl = f"{age // 3600}h"
+    if age <= 30:
+      age_color = fmt.C.GREEN
+    elif age <= 120:
+      age_color = fmt.C.YELLOW
+    else:
+      age_color = fmt.C.RED
+    fresh = f" {fmt.C.DIM}(cached{fmt.C.RESET} {age_color}{age_lbl}{fmt.C.RESET}{fmt.C.DIM}){fmt.C.RESET}"
+  return f"{fmt.C.DIM}Fleet:{fmt.C.RESET}{breakdown}{fresh}"
 
 
 # --- Risk Tags ---
 
 
 class Tag:
-    """Risk/status tags for menu items."""
+  """Risk/status tags for menu items."""
 
-    SAFE = f"{fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET}"
-    CHANGES = f"{fmt.C.YELLOW}{fmt.S.WARN}{fmt.C.RESET}"
-    RISKY = f"{fmt.C.RED}{fmt.S.WARN}{fmt.C.RESET}"
-    DESTRUCTIVE = f"{fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET}"
-    COMING = f"{fmt.C.DIM}...{fmt.C.RESET}"
+  SAFE = f"{fmt.C.GREEN}{fmt.S.TICK}{fmt.C.RESET}"
+  CHANGES = f"{fmt.C.YELLOW}{fmt.S.WARN}{fmt.C.RESET}"
+  RISKY = f"{fmt.C.RED}{fmt.S.WARN}{fmt.C.RESET}"
+  DESTRUCTIVE = f"{fmt.C.RED}{fmt.S.CROSS}{fmt.C.RESET}"
+  COMING = f"{fmt.C.DIM}...{fmt.C.RESET}"
 
 
 # --- Menu Rendering ---
 
 
 def _render_menu(title: str, items: list, breadcrumb: list = None):
-    """Render a menu screen.
+  """Render a menu screen.
 
-    items: list of (key, label, description, tag) tuples.
-    """
-    _clear()
+  items: list of (key, label, description, tag) tuples.
+  """
+  _clear()
 
-    # Breadcrumb
-    trail = " > ".join(breadcrumb or ["PVE FREQ"])
-    print(f"  {fmt.C.PURPLE}{trail}{fmt.C.RESET}")
-    print(f"  {fmt.C.DARK_GRAY}{'─' * (fmt.term_width() - 4)}{fmt.C.RESET}")
-    print()
+  # Breadcrumb
+  trail = " > ".join(breadcrumb or ["PVE FREQ"])
+  print(f" {fmt.C.PURPLE}{trail}{fmt.C.RESET}")
+  print(f" {fmt.C.DARK_GRAY}{'─' * (fmt.term_width() - 4)}{fmt.C.RESET}")
+  print()
 
-    # Title
-    print(f"  {fmt.C.PURPLE_BOLD}{title}{fmt.C.RESET}")
-    print()
+  # Title
+  print(f" {fmt.C.PURPLE_BOLD}{title}{fmt.C.RESET}")
+  print()
 
-    # Items
-    for item in items:
-        if item is None:
-            # Section divider
-            print()
-            continue
-        if isinstance(item, str):
-            # Section header
-            print(f"  {fmt.C.PURPLE_BOLD}{item}{fmt.C.RESET}")
-            continue
+  # Items
+  for item in items:
+    if item is None:
+      # Section divider
+      print()
+      continue
+    if isinstance(item, str):
+      # Section header
+      print(f" {fmt.C.PURPLE_BOLD}{item}{fmt.C.RESET}")
+      continue
 
-        key, label, desc, tag = item
-        tag_str = f" {tag}" if tag else ""
-        print(
-            f"  {fmt.C.CYAN}[{key}]{fmt.C.RESET}  "
-            f"{fmt.C.BOLD}{label:<16}{fmt.C.RESET} "
-            f"{fmt.C.DIM}{desc}{fmt.C.RESET}"
-            f"{tag_str}"
-        )
+    key, label, desc, tag = item
+    tag_str = f" {tag}" if tag else ""
+    print(
+      f" {fmt.C.CYAN}[{key}]{fmt.C.RESET} "
+      f"{fmt.C.BOLD}{label:<16}{fmt.C.RESET} "
+      f"{fmt.C.DIM}{desc}{fmt.C.RESET}"
+      f"{tag_str}"
+    )
 
-    print()
-    print(f"  {fmt.C.DARK_GRAY}{'─' * (fmt.term_width() - 4)}{fmt.C.RESET}")
-    print(f"  {fmt.C.DIM}Select an option:{fmt.C.RESET} ", end="", flush=True)
+  print()
+  print(f" {fmt.C.DARK_GRAY}{'─' * (fmt.term_width() - 4)}{fmt.C.RESET}")
+  print(f" {fmt.C.DIM}Select an option:{fmt.C.RESET} ", end="", flush=True)
 
 
 def _run_command(cfg, pack, cmd_name: str, args_override: dict = None):
-    """Execute a FREQ command and return to menu."""
-    from freq.cli import _build_parser
+  """Execute a FREQ command and return to menu."""
+  from freq.cli import _build_parser
 
-    print()
+  print()
 
-    # Build args — cmd_name may contain spaces for domain dispatch (e.g. "fleet status")
-    argv = cmd_name.split()
-    if args_override:
-        for k, v in args_override.items():
-            if v is True:
-                argv.append(f"--{k}")
-            elif v is not None:
-                argv.append(f"--{k}")
-                argv.append(str(v))
+  # Build args — cmd_name may contain spaces for domain dispatch (e.g. "fleet status")
+  argv = cmd_name.split()
+  if args_override:
+    for k, v in args_override.items():
+      if v is True:
+        argv.append(f"--{k}")
+      elif v is not None:
+        argv.append(f"--{k}")
+        argv.append(str(v))
 
-    parser = _build_parser()
+  parser = _build_parser()
+  try:
+    args = parser.parse_args(argv)
+  except SystemExit:
+    return
+
+  if hasattr(args, "func"):
     try:
-        args = parser.parse_args(argv)
-    except SystemExit:
-        return
+      args.func(cfg, pack, args)
+    except KeyboardInterrupt:
+      print(f"\n {fmt.C.YELLOW}Interrupted.{fmt.C.RESET}")
+    except Exception as e:
+      fmt.error(f"Command failed: {e}")
+      if cfg.debug:
+        import traceback
 
-    if hasattr(args, "func"):
-        try:
-            args.func(cfg, pack, args)
-        except KeyboardInterrupt:
-            print(f"\n  {fmt.C.YELLOW}Interrupted.{fmt.C.RESET}")
-        except Exception as e:
-            fmt.error(f"Command failed: {e}")
-            if cfg.debug:
-                import traceback
-
-                traceback.print_exc()
+        traceback.print_exc()
 
 
 def _run_argv(cfg, pack, argv: list):
-    """Run a FREQ command with raw argv list."""
-    from freq.cli import _build_parser
+  """Run a FREQ command with raw argv list."""
+  from freq.cli import _build_parser
 
-    print()
-    parser = _build_parser()
+  print()
+  parser = _build_parser()
+  try:
+    args = parser.parse_args(argv)
+  except SystemExit:
+    return
+
+  if hasattr(args, "func"):
     try:
-        args = parser.parse_args(argv)
-    except SystemExit:
-        return
-
-    if hasattr(args, "func"):
-        try:
-            args.func(cfg, pack, args)
-        except KeyboardInterrupt:
-            print(f"\n  {fmt.C.YELLOW}Interrupted.{fmt.C.RESET}")
-        except Exception as e:
-            fmt.error(f"Command failed: {e}")
+      args.func(cfg, pack, args)
+    except KeyboardInterrupt:
+      print(f"\n {fmt.C.YELLOW}Interrupted.{fmt.C.RESET}")
+    except Exception as e:
+      fmt.error(f"Command failed: {e}")
 
 
 def _run_with_target(cfg, pack, cmd_name: str, prompt: str = "Target:"):
-    """Run a command that needs a target argument."""
-    target = _input(prompt)
-    if not target:
-        return
+  """Run a command that needs a target argument."""
+  target = _input(prompt)
+  if not target:
+    return
 
-    from freq.cli import _build_parser
+  from freq.cli import _build_parser
 
-    print()
-    # cmd_name may contain spaces for domain dispatch (e.g. "fleet info")
-    argv = cmd_name.split() + [target]
-    parser = _build_parser()
+  print()
+  # cmd_name may contain spaces for domain dispatch (e.g. "fleet info")
+  argv = cmd_name.split() + [target]
+  parser = _build_parser()
+  try:
+    args = parser.parse_args(argv)
+  except SystemExit:
+    return
+
+  if hasattr(args, "func"):
     try:
-        args = parser.parse_args(argv)
-    except SystemExit:
-        return
-
-    if hasattr(args, "func"):
-        try:
-            args.func(cfg, pack, args)
-        except KeyboardInterrupt:
-            print(f"\n  {fmt.C.YELLOW}Interrupted.{fmt.C.RESET}")
-        except Exception as e:
-            fmt.error(f"Command failed: {e}")
+      args.func(cfg, pack, args)
+    except KeyboardInterrupt:
+      print(f"\n {fmt.C.YELLOW}Interrupted.{fmt.C.RESET}")
+    except Exception as e:
+      fmt.error(f"Command failed: {e}")
 
 
 # --- Submenus ---
 
 
 def _menu_quick_actions(cfg, pack):
-    """Quick Actions submenu."""
-    crumb = ["PVE FREQ", "Quick Actions"]
-    while True:
-        _render_menu(
-            "Quick Actions",
-            [
-                ("1", "dashboard", "Fleet-wide monitoring overview", ""),
-                ("2", "health", "Infrastructure dashboard", ""),
-                ("3", "vm-overview", "Cluster-wide VM inventory", ""),
-                ("4", "docker", "Container status across fleet", ""),
-                ("5", "exec", "Run command on all hosts", Tag.RISKY),
-                ("6", "info", "Deep dive on a single host", ""),
-                ("7", "diagnose", "Find problems on a host", ""),
-                ("8", "audit", "Security scan", ""),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """Quick Actions submenu."""
+  crumb = ["PVE FREQ", "Quick Actions"]
+  while True:
+    _render_menu(
+      "Quick Actions",
+      [
+        ("1", "dashboard", "Fleet-wide monitoring overview", ""),
+        ("2", "health", "Infrastructure dashboard", ""),
+        ("3", "vm-overview", "Cluster-wide VM inventory", ""),
+        ("4", "docker", "Container status across fleet", ""),
+        ("5", "exec", "Run command on all hosts", Tag.RISKY),
+        ("6", "info", "Deep dive on a single host", ""),
+        ("7", "diagnose", "Find problems on a host", ""),
+        ("8", "audit", "Security scan", ""),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _run_command(cfg, pack, "fleet dashboard")
-        elif ch == "2":
-            _run_command(cfg, pack, "fleet health")
-        elif ch == "3":
-            _run_command(cfg, pack, "vm list")
-        elif ch == "4":
-            print()
-            _run_with_target(cfg, pack, "fleet docker", "Host (Enter=auto):")
-        elif ch == "5":
-            print()
-            target = _input("Target (host/group/all):")
-            if target:
-                cmd = _input("Command:")
-                if cmd:
-                    from freq.cli import _build_parser
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _run_command(cfg, pack, "fleet dashboard")
+    elif ch == "2":
+      _run_command(cfg, pack, "fleet health")
+    elif ch == "3":
+      _run_command(cfg, pack, "vm list")
+    elif ch == "4":
+      print()
+      _run_with_target(cfg, pack, "fleet docker", "Host (Enter=auto):")
+    elif ch == "5":
+      print()
+      target = _input("Target (host/group/all):")
+      if target:
+        cmd = _input("Command:")
+        if cmd:
+          from freq.cli import _build_parser
 
-                    argv = ["fleet", "exec", target] + shlex.split(cmd)
-                    parser = _build_parser()
-                    args = parser.parse_args(argv)
-                    if hasattr(args, "func"):
-                        args.func(cfg, pack, args)
-        elif ch == "6":
-            print()
-            _run_with_target(cfg, pack, "fleet info", "Host:")
-        elif ch == "7":
-            print()
-            _run_with_target(cfg, pack, "fleet diagnose", "Host:")
-        elif ch == "8":
-            _run_command(cfg, pack, "secure audit")
-        else:
-            continue
-        _pause()
+          argv = ["fleet", "exec", target] + shlex.split(cmd)
+          parser = _build_parser()
+          args = parser.parse_args(argv)
+          if hasattr(args, "func"):
+            args.func(cfg, pack, args)
+    elif ch == "6":
+      print()
+      _run_with_target(cfg, pack, "fleet info", "Host:")
+    elif ch == "7":
+      print()
+      _run_with_target(cfg, pack, "fleet diagnose", "Host:")
+    elif ch == "8":
+      _run_command(cfg, pack, "secure audit")
+    else:
+      continue
+    _pause()
 
 
 def _menu_vm_lifecycle(cfg, pack):
-    """VM Lifecycle submenu."""
-    crumb = ["PVE FREQ", "VM Lifecycle"]
-    while True:
-        _render_menu(
-            "VM Lifecycle",
-            [
-                "Core Operations",
-                ("1", "create", "Launch the creation wizard", Tag.CHANGES),
-                ("2", "clone", "Full clone an existing VM", Tag.CHANGES),
-                ("3", "resize", "Change CPU/RAM/disk", Tag.CHANGES),
-                ("4", "list", "Live cluster VM inventory", ""),
-                ("5", "vmconfig", "View VM configuration", ""),
-                ("6", "snapshot", "Take a quick snapshot", Tag.CHANGES),
-                ("7", "migrate", "Move VM between nodes", Tag.RISKY),
-                ("8", "destroy", "Safely remove a VM", Tag.DESTRUCTIVE),
-                None,
-                "Declarative Fleet",
-                ("f", "plan", "Show fleet plan diff (desired vs actual)", ""),
-                ("a", "apply", "Apply fleet plan (create/resize VMs)", Tag.CHANGES),
-                None,
-                "Extended Operations",
-                ("t", "template", "Convert VM to template", Tag.CHANGES),
-                ("r", "rename", "Rename a VM", Tag.CHANGES),
-                ("d", "add-disk", "Add disk to a VM", Tag.CHANGES),
-                ("g", "tag", "Set/view PVE tags", ""),
-                ("p", "pool", "PVE pool management", ""),
-                None,
-                "Power & NIC",
-                ("w", "power", "Start/stop/reboot a VM", Tag.CHANGES),
-                ("s", "snapshot list", "List VM snapshots", ""),
-                ("x", "snapshot delete", "Delete a snapshot", Tag.DESTRUCTIVE),
-                ("o", "rollback", "Roll back VM to latest snapshot", Tag.RISKY),
-                ("n", "nic", "NIC management submenu", Tag.CHANGES),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """VM Lifecycle submenu."""
+  crumb = ["PVE FREQ", "VM Lifecycle"]
+  while True:
+    _render_menu(
+      "VM Lifecycle",
+      [
+        "Core Operations",
+        ("1", "create", "Launch the creation wizard", Tag.CHANGES),
+        ("2", "clone", "Full clone an existing VM", Tag.CHANGES),
+        ("3", "resize", "Change CPU/RAM/disk", Tag.CHANGES),
+        ("4", "list", "Live cluster VM inventory", ""),
+        ("5", "vmconfig", "View VM configuration", ""),
+        ("6", "snapshot", "Take a quick snapshot", Tag.CHANGES),
+        ("7", "migrate", "Move VM between nodes", Tag.RISKY),
+        ("8", "destroy", "Safely remove a VM", Tag.DESTRUCTIVE),
+        None,
+        "Declarative Fleet",
+        ("f", "plan", "Show fleet plan diff (desired vs actual)", ""),
+        ("a", "apply", "Apply fleet plan (create/resize VMs)", Tag.CHANGES),
+        None,
+        "Extended Operations",
+        ("t", "template", "Convert VM to template", Tag.CHANGES),
+        ("r", "rename", "Rename a VM", Tag.CHANGES),
+        ("d", "add-disk", "Add disk to a VM", Tag.CHANGES),
+        ("g", "tag", "Set/view PVE tags", ""),
+        ("p", "pool", "PVE pool management", ""),
+        None,
+        "Power & NIC",
+        ("w", "power", "Start/stop/reboot a VM", Tag.CHANGES),
+        ("s", "snapshot list", "List VM snapshots", ""),
+        ("x", "snapshot delete", "Delete a snapshot", Tag.DESTRUCTIVE),
+        ("o", "rollback", "Roll back VM to latest snapshot", Tag.RISKY),
+        ("n", "nic", "NIC management submenu", Tag.CHANGES),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _run_command(cfg, pack, "vm create")
-        elif ch == "2":
-            print()
-            _run_with_target(cfg, pack, "vm clone", "Source VMID:")
-        elif ch == "3":
-            print()
-            _run_with_target(cfg, pack, "vm resize", "VMID:")
-        elif ch == "4":
-            _run_command(cfg, pack, "vm list")
-        elif ch == "5":
-            print()
-            _run_with_target(cfg, pack, "vm config", "VMID:")
-        elif ch == "6":
-            print()
-            _run_with_target(cfg, pack, "vm snapshot", "VMID:")
-        elif ch == "7":
-            print()
-            _run_with_target(cfg, pack, "vm migrate", "VMID:")
-        elif ch == "8":
-            print()
-            _run_with_target(cfg, pack, "vm destroy", "VMID:")
-        elif ch == "f":
-            _run_command(cfg, pack, "state plan")
-        elif ch == "a":
-            _run_command(cfg, pack, "state apply")
-        elif ch == "t":
-            print()
-            _run_with_target(cfg, pack, "vm template", "VMID:")
-        elif ch == "r":
-            print()
-            _run_with_target(cfg, pack, "vm rename", "VMID:")
-        elif ch == "d":
-            print()
-            _run_with_target(cfg, pack, "vm disk", "VMID:")
-        elif ch == "g":
-            print()
-            _run_with_target(cfg, pack, "vm tag", "VMID:")
-        elif ch == "p":
-            _run_command(cfg, pack, "vm pool")
-        elif ch == "w":
-            print()
-            action = _input("Action (start/stop/reboot/shutdown/status):")
-            if action:
-                vmid = _input("VMID:")
-                if vmid:
-                    _run_argv(cfg, pack, ["vm", "power", action, vmid])
-        elif ch == "s":
-            print()
-            vmid = _input("VMID:")
-            if vmid:
-                _run_argv(cfg, pack, ["vm", "snapshot", "list", vmid])
-        elif ch == "x":
-            print()
-            vmid = _input("VMID:")
-            if vmid:
-                name = _input("Snapshot name:")
-                if name:
-                    _run_argv(cfg, pack, ["vm", "snapshot", "delete", vmid, "--name", name])
-        elif ch == "o":
-            print()
-            _run_with_target(cfg, pack, "vm rollback", "VMID:")
-        elif ch == "n":
-            _menu_nic(cfg, pack)
-            continue
-        else:
-            continue
-        _pause()
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _run_command(cfg, pack, "vm create")
+    elif ch == "2":
+      print()
+      _run_with_target(cfg, pack, "vm clone", "Source VMID:")
+    elif ch == "3":
+      print()
+      _run_with_target(cfg, pack, "vm resize", "VMID:")
+    elif ch == "4":
+      _run_command(cfg, pack, "vm list")
+    elif ch == "5":
+      print()
+      _run_with_target(cfg, pack, "vm config", "VMID:")
+    elif ch == "6":
+      print()
+      _run_with_target(cfg, pack, "vm snapshot", "VMID:")
+    elif ch == "7":
+      print()
+      _run_with_target(cfg, pack, "vm migrate", "VMID:")
+    elif ch == "8":
+      print()
+      _run_with_target(cfg, pack, "vm destroy", "VMID:")
+    elif ch == "f":
+      _run_command(cfg, pack, "state plan")
+    elif ch == "a":
+      _run_command(cfg, pack, "state apply")
+    elif ch == "t":
+      print()
+      _run_with_target(cfg, pack, "vm template", "VMID:")
+    elif ch == "r":
+      print()
+      _run_with_target(cfg, pack, "vm rename", "VMID:")
+    elif ch == "d":
+      print()
+      _run_with_target(cfg, pack, "vm disk", "VMID:")
+    elif ch == "g":
+      print()
+      _run_with_target(cfg, pack, "vm tag", "VMID:")
+    elif ch == "p":
+      _run_command(cfg, pack, "vm pool")
+    elif ch == "w":
+      print()
+      action = _input("Action (start/stop/reboot/shutdown/status):")
+      if action:
+        vmid = _input("VMID:")
+        if vmid:
+          _run_argv(cfg, pack, ["vm", "power", action, vmid])
+    elif ch == "s":
+      print()
+      vmid = _input("VMID:")
+      if vmid:
+        _run_argv(cfg, pack, ["vm", "snapshot", "list", vmid])
+    elif ch == "x":
+      print()
+      vmid = _input("VMID:")
+      if vmid:
+        name = _input("Snapshot name:")
+        if name:
+          _run_argv(cfg, pack, ["vm", "snapshot", "delete", vmid, "--name", name])
+    elif ch == "o":
+      print()
+      _run_with_target(cfg, pack, "vm rollback", "VMID:")
+    elif ch == "n":
+      _menu_nic(cfg, pack)
+      continue
+    else:
+      continue
+    _pause()
 
 
 def _menu_nic(cfg, pack):
-    """NIC Management submenu."""
-    crumb = ["PVE FREQ", "VM Lifecycle", "NIC Management"]
-    while True:
-        _render_menu(
-            "NIC Management",
-            [
-                ("1", "nic add", "Add a NIC to a VM", Tag.CHANGES),
-                ("2", "nic clear", "Remove all NICs from a VM", Tag.DESTRUCTIVE),
-                ("3", "nic change-ip", "Change VM IP config", Tag.CHANGES),
-                ("4", "nic change-id", "Change VMID (clone + destroy)", Tag.RISKY),
-                ("5", "nic check-ip", "Check if IP is available", ""),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """NIC Management submenu."""
+  crumb = ["PVE FREQ", "VM Lifecycle", "NIC Management"]
+  while True:
+    _render_menu(
+      "NIC Management",
+      [
+        ("1", "nic add", "Add a NIC to a VM", Tag.CHANGES),
+        ("2", "nic clear", "Remove all NICs from a VM", Tag.DESTRUCTIVE),
+        ("3", "nic change-ip", "Change VM IP config", Tag.CHANGES),
+        ("4", "nic change-id", "Change VMID (clone + destroy)", Tag.RISKY),
+        ("5", "nic check-ip", "Check if IP is available", ""),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            print()
-            vmid = _input("VMID:")
-            if vmid:
-                ip = _input("IP address:")
-                if ip:
-                    gw = _input("Gateway (optional):")
-                    vlan = _input("VLAN (optional):")
-                    argv = ["vm", "nic", "add", vmid, "--ip", ip]
-                    if gw:
-                        argv += ["--gw", gw]
-                    if vlan:
-                        argv += ["--vlan", vlan]
-                    _run_argv(cfg, pack, argv)
-        elif ch == "2":
-            print()
-            vmid = _input("VMID:")
-            if vmid:
-                _run_argv(cfg, pack, ["vm", "nic", "clear", vmid])
-        elif ch == "3":
-            print()
-            vmid = _input("VMID:")
-            if vmid:
-                ip = _input("New IP address:")
-                if ip:
-                    gw = _input("Gateway (optional):")
-                    argv = ["vm", "nic", "change-ip", vmid, "--ip", ip]
-                    if gw:
-                        argv += ["--gw", gw]
-                    _run_argv(cfg, pack, argv)
-        elif ch == "4":
-            print()
-            vmid = _input("Current VMID:")
-            if vmid:
-                newid = _input("New VMID:")
-                if newid:
-                    _run_argv(cfg, pack, ["vm", "nic", "change-id", vmid, "--new-id", newid])
-        elif ch == "5":
-            print()
-            ip = _input("IP to check:")
-            if ip:
-                _run_argv(cfg, pack, ["vm", "nic", "check-ip", "--ip", ip])
-        else:
-            continue
-        _pause()
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      print()
+      vmid = _input("VMID:")
+      if vmid:
+        ip = _input("IP address:")
+        if ip:
+          gw = _input("Gateway (optional):")
+          vlan = _input("VLAN (optional):")
+          argv = ["vm", "nic", "add", vmid, "--ip", ip]
+          if gw:
+            argv += ["--gw", gw]
+          if vlan:
+            argv += ["--vlan", vlan]
+          _run_argv(cfg, pack, argv)
+    elif ch == "2":
+      print()
+      vmid = _input("VMID:")
+      if vmid:
+        _run_argv(cfg, pack, ["vm", "nic", "clear", vmid])
+    elif ch == "3":
+      print()
+      vmid = _input("VMID:")
+      if vmid:
+        ip = _input("New IP address:")
+        if ip:
+          gw = _input("Gateway (optional):")
+          argv = ["vm", "nic", "change-ip", vmid, "--ip", ip]
+          if gw:
+            argv += ["--gw", gw]
+          _run_argv(cfg, pack, argv)
+    elif ch == "4":
+      print()
+      vmid = _input("Current VMID:")
+      if vmid:
+        newid = _input("New VMID:")
+        if newid:
+          _run_argv(cfg, pack, ["vm", "nic", "change-id", vmid, "--new-id", newid])
+    elif ch == "5":
+      print()
+      ip = _input("IP to check:")
+      if ip:
+        _run_argv(cfg, pack, ["vm", "nic", "check-ip", "--ip", ip])
+    else:
+      continue
+    _pause()
 
 
 def _menu_fleet_info(cfg, pack):
-    """Fleet Info submenu."""
-    crumb = ["PVE FREQ", "Fleet Info"]
-    while True:
-        _render_menu(
-            "Fleet Info",
-            [
-                ("1", "dashboard", "Monitoring overview", ""),
-                ("2", "status", "SSH ping all hosts", ""),
-                ("3", "info", "Detailed info for one host", ""),
-                ("4", "diagnose", "Deep diagnostic scan", ""),
-                ("5", "docker", "Container status", ""),
-                ("6", "log", "View host logs", ""),
-                ("7", "keys", "SSH key status", ""),
-                ("8", "detail", "Deep host inventory", ""),
-                ("9", "ssh", "SSH to a fleet host", ""),
-                ("t", "test-connection", "Test TCP + SSH + sudo", ""),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """Fleet Info submenu."""
+  crumb = ["PVE FREQ", "Fleet Info"]
+  while True:
+    _render_menu(
+      "Fleet Info",
+      [
+        ("1", "dashboard", "Monitoring overview", ""),
+        ("2", "status", "SSH ping all hosts", ""),
+        ("3", "info", "Detailed info for one host", ""),
+        ("4", "diagnose", "Deep diagnostic scan", ""),
+        ("5", "docker", "Container status", ""),
+        ("6", "log", "View host logs", ""),
+        ("7", "keys", "SSH key status", ""),
+        ("8", "detail", "Deep host inventory", ""),
+        ("9", "ssh", "SSH to a fleet host", ""),
+        ("t", "test-connection", "Test TCP + SSH + sudo", ""),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _run_command(cfg, pack, "fleet dashboard")
-        elif ch == "2":
-            _run_command(cfg, pack, "fleet status")
-        elif ch == "3":
-            print()
-            _run_with_target(cfg, pack, "fleet info", "Host:")
-        elif ch == "4":
-            print()
-            _run_with_target(cfg, pack, "fleet diagnose", "Host:")
-        elif ch == "5":
-            print()
-            _run_with_target(cfg, pack, "fleet docker", "Host (Enter=auto):")
-        elif ch == "6":
-            print()
-            _run_with_target(cfg, pack, "fleet log", "Host:")
-        elif ch == "7":
-            _run_command(cfg, pack, "host keys")
-        elif ch == "8":
-            print()
-            _run_with_target(cfg, pack, "fleet detail", "Host:")
-        elif ch == "9":
-            print()
-            _run_with_target(cfg, pack, "fleet ssh", "Host:")
-        elif ch == "t":
-            print()
-            _run_with_target(cfg, pack, "fleet test", "Host:")
-        else:
-            continue
-        _pause()
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _run_command(cfg, pack, "fleet dashboard")
+    elif ch == "2":
+      _run_command(cfg, pack, "fleet status")
+    elif ch == "3":
+      print()
+      _run_with_target(cfg, pack, "fleet info", "Host:")
+    elif ch == "4":
+      print()
+      _run_with_target(cfg, pack, "fleet diagnose", "Host:")
+    elif ch == "5":
+      print()
+      _run_with_target(cfg, pack, "fleet docker", "Host (Enter=auto):")
+    elif ch == "6":
+      print()
+      _run_with_target(cfg, pack, "fleet log", "Host:")
+    elif ch == "7":
+      _run_command(cfg, pack, "host keys")
+    elif ch == "8":
+      print()
+      _run_with_target(cfg, pack, "fleet detail", "Host:")
+    elif ch == "9":
+      print()
+      _run_with_target(cfg, pack, "fleet ssh", "Host:")
+    elif ch == "t":
+      print()
+      _run_with_target(cfg, pack, "fleet test", "Host:")
+    else:
+      continue
+    _pause()
 
 
 def _menu_host_setup(cfg, pack):
-    """Host Setup submenu."""
-    crumb = ["PVE FREQ", "Host Setup"]
-    while True:
-        _render_menu(
-            "Host Setup",
-            [
-                ("1", "discover", "Scan network for hosts", ""),
-                ("2", "bootstrap", "Deploy SSH keys to a host", Tag.CHANGES),
-                ("3", "onboard", "Add host to fleet", Tag.CHANGES),
-                ("4", "hosts", "Manage fleet hosts", ""),
-                ("5", "groups", "View host groups", ""),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """Host Setup submenu."""
+  crumb = ["PVE FREQ", "Host Setup"]
+  while True:
+    _render_menu(
+      "Host Setup",
+      [
+        ("1", "discover", "Scan network for hosts", ""),
+        ("2", "bootstrap", "Deploy SSH keys to a host", Tag.CHANGES),
+        ("3", "onboard", "Add host to fleet", Tag.CHANGES),
+        ("4", "hosts", "Manage fleet hosts", ""),
+        ("5", "groups", "View host groups", ""),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _run_command(cfg, pack, "host discover")
-        elif ch == "2":
-            _run_command(cfg, pack, "host bootstrap")
-        elif ch == "3":
-            _run_command(cfg, pack, "host onboard")
-        elif ch == "4":
-            _run_command(cfg, pack, "host list")
-        elif ch == "5":
-            _run_command(cfg, pack, "host groups")
-        else:
-            continue
-        _pause()
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _run_command(cfg, pack, "host discover")
+    elif ch == "2":
+      _run_command(cfg, pack, "host bootstrap")
+    elif ch == "3":
+      _run_command(cfg, pack, "host onboard")
+    elif ch == "4":
+      _run_command(cfg, pack, "host list")
+    elif ch == "5":
+      _run_command(cfg, pack, "host groups")
+    else:
+      continue
+    _pause()
 
 
 def _menu_user_mgmt(cfg, pack):
-    """User Management submenu."""
-    crumb = ["PVE FREQ", "User Management"]
-    while True:
-        _render_menu(
-            "User Management",
-            [
-                ("1", "users", "List registered users", ""),
-                ("2", "new-user", "Create a new user", Tag.CHANGES),
-                ("3", "passwd", "Change password fleet-wide", Tag.CHANGES),
-                ("4", "roles", "View role assignments", ""),
-                ("5", "promote", "Elevate user role", Tag.CHANGES),
-                ("6", "demote", "Lower user role", Tag.CHANGES),
-                ("7", "install-user", "Deploy user to fleet", Tag.CHANGES),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """User Management submenu."""
+  crumb = ["PVE FREQ", "User Management"]
+  while True:
+    _render_menu(
+      "User Management",
+      [
+        ("1", "users", "List registered users", ""),
+        ("2", "new-user", "Create a new user", Tag.CHANGES),
+        ("3", "passwd", "Change password fleet-wide", Tag.CHANGES),
+        ("4", "roles", "View role assignments", ""),
+        ("5", "promote", "Elevate user role", Tag.CHANGES),
+        ("6", "demote", "Lower user role", Tag.CHANGES),
+        ("7", "install-user", "Deploy user to fleet", Tag.CHANGES),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _run_command(cfg, pack, "user list")
-        elif ch == "2":
-            print()
-            _run_with_target(cfg, pack, "user create", "Username:")
-        elif ch == "3":
-            print()
-            _run_with_target(cfg, pack, "user passwd", "Username:")
-        elif ch == "4":
-            _run_command(cfg, pack, "user roles")
-        elif ch == "5":
-            print()
-            _run_with_target(cfg, pack, "user promote", "Username:")
-        elif ch == "6":
-            print()
-            _run_with_target(cfg, pack, "user demote", "Username:")
-        elif ch == "7":
-            print()
-            _run_with_target(cfg, pack, "user install", "Username:")
-        else:
-            continue
-        _pause()
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _run_command(cfg, pack, "user list")
+    elif ch == "2":
+      print()
+      _run_with_target(cfg, pack, "user create", "Username:")
+    elif ch == "3":
+      print()
+      _run_with_target(cfg, pack, "user passwd", "Username:")
+    elif ch == "4":
+      _run_command(cfg, pack, "user roles")
+    elif ch == "5":
+      print()
+      _run_with_target(cfg, pack, "user promote", "Username:")
+    elif ch == "6":
+      print()
+      _run_with_target(cfg, pack, "user demote", "Username:")
+    elif ch == "7":
+      print()
+      _run_with_target(cfg, pack, "user install", "Username:")
+    else:
+      continue
+    _pause()
 
 
 def _menu_run_commands(cfg, pack):
-    """Run Commands submenu."""
-    crumb = ["PVE FREQ", "Run Commands"]
-    while True:
-        _render_menu(
-            "Run Commands",
-            [
-                ("1", "exec all", "Run command on all hosts", Tag.RISKY),
-                ("2", "exec single", "Run command on one host", ""),
-                ("3", "keys deploy", "Deploy SSH keys", Tag.CHANGES),
-                ("4", "keys list", "Audit SSH key status", ""),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """Run Commands submenu."""
+  crumb = ["PVE FREQ", "Run Commands"]
+  while True:
+    _render_menu(
+      "Run Commands",
+      [
+        ("1", "exec all", "Run command on all hosts", Tag.RISKY),
+        ("2", "exec single", "Run command on one host", ""),
+        ("3", "keys deploy", "Deploy SSH keys", Tag.CHANGES),
+        ("4", "keys list", "Audit SSH key status", ""),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            print()
-            cmd = _input("Command:")
-            if cmd:
-                from freq.cli import _build_parser
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      print()
+      cmd = _input("Command:")
+      if cmd:
+        from freq.cli import _build_parser
 
-                argv = ["fleet", "exec", "all"] + shlex.split(cmd)
-                parser = _build_parser()
-                args = parser.parse_args(argv)
-                if hasattr(args, "func"):
-                    args.func(cfg, pack, args)
-        elif ch == "2":
-            print()
-            host = _input("Host:")
-            if host:
-                cmd = _input("Command:")
-                if cmd:
-                    from freq.cli import _build_parser
+        argv = ["fleet", "exec", "all"] + shlex.split(cmd)
+        parser = _build_parser()
+        args = parser.parse_args(argv)
+        if hasattr(args, "func"):
+          args.func(cfg, pack, args)
+    elif ch == "2":
+      print()
+      host = _input("Host:")
+      if host:
+        cmd = _input("Command:")
+        if cmd:
+          from freq.cli import _build_parser
 
-                    argv = ["fleet", "exec", host] + shlex.split(cmd)
-                    parser = _build_parser()
-                    args = parser.parse_args(argv)
-                    if hasattr(args, "func"):
-                        args.func(cfg, pack, args)
-        elif ch == "3":
-            _run_command(cfg, pack, "host keys")
-        elif ch == "4":
-            _run_command(cfg, pack, "host keys")
-        else:
-            continue
-        _pause()
+          argv = ["fleet", "exec", host] + shlex.split(cmd)
+          parser = _build_parser()
+          args = parser.parse_args(argv)
+          if hasattr(args, "func"):
+            args.func(cfg, pack, args)
+    elif ch == "3":
+      _run_command(cfg, pack, "host keys")
+    elif ch == "4":
+      _run_command(cfg, pack, "host keys")
+    else:
+      continue
+    _pause()
 
 
 def _menu_proxmox(cfg, pack):
-    """Proxmox submenu."""
-    crumb = ["PVE FREQ", "Proxmox"]
-    while True:
-        _render_menu(
-            "Proxmox",
-            [
-                ("1", "vm-overview", "Cluster-wide VM inventory", ""),
-                ("2", "vmconfig", "View VM configuration", ""),
-                ("3", "migrate", "Move VM between nodes", Tag.RISKY),
-                ("4", "rescue", "Boot from rescue ISO", Tag.RISKY),
-                ("5", "distros", "Supported cloud images", ""),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """Proxmox submenu."""
+  crumb = ["PVE FREQ", "Proxmox"]
+  while True:
+    _render_menu(
+      "Proxmox",
+      [
+        ("1", "vm-overview", "Cluster-wide VM inventory", ""),
+        ("2", "vmconfig", "View VM configuration", ""),
+        ("3", "migrate", "Move VM between nodes", Tag.RISKY),
+        ("4", "rescue", "Boot from rescue ISO", Tag.RISKY),
+        ("5", "distros", "Supported cloud images", ""),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _run_command(cfg, pack, "vm list")
-        elif ch == "2":
-            print()
-            _run_with_target(cfg, pack, "vm config", "VMID:")
-        elif ch == "3":
-            print()
-            _run_with_target(cfg, pack, "vm migrate", "VMID:")
-        elif ch == "4":
-            _run_command(cfg, pack, "vm rescue")
-        elif ch == "5":
-            _run_command(cfg, pack, "distros")
-        else:
-            continue
-        _pause()
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _run_command(cfg, pack, "vm list")
+    elif ch == "2":
+      print()
+      _run_with_target(cfg, pack, "vm config", "VMID:")
+    elif ch == "3":
+      print()
+      _run_with_target(cfg, pack, "vm migrate", "VMID:")
+    elif ch == "4":
+      _run_command(cfg, pack, "vm rescue")
+    elif ch == "5":
+      _run_command(cfg, pack, "distros")
+    else:
+      continue
+    _pause()
 
 
 def _menu_security(cfg, pack):
-    """Security & Vault submenu."""
-    crumb = ["PVE FREQ", "Security"]
-    while True:
-        _render_menu(
-            "Security & Vault",
-            [
-                ("1", "audit", "Security scan", ""),
-                ("2", "harden", "Apply hardening", Tag.CHANGES),
-                None,
-                ("3", "vault list", "Show stored credentials", ""),
-                ("4", "vault set", "Store a credential", Tag.CHANGES),
-                ("5", "vault get", "Retrieve a credential", ""),
-                ("6", "vault init", "Initialize vault", Tag.CHANGES),
-                None,
-                "Policy Engine",
-                ("7", "check", "Check policy compliance (dry run)", ""),
-                ("8", "fix", "Apply policy remediation", Tag.CHANGES),
-                ("9", "diff", "Show policy drift", ""),
-                ("c", "policies", "List available policies", ""),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """Security & Vault submenu."""
+  crumb = ["PVE FREQ", "Security"]
+  while True:
+    _render_menu(
+      "Security & Vault",
+      [
+        ("1", "audit", "Security scan", ""),
+        ("2", "harden", "Apply hardening", Tag.CHANGES),
+        None,
+        ("3", "vault list", "Show stored credentials", ""),
+        ("4", "vault set", "Store a credential", Tag.CHANGES),
+        ("5", "vault get", "Retrieve a credential", ""),
+        ("6", "vault init", "Initialize vault", Tag.CHANGES),
+        None,
+        "Policy Engine",
+        ("7", "check", "Check policy compliance (dry run)", ""),
+        ("8", "fix", "Apply policy remediation", Tag.CHANGES),
+        ("9", "diff", "Show policy drift", ""),
+        ("c", "policies", "List available policies", ""),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _run_command(cfg, pack, "secure audit")
-        elif ch == "2":
-            _run_command(cfg, pack, "secure harden")
-        elif ch == "3":
-            from freq.cli import _build_parser
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _run_command(cfg, pack, "secure audit")
+    elif ch == "2":
+      _run_command(cfg, pack, "secure harden")
+    elif ch == "3":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["secure", "vault", "list"])
-            args.func(cfg, pack, args)
-        elif ch == "4":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["secure", "vault", "list"])
+      args.func(cfg, pack, args)
+    elif ch == "4":
+      from freq.cli import _build_parser
 
-            print()
-            key = _input("Key name:")
-            if key:
-                parser = _build_parser()
-                args = parser.parse_args(["secure", "vault", "set", key])
-                args.func(cfg, pack, args)
-        elif ch == "5":
-            from freq.cli import _build_parser
+      print()
+      key = _input("Key name:")
+      if key:
+        parser = _build_parser()
+        args = parser.parse_args(["secure", "vault", "set", key])
+        args.func(cfg, pack, args)
+    elif ch == "5":
+      from freq.cli import _build_parser
 
-            print()
-            key = _input("Key name:")
-            if key:
-                parser = _build_parser()
-                args = parser.parse_args(["secure", "vault", "get", key])
-                args.func(cfg, pack, args)
-        elif ch == "6":
-            from freq.cli import _build_parser
+      print()
+      key = _input("Key name:")
+      if key:
+        parser = _build_parser()
+        args = parser.parse_args(["secure", "vault", "get", key])
+        args.func(cfg, pack, args)
+    elif ch == "6":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["secure", "vault", "init"])
-            args.func(cfg, pack, args)
-        elif ch == "7":
-            _run_command(cfg, pack, "state check")
-        elif ch == "8":
-            _run_command(cfg, pack, "state fix")
-        elif ch == "9":
-            _run_command(cfg, pack, "state diff")
-        elif ch == "c":
-            _run_command(cfg, pack, "state policies")
-        else:
-            continue
-        _pause()
+      parser = _build_parser()
+      args = parser.parse_args(["secure", "vault", "init"])
+      args.func(cfg, pack, args)
+    elif ch == "7":
+      _run_command(cfg, pack, "state check")
+    elif ch == "8":
+      _run_command(cfg, pack, "state fix")
+    elif ch == "9":
+      _run_command(cfg, pack, "state diff")
+    elif ch == "c":
+      _run_command(cfg, pack, "state policies")
+    else:
+      continue
+    _pause()
 
 
 def _menu_media_stack(cfg, pack):
-    """Media Stack submenu — full media management."""
-    crumb = ["PVE FREQ", "Media Stack"]
-    while True:
-        _render_menu(
-            "Media Stack",
-            [
-                "Status & Health",
-                ("1", "status", "Container status across all VMs", ""),
-                ("2", "health", "API health checks", ""),
-                ("3", "dashboard", "Aggregate media dashboard", ""),
-                ("4", "doctor", "Comprehensive diagnostic", ""),
-                None,
-                "Downloads & Library",
-                ("5", "queue", "Download queue (qBit + SABnzbd)", ""),
-                ("6", "streams", "Active Plex streams", ""),
-                ("7", "missing", "Missing episodes/movies", ""),
-                ("8", "downloads", "Download management", ""),
-                None,
-                "Container Ops",
-                ("9", "restart", "Restart a container", Tag.CHANGES),
-                ("a", "logs", "View container logs", ""),
-                ("b", "update", "Update container images", Tag.CHANGES),
-                ("c", "stats", "Container resource stats", ""),
-                None,
-                "Advanced",
-                ("d", "indexers", "Prowlarr indexer status", ""),
-                ("e", "transcode", "Tdarr transcode status", ""),
-                ("f", "vpn", "VPN/Gluetun status", ""),
-                ("g", "disk", "Disk usage across VMs", ""),
-                ("h", "compose", "Compose file audit", ""),
-                ("i", "mounts", "NFS mount check", ""),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """Media Stack submenu — full media management."""
+  crumb = ["PVE FREQ", "Media Stack"]
+  while True:
+    _render_menu(
+      "Media Stack",
+      [
+        "Status & Health",
+        ("1", "status", "Container status across all VMs", ""),
+        ("2", "health", "API health checks", ""),
+        ("3", "dashboard", "Aggregate media dashboard", ""),
+        ("4", "doctor", "Comprehensive diagnostic", ""),
+        None,
+        "Downloads & Library",
+        ("5", "queue", "Download queue (qBit + SABnzbd)", ""),
+        ("6", "streams", "Active Plex streams", ""),
+        ("7", "missing", "Missing episodes/movies", ""),
+        ("8", "downloads", "Download management", ""),
+        None,
+        "Container Ops",
+        ("9", "restart", "Restart a container", Tag.CHANGES),
+        ("a", "logs", "View container logs", ""),
+        ("b", "update", "Update container images", Tag.CHANGES),
+        ("c", "stats", "Container resource stats", ""),
+        None,
+        "Advanced",
+        ("d", "indexers", "Prowlarr indexer status", ""),
+        ("e", "transcode", "Tdarr transcode status", ""),
+        ("f", "vpn", "VPN/Gluetun status", ""),
+        ("g", "disk", "Disk usage across VMs", ""),
+        ("h", "compose", "Compose file audit", ""),
+        ("i", "mounts", "NFS mount check", ""),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            from freq.cli import _build_parser
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "status"])
-            args.func(cfg, pack, args)
-        elif ch == "2":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "status"])
+      args.func(cfg, pack, args)
+    elif ch == "2":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "health"])
-            args.func(cfg, pack, args)
-        elif ch == "3":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "health"])
+      args.func(cfg, pack, args)
+    elif ch == "3":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "dashboard"])
-            args.func(cfg, pack, args)
-        elif ch == "4":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "dashboard"])
+      args.func(cfg, pack, args)
+    elif ch == "4":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "doctor"])
-            args.func(cfg, pack, args)
-        elif ch == "5":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "doctor"])
+      args.func(cfg, pack, args)
+    elif ch == "5":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "queue"])
-            args.func(cfg, pack, args)
-        elif ch == "6":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "queue"])
+      args.func(cfg, pack, args)
+    elif ch == "6":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "streams"])
-            args.func(cfg, pack, args)
-        elif ch == "7":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "streams"])
+      args.func(cfg, pack, args)
+    elif ch == "7":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "missing"])
-            args.func(cfg, pack, args)
-        elif ch == "8":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "missing"])
+      args.func(cfg, pack, args)
+    elif ch == "8":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "downloads"])
-            args.func(cfg, pack, args)
-        elif ch == "9":
-            print()
-            svc = _input("Service to restart:")
-            if svc:
-                from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "downloads"])
+      args.func(cfg, pack, args)
+    elif ch == "9":
+      print()
+      svc = _input("Service to restart:")
+      if svc:
+        from freq.cli import _build_parser
 
-                parser = _build_parser()
-                args = parser.parse_args(["media", "restart", svc])
-                args.func(cfg, pack, args)
-        elif ch == "a":
-            print()
-            svc = _input("Service:")
-            if svc:
-                from freq.cli import _build_parser
+        parser = _build_parser()
+        args = parser.parse_args(["media", "restart", svc])
+        args.func(cfg, pack, args)
+    elif ch == "a":
+      print()
+      svc = _input("Service:")
+      if svc:
+        from freq.cli import _build_parser
 
-                parser = _build_parser()
-                args = parser.parse_args(["media", "logs", svc])
-                args.func(cfg, pack, args)
-        elif ch == "b":
-            print()
-            svc = _input("Service (or 'all'):")
-            if svc:
-                from freq.cli import _build_parser
+        parser = _build_parser()
+        args = parser.parse_args(["media", "logs", svc])
+        args.func(cfg, pack, args)
+    elif ch == "b":
+      print()
+      svc = _input("Service (or 'all'):")
+      if svc:
+        from freq.cli import _build_parser
 
-                parser = _build_parser()
-                args = parser.parse_args(["media", "update", svc])
-                args.func(cfg, pack, args)
-        elif ch == "c":
-            from freq.cli import _build_parser
+        parser = _build_parser()
+        args = parser.parse_args(["media", "update", svc])
+        args.func(cfg, pack, args)
+    elif ch == "c":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "stats"])
-            args.func(cfg, pack, args)
-        elif ch == "d":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "stats"])
+      args.func(cfg, pack, args)
+    elif ch == "d":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "indexers"])
-            args.func(cfg, pack, args)
-        elif ch == "e":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "indexers"])
+      args.func(cfg, pack, args)
+    elif ch == "e":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "transcode"])
-            args.func(cfg, pack, args)
-        elif ch == "f":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "transcode"])
+      args.func(cfg, pack, args)
+    elif ch == "f":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "vpn"])
-            args.func(cfg, pack, args)
-        elif ch == "g":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "vpn"])
+      args.func(cfg, pack, args)
+    elif ch == "g":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "disk"])
-            args.func(cfg, pack, args)
-        elif ch == "h":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "disk"])
+      args.func(cfg, pack, args)
+    elif ch == "h":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "compose", "audit"])
-            args.func(cfg, pack, args)
-        elif ch == "i":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "compose", "audit"])
+      args.func(cfg, pack, args)
+    elif ch == "i":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "mounts"])
-            args.func(cfg, pack, args)
-        else:
-            continue
-        _pause()
+      parser = _build_parser()
+      args = parser.parse_args(["media", "mounts"])
+      args.func(cfg, pack, args)
+    else:
+      continue
+    _pause()
 
 
 def _menu_lab(cfg, pack):
-    """Lab submenu — sandbox spawning, specialists, lab management."""
-    crumb = ["PVE FREQ", "Lab"]
-    while True:
-        _render_menu(
-            "Lab & Specialists",
-            [
-                "Lab VMs",
-                ("1", "lab status", "Lab fleet overview", ""),
-                ("2", "sandbox", "Spawn VM from template", Tag.CHANGES),
-                ("3", "template", "Convert VM to template", Tag.CHANGES),
-                ("4", "lab media", "Lab media stack status", ""),
-                ("5", "lab rebuild", "Destroy and recreate VM", Tag.DESTRUCTIVE),
-                None,
-                "Specialists",
-                ("6", "create", "Deploy specialist workspace", Tag.CHANGES),
-                ("7", "health", "Check specialist health", ""),
-                ("8", "roles", "List specialist roles", ""),
-                None,
-                "Fleet",
-                ("9", "ntp", "Check fleet NTP sync", ""),
-                ("a", "updates", "Check OS updates", ""),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """Lab submenu — sandbox spawning, specialists, lab management."""
+  crumb = ["PVE FREQ", "Lab"]
+  while True:
+    _render_menu(
+      "Lab & Specialists",
+      [
+        "Lab VMs",
+        ("1", "lab status", "Lab fleet overview", ""),
+        ("2", "sandbox", "Spawn VM from template", Tag.CHANGES),
+        ("3", "template", "Convert VM to template", Tag.CHANGES),
+        ("4", "lab media", "Lab media stack status", ""),
+        ("5", "lab rebuild", "Destroy and recreate VM", Tag.DESTRUCTIVE),
+        None,
+        "Specialists",
+        ("6", "create", "Deploy specialist workspace", Tag.CHANGES),
+        ("7", "health", "Check specialist health", ""),
+        ("8", "roles", "List specialist roles", ""),
+        None,
+        "Fleet",
+        ("9", "ntp", "Check fleet NTP sync", ""),
+        ("a", "updates", "Check OS updates", ""),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _run_command(cfg, pack, "lab")
-        elif ch == "2":
-            print()
-            tmpl = _input("Template VMID:")
-            if tmpl:
-                from freq.cli import _build_parser
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _run_command(cfg, pack, "lab")
+    elif ch == "2":
+      print()
+      tmpl = _input("Template VMID:")
+      if tmpl:
+        from freq.cli import _build_parser
 
-                parser = _build_parser()
-                args = parser.parse_args(["vm", "sandbox", tmpl])
-                args.func(cfg, pack, args)
-        elif ch == "3":
-            print()
-            _run_with_target(cfg, pack, "vm template", "VMID:")
-        elif ch == "4":
-            from freq.cli import _build_parser
+        parser = _build_parser()
+        args = parser.parse_args(["vm", "sandbox", tmpl])
+        args.func(cfg, pack, args)
+    elif ch == "3":
+      print()
+      _run_with_target(cfg, pack, "vm template", "VMID:")
+    elif ch == "4":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["lab", "media"])
-            args.func(cfg, pack, args)
-        elif ch == "5":
-            print()
-            vmid = _input("VMID to rebuild:")
-            if vmid:
-                from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["lab", "media"])
+      args.func(cfg, pack, args)
+    elif ch == "5":
+      print()
+      vmid = _input("VMID to rebuild:")
+      if vmid:
+        from freq.cli import _build_parser
 
-                parser = _build_parser()
-                args = parser.parse_args(["lab", "rebuild", vmid])
-                args.func(cfg, pack, args)
-        elif ch == "6":
-            print()
-            host = _input("Host IP:")
-            if host:
-                role = _input("Role (sandbox/dev/infra/security/media):")
-                if role:
-                    from freq.cli import _build_parser
+        parser = _build_parser()
+        args = parser.parse_args(["lab", "rebuild", vmid])
+        args.func(cfg, pack, args)
+    elif ch == "6":
+      print()
+      host = _input("Host IP:")
+      if host:
+        role = _input("Role (sandbox/dev/infra/security/media):")
+        if role:
+          from freq.cli import _build_parser
 
-                    parser = _build_parser()
-                    args = parser.parse_args(["specialist", "create", host, "--role", role])
-                    args.func(cfg, pack, args)
-        elif ch == "7":
-            print()
-            _run_with_target(cfg, pack, "specialist", "Host:")
-        elif ch == "8":
-            from freq.cli import _build_parser
+          parser = _build_parser()
+          args = parser.parse_args(["specialist", "create", host, "--role", role])
+          args.func(cfg, pack, args)
+    elif ch == "7":
+      print()
+      _run_with_target(cfg, pack, "specialist", "Host:")
+    elif ch == "8":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["specialist", "roles"])
-            args.func(cfg, pack, args)
-        elif ch == "9":
-            _run_command(cfg, pack, "fleet ntp")
-        elif ch == "a":
-            _run_command(cfg, pack, "fleet update")
-        else:
-            continue
-        _pause()
+      parser = _build_parser()
+      args = parser.parse_args(["specialist", "roles"])
+      args.func(cfg, pack, args)
+    elif ch == "9":
+      _run_command(cfg, pack, "fleet ntp")
+    elif ch == "a":
+      _run_command(cfg, pack, "fleet update")
+    else:
+      continue
+    _pause()
 
 
 def _menu_jarvis(cfg, pack):
-    """JARVIS smart commands submenu."""
-    crumb = ["PVE FREQ", "JARVIS"]
-    while True:
-        _render_menu(
-            "JARVIS — Smart Commands",
-            [
-                ("1", "playbook list", "List incident playbooks", ""),
-                ("2", "playbook run", "Run a playbook", Tag.RISKY),
-                ("3", "federation list", "Multi-site status", ""),
-                ("4", "federation poll", "Poll all remote sites", ""),
-                ("5", "gitops status", "Config sync status", ""),
-                ("6", "gitops sync", "Fetch from remote", ""),
-                ("7", "gitops diff", "Show pending changes", ""),
-                ("8", "chaos list", "Experiment types", ""),
-                ("9", "chaos run", "Run chaos experiment", Tag.DESTRUCTIVE),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """JARVIS smart commands submenu."""
+  crumb = ["PVE FREQ", "JARVIS"]
+  while True:
+    _render_menu(
+      "JARVIS — Smart Commands",
+      [
+        ("1", "playbook list", "List incident playbooks", ""),
+        ("2", "playbook run", "Run a playbook", Tag.RISKY),
+        ("3", "federation list", "Multi-site status", ""),
+        ("4", "federation poll", "Poll all remote sites", ""),
+        ("5", "gitops status", "Config sync status", ""),
+        ("6", "gitops sync", "Fetch from remote", ""),
+        ("7", "gitops diff", "Show pending changes", ""),
+        ("8", "chaos list", "Experiment types", ""),
+        ("9", "chaos run", "Run chaos experiment", Tag.DESTRUCTIVE),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _run_command(cfg, pack, "auto playbook")
-        elif ch == "2":
-            print()
-            name = _input("Playbook name/filename:")
-            if name:
-                _run_argv(cfg, pack, ["auto", "playbook", "run", name])
-        elif ch == "3":
-            _run_command(cfg, pack, "fleet federation")
-        elif ch == "4":
-            _run_argv(cfg, pack, ["fleet", "federation", "poll"])
-        elif ch == "5":
-            _run_command(cfg, pack, "state gitops")
-        elif ch == "6":
-            _run_argv(cfg, pack, ["state", "gitops", "sync"])
-        elif ch == "7":
-            _run_argv(cfg, pack, ["state", "gitops", "diff"])
-        elif ch == "8":
-            _run_command(cfg, pack, "auto chaos")
-        elif ch == "9":
-            print()
-            etype = _input("Experiment type (service_kill/service_restart/cpu_stress/disk_fill/network_delay):")
-            host = _input("Target host:")
-            if etype and host:
-                _run_argv(cfg, pack, ["auto", "chaos", "run", "--type", etype, "--host", host])
-        else:
-            continue
-        _pause()
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _run_command(cfg, pack, "auto playbook")
+    elif ch == "2":
+      print()
+      name = _input("Playbook name/filename:")
+      if name:
+        _run_argv(cfg, pack, ["auto", "playbook", "run", name])
+    elif ch == "3":
+      _run_command(cfg, pack, "fleet federation")
+    elif ch == "4":
+      _run_argv(cfg, pack, ["fleet", "federation", "poll"])
+    elif ch == "5":
+      _run_command(cfg, pack, "state gitops")
+    elif ch == "6":
+      _run_argv(cfg, pack, ["state", "gitops", "sync"])
+    elif ch == "7":
+      _run_argv(cfg, pack, ["state", "gitops", "diff"])
+    elif ch == "8":
+      _run_command(cfg, pack, "auto chaos")
+    elif ch == "9":
+      print()
+      etype = _input("Experiment type (service_kill/service_restart/cpu_stress/disk_fill/network_delay):")
+      host = _input("Target host:")
+      if etype and host:
+        _run_argv(cfg, pack, ["auto", "chaos", "run", "--type", etype, "--host", host])
+    else:
+      continue
+    _pause()
 
 
 def _menu_monitoring(cfg, pack):
-    """Monitoring submenu."""
-    crumb = ["PVE FREQ", "Monitoring"]
-    while True:
-        _render_menu(
-            "Monitoring",
-            [
-                ("1", "health", "Infrastructure dashboard", ""),
-                ("2", "media dash", "Media stack dashboard", ""),
-                ("3", "watch", "Monitoring daemon", ""),
-                ("4", "doctor", "Self-diagnostic", ""),
-                ("5", "compose", "Compose file audit", ""),
-                ("6", "ntp", "Fleet NTP status", ""),
-                ("7", "capacity", "Fleet capacity projections", ""),
-                ("8", "cost", "Fleet power cost estimates", ""),
-                ("9", "rules", "Alert rule management", ""),
-                None,
-                "Alerting & Intelligence",
-                ("a", "alert list", "View alert rules", ""),
-                ("c", "alert check", "Evaluate alerts NOW", Tag.CHANGES),
-                ("t", "alert test", "Test notification delivery", ""),
-                ("h", "alert history", "Fired alert history", ""),
-                ("i", "inventory", "Full fleet CMDB export", ""),
-                ("d", "compare", "Diff two hosts side-by-side", ""),
-                ("e", "baseline list", "View saved baselines", ""),
-                ("f", "baseline capture", "Capture config state", Tag.SAFE),
-                ("g", "baseline compare", "Detect drift", ""),
-                None,
-                "Fleet Intelligence",
-                ("r", "report", "Full fleet health report", ""),
-                ("v", "trend", "Capacity trends (sparklines)", ""),
-                ("u", "sla", "Fleet uptime SLA tracking", ""),
-                ("k", "cert scan", "TLS certificate scan", ""),
-                ("n", "dns scan", "DNS record validation", ""),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """Monitoring submenu."""
+  crumb = ["PVE FREQ", "Monitoring"]
+  while True:
+    _render_menu(
+      "Monitoring",
+      [
+        ("1", "health", "Infrastructure dashboard", ""),
+        ("2", "media dash", "Media stack dashboard", ""),
+        ("3", "watch", "Monitoring daemon", ""),
+        ("4", "doctor", "Self-diagnostic", ""),
+        ("5", "compose", "Compose file audit", ""),
+        ("6", "ntp", "Fleet NTP status", ""),
+        ("7", "capacity", "Fleet capacity projections", ""),
+        ("8", "cost", "Fleet power cost estimates", ""),
+        ("9", "rules", "Alert rule management", ""),
+        None,
+        "Alerting & Intelligence",
+        ("a", "alert list", "View alert rules", ""),
+        ("c", "alert check", "Evaluate alerts NOW", Tag.CHANGES),
+        ("t", "alert test", "Test notification delivery", ""),
+        ("h", "alert history", "Fired alert history", ""),
+        ("i", "inventory", "Full fleet CMDB export", ""),
+        ("d", "compare", "Diff two hosts side-by-side", ""),
+        ("e", "baseline list", "View saved baselines", ""),
+        ("f", "baseline capture", "Capture config state", Tag.SAFE),
+        ("g", "baseline compare", "Detect drift", ""),
+        None,
+        "Fleet Intelligence",
+        ("r", "report", "Full fleet health report", ""),
+        ("v", "trend", "Capacity trends (sparklines)", ""),
+        ("u", "sla", "Fleet uptime SLA tracking", ""),
+        ("k", "cert scan", "TLS certificate scan", ""),
+        ("n", "dns scan", "DNS record validation", ""),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _run_command(cfg, pack, "fleet health")
-        elif ch == "2":
-            from freq.cli import _build_parser
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _run_command(cfg, pack, "fleet health")
+    elif ch == "2":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "dashboard"])
-            args.func(cfg, pack, args)
-        elif ch == "3":
-            _run_command(cfg, pack, "observe watch")
-        elif ch == "4":
-            _run_command(cfg, pack, "doctor")
-        elif ch == "5":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["media", "dashboard"])
+      args.func(cfg, pack, args)
+    elif ch == "3":
+      _run_command(cfg, pack, "observe watch")
+    elif ch == "4":
+      _run_command(cfg, pack, "doctor")
+    elif ch == "5":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["media", "compose", "audit"])
-            args.func(cfg, pack, args)
-        elif ch == "6":
-            _run_command(cfg, pack, "fleet ntp")
-        elif ch == "7":
-            _run_command(cfg, pack, "observe capacity")
-        elif ch == "8":
-            _run_command(cfg, pack, "hw cost")
-        elif ch == "9":
-            _run_command(cfg, pack, "auto rules")
-        elif ch == "a":
-            _run_command(cfg, pack, "observe alert")
-        elif ch == "c":
-            _run_argv(cfg, pack, ["observe", "alert", "check"])
-        elif ch == "t":
-            _run_argv(cfg, pack, ["observe", "alert", "test"])
-        elif ch == "h":
-            _run_argv(cfg, pack, ["observe", "alert", "history"])
-        elif ch == "i":
-            _run_command(cfg, pack, "fleet inventory")
-        elif ch == "d":
-            print()
-            host_a = _input("Host A:")
-            host_b = _input("Host B:")
-            if host_a and host_b:
-                _run_argv(cfg, pack, ["fleet", "compare", host_a, host_b])
-        elif ch == "e":
-            _run_command(cfg, pack, "state baseline")
-        elif ch == "f":
-            print()
-            name = _input("Baseline name (Enter=auto):")
-            if name:
-                _run_argv(cfg, pack, ["state", "baseline", "capture", name])
-            else:
-                _run_argv(cfg, pack, ["state", "baseline", "capture"])
-        elif ch == "g":
-            print()
-            name = _input("Baseline to compare (Enter=latest):")
-            if name:
-                _run_argv(cfg, pack, ["state", "baseline", "compare", name])
-            else:
-                _run_argv(cfg, pack, ["state", "baseline", "compare"])
-        elif ch == "r":
-            _run_command(cfg, pack, "fleet report")
-        elif ch == "v":
-            _run_command(cfg, pack, "observe trend")
-        elif ch == "u":
-            _run_command(cfg, pack, "observe sla")
-        elif ch == "k":
-            _run_argv(cfg, pack, ["cert", "scan"])
-        elif ch == "n":
-            _run_argv(cfg, pack, ["dns", "scan"])
-        else:
-            continue
-        _pause()
+      parser = _build_parser()
+      args = parser.parse_args(["media", "compose", "audit"])
+      args.func(cfg, pack, args)
+    elif ch == "6":
+      _run_command(cfg, pack, "fleet ntp")
+    elif ch == "7":
+      _run_command(cfg, pack, "observe capacity")
+    elif ch == "8":
+      _run_command(cfg, pack, "hw cost")
+    elif ch == "9":
+      _run_command(cfg, pack, "auto rules")
+    elif ch == "a":
+      _run_command(cfg, pack, "observe alert")
+    elif ch == "c":
+      _run_argv(cfg, pack, ["observe", "alert", "check"])
+    elif ch == "t":
+      _run_argv(cfg, pack, ["observe", "alert", "test"])
+    elif ch == "h":
+      _run_argv(cfg, pack, ["observe", "alert", "history"])
+    elif ch == "i":
+      _run_command(cfg, pack, "fleet inventory")
+    elif ch == "d":
+      print()
+      host_a = _input("Host A:")
+      host_b = _input("Host B:")
+      if host_a and host_b:
+        _run_argv(cfg, pack, ["fleet", "compare", host_a, host_b])
+    elif ch == "e":
+      _run_command(cfg, pack, "state baseline")
+    elif ch == "f":
+      print()
+      name = _input("Baseline name (Enter=auto):")
+      if name:
+        _run_argv(cfg, pack, ["state", "baseline", "capture", name])
+      else:
+        _run_argv(cfg, pack, ["state", "baseline", "capture"])
+    elif ch == "g":
+      print()
+      name = _input("Baseline to compare (Enter=latest):")
+      if name:
+        _run_argv(cfg, pack, ["state", "baseline", "compare", name])
+      else:
+        _run_argv(cfg, pack, ["state", "baseline", "compare"])
+    elif ch == "r":
+      _run_command(cfg, pack, "fleet report")
+    elif ch == "v":
+      _run_command(cfg, pack, "observe trend")
+    elif ch == "u":
+      _run_command(cfg, pack, "observe sla")
+    elif ch == "k":
+      _run_argv(cfg, pack, ["cert", "scan"])
+    elif ch == "n":
+      _run_argv(cfg, pack, ["dns", "scan"])
+    else:
+      continue
+    _pause()
 
 
 def _menu_infrastructure(cfg, pack):
-    """Infrastructure submenu."""
-    crumb = ["PVE FREQ", "Infrastructure"]
-    while True:
-        _render_menu(
-            "Infrastructure",
-            [
-                ("1", "pfSense", "Firewall rules, NAT, logs", ""),
-                ("2", "TrueNAS", "Pools, shares, alerts", ""),
-                ("3", "Switch", "Cisco Catalyst VLANs/ports", ""),
-                ("4", "iDRAC", "Server BMC management", ""),
-                ("5", "VPN", "WireGuard tunnels", Tag.COMING),
-                None,
-                "IPAM",
-                ("p", "IP Next", "Next available IP in a VLAN", ""),
-                ("l", "IP List", "List all used IPs", ""),
-                ("c", "IP Check", "Check if an IP is in use", ""),
-                None,
-                "Fleet Operations",
-                ("6", "NTP", "Fleet time sync check/fix", ""),
-                ("7", "Updates", "Fleet OS updates", ""),
-                ("8", "Comms", "Inter-VM mailbox", ""),
-                ("9", "ZFS", "ZFS pool operations", ""),
-                ("a", "Backup", "VM backup management", ""),
-                ("j", "Journal", "Operation history", ""),
-                ("n", "Notify", "Send notification", Tag.CHANGES),
-                ("b", "Boundaries", "Fleet permission tiers", ""),
-                None,
-                "Platform",
-                ("s", "Schedule", "View scheduled jobs", ""),
-                ("w", "Webhook", "View inbound webhooks", ""),
-                ("d", "Backup Policy", "View backup policies", ""),
-                ("m", "Migrate Plan", "Load-aware migration recommendations", ""),
-                ("v", "VMware Import", "VMware → Proxmox migration", Tag.CHANGES),
-                None,
-                "Operations",
-                ("p", "Patch Status", "Fleet patch status", ""),
-                ("t", "Stack Status", "Docker Compose stacks", ""),
-                ("k", "Stack Health", "Container health fleet-wide", ""),
-                ("o", "Docs Generate", "Auto-generate infra docs", Tag.SAFE),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """Infrastructure submenu."""
+  crumb = ["PVE FREQ", "Infrastructure"]
+  while True:
+    _render_menu(
+      "Infrastructure",
+      [
+        ("1", "pfSense", "Firewall rules, NAT, logs", ""),
+        ("2", "TrueNAS", "Pools, shares, alerts", ""),
+        ("3", "Switch", "Cisco Catalyst VLANs/ports", ""),
+        ("4", "iDRAC", "Server BMC management", ""),
+        ("5", "VPN", "WireGuard tunnels", Tag.COMING),
+        None,
+        "IPAM",
+        ("p", "IP Next", "Next available IP in a VLAN", ""),
+        ("l", "IP List", "List all used IPs", ""),
+        ("c", "IP Check", "Check if an IP is in use", ""),
+        None,
+        "Fleet Operations",
+        ("6", "NTP", "Fleet time sync check/fix", ""),
+        ("7", "Updates", "Fleet OS updates", ""),
+        ("8", "Comms", "Inter-VM mailbox", ""),
+        ("9", "ZFS", "ZFS pool operations", ""),
+        ("a", "Backup", "VM backup management", ""),
+        ("j", "Journal", "Operation history", ""),
+        ("n", "Notify", "Send notification", Tag.CHANGES),
+        ("b", "Boundaries", "Fleet permission tiers", ""),
+        None,
+        "Platform",
+        ("s", "Schedule", "View scheduled jobs", ""),
+        ("w", "Webhook", "View inbound webhooks", ""),
+        ("d", "Backup Policy", "View backup policies", ""),
+        ("m", "Migrate Plan", "Load-aware migration recommendations", ""),
+        ("v", "VMware Import", "VMware → Proxmox migration", Tag.CHANGES),
+        None,
+        "Operations",
+        ("p", "Patch Status", "Fleet patch status", ""),
+        ("t", "Stack Status", "Docker Compose stacks", ""),
+        ("k", "Stack Health", "Container health fleet-wide", ""),
+        ("o", "Docs Generate", "Auto-generate infra docs", Tag.SAFE),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _run_command(cfg, pack, "fw")
-        elif ch == "2":
-            _run_command(cfg, pack, "store nas")
-        elif ch == "3":
-            _run_command(cfg, pack, "net switch")
-        elif ch == "4":
-            _run_command(cfg, pack, "hw idrac")
-        elif ch == "5":
-            fmt.info("VPN management coming soon")
-        elif ch == "p":
-            vlan = _input("VLAN name:")
-            if vlan:
-                _run_argv(cfg, pack, ["net", "ip", "next", "--vlan", vlan])
-        elif ch == "l":
-            _run_argv(cfg, pack, ["net", "ip", "list"])
-        elif ch == "c":
-            ip_addr = _input("IP address:")
-            if ip_addr:
-                _run_argv(cfg, pack, ["net", "ip", "check", ip_addr])
-        elif ch == "6":
-            _run_command(cfg, pack, "fleet ntp")
-        elif ch == "7":
-            _run_command(cfg, pack, "fleet update")
-        elif ch == "8":
-            _run_command(cfg, pack, "fleet comms")
-        elif ch == "9":
-            _run_command(cfg, pack, "store pools")
-        elif ch == "a":
-            _run_command(cfg, pack, "dr backup")
-        elif ch == "j":
-            _run_command(cfg, pack, "dr journal")
-        elif ch == "n":
-            _run_command(cfg, pack, "notify")
-        elif ch == "b":
-            _run_command(cfg, pack, "fleet boundaries")
-        elif ch == "s":
-            _run_command(cfg, pack, "auto schedule")
-        elif ch == "w":
-            _run_command(cfg, pack, "auto webhook")
-        elif ch == "d":
-            _run_command(cfg, pack, "dr policy")
-        elif ch == "m":
-            _run_command(cfg, pack, "dr migrate-plan")
-        elif ch == "v":
-            _run_command(cfg, pack, "dr migrate-vmware")
-        elif ch == "p":
-            _run_command(cfg, pack, "secure patch")
-        elif ch == "t":
-            _run_command(cfg, pack, "docker stack")
-        elif ch == "k":
-            _run_argv(cfg, pack, ["docker", "stack", "health"])
-        elif ch == "o":
-            _run_argv(cfg, pack, ["docs", "generate"])
-        else:
-            continue
-        _pause()
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _run_command(cfg, pack, "fw")
+    elif ch == "2":
+      _run_command(cfg, pack, "store nas")
+    elif ch == "3":
+      _run_command(cfg, pack, "net switch")
+    elif ch == "4":
+      _run_command(cfg, pack, "hw idrac")
+    elif ch == "5":
+      fmt.info("VPN management coming soon")
+    elif ch == "p":
+      vlan = _input("VLAN name:")
+      if vlan:
+        _run_argv(cfg, pack, ["net", "ip", "next", "--vlan", vlan])
+    elif ch == "l":
+      _run_argv(cfg, pack, ["net", "ip", "list"])
+    elif ch == "c":
+      ip_addr = _input("IP address:")
+      if ip_addr:
+        _run_argv(cfg, pack, ["net", "ip", "check", ip_addr])
+    elif ch == "6":
+      _run_command(cfg, pack, "fleet ntp")
+    elif ch == "7":
+      _run_command(cfg, pack, "fleet update")
+    elif ch == "8":
+      _run_command(cfg, pack, "fleet comms")
+    elif ch == "9":
+      _run_command(cfg, pack, "store pools")
+    elif ch == "a":
+      _run_command(cfg, pack, "dr backup")
+    elif ch == "j":
+      _run_command(cfg, pack, "dr journal")
+    elif ch == "n":
+      _run_command(cfg, pack, "notify")
+    elif ch == "b":
+      _run_command(cfg, pack, "fleet boundaries")
+    elif ch == "s":
+      _run_command(cfg, pack, "auto schedule")
+    elif ch == "w":
+      _run_command(cfg, pack, "auto webhook")
+    elif ch == "d":
+      _run_command(cfg, pack, "dr policy")
+    elif ch == "m":
+      _run_command(cfg, pack, "dr migrate-plan")
+    elif ch == "v":
+      _run_command(cfg, pack, "dr migrate-vmware")
+    elif ch == "p":
+      _run_command(cfg, pack, "secure patch")
+    elif ch == "t":
+      _run_command(cfg, pack, "docker stack")
+    elif ch == "k":
+      _run_argv(cfg, pack, ["docker", "stack", "health"])
+    elif ch == "o":
+      _run_argv(cfg, pack, ["docs", "generate"])
+    else:
+      continue
+    _pause()
 
 
 def _menu_agents(cfg, pack):
-    """Agent Platform submenu."""
-    crumb = ["PVE FREQ", "Agent Platform"]
-    while True:
-        _render_menu(
-            "Agent Platform",
-            [
-                ("1", "templates", "Browse specialist templates", ""),
-                ("2", "create", "Create a new AI specialist", Tag.CHANGES),
-                ("3", "list", "Show registered agents", ""),
-                ("4", "status", "Live health check on all agents", ""),
-                ("5", "start", "Start an agent session", ""),
-                ("6", "stop", "Stop an agent session", ""),
-                ("7", "destroy", "Remove agent + VM", Tag.DESTRUCTIVE),
-                ("0", "Back", "", ""),
-            ],
-            crumb,
-        )
+  """Agent Platform submenu."""
+  crumb = ["PVE FREQ", "Agent Platform"]
+  while True:
+    _render_menu(
+      "Agent Platform",
+      [
+        ("1", "templates", "Browse specialist templates", ""),
+        ("2", "create", "Create a new AI specialist", Tag.CHANGES),
+        ("3", "list", "Show registered agents", ""),
+        ("4", "status", "Live health check on all agents", ""),
+        ("5", "start", "Start an agent session", ""),
+        ("6", "stop", "Stop an agent session", ""),
+        ("7", "destroy", "Remove agent + VM", Tag.DESTRUCTIVE),
+        ("0", "Back", "", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            from freq.cli import _build_parser
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["agent", "templates"])
-            args.func(cfg, pack, args)
-        elif ch == "2":
-            print()
-            template = _input("Template (infra-manager/security-ops/dev/media-ops/blank):")
-            if template:
-                from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["agent", "templates"])
+      args.func(cfg, pack, args)
+    elif ch == "2":
+      print()
+      template = _input("Template (infra-manager/security-ops/dev/media-ops/blank):")
+      if template:
+        from freq.cli import _build_parser
 
-                parser = _build_parser()
-                args = parser.parse_args(["agent", "create", template])
-                args.func(cfg, pack, args)
-        elif ch == "3":
-            from freq.cli import _build_parser
+        parser = _build_parser()
+        args = parser.parse_args(["agent", "create", template])
+        args.func(cfg, pack, args)
+    elif ch == "3":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["agent", "list"])
-            args.func(cfg, pack, args)
-        elif ch == "4":
-            from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["agent", "list"])
+      args.func(cfg, pack, args)
+    elif ch == "4":
+      from freq.cli import _build_parser
 
-            parser = _build_parser()
-            args = parser.parse_args(["agent", "status"])
-            args.func(cfg, pack, args)
-        elif ch == "5":
-            print()
-            name = _input("Agent name:")
-            if name:
-                from freq.cli import _build_parser
+      parser = _build_parser()
+      args = parser.parse_args(["agent", "status"])
+      args.func(cfg, pack, args)
+    elif ch == "5":
+      print()
+      name = _input("Agent name:")
+      if name:
+        from freq.cli import _build_parser
 
-                parser = _build_parser()
-                args = parser.parse_args(["agent", "start", name])
-                args.func(cfg, pack, args)
-        elif ch == "6":
-            print()
-            name = _input("Agent name:")
-            if name:
-                from freq.cli import _build_parser
+        parser = _build_parser()
+        args = parser.parse_args(["agent", "start", name])
+        args.func(cfg, pack, args)
+    elif ch == "6":
+      print()
+      name = _input("Agent name:")
+      if name:
+        from freq.cli import _build_parser
 
-                parser = _build_parser()
-                args = parser.parse_args(["agent", "stop", name])
-                args.func(cfg, pack, args)
-        elif ch == "7":
-            print()
-            name = _input("Agent name:")
-            if name:
-                from freq.cli import _build_parser
+        parser = _build_parser()
+        args = parser.parse_args(["agent", "stop", name])
+        args.func(cfg, pack, args)
+    elif ch == "7":
+      print()
+      name = _input("Agent name:")
+      if name:
+        from freq.cli import _build_parser
 
-                parser = _build_parser()
-                args = parser.parse_args(["agent", "destroy", name])
-                args.func(cfg, pack, args)
-        else:
-            continue
-        _pause()
+        parser = _build_parser()
+        args = parser.parse_args(["agent", "destroy", name])
+        args.func(cfg, pack, args)
+    else:
+      continue
+    _pause()
 
 
 def _gwipe_cmd(cfg, pack, *argv):
-    """Run a freq gwipe subcommand."""
-    from freq.cli import _build_parser
+  """Run a freq gwipe subcommand."""
+  from freq.cli import _build_parser
 
-    print()
-    try:
-        parser = _build_parser()
-        args = parser.parse_args(["hw", "gwipe"] + list(argv))
-        if hasattr(args, "func"):
-            args.func(cfg, pack, args)
-    except Exception as e:
-        print(f"  {fmt.C.RED}Error: {e}{fmt.C.RESET}")
+  print()
+  try:
+    parser = _build_parser()
+    args = parser.parse_args(["hw", "gwipe"] + list(argv))
+    if hasattr(args, "func"):
+      args.func(cfg, pack, args)
+  except Exception as e:
+    print(f" {fmt.C.RED}Error: {e}{fmt.C.RESET}")
 
 
 def _menu_freq_wipe(cfg, pack):
-    """FREQ WIPE submenu — drive sanitization station."""
-    crumb = ["PVE FREQ", "FREQ WIPE"]
-    while True:
-        _render_menu(
-            "FREQ WIPE — Drive Sanitization",
-            [
-                "Station",
-                ("1", "Status", "Station overview", ""),
-                ("2", "Bays", "All drive bays + progress", ""),
-                ("3", "History", "Wipe history log", ""),
-                None,
-                "Actions",
-                ("4", "Full Send", "SMART all + auto-wipe", ""),
-                ("5", "Wipe Bay", "Wipe a specific drive", ""),
-                ("6", "SMART Test", "Test a bay or all", ""),
-                ("7", "Pause", "Pause all active wipes", ""),
-                ("8", "Resume", "Resume all paused wipes", ""),
-                None,
-                "Config",
-                ("9", "Connect", "Set station host + API key", ""),
-            ],
-            crumb,
-        )
+  """FREQ WIPE submenu — drive sanitization station."""
+  crumb = ["PVE FREQ", "FREQ WIPE"]
+  while True:
+    _render_menu(
+      "FREQ WIPE — Drive Sanitization",
+      [
+        "Station",
+        ("1", "Status", "Station overview", ""),
+        ("2", "Bays", "All drive bays + progress", ""),
+        ("3", "History", "Wipe history log", ""),
+        None,
+        "Actions",
+        ("4", "Full Send", "SMART all + auto-wipe", ""),
+        ("5", "Wipe Bay", "Wipe a specific drive", ""),
+        ("6", "SMART Test", "Test a bay or all", ""),
+        ("7", "Pause", "Pause all active wipes", ""),
+        ("8", "Resume", "Resume all paused wipes", ""),
+        None,
+        "Config",
+        ("9", "Connect", "Set station host + API key", ""),
+      ],
+      crumb,
+    )
 
-        ch = _getch()
-        if ch in ("0", "b", "q", "\x1b"):
-            return
-        elif ch == "1":
-            _gwipe_cmd(cfg, pack, "status")
-        elif ch == "2":
-            _gwipe_cmd(cfg, pack, "bays")
-        elif ch == "3":
-            _gwipe_cmd(cfg, pack, "history")
-        elif ch == "4":
-            _gwipe_cmd(cfg, pack, "full-send")
-        elif ch == "5":
-            print()
-            bay = _input("Bay device (e.g. sdb):")
-            if bay:
-                _gwipe_cmd(cfg, pack, "wipe", bay)
-        elif ch == "6":
-            print()
-            bay = _input("Bay device (blank=all):")
-            if bay:
-                _gwipe_cmd(cfg, pack, "test", bay)
-            else:
-                _gwipe_cmd(cfg, pack, "test")
-        elif ch == "7":
-            _gwipe_cmd(cfg, pack, "pause")
-        elif ch == "8":
-            _gwipe_cmd(cfg, pack, "resume")
-        elif ch == "9":
-            print()
-            host = _input("FREQ WIPE station IP:")
-            key = _input("API key:")
-            if host and key:
-                _gwipe_cmd(cfg, pack, "connect", "--host", host, "--key", key)
-        else:
-            continue
-        _pause()
+    ch = _getch()
+    if ch in ("0", "b", "q", "\x1b"):
+      return
+    elif ch == "1":
+      _gwipe_cmd(cfg, pack, "status")
+    elif ch == "2":
+      _gwipe_cmd(cfg, pack, "bays")
+    elif ch == "3":
+      _gwipe_cmd(cfg, pack, "history")
+    elif ch == "4":
+      _gwipe_cmd(cfg, pack, "full-send")
+    elif ch == "5":
+      print()
+      bay = _input("Bay device (e.g. sdb):")
+      if bay:
+        _gwipe_cmd(cfg, pack, "wipe", bay)
+    elif ch == "6":
+      print()
+      bay = _input("Bay device (blank=all):")
+      if bay:
+        _gwipe_cmd(cfg, pack, "test", bay)
+      else:
+        _gwipe_cmd(cfg, pack, "test")
+    elif ch == "7":
+      _gwipe_cmd(cfg, pack, "pause")
+    elif ch == "8":
+      _gwipe_cmd(cfg, pack, "resume")
+    elif ch == "9":
+      print()
+      host = _input("FREQ WIPE station IP:")
+      key = _input("API key:")
+      if host and key:
+        _gwipe_cmd(cfg, pack, "connect", "--host", host, "--key", key)
+    else:
+      continue
+    _pause()
 
 
 # --- Main Menu ---
 
 
 def run(cfg, pack) -> int:
-    """Launch the interactive TUI menu."""
-    first_run = True
+  """Launch the interactive TUI menu."""
+  first_run = True
 
-    while True:
-        _clear()
+  while True:
+    _clear()
 
-        if first_run:
-            # Show splash on first render
-            splash(pack, cfg.version)
-            print()
+    if first_run:
+      # Show splash on first render
+      splash(pack, cfg.version)
+      print()
 
-            # Operator-truth densified header. Pre-fix this was a bare
-            # 'Hosts: 14    PVE nodes: 3    User: morty' static line
-            # with no probe state, no freshness, no failure class. The
-            # tired operator at 2AM had no idea which hosts were
-            # reachable, when the data was last refreshed, or what was
-            # broken. The new line reads cached probe state from the
-            # SAME health.json the API and CLI surfaces consume, so
-            # the cross-surface invariant holds: TUI splash, CLI
-            # `freq fleet status`, web banner, audit.jsonl all carry
-            # the same six-state truth.
-            host_count = len(cfg.hosts)
-            pve_count = sum(1 for h in cfg.hosts if h.htype == "pve")
-            try:
-                _summary = _load_probe_state_summary(cfg)
-                if not _summary.get("has_data"):
-                    _summary["total"] = host_count
-                fleet_line = _render_probe_state_summary(_summary)
-            except Exception:
-                # Defensive: never let a probe-cache read failure block
-                # the TUI from rendering. Fall back to the legacy line.
-                fleet_line = (
-                    f"{fmt.C.DIM}Fleet:{fmt.C.RESET} "
-                    f"{fmt.C.BOLD}{host_count}{fmt.C.RESET} hosts"
-                )
-            print(
-                f"  {fleet_line}    "
-                f"{fmt.C.DIM}{fmt.S.DOT} PVE nodes: {pve_count}    "
-                f"{fmt.S.DOT} User: {os.environ.get('USER', 'unknown')}{fmt.C.RESET}"
-            )
-            print()
-            first_run = False
+      # Operator-truth densified header. Pre-fix this was a bare
+      # 'Hosts: 14  PVE nodes: 3  User: admin' static line
+      # with no probe state, no freshness, no failure class. The
+      # tired operator at 2AM had no idea which hosts were
+      # reachable, when the data was last refreshed, or what was
+      # broken. The new line reads cached probe state from the
+      # SAME health.json the API and CLI surfaces consume, so
+      # the cross-surface invariant holds: TUI splash, CLI
+      # `freq fleet status`, web banner, audit.jsonl all carry
+      # the same six-state truth.
+      host_count = len(cfg.hosts)
+      pve_count = sum(1 for h in cfg.hosts if h.htype == "pve")
+      try:
+        _summary = _load_probe_state_summary(cfg)
+        if not _summary.get("has_data"):
+          _summary["total"] = host_count
+        fleet_line = _render_probe_state_summary(_summary)
+      except Exception:
+        # Defensive: never let a probe-cache read failure block
+        # the TUI from rendering. Fall back to the legacy line.
+        fleet_line = (
+          f"{fmt.C.DIM}Fleet:{fmt.C.RESET} "
+          f"{fmt.C.BOLD}{host_count}{fmt.C.RESET} hosts"
+        )
+      print(
+        f" {fleet_line}  "
+        f"{fmt.C.DIM}{fmt.S.DOT} PVE nodes: {pve_count}  "
+        f"{fmt.S.DOT} User: {os.environ.get('USER', 'unknown')}{fmt.C.RESET}"
+      )
+      print()
+      first_run = False
 
-        # Render main menu
-        print(f"  {fmt.C.PURPLE_BOLD}PVE FREQ{fmt.C.RESET}")
-        print(f"  {fmt.C.DARK_GRAY}{'─' * (fmt.term_width() - 4)}{fmt.C.RESET}")
+    # Render main menu
+    print(f" {fmt.C.PURPLE_BOLD}PVE FREQ{fmt.C.RESET}")
+    print(f" {fmt.C.DARK_GRAY}{'─' * (fmt.term_width() - 4)}{fmt.C.RESET}")
+    print()
+
+    sections = [
+      "Quick Access",
+      ("!", "Quick Actions", "Top daily commands", ""),
+      None,
+      "VM Operations",
+      ("v", "VM Lifecycle", "Create, clone, resize, template, tag", ""),
+      ("k", "Lab", "Sandbox spawn, templates, NTP", ""),
+      None,
+      "Media",
+      ("g", "Media Stack", "40+ commands for Plex/Arr/qBit", ""),
+      None,
+      "Fleet",
+      ("f", "Fleet Info", "Dashboard, status, diagnose", ""),
+      ("b", "Host Setup", "Discover, bootstrap, onboard", ""),
+      ("u", "User Mgmt", "Users, roles, passwords", ""),
+      ("x", "Run Commands", "Fleet exec, SSH keys", ""),
+      None,
+      "Proxmox & Infrastructure",
+      ("p", "Proxmox", "VM overview, config, migrate", ""),
+      ("n", "Hosts & Groups", "Host registry, groups", ""),
+      ("i", "Infrastructure", "pfSense, TrueNAS, iDRAC, NTP", ""),
+      None,
+      "Smart Commands",
+      ("l", "Learn", "Search the knowledge base", ""),
+      ("r", "Risk", "Kill-chain blast radius analysis", ""),
+      ("w", "Sweep", "Full audit + policy pipeline", ""),
+      ("y", "JARVIS", "Playbooks, federation, gitops, chaos", ""),
+      None,
+      "Agent Platform",
+      ("a", "Agents", "Create & manage AI specialists", ""),
+      None,
+      "Monitoring & Security",
+      ("m", "Monitoring", "Health, media, doctor, NTP", ""),
+      ("s", "Security", "Audit, vault, harden", ""),
+      None,
+      "Lab Tools",
+      ("z", "FREQ WIPE", "Drive sanitization station", ""),
+      None,
+      ("d", "Doctor", "Self-diagnostic", ""),
+      ("e", "Version", "Build info", ""),
+      ("h", "Help", "Command reference", ""),
+      ("j", "Dashboard", "Start web dashboard (freq serve)", ""),
+      ("c", "Update", "Check for updates", ""),
+      ("q", "Quit", "", ""),
+    ]
+
+    for item in sections:
+      if item is None:
         print()
+        continue
+      if isinstance(item, str):
+        print(f" {fmt.C.PURPLE_BOLD}{item}{fmt.C.RESET}")
+        continue
 
-        sections = [
-            "Quick Access",
-            ("!", "Quick Actions", "Top daily commands", ""),
-            None,
-            "VM Operations",
-            ("v", "VM Lifecycle", "Create, clone, resize, template, tag", ""),
-            ("k", "Lab", "Sandbox spawn, templates, NTP", ""),
-            None,
-            "Media",
-            ("g", "Media Stack", "40+ commands for Plex/Arr/qBit", ""),
-            None,
-            "Fleet",
-            ("f", "Fleet Info", "Dashboard, status, diagnose", ""),
-            ("b", "Host Setup", "Discover, bootstrap, onboard", ""),
-            ("u", "User Mgmt", "Users, roles, passwords", ""),
-            ("x", "Run Commands", "Fleet exec, SSH keys", ""),
-            None,
-            "Proxmox & Infrastructure",
-            ("p", "Proxmox", "VM overview, config, migrate", ""),
-            ("n", "Hosts & Groups", "Host registry, groups", ""),
-            ("i", "Infrastructure", "pfSense, TrueNAS, iDRAC, NTP", ""),
-            None,
-            "Smart Commands",
-            ("l", "Learn", "Search the knowledge base", ""),
-            ("r", "Risk", "Kill-chain blast radius analysis", ""),
-            ("w", "Sweep", "Full audit + policy pipeline", ""),
-            ("y", "JARVIS", "Playbooks, federation, gitops, chaos", ""),
-            None,
-            "Agent Platform",
-            ("a", "Agents", "Create & manage AI specialists", ""),
-            None,
-            "Monitoring & Security",
-            ("m", "Monitoring", "Health, media, doctor, NTP", ""),
-            ("s", "Security", "Audit, vault, harden", ""),
-            None,
-            "Lab Tools",
-            ("z", "FREQ WIPE", "Drive sanitization station", ""),
-            None,
-            ("d", "Doctor", "Self-diagnostic", ""),
-            ("e", "Version", "Build info", ""),
-            ("h", "Help", "Command reference", ""),
-            ("j", "Dashboard", "Start web dashboard (freq serve)", ""),
-            ("c", "Update", "Check for updates", ""),
-            ("q", "Quit", "", ""),
-        ]
+      key, label, desc, tag = item
+      tag_str = f" {tag}" if tag else ""
+      print(
+        f" {fmt.C.CYAN}[{key}]{fmt.C.RESET} "
+        f"{fmt.C.BOLD}{label:<16}{fmt.C.RESET} "
+        f"{fmt.C.DIM}{desc}{fmt.C.RESET}"
+        f"{tag_str}"
+      )
 
-        for item in sections:
-            if item is None:
-                print()
-                continue
-            if isinstance(item, str):
-                print(f"  {fmt.C.PURPLE_BOLD}{item}{fmt.C.RESET}")
-                continue
+    print()
+    print(f" {fmt.C.DARK_GRAY}{'─' * (fmt.term_width() - 4)}{fmt.C.RESET}")
+    print(f" {fmt.C.DIM}Select:{fmt.C.RESET} ", end="", flush=True)
 
-            key, label, desc, tag = item
-            tag_str = f" {tag}" if tag else ""
-            print(
-                f"  {fmt.C.CYAN}[{key}]{fmt.C.RESET}  "
-                f"{fmt.C.BOLD}{label:<16}{fmt.C.RESET} "
-                f"{fmt.C.DIM}{desc}{fmt.C.RESET}"
-                f"{tag_str}"
-            )
+    # Read selection
+    try:
+      ch = _getch()
+    except (EOFError, KeyboardInterrupt):
+      print()
+      return 0
 
-        print()
-        print(f"  {fmt.C.DARK_GRAY}{'─' * (fmt.term_width() - 4)}{fmt.C.RESET}")
-        print(f"  {fmt.C.DIM}Select:{fmt.C.RESET} ", end="", flush=True)
+    # Handle Ctrl+C and Ctrl+D
+    if ch in ("\x03", "\x04"):
+      print()
+      return 0
 
-        # Read selection
-        try:
-            ch = _getch()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 0
+    ch_lower = ch.lower()
 
-        # Handle Ctrl+C and Ctrl+D
-        if ch in ("\x03", "\x04"):
-            print()
-            return 0
+    # Dispatch
+    if ch_lower == "q":
+      _clear()
+      print(f"\n {fmt.C.PURPLE}freq out.{fmt.C.RESET}\n")
+      return 0
+    elif ch_lower == "!":
+      _menu_quick_actions(cfg, pack)
+    elif ch_lower == "v":
+      _menu_vm_lifecycle(cfg, pack)
+    elif ch_lower == "k":
+      _menu_lab(cfg, pack)
+    elif ch_lower == "g":
+      _menu_media_stack(cfg, pack)
+    elif ch_lower == "f":
+      _menu_fleet_info(cfg, pack)
+    elif ch_lower == "b":
+      _menu_host_setup(cfg, pack)
+    elif ch_lower == "u":
+      _menu_user_mgmt(cfg, pack)
+    elif ch_lower == "x":
+      _menu_run_commands(cfg, pack)
+    elif ch_lower == "p":
+      _menu_proxmox(cfg, pack)
+    elif ch_lower == "n":
+      _run_command(cfg, pack, "host list")
+      _pause()
+    elif ch_lower == "i":
+      _menu_infrastructure(cfg, pack)
+    elif ch_lower == "l":
+      print()
+      query = _input("Search knowledge base:")
+      if query:
+        from freq.cli import _build_parser
 
-        ch_lower = ch.lower()
-
-        # Dispatch
-        if ch_lower == "q":
-            _clear()
-            print(f"\n  {fmt.C.PURPLE}freq out.{fmt.C.RESET}\n")
-            return 0
-        elif ch_lower == "!":
-            _menu_quick_actions(cfg, pack)
-        elif ch_lower == "v":
-            _menu_vm_lifecycle(cfg, pack)
-        elif ch_lower == "k":
-            _menu_lab(cfg, pack)
-        elif ch_lower == "g":
-            _menu_media_stack(cfg, pack)
-        elif ch_lower == "f":
-            _menu_fleet_info(cfg, pack)
-        elif ch_lower == "b":
-            _menu_host_setup(cfg, pack)
-        elif ch_lower == "u":
-            _menu_user_mgmt(cfg, pack)
-        elif ch_lower == "x":
-            _menu_run_commands(cfg, pack)
-        elif ch_lower == "p":
-            _menu_proxmox(cfg, pack)
-        elif ch_lower == "n":
-            _run_command(cfg, pack, "host list")
-            _pause()
-        elif ch_lower == "i":
-            _menu_infrastructure(cfg, pack)
-        elif ch_lower == "l":
-            print()
-            query = _input("Search knowledge base:")
-            if query:
-                from freq.cli import _build_parser
-
-                argv = ["learn"] + shlex.split(query)
-                parser = _build_parser()
-                args = parser.parse_args(argv)
-                if hasattr(args, "func"):
-                    args.func(cfg, pack, args)
-            else:
-                _run_command(cfg, pack, "learn")
-            _pause()
-        elif ch_lower == "r":
-            print()
-            target = _input("Target (pfsense/truenas/switch/all):")
-            if target:
-                _run_with_target(cfg, pack, "risk", "")
-            else:
-                _run_command(cfg, pack, "risk")
-            _pause()
-        elif ch_lower == "w":
-            _run_command(cfg, pack, "sweep")
-            _pause()
-        elif ch_lower == "y":
-            _menu_jarvis(cfg, pack)
-        elif ch_lower == "a":
-            _menu_agents(cfg, pack)
-        elif ch_lower == "m":
-            _menu_monitoring(cfg, pack)
-        elif ch_lower == "s":
-            _menu_security(cfg, pack)
-        elif ch_lower == "z":
-            _menu_freq_wipe(cfg, pack)
-        elif ch_lower == "d":
-            _run_command(cfg, pack, "doctor")
-            _pause()
-        elif ch_lower == "e":
-            _run_command(cfg, pack, "version")
-            _pause()
-        elif ch_lower == "h":
-            _run_command(cfg, pack, "help")
-            _pause()
-        elif ch_lower == "j":
-            _run_command(cfg, pack, "serve")
-            _pause()
-        elif ch_lower == "c":
-            _run_command(cfg, pack, "update")
-            _pause()
-        # Enter = redraw
-        elif ch in ("\r", "\n"):
-            continue
+        argv = ["learn"] + shlex.split(query)
+        parser = _build_parser()
+        args = parser.parse_args(argv)
+        if hasattr(args, "func"):
+          args.func(cfg, pack, args)
+      else:
+        _run_command(cfg, pack, "learn")
+      _pause()
+    elif ch_lower == "r":
+      print()
+      target = _input("Target (pfsense/truenas/switch/all):")
+      if target:
+        _run_with_target(cfg, pack, "risk", "")
+      else:
+        _run_command(cfg, pack, "risk")
+      _pause()
+    elif ch_lower == "w":
+      _run_command(cfg, pack, "sweep")
+      _pause()
+    elif ch_lower == "y":
+      _menu_jarvis(cfg, pack)
+    elif ch_lower == "a":
+      _menu_agents(cfg, pack)
+    elif ch_lower == "m":
+      _menu_monitoring(cfg, pack)
+    elif ch_lower == "s":
+      _menu_security(cfg, pack)
+    elif ch_lower == "z":
+      _menu_freq_wipe(cfg, pack)
+    elif ch_lower == "d":
+      _run_command(cfg, pack, "doctor")
+      _pause()
+    elif ch_lower == "e":
+      _run_command(cfg, pack, "version")
+      _pause()
+    elif ch_lower == "h":
+      _run_command(cfg, pack, "help")
+      _pause()
+    elif ch_lower == "j":
+      _run_command(cfg, pack, "serve")
+      _pause()
+    elif ch_lower == "c":
+      _run_command(cfg, pack, "update")
+      _pause()
+    # Enter = redraw
+    elif ch in ("\r", "\n"):
+      continue

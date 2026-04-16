@@ -146,7 +146,7 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
         results.update(batch)
     total_duration = time.monotonic() - start
 
-    # R-PRODUCT-LAW-BACKEND-TRUTH: parity with /api/health — every
+    # parity with /api/health — every
     # failure is classified through the shared six-state classifier so
     # the CLI surface is not vaguer than the web surface. Sonny's rule:
     # no surface gets to be vaguer than the others.
@@ -807,7 +807,7 @@ def cmd_dashboard(cfg: FreqConfig, pack, args) -> int:
         ("DISK", 6),
     )
 
-    # R-PRODUCT-LAW-BACKEND-TRUTH: classify every failure into the
+    # classify every failure into the
     # shared six-state vocabulary so the fleet dashboard does not say
     # 'down' on a host whose real problem is auth_failed or degraded.
     # Parity with freq fleet status + freq doctor + /api/health.

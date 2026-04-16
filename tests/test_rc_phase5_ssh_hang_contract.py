@@ -1,4 +1,4 @@
-"""R-RC-PHASE5-SSH-HANG-20260414X regression contract.
+""" regression contract.
 
 Finn's RC repeatability run on clean 5005 at d55934a stalled in Phase 5.
 Live proof: root `python3 -m freq init` was stuck on a child

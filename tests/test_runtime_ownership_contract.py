@@ -2,8 +2,8 @@
 
 Bug: _detect_ssh_key() returned keys that exist on disk but aren't readable
 by the current user. In repo-backed installs where multiple devs work on
-the same checkout, SSH keys created by one user (e.g. rick-ops, 0600 perms)
-were returned for another user (morty-ops) who can't read them, causing
+the same checkout, SSH keys created by one user (e.g. user-a, 0600 perms)
+were returned for another user (user-b) who can't read them, causing
 silent SSH failures.
 
 Ownership contract:

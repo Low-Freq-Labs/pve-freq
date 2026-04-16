@@ -81,7 +81,7 @@ class TestInitIdentityLifecycleTruth(unittest.TestCase):
         self.assertIn("Bootstrap/sudo account: `freq-ops`", src)
         self.assertIn("Deployed fleet service account: `cfg.ssh_service_account`", src)
         self.assertIn("Default fleet service account name when unset: `freq-admin`", src)
-        # R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: PVE API identity is
+        # PVE API identity is
         # derived from cfg.ssh_service_account, NOT the legacy freq-ops@pam.
         self.assertIn(
             "PVE API identity: `{cfg.ssh_service_account}@pam!freq-rw`",
@@ -101,7 +101,7 @@ class TestInitIdentityLifecycleTruth(unittest.TestCase):
             '("Phase 3", "Service Account", f"Create \'{cfg.ssh_service_account}\' with NOPASSWD sudo, init vault")',
             src,
         )
-        # R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: Phase 6 token ID is
+        # Phase 6 token ID is
         # derived from cfg.ssh_service_account via an f-string so the
         # summary line always matches the current identity contract.
         self.assertIn(

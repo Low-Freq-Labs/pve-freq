@@ -92,7 +92,7 @@ _host_fail_count = {}            # ip -> consecutive failure count
 _host_backoff_until = {}         # ip -> monotonic timestamp when backoff expires
 _last_legacy_probe = 0.0         # monotonic timestamp of last legacy probe
 
-# R-PRODUCT-LAW-BACKEND-TRUTH: six-state health contract state-tracking.
+# six-state health contract state-tracking.
 # These track per-host evidence across probe cycles so we can emit
 # reason + last_success_at + a one-cycle 'recovering' marker after a
 # circuit-breaker backoff resets. Keyed by host IP.
@@ -618,7 +618,7 @@ def _bg_probe_health():
     def _probe_host(h):
         """Probe one host and return a six-state entry with full evidence.
 
-        R-PRODUCT-LAW-BACKEND-TRUTH: every return path carries a canonical
+        every return path carries a canonical
         `state` token (live/stale/degraded/auth_failed/unreachable/recovering)
         plus `reason`, `probed_at`, `last_success_at`, `failure_count`.
         The legacy `status` field is set via legacy_status_for() so the
@@ -814,7 +814,7 @@ def _bg_probe_health():
     if probe_legacy and any(h.htype in LEGACY_HTYPES for h in active_hosts):
         _last_legacy_probe = now
 
-    # R-PRODUCT-LAW-BACKEND-TRUTH: log what we skipped this cycle.
+    # log what we skipped this cycle.
     # Previously the probe loop silently dropped backoff/rate-limited
     # hosts into a local variable with no audit trail — operators had
     # no way to reason about why a host card was stale.
@@ -869,7 +869,7 @@ def _bg_probe_health():
                 entry_state = result_entry.get("state", STATE_UNREACHABLE)
 
                 # ── Circuit breaker: success/failure tracking with evidence ──
-                # R-PRODUCT-LAW-BACKEND-TRUTH: previously circuit-breaker
+                # previously circuit-breaker
                 # engage and reset logged only a stderr warning. An
                 # operator reviewing audit.jsonl found nothing about the
                 # system's self-protective backoffs. Both engage and
@@ -1000,7 +1000,7 @@ def _bg_probe_health():
     except Exception as e:
         logger.warning(f"bg_probe_health: node_containers aggregation failed: {e}")
 
-    # R-PRODUCT-LAW-BACKEND-TRUTH: aggregate a top-level probe_state so
+    # aggregate a top-level probe_state so
     # Morty's silent-refresh banner does not have to re-derive fleet
     # health by inspecting every host entry with possibly-undefined
     # fields. Worst state wins (auth_failed > unreachable > degraded
@@ -1142,7 +1142,7 @@ def _bg_probe_fleet_overview():
             from freq.modules.pve import _pve_api_call
             _, ok = _pve_api_call(cfg, entry["ip"], f"/nodes/{entry['name']}/status", timeout=3)
             entry["online"] = ok
-        # R-PRODUCT-LAW-BACKEND-TRUTH: attach six-state + reason +
+        # attach six-state + reason +
         # last_seen_ts per node. Shares the same _pve_last_seen_ts
         # dict the live-metrics endpoint maintains, so 'STALE 47s'
         # is consistent across /api/fleet/overview and /api/pve/metrics.
@@ -1229,7 +1229,7 @@ def _bg_probe_fleet_overview():
                     )
 
     duration = round(time.monotonic() - start, 2)
-    # R-PRODUCT-LAW-BACKEND-TRUTH: aggregate top-level fleet_state so
+    # aggregate top-level fleet_state so
     # the dashboard banner can stop guessing whether the fleet is OK
     # from an empty vms list + all-offline pve_nodes + undefined
     # probe_status. Worst PVE-node state wins for the overview.
@@ -2170,7 +2170,7 @@ class FreqHandler(BaseHTTPRequestHandler):
     # Class-level caches for PVE metrics polling
     _pve_metrics_cache = None
     _pve_metrics_ts = 0
-    # R-PRODUCT-LAW-BACKEND-TRUTH: per-node last-seen tracking so the
+    # per-node last-seen tracking so the
     # dashboard can render 'STALE 47s' instead of a bare 'offline' chip.
     _pve_last_seen_ts: dict = {}
 
@@ -2308,7 +2308,7 @@ class FreqHandler(BaseHTTPRequestHandler):
                 and not any(path.startswith(p) for p in self._AUTH_WHITELIST_PREFIXES):
             role, err = _check_session_role(self, "viewer")
             if err:
-                # R-DC01-OPS-SURFACES-20260414A task 1: when the caller
+                #  task 1: when the caller
                 # passed ?token= in the query string but no cookie or
                 # Authorization header, surface the truthful migration
                 # reason so the operator can see that query-string auth
@@ -3403,7 +3403,7 @@ a:hover{{text-decoration:underline}}
 
                 iowait = round(data.get("wait", 0) * 100, 1)
 
-                # R-PRODUCT-LAW-BACKEND-TRUTH: record last-seen so a
+                # record last-seen so a
                 # subsequent offline probe can show 'STALE Ns' instead
                 # of bare offline. Stored keyed by IP so node rename
                 # doesn't lose history.

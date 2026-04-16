@@ -65,7 +65,7 @@ IDRAC_SETUP_TIMEOUT = 60
 IDRAC_VERIFY_TIMEOUT = 15
 SWITCH_CONFIG_TIMEOUT = 30
 QUICK_CHECK_TIMEOUT = 10
-# R-PVEFREQ-RUN6-IDRAC-STDIN-PIPE-RC255-20260416AE: per-slot iDRAC query
+# per-slot iDRAC query
 # timeout. 10s × 14 slots = 140s consumed most of DEVICE_DEPLOY_TIMEOUT.
 # 5s × 14 = 70s, leaving 170s for setup commands. On slow BMCs, a 5s
 # timeout may miss some slots, but the RAC1016 recovery catches the case
@@ -78,7 +78,7 @@ VERIFY_TIMEOUT = 20
 # spending ~2 minutes across slot discovery + user setup on real hardware.
 # 120s was enough to keep the old hang bounded, but too low to let a healthy
 # slow path finish. Keep the deploy bounded, but give iDRAC enough wall clock
-# to complete on DC01-class hardware.
+# to complete on lab-class hardware.
 DEVICE_DEPLOY_TIMEOUT = 240  # Total timeout for iDRAC/switch deploy (all steps combined)
 
 # iDRAC user slot range (slots 1-2 are reserved by Dell for root/admin)
@@ -162,7 +162,7 @@ def _parse_idrac_slots(output, svc_name):
 def _query_idrac_slots(_ssh, extra_opts, svc_name):
     """Query iDRAC user slots via per-slot RACADM calls.
 
-    R-PVEFREQ-RUN6-IDRAC-STDIN-PIPE-RC255-20260416AE: three bulk query
+    three bulk query
     strategies were attempted and all failed on real bmc-10 firmware:
     (1) multi-command newline exec — iDRAC rejects; (2) racadm get
     iDRAC.Users hierarchy — returns TOC only; (3) stdin-piped interactive
@@ -270,7 +270,7 @@ def _home_dir_for_user(user_name):
         return ""
 
 
-# R-POSTINIT-CHAOS-DIR-OWNERSHIP-20260413V: canonical list of data/ subdirs
+# canonical list of data/ subdirs
 # that the dashboard and CLI modules expect to exist after init. Each one
 # is pre-created during post-init ownership fix-up so the first runtime
 # caller never has to `os.makedirs` from the dashboard service account
@@ -294,7 +294,7 @@ POST_INIT_DATA_SUBDIRS = (
 def _ensure_post_init_data_ownership(cfg, svc_name):
     """Create + chown every post-init data/ subdir to {svc_name}:{svc_name}.
 
-    R-POSTINIT-CHAOS-DIR-OWNERSHIP-20260413V: the fix Finn asked for.
+    the fix Finn asked for.
 
     The root cause: init was previously run with a different service
     account (freq-ops), the headless post-init step only chmod'd specific
@@ -386,10 +386,10 @@ def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
       3. start_new_session=True ensures killpg reaches the entire tree
          (sshpass → ssh → racadm) via the session group.
 
-    R-E2E-IDRAC-PRIVILEGE-HANG-20260413R: added because Phase 8 was
+    added because Phase 8 was
     observed to wedge indefinitely on iDRAC racadm hangs.
 
-    R-PVEFREQ-RUN6-IDRAC-HANG-20260416Y: GNU timeout added as the
+    GNU timeout added as the
     outermost wrapper after the Python-only layers failed to prevent
     >2min hangs on iDRAC SSH connections. The pipe-drain blocking
     in proc.communicate can outlast the Python timeout when grandchild
@@ -821,7 +821,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     _phase_fleet_discover(cfg, ctx, args)
     logger.perf("init_phase", time.monotonic() - _t, phase=7, name="fleet_discover")
 
-    # R-PVEFREQ-FINAL-RUNTIME-TRUTH-20260416AI: quiet freq-serve during
+    # quiet freq-serve during
     # deploy/verify in interactive init (same pattern as headless path).
     _interactive_serve_was_running = False
     try:
@@ -878,7 +878,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     logger.perf("init_phase", time.monotonic() - _t, phase=13, name="summary")
 
     # Fix post-init ownership: service account owns data dirs, operator can read.
-    # R-POSTINIT-CHAOS-DIR-OWNERSHIP-20260413V: replaced the ad-hoc chown loop
+    # replaced the ad-hoc chown loop
     # with _ensure_post_init_data_ownership which also pre-creates every known
     # post-init data subdir (chaos, backups, jarvis, observe, state, …) with
     # correct ownership. Prevents first-runtime-caller PermissionError on
@@ -1788,7 +1788,7 @@ def _phase_service_account(cfg, ctx, args=None):
     if not _validate_username(svc_name):
         fmt.step_fail(f"Invalid username '{svc_name}' — must be lowercase, start with letter/underscore, max 32 chars")
         return 1
-    # R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D: freq-ops is the bootstrap/sudo
+    # freq-ops is the bootstrap/sudo
     # ingress identity per docs/IDENTITY-CONTRACT.md. init must not useradd,
     # chpasswd, sudoers-write, or otherwise manage it. Refuse the name here
     # so the operator gets a clear contract message instead of a downstream
@@ -1939,7 +1939,7 @@ def _ssh_with_pass(password, ssh_cmd_list, timeout=DEFAULT_CMD_TIMEOUT, input_te
     Writes password to a chmod-600 tempfile, uses 'sshpass -f', then deletes.
     If input_text is provided, pipes it via stdin (for IOS switch config).
 
-    R-PVEFREQ-RUN3-IDRAC-HANG-20260415M: sshpass is wrapped in GNU
+    sshpass is wrapped in GNU
     timeout(1) as a hard process-level kill. _run_bounded's Python-side
     proc.communicate(timeout=) can fail to fire when sshpass's forkpty
     child (ssh) holds pipe FDs open past the iDRAC RACADM session — the
@@ -2233,7 +2233,7 @@ def _phase_pve_deploy(cfg, ctx, args=None):
 def _phase_pve_api_token(cfg, ctx):
     """Create the runtime PVE API token for the configured service account.
 
-    R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the runtime PVE API token
+    the runtime PVE API token
     belongs to cfg.ssh_service_account (default "freq-admin"), NOT the
     legacy freq-ops@pam identity. The PVE-side identity is
     f"{svc_name}@pam" and the token is f"{svc_name}@pam!freq-rw".
@@ -2265,7 +2265,7 @@ def _phase_pve_api_token(cfg, ctx):
         fmt.step_warn("SSH key not available — skipping API token creation")
         return
 
-    # R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: derive the PVE-side identity
+    # derive the PVE-side identity
     # and token name from the configured service account. These are the
     # single source of truth for the rest of the phase — no hardcoded
     # "freq-ops@pam" strings below.
@@ -2315,7 +2315,7 @@ def _phase_pve_api_token(cfg, ctx):
     else:
         fmt.step_ok(f"{pve_user} user already exists")
 
-    # R-PVEFREQ-INIT-PVEAPI-CORE-20260415B: role reconciliation runs every
+    # role reconciliation runs every
     # init, not just on user creation. A manual pveum acl delete (or a
     # role rename on the PVE side) would silently drift the ACL and
     # Phase 6 would print "user already exists" without re-asserting the
@@ -2373,7 +2373,7 @@ def _phase_pve_api_token(cfg, ctx):
 
     # Step 3: Save token secret to credential file.
     #
-    # R-PVEFREQ-INIT-PVEAPI-CORE-20260415B: credentials live at the
+    # credentials live at the
     # FHS-canonical path /etc/freq/credentials/, not a cfg.conf_dir-
     # derived path. Prior code wrote to <install_dir>/credentials/
     # (e.g. /opt/pve-freq/credentials/) while doctor._check_pve_nodes
@@ -2427,7 +2427,7 @@ def _phase_pve_api_token(cfg, ctx):
     # Step 6: Verify token works via REST API across EVERY configured
     # node, not just the first reachable one.
     #
-    # R-PVEFREQ-INIT-PVEAPI-CORE-20260415B: prior code verified /version
+    # prior code verified /version
     # on `first_node` only. A token is cluster-scoped at the ACL layer
     # but nothing in init proved it actually resolved on every node —
     # network reachability, per-node firewall, or a stale corosync
@@ -2477,7 +2477,7 @@ def _phase_pve_api_token(cfg, ctx):
             f"Token saved but API failed on all {len(pve_nodes)} node(s) — will fall back to SSH"
         )
 
-    # R-PVEFREQ-INIT-PVEAPI-CORE-20260415B: audit event reflects the
+    # audit event reflects the
     # real verification state, not just "create_api_token success" on
     # every run. Prior code recorded success regardless of whether
     # verification passed on any node — audit.jsonl was lying.
@@ -3702,7 +3702,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     # the in-conf .example or the packaged template before reading, so a
     # green init never carries the "Could not update freq.toml infrastructure:
     # ENOENT" warning. The seed is idempotent — never overwrites an existing
-    # live file. R-E2E-INFRA-CONFIG-WRITE-WARNING-20260413N.
+    # live file. .
     toml_path = os.path.join(cfg.conf_dir, "freq.toml")
     if not os.path.isfile(toml_path):
         _seed_config_files(cfg)
@@ -4891,7 +4891,7 @@ def _init_ssh(ip, auth_pass, auth_key, auth_user, deploy_start=None, deploy_budg
     When as_root=True and auth_user is not root, wraps the command in sudo
     using base64 encoding to avoid quoting issues with multi-line scripts.
 
-    R-E2E-IDRAC-PRIVILEGE-HANG-20260413R: optionally clamps each step's
+    optionally clamps each step's
     timeout to the remaining wall-clock budget of a parent deploy. When
     deploy_start/deploy_budget are passed, every _ssh() call will:
       - short-circuit with rc=124 if elapsed >= budget
@@ -4924,7 +4924,7 @@ def _init_ssh(ip, auth_pass, auth_key, auth_user, deploy_start=None, deploy_budg
             full = base + ["-o", "BatchMode=yes", "-i", auth_key, f"{auth_user}@{ip}", cmd]
             return _run(full, timeout=timeout)
         else:
-            # R-PVEFREQ-RUN3-PASSWORD-FIRST-20260415L: force password auth
+            # force password auth
             # method ordering so sshpass can feed the password correctly.
             # Proxmox 8+ (Debian 12) defaults to PasswordAuthentication=no
             # with KbdInteractiveAuthentication=yes; without this hint SSH
@@ -5037,7 +5037,7 @@ echo DEPLOY_OK
         fmt.step_ok("Account, password, sudo, SSH key deployed")
 
     # Verify FREQ key SSH access.
-    # R-RC-PHASE5-SSH-HANG-20260414X: these verify probes must be hard-bounded.
+    # these verify probes must be hard-bounded.
     # ConnectTimeout=3 only caps TCP connect; post-connect banner/handshake/auth
     # can stall indefinitely (e.g. sshd MaxStartups backoff, slow reverse DNS,
     # authorized_keys reload race). Without an explicit _run timeout we default
@@ -5194,7 +5194,7 @@ echo DEPLOY_OK
         fmt.step_ok("Account, password, SSH key deployed (no sudo — pfSense)")
 
     # Verify FREQ key SSH access (no sudo on pfSense).
-    # R-RC-PHASE5-SSH-HANG-20260414X: same bounded-verify contract as _deploy_linux.
+    # same bounded-verify contract as _deploy_linux.
     success = True
     if ctx.get("key_path") and os.path.isfile(ctx["key_path"]):
         rc2, _, _ = _run(
@@ -5276,7 +5276,7 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     )
 
     # Test connectivity with legacy ciphers.
-    # R-PVEFREQ-FINAL-SQUEEZE-RUNTIME-20260416AK: retry once on "no more
+    # retry once on "no more
     # sessions" — iDRAC has a 2-session SSH limit. Same pattern as _verify_host.
     rc, out, err = _ssh("racadm getsysinfo", extra_opts=extra_opts, timeout=IDRAC_VERIFY_TIMEOUT)
     if rc != 0 and "no more sessions" in (out + err).lower():
@@ -5332,7 +5332,7 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
             return False
         ok_cmd, details = _run_idrac_command(_ssh, extra_opts, cmd, timeout=IDRAC_SETUP_TIMEOUT)
         if not ok_cmd:
-            # R-PVEFREQ-RUN2-IDRAC-IDEMPOTENCY-20260415K: RAC1016 "user already
+            # RAC1016 "user already
             # exists" fires when _query_idrac_slots missed the existing user
             # (e.g., query for the occupied slot timed out on a slow BMC). The
             # user exists in a different slot from target_slot. Re-scan to find
@@ -5716,7 +5716,7 @@ def _remove_pfsense(ip, svc_name, key_path, admin_auth=None):
 def _remove_idrac(ip, svc_name, key_path):
     """Remove FREQ service account from iDRAC.
 
-    R-PVEFREQ-RUN6-UNINSTALL-DEFECTS-20260415V: reordered so Enable=0
+    reordered so Enable=0
     is LAST. Disabling the user immediately terminates all active iDRAC
     sessions for that user — if Enable=0 runs first, the SSH session
     drops and subsequent commands (UserName clear, key clear) never
@@ -5767,7 +5767,7 @@ def _remove_idrac(ip, svc_name, key_path):
 def _remove_switch(ip, svc_name, key_path):
     """Remove FREQ service account from Cisco IOS switch.
 
-    R-PVEFREQ-RUN6-UNINSTALL-DEFECTS-20260415V: IOS does not allow
+    IOS does not allow
     'no username X' while logged in as X — the switch rejects it.
     Instead, revoke the SSH public key (preventing key-based login)
     and write config. The username entry remains but is inaccessible
@@ -6142,7 +6142,7 @@ def _phase_verify(cfg, ctx):
             label = _label_for(h)
             if label is None:
                 return (h, None, None, None)
-            # R-PVEFREQ-RUN8-TRUENAS-CREDS-IGNORED-20260416AF: skip verify
+            # skip verify
             # for hosts that were NOT deployed this run. Trying to verify
             # as freq-admin on a host where deploy was skipped (e.g., bad
             # device credentials) produces misleading "Permission denied"
@@ -6156,7 +6156,7 @@ def _phase_verify(cfg, ctx):
                 return (h, label, False, str(e))
 
         # Cap total phase time. Any stragglers get reported as timeout.
-        # R-PVEFREQ-RUN6-LATE-VERIFY-HANG-20260416Z: the ThreadPoolExecutor
+        # the ThreadPoolExecutor
         # context manager calls pool.shutdown(wait=True) on exit, which
         # blocks indefinitely if any worker thread is stuck in a subprocess
         # that refuses to die. Use explicit shutdown(wait=False) instead
@@ -6170,7 +6170,7 @@ def _phase_verify(cfg, ctx):
                 for fut in concurrent.futures.as_completed(futures, timeout=PHASE12_FLEET_TIMEOUT):
                     results_list.append(fut.result())
             except concurrent.futures.TimeoutError:
-                # R-PVEFREQ-FINAL-SQUEEZE-RUNTIME-20260416AK: log WHICH
+                # log WHICH
                 # hosts stalled so the operator knows where to look.
                 done_hosts = {r[0].ip for r in results_list}
                 stalled = [h for h in fleet_hosts if h.ip not in done_hosts]
@@ -6261,7 +6261,7 @@ def _phase_verify(cfg, ctx):
         fmt.line(f"  {fmt.C.DIM}fleet-boundaries.toml is empty — no device categories configured{fmt.C.RESET}")
 
     # containers.toml — verify file is parseable if it was generated.
-    # R-PVEFREQ-RUN3-CONTAINERS-VERIFY-20260415N: 0 containers across
+    # 0 containers across
     # 0 hosts is a legitimate cluster state (no-docker or docker hosts
     # with no running containers). The check is parseability, not count.
     ct_path = os.path.join(cfg.conf_dir, "containers.toml")
@@ -7304,8 +7304,7 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
 
     # Local dashboard service
     #
-    # R-PVEFREQ-RUN6-UNINSTALL-DEFECTS-20260415V:
-    # freq-serve runs as the managed service account. If we try to userdel the
+    # # freq-serve runs as the managed service account. If we try to userdel the
     # account while the unit is still active (or allowed to restart), systemd
     # immediately recreates the process tree and userdel either hangs or fails
     # with "user is currently used by process". Stop and disable it before the
@@ -7323,7 +7322,7 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
     # Local service account
     rc, _, _ = _run(["id", svc_name])
     if rc == 0:
-        # R-PVEFREQ-RUN6-UNINSTALL-DEFECTS-20260415V: kill processes and
+        # kill processes and
         # WAIT for them to die before userdel. pkill sends SIGTERM but
         # returns immediately; userdel fails with "user is currently used
         # by process" if any process is still running. Grace wait + SIGKILL
@@ -7729,7 +7728,7 @@ def _init_headless(cfg, args):
     _phase(7, headless_total, "Fleet Discovery")
     _phase_fleet_discover(cfg, ctx, args)
 
-    # R-PVEFREQ-RUN8-INIT-QUIET-SERVE-20260416AG: stop freq-serve before
+    # stop freq-serve before
     # fleet deploy/verify so background health probes and dashboard API
     # handlers don't SSH to fleet hosts as freq-admin during init. Those
     # bg probes are expected runtime behavior, but during init they muddy
@@ -7808,7 +7807,7 @@ def _init_headless(cfg, args):
     )
 
     # ── Post-init permissions ──
-    # R-POSTINIT-CHAOS-DIR-OWNERSHIP-20260413V: headless init used to
+    # headless init used to
     # skip the recursive chown of data_dir that the interactive path
     # does. A data/ created by a previous svc_name stayed owned by
     # that user, and first-use `os.makedirs(data/chaos, exist_ok=True)`

@@ -17,7 +17,7 @@ This contract pins three layers:
 
   1. STATIC CALL-SITE PIN — every call site that surfaces a per-host
      reason must import and use classify_probe_failure (or its
-     entry_base wrapper). Rick's rollout under R-PRODUCT-LAW-BACKEND-
+     entry_base wrapper). Rick's rollout under 
      TRUTH (e03b382 / 170b0c8 / 9dd8200 / 869416f) named these four
      sites as the canonical readers:
 
@@ -133,7 +133,7 @@ class TestNoParallelClassifierDrift(unittest.TestCase):
     Pre-fix Rick's audit found this is a real risk: pattern matching
     on 'permission denied' / 'connection refused' was scattered across
     serve.py and fleet.py renderers in earlier iterations. The unify
-    landed under R-PRODUCT-LAW-BACKEND-TRUTH; this test makes sure a
+    landed under ; this test makes sure a
     future cleanup can't quietly re-introduce a parallel path.
 
     NOTE: substring-only greps for 'permission denied' have noise

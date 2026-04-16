@@ -67,7 +67,7 @@ def _mock_cfg(**overrides):
         pve_node_names=["pve01"],
         ssh_key_path="/tmp/fake_key",
         ssh_connect_timeout=3,
-        ssh_service_account="freq-admin",  # R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D: freq-ops is bootstrap-only
+        ssh_service_account="freq-admin",  # freq-ops is bootstrap-only
         brand="FREQ",
         build="dev",
         cluster_name="testcluster",

@@ -343,7 +343,7 @@ class TestBaselineModule(unittest.TestCase):
             "docker.service\n"
             "---USERS---\n"
             "freq-ops\n"
-            "sonny\n"
+            "admin\n"
             "---KERNEL---\n"
             "6.1.0-27-amd64\n"
             "---END---\n"

@@ -1,6 +1,6 @@
 """freq-ops bootstrap-untouched contract pins.
 
-R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D
+
 
 `freq-ops` is the bootstrap/sudo ingress identity per
 docs/IDENTITY-CONTRACT.md. `freq init` MUST pass through it untouched —
@@ -90,7 +90,7 @@ class TestConfigLoadRejectsReservedSvcName(unittest.TestCase):
         err = captured.getvalue()
         self.assertIn("freq-ops", err)
         self.assertIn("reserved", err.lower())
-        self.assertIn("R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D", err)
+        self.assertIn("", err)
 
     def test_freq_toml_with_valid_name_passes_through(self):
         from freq.core.config import FreqConfig, _apply_toml

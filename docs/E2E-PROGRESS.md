@@ -9,7 +9,7 @@
 - Bootstrap/sudo account: `freq-ops`
 - Deployed fleet service account: `cfg.ssh_service_account`
 - Default fleet service account name when unset: `freq-admin`
-- PVE API identity: `{cfg.ssh_service_account}@pam!freq-rw` (default `freq-admin@pam!freq-rw`) — R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C. The runtime PVE API token belongs to the configured service account, NOT the legacy `freq-ops@pam` identity. Any `freq-ops@pam` user still present on a PVE cluster from a pre-svc-token install is left untouched by init and can be manually cleaned up via `pveum user delete freq-ops@pam` once the dashboard is confirmed running under the new identity.
+- PVE API identity: `{cfg.ssh_service_account}@pam!freq-rw` (default `freq-admin@pam!freq-rw`) — . The runtime PVE API token belongs to the configured service account, NOT the legacy `freq-ops@pam` identity. Any `freq-ops@pam` user still present on a PVE cluster from a pre-svc-token install is left untouched by init and can be manually cleaned up via `pveum user delete freq-ops@pam` once the dashboard is confirmed running under the new identity.
 
 For the E2E gauntlet, verify this split between every major `freq init` step:
 - before init: bootstrap/sudo account is distinct from the future fleet service account

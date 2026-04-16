@@ -27,7 +27,7 @@ class TestIdentityContractDoc(unittest.TestCase):
         self.assertIn("`freq-ops` is the bootstrap/sudo identity", src)
         self.assertIn("`cfg.ssh_service_account` is the deployed fleet service account", src)
         self.assertIn("`freq-admin` is only the default deployed service-account name", src)
-        # R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the runtime PVE API
+        # the runtime PVE API
         # identity is derived from cfg.ssh_service_account, NOT the
         # legacy freq-ops@pam@pam token.
         self.assertIn(
@@ -83,7 +83,7 @@ class TestInitLifecycleIdentityBoundaries(unittest.TestCase):
         src = _read("freq/modules/init_cmd.py")
         plan_block = src.split('("Phase 2", "Cluster Config + VLAN Discovery"')[1].split('("SSH Account", cfg.ssh_service_account),')[0]
         self.assertIn("Create '{cfg.ssh_service_account}'", plan_block)
-        # R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: Phase 6 plan line uses
+        # Phase 6 plan line uses
         # an f-string so the displayed token id always matches the
         # currently-configured service account, not a hardcoded legacy.
         self.assertIn(
@@ -100,7 +100,7 @@ class TestInitLifecycleIdentityBoundaries(unittest.TestCase):
 
     def test_runtime_terminal_uses_configured_service_account(self):
         src = _read("freq/api/terminal.py")
-        # R-PVEFREQ-FINAL-RUNTIME-TRUTH-20260416AI: the silent `or "freq-admin"`
+        # the silent `or "freq-admin"`
         # fallback was replaced with an explicit if-not check that logs a warning.
         # The contract: cfg.ssh_service_account is the primary; fallback is visible.
         self.assertIn('ssh_user = cfg.ssh_service_account', src)
@@ -110,9 +110,9 @@ class TestInitLifecycleIdentityBoundaries(unittest.TestCase):
     def test_pve_api_identity_uses_service_account(self):
         """Phase 6 must derive the PVE API identity from cfg.ssh_service_account.
 
-        R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the runtime PVE API token
+        the runtime PVE API token
         is owned by {cfg.ssh_service_account}@pam, not the legacy
-        freq-ops@pam. R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D forbids
+        freq-ops@pam.  forbids
         freq-ops as a managed product identity entirely.
         """
         src = _read("freq/modules/init_cmd.py")

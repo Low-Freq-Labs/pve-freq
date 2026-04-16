@@ -3,25 +3,25 @@
 # PVE FREQ Installer
 #
 # One-line install:
-#   curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq/main/install.sh | sudo bash
+#  curl -fsSL https://raw.githubusercontent.com/Low-Freq-Labs/pve-freq/main/install.sh | sudo bash
 #
 # Manual:
-#   sudo bash install.sh --from-local /path/to/source
+#  sudo bash install.sh --from-local /path/to/source
 #
 # Uninstall:
-#   sudo bash install.sh --uninstall
+#  sudo bash install.sh --uninstall
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 # Version: read from freq/__init__.py if available, else fallback
 _detect_version() {
-    local init_py
-    for init_py in "./freq/__init__.py" "${FREQ_DIR:-/opt/pve-freq}/freq/__init__.py"; do
-        if [[ -f "$init_py" ]]; then
-            grep -oP '__version__\s*=\s*"\K[^"]+' "$init_py" 2>/dev/null && return
-        fi
-    done
-    echo "1.0.0"  # fallback — keep in sync with freq/__init__.py
+  local init_py
+  for init_py in "./freq/__init__.py" "${FREQ_DIR:-/opt/pve-freq}/freq/__init__.py"; do
+    if [[ -f "$init_py" ]]; then
+      grep -oP '__version__\s*=\s*"\K[^"]+' "$init_py" 2>/dev/null && return
+    fi
+  done
+  echo "1.0.0" # fallback — keep in sync with freq/__init__.py
 }
 FREQ_VERSION="${FREQ_VERSION:-$(_detect_version)}"
 INSTALL_DIR="${FREQ_DIR:-/opt/pve-freq}"
@@ -49,490 +49,490 @@ YES=false
 WITH_SYSTEMD=false
 
 usage() {
-    echo -e "${C_PURPLE}${C_BOLD}PVE FREQ Installer v${FREQ_VERSION}${C_RESET}"
-    echo ""
-    echo "Usage: install.sh [OPTIONS]"
-    echo ""
-    echo "Options:"
-    echo "  --from-local <path>  Install from local source directory"
-    echo "  --from-git           Clone from GitHub"
-    echo "  --dir <path>         Custom install directory (default: /opt/pve-freq)"
-    echo "  --skip-doctor        Skip post-install verification"
-    echo "  --with-systemd       Install systemd unit for freq serve"
-    echo "  --uninstall          Remove FREQ from this host"
-    echo "  --yes, -y            Non-interactive (no confirmations)"
-    echo "  --help               Show this help"
-    echo "  --version            Show version"
-    exit 0
+  echo -e "${C_PURPLE}${C_BOLD}PVE FREQ Installer v${FREQ_VERSION}${C_RESET}"
+  echo ""
+  echo "Usage: install.sh [OPTIONS]"
+  echo ""
+  echo "Options:"
+  echo " --from-local <path> Install from local source directory"
+  echo " --from-git      Clone from GitHub"
+  echo " --dir <path>     Custom install directory (default: /opt/pve-freq)"
+  echo " --skip-doctor    Skip post-install verification"
+  echo " --with-systemd    Install systemd unit for freq serve"
+  echo " --uninstall     Remove FREQ from this host"
+  echo " --yes, -y      Non-interactive (no confirmations)"
+  echo " --help        Show this help"
+  echo " --version      Show version"
+  exit 0
 }
 
 while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --from-local)
-            MODE="local"
-            SOURCE="${2:?'--from-local requires a path'}"
-            shift 2
-            ;;
-        --from-git)
-            MODE="git"
-            shift
-            ;;
-        --dir)
-            INSTALL_DIR="${2:?'--dir requires a path'}"
-            shift 2
-            ;;
-        --skip-doctor)
-            SKIP_DOCTOR=true
-            shift
-            ;;
-        --with-systemd)
-            WITH_SYSTEMD=true
-            shift
-            ;;
-        --uninstall)
-            MODE="uninstall"
-            shift
-            ;;
-        --yes|-y)
-            YES=true
-            shift
-            ;;
-        --help|-h)
-            usage
-            ;;
-        --version)
-            echo "PVE FREQ installer v${FREQ_VERSION}"
-            exit 0
-            ;;
-        *)
-            echo -e "${C_RED}Unknown option: $1${C_RESET}"
-            echo "Run install.sh --help for usage"
-            exit 1
-            ;;
-    esac
+  case "$1" in
+    --from-local)
+      MODE="local"
+      SOURCE="${2:?'--from-local requires a path'}"
+      shift 2
+      ;;
+    --from-git)
+      MODE="git"
+      shift
+      ;;
+    --dir)
+      INSTALL_DIR="${2:?'--dir requires a path'}"
+      shift 2
+      ;;
+    --skip-doctor)
+      SKIP_DOCTOR=true
+      shift
+      ;;
+    --with-systemd)
+      WITH_SYSTEMD=true
+      shift
+      ;;
+    --uninstall)
+      MODE="uninstall"
+      shift
+      ;;
+    --yes|-y)
+      YES=true
+      shift
+      ;;
+    --help|-h)
+      usage
+      ;;
+    --version)
+      echo "PVE FREQ installer v${FREQ_VERSION}"
+      exit 0
+      ;;
+    *)
+      echo -e "${C_RED}Unknown option: $1${C_RESET}"
+      echo "Run install.sh --help for usage"
+      exit 1
+      ;;
+  esac
 done
 
 # ── Output helpers ─────────────────────────────────────────────────────────
 
-ok()   { echo -e "  ${C_GREEN}[OK]${C_RESET}   $1"; }
-fail() { echo -e "  ${C_RED}[FAIL]${C_RESET} $1"; }
-warn() { echo -e "  ${C_YELLOW}[WARN]${C_RESET} $1"; }
-info() { echo -e "  ${C_CYAN}[INFO]${C_RESET} $1"; }
-step() { echo -e "  ${C_PURPLE}>>>${C_RESET}   $1"; }
+ok()  { echo -e " ${C_GREEN}[OK]${C_RESET}  $1"; }
+fail() { echo -e " ${C_RED}[FAIL]${C_RESET} $1"; }
+warn() { echo -e " ${C_YELLOW}[WARN]${C_RESET} $1"; }
+info() { echo -e " ${C_CYAN}[INFO]${C_RESET} $1"; }
+step() { echo -e " ${C_PURPLE}>>>${C_RESET}  $1"; }
 
 detect_service_account() {
-    # Default only. freq-ops is bootstrap/sudo; the deployed fleet account
-    # defaults to freq-admin unless freq.toml overrides it.
-    #
-    # R-PVEFREQ-BOOTSTRAP-UNTOUCHED-20260415D: if freq.toml asks for a
-    # reserved bootstrap-only name (e.g. freq-ops), reject it here and
-    # fall back to the canonical default. The systemd unit + chown
-    # paths downstream of this function would otherwise propagate the
-    # bad value into User= and ownership writes that violate the
-    # bootstrap-untouched contract.
-    local svc_user="freq-admin"
-    if [[ -f "$INSTALL_DIR/conf/freq.toml" ]] && grep -q '^service_account' "$INSTALL_DIR/conf/freq.toml" 2>/dev/null; then
-        local requested
-        requested=$(grep '^service_account' "$INSTALL_DIR/conf/freq.toml" | head -1 | sed 's/.*=\s*"\(.*\)"/\1/')
-        case "$requested" in
-            freq-ops)
-                warn "freq.toml service_account='${requested}' is reserved (bootstrap-only); using default 'freq-admin' (see docs/IDENTITY-CONTRACT.md)" >&2
-                ;;
-            "")
-                ;;
-            *)
-                svc_user="$requested"
-                ;;
-        esac
-    fi
-    printf '%s\n' "$svc_user"
+  # Default only. freq-ops is bootstrap/sudo; the deployed fleet account
+  # defaults to freq-admin unless freq.toml overrides it.
+  #
+  # If freq.toml asks for a reserved bootstrap-only name (e.g. freq-ops),
+  # reject it here and
+  # fall back to the canonical default. The systemd unit + chown
+  # paths downstream of this function would otherwise propagate the
+  # bad value into User= and ownership writes that violate the
+  # bootstrap-untouched contract.
+  local svc_user="freq-admin"
+  if [[ -f "$INSTALL_DIR/conf/freq.toml" ]] && grep -q '^service_account' "$INSTALL_DIR/conf/freq.toml" 2>/dev/null; then
+    local requested
+    requested=$(grep '^service_account' "$INSTALL_DIR/conf/freq.toml" | head -1 | sed 's/.*=\s*"\(.*\)"/\1/')
+    case "$requested" in
+      freq-ops)
+        warn "freq.toml service_account='${requested}' is reserved (bootstrap-only); using default 'freq-admin' (see docs/IDENTITY-CONTRACT.md)" >&2
+        ;;
+      "")
+        ;;
+      *)
+        svc_user="$requested"
+        ;;
+    esac
+  fi
+  printf '%s\n' "$svc_user"
 }
 
 banner() {
-    echo ""
-    local title="PVE FREQ v${FREQ_VERSION} Installer"
-    local width=42
-    local pad=$(( (width - ${#title}) / 2 ))
-    local lpad=$(printf '%*s' "$pad" '')
-    local rpad=$(printf '%*s' "$((width - ${#title} - pad))" '')
-    echo -e "${C_PURPLE}${C_BOLD}╔$(printf '═%.0s' $(seq 1 $width))╗${C_RESET}"
-    echo -e "${C_PURPLE}${C_BOLD}║${lpad}${title}${rpad}║${C_RESET}"
-    echo -e "${C_PURPLE}${C_BOLD}╚$(printf '═%.0s' $(seq 1 $width))╝${C_RESET}"
-    echo ""
+  echo ""
+  local title="PVE FREQ v${FREQ_VERSION} Installer"
+  local width=42
+  local pad=$(( (width - ${#title}) / 2 ))
+  local lpad=$(printf '%*s' "$pad" '')
+  local rpad=$(printf '%*s' "$((width - ${#title} - pad))" '')
+  echo -e "${C_PURPLE}${C_BOLD}╔$(printf '═%.0s' $(seq 1 $width))╗${C_RESET}"
+  echo -e "${C_PURPLE}${C_BOLD}║${lpad}${title}${rpad}║${C_RESET}"
+  echo -e "${C_PURPLE}${C_BOLD}╚$(printf '═%.0s' $(seq 1 $width))╝${C_RESET}"
+  echo ""
 }
 
 # ── Pre-flight checks ─────────────────────────────────────────────────────
 
 preflight() {
-    local errors=0
+  local errors=0
 
-    echo -e "${C_BOLD}Pre-flight checks${C_RESET}"
-    echo ""
+  echo -e "${C_BOLD}Pre-flight checks${C_RESET}"
+  echo ""
 
-    # 1. Root check
-    if [[ $EUID -eq 0 ]]; then
-        ok "Running as root"
+  # 1. Root check
+  if [[ $EUID -eq 0 ]]; then
+    ok "Running as root"
+  else
+    fail "Must run as root (use sudo)"
+    exit 1
+  fi
+
+  # 2. OS detection
+  local distro="" version="" family="" pretty=""
+  if [[ -f /etc/os-release ]]; then
+    distro=$(grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+    version=$(grep '^VERSION_ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+    pretty=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2 | tr -d '"')
+
+    case "$distro" in
+      debian|ubuntu)      family="debian" ;;
+      rhel|rocky|almalinux|centos|fedora) family="rhel" ;;
+      *suse*)         family="suse" ;;
+      *)            family="unknown" ;;
+    esac
+
+    if [[ "$family" == "unknown" ]]; then
+      warn "OS: ${pretty:-$distro} (untested — proceeding anyway)"
     else
-        fail "Must run as root (use sudo)"
-        exit 1
+      ok "OS: ${pretty:-$distro $version}"
     fi
+  else
+    warn "OS: cannot detect (/etc/os-release missing)"
+  fi
 
-    # 2. OS detection
-    local distro="" version="" family="" pretty=""
-    if [[ -f /etc/os-release ]]; then
-        distro=$(grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
-        version=$(grep '^VERSION_ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
-        pretty=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2 | tr -d '"')
+  # 3. Python version
+  local python_bin=""
+  for candidate in python3 python3.13 python3.12 python3.11 python3.10 python3.9 python39; do
+    if command -v "$candidate" &>/dev/null; then
+      python_bin="$candidate"
+      break
+    fi
+  done
 
-        case "$distro" in
-            debian|ubuntu)           family="debian" ;;
-            rhel|rocky|almalinux|centos|fedora) family="rhel" ;;
-            *suse*)                  family="suse" ;;
-            *)                       family="unknown" ;;
-        esac
+  if [[ -z "$python_bin" ]]; then
+    fail "Python 3 not found"
+    case "$family" in
+      debian) echo -e "    ${C_GRAY}Fix: apt install python3${C_RESET}" ;;
+      rhel)  echo -e "    ${C_GRAY}Fix: dnf install python39${C_RESET}" ;;
+      suse)  echo -e "    ${C_GRAY}Fix: zypper install python39${C_RESET}" ;;
+      *)   echo -e "    ${C_GRAY}Fix: install Python 3.11+ for your distro${C_RESET}" ;;
+    esac
+    errors=$((errors + 1))
+  else
+    local py_ver
+    py_ver=$("$python_bin" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')" 2>/dev/null)
+    local py_major py_minor
+    py_major=$("$python_bin" -c "import sys; print(sys.version_info.major)" 2>/dev/null)
+    py_minor=$("$python_bin" -c "import sys; print(sys.version_info.minor)" 2>/dev/null)
 
-        if [[ "$family" == "unknown" ]]; then
-            warn "OS: ${pretty:-$distro} (untested — proceeding anyway)"
-        else
-            ok "OS: ${pretty:-$distro $version}"
-        fi
+    if [[ "$py_major" -ge $MIN_PYTHON_MAJOR ]] && [[ "$py_minor" -ge $MIN_PYTHON_MINOR ]]; then
+      ok "Python ${py_ver} (${python_bin})"
     else
-        warn "OS: cannot detect (/etc/os-release missing)"
+      fail "Python ${py_ver} — need >= ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}"
+      case "$family" in
+        debian) echo -e "    ${C_GRAY}Fix: apt install python3${C_RESET}" ;;
+        rhel)  echo -e "    ${C_GRAY}Fix: dnf install python39${C_RESET}" ;;
+        suse)  echo -e "    ${C_GRAY}Fix: zypper install python39${C_RESET}" ;;
+      esac
+      errors=$((errors + 1))
     fi
+  fi
 
-    # 3. Python version
-    local python_bin=""
-    for candidate in python3 python3.13 python3.12 python3.11 python3.10 python3.9 python39; do
-        if command -v "$candidate" &>/dev/null; then
-            python_bin="$candidate"
-            break
-        fi
-    done
-
-    if [[ -z "$python_bin" ]]; then
-        fail "Python 3 not found"
-        case "$family" in
-            debian) echo -e "       ${C_GRAY}Fix: apt install python3${C_RESET}" ;;
-            rhel)   echo -e "       ${C_GRAY}Fix: dnf install python39${C_RESET}" ;;
-            suse)   echo -e "       ${C_GRAY}Fix: zypper install python39${C_RESET}" ;;
-            *)      echo -e "       ${C_GRAY}Fix: install Python 3.11+ for your distro${C_RESET}" ;;
-        esac
-        errors=$((errors + 1))
+  # 4. Disk space
+  local target_parent
+  target_parent=$(dirname "$INSTALL_DIR")
+  if [[ -d "$target_parent" ]]; then
+    local free_mb
+    free_mb=$(df -m "$target_parent" | awk 'NR==2 {print $4}')
+    if [[ "$free_mb" -ge $MIN_DISK_MB ]]; then
+      ok "Disk: ${free_mb}MB free at ${target_parent}"
     else
-        local py_ver
-        py_ver=$("$python_bin" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')" 2>/dev/null)
-        local py_major py_minor
-        py_major=$("$python_bin" -c "import sys; print(sys.version_info.major)" 2>/dev/null)
-        py_minor=$("$python_bin" -c "import sys; print(sys.version_info.minor)" 2>/dev/null)
-
-        if [[ "$py_major" -ge $MIN_PYTHON_MAJOR ]] && [[ "$py_minor" -ge $MIN_PYTHON_MINOR ]]; then
-            ok "Python ${py_ver} (${python_bin})"
-        else
-            fail "Python ${py_ver} — need >= ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}"
-            case "$family" in
-                debian) echo -e "       ${C_GRAY}Fix: apt install python3${C_RESET}" ;;
-                rhel)   echo -e "       ${C_GRAY}Fix: dnf install python39${C_RESET}" ;;
-                suse)   echo -e "       ${C_GRAY}Fix: zypper install python39${C_RESET}" ;;
-            esac
-            errors=$((errors + 1))
-        fi
+      fail "Disk: only ${free_mb}MB free at ${target_parent} (need ${MIN_DISK_MB}MB)"
+      errors=$((errors + 1))
     fi
+  else
+    warn "Disk: ${target_parent} does not exist (will create)"
+  fi
 
-    # 4. Disk space
-    local target_parent
-    target_parent=$(dirname "$INSTALL_DIR")
-    if [[ -d "$target_parent" ]]; then
-        local free_mb
-        free_mb=$(df -m "$target_parent" | awk 'NR==2 {print $4}')
-        if [[ "$free_mb" -ge $MIN_DISK_MB ]]; then
-            ok "Disk: ${free_mb}MB free at ${target_parent}"
-        else
-            fail "Disk: only ${free_mb}MB free at ${target_parent} (need ${MIN_DISK_MB}MB)"
-            errors=$((errors + 1))
-        fi
+  # 5. Required binaries
+  local missing_req=()
+  for bin in ssh ssh-keygen; do
+    if ! command -v "$bin" &>/dev/null; then
+      missing_req+=("$bin")
+    fi
+  done
+
+  if [[ ${#missing_req[@]} -gt 0 ]]; then
+    fail "Missing required: ${missing_req[*]}"
+    echo -e "    ${C_GRAY}Fix: apt install openssh-client${C_RESET}"
+    errors=$((errors + 1))
+  else
+    ok "Required tools: ssh, ssh-keygen"
+  fi
+
+  # 6. Optional binaries
+  local missing_opt=()
+  for bin in sshpass curl jq; do
+    if ! command -v "$bin" &>/dev/null; then
+      missing_opt+=("$bin")
+    fi
+  done
+
+  if [[ ${#missing_opt[@]} -gt 0 ]]; then
+    warn "Optional tools missing: ${missing_opt[*]}"
+    if [[ " ${missing_opt[*]} " == *" sshpass "* ]]; then
+      echo -e "    ${C_GRAY}sshpass is needed for 'freq init' (password-based SSH deployment)${C_RESET}"
+    fi
+  else
+    ok "Optional tools: sshpass, curl, jq"
+  fi
+
+  # 7. Existing installation
+  if [[ -d "$INSTALL_DIR" ]]; then
+    if [[ -d "$INSTALL_DIR/.git" ]]; then
+      info "Existing install detected (git clone) — will upgrade"
+    elif [[ -f "$INSTALL_DIR/.install-method" ]]; then
+      local method
+      method=$(cat "$INSTALL_DIR/.install-method")
+      info "Existing install detected (${method}) — will upgrade"
     else
-        warn "Disk: ${target_parent} does not exist (will create)"
+      info "Existing install detected — will upgrade"
     fi
+  fi
 
-    # 5. Required binaries
-    local missing_req=()
-    for bin in ssh ssh-keygen; do
-        if ! command -v "$bin" &>/dev/null; then
-            missing_req+=("$bin")
-        fi
-    done
+  echo ""
 
-    if [[ ${#missing_req[@]} -gt 0 ]]; then
-        fail "Missing required: ${missing_req[*]}"
-        echo -e "       ${C_GRAY}Fix: apt install openssh-client${C_RESET}"
-        errors=$((errors + 1))
-    else
-        ok "Required tools: ssh, ssh-keygen"
-    fi
+  if [[ $errors -gt 0 ]]; then
+    echo -e "${C_RED}Pre-flight failed: ${errors} issue(s) must be fixed first.${C_RESET}"
+    exit 1
+  fi
 
-    # 6. Optional binaries
-    local missing_opt=()
-    for bin in sshpass curl jq; do
-        if ! command -v "$bin" &>/dev/null; then
-            missing_opt+=("$bin")
-        fi
-    done
-
-    if [[ ${#missing_opt[@]} -gt 0 ]]; then
-        warn "Optional tools missing: ${missing_opt[*]}"
-        if [[ " ${missing_opt[*]} " == *" sshpass "* ]]; then
-            echo -e "       ${C_GRAY}sshpass is needed for 'freq init' (password-based SSH deployment)${C_RESET}"
-        fi
-    else
-        ok "Optional tools: sshpass, curl, jq"
-    fi
-
-    # 7. Existing installation
-    if [[ -d "$INSTALL_DIR" ]]; then
-        if [[ -d "$INSTALL_DIR/.git" ]]; then
-            info "Existing install detected (git clone) — will upgrade"
-        elif [[ -f "$INSTALL_DIR/.install-method" ]]; then
-            local method
-            method=$(cat "$INSTALL_DIR/.install-method")
-            info "Existing install detected (${method}) — will upgrade"
-        else
-            info "Existing install detected — will upgrade"
-        fi
-    fi
-
-    echo ""
-
-    if [[ $errors -gt 0 ]]; then
-        echo -e "${C_RED}Pre-flight failed: ${errors} issue(s) must be fixed first.${C_RESET}"
-        exit 1
-    fi
-
-    ok "Pre-flight passed"
-    echo ""
+  ok "Pre-flight passed"
+  echo ""
 }
 
 # ── Install ────────────────────────────────────────────────────────────────
 
 do_install() {
-    echo -e "${C_BOLD}Installing PVE FREQ v${FREQ_VERSION}${C_RESET}"
-    echo ""
+  echo -e "${C_BOLD}Installing PVE FREQ v${FREQ_VERSION}${C_RESET}"
+  echo ""
 
-    # Get files into INSTALL_DIR
-    case "$MODE" in
-        local)
-            step "Copying from ${SOURCE}"
-            if [[ ! -f "$SOURCE/freq/__init__.py" ]]; then
-                fail "Not a FREQ source directory: ${SOURCE}"
-                exit 1
-            fi
-            mkdir -p "$INSTALL_DIR"
-            # Copy source — exclude dev artifacts
-            rsync -a --delete \
-                --exclude='.git' \
-                --exclude='__pycache__' \
-                --exclude='*.pyc' \
-                --exclude='.pytest_cache' \
-                --exclude='*.egg-info' \
-                --include='conf/' \
-                --include='conf/*.example' \
-                --exclude='conf/*' \
-                --exclude='data/vault/*' \
-                --exclude='data/keys/*' \
-                --exclude='memory/' \
-                --exclude='resume-state.md' \
-                --exclude='CLAUDE.md' \
-                --exclude='cold-storage/' \
-                --exclude='skills/' \
-                --exclude='planning/' \
-                --exclude='reference/' \
-                --exclude='archive/' \
-                "$SOURCE/" "$INSTALL_DIR/"
-            echo "local" > "$INSTALL_DIR/.install-method"
-            ok "Source copied to ${INSTALL_DIR}"
-            ;;
-        git)
-            step "Cloning from ${REPO_URL}"
-            if [[ -d "$INSTALL_DIR/.git" ]]; then
-                git -C "$INSTALL_DIR" pull --ff-only
-                ok "Updated existing git clone"
-            else
-                git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
-                ok "Cloned to ${INSTALL_DIR}"
-            fi
-            echo "git-release" > "$INSTALL_DIR/.install-method"
-            ;;
-        install)
-            # Default: download release tarball
-            if ! command -v curl &>/dev/null; then
-                fail "curl is required for tarball download"
-                echo -e "       ${C_GRAY}Fix: apt install curl  OR  use --from-git / --from-local${C_RESET}"
-                exit 1
-            fi
-            local tarball_url="${REPO_URL}/releases/download/v${FREQ_VERSION}/pve-freq-${FREQ_VERSION}.tar.gz"
-            local checksum_url="${tarball_url}.sha256"
-            local tmpdir
-            tmpdir=$(mktemp -d)
-            trap "rm -rf '$tmpdir'" EXIT
+  # Get files into INSTALL_DIR
+  case "$MODE" in
+    local)
+      step "Copying from ${SOURCE}"
+      if [[ ! -f "$SOURCE/freq/__init__.py" ]]; then
+        fail "Not a FREQ source directory: ${SOURCE}"
+        exit 1
+      fi
+      mkdir -p "$INSTALL_DIR"
+      # Copy source — exclude dev artifacts
+      rsync -a --delete \
+        --exclude='.git' \
+        --exclude='__pycache__' \
+        --exclude='*.pyc' \
+        --exclude='.pytest_cache' \
+        --exclude='*.egg-info' \
+        --include='conf/' \
+        --include='conf/*.example' \
+        --exclude='conf/*' \
+        --exclude='data/vault/*' \
+        --exclude='data/keys/*' \
+        --exclude='memory/' \
+        --exclude='resume-state.md' \
+        --exclude='CLAUDE.md' \
+        --exclude='cold-storage/' \
+        --exclude='skills/' \
+        --exclude='planning/' \
+        --exclude='reference/' \
+        --exclude='archive/' \
+        "$SOURCE/" "$INSTALL_DIR/"
+      echo "local" > "$INSTALL_DIR/.install-method"
+      ok "Source copied to ${INSTALL_DIR}"
+      ;;
+    git)
+      step "Cloning from ${REPO_URL}"
+      if [[ -d "$INSTALL_DIR/.git" ]]; then
+        git -C "$INSTALL_DIR" pull --ff-only
+        ok "Updated existing git clone"
+      else
+        git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
+        ok "Cloned to ${INSTALL_DIR}"
+      fi
+      echo "git-release" > "$INSTALL_DIR/.install-method"
+      ;;
+    install)
+      # Default: download release tarball
+      if ! command -v curl &>/dev/null; then
+        fail "curl is required for tarball download"
+        echo -e "    ${C_GRAY}Fix: apt install curl OR use --from-git / --from-local${C_RESET}"
+        exit 1
+      fi
+      local tarball_url="${REPO_URL}/releases/download/v${FREQ_VERSION}/pve-freq-${FREQ_VERSION}.tar.gz"
+      local checksum_url="${tarball_url}.sha256"
+      local tmpdir
+      tmpdir=$(mktemp -d)
+      trap "rm -rf '$tmpdir'" EXIT
 
-            step "Downloading PVE FREQ v${FREQ_VERSION}"
-            if ! curl -fsSL -o "$tmpdir/pve-freq.tar.gz" "$tarball_url"; then
-                fail "Download failed. Check your internet connection."
-                echo -e "       ${C_GRAY}URL: ${tarball_url}${C_RESET}"
-                echo -e "       ${C_GRAY}Alternative: install.sh --from-git${C_RESET}"
-                exit 1
-            fi
-            ok "Downloaded"
+      step "Downloading PVE FREQ v${FREQ_VERSION}"
+      if ! curl -fsSL -o "$tmpdir/pve-freq.tar.gz" "$tarball_url"; then
+        fail "Download failed. Check your internet connection."
+        echo -e "    ${C_GRAY}URL: ${tarball_url}${C_RESET}"
+        echo -e "    ${C_GRAY}Alternative: install.sh --from-git${C_RESET}"
+        exit 1
+      fi
+      ok "Downloaded"
 
-            # Verify checksum if available
-            if curl -fsSL -o "$tmpdir/pve-freq.tar.gz.sha256" "$checksum_url" 2>/dev/null; then
-                step "Verifying checksum"
-                cd "$tmpdir"
-                if sha256sum -c pve-freq.tar.gz.sha256 &>/dev/null; then
-                    ok "SHA256 verified"
-                else
-                    fail "Checksum mismatch — download may be corrupted"
-                    exit 1
-                fi
-                cd - >/dev/null
-            else
-                warn "Checksum file not available — skipping verification"
-            fi
-
-            step "Extracting"
-            mkdir -p "$INSTALL_DIR"
-            tar xzf "$tmpdir/pve-freq.tar.gz" -C "$INSTALL_DIR" --strip-components=1
-            echo "tarball" > "$INSTALL_DIR/.install-method"
-            ok "Extracted to ${INSTALL_DIR}"
-            ;;
-    esac
-
-    echo ""
-
-    # Create data directories
-    step "Setting up data directories"
-    mkdir -p "$INSTALL_DIR/data/log"
-    mkdir -p "$INSTALL_DIR/data/vault"
-    mkdir -p "$INSTALL_DIR/data/keys"
-    mkdir -p "$INSTALL_DIR/data/cache"
-    mkdir -p "$INSTALL_DIR/data/knowledge"
-    chmod 700 "$INSTALL_DIR/data/vault"
-    chmod 700 "$INSTALL_DIR/data/keys"
-    # Align initial ownership with the configured runtime account when it
-    # already exists locally. Otherwise leave the tree root-owned and let
-    # freq init perform the service-account handoff explicitly.
-    local svc_user
-    svc_user=$(detect_service_account)
-    if id "$svc_user" &>/dev/null; then
-        chown -R "$svc_user:$svc_user" "$INSTALL_DIR/data"
-    else
-        info "Data ownership deferred until init creates runtime account '${svc_user}'"
-    fi
-    ok "Data directories created"
-
-    # Seed config files from examples (idempotent — never overwrite existing)
-    step "Seeding configuration"
-    local seeded=0
-    for example in "$INSTALL_DIR"/conf/*.example; do
-        [[ -f "$example" ]] || continue
-        local active="${example%.example}"
-        if [[ ! -f "$active" ]]; then
-            cp "$example" "$active"
-            seeded=$((seeded + 1))
+      # Verify checksum if available
+      if curl -fsSL -o "$tmpdir/pve-freq.tar.gz.sha256" "$checksum_url" 2>/dev/null; then
+        step "Verifying checksum"
+        cd "$tmpdir"
+        if sha256sum -c pve-freq.tar.gz.sha256 &>/dev/null; then
+          ok "SHA256 verified"
+        else
+          fail "Checksum mismatch — download may be corrupted"
+          exit 1
         fi
-    done
+        cd - >/dev/null
+      else
+        warn "Checksum file not available — skipping verification"
+      fi
 
-    # Seed personality packs from package data
-    local pkg_personality="$INSTALL_DIR/freq/data/conf-templates/personality"
-    local conf_personality="$INSTALL_DIR/conf/personality"
-    if [[ -d "$pkg_personality" && ! -d "$conf_personality" ]]; then
-        mkdir -p "$conf_personality"
-        cp "$pkg_personality"/*.toml "$conf_personality/" 2>/dev/null
-        seeded=$((seeded + 1))
+      step "Extracting"
+      mkdir -p "$INSTALL_DIR"
+      tar xzf "$tmpdir/pve-freq.tar.gz" -C "$INSTALL_DIR" --strip-components=1
+      echo "tarball" > "$INSTALL_DIR/.install-method"
+      ok "Extracted to ${INSTALL_DIR}"
+      ;;
+  esac
+
+  echo ""
+
+  # Create data directories
+  step "Setting up data directories"
+  mkdir -p "$INSTALL_DIR/data/log"
+  mkdir -p "$INSTALL_DIR/data/vault"
+  mkdir -p "$INSTALL_DIR/data/keys"
+  mkdir -p "$INSTALL_DIR/data/cache"
+  mkdir -p "$INSTALL_DIR/data/knowledge"
+  chmod 700 "$INSTALL_DIR/data/vault"
+  chmod 700 "$INSTALL_DIR/data/keys"
+  # Align initial ownership with the configured runtime account when it
+  # already exists locally. Otherwise leave the tree root-owned and let
+  # freq init perform the service-account handoff explicitly.
+  local svc_user
+  svc_user=$(detect_service_account)
+  if id "$svc_user" &>/dev/null; then
+    chown -R "$svc_user:$svc_user" "$INSTALL_DIR/data"
+  else
+    info "Data ownership deferred until init creates runtime account '${svc_user}'"
+  fi
+  ok "Data directories created"
+
+  # Seed config files from examples (idempotent — never overwrite existing)
+  step "Seeding configuration"
+  local seeded=0
+  for example in "$INSTALL_DIR"/conf/*.example; do
+    [[ -f "$example" ]] || continue
+    local active="${example%.example}"
+    if [[ ! -f "$active" ]]; then
+      cp "$example" "$active"
+      seeded=$((seeded + 1))
     fi
+  done
 
-    if [[ $seeded -gt 0 ]]; then
-        ok "Created ${seeded} config file(s) from examples"
-    else
-        ok "Config files already exist"
-    fi
+  # Seed personality packs from package data
+  local pkg_personality="$INSTALL_DIR/freq/data/conf-templates/personality"
+  local conf_personality="$INSTALL_DIR/conf/personality"
+  if [[ -d "$pkg_personality" && ! -d "$conf_personality" ]]; then
+    mkdir -p "$conf_personality"
+    cp "$pkg_personality"/*.toml "$conf_personality/" 2>/dev/null
+    seeded=$((seeded + 1))
+  fi
 
-    echo ""
+  if [[ $seeded -gt 0 ]]; then
+    ok "Created ${seeded} config file(s) from examples"
+  else
+    ok "Config files already exist"
+  fi
 
-    # Set up entry point
-    #
-    # Two pieces, both always applied:
-    #   1. /usr/local/bin/freq wrapper — canonical CLI entrypoint. Sets
-    #      FREQ_DIR and PYTHONPATH to $INSTALL_DIR so the wrapper is
-    #      self-contained and never depends on site-packages state.
-    #   2. pve-freq.pth file in every /usr/local/lib/python3.*/dist-packages
-    #      directory — exposes $INSTALL_DIR on sys.path globally, so plain
-    #      `python3 -m freq …` and `python3 -c 'import freq'` work from any
-    #      shell on the installed VM (post-init CLI sweeps, ad-hoc ops).
-    #
-    # We do NOT use `pip install` here. On modern Debian (PEP 668 /
-    # EXTERNALLY-MANAGED), pip install into the system Python refuses
-    # unless --break-system-packages is passed, and even when it works
-    # it copies files into site-packages that go stale when $INSTALL_DIR
-    # changes. A .pth file pointing at $INSTALL_DIR stays live with every
-    # runtime sync and survives apt upgrades cleanly.
-    step "Setting up 'freq' command"
+  echo ""
 
-    # Wrapper (canonical)
-    cat > /usr/local/bin/freq << WRAPPER
+  # Set up entry point
+  #
+  # Two pieces, both always applied:
+  #  1. /usr/local/bin/freq wrapper — canonical CLI entrypoint. Sets
+  #   FREQ_DIR and PYTHONPATH to $INSTALL_DIR so the wrapper is
+  #   self-contained and never depends on site-packages state.
+  #  2. pve-freq.pth file in every /usr/local/lib/python3.*/dist-packages
+  #   directory — exposes $INSTALL_DIR on sys.path globally, so plain
+  #   `python3 -m freq …` and `python3 -c 'import freq'` work from any
+  #   shell on the installed VM (post-init CLI sweeps, ad-hoc ops).
+  #
+  # We do NOT use `pip install` here. On modern Debian (PEP 668 /
+  # EXTERNALLY-MANAGED), pip install into the system Python refuses
+  # unless --break-system-packages is passed, and even when it works
+  # it copies files into site-packages that go stale when $INSTALL_DIR
+  # changes. A .pth file pointing at $INSTALL_DIR stays live with every
+  # runtime sync and survives apt upgrades cleanly.
+  step "Setting up 'freq' command"
+
+  # Wrapper (canonical)
+  cat > /usr/local/bin/freq << WRAPPER
 #!/bin/sh
 FREQ_DIR="${INSTALL_DIR}" PYTHONPATH="${INSTALL_DIR}" exec python3 -m freq "\$@"
 WRAPPER
-    chmod 755 /usr/local/bin/freq
-    if ! /usr/local/bin/freq --version &>/dev/null; then
-        fail "Could not set up freq command"
-        exit 1
-    fi
-    ok "Installed wrapper (/usr/local/bin/freq)"
+  chmod 755 /usr/local/bin/freq
+  if ! /usr/local/bin/freq --version &>/dev/null; then
+    fail "Could not set up freq command"
+    exit 1
+  fi
+  ok "Installed wrapper (/usr/local/bin/freq)"
 
-    # .pth file (makes `python3 -m freq` work without the wrapper)
-    local pth_written=0
-    for site_dir in /usr/local/lib/python3.*/dist-packages; do
-        if [[ -d "$site_dir" ]]; then
-            echo "$INSTALL_DIR" > "$site_dir/pve-freq.pth"
-            pth_written=$((pth_written + 1))
-        fi
-    done
-    if [[ $pth_written -gt 0 ]]; then
-        ok "Exposed freq on sys.path via pve-freq.pth (${pth_written} site-packages)"
-    else
-        warn "No /usr/local/lib/python3.*/dist-packages found — python3 -m freq will only work via the wrapper"
+  # .pth file (makes `python3 -m freq` work without the wrapper)
+  local pth_written=0
+  for site_dir in /usr/local/lib/python3.*/dist-packages; do
+    if [[ -d "$site_dir" ]]; then
+      echo "$INSTALL_DIR" > "$site_dir/pve-freq.pth"
+      pth_written=$((pth_written + 1))
     fi
+  done
+  if [[ $pth_written -gt 0 ]]; then
+    ok "Exposed freq on sys.path via pve-freq.pth (${pth_written} site-packages)"
+  else
+    warn "No /usr/local/lib/python3.*/dist-packages found — python3 -m freq will only work via the wrapper"
+  fi
 
-    echo ""
+  echo ""
 }
 
 # ── Post-install ───────────────────────────────────────────────────────────
 
 post_install() {
-    # Verify version
-    local installed_ver
-    installed_ver=$(freq --version 2>/dev/null | head -1 || echo "unknown")
-    step "Installed: ${installed_ver}"
+  # Verify version
+  local installed_ver
+  installed_ver=$(freq --version 2>/dev/null | head -1 || echo "unknown")
+  step "Installed: ${installed_ver}"
+  echo ""
+
+  # Run doctor
+  if [[ "$SKIP_DOCTOR" == false ]]; then
+    echo -e "${C_BOLD}Running diagnostics...${C_RESET}"
     echo ""
-
-    # Run doctor
-    if [[ "$SKIP_DOCTOR" == false ]]; then
-        echo -e "${C_BOLD}Running diagnostics...${C_RESET}"
-        echo ""
-        if ! freq doctor; then
-            fail "Post-install verification failed"
-            exit 1
-        fi
-        echo ""
+    if ! freq doctor; then
+      fail "Post-install verification failed"
+      exit 1
     fi
+    echo ""
+  fi
 
-    # Install systemd unit if requested — templated to match actual install dir
-    if [[ "$WITH_SYSTEMD" == true ]]; then
-        step "Installing systemd unit"
-        # Detect service account (match what init creates)
-        local svc_user
-        svc_user=$(detect_service_account)
-        cat > /etc/systemd/system/freq-serve.service << UNIT
+  # Install systemd unit if requested — templated to match actual install dir
+  if [[ "$WITH_SYSTEMD" == true ]]; then
+    step "Installing systemd unit"
+    # Detect service account (match what init creates)
+    local svc_user
+    svc_user=$(detect_service_account)
+    cat > /etc/systemd/system/freq-serve.service << UNIT
 [Unit]
 Description=PVE FREQ Dashboard
 After=network-online.target
@@ -555,128 +555,128 @@ SyslogIdentifier=freq-serve
 [Install]
 WantedBy=multi-user.target
 UNIT
-        systemctl daemon-reload
-        systemctl enable freq-serve
-        ok "Systemd unit installed (freq-serve.service)"
-        info "  User=${svc_user}, FREQ_DIR=${INSTALL_DIR}"
-        info "Start with: systemctl start freq-serve"
-        echo ""
-    fi
+    systemctl daemon-reload
+    systemctl enable freq-serve
+    ok "Systemd unit installed (freq-serve.service)"
+    info " User=${svc_user}, FREQ_DIR=${INSTALL_DIR}"
+    info "Start with: systemctl start freq-serve"
+    echo ""
+  fi
 
-    # Next steps
-    echo -e "${C_GREEN}${C_BOLD}PVE FREQ v${FREQ_VERSION} installed successfully.${C_RESET}"
-    echo ""
-    echo -e "  ${C_BOLD}Next steps:${C_RESET}"
-    echo -e "    1. Run ${C_CYAN}sudo freq init${C_RESET} — discovers your cluster and deploys fleet access"
-    echo -e "    2. Run ${C_CYAN}freq doctor${C_RESET} to verify everything is healthy"
-    if [[ "$WITH_SYSTEMD" == true ]]; then
-        echo -e "    3. Run ${C_CYAN}systemctl start freq-serve${C_RESET} to start the dashboard"
-    else
-        echo -e "    3. Run ${C_CYAN}freq serve${C_RESET} to start the dashboard"
-    fi
-    echo ""
-    echo -e "  ${C_GRAY}Documentation: ${REPO_URL}${C_RESET}"
-    echo ""
+  # Next steps
+  echo -e "${C_GREEN}${C_BOLD}PVE FREQ v${FREQ_VERSION} installed successfully.${C_RESET}"
+  echo ""
+  echo -e " ${C_BOLD}Next steps:${C_RESET}"
+  echo -e "  1. Run ${C_CYAN}sudo freq init${C_RESET} — discovers your cluster and deploys fleet access"
+  echo -e "  2. Run ${C_CYAN}freq doctor${C_RESET} to verify everything is healthy"
+  if [[ "$WITH_SYSTEMD" == true ]]; then
+    echo -e "  3. Run ${C_CYAN}systemctl start freq-serve${C_RESET} to start the dashboard"
+  else
+    echo -e "  3. Run ${C_CYAN}freq serve${C_RESET} to start the dashboard"
+  fi
+  echo ""
+  echo -e " ${C_GRAY}Documentation: ${REPO_URL}${C_RESET}"
+  echo ""
 }
 
 # ── Uninstall ──────────────────────────────────────────────────────────────
 
 do_uninstall() {
-    echo -e "${C_BOLD}Uninstalling PVE FREQ${C_RESET}"
+  echo -e "${C_BOLD}Uninstalling PVE FREQ${C_RESET}"
+  echo ""
+
+  # Must be root
+  if [[ $EUID -ne 0 ]]; then
+    fail "Must run as root (use sudo)"
+    exit 1
+  fi
+
+  # Warn about fleet accounts
+  if [[ -d "$INSTALL_DIR/data/keys" ]] && ls "$INSTALL_DIR"/data/keys/freq_id_* &>/dev/null 2>&1; then
+    echo -e " ${C_YELLOW}WARNING: FREQ SSH keys still exist in ${INSTALL_DIR}/data/keys/${C_RESET}"
+    echo -e " ${C_YELLOW}Fleet hosts may still have the FREQ service account.${C_RESET}"
+    echo -e " ${C_YELLOW}Run 'sudo freq init --uninstall' first to clean up fleet hosts.${C_RESET}"
     echo ""
-
-    # Must be root
-    if [[ $EUID -ne 0 ]]; then
-        fail "Must run as root (use sudo)"
-        exit 1
+    if [[ "$YES" == false ]]; then
+      read -rp " Continue with local uninstall anyway? [y/N]: " confirm
+      if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        echo " Aborted."
+        exit 0
+      fi
     fi
+  fi
 
-    # Warn about fleet accounts
-    if [[ -d "$INSTALL_DIR/data/keys" ]] && ls "$INSTALL_DIR"/data/keys/freq_id_* &>/dev/null 2>&1; then
-        echo -e "  ${C_YELLOW}WARNING: FREQ SSH keys still exist in ${INSTALL_DIR}/data/keys/${C_RESET}"
-        echo -e "  ${C_YELLOW}Fleet hosts may still have the FREQ service account.${C_RESET}"
-        echo -e "  ${C_YELLOW}Run 'sudo freq init --uninstall' first to clean up fleet hosts.${C_RESET}"
-        echo ""
-        if [[ "$YES" == false ]]; then
-            read -rp "  Continue with local uninstall anyway? [y/N]: " confirm
-            if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-                echo "  Aborted."
-                exit 0
-            fi
-        fi
+  # Remove pip package
+  if command -v pip3 &>/dev/null; then
+    step "Removing pip package"
+    pip3 uninstall -y pve-freq 2>/dev/null && ok "pip package removed" || true
+  fi
+
+  # Remove wrapper script
+  if [[ -f /usr/local/bin/freq ]]; then
+    rm -f /usr/local/bin/freq
+    ok "Removed /usr/local/bin/freq"
+  fi
+
+  # Remove site-packages .pth files that pointed python3 -m freq at the
+  # install dir. Leaving them behind breaks imports after uninstall.
+  local pth_removed=0
+  for site_dir in /usr/local/lib/python3.*/dist-packages; do
+    if [[ -f "$site_dir/pve-freq.pth" ]]; then
+      rm -f "$site_dir/pve-freq.pth"
+      pth_removed=$((pth_removed + 1))
     fi
+  done
+  if [[ $pth_removed -gt 0 ]]; then
+    ok "Removed pve-freq.pth from ${pth_removed} site-packages path(s)"
+  fi
 
-    # Remove pip package
-    if command -v pip3 &>/dev/null; then
-        step "Removing pip package"
-        pip3 uninstall -y pve-freq 2>/dev/null && ok "pip package removed" || true
+  # Remove systemd unit if install.sh created it.
+  if [[ -f /etc/systemd/system/freq-serve.service ]]; then
+    systemctl disable --now freq-serve.service >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/freq-serve.service
+    systemctl daemon-reload
+    ok "Removed freq-serve.service"
+  fi
+
+  # Remove install directory
+  if [[ -d "$INSTALL_DIR" ]]; then
+    if [[ "$YES" == false ]]; then
+      echo ""
+      echo -e " ${C_YELLOW}This will remove all FREQ files including config:${C_RESET}"
+      echo -e " ${C_YELLOW} ${INSTALL_DIR}${C_RESET}"
+      read -rp " Are you sure? [y/N]: " confirm
+      if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        echo " Aborted. Files remain at ${INSTALL_DIR}"
+        exit 0
+      fi
     fi
+    rm -rf "$INSTALL_DIR"
+    ok "Removed ${INSTALL_DIR}"
+  else
+    info "Install directory not found: ${INSTALL_DIR}"
+  fi
 
-    # Remove wrapper script
-    if [[ -f /usr/local/bin/freq ]]; then
-        rm -f /usr/local/bin/freq
-        ok "Removed /usr/local/bin/freq"
-    fi
-
-    # Remove site-packages .pth files that pointed python3 -m freq at the
-    # install dir. Leaving them behind breaks imports after uninstall.
-    local pth_removed=0
-    for site_dir in /usr/local/lib/python3.*/dist-packages; do
-        if [[ -f "$site_dir/pve-freq.pth" ]]; then
-            rm -f "$site_dir/pve-freq.pth"
-            pth_removed=$((pth_removed + 1))
-        fi
-    done
-    if [[ $pth_removed -gt 0 ]]; then
-        ok "Removed pve-freq.pth from ${pth_removed} site-packages path(s)"
-    fi
-
-    # Remove systemd unit if install.sh created it.
-    if [[ -f /etc/systemd/system/freq-serve.service ]]; then
-        systemctl disable --now freq-serve.service >/dev/null 2>&1 || true
-        rm -f /etc/systemd/system/freq-serve.service
-        systemctl daemon-reload
-        ok "Removed freq-serve.service"
-    fi
-
-    # Remove install directory
-    if [[ -d "$INSTALL_DIR" ]]; then
-        if [[ "$YES" == false ]]; then
-            echo ""
-            echo -e "  ${C_YELLOW}This will remove all FREQ files including config:${C_RESET}"
-            echo -e "  ${C_YELLOW}  ${INSTALL_DIR}${C_RESET}"
-            read -rp "  Are you sure? [y/N]: " confirm
-            if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-                echo "  Aborted. Files remain at ${INSTALL_DIR}"
-                exit 0
-            fi
-        fi
-        rm -rf "$INSTALL_DIR"
-        ok "Removed ${INSTALL_DIR}"
-    else
-        info "Install directory not found: ${INSTALL_DIR}"
-    fi
-
-    echo ""
-    echo -e "${C_GREEN}FREQ removed from this host.${C_RESET}"
-    echo -e "${C_GRAY}Fleet hosts were NOT modified. To remove FREQ from fleet hosts,${C_RESET}"
-    echo -e "${C_GRAY}run 'sudo freq init --uninstall' before uninstalling.${C_RESET}"
-    echo ""
+  echo ""
+  echo -e "${C_GREEN}FREQ removed from this host.${C_RESET}"
+  echo -e "${C_GRAY}Fleet hosts were NOT modified. To remove FREQ from fleet hosts,${C_RESET}"
+  echo -e "${C_GRAY}run 'sudo freq init --uninstall' before uninstalling.${C_RESET}"
+  echo ""
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────
 
 main() {
-    if [[ "$MODE" == "uninstall" ]]; then
-        banner
-        do_uninstall
-        exit 0
-    fi
-
+  if [[ "$MODE" == "uninstall" ]]; then
     banner
-    preflight
-    do_install
-    post_install
+    do_uninstall
+    exit 0
+  fi
+
+  banner
+  preflight
+  do_install
+  post_install
 }
 
 main

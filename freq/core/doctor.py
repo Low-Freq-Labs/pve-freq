@@ -137,7 +137,7 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
 
         total = passed + failed + warnings
         status = "healthy" if failed == 0 and warnings == 0 else "degraded" if failed == 0 else "unhealthy"
-        # R-PRODUCT-LAW-BACKEND-TRUTH: doctor must carry a top-level
+        # doctor must carry a top-level
         # reason so Morty's post-auth banner can explain *why* FREQ is
         # degraded without re-deriving it from the checks array, and
         # a checked_at timestamp so a tired operator can tell fresh
@@ -418,7 +418,7 @@ def _check_rbac_bootstrap(cfg: FreqConfig) -> int:
     }
     common = sorted(role_admins & user_admins)
     if not user_admins:
-        # R-PVEFREQ-HIGH-DOCTOR-SEVERITY-20260416AJ: distinguish pre-init
+        # distinguish pre-init
         # (no files / empty files) from a real RBAC gap (files exist with
         # entries but no non-service admin). Pre-init is a warn; RBAC gap
         # where the only admin is the service account is a fail.
@@ -576,7 +576,7 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
         "switch": "show version | include uptime",
     }
 
-    # R-PRODUCT-LAW-BACKEND-TRUTH: route every failure through the
+    # route every failure through the
     # shared classifier so doctor surfaces the same six-state reason
     # strings as /api/health and `freq fleet status`. Three surfaces,
     # one truth — no surface gets to be vaguer than the others.
@@ -875,13 +875,13 @@ def _check_pve_nodes(cfg: FreqConfig) -> int:
 
     reachable = 0
     pve_version = ""
-    # R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the runtime PVE token belongs
+    # the runtime PVE token belongs
     # to cfg.ssh_service_account (default "freq-admin"). The fallback
     # token_id is derived from the configured identity, not the legacy
     # freq-ops@pam name. cfg.pve_api_token_id (set by Phase 6 and loaded
     # from freq.toml) is the authoritative source; the fallback only
     # applies when freq.toml has no api_token_id at all.
-    # R-PVEFREQ-FINAL-RUNTIME-TRUTH-20260416AI: identity fallbacks log
+    # identity fallbacks log
     # a warning instead of silently substituting. The cfg default for
     # ssh_service_account is already "freq-admin" — if it's empty here,
     # something is broken in config load and the operator must know.
@@ -1005,12 +1005,12 @@ def _probe_pve_api_token(node_ip: str, token_id: str, token_secret: str) -> tupl
 def _check_pve_token_drift(cfg: FreqConfig) -> int:
     """Probe the runtime PVE API token across every configured node.
 
-    R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the runtime PVE token is the
+    the runtime PVE token is the
     RW token owned by cfg.ssh_service_account (default freq-admin).
     Prior versions of this check also probed a read-only "pve-token"
     file at /etc/freq/credentials/pve-token using an ad-hoc
     PVE_TOKEN_ID=...\\nPVE_TOKEN_SECRET=... format. That RO token was
-    a Jarvis (infra lane) construct for a separate metrics-scraping
+    an infrastructure-only construct for a separate metrics-scraping
     workflow and was never part of the FREQ product runtime contract.
     Keeping it in the runtime doctor check caused two problems:
 

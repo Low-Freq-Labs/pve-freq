@@ -1,4 +1,4 @@
-"""R-POSTINIT-CHAOS-DIR-OWNERSHIP-20260413V regression contract.
+""" regression contract.
 
 The actual root-cause fix for the chaos log 500 Finn saw on 5005 (T-6
 of the red-team pass only caught the symptom with a PermissionError
@@ -83,7 +83,7 @@ class TestEnsurePostInitDataOwnership(unittest.TestCase):
                 return (0, "", "")
             with mock.patch.object(init_cmd, "_run", side_effect=fake_chown_run), \
                  mock.patch("pwd.getpwnam", return_value=self._fake_pwnam()):
-                ok = init_cmd._ensure_post_init_data_ownership(cfg, "rickfake")
+                ok = init_cmd._ensure_post_init_data_ownership(cfg, "testadmin")
             self.assertTrue(ok)
             for sub in init_cmd.POST_INIT_DATA_SUBDIRS:
                 self.assertTrue(
@@ -105,8 +105,8 @@ class TestEnsurePostInitDataOwnership(unittest.TestCase):
                 return (0, "", "")
             with mock.patch.object(init_cmd, "_run", side_effect=fake_chown_run), \
                  mock.patch("pwd.getpwnam", return_value=self._fake_pwnam()):
-                ok1 = init_cmd._ensure_post_init_data_ownership(cfg, "rickfake")
-                ok2 = init_cmd._ensure_post_init_data_ownership(cfg, "rickfake")
+                ok1 = init_cmd._ensure_post_init_data_ownership(cfg, "testadmin")
+                ok2 = init_cmd._ensure_post_init_data_ownership(cfg, "testadmin")
             self.assertTrue(ok1)
             self.assertTrue(ok2)
 
@@ -147,7 +147,7 @@ class TestEnsurePostInitDataOwnership(unittest.TestCase):
             with mock.patch.object(init_cmd, "_run", side_effect=fake_run), \
                  mock.patch("pwd.getpwnam", return_value=self._fake_pwnam()), \
                  mock.patch("os.chown", side_effect=counting_chown):
-                ok = init_cmd._ensure_post_init_data_ownership(cfg, "rickfake")
+                ok = init_cmd._ensure_post_init_data_ownership(cfg, "testadmin")
 
             self.assertTrue(ok)
             self.assertEqual(chown_calls["n"], 1, "chown -R must be tried once")

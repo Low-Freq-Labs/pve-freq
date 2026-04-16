@@ -1,6 +1,6 @@
 """Phase 6 PVE API token bootstrap — product-contract pins.
 
-R-PVEFREQ-INIT-PVEAPI-CORE-20260415B + R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C
+ + 
 
 Finn declared the PVE API token bootstrap inside `freq init` a required
 product contract. These static tests pin the seven contract surfaces
@@ -10,7 +10,7 @@ at the source level so future refactors cannot silently drift them back:
                                (default freq-admin@pam), derived from the
                                configured service account — NOT the legacy
                                freq-ops@pam identity. See
-                               R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C.
+                               .
   2. Token creation         — token name is freq-rw, full token_id is
                                f"{svc_name}@pam!freq-rw"
   3. Role/ACL reconciliation — PVEAuditor + PVEVMUser granted on EVERY
@@ -110,7 +110,7 @@ class TestPhase6IdentityAndToken(unittest.TestCase):
 class TestPhase6AntiLegacyGuard(unittest.TestCase):
     """Contract guard: the legacy freq-ops@pam identity must not be hardcoded as a token owner.
 
-    R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the runtime PVE API token
+    the runtime PVE API token
     belongs to cfg.ssh_service_account, not freq-ops@pam. Any hardcoded
     "freq-ops@pam!freq-rw" or "pveum user add freq-ops@pam" pattern in
     the Phase 6 function is a regression — it would mean the svc-account
@@ -304,7 +304,7 @@ class TestPhase6DoctorPathAlignment(unittest.TestCase):
     def test_doctor_fallback_token_id_uses_svc_name(self):
         """doctor's fallback token_id must derive from cfg.ssh_service_account, not freq-ops@pam.
 
-        R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: when freq.toml has no
+        when freq.toml has no
         api_token_id at all (pre-init install, or stripped config),
         doctor must fall back to the svc-account-derived id, not the
         legacy freq-ops@pam hardcode.
@@ -326,7 +326,7 @@ class TestPhase6DoctorPathAlignment(unittest.TestCase):
     def test_doctor_pve_token_drift_has_no_ro_legacy(self):
         """_check_pve_token_drift must not read the Jarvis-legacy /etc/freq/credentials/pve-token RO file.
 
-        R-PVEFREQ-SVC-TOKEN-CONTRACT-20260415C: the RO token at
+        the RO token at
         /etc/freq/credentials/pve-token (PVE_TOKEN_ID=... format) was
         a Jarvis infra-lane construct, not a product runtime concept.
         Keeping it in the runtime doctor check conflated two distinct

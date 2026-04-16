@@ -98,7 +98,7 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
         ("HEALTH", 8),
     )
 
-    # R-PRODUCT-LAW-BACKEND-TRUTH: failure paths route through the
+    # failure paths route through the
     # shared classifier so the fleet health table names the failure
     # class (auth_failed / unreachable / degraded) alongside the
     # metric-based grading. Metric axis (load/ram/disk → healthy/
@@ -272,7 +272,7 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
         f"{fmt.C.YELLOW}{degraded}{fmt.C.RESET} degraded  "
         f"{fmt.C.RED}{critical}{fmt.C.RESET} critical"
     )
-    # R-PRODUCT-LAW-BACKEND-TRUTH: probe-failure classes are a
+    # probe-failure classes are a
     # different axis than load grading but must still be named so an
     # operator knows whether a red host is overloaded or unreachable.
     if auth_failed_n:

@@ -170,7 +170,7 @@ def handle_health_api(handler):
     def _probe_host(h):
         """Cold-cache fallback probe with parity to serve.py _bg_probe_health.
 
-        R-PRODUCT-LAW-BACKEND-TRUTH: must emit the same six-state
+        must emit the same six-state
         contract as the background probe so the operator never sees a
         lying entry just because the cache was cold when they opened
         the dashboard.
@@ -322,7 +322,7 @@ def handle_fleet_overview(handler):
         response["age"] = age_seconds
         response["age_seconds"] = age_seconds
         response["stale"] = age_seconds > 120
-        # R-PRODUCT-LAW-BACKEND-TRUTH: if the cached payload predates
+        # if the cached payload predates
         # the fleet_state rollout (disk cache from an older build), or
         # a newly-added node didn't get stamped during the last bg
         # refresh, compute the rollup on-the-fly so the banner always

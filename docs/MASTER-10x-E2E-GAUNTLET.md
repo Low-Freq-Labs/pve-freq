@@ -39,7 +39,7 @@ Operational takeaway:
 - cleanup and rerun discipline matters as much as the run itself
 
 Additional malicious-training input now folded into this master:
-- joint Rick + Morty v2 appendix at `/opt/freq-devs/rick/findings/R-PVEFREQ-MALICIOUS-TRAINING-20260415H-v2.md`
+- joint Rick + Morty v2 appendix at `/opt/freq-devs/rick/findings/v2.md`
 - 8-persona threat model
 - 30 unified attack patterns across 21 categories
 - backend/runtime and web/operator abuse merged into one matrix
