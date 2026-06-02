@@ -33,6 +33,10 @@ function badge(s){var c={
   CRITICAL:'CRITICAL',HIGH:'HIGH',MEDIUM:'MEDIUM',
   created:'created',remote:'remote',paused:'paused',unknown:'unknown'
 }[s]||'warn';var label=String(s).replace(/_/g,' ').toUpperCase();return '<span class="badge '+c+'">'+label+'</span>';}
+function _healthState(h){return (h&&(h.state||h.status))||'unknown';}
+function _healthIsLive(h){var s=_healthState(h);return s==='live'||s==='recovering'||s==='healthy'||s==='up'||s==='ok';}
+function _healthIsBad(h){var s=_healthState(h);return s==='unreachable'||s==='auth_failed'||s==='degraded'||s==='down';}
+function _healthIsStale(h){return _healthState(h)==='stale';}
 function s(l,v,c){return '<div class="st"><div class="lb">'+l+'</div><div class="vl '+c+'">'+v+'</div></div>';}
 var st=s;
 function _pbar(pct,color){var p=pct||0;var c=p>=90?'var(--red)':p>=75?'var(--yellow)':color||'var(--purple-light)';return '<div class="pbar"><div class="pbar-fill" style="width:'+p+'%;background:'+c+'"></div></div>';}
@@ -1673,7 +1677,7 @@ function _loadHomeFleetStats(){
   _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
     if(!hd||!hd.hosts)hd={hosts:[],duration:0};
     var up=0,down=0,pve=0;var _homeLabLabels=_getLabLabels(hd.hosts);var lab=Object.keys(_homeLabLabels||{}).length;
-    hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;if(h.type==='pve')pve++;});
+    hd.hosts.forEach(function(h){if(_healthIsLive(h))up++;else if(_healthIsBad(h))down++;if(h.type==='pve')pve++;});
     var totalAll=hd.hosts.length;
     var totalOff=down;var prodCount=totalAll-lab;var pveCount=PROD_HOSTS.filter(function(h){return h.type==='pve';}).length||pve;
     /* Densified tile builder. opts:
@@ -2143,7 +2147,7 @@ function _silentHealthRefresh(){
             if(h.status==='healthy'){last.style.color='var(--green)';last.textContent='UP';}
             else{last.style.color='var(--red)';last.textContent='DOWN';}}}
         /* Update metrics in-place */
-        if(h.status!=='healthy')return;
+        if(!_healthIsLive(h))return;
         /* Skip PVE nodes — their metrics come from the PVE API poller which
            gives real CPU%. The SSH health data uses load_average which is wrong. */
         if(h.type==='pve')return;
@@ -2162,7 +2166,7 @@ function _silentHealthRefresh(){
         });
     });
     /* Update fleet stats online/offline counts */
-    var up=0,down=0;hd.hosts.forEach(function(h){if(h.status==='healthy')up++;else down++;});
+    var up=0,down=0;hd.hosts.forEach(function(h){if(_healthIsLive(h))up++;else if(_healthIsBad(h))down++;});
     var sumEl=document.getElementById('metrics-summary');
     if(sumEl){var sts=sumEl.querySelectorAll('.st .vl');if(sts.length>=2){sts[0].textContent=up;sts[1].textContent=down;}}
     /* Update probe age indicator */
@@ -5199,7 +5203,7 @@ function _infraRoleCard(ph,healthMap){
   if(!ph||!ph.type)return '';
   var roleInfo=(INFRA_ROLES||{})[ph.type]||{role:(ph.type||'DEVICE').toUpperCase(),icon:'\u2726',color:'var(--text-dim)'};
   var live=healthMap[ph.label];
-  var up=ph.reachable||false;if(live&&live.status==='healthy')up=true;
+  var up=ph.reachable||false;if(live&&_healthIsLive(live))up=true;
   var safeId=ph.label.replace(/[^a-zA-Z0-9]/g,'-');
   var c='<div class="infra-role-card" onclick="openHost(\''+ph.label+'\')">';
   /* Role label row */
@@ -5274,12 +5278,17 @@ function _enrichInfraCards(){
           h+=_m('No SSH','METRICS','var(--text-dim)');
         }
       } else if(dev.type==='truenas'||dev.type==='synology'||dev.type==='unraid'){
-        var poolColor=m.pool_health==='ONLINE'?'var(--green)':m.pool_health==='DEGRADED'?'var(--yellow)':'var(--red)';
-        h+=_m(m.pool_health||'?','POOLS',poolColor);
-        h+=_m(m.capacity_pct||'?','USED',parseInt(m.capacity_pct)>=85?'var(--red)':'var(--green)');
-        h+=_m(m.total_size||'?','TOTAL','var(--blue)');
-        var alertCount=m.alerts||0;
-        h+=_m(alertCount,'ALERTS',alertCount>0?'var(--yellow)':'var(--green)');
+        if(m.note){
+          h+=_m('REACHABLE','NETWORK','var(--green)');
+          h+=_m(m.note,'SSH','var(--yellow)');
+        } else {
+          var poolColor=m.pool_health==='ONLINE'?'var(--green)':m.pool_health==='DEGRADED'?'var(--yellow)':'var(--red)';
+          h+=_m(m.pool_health||'?','POOLS',poolColor);
+          h+=_m(m.capacity_pct||'?','USED',parseInt(m.capacity_pct)>=85?'var(--red)':'var(--green)');
+          h+=_m(m.total_size||'?','TOTAL','var(--blue)');
+          var alertCount=m.alerts||0;
+          h+=_m(alertCount,'ALERTS',alertCount>0?'var(--yellow)':'var(--green)');
+        }
       } else if(dev.type==='switch'){
         if(m.ports_up)h+=_m(m.ports_up,'PORTS UP','var(--green)');
         if(m.vlans)h+=_m(m.vlans,'VLANs','var(--cyan)');
@@ -5592,8 +5601,7 @@ function _renderFleetData(fo,hd,md){
     if(hd&&hd.hosts){
       hd.hosts.forEach(function(h){
         healthMap[h.label]=h;
-        var up=h.status==='healthy';
-        if(up)totalUp++;else totalDown++;
+        if(_healthIsLive(h))totalUp++;else if(_healthIsBad(h))totalDown++;
         if(h.type==='pve'&&labLabels[h.label])labPveNodes++;
       });
     }

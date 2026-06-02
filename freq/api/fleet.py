@@ -52,7 +52,7 @@ import freq
 def handle_status(handler):
     """GET /api/status -- fleet host status via SSH uptime probe."""
     cfg = load_config()
-    hosts = cfg.hosts
+    hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]
     start = time.monotonic()
 
     results = ssh_run_many(

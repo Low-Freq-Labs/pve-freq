@@ -67,6 +67,7 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         src = (REPO_ROOT / "freq" / "api" / "fleet.py").read_text()
         self.assertIn("active_hosts = [h for h in cfg.hosts if getattr(h, \"managed\", True)]", src)
         self.assertIn("pool.submit(_probe_host, h): h for h in active_hosts", src)
+        self.assertIn("hosts = [h for h in cfg.hosts if getattr(h, \"managed\", True)]", src)
 
     def test_init_deploy_phase_uses_managed_hosts_only(self):
         src = (REPO_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
@@ -88,6 +89,23 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("unreachable=state_counts[STATE_UNREACHABLE]", src)
         self.assertIn('f"{h_e[\'label\']} is now {cur_state}"', src)
         self.assertNotIn('unreachable_count = sum(1 for h in host_data if h.get("status") != "healthy")', src)
+
+    def test_frontend_does_not_count_stale_as_down(self):
+        src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+        self.assertIn("function _healthIsLive", src)
+        self.assertIn("function _healthIsBad", src)
+        self.assertIn("if(_healthIsLive(h))up++;else if(_healthIsBad(h))down++;", src)
+        self.assertIn("if(_healthIsLive(h))totalUp++;else if(_healthIsBad(h))totalDown++;", src)
+
+    def test_truenas_auth_failure_keeps_ping_reachability_separate(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        web_src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+        self.assertIn("ssh_auth_failed_ping", src)
+        self.assertIn("Ping reachable; SSH metrics unavailable", src)
+        self.assertIn('failure_log_level="warn"', src)
+        self.assertIn("if r.returncode == 0:", src)
+        self.assertIn('command="midclt call alert.list"', src)
+        self.assertIn("_m('REACHABLE','NETWORK','var(--green)')", web_src)
 
 
 if __name__ == "__main__":

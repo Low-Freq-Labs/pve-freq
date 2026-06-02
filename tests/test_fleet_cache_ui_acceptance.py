@@ -140,14 +140,14 @@ class TestFrontendCacheHonesty(unittest.TestCase):
     def test_shows_probe_error_in_status(self):
         """Probe error state shown in connection status indicator."""
         src = self._app_js()
-        self.assertIn("PROBE ERROR", src)
+        self.assertIn("PROBE FAILED", src)
 
     def test_shows_age_with_color_coding(self):
         """Age labels use color coding: green < 30s, yellow < 120s, red > 120s."""
         src = self._app_js()
         # Age label rendering
         self.assertIn("LIVE", src)
-        self.assertIn("AGO", src)
+        self.assertIn("_freshChip", src)
         # Color thresholds
         self.assertIn("_age<30", src)
         self.assertIn("_age<120", src)
@@ -171,11 +171,11 @@ class TestFrontendCacheHonesty(unittest.TestCase):
 
     def test_fleet_overview_unavailable_on_error(self):
         src = self._app_js()
-        self.assertIn("Fleet overview unavailable", src)
+        self.assertIn("_markApiDegraded('fleet overview','network')", src)
 
     def test_health_check_unavailable_on_error(self):
         src = self._app_js()
-        self.assertIn("Health check unavailable", src)
+        self.assertIn("_markApiDegraded('health','network')", src)
 
 
 class TestCacheConsistency(unittest.TestCase):

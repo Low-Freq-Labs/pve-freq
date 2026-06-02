@@ -339,6 +339,7 @@ def _bg_probe_infra():
                     htype="pfsense",
                     use_sudo=False,
                     cfg=cfg,
+                    failure_log_level="warn",
                 )
                 if r.returncode == 0 and r.stdout.strip():
                     d["reachable"] = True
@@ -376,19 +377,21 @@ def _bg_probe_infra():
                     htype="truenas",
                     use_sudo=True,
                     cfg=cfg,
-                )
-                r2 = ssh_single(
-                    host=dev.ip,
-                    command="midclt call alert.list",
-                    key_path=fleet_key,
-                    user=bootstrap_user,
-                    connect_timeout=2,
-                    command_timeout=8,
-                    htype="truenas",
-                    use_sudo=True,
-                    cfg=cfg,
+                    failure_log_level="warn",
                 )
                 if r.returncode == 0:
+                    r2 = ssh_single(
+                        host=dev.ip,
+                        command="midclt call alert.list",
+                        key_path=fleet_key,
+                        user=bootstrap_user,
+                        connect_timeout=2,
+                        command_timeout=8,
+                        htype="truenas",
+                        use_sudo=True,
+                        cfg=cfg,
+                        failure_log_level="warn",
+                    )
                     d["reachable"] = True
                     d["probe_method"] = "ssh"
                     m = d["metrics"]
@@ -432,8 +435,13 @@ def _bg_probe_infra():
                         m["alerts"] = 0
                 elif _is_auth_failure(r.stderr):
                     d["auth_failed"] = True
-                    d["probe_method"] = "ssh_auth_failed"
-                    d["metrics"]["note"] = "SSH auth failed — credentials rejected"
+                    d["reachable"] = _ping_check(dev.ip)
+                    d["probe_method"] = "ssh_auth_failed_ping" if d["reachable"] else "ssh_auth_failed"
+                    d["metrics"]["note"] = (
+                        "Ping reachable; SSH metrics unavailable — credentials rejected"
+                        if d["reachable"] else
+                        "SSH auth failed — credentials rejected"
+                    )
                 else:
                     d["reachable"] = _ping_check(dev.ip)
                     d["probe_method"] = "ping" if d["reachable"] else "none"
@@ -462,6 +470,7 @@ def _bg_probe_infra():
                         htype="switch",
                         use_sudo=False,
                         cfg=cfg,
+                        failure_log_level="warn",
                     )
                 if r.returncode == 0 and r.stdout.strip():
                     d["reachable"] = True
