@@ -50,6 +50,9 @@ class TestFleetPhysicalScope(unittest.TestCase):
         self.assertIn("corePhysicals", src)
         self.assertIn("labPhysicals", src)
         self.assertIn("infraLabels", src)
+        self.assertIn("var corePhysical=fo.physical?fo.physical.filter(function(p){return !_isLabPhysical(p);}):[];", src)
+        self.assertIn("var tnDev=corePhysical.find(function(p){return p.type==='truenas'})||null;", src)
+        self.assertIn("(fo.physical||[]).filter(function(p){return !_isLabPhysical(p);}).forEach(function(p)", src)
 
 
 class TestFleetProbeNoiseContract(unittest.TestCase):

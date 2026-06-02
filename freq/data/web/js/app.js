@@ -2864,12 +2864,13 @@ function _renderFleetOverview(fo){
     ps+=_mrow('STOPPED',fo.summary.stopped,0,fo.summary.stopped>0?'var(--red)':'var(--green)');
     var pse=document.getElementById('home-pve-summary');if(pse)pse.innerHTML=ps;
     /* pfSense */
-    var pfDev=fo.physical?fo.physical.find(function(p){return p.type==='pfsense'}):null;
+    var corePhysical=fo.physical?fo.physical.filter(function(p){return !_isLabPhysical(p);}):[];
+    var pfDev=corePhysical.find(function(p){return p.type==='pfsense'})||null;
     var pf='';
     if(pfDev){pf+=_mrow('DEVICE',pfDev.detail,0,'var(--purple-light)');pf+=_mrow('IP',pfDev.ip,0,'var(--purple-light)');pf+=_mrow('STATUS',pfDev.reachable?'REACHABLE':'UNREACHABLE',0,pfDev.reachable?'var(--green)':'var(--red)');}
     var pfe=document.getElementById('home-pfsense');if(pfe)pfe.innerHTML=pf||'<span class="c-dim-fs12">N/A</span>';
     /* TrueNAS */
-    var tnDev=fo.physical?fo.physical.find(function(p){return p.type==='truenas'}):null;
+    var tnDev=corePhysical.find(function(p){return p.type==='truenas'})||null;
     var tn='';
     if(tnDev){tn+=_mrow('DEVICE',tnDev.detail,0,'var(--purple-light)');tn+=_mrow('IP',tnDev.ip,0,'var(--purple-light)');tn+=_mrow('STATUS',tnDev.reachable?'REACHABLE':'UNREACHABLE',0,tnDev.reachable?'var(--green)':'var(--red)');}
     var tne=document.getElementById('home-truenas');if(tne)tne.innerHTML=tn||'<span class="c-dim-fs12">N/A</span>';
@@ -2902,7 +2903,7 @@ function _initFleetData(fo){
     if(!ramGB){(n.detail||'').split(' \u00b7 ').forEach(function(p){var m=p.match(/^(\d+)GB$/);if(m)ramGB=parseInt(m[1]);});}
     PROD_HOSTS.push({label:n.name,ip:n.ip,type:'pve',role:'HYPERVISOR',cores:cores,ram:ramGB?ramGB+'GB':'-',vlans:['MGMT'],detail:n.detail||''});
   });
-  (fo.physical||[]).forEach(function(p){
+  (fo.physical||[]).filter(function(p){return !_isLabPhysical(p);}).forEach(function(p){
     var h={label:p.label,ip:p.ip,type:p.type,role:(p.detail||p.type).split(' · ')[0].toUpperCase(),cores:0,ram:'-',vlans:['MGMT'],detail:p.detail||''};
     var da=_DEVICE_ACTIONS[p.type];
     if(da){h.actions=da.actions;h.outId=p.type==='idrac'?'idrac-out'+(++_idracOutCount>1?_idracOutCount:''):da.outId;}
