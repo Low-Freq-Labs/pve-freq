@@ -1176,7 +1176,9 @@ def _bg_probe_fleet_overview():
         }
 
     non_template = [v for v in vm_list if v["category"] != "templates"]
-    total_vms = len(non_template)
+    resource_count = len(vm_list)
+    real_vm_count = len(non_template)
+    total_vms = real_vm_count  # Backward-compatible alias: templates are not real VMs.
     running = sum(1 for v in non_template if v["status"] == "running")
     stopped = sum(1 for v in non_template if v["status"] == "stopped")
     prod_count = sum(1 for v in non_template if v["is_prod"])
@@ -1247,7 +1249,10 @@ def _bg_probe_fleet_overview():
         _fleet_reason = f"{n_stale}/{len(_pve_states)} PVE nodes stale (not responding, prior evidence)"
     else:
         _fleet_state = "live"
-        _fleet_reason = f"all {len(_pve_states)} PVE nodes live; {total_vms} VMs tracked"
+        _fleet_reason = (
+            f"all {len(_pve_states)} PVE nodes live; "
+            f"{real_vm_count} real VMs + {template_count} templates tracked"
+        )
     result = {
         "vms": vm_list,
         "vm_nics": {str(k): v for k, v in vm_nics.items()},
@@ -1268,6 +1273,8 @@ def _bg_probe_fleet_overview():
         "nic_profiles": cfg.nic_profiles,
         "categories": cat_summary,
         "summary": {
+            "resource_count": resource_count,
+            "real_vm_count": real_vm_count,
             "total_vms": total_vms,
             "running": running,
             "stopped": stopped,
@@ -2128,7 +2135,11 @@ def _get_fleet_vms(cfg):
                 vms = result if isinstance(result, list) else json.loads(result)
                 for v in vms:
                     vmid = v.get("vmid", 0)
-                    cat_name, tier = fb.categorize(vmid)
+                    template_flag = v.get("template", 0)
+                    if bool(template_flag) or 9000 <= int(vmid or 0) < 10000:
+                        cat_name, tier = "templates", "protected"
+                    else:
+                        cat_name, tier = fb.categorize(vmid)
                     tags = get_vm_tags(vmid)
                     # cpu field: real utilization (0.0-1.0), maxcpu: allocated cores
                     # mem field: real used bytes, maxmem: allocated bytes

@@ -93,7 +93,7 @@ class TestSkipClassificationContract(unittest.TestCase):
         self.assertFalse(_is_skip_error(""))
 
     def test_skip_reason_permission_denied(self):
-        self.assertEqual(_skip_reason("Permission denied"), "auth failed")
+        self.assertEqual(_skip_reason("Permission denied"), "auth failed (key or password rejected)")
 
     def test_skip_reason_unreachable(self):
         reason = _skip_reason("No route to host")

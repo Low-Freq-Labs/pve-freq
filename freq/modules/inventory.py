@@ -71,6 +71,7 @@ def _gather_hosts(cfg: FreqConfig) -> list:
         command_timeout=INV_CMD_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     inventory = []
@@ -128,7 +129,27 @@ def _gather_vms(cfg: FreqConfig) -> list:
     if not cfg.pve_nodes:
         return []
 
-    # Find a reachable PVE node
+    # Prefer the same API-token path as `freq vm list`; SSH is only a fallback.
+    if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+        try:
+            from freq.modules.pve import _find_reachable_node, _pve_call
+
+            node_ip = _find_reachable_node(cfg)
+            if node_ip:
+                result, ok = _pve_call(
+                    cfg,
+                    node_ip,
+                    api_endpoint="/cluster/resources?type=vm",
+                    ssh_command="pvesh get /cluster/resources --type vm --output-format json",
+                    timeout=INV_PVE_TIMEOUT,
+                )
+                if ok and result:
+                    data = result if isinstance(result, list) else json.loads(result)
+                    return _normalize_vm_rows(data)
+        except (ImportError, json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+    # Find a reachable PVE node via SSH fallback.
     node_ip = ""
     for ip in cfg.pve_nodes:
         r = ssh_run(
@@ -139,6 +160,7 @@ def _gather_vms(cfg: FreqConfig) -> list:
             command_timeout=INV_QUICK_TIMEOUT,
             htype="pve",
             use_sudo=True,
+            cfg=cfg,
         )
         if r.returncode == 0:
             node_ip = ip
@@ -156,6 +178,7 @@ def _gather_vms(cfg: FreqConfig) -> list:
         command_timeout=INV_PVE_TIMEOUT,
         htype="pve",
         use_sudo=True,
+        cfg=cfg,
     )
 
     if r.returncode != 0:
@@ -166,15 +189,24 @@ def _gather_vms(cfg: FreqConfig) -> list:
     except json.JSONDecodeError:
         return []
 
+    return _normalize_vm_rows(data)
+
+
+def _normalize_vm_rows(data: list) -> list:
+    """Normalize PVE VM/CT rows from API or pvesh into inventory rows."""
     vms = []
     for vm in data:
+        vmid = vm.get("vmid", 0)
+        template_flag = vm.get("template", 0)
+        is_template = bool(template_flag) or 9000 <= int(vmid or 0) < 10000
         vms.append(
             {
-                "vmid": vm.get("vmid", 0),
+                "vmid": vmid,
                 "name": vm.get("name", ""),
                 "status": vm.get("status", "unknown"),
                 "node": vm.get("node", ""),
                 "type": vm.get("type", "qemu"),
+                "template": 1 if is_template else 0,
                 "cores": vm.get("maxcpu", 0),
                 "ram_mb": round(vm.get("maxmem", 0) / 1048576),
                 "disk_gb": round(vm.get("maxdisk", 0) / 1073741824),
@@ -188,7 +220,7 @@ def _gather_vms(cfg: FreqConfig) -> list:
 
 def _gather_containers(cfg: FreqConfig) -> list:
     """Gather Docker container inventory from fleet hosts."""
-    hosts = cfg.hosts
+    hosts = [h for h in cfg.hosts if h.htype == "docker" and getattr(h, "managed", True)]
     if not hosts:
         return []
 
@@ -202,6 +234,7 @@ def _gather_containers(cfg: FreqConfig) -> list:
         command_timeout=INV_CMD_TIMEOUT,
         max_parallel=cfg.ssh_max_parallel,
         use_sudo=False,
+        cfg=cfg,
     )
 
     containers = []

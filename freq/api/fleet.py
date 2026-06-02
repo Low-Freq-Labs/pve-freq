@@ -366,6 +366,8 @@ def handle_fleet_overview(handler):
                 "nic_profiles": {},
                 "categories": {},
                 "summary": {
+                    "resource_count": 0,
+                    "real_vm_count": 0,
                     "total_vms": 0,
                     "running": 0,
                     "stopped": 0,
@@ -1017,8 +1019,9 @@ def handle_fleet_health_score(handler):
 
     if fleet and isinstance(fleet, dict):
         vms = fleet.get("vms", [])
-        stopped = sum(1 for v in vms if v.get("status") == "stopped")
-        total_vms = len(vms)
+        real_vms = [v for v in vms if v.get("category") != "templates"]
+        stopped = sum(1 for v in real_vms if v.get("status") == "stopped")
+        total_vms = len(real_vms)
         if total_vms > 0 and stopped > total_vms * 0.3:
             penalty = min(10, stopped)
             score -= penalty

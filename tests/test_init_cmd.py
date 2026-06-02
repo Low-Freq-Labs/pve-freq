@@ -232,6 +232,11 @@ class TestIdracParsing(unittest.TestCase):
         self.assertIsNone(existing_slot)
         self.assertEqual(seen[0], "racadm get iDRAC.Users.8.UserName")
 
+    def test_idrac_slot_query_timeout_matches_real_bmc_latency(self):
+        from freq.modules.init_cmd import IDRAC_SLOT_QUERY_TIMEOUT
+
+        self.assertGreaterEqual(IDRAC_SLOT_QUERY_TIMEOUT, 15)
+
 
 class TestHeadlessFleetDeployTruth(unittest.TestCase):
     @patch("freq.modules.init_cmd._deploy_to_host_dispatch")

@@ -417,8 +417,9 @@ class TestSetupHandlers:
                 content = f.read()
             assert 'node_names = ["pve01", "pve02"]' in content
 
+    @patch("freq.modules.serve._check_session_role", return_value=("admin", None))
     @patch("freq.modules.serve._is_first_run", return_value=True)
-    def test_setup_test_ssh_requires_host(self, _mock_first_run):
+    def test_setup_test_ssh_requires_host(self, _mock_first_run, _mock_role):
         h = _make_handler("/api/setup/test-ssh")
         h._serve_setup_test_ssh()
 
@@ -426,8 +427,9 @@ class TestSetupHandlers:
         data = _get_json(h)
         assert data["error"] == "host parameter required"
 
+    @patch("freq.modules.serve._check_session_role", return_value=("admin", None))
     @patch("freq.modules.serve._is_first_run", return_value=True)
-    def test_setup_test_ssh_rejects_invalid_host(self, _mock_first_run):
+    def test_setup_test_ssh_rejects_invalid_host(self, _mock_first_run, _mock_role):
         h = _make_handler("/api/setup/test-ssh?host=bad host")
         h._serve_setup_test_ssh()
 
@@ -437,9 +439,14 @@ class TestSetupHandlers:
 
     @patch("freq.modules.serve.ssh_single")
     @patch("freq.modules.serve.load_config")
+    @patch("freq.modules.serve._check_session_role", return_value=("admin", None))
     @patch("freq.modules.serve._is_first_run", return_value=True)
-    def test_setup_test_ssh_returns_502_on_connection_failure(self, _mock_first_run, mock_cfg_fn, mock_ssh_single):
-        mock_cfg_fn.return_value = _mock_cfg(ssh_connect_timeout=5, ssh_service_account="freq-admin")
+    def test_setup_test_ssh_returns_502_on_connection_failure(self, _mock_first_run, _mock_role, mock_cfg_fn, mock_ssh_single):
+        mock_cfg_fn.return_value = _mock_cfg(
+            ssh_connect_timeout=5,
+            ssh_service_account="freq-admin",
+            pve_nodes=["10.0.0.1"],
+        )
         mock_ssh_single.return_value = _mock_ssh_result("", "Permission denied", 255)
 
         h = _make_handler("/api/setup/test-ssh?host=10.0.0.1")
@@ -482,7 +489,7 @@ class TestJsonResponse:
         h._json_response({"x": 1})
 
         header_dict = dict(h._resp_headers)
-        assert header_dict["Access-Control-Allow-Origin"] == "http://localhost:3000"
+        assert "Access-Control-Allow-Origin" not in header_dict
 
     def test_json_response_complex_data(self):
         h = _make_handler("/test")
@@ -742,18 +749,19 @@ class TestAuthWhitelist:
     """Verify auth whitelist covers required public endpoints."""
 
     def test_setup_endpoints_whitelisted_for_first_run(self):
-        """All setup wizard endpoints must be in auth whitelist so first-run works."""
+        """Only non-probing setup wizard endpoints are public in first-run."""
         setup_routes = [
             "/api/setup/status",
             "/api/setup/create-admin",
             "/api/setup/configure",
             "/api/setup/generate-key",
-            "/api/setup/test-ssh",
             "/api/setup/complete",
         ]
         for route in setup_routes:
             assert route in FreqHandler._AUTH_WHITELIST, \
                 f"Setup route {route} missing from auth whitelist — first-run will 403"
+
+        assert "/api/setup/test-ssh" not in FreqHandler._AUTH_WHITELIST
 
     def test_auth_endpoints_whitelisted(self):
         """Auth login and verify must be public."""

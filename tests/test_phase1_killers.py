@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+REPO_ROOT = str(Path(__file__).parent.parent)
 
 
 class TestPhase1Registration(unittest.TestCase):
@@ -416,6 +417,125 @@ class TestPhase1CommandCount(unittest.TestCase):
                 registered.update(action.choices.keys())
         self.assertGreaterEqual(len(registered), 38,
                                 f"Expected 38+ domain commands, got {len(registered)}: {sorted(registered)}")
+
+
+class TestFleetInventoryContracts(unittest.TestCase):
+    """Inventory must use the same live identity and VM truth as runtime commands."""
+
+    def test_inventory_ssh_calls_pass_live_config(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/inventory.py")) as f:
+            src = f.read()
+
+        self.assertIn("cfg=cfg", src.split("def _gather_hosts")[1].split("def _gather_vms")[0])
+        self.assertIn("cfg=cfg", src.split("def _gather_containers")[1].split("def _to_csv")[0])
+
+    def test_inventory_vms_prefers_pve_api_path(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/inventory.py")) as f:
+            block = src = f.read()
+        gather_vms = block.split("def _gather_vms")[1].split("def _normalize_vm_rows")[0]
+
+        self.assertIn("_pve_call", gather_vms)
+        self.assertIn('/cluster/resources?type=vm', gather_vms)
+        self.assertIn("_normalize_vm_rows", src)
+
+    def test_inventory_vm_rows_preserve_template_truth(self):
+        from freq.modules.inventory import _normalize_vm_rows
+
+        rows = _normalize_vm_rows([
+            {"vmid": 100, "name": "real", "status": "running"},
+            {"vmid": 9000, "name": "template-by-range", "status": "stopped"},
+            {"vmid": 500, "name": "template-by-flag", "status": "stopped", "template": 1},
+        ])
+
+        by_vmid = {row["vmid"]: row for row in rows}
+        self.assertEqual(by_vmid[100]["template"], 0)
+        self.assertEqual(by_vmid[9000]["template"], 1)
+        self.assertEqual(by_vmid[500]["template"], 1)
+
+    def test_container_inventory_only_queries_managed_docker_hosts(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/inventory.py")) as f:
+            block = f.read().split("def _gather_containers")[1].split("def _to_csv")[0]
+
+        self.assertIn('h.htype == "docker"', block)
+        self.assertIn('getattr(h, "managed", True)', block)
+
+    def test_init_preserves_vmid_map_for_explicit_hosts(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:
+            src = f.read()
+
+        discovery = src.split("def _phase_fleet_discover")[1].split("def _is_docker_bridge_ip")[0]
+        deploy = src.split("def _headless_fleet_deploy")[1].split("def _deploy_via_guest_agent")[0]
+
+        self.assertIn('ctx.setdefault("ip_vmid_map"', discovery)
+        self.assertIn("ip_vmid_map.setdefault(ip, vmid)", discovery)
+        self.assertIn('ctx.get("ip_vmid_map", {}).get(h.ip, 0)', deploy)
+
+    def test_headless_discovery_auto_registers_only_managed_hosts(self):
+        from freq.modules.init_cmd import _is_managed_auto_host
+
+        self.assertTrue(_is_managed_auto_host("pve01", "pve"))
+        self.assertTrue(_is_managed_auto_host("plex", "docker", vmid=201))
+        self.assertTrue(_is_managed_auto_host("switch", "switch"))
+        self.assertTrue(_is_managed_auto_host("truenas", "truenas"))
+        self.assertTrue(_is_managed_auto_host("bmc-10", "idrac"))
+        self.assertTrue(_is_managed_auto_host("pdm-manager", "linux", vmid=101, source="pve-api"))
+        self.assertFalse(_is_managed_auto_host("jarvis-ai", "linux", vmid=666))
+        self.assertFalse(_is_managed_auto_host("blue", "linux", vmid=802))
+        self.assertFalse(_is_managed_auto_host("freq-test", "linux", vmid=5005))
+        self.assertFalse(_is_managed_auto_host("lab-pve1", "pve", vmid=5002, source="pve-api"))
+
+    def test_headless_registration_skips_inventory_only_guests(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:
+            src = f.read()
+        registration = src.split("Auto-register only managed targets in headless mode.")[1].split("else:", 1)[0]
+
+        self.assertIn('if not d.get("managed", False):', registration)
+        self.assertIn("skipped_inventory_only += 1", registration)
+        self.assertIn("inventory-only guest(s) left out of hosts.toml", registration)
+
+    def test_init_summary_counts_managed_hosts_not_inventory_only_hosts(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:
+            src = f.read()
+        summary = src.split("def _phase_summary")[1].split("def _phase_interactive_cleanup", 1)[0]
+        headless = src.split("def _init_headless")[1].split("logger.info(\"headless init complete\"", 1)[0]
+
+        self.assertIn('managed_hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]', summary)
+        self.assertIn("managed hosts deployed", summary)
+        self.assertIn("inventory-only/unmanaged host(s) tracked outside deployment", summary)
+        self.assertIn('managed_hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]', headless)
+        self.assertIn("managed hosts deployed (headless)", headless)
+
+    def test_phase8_and_phase9_skip_unmanaged_hosts(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:
+            src = f.read()
+        fleet_config = src.split("def _phase_fleet_configure")[1].split("def _categorize_vms", 1)[0]
+        headless_deploy = src.split("def _headless_fleet_deploy")[1].split("def _deploy_via_guest_agent", 1)[0]
+
+        self.assertIn('h.htype == "docker" and getattr(h, "managed", True)', fleet_config)
+        self.assertIn('and getattr(h, "managed", True)', fleet_config)
+        self.assertIn('if not getattr(h, "managed", True):', headless_deploy)
+        self.assertIn("continue", headless_deploy)
+
+    def test_fleet_overview_splits_resources_real_vms_and_templates(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        summary = src.split('"summary": {')[1].split("},", 1)[0]
+
+        self.assertIn('"resource_count": resource_count', summary)
+        self.assertIn('"real_vm_count": real_vm_count', summary)
+        self.assertIn('"total_vms": total_vms', summary)
+        self.assertIn("templates are not real VMs", src)
+        self.assertIn("real VMs +", src)
+        self.assertIn('cat_name, tier = "templates", "protected"', src)
+
+    def test_fleet_health_score_excludes_templates_from_stopped_vm_penalty(self):
+        with open(os.path.join(REPO_ROOT, "freq/api/fleet.py")) as f:
+            src = f.read()
+        block = src.split('if fleet and isinstance(fleet, dict):')[1].split('score = max', 1)[0]
+
+        self.assertIn('real_vms = [v for v in vms if v.get("category") != "templates"]', block)
+        self.assertIn("stopped = sum(1 for v in real_vms", block)
+        self.assertIn("total_vms = len(real_vms)", block)
 
 
 class TestPhase1Dispatch(unittest.TestCase):

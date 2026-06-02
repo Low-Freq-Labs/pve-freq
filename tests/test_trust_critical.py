@@ -331,7 +331,7 @@ class TestInitSummaryHonesty(unittest.TestCase):
 
     @patch("freq.modules.init_cmd.fmt")
     def test_summary_says_ready_when_verified(self, mock_fmt):
-        """If verified=True, summary should say 'ready'."""
+        """If verified=True, summary should say the install initialized."""
         from freq.modules.init_cmd import _phase_summary
 
         cfg = self._make_cfg()
@@ -340,8 +340,8 @@ class TestInitSummaryHonesty(unittest.TestCase):
 
         all_calls = [str(c) for c in mock_fmt.line.call_args_list]
         combined = " ".join(all_calls)
-        self.assertIn("is ready", combined,
-                       "Summary must say 'ready' when verified=True")
+        self.assertIn("initialized", combined,
+                       "Summary must say 'initialized' when verified=True")
 
 
 class TestInitOwnershipContract(unittest.TestCase):

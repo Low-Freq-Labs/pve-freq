@@ -65,12 +65,12 @@ IDRAC_SETUP_TIMEOUT = 60
 IDRAC_VERIFY_TIMEOUT = 15
 SWITCH_CONFIG_TIMEOUT = 30
 QUICK_CHECK_TIMEOUT = 10
-# per-slot iDRAC query
-# timeout. 10s × 14 slots = 140s consumed most of DEVICE_DEPLOY_TIMEOUT.
-# 5s × 14 = 70s, leaving 170s for setup commands. On slow BMCs, a 5s
-# timeout may miss some slots, but the RAC1016 recovery catches the case
-# where existing_slot was missed.
-IDRAC_SLOT_QUERY_TIMEOUT = 5
+# Per-slot iDRAC query timeout. Dell RACADM over sshpass can take longer
+# than a normal SSH command even when a direct shell command looks quick.
+# The query prefers high automation slots first, so healthy BMCs usually
+# return after slot 8; the 15s ceiling mainly protects slow/limited BMCs
+# from being misread as "no empty slots."
+IDRAC_SLOT_QUERY_TIMEOUT = 15
 PING_TIMEOUT = 5
 VERIFY_TIMEOUT = 20
 #
@@ -167,9 +167,9 @@ def _query_idrac_slots(_ssh, extra_opts, svc_name):
     (1) multi-command newline exec — iDRAC rejects; (2) racadm get
     iDRAC.Users hierarchy — returns TOC only; (3) stdin-piped interactive
     session — sshpass pty conflicts with stdin pipe, rc=255. Per-slot
-    with IDRAC_SLOT_QUERY_TIMEOUT=5 is the pragmatic fix: 14 × 5 = 70s
-    aggregate, leaving 170s of DEVICE_DEPLOY_TIMEOUT for setup commands.
-    RAC1016 recovery catches any missed existing_slot from timed-out probes.
+    with a realistic timeout is the pragmatic fix. Preferred high slots
+    keep the normal path short, while RAC1016 recovery catches any missed
+    existing_slot from timed-out probes.
     """
     target_slot = None
     existing_slot = None
@@ -181,6 +181,13 @@ def _query_idrac_slots(_ssh, extra_opts, svc_name):
             extra_opts=extra_opts,
             timeout=IDRAC_SLOT_QUERY_TIMEOUT,
         )
+        if rc != 0 and "no more sessions" in f"{out}\n{err}".lower():
+            time.sleep(5)
+            rc, out, err = _ssh(
+                f"racadm get iDRAC.Users.{slot}.UserName",
+                extra_opts=extra_opts,
+                timeout=IDRAC_SLOT_QUERY_TIMEOUT,
+            )
         if rc != 0:
             logger.warning(
                 "idrac slot query failed",
@@ -3151,7 +3158,7 @@ def _classify_host_by_name(name):
         return "switch"
     if "pfsense" in name_lower or "opnsense" in name_lower:
         return "pfsense"
-    if "truenas" in name_lower or "freenas" in name_lower or "nexus" in name_lower:
+    if "truenas" in name_lower or "freenas" in name_lower:
         return "truenas"
     # NAS-like hostnames (standalone "nas" as whole name or hyphen-delimited segment)
     if name_lower == "nas" or name_lower.startswith("nas-") or "-nas-" in name_lower or name_lower.endswith("-nas"):
@@ -3162,6 +3169,36 @@ def _classify_host_by_name(name):
     if "pve" in name_lower or "proxmox" in name_lower:
         return "pve"
     return "linux"
+
+
+def _is_managed_auto_host(label, htype, vmid=0, source=""):
+    """Return True when discovery should auto-register a managed host.
+
+    PVE VM inventory and hosts.toml are different surfaces. VM inventory
+    should show every PVE resource, including templates and operator-only
+    guests. hosts.toml is the managed-fleet registry used for service-account
+    deployment and health probing, so headless init must not promote every
+    reachable guest into it.
+    """
+    label_lower = (label or "").lower()
+
+    # Real PVE nodes come from the configured node list. PVE-looking VMs from
+    # API discovery, such as nested lab hypervisors, are inventory-only unless
+    # an operator explicitly scopes them.
+    if htype == "pve":
+        return source == "pve-node" or not vmid
+
+    if htype in {"pfsense", "truenas", "switch", "idrac", "opnsense"}:
+        return True
+
+    # Product/service-stack managers are safe to manage automatically; arbitrary
+    # Linux guests stay inventory-only so init does not spray service accounts.
+    if htype == "linux" and label_lower in {"pdm-manager"}:
+        return True
+
+    if htype == "docker":
+        return True
+    return False
 
 
 def _phase_fleet_discover(cfg, ctx, args=None):
@@ -3200,6 +3237,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     # Track all discovered hosts: ip -> {label, htype, groups, vmid, source, all_ips}
     discovered = {}
     vmid_node_map = ctx.setdefault("vmid_node_map", {})
+    ip_vmid_map = ctx.setdefault("ip_vmid_map", {})
     existing_hosts = list(cfg.hosts)
     seen_existing = {h.ip for h in existing_hosts}
     for h in scoped_hosts:
@@ -3208,6 +3246,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
             seen_existing.add(h.ip)
     existing_ips = {h.ip for h in existing_hosts}
     scoped_infra_types = {h.htype for h in scoped_hosts if h.htype in {"pfsense", "truenas", "switch", "idrac"}}
+    scanned_prefixes = set()
 
     # ── Step 1: PVE API Discovery (primary mechanism) ──────────────
     fmt.line(f"  {fmt.C.BOLD}Step 1: PVE Cluster Discovery{fmt.C.RESET}")
@@ -3342,6 +3381,14 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                 mgmt_ips = [ip for ip in all_ips if any(ip.startswith(p) for p in mgmt_prefixes)]
                 chosen_ip = mgmt_ips[0] if mgmt_ips else all_ips[0]
 
+            # Preserve PVE identity even when an explicit hosts file is the
+            # source of truth. Phase 8 needs this map to use guest-agent
+            # fallback for scoped hosts whose SSH bootstrap auth is stale.
+            if vmid:
+                vmid_node_map[vmid] = node_ip
+                for ip in all_ips:
+                    ip_vmid_map.setdefault(ip, vmid)
+
             # Auto-classify type
             htype = _classify_host_by_name(name)
 
@@ -3355,6 +3402,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     safe_label = sanitize_label(name)
                 except ImportError:
                     safe_label = name.lower().replace(" ", "-")
+                managed = _is_managed_auto_host(safe_label, htype, vmid=vmid, source="pve-api")
                 discovered[chosen_ip] = {
                     "label": safe_label,
                     "htype": htype,
@@ -3363,6 +3411,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     "pve_node": node,
                     "pve_node_ip": node_ip,
                     "source": "pve-api",
+                    "managed": managed,
                     "all_ips": all_ips,
                 }
                 if vmid:
@@ -3379,6 +3428,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     "groups": "cluster",
                     "vmid": 0,
                     "source": "pve-node",
+                    "managed": True,
                     "all_ips": [nip],
                 }
 
@@ -3387,7 +3437,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
     # ── Step 2: Multi-VLAN Ping Sweep (supplement) ─────────────────
     vlans = getattr(cfg, "vlans", []) or []
-    if vlans:
+    if vlans or cfg.pve_nodes:
         fmt.blank()
         fmt.line(f"  {fmt.C.BOLD}Step 2: Multi-VLAN Discovery{fmt.C.RESET}")
         fmt.blank()
@@ -3396,11 +3446,23 @@ def _phase_fleet_discover(cfg, ctx, args=None):
         known_labels = {d["label"].lower() for d in discovered.values()}
         known_labels |= {h.label.lower() for h in existing_hosts}
 
+        scan_targets = []
+        for nip in cfg.pve_nodes:
+            parts = nip.rsplit(".", 1)
+            if len(parts) == 2 and parts[0] not in scanned_prefixes:
+                scanned_prefixes.add(parts[0])
+                scan_targets.append((f"management-{parts[0]}", parts[0]))
         for vlan in vlans:
             prefix = getattr(vlan, "prefix", "") or ""
             vlan_name = getattr(vlan, "name", "") or f"VLAN{getattr(vlan, 'id', '?')}"
             if not prefix:
                 continue
+            if prefix in scanned_prefixes:
+                continue
+            scanned_prefixes.add(prefix)
+            scan_targets.append((vlan_name, prefix))
+
+        for vlan_name, prefix in scan_targets:
 
             fmt.step_start(f"Scanning {vlan_name} ({prefix}.0/24)...")
             try:
@@ -3421,6 +3483,12 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                         "groups": vlan_name.lower().replace("/", "-"),
                         "vmid": 0,
                         "source": f"vlan-scan",
+                        "managed": _is_managed_auto_host(
+                            hostname,
+                            h.get("type", "linux"),
+                            vmid=0,
+                            source="vlan-scan",
+                        ),
                         "all_ips": [h["ip"]],
                     }
                     already_known.add(h["ip"])
@@ -3482,6 +3550,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     "groups": "infrastructure",
                     "vmid": 0,
                     "source": "gateway-probe",
+                    "managed": True,
                     "all_ips": [gw],
                 }
                 infra_pfsense = gw
@@ -3546,7 +3615,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     discovered[ip] = {
                         "label": label, "htype": "idrac",
                         "groups": "infrastructure", "vmid": 0,
-                        "source": "infra-probe", "all_ips": [ip],
+                        "source": "infra-probe", "managed": True, "all_ips": [ip],
                     }
                     infra_idrac_ips.append(ip)
                     fmt.step_ok(f"iDRAC detected: {label} ({ip})")
@@ -3556,7 +3625,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     discovered[ip] = {
                         "label": label, "htype": "idrac",
                         "groups": "infrastructure", "vmid": 0,
-                        "source": "infra-probe-ping", "all_ips": [ip],
+                        "source": "infra-probe-ping", "managed": True, "all_ips": [ip],
                     }
                     infra_idrac_ips.append(ip)
                     fmt.step_ok(f"BMC reachable: {label} ({ip})")
@@ -3572,7 +3641,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     discovered[ip] = {
                         "label": "switch", "htype": "switch",
                         "groups": "infrastructure", "vmid": 0,
-                        "source": "infra-probe", "all_ips": [ip],
+                        "source": "infra-probe", "managed": True, "all_ips": [ip],
                     }
                     infra_switch = ip
                     fmt.step_ok(f"Switch detected: {ip}")
@@ -3589,7 +3658,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     discovered[ip] = {
                         "label": "truenas", "htype": "truenas",
                         "groups": "infrastructure", "vmid": 0,
-                        "source": "infra-probe", "all_ips": [ip],
+                        "source": "infra-probe", "managed": True, "all_ips": [ip],
                     }
                     infra_truenas = ip
                     fmt.step_ok(f"TrueNAS detected: {ip}")
@@ -3634,16 +3703,28 @@ def _phase_fleet_discover(cfg, ctx, args=None):
             if scoped_hosts:
                 fmt.step_ok(f"Explicit hosts file provided — skipped auto-registration of {len(discovered)} discovered host(s)")
             else:
-                # Auto-register all in headless mode
+                # Auto-register only managed targets in headless mode.
+                # Inventory-only guests stay visible through PVE inventory.
                 # Use save (overwrite) instead of append to prevent duplicates
                 # from seeded template files or repeated runs
                 from freq.core.config import save_hosts_toml
+                skipped_inventory_only = 0
                 for ip, d in discovered.items():
+                    if not d.get("managed", False):
+                        skipped_inventory_only += 1
+                        continue
                     host = Host(ip=ip, label=d["label"], htype=d["htype"],
                                 groups=d.get("groups", ""), vmid=d.get("vmid", 0))
                     cfg.hosts.append(host)
                 save_hosts_toml(cfg.hosts_file, cfg.hosts)
-                fmt.step_ok(f"Auto-registered {len(discovered)} host(s)")
+                registered = len(discovered) - skipped_inventory_only
+                if skipped_inventory_only:
+                    fmt.step_ok(
+                        f"Auto-registered {registered} managed host(s); "
+                        f"{skipped_inventory_only} inventory-only guest(s) left out of hosts.toml"
+                    )
+                else:
+                    fmt.step_ok(f"Auto-registered {registered} managed host(s)")
         else:
             # Interactive: confirm registration
             if _confirm(f"Register all {len(discovered)} discovered hosts?", default=True):
@@ -3759,17 +3840,24 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
     hosts_file_arg = getattr(args, "hosts_file", None) if args else None
     if hosts_file_arg and os.path.isfile(hosts_file_arg) and not cfg.hosts:
         fmt.step_start(f"Importing fleet hosts from {hosts_file_arg}")
-        shutil.copy2(hosts_file_arg, cfg.hosts_file)
         from freq.core.config import load_hosts, load_hosts_toml
 
         try:
             if hosts_file_arg.endswith(".toml"):
-                cfg.hosts = load_hosts_toml(cfg.hosts_file)
+                imported_hosts = load_hosts_toml(hosts_file_arg)
             else:
-                cfg.hosts = load_hosts(cfg.hosts_file)
+                imported_hosts = load_hosts(hosts_file_arg)
+            if not imported_hosts:
+                fmt.step_fail(f"Explicit hosts file loaded 0 hosts: {hosts_file_arg}")
+                ctx["fleet_deploy_failed"] = True
+                return
+            shutil.copy2(hosts_file_arg, cfg.hosts_file)
+            cfg.hosts = imported_hosts
             fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")
         except Exception as e:
             fmt.step_fail(f"Failed to reload hosts: {e}")
+            ctx["fleet_deploy_failed"] = True
+            return
 
     if not cfg.hosts:
         fmt.line(f"  {fmt.C.DIM}No hosts registered — nothing to deploy.{fmt.C.RESET}")
@@ -4038,7 +4126,7 @@ def _phase_fleet_configure(cfg, ctx):
     ]
 
     # ── 9a: Docker — Verify, Tag, Discover Containers ───────────
-    docker_hosts = [h for h in cfg.hosts if h.htype == "docker"]
+    docker_hosts = [h for h in cfg.hosts if h.htype == "docker" and getattr(h, "managed", True)]
     verified_docker_hosts = []  # hosts where docker is confirmed working
 
     if docker_hosts:
@@ -4194,7 +4282,11 @@ def _phase_fleet_configure(cfg, ctx):
 
     # ── 9b: Metrics Agent Deployment ──────────────────────────────
     fmt.blank()
-    agent_hosts = [h for h in cfg.hosts if h.htype in ("linux", "pve", "docker", "truenas")]
+    agent_hosts = [
+        h for h in cfg.hosts
+        if h.htype in ("linux", "pve", "docker", "truenas")
+        and getattr(h, "managed", True)
+    ]
     if agent_hosts:
         fmt.line(f"  {fmt.C.BOLD}Metrics Agent Deployment ({len(agent_hosts)} hosts){fmt.C.RESET}")
         fmt.blank()
@@ -4344,7 +4436,12 @@ def _phase_fleet_configure(cfg, ctx):
     fmt.blank()
 
     # Find Linux hosts that are VMs (not PVE nodes themselves, not physical devices)
-    vm_hosts = [h for h in cfg.hosts if h.htype in ("linux", "docker") and h.ip not in set(cfg.pve_nodes or [])]
+    vm_hosts = [
+        h for h in cfg.hosts
+        if h.htype in ("linux", "docker")
+        and h.ip not in set(cfg.pve_nodes or [])
+        and getattr(h, "managed", True)
+    ]
     if vm_hosts:
         installed_count = 0
         already_count = 0
@@ -4678,7 +4775,7 @@ def _phase_fleet_configure(cfg, ctx):
     cert_path = os.path.join(cert_dir, "freq.crt")
     key_path_tls = os.path.join(cert_dir, "freq.key")
     cert_generated = False
-    if not os.path.isfile(cert_path):
+    if not os.path.isfile(cert_path) or not os.path.isfile(key_path_tls):
         os.makedirs(cert_dir, mode=0o700, exist_ok=True)
         # Generate self-signed cert
         rc, _, err = _run(
@@ -4712,6 +4809,8 @@ def _phase_fleet_configure(cfg, ctx):
                 cert_generated
                 or "tls_cert" not in content
                 or "tls_key" not in content
+                or f'tls_cert = "{cert_path}"' not in content
+                or f'tls_key = "{key_path_tls}"' not in content
             )
             if needs_update:
                 content = _update_toml_value(content, "tls_cert", cert_path)
@@ -5293,7 +5392,7 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
         return False
 
     # Find an empty user slot (slots 3-16, 1-2 are reserved).
-    # IDRAC_SLOT_QUERY_TIMEOUT=5 bounds the aggregate to ~70s.
+    fmt.step_info("Scanning iDRAC user slots")
     target_slot, existing_slot = _query_idrac_slots(_ssh, extra_opts, svc_name)
 
     if _check_timeout("after_slot_query"):
@@ -6364,11 +6463,13 @@ def _phase_summary(cfg, ctx, verified, pack=None):
     rsa_key = os.path.join(cfg.key_dir, "freq_id_rsa")
 
     deployed_count = len(ctx.get("deployed_ips", set()))
-    total_hosts = len(cfg.hosts)
+    managed_hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]
+    unmanaged_count = len(cfg.hosts) - len(managed_hosts)
+    total_hosts = len(managed_hosts)
     if verified and deployed_count >= total_hosts:
-        fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ {cfg.version} initialized — {deployed_count}/{total_hosts} hosts deployed.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ {cfg.version} initialized — {deployed_count}/{total_hosts} managed hosts deployed.{fmt.C.RESET}")
     elif verified:
-        fmt.line(f"  {fmt.C.YELLOW}{fmt.C.BOLD}FREQ {cfg.version} initialized — {deployed_count}/{total_hosts} hosts deployed.{fmt.C.RESET}")
+        fmt.line(f"  {fmt.C.YELLOW}{fmt.C.BOLD}FREQ {cfg.version} initialized — {deployed_count}/{total_hosts} managed hosts deployed.{fmt.C.RESET}")
         fmt.line(f"  {fmt.C.DIM}Re-run freq init when remaining hosts come online.{fmt.C.RESET}")
     else:
         fmt.line(f"  {fmt.C.YELLOW}FREQ {cfg.version} is partially configured.{fmt.C.RESET}")
@@ -6382,16 +6483,16 @@ def _phase_summary(cfg, ctx, verified, pack=None):
     fmt.line(f"    SSH mode: sudo (via {svc_name})")
 
     # Deployment scorecard
-    deployed_count = len(ctx.get("deployed_ips", set()))
     deploy_failures = ctx.get("fleet_deploy_failures", 0)
-    total_hosts = len(cfg.hosts)
     skipped = total_hosts - deployed_count - deploy_failures
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}Deployment:{fmt.C.RESET}")
     fmt.line(f"    {fmt.C.GREEN}{deployed_count} deployed{fmt.C.RESET}, "
              f"{fmt.C.RED}{deploy_failures} failed{fmt.C.RESET}, "
              f"{fmt.C.YELLOW}{skipped} skipped{fmt.C.RESET} "
-             f"({total_hosts} total hosts)")
+             f"({total_hosts} managed hosts)")
+    if unmanaged_count:
+        fmt.line(f"    {fmt.C.DIM}{unmanaged_count} inventory-only/unmanaged host(s) tracked outside deployment.{fmt.C.RESET}")
 
     # Fleet topology
     fmt.blank()
@@ -7751,17 +7852,23 @@ def _init_headless(cfg, args):
     hosts_file_arg = getattr(args, "hosts_file", None)
     if hosts_file_arg and os.path.isfile(hosts_file_arg):
         fmt.step_start(f"Importing fleet hosts from {hosts_file_arg}")
-        shutil.copy2(hosts_file_arg, cfg.hosts_file)
         from freq.core.config import load_hosts, load_hosts_toml
 
         try:
             if hosts_file_arg.endswith(".toml"):
-                cfg.hosts = load_hosts_toml(cfg.hosts_file)
+                imported_hosts = load_hosts_toml(hosts_file_arg)
             else:
-                cfg.hosts = load_hosts(cfg.hosts_file)
-            fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")
+                imported_hosts = load_hosts(hosts_file_arg)
+            if not imported_hosts:
+                fmt.step_fail(f"Explicit hosts file loaded 0 hosts: {hosts_file_arg}")
+                ctx["fleet_deploy_failed"] = True
+            else:
+                shutil.copy2(hosts_file_arg, cfg.hosts_file)
+                cfg.hosts = imported_hosts
+                fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")
         except Exception as e:
             fmt.step_fail(f"Failed to reload hosts: {e}")
+            ctx["fleet_deploy_failed"] = True
 
     # Load per-device credentials
     device_creds = _load_device_credentials(device_credentials_file)
@@ -7860,15 +7967,19 @@ def _init_headless(cfg, args):
     fmt.blank()
     deployed_ips = ctx.get("deployed_ips", set())
     deployed_count = len(deployed_ips)
-    total_hosts = len(cfg.hosts)
+    managed_hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]
+    unmanaged_count = len(cfg.hosts) - len(managed_hosts)
+    total_hosts = len(managed_hosts)
     if verified:
         with open(INIT_MARKER, "w") as f:
             f.write(f"{cfg.version}\n")
         if deployed_count >= total_hosts:
-            fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ initialized — {deployed_count}/{total_hosts} hosts deployed (headless).{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ initialized — {deployed_count}/{total_hosts} managed hosts deployed (headless).{fmt.C.RESET}")
         else:
-            fmt.line(f"  {fmt.C.YELLOW}{fmt.C.BOLD}FREQ initialized — {deployed_count}/{total_hosts} hosts deployed (headless).{fmt.C.RESET}")
+            fmt.line(f"  {fmt.C.YELLOW}{fmt.C.BOLD}FREQ initialized — {deployed_count}/{total_hosts} managed hosts deployed (headless).{fmt.C.RESET}")
             fmt.line(f"  {fmt.C.DIM}Re-run freq init when remaining hosts come online.{fmt.C.RESET}")
+        if unmanaged_count:
+            fmt.line(f"  {fmt.C.DIM}{unmanaged_count} inventory-only/unmanaged host(s) tracked outside deployment.{fmt.C.RESET}")
     else:
         fmt.line(f"  {fmt.C.YELLOW}Init completed with warnings. Run 'freq init --check' to review.{fmt.C.RESET}")
     fmt.blank()
@@ -8171,10 +8282,13 @@ def _headless_fleet_deploy(
 
     if not pve_only:
         for h in cfg.hosts:
+            if not getattr(h, "managed", True):
+                continue
             if h.ip not in seen_ips:
+                vmid = getattr(h, "vmid", 0) or ctx.get("ip_vmid_map", {}).get(h.ip, 0)
                 targets.append({
                     "ip": h.ip, "label": h.label, "htype": h.htype,
-                    "vmid": getattr(h, "vmid", 0),
+                    "vmid": vmid,
                 })
                 seen_ips.add(h.ip)
 

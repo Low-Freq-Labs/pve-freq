@@ -37,15 +37,31 @@ class TestPhase9lAlwaysUpdatesToml(unittest.TestCase):
         self.assertIn("os.path.isfile(cert_path) and os.path.isfile(key_path_tls)", src)
 
     def test_needs_update_covers_missing_keys(self):
-        """needs_update must fire when tls_cert or tls_key are absent from content."""
+        """needs_update must fire when tls_cert/tls_key are absent or stale."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
         self.assertIn('"tls_cert" not in content', src)
         self.assertIn('"tls_key" not in content', src)
+        self.assertIn('f\'tls_cert = "{cert_path}"\' not in content', src)
+        self.assertIn('f\'tls_key = "{key_path_tls}"\' not in content', src)
 
     def test_cert_generated_flag(self):
         """cert_generated flag tracked so new cert always writes freq.toml."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
         self.assertIn("cert_generated = True", src)
+
+    def test_missing_cert_or_key_regenerates_pair(self):
+        """Phase 9l must regenerate if either cert or key is missing."""
+        src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
+        self.assertIn("not os.path.isfile(cert_path) or not os.path.isfile(key_path_tls)", src)
+
+
+class TestInstallerPreservesGeneratedTls(unittest.TestCase):
+    """Local source installs must not delete generated dashboard TLS assets."""
+
+    def test_local_rsync_excludes_tls_dir(self):
+        src = (FREQ_ROOT / "install.sh").read_text()
+        local_copy = src.split("rsync -a --delete", 1)[1].split('"$SOURCE/" "$INSTALL_DIR/"', 1)[0]
+        self.assertIn("--exclude='tls/'", local_copy)
 
 
 if __name__ == "__main__":

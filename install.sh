@@ -336,6 +336,7 @@ do_install() {
         --include='conf/' \
         --include='conf/*.example' \
         --exclude='conf/*' \
+        --exclude='tls/' \
         --exclude='data/vault/*' \
         --exclude='data/keys/*' \
         --exclude='memory/' \
