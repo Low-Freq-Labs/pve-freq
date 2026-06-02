@@ -5408,6 +5408,10 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
   });
   return labCards;
 }
+function _isLabPhysical(ph){
+  var hay=((ph.scope||'')+' '+(ph.groups||'')+' '+(ph.label||'')+' '+(ph.key||'')).toLowerCase();
+  return hay.indexOf('lab')>=0;
+}
 function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
   var nodeData={};
   pveNodes.forEach(function(pn){
@@ -5603,13 +5607,16 @@ function _renderFleetData(fo,hd,md){
     var hdDuration=hd?hd.duration:0;
     /* Infrastructure role cards — sorted: firewall → switch → network_storage → bmc */
     var _infraOrder={pfsense:1,opnsense:1,switch:2,truenas:3,synology:3,unraid:3,bmc:4,idrac:4,ilo:4,ipmi:4};
-    var sortedPhysicals=physicals.slice().sort(function(a,b){return (_infraOrder[a.type]||99)-(_infraOrder[b.type]||99);});
+    var corePhysicals=physicals.filter(function(ph){return !_isLabPhysical(ph);});
+    var labPhysicals=physicals.filter(function(ph){return _isLabPhysical(ph);});
+    var sortedPhysicals=corePhysicals.slice().sort(function(a,b){return (_infraOrder[a.type]||99)-(_infraOrder[b.type]||99);});
     var infraCards='';
     sortedPhysicals.forEach(function(ph){infraCards+=_infraRoleCard(ph,healthMap);});
     /* Lab host cards */
     var infraLabels={};physicals.forEach(function(p){infraLabels[p.label]=true;});
     pveNodes.forEach(function(pn){infraLabels[pn.name]=true;});
     var labCards=_buildLabHostCards(hd?hd.hosts:null,infraLabels,labLabels);
+    labPhysicals.forEach(function(ph){labCards+=_infraRoleCard(ph,healthMap);});
     /* PVE node cards */
     var nodeData=_buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels);
     /* VM cards grouped under nodes — skip lab-tagged VMs */

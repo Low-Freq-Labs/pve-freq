@@ -1041,18 +1041,45 @@ def _bg_probe_health():
                     "new": cur,
                     "reason": h_e.get("reason", ""),
                 })
-                severity = "success" if h_e.get("status") == "healthy" else "error"
-                _activity_add("health_change", f"{h_e['label']} is now {h_e.get('status', '?')}", f"was {prev}", severity)
+                cur_state = h_e.get("state") or h_e.get("status")
+                severity = (
+                    "success"
+                    if cur_state in (STATE_LIVE, STATE_RECOVERING)
+                    else "warn"
+                    if cur_state in (STATE_STALE, STATE_DEGRADED)
+                    else "error"
+                )
+                _activity_add("health_change", f"{h_e['label']} is now {cur_state}", f"was {prev}", severity)
 
     # Evaluate alert rules against fresh health data
     _evaluate_alert_rules(cfg, result)
 
     # Log probe completion
     duration = round(time.monotonic() - start, 1)
-    healthy_count = sum(1 for h in host_data if h.get("status") == "healthy")
-    unreachable_count = sum(1 for h in host_data if h.get("status") != "healthy")
-    logger.info("health_probe_complete", duration=duration, total=len(host_data), healthy=healthy_count, unreachable=unreachable_count)
-    logger.perf("health_probe", duration, hosts_total=len(host_data), hosts_healthy=healthy_count)
+    state_counts = {
+        state: sum(1 for h in host_data if (h.get("state") or h.get("status")) == state)
+        for state in (
+            STATE_LIVE,
+            STATE_RECOVERING,
+            STATE_STALE,
+            STATE_DEGRADED,
+            STATE_AUTH_FAILED,
+            STATE_UNREACHABLE,
+        )
+    }
+    liveish_count = state_counts[STATE_LIVE] + state_counts[STATE_RECOVERING]
+    logger.info(
+        "health_probe_complete",
+        duration=duration,
+        total=len(host_data),
+        live=state_counts[STATE_LIVE],
+        recovering=state_counts[STATE_RECOVERING],
+        stale=state_counts[STATE_STALE],
+        degraded=state_counts[STATE_DEGRADED],
+        auth_failed=state_counts[STATE_AUTH_FAILED],
+        unreachable=state_counts[STATE_UNREACHABLE],
+    )
+    logger.perf("health_probe", duration, hosts_total=len(host_data), hosts_healthy=liveish_count)
 
     # Save capacity snapshot if due (weekly)
     try:
@@ -1097,6 +1124,8 @@ def _bg_probe_fleet_overview():
             "type": dev.device_type,
             "tier": dev.tier,
             "detail": dev.detail,
+            "groups": dev.groups,
+            "scope": dev.scope,
             "reachable": reachable,
         }
 
@@ -1115,6 +1144,8 @@ def _bg_probe_fleet_overview():
                         "type": dev.device_type,
                         "tier": dev.tier,
                         "detail": dev.detail,
+                        "groups": dev.groups,
+                        "scope": dev.scope,
                         "reachable": False,
                     }
                 )
@@ -1210,6 +1241,7 @@ def _bg_probe_fleet_overview():
             htype="pve",
             use_sudo=True,
             cfg=cfg,
+            failure_log_level="warn",
         )
         if r.returncode == 0 and r.stdout:
             cur_vmid = None
@@ -1503,6 +1535,7 @@ def _bg_fetch_vm_tags():
                 htype="pve",
                 use_sudo=True,
                 cfg=cfg,
+                failure_log_level="warn",
             )
             if r.returncode == 0 and r.stdout:
                 cur_vmid = None

@@ -252,6 +252,8 @@ class PhysicalDevice:
     device_type: str
     tier: str = "probe"
     detail: str = ""
+    groups: str = ""
+    scope: str = "core"
 
 
 @dataclass

@@ -559,7 +559,9 @@ def _get_file_owner(path: str) -> str:
 
 def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     """Test SSH connectivity to ALL fleet hosts in parallel with device-appropriate commands."""
-    if not cfg.hosts:
+    hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]
+    unmanaged_count = len(cfg.hosts) - len(hosts)
+    if not hosts:
         fmt.step_info("Fleet connectivity: no hosts to test")
         return 0
 
@@ -631,12 +633,12 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     auth_failed_hosts = []
     degraded_hosts = []
     na = 0
-    total = len(cfg.hosts)
+    total = len(hosts)
     # Stash worst-case reason for each non-live class so the step_*
     # output can name the failure instead of just counting it.
     worst_reason_by_state: dict[str, tuple[str, str]] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
-        for h, state, reason, operator_auth in pool.map(lambda h: _test(h), cfg.hosts):
+        for h, state, reason, operator_auth in pool.map(lambda h: _test(h), hosts):
             if state == STATE_LIVE:
                 reachable += 1
                 continue
@@ -655,10 +657,11 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     total_bad = len(auth_failed_hosts) + len(unreachable) + len(degraded_hosts)
 
     if reachable == total_checkable and total_checkable > 0:
+        unmanaged_suffix = f"; {unmanaged_count} unmanaged inventory-only" if unmanaged_count else ""
         if na:
-            fmt.step_ok(f"Fleet SSH: {reachable}/{total_checkable} live ({na} n/a — need svc account)")
+            fmt.step_ok(f"Fleet SSH: {reachable}/{total_checkable} live ({na} n/a — need svc account{unmanaged_suffix})")
         else:
-            fmt.step_ok(f"Fleet SSH: {reachable}/{total} hosts live")
+            fmt.step_ok(f"Fleet SSH: {reachable}/{total} hosts live{unmanaged_suffix}")
         return 0
     if reachable > 0:
         breakdown = []
@@ -700,7 +703,8 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
 
 def _check_service_account(cfg: FreqConfig) -> int:
     """Verify service account exists and has correct permissions on reachable hosts."""
-    if not cfg.hosts:
+    hosts_for_check = [h for h in cfg.hosts if getattr(h, "managed", True)]
+    if not hosts_for_check:
         return 0
 
     import concurrent.futures
@@ -708,7 +712,7 @@ def _check_service_account(cfg: FreqConfig) -> int:
     svc = cfg.ssh_service_account
     # Sample: first 2 of each type to keep it fast
     by_type = {}
-    for h in cfg.hosts:
+    for h in hosts_for_check:
         by_type.setdefault(h.htype, []).append(h)
     sample = []
     for hosts in by_type.values():

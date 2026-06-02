@@ -277,9 +277,10 @@ def handle_health_api(handler):
         })
         return entry
 
+    active_hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]
     host_data = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=cfg.ssh_max_parallel) as pool:
-        futures = {pool.submit(_probe_host, h): h for h in cfg.hosts}
+        futures = {pool.submit(_probe_host, h): h for h in active_hosts}
         for f in concurrent.futures.as_completed(futures):
             try:
                 host_data.append(f.result())

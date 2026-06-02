@@ -1066,6 +1066,11 @@ def load_fleet_boundaries(path: str) -> FleetBoundaries:
                 device_type=info.get("type", "unknown"),
                 tier=info.get("tier", "probe"),
                 detail=info.get("detail", ""),
+                groups=info.get("groups", ""),
+                scope=info.get(
+                    "scope",
+                    "lab" if "lab" in (f"{key} {info.get('label', '')} {info.get('groups', '')}").lower() else "core",
+                ),
             )
 
     # PVE nodes

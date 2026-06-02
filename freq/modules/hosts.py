@@ -546,7 +546,8 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                 discovered[ip] = {
                     "label": safe_label,
                     "htype": dev.device_type,
-                    "groups": "prod,network" if dev.device_type in ("pfsense", "switch") else "prod",
+                    "groups": dev.groups
+                    or ("lab" if dev.scope == "lab" else "prod,network" if dev.device_type in ("pfsense", "switch") else "prod"),
                     "vmid": 0,
                     "source": "fleet-boundaries",
                     "all_ips": [],
@@ -715,11 +716,19 @@ def _auto_populate_fleet_boundaries(cfg, discovered: dict):
     infra_devices = {}
     for ip, d in discovered.items():
         if d["htype"] in INFRA_TYPES:
-            # Skip VMs categorized as lab (e.g., truenas-lab, pfsense-lab)
-            if d.get("vmid", 0) in lab_vmids:
-                continue
             key = d["label"].replace("-", "_").replace(" ", "_")
-            infra_devices[key] = {"ip": ip, "label": d["label"], "type": d["htype"]}
+            label_l = (d.get("label") or "").lower()
+            groups = d.get("groups", "")
+            scope = "lab" if d.get("vmid", 0) in lab_vmids or "lab" in label_l or "lab" in groups.split(",") else "core"
+            if scope == "lab" and "lab" not in groups.split(","):
+                groups = ",".join([g for g in [groups, "lab"] if g])
+            infra_devices[key] = {
+                "ip": ip,
+                "label": d["label"],
+                "type": d["htype"],
+                "groups": groups,
+                "scope": scope,
+            }
 
     # Also add infrastructure devices from freq.toml config
     _cfg_devices = [
@@ -837,7 +846,12 @@ def _auto_populate_fleet_boundaries(cfg, discovered: dict):
                     dtype = dev.get("type", "unknown")
                     detail = dev.get("detail", detail_map.get(dtype, dtype.upper()))
                     tier = dev.get("tier", "probe")
-                    f.write(f'{key} = {{ ip = "{ip}", label = "{label}", type = "{dtype}", tier = "{tier}", detail = "{detail}" }}\n')
+                    groups = dev.get("groups", "")
+                    scope = dev.get("scope", "lab" if "lab" in f"{key} {label} {groups}".lower() else "core")
+                    f.write(
+                        f'{key} = {{ ip = "{ip}", label = "{label}", type = "{dtype}", '
+                        f'tier = "{tier}", detail = "{detail}", groups = "{groups}", scope = "{scope}" }}\n'
+                    )
 
         if merged_pve:
             f.write("\n# Auto-discovered PVE nodes\n[pve_nodes]\n")

@@ -238,6 +238,7 @@ def run(
     htype: str = "linux",
     use_sudo: bool = True,
     cfg=None,
+    failure_log_level: str = "error",
 ) -> CmdResult:
     """Execute a command on a remote host via SSH (synchronous).
 
@@ -295,11 +296,20 @@ def run(
 
         if rc != 0:
             stderr_snippet = (result.stderr or "").strip()[:200]
-            logger.error(
+            normalized_failure_log_level = (failure_log_level or "error").lower()
+            log_failure = {
+                "debug": logger.debug,
+                "info": logger.info,
+                "warn": logger.warn,
+                "warning": logger.warn,
+                "error": logger.error,
+            }.get(normalized_failure_log_level, logger.error)
+            log_failure(
                 f"ssh_failed: {host} [{htype}] rc={rc}",
                 command=command[:120],
                 stderr=stderr_snippet,
                 duration=duration,
+                optional=normalized_failure_log_level not in ("", "error"),
             )
 
         # Performance tracking

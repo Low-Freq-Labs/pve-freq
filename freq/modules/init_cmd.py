@@ -3865,10 +3865,11 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
         return
 
     # Group hosts by auth category (using deployer registry)
-    linux_hosts = [h for h in cfg.hosts if h.category == "server"]
-    pfsense_hosts = [h for h in cfg.hosts if h.category == "firewall"]
-    device_hosts = [h for h in cfg.hosts if h.category in ("bmc", "switch")]
-    nas_hosts = [h for h in cfg.hosts if h.category == "nas"]
+    managed_hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]
+    linux_hosts = [h for h in managed_hosts if h.category == "server"]
+    pfsense_hosts = [h for h in managed_hosts if h.category == "firewall"]
+    device_hosts = [h for h in managed_hosts if h.category in ("bmc", "switch")]
+    nas_hosts = [h for h in managed_hosts if h.category == "nas"]
     # NAS hosts use server deployer (same SSH+useradd flow)
     linux_hosts.extend(nas_hosts)
 
