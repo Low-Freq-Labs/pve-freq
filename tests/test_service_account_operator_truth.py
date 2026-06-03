@@ -9,6 +9,8 @@ Proves:
 
 import os
 import re
+import shutil
+import tempfile
 import tomllib
 import unittest
 
@@ -52,12 +54,21 @@ class TestRuntimeConfigTruth(unittest.TestCase):
     def test_configured_account_matches_local_config(self):
         """Runtime config must match the local freq.toml service_account value when set."""
         from freq.core.config import load_config
-        cfg_path = os.path.join(REPO_ROOT, "conf", "freq.toml")
-        cfg = load_config()
-        with open(cfg_path, "rb") as f:
-            data = tomllib.load(f)
-        expected = data.get("ssh", {}).get("service_account", "freq-admin")
-        self.assertEqual(cfg.ssh_service_account, expected)
+        tmp = tempfile.mkdtemp(prefix="freq-svc-account-")
+        try:
+            conf_dir = os.path.join(tmp, "conf")
+            os.makedirs(conf_dir, exist_ok=True)
+            cfg_path = os.path.join(conf_dir, "freq.toml")
+            with open(cfg_path, "w") as f:
+                f.write('[ssh]\nservice_account = "dc01-admin"\n')
+
+            cfg = load_config(install_dir=tmp, force=True)
+            with open(cfg_path, "rb") as f:
+                data = tomllib.load(f)
+            expected = data.get("ssh", {}).get("service_account", "freq-admin")
+            self.assertEqual(cfg.ssh_service_account, expected)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def test_configured_value_is_nonempty(self):
         """Configured runtime service account must not be empty."""

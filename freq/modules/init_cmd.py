@@ -739,6 +739,31 @@ def _confirm(prompt, default=False):
         return False
 
 
+def _validate_service_account_choice(svc_name):
+    """Validate a managed service-account name before any side effect."""
+    if not _validate_username(svc_name):
+        fmt.step_fail(
+            f"Invalid username '{svc_name}' — must be lowercase, start with letter/underscore, max 32 chars"
+        )
+        return False
+
+    # freq-ops is the bootstrap/sudo ingress identity per
+    # docs/IDENTITY-CONTRACT.md. init must not useradd, chpasswd,
+    # sudoers-write, or otherwise manage it.
+    from freq.core.config import is_managed_service_account_name, RESERVED_SERVICE_ACCOUNT_NAMES
+
+    if not is_managed_service_account_name(svc_name):
+        fmt.step_fail(
+            f"'{svc_name}' is reserved as a bootstrap-only identity "
+            f"(see docs/IDENTITY-CONTRACT.md). Reserved names: "
+            f"{sorted(RESERVED_SERVICE_ACCOUNT_NAMES)}. Pick a different "
+            f"service account name (default: 'freq-admin')."
+        )
+        return False
+
+    return True
+
+
 def _phase(num, total, title):
     """Print phase header."""
     fmt.blank()
@@ -1928,27 +1953,18 @@ def _phase_service_account(cfg, ctx, args=None):
     fmt.line(f"  {fmt.C.DIM}It will be created on this host and deployed to all managed nodes.{fmt.C.RESET}")
     fmt.blank()
 
-    # Service account name
-    svc_name = _input("Service account name", ctx["svc_name"])
-    if not _validate_username(svc_name):
-        fmt.step_fail(f"Invalid username '{svc_name}' — must be lowercase, start with letter/underscore, max 32 chars")
+    svc_arg = (getattr(args, "service_account", None) or "").strip() if args else ""
+    if svc_arg:
+        svc_name = svc_arg
+        fmt.step_ok(f"Service account from CLI: {svc_name}")
+    else:
+        svc_name = _input("Service account name", ctx["svc_name"])
+
+    if not _validate_service_account_choice(svc_name):
         return 1
-    # freq-ops is the bootstrap/sudo
-    # ingress identity per docs/IDENTITY-CONTRACT.md. init must not useradd,
-    # chpasswd, sudoers-write, or otherwise manage it. Refuse the name here
-    # so the operator gets a clear contract message instead of a downstream
-    # mystery (chpasswd silently changing the bootstrap account password,
-    # sudoers file landing at /etc/sudoers.d/freq-freq-ops, etc.).
-    from freq.core.config import is_managed_service_account_name, RESERVED_SERVICE_ACCOUNT_NAMES
-    if not is_managed_service_account_name(svc_name):
-        fmt.step_fail(
-            f"'{svc_name}' is reserved as a bootstrap-only identity "
-            f"(see docs/IDENTITY-CONTRACT.md). Reserved names: "
-            f"{sorted(RESERVED_SERVICE_ACCOUNT_NAMES)}. Pick a different "
-            f"service account name (default: 'freq-admin')."
-        )
-        return 1
+
     ctx["svc_name"] = svc_name
+    cfg.ssh_service_account = svc_name
     fmt.blank()
 
     # Read password from file if provided, otherwise prompt
@@ -7855,8 +7871,13 @@ def _init_headless(cfg, args):
         fmt.line(f"  {fmt.C.RED}Password too short (min 8 chars){fmt.C.RESET}")
         return 1
 
+    svc_name = (getattr(args, "service_account", None) or cfg.ssh_service_account).strip()
+    if not _validate_service_account_choice(svc_name):
+        return 1
+    cfg.ssh_service_account = svc_name
+
     ctx = {
-        "svc_name": cfg.ssh_service_account,
+        "svc_name": svc_name,
         "svc_pass": svc_pass,
         "key_path": "",
         "pubkey": "",

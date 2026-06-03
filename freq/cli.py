@@ -228,6 +228,10 @@ def _register_utilities(sub):
         "--bootstrap-password-file",
         help="Password file for initial auth to PVE nodes (via sshpass, when no bootstrap key)",
     )
+    p.add_argument(
+        "--service-account",
+        help="Managed FREQ service account to create/deploy (default from freq.toml, usually freq-admin)",
+    )
     p.add_argument("--password-file", help="Read service account password from file")
     p.add_argument("--pve-nodes", help="PVE node IPs (comma or space-separated)")
     p.add_argument("--pve-node-names", help="PVE node names (comma or space-separated, same order as --pve-nodes)")

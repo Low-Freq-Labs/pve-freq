@@ -122,26 +122,31 @@ class TestPhase3RejectsReservedSvcName(unittest.TestCase):
     location it must appear.
     """
 
+    def _validator_source(self):
+        import inspect
+        from freq.modules.init_cmd import _validate_service_account_choice
+        return inspect.getsource(_validate_service_account_choice)
+
     def _phase3_source(self):
         import inspect
         from freq.modules.init_cmd import _phase_service_account
         return inspect.getsource(_phase_service_account)
 
     def test_phase3_imports_validator(self):
-        src = self._phase3_source()
+        src = self._validator_source()
         self.assertIn(
             "from freq.core.config import is_managed_service_account_name",
             src,
-            "Phase 3 must import the canonical validator from config.py",
+            "The shared service-account validator must import the canonical validator from config.py",
         )
 
     def test_phase3_calls_validator_after_username_format_check(self):
-        src = self._phase3_source()
+        src = self._validator_source()
         # The validator call must appear in the function body.
         self.assertIn(
             "is_managed_service_account_name(svc_name)",
             src,
-            "Phase 3 must call is_managed_service_account_name on svc_name",
+            "The shared service-account validator must call is_managed_service_account_name on svc_name",
         )
 
     def test_phase3_fails_before_useradd_on_reserved_name(self):
@@ -163,11 +168,11 @@ class TestPhase3RejectsReservedSvcName(unittest.TestCase):
                 code_lines.append(line)
         code = "\n".join(code_lines)
 
-        validator_idx = code.find("is_managed_service_account_name(svc_name)")
+        validator_idx = code.find("_validate_service_account_choice(svc_name)")
         useradd_idx = code.find('"useradd"')
         chpasswd_idx = code.find("/usr/sbin/chpasswd")
         sudoers_idx = code.find("_setup_sudoers(svc_name)")
-        self.assertNotEqual(validator_idx, -1, "validator call must exist")
+        self.assertNotEqual(validator_idx, -1, "Phase 3 must call the shared validator")
 
         for label, idx in [("useradd", useradd_idx), ("chpasswd", chpasswd_idx), ("_setup_sudoers", sudoers_idx)]:
             if idx == -1:
@@ -175,7 +180,7 @@ class TestPhase3RejectsReservedSvcName(unittest.TestCase):
             self.assertLess(
                 validator_idx,
                 idx,
-                f"is_managed_service_account_name() must run BEFORE {label} "
+                f"_validate_service_account_choice() must run BEFORE {label} "
                 f"so a reserved name is rejected before any write to the "
                 f"bootstrap account",
             )
@@ -185,7 +190,7 @@ class TestPhase3RejectsReservedSvcName(unittest.TestCase):
         src = self._phase3_source()
         # Look for the rejection block — it should mention reserved + return 1.
         match = re.search(
-            r'if not is_managed_service_account_name\(svc_name\):.*?return 1',
+            r'if not _validate_service_account_choice\(svc_name\):.*?return 1',
             src,
             re.DOTALL,
         )
@@ -196,12 +201,27 @@ class TestPhase3RejectsReservedSvcName(unittest.TestCase):
 
     def test_phase3_error_message_cites_identity_contract(self):
         """Operator should be told WHY the name was rejected and where to look."""
-        src = self._phase3_source()
+        src = self._validator_source()
         self.assertIn(
             "IDENTITY-CONTRACT.md",
             src,
-            "Phase 3 rejection message must cite docs/IDENTITY-CONTRACT.md",
+            "Service-account rejection message must cite docs/IDENTITY-CONTRACT.md",
         )
+
+    def test_headless_init_validates_cli_service_account_before_local_account(self):
+        import inspect
+        from freq.modules.init_cmd import _init_headless
+
+        src = inspect.getsource(_init_headless)
+        svc_idx = src.find('getattr(args, "service_account"')
+        validator_idx = src.find("_validate_service_account_choice(svc_name)")
+        ctx_idx = src.find('"svc_name": svc_name')
+        phase3_idx = src.find("_headless_local_account(cfg, ctx)")
+        self.assertNotEqual(svc_idx, -1, "headless init must read --service-account")
+        self.assertNotEqual(validator_idx, -1, "headless init must validate --service-account")
+        self.assertLess(svc_idx, validator_idx)
+        self.assertLess(validator_idx, ctx_idx)
+        self.assertLess(ctx_idx, phase3_idx)
 
 
 class TestInstallShRejectsReservedSvcName(unittest.TestCase):

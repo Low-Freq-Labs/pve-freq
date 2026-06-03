@@ -47,6 +47,13 @@ class TestCLIDispatch(unittest.TestCase):
         for domain in expected_domains:
             self.assertIn(domain, registered, f"Domain '{domain}' not registered")
 
+    def test_init_service_account_arg(self):
+        """Headless init can choose a managed service account without pre-seeded config."""
+        args = self.parser.parse_args(["init", "--headless", "--service-account", "dc01-admin"])
+        self.assertEqual(args.domain, "init")
+        self.assertTrue(args.headless)
+        self.assertEqual(args.service_account, "dc01-admin")
+
     def test_vm_subcommands(self):
         """VM domain has all expected subcommands."""
         args = self.parser.parse_args(["vm", "list"])
