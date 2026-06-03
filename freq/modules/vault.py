@@ -189,6 +189,8 @@ def vault_init(cfg: FreqConfig) -> bool:
     vault_path = cfg.vault_file
 
     os.makedirs(vault_dir, mode=0o700, exist_ok=True)
+    if os.path.exists(vault_path):
+        return True
     return _encrypt("# FREQ Vault — initialized\n", key, vault_path)
 
 

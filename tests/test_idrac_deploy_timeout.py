@@ -74,6 +74,24 @@ class TestSwitchDeployHasTimeout(unittest.TestCase):
         self.assertIsNotNone(switch_fn)
         self.assertIn("deploy_start", switch_fn.group())
 
+    def test_switch_config_uses_forced_tty_not_no_pty(self):
+        """Cisco IOS config mode is interactive and must not use ssh -T."""
+        src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
+        import re
+        switch_fn = re.search(r'def _deploy_switch\(.*?\n(?=def |\Z)', src, re.DOTALL)
+        self.assertIsNotNone(switch_fn)
+        body = switch_fn.group()
+        self.assertIn('"ssh",\n        "-tt"', body)
+        self.assertNotIn('"ssh",\n        "-T"', body)
+        self.assertIn("SWITCH_CONFIG_TIMEOUT", body)
+
+    def test_timeout_wrapper_uses_kill_after(self):
+        """GNU timeout must escalate and normalize timeout exits to rc=124."""
+        src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
+        self.assertIn('"timeout", "-k", "5s"', src)
+        self.assertNotIn('"timeout", "-s", "KILL"', src)
+        self.assertIn("if rc in (124, 137, -9):", src)
+
 
 if __name__ == "__main__":
     unittest.main()

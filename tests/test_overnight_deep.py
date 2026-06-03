@@ -217,6 +217,64 @@ class TestDoctorChecks(unittest.TestCase):
         # 0 = hosts found, 2 = hosts.conf missing (CI)
         self.assertIn(result, [0, 2])
 
+    def test_check_hosts_allows_probe_only_firewall(self):
+        from freq.core.config import FreqConfig
+        from freq.core.doctor import _check_hosts
+        from freq.core.types import FleetBoundaries, Host, PhysicalDevice
+
+        cfg = FreqConfig()
+        cfg.hosts = [
+            Host(
+                ip="10.0.0.1",
+                label="firewall",
+                htype="pfsense",
+                managed=False,
+            )
+        ]
+        cfg.fleet_boundaries = FleetBoundaries(
+            physical={
+                "firewall": PhysicalDevice(
+                    key="firewall",
+                    ip="10.0.0.1",
+                    label="firewall",
+                    device_type="pfsense",
+                    tier="probe",
+                    scope="core",
+                )
+            }
+        )
+
+        self.assertEqual(_check_hosts(cfg), 0)
+
+    def test_check_hosts_rejects_unmanaged_core_switch(self):
+        from freq.core.config import FreqConfig
+        from freq.core.doctor import _check_hosts
+        from freq.core.types import FleetBoundaries, Host, PhysicalDevice
+
+        cfg = FreqConfig()
+        cfg.hosts = [
+            Host(
+                ip="10.0.0.5",
+                label="switch",
+                htype="switch",
+                managed=False,
+            )
+        ]
+        cfg.fleet_boundaries = FleetBoundaries(
+            physical={
+                "switch": PhysicalDevice(
+                    key="switch",
+                    ip="10.0.0.5",
+                    label="switch",
+                    device_type="switch",
+                    tier="probe",
+                    scope="core",
+                )
+            }
+        )
+
+        self.assertEqual(_check_hosts(cfg), 1)
+
     def test_check_hosts_validity(self):
         from freq.core.doctor import _check_hosts_validity
         result = _check_hosts_validity(self.cfg)

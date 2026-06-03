@@ -218,7 +218,7 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
     def test_init_persists_truenas_api_key_to_runtime_vault(self):
         src = (REPO_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
         self.assertIn("def _seed_truenas_api_key_from_device_creds", src)
-        self.assertIn('vault_set(cfg, "truenas", "api_key", api_key)', src)
+        self.assertIn('vault_set(cfg, namespace, "api_key", api_key)', src)
         self.assertIn("_seed_truenas_api_key_from_device_creds(cfg, device_creds)", src)
 
 

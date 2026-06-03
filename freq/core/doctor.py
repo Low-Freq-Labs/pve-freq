@@ -901,7 +901,10 @@ def _check_hosts(cfg: FreqConfig) -> int:
         for dev in getattr(cfg.fleet_boundaries, "physical", {}).values():
             if getattr(dev, "scope", "core") == "lab":
                 continue
-            if getattr(dev, "device_type", "") == "truenas":
+            dev_type = getattr(dev, "device_type", "")
+            if dev_type == "truenas":
+                continue
+            if dev_type in {"pfsense", "opnsense"} and getattr(dev, "tier", "probe") == "probe":
                 continue
             h = unmanaged_by_ip.get(dev.ip)
             if h:

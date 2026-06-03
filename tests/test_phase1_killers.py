@@ -476,7 +476,7 @@ class TestFleetInventoryContracts(unittest.TestCase):
         self.assertTrue(_is_managed_auto_host("pve01", "pve"))
         self.assertTrue(_is_managed_auto_host("plex", "docker", vmid=201))
         self.assertTrue(_is_managed_auto_host("switch", "switch"))
-        self.assertTrue(_is_managed_auto_host("truenas", "truenas"))
+        self.assertFalse(_is_managed_auto_host("truenas", "truenas"))
         self.assertTrue(_is_managed_auto_host("bmc-10", "idrac"))
         self.assertTrue(_is_managed_auto_host("pdm-manager", "linux", vmid=101, source="pve-api"))
         self.assertFalse(_is_managed_auto_host("jarvis-ai", "linux", vmid=666))

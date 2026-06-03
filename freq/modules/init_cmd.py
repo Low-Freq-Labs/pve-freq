@@ -38,6 +38,7 @@ import signal
 import subprocess
 import tempfile
 import time
+from urllib.parse import urlparse
 
 try:
     import tomllib
@@ -84,6 +85,7 @@ DEVICE_DEPLOY_TIMEOUT = 240  # Total timeout for iDRAC/switch deploy (all steps 
 # iDRAC user slot range (slots 1-2 are reserved by Dell for root/admin)
 IDRAC_SLOT_MIN = 3
 IDRAC_SLOT_MAX = 17  # exclusive — range(3, 17) gives slots 3-16
+IDRAC_PASSWORD_MAX_LEN = 20
 
 # IOS SSH key line width (PEM line wrapping limit)
 IOS_KEY_LINE_WIDTH = 72
@@ -406,7 +408,7 @@ def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
     # if the caller (e.g., _ssh_with_pass) already added a timeout prefix.
     py_timeout = timeout
     if cmd and cmd[0] != "timeout":
-        cmd = ["timeout", "-s", "KILL", str(timeout)] + list(cmd)
+        cmd = ["timeout", "-k", "5s", str(timeout)] + list(cmd)
         py_timeout = timeout + 10  # Python fallback fires 10s after GNU timeout
 
     try:
@@ -426,11 +428,11 @@ def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
     try:
         out, err = proc.communicate(input=input_text, timeout=py_timeout)
         rc = proc.returncode
-        # GNU timeout returns 128+9=137 on SIGKILL; Python reports -9
-        # when the process group kill catches the wrapper itself. Both
-        # indicate the command was killed due to timeout — map to rc=124
-        # so callers see a consistent timeout signal.
-        if rc in (137, -9):
+        # GNU timeout normally returns 124. If kill-after escalates to
+        # SIGKILL, it can return 137; Python reports -9 when the process
+        # group kill catches the wrapper itself. Normalize all timeout
+        # shapes so callers see one contract.
+        if rc in (124, 137, -9):
             return 124, out or "", f"command timed out after {timeout}s"
         return rc, out or "", err or ""
     except subprocess.TimeoutExpired:
@@ -589,6 +591,9 @@ def _load_device_credentials(cred_file):
             1. password_file = "/path/to/file"  — read password from file
             2. password = "inline"              — inline password value
 
+        Firewall-style devices also support key-based bootstrap:
+            ssh_key_file = "/path/to/key"
+
         TrueNAS also supports api_key_file/api_key. password_file takes
         priority when both password forms exist.
         Accepts both 'user' and 'username' as key for the account name.
@@ -596,11 +601,27 @@ def _load_device_credentials(cred_file):
         user = entry.get("user") or entry.get("username") or "root"
         pw_file = entry.get("password_file", "")
         inline_pw = entry.get("password", "")
+        key_file = entry.get("ssh_key_file", "") or entry.get("key_file", "") or entry.get("key_path", "")
+        host = str(entry.get("host", "") or "").strip()
+        url = str(entry.get("url", "") or "").strip()
+        hosts_value = entry.get("hosts", [])
         api_key_file = entry.get("api_key_file", "") or entry.get("api_key_path", "")
         inline_api_key = entry.get("api_key", "")
         api_key = _read_secret_file(api_key_file, f"{label} api_key") if api_key_file else inline_api_key
 
         cred = {"user": user, "password": ""}
+        if host:
+            cred["host"] = host
+        if url:
+            cred["url"] = url
+            parsed_host = urlparse(url).hostname or ""
+            if parsed_host and "host" not in cred:
+                cred["host"] = parsed_host
+        if hosts_value:
+            if isinstance(hosts_value, str):
+                cred["hosts"] = [h.strip() for h in hosts_value.split(",") if h.strip()]
+            elif isinstance(hosts_value, (list, tuple)):
+                cred["hosts"] = [str(h).strip() for h in hosts_value if str(h).strip()]
         if api_key:
             cred["api_key"] = api_key
 
@@ -624,10 +645,16 @@ def _load_device_credentials(cred_file):
         if inline_pw:
             cred["password"] = inline_pw
             return cred
+        if key_file:
+            if os.path.isfile(key_file):
+                cred["key_path"] = key_file
+                return cred
+            fmt.step_warn(f"Cannot read {label} ssh_key_file from {key_file}: file not found")
+            return None
         if api_key:
             cred["api_key_only"] = True
             return cred
-        fmt.step_warn(f"Device '{label}' has no password or password_file — skipped")
+        fmt.step_warn(f"Device '{label}' has no password, password_file, or ssh_key_file — skipped")
         return None
 
     # Build lookup: check all three formats per device type
@@ -651,6 +678,20 @@ def _load_device_credentials(cred_file):
             if cred:
                 result[legacy_htype] = cred
 
+    # Named TrueNAS instances, for example [truenas-lab], are runtime
+    # storage targets rather than a new deployer htype. Preserve them by
+    # section name so init can seed matching vault namespaces.
+    for section_name, entry in data.items():
+        if not isinstance(entry, dict):
+            continue
+        if not str(section_name).startswith("truenas-"):
+            continue
+        if section_name in result:
+            continue
+        cred = _read_entry(entry, str(section_name))
+        if cred:
+            result[str(section_name)] = cred
+
     return result
 
 
@@ -663,9 +704,29 @@ def _seed_truenas_api_key_from_device_creds(cfg, device_creds):
     truthfully reports "API key missing" after an apparently successful
     setup. This keeps init as the one-stop onboarding path.
     """
-    cred = (device_creds or {}).get("truenas") or {}
-    api_key = (cred.get("api_key") or "").strip()
-    if not api_key:
+    stored_any = False
+    truenas_creds = {
+        name: cred
+        for name, cred in (device_creds or {}).items()
+        if name == "truenas" or str(name).startswith("truenas-")
+    }
+    for namespace, cred in truenas_creds.items():
+        api_key = ((cred or {}).get("api_key") or "").strip()
+        if not api_key:
+            continue
+        try:
+            from freq.modules.vault import vault_init, vault_set
+
+            vault_init(cfg)
+            if vault_set(cfg, namespace, "api_key", api_key):
+                fmt.step_ok(f"TrueNAS API key stored in vault namespace {namespace}:api_key")
+                stored_any = True
+            else:
+                fmt.step_warn(f"TrueNAS API key supplied but vault write failed for {namespace}")
+        except Exception as e:
+            fmt.step_warn(f"TrueNAS API key supplied but could not be stored for {namespace}: {e}")
+
+    if not stored_any:
         has_core_truenas = bool(getattr(cfg, "truenas_ip", ""))
         if not has_core_truenas:
             for dev in getattr(cfg.fleet_boundaries, "physical", {}).values():
@@ -681,17 +742,25 @@ def _seed_truenas_api_key_from_device_creds(cfg, device_creds):
                 "[truenas] in --device-credentials for fully green storage metrics"
             )
         return False
+    return True
 
-    try:
-        from freq.modules.vault import vault_init, vault_set
 
-        vault_init(cfg)
-        if vault_set(cfg, "truenas", "api_key", api_key):
-            fmt.step_ok("TrueNAS API key stored in vault namespace truenas:api_key")
-            return True
-        fmt.step_warn("TrueNAS API key supplied but vault write failed")
-    except Exception as e:
-        fmt.step_warn(f"TrueNAS API key supplied but could not be stored: {e}")
+def _validate_device_scoped_service_password(device_creds, svc_pass):
+    """Reject service passwords that known device firmware cannot accept.
+
+    Linux and PVE can handle the generated long password, but older iDRAC
+    RACADM rejects overlong password values with a vague RAC947 error after
+    init has already started mutating BMC state. Validate before deploy.
+    """
+    if not (device_creds or {}).get("idrac"):
+        return True
+    if len(svc_pass or "") <= IDRAC_PASSWORD_MAX_LEN:
+        return True
+    fmt.step_fail(
+        f"Service password is too long for iDRAC deployment "
+        f"({len(svc_pass)} > {IDRAC_PASSWORD_MAX_LEN}); rotate --password-file "
+        "before running init with [idrac] device credentials"
+    )
     return False
 
 
@@ -2105,8 +2174,8 @@ def _ssh_with_pass(password, ssh_cmd_list, timeout=DEFAULT_CMD_TIMEOUT, input_te
     proc.communicate(timeout=) can fail to fire when sshpass's forkpty
     child (ssh) holds pipe FDs open past the iDRAC RACADM session — the
     pipe drain blocks indefinitely even after TimeoutExpired is raised.
-    GNU timeout -s KILL ensures the sshpass tree is killed at the OS
-    level regardless of Python subprocess internals.
+    GNU timeout -k ensures the sshpass tree is escalated and killed at
+    the OS level regardless of Python subprocess internals.
 
     Returns (rc, stdout, stderr).
     """
@@ -2116,12 +2185,13 @@ def _ssh_with_pass(password, ssh_cmd_list, timeout=DEFAULT_CMD_TIMEOUT, input_te
         tmp.close()
         os.chmod(tmp.name, 0o600)
         full_cmd = [
-            "timeout", "-s", "KILL", str(timeout),
+            "timeout", "-k", "5s", str(timeout),
             "sshpass", "-f", tmp.name,
         ] + ssh_cmd_list
         # _run/_run_bounded gets timeout + 10 as its Python-side ceiling
-        # so GNU timeout fires first (hard kill) and _run_bounded serves
-        # as the fallback if timeout(1) itself somehow doesn't exit.
+        # so GNU timeout fires first (with SIGTERM, then SIGKILL after
+        # 5s) and _run_bounded serves as the fallback if timeout(1)
+        # itself somehow doesn't exit.
         py_timeout = timeout + 10
         if input_text is not None:
             return _run_with_input(full_cmd, input_text, timeout=py_timeout)
@@ -3342,6 +3412,9 @@ def _is_managed_auto_host(label, htype, vmid=0, source=""):
     if htype == "pve":
         return source == "pve-node" or not vmid
 
+    if htype == "truenas":
+        return False
+
     if htype in {"pfsense", "truenas", "switch", "idrac", "opnsense"}:
         return True
 
@@ -3373,6 +3446,9 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     key_path = ctx.get("key_path", "") or cfg.ssh_key_path
     svc_name = ctx.get("svc_name", cfg.ssh_service_account)
     hosts_file_arg = getattr(args, "hosts_file", None) if args else None
+    device_creds = ctx.get("device_creds") or _load_device_credentials(getattr(args, "device_credentials", None))
+    if device_creds:
+        ctx["device_creds"] = device_creds
     scoped_hosts = []
 
     if hosts_file_arg and os.path.isfile(hosts_file_arg):
@@ -3669,8 +3745,93 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     infra_truenas = ""
     infra_switch = ""
 
+    def _discovery_is_lab(d):
+        label = (d.get("label") or "").lower()
+        groups = [g.strip().lower() for g in (d.get("groups") or "").split(",") if g.strip()]
+        return d.get("vmid", 0) >= 5000 or "lab" in label or "lab" in groups
+
+    def _discovery_is_core_truenas(d):
+        return d.get("htype") == "truenas" and not _discovery_is_lab(d)
+
+    def _host_is_core_truenas(h):
+        label = (getattr(h, "label", "") or "").lower()
+        groups = [g.strip().lower() for g in (getattr(h, "groups", "") or "").split(",") if g.strip()]
+        return h.htype == "truenas" and "lab" not in label and "lab" not in groups
+
+    def _gateway_ssh_probe(gateway_ip):
+        pfsense_creds = device_creds.get("pfsense", {}) if isinstance(device_creds, dict) else {}
+        auth_user = pfsense_creds.get("user") or svc_name
+        auth_key = pfsense_creds.get("key_path") or key_path
+        auth_pass = pfsense_creds.get("password", "")
+        if auth_pass:
+            cmd = [
+                "sshpass", "-p", auth_pass, "ssh", "-n",
+                "-o", "ConnectTimeout=3",
+                "-o", "BatchMode=no",
+                "-o", "NumberOfPasswordPrompts=1",
+                "-o", "StrictHostKeyChecking=accept-new",
+                f"{auth_user}@{gateway_ip}", "uname -s",
+            ]
+        else:
+            cmd = [
+                "ssh", "-n",
+                "-o", "ConnectTimeout=3",
+                "-o", "BatchMode=yes",
+                "-o", "StrictHostKeyChecking=accept-new",
+            ]
+            if auth_key:
+                cmd.extend(["-i", auth_key])
+            cmd.extend([f"{auth_user}@{gateway_ip}", "uname -s"])
+        return _run(cmd, timeout=QUICK_CHECK_TIMEOUT)
+
+    def _pfsense_is_deployable():
+        pfsense_creds = device_creds.get("pfsense", {}) if isinstance(device_creds, dict) else {}
+        user = (pfsense_creds.get("user") or "").lower()
+        return user in {"root", "admin"}
+
+    def _repair_existing_probe_only_infra():
+        changed = False
+        pfsense_deployable = _pfsense_is_deployable()
+        for h in existing_hosts:
+            if h.htype == "pfsense" and not pfsense_deployable and getattr(h, "managed", True):
+                h.managed = False
+                changed = True
+        if changed:
+            from freq.core.config import save_hosts_toml
+
+            save_hosts_toml(cfg.hosts_file, cfg.hosts)
+            fmt.step_ok("Existing probe-only infrastructure marked unmanaged")
+
+    def _credential_hosts(name):
+        cred = device_creds.get(name, {}) if isinstance(device_creds, dict) else {}
+        hosts = []
+        for value in cred.get("hosts", []) or []:
+            if value and value not in hosts:
+                hosts.append(value)
+        host = cred.get("host", "")
+        if host and host not in hosts:
+            hosts.append(host)
+        return hosts
+
+    def _add_staged_device(ip, label, htype, groups="infrastructure", managed=True):
+        if not ip:
+            return
+        if ip not in existing_ips and ip not in discovered:
+            discovered[ip] = {
+                "label": label,
+                "htype": htype,
+                "groups": groups,
+                "vmid": 0,
+                "source": "device-credentials",
+                "managed": managed,
+                "all_ips": [ip],
+            }
+
     # Gateway = firewall
     gw = getattr(cfg, "vm_gateway", "") or ""
+    if not gw:
+        hosts = _credential_hosts("pfsense")
+        gw = hosts[0] if hosts else ""
     if gw and gw not in existing_ips:
         if gw in discovered:
             # Already discovered — check/update type
@@ -3682,21 +3843,11 @@ def _phase_fleet_discover(cfg, ctx, args=None):
         else:
             # Probe gateway
             rc, _, _ = _run(["ping", "-c", "1", "-W", "1", gw], timeout=PING_TIMEOUT)
-            if rc == 0:
-                # Try SSH fingerprint
+            rc2, out2, _ = _gateway_ssh_probe(gw)
+            if rc == 0 or rc2 == 0:
                 gw_type = "pfsense"
-                try:
-                    rc2, out2, _ = _run(
-                        ["ssh", "-n", "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
-                         "-o", "StrictHostKeyChecking=accept-new",
-                         "-i", key_path, f"{svc_name}@{gw}", "uname -s"],
-                        timeout=QUICK_CHECK_TIMEOUT,
-                    )
-                    if rc2 == 0:
-                        if "Linux" in out2:
-                            gw_type = "opnsense"
-                except Exception:
-                    pass
+                if rc2 == 0 and "Linux" in out2:
+                    gw_type = "opnsense"
 
                 discovered[gw] = {
                     "label": "firewall",
@@ -3704,20 +3855,21 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     "groups": "infrastructure",
                     "vmid": 0,
                     "source": "gateway-probe",
-                    "managed": True,
+                    "managed": _pfsense_is_deployable(),
                     "all_ips": [gw],
                 }
                 infra_pfsense = gw
                 fmt.step_ok(f"Gateway {gw} → {gw_type}")
             else:
-                fmt.step_warn(f"Gateway {gw} not responding to ping")
+                fmt.step_warn(f"Gateway {gw} not reachable by ping or staged SSH credentials")
     elif gw and gw in existing_ips:
         infra_pfsense = gw
         fmt.step_ok(f"Gateway {gw} already registered")
+        _repair_existing_probe_only_infra()
 
     # Detect TrueNAS, switch, iDRAC from discovered hosts
     for ip, d in discovered.items():
-        if d["htype"] == "truenas" and not infra_truenas:
+        if _discovery_is_core_truenas(d) and not infra_truenas:
             infra_truenas = ip
             fmt.step_ok(f"TrueNAS detected: {d['label']} ({ip})")
         elif d["htype"] == "switch" and not infra_switch:
@@ -3726,7 +3878,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
     # Also check existing hosts for infrastructure
     for h in existing_hosts:
-        if h.htype == "truenas" and not infra_truenas:
+        if _host_is_core_truenas(h) and not infra_truenas:
             infra_truenas = h.ip
         elif h.htype == "switch" and not infra_switch:
             infra_switch = h.ip
@@ -3812,10 +3964,43 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     discovered[ip] = {
                         "label": "truenas", "htype": "truenas",
                         "groups": "infrastructure", "vmid": 0,
-                        "source": "infra-probe", "managed": True, "all_ips": [ip],
+                        "source": "infra-probe", "managed": False, "all_ips": [ip],
                     }
                     infra_truenas = ip
                     fmt.step_ok(f"TrueNAS detected: {ip}")
+
+    # Device credentials are explicit operator input. Use them as discovery
+    # truth when ping/guest-agent discovery cannot see management appliances.
+    if not infra_pfsense:
+        for ip in _credential_hosts("pfsense"):
+            _add_staged_device(ip, "firewall", "pfsense", managed=_pfsense_is_deployable())
+            infra_pfsense = ip
+            fmt.step_ok(f"Gateway from device credentials: {ip}")
+            break
+    if not infra_switch:
+        for ip in _credential_hosts("switch"):
+            _add_staged_device(ip, "switch", "switch")
+            infra_switch = ip
+            fmt.step_ok(f"Switch from device credentials: {ip}")
+            break
+    if not infra_truenas:
+        for ip in _credential_hosts("truenas"):
+            _add_staged_device(ip, "truenas", "truenas", managed=False)
+            infra_truenas = ip
+            fmt.step_ok(f"TrueNAS from device credentials: {ip}")
+            break
+    for name, cred in sorted((device_creds or {}).items()):
+        if name == "idrac" or str(name).startswith("idrac-"):
+            for ip in _credential_hosts(name):
+                label = f"bmc-{ip.split('.')[-1]}"
+                _add_staged_device(ip, label, "idrac")
+                if ip not in infra_idrac_ips:
+                    infra_idrac_ips.append(ip)
+                    fmt.step_ok(f"iDRAC from device credentials: {label} ({ip})")
+        elif str(name).startswith("truenas-"):
+            for ip in _credential_hosts(name):
+                label = str(name).replace("_", "-")
+                _add_staged_device(ip, label, "truenas", groups="lab", managed=False)
 
     if not infra_truenas and not infra_switch and not infra_idrac_ips:
         fmt.line(f"  {fmt.C.DIM}No additional infrastructure devices auto-detected.{fmt.C.RESET}")
@@ -3867,8 +4052,15 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     if not d.get("managed", False):
                         skipped_inventory_only += 1
                         continue
-                    host = Host(ip=ip, label=d["label"], htype=d["htype"],
-                                groups=d.get("groups", ""), vmid=d.get("vmid", 0))
+                    host = Host(
+                        ip=ip,
+                        label=d["label"],
+                        htype=d["htype"],
+                        groups=d.get("groups", ""),
+                        vmid=d.get("vmid", 0),
+                        managed=d.get("managed", True),
+                        all_ips=d.get("all_ips", []),
+                    )
                     cfg.hosts.append(host)
                 save_hosts_toml(cfg.hosts_file, cfg.hosts)
                 registered = len(discovered) - skipped_inventory_only
@@ -3884,8 +4076,15 @@ def _phase_fleet_discover(cfg, ctx, args=None):
             if _confirm(f"Register all {len(discovered)} discovered hosts?", default=True):
                 from freq.core.config import save_hosts_toml
                 for ip, d in discovered.items():
-                    host = Host(ip=ip, label=d["label"], htype=d["htype"],
-                                groups=d.get("groups", ""), vmid=d.get("vmid", 0))
+                    host = Host(
+                        ip=ip,
+                        label=d["label"],
+                        htype=d["htype"],
+                        groups=d.get("groups", ""),
+                        vmid=d.get("vmid", 0),
+                        managed=d.get("managed", True),
+                        all_ips=d.get("all_ips", []),
+                    )
                     cfg.hosts.append(host)
                 save_hosts_toml(cfg.hosts_file, cfg.hosts)
                 fmt.step_ok(f"Registered {len(discovered)} host(s)")
@@ -3897,8 +4096,15 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     if _confirm(f"  Register {d['label']} ({ip}) [{d['htype']}]?", default=True):
                         label = _input(f"    Label", d["label"])
                         htype = _input(f"    Type", d["htype"])
-                        host = Host(ip=ip, label=label, htype=htype,
-                                    groups=d.get("groups", ""), vmid=d.get("vmid", 0))
+                        host = Host(
+                            ip=ip,
+                            label=label,
+                            htype=htype,
+                            groups=d.get("groups", ""),
+                            vmid=d.get("vmid", 0),
+                            managed=d.get("managed", True),
+                            all_ips=d.get("all_ips", []),
+                        )
                         cfg.hosts.append(host)
                         registered += 1
                 save_hosts_toml(cfg.hosts_file, cfg.hosts)
@@ -4108,10 +4314,10 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
 
         pf_creds = device_creds.get("pfsense")
         if pf_creds:
-            # Device credentials mode — password auth from --device-credentials
+            # Device credentials mode — password or key auth from --device-credentials
             pf_user = pf_creds["user"]
-            pf_pass = pf_creds["password"]
-            pf_key = ""
+            pf_pass = pf_creds.get("password", "")
+            pf_key = pf_creds.get("key_path", "")
             fmt.step_ok(f"Using device credentials for pfSense: {pf_user}")
             for h in pfsense_hosts:
                 fmt.blank()
@@ -5670,6 +5876,14 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     rsa_pubkey = ctx.get("rsa_pubkey", "")
     logger.info(f"deploy_start: {ip} [switch]", host=ip, htype="switch")
 
+    def _check_timeout(step=""):
+        elapsed = time.monotonic() - deploy_start
+        if elapsed > DEVICE_DEPLOY_TIMEOUT:
+            fmt.step_fail(f"Switch deploy timeout ({elapsed:.0f}s > {DEVICE_DEPLOY_TIMEOUT}s) at {step}")
+            logger.error(f"deploy_timeout: {ip}", host=ip, elapsed=elapsed, step=step)
+            return True
+        return False
+
     # Dry-run: show what would be done without making changes
     if ctx.get("dry_run"):
         fmt.step_info(f"DRY RUN: Would deploy {svc_name} to {ip}")
@@ -5697,6 +5911,9 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
         return False
     fmt.step_ok("Connected to switch")
 
+    if _check_timeout("config_session"):
+        return False
+
     # Build IOS config commands — create user + deploy RSA public key
     # RSA public key base64 data split into 72-char lines (PEM width).
     # IOS key-string chokes on 254-char lines — 72 works reliably.
@@ -5704,6 +5921,7 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     key_lines = [rsa_key_data[i : i + IOS_KEY_LINE_WIDTH] for i in range(0, len(rsa_key_data), IOS_KEY_LINE_WIDTH)]
 
     ios_cmds = [
+        "terminal length 0",
         "configure terminal",
         f"username {svc_name} privilege 15 secret {svc_pass}",
         "ip ssh pubkey-chain",
@@ -5718,22 +5936,31 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
             "exit",  # exit key-string → username
             "exit",  # exit username → pubkey-chain
             "exit",  # exit pubkey-chain → config
-            "exit",  # exit config → exec mode
+            "end",  # return to exec mode
             "write memory",  # save config (exec mode only)
         ]
     )
 
-    # Pipe IOS commands via stdin — IOS requires interactive-style input
-    # for config mode (configure terminal). SSH exec args don't work for
-    # multi-command config sessions. Uses ssh -T (no pseudo-tty).
+    # Pipe IOS commands via stdin through a forced TTY. Cisco IOS config
+    # mode is an interactive CLI; a no-PTY SSH pipe can connect cleanly and
+    # then wedge after entering config mode. Keep this session short and
+    # bounded so one switch can never stall init.
     ios_cmds.append("exit")  # exit exec mode to close session cleanly
     ios_script = "\n".join(ios_cmds) + "\n"
 
     ssh_cmd = [
         "ssh",
-        "-T",
+        "-tt",
         "-o",
         "ConnectTimeout=5",
+        "-o",
+        "ConnectionAttempts=1",
+        "-o",
+        "ServerAliveInterval=5",
+        "-o",
+        "ServerAliveCountMax=2",
+        "-o",
+        "NumberOfPasswordPrompts=1",
         "-o",
         "StrictHostKeyChecking=accept-new",
     ]
@@ -5742,12 +5969,24 @@ def _deploy_switch(ip, ctx, auth_pass, auth_key, auth_user):
     ssh_cmd.append(f"{auth_user}@{ip}")
 
     if auth_pass:
-        rc, out, err = _ssh_with_pass(auth_pass, ssh_cmd, timeout=30, input_text=ios_script)
+        rc, out, err = _ssh_with_pass(auth_pass, ssh_cmd, timeout=SWITCH_CONFIG_TIMEOUT, input_text=ios_script)
     elif auth_key:
         ssh_cmd.extend(["-o", "BatchMode=yes", "-i", auth_key])
-        rc, out, err = _run_with_input(ssh_cmd, ios_script, timeout=30)
+        rc, out, err = _run_with_input(ssh_cmd, ios_script, timeout=SWITCH_CONFIG_TIMEOUT)
     else:
-        rc, out, err = _run_with_input(ssh_cmd, ios_script, timeout=30)
+        rc, out, err = _run_with_input(ssh_cmd, ios_script, timeout=SWITCH_CONFIG_TIMEOUT)
+
+    if rc == 124:
+        fmt.step_fail(f"Switch IOS config timed out after {SWITCH_CONFIG_TIMEOUT}s")
+        logger.error(f"deploy_failed: {ip}", host=ip, error="switch_config_timeout")
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="switch_config_timeout")
+        return False
+    if rc != 0:
+        details = (err or out or "").strip()[:100]
+        fmt.step_fail(f"Switch IOS config failed ({_ssh_error_msg(rc, details)})")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=f"switch_config_rc_{rc}")
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="switch_config")
+        return False
 
     # IOS doesn't give clean exit codes — check for specific error indicators.
     # Generic "error" matching is too broad — IOS echoes "error" in normal output.
@@ -7870,6 +8109,9 @@ def _init_headless(cfg, args):
     if len(svc_pass) < 8:
         fmt.line(f"  {fmt.C.RED}Password too short (min 8 chars){fmt.C.RESET}")
         return 1
+    device_creds = _load_device_credentials(device_credentials_file)
+    if not _validate_device_scoped_service_password(device_creds, svc_pass):
+        return 1
 
     svc_name = (getattr(args, "service_account", None) or cfg.ssh_service_account).strip()
     if not _validate_service_account_choice(svc_name):
@@ -7886,6 +8128,7 @@ def _init_headless(cfg, args):
         "bootstrap_key": bootstrap_key or "",
         "bootstrap_pass": bootstrap_pass,
         "bootstrap_user": bootstrap_user,
+        "device_creds": device_creds,
         "dry_run": False,
     }
 
@@ -8455,8 +8698,8 @@ def _headless_fleet_deploy(
             # Per-device credentials from --device-credentials TOML
             dcred = device_creds[htype]
             auth_user = dcred["user"]
-            auth_pass = dcred["password"]
-            auth_key = ""
+            auth_pass = dcred.get("password", "")
+            auth_key = dcred.get("key_path", "")
         elif htype in ("idrac", "switch"):
             # Legacy fallback: device_password_file + device_user
             if device_pass:
