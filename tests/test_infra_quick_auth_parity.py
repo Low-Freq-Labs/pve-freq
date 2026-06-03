@@ -68,6 +68,14 @@ class TestInfraProbeMethodField(unittest.TestCase):
         self.assertIn('"network" if d["reachable"] else "none"', src,
                        "Network fallback must set probe_method='network' or 'none'")
 
+    def test_pfsense_probe_uses_runtime_device_credentials(self):
+        src = self._probe_src()
+        block = src.split('if dt == "pfsense":')[1].split('\n            elif dt == "truenas":')[0]
+        self.assertIn("pfsense_auth", block)
+        self.assertIn('user=pfsense_auth["user"]', block)
+        self.assertIn('key_path=pfsense_auth["key_path"]', block)
+        self.assertNotIn("user=svc_user", block)
+
 
 class TestInfraAuthFailureKeepsNetworkTruth(unittest.TestCase):
     """SSH auth failure must not erase network reachability."""
@@ -105,6 +113,14 @@ class TestInfraAuthFailureKeepsNetworkTruth(unittest.TestCase):
                           "Auth failure branch must preserve network reachability truth")
             self.assertNotIn('d["reachable"] = False', block,
                              "Auth failure branch must not force network unreachable")
+
+    def test_dashboard_renders_auth_failed_as_warning_not_reachable(self):
+        with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
+            src = f.read()
+        self.assertIn("statusLabel='AUTH FAILED'", src)
+        self.assertIn("dotClass='warn'", src)
+        self.assertIn("authFailed?'AUTH FAILED'", src)
+        self.assertNotIn("if(dev.reachable&&dev.auth_failed)statusLabel='REACHABLE'", src)
 
 
 class TestIdracProbeParity(unittest.TestCase):

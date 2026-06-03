@@ -31,6 +31,36 @@ def test_terminal_dashboard_mutations_use_post():
         assert "method:'POST'" in snippet or 'method:"POST"' in snippet
 
 
+def test_infra_terminal_buttons_use_host_mode_not_vmid_resolution():
+    source = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+
+    assert "openTerminal(\\'host\\'" in source
+    assert "through VMID resolution" in source
+    assert "type='+type+'&target='" in source
+    assert "var termType=(type==='pfsense'||type==='truenas'||type==='idrac'||type==='switch'||type==='host')?'host':type;" in source
+    assert "openTerminal(\\'vm\\',\\''+_esc(termIp)" not in source
+
+
+def test_terminal_api_supports_direct_host_targets_and_device_credentials():
+    source = (REPO_ROOT / "freq" / "api" / "terminal.py").read_text()
+
+    assert "host: SSH directly to a host/device IP" in source
+    assert 'term_type = params.get("type", ["vm"])[0]  # vm, host, ct, node' in source
+    assert "resolve_device_ssh_auth(cfg, htype)" in source
+    assert "local_prefix = f\"sudo -n -u" in source
+    assert 'if term_type == "vm" and target.isdigit()' in source
+
+
+def test_infra_detail_cards_have_single_output_target():
+    source = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+
+    assert "function _infraOutputHtml" in source
+    panel = source.split("function _infraPanelHtml", 1)[1].split("function _infraOutputHtml", 1)[0]
+    assert "id=\"hd-infra-out\"" not in panel
+    assert source.count("_infraOutputHtml()") >= 2
+    assert "_infraOutputTarget='hd-infra-out'" in source
+
+
 def test_known_dashboard_write_actions_use_post():
     source = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
 
@@ -65,6 +95,9 @@ def test_terminal_vm_resolution_uses_live_pve_inventory_not_host_discover():
     source = (REPO_ROOT / "freq" / "api" / "terminal.py").read_text()
     assert "def _find_live_vm_node_ip" in source
     assert "from freq.modules.serve import _get_fleet_vms" in source
+    assert "def _guest_agent_network_json" in source
+    assert "/agent/network-get-interfaces" in source
+    assert "pve_api" in source
     assert "The VM is visible in PVE" in source
     assert "Run 'freq host discover' to populate hosts.toml with VMIDs" not in source
 
@@ -74,8 +107,10 @@ def test_terminal_guest_agent_ipv4_parser_accepts_raw_and_wrapped_json():
 
     raw = '[{"name":"lo","ip-addresses":[{"ip-address-type":"ipv4","ip-address":"127.0.0.1"}]},{"name":"ens18","ip-addresses":[{"ip-address-type":"ipv4","ip-address":"10.25.255.201"}]}]'
     wrapped = '{"result":' + raw + "}"
+    api_wrapped = '{"result":[{"name":"lo","ip-addresses":[{"ip-address-type":"ipv4","ip-address":"127.0.0.1"}]},{"name":"eth0","ip-addresses":[{"prefix":24,"ip-address-type":"ipv4","ip-address":"10.25.255.30"}]}]}'
     assert _extract_guest_ipv4(raw) == "10.25.255.201"
     assert _extract_guest_ipv4(wrapped) == "10.25.255.201"
+    assert _extract_guest_ipv4(api_wrapped) == "10.25.255.30"
     assert _extract_guest_ipv4("{}") == ""
 
 

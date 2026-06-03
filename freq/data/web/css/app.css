@@ -996,6 +996,10 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   background: var(--green);
   box-shadow: 0 0 4px rgba(34,197,94,0.25);
 }
+.infra-role-card .status-dot.warn {
+  background: var(--yellow);
+  box-shadow: 0 0 4px rgba(234,179,8,0.3);
+}
 .infra-role-card .status-dot.down {
   background: var(--red);
   box-shadow: 0 0 4px rgba(239,68,68,0.3);

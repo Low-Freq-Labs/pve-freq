@@ -4334,8 +4334,9 @@ function launchTermFromPicker(){
   var opt=sel.options[sel.selectedIndex];
   var label=opt.getAttribute('data-label')||target;
   var htype=opt.getAttribute('data-htype')||type;
-  /* For infra devices, use 'vm' type (direct SSH) but pass the htype for SSH config */
-  var termType=(type==='pfsense'||type==='truenas'||type==='idrac'||type==='switch'||type==='host')?'vm':type;
+  /* Infrastructure/host entries are already IP targets. Do not send them
+     through VMID resolution, or the terminal can fail on valid core-device cards. */
+  var termType=(type==='pfsense'||type==='truenas'||type==='idrac'||type==='switch'||type==='host')?'host':type;
   openTerminal(termType,target,'',label,htype);
 }
 
@@ -5220,6 +5221,7 @@ var INFRA_ROLES={
   ilo:      {role:'BMC',            icon:'\u2699', color:'var(--yellow)'},
   ipmi:     {role:'BMC',            icon:'\u2699', color:'var(--yellow)'}
 };
+var _infraQuickCache={byLabel:{},byIp:{}};
 function _infraRoleCard(ph,healthMap){
   if(!ph||!ph.type)return '';
   var roleInfo=(INFRA_ROLES||{})[ph.type]||{role:(ph.type||'DEVICE').toUpperCase(),icon:'\u2726',color:'var(--text-dim)'};
@@ -5273,6 +5275,11 @@ function _enrichInfraCards(){
       ageEl.textContent=a<60?a+'s':Math.round(a/60)+'m';
       ageEl.style.color=a<30?'var(--green)':a<120?'var(--yellow)':'var(--red)';
     }
+    _infraQuickCache={byLabel:{},byIp:{}};
+    (d.devices||[]).forEach(function(dev){
+      if(dev.label)_infraQuickCache.byLabel[dev.label]=dev;
+      if(dev.ip)_infraQuickCache.byIp[dev.ip]=dev;
+    });
     d.devices.forEach(function(dev){
       var safeId=dev.label.replace(/[^a-zA-Z0-9]/g,'-');
       var el=document.getElementById('infra-metrics-'+safeId);
@@ -5281,8 +5288,9 @@ function _enrichInfraCards(){
       /* Update status dot */
       if(statusEl){
         var statusLabel=dev.reachable?'REACHABLE':'UNREACHABLE';
-        if(dev.reachable&&dev.auth_failed)statusLabel='REACHABLE';
-        statusEl.innerHTML='<span class="status-dot '+(dev.reachable?'up':'down')+'"></span>'+statusLabel;
+        var dotClass=dev.reachable?'up':'down';
+        if(dev.auth_failed){statusLabel='AUTH FAILED';dotClass='warn';}
+        statusEl.innerHTML='<span class="status-dot '+dotClass+'"></span>'+statusLabel;
         _uiLog('core_systems_state',{message:dev.label+': '+statusLabel,source:'infra_quick',label:dev.label,type:dev.type,ip:dev.ip,reachable:!!dev.reachable,auth_failed:!!dev.auth_failed,probe_method:dev.probe_method||'',note:(dev.metrics&&dev.metrics.note)||''});
       }
       if(!dev.reachable){
@@ -6108,7 +6116,7 @@ function vmtLoadList(){
       if(acts.indexOf('start')>=0&&!isRun)h+='<button class="fleet-btn pill-ok-3-8" data-action="vmPower" data-vmid="'+v.vmid+'" data-arg="start" >START</button>';
       if(acts.indexOf('configure')>=0)h+='<button class="fleet-btn pill-xs" data-action="vmQuickTag" data-vmid="'+v.vmid+'" >TAG</button>';
       if(acts.indexOf('destroy')>=0)h+='<button class="fleet-btn pill-err-3-8" data-action="vmDestroy" data-vmid="'+v.vmid+'" >DESTROY</button>';
-      if(isRun)h+='<button class="fleet-btn" style="font-size:10px;padding:2px 6px;color:var(--cyan)" onclick="openTerminal(\'vm\',\''+v.vmid+'\',\'\',\''+_esc(v.name)+'\')">&#9002; TERM</button>';
+      if(isRun)h+='<button class="fleet-btn" style="font-size:10px;padding:2px 6px;color:var(--cyan)" onclick="openTerminal(\'vm\',\''+v.vmid+'\',\''+_esc(v.node||'')+'\',\''+_esc(v.name)+'\')">&#9002; TERM</button>';
       h+='</td></tr>';
     });
     h+='</tbody></table>';el.innerHTML=h;
@@ -8330,8 +8338,10 @@ function _infraPanelHtml(roleLabel,roleColor,btnsHtml){
   return '<div style="margin-bottom:16px;background:var(--card);border:2px solid var(--input-border);border-radius:8px;padding:16px">'+
     '<div style="font-size:11px;color:'+roleColor+';text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:600">'+roleLabel+'</div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">'+btnsHtml+'</div>'+
-    '<div class="exec-out" id="hd-infra-out" style="margin-top:12px;min-height:80px;display:none"></div>'+
     '</div>';
+}
+function _infraOutputHtml(){
+  return '<div class="exec-out" id="hd-infra-out" style="margin-top:12px;margin-bottom:16px;min-height:80px;display:none"></div>';
 }
 function _kvRow(k,v,c){return '<div class="ho-row"><span class="k">'+k+'</span><span class="v" style="color:'+(c||'var(--text)')+'">'+v+'</span></div>';}
 
@@ -8428,6 +8438,7 @@ function renderPveNodeCard(config){
   btns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();hdDiagnose(this)">DIAGNOSE</button>';
   btns+='<button class="fleet-btn min-w-120-center" style="color:var(--cyan)" onclick="event.stopPropagation();openTerminal(\'node\',\''+_esc(ip)+'\',\'\',\''+_esc(label)+'\')">&#9002; TERMINAL</button>';
   html+=_infraPanelHtml('PVE NODE CONTROLS','var(--purple-light)',btns);
+  html+=_infraOutputHtml();
   html+=_toolPanelHtml();
   _infraOutputTarget='hd-infra-out';
   _cardReady(html);
@@ -8444,8 +8455,10 @@ function renderInfraCard(config){
   document.getElementById('hd-subtitle').textContent=(ph?ph.ip+' \u00b7 ':'')+roleInfo.role+(ph?' \u00b7 '+ph.detail:'');
   var stats='';
   var live=_fleetCache.hd?(_fleetCache.hd.hosts||[]).find(function(h){return h.label===label;}):null;
+  var qDev=(_infraQuickCache.byLabel&&_infraQuickCache.byLabel[label])||(ph&&_infraQuickCache.byIp?_infraQuickCache.byIp[ph.ip]:null);
   var up=ph&&ph.reachable;if(live&&_healthIsLive(live))up=true;
-  stats+=st('STATUS',up?'REACHABLE':'UNREACHABLE',up?'g':'r');
+  var authFailed=qDev&&qDev.auth_failed;
+  stats+=st('STATUS',authFailed?'AUTH FAILED':(up?'REACHABLE':'UNREACHABLE'),authFailed?'y':(up?'g':'r'));
   if(live){
     if(live.cores)stats+=st('CPU',live.cores+' Cores','p');
     if(live.ram)stats+=st('RAM',_ramStr(live.ram),'b');
@@ -8472,9 +8485,10 @@ function renderInfraCard(config){
     /* Add TERMINAL button for SSH-capable devices */
     var termIp=ph?ph.ip:'';
     var termHtype=infraType||'linux';
-    if(termIp)readBtns+='<button class="fleet-btn min-w-120-center" style="color:var(--cyan)" onclick="event.stopPropagation();openTerminal(\'vm\',\''+_esc(termIp)+'\',\'\',\''+_esc(label)+'\',\''+_esc(termHtype)+'\')">&#9002; TERMINAL</button>';
+    if(termIp)readBtns+='<button class="fleet-btn min-w-120-center" style="color:var(--cyan)" onclick="event.stopPropagation();openTerminal(\'host\',\''+_esc(termIp)+'\',\'\',\''+_esc(label)+'\',\''+_esc(termHtype)+'\')">&#9002; TERMINAL</button>';
     html+=_infraPanelHtml(roleInfo.role+' MONITORING',roleInfo.color,readBtns);
     if(writeBtns)html+=_infraPanelHtml(roleInfo.role+' MANAGEMENT','var(--yellow)',writeBtns);
+    html+=_infraOutputHtml();
   }
   _infraOutputTarget='hd-infra-out';
   _cardReady(html);
@@ -8507,7 +8521,7 @@ function renderHostCard(config){
     html+='<button data-action="hdLogs">VIEW LOGS</button>';
     html+='<button data-action="hdDiagnose">FULL DIAGNOSE</button>';
     html+='<button data-action="hdRestart" class="c-yellow">RESTART SERVICES</button>';
-    html+='<button style="color:var(--cyan)" onclick="openTerminal(\'vm\',\''+_esc(d.ip||'')+'\',\'\',\''+_esc(label)+'\')">&#9002; TERMINAL</button>';
+    html+='<button style="color:var(--cyan)" onclick="openTerminal(\'host\',\''+_esc(d.ip||'')+'\',\'\',\''+_esc(label)+'\',\''+_esc(d.type||'linux')+'\')">&#9002; TERMINAL</button>';
     html+='</div>';
     html+=_toolPanelHtml();
     /* ── Build reusable data sections ── */
@@ -8651,7 +8665,7 @@ function _vmNicCards(allIps){
   });
   return h;
 }
-function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip){
+function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip,termIp){
   var ctrl='<div style="display:flex;gap:16px;margin:12px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">';
   if(acts.indexOf('configure')>=0){
     ctrl+=_vmConfigPanel(vmid,label);
@@ -8675,7 +8689,10 @@ function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip){
   ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdDiagnose" >DIAGNOSE</button>';
   ctrl+='<button class="fleet-btn pad-v8-warn" data-action="hdRestart" >RESTART SVC</button>';
   ctrl+='<button class="fleet-btn pad-v8-fs11" onclick="vmPushKey(\''+(ip||'')+'\')" >PUSH KEY</button>';
-  if(isRunning)ctrl+='<button class="fleet-btn pad-v8-fs11" style="color:var(--cyan)" onclick="openTerminal(\'vm\',\''+vmid+'\',\'\',\''+_esc(label)+'\')">&#9002; TERMINAL</button>';
+  if(isRunning){
+    if(termIp)ctrl+='<button class="fleet-btn pad-v8-fs11" style="color:var(--cyan)" onclick="openTerminal(\'host\',\''+_esc(termIp)+'\',\'\',\''+_esc(label)+'\',\'linux\')">&#9002; TERMINAL</button>';
+    else ctrl+='<button class="fleet-btn pad-v8-fs11" style="color:var(--cyan)" onclick="openTerminal(\'vm\',\''+vmid+'\',\''+_esc(vm?vm.node:'')+'\',\''+_esc(label)+'\')">&#9002; TERMINAL</button>';
+  }
   ctrl+='</div></div>';
   ctrl+='</div>';
   ctrl+='<div id="vm-ctrl-out"></div>';
@@ -8768,7 +8785,7 @@ function renderVmCard(config){
     if(vm){stats+=st('CPU',vm.cpu+' cores','p');stats+=st('RAM',_ramGB(vm.ram_mb),'b');}
   }
   var html='<div class="card-box"><div class="stats mb-0" >'+stats+'</div></div>';
-  html+=_vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip);
+  html+=_vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip,subtitleIp&&subtitleIp!=='?'?subtitleIp:'');
   html+=_toolPanelHtml();
   /* Build reusable data */
   var sys='';

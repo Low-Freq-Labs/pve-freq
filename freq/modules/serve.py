@@ -31,6 +31,7 @@ import datetime
 import json
 import os
 import re
+import shlex
 import shutil
 import socket
 import ssl
@@ -63,6 +64,7 @@ from freq.core.health_state import (
 )
 from freq.core.ssh import run as ssh_single, run_many as ssh_run_many
 from freq.core import truenas_api
+from freq.core.device_credentials import resolve_device_ssh_auth
 from freq.core.validate import (
     label as valid_label,
 )
@@ -258,6 +260,28 @@ def _is_routine_legacy_health_change(
     )
 
 
+def _reuse_skipped_health(prev: dict, now_wall: float, skip_reason: str) -> dict:
+    """Return honest cached health for a skipped probe cycle.
+
+    Circuit-breaker skips are stale because the host is intentionally not being
+    retried after failures. Routine legacy-device rate limiting is different:
+    the previous real probe is still the newest truth, so preserve its state and
+    mark only the freshness metadata.
+    """
+    if "legacy-device rate limit" in (skip_reason or ""):
+        reused = dict(prev)
+        reused["freshness"] = "rate_limited"
+        reused["freshness_reason"] = skip_reason
+        reused["skip_reason"] = skip_reason
+        try:
+            probed_at = float(prev.get("probed_at") or now_wall)
+        except (TypeError, ValueError):
+            probed_at = now_wall
+        reused["age_seconds"] = max(0, round(now_wall - probed_at, 1))
+        return reused
+    return mark_stale(prev, now_wall, skip_reason)
+
+
 # ── ACTIVITY FEED ────────────────────────────────────────────────────────
 # Ring buffer for recent system events — powers the dashboard activity widget.
 # Max 200 events kept in memory, newest first.
@@ -380,12 +404,13 @@ def _bg_probe_infra():
             return _tcp_check(dev.ip, (22,)) or _ping_check(dev.ip)
         return _ping_check(dev.ip)
 
-    # Infrastructure devices often need different credentials than the service account.
-    # Try: 1) bootstrap/fleet key, 2) deployed service-account key
-    fleet_key = os.path.join(cfg.key_dir, "fleet_key")
-    if not os.path.isfile(fleet_key):
-        fleet_key = cfg.ssh_key_path  # fallback to service account key
-    bootstrap_user = os.environ.get("SUDO_USER") or cfg.ssh_service_account
+    # Runtime probes must use the same managed service-account identity that
+    # init verifies. Bootstrap/operator keys are for deployment only; using
+    # them here lets init drift hide behind stale "network reachable" UI.
+    svc_user = cfg.ssh_service_account
+    svc_key = cfg.ssh_key_path
+    legacy_key = cfg.ssh_rsa_key_path or svc_key
+    pfsense_auth = resolve_device_ssh_auth(cfg, "pfsense")
 
     def _is_auth_failure(stderr):
         """Detect SSH permission denied in stderr.
@@ -406,8 +431,9 @@ def _bg_probe_infra():
                 r = ssh_single(
                     host=dev.ip,
                     command='echo "$(sudo pfctl -ss 2>/dev/null | wc -l)|$(uptime)|$(ifconfig -l)"',
-                    key_path=fleet_key,
-                    user=bootstrap_user,
+                    key_path=pfsense_auth["key_path"],
+                    user=pfsense_auth["user"],
+                    local_user=pfsense_auth.get("local_user"),
                     connect_timeout=2,
                     command_timeout=5,
                     htype="pfsense",
@@ -471,7 +497,7 @@ def _bg_probe_infra():
                         "-o", "StrictHostKeyChecking=accept-new",
                         "-o", "KexAlgorithms=+diffie-hellman-group14-sha1",
                         "-o", "HostKeyAlgorithms=+ssh-rsa",
-                        f"{bootstrap_user}@{dev.ip}",
+                        f"{svc_user}@{dev.ip}",
                         "show version | include uptime",
                     ]
                     proc = subprocess.run(sw_cmd, capture_output=True, text=True, timeout=10)
@@ -480,7 +506,8 @@ def _bg_probe_infra():
                     r = ssh_single(
                         host=dev.ip,
                         command="show version | include uptime",
-                        key_path=fleet_key,
+                        user=svc_user,
+                        key_path=legacy_key,
                         connect_timeout=2,
                         command_timeout=5,
                         htype="switch",
@@ -513,8 +540,8 @@ def _bg_probe_infra():
                 # — which left /api/infra/quick reporting auth_failed on
                 # BMCs that the CLI had verified green.
                 from freq.core.ssh import PLATFORM_SSH as _PLATFORM_SSH_LOCAL
-                svc_user = cfg.ssh_service_account
-                idrac_key = cfg.ssh_rsa_key_path or fleet_key
+                idrac_user = cfg.ssh_service_account
+                idrac_key = legacy_key
                 idrac_opts = _PLATFORM_SSH_LOCAL.get("idrac", {}).get("extra_opts", [])
                 idrac_cmd = [
                     "ssh", "-n",
@@ -523,7 +550,7 @@ def _bg_probe_infra():
                     "-o", "StrictHostKeyChecking=accept-new",
                     "-i", idrac_key,
                 ] + idrac_opts + [
-                    f"{svc_user}@{dev.ip}",
+                    f"{idrac_user}@{dev.ip}",
                     "racadm getsysinfo -s",
                 ]
                 proc = subprocess.run(idrac_cmd, capture_output=True, text=True, timeout=15)
@@ -540,7 +567,7 @@ def _bg_probe_infra():
                             "-o", "ConnectTimeout=3",
                             "-o", "StrictHostKeyChecking=accept-new",
                         ] + idrac_opts + [
-                            f"{svc_user}@{dev.ip}",
+                            f"{idrac_user}@{dev.ip}",
                             "racadm getsysinfo -s",
                         ]
                         proc2 = subprocess.run(sshpass_cmd, capture_output=True, text=True, timeout=15)
@@ -874,9 +901,9 @@ def _bg_probe_health():
             hosts=",".join(f"{h.label}:{r}" for h, r in skipped_hosts[:8]),
         )
 
-    # Reuse cached data for skipped hosts — but flip the cached entry
-    # to state='stale' with age_seconds so the dashboard stops lying
-    # about freshness. An old cache entry is not fresh measurement.
+    # Reuse cached data for skipped hosts. Circuit-breaker skips go stale;
+    # routine legacy-device rate-limit skips keep the last real state and only
+    # annotate freshness, avoiding false unreachable churn in the dashboard.
     now_wall = time.time()
     host_data = []
     if skipped_hosts:
@@ -888,7 +915,7 @@ def _bg_probe_health():
         for h, skip_reason in skipped_hosts:
             prev = cached_by_ip.get(h.ip)
             if prev:
-                host_data.append(mark_stale(prev, now_wall, skip_reason))
+                host_data.append(_reuse_skipped_health(prev, now_wall, skip_reason))
             else:
                 # No prior cache for this host — we genuinely have no
                 # evidence. Honest state: unreachable, not stale.
@@ -4090,21 +4117,31 @@ a:hover{{text-decoration:underline}}
         }
 
         cmd = actions.get(action, actions["status"])
+        pf_auth = resolve_device_ssh_auth(cfg, "pfsense")
+        remote_cmd = cmd if pf_auth["user"] in ("root", "admin") else f"sudo sh -c {shlex.quote(cmd)}"
         r = ssh_single(
             host=pf_ip,
-            command=cmd,
-            key_path=cfg.ssh_key_path,
+            command=remote_cmd,
+            key_path=pf_auth["key_path"],
+            user=pf_auth["user"],
+            local_user=pf_auth.get("local_user"),
+            connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=15,
             htype="pfsense",
             use_sudo=False,
             cfg=cfg,
+            failure_log_level="warn",
         )
+
+        auth_failed = "permission denied" in (r.stderr or "").lower() or "publickey" in (r.stderr or "").lower()
 
         self._json_response(
             {
                 "action": action,
                 "host": pf_ip,
                 "reachable": r.returncode == 0,
+                "auth_failed": auth_failed,
+                "probe_method": "ssh_auth_failed" if auth_failed else ("ssh" if r.returncode == 0 else "ssh_failed"),
                 "output": r.stdout if r.returncode == 0 else "",
                 "error": r.stderr[:100] if r.returncode != 0 else "",
             }

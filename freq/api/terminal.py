@@ -13,7 +13,8 @@ Architecture:
     5. Cleanup on disconnect or timeout
 
 Terminal types:
-    - vm:   SSH directly to VM IP (service-account@<ip>)
+    - vm:   Resolve a VMID to a guest IP, then SSH as service account
+    - host: SSH directly to a host/device IP as service account
     - ct:   SSH to PVE node, then pct exec <ctid> -- bash
     - node: SSH directly to PVE node (service-account@<ip>)
 """
@@ -27,6 +28,7 @@ import re
 import secrets
 import select
 import signal
+import shlex
 import struct
 import threading
 import time
@@ -35,6 +37,7 @@ from freq.core import log as logger
 from freq.api.helpers import require_post, json_response, get_params
 from freq.api.auth import current_user
 from freq.core.config import load_config
+from freq.core.device_credentials import resolve_device_ssh_auth
 from freq.modules.serve import _check_session_role
 
 
@@ -129,6 +132,38 @@ def _find_live_vm_node_ip(cfg, vmid: int, node_ref: str = "") -> tuple[str, str]
     return "", ""
 
 
+def _guest_agent_network_json(cfg, vmid: int, node_ip: str, node_name: str) -> tuple[str, bool, str]:
+    """Fetch guest-agent interface JSON for a VM, preferring the PVE API."""
+    if node_name:
+        try:
+            from freq.modules.pve import _pve_api_call
+
+            result, ok = _pve_api_call(
+                cfg,
+                node_ip,
+                f"/nodes/{node_name}/qemu/{vmid}/agent/network-get-interfaces",
+                timeout=10,
+            )
+            if ok:
+                return json.dumps(result), True, "pve_api"
+        except Exception as e:
+            logger.warn(f"terminal: PVE API guest-agent lookup failed for VMID {vmid}: {e}")
+
+    try:
+        from freq.modules.pve import _pve_cmd
+
+        out, ok = _pve_cmd(
+            cfg,
+            node_ip,
+            f"qm agent {vmid} network-get-interfaces 2>/dev/null",
+            timeout=10,
+        )
+        return out, ok, "pve_ssh"
+    except Exception as e:
+        logger.warn(f"terminal: SSH guest-agent lookup failed for VMID {vmid}: {e}")
+        return str(e), False, "pve_ssh"
+
+
 def _extract_guest_ipv4(raw: str) -> str:
     """Extract the first usable IPv4 address from QEMU guest-agent JSON."""
     try:
@@ -168,7 +203,7 @@ def handle_terminal_open(handler):
 
     cfg = load_config()
     params = get_params(handler)
-    term_type = params.get("type", ["vm"])[0]  # vm, ct, node
+    term_type = params.get("type", ["vm"])[0]  # vm, host, ct, node
     target = params.get("target", [""])[0]  # IP or CTID
     node = params.get("node", [""])[0]  # PVE node IP (for ct type)
     cols = int(params.get("cols", ["120"])[0])
@@ -201,21 +236,14 @@ def handle_terminal_open(handler):
             # 2. Live PVE ownership + guest agent. A VM card can render from
             # PVE inventory even when hosts.toml is empty; terminal must use
             # that same truth instead of telling the operator to run discovery.
-            from freq.modules.pve import _pve_cmd
-
             node_ip, node_name = _find_live_vm_node_ip(cfg, vmid, node)
             if node_ip:
-                out, ok = _pve_cmd(
-                    cfg,
-                    node_ip,
-                    f"qm agent {vmid} network-get-interfaces 2>/dev/null",
-                    timeout=10,
-                )
+                out, ok, method = _guest_agent_network_json(cfg, vmid, node_ip, node_name)
                 if ok:
                     resolved_ip = _extract_guest_ipv4(out) or resolved_ip
                 else:
                     logger.warn(
-                        f"terminal: guest-agent IP lookup failed for VMID {vmid}"
+                        f"terminal: {method} guest-agent IP lookup failed for VMID {vmid}"
                         + (f" on {node_name or node_ip}" if node_name or node_ip else "")
                     )
 
@@ -232,21 +260,19 @@ def handle_terminal_open(handler):
             )
             return
 
-    # Build SSH command with device-type-aware options
-    key_path = cfg.ssh_key_path
-    # Terminal sessions must follow the configured fleet service account.
-    # freq-admin is the default only; freq-ops is not the deployed SSH user.
-    ssh_user = cfg.ssh_service_account
-    if not ssh_user:
-        ssh_user = "freq-admin"
-        logger.warning("terminal: cfg.ssh_service_account empty — falling back to freq-admin (identity contract violation)")
     htype = params.get("htype", ["linux"])[0]
+    # Build SSH command with device-type-aware options. Physical devices can
+    # use staged runtime credentials (for example pfSense freq-ops/fleet_key)
+    # while normal VM/node hosts use the managed service account.
+    auth = resolve_device_ssh_auth(cfg, htype)
+    key_path = auth["key_path"]
+    ssh_user = auth["user"] or cfg.ssh_service_account or "freq-admin"
 
     # Base SSH options
     ssh_opts = (
         f"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
         f"-o ServerAliveInterval=15 -o ServerAliveCountMax=3 "
-        f"-i {key_path}"
+        f"-i {shlex.quote(key_path)}"
     )
 
     # Device-specific SSH options from ssh.py platform config
@@ -262,14 +288,17 @@ def handle_terminal_open(handler):
     if htype in ("idrac", "switch"):
         rsa_key = getattr(cfg, "ssh_rsa_key_path", "")
         if rsa_key:
-            ssh_opts = ssh_opts.replace(f"-i {key_path}", f"-i {rsa_key}")
+            ssh_opts = ssh_opts.replace(f"-i {shlex.quote(key_path)}", f"-i {shlex.quote(rsa_key)}")
         # Password auth via sshpass if configured
-        pw_file = getattr(cfg, "legacy_password_file", "")
+        pw_file = auth.get("password_file") or getattr(cfg, "legacy_password_file", "")
         if pw_file and os.path.isfile(pw_file):
-            sshpass_prefix = f"sshpass -f {pw_file} "
+            sshpass_prefix = f"sshpass -f {shlex.quote(pw_file)} "
 
     # Note: -T (no remote PTY) is used for non-interactive switch commands
     # but for terminal sessions we need the PTY for interactive IOS CLI
+    local_prefix = ""
+    if auth.get("local_user"):
+        local_prefix = f"sudo -n -u {shlex.quote(auth['local_user'])} "
 
     if term_type == "ct":
         # SSH to PVE node, then pct exec into container
@@ -280,9 +309,9 @@ def handle_terminal_open(handler):
             if not node:
                 json_response(handler, {"error": "No PVE node reachable"}, 400)
                 return
-        cmd = f"ssh {ssh_opts} {ssh_user}@{node} sudo pct enter {target}"
+        cmd = f"{local_prefix}ssh {ssh_opts} {ssh_user}@{node} sudo pct enter {target}"
     else:
-        cmd = f"{sshpass_prefix}ssh {ssh_opts} {ssh_user}@{resolved_ip}"
+        cmd = f"{local_prefix}{sshpass_prefix}ssh {ssh_opts} {ssh_user}@{resolved_ip}"
 
     # Spawn in PTY
     try:

@@ -319,9 +319,15 @@ class TestServePyUsesSixStateContract(unittest.TestCase):
         self.assertIn("health_probe_skipped", src,
                       "skipped hosts must emit a logger event with reason")
 
-    def test_skipped_hosts_marked_stale_not_silent(self):
+    def test_skipped_hosts_preserve_or_stale_with_reason(self):
         src = self._serve_src()
-        self.assertIn("mark_stale(prev, now_wall, skip_reason)", src)
+        self.assertIn("def _reuse_skipped_health", src)
+        self.assertIn('"legacy-device rate limit" in (skip_reason or "")', src)
+        self.assertIn("reused = dict(prev)", src)
+        self.assertIn('reused["freshness"] = "rate_limited"', src)
+        self.assertIn('reused["freshness_reason"] = skip_reason', src)
+        self.assertIn("return mark_stale(prev, now_wall, skip_reason)", src)
+        self.assertIn("_reuse_skipped_health(prev, now_wall, skip_reason)", src)
 
     def test_state_tracking_dicts_declared(self):
         src = self._serve_src()

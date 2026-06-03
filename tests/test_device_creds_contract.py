@@ -19,6 +19,7 @@ import os
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -154,6 +155,106 @@ class TestHeadlessFleetDeployUsesDeviceCreds(unittest.TestCase):
         """_headless_fleet_deploy must check htype in device_creds for dispatch."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
         self.assertIn("htype in device_creds", src)
+
+
+class TestRuntimeDeviceCredentials(unittest.TestCase):
+    """Runtime probes/actions must honor staged physical-device credentials."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="freq-test-runtime-devcreds-")
+        self.key_path = os.path.join(self.tmpdir, "fleet_key")
+        with open(self.key_path, "w") as f:
+            f.write("not-a-real-key\n")
+        os.chmod(self.key_path, 0o600)
+        self.creds_path = os.path.join(self.tmpdir, "device-credentials.toml")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _cfg(self):
+        return SimpleNamespace(
+            conf_dir=os.path.join(self.tmpdir, "conf"),
+            install_dir=self.tmpdir,
+            ssh_service_account="dc01-admin",
+            ssh_key_path=os.path.join(self.tmpdir, "managed_key"),
+        )
+
+    def test_runtime_resolver_uses_pfsense_staged_user_and_key(self):
+        from freq.core import device_credentials
+
+        with open(self.creds_path, "w") as f:
+            f.write(f"""
+[pfsense]
+username = "freq-ops"
+ssh_key_file = "{self.key_path}"
+""")
+        old = device_credentials.DEVICE_CREDENTIAL_CANDIDATES
+        device_credentials.DEVICE_CREDENTIAL_CANDIDATES = (self.creds_path,)
+        try:
+            auth = device_credentials.resolve_device_ssh_auth(self._cfg(), "pfsense")
+        finally:
+            device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old
+
+        self.assertEqual(auth["user"], "freq-ops")
+        self.assertEqual(auth["key_path"], self.key_path)
+        self.assertEqual(auth["local_user"], "")
+        self.assertEqual(auth["source"], "device-credentials")
+
+    def test_runtime_resolver_infers_local_key_owner_for_home_ssh_keys(self):
+        from freq.core import device_credentials
+
+        key_path = "/home/freq-ops/.ssh/fleet_key"
+        with open(self.creds_path, "w") as f:
+            f.write(f"""
+[pfsense]
+username = "freq-ops"
+ssh_key_file = "{key_path}"
+""")
+        old_candidates = device_credentials.DEVICE_CREDENTIAL_CANDIDATES
+        old_isfile = device_credentials.os.path.isfile
+        old_access = device_credentials.os.access
+        device_credentials.DEVICE_CREDENTIAL_CANDIDATES = (self.creds_path,)
+        device_credentials.os.path.isfile = lambda path: path == self.creds_path
+        device_credentials.os.access = lambda path, mode: path == self.creds_path
+        try:
+            auth = device_credentials.resolve_device_ssh_auth(self._cfg(), "pfsense")
+        finally:
+            device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old_candidates
+            device_credentials.os.path.isfile = old_isfile
+            device_credentials.os.access = old_access
+
+        self.assertEqual(auth["user"], "freq-ops")
+        self.assertEqual(auth["key_path"], key_path)
+        self.assertEqual(auth["local_user"], "freq-ops")
+
+    def test_runtime_resolver_falls_back_to_managed_account(self):
+        from freq.core import device_credentials
+
+        old = device_credentials.DEVICE_CREDENTIAL_CANDIDATES
+        device_credentials.DEVICE_CREDENTIAL_CANDIDATES = (os.path.join(self.tmpdir, "missing.toml"),)
+        try:
+            auth = device_credentials.resolve_device_ssh_auth(self._cfg(), "linux")
+        finally:
+            device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old
+
+        self.assertEqual(auth["user"], "dc01-admin")
+        self.assertEqual(auth["source"], "config")
+
+    def test_pfsense_api_and_status_paths_use_runtime_resolver(self):
+        fw_src = (FREQ_ROOT / "freq" / "api" / "fw.py").read_text()
+        serve_src = (FREQ_ROOT / "freq" / "modules" / "serve.py").read_text()
+        ssh_src = (FREQ_ROOT / "freq" / "core" / "ssh.py").read_text()
+
+        self.assertIn("resolve_device_ssh_auth(cfg, \"pfsense\")", fw_src)
+        self.assertIn("user=auth[\"user\"]", fw_src)
+        self.assertIn("key_path=auth[\"key_path\"]", fw_src)
+        self.assertIn("local_user=auth.get(\"local_user\")", fw_src)
+        self.assertIn("resolve_device_ssh_auth(cfg, \"pfsense\")", serve_src)
+        self.assertIn("user=pf_auth[\"user\"]", serve_src)
+        self.assertIn("key_path=pf_auth[\"key_path\"]", serve_src)
+        self.assertIn("local_user=pf_auth.get(\"local_user\")", serve_src)
+        self.assertIn("[\"sudo\", \"-n\", \"-u\", local_user]", ssh_src)
 
 
 if __name__ == "__main__":

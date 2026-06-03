@@ -186,8 +186,12 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
     def test_legacy_rate_limit_health_changes_are_not_toast_events(self):
         src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
         self.assertIn("def _is_routine_legacy_health_change", src)
+        self.assertIn("def _reuse_skipped_health", src)
         self.assertIn('htype: str = ""', src)
         self.assertIn('"legacy-device rate limit" in prev_reason', src)
+        self.assertIn('"legacy-device rate limit" in (skip_reason or "")', src)
+        self.assertIn('reused["freshness"] = "rate_limited"', src)
+        self.assertIn('reused["freshness_reason"] = skip_reason', src)
         self.assertIn("metrics_probe_noise", src)
         self.assertIn("h_e.get(\"type\", \"\")", src)
         self.assertIn("health_change_suppressed", src)

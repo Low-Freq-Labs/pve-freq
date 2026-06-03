@@ -161,6 +161,7 @@ def _build_ssh_cmd(
     htype: str = "linux",
     use_sudo: bool = True,
     extra_opts: Optional[list] = None,
+    local_user: Optional[str] = None,
     cfg=None,
 ) -> list:
     """Build an SSH command list for subprocess execution."""
@@ -190,7 +191,7 @@ def _build_ssh_cmd(
 
     # SSH multiplexing — skip for password-auth and legacy devices
     # iDRAC/switch have 2-session SSH limits; mux sockets hold connections and exhaust slots
-    if not use_password and htype not in LEGACY_HTYPES:
+    if not use_password and htype not in LEGACY_HTYPES and not local_user:
         control_dir = os.path.expanduser(MUX_CONTROL_DIR)
         os.makedirs(control_dir, mode=0o700, exist_ok=True)
         control_path = os.path.join(control_dir, "%r@%h:%p")
@@ -225,6 +226,8 @@ def _build_ssh_cmd(
     elif command:
         cmd.append(command)
 
+    if local_user:
+        return ["sudo", "-n", "-u", local_user] + prefix + cmd
     return prefix + cmd
 
 
@@ -237,6 +240,7 @@ def run(
     command_timeout: int = 30,
     htype: str = "linux",
     use_sudo: bool = True,
+    local_user: Optional[str] = None,
     cfg=None,
     failure_log_level: str = "error",
 ) -> CmdResult:
@@ -252,6 +256,7 @@ def run(
         connect_timeout=connect_timeout,
         htype=htype,
         use_sudo=use_sudo,
+        local_user=local_user,
         cfg=cfg,
     )
 
@@ -343,6 +348,7 @@ async def async_run(
     command_timeout: int = 30,
     htype: str = "linux",
     use_sudo: bool = True,
+    local_user: Optional[str] = None,
     cfg=None,
 ) -> CmdResult:
     """Execute a command on a remote host via SSH (async).
@@ -357,6 +363,7 @@ async def async_run(
         connect_timeout=connect_timeout,
         htype=htype,
         use_sudo=use_sudo,
+        local_user=local_user,
         cfg=cfg,
     )
 

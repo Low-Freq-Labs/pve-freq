@@ -9,10 +9,12 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
 import re
+import shlex
 
 from freq.core import log as logger
 from freq.api.helpers import require_post,  json_response, get_json_body
 from freq.core.config import load_config
+from freq.core.device_credentials import resolve_device_ssh_auth
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import _check_session_role
 
@@ -22,10 +24,14 @@ from freq.modules.serve import _check_session_role
 
 def _pf_ssh(cfg, cmd, timeout=15):
     """SSH to pfSense and return result."""
+    auth = resolve_device_ssh_auth(cfg, "pfsense")
+    remote_cmd = cmd if auth["user"] in ("root", "admin") else f"sudo sh -c {shlex.quote(cmd)}"
     return ssh_single(
         host=cfg.pfsense_ip,
-        command=cmd,
-        key_path=cfg.ssh_key_path,
+        command=remote_cmd,
+        user=auth["user"],
+        key_path=auth["key_path"],
+        local_user=auth.get("local_user"),
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
         htype="pfsense",
