@@ -285,6 +285,27 @@ class TestUpdateFbToml(unittest.TestCase):
         self.assertTrue(found_start, "range_start not found")
         self.assertTrue(found_end, "range_end not found")
 
+    def test_update_range_adds_missing_lines(self):
+        """Add range lines when a category only has explicit VMIDs."""
+        handler = self._make_handler()
+        handler._update_fb_toml(self.fb_path, "update_range",
+                                cat_name="personal", range_start=7000, range_end=7099)
+        content = self._read_toml()
+        lines = content.split("\n")
+        in_personal = False
+        section = []
+        for line in lines:
+            if line.strip() == "[categories.personal]":
+                in_personal = True
+                continue
+            if in_personal and line.strip().startswith("["):
+                break
+            if in_personal:
+                section.append(line.strip())
+        self.assertIn("range_start = 7000", section)
+        self.assertIn("range_end = 7099", section)
+        self.assertIn("vmids = [100, 802, 804]", section)
+
     def test_update_tier_actions(self):
         """Change probe tier to include start and stop."""
         handler = self._make_handler()

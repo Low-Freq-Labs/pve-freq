@@ -339,6 +339,7 @@ def _register_vm(sub):
     p.add_argument("--name", help="New VM hostname")
     p.add_argument("--vmid", type=int, help="New VMID")
     p.add_argument("--node", help="Target PVE node")
+    p.add_argument("--storage", help="Target storage pool")
     p.add_argument("--ip", help="Static IP (triggers disk mount network config)")
     p.add_argument("--vlan", help="VLAN name (dirty/clean/dev/mgmt)")
     p.add_argument("--start", action="store_true", help="Start VM after clone")
@@ -384,6 +385,7 @@ def _register_vm(sub):
     p.add_argument("--vlan", help="VLAN ID")
     p.add_argument("--nic-index", type=int, default=0, help="NIC index (default: 0)")
     p.add_argument("--new-id", help="New VMID (for change-id)")
+    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmations for destructive NIC actions")
     p.set_defaults(func=_cmd_nic)
 
     p = vm_sub.add_parser("import", help="Import a cloud image as a VM")

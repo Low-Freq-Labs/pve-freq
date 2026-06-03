@@ -665,6 +665,14 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
                     validated_ranges.append([int(rng[0]), int(rng[1])])
                 except (ValueError, TypeError):
                     pass
+            elif isinstance(rng, str):
+                stripped = rng.strip().strip("[]")
+                parts = [p.strip() for p in stripped.split(",") if p.strip()]
+                if len(parts) == 2:
+                    try:
+                        validated_ranges.append([int(parts[0]), int(parts[1])])
+                    except (ValueError, TypeError):
+                        pass
     cfg.protected_ranges = validated_ranges if validated_ranges else cfg.protected_ranges
     cfg.max_failure_percent = _safe_int(safety.get("max_failure_percent"), cfg.max_failure_percent)
 

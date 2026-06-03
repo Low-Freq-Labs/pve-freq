@@ -4891,17 +4891,33 @@ a:hover{{text-decoration:underline}}
             cat_name = kw["cat_name"]
             rs, re_val = kw["range_start"], kw["range_end"]
             in_section = False
+            saw_start = False
+            saw_end = False
+            insert_at = None
             for i, line in enumerate(lines):
                 stripped = line.strip()
                 if stripped == f"[categories.{cat_name}]":
                     in_section = True
+                    insert_at = i + 1
                     continue
                 if in_section and stripped.startswith("[") and not stripped.startswith(f"[categories.{cat_name}"):
+                    insert_at = i
                     break
                 if in_section and stripped.startswith("range_start"):
                     lines[i] = f"range_start = {rs}\n"
+                    saw_start = True
                 if in_section and stripped.startswith("range_end"):
                     lines[i] = f"range_end = {re_val}\n"
+                    saw_end = True
+                if in_section and stripped:
+                    insert_at = i + 1
+            if in_section and (not saw_start or not saw_end):
+                additions = []
+                if not saw_start:
+                    additions.append(f"range_start = {rs}\n")
+                if not saw_end:
+                    additions.append(f"range_end = {re_val}\n")
+                lines[insert_at or len(lines):insert_at or len(lines)] = additions
 
         elif op == "update_tier_actions":
             tier_name, actions = kw["tier_name"], kw["actions"]

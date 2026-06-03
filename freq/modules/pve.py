@@ -129,6 +129,7 @@ def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = PVE_CMD
         command_timeout=timeout,
         htype="pve",
         use_sudo=True,
+        cfg=cfg,
     )
     # On failure, include stderr in stdout so callers see the real error
     output = r.stdout
@@ -154,6 +155,7 @@ def _find_reachable_node(cfg: FreqConfig) -> str:
             command_timeout=PVE_QUICK_TIMEOUT,
             htype="pve",
             use_sudo=True,
+            cfg=cfg,
         )
         if r.returncode == 0:
             return ip
@@ -171,6 +173,7 @@ def _find_vm_node(cfg: FreqConfig, vmid: int, fallback_ip: str = "") -> str:
             command_timeout=5,
             htype="pve",
             use_sudo=True,
+            cfg=cfg,
         )
         if r.returncode == 0 and r.stdout.strip() == "FOUND":
             return nip

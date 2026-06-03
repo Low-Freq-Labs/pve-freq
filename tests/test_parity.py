@@ -285,7 +285,7 @@ class TestCmdNic(unittest.TestCase):
         assert result == 1
 
     @patch("freq.modules.vm._pve_cmd")
-    @patch("freq.modules.vm._find_node", return_value="192.168.10.1")
+    @patch("freq.modules.vm._find_vm_node", return_value="192.168.10.1")
     def test_nic_add(self, mock_node, mock_pve):
         mock_pve.side_effect = [
             ("net0: virtio...", True),  # qm config
@@ -298,7 +298,7 @@ class TestCmdNic(unittest.TestCase):
         assert result == 0
 
     @patch("freq.modules.vm._pve_cmd")
-    @patch("freq.modules.vm._find_node", return_value="192.168.10.1")
+    @patch("freq.modules.vm._find_vm_node", return_value="192.168.10.1")
     def test_nic_clear(self, mock_node, mock_pve):
         mock_pve.side_effect = [
             ("net0: virtio\nipconfig0: ip=192.168.10.1/24", True),  # qm config
@@ -311,7 +311,7 @@ class TestCmdNic(unittest.TestCase):
         assert result == 0
 
     @patch("freq.modules.vm._pve_cmd")
-    @patch("freq.modules.vm._find_node", return_value="192.168.10.1")
+    @patch("freq.modules.vm._find_vm_node", return_value="192.168.10.1")
     def test_nic_change_ip(self, mock_node, mock_pve):
         mock_pve.side_effect = [
             ("", True),  # qm set net
@@ -357,7 +357,7 @@ class TestCmdNic(unittest.TestCase):
         assert result == 1
 
     @patch("freq.modules.vm._pve_cmd")
-    @patch("freq.modules.vm._find_node", return_value="192.168.10.1")
+    @patch("freq.modules.vm._find_vm_node", return_value="192.168.10.1")
     def test_nic_change_id(self, mock_node, mock_pve):
         mock_pve.side_effect = [
             ("status: stopped", True),   # qm status
@@ -413,6 +413,13 @@ class TestCLIParserParity(unittest.TestCase):
         p = _build_parser()
         args = p.parse_args(["vm", "nic", "clear", "5001"])
         assert args.action == "clear"
+
+    def test_nic_clear_yes_registered(self):
+        from freq.cli import _build_parser
+        p = _build_parser()
+        args = p.parse_args(["vm", "nic", "clear", "5001", "--yes"])
+        assert args.action == "clear"
+        assert args.yes is True
 
     def test_nic_change_id_registered(self):
         from freq.cli import _build_parser

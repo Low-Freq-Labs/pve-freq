@@ -137,6 +137,11 @@ class TestConfigTrustHardening:
         _apply_toml(cfg, {"pve": {"storage": {"node1": "local-lvm"}}})
         assert cfg.pve_storage["node1"] == {"pool": "", "type": ""}
 
+    def test_apply_toml_normalizes_string_protected_ranges(self):
+        cfg = FreqConfig()
+        _apply_toml(cfg, {"safety": {"protected_ranges": ["[900, 999]"]}})
+        assert cfg.protected_ranges == [[900, 999]]
+
     def test_load_hosts_toml_tolerates_bad_vmid(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write('[[host]]\nip = "10.0.0.10"\nlabel = "bad"\ntype = "linux"\nvmid = "oops"\n')

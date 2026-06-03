@@ -56,7 +56,28 @@ class TestVmApiTrust(unittest.TestCase):
             protected_ranges = []
 
             class FB:
-                categories = {"lab": {"range_start": 5000}}
+                categories = {
+                    "lab": {"range_start": 5000, "range_end": 7999, "tier": "admin"},
+                    "templates": {"vmids": [9000], "tier": "probe"},
+                }
+                tiers = {
+                    "probe": ["view"],
+                    "admin": ["view", "start", "stop", "restart", "snapshot", "destroy", "clone", "resize", "migrate", "configure"],
+                }
+
+                def categorize(self, vmid):
+                    for name, cat in self.categories.items():
+                        if vmid in cat.get("vmids", []):
+                            return name, cat.get("tier", "probe")
+                        start = cat.get("range_start")
+                        end = cat.get("range_end")
+                        if start is not None and end is not None and start <= vmid <= end:
+                            return name, cat.get("tier", "probe")
+                    return "unknown", "probe"
+
+                def can_action(self, vmid, action):
+                    _, tier = self.categorize(vmid)
+                    return action in self.tiers.get(tier, ["view"])
 
             fleet_boundaries = FB()
 
@@ -180,6 +201,51 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertEqual(handler.status, 403)
         data = _json(handler)
         self.assertIn("PROTECTED", data["error"])
+
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
+    @patch("freq.api.vm._find_vm_node_ip", return_value="10.0.0.1")
+    @patch("freq.api.vm._pve_cmd")
+    def test_clone_allows_template_source_into_lab_target(self, mock_pve_cmd, _mock_find_node, mock_load, _mock_role):
+        mock_load.return_value = self._cfg()
+        commands = []
+
+        def fake_pve(_cfg, _node_ip, command, timeout=60):
+            commands.append(command)
+            return ("", True)
+
+        mock_pve_cmd.side_effect = fake_pve
+        handler = _Handler(
+            "/api/vm/clone?vmid=9000&newid=7000&name=freq-lifecycle-7000&target_node=pve03&storage=os-drive-ssd"
+        )
+
+        vm_api.handle_vm_clone(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["new_vmid"], 7000)
+        self.assertIn(
+            "qm clone 9000 7000 --name freq-lifecycle-7000 --target pve03 --storage os-drive-ssd --full 1",
+            commands,
+        )
+
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
+    @patch("freq.api.vm._find_vm_node_ip", return_value="10.0.0.1")
+    @patch("freq.api.vm._pve_cmd")
+    def test_clone_blocks_template_source_into_unmanaged_target(
+        self, mock_pve_cmd, _mock_find_node, mock_load, _mock_role
+    ):
+        mock_load.return_value = self._cfg()
+        handler = _Handler("/api/vm/clone?vmid=9000&newid=101&name=bad-target")
+
+        vm_api.handle_vm_clone(handler)
+
+        self.assertEqual(handler.status, 403)
+        data = _json(handler)
+        self.assertIn("Target VMID blocked", data["error"])
+        mock_pve_cmd.assert_not_called()
 
     @patch("freq.api.vm._check_session_role", return_value=("admin", None))
     @patch("freq.api.vm.load_config")

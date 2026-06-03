@@ -22,6 +22,7 @@ Design decisions:
 
 import json
 import os
+import re
 import shlex
 import subprocess
 import threading
@@ -83,6 +84,7 @@ def _pve_cmd(cfg: FreqConfig, node_ip: str, command: str, timeout: int = VM_CMD_
         command_timeout=timeout,
         htype="pve",
         use_sudo=True,
+        cfg=cfg,
     )
     output = r.stdout
     if r.returncode != 0 and r.stderr and not output:
@@ -110,6 +112,7 @@ def _find_node(cfg: FreqConfig) -> str:
             command_timeout=VM_QUICK_TIMEOUT,
             htype="pve",
             use_sudo=False,
+            cfg=cfg,
         )
         if r.returncode == 0:
             return ip
@@ -243,6 +246,27 @@ def _safety_check(cfg: FreqConfig, vmid: int, operation: str) -> bool:
             fmt.info(f"Protected ranges: {cfg.protected_ranges}")
         return False
     return True
+
+
+def _safe_pve_token(value: str, label: str) -> bool:
+    """Validate node/storage tokens passed to qm flags."""
+    if not value:
+        return True
+    if re.match(r"^[A-Za-z0-9_.:-]+$", str(value)):
+        return True
+    fmt.error(f"Invalid {label}: {value}")
+    return False
+
+
+def _clone_source_allowed(cfg: FreqConfig, vmid: int) -> bool:
+    """Allow templates as read-only clone sources without making them mutable."""
+    cat_name, tier = cfg.fleet_boundaries.categorize(vmid)
+    if cat_name == "templates":
+        return True
+    if cfg.fleet_boundaries.can_action(vmid, "clone"):
+        return True
+    fmt.error(f"Action 'clone' blocked on VMID {vmid} ({cat_name}/{tier})")
+    return False
 
 
 # ─────────────────────────────────────────────────────────────
@@ -392,12 +416,20 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
 
     new_name = getattr(args, "name", None) or f"clone-of-{src_vmid}"
     new_vmid = getattr(args, "vmid", None)
+    target_node = getattr(args, "node", None)
+    storage = getattr(args, "storage", None)
     ip_addr = getattr(args, "ip", None)
     vlan = getattr(args, "vlan", None)
 
+    if not _clone_source_allowed(cfg, src_vmid):
+        return 1
     if not validate.shell_safe_name(new_name):
         fmt.error("Invalid VM name: {}".format(new_name))
         fmt.info("Names: alphanumeric, hyphens, underscores, dots. Max 63 chars.")
+        return 1
+    if target_node and not _safe_pve_token(target_node, "node"):
+        return 1
+    if storage and not _safe_pve_token(storage, "storage"):
         return 1
     if ip_addr and not validate.ip(ip_addr.split("/")[0]):
         fmt.error("Invalid IP address: {}".format(ip_addr))
@@ -414,9 +446,18 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
 
     if not _safety_check(cfg, new_vmid, "clone into"):
         return 1
+    target_cat, target_tier = cfg.fleet_boundaries.categorize(new_vmid)
+    if not cfg.fleet_boundaries.can_action(new_vmid, "configure"):
+        fmt.error(f"Target VMID {new_vmid} is blocked ({target_cat}/{target_tier}).")
+        fmt.info("Pick a VMID in a managed lab/admin range.")
+        return 1
 
     fmt.line(f"  Source:  VM {src_vmid}")
     fmt.line(f"  Target:  VM {new_vmid} '{new_name}'")
+    if target_node:
+        fmt.line(f"  Node:    {target_node}")
+    if storage:
+        fmt.line(f"  Storage: {storage}")
     if ip_addr:
         fmt.line(f"  IP:      {ip_addr}")
     if vlan:
@@ -435,12 +476,17 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
 
     # Step 1: Full clone
     fmt.step_start(f"Cloning VM {src_vmid} to {new_vmid}")
+    clone_parts = ["qm", "clone", str(src_vmid), str(new_vmid), "--name", new_name, "--full", "1"]
+    if target_node:
+        clone_parts.extend(["--target", target_node])
+    if storage:
+        clone_parts.extend(["--storage", storage])
+    clone_cmd = " ".join(shlex.quote(part) for part in clone_parts)
     with _ProgressTicker("Cloning"):
-        stdout, ok = _pve_cmd(
-            cfg, node_ip, f"qm clone {src_vmid} {new_vmid} --name {new_name} --full", timeout=VM_CLONE_TIMEOUT
-        )
+        stdout, ok = _pve_cmd(cfg, node_ip, clone_cmd, timeout=VM_CLONE_TIMEOUT)
 
     if not ok:
+        _pve_cmd(cfg, node_ip, f"qm destroy {new_vmid} --purge 1", timeout=VM_CONFIG_TIMEOUT)
         fmt.step_fail(f"Clone failed: {stdout}")
         return 1
     fmt.step_ok(f"VM {new_vmid} cloned")
@@ -631,7 +677,7 @@ def cmd_resize(cfg: FreqConfig, pack, args) -> int:
         fmt.error("Specify at least one: --cores, --ram, or --disk")
         return 1
 
-    node_ip = _find_vm_node(cfg, vmid)
+    node_ip = _find_node(cfg)
     if not node_ip:
         node_ip = _find_node(cfg)
     if not node_ip:
@@ -711,7 +757,9 @@ def cmd_template(cfg: FreqConfig, pack, args) -> int:
     if not _safety_check(cfg, vmid, "templatize"):
         return 1
 
-    node_ip = _find_vm_node(cfg, vmid)
+    node_ip = _find_vm_node(cfg, src_vmid)
+    if not node_ip:
+        node_ip = _find_node(cfg)
     if not node_ip:
         node_ip = _find_node(cfg)
     if not node_ip:
@@ -842,6 +890,7 @@ def cmd_rename(cfg: FreqConfig, pack, args) -> int:
             command_timeout=10,
             htype="pve",
             use_sudo=True,
+            cfg=cfg,
         )
         if r.returncode == 0 and r.stdout.strip():
             try:
@@ -983,7 +1032,7 @@ def cmd_pool(cfg: FreqConfig, pack, args) -> int:
     """PVE pool management."""
     action = getattr(args, "pool_action", None) or getattr(args, "action", None)
 
-    node_ip = _find_node(cfg)
+    node_ip = _find_vm_node(cfg, vmid)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
         _pve_unreachable_hint(cfg)
@@ -1064,7 +1113,7 @@ def cmd_sandbox(cfg: FreqConfig, pack, args) -> int:
         fmt.error(f"Invalid VMID: {source}")
         return 1
 
-    node_ip = _find_node(cfg)
+    node_ip = _find_vm_node(cfg, vmid)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
         _pve_unreachable_hint(cfg)
@@ -1484,7 +1533,7 @@ def _nic_add(cfg: FreqConfig, args) -> int:
     if not _safety_check(cfg, vmid, "configure"):
         return 1
 
-    node_ip = _find_node(cfg)
+    node_ip = _find_vm_node(cfg, vmid)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
         _pve_unreachable_hint(cfg)
@@ -1553,7 +1602,7 @@ def _nic_clear(cfg: FreqConfig, args) -> int:
     if not _safety_check(cfg, vmid, "configure"):
         return 1
 
-    node_ip = _find_node(cfg)
+    node_ip = _find_vm_node(cfg, vmid)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
         _pve_unreachable_hint(cfg)
@@ -1630,7 +1679,7 @@ def _nic_change_ip(cfg: FreqConfig, args) -> int:
     if not _safety_check(cfg, vmid, "configure"):
         return 1
 
-    node_ip = _find_node(cfg)
+    node_ip = _find_vm_node(cfg, vmid)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
         _pve_unreachable_hint(cfg)
@@ -1690,7 +1739,7 @@ def _nic_change_id(cfg: FreqConfig, args) -> int:
     if not _safety_check(cfg, newid, "change-id"):
         return 1
 
-    node_ip = _find_node(cfg)
+    node_ip = _find_vm_node(cfg, vmid)
     if not node_ip:
         fmt.error("Cannot reach any PVE node")
         _pve_unreachable_hint(cfg)

@@ -13,6 +13,7 @@ that receives the HTTP handler as its first argument.
 import json
 import os
 import re
+import shlex
 import subprocess
 
 from freq.core import log as logger
@@ -75,6 +76,23 @@ def _parse_next_vmid(raw_value: str) -> int:
 def _respond_operation(handler, payload, ok, failure_status=502):
     """Return 200 on success and a real error status when the backend action failed."""
     json_response(handler, payload, 200 if ok else failure_status)
+
+
+def _token_param(value: str, label: str):
+    """Return a shell-safe Proxmox token or an error message."""
+    if not value:
+        return "", ""
+    if not re.match(r"^[A-Za-z0-9_.:-]+$", value):
+        return "", f"Invalid {label}: {value}"
+    return value, ""
+
+
+def _clone_source_allowed(cfg, vmid: int):
+    """Allow read-only clone use of templates while keeping them mutation-protected."""
+    cat_name, tier = cfg.fleet_boundaries.categorize(vmid)
+    if cat_name == "templates":
+        return True, ""
+    return _check_vm_permission(cfg, vmid, "clone")
 
 
 # ── Handlers ────────────────────────────────────────────────────────────
@@ -1117,16 +1135,31 @@ def handle_vm_clone(handler):
     if source_vmid is None:
         return
     name = params.get("name", [""])[0]
-    target_node = params.get("target_node", [""])[0]
+    target_node = params.get("target_node", params.get("node", [""]))[0]
+    storage = params.get("storage", [""])[0]
     full = params.get("full", ["1"])[0] == "1"
+    explicit_newid = (
+        params.get("newid")
+        or params.get("new_vmid")
+        or params.get("target_vmid")
+        or [""]
+    )[0]
 
     if not source_vmid:
         json_response(handler, {"error": "vmid (source) required"}, 400)
         return
 
-    allowed, err = _check_vm_permission(cfg, source_vmid, "clone")
+    allowed, err = _clone_source_allowed(cfg, source_vmid)
     if not allowed:
         json_response(handler, {"error": err}, 403)
+        return
+    target_node, target_node_err = _token_param(target_node, "target_node")
+    if target_node_err:
+        json_response(handler, {"error": target_node_err}, 400)
+        return
+    storage, storage_err = _token_param(storage, "storage")
+    if storage_err:
+        json_response(handler, {"error": storage_err}, 400)
         return
 
     try:
@@ -1135,32 +1168,43 @@ def handle_vm_clone(handler):
             json_response(handler, {"error": f"Cannot find VM {source_vmid} on any PVE node"}, 404)
             return
 
-        # Get next available VMID
-        stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
-        if not ok:
-            json_response(handler, {"error": "Cannot get next VMID"}, 502)
-            return
-        new_vmid = stdout.strip()
-        parsed_new_vmid = _parse_next_vmid(new_vmid)
+        if explicit_newid:
+            parsed_new_vmid = _parse_next_vmid(explicit_newid)
+        else:
+            stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
+            if not ok:
+                json_response(handler, {"error": "Cannot get next VMID"}, 502)
+                return
+            parsed_new_vmid = _parse_next_vmid(stdout.strip())
         if parsed_new_vmid <= 0:
-            json_response(handler, {"error": f"Invalid next VMID from cluster: {new_vmid or 'empty'}"}, 502)
+            source = explicit_newid or "cluster nextid"
+            json_response(handler, {"error": f"Invalid target VMID from {source}"}, 400)
             return
 
-        parts = [f"qm clone {source_vmid} {new_vmid}"]
+        target_allowed, target_err = _check_vm_permission(cfg, parsed_new_vmid, "configure")
+        if not target_allowed:
+            json_response(handler, {"error": f"Target VMID blocked: {target_err}"}, 403)
+            return
+
+        parts = ["qm", "clone", str(source_vmid), str(parsed_new_vmid)]
         if name:
             from freq.core.validate import shell_safe_name
 
             if not shell_safe_name(name):
                 json_response(handler, {"error": f"Invalid VM name: {name}"}, 400)
                 return
-            parts.append(f"--name {name}")
+            parts.extend(["--name", name])
         if target_node:
-            parts.append(f"--target {target_node}")
+            parts.extend(["--target", target_node])
+        if storage:
+            parts.extend(["--storage", storage])
         if full:
-            parts.append("--full")
+            parts.extend(["--full", "1"])
 
-        cmd = " ".join(parts)
+        cmd = " ".join(shlex.quote(part) for part in parts)
         stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=300)
+        if not ok:
+            _pve_cmd(cfg, node_ip, f"qm destroy {parsed_new_vmid} --purge 1", timeout=30)
         _respond_operation(
             handler,
             {
@@ -1168,6 +1212,8 @@ def handle_vm_clone(handler):
                 "source_vmid": source_vmid,
                 "new_vmid": parsed_new_vmid,
                 "name": name,
+                "target_node": target_node,
+                "storage": storage,
                 "full_clone": full,
                 "error": stdout if not ok else "",
             },
