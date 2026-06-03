@@ -8,6 +8,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
 import re
+import json
 
 from freq.core import log as logger
 from freq.api.helpers import json_response, get_param, get_param_int
@@ -201,6 +202,58 @@ def handle_logs_auth(handler):
     )
 
 
+def handle_logs_runtime(handler):
+    """GET /api/logs/runtime -- local dashboard/runtime structured log.
+
+    Params: ?level=ERROR&msg=http_handler_exception&request_id=abc&limit=100
+    """
+    cfg = load_config()
+    level = get_param(handler, "level", "").upper()
+    msg = get_param(handler, "msg", "")
+    request_id = get_param(handler, "request_id", "")
+    limit = get_param_int(handler, "limit", 100, min_val=10, max_val=500)
+    if level and level not in ("DEBUG", "INFO", "WARN", "ERROR", "CMD"):
+        json_response(handler, {"error": "Invalid level"}, 400)
+        return
+    if request_id and not re.match(r"^[a-fA-F0-9]{6,32}$", request_id):
+        json_response(handler, {"error": "Invalid request_id"}, 400)
+        return
+    rows = []
+    try:
+        with open(cfg.log_file, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()[-5000:]
+    except OSError as e:
+        json_response(handler, {"error": f"Cannot read runtime log: {e}"}, 500)
+        return
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            row = {"level": "WARN", "msg": "unparsed_log_line", "raw": line[:1000]}
+        if level and row.get("level") != level:
+            continue
+        if msg and msg.lower() not in str(row.get("msg", "")).lower():
+            continue
+        if request_id and row.get("request_id") != request_id:
+            continue
+        rows.append(row)
+        if len(rows) >= limit:
+            break
+    rows.reverse()
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "path": cfg.log_file,
+            "count": len(rows),
+            "entries": rows,
+        },
+    )
+
+
 # -- Registration ------------------------------------------------------------
 
 
@@ -210,3 +263,4 @@ def register(routes: dict):
     routes["/api/logs/search"] = handle_logs_search
     routes["/api/logs/oom"] = handle_logs_oom
     routes["/api/logs/auth"] = handle_logs_auth
+    routes["/api/logs/runtime"] = handle_logs_runtime

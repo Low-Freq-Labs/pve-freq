@@ -39,6 +39,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from urllib.parse import urlparse, parse_qs
@@ -1870,6 +1871,7 @@ def _bg_initial_probe():
 
 def start_background_cache():
     """Load disk cache, then start background refresh threads."""
+    _install_runtime_exception_hooks()
     _init_cache_dir()
     _load_disk_cache()
     # Kick off critical probes immediately so first page load has data
@@ -1879,6 +1881,47 @@ def start_background_cache():
     t0.start()
     t1.start()
     t2.start()
+
+
+_RUNTIME_EXCEPTION_HOOKS_INSTALLED = False
+
+
+def _install_runtime_exception_hooks():
+    """Log uncaught process/thread exceptions as structured runtime events."""
+    global _RUNTIME_EXCEPTION_HOOKS_INSTALLED
+    if _RUNTIME_EXCEPTION_HOOKS_INSTALLED:
+        return
+    _RUNTIME_EXCEPTION_HOOKS_INSTALLED = True
+
+    import sys
+    import traceback as _traceback
+
+    previous_excepthook = sys.excepthook
+    previous_thread_hook = getattr(threading, "excepthook", None)
+
+    def _excepthook(exc_type, exc, tb):
+        logger.error(
+            "runtime_uncaught_exception",
+            error=repr(exc),
+            exception_type=getattr(exc_type, "__name__", str(exc_type)),
+            traceback="".join(_traceback.format_exception(exc_type, exc, tb)),
+        )
+        previous_excepthook(exc_type, exc, tb)
+
+    def _thread_excepthook(args):
+        logger.error(
+            "runtime_thread_exception",
+            thread=getattr(args.thread, "name", ""),
+            error=repr(args.exc_value),
+            exception_type=getattr(args.exc_type, "__name__", str(args.exc_type)),
+            traceback="".join(_traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback)),
+        )
+        if previous_thread_hook:
+            previous_thread_hook(args)
+
+    sys.excepthook = _excepthook
+    if hasattr(threading, "excepthook"):
+        threading.excepthook = _thread_excepthook
 
 
 def _cleanup_ssh_mux(cfg):
@@ -2317,6 +2360,59 @@ class FreqHandler(BaseHTTPRequestHandler):
         """Suppress default logging."""
         pass
 
+    def send_response(self, code, message=None):
+        self._response_status = int(code)
+        super().send_response(code, message)
+
+    def send_header(self, keyword, value):
+        if keyword.lower() == "content-length":
+            try:
+                self._response_bytes = int(value)
+            except (TypeError, ValueError):
+                self._response_bytes = None
+        super().send_header(keyword, value)
+
+    def end_headers(self):
+        request_id = getattr(self, "_request_id", "")
+        if request_id and not getattr(self, "_request_id_header_sent", False):
+            self.send_header("X-Request-ID", request_id)
+            self._request_id_header_sent = True
+        super().end_headers()
+
+    def _begin_request(self):
+        self._request_id = uuid.uuid4().hex[:12]
+        self._request_started = time.monotonic()
+        self._response_status = None
+        self._response_bytes = None
+        self._request_path = self.path.split("?")[0]
+        self._request_user = ""
+        self._request_role = ""
+        logger.info(
+            "http_request_start",
+            request_id=self._request_id,
+            method=getattr(self, "command", "?"),
+            path=self._request_path,
+            client=getattr(self, "client_address", ("?", 0))[0],
+        )
+
+    def _finish_request(self):
+        started = getattr(self, "_request_started", None)
+        duration_ms = round((time.monotonic() - started) * 1000, 1) if started else None
+        status = getattr(self, "_response_status", None)
+        user = getattr(self, "_request_user", "") or getattr(self, "_session_user", "")
+        role = getattr(self, "_request_role", "") or getattr(self, "_session_role", "")
+        logger.info(
+            "http_request_end",
+            request_id=getattr(self, "_request_id", ""),
+            method=getattr(self, "command", "?"),
+            path=getattr(self, "_request_path", self.path.split("?")[0]),
+            status=status if status is not None else "unknown",
+            duration_ms=duration_ms,
+            bytes=getattr(self, "_response_bytes", None),
+            user=user,
+            role=role,
+        )
+
     # Route dispatch table — path → method name (resolved at call time via getattr)
     _ROUTES = {
         # ── Infrastructure routes (stay in serve.py) ──────────────────
@@ -2448,6 +2544,13 @@ class FreqHandler(BaseHTTPRequestHandler):
                 and not any(path.startswith(p) for p in self._AUTH_WHITELIST_PREFIXES):
             role, err = _check_session_role(self, "viewer")
             if err:
+                logger.warn(
+                    "http_auth_rejected",
+                    request_id=getattr(self, "_request_id", ""),
+                    method=getattr(self, "command", "?"),
+                    path=path,
+                    reason=err,
+                )
                 #  task 1: when the caller
                 # passed ?token= in the query string but no cookie or
                 # Authorization header, surface the truthful migration
@@ -2470,6 +2573,8 @@ class FreqHandler(BaseHTTPRequestHandler):
                 else:
                     self._json_response({"error": err}, 403)
                 return
+            self._request_role = role or ""
+            self._request_user = getattr(self, "_session_user", "")
 
         # Check legacy routes first, then v1 domain routes
         handler_ref = self._ROUTES.get(path)
@@ -2485,11 +2590,21 @@ class FreqHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 import traceback
 
-                traceback.print_exc()
                 try:
-                    logger.error("api_error", method=getattr(self, "command", "?"), path=path, status=500)
-                    logger.error(f"handler error: {path}: {e}")
-                    self._json_response({"error": "Internal server error", "path": path}, 500)
+                    logger.error(
+                        "http_handler_exception",
+                        request_id=getattr(self, "_request_id", ""),
+                        method=getattr(self, "command", "?"),
+                        path=path,
+                        status=500,
+                        error=repr(e),
+                        traceback=traceback.format_exc(),
+                    )
+                    self._json_response({
+                        "error": "Internal server error",
+                        "path": path,
+                        "request_id": getattr(self, "_request_id", ""),
+                    }, 500)
                 except Exception as e2:
                     import sys
 
@@ -2505,12 +2620,18 @@ class FreqHandler(BaseHTTPRequestHandler):
             self._serve_app()
 
     def do_GET(self):
-        logger.debug("api_request", method=getattr(self, "command", "GET"), path=self.path)
-        self._dispatch()
+        self._begin_request()
+        try:
+            self._dispatch()
+        finally:
+            self._finish_request()
 
     def do_POST(self):
-        logger.debug("api_request", method=getattr(self, "command", "POST"), path=self.path)
-        self._dispatch()
+        self._begin_request()
+        try:
+            self._dispatch()
+        finally:
+            self._finish_request()
 
     # ── Server-Sent Events ────────────────────────────────────────────────
 
@@ -5605,6 +5726,9 @@ a:hover{{text-decoration:underline}}
 
     def _json_response(self, data, status=200):
         """Send a JSON response."""
+        if isinstance(data, dict) and "error" in data and "request_id" not in data:
+            data = dict(data)
+            data["request_id"] = getattr(self, "_request_id", "")
         body = json.dumps(data).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")

@@ -106,6 +106,56 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("tls_client_disconnect", server_window)
         self.assertIn("super().handle_error", server_window)
 
+    def test_web_runtime_logs_every_request_with_correlation_id(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        self.assertIn("def _begin_request", src)
+        self.assertIn("uuid.uuid4().hex[:12]", src)
+        self.assertIn("http_request_start", src)
+        self.assertIn("http_request_end", src)
+        self.assertIn("X-Request-ID", src)
+        self.assertIn("duration_ms", src)
+        self.assertIn("bytes=getattr(self, \"_response_bytes\", None)", src)
+
+    def test_handler_errors_are_structured_not_raw_traceback_prints(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        dispatch_window = src.split("def _dispatch", 1)[1].split("def do_GET", 1)[0]
+        self.assertIn("http_handler_exception", dispatch_window)
+        self.assertIn("traceback=traceback.format_exc()", dispatch_window)
+        self.assertIn('"request_id": getattr(self, "_request_id", "")', dispatch_window)
+        self.assertNotIn("traceback.print_exc()", dispatch_window)
+
+    def test_json_error_responses_include_request_id(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        json_window = src.split("def _json_response", 1)[1].split("# --- Phase 1", 1)[0]
+        self.assertIn('if isinstance(data, dict) and "error" in data and "request_id" not in data:', json_window)
+        self.assertIn('data["request_id"] = getattr(self, "_request_id", "")', json_window)
+
+    def test_runtime_exception_hooks_are_installed(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        self.assertIn("def _install_runtime_exception_hooks", src)
+        self.assertIn("runtime_uncaught_exception", src)
+        self.assertIn("runtime_thread_exception", src)
+        self.assertIn("threading.excepthook = _thread_excepthook", src)
+        self.assertIn("_install_runtime_exception_hooks()", src.split("def start_background_cache", 1)[1].split("def _cleanup_ssh_mux", 1)[0])
+
+    def test_auth_helper_attaches_actor_for_request_logs(self):
+        src = (REPO_ROOT / "freq" / "api" / "auth.py").read_text()
+        self.assertIn("handler._session_user = session[\"user\"]", src)
+        self.assertIn("handler._session_role = session[\"role\"]", src)
+
+    def test_domain_api_errors_include_request_id(self):
+        src = (REPO_ROOT / "freq" / "api" / "helpers.py").read_text()
+        self.assertIn('if isinstance(data, dict) and "error" in data and "request_id" not in data:', src)
+        self.assertIn('data["request_id"] = getattr(handler, "_request_id", "")', src)
+
+    def test_runtime_log_api_exposes_local_structured_logs(self):
+        src = (REPO_ROOT / "freq" / "api" / "logs.py").read_text()
+        self.assertIn("def handle_logs_runtime", src)
+        self.assertIn('routes["/api/logs/runtime"] = handle_logs_runtime', src)
+        self.assertIn('with open(cfg.log_file, "r"', src)
+        self.assertIn('request_id and row.get("request_id") != request_id', src)
+        self.assertIn('"entries": rows', src)
+
     def test_fleet_overview_uses_device_appropriate_physical_reachability(self):
         src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
         window = src.split("def _bg_probe_fleet_overview", 1)[1].split("\ndef ", 1)[0]

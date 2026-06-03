@@ -271,6 +271,11 @@ def check_session_role(handler, min_role="operator"):
     role_order = {"viewer": 0, "operator": 1, "admin": 2, "protected": 3}
     if role_order.get(session["role"], 0) < role_order.get(min_role, 1):
         return None, f"Requires {min_role} role (you are {session['role']})"
+    try:
+        handler._session_user = session["user"]
+        handler._session_role = session["role"]
+    except Exception:
+        pass
     return session["role"], None
 
 
