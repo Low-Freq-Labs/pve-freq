@@ -3,13 +3,14 @@
 Proves:
 1. _is_auth_failure detects SSH permission denied errors
 2. Infra quick probe marks auth failures with auth_failed=true
-3. Infra quick does NOT report reachable=true on SSH auth failure
+3. Infra quick separates network reachability from SSH/API auth failures
 4. probe_method field is set for all probe outcomes
 5. Unknown device types note that /api/health has authoritative SSH state
 
-Fixes Finn-reported divergence: /api/health marks nexus unreachable
-(permission denied) while /api/infra/quick said reachable=true. Both
-surfaces must agree when SSH auth fails.
+Fixes Finn-reported divergence: /api/fleet/overview marked the firewall
+network-reachable, then /api/infra/quick overwrote the Core Systems card
+as unreachable because SSH metrics auth failed. Infrastructure cards must
+show reachable network state and auth/metrics failure separately.
 """
 
 import os
@@ -64,12 +65,12 @@ class TestInfraProbeMethodField(unittest.TestCase):
 
     def test_ping_fallback_sets_method(self):
         src = self._probe_src()
-        self.assertIn('"ping" if d["reachable"] else "none"', src,
-                       "Ping fallback must set probe_method='ping' or 'none'")
+        self.assertIn('"network" if d["reachable"] else "none"', src,
+                       "Network fallback must set probe_method='network' or 'none'")
 
 
-class TestInfraAuthFailureNotReachable(unittest.TestCase):
-    """SSH auth failure must NOT produce reachable=true."""
+class TestInfraAuthFailureKeepsNetworkTruth(unittest.TestCase):
+    """SSH auth failure must not erase network reachability."""
 
     def _probe_src(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
@@ -89,20 +90,21 @@ class TestInfraAuthFailureNotReachable(unittest.TestCase):
         # Each "elif _is_auth_failure" branch must set d["auth_failed"] = True.
         # Skip non-elif occurrences (e.g. idrac's retry gate which triggers
         # a sshpass fallback rather than being the terminal handler).
-        for m in re.finditer(r"elif _is_auth_failure\(r\.stderr\):", src):
-            snippet = src[m.end(): m.end() + 300]
-            self.assertIn('d["auth_failed"] = True', snippet,
+        pattern = re.compile(r'elif _is_auth_failure\(r\.stderr\):(.*?)(?=\n                (?:else|elif |\Z))', re.DOTALL)
+        for m in pattern.finditer(src):
+            self.assertIn('d["auth_failed"] = True', m.group(1),
                            "elif _is_auth_failure branch must set auth_failed=True")
 
-    def test_auth_failure_does_not_set_reachable_true(self):
-        """Auth failure branches must NOT set d['reachable'] = True."""
+    def test_auth_failure_rechecks_network_reachability(self):
+        """Auth failure branches must classify network reachability separately."""
         src = self._probe_src()
-        # Find each 'elif _is_auth_failure' block and verify no 'reachable'] = True' in it
         pattern = re.compile(r'elif _is_auth_failure\(r\.stderr\):(.*?)(?=\n                (?:else|elif |\Z))', re.DOTALL)
         for m in pattern.finditer(src):
             block = m.group(1)
-            self.assertNotIn('d["reachable"] = True', block,
-                              "Auth failure branch must not mark device as reachable")
+            self.assertIn('d["reachable"] = _network_reachable(dev)', block,
+                          "Auth failure branch must preserve network reachability truth")
+            self.assertNotIn('d["reachable"] = False', block,
+                             "Auth failure branch must not force network unreachable")
 
 
 class TestIdracProbeParity(unittest.TestCase):

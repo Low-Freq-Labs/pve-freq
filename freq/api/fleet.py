@@ -912,9 +912,57 @@ def handle_infra_quick(handler):
         cached = _bg_cache.get("infra_quick")
         _infra_ts = _bg_cache_ts.get("infra_quick", 0)
         _infra_err = _bg_cache_errors.get("infra_quick")
+        fleet_overview = _bg_cache.get("fleet_overview")
     if cached:
         age_seconds = round(time.time() - _infra_ts, 1)
         response = dict(cached)
+        devices = response.get("devices")
+        physical = fleet_overview.get("physical") if isinstance(fleet_overview, dict) else []
+        physical_reachability = {}
+        if isinstance(physical, list):
+            for dev in physical:
+                if not isinstance(dev, dict):
+                    continue
+                reachable = bool(dev.get("reachable"))
+                label = str(dev.get("label") or "").strip().lower()
+                key = str(dev.get("key") or "").strip().lower()
+                ip = str(dev.get("ip") or "").strip()
+                for token in (label, key, ip):
+                    if token:
+                        physical_reachability[token] = reachable
+        if isinstance(devices, list) and physical_reachability:
+            reconciled = []
+            for dev in devices:
+                if not isinstance(dev, dict):
+                    reconciled.append(dev)
+                    continue
+                item = dict(dev)
+                tokens = [
+                    str(item.get("label") or "").strip().lower(),
+                    str(item.get("key") or "").strip().lower(),
+                    str(item.get("ip") or "").strip(),
+                ]
+                fleet_reachable = any(
+                    physical_reachability.get(token) is True for token in tokens if token
+                )
+                if fleet_reachable and item.get("reachable") is not True:
+                    item["reachable"] = True
+                    item["network_reachable"] = True
+                    item["reachability_source"] = "fleet_overview"
+                    metrics = item.get("metrics")
+                    if not isinstance(metrics, dict):
+                        metrics = {}
+                    metrics.setdefault("note", "Network reachable, metrics unavailable")
+                    item["metrics"] = metrics
+                    logger.info(
+                        "infra_quick_reachability_reconciled",
+                        label=item.get("label"),
+                        ip=item.get("ip"),
+                        auth_failed=bool(item.get("auth_failed")),
+                        source="fleet_overview",
+                    )
+                reconciled.append(item)
+            response["devices"] = reconciled
         response["cached"] = True
         response["age"] = age_seconds
         response["age_seconds"] = age_seconds

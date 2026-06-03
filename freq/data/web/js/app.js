@@ -139,7 +139,14 @@ function _authFetch(url, opts) {
 }
 
 /* === Toast === */
+function _uiLog(event,payload){
+  try{
+    payload=payload||{};payload.event=event;payload.view=(typeof _currentView!=='undefined'&&_currentView)?_currentView:'';
+    fetch('/api/ui/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),keepalive:true}).catch(function(){});
+  }catch(_e){}
+}
 function toast(msg,type){
+  _uiLog('toast',{message:String(msg||''),type:type||'info',source:'toast'});
   var t=document.createElement('div');t.className='toast '+(type||'info');t.textContent=msg;
   document.getElementById('toast-container').appendChild(t);
   setTimeout(function(){t.classList.add('fadeout');},3500);
@@ -326,6 +333,11 @@ document.addEventListener('click',function(e){
     if(a==='vmSnap'){vmSnap(+da.dataset.vmid);return;}
     if(a==='vmQuickTag'){var tags=prompt('Enter tags for VM '+da.dataset.vmid+' (comma-separated):');if(tags!==null)_authFetch(API.VM_TAG+'?vmid='+da.dataset.vmid+'&tags='+encodeURIComponent(tags),{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(d.ok)toast('Tags updated','success');else toast(d.error,'error');});return;}
     if(a==='openVmInfo'){openVmInfo(da.dataset.label,'',+da.dataset.vmid);return;}
+    if(a==='openInfraDevice'){
+      _uiLog('infra_card_click',{message:'open infra '+(da.dataset.label||''),source:'core_systems',label:da.dataset.label||'',infraType:da.dataset.infraType||'',ip:da.dataset.ip||''});
+      openCard('infra',{label:da.dataset.label,infraType:da.dataset.infraType,ip:da.dataset.ip});
+      return;
+    }
     if(a==='vaultReveal'){vaultReveal(da.dataset.uid,da.dataset.host,da.dataset.key);return;}
     if(a==='vaultCopy'){vaultCopy(da.dataset.host,da.dataset.key);return;}
     if(a==='vaultDelGroup'){vaultDelGroup(g);return;}
@@ -5214,7 +5226,7 @@ function _infraRoleCard(ph,healthMap){
   var live=healthMap[ph.label];
   var up=ph.reachable||false;if(live&&_healthIsLive(live))up=true;
   var safeId=ph.label.replace(/[^a-zA-Z0-9]/g,'-');
-  var c='<div class="infra-role-card" onclick="openHost(\''+ph.label+'\')">';
+  var c='<div class="infra-role-card" data-action="openInfraDevice" data-label="'+_esc(ph.label)+'" data-infra-type="'+_esc(ph.type)+'" data-ip="'+_esc(ph.ip||'')+'" style="cursor:pointer">';
   /* Role label row */
   c+='<div class="role-label" style="color:'+roleInfo.color+'"><span class="role-icon">'+roleInfo.icon+'</span>'+roleInfo.role+'</div>';
   /* Device name + status */
@@ -5268,7 +5280,10 @@ function _enrichInfraCards(){
       if(!el)return;
       /* Update status dot */
       if(statusEl){
-        statusEl.innerHTML='<span class="status-dot '+(dev.reachable?'up':'down')+'"></span>'+(dev.reachable?'REACHABLE':'UNREACHABLE');
+        var statusLabel=dev.reachable?'REACHABLE':'UNREACHABLE';
+        if(dev.reachable&&dev.auth_failed)statusLabel='REACHABLE';
+        statusEl.innerHTML='<span class="status-dot '+(dev.reachable?'up':'down')+'"></span>'+statusLabel;
+        _uiLog('core_systems_state',{message:dev.label+': '+statusLabel,source:'infra_quick',label:dev.label,type:dev.type,ip:dev.ip,reachable:!!dev.reachable,auth_failed:!!dev.auth_failed,probe_method:dev.probe_method||'',note:(dev.metrics&&dev.metrics.note)||''});
       }
       if(!dev.reachable){
         var roleInfo=INFRA_ROLES[dev.type]||{};
@@ -5278,7 +5293,10 @@ function _enrichInfraCards(){
       var m=dev.metrics;var h='';
       var _m=function(val,lbl,color){return '<div class="role-metric"><span class="rm-val" style="color:'+color+'">'+val+'</span><span class="rm-lbl">'+lbl+'</span></div>';};
       if(dev.type==='pfsense'||dev.type==='opnsense'){
-        if(m.states||m.interfaces||m.uptime){
+        if(dev.auth_failed||m.note){
+          h+=_m('REACHABLE','NETWORK','var(--green)');
+          h+=_m(m.note||'AUTH REQUIRED','METRICS','var(--yellow)');
+        } else if(m.states||m.interfaces||m.uptime){
           h+=_m(m.states||'—','STATES','var(--cyan)');
           if(m.interfaces)h+=_m(m.interfaces,'IFACES','var(--text)');
           if(m.uptime){var pfUp=m.uptime.replace(/^up\s+/i,'').replace(/,\s*\d+:\d+$/,'');h+=_m(pfUp,'UPTIME','var(--green)');}
@@ -8421,6 +8439,7 @@ function renderInfraCard(config){
   var ph=null;
   if(_fleetCache.fo&&_fleetCache.fo.physical)ph=_fleetCache.fo.physical.find(function(p){return p.label===label;});
   if(!ph)ph=PROD_HOSTS.find(function(h){return h.label===label;});
+  if(!ph&&config.ip)ph={label:label,type:infraType,ip:config.ip,detail:(infraType||'device').toUpperCase(),reachable:true};
   var roleInfo=INFRA_ROLES[infraType]||{role:infraType.toUpperCase(),color:'var(--text-dim)'};
   document.getElementById('hd-subtitle').textContent=(ph?ph.ip+' \u00b7 ':'')+roleInfo.role+(ph?' \u00b7 '+ph.detail:'');
   var stats='';

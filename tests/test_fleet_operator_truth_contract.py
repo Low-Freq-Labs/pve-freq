@@ -97,6 +97,15 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn('f"{h_e[\'label\']} is now {cur_state}"', src)
         self.assertNotIn('unreachable_count = sum(1 for h in host_data if h.get("status") != "healthy")', src)
 
+    def test_tls_client_disconnects_do_not_print_tracebacks(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        server_window = src.split("class ThreadedHTTPServer", 1)[1].split("# ── CONSTANTS", 1)[0]
+        self.assertIn("def handle_error", server_window)
+        self.assertIn("ssl.SSLError", server_window)
+        self.assertIn("UNEXPECTED_EOF_WHILE_READING", server_window)
+        self.assertIn("tls_client_disconnect", server_window)
+        self.assertIn("super().handle_error", server_window)
+
     def test_fleet_overview_uses_device_appropriate_physical_reachability(self):
         src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
         window = src.split("def _bg_probe_fleet_overview", 1)[1].split("\ndef ", 1)[0]
@@ -123,6 +132,55 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("ns==='stale'?'STALE'", src)
         self.assertIn("(ns==='stale'||ns==='degraded')?'warn':'error'", src)
         self.assertNotIn("var label=d['new']==='healthy'?'UP':'DOWN';", src)
+
+    def test_legacy_rate_limit_health_changes_are_not_toast_events(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        self.assertIn("def _is_routine_legacy_health_change", src)
+        self.assertIn('htype: str = ""', src)
+        self.assertIn('"legacy-device rate limit" in prev_reason', src)
+        self.assertIn("metrics_probe_noise", src)
+        self.assertIn("h_e.get(\"type\", \"\")", src)
+        self.assertIn("health_change_suppressed", src)
+        self.assertIn("continue", src.split("health_change_suppressed", 1)[1].split("_sse_broadcast(\"health_change\"", 1)[0])
+
+    def test_legacy_command_timeout_keeps_network_truth(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        window = src.split("def _bg_probe_health", 1)[1].split("\ndef _bg_probe_update", 1)[0]
+        self.assertIn("def _legacy_network_reachable(h):", window)
+        self.assertIn("socket.create_connection((h.ip, 22)", window)
+        self.assertIn('["ping", "-c", "1", "-W", "1", h.ip]', window)
+        self.assertIn("if htype in LEGACY_HTYPES and state == STATE_UNREACHABLE and _legacy_network_reachable(h):", window)
+        self.assertIn("state = STATE_DEGRADED", window)
+        self.assertIn("legacy device reachable; metrics probe failed", window)
+
+    def test_ui_toasts_are_logged_to_server(self):
+        src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+        serve_src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        self.assertIn("function _uiLog", src)
+        self.assertIn("fetch('/api/ui/event'", src)
+        self.assertIn("_uiLog('toast'", src)
+        self.assertIn('"/api/ui/event": "_serve_ui_event"', serve_src)
+        self.assertIn("logger.info(\n            \"ui_event\"", serve_src)
+        self.assertIn("ui_level=level", serve_src)
+        self.assertNotIn("\n            level=level,", serve_src)
+
+    def test_core_system_cards_open_infra_detail_without_cache_lookup(self):
+        src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+        self.assertIn('data-action="openInfraDevice"', src)
+        self.assertIn("data-infra-type", src)
+        self.assertIn("openCard('infra',{label:da.dataset.label,infraType:da.dataset.infraType,ip:da.dataset.ip})", src)
+        self.assertIn("if(!ph&&config.ip)ph={label:label,type:infraType,ip:config.ip", src)
+
+    def test_infra_quick_reconciles_reachability_with_fleet_overview(self):
+        src = (REPO_ROOT / "freq" / "api" / "fleet.py").read_text()
+        window = src.split("def handle_infra_quick", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn('fleet_overview = _bg_cache.get("fleet_overview")', window)
+        self.assertIn("physical_reachability", window)
+        self.assertIn('item["reachable"] = True', window)
+        self.assertIn('item["network_reachable"] = True', window)
+        self.assertIn('item["reachability_source"] = "fleet_overview"', window)
+        self.assertIn("auth_failed=bool(item.get(\"auth_failed\"))", window)
+        self.assertIn("infra_quick_reachability_reconciled", window)
 
     def test_truenas_quick_card_uses_api_key_truth(self):
         src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()

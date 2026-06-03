@@ -33,6 +33,7 @@ import os
 import re
 import shutil
 import socket
+import ssl
 import subprocess
 import tempfile
 import time
@@ -78,6 +79,16 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
     allow_reuse_port = False
+
+    def handle_error(self, request, client_address):
+        """Keep benign TLS disconnects from looking like app crashes."""
+        import sys
+
+        exc = sys.exc_info()[1]
+        if isinstance(exc, ssl.SSLError) and "UNEXPECTED_EOF_WHILE_READING" in str(exc):
+            logger.info("tls_client_disconnect", client=f"{client_address[0]}:{client_address[1]}")
+            return
+        super().handle_error(request, client_address)
 
 
 # ── CONSTANTS ────────────────────────────────────────────────────────────
@@ -207,6 +218,45 @@ def _sse_broadcast(event_type: str, data: dict):
                 pass
 
 
+def _is_routine_legacy_health_change(
+    prev_state: str,
+    prev_reason: str,
+    cur_state: str,
+    cur_reason: str,
+    htype: str = "",
+) -> bool:
+    """Return True for expected legacy-device rate-limit churn.
+
+    Switches and BMCs are intentionally probed less often than normal Linux
+    hosts. Between real probes the cache may mark them stale for freshness,
+    then live again on the next scheduled probe. That transition is useful
+    metadata, not an operator event, and must not create recurring toasts.
+    """
+    prev_reason = (prev_reason or "").lower()
+    cur_reason = (cur_reason or "").lower()
+    htype = (htype or "").lower()
+    rate_limited = "legacy-device rate limit" in prev_reason or "legacy-device rate limit" in cur_reason
+    metrics_probe_noise = (
+        "legacy device reachable; metrics probe failed" in prev_reason
+        or "legacy device reachable; metrics probe failed" in cur_reason
+        or "probe command timed out" in cur_reason
+    )
+    if htype in LEGACY_HTYPES and (rate_limited or metrics_probe_noise):
+        if cur_state in (STATE_STALE, STATE_DEGRADED, STATE_UNREACHABLE):
+            return True
+        if prev_state in (STATE_STALE, STATE_DEGRADED, STATE_UNREACHABLE) and cur_state in (
+            STATE_LIVE,
+            STATE_RECOVERING,
+        ):
+            return True
+    if not rate_limited:
+        return False
+    return (
+        (prev_state == STATE_LIVE and cur_state == STATE_STALE)
+        or (prev_state == STATE_STALE and cur_state in (STATE_LIVE, STATE_RECOVERING))
+    )
+
+
 # ── ACTIVITY FEED ────────────────────────────────────────────────────────
 # Ring buffer for recent system events — powers the dashboard activity widget.
 # Max 200 events kept in memory, newest first.
@@ -303,12 +353,31 @@ def _bg_probe_infra():
     start = time.monotonic()
 
     def _ping_check(ip):
-        """Quick ping fallback for devices where SSH isn't available."""
+        """Quick ICMP fallback for devices where SSH/API isn't available."""
         try:
             r = subprocess.run(["ping", "-c", "1", "-W", "1", ip], capture_output=True, timeout=2)
             return r.returncode == 0
         except (subprocess.TimeoutExpired, OSError):
             return False
+
+    def _tcp_check(ip, ports, timeout=1.0):
+        for port in ports:
+            try:
+                with socket.create_connection((ip, port), timeout=timeout):
+                    return True
+            except OSError:
+                continue
+        return False
+
+    def _network_reachable(dev):
+        dt = dev.device_type
+        if dt in ("pfsense", "opnsense"):
+            return _tcp_check(dev.ip, (443, 80, 22)) or _ping_check(dev.ip)
+        if dt in ("truenas", "synology", "unraid"):
+            return _tcp_check(dev.ip, (443, 80)) or _ping_check(dev.ip)
+        if dt in ("switch", "idrac", "ilo", "ipmi"):
+            return _tcp_check(dev.ip, (22,)) or _ping_check(dev.ip)
+        return _ping_check(dev.ip)
 
     # Infrastructure devices often need different credentials than the service account.
     # Try: 1) bootstrap/fleet key, 2) deployed service-account key
@@ -318,9 +387,11 @@ def _bg_probe_infra():
     bootstrap_user = os.environ.get("SUDO_USER") or cfg.ssh_service_account
 
     def _is_auth_failure(stderr):
-        """Detect SSH permission denied in stderr — means credential is wrong,
-        not that the host is unreachable. Health probe reports this as
-        unreachable, so infra_quick must agree."""
+        """Detect SSH permission denied in stderr.
+
+        Credential failure is not network failure. The dashboard must keep
+        the device reachable and show auth/metrics unavailable separately.
+        """
         if not stderr:
             return False
         s = stderr.lower()
@@ -360,13 +431,16 @@ def _bg_probe_infra():
                         ]
                         m["interfaces"] = str(len(ifaces))
                 elif _is_auth_failure(r.stderr):
-                    # Auth failure ≠ reachable. Agrees with health probe.
+                    # Auth failure is not network failure. Keep the device
+                    # reachable when TCP/ICMP says it is there, but make the
+                    # metrics credential problem explicit.
+                    d["reachable"] = _network_reachable(dev)
                     d["auth_failed"] = True
                     d["probe_method"] = "ssh_auth_failed"
                     d["metrics"]["note"] = "SSH auth failed — credentials rejected"
                 else:
-                    d["reachable"] = _ping_check(dev.ip)
-                    d["probe_method"] = "ping" if d["reachable"] else "none"
+                    d["reachable"] = _network_reachable(dev)
+                    d["probe_method"] = "network" if d["reachable"] else "none"
             elif dt == "truenas":
                 api_settings = truenas_api.settings(cfg, dev)
                 pool_data, pool_err = truenas_api.request(api_settings, "pools", timeout=6)
@@ -418,15 +492,15 @@ def _bg_probe_infra():
                     d["probe_method"] = "ssh"
                     d["metrics"]["uptime"] = r.stdout.strip()
                 elif _is_auth_failure(r.stderr):
+                    d["reachable"] = _network_reachable(dev)
                     d["auth_failed"] = True
                     d["probe_method"] = "ssh_auth_failed"
                     d["metrics"]["note"] = "SSH auth failed — credentials rejected"
                 else:
-                    pr = subprocess.run(["ping", "-c", "1", "-W", "1", dev.ip], capture_output=True, timeout=2)
-                    d["reachable"] = pr.returncode == 0
-                    d["probe_method"] = "ping" if d["reachable"] else "none"
+                    d["reachable"] = _network_reachable(dev)
+                    d["probe_method"] = "network" if d["reachable"] else "none"
                     if d["reachable"]:
-                        d["metrics"]["note"] = "Ping reachable, no SSH"
+                        d["metrics"]["note"] = "Network reachable, no SSH metrics"
             elif dt == "idrac":
                 # iDRAC probe MUST match init's verify path for parity with
                 # `freq init --check` and `freq fleet status`. Init verifies
@@ -486,25 +560,23 @@ def _bg_probe_infra():
                         elif "system model" in low:
                             m["model"] = line.split("=")[-1].strip() if "=" in line else line.split(":")[-1].strip()
                 elif _is_auth_failure(r.stderr):
+                    d["reachable"] = _network_reachable(dev)
                     d["auth_failed"] = True
                     d["probe_method"] = "ssh_auth_failed"
                     d["metrics"]["note"] = "SSH auth failed — credentials rejected"
                 else:
-                    # SSH failed without auth error — fall back to ping so we don't mark a reachable iDRAC as offline
-                    pr = subprocess.run(["ping", "-c", "1", "-W", "1", dev.ip], capture_output=True, timeout=2)
-                    d["reachable"] = pr.returncode == 0
-                    d["probe_method"] = "ping" if d["reachable"] else "none"
+                    d["reachable"] = _network_reachable(dev)
+                    d["probe_method"] = "network" if d["reachable"] else "none"
                     if d["reachable"]:
-                        d["metrics"]["note"] = "Ping reachable, no SSH"
+                        d["metrics"]["note"] = "Network reachable, no SSH metrics"
             else:
                 # Unknown device type — ping-only probe. The health probe
                 # may have more authoritative data if this device is also
                 # in cfg.hosts; operators should check both surfaces.
-                pr = subprocess.run(["ping", "-c", "1", "-W", "1", dev.ip], capture_output=True, timeout=2)
-                d["reachable"] = pr.returncode == 0
-                d["probe_method"] = "ping" if d["reachable"] else "none"
+                d["reachable"] = _network_reachable(dev)
+                d["probe_method"] = "network" if d["reachable"] else "none"
                 if d["reachable"]:
-                    d["metrics"]["note"] = "Ping only — see /api/health for SSH probe state"
+                    d["metrics"]["note"] = "Network reachable — see /api/health for SSH probe state"
         except Exception as e:
             logger.warning(f"bg_probe_infra: probe failed for {key} ({dev.ip}): {e}")
         return d
@@ -565,6 +637,28 @@ def _bg_probe_health():
         "idrac": "racadm getsysinfo -s",
     }
 
+    def _legacy_network_reachable(h):
+        """Return whether a legacy management endpoint is still on-network.
+
+        Legacy device command probes can hang even when the management
+        controller itself is reachable. Separate "device is down" from
+        "metrics command is stuck" so the dashboard does not lie red.
+        """
+        try:
+            with socket.create_connection((h.ip, 22), timeout=1.0):
+                return True
+        except OSError:
+            pass
+        try:
+            r = subprocess.run(
+                ["ping", "-c", "1", "-W", "1", h.ip],
+                capture_output=True,
+                timeout=2,
+            )
+            return r.returncode == 0
+        except (subprocess.TimeoutExpired, OSError):
+            return False
+
     def _probe_host(h):
         """Probe one host and return a six-state entry with full evidence.
 
@@ -601,6 +695,9 @@ def _bg_probe_health():
             state, reason = classify_probe_failure(
                 r.returncode, r.stderr or "", r.stdout or ""
             )
+            if htype in LEGACY_HTYPES and state == STATE_UNREACHABLE and _legacy_network_reachable(h):
+                state = STATE_DEGRADED
+                reason = f"legacy device reachable; metrics probe failed: {reason}"
             entry = entry_base(
                 h,
                 state=state,
@@ -982,15 +1079,35 @@ def _bg_probe_health():
             h_e["label"]: h_e.get("state") or h_e.get("status")
             for h_e in old_health.get("hosts", [])
         }
+        old_reason = {
+            h_e["label"]: h_e.get("reason", "")
+            for h_e in old_health.get("hosts", [])
+        }
         for h_e in host_data:
             prev = old_state.get(h_e["label"])
             cur = h_e.get("state") or h_e.get("status")
             if prev and prev != cur:
+                reason = h_e.get("reason", "")
+                if _is_routine_legacy_health_change(
+                    prev,
+                    old_reason.get(h_e["label"], ""),
+                    cur,
+                    reason,
+                    h_e.get("type", ""),
+                ):
+                    logger.info(
+                        "health_change_suppressed",
+                        host=h_e["label"],
+                        old=prev,
+                        new=cur,
+                        reason=reason,
+                    )
+                    continue
                 _sse_broadcast("health_change", {
                     "host": h_e["label"],
                     "old": prev,
                     "new": cur,
-                    "reason": h_e.get("reason", ""),
+                    "reason": reason,
                 })
                 cur_state = h_e.get("state") or h_e.get("status")
                 severity = (
@@ -2226,6 +2343,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/setup/reset": "_serve_setup_reset",
         # ── SSE / orchestration (stays in serve.py) ───────────────────
         "/api/events": "_serve_events",
+        "/api/ui/event": "_serve_ui_event",
         "/healthz": "_serve_healthz",
         "/readyz": "_serve_readyz",
         # ── Docs (stays in serve.py) ──────────────────────────────────
@@ -2438,6 +2556,38 @@ class FreqHandler(BaseHTTPRequestHandler):
             pass  # Client disconnected
         finally:
             _sse_unsubscribe(q)
+
+    def _serve_ui_event(self):
+        """POST /api/ui/event — log browser-visible UI events.
+
+        This is intentionally small and non-authoritative. It lets server
+        logs show the same toast/card state the operator saw in the browser,
+        without depending on screenshots to reconstruct frontend behavior.
+        """
+        role, err = _check_session_role(self, "viewer")
+        if err:
+            self._json_response({"error": err}, 403)
+            return
+        if self.command != "POST":
+            self._json_response({"error": "UI event logging requires POST"}, 405)
+            return
+        body = self._request_body()
+        event_type = str(body.get("event", "ui_event"))[:64]
+        level = str(body.get("level", body.get("type", "info")))[:24]
+        message = str(body.get("message", ""))[:500]
+        source = str(body.get("source", ""))[:120]
+        view = str(body.get("view", ""))[:80]
+        logger.info(
+            "ui_event",
+            event=event_type,
+            ui_level=level,
+            source=source,
+            view=view,
+            message=message,
+        )
+        if event_type == "toast":
+            _activity_add("ui_toast", message, f"{level} {source}".strip(), level if level in ("info", "success", "warning", "error") else "info")
+        self._json_response({"ok": True})
 
     # ── Topology ─────────────────────────────────────────────────────────
 
