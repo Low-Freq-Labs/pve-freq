@@ -32,6 +32,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
@@ -1053,20 +1054,47 @@ def _bg_probe_fleet_overview():
 
     vm_list = _get_fleet_vms(cfg)
 
-    # Physical devices — ping in parallel
-    physical = []
+    def _tcp_check(ip, ports, timeout=1.0):
+        """Return True when any TCP port accepts a connection.
 
-    def _ping_device(dev):
-        reachable = False
+        Some infrastructure devices intentionally block ICMP while still
+        serving their management plane. The fleet overview card must not
+        render those as unreachable just because ping is disabled.
+        """
+        for port in ports:
+            try:
+                with socket.create_connection((ip, int(port)), timeout=timeout):
+                    return True
+            except OSError:
+                continue
+        return False
+
+    def _icmp_check(ip):
         try:
             r = subprocess.run(
-                ["ping", "-c", "1", "-W", "1", dev.ip],
+                ["ping", "-c", "1", "-W", "1", ip],
                 capture_output=True,
                 timeout=2,
             )
-            reachable = r.returncode == 0
+            return r.returncode == 0
         except (subprocess.TimeoutExpired, OSError):
-            pass
+            return False
+
+    def _physical_reachable(dev):
+        dtype = (getattr(dev, "device_type", "") or "").lower()
+        if dtype in {"pfsense", "opnsense"}:
+            return _tcp_check(dev.ip, (443, 80, 22)) or _icmp_check(dev.ip)
+        if dtype == "truenas":
+            return _tcp_check(dev.ip, (443, 80)) or _icmp_check(dev.ip)
+        if dtype in {"switch", "idrac", "ilo", "ipmi"}:
+            return _tcp_check(dev.ip, (22,)) or _icmp_check(dev.ip)
+        return _icmp_check(dev.ip)
+
+    # Physical devices — device-appropriate reachability in parallel.
+    physical = []
+
+    def _ping_device(dev):
+        reachable = _physical_reachable(dev)
         return {
             "key": dev.key,
             "ip": dev.ip,
@@ -4648,14 +4676,16 @@ a:hover{{text-decoration:underline}}
     def _proxy_watchdog(self):
         """Proxy requests to FREQ WATCHDOG daemon.
 
-        Watchdog is an optional add-on. If not enabled in config, returns 501
-        (not implemented) with a truthful message rather than a misleading 503.
+        Watchdog is an optional add-on. If not enabled in config, returns a
+        normal 200 state object. The dashboard polls this endpoint
+        automatically, so default optional absence must not look like a failed
+        resource in browser tooling.
         """
         cfg = load_config()
         if not getattr(cfg, "watchdog_enabled", False):
             self._json_response(
-                {"error": "Watchdog is not installed on this host", "watchdog_installed": False},
-                501,
+                {"ok": True, "watchdog_installed": False, "status": "not_installed"},
+                200,
             )
             return
         wd_port = cfg.watchdog_port
@@ -5379,48 +5409,27 @@ a:hover{{text-decoration:underline}}
         # fonts use platform stacks only, no public CDN or font host references.
         #
         # Honest limits on 'unsafe-inline' and the remaining inline
-        # execution/style paths (state after token Q hybrid + AH, plus
-        # AL release-QA follow-up):
+        # execution/style paths:
         #   script-src: ZERO inline event handlers, ZERO inline <script> blocks,
         #     ZERO javascript: URLs (closed by R-WEB-INLINE-CSP-CLEANUP-20260413O).
         #     'unsafe-inline' is dropped from script-src.
-        #   style-src: no broad 'unsafe-inline'. The Q utility-class sweep
-        #     dropped the count from 264 to 90, the Q hybrid finish
-        #     extracted 25 ID-based rules + 4 chrome semantic classes
-        #     (bringing it to 61), and the AH partner pass extracted
-        #     15 more inner-composition semantic classes — terminal
-        #     shell, global search overlay, shortcuts modal, chaos
-        #     destructive banner, home view toolbar — bringing the
-        #     count to 46 bespoke inline style="…" attrs.
-        #     Those 46 are allowed via 'unsafe-hashes' + per-attr SHA256
-        #     hashes computed at startup by _inline_style_csp_hashes().
-        #     'self' is kept for <link rel=stylesheet> references;
-        #     'unsafe-hashes' enables per-style hash matching; each
-        #     'sha256-…' source matches one specific bespoke inline
-        #     style attribute value. R-WEB-INLINE-STYLE-CSP-SWEEP-20260413Q
-        #     hybrid finish (Path 4) + M-UI-INLINE-STYLE-REGRESSION-POLISH-
-        #     20260413AH partner pass: cleanest path to zero unsafe-inline
-        #     without generating opaque auto-classes for every bespoke style.
-        #   style-src-attr: runtime JS still performs a finite set of
-        #     legitimate element.style mutations (progress widths, live
-        #     indicator colors, a few dynamic visibility/layout nudges).
-        #     'unsafe-hashes' only matches static style="..." attrs parsed
-        #     from app.html; it does NOT cover runtime property mutation.
-        #     Release-QA AL proved those dynamic mutations were being
-        #     silently blocked under the tighter header. The right middle
-        #     ground is:
-        #       - keep style-src hashed/tight for elements and linked CSS
-        #       - open style-src-attr 'unsafe-inline' for runtime style
-        #         attribute/property writes only
-        #     This avoids re-opening inline <style> blocks or broad
-        #     stylesheet injection while keeping the current UI truthful.
+        #   style-src: the shipped dashboard still uses runtime
+        #     element.style writes and generated style="..." fragments
+        #     across progress bars, modals, health colors, terminal layout,
+        #     operator cards, and the 46 remaining inline style attributes
+        #     in app.html. A previous contract tried to keep
+        #     style-src hash-only and rely on style-src-attr for runtime
+        #     property writes. Chromium browser smoke proved that was false:
+        #     those runtime writes are enforced against style-src and are
+        #     blocked unless style-src itself allows inline styles. Until
+        #     the UI is fully migrated to classes/CSS variables, the truthful
+        #     policy is style-src 'self' 'unsafe-inline'. Script execution
+        #     remains locked down separately under script-src 'self'.
         #
         # No host names appear below. An air-gapped dashboard MUST NOT fetch any
         # asset off-box — that's what R-WEB-EXTERNAL-ASSET-CONTRACT-20260413L
         # closed. This CSP is the policy enforcement.
-        style_hash_tokens = _inline_style_csp_hashes()
-        style_src = "style-src 'self' 'unsafe-hashes' " + " ".join(style_hash_tokens) if style_hash_tokens else "style-src 'self'"
-        style_src_attr = "style-src-attr 'unsafe-inline'"
+        style_src = "style-src 'self' 'unsafe-inline'"
         # M-BLUETEAM-SECURITY-HARDENING-20260413AJ:
         #   frame-ancestors 'none' — clickjacking defense-in-depth. The
         #     legacy X-Frame-Options: DENY header above covers older
@@ -5436,7 +5445,6 @@ a:hover{{text-decoration:underline}}
                          "default-src 'self'; "
                          "script-src 'self'; "
                          f"{style_src}; "
-                         f"{style_src_attr}; "
                          "img-src 'self' data:; "
                          "connect-src 'self'; "
                          "font-src 'self'; "

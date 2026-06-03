@@ -247,49 +247,30 @@ class TestCspHonestLimitDocumented(unittest.TestCase):
         )
 
     def test_style_src_dropped_unsafe_inline_uses_unsafe_hashes(self):
-        """R-WEB-INLINE-STYLE-CSP-SWEEP-20260413Q hybrid finish (Path 4):
-        style-src must NOT carry the broad 'unsafe-inline' keyword. The bespoke remaining
-        inline style="…" attrs are allowed via 'unsafe-hashes' + per-style
-        sha256 tokens computed at startup by _inline_style_csp_hashes()
-        in serve.py. Pin both halves: the literal directive must call
-        _inline_style_csp_hashes(), and the directive must not contain
-        the old broad style-src unsafe-inline form. Runtime property
-        mutations are handled separately under style-src-attr."""
-        # The directive value is built dynamically (style_hash_tokens),
-        # not as a static literal — anchor on the helper invocation.
+        """Browser-truth CSP contract:
+        the shipped dashboard still performs runtime element.style writes
+        and generates style="..." fragments. Chromium enforces those writes
+        against style-src, so the dashboard must honestly allow inline
+        styles until the UI is migrated to CSS classes/variables."""
         self.assertIn(
-            "_inline_style_csp_hashes()",
-            self.src,
-            "style-src builder must call _inline_style_csp_hashes() to "
-            "fetch the per-style sha256 hashes",
-        )
-        self.assertIn(
-            "'unsafe-hashes'",
-            self.src,
-            "style-src must use 'unsafe-hashes' to enable per-style hash matching",
-        )
-        # The static fallback for the empty-hashes case must be tight too.
-        self.assertIn(
-            'style-src \'self\'',
-            self.src,
-            "style-src must list 'self' (for <link rel=stylesheet> + the css fallback)",
-        )
-        # The pre-fix `style-src 'self' 'unsafe-inline'` literal must be gone.
-        self.assertNotIn(
             "style-src 'self' 'unsafe-inline'",
             self.src,
-            "the pre-fix style-src 'unsafe-inline' literal must not return",
+            "runtime style mutations are browser-enforced by style-src; "
+            "until the UI class sweep is complete the policy must be honest",
         )
 
-    def test_runtime_style_attr_path_is_explicit(self):
-        """Release QA AL proved runtime element.style mutations are still
-        required. These must be opened explicitly via style-src-attr,
-        not by weakening style-src itself."""
-        self.assertIn(
+    def test_style_src_attr_escape_hatch_removed(self):
+        """style-src-attr alone did not cover runtime style writes in
+        Chromium; keep the contract from reintroducing that false fix."""
+        self.assertNotIn(
             "style-src-attr 'unsafe-inline'",
             self.src,
-            "runtime style mutations must be permitted explicitly via "
-            "style-src-attr 'unsafe-inline'",
+            "style-src-attr must not be presented as the runtime style fix",
+        )
+        self.assertIn(
+            "Chromium browser smoke proved",
+            self.src,
+            "serve.py must document why style-src carries unsafe-inline",
         )
 
 

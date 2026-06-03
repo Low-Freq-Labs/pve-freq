@@ -20,8 +20,10 @@ Terminal types:
 
 import base64
 import hashlib
+import json
 import os
 import pty
+import re
 import secrets
 import select
 import signal
@@ -71,6 +73,83 @@ def _kill_session(sid):
 # ── Session Creation ───────────────────────────────────────────────────
 
 
+def _resolve_pve_node_ip(cfg, node_ref: str) -> str:
+    """Resolve a PVE node name/IP using the live dashboard discovery cache."""
+    if not node_ref:
+        return ""
+    if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", node_ref):
+        return node_ref
+    try:
+        from freq.modules.serve import _get_discovered_nodes
+
+        for node in _get_discovered_nodes():
+            if node.get("name") == node_ref or node.get("ip") == node_ref:
+                return node.get("ip", "")
+    except Exception as e:
+        logger.warn(f"terminal: live node discovery lookup failed for {node_ref}: {e}")
+
+    for idx, name in enumerate(getattr(cfg, "pve_node_names", []) or []):
+        if name == node_ref and idx < len(getattr(cfg, "pve_nodes", []) or []):
+            return cfg.pve_nodes[idx]
+
+    fb = getattr(cfg, "fleet_boundaries", None)
+    if fb:
+        for pve_node in getattr(fb, "pve_nodes", {}).values():
+            if getattr(pve_node, "name", "") == node_ref or getattr(pve_node, "ip", "") == node_ref:
+                return getattr(pve_node, "ip", "")
+    return ""
+
+
+def _find_live_vm_node_ip(cfg, vmid: int, node_ref: str = "") -> tuple[str, str]:
+    """Return (node_ip, node_name) for a VM using live cluster inventory."""
+    node_ip = _resolve_pve_node_ip(cfg, node_ref)
+    if node_ip:
+        return node_ip, node_ref
+
+    try:
+        from freq.modules.serve import _get_fleet_vms
+
+        vm = next((v for v in _get_fleet_vms(cfg) if int(v.get("vmid", 0) or 0) == vmid), None)
+        if vm:
+            node_name = vm.get("node", "")
+            node_ip = _resolve_pve_node_ip(cfg, node_name)
+            if node_ip:
+                return node_ip, node_name
+    except Exception as e:
+        logger.warn(f"terminal: live VM ownership lookup failed for VMID {vmid}: {e}")
+
+    try:
+        from freq.modules.pve import _find_vm_node
+
+        node_ip = _find_vm_node(cfg, vmid, "")
+        if node_ip:
+            return node_ip, node_ref
+    except Exception as e:
+        logger.warn(f"terminal: fallback VM node lookup failed for VMID {vmid}: {e}")
+    return "", ""
+
+
+def _extract_guest_ipv4(raw: str) -> str:
+    """Extract the first usable IPv4 address from QEMU guest-agent JSON."""
+    try:
+        data = json.loads(raw or "")
+    except json.JSONDecodeError:
+        return ""
+    interfaces = data.get("result", data) if isinstance(data, dict) else data
+    if not isinstance(interfaces, list):
+        return ""
+    for iface in interfaces:
+        if not isinstance(iface, dict) or iface.get("name") == "lo":
+            continue
+        for addr in iface.get("ip-addresses", []) or []:
+            if not isinstance(addr, dict) or addr.get("ip-address-type") != "ipv4":
+                continue
+            ip = addr.get("ip-address", "")
+            if ip and not ip.startswith("127."):
+                return ip
+    return ""
+
+
 def handle_terminal_open(handler):
     """POST /api/terminal/open — create a new terminal session."""
     if require_post(handler, "Terminal open"):
@@ -100,12 +179,10 @@ def handle_terminal_open(handler):
         return
 
     # Validate target — must be IP or numeric VMID/CTID, no shell metacharacters
-    import re as _re
-
-    if not _re.match(r"^[a-zA-Z0-9._:-]+$", target):
+    if not re.match(r"^[a-zA-Z0-9._:-]+$", target):
         json_response(handler, {"error": "Invalid target (alphanumeric, dots, colons, hyphens only)"}, 400)
         return
-    if node and not _re.match(r"^[a-zA-Z0-9._:-]+$", node):
+    if node and not re.match(r"^[a-zA-Z0-9._:-]+$", node):
         json_response(handler, {"error": "Invalid node parameter"}, 400)
         return
 
@@ -114,31 +191,45 @@ def handle_terminal_open(handler):
     if term_type == "vm" and target.isdigit():
         vmid = int(target)
 
-        # 1. Fleet registry (hosts.toml) — instant, no SSH needed
+        # 1. Host registry, when populated. This is a convenience path, not
+        # the source of truth for dashboard-listed VMs.
         for h in cfg.hosts:
             if getattr(h, "vmid", 0) == vmid:
                 resolved_ip = h.ip
                 break
         else:
-            # 2. PVE guest agent — slower but authoritative
-            from freq.modules.pve import _find_reachable_node, _pve_cmd
+            # 2. Live PVE ownership + guest agent. A VM card can render from
+            # PVE inventory even when hosts.toml is empty; terminal must use
+            # that same truth instead of telling the operator to run discovery.
+            from freq.modules.pve import _pve_cmd
 
-            node_ip = node or _find_reachable_node(cfg)
+            node_ip, node_name = _find_live_vm_node_ip(cfg, vmid, node)
             if node_ip:
                 out, ok = _pve_cmd(
                     cfg,
                     node_ip,
-                    f"qm agent {vmid} network-get-interfaces 2>/dev/null | "
-                    f"python3 -c \"import sys,json;[print(a['ip-address']) "
-                    f"for i in json.load(sys.stdin) if i.get('name')!='lo' "
-                    f"for a in i.get('ip-addresses',[]) if a.get('ip-address-type')=='ipv4']\" 2>/dev/null | head -1",
+                    f"qm agent {vmid} network-get-interfaces 2>/dev/null",
                     timeout=10,
                 )
-                if ok and out.strip():
-                    resolved_ip = out.strip().split("\n")[0]
+                if ok:
+                    resolved_ip = _extract_guest_ipv4(out) or resolved_ip
+                else:
+                    logger.warn(
+                        f"terminal: guest-agent IP lookup failed for VMID {vmid}"
+                        + (f" on {node_name or node_ip}" if node_name or node_ip else "")
+                    )
 
         if resolved_ip == target:
-            json_response(handler, {"error": f"Cannot resolve IP for VMID {vmid}. Run 'freq host discover' to populate hosts.toml with VMIDs."}, 400)
+            json_response(
+                handler,
+                {
+                    "error": (
+                        f"Cannot resolve guest IP for VMID {vmid}. "
+                        "The VM is visible in PVE, but QEMU guest-agent did not return a usable IPv4 address."
+                    )
+                },
+                400,
+            )
             return
 
     # Build SSH command with device-type-aware options

@@ -275,67 +275,44 @@ class TestUnsafeHashesMachinery(unittest.TestCase):
         self.assertIs(first, second)
 
 
-class TestStyleSrcNeverHasUnsafeInline(unittest.TestCase):
-    """Hybrid finish: style-src must NEVER carry 'unsafe-inline'
-    regardless of how many bespoke inline styles remain. Bespoke
-    styles are allowed via 'unsafe-hashes' + per-style sha256 tokens
-    computed at startup. Pin this both at the source level (no
-    static literal carries 'unsafe-inline') and at the runtime level
-    (the dynamically-built directive does not contain it). Runtime
-    element.style mutations are permitted separately under
-    style-src-attr 'unsafe-inline'."""
+class TestStyleSrcBrowserTruth(unittest.TestCase):
+    """The current dashboard still depends on runtime style writes.
+
+    Chromium browser smoke proved style-src-attr is not enough for the
+    shipped app: element.style mutations are blocked unless style-src
+    itself permits inline styles. Keep this contract honest until the
+    remaining style writes are migrated to classes/CSS variables.
+    """
 
     @classmethod
     def setUpClass(cls):
         cls.html = APP_HTML.read_text()
         cls.src = SERVE_PY.read_text()
 
-    def test_no_static_unsafe_inline_in_style_src(self):
+    def test_static_style_src_allows_runtime_inline_styles(self):
         # Anchor on the f-string literal in the send_header call.
         csp_idx = self.src.find('"Content-Security-Policy"')
         self.assertNotEqual(csp_idx, -1)
-        # Find the static fallback 'self' literal which is what
-        # ships when there are no hashes.
-        # The dynamically-built version uses the style_src local var.
-        # Both must be unsafe-inline-free.
         directive_end = self.src.find(')', csp_idx)
         directive_block = self.src[csp_idx:directive_end]
-        # The literal must reference style_src (the local var) AND
-        # not contain 'unsafe-inline'.
         self.assertIn("{style_src}", directive_block,
                       "style-src must be built dynamically via the style_src local var")
-        self.assertNotIn(
-            "'unsafe-inline'",
-            directive_block,
-            "the CSP directive literal must not contain 'unsafe-inline' "
-            "anywhere — neither for script-src nor style-src",
-        )
+        self.assertNotIn("'unsafe-inline'", directive_block,
+                         "script-src must stay inline-free in the header literal")
 
-    def test_runtime_directive_is_unsafe_inline_free(self):
-        """Build the actual style_src string the way serve.py does
-        and assert it doesn't contain unsafe-inline."""
-        from freq.modules import serve as serve_mod
-        serve_mod._INLINE_STYLE_CSP_HASHES = []
-        style_hash_tokens = serve_mod._inline_style_csp_hashes()
-        if style_hash_tokens:
-            style_src = "style-src 'self' 'unsafe-hashes' " + " ".join(style_hash_tokens)
-        else:
-            style_src = "style-src 'self'"
-        self.assertNotIn(
-            "'unsafe-inline'", style_src,
-            "runtime style-src directive must never carry 'unsafe-inline'",
-        )
-        # Sanity: when hashes are present, 'unsafe-hashes' must be too.
-        if style_hash_tokens:
-            self.assertIn("'unsafe-hashes'", style_src)
-            self.assertIn("'sha256-", style_src)
-
-    def test_style_src_attr_is_explicit_runtime_escape_hatch(self):
+    def test_runtime_style_src_matches_browser_behavior(self):
         self.assertIn(
+            "style-src 'self' 'unsafe-inline'",
+            self.src,
+            "runtime style-src must allow inline styles until the UI stops "
+            "using runtime style/property writes",
+        )
+
+    def test_style_src_attr_false_escape_hatch_is_gone(self):
+        self.assertNotIn(
             "style-src-attr 'unsafe-inline'",
             self.src,
-            "runtime style mutations must be explicitly allowed via "
-            "style-src-attr, not by weakening style-src",
+            "style-src-attr alone did not satisfy Chromium for this app",
         )
 
 

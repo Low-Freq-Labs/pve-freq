@@ -2646,8 +2646,11 @@ function startSSE(){
 
   _evtSource.addEventListener('health_change',function(e){
     var d=JSON.parse(e.data);
-    var label=d['new']==='healthy'?'UP':'DOWN';
-    toast(d.host+': SSH probe '+label,d['new']==='healthy'?'success':'error');
+    var ns=d['new']||'';
+    var label=(ns==='healthy'||ns==='live'||ns==='recovering')?'UP':ns==='stale'?'STALE':ns==='degraded'?'DEGRADED':ns==='auth_failed'?'AUTH FAILED':'DOWN';
+    var kind=(ns==='healthy'||ns==='live'||ns==='recovering')?'success':(ns==='stale'||ns==='degraded')?'warn':'error';
+    var detail=d.reason?' — '+d.reason:'';
+    toast(d.host+': SSH probe '+label+detail,kind);
   });
 
   _evtSource.addEventListener('probe_error',function(e){
@@ -5129,7 +5132,7 @@ function loadHome(){
       if(nv)nv.textContent='V'+d.version+' \u00b7 '+d.dashboard_header.replace(/^PVE FREQ\s*\u00b7\s*/,'');
     }
   });
-  /* Watchdog probe status — distinguish not-installed (501), down (503), and working (200).
+  /* Watchdog probe status — distinguish not-installed (200 state), down (503), and working (200).
    * silent:true because this endpoint renders its own UI state for each status
    * code below; the generic _authFetch toast would overlap with the inline label. */
   _authFetch(API.WATCHDOG_HEALTH,{silent:true}).then(function(r){
@@ -5138,8 +5141,8 @@ function loadHome(){
   }).then(function(res){
     var el=document.getElementById('watchdog-status');if(!el)return;
     var d=res.data||{};
-    /* Not installed (501) — optional add-on, render plainly */
-    if(res.status===501||d.watchdog_installed===false){
+    /* Not installed — optional add-on, render plainly */
+    if(d.watchdog_installed===false){
       el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: not installed (optional add-on)</span>';
       return;
     }

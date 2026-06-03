@@ -97,6 +97,15 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn('f"{h_e[\'label\']} is now {cur_state}"', src)
         self.assertNotIn('unreachable_count = sum(1 for h in host_data if h.get("status") != "healthy")', src)
 
+    def test_fleet_overview_uses_device_appropriate_physical_reachability(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        window = src.split("def _bg_probe_fleet_overview", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn("def _physical_reachable(dev):", window)
+        self.assertIn('dtype in {"pfsense", "opnsense"}', window)
+        self.assertIn("return _tcp_check(dev.ip, (443, 80, 22)) or _icmp_check(dev.ip)", window)
+        self.assertIn('["ping", "-c", "1", "-W", "1", ip]', window)
+        self.assertNotIn('["ping", "-c", "1", "-W", "1", dev.ip]', window)
+
     def test_frontend_does_not_count_stale_as_down(self):
         src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
         self.assertIn("function _healthIsLive", src)
@@ -108,6 +117,12 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertNotIn("var fpsBad=(fps==='stale'", src)
         self.assertNotIn("status==='healthy'", src)
         self.assertNotIn('status === "healthy"', src)
+
+    def test_frontend_health_change_toast_keeps_stale_out_of_down(self):
+        src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+        self.assertIn("ns==='stale'?'STALE'", src)
+        self.assertIn("(ns==='stale'||ns==='degraded')?'warn':'error'", src)
+        self.assertNotIn("var label=d['new']==='healthy'?'UP':'DOWN';", src)
 
     def test_truenas_quick_card_uses_api_key_truth(self):
         src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()

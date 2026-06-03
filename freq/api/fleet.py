@@ -1488,8 +1488,10 @@ def handle_discover(handler):
 def handle_watchdog_health(handler):
     """GET /api/watchdog/health -- proxy to WATCHDOG daemon.
 
-    Watchdog is an optional add-on. If not enabled in config, returns 501
-    (not implemented) with a truthful message rather than a misleading 503.
+    Watchdog is an optional add-on. If not enabled in config, returns a
+    normal 200 state object. The dashboard polls this endpoint
+    automatically, so default optional absence must not look like a failed
+    resource in browser tooling.
     """
     import urllib.request
     import urllib.error
@@ -1499,8 +1501,8 @@ def handle_watchdog_health(handler):
     if not getattr(cfg, "watchdog_enabled", False):
         json_response(
             handler,
-            {"error": "Watchdog is not installed on this host", "watchdog_installed": False},
-            501,
+            {"ok": True, "watchdog_installed": False, "status": "not_installed"},
+            200,
         )
         return
     wd_port = cfg.watchdog_port

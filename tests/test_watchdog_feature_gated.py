@@ -11,8 +11,10 @@ watchdog_enabled=true in freq.toml [services].
 
 Fix:
 - cfg.watchdog_enabled defaults to False
-- Both proxy paths check watchdog_enabled first; if False, return 501
-  Not Implemented with truthful 'Watchdog is not installed' message
+- Both proxy paths check watchdog_enabled first; if False, return 200
+  with truthful status='not_installed'. The dashboard polls this endpoint
+  automatically, so optional absence must not appear as a browser resource
+  failure.
 - If True but unreachable, still returns 503 (daemon was expected but down)
 """
 import sys
@@ -45,15 +47,15 @@ class TestWatchdogFeatureFlag(unittest.TestCase):
         self.assertIn('services.get("watchdog_enabled"', src)
 
 
-class TestProxyReturns501WhenDisabled(unittest.TestCase):
-    """Both proxy paths must return 501 when watchdog is not enabled."""
+class TestProxyReturnsCleanStateWhenDisabled(unittest.TestCase):
+    """Both proxy paths must return clean optional state when watchdog is not enabled."""
 
     def test_fleet_api_checks_enabled(self):
         """fleet.handle_watchdog_health must check watchdog_enabled."""
         src = (FREQ_ROOT / "freq" / "api" / "fleet.py").read_text()
         self.assertIn('watchdog_enabled', src)
-        self.assertIn('501', src)
-        self.assertIn('Watchdog is not installed', src)
+        self.assertIn('"watchdog_installed": False', src)
+        self.assertIn('"status": "not_installed"', src)
 
     def test_serve_proxy_checks_enabled(self):
         """serve._proxy_watchdog must check watchdog_enabled."""
@@ -67,10 +69,11 @@ class TestProxyReturns501WhenDisabled(unittest.TestCase):
         self.assertIsNotNone(match)
         body = match.group()
         self.assertIn("watchdog_enabled", body)
-        self.assertIn("501", body)
+        self.assertIn('"watchdog_installed": False', body)
+        self.assertIn('"status": "not_installed"', body)
 
-    def test_501_returned_before_url_request(self):
-        """501 check must happen before any URL request (no connect attempt)."""
+    def test_disabled_state_returned_before_url_request(self):
+        """Disabled-state check must happen before any URL request (no connect attempt)."""
         src = (FREQ_ROOT / "freq" / "api" / "fleet.py").read_text()
         # The 'if not ... watchdog_enabled' check must appear before urlopen
         enabled_pos = src.find('getattr(cfg, "watchdog_enabled"')
