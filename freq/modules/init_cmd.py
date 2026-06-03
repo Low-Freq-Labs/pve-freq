@@ -533,6 +533,12 @@ def _load_device_credentials(cred_file):
 
     Returns dict keyed by LEGACY htype for backward compat with fleet deploy:
         {"pfsense": {"user": "root", "password": "thepass"}, ...}
+
+    TrueNAS may also carry an API key for dashboard/storage metrics:
+        [truenas]
+        user = "root"
+        password_file = "/run/secrets/truenas-root"
+        api_key_file = "/run/secrets/truenas-api-key"
     """
     from freq.deployers import HTYPE_COMPAT
 
@@ -568,19 +574,36 @@ def _load_device_credentials(cred_file):
             fmt.step_warn(f"Failed to parse device credentials: {e}")
             return result
 
+    def _read_secret_file(path, label):
+        try:
+            with open(path) as f:
+                return f.read().strip()
+        except (OSError, IOError) as e:
+            fmt.step_warn(f"Cannot read {label} from {path}: {e}")
+            return ""
+
     def _read_entry(entry, label):
-        """Extract user + password from a credential entry.
+        """Extract user + password/API key from a credential entry.
 
         Supports two password sources (priority order):
             1. password_file = "/path/to/file"  — read password from file
             2. password = "inline"              — inline password value
 
-        At least one must be present. password_file takes priority when both exist.
+        TrueNAS also supports api_key_file/api_key. password_file takes
+        priority when both password forms exist.
         Accepts both 'user' and 'username' as key for the account name.
         """
         user = entry.get("user") or entry.get("username") or "root"
         pw_file = entry.get("password_file", "")
         inline_pw = entry.get("password", "")
+        api_key_file = entry.get("api_key_file", "") or entry.get("api_key_path", "")
+        inline_api_key = entry.get("api_key", "")
+        api_key = _read_secret_file(api_key_file, f"{label} api_key") if api_key_file else inline_api_key
+
+        cred = {"user": user, "password": ""}
+        if api_key:
+            cred["api_key"] = api_key
+
         if pw_file:
             try:
                 with open(pw_file) as f:
@@ -589,12 +612,21 @@ def _load_device_credentials(cred_file):
                 if inline_pw:
                     # password_file unreadable but inline password available — use it
                     fmt.step_warn(f"Cannot read {label} password from {pw_file}, using inline password")
-                    return {"user": user, "password": inline_pw}
+                    cred["password"] = inline_pw
+                    return cred
                 fmt.step_warn(f"Cannot read {label} password from {pw_file}: {e}")
+                if api_key:
+                    cred["api_key_only"] = True
+                    return cred
                 return None
-            return {"user": user, "password": password}
+            cred["password"] = password
+            return cred
         if inline_pw:
-            return {"user": user, "password": inline_pw}
+            cred["password"] = inline_pw
+            return cred
+        if api_key:
+            cred["api_key_only"] = True
+            return cred
         fmt.step_warn(f"Device '{label}' has no password or password_file — skipped")
         return None
 
@@ -620,6 +652,47 @@ def _load_device_credentials(cred_file):
                 result[legacy_htype] = cred
 
     return result
+
+
+def _seed_truenas_api_key_from_device_creds(cfg, device_creds):
+    """Persist the TrueNAS API key supplied to init into the runtime vault.
+
+    The dashboard/storage runtime reads ``vault truenas:api_key`` unless
+    freq.toml points at a specific api_key_file/ref. If init accepts a
+    TrueNAS key but never writes that namespace, the first dashboard view
+    truthfully reports "API key missing" after an apparently successful
+    setup. This keeps init as the one-stop onboarding path.
+    """
+    cred = (device_creds or {}).get("truenas") or {}
+    api_key = (cred.get("api_key") or "").strip()
+    if not api_key:
+        has_core_truenas = bool(getattr(cfg, "truenas_ip", ""))
+        if not has_core_truenas:
+            for dev in getattr(cfg.fleet_boundaries, "physical", {}).values():
+                if (
+                    getattr(dev, "device_type", "") == "truenas"
+                    and getattr(dev, "scope", "core") != "lab"
+                ):
+                    has_core_truenas = True
+                    break
+        if has_core_truenas:
+            fmt.step_warn(
+                "TrueNAS API key not supplied — add api_key_file/api_key under "
+                "[truenas] in --device-credentials for fully green storage metrics"
+            )
+        return False
+
+    try:
+        from freq.modules.vault import vault_init, vault_set
+
+        vault_init(cfg)
+        if vault_set(cfg, "truenas", "api_key", api_key):
+            fmt.step_ok("TrueNAS API key stored in vault namespace truenas:api_key")
+            return True
+        fmt.step_warn("TrueNAS API key supplied but vault write failed")
+    except Exception as e:
+        fmt.step_warn(f"TrueNAS API key supplied but could not be stored: {e}")
+    return False
 
 
 def _read_password(prompt="Password"):
@@ -3835,6 +3908,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
     device_creds = _load_device_credentials(device_creds_file)
     if device_creds:
         fmt.step_ok(f"Device credentials loaded: {', '.join(sorted(device_creds.keys()))}")
+    _seed_truenas_api_key_from_device_creds(cfg, device_creds)
 
     # Import hosts from file if --hosts-file provided (headless/automation)
     hosts_file_arg = getattr(args, "hosts_file", None) if args else None
@@ -7877,6 +7951,7 @@ def _init_headless(cfg, args):
         fmt.step_ok(f"Per-device credentials loaded: {', '.join(sorted(device_creds.keys()))}")
     elif device_password_file:
         fmt.step_warn("Using deprecated --device-password-file (migrate to --device-credentials)")
+    _seed_truenas_api_key_from_device_creds(cfg, device_creds)
 
     _headless_fleet_deploy(
         cfg,
@@ -8329,7 +8404,11 @@ def _headless_fleet_deploy(
         fmt.line(f"  {fmt.C.BOLD}{label}{fmt.C.RESET} ({ip}) [{htype}]")
 
         # Determine auth credentials based on host type
-        if htype in DEVICE_HTYPES and htype in device_creds:
+        if (
+            htype in DEVICE_HTYPES
+            and htype in device_creds
+            and not device_creds[htype].get("api_key_only")
+        ):
             # Per-device credentials from --device-credentials TOML
             dcred = device_creds[htype]
             auth_user = dcred["user"]

@@ -542,6 +542,18 @@ def _check_ssh_key(cfg: FreqConfig) -> int:
         fmt.step_ok(f"SSH key: {key_file} ({mode})")
         return 0
     else:
+        import getpass
+
+        current_user = getpass.getuser()
+        svc = getattr(cfg, "ssh_service_account", "") or ""
+        if svc and current_user != svc:
+            key_dir = getattr(cfg, "key_dir", "")
+            if key_dir and os.path.isdir(key_dir) and not os.access(key_dir, os.X_OK):
+                fmt.step_warn(
+                    f"SSH key: service-owned under {key_dir}; current user '{current_user}' "
+                    f"cannot inspect it. Run `sudo -u {svc} freq doctor` for fleet SSH truth."
+                )
+                return 2
         fmt.step_warn("SSH key: not found (fleet operations will fail)")
         return 2
 
@@ -566,6 +578,19 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     if not hosts:
         fmt.step_info("Fleet connectivity: no hosts to test")
         return 0
+
+    import getpass
+
+    current_user = getpass.getuser()
+    svc = getattr(cfg, "ssh_service_account", "") or ""
+    key_dir = getattr(cfg, "key_dir", "")
+    if not getattr(cfg, "ssh_key_path", "") and svc and current_user != svc:
+        if key_dir and os.path.isdir(key_dir) and not os.access(key_dir, os.X_OK):
+            fmt.step_warn(
+                f"Fleet SSH: not checked from '{current_user}' — service-owned keys live in "
+                f"{key_dir}. Run `sudo -u {svc} freq doctor` or use /api/doctor."
+            )
+            return 2
 
     import concurrent.futures
 
@@ -709,9 +734,21 @@ def _check_service_account(cfg: FreqConfig) -> int:
     if not hosts_for_check:
         return 0
 
+    import getpass
+
+    current_user = getpass.getuser()
+    svc = cfg.ssh_service_account
+    key_dir = getattr(cfg, "key_dir", "")
+    if not getattr(cfg, "ssh_key_path", "") and svc and current_user != svc:
+        if key_dir and os.path.isdir(key_dir) and not os.access(key_dir, os.X_OK):
+            fmt.step_warn(
+                f"Service account '{svc}': not checked from '{current_user}' — "
+                "service-owned SSH key is not readable in this shell"
+            )
+            return 2
+
     import concurrent.futures
 
-    svc = cfg.ssh_service_account
     # Sample: first 2 of each type to keep it fast
     by_type = {}
     for h in hosts_for_check:
@@ -777,6 +814,10 @@ def _check_legacy_passwords(cfg: FreqConfig) -> int:
         if os.path.isfile(pw_file):
             fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)}")
             return 0
+        parent = os.path.dirname(pw_file)
+        if parent and not os.access(parent, os.R_OK):
+            fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)} (in secure dir)")
+            return 0
         # Check if path is under service account home — if yes, file is
         # (very likely) in a secure 700 dir we can't stat from operator context.
         svc = getattr(cfg, "ssh_service_account", "") or ""
@@ -787,7 +828,7 @@ def _check_legacy_passwords(cfg: FreqConfig) -> int:
             except (KeyError, ImportError):
                 svc_home = f"/home/{svc}"
             if svc_home and pw_file.startswith(svc_home + os.sep):
-                fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)} (in secure svc dir)")
+                fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)} (in secure dir)")
                 return 0
         fmt.step_warn(f"Legacy password file configured but missing: {pw_file}")
         return 2

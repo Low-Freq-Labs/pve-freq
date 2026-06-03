@@ -291,6 +291,21 @@ class TestHealthScoreStalenessRegression(CacheStalenessTestBase):
         data = self._call()
         self.assertTrue(data["stale"])
 
+    def test_stale_hosts_are_not_scored_as_down(self):
+        self._inject_cache("health", {
+            "hosts": [
+                {"host": "switch", "label": "switch", "state": "stale", "status": "stale",
+                 "ram": "-", "disk": "-"},
+                {"host": "pve01", "label": "pve01", "state": "live", "status": "healthy",
+                 "ram": "40%", "disk": "30%"},
+            ],
+        }, age_seconds=20)
+        self._inject_cache("fleet_overview", {"vms": []}, age_seconds=20)
+        data = self._call()
+        self.assertEqual(data["score"], 100)
+        self.assertFalse(any(f.get("factor") == "hosts_down" for f in data.get("factors", [])))
+        self.assertTrue(any(f.get("factor") == "hosts_stale" for f in data.get("factors", [])))
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # Cross-endpoint consistency: all cached endpoints share same contract

@@ -20,7 +20,9 @@ from freq.core import log as logger
 from freq.core.ssh import run as ssh_single, run_many as ssh_run_many, result_for
 from freq.core.health_state import (
     STATE_LIVE,
+    STATE_STALE,
     STATE_DEGRADED,
+    STATE_AUTH_FAILED,
     STATE_UNREACHABLE,
     aggregate_probe_state,
     classify_probe_failure,
@@ -1037,16 +1039,21 @@ def handle_fleet_health_score(handler):
     if health and isinstance(health, dict):
         hosts = health.get("hosts", [])
         total = len(hosts)
-        healthy = sum(1 for h in hosts if h.get("status") == "healthy")
-        unhealthy = total - healthy
+        bad_states = {STATE_AUTH_FAILED, STATE_DEGRADED, STATE_UNREACHABLE}
+        unhealthy = sum(1 for h in hosts if (h.get("state") or h.get("status")) in bad_states)
+        stale_hosts = sum(1 for h in hosts if (h.get("state") or h.get("status")) == STATE_STALE)
 
         if total > 0:
-            host_pct = round(healthy / total * 100)
+            host_pct = round((total - unhealthy) / total * 100)
             if host_pct < 100:
                 penalty = min(40, (100 - host_pct) * 2)
                 score -= penalty
                 factors.append(
-                    {"factor": "hosts_down", "penalty": penalty, "detail": f"{unhealthy}/{total} hosts unhealthy"}
+                    {"factor": "hosts_down", "penalty": penalty, "detail": f"{unhealthy}/{total} hosts down"}
+                )
+            if stale_hosts:
+                factors.append(
+                    {"factor": "hosts_stale", "penalty": 0, "detail": f"{stale_hosts}/{total} host probe(s) stale"}
                 )
 
             high_ram = sum(1 for h in hosts if _parse_pct(h.get("ram", "")) > 80)

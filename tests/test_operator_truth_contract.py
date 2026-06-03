@@ -23,8 +23,9 @@ fixed:
 
   4. API-degrade streak + probe_status honesty: the background silent
      refreshers (_silentHealthRefresh / _silentFleetRefresh) count
-     consecutive failures AND honor probe_status=stale/error on 200
-     responses. After two failures in a row, _markApiDegraded flips
+     consecutive failures AND honor hard probe failures on 200
+     responses without treating bounded stale cache windows as down.
+     After two failures in a row, _markApiDegraded flips
      the stream indicator to CACHED and writes an "API DEGRADED"
      message into the operator-truth banner with the specific
      failing endpoint + reason.
@@ -288,18 +289,20 @@ class TestApiDegradedStreakAndProbeStatus(unittest.TestCase):
         # Catch branch must also bump the streak.
         self.assertRegex(body, r"\.catch\(function\(\)\{[\s\S]*?_healthFailStreak\+\+")
 
-    def test_health_refresh_honors_probe_status_stale(self):
+    def test_health_refresh_honors_probe_status_errors_without_stale_bubble(self):
         """After the product-law refactor the refresher reads multiple
         equivalent state field names (probe_status / probe_state /
-        state) into a single var, then checks for stale/error/degraded/
-        unreachable/auth_failed. The intent is unchanged: a stale probe
-        on a 200 response must still flip the streak."""
+        state) into a single var. Hard failures on a 200 response must
+        flip the streak, but stale alone is cache freshness metadata."""
         body = _fn_body(_app_js(), "_silentHealthRefresh")
         self.assertIn("probe_status", body,
                       "_silentHealthRefresh must read probe_status (legacy)")
-        self.assertIn("'stale'", body,
-                      "_silentHealthRefresh must treat 'stale' as degraded")
+        self.assertNotIn("ps==='stale'", body,
+                         "_silentHealthRefresh must not raise degraded on stale alone")
         self.assertIn("'error'", body)
+        self.assertIn("'degraded'", body)
+        self.assertIn("'unreachable'", body)
+        self.assertIn("'auth_failed'", body)
         self.assertRegex(body, r"_markApiDegraded\('health probe'")
 
     def test_fleet_refresh_counts_http_failures(self):
@@ -310,10 +313,14 @@ class TestApiDegradedStreakAndProbeStatus(unittest.TestCase):
         self.assertIn("_fleetFailStreak=0", body)
         self.assertRegex(body, r"\.catch\(function\(\)\{[\s\S]*?_fleetFailStreak\+\+")
 
-    def test_fleet_refresh_honors_probe_status_stale(self):
+    def test_fleet_refresh_honors_probe_status_errors_without_stale_bubble(self):
         body = _fn_body(_app_js(), "_silentFleetRefresh")
         self.assertIn("probe_status", body)
-        self.assertIn("'stale'", body)
+        self.assertNotIn("fps==='stale'", body)
+        self.assertIn("'error'", body)
+        self.assertIn("'degraded'", body)
+        self.assertIn("'unreachable'", body)
+        self.assertIn("'auth_failed'", body)
         self.assertRegex(body, r"_markApiDegraded\('fleet probe'")
 
 

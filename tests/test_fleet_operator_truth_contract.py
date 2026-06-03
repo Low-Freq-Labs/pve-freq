@@ -64,6 +64,12 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("hosts = [h for h in cfg.hosts if getattr(h, \"managed\", True)]", src)
         self.assertIn("hosts_for_check = [h for h in cfg.hosts if getattr(h, \"managed\", True)]", src)
 
+    def test_operator_doctor_does_not_fake_fleet_outage_without_service_key(self):
+        src = (REPO_ROOT / "freq" / "core" / "doctor.py").read_text()
+        self.assertIn("service-owned keys live in", src)
+        self.assertIn("Run `sudo -u {svc} freq doctor` or use /api/doctor", src)
+        self.assertIn("Service account '{svc}': not checked from", src)
+
     def test_api_health_fallback_uses_managed_hosts_only(self):
         src = (REPO_ROOT / "freq" / "api" / "fleet.py").read_text()
         self.assertIn("active_hosts = [h for h in cfg.hosts if getattr(h, \"managed\", True)]", src)
@@ -98,6 +104,8 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("function _healthLabel", src)
         self.assertIn("if(_healthIsLive(h))up++;else if(_healthIsBad(h))down++;", src)
         self.assertIn("if(_healthIsLive(h))totalUp++;else if(_healthIsBad(h))totalDown++;", src)
+        self.assertNotIn("var psBad=(ps==='stale'", src)
+        self.assertNotIn("var fpsBad=(fps==='stale'", src)
         self.assertNotIn("status==='healthy'", src)
         self.assertNotIn('status === "healthy"', src)
 
@@ -182,6 +190,36 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("TrueNAS API key missing", src)
         self.assertIn("truenas_api.settings(cfg, dev)", src)
         self.assertIn('vault_get(cfg, secret_ns, "api_key")', helper_src)
+
+    def test_init_device_credentials_can_carry_truenas_api_key(self):
+        from freq.modules.init_cmd import _load_device_credentials
+
+        with tempfile.TemporaryDirectory(prefix="freq-init-tn-creds-") as tmp:
+            tmp_path = Path(tmp)
+            key_path = tmp_path / "truenas-api.key"
+            key_path.write_text("tn-init-secret\n")
+            creds_path = tmp_path / "device-creds.toml"
+            creds_path.write_text(
+                "\n".join(
+                    [
+                        "[truenas]",
+                        'user = "root"',
+                        f'api_key_file = "{key_path}"',
+                    ]
+                )
+            )
+
+            creds = _load_device_credentials(str(creds_path))
+
+        self.assertIn("truenas", creds)
+        self.assertEqual(creds["truenas"]["api_key"], "tn-init-secret")
+        self.assertTrue(creds["truenas"]["api_key_only"])
+
+    def test_init_persists_truenas_api_key_to_runtime_vault(self):
+        src = (REPO_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
+        self.assertIn("def _seed_truenas_api_key_from_device_creds", src)
+        self.assertIn('vault_set(cfg, "truenas", "api_key", api_key)', src)
+        self.assertIn("_seed_truenas_api_key_from_device_creds(cfg, device_creds)", src)
 
 
 if __name__ == "__main__":

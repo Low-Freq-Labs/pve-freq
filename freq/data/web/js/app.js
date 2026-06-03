@@ -2106,16 +2106,17 @@ function _silentHealthRefresh(){
     if(hd===null||!hd){_healthInFlight=false;return;}
     _healthInFlight=false;
     /* Honor probe_status / probe_state / state even when the HTTP
-     * response is 200. A stale/error probe means the backend couldn't
+     * response is 200. Hard probe failures mean the backend couldn't
      * reach the fleet hosts even though the /api/health route itself
-     * responded — the UI must surface that degradation, not paint over
-     * it with the cached hosts list. Tolerant of multiple field names:
+     * responded. Plain stale means a cached probe aged during a bounded
+     * refresh/rate-limit window; keep that as freshness metadata, not an
+     * upper-right API-degraded warning. Tolerant of multiple field names:
      * legacy probe_status, Rick's incoming probe_state / state /
      * reason. Also runs structural sanity so the streak fires even on
      * a clean 200 with no probe_status when the body itself proves
      * the probe couldn't see anything. */
     var ps=hd.probe_status||hd.probe_state||hd.state||'';
-    var psBad=(ps==='stale'||ps==='error'||ps==='degraded'||
+    var psBad=(ps==='error'||ps==='degraded'||
                ps==='unreachable'||ps==='auth_failed');
     var structReason=_healthStructurallyDegraded(hd);
     if(psBad||structReason){
@@ -2193,11 +2194,12 @@ function _silentFleetRefresh(){
     _fleetInFlight=false;
     /* Same probe-status honesty rule as the health path, plus
      * structural sanity (every PVE node offline → degrade even if
-     * probe_status is undefined). Field-tolerant for the new
+     * probe_status is undefined). Plain stale is freshness metadata,
+     * not a degraded API warning. Field-tolerant for the new
      * state/fleet_state/probe_state/reason fields landing under Rick's
      * lane (e03b382 / 170b0c8 / 9dd8200). */
     var fps=(fo&&(fo.probe_status||fo.probe_state||fo.fleet_state||fo.state))||'';
-    var fpsBad=(fps==='stale'||fps==='error'||fps==='degraded'||
+    var fpsBad=(fps==='error'||fps==='degraded'||
                 fps==='unreachable'||fps==='auth_failed');
     var foReason=_fleetStructurallyDegraded(fo);
     if(fpsBad||foReason){
