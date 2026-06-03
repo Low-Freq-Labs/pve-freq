@@ -1146,6 +1146,71 @@ def _seed_config_files(cfg):
         fmt.step_ok("Config files: all present")
 
 
+INIT_LIVE_CONFIG_FILES = (
+    "freq.toml",
+    "hosts.toml",
+    "hosts.conf",
+    "vlans.toml",
+    "fleet-boundaries.toml",
+    "risk.toml",
+    "roles.conf",
+    "users.conf",
+    "containers.toml",
+)
+
+INIT_GENERATED_TOKEN_FILES = (
+    "/etc/freq/credentials/pve-token-rw",
+    "/etc/freq/credentials/pve-token",
+)
+
+
+def _remove_init_file(path, label):
+    """Remove a generated init file if present and report the result."""
+    if os.path.isfile(path):
+        os.unlink(path)
+        fmt.step_ok(f"{label} removed: {path}")
+        return True
+    fmt.step_warn(f"{label} not found: {path}")
+    return False
+
+
+def _reset_local_init_state(cfg, *, remove_live_config=False):
+    """Remove generated local init state without touching templates.
+
+    ``freq init --reset`` must create a real first-run state. Leaving
+    generated live config, web setup markers, keys, or PVE token files behind
+    makes the next init inherit old DC01 truth and lets the dashboard look
+    configured when the current acceptance run did not create that state.
+
+    Staging/input secret files are intentionally preserved. Init accepts them
+    by explicit path on the next run; reset only removes state freq generated.
+    """
+    marker = os.path.join(cfg.conf_dir, ".initialized")
+    web_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
+    setup_marker = os.path.join(cfg.data_dir, "setup-complete")
+
+    targets = [
+        (cfg.vault_file, "Vault"),
+        (marker, "Init marker"),
+        (web_marker, "Web setup marker"),
+        (setup_marker, "Setup marker"),
+    ]
+
+    for key_name in ("freq_id_ed25519", "freq_id_rsa"):
+        targets.append((os.path.join(cfg.key_dir, key_name), f"SSH key {key_name}"))
+        targets.append((os.path.join(cfg.key_dir, f"{key_name}.pub"), f"SSH pubkey {key_name}.pub"))
+
+    for token_path in INIT_GENERATED_TOKEN_FILES:
+        targets.append((token_path, f"PVE token {os.path.basename(token_path)}"))
+
+    for path, label in targets:
+        _remove_init_file(path, label)
+
+    if remove_live_config:
+        for name in INIT_LIVE_CONFIG_FILES:
+            _remove_init_file(os.path.join(cfg.conf_dir, name), f"Live config {name}")
+
+
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 2: Cluster Configuration
 # ═══════════════════════════════════════════════════════════════════
@@ -7195,28 +7260,19 @@ def _init_reset(cfg):
     """Reset FREQ to pre-init state."""
     fmt.header("Init Reset")
     fmt.blank()
-    fmt.line(f"  {fmt.C.RED}{fmt.C.BOLD}WARNING: This will wipe vault, roles, and initialization state.{fmt.C.RESET}")
+    fmt.line(
+        f"  {fmt.C.RED}{fmt.C.BOLD}"
+        f"WARNING: This will wipe generated init state and live config files."
+        f"{fmt.C.RESET}"
+    )
+    fmt.line(f"  {fmt.C.DIM}Templates and explicit staging credential files are preserved.{fmt.C.RESET}")
     fmt.blank()
 
     if not _confirm("Are you sure?"):
         fmt.line(f"  {fmt.C.DIM}Cancelled.{fmt.C.RESET}")
         return 0
 
-    marker = os.path.join(cfg.conf_dir, ".initialized")
-    web_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
-    roles_file = os.path.join(cfg.conf_dir, "roles.conf")
-
-    for path, label in [
-        (cfg.vault_file, "Vault"),
-        (roles_file, "Roles"),
-        (marker, "Init marker"),
-        (web_marker, "Web setup marker"),
-    ]:
-        if os.path.isfile(path):
-            os.unlink(path)
-            fmt.step_ok(f"{label} removed: {path}")
-        else:
-            fmt.step_warn(f"{label} not found: {path}")
+    _reset_local_init_state(cfg, remove_live_config=True)
 
     fmt.blank()
     fmt.line(f"  {fmt.C.GREEN}Reset complete. Run 'freq init' to start fresh.{fmt.C.RESET}")
@@ -7434,18 +7490,7 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
     else:
         fmt.step_warn(f"Sudoers not found: {sudoers_file}")
 
-    # SSH keys
-    for key_file, label in [
-        (ed_key, "ed25519 private key"),
-        (f"{ed_key}.pub", "ed25519 public key"),
-        (rsa_key, "RSA private key"),
-        (f"{rsa_key}.pub", "RSA public key"),
-    ]:
-        if os.path.isfile(key_file):
-            os.unlink(key_file)
-            fmt.step_ok(f"{label} removed")
-        else:
-            fmt.step_warn(f"{label} not found")
+    _reset_local_init_state(cfg, remove_live_config=True)
 
     # Remove key directory if empty
     if os.path.isdir(cfg.key_dir):
@@ -7454,29 +7499,6 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
             fmt.step_ok(f"Key dir removed: {cfg.key_dir}")
         except OSError:
             fmt.step_warn(f"Key dir not empty: {cfg.key_dir}")
-
-    # Vault
-    if os.path.isfile(cfg.vault_file):
-        os.unlink(cfg.vault_file)
-        fmt.step_ok("Vault removed")
-    else:
-        fmt.step_warn("Vault not found")
-
-    # Roles
-    roles_file = os.path.join(cfg.conf_dir, "roles.conf")
-    if os.path.isfile(roles_file):
-        os.unlink(roles_file)
-        fmt.step_ok("Roles removed")
-    else:
-        fmt.step_warn("Roles not found")
-
-    # Init marker
-    marker = os.path.join(cfg.conf_dir, ".initialized")
-    if os.path.isfile(marker):
-        os.unlink(marker)
-        fmt.step_ok("Init marker removed")
-    else:
-        fmt.step_warn("Init marker not found")
 
     # Local dashboard service
     #

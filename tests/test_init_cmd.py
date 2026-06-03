@@ -4,6 +4,7 @@ Tests the stdin-piping helpers for IOS switch config and the per-device
 credential loading from TOML files.
 """
 import os
+import shutil
 import sys
 import stat
 import tempfile
@@ -15,6 +16,8 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from freq.modules.init_cmd import _run_with_input, _ssh_with_pass
+from freq.modules.init_cmd import _reset_local_init_state, INIT_LIVE_CONFIG_FILES, INIT_GENERATED_TOKEN_FILES
+from freq.core.config import FreqConfig, _resolve_paths
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -68,6 +71,74 @@ class TestRunWithInput(unittest.TestCase):
         rc, out, err = _run_with_input(["cat"], "")
         self.assertEqual(rc, 0)
         self.assertEqual(out.strip(), "")
+
+
+class TestInitResetLocalState(unittest.TestCase):
+    """Reset must produce a true first-run state without destroying templates."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="freq-init-reset-")
+        self.cfg = FreqConfig()
+        self.cfg.install_dir = self.tmp
+        _resolve_paths(self.cfg)
+        os.makedirs(self.cfg.conf_dir, exist_ok=True)
+        os.makedirs(self.cfg.key_dir, exist_ok=True)
+        os.makedirs(os.path.dirname(self.cfg.vault_file), exist_ok=True)
+        os.makedirs(os.path.join(self.cfg.data_dir, "secrets"), exist_ok=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _touch(self, path, body="x"):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(body)
+
+    def test_reset_removes_generated_state_and_live_config_only(self):
+        generated = [
+            os.path.join(self.cfg.conf_dir, ".initialized"),
+            os.path.join(self.cfg.conf_dir, ".web-setup-complete"),
+            os.path.join(self.cfg.data_dir, "setup-complete"),
+            self.cfg.vault_file,
+            os.path.join(self.cfg.key_dir, "freq_id_ed25519"),
+            os.path.join(self.cfg.key_dir, "freq_id_ed25519.pub"),
+            os.path.join(self.cfg.key_dir, "freq_id_rsa"),
+            os.path.join(self.cfg.key_dir, "freq_id_rsa.pub"),
+        ]
+        for path in generated:
+            self._touch(path)
+
+        for name in INIT_LIVE_CONFIG_FILES:
+            self._touch(os.path.join(self.cfg.conf_dir, name), "live\n")
+            self._touch(os.path.join(self.cfg.conf_dir, f"{name}.example"), "template\n")
+
+        staging_secret = os.path.join(self.cfg.data_dir, "secrets", "truenas-prod.key")
+        self._touch(staging_secret, "operator supplied\n")
+
+        with patch("freq.modules.init_cmd.fmt") as _fmt:
+            _fmt.step_ok = MagicMock()
+            _fmt.step_warn = MagicMock()
+            with patch("freq.modules.init_cmd.INIT_GENERATED_TOKEN_FILES", ()):
+                _reset_local_init_state(self.cfg, remove_live_config=True)
+
+        for path in generated:
+            self.assertFalse(os.path.exists(path), f"generated init state survived reset: {path}")
+
+        for name in INIT_LIVE_CONFIG_FILES:
+            self.assertFalse(
+                os.path.exists(os.path.join(self.cfg.conf_dir, name)),
+                f"live generated config survived reset: {name}",
+            )
+            self.assertTrue(
+                os.path.isfile(os.path.join(self.cfg.conf_dir, f"{name}.example")),
+                f"template was removed by reset: {name}.example",
+            )
+
+        self.assertTrue(os.path.isfile(staging_secret), "explicit staging secret must survive reset")
+
+    def test_reset_inventory_names_external_generated_pve_tokens(self):
+        self.assertIn("/etc/freq/credentials/pve-token-rw", INIT_GENERATED_TOKEN_FILES)
+        self.assertIn("/etc/freq/credentials/pve-token", INIT_GENERATED_TOKEN_FILES)
 
 
 # ═══════════════════════════════════════════════════════════════════

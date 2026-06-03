@@ -216,7 +216,7 @@ def _register_utilities(sub):
     p.add_argument("--check", action="store_true", help="Validate init state — local files + remote host SSH")
     p.add_argument("--json", dest="json_output", action="store_true", help="Output results as JSON")
     p.add_argument("--fix", action="store_true", help="Scan fleet, find broken hosts, redeploy service account")
-    p.add_argument("--reset", action="store_true", help="Wipe vault, roles, .initialized (fresh start)")
+    p.add_argument("--reset", action="store_true", help="Wipe generated init state and live config (fresh start)")
     p.add_argument("--uninstall", action="store_true", help="Remove FREQ service account from all hosts")
     p.add_argument("--dry-run", action="store_true", help="Show what init would do (or would remove with --uninstall)")
     p.add_argument("--headless", action="store_true", help="Non-interactive mode (no prompts)")
