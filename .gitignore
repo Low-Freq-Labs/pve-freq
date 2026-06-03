@@ -18,6 +18,10 @@ venv/
 .pytest_cache/
 .coverage
 htmlcov/
+node_modules/
+test-results/
+playwright-report/
+.playwright/
 
 # Runtime data (not source — top-level only, not freq/data/)
 /data/

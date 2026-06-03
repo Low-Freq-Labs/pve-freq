@@ -338,6 +338,7 @@ document.addEventListener('click',function(e){
       openCard('infra',{label:da.dataset.label,infraType:da.dataset.infraType,ip:da.dataset.ip});
       return;
     }
+    if(a==='infraRead'){_runInfraAction(da.dataset.infraType||'',da.dataset.arg||'status',da.dataset.target||'');return;}
     if(a==='vaultReveal'){vaultReveal(da.dataset.uid,da.dataset.host,da.dataset.key);return;}
     if(a==='vaultCopy'){vaultCopy(da.dataset.host,da.dataset.key);return;}
     if(a==='vaultDelGroup'){vaultDelGroup(g);return;}
@@ -5198,7 +5199,7 @@ function _assignNodeColors(){var pveHosts=PROD_HOSTS.filter(function(h){return h
 var INFRA_GOLD='var(--text)';
 function _hostColor(label,htype,node){
   /* Infra devices → gold */
-  if(htype==='pfsense'||htype==='truenas'||htype==='switch'||htype==='docker'||htype==='idrac')return INFRA_GOLD;
+  if(htype==='pfsense'||htype==='truenas'||htype==='switch'||htype==='docker'||htype==='idrac'||htype==='bmc')return INFRA_GOLD;
   /* PVE nodes → node color */
   if(htype==='pve'){return (NODE_COLORS||{})[label]||INFRA_GOLD;}
   /* VMs → inherit from node */
@@ -5218,6 +5219,7 @@ var INFRA_ROLES={
   unraid:   {role:'NETWORK STORAGE',icon:'\u26c1', color:'var(--blue)'},
   switch:   {role:'SWITCH',         icon:'\u26a1', color:'var(--orange)'},
   idrac:    {role:'BMC',            icon:'\u2699', color:'var(--yellow)'},
+  bmc:      {role:'BMC',            icon:'\u2699', color:'var(--yellow)'},
   ilo:      {role:'BMC',            icon:'\u2699', color:'var(--yellow)'},
   ipmi:     {role:'BMC',            icon:'\u2699', color:'var(--yellow)'}
 };
@@ -5251,7 +5253,7 @@ function _infraRoleCard(ph,healthMap){
 }
 function _roleOfflineMetrics(type,roleInfo){
   var m='';
-  if(type==='idrac'||type==='ilo'||type==='ipmi'){
+  if(type==='idrac'||type==='bmc'||type==='ilo'||type==='ipmi'){
     m+='<div class="role-metric"><span class="rm-val c-dim">NO RESPONSE</span></div>';
   } else {
     m+='<div class="role-metric"><span class="rm-val c-dim">UNREACHABLE</span></div>';
@@ -5332,7 +5334,7 @@ function _enrichInfraCards(){
         if(m.ports_up)h+=_m(m.ports_up,'PORTS UP','var(--green)');
         if(m.vlans)h+=_m(m.vlans,'VLANs','var(--cyan)');
         if(m.uptime){var ut=m.uptime.replace(/.*uptime is /i,'').replace(/,\s*\d+ minutes?/i,'');h+=_m(ut,'UPTIME','var(--green)');}
-      } else if(dev.type==='idrac'||dev.type==='ilo'||dev.type==='ipmi'){
+      } else if(dev.type==='idrac'||dev.type==='bmc'||dev.type==='ilo'||dev.type==='ipmi'){
         if(m.note){
           h+=_m(m.note,'','var(--yellow)');
         } else {
@@ -5364,6 +5366,11 @@ var INFRA_ACTIONS={
     {l:'\u2699 CREATE VLAN',f:"swWriteVlan('create')",w:1},{l:'\u2699 DELETE VLAN',f:"swWriteVlan('delete')",w:2},{l:'\u2699 MANAGE ACL',f:"swWriteAcl()",w:1}
   ],
   idrac:[
+    {l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"},
+    /* Write operations */
+    {l:'\u26a1 POWER ON',f:"idracWrite('poweron')",w:1},{l:'\u26a1 POWER OFF',f:"idracWrite('poweroff')",w:2},{l:'\u26a1 POWER CYCLE',f:"idracWrite('powercycle')",w:2},{l:'\u26a1 HARD RESET',f:"idracWrite('hardreset')",w:2},{l:'\u26a1 GRACEFUL OFF',f:"idracWrite('graceshutdown')",w:1},{l:'\u2699 CLEAR SEL',f:"idracWrite('clearsel')",w:1},{l:'\u2699 BOOT PXE',f:"idracWrite('bootpxe')",w:1},{l:'\u2699 BOOT BIOS',f:"idracWrite('bootbios')",w:1}
+  ],
+  bmc:[
     {l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"},
     /* Write operations */
     {l:'\u26a1 POWER ON',f:"idracWrite('poweron')",w:1},{l:'\u26a1 POWER OFF',f:"idracWrite('poweroff')",w:2},{l:'\u26a1 POWER CYCLE',f:"idracWrite('powercycle')",w:2},{l:'\u26a1 HARD RESET',f:"idracWrite('hardreset')",w:2},{l:'\u26a1 GRACEFUL OFF',f:"idracWrite('graceshutdown')",w:1},{l:'\u2699 CLEAR SEL',f:"idracWrite('clearsel')",w:1},{l:'\u2699 BOOT PXE',f:"idracWrite('bootpxe')",w:1},{l:'\u2699 BOOT BIOS',f:"idracWrite('bootbios')",w:1}
@@ -7251,16 +7258,19 @@ function tnAction(action){
     else{o.innerHTML='<div class="c-red">Cannot reach TrueNAS at '+(d.host||d.ip||'unknown')+'</div><div class="c-dim-mt8">'+(d.error||'')+'</div>';}
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
 }
-function idracAction(action){
+function idracAction(action,target){
   var o=_infraOut('idrac-out');if(!o)return;
-  o.innerHTML='<div class="skeleton"></div>';
-  _authFetch(API.INFRA_IDRAC+'?action='+action).then(function(r){return r.json()}).then(function(d){
+  var suffix=target?' on '+target:'';
+  o.innerHTML='<span class="c-dim">Querying BMC / iDRAC ('+action+')'+suffix+'...</span>';
+  var url=API.INFRA_IDRAC+'?action='+action;
+  if(target)url+='&target='+encodeURIComponent(target);
+  _authFetch(url).then(function(r){return r.json()}).then(function(d){
     var html='';
-    d.targets.forEach(function(t){
+    (d.targets||[]).forEach(function(t){
       if(t.reachable){html+=_infraPre(t.name.toUpperCase()+' ('+t.ip+') \u2014 '+action.toUpperCase(),t.output);}
       else{html+='<div class="mb-12"><div style="font-size:12px;font-weight:600;color:var(--red)">'+t.name.toUpperCase()+' ('+t.ip+') \u2014 UNREACHABLE</div><p class="c-dim-fs11">'+(t.error||'')+'</p></div>';}
     });
-    o.innerHTML=html;
+    o.innerHTML=html||'<div class="c-yellow">No BMC targets returned for '+action+'</div>';
   }).catch(function(e){o.innerHTML='<p class="c-red">Error: '+e+'</p>';});
 }
 function swAction(action){
@@ -8479,7 +8489,7 @@ function renderInfraCard(config){
         /* Read operation — dispatch through _runInfraAction */
         var match=a.f.match(/\('([^']+)'\)/);
         var actionName=match?match[1]:'status';
-        readBtns+='<button class="fleet-btn min-w-120-center"  onclick="event.stopPropagation();_runInfraAction(\''+infraType+'\',\''+actionName+'\')">'+a.l+'</button>';
+        readBtns+='<button class="fleet-btn min-w-120-center" data-action="infraRead" data-infra-type="'+_esc(infraType)+'" data-arg="'+_esc(actionName)+'" data-target="'+_esc(label)+'">'+a.l+'</button>';
       }
     });
     /* Add TERMINAL button for SSH-capable devices */
@@ -8857,7 +8867,7 @@ function _findInfraType(label){
   return null;
 }
 function _getInfraFn(type){
-  var map={pfsense:pfAction,opnsense:opnAction,truenas:tnAction,synology:synAction,unraid:tnAction,switch:swAction,idrac:idracAction,ilo:redfishAction,ipmi:ipmiAction};
+  var map={pfsense:pfAction,opnsense:opnAction,truenas:tnAction,synology:synAction,unraid:tnAction,switch:swAction,idrac:idracAction,bmc:idracAction,ilo:redfishAction,ipmi:ipmiAction};
   return map[type]||null;
 }
 function _runPveNodeCmd(label,ip,cmd){
@@ -8871,10 +8881,10 @@ function _runPveNodeCmd(label,ip,cmd){
     o.innerHTML=_infraPre(label.toUpperCase(),out||'No output');
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
 }
-function _runInfraAction(type,action){
+function _runInfraAction(type,action,target){
   _infraOutputTarget='hd-infra-out';
   var fn=_getInfraFn(type);
-  if(fn)fn(action);
+  if(fn)fn(action,target);
   else{var o=document.getElementById('hd-infra-out');o.style.display='block';o.innerHTML='<span class="c-red">No handler for '+type+'</span>';}
 }
 
