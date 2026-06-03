@@ -303,13 +303,14 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
     fmt.blank()
 
     # ── Step 1: Read existing hosts.toml ──
-    existing = {}  # ip -> {label, htype, groups, all_ips}
+    existing = {}  # ip -> {label, htype, groups, all_ips, managed}
     for h in cfg.hosts:
         existing[h.ip] = {
             "label": h.label,
             "htype": h.htype,
             "groups": getattr(h, "groups", "") or "",
             "all_ips": getattr(h, "all_ips", []) or [],
+            "managed": getattr(h, "managed", True),
         }
 
     fmt.step_ok(f"Current hosts.toml: {len(existing)} hosts")
@@ -539,6 +540,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                     "vmid": 0,
                     "source": "fleet-boundaries",
                     "all_ips": e.get("all_ips", []),
+                    "managed": e.get("managed", True),
                 }
             elif ip not in discovered:
                 # Sanitize label — hosts.toml labels should be simple identifiers
@@ -551,6 +553,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                     "vmid": 0,
                     "source": "fleet-boundaries",
                     "all_ips": [],
+                    "managed": dev.scope != "lab" and dev.device_type != "truenas",
                 }
         fmt.step_ok(f"Fleet boundaries: {len(fb.physical)} physical devices")
 
@@ -564,6 +567,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                 "vmid": 0,
                 "source": "manual",
                 "all_ips": e.get("all_ips", []),
+                "managed": e.get("managed", True),
             }
 
     # ── Step 6b: Dedup by hostname across VLANs ──
@@ -675,6 +679,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                 htype=d["htype"],
                 groups=d.get("groups", ""),
                 vmid=d.get("vmid", 0),
+                managed=d.get("managed", True),
                 all_ips=all_ips,
             )
         )

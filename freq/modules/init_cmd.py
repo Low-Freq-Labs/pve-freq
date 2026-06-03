@@ -8135,6 +8135,17 @@ def _seed_headless_dashboard_auth(cfg, bootstrap_user, bootstrap_pass, svc_name,
 def _mark_host_unmanaged(cfg, ip):
     """Mark a host as unmanaged after deploy fails — prevents downstream lies."""
     from freq.core.config import save_hosts_toml
+    for dev in getattr(cfg.fleet_boundaries, "physical", {}).values():
+        if (
+            dev.ip == ip
+            and getattr(dev, "scope", "core") != "lab"
+            and getattr(dev, "device_type", "") != "truenas"
+        ):
+            fmt.step_fail(
+                f"{getattr(dev, 'label', ip)} ({ip}) is core physical infrastructure; "
+                "leaving managed so doctor/verify must fail until SSH is fixed"
+            )
+            return
     for h in cfg.hosts:
         if h.ip == ip:
             h.managed = False

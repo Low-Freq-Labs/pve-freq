@@ -8,39 +8,229 @@ Where: Routes registered at /api/* (same paths as legacy serve.py).
 When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
+import json
+import os
 import re
+import subprocess
 
 from freq.core import log as logger
 from freq.api.helpers import require_post, json_response, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_run_fn
-from freq.modules.serve import _check_session_role
+from freq.core import truenas_api
+from freq.modules.serve import _check_session_role, _parse_query
 
 
 # -- Handlers ----------------------------------------------------------------
 
 
+def _ping_check(ip: str) -> bool:
+    """Return True when the device answers ICMP.
+
+    This is a reachability fallback only. It must not be confused with
+    successful SSH metrics collection.
+    """
+    try:
+        r = subprocess.run(["ping", "-c", "1", "-W", "1", ip], capture_output=True, timeout=2)
+        return r.returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def _is_auth_failure(stderr: str) -> bool:
+    s = (stderr or "").lower()
+    return (
+        "permission denied" in s
+        or "publickey" in s
+        or "no supported authentication methods" in s
+        or "too many authentication failures" in s
+    )
+
+
+def _resolve_truenas_target(cfg, target: str = ""):
+    """Resolve the requested TrueNAS device from fleet boundaries.
+
+    Default is the core/non-lab NAS. Lab devices are selectable by
+    label/key/ip but never become the production card by accident.
+    """
+    target_l = (target or "").lower()
+    devices = [
+        dev
+        for _key, dev in getattr(cfg.fleet_boundaries, "physical", {}).items()
+        if getattr(dev, "device_type", "") == "truenas"
+    ]
+    if target_l:
+        for dev in devices:
+            hay = f"{getattr(dev, 'key', '')} {dev.label} {dev.ip}".lower()
+            if target_l in hay:
+                return dev
+        return None
+    core = [dev for dev in devices if getattr(dev, "scope", "core") != "lab"]
+    if core:
+        return core[0]
+    if devices:
+        return devices[0]
+    if cfg.truenas_ip:
+        from freq.core.types import PhysicalDevice
+
+        return PhysicalDevice(
+            key="truenas",
+            ip=cfg.truenas_ip,
+            label="truenas",
+            device_type="truenas",
+            scope="core",
+        )
+    return None
+
+
 def handle_truenas(handler):
-    """GET /api/infra/truenas -- TrueNAS overview."""
+    """GET /api/infra/truenas -- TrueNAS action endpoint.
+
+    Read actions return real command output when SSH works. If SSH auth
+    is rejected but ping succeeds, the endpoint reports network
+    reachability and unavailable SSH metrics instead of lying with a
+    generic "unreachable" response.
+    """
     cfg = load_config()
-    if not cfg.truenas_ip:
+    params = _parse_query(handler)
+    action = params.get("action", ["status"])[0]
+    target_name = params.get("target", [""])[0]
+    target = _resolve_truenas_target(cfg, target_name)
+    if not target:
         json_response(handler, {"error": "TrueNAS not configured", "configured": False}, 400)
         return
-    # Basic SSH probe for TrueNAS status
+
+    read_actions = {
+        "status": "hostname && uptime && zpool list -o name,size,alloc,free,health -H 2>/dev/null",
+        "pools": "zpool list -v",
+        "health": "zpool status",
+        "datasets": "zfs list -o name,used,avail,refer,mountpoint -H | head -100",
+        "shares": "midclt call sharing.smb.query",
+        "alerts": "midclt call alert.list",
+        "smart": "midclt call disk.query | head -c 12000",
+        "snapshots": "zfs list -t snapshot -o name,used,refer,creation -H | tail -50",
+        "replication": "midclt call replication.query",
+        "services": "midclt call service.query",
+        "network": "ifconfig -a | head -200",
+        "syslog": "tail -100 /var/log/messages 2>/dev/null || journalctl --no-pager -n 100",
+    }
+    if action not in read_actions:
+        json_response(handler, {"error": f"Unknown TrueNAS action: {action}"}, 400)
+        return
+
+    api_settings = truenas_api.settings(cfg, target)
+    if api_settings.get("type") == "api_key" or api_settings.get("api_key"):
+        data, api_err = truenas_api.request(api_settings, action)
+        if not api_err:
+            output = truenas_api.format_output(action, data)
+            json_response(
+                handler,
+                {
+                    "configured": True,
+                    "host": target.ip,
+                    "ip": target.ip,
+                    "label": target.label,
+                    "action": action,
+                    "reachable": True,
+                    "api_available": True,
+                    "ssh_available": None,
+                    "probe_method": "truenas_api_key",
+                    "output": output,
+                    "raw": data,
+                },
+            )
+            return
+        if api_settings.get("type") == "api_key":
+            json_response(
+                handler,
+                {
+                    "configured": True,
+                    "host": target.ip,
+                    "ip": target.ip,
+                    "label": target.label,
+                    "action": action,
+                    "reachable": _ping_check(target.ip),
+                    "api_available": False,
+                    "ssh_available": None,
+                    "probe_method": "truenas_api_key_failed",
+                    "error": api_err["error"],
+                    "output": api_err["error"],
+                },
+                502,
+            )
+            return
+
+    fleet_key = os.path.join(cfg.key_dir, "fleet_key")
+    if not os.path.isfile(fleet_key):
+        fleet_key = cfg.ssh_key_path
+
     r = ssh_run_fn(
-        host=cfg.truenas_ip,
-        command="hostname && uptime && zpool list -H 2>/dev/null | head -10",
-        key_path=cfg.ssh_key_path,
+        host=target.ip,
+        command=read_actions[action],
+        user=cfg.ssh_service_account,
+        key_path=fleet_key,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=15,
         htype="truenas",
-        use_sudo=False,
+        use_sudo=True,
+        cfg=cfg,
+        failure_log_level="warn",
     )
     if r.returncode != 0:
-        json_response(handler, {"error": "TrueNAS unreachable", "configured": True, "ip": cfg.truenas_ip}, 502)
+        ping_ok = _ping_check(target.ip)
+        if _is_auth_failure(r.stderr) and ping_ok:
+            msg = "Ping reachable; SSH metrics unavailable — credentials rejected"
+            json_response(
+                handler,
+                {
+                    "configured": True,
+                    "host": target.ip,
+                    "ip": target.ip,
+                    "label": target.label,
+                    "action": action,
+                    "reachable": True,
+                    "ssh_available": False,
+                    "probe_method": "ssh_auth_failed_ping",
+                    "error": msg,
+                    "output": msg,
+                },
+            )
+            return
+        reason = r.stderr or "SSH probe failed"
+        json_response(
+            handler,
+            {
+                "configured": True,
+                "host": target.ip,
+                "ip": target.ip,
+                "label": target.label,
+                "action": action,
+                "reachable": ping_ok,
+                "ssh_available": False,
+                "probe_method": "ping" if ping_ok else "ssh_failed",
+                "error": reason,
+                "output": "Network reachable, but SSH metrics unavailable." if ping_ok else reason,
+            },
+            200 if ping_ok else 502,
+        )
         return
     lines = r.stdout.strip().split("\n")
-    json_response(handler, {"configured": True, "ip": cfg.truenas_ip, "hostname": lines[0] if lines else "", "raw": r.stdout.strip()})
+    json_response(
+        handler,
+        {
+            "configured": True,
+            "host": target.ip,
+            "ip": target.ip,
+            "label": target.label,
+            "action": action,
+            "reachable": True,
+            "ssh_available": True,
+            "probe_method": "ssh",
+            "hostname": lines[0] if lines else "",
+            "raw": r.stdout.strip(),
+            "output": r.stdout.strip(),
+        },
+    )
 
 
 def handle_storage_health(handler):

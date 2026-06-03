@@ -59,6 +59,7 @@ from freq.core.health_state import (
     mark_stale,
 )
 from freq.core.ssh import run as ssh_single, run_many as ssh_run_many
+from freq.core import truenas_api
 from freq.core.validate import (
     label as valid_label,
 )
@@ -366,85 +367,24 @@ def _bg_probe_infra():
                     d["reachable"] = _ping_check(dev.ip)
                     d["probe_method"] = "ping" if d["reachable"] else "none"
             elif dt == "truenas":
-                # Two quick SSH calls: zpool for pool status, midclt for alert count
-                r = ssh_single(
-                    host=dev.ip,
-                    command="zpool list -o name,size,alloc,free,health -H 2>/dev/null",
-                    key_path=fleet_key,
-                    user=bootstrap_user,
-                    connect_timeout=2,
-                    command_timeout=8,
-                    htype="truenas",
-                    use_sudo=True,
-                    cfg=cfg,
-                    failure_log_level="warn",
-                )
-                if r.returncode == 0:
-                    r2 = ssh_single(
-                        host=dev.ip,
-                        command="midclt call alert.list",
-                        key_path=fleet_key,
-                        user=bootstrap_user,
-                        connect_timeout=2,
-                        command_timeout=8,
-                        htype="truenas",
-                        use_sudo=True,
-                        cfg=cfg,
-                        failure_log_level="warn",
-                    )
+                api_settings = truenas_api.settings(cfg, dev)
+                pool_data, pool_err = truenas_api.request(api_settings, "pools", timeout=6)
+                if not pool_err:
                     d["reachable"] = True
-                    d["probe_method"] = "ssh"
-                    m = d["metrics"]
-                    if r.stdout.strip():
-                        pools = []
-                        for line in r.stdout.strip().split("\n"):
-                            cols = line.split()
-                            if len(cols) >= 5:
-                                pools.append(
-                                    {
-                                        "name": cols[0],
-                                        "size": cols[1],
-                                        "alloc": cols[2],
-                                        "free": cols[3],
-                                        "health": cols[4],
-                                    }
-                                )
-                        m["pools"] = pools
-                        healths = [p["health"] for p in pools]
-                        m["pool_health"] = (
-                            "DEGRADED" if "DEGRADED" in healths else "FAULTED" if "FAULTED" in healths else "ONLINE"
-                        )
-                        total_alloc = sum(
-                            float(p["alloc"].replace("T", "").replace("G", "")) * (1024 if "T" in p["alloc"] else 1)
-                            for p in pools
-                        )
-                        total_size = sum(
-                            float(p["size"].replace("T", "").replace("G", "")) * (1024 if "T" in p["size"] else 1)
-                            for p in pools
-                        )
-                        if total_size > 0:
-                            m["capacity_pct"] = str(round(total_alloc / total_size * 100)) + "%"
-                        m["total_size"] = (
-                            pools[0]["size"] if len(pools) == 1 else str(round(total_size / 1024, 1)) + "T"
-                        )
-                    # Parse alert count from raw JSON
-                    try:
-                        alerts = json.loads(r2.stdout) if r2.returncode == 0 else []
-                        m["alerts"] = len(alerts) if isinstance(alerts, list) else 0
-                    except (json.JSONDecodeError, ValueError):
-                        m["alerts"] = 0
-                elif _is_auth_failure(r.stderr):
-                    d["auth_failed"] = True
-                    d["reachable"] = _ping_check(dev.ip)
-                    d["probe_method"] = "ssh_auth_failed_ping" if d["reachable"] else "ssh_auth_failed"
-                    d["metrics"]["note"] = (
-                        "Ping reachable; SSH metrics unavailable — credentials rejected"
-                        if d["reachable"] else
-                        "SSH auth failed — credentials rejected"
-                    )
+                    d["api_available"] = True
+                    d["probe_method"] = "truenas_api_key"
+                    d["metrics"].update(truenas_api.pool_metrics(pool_data))
+                    alerts, alert_err = truenas_api.request(api_settings, "alerts", timeout=6)
+                    if not alert_err and isinstance(alerts, list):
+                        d["metrics"]["alerts"] = len(alerts)
                 else:
+                    d["api_available"] = False
                     d["reachable"] = _ping_check(dev.ip)
-                    d["probe_method"] = "ping" if d["reachable"] else "none"
+                    d["probe_method"] = "truenas_api_key_failed" if d["reachable"] else "truenas_api_unreachable"
+                    d["metrics"]["note"] = (
+                        pool_err["error"] if d["reachable"]
+                        else f"Network unreachable; {pool_err['error']}"
+                    )
             elif dt == "switch":
                 # Switch: password auth via sshpass (Cisco IOS needs legacy ciphers)
                 sw_pass_file = os.path.join(os.path.dirname(cfg.conf_dir), "credentials", "switch-password")
@@ -630,9 +570,10 @@ def _bg_probe_health():
         every return path carries a canonical
         `state` token (live/stale/degraded/auth_failed/unreachable/recovering)
         plus `reason`, `probed_at`, `last_success_at`, `failure_count`.
-        The legacy `status` field is set via legacy_status_for() so the
-        frontend's `h.status==='healthy'` checks keep working until Morty
-        migrates them to `h.state`.
+        The legacy `status` field is still set via legacy_status_for() for
+        older callers, but the dashboard reads `state` through classifier
+        helpers so stale, auth_failed, degraded, and unreachable stay
+        distinct.
         """
         htype = h.htype
         cmd = HEALTH_CMDS.get(htype, HEALTH_CMDS["linux"])

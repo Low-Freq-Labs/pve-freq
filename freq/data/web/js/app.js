@@ -37,6 +37,8 @@ function _healthState(h){return (h&&(h.state||h.status))||'unknown';}
 function _healthIsLive(h){var s=_healthState(h);return s==='live'||s==='recovering'||s==='healthy'||s==='up'||s==='ok';}
 function _healthIsBad(h){var s=_healthState(h);return s==='unreachable'||s==='auth_failed'||s==='degraded'||s==='down';}
 function _healthIsStale(h){return _healthState(h)==='stale';}
+function _healthLabel(h){if(_healthIsLive(h))return 'UP';if(_healthIsStale(h))return 'STALE';if(_healthIsBad(h))return 'DOWN';return 'UNKNOWN';}
+function _healthColor(h){if(_healthIsLive(h))return 'var(--green)';if(_healthIsStale(h))return 'var(--yellow)';if(_healthIsBad(h))return 'var(--red)';return 'var(--text-dim)';}
 function s(l,v,c){return '<div class="st"><div class="lb">'+l+'</div><div class="vl '+c+'">'+v+'</div></div>';}
 var st=s;
 function _pbar(pct,color){var p=pct||0;var c=p>=90?'var(--red)':p>=75?'var(--yellow)':color||'var(--purple-light)';return '<div class="pbar"><div class="pbar-fill" style="width:'+p+'%;background:'+c+'"></div></div>';}
@@ -734,7 +736,7 @@ function _showApp(){
 
   var p2=_authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
     _fleetCache.hd=hd;
-    var up=0;hd.hosts.forEach(function(h){if(h.status==='healthy')up++;});
+    var up=0;hd.hosts.forEach(function(h){if(_healthIsLive(h))up++;});
     _p(70,'HEALTH',up+'/'+hd.hosts.length+' hosts responded');
     return hd;
   }).catch(function(){_p(70,'HEALTH','health probe unavailable');return null;});
@@ -1460,9 +1462,9 @@ var WIDGET_REGISTRY=[
         h+='<div style="font-weight:600;font-size:13px;color:'+color+'">'+_esc(v.name)+' <span style="font-size:11px" class="text-dim">VLAN '+v.id+(v.subnet?' \u2022 '+v.subnet:'')+'</span></div>';
         h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">';
         v.hosts.forEach(function(host){
-          var bg=host.status==='healthy'?'rgba(50,255,50,0.1)':'rgba(255,50,50,0.1)';
-          var dot=host.status==='healthy'?'\u2022':'!';
-          var dotColor=host.status==='healthy'?'var(--green)':'var(--red)';
+          var bg=_healthIsLive(host)?'rgba(50,255,50,0.1)':_healthIsStale(host)?'rgba(255,190,50,0.1)':'rgba(255,50,50,0.1)';
+          var dot=_healthIsLive(host)?'\u2022':_healthIsStale(host)?'~':'!';
+          var dotColor=_healthColor(host);
           h+='<span style="padding:2px 8px;border-radius:4px;background:'+bg+';font-size:11px"><span style="color:'+dotColor+'">'+dot+'</span> '+_esc(host.label)+'</span>';
         });
         h+='</div></div>';
@@ -2143,9 +2145,8 @@ function _silentHealthRefresh(){
         /* Update status */
         var meta=card.querySelector('.host-meta');
         if(meta){var spans=meta.querySelectorAll('span');var last=spans[spans.length-1];
-          if(last&&(last.textContent==='UP'||last.textContent==='DOWN'||last.textContent==='ONLINE'||last.textContent==='OFFLINE')){
-            if(h.status==='healthy'){last.style.color='var(--green)';last.textContent='UP';}
-            else{last.style.color='var(--red)';last.textContent='DOWN';}}}
+          if(last&&(last.textContent==='UP'||last.textContent==='DOWN'||last.textContent==='ONLINE'||last.textContent==='OFFLINE'||last.textContent==='STALE'||last.textContent==='UNKNOWN')){
+            last.style.color=_healthColor(h);last.textContent=_healthLabel(h);}}
         /* Update metrics in-place */
         if(!_healthIsLive(h))return;
         /* Skip PVE nodes — their metrics come from the PVE API poller which
@@ -2372,7 +2373,7 @@ function _decorateAllHostCardsFresh(hd){
     else if(h.last_success_at!=null)perHostAge=Math.max(0,Date.now()/1000-Number(h.last_success_at));
     else if(h.age_seconds!=null)perHostAge=Number(h.age_seconds);
     var ageSec=perHostAge!=null?perHostAge:topAge;
-    if(h.status==='healthy'){
+    if(_healthIsLive(h)){
       _clearHostCardStale(card);
       _decorateHostCardFresh(card,ageSec);
     }else{
@@ -4861,7 +4862,7 @@ function _loadLabAssignments(){
     /* Add all hosts from health data */
     if(hd&&hd.hosts)hd.hosts.forEach(function(h){
       var serverLab=h.groups&&h.groups.indexOf('lab')>=0;
-      items.push({label:h.label,type:h.type||'linux',node:'',status:h.status==='healthy'?'online':'offline',serverLab:serverLab,source:'host'});
+      items.push({label:h.label,type:h.type||'linux',node:'',status:_healthIsLive(h)?'online':_healthIsStale(h)?'stale':'offline',serverLab:serverLab,source:'host'});
     });
     /* Add VMs not already covered by hosts (VMs without SSH entries) */
     var hostSet={};items.forEach(function(i){hostSet[i.label]=true;});
@@ -5278,9 +5279,13 @@ function _enrichInfraCards(){
           h+=_m('No SSH','METRICS','var(--text-dim)');
         }
       } else if(dev.type==='truenas'||dev.type==='synology'||dev.type==='unraid'){
+        var hasStorageMetrics=!!(m.pool_health||m.capacity_pct||m.total_size||m.alerts);
         if(m.note){
           h+=_m('REACHABLE','NETWORK','var(--green)');
-          h+=_m(m.note,'SSH','var(--yellow)');
+          h+=_m(m.note,dev.type==='truenas'?'API':'METRICS','var(--yellow)');
+        } else if(!hasStorageMetrics){
+          h+=_m('REACHABLE','NETWORK','var(--green)');
+          h+=_m('METRICS UNAVAILABLE',dev.type==='truenas'?'API':'SSH','var(--yellow)');
         } else {
           var poolColor=m.pool_health==='ONLINE'?'var(--green)':m.pool_health==='DEGRADED'?'var(--yellow)':'var(--red)';
           h+=_m(m.pool_health||'?','POOLS',poolColor);
@@ -5379,7 +5384,7 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
   if(!hosts)return labCards;
   hosts.forEach(function(h){
     if(infraLabels[h.label])return;
-    var cl=_hostColor(h.label,h.type);var up=h.status==='healthy';
+    var cl=_hostColor(h.label,h.type);var up=_healthIsLive(h);
     var isLab=labLabels[h.label];
     var diskPct=parseInt((h.disk||'0').replace('%',''))||0;
     var ramParts=(h.ram||'0/0MB').match(/(\d+)\/(\d+)/);
@@ -5428,7 +5433,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
     var nodeName=pn.name;
     var cl=_hostColor(nodeName,'pve');
     var live=healthMap[nodeName];
-    var up=(live&&live.status==='healthy')||pn.online===true;
+    var up=(live&&_healthIsLive(live))||pn.online===true;
     var nodeVms=(vmsByNode[nodeName]||[]).filter(function(v){return !labLabels[v.name]&&v.category!=='lab';});
     var nVms=nodeVms.length;
     var nCores=0,nRamMb=0,nOnline=0,nOffline=0;
@@ -5905,7 +5910,7 @@ function _fleetToolInner(tool,panel,content){
       h+='</div>';
       h+='<table class="w-full"><thead><tr><th class="w-30"></th><th>HOST</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>';
       d.hosts.forEach(function(x,i){
-        var up=x.status==='healthy';
+        var up=_healthIsLive(x);
         h+='<tr><td><input type="checkbox" class="ft-sshd-check" data-host="'+x.label+'"></td>';
         h+='<td><strong style="color:'+HC[i%HC.length]+'">'+x.label.toUpperCase()+'</strong></td>';
         h+='<td>'+badge(up?'ok':'down')+'</td>';
@@ -6229,11 +6234,11 @@ function switchMonitoring(tab){
   if(tab==='monhealth'){
     f.innerHTML='<div id="mon-h-out"><div class="skeleton"></div></div>';
     _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
-      var up=0,dn=0;d.hosts.forEach(function(h){if(h.status==='healthy')up++;else dn++;});
+      var up=0,dn=0;d.hosts.forEach(function(h){if(_healthIsLive(h))up++;else if(_healthIsBad(h))dn++;});
       var h='<div class="stats mb-12" >'+st('HOSTS',d.hosts.length,'p')+st('HEALTHY',up,'g')+st('UNHEALTHY',dn,dn>0?'r':'g')+st('RESPONSE',d.duration+'s','b')+'</div>';
       h+='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>TYPE</th><th>STATUS</th><th>UPTIME</th></tr></thead><tbody>';
       d.hosts.forEach(function(x){
-        h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+(x.type||'linux').toUpperCase()+'</td><td>'+badge(x.status==='healthy'?'ok':'down')+'</td><td class="text-meta">'+(x.uptime||'-')+'</td></tr>';
+        h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+(x.type||'linux').toUpperCase()+'</td><td>'+badge(_healthIsLive(x)?'ok':_healthIsStale(x)?'stale':'down')+'</td><td class="text-meta">'+(x.uptime||'-')+'</td></tr>';
       });
       h+='</tbody></table>';
       document.getElementById('mon-h-out').innerHTML=h;
@@ -6368,7 +6373,7 @@ function netPingAll(){
   _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
     var h='<table class="w-full"><thead><tr><th>HOST</th><th>IP</th><th>PING</th><th>LATENCY</th></tr></thead><tbody>';
     d.hosts.forEach(function(x){
-      var ok=x.status==='healthy';
+      var ok=_healthIsLive(x);
       h+='<tr><td><strong>'+x.label.toUpperCase()+'</strong></td><td>'+x.ip+'</td><td>'+badge(ok?'ok':'down')+'</td><td class="c-dim">'+( ok?'<1ms':'-')+'</td></tr>';
     });
     h+='</tbody></table>';if(out)out.innerHTML=h;
@@ -6883,7 +6888,7 @@ function sshdPanel(targetId){
     h+='</div>';
     h+='<table class="w-full"><thead><tr><th class="w-30"></th><th>HOST</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>';
     d.hosts.forEach(function(x,i){
-      var up=x.status==='healthy';
+      var up=_healthIsLive(x);
       h+='<tr><td><input type="checkbox" class="ft-sshd-check" data-host="'+x.label+'"></td>';
       h+='<td><strong style="color:'+HC[i%HC.length]+'">'+x.label.toUpperCase()+'</strong></td>';
       h+='<td>'+badge(up?'ok':'down')+'</td>';
@@ -7206,8 +7211,10 @@ function tnAction(action){
   var o=_infraOut('tn-out');if(!o)return;
   o.innerHTML='<span class="c-dim">Querying TrueNAS ('+action+')...</span>';
   _authFetch(API.INFRA_TRUENAS+'?action='+action).then(function(r){return r.json()}).then(function(d){
-    if(d.reachable){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output);}
-    else{o.innerHTML='<div class="c-red">Cannot reach TrueNAS at '+d.host+'</div><div class="c-dim-mt8">'+d.error+'</div>';}
+    if(d.api_available===false){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output||d.error||'API key unavailable');}
+    else if(d.reachable&&d.ssh_available===false){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output||d.error||'SSH metrics unavailable');}
+    else if(d.reachable){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output||d.raw||'');}
+    else{o.innerHTML='<div class="c-red">Cannot reach TrueNAS at '+(d.host||d.ip||'unknown')+'</div><div class="c-dim-mt8">'+(d.error||'')+'</div>';}
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
 }
 function idracAction(action){
@@ -8356,7 +8363,7 @@ function renderPveNodeCard(config){
   if(_fleetCache.fo&&_fleetCache.fo.pve_nodes)pn=_fleetCache.fo.pve_nodes.find(function(n){return n.name===label;});
   var live=null;
   if(_fleetCache.hd&&_fleetCache.hd.hosts)live=_fleetCache.hd.hosts.find(function(h){return h.label===label;});
-  var up=live&&live.status==='healthy';
+  var up=live&&_healthIsLive(live);
   document.getElementById('hd-subtitle').textContent=ip+' \u00b7 HYPERVISOR'+(pn?' \u00b7 '+pn.detail:'');
   var stats='';
   stats+=st('STATUS',up?'REACHABLE':'UNREACHABLE',up?'g':'r');
@@ -8410,7 +8417,7 @@ function renderInfraCard(config){
   document.getElementById('hd-subtitle').textContent=(ph?ph.ip+' \u00b7 ':'')+roleInfo.role+(ph?' \u00b7 '+ph.detail:'');
   var stats='';
   var live=_fleetCache.hd?(_fleetCache.hd.hosts||[]).find(function(h){return h.label===label;}):null;
-  var up=ph&&ph.reachable;if(live&&live.status==='healthy')up=true;
+  var up=ph&&ph.reachable;if(live&&_healthIsLive(live))up=true;
   stats+=st('STATUS',up?'REACHABLE':'UNREACHABLE',up?'g':'r');
   if(live){
     if(live.cores)stats+=st('CPU',live.cores+' Cores','p');
@@ -8725,7 +8732,7 @@ function renderVmCard(config){
   stats+=st('NODE',vm?vm.node:'?','b');
   stats+=st('STATUS',isRunning?'RUNNING':'STOPPED',isRunning?'g':'r');
   stats+='<div class="st"><div class="lb">CATEGORY</div><div><span class="cat-badge cat-'+cat+'">'+catLabel+'</span></div></div>';
-  if(liveHost&&liveHost.status==='healthy'){
+  if(liveHost&&_healthIsLive(liveHost)){
     stats+=st('CPU',liveHost.cores+' cores','p');
     var rp=(liveHost.ram||'').match(/(\d+)\/(\d+)/);
     stats+=st('RAM',rp?(_ramGB(rp[1])+'/'+_ramGB(rp[2])):'?',rp&&parseInt(rp[1])/parseInt(rp[2])>0.8?'r':'g');
@@ -8744,7 +8751,7 @@ function renderVmCard(config){
   sys+=kv('STATUS',isRunning?'RUNNING':'STOPPED',isRunning?'var(--green)':'var(--red)');
   sys+=kv('CATEGORY',catLabel.toUpperCase());
   sys+=kv('TIER',tier.toUpperCase());
-  if(liveHost&&liveHost.status==='healthy'){
+  if(liveHost&&_healthIsLive(liveHost)){
     sys+=kv('HOSTNAME',liveHost.label);
     sys+=kv('LOAD',liveHost.load);
   }

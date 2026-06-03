@@ -81,6 +81,7 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
                 _check_fleet_connectivity,
                 _check_service_account,
                 _check_legacy_passwords,
+                _check_truenas_api_credentials,
             ],
         ),
         (
@@ -794,6 +795,56 @@ def _check_legacy_passwords(cfg: FreqConfig) -> int:
         return 0
 
 
+def _check_truenas_api_credentials(cfg: FreqConfig) -> int:
+    """Verify core TrueNAS API-key management path when TrueNAS exists."""
+    devices = [
+        dev for dev in getattr(cfg.fleet_boundaries, "physical", {}).values()
+        if getattr(dev, "device_type", "") == "truenas"
+        and getattr(dev, "scope", "core") != "lab"
+    ]
+    if not devices and not getattr(cfg, "truenas_ip", ""):
+        return 0
+    if not devices:
+        from freq.core.types import PhysicalDevice
+
+        devices = [
+            PhysicalDevice(
+                key="truenas",
+                ip=cfg.truenas_ip,
+                label="truenas",
+                device_type="truenas",
+                scope="core",
+            )
+        ]
+
+    from freq.core import truenas_api
+
+    missing = []
+    failed = []
+    ok = []
+    for dev in devices:
+        api_settings = truenas_api.settings(cfg, dev)
+        ns = api_settings.get("secret_ns") or api_settings.get("section") or "truenas"
+        if not api_settings.get("api_key"):
+            missing.append(f"{dev.label}: vault {ns}:api_key")
+            continue
+        _data, err = truenas_api.request(api_settings, "status", timeout=5)
+        if err:
+            failed.append(f"{dev.label}: {err['error'][:80]}")
+        else:
+            ok.append(dev.label)
+
+    if failed:
+        fmt.step_warn("TrueNAS API: " + "; ".join(failed[:3]))
+        return 2
+    if missing:
+        fmt.step_warn("TrueNAS API key missing — " + "; ".join(missing[:3]))
+        return 2
+    if ok:
+        fmt.step_ok(f"TrueNAS API: {len(ok)}/{len(devices)} core target(s) live")
+    return 0
+
+
 # --- Fleet Data ---
 
 
@@ -803,6 +854,22 @@ def _check_hosts(cfg: FreqConfig) -> int:
 
         types = all_types(cfg.hosts)
         type_str = ", ".join(f"{c} {t}" for t, c in sorted(types.items()))
+        unmanaged_by_ip = {h.ip: h for h in cfg.hosts if not getattr(h, "managed", True)}
+        core_unmanaged = []
+        for dev in getattr(cfg.fleet_boundaries, "physical", {}).values():
+            if getattr(dev, "scope", "core") == "lab":
+                continue
+            if getattr(dev, "device_type", "") == "truenas":
+                continue
+            h = unmanaged_by_ip.get(dev.ip)
+            if h:
+                core_unmanaged.append(h.label or dev.label or dev.ip)
+        if core_unmanaged:
+            fmt.step_fail(
+                "Fleet: core physical host(s) marked unmanaged — "
+                + ", ".join(core_unmanaged[:5])
+            )
+            return 1
         fmt.step_ok(f"Fleet: {len(cfg.hosts)} hosts ({type_str})")
         return 0
     elif os.path.isfile(cfg.hosts_file):

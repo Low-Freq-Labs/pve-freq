@@ -15,10 +15,10 @@ Product law (pve-freq-product-law.md):
 
 Design:
   - `state` (the new canonical field) is always one of the six tokens.
-  - `status` is kept as a legacy alias ("healthy"|"unreachable") so the
-    existing frontend (~20+ `h.status==='healthy'` checks in app.js)
-    does not break. Morty's migration flips readers to `state` when
-    convenient. Both fields emit from the same source of truth.
+  - `status` is kept as a legacy alias ("healthy"|"unreachable") for
+    older consumers. The dashboard reads `state` through a single
+    classifier so stale/recovering/auth_failed do not collapse into a
+    boolean.
   - Every probe result carries `reason` (one-line operator-readable),
     `probed_at` (unix ts), `last_success_at` (unix ts or None),
     `failure_count` (consecutive failures).

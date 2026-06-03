@@ -94,18 +94,57 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
         self.assertIn("function _healthIsLive", src)
         self.assertIn("function _healthIsBad", src)
+        self.assertIn("function _healthLabel", src)
         self.assertIn("if(_healthIsLive(h))up++;else if(_healthIsBad(h))down++;", src)
         self.assertIn("if(_healthIsLive(h))totalUp++;else if(_healthIsBad(h))totalDown++;", src)
+        self.assertNotIn("status==='healthy'", src)
+        self.assertNotIn('status === "healthy"', src)
 
-    def test_truenas_auth_failure_keeps_ping_reachability_separate(self):
+    def test_truenas_quick_card_uses_api_key_truth(self):
         src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
         web_src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
-        self.assertIn("ssh_auth_failed_ping", src)
-        self.assertIn("Ping reachable; SSH metrics unavailable", src)
-        self.assertIn('failure_log_level="warn"', src)
-        self.assertIn("if r.returncode == 0:", src)
-        self.assertIn('command="midclt call alert.list"', src)
+        helper_src = (REPO_ROOT / "freq" / "core" / "truenas_api.py").read_text()
+        self.assertIn("from freq.core import truenas_api", src)
+        self.assertIn('truenas_api.request(api_settings, "pools"', src)
+        self.assertIn('d["probe_method"] = "truenas_api_key"', src)
+        self.assertIn("TrueNAS API key missing", helper_src)
+        self.assertIn("pool_metrics", helper_src)
         self.assertIn("_m('REACHABLE','NETWORK','var(--green)')", web_src)
+        self.assertIn("METRICS UNAVAILABLE", web_src)
+        self.assertIn("dev.type==='truenas'?'API':'SSH'", web_src)
+
+    def test_core_physical_hosts_cannot_hide_as_unmanaged(self):
+        doctor_src = (REPO_ROOT / "freq" / "core" / "doctor.py").read_text()
+        init_src = (REPO_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
+        hosts_src = (REPO_ROOT / "freq" / "modules" / "hosts.py").read_text()
+        self.assertIn("core physical host(s) marked unmanaged", doctor_src)
+        self.assertIn('getattr(dev, "device_type", "") == "truenas"', doctor_src)
+        self.assertIn("is core physical infrastructure", init_src)
+        self.assertIn("leaving managed so doctor/verify must fail", init_src)
+        self.assertIn('"managed": dev.scope != "lab" and dev.device_type != "truenas"', hosts_src)
+        self.assertIn('managed=d.get("managed", True)', hosts_src)
+
+    def test_truenas_action_endpoint_is_action_aware_and_truthful(self):
+        src = (REPO_ROOT / "freq" / "api" / "store.py").read_text()
+        helper_src = (REPO_ROOT / "freq" / "core" / "truenas_api.py").read_text()
+        self.assertIn("read_actions = {", src)
+        self.assertIn('"pools": "zpool list -v"', src)
+        self.assertIn("truenas_api.settings(cfg, target)", src)
+        self.assertIn("truenas_api.request(api_settings, action)", src)
+        self.assertIn("truenas_api_key", helper_src + src)
+        self.assertIn("ssh_auth_failed_ping", src)
+        self.assertIn('"ssh_available": False', src)
+        self.assertIn('failure_log_level="warn"', src)
+        self.assertIn("use_sudo=True", src)
+
+    def test_doctor_checks_truenas_api_key_path(self):
+        src = (REPO_ROOT / "freq" / "core" / "doctor.py").read_text()
+        helper_src = (REPO_ROOT / "freq" / "core" / "truenas_api.py").read_text()
+        self.assertIn("def _check_truenas_api_credentials", src)
+        self.assertIn("_check_truenas_api_credentials", src)
+        self.assertIn("TrueNAS API key missing", src)
+        self.assertIn("truenas_api.settings(cfg, dev)", src)
+        self.assertIn('vault_get(cfg, secret_ns, "api_key")', helper_src)
 
 
 if __name__ == "__main__":
