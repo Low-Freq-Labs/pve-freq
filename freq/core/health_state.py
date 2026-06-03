@@ -15,10 +15,10 @@ Product law (pve-freq-product-law.md):
 
 Design:
   - `state` (the new canonical field) is always one of the six tokens.
-  - `status` is kept as a legacy alias ("healthy"|"unreachable") for
-    older consumers. The dashboard reads `state` through a single
-    classifier so stale/recovering/auth_failed do not collapse into a
-    boolean.
+  - `status` is kept as a compatibility alias, but it must not flatten
+    stale/degraded/auth_failed into unreachable. Older consumers still
+    see live/recovering as "healthy"; every non-live state keeps its
+    truth token.
   - Every probe result carries `reason` (one-line operator-readable),
     `probed_at` (unix ts), `last_success_at` (unix ts or None),
     `failure_count` (consecutive failures).
@@ -51,16 +51,15 @@ ALL_STATES = frozenset({
 def legacy_status_for(state: str) -> str:
     """Map a six-state token to the legacy 'healthy'|'unreachable' alias.
 
-    Frontend compat: app.js treats 'healthy' as up, everything else as
-    down. live + recovering = up; stale + degraded + auth_failed +
-    unreachable = down. Stale on its own is still honest: the cache may
-    be old, so we refuse to report it as 'healthy'. Degraded likewise
-    (partial probe success is not full success — the product law says
-    do not collapse partial failure into fake green).
+    Frontend compat: old app.js paths treated 'healthy' as up and
+    everything else as down. live + recovering remain healthy; stale,
+    degraded, auth_failed, and unreachable keep distinct tokens so API
+    consumers and dashboard fallbacks do not display false "SSH down"
+    messages for stale-but-recent legacy device probes.
     """
     if state in (STATE_LIVE, STATE_RECOVERING):
         return "healthy"
-    return "unreachable"
+    return state
 
 
 def classify_probe_failure(returncode: int, stderr: str, stdout: str) -> tuple[str, str]:

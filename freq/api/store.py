@@ -16,6 +16,7 @@ import subprocess
 from freq.core import log as logger
 from freq.api.helpers import require_post, json_response, get_json_body
 from freq.core.config import load_config
+from freq.core.health_state import STATE_AUTH_FAILED, classify_probe_failure
 from freq.core.ssh import run as ssh_run_fn
 from freq.core import truenas_api
 from freq.modules.serve import _check_session_role, _parse_query
@@ -38,13 +39,8 @@ def _ping_check(ip: str) -> bool:
 
 
 def _is_auth_failure(stderr: str) -> bool:
-    s = (stderr or "").lower()
-    return (
-        "permission denied" in s
-        or "publickey" in s
-        or "no supported authentication methods" in s
-        or "too many authentication failures" in s
-    )
+    state, _reason = classify_probe_failure(255, stderr or "", "")
+    return state == STATE_AUTH_FAILED
 
 
 def _resolve_truenas_target(cfg, target: str = ""):

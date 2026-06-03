@@ -5167,6 +5167,9 @@ a:hover{{text-decoration:underline}}
 
     def _serve_container_action(self):
         """Restart/stop/start a container on a Docker host."""
+        if self.command != "POST":
+            self._json_response({"error": "Container action requires POST"}, 405)
+            return
         role, err = _check_session_role(self, "operator")
         if err:
             self._json_response({"error": err}, 403)

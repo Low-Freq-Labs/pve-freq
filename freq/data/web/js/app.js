@@ -4025,7 +4025,7 @@ function loadBackupPolicies(){
 }
 /* ── Trend Data (Capacity page) ── */
 function takeTrendSnapshot(){
-  _authFetch(API.TREND_SNAPSHOT).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.TREND_SNAPSHOT,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok)toast('Trend snapshot saved','success');
     else toast(d.error||'Snapshot failed','error');
     loadTrendData();
@@ -4076,7 +4076,7 @@ function createPlaybook(){
   var trigger=document.getElementById('pb-create-trigger').value.trim();
   var msg=document.getElementById('pb-create-msg');
   if(!name){if(msg)msg.innerHTML='<span class="c-red">Name required</span>';return;}
-  _authFetch(API.PLAYBOOKS_CREATE+'?name='+encodeURIComponent(name)+'&description='+encodeURIComponent(desc)+'&trigger='+encodeURIComponent(trigger))
+  _authFetch(API.PLAYBOOKS_CREATE+'?name='+encodeURIComponent(name)+'&description='+encodeURIComponent(desc)+'&trigger='+encodeURIComponent(trigger),{method:'POST'})
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){if(msg)msg.innerHTML='<span class="c-red">'+_esc(d.error)+'</span>';return;}
     if(msg)msg.innerHTML='<span class="c-green">Created: '+_esc(d.filename)+'</span>';
@@ -4148,10 +4148,13 @@ function openTerminal(type,target,node,label,htype){
   /* Show connecting state */
   term.writeln('\x1b[90m  Connecting to '+_esc(_displayName)+'...\x1b[0m');
 
+  /* Terminal session mutations are POST-only server-side. Keep
+     parameters in the query string because the API handler reads
+     get_params(handler) for both GET and POST requests. */
   _authFetch('/api/terminal/open?type='+type+'&target='+encodeURIComponent(target)+
     (node?'&node='+encodeURIComponent(node):'')+
     (htype?'&htype='+encodeURIComponent(htype):'')+
-    '&cols='+cols+'&rows='+rows)
+    '&cols='+cols+'&rows='+rows,{method:'POST'})
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){term.writeln('\x1b[31mError: '+d.error+'\x1b[0m');return;}
     _termSession=d.session;
@@ -4225,7 +4228,7 @@ function openTerminal(type,target,node,label,htype){
     /* Handle resize */
     term.onResize(function(size){
       if(_termSession){
-        _authFetch('/api/terminal/resize?session='+_termSession+'&cols='+size.cols+'&rows='+size.rows);
+        _authFetch('/api/terminal/resize?session='+_termSession+'&cols='+size.cols+'&rows='+size.rows,{method:'POST'});
       }
     });
 
@@ -4241,7 +4244,7 @@ function openTerminal(type,target,node,label,htype){
 
 function closeTerminal(){
   if(_termSocket&&_termSocket.readyState===WebSocket.OPEN)_termSocket.close();
-  if(_termSession)_authFetch('/api/terminal/close?session='+_termSession);
+  if(_termSession)_authFetch('/api/terminal/close?session='+_termSession,{method:'POST'});
   if(_termXterm){_termXterm.dispose();_termXterm=null;}
   _termSession=null;_termSocket=null;_termFit=null;
   document.getElementById('terminal-overlay').style.display='none';
@@ -4926,7 +4929,7 @@ function createRule(){
   var sev=document.getElementById('rule-severity').value;
   var msg=document.getElementById('rule-create-msg');
   if(!n){msg.innerHTML='<span class="c-red">Name required</span>';return;}
-  _authFetch('/api/rules/create?name='+encodeURIComponent(n)+'&condition='+c+'&target='+encodeURIComponent(t)+'&threshold='+th+'&duration='+dur+'&cooldown='+cd+'&severity='+sev)
+  _authFetch('/api/rules/create?name='+encodeURIComponent(n)+'&condition='+c+'&target='+encodeURIComponent(t)+'&threshold='+th+'&duration='+dur+'&cooldown='+cd+'&severity='+sev,{method:'POST'})
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){msg.innerHTML='<span class="c-red">'+d.error+'</span>';return;}
     msg.innerHTML='<span class="c-green">Rule created</span>';loadRules();
@@ -4934,12 +4937,12 @@ function createRule(){
   }).catch(function(e){msg.innerHTML='<span class="c-red">Failed: '+e+'</span>';});
 }
 function toggleRule(name,enabled){
-  _authFetch('/api/rules/update?name='+encodeURIComponent(name)+'&enabled='+enabled)
+  _authFetch('/api/rules/update?name='+encodeURIComponent(name)+'&enabled='+enabled,{method:'POST'})
   .then(function(r){return r.json()}).then(function(d){loadRules();});
 }
 function deleteRule(name){
   if(!confirm('Delete rule "'+name+'"?'))return;
-  _authFetch('/api/rules/delete?name='+encodeURIComponent(name))
+  _authFetch('/api/rules/delete?name='+encodeURIComponent(name),{method:'POST'})
   .then(function(r){return r.json()}).then(function(d){loadRules();});
 }
 function loadAlertHistory(){
@@ -5064,7 +5067,7 @@ function saveHostProps(label){
   var groupEl=document.getElementById('hg-'+label);
   if(!typeEl||!groupEl)return;
   var url='/api/admin/hosts/update?label='+encodeURIComponent(label)+'&type='+encodeURIComponent(typeEl.value)+'&groups='+encodeURIComponent(groupEl.value);
-  _authFetch(url).then(function(r){return r.json()}).then(function(d){
+  _authFetch(url,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast('Error: '+d.error,'error');return;}
     toast(label+' updated','success');
   }).catch(function(e){toast('Failed: '+e,'error');});
@@ -6219,7 +6222,7 @@ function vmtResize(){
   var url='/api/vm/resize?vmid='+src;
   if(cores)url+='&cores='+cores;
   if(ram)url+='&ram='+ram;
-  _authFetch(url).then(function(r){return r.json()}).then(function(d){
+  _authFetch(url,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('VM '+src+' resized','success');if(out)out.innerHTML='<div class="c-green">VM '+src+' resized successfully.</div>';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
@@ -6461,7 +6464,7 @@ function bkTakeSnap(){
   var out=document.getElementById('bk-snap-out');if(out)out.innerHTML='<div class="c-yellow">Creating snapshot...</div>';
   var url=API.BACKUP_CREATE+'?vmid='+vmid;
   if(name)url+='&name='+encodeURIComponent(name);
-  _authFetch(url).then(function(r){return r.json()}).then(function(d){
+  _authFetch(url,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){toast('Snapshot "'+d.snapshot+'" created','success');if(out)out.innerHTML='<div class="c-green">Snapshot "'+d.snapshot+'" created for VM '+vmid+'</div>';}
     else{toast(d.error||'Snapshot failed','error');if(out)out.innerHTML='<div class="c-red">'+(d.error||'Failed')+'</div>';}
   }).catch(function(e){toast('Snapshot failed','error');if(out)out.innerHTML='<div class="c-red">'+e+'</div>';});
@@ -6520,7 +6523,7 @@ function labDockerAction(name,action){
 function _labDockerRun(name,action){
   var out=document.getElementById('ft-lab-out');
   if(out)out.innerHTML='<div class="c-yellow">'+action.toUpperCase()+' '+name+'...</div>';
-  _authFetch('/api/containers/action?host=docker-dev&name='+encodeURIComponent(name)+'&action='+encodeURIComponent(action)).then(function(r){return r.json()}).then(function(d){
+  _authFetch('/api/containers/action?host=docker-dev&name='+encodeURIComponent(name)+'&action='+encodeURIComponent(action),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     var txt=d.output||d.error||'';
     if(out)out.innerHTML='<pre style="font-size:11px;color:var(--green);white-space:pre-wrap;margin:0">'+name+': '+(txt||action+' OK')+'</pre>';
     toast(name+' '+action+' complete','success');
@@ -8558,7 +8561,7 @@ function renderHostCard(config){
 function hdDockerRestart(name){
   if(!confirm('Restart container: '+name+'?'))return;
   var host=_cardState.host;
-  _authFetch('/api/containers/action?host='+encodeURIComponent(host)+'&name='+encodeURIComponent(name)+'&action=restart')
+  _authFetch('/api/containers/action?host='+encodeURIComponent(host)+'&name='+encodeURIComponent(name)+'&action=restart',{method:'POST'})
     .then(function(r){return r.json()}).then(function(d){toast(d.ok?'Restarted '+name:(d.error||'Failed'),'success');}).catch(function(e){toast('Error: '+e,'error');});
 }
 function hdDockerLogs(name){
@@ -9837,7 +9840,7 @@ function _renderPbSteps(){
 function runPbStep(idx){
   _pbSteps[idx]._status='running';
   _renderPbSteps();
-  _authFetch('/api/playbooks/step?filename='+encodeURIComponent(_pbFilename)+'&step='+idx)
+  _authFetch('/api/playbooks/step?filename='+encodeURIComponent(_pbFilename)+'&step='+idx,{method:'POST'})
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){_pbSteps[idx]._status='fail';_pbSteps[idx]._error=d.error;_renderPbSteps();return;}
     var r=d.result;

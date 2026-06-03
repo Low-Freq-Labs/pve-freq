@@ -82,6 +82,14 @@ mtu = 1500
 # user = "freq-admin"
 # config_path = "/cf/conf/config.xml"
 
+# TrueNAS read-only dashboard integration.
+# Store the secret by file path or in secure vault host truenas-prod / key api_key.
+# [truenas]
+# type = "api_key"
+# url = "https://192.168.1.20/api/v2.0"
+# api_key_file = "/opt/pve-freq/data/secrets/truenas-prod.key"
+# api_key_ref = "secrets://truenas-prod"
+
 [services]
 dashboard_port = 8888
 watchdog_port = 9900

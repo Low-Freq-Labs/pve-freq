@@ -763,6 +763,7 @@ def handle_deploy_agent(handler):
 def handle_infra_overview(handler):
     """GET /api/infra/overview -- full infrastructure overview."""
     cfg = load_config()
+    physical_types = {"truenas", "switch", "idrac"}
 
     cmd = (
         'echo "$(hostname)|$(cat /etc/os-release 2>/dev/null | grep -oP \'(?<=PRETTY_NAME=\\").*(?=\\")\' || echo unknown)|'
@@ -772,8 +773,9 @@ def handle_infra_overview(handler):
         '$(systemctl list-units --type=service --state=running --no-legend 2>/dev/null | wc -l)"'
     )
 
+    shell_hosts = [h for h in cfg.hosts if h.htype not in physical_types]
     results = ssh_run_many(
-        hosts=cfg.hosts,
+        hosts=shell_hosts,
         command=cmd,
         key_path=cfg.ssh_key_path,
         connect_timeout=3,
@@ -783,8 +785,50 @@ def handle_infra_overview(handler):
         cfg=cfg,
     )
 
+    with _bg_lock:
+        quick = _bg_cache.get("infra_quick") or {}
+    quick_devices = quick.get("devices", []) if isinstance(quick, dict) else []
+    quick_by_label = {d.get("label"): d for d in quick_devices if isinstance(d, dict)}
+    quick_by_ip = {d.get("ip"): d for d in quick_devices if isinstance(d, dict)}
+
+    def _physical_layer(h):
+        q = quick_by_label.get(h.label) or quick_by_ip.get(h.ip) or {}
+        reachable = bool(q.get("reachable"))
+        auth_failed = bool(q.get("auth_failed"))
+        api_available = q.get("api_available")
+        if auth_failed:
+            status = "auth_failed"
+        elif reachable and api_available is False:
+            status = "degraded"
+        elif reachable:
+            status = "up"
+        else:
+            status = "down"
+        metrics = q.get("metrics") if isinstance(q.get("metrics"), dict) else {}
+        return {
+            "label": h.label,
+            "ip": h.ip,
+            "type": h.htype,
+            "status": status,
+            "hostname": h.label,
+            "os": h.htype,
+            "cores": "",
+            "ram": "",
+            "disk_pct": "",
+            "containers": 0,
+            "services": 0,
+            "reachable": reachable,
+            "auth_failed": auth_failed,
+            "api_available": api_available,
+            "probe_method": q.get("probe_method", "none"),
+            "note": metrics.get("note", ""),
+        }
+
     layers = []
     for h in cfg.hosts:
+        if h.htype in physical_types:
+            layers.append(_physical_layer(h))
+            continue
         r = result_for(results, h)
         if r and r.returncode == 0 and r.stdout:
             parts = r.stdout.split("|")

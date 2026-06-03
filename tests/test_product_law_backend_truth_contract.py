@@ -15,9 +15,10 @@ Pin the six-state contract on every probe return path in:
   - freq/api/fleet.py handle_health_api fallback (cold-cache path)
   - circuit breaker engage / reset must write audit.jsonl evidence
 
-The frontend-compat alias (`status = "healthy"|"unreachable"`) must
-remain set alongside the new `state` field so Morty's ~20 app.js
-`h.status === 'healthy'` checks keep working.
+The frontend-compat alias (`status`) must remain set alongside the
+new `state` field. live/recovering stay `healthy` for old green-state
+readers; non-live states preserve their truth token instead of being
+flattened to `unreachable`.
 """
 import os
 import sys
@@ -58,11 +59,11 @@ class TestHealthStateModuleExists(unittest.TestCase):
         # live + recovering = 'healthy' (frontend compat)
         self.assertEqual(hs.legacy_status_for("live"), "healthy")
         self.assertEqual(hs.legacy_status_for("recovering"), "healthy")
-        # Everything else collapses to 'unreachable' in the legacy alias
-        # so the frontend does not paint stale/degraded/auth_failed as up.
-        self.assertEqual(hs.legacy_status_for("stale"), "unreachable")
-        self.assertEqual(hs.legacy_status_for("degraded"), "unreachable")
-        self.assertEqual(hs.legacy_status_for("auth_failed"), "unreachable")
+        # Non-live states preserve their truth token so stale/degraded/
+        # auth_failed do not render as false unreachable failures.
+        self.assertEqual(hs.legacy_status_for("stale"), "stale")
+        self.assertEqual(hs.legacy_status_for("degraded"), "degraded")
+        self.assertEqual(hs.legacy_status_for("auth_failed"), "auth_failed")
         self.assertEqual(hs.legacy_status_for("unreachable"), "unreachable")
 
 
@@ -142,12 +143,12 @@ class TestEntryBase(unittest.TestCase):
         self.assertEqual(e["last_success_at"], now)
         self.assertEqual(e["failure_count"], 0)
 
-    def test_auth_failed_entry_is_legacy_unreachable(self):
+    def test_auth_failed_entry_preserves_status_token(self):
         from freq.core.health_state import entry_base
         e = entry_base(self._fake_host(), state="auth_failed",
                        reason="publickey rejected", probed_at=time.time())
         self.assertEqual(e["state"], "auth_failed")
-        self.assertEqual(e["status"], "unreachable")
+        self.assertEqual(e["status"], "auth_failed")
         self.assertEqual(e["reason"], "publickey rejected")
         # Stores None when we have no prior success on record.
         self.assertIsNone(e["last_success_at"])
@@ -179,7 +180,7 @@ class TestMarkStale(unittest.TestCase):
         }
         stale = mark_stale(cached, now, "circuit breaker backoff (120s remaining)")
         self.assertEqual(stale["state"], "stale")
-        self.assertEqual(stale["status"], "unreachable")
+        self.assertEqual(stale["status"], "stale")
         self.assertIn("circuit breaker", stale["reason"])
         self.assertGreaterEqual(stale["age_seconds"], 299)
         self.assertLessEqual(stale["age_seconds"], 301)

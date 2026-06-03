@@ -227,6 +227,7 @@ class TestServeMutatingHandlersRejectGet(unittest.TestCase):
         ("/api/agent/destroy", "_serve_agent_destroy", True),
         ("/api/media/restart", "_serve_media_restart", True),
         ("/api/media/update", "_serve_media_update", True),
+        ("/api/containers/action", "_serve_container_action", True),
         ("/api/net/portscan", "_serve_portscan", True),
         ("/api/admin/hosts/update", "_serve_admin_hosts_update", True),
         ("/api/admin/fleet-boundaries/update", "_serve_admin_fleet_boundaries_update", True),

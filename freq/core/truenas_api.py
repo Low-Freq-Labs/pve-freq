@@ -28,9 +28,13 @@ def settings(cfg, target) -> dict[str, str]:
         [truenas]
         type = "api_key"
         url = "https://10.25.255.25/api/v2.0"
+        api_key_file = "/opt/pve-freq/data/secrets/truenas-prod.key"
         api_key_ref = "secrets://truenas-prod"
 
-    The secret is read as ``vault_get(cfg, "truenas-prod", "api_key")``.
+    ``api_key_file`` is preferred when present because it lets operators
+    stage one-shot TrueNAS API secrets by path without putting them in
+    config or chat logs. Otherwise the secret is read as
+    ``vault_get(cfg, "truenas-prod", "api_key")``.
     If no section exists, the core TrueNAS defaults to namespace
     ``truenas`` and URL ``https://<target.ip>/api/v2.0``.
     """
@@ -51,7 +55,16 @@ def settings(cfg, target) -> dict[str, str]:
     else:
         secret_ns = section.get("vault_namespace", "") or section_name
 
-    api_key = vault_get(cfg, secret_ns, "api_key") if secret_ns else ""
+    key_file = str(section.get("api_key_file") or section.get("api_key_path") or "").strip()
+    api_key = ""
+    if key_file:
+        try:
+            with open(os.path.expanduser(key_file), encoding="utf-8") as f:
+                api_key = f.read().strip()
+        except OSError:
+            api_key = ""
+    if not api_key:
+        api_key = vault_get(cfg, secret_ns, "api_key") if secret_ns else ""
     if not api_key:
         api_key = vault_get(cfg, section_name, "api_key")
 
@@ -61,6 +74,7 @@ def settings(cfg, target) -> dict[str, str]:
         "url": url,
         "api_key": api_key,
         "secret_ns": secret_ns,
+        "api_key_file": key_file,
     }
 
 

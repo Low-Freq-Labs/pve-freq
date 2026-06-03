@@ -335,9 +335,10 @@ class TestBgProbeHealth(unittest.TestCase):
 
     def test_unreachable_host(self):
         hosts = [_make_host("dead01", "10.0.0.99")]
-        data, _ = self._run_probe(hosts, [_make_ssh_result(1, "")])
+        data, _ = self._run_probe(hosts, [_make_ssh_result(255, "", "No route to host")])
 
         h = data["hosts"][0]
+        self.assertEqual(h["state"], "unreachable")
         self.assertEqual(h["status"], "unreachable")
         self.assertEqual(h["cores"], "-")
         self.assertEqual(h["ram"], "-")

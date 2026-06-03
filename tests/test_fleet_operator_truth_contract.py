@@ -10,6 +10,7 @@ error in the logs.
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from freq.core.config import load_fleet_boundaries
 
@@ -112,6 +113,42 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("_m('REACHABLE','NETWORK','var(--green)')", web_src)
         self.assertIn("METRICS UNAVAILABLE", web_src)
         self.assertIn("dev.type==='truenas'?'API':'SSH'", web_src)
+
+    def test_truenas_settings_can_read_api_key_file(self):
+        from freq.core import truenas_api
+
+        with tempfile.TemporaryDirectory(prefix="freq-truenas-key-") as tmp:
+            tmp_path = Path(tmp)
+            key_path = tmp_path / "truenas.key"
+            key_path.write_text("tn-test-secret\n")
+            (tmp_path / "freq.toml").write_text(
+                "\n".join(
+                    [
+                        "[truenas]",
+                        'type = "api_key"',
+                        'url = "https://10.0.0.25/api/v2.0"',
+                        f'api_key_file = "{key_path}"',
+                        'api_key_ref = "secrets://should-not-win"',
+                    ]
+                )
+            )
+            cfg = SimpleNamespace(conf_dir=str(tmp_path), vault_file=str(tmp_path / "vault.enc"))
+            target = SimpleNamespace(ip="10.0.0.25", label="truenas", key="truenas")
+
+            settings = truenas_api.settings(cfg, target)
+
+        self.assertEqual(settings["api_key"], "tn-test-secret")
+        self.assertEqual(settings["api_key_file"], str(key_path))
+        self.assertEqual(settings["secret_ns"], "should-not-win")
+
+    def test_infra_overview_does_not_probe_physical_devices_as_linux(self):
+        src = (REPO_ROOT / "freq" / "api" / "fleet.py").read_text()
+        self.assertIn('physical_types = {"truenas", "switch", "idrac"}', src)
+        self.assertIn("shell_hosts = [h for h in cfg.hosts if h.htype not in physical_types]", src)
+        self.assertIn("quick_by_label", src)
+        self.assertIn("quick_by_ip", src)
+        self.assertIn('"hostname": h.label', src)
+        self.assertIn('"status": status', src)
 
     def test_core_physical_hosts_cannot_hide_as_unmanaged(self):
         doctor_src = (REPO_ROOT / "freq" / "core" / "doctor.py").read_text()
