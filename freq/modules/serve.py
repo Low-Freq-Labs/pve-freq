@@ -4020,9 +4020,14 @@ a:hover{{text-decoration:underline}}
                 "pfctl -ss 2>/dev/null | awk '{print $3}' | cut -d: -f1 | sort | uniq -c | sort -rn | head -15"
             ),
             "interfaces": (
-                'echo "=== INTERFACES WITH IPs === ";'
-                "ifconfig -a | grep -E '^[a-z]|inet ' | awk '/^[a-z]/{iface=$1} /inet /{print iface, $2}' | column -t; "
-                "echo \"\";echo \"=== ALL INTERFACES === \";ifconfig -l | tr ' ' '\\n'"
+                'echo "=== INTERFACES === ";'
+                "printf '%-18s  %s\\n' 'INTERFACE' 'IP ADDRESS';"
+                "printf '%-18s  %s\\n' '──────────────────' '────────────────────────';"
+                "for iface in $(ifconfig -l); do "
+                '  ips=$(ifconfig "$iface" 2>/dev/null | awk \'/ inet /{print $2}\' | tr \'\\n\' \',\' | sed \'s/,$//\'); '
+                '  [ -n "$ips" ] || ips="no IP assigned"; '
+                '  printf "%-18s  %s\\n" "$iface" "$ips"; '
+                "done"
             ),
             "gateways": (
                 'echo "=== ROUTING TABLE === ";netstat -rn | head -25;'

@@ -59,6 +59,11 @@ def _app_js():
         return f.read()
 
 
+def _serve_py():
+    with open(os.path.join(REPO_ROOT, "freq", "modules", "serve.py")) as f:
+        return f.read()
+
+
 def _fn_body(src, name):
     idx = src.find("function " + name + "(")
     if idx == -1:
@@ -296,6 +301,27 @@ class TestInfraOutputIsHumanReadable(unittest.TestCase):
                 body = _fn_body(src, fn)
                 self.assertIn("_infraMiniStats", body)
                 self.assertNotIn("_statCards", body)
+
+    def test_pfsense_interfaces_render_as_one_operator_table(self):
+        src = _app_js()
+        self.assertIn("function _pfInterfaceRows", src)
+        self.assertIn("function _renderPfInterfacesOutput", src)
+        self.assertIn("if(d.action==='interfaces')return _renderPfInterfacesOutput(d);", _fn_body(src, "_renderPfOutput"))
+        body = _fn_body(src, "_renderPfInterfacesOutput")
+        self.assertIn("<th>Interface</th><th>IP Address</th>", body)
+        self.assertIn("no IP assigned", body)
+        self.assertIn("_infraRawDetails('Raw pfSense payload'", body)
+        self.assertNotIn("_infraRenderSection", body)
+
+    def test_pfsense_interfaces_backend_emits_one_curated_section(self):
+        src = _serve_py()
+        interfaces_idx = src.find('"interfaces": (')
+        self.assertNotEqual(interfaces_idx, -1)
+        chunk = src[interfaces_idx:interfaces_idx + 900]
+        self.assertIn('=== INTERFACES ===', chunk)
+        self.assertIn('no IP assigned', chunk)
+        self.assertNotIn('=== INTERFACES WITH IPs ===', chunk)
+        self.assertNotIn('=== ALL INTERFACES ===', chunk)
 
 
 class TestSilentRefreshStructuralSanity(unittest.TestCase):

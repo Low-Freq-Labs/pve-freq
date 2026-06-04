@@ -7394,6 +7394,55 @@ function _infraRenderTextDevice(device,action,output,opts){
   sections.forEach(function(sec){h+=_infraRenderSection(sec,opts.kind);});
   return h+_infraRawDetails('Raw '+device+' payload',output);
 }
+function _infraSectionLines(output,title){
+  title=_infraTitle(title);
+  var found=[];
+  _infraSections(output,'Output').forEach(function(sec){
+    if(_infraTitle(sec.title)===title)found=sec.lines||[];
+  });
+  return found;
+}
+function _pfInterfaceRows(output){
+  var ipsByIface={};
+  var names=[];
+  _infraSectionLines(output,'INTERFACES').forEach(function(line){
+    if(_infraIsSeparator(line)||/^INTERFACE\b/i.test(String(line||'').trim()))return;
+    var cols=_infraSplitCols(line);
+    if(cols.length>=1){
+      var iface=String(cols[0]||'').replace(/:$/,'');
+      if(!iface)return;
+      if(names.indexOf(iface)<0)names.push(iface);
+      var ip=cols.slice(1).join(', ').trim();
+      if(ip&&!/^no ip assigned$/i.test(ip))ipsByIface[iface]=ip;
+    }
+  });
+  _infraSectionLines(output,'INTERFACES WITH IPs').forEach(function(line){
+    var cols=_infraSplitCols(line);
+    if(cols.length>=2){
+      var iface=String(cols[0]||'').replace(/:$/,'');
+      if(iface)ipsByIface[iface]=cols.slice(1).join(', ');
+    }
+  });
+  _infraSectionLines(output,'ALL INTERFACES').forEach(function(line){
+    var name=String(line||'').trim().replace(/:$/,'');
+    if(name&&names.indexOf(name)<0)names.push(name);
+  });
+  Object.keys(ipsByIface).forEach(function(name){if(names.indexOf(name)<0)names.push(name);});
+  return names.map(function(name){return {name:name,ip:ipsByIface[name]||''};});
+}
+function _renderPfInterfacesOutput(d){
+  var rows=_pfInterfaceRows(d.output);
+  if(!rows.length)return _infraRenderTextDevice('pfSense','interfaces',d.output||'No interface data returned');
+  var withIp=rows.filter(function(r){return !!r.ip;}).length;
+  var h='<div style="color:var(--green);font-weight:800;margin-bottom:8px;font-size:12px">PFSENSE — INTERFACES</div>';
+  h+=_infraMiniStats([{l:'Interfaces',v:rows.length,c:'text'},{l:'With IP',v:withIp,c:'green'},{l:'No IP',v:rows.length-withIp,c:(rows.length-withIp)>0?'yellow':'green'}]);
+  h+='<table><thead><tr><th>Interface</th><th>IP Address</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    h+='<tr><td><strong>'+_esc(r.name)+'</strong></td><td class="mono-11">'+(r.ip?_esc(r.ip):'<span class="c-dim">no IP assigned</span>')+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  return h+_infraRawDetails('Raw pfSense payload',d.output);
+}
 function _fmtBytes(value){
   var n=Number(value||0);if(!isFinite(n)||n<=0)return '0B';
   var u=['B','KiB','MiB','GiB','TiB','PiB'];var i=0;
@@ -7579,6 +7628,7 @@ function _renderTrueNasOutput(d){
 }
 function _renderPfOutput(d){
   var lines=_infraLines(d.output);var stats=[];
+  if(d.action==='interfaces')return _renderPfInterfacesOutput(d);
   if(d.action==='states'){
     var m=(d.output||'').match(/Active states:\s*([0-9]+)/i);
     if(m)stats.push({l:'Active states',v:m[1],c:'cyan'});

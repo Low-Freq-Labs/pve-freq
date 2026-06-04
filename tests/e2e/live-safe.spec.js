@@ -162,7 +162,7 @@ test.describe('live dashboard safe E2E', () => {
 
   test('expanded core read actions render readable output without toast spam', async ({ page }) => {
     const cases = [
-      { label: 'firewall', buttons: [/ARP TABLE/], expect: /PFSENSE|ARP TABLE|IP ADDRESS|SUMMARY/i },
+      { label: 'firewall', buttons: [/INTERFACES/, /ARP TABLE/], expect: /PFSENSE|INTERFACES|ARP TABLE|IP Address|IP ADDRESS|SUMMARY/i },
       { label: 'switch', buttons: [/CDP NEIGHBORS/], expect: /SWITCH|CDP|NEIGHBOR|Device ID|Local Intrfce/i },
       { label: 'truenas', buttons: [/SMART DISKS/, /SNAPSHOTS/, /NETWORK/, /SYSTEM LOG/], expect: /TRUENAS|Disk|Snapshot|Interface|SYSTEM LOG|Raw TrueNAS payload/i },
       { label: 'bmc-10', buttons: [/FIRMWARE/, /LICENSE/, /NETWORK/], expect: /BMC-10|Firmware|License|NIC|Network|Raw BMC-10/i }
@@ -181,6 +181,10 @@ test.describe('live dashboard safe E2E', () => {
         await expect(btn, `${item.label} ${buttonText}`).toBeVisible();
         await btn.click();
         await expect(out, `${item.label} ${buttonText} output`).toContainText(item.expect, { timeout: 45_000 });
+        if (item.label === 'firewall' && String(buttonText).includes('INTERFACES')) {
+          await expect(out).toContainText(/IP Address/i);
+          await expect(out).not.toContainText(/ALL INTERFACES/i);
+        }
         await expect(out).not.toContainText(/^\s*\{[\s\S]*\}\s*$/);
       }
 
