@@ -224,6 +224,40 @@ class TestInfraOutputIsHumanReadable(unittest.TestCase):
         self.assertIn("_renderTrueNasOutput(d)", body)
         self.assertIn("else if(d.reachable){o.innerHTML=_renderTrueNasOutput(d);}", body)
 
+    def test_all_core_device_reads_use_structured_renderers(self):
+        expectations = {
+            "pfAction": "_renderPfOutput(d)",
+            "swAction": "_renderSwitchOutput(d)",
+            "idracAction": "_renderIdracOutput(d,action)",
+        }
+        for fn, expected in expectations.items():
+            with self.subTest(fn=fn):
+                self.assertIn(expected, _fn_body(_app_js(), fn))
+
+    def test_core_action_map_exposes_complete_read_surface(self):
+        src = _app_js()
+        for text in (
+            "SMART DISKS",
+            "SNAPSHOTS",
+            "SYSTEM LOG",
+            "GATEWAY MONITOR",
+            "ARP TABLE",
+            "PORT ERRORS",
+            "CDP NEIGHBORS",
+            "STORAGE / RAID",
+            "FIRMWARE",
+            "LICENSE",
+        ):
+            self.assertIn(text, src)
+
+    def test_repeated_api_toasts_are_deduped_and_rate_limited(self):
+        src = _app_js()
+        self.assertIn("function _shouldToastApiError", src)
+        self.assertIn("_apiErrorToastState", src)
+        self.assertIn("_toastState", src)
+        self.assertIn("toast_deduped", src)
+        self.assertIn("api_error_toast_suppressed", src)
+
     def test_truenas_alert_renderer_explains_meaning_and_action(self):
         body = _fn_body(_app_js(), "_renderTnAlerts")
         for text in ("What it means", "What to do", "Evidence"):
@@ -235,6 +269,14 @@ class TestInfraOutputIsHumanReadable(unittest.TestCase):
         self.assertIn("RESTAPIUsage", body)
         self.assertIn("Deprecated REST API usage", body)
         self.assertIn("Migrate integrations", body)
+
+    def test_truenas_missing_actions_have_specific_renderers(self):
+        src = _app_js()
+        for fn in ("_renderTnSmart", "_renderTnSnapshots", "_renderTnNetwork", "_renderTnReplication"):
+            self.assertIn("function " + fn + "(", src)
+        body = _fn_body(_app_js(), "_renderTrueNasOutput")
+        for action in ("smart", "snapshots", "network", "replication", "syslog"):
+            self.assertIn("a==='" + action + "'", body)
 
 
 class TestSilentRefreshStructuralSanity(unittest.TestCase):

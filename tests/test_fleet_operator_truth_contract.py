@@ -303,6 +303,8 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn('"pools": "zpool list -v"', src)
         self.assertIn("truenas_api.settings(cfg, target)", src)
         self.assertIn("truenas_api.request(api_settings, action)", src)
+        self.assertIn("api_action_supported = truenas_api.action_endpoint(action) is not None", src)
+        self.assertIn("if api_action_supported and", src)
         self.assertIn("truenas_api_key", helper_src + src)
         self.assertIn("ssh_auth_failed_ping", src)
         self.assertIn('"ssh_available": False', src)

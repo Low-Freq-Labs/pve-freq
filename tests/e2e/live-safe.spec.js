@@ -160,6 +160,37 @@ test.describe('live dashboard safe E2E', () => {
     await expect(out).toContainText(/No active TrueNAS alerts|What to do/, { timeout: 20_000 });
   });
 
+  test('expanded core read actions render readable output without toast spam', async ({ page }) => {
+    const cases = [
+      { label: 'firewall', buttons: [/ARP TABLE/], expect: /PFSENSE|ARP TABLE|IP ADDRESS|SUMMARY/i },
+      { label: 'switch', buttons: [/CDP NEIGHBORS/], expect: /SWITCH|CDP|NEIGHBOR|Device ID|Local Intrfce/i },
+      { label: 'truenas', buttons: [/SMART DISKS/, /SNAPSHOTS/, /NETWORK/, /SYSTEM LOG/], expect: /TRUENAS|Disk|Snapshot|Interface|SYSTEM LOG|Raw TrueNAS payload/i },
+      { label: 'bmc-10', buttons: [/FIRMWARE/, /LICENSE/, /NETWORK/], expect: /BMC-10|Firmware|License|NIC|Network|Raw BMC-10/i }
+    ];
+
+    await goFleet(page);
+    for (const item of cases) {
+      const card = page.locator(`.infra-role-card:visible[data-label="${item.label}"]`).first();
+      await expect(card).toBeVisible();
+      await card.click();
+      await page.locator('#host-overlay.open').waitFor();
+      const out = page.locator('#hd-infra-out');
+
+      for (const buttonText of item.buttons) {
+        const btn = page.locator('#host-overlay button').filter({ hasText: buttonText }).first();
+        await expect(btn, `${item.label} ${buttonText}`).toBeVisible();
+        await btn.click();
+        await expect(out, `${item.label} ${buttonText} output`).toContainText(item.expect, { timeout: 45_000 });
+        await expect(out).not.toContainText(/^\s*\{[\s\S]*\}\s*$/);
+      }
+
+      await page.locator('#host-overlay [data-action="closeCard"]').click();
+      await page.locator('#host-overlay').waitFor({ state: 'hidden' });
+    }
+
+    await expectNoOperatorWarnings(page);
+  });
+
   test('terminal sessions open and close without touching power state', async ({ page }) => {
     const opened = [];
     for (const path of [

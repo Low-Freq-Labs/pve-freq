@@ -115,7 +115,8 @@ def handle_truenas(handler):
         return
 
     api_settings = truenas_api.settings(cfg, target)
-    if api_settings.get("type") == "api_key" or api_settings.get("api_key"):
+    api_action_supported = truenas_api.action_endpoint(action) is not None
+    if api_action_supported and (api_settings.get("type") == "api_key" or api_settings.get("api_key")):
         data, api_err = truenas_api.request(api_settings, action)
         if not api_err:
             output = truenas_api.format_output(action, data)

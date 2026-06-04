@@ -116,6 +116,19 @@ function _esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(
  * The silent flag is stripped before the fetch call so it doesn't
  * show up as an unknown fetch option. */
 var _authFailing=false;
+var _apiErrorToastState={};
+var _toastState={};
+function _shouldToastApiError(url,status){
+  var now=Date.now();
+  var key=String(url||'').replace(/\?.*/,'')+'#'+status;
+  var s=_apiErrorToastState[key]||{last:0,count:0};
+  s.count++;
+  var allow=(now-s.last)>30000;
+  if(allow){s.last=now;s.count=1;}
+  _apiErrorToastState[key]=s;
+  if(!allow)_uiLog('api_error_toast_suppressed',{message:'suppressed repeated API error',source:'_authFetch',url:String(url||''),status:status,count:s.count});
+  return allow;
+}
 function _authFetch(url, opts) {
     opts = opts || {};
     var silent = opts.silent === true;
@@ -131,7 +144,7 @@ function _authFetch(url, opts) {
         }
         return r;
       }
-      if(!r.ok && !silent && r.status!==501){
+      if(!r.ok && !silent && r.status!==501 && _shouldToastApiError(url,r.status)){
         toast('API error: '+url.replace('/api/','')+ ' ('+r.status+')','error');
       }
       return r;
@@ -146,11 +159,21 @@ function _uiLog(event,payload){
   }catch(_e){}
 }
 function toast(msg,type){
-  _uiLog('toast',{message:String(msg||''),type:type||'info',source:'toast'});
+  msg=String(msg||'');type=type||'info';
+  var key=type+'|'+msg;var now=Date.now();var prior=_toastState[key];
+  if(prior&&now-prior.last<8000){
+    prior.count++;
+    prior.last=now;
+    if(prior.el&&prior.el.isConnected)prior.el.textContent=msg+' ('+prior.count+'x)';
+    _uiLog('toast_deduped',{message:msg,type:type,source:'toast',count:prior.count});
+    return;
+  }
+  _uiLog('toast',{message:msg,type:type,source:'toast'});
   var t=document.createElement('div');t.className='toast '+(type||'info');t.textContent=msg;
+  _toastState[key]={last:now,count:1,el:t};
   document.getElementById('toast-container').appendChild(t);
   setTimeout(function(){t.classList.add('fadeout');},3500);
-  setTimeout(function(){t.remove();},4000);
+  setTimeout(function(){t.remove();if(_toastState[key]&&_toastState[key].el===t)delete _toastState[key];},4000);
 }
 /* === Modal === */
 /* M-BLUETEAM-SECURITY-HARDENING-20260413AJ: safe confirmAction.
@@ -2909,10 +2932,11 @@ var PROD_HOSTS=[];
 var PROD_VMS=[];
 /* Device-type action configs (universal — same for any cluster with these device types) */
 var _DEVICE_ACTIONS={
-  pfsense:{actions:[{l:'STATUS',f:"pfAction('status')"},{l:'RULES',f:"pfAction('rules')"},{l:'NAT',f:"pfAction('nat')"},{l:'STATES',f:"pfAction('states')"},{l:'INTERFACES',f:"pfAction('interfaces')"}],outId:'pf-out'},
-  truenas:{actions:[{l:'SYSTEM',f:"tnAction('status')"},{l:'POOLS',f:"tnAction('pools')"},{l:'HEALTH',f:"tnAction('health')"},{l:'DATASETS',f:"tnAction('datasets')"},{l:'SHARES',f:"tnAction('shares')"},{l:'ALERTS',f:"tnAction('alerts')"}],outId:'tn-out'},
-  switch:{actions:[{l:'STATUS',f:"swAction('status')"},{l:'VLANS',f:"swAction('vlans')"},{l:'INTERFACES',f:"swAction('interfaces')"},{l:'MAC TABLE',f:"swAction('mac')"}],outId:'sw-out'},
-  idrac:{actions:[{l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'POWER',f:"idracAction('power')"},{l:'EVENT LOG',f:"idracAction('sel')"}],outId:'idrac-out'}
+  pfsense:{actions:[{l:'STATUS',f:"pfAction('status')"},{l:'RULES',f:"pfAction('rules')"},{l:'NAT',f:"pfAction('nat')"},{l:'STATES',f:"pfAction('states')"},{l:'INTERFACES',f:"pfAction('interfaces')"},{l:'GATEWAYS',f:"pfAction('gateways')"},{l:'GATEWAY MONITOR',f:"pfAction('gateway_monitor')"},{l:'DNS',f:"pfAction('dns')"},{l:'TRAFFIC',f:"pfAction('traffic')"},{l:'VPN',f:"pfAction('vpn')"},{l:'SERVICES',f:"pfAction('services')"},{l:'FIREWALL LOG',f:"pfAction('log')"},{l:'SYSTEM LOG',f:"pfAction('syslog')"},{l:'ARP TABLE',f:"pfAction('arp')"},{l:'DHCP LEASES',f:"pfAction('dhcp')"},{l:'ALIASES',f:"pfAction('aliases')"},{l:'BACKUP CONFIG',f:"pfAction('backup')"}],outId:'pf-out'},
+  truenas:{actions:[{l:'SYSTEM',f:"tnAction('status')"},{l:'POOLS',f:"tnAction('pools')"},{l:'HEALTH',f:"tnAction('health')"},{l:'DATASETS',f:"tnAction('datasets')"},{l:'SHARES',f:"tnAction('shares')"},{l:'ALERTS',f:"tnAction('alerts')"},{l:'SMART DISKS',f:"tnAction('smart')"},{l:'SNAPSHOTS',f:"tnAction('snapshots')"},{l:'REPLICATION',f:"tnAction('replication')"},{l:'SERVICES',f:"tnAction('services')"},{l:'NETWORK',f:"tnAction('network')"},{l:'SYSTEM LOG',f:"tnAction('syslog')"}],outId:'tn-out'},
+  switch:{actions:[{l:'STATUS',f:"swAction('status')"},{l:'VLANS',f:"swAction('vlans')"},{l:'INTERFACES',f:"swAction('interfaces')"},{l:'MAC TABLE',f:"swAction('mac')"},{l:'TRUNKS',f:"swAction('trunk')"},{l:'PORT ERRORS',f:"swAction('errors')"},{l:'SPANNING TREE',f:"swAction('spanning')"},{l:'LOG',f:"swAction('log')"},{l:'CDP NEIGHBORS',f:"swAction('cdp')"},{l:'INVENTORY',f:"swAction('inventory')"}],outId:'sw-out'},
+  idrac:{actions:[{l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'POWER',f:"idracAction('power')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"}],outId:'idrac-out'},
+  bmc:{actions:[{l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'POWER',f:"idracAction('power')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"}],outId:'idrac-out'}
 };
 var _idracOutCount=0;
 function _initFleetData(fo){
@@ -7238,6 +7262,7 @@ function _infraOut(defaultId){
   var el=document.getElementById(defaultId);if(el)el.style.display='block';return el;
 }
 function _infraPre(title,output){
+  output=String(output||'');
   return '<div style="color:var(--green);margin-bottom:8px;font-size:12px;font-weight:600">'+title+'</div><pre style="font-size:11px;color:var(--text);white-space:pre-wrap;font-family:\'Courier New\',monospace;line-height:1.5;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px">'+output.replace(/</g,'&lt;').replace(/===/g,'<span class="c-purple">═══</span>')+'</pre>';
 }
 function _infraKvTable(rows){
@@ -7248,6 +7273,113 @@ function _infraKvTable(rows){
 function _infraRawDetails(title,output){
   if(!output)return '';
   return '<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:1px">'+_esc(title||'Raw output')+'</summary>'+_infraPre(title||'RAW OUTPUT',String(output))+'</details>';
+}
+function _infraCleanText(output){
+  return String(output||'')
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'')
+    .replace(/\r/g,'')
+    .trim();
+}
+function _infraLines(output){
+  var text=_infraCleanText(output);
+  if(!text)return [];
+  return text.split('\n').map(function(l){return l.trimEnd();}).filter(function(l){return l.trim()!=='';});
+}
+function _infraTitle(s){
+  return String(s||'OUTPUT').replace(/_/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
+}
+function _infraSections(output,defaultTitle){
+  var sections=[];var cur={title:defaultTitle||'Output',lines:[]};
+  _infraLines(output).forEach(function(line){
+    var m=line.match(/^={3,}\s*(.*?)\s*={3,}\s*$/);
+    if(m){
+      if(cur.lines.length)sections.push(cur);
+      cur={title:m[1]||defaultTitle||'Output',lines:[]};
+    }else{
+      cur.lines.push(line);
+    }
+  });
+  if(cur.lines.length||!sections.length)sections.push(cur);
+  return sections;
+}
+function _infraSplitCols(line){
+  return String(line||'').trim().split(/\t+|\s{2,}/).map(function(x){return x.trim();}).filter(Boolean);
+}
+function _infraIsSeparator(line){
+  return /^[\s\-\u2500=._]+$/.test(String(line||''));
+}
+function _infraLooksTable(lines){
+  var sample=(lines||[]).filter(function(l){return !_infraIsSeparator(l);}).slice(0,5);
+  if(sample.length<2)return false;
+  var count=0;
+  sample.forEach(function(l){if(_infraSplitCols(l).length>=2)count++;});
+  return count>=Math.min(2,sample.length);
+}
+function _infraTableFromLines(lines,opts){
+  opts=opts||{};
+  var data=(lines||[]).filter(function(l){return l&&(!_infraIsSeparator(l));});
+  if(!data.length)return '';
+  var rows=data.map(_infraSplitCols).filter(function(r){return r.length;});
+  if(!rows.length)return '';
+  var headers=opts.headers||null;
+  if(!headers&&rows.length>1&&rows[0].length>=2&&/[A-Za-z]/.test(rows[0].join(' '))){
+    headers=rows.shift();
+  }
+  var max=0;rows.forEach(function(r){if(r.length>max)max=r.length;});if(headers&&headers.length>max)max=headers.length;
+  if(!headers){headers=[];for(var i=0;i<max;i++)headers.push(i===0?'Item':'Value '+i);}
+  var h='<table><thead><tr>';
+  headers.slice(0,max).forEach(function(c){h+='<th>'+_esc(c)+'</th>';});
+  h+='</tr></thead><tbody>';
+  rows.slice(0,120).forEach(function(r){
+    h+='<tr>';
+    for(var i=0;i<max;i++)h+='<td class="'+(i===0?'mono-11':'')+'">'+_esc(r[i]||'')+'</td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  if(rows.length>120)h+='<div class="c-dim-mt8">Showing first 120 rows of '+rows.length+'.</div>';
+  return h;
+}
+function _infraKvFromLines(lines){
+  var rows=[];
+  (lines||[]).forEach(function(l){
+    var m=String(l).match(/^\s*([^:=|]{2,40})\s*[:=]\s*(.+?)\s*$/);
+    if(m)rows.push([m[1].trim(),m[2].trim()]);
+  });
+  return rows.length>=2?rows:[];
+}
+function _infraSummaryStats(lines){
+  var stats=[];var text=(lines||[]).join(' | ');
+  text.split('|').forEach(function(part){
+    var m=part.match(/^\s*([A-Za-z][A-Za-z0-9 /_-]{1,24})\s*:\s*([^|]+?)\s*$/);
+    if(m)stats.push({l:m[1].trim(),v:m[2].trim(),c:'blue'});
+  });
+  return stats.slice(0,6);
+}
+function _infraRenderLogLines(lines){
+  var h='<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11px;line-height:1.55;max-height:420px;overflow:auto">';
+  (lines||[]).slice(0,160).forEach(function(l){h+='<div class="mono-11" style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'+_esc(l)+'</div>';});
+  return h+'</div>';
+}
+function _infraRenderSection(sec,kind){
+  var title=_infraTitle(sec.title);var lines=sec.lines||[];
+  var h='<div style="margin-top:12px"><div style="color:var(--text-bright);font-weight:800;font-size:12px;margin-bottom:8px">'+_esc(title)+'</div>';
+  var stats=_infraSummaryStats(lines);
+  if(stats.length)h+=_statCards(stats);
+  var kv=_infraKvFromLines(lines);
+  if(kv.length)h+=_infraKvTable(kv);
+  else if(/LOG|SYSLOG|EVENT/.test(title)||kind==='log')h+=_infraRenderLogLines(lines);
+  else if(_infraLooksTable(lines))h+=_infraTableFromLines(lines);
+  else h+='<div class="exec-out mono-11" style="white-space:pre-wrap">'+_esc(lines.join('\n')||'-')+'</div>';
+  return h+'</div>';
+}
+function _infraRenderTextDevice(device,action,output,opts){
+  opts=opts||{};
+  var title=opts.title||(_infraTitle(device)+' — '+_infraTitle(action));
+  var sections=_infraSections(output,title);
+  var h='<div style="color:var(--green);font-weight:800;margin-bottom:8px">'+_esc(title)+'</div>';
+  if(opts.summary)h+=opts.summary;
+  sections.forEach(function(sec){h+=_infraRenderSection(sec,opts.kind);});
+  return h+_infraRawDetails('Raw '+device+' payload',output);
 }
 function _fmtBytes(value){
   var n=Number(value||0);if(!isFinite(n)||n<=0)return '0B';
@@ -7265,6 +7397,7 @@ function _tnDate(v){
   if(v&&typeof v==='object'&&v.$date)ms=Number(v.$date);
   else if(v&&typeof v==='object'&&v.parsed&&v.parsed.$date)ms=Number(v.parsed.$date);
   else if(typeof v==='number')ms=v;
+  else if(typeof v==='string'&&v.trim())return v.trim();
   if(!ms)return '-';
   try{return new Date(ms).toLocaleString();}catch(e){return '-';}
 }
@@ -7371,6 +7504,51 @@ function _renderTnServices(d){
   rows.forEach(function(s){h+='<tr><td><strong>'+_esc(s.service||s.name||'-')+'</strong></td><td>'+_tnBadge(s.enable?'OK':'UNKNOWN')+'</td><td>'+_esc(s.state||'-')+'</td></tr>';});
   return h+'</tbody></table>'+_infraRawDetails('Raw service payload',d.output);
 }
+function _renderTnSmart(d){
+  var rows=Array.isArray(d.raw)?d.raw:[];
+  if(!rows.length)return _infraRenderTextDevice('TrueNAS',d.action,d.output||'No SMART disk data returned');
+  var h='<table><thead><tr><th>Disk</th><th>Serial</th><th>Size</th><th>Type</th><th>Status</th><th>Pool</th></tr></thead><tbody>';
+  rows.forEach(function(x){
+    var size=x.size||x.size_str||x.dev_size||'-';
+    var pool=x.pool||x.zfs_guid||'-';
+    var status=x.expired?'EXPIRED':(x.imported_zpool?'OK':'UNKNOWN');
+    h+='<tr><td><strong>'+_esc(x.name||x.devname||x.identifier||'-')+'</strong></td><td class="mono-11">'+_esc(x.serial||'-')+'</td><td>'+_esc(size)+'</td><td>'+_esc(x.type||x.subsystem||'-')+'</td><td>'+_tnBadge(status)+'</td><td>'+_esc(pool)+'</td></tr>';
+  });
+  return h+'</tbody></table>'+_infraRawDetails('Raw SMART payload',d.output);
+}
+function _renderTnSnapshots(d){
+  var rows=Array.isArray(d.raw)?d.raw:[];
+  if(rows.length){
+    var h='<table><thead><tr><th>Snapshot</th><th>Dataset</th><th>Used</th><th>Referenced</th><th>Created</th></tr></thead><tbody>';
+    rows.slice(0,120).forEach(function(x){
+      var name=x.name||x.id||'-';var parts=String(name).split('@');
+      h+='<tr><td class="mono-11">'+_esc(parts[1]||name)+'</td><td class="mono-11">'+_esc(parts[0]||'-')+'</td><td>'+_esc(_tnPropValue(x.used)||'-')+'</td><td>'+_esc(_tnPropValue(x.referenced)||_tnPropValue(x.refer)||'-')+'</td><td>'+_esc(_tnDate(x.creation)||_tnPropValue(x.creation)||'-')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    if(rows.length>120)h+='<div class="c-dim-mt8">Showing first 120 snapshots of '+rows.length+'.</div>';
+    return h+_infraRawDetails('Raw snapshot payload',d.output);
+  }
+  return _infraRenderTextDevice('TrueNAS','snapshots',d.output||'No snapshots returned');
+}
+function _renderTnNetwork(d){
+  var rows=Array.isArray(d.raw)?d.raw:[];
+  if(rows.length){
+    var h='<table><thead><tr><th>Interface</th><th>Type</th><th>Status</th><th>Addresses</th><th>Description</th></tr></thead><tbody>';
+    rows.forEach(function(x){
+      var aliases=(x.aliases||x.state&&x.state.aliases||[]).map(function(a){return a.address||a.address_b||a;}).join(', ');
+      h+='<tr><td><strong>'+_esc(x.name||x.id||'-')+'</strong></td><td>'+_esc(x.type||'-')+'</td><td>'+_tnBadge(x.state&&x.state.link_state||x.link_state||'UNKNOWN')+'</td><td class="mono-11">'+_esc(aliases||'-')+'</td><td>'+_esc(x.description||'-')+'</td></tr>';
+    });
+    return h+'</tbody></table>'+_infraRawDetails('Raw network payload',d.output);
+  }
+  return _infraRenderTextDevice('TrueNAS','network',d.output||'No network output returned');
+}
+function _renderTnReplication(d){
+  var rows=Array.isArray(d.raw)?d.raw:[];
+  if(!rows.length)return _infraRenderTextDevice('TrueNAS','replication',d.output||'No replication tasks returned');
+  var h='<table><thead><tr><th>Task</th><th>Direction</th><th>Enabled</th><th>State</th><th>Transport</th></tr></thead><tbody>';
+  rows.forEach(function(x){h+='<tr><td><strong>'+_esc(x.name||x.id||'-')+'</strong></td><td>'+_esc(x.direction||'-')+'</td><td>'+_tnBadge(x.enabled?'OK':'WARNING')+'</td><td>'+_esc(x.state&&x.state.state||x.state||'-')+'</td><td>'+_esc(x.transport||'-')+'</td></tr>';});
+  return h+'</tbody></table>'+_infraRawDetails('Raw replication payload',d.output);
+}
 function _renderTrueNasOutput(d){
   var a=d.action||'status';
   if(a==='alerts')return _renderTnAlerts(d);
@@ -7379,13 +7557,67 @@ function _renderTrueNasOutput(d){
   if(a==='datasets')return _renderTnDatasets(d);
   if(a==='shares')return _renderTnShares(d);
   if(a==='services')return _renderTnServices(d);
-  return _infraPre('TRUENAS — '+String(a).toUpperCase(),d.output||JSON.stringify(d.raw||'',null,2)||'No output');
+  if(a==='smart')return _renderTnSmart(d);
+  if(a==='snapshots')return _renderTnSnapshots(d);
+  if(a==='network')return _renderTnNetwork(d);
+  if(a==='replication')return _renderTnReplication(d);
+  if(a==='syslog')return _infraRenderTextDevice('TrueNAS','system log',d.output||'',{kind:'log'});
+  return _infraRenderTextDevice('TrueNAS',a,d.output||JSON.stringify(d.raw||'',null,2)||'No output');
+}
+function _renderPfOutput(d){
+  var lines=_infraLines(d.output);var stats=[];
+  if(d.action==='states'){
+    var m=(d.output||'').match(/Active states:\s*([0-9]+)/i);
+    if(m)stats.push({l:'Active states',v:m[1],c:'cyan'});
+  }else if(d.action==='rules'){
+    stats=_infraSummaryStats(lines).map(function(s){s.c=s.l.toLowerCase().indexOf('block')>=0?'yellow':'blue';return s;});
+  }else if(d.action==='arp'){
+    stats=_infraSummaryStats(lines);
+  }
+  return _infraRenderTextDevice('pfSense',d.action,d.output,{summary:stats.length?_statCards(stats):'',kind:(d.action==='log'||d.action==='syslog')?'log':''});
+}
+function _renderSwitchOutput(d){
+  var stats=[];
+  if(d.action==='vlans'){
+    var vlanLines=_infraLines(d.output).filter(function(l){return /^\d+\s+/.test(l);});
+    if(vlanLines.length)stats.push({l:'VLANs',v:vlanLines.length,c:'cyan'});
+  }else if(d.action==='interfaces'){
+    var connected=_infraLines(d.output).filter(function(l){return /connected|up/i.test(l);}).length;
+    if(connected)stats.push({l:'Ports up',v:connected,c:'green'});
+  }else if(d.action==='mac'){
+    var macs=_infraLines(d.output).filter(function(l){return /[0-9a-f]{4}[.\-:][0-9a-f]{4}/i.test(l);}).length;
+    if(macs)stats.push({l:'MAC entries',v:macs,c:'blue'});
+  }
+  return _infraRenderTextDevice('Switch',d.action,d.output,{summary:stats.length?_statCards(stats):'',kind:d.action==='log'?'log':''});
+}
+function _renderIdracOutput(d,action){
+  var html='';
+  (d.targets||[]).forEach(function(t){
+    if(!t.reachable){
+      html+='<div class="mb-12"><div style="font-size:12px;font-weight:600;color:var(--red)">'+_esc(t.name.toUpperCase())+' ('+_esc(t.ip)+') — UNREACHABLE</div><p class="c-dim-fs11">'+_esc(t.error||'')+'</p></div>';
+      return;
+    }
+    var rows=_infraKvFromLines(_infraLines(t.output));
+    var summary='';
+    if(rows.length){
+      var model=(rows.find(function(r){return /model/i.test(r[0]);})||[])[1];
+      var power=(rows.find(function(r){return /power/i.test(r[0]);})||[])[1];
+      var fw=(rows.find(function(r){return /firmware|version/i.test(r[0]);})||[])[1];
+      var cards=[];
+      if(power)cards.push({l:'Power',v:power,c:/on/i.test(power)?'green':'yellow'});
+      if(model)cards.push({l:'Model',v:model,c:'blue'});
+      if(fw)cards.push({l:'Firmware',v:fw,c:'blue'});
+      if(cards.length)summary=_statCards(cards);
+    }
+    html+=_infraRenderTextDevice(t.name.toUpperCase()+' ('+t.ip+')',action,t.output,{summary:summary,kind:action==='sel'?'log':''});
+  });
+  return html||'<div class="c-yellow">No BMC targets returned for '+_esc(action)+'</div>';
 }
 function pfAction(action){
   var o=_infraOut('pf-out');if(!o)return;
   o.innerHTML='<span class="c-dim">Querying pfSense ('+action+')...</span>';
   _authFetch(API.INFRA_PFSENSE+'?action='+action).then(function(r){return r.json()}).then(function(d){
-    if(d.reachable){o.innerHTML=_infraPre('PFSENSE \u2014 '+action.toUpperCase(),d.output);}
+    if(d.reachable){o.innerHTML=_renderPfOutput(d);}
     else{o.innerHTML='<div class="c-red">Cannot reach pfSense at '+d.host+'</div><div class="c-dim-mt8">'+d.error+'</div>';}
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
 }
@@ -7406,19 +7638,14 @@ function idracAction(action,target){
   var url=API.INFRA_IDRAC+'?action='+action;
   if(target)url+='&target='+encodeURIComponent(target);
   _authFetch(url).then(function(r){return r.json()}).then(function(d){
-    var html='';
-    (d.targets||[]).forEach(function(t){
-      if(t.reachable){html+=_infraPre(t.name.toUpperCase()+' ('+t.ip+') \u2014 '+action.toUpperCase(),t.output);}
-      else{html+='<div class="mb-12"><div style="font-size:12px;font-weight:600;color:var(--red)">'+t.name.toUpperCase()+' ('+t.ip+') \u2014 UNREACHABLE</div><p class="c-dim-fs11">'+(t.error||'')+'</p></div>';}
-    });
-    o.innerHTML=html||'<div class="c-yellow">No BMC targets returned for '+action+'</div>';
+    o.innerHTML=_renderIdracOutput(d,action);
   }).catch(function(e){o.innerHTML='<p class="c-red">Error: '+e+'</p>';});
 }
 function swAction(action){
   var o=_infraOut('sw-out');if(!o)return;
   o.innerHTML='<span class="c-dim">Querying switch ('+action+')...</span>';
   _authFetch(API.SWITCH+'?action='+action).then(function(r){return r.json()}).then(function(d){
-    if(d.reachable)o.innerHTML=_infraPre('SWITCH \u2014 '+action.toUpperCase(),d.output);
+    if(d.reachable)o.innerHTML=_renderSwitchOutput(d);
     else o.innerHTML='<div class="c-red">Cannot reach switch at '+d.host+'</div><div class="c-dim-mt8">'+d.error+'</div>';
   });
 }

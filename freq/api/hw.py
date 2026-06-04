@@ -8,6 +8,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
 import json
+import copy
 import time
 
 from freq.core import log as logger
@@ -26,6 +27,60 @@ from freq.modules.vault import vault_get
 
 IDRAC_READ_CONNECT_TIMEOUT = 10
 IDRAC_READ_COMMAND_TIMEOUT = 30
+
+
+def _is_auth_failure(text: str) -> bool:
+    low = (text or "").lower()
+    return "permission denied" in low or "publickey" in low or "authentication failed" in low
+
+
+def _idrac_failure_evidence(r) -> str:
+    stderr = (getattr(r, "stderr", "") or "").strip()
+    stdout = (getattr(r, "stdout", "") or "").strip()
+    if stderr:
+        return stderr[:300]
+    if stdout:
+        return stdout[:300]
+    return f"SSH command failed with rc={getattr(r, 'returncode', '?')} and no stderr"
+
+
+def _run_idrac_read(cfg, ip: str, cmd: str):
+    """Run iDRAC reads in the same order as init/infra quick.
+
+    Dell iDRAC is legacy SSH. The product contract is key-first with the
+    deployed service account, then password fallback only when auth fails.
+    Generic ssh.run prefers legacy_password_file when present, so call it
+    with a copy that disables password auth for the first pass.
+    """
+    idrac_key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
+    key_cfg = copy.copy(cfg)
+    key_cfg.legacy_password_file = ""
+    r = ssh_single(
+        host=ip,
+        command=cmd,
+        user=cfg.ssh_service_account,
+        key_path=idrac_key,
+        connect_timeout=IDRAC_READ_CONNECT_TIMEOUT,
+        command_timeout=IDRAC_READ_COMMAND_TIMEOUT,
+        htype="idrac",
+        use_sudo=False,
+        cfg=key_cfg,
+        failure_log_level="warn",
+    )
+    if r.returncode != 0 and _is_auth_failure(f"{r.stderr}\n{r.stdout}") and getattr(cfg, "legacy_password_file", ""):
+        r = ssh_single(
+            host=ip,
+            command=cmd,
+            user=cfg.ssh_service_account,
+            key_path=idrac_key,
+            connect_timeout=IDRAC_READ_CONNECT_TIMEOUT,
+            command_timeout=IDRAC_READ_COMMAND_TIMEOUT,
+            htype="idrac",
+            use_sudo=False,
+            cfg=cfg,
+            failure_log_level="warn",
+        )
+    return r
 
 
 # -- Handlers ----------------------------------------------------------------
@@ -99,25 +154,15 @@ def handle_idrac(handler):
         return
 
     results = []
-    idrac_key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
     for name, ip in idrac_ips.items():
-        r = ssh_single(
-            host=ip,
-            command=cmd,
-            key_path=idrac_key,
-            connect_timeout=IDRAC_READ_CONNECT_TIMEOUT,
-            command_timeout=IDRAC_READ_COMMAND_TIMEOUT,
-            htype="idrac",
-            use_sudo=False,
-            cfg=cfg,
-        )
+        r = _run_idrac_read(cfg, ip, cmd)
         results.append(
             {
                 "name": name,
                 "ip": ip,
                 "reachable": r.returncode == 0,
                 "output": r.stdout[:2000] if r.returncode == 0 else "",
-                "error": r.stderr[:100] if r.returncode != 0 else "",
+                "error": _idrac_failure_evidence(r) if r.returncode != 0 else "",
             }
         )
 

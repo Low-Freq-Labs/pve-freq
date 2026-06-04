@@ -252,6 +252,21 @@ class TestLegacyHealthProbeIdrac(unittest.TestCase):
         self.assertIn("connect_timeout=IDRAC_READ_CONNECT_TIMEOUT", src)
         self.assertIn("command_timeout=IDRAC_READ_COMMAND_TIMEOUT", src)
 
+    def test_idrac_api_matches_init_key_first_auth_order(self):
+        src = HW_API_PY.read_text()
+        self.assertIn("def _run_idrac_read", src)
+        self.assertIn('key_cfg.legacy_password_file = ""', src)
+        self.assertIn("user=cfg.ssh_service_account", src)
+        self.assertIn("_is_auth_failure", src)
+        self.assertIn("cfg=key_cfg", src)
+        self.assertIn("cfg=cfg", src)
+
+    def test_idrac_api_failure_payload_always_has_evidence(self):
+        src = HW_API_PY.read_text()
+        self.assertIn("def _idrac_failure_evidence", src)
+        self.assertIn("SSH command failed with rc=", src)
+        self.assertIn('"error": _idrac_failure_evidence(r)', src)
+
     def test_infra_quick_uses_legacy_read_timeout_constants(self):
         src = SERVE_PY.read_text()
         idx = src.find('elif dt == "idrac":')
