@@ -291,7 +291,10 @@ class TestInfraOutputIsHumanReadable(unittest.TestCase):
         self.assertIn("function _infraSkipSection", src)
         self.assertIn("opts&&opts.summary&&title==='SUMMARY'", src)
         render_section = _fn_body(src, "_infraRenderSection")
+        render_text = _fn_body(src, "_infraRenderTextDevice")
         self.assertNotIn("_statCards", render_section)
+        self.assertIn("hideTitle", render_section)
+        self.assertIn("_infraTitle(sec.title)===_infraTitle(title)", render_text)
         for fn in (
             "_renderTnPools",
             "_renderTnStatus",
@@ -315,6 +318,14 @@ class TestInfraOutputIsHumanReadable(unittest.TestCase):
         self.assertIn("no ip assigned", _fn_body(src, "_pfInterfaceRows").lower())
         self.assertIn("_infraRawDetails('Raw pfSense payload'", body)
         self.assertNotIn("_infraRenderSection", body)
+
+    def test_switch_monitoring_uses_native_switch_commands(self):
+        with open(os.path.join(REPO_ROOT, "freq", "api", "net.py")) as f:
+            src = f.read()
+        self.assertIn('"spanning": "show spanning-tree summary"', src)
+        self.assertIn('"log": "show logging"', src)
+        self.assertNotIn("show spanning-tree brief", src)
+        self.assertNotIn("tail 30", src)
 
     def test_pfsense_summary_sections_are_promoted_once(self):
         body = _fn_body(_app_js(), "_renderPfOutput")

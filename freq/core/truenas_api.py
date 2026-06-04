@@ -87,7 +87,7 @@ def action_endpoint(action: str) -> tuple[str, str] | None:
         "shares": ("GET", "/sharing/smb"),
         "alerts": ("GET", "/alert/list"),
         "smart": ("GET", "/disk"),
-        "snapshots": ("GET", "/zfs/snapshot"),
+        "snapshots": ("GET", "/pool/snapshot"),
         "replication": ("GET", "/replication"),
         "services": ("GET", "/service"),
         "network": ("GET", "/interface"),
@@ -128,6 +128,17 @@ def request(api_settings: dict[str, str], action: str, timeout: int = 15) -> tup
 
 
 def format_output(action: str, data: Any) -> str:
+    def prop(item: dict[str, Any], key: str) -> Any:
+        value = item.get(key)
+        if value not in (None, ""):
+            return value
+        properties = item.get("properties")
+        if isinstance(properties, dict):
+            meta = properties.get(key)
+            if isinstance(meta, dict):
+                return meta.get("value") or meta.get("parsed") or meta.get("rawvalue")
+        return ""
+
     if action == "status" and isinstance(data, dict):
         keys = ("hostname", "version", "uptime", "system_product", "physmem")
         return "\n".join(f"{k}: {data.get(k)}" for k in keys if k in data)
@@ -141,6 +152,29 @@ def format_output(action: str, data: Any) -> str:
             used = pool.get("allocated") or pool.get("allocated_str") or ""
             lines.append(f"{name}\t{status}\tsize={size}\tused={used}")
         return "\n".join(lines) or "No pools returned"
+    if action == "snapshots" and isinstance(data, list):
+        lines = ["Snapshot\tDataset\tUsed\tReferenced\tCreated"]
+        for snap in data[:120]:
+            if not isinstance(snap, dict):
+                continue
+            name = snap.get("name") or snap.get("id") or ""
+            dataset = snap.get("dataset") or name.split("@", 1)[0]
+            short = snap.get("snapshot_name") or (name.split("@", 1)[1] if "@" in name else name)
+            lines.append(
+                "\t".join(
+                    str(v or "-")
+                    for v in (
+                        short,
+                        dataset,
+                        prop(snap, "used"),
+                        prop(snap, "referenced") or prop(snap, "refer"),
+                        prop(snap, "creation"),
+                    )
+                )
+            )
+        if len(data) > 120:
+            lines.append(f"Showing first 120 snapshots of {len(data)}.")
+        return "\n".join(lines) if len(lines) > 1 else "No snapshots returned"
     return json.dumps(data, indent=2, sort_keys=True)[:12000]
 
 

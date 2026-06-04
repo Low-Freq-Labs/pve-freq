@@ -163,8 +163,8 @@ def handle_switch(handler):
         "mac": "show mac address-table | exclude Drop",
         "trunk": "show interfaces trunk",
         "errors": "show interfaces counters errors",
-        "spanning": "show spanning-tree brief",
-        "log": "show logging | tail 30",
+        "spanning": "show spanning-tree summary",
+        "log": "show logging",
         "cdp": "show cdp neighbors",
         "inventory": "show inventory",
     }

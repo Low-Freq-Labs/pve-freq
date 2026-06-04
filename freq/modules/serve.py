@@ -247,6 +247,7 @@ def _is_routine_legacy_health_change(
         "legacy device reachable; metrics probe failed" in prev_reason
         or "legacy device reachable; metrics probe failed" in cur_reason
         or "probe command timed out" in cur_reason
+        or "probe parse error" in cur_reason
     )
     if htype in LEGACY_HTYPES and (rate_limited or metrics_probe_noise):
         if cur_state in (STATE_STALE, STATE_DEGRADED, STATE_UNREACHABLE):

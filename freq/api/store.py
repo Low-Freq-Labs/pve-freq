@@ -90,6 +90,7 @@ def handle_truenas(handler):
     cfg = load_config()
     params = _parse_query(handler)
     action = params.get("action", ["status"])[0]
+    action = {"system": "status", "log": "syslog"}.get(action, action)
     target_name = params.get("target", [""])[0]
     target = _resolve_truenas_target(cfg, target_name)
     if not target:
@@ -156,6 +157,33 @@ def handle_truenas(handler):
                 502,
             )
             return
+
+    if (
+        api_settings.get("type") == "api_key"
+        and api_settings.get("api_key")
+        and not api_action_supported
+    ):
+        msg = (
+            f"TrueNAS {action} is not available through the configured API-key read path. "
+            "This install is intentionally not falling back to SSH for TrueNAS dashboard reads."
+        )
+        json_response(
+            handler,
+            {
+                "configured": True,
+                "host": target.ip,
+                "ip": target.ip,
+                "label": target.label,
+                "action": action,
+                "reachable": _ping_check(target.ip),
+                "api_available": True,
+                "ssh_available": False,
+                "probe_method": "truenas_api_key_unsupported",
+                "unsupported": True,
+                "output": msg,
+            },
+        )
+        return
 
     fleet_key = os.path.join(cfg.key_dir, "fleet_key")
     if not os.path.isfile(fleet_key):

@@ -7403,9 +7403,10 @@ function _infraRenderLogLines(lines){
   (lines||[]).slice(0,160).forEach(function(l){h+='<div class="mono-11" style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'+_esc(l)+'</div>';});
   return h+'</div>';
 }
-function _infraRenderSection(sec,kind){
+function _infraRenderSection(sec,kind,hideTitle){
   var title=_infraTitle(sec.title);var lines=sec.lines||[];
-  var h='<div style="margin-top:12px"><div style="color:var(--text-bright);font-weight:800;font-size:12px;margin-bottom:8px">'+_esc(title)+'</div>';
+  var h='<div style="margin-top:12px">';
+  if(!hideTitle)h+='<div style="color:var(--text-bright);font-weight:800;font-size:12px;margin-bottom:8px">'+_esc(title)+'</div>';
   var kv=_infraKvFromLines(lines);
   if(kv.length)h+=_infraKvTable(kv);
   else if(/LOG|SYSLOG|EVENT/.test(title)||kind==='log')h+=_infraRenderLogLines(lines);
@@ -7427,7 +7428,7 @@ function _infraRenderTextDevice(device,action,output,opts){
   var sections=_infraSections(output,title);
   var h='<div style="color:var(--green);font-weight:800;margin-bottom:8px;font-size:12px">'+_esc(title)+'</div>';
   if(opts.summary)h+=opts.summary;
-  sections.forEach(function(sec){if(!_infraSkipSection(sec,opts,title))h+=_infraRenderSection(sec,opts.kind);});
+  sections.forEach(function(sec){if(!_infraSkipSection(sec,opts,title))h+=_infraRenderSection(sec,opts.kind,_infraTitle(sec.title)===_infraTitle(title));});
   return h+_infraRawDetails('Raw '+device+' payload',output);
 }
 function _infraSectionLines(output,title){
@@ -7744,7 +7745,8 @@ function tnAction(action){
   var o=_infraOut('tn-out');if(!o)return;
   o.innerHTML='<span class="c-dim">Querying TrueNAS ('+action+')...</span>';
   _authFetch(API.INFRA_TRUENAS+'?action='+action).then(function(r){return r.json()}).then(function(d){
-    if(d.api_available===false){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output||d.error||'API key unavailable');}
+    if(d.unsupported){o.innerHTML=_infraRenderTextDevice('TrueNAS',d.action||action,d.output||d.error||'Action unavailable');}
+    else if(d.api_available===false){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output||d.error||'API key unavailable');}
     else if(d.reachable&&d.ssh_available===false){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output||d.error||'SSH metrics unavailable');}
     else if(d.reachable){o.innerHTML=_renderTrueNasOutput(d);}
     else{o.innerHTML='<div class="c-red">Cannot reach TrueNAS at '+(d.host||d.ip||'unknown')+'</div><div class="c-dim-mt8">'+(d.error||'')+'</div>';}
