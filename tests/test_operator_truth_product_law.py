@@ -288,6 +288,8 @@ class TestInfraOutputIsHumanReadable(unittest.TestCase):
         self.assertIn("function _infraMiniStats", src)
         self.assertIn("function _infraSummaryColor", src)
         self.assertIn("blue:'var(--text)'", src)
+        self.assertIn("function _infraSkipSection", src)
+        self.assertIn("opts&&opts.summary&&title==='SUMMARY'", src)
         render_section = _fn_body(src, "_infraRenderSection")
         self.assertNotIn("_statCards", render_section)
         for fn in (
@@ -295,7 +297,7 @@ class TestInfraOutputIsHumanReadable(unittest.TestCase):
             "_renderTnStatus",
             "_renderPfOutput",
             "_renderSwitchOutput",
-            "_renderIdracOutput",
+            "_renderIdracTargetOutput",
         ):
             with self.subTest(fn=fn):
                 body = _fn_body(src, fn)
@@ -309,9 +311,35 @@ class TestInfraOutputIsHumanReadable(unittest.TestCase):
         self.assertIn("if(d.action==='interfaces')return _renderPfInterfacesOutput(d);", _fn_body(src, "_renderPfOutput"))
         body = _fn_body(src, "_renderPfInterfacesOutput")
         self.assertIn("<th>Interface</th><th>IP Address</th>", body)
-        self.assertIn("no IP assigned", body)
+        self.assertNotIn("no IP assigned</span>", body)
+        self.assertIn("no ip assigned", _fn_body(src, "_pfInterfaceRows").lower())
         self.assertIn("_infraRawDetails('Raw pfSense payload'", body)
         self.assertNotIn("_infraRenderSection", body)
+
+    def test_pfsense_summary_sections_are_promoted_once(self):
+        body = _fn_body(_app_js(), "_renderPfOutput")
+        self.assertIn("_infraSummaryStatsFromSection(d.output,'SUMMARY')", body)
+        for action in ("rules", "nat", "arp"):
+            with self.subTest(action=action):
+                idx = body.find("d.action==='" + action + "'")
+                self.assertNotEqual(idx, -1)
+                chunk = body[idx:idx + 450]
+                self.assertIn("summary:_infraMiniStats(stats)", chunk)
+                self.assertIn("skipSections:['SUMMARY']", chunk)
+        states_idx = body.find("d.action==='states'")
+        self.assertNotEqual(states_idx, -1)
+        self.assertIn("skipDefaultSection:true", body[states_idx:states_idx + 450])
+
+    def test_bmc_summary_rows_are_not_repeated_in_detail_table(self):
+        src = _app_js()
+        self.assertIn("function _renderIdracTargetOutput", src)
+        body = _fn_body(src, "_renderIdracTargetOutput")
+        self.assertIn("used[power.index]=true", body)
+        self.assertIn("used[model.index]=true", body)
+        self.assertIn("used[fw.index]=true", body)
+        self.assertIn("detailRows=rows.filter", body)
+        self.assertIn("_infraKvTable(detailRows)", body)
+        self.assertIn("_infraRawDetails('Raw '+title+' payload'", body)
 
     def test_pfsense_interfaces_backend_emits_one_curated_section(self):
         src = _serve_py()

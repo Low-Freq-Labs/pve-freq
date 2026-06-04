@@ -7385,13 +7385,21 @@ function _infraRenderSection(sec,kind){
   else h+='<div class="exec-out mono-11" style="white-space:pre-wrap">'+_esc(lines.join('\n')||'-')+'</div>';
   return h+'</div>';
 }
+function _infraSkipSection(sec,opts,defaultTitle){
+  var title=_infraTitle(sec&&sec.title||'');
+  var skip=(opts&&opts.skipSections)||[];
+  for(var i=0;i<skip.length;i++)if(title===_infraTitle(skip[i]))return true;
+  if(opts&&opts.summary&&title==='SUMMARY')return true;
+  if(opts&&opts.skipDefaultSection&&title===_infraTitle(defaultTitle))return true;
+  return false;
+}
 function _infraRenderTextDevice(device,action,output,opts){
   opts=opts||{};
   var title=opts.title||(_infraTitle(device)+' — '+_infraTitle(action));
   var sections=_infraSections(output,title);
   var h='<div style="color:var(--green);font-weight:800;margin-bottom:8px;font-size:12px">'+_esc(title)+'</div>';
   if(opts.summary)h+=opts.summary;
-  sections.forEach(function(sec){h+=_infraRenderSection(sec,opts.kind);});
+  sections.forEach(function(sec){if(!_infraSkipSection(sec,opts,title))h+=_infraRenderSection(sec,opts.kind);});
   return h+_infraRawDetails('Raw '+device+' payload',output);
 }
 function _infraSectionLines(output,title){
@@ -7438,10 +7446,13 @@ function _renderPfInterfacesOutput(d){
   h+=_infraMiniStats([{l:'Interfaces',v:rows.length,c:'text'},{l:'With IP',v:withIp,c:'green'},{l:'No IP',v:rows.length-withIp,c:(rows.length-withIp)>0?'yellow':'green'}]);
   h+='<table><thead><tr><th>Interface</th><th>IP Address</th></tr></thead><tbody>';
   rows.forEach(function(r){
-    h+='<tr><td><strong>'+_esc(r.name)+'</strong></td><td class="mono-11">'+(r.ip?_esc(r.ip):'<span class="c-dim">no IP assigned</span>')+'</td></tr>';
+    h+='<tr><td><strong>'+_esc(r.name)+'</strong></td><td class="mono-11">'+(r.ip?_esc(r.ip):'')+'</td></tr>';
   });
   h+='</tbody></table>';
   return h+_infraRawDetails('Raw pfSense payload',d.output);
+}
+function _infraSummaryStatsFromSection(output,title){
+  return _infraSummaryStats(_infraSectionLines(output,title));
 }
 function _fmtBytes(value){
   var n=Number(value||0);if(!isFinite(n)||n<=0)return '0B';
@@ -7627,15 +7638,21 @@ function _renderTrueNasOutput(d){
   return _infraRenderTextDevice('TrueNAS',a,d.output||JSON.stringify(d.raw||'',null,2)||'No output');
 }
 function _renderPfOutput(d){
-  var lines=_infraLines(d.output);var stats=[];
+  var stats=[];
   if(d.action==='interfaces')return _renderPfInterfacesOutput(d);
   if(d.action==='states'){
     var m=(d.output||'').match(/Active states:\s*([0-9]+)/i);
     if(m)stats.push({l:'Active states',v:m[1],c:'cyan'});
+    return _infraRenderTextDevice('pfSense',d.action,d.output,{summary:_infraMiniStats(stats),skipDefaultSection:true});
   }else if(d.action==='rules'){
-    stats=_infraSummaryStats(lines).map(function(s){s.c=s.l.toLowerCase().indexOf('block')>=0?'yellow':'text';return s;});
+    stats=_infraSummaryStatsFromSection(d.output,'SUMMARY').map(function(s){s.c=s.l.toLowerCase().indexOf('block')>=0?'yellow':'text';return s;});
+    return _infraRenderTextDevice('pfSense',d.action,d.output,{summary:_infraMiniStats(stats),skipSections:['SUMMARY']});
+  }else if(d.action==='nat'){
+    stats=_infraSummaryStatsFromSection(d.output,'SUMMARY');
+    return _infraRenderTextDevice('pfSense',d.action,d.output,{summary:_infraMiniStats(stats),skipSections:['SUMMARY']});
   }else if(d.action==='arp'){
-    stats=_infraSummaryStats(lines);
+    stats=_infraSummaryStatsFromSection(d.output,'SUMMARY');
+    return _infraRenderTextDevice('pfSense',d.action,d.output,{summary:_infraMiniStats(stats),skipSections:['SUMMARY']});
   }
   return _infraRenderTextDevice('pfSense',d.action,d.output,{summary:_infraMiniStats(stats),kind:(d.action==='log'||d.action==='syslog')?'log':''});
 }
@@ -7653,6 +7670,29 @@ function _renderSwitchOutput(d){
   }
   return _infraRenderTextDevice('Switch',d.action,d.output,{summary:_infraMiniStats(stats),kind:d.action==='log'?'log':''});
 }
+function _infraFindKv(rows,regex){
+  for(var i=0;i<(rows||[]).length;i++){
+    if(regex.test(String(rows[i][0]||'')))return {label:rows[i][0],value:rows[i][1],index:i};
+  }
+  return null;
+}
+function _renderIdracTargetOutput(target,action){
+  var title=target.name.toUpperCase()+' ('+target.ip+')';
+  var rows=_infraKvFromLines(_infraLines(target.output));
+  if(!rows.length)return _infraRenderTextDevice(title,action,target.output,{kind:action==='sel'?'log':''});
+  var used={};var cards=[];
+  var power=_infraFindKv(rows,/power/i);
+  var model=_infraFindKv(rows,/model/i);
+  var fw=_infraFindKv(rows,/firmware|version/i);
+  if(power){cards.push({l:'Power',v:power.value,c:/on/i.test(power.value)?'green':'yellow'});used[power.index]=true;}
+  if(model){cards.push({l:'Model',v:model.value,c:'text'});used[model.index]=true;}
+  if(fw){cards.push({l:'Firmware',v:fw.value,c:'text'});used[fw.index]=true;}
+  var detailRows=rows.filter(function(_,idx){return !used[idx];});
+  var h='<div style="color:var(--green);font-weight:800;margin-bottom:8px;font-size:12px">'+_esc(title+' — '+_infraTitle(action))+'</div>';
+  h+=_infraMiniStats(cards);
+  if(detailRows.length)h+=_infraKvTable(detailRows);
+  return h+_infraRawDetails('Raw '+title+' payload',target.output);
+}
 function _renderIdracOutput(d,action){
   var html='';
   (d.targets||[]).forEach(function(t){
@@ -7660,19 +7700,7 @@ function _renderIdracOutput(d,action){
       html+='<div class="mb-12"><div style="font-size:12px;font-weight:600;color:var(--red)">'+_esc(t.name.toUpperCase())+' ('+_esc(t.ip)+') — UNREACHABLE</div><p class="c-dim-fs11">'+_esc(t.error||'')+'</p></div>';
       return;
     }
-    var rows=_infraKvFromLines(_infraLines(t.output));
-    var summary='';
-    if(rows.length){
-      var model=(rows.find(function(r){return /model/i.test(r[0]);})||[])[1];
-      var power=(rows.find(function(r){return /power/i.test(r[0]);})||[])[1];
-      var fw=(rows.find(function(r){return /firmware|version/i.test(r[0]);})||[])[1];
-      var cards=[];
-      if(power)cards.push({l:'Power',v:power,c:/on/i.test(power)?'green':'yellow'});
-      if(model)cards.push({l:'Model',v:model,c:'text'});
-      if(fw)cards.push({l:'Firmware',v:fw,c:'text'});
-      if(cards.length)summary=_infraMiniStats(cards);
-    }
-    html+=_infraRenderTextDevice(t.name.toUpperCase()+' ('+t.ip+')',action,t.output,{summary:summary,kind:action==='sel'?'log':''});
+    html+=_renderIdracTargetOutput(t,action);
   });
   return html||'<div class="c-yellow">No BMC targets returned for '+_esc(action)+'</div>';
 }

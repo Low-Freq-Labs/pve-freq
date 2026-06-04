@@ -162,7 +162,7 @@ test.describe('live dashboard safe E2E', () => {
 
   test('expanded core read actions render readable output without toast spam', async ({ page }) => {
     const cases = [
-      { label: 'firewall', buttons: [/INTERFACES/, /ARP TABLE/], expect: /PFSENSE|INTERFACES|ARP TABLE|IP Address|IP ADDRESS|SUMMARY/i },
+      { label: 'firewall', buttons: [/RULES/, /NAT/, /STATES/, /INTERFACES/, /ARP TABLE/], expect: /PFSENSE|FILTER RULES|NAT RULES|TOP STATES|INTERFACES|ARP TABLE|IP Address|IP ADDRESS/i },
       { label: 'switch', buttons: [/CDP NEIGHBORS/], expect: /SWITCH|CDP|NEIGHBOR|Device ID|Local Intrfce/i },
       { label: 'truenas', buttons: [/SMART DISKS/, /SNAPSHOTS/, /NETWORK/, /SYSTEM LOG/], expect: /TRUENAS|Disk|Snapshot|Interface|SYSTEM LOG|Raw TrueNAS payload/i },
       { label: 'bmc-10', buttons: [/FIRMWARE/, /LICENSE/, /NETWORK/], expect: /BMC-10|Firmware|License|NIC|Network|Raw BMC-10/i }
