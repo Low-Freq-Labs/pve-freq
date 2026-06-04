@@ -7351,9 +7351,24 @@ function _infraSummaryStats(lines){
   var stats=[];var text=(lines||[]).join(' | ');
   text.split('|').forEach(function(part){
     var m=part.match(/^\s*([A-Za-z][A-Za-z0-9 /_-]{1,24})\s*:\s*([^|]+?)\s*$/);
-    if(m)stats.push({l:m[1].trim(),v:m[2].trim(),c:'blue'});
+    if(m)stats.push({l:m[1].trim(),v:m[2].trim(),c:'text'});
   });
   return stats.slice(0,6);
+}
+function _infraSummaryColor(c){
+  var map={green:'var(--green)',yellow:'var(--yellow)',red:'var(--red)',cyan:'var(--cyan)',orange:'var(--orange)',blue:'var(--text)',purple:'var(--purple-light)',text:'var(--text)'};
+  return map[c]||'var(--text)';
+}
+function _infraMiniStats(items){
+  if(!items||!items.length)return '';
+  var h='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px">';
+  items.forEach(function(i){
+    h+='<div style="display:flex;align-items:baseline;gap:8px;background:rgba(255,255,255,0.035);border:1px solid var(--border);border-radius:6px;padding:5px 9px;min-height:26px">';
+    h+='<span style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;font-family:var(--font-ui);font-weight:700">'+_esc(i.l)+'</span>';
+    h+='<span style="font-size:12px;color:'+_infraSummaryColor(i.c)+';font-family:var(--font-mono);font-weight:650;white-space:nowrap">'+_esc(i.v)+'</span>';
+    h+='</div>';
+  });
+  return h+'</div>';
 }
 function _infraRenderLogLines(lines){
   var h='<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11px;line-height:1.55;max-height:420px;overflow:auto">';
@@ -7363,8 +7378,6 @@ function _infraRenderLogLines(lines){
 function _infraRenderSection(sec,kind){
   var title=_infraTitle(sec.title);var lines=sec.lines||[];
   var h='<div style="margin-top:12px"><div style="color:var(--text-bright);font-weight:800;font-size:12px;margin-bottom:8px">'+_esc(title)+'</div>';
-  var stats=_infraSummaryStats(lines);
-  if(stats.length)h+=_statCards(stats);
   var kv=_infraKvFromLines(lines);
   if(kv.length)h+=_infraKvTable(kv);
   else if(/LOG|SYSLOG|EVENT/.test(title)||kind==='log')h+=_infraRenderLogLines(lines);
@@ -7376,7 +7389,7 @@ function _infraRenderTextDevice(device,action,output,opts){
   opts=opts||{};
   var title=opts.title||(_infraTitle(device)+' — '+_infraTitle(action));
   var sections=_infraSections(output,title);
-  var h='<div style="color:var(--green);font-weight:800;margin-bottom:8px">'+_esc(title)+'</div>';
+  var h='<div style="color:var(--green);font-weight:800;margin-bottom:8px;font-size:12px">'+_esc(title)+'</div>';
   if(opts.summary)h+=opts.summary;
   sections.forEach(function(sec){h+=_infraRenderSection(sec,opts.kind);});
   return h+_infraRawDetails('Raw '+device+' payload',output);
@@ -7456,7 +7469,7 @@ function _renderTnPools(d){
   if(!pools.length)return _infraPre('TRUENAS — '+String(d.action||'POOLS').toUpperCase(),d.output||'No pools returned');
   var total=0,used=0,online=0;
   pools.forEach(function(p){total+=Number(p.size||0);used+=Number(p.allocated||0);if((p.status||'').toUpperCase()==='ONLINE'||p.healthy===true)online++;});
-  var h=_statCards([{l:'Pools',v:pools.length},{l:'Online',v:online,c:online===pools.length?'green':'yellow'},{l:'Used',v:total?Math.round(used/total*100)+'%':'?'},{l:'Total',v:_fmtBytes(total),c:'blue'}]);
+  var h=_infraMiniStats([{l:'Pools',v:pools.length},{l:'Online',v:online,c:online===pools.length?'green':'yellow'},{l:'Used',v:total?Math.round(used/total*100)+'%':'?'},{l:'Total',v:_fmtBytes(total),c:'text'}]);
   h+='<table style="margin-top:12px"><thead><tr><th>Pool</th><th>Health</th><th>Used</th><th>Free</th><th>Total</th><th>Scan</th><th>Errors</th></tr></thead><tbody>';
   pools.forEach(function(p){
     var scan=p.scan||{};var errs=scan.errors!==undefined?scan.errors:'0';
@@ -7468,7 +7481,7 @@ function _renderTnPools(d){
 function _renderTnStatus(d){
   var r=d.raw||{};
   if(!r||typeof r!=='object'||Array.isArray(r))return _infraPre('TRUENAS — STATUS',d.output||'');
-  var h=_statCards([{l:'Host',v:r.hostname||d.label||'truenas',c:'green'},{l:'Version',v:r.version||'?'},{l:'Cores',v:r.cores||'?'},{l:'Memory',v:_fmtBytes(r.physmem),c:'blue'}]);
+  var h=_infraMiniStats([{l:'Host',v:r.hostname||d.label||'truenas',c:'green'},{l:'Version',v:r.version||'?'},{l:'Cores',v:r.cores||'?'},{l:'Memory',v:_fmtBytes(r.physmem),c:'text'}]);
   h+='<div style="margin-top:12px">'+_infraKvTable([['Model',r.system_product||'-'],['Manufacturer',r.system_manufacturer||'-'],['Uptime',r.uptime||'-'],['Timezone',r.timezone||'-'],['ECC memory',r.ecc_memory?'YES':'NO'],['Load average',(r.loadavg||[]).join(' / ')||'-']])+'</div>';
   return h+_infraRawDetails('Raw status payload',d.output);
 }
@@ -7570,11 +7583,11 @@ function _renderPfOutput(d){
     var m=(d.output||'').match(/Active states:\s*([0-9]+)/i);
     if(m)stats.push({l:'Active states',v:m[1],c:'cyan'});
   }else if(d.action==='rules'){
-    stats=_infraSummaryStats(lines).map(function(s){s.c=s.l.toLowerCase().indexOf('block')>=0?'yellow':'blue';return s;});
+    stats=_infraSummaryStats(lines).map(function(s){s.c=s.l.toLowerCase().indexOf('block')>=0?'yellow':'text';return s;});
   }else if(d.action==='arp'){
     stats=_infraSummaryStats(lines);
   }
-  return _infraRenderTextDevice('pfSense',d.action,d.output,{summary:stats.length?_statCards(stats):'',kind:(d.action==='log'||d.action==='syslog')?'log':''});
+  return _infraRenderTextDevice('pfSense',d.action,d.output,{summary:_infraMiniStats(stats),kind:(d.action==='log'||d.action==='syslog')?'log':''});
 }
 function _renderSwitchOutput(d){
   var stats=[];
@@ -7586,9 +7599,9 @@ function _renderSwitchOutput(d){
     if(connected)stats.push({l:'Ports up',v:connected,c:'green'});
   }else if(d.action==='mac'){
     var macs=_infraLines(d.output).filter(function(l){return /[0-9a-f]{4}[.\-:][0-9a-f]{4}/i.test(l);}).length;
-    if(macs)stats.push({l:'MAC entries',v:macs,c:'blue'});
+    if(macs)stats.push({l:'MAC entries',v:macs,c:'text'});
   }
-  return _infraRenderTextDevice('Switch',d.action,d.output,{summary:stats.length?_statCards(stats):'',kind:d.action==='log'?'log':''});
+  return _infraRenderTextDevice('Switch',d.action,d.output,{summary:_infraMiniStats(stats),kind:d.action==='log'?'log':''});
 }
 function _renderIdracOutput(d,action){
   var html='';
@@ -7605,9 +7618,9 @@ function _renderIdracOutput(d,action){
       var fw=(rows.find(function(r){return /firmware|version/i.test(r[0]);})||[])[1];
       var cards=[];
       if(power)cards.push({l:'Power',v:power,c:/on/i.test(power)?'green':'yellow'});
-      if(model)cards.push({l:'Model',v:model,c:'blue'});
-      if(fw)cards.push({l:'Firmware',v:fw,c:'blue'});
-      if(cards.length)summary=_statCards(cards);
+      if(model)cards.push({l:'Model',v:model,c:'text'});
+      if(fw)cards.push({l:'Firmware',v:fw,c:'text'});
+      if(cards.length)summary=_infraMiniStats(cards);
     }
     html+=_infraRenderTextDevice(t.name.toUpperCase()+' ('+t.ip+')',action,t.output,{summary:summary,kind:action==='sel'?'log':''});
   });

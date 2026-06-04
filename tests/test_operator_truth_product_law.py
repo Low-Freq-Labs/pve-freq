@@ -278,6 +278,25 @@ class TestInfraOutputIsHumanReadable(unittest.TestCase):
         for action in ("smart", "snapshots", "network", "replication", "syslog"):
             self.assertIn("a==='" + action + "'", body)
 
+    def test_core_device_outputs_use_compact_summary_chips(self):
+        src = _app_js()
+        self.assertIn("function _infraMiniStats", src)
+        self.assertIn("function _infraSummaryColor", src)
+        self.assertIn("blue:'var(--text)'", src)
+        render_section = _fn_body(src, "_infraRenderSection")
+        self.assertNotIn("_statCards", render_section)
+        for fn in (
+            "_renderTnPools",
+            "_renderTnStatus",
+            "_renderPfOutput",
+            "_renderSwitchOutput",
+            "_renderIdracOutput",
+        ):
+            with self.subTest(fn=fn):
+                body = _fn_body(src, fn)
+                self.assertIn("_infraMiniStats", body)
+                self.assertNotIn("_statCards", body)
+
 
 class TestSilentRefreshStructuralSanity(unittest.TestCase):
     """A 200 response without probe_status doesn't mean the data is
