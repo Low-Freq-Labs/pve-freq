@@ -7240,6 +7240,147 @@ function _infraOut(defaultId){
 function _infraPre(title,output){
   return '<div style="color:var(--green);margin-bottom:8px;font-size:12px;font-weight:600">'+title+'</div><pre style="font-size:11px;color:var(--text);white-space:pre-wrap;font-family:\'Courier New\',monospace;line-height:1.5;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px">'+output.replace(/</g,'&lt;').replace(/===/g,'<span class="c-purple">═══</span>')+'</pre>';
 }
+function _infraKvTable(rows){
+  var h='<table><tbody>';
+  rows.forEach(function(r){h+='<tr><td style="color:var(--text-dim);width:190px">'+_esc(r[0])+'</td><td>'+_esc(String(r[1]===undefined||r[1]===null?'-':r[1]))+'</td></tr>';});
+  return h+'</tbody></table>';
+}
+function _infraRawDetails(title,output){
+  if(!output)return '';
+  return '<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:1px">'+_esc(title||'Raw output')+'</summary>'+_infraPre(title||'RAW OUTPUT',String(output))+'</details>';
+}
+function _fmtBytes(value){
+  var n=Number(value||0);if(!isFinite(n)||n<=0)return '0B';
+  var u=['B','KiB','MiB','GiB','TiB','PiB'];var i=0;
+  while(n>=1024&&i<u.length-1){n=n/1024;i++;}
+  return (n>=10||i===0?n.toFixed(0):n.toFixed(1))+' '+u[i];
+}
+function _tnPropValue(v){
+  if(v&&typeof v==='object'&&('value' in v))return v.value===null?'-':v.value;
+  if(v===true)return 'YES';if(v===false)return 'NO';
+  return v===undefined||v===null?'-':v;
+}
+function _tnDate(v){
+  var ms=null;
+  if(v&&typeof v==='object'&&v.$date)ms=Number(v.$date);
+  else if(v&&typeof v==='object'&&v.parsed&&v.parsed.$date)ms=Number(v.parsed.$date);
+  else if(typeof v==='number')ms=v;
+  if(!ms)return '-';
+  try{return new Date(ms).toLocaleString();}catch(e){return '-';}
+}
+function _tnBadge(level){
+  var s=String(level||'unknown').toUpperCase();
+  var cls=s==='CRITICAL'||s==='ERROR'?'CRITICAL':s==='WARNING'||s==='WARN'?'warn':s==='ONLINE'||s==='OK'?'ok':'unknown';
+  return '<span class="badge '+cls+'">'+_esc(s)+'</span>';
+}
+function _tnCleanHtmlText(s){
+  return String(s||'')
+    .replace(/<br\s*\/?>/gi,'\n')
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi,'$2 ($1)')
+    .replace(/<[^>]+>/g,'')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+}
+function _tnAlertSummary(alert){
+  var klass=alert.klass||alert.source||'Alert';
+  var args=alert.args||{};
+  if(klass==='RESTAPIUsage'){
+    return {
+      title:'Deprecated REST API usage',
+      impact:'TrueNAS is warning that an older API path is still being used.',
+      action:'Migrate integrations to the supported JSON-RPC API before upgrading TrueNAS to 26.04.',
+      detail:'Seen '+(args.count||'?')+' time(s) in the last 24 hours from '+(args.ip_addresses||'unknown IPs')+'.'
+    };
+  }
+  return {
+    title:klass,
+    impact:_tnCleanHtmlText(alert.formatted||alert.text||'TrueNAS reported an alert.'),
+    action:'Review the alert details and clear it in TrueNAS after the cause is resolved.',
+    detail:'Source: '+(alert.source||'-')
+  };
+}
+function _renderTnAlerts(d){
+  var alerts=Array.isArray(d.raw)?d.raw:[];
+  if(!alerts.length)return '<div class="exec-out" style="color:var(--green)">No active TrueNAS alerts.</div>';
+  var h='<div style="color:var(--yellow);font-weight:700;margin-bottom:10px">'+alerts.length+' TrueNAS alert'+(alerts.length===1?'':'s')+'</div>';
+  alerts.forEach(function(a){
+    var s=_tnAlertSummary(a);
+    h+='<div style="background:var(--card);border:1px solid var(--border);border-left:3px solid var(--yellow);border-radius:8px;padding:14px 16px;margin-bottom:12px">';
+    h+='<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px"><div><div style="font-size:14px;font-weight:800;color:var(--text-bright)">'+_esc(s.title)+'</div><div style="font-size:11px;color:var(--text-dim);margin-top:2px">'+_esc(a.node||'TrueNAS')+' · '+_esc(_tnDate(a.datetime||a.last_occurrence))+'</div></div>'+_tnBadge(a.level)+'</div>';
+    h+='<div style="display:grid;grid-template-columns:120px 1fr;gap:8px;font-size:12px;line-height:1.45">';
+    h+='<div class="c-dim">What it means</div><div>'+_esc(s.impact)+'</div>';
+    h+='<div class="c-dim">What to do</div><div style="color:var(--green)">'+_esc(s.action)+'</div>';
+    h+='<div class="c-dim">Evidence</div><div>'+_esc(s.detail)+'</div>';
+    h+='</div>';
+    var full=_tnCleanHtmlText(a.formatted||a.text||'');
+    if(full&&full!==s.impact)h+='<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--text-dim);font-size:11px">More detail</summary><pre style="white-space:pre-wrap;font-size:11px;line-height:1.5;margin-top:8px">'+_esc(full)+'</pre></details>';
+    h+='</div>';
+  });
+  return h+_infraRawDetails('Raw alert payload',d.output);
+}
+function _renderTnPools(d){
+  var pools=Array.isArray(d.raw)?d.raw:[];
+  if(!pools.length)return _infraPre('TRUENAS — '+String(d.action||'POOLS').toUpperCase(),d.output||'No pools returned');
+  var total=0,used=0,online=0;
+  pools.forEach(function(p){total+=Number(p.size||0);used+=Number(p.allocated||0);if((p.status||'').toUpperCase()==='ONLINE'||p.healthy===true)online++;});
+  var h=_statCards([{l:'Pools',v:pools.length},{l:'Online',v:online,c:online===pools.length?'green':'yellow'},{l:'Used',v:total?Math.round(used/total*100)+'%':'?'},{l:'Total',v:_fmtBytes(total),c:'blue'}]);
+  h+='<table style="margin-top:12px"><thead><tr><th>Pool</th><th>Health</th><th>Used</th><th>Free</th><th>Total</th><th>Scan</th><th>Errors</th></tr></thead><tbody>';
+  pools.forEach(function(p){
+    var scan=p.scan||{};var errs=scan.errors!==undefined?scan.errors:'0';
+    h+='<tr><td><strong>'+_esc(p.name||p.id||'pool')+'</strong></td><td>'+_tnBadge(p.status||(p.healthy?'ONLINE':'UNKNOWN'))+'</td><td>'+_esc(_fmtBytes(p.allocated))+'</td><td>'+_esc(_fmtBytes(p.free||Math.max(Number(p.size||0)-Number(p.allocated||0),0)))+'</td><td>'+_esc(_fmtBytes(p.size))+'</td><td>'+_esc(scan.state||'-')+'</td><td>'+_esc(String(errs))+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  return h+_infraRawDetails('Raw pool payload',d.output);
+}
+function _renderTnStatus(d){
+  var r=d.raw||{};
+  if(!r||typeof r!=='object'||Array.isArray(r))return _infraPre('TRUENAS — STATUS',d.output||'');
+  var h=_statCards([{l:'Host',v:r.hostname||d.label||'truenas',c:'green'},{l:'Version',v:r.version||'?'},{l:'Cores',v:r.cores||'?'},{l:'Memory',v:_fmtBytes(r.physmem),c:'blue'}]);
+  h+='<div style="margin-top:12px">'+_infraKvTable([['Model',r.system_product||'-'],['Manufacturer',r.system_manufacturer||'-'],['Uptime',r.uptime||'-'],['Timezone',r.timezone||'-'],['ECC memory',r.ecc_memory?'YES':'NO'],['Load average',(r.loadavg||[]).join(' / ')||'-']])+'</div>';
+  return h+_infraRawDetails('Raw status payload',d.output);
+}
+function _flattenTnDatasets(list,out,depth){
+  (list||[]).forEach(function(x){out.push({item:x,depth:depth});_flattenTnDatasets(x.children||[],out,depth+1);});
+}
+function _renderTnDatasets(d){
+  var rows=[];_flattenTnDatasets(Array.isArray(d.raw)?d.raw:[],rows,0);
+  if(!rows.length)return _infraPre('TRUENAS — DATASETS',d.output||'No datasets returned');
+  var h='<table><thead><tr><th>Dataset</th><th>Used</th><th>Available</th><th>Quota</th><th>Encrypted</th><th>Mountpoint</th></tr></thead><tbody>';
+  rows.slice(0,80).forEach(function(r){
+    var x=r.item,indent='';for(var i=0;i<r.depth;i++)indent+='&nbsp;&nbsp;';
+    h+='<tr><td class="mono-11">'+indent+_esc(x.name||x.id||'-')+'</td><td>'+_esc(_tnPropValue(x.used))+'</td><td>'+_esc(_tnPropValue(x.available))+'</td><td>'+_esc(_tnPropValue(x.quota))+'</td><td>'+_tnBadge(x.encrypted?'OK':'UNKNOWN')+'</td><td class="mono-11">'+_esc(x.mountpoint||'-')+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  if(rows.length>80)h+='<div class="c-dim-mt8">Showing first 80 datasets of '+rows.length+'.</div>';
+  return h+_infraRawDetails('Raw dataset payload',d.output);
+}
+function _renderTnShares(d){
+  var rows=Array.isArray(d.raw)?d.raw:[];
+  if(!rows.length)return '<div class="exec-out">No TrueNAS shares returned.</div>';
+  var h='<table><thead><tr><th>Share</th><th>Path</th><th>Status</th><th>Read only</th><th>Allowed clients</th></tr></thead><tbody>';
+  rows.forEach(function(s){
+    var opts=s.options||{};
+    h+='<tr><td><strong>'+_esc(s.name||'-')+'</strong></td><td class="mono-11">'+_esc(s.path||'-')+'</td><td>'+_tnBadge(s.enabled?'OK':'WARNING')+'</td><td>'+_esc(s.readonly?'YES':'NO')+'</td><td class="mono-11">'+_esc((opts.hostsallow||[]).join(', ')||'any')+'</td></tr>';
+  });
+  return h+'</tbody></table>'+_infraRawDetails('Raw share payload',d.output);
+}
+function _renderTnServices(d){
+  var rows=Array.isArray(d.raw)?d.raw:[];
+  if(!rows.length)return _infraPre('TRUENAS — SERVICES',d.output||'No services returned');
+  var h='<table><thead><tr><th>Service</th><th>Enabled</th><th>State</th></tr></thead><tbody>';
+  rows.forEach(function(s){h+='<tr><td><strong>'+_esc(s.service||s.name||'-')+'</strong></td><td>'+_tnBadge(s.enable?'OK':'UNKNOWN')+'</td><td>'+_esc(s.state||'-')+'</td></tr>';});
+  return h+'</tbody></table>'+_infraRawDetails('Raw service payload',d.output);
+}
+function _renderTrueNasOutput(d){
+  var a=d.action||'status';
+  if(a==='alerts')return _renderTnAlerts(d);
+  if(a==='pools'||a==='health')return _renderTnPools(d);
+  if(a==='status')return _renderTnStatus(d);
+  if(a==='datasets')return _renderTnDatasets(d);
+  if(a==='shares')return _renderTnShares(d);
+  if(a==='services')return _renderTnServices(d);
+  return _infraPre('TRUENAS — '+String(a).toUpperCase(),d.output||JSON.stringify(d.raw||'',null,2)||'No output');
+}
 function pfAction(action){
   var o=_infraOut('pf-out');if(!o)return;
   o.innerHTML='<span class="c-dim">Querying pfSense ('+action+')...</span>';
@@ -7254,7 +7395,7 @@ function tnAction(action){
   _authFetch(API.INFRA_TRUENAS+'?action='+action).then(function(r){return r.json()}).then(function(d){
     if(d.api_available===false){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output||d.error||'API key unavailable');}
     else if(d.reachable&&d.ssh_available===false){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output||d.error||'SSH metrics unavailable');}
-    else if(d.reachable){o.innerHTML=_infraPre('TRUENAS \u2014 '+action.toUpperCase(),d.output||d.raw||'');}
+    else if(d.reachable){o.innerHTML=_renderTrueNasOutput(d);}
     else{o.innerHTML='<div class="c-red">Cannot reach TrueNAS at '+(d.host||d.ip||'unknown')+'</div><div class="c-dim-mt8">'+(d.error||'')+'</div>';}
   }).catch(function(e){o.innerHTML='<div class="c-red">Error: '+e+'</div>';});
 }

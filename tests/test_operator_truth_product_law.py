@@ -214,6 +214,29 @@ class TestDoctorTruthSurfaces(unittest.TestCase):
         self.assertIn("_doctorProbeTimer", body)
 
 
+class TestInfraOutputIsHumanReadable(unittest.TestCase):
+    """Infrastructure detail panels should summarize raw device output before
+    exposing raw payloads. Pre-fix TrueNAS alerts dumped internal JSON fields,
+    which made a normal warning look like an emergency."""
+
+    def test_truenas_output_uses_structured_renderer(self):
+        body = _fn_body(_app_js(), "tnAction")
+        self.assertIn("_renderTrueNasOutput(d)", body)
+        self.assertIn("else if(d.reachable){o.innerHTML=_renderTrueNasOutput(d);}", body)
+
+    def test_truenas_alert_renderer_explains_meaning_and_action(self):
+        body = _fn_body(_app_js(), "_renderTnAlerts")
+        for text in ("What it means", "What to do", "Evidence"):
+            self.assertIn(text, body)
+        self.assertIn("Raw alert payload", body)
+
+    def test_known_truenas_rest_api_alert_has_operator_language(self):
+        body = _fn_body(_app_js(), "_tnAlertSummary")
+        self.assertIn("RESTAPIUsage", body)
+        self.assertIn("Deprecated REST API usage", body)
+        self.assertIn("Migrate integrations", body)
+
+
 class TestSilentRefreshStructuralSanity(unittest.TestCase):
     """A 200 response without probe_status doesn't mean the data is
     fresh — it can also mean the backend has no idea. Treat

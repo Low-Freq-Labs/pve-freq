@@ -76,6 +76,10 @@ from freq.jarvis.notify import notify as jarvis_notify
 from freq.jarvis.risk import _load_kill_chain
 
 
+IDRAC_READ_CONNECT_TIMEOUT = 10
+IDRAC_READ_COMMAND_TIMEOUT = 30
+
+
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """Multi-threaded HTTP server — won't block on slow API calls."""
 
@@ -545,7 +549,7 @@ def _bg_probe_infra():
                 idrac_opts = _PLATFORM_SSH_LOCAL.get("idrac", {}).get("extra_opts", [])
                 idrac_cmd = [
                     "ssh", "-n",
-                    "-o", "ConnectTimeout=3",
+                    "-o", f"ConnectTimeout={IDRAC_READ_CONNECT_TIMEOUT}",
                     "-o", "BatchMode=yes",
                     "-o", "StrictHostKeyChecking=accept-new",
                     "-i", idrac_key,
@@ -553,7 +557,7 @@ def _bg_probe_infra():
                     f"{idrac_user}@{dev.ip}",
                     "racadm getsysinfo -s",
                 ]
-                proc = subprocess.run(idrac_cmd, capture_output=True, text=True, timeout=15)
+                proc = subprocess.run(idrac_cmd, capture_output=True, text=True, timeout=IDRAC_READ_COMMAND_TIMEOUT)
                 r = type("R", (), {"returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})()
 
                 # Fallback: if key auth hit a permission-denied, try sshpass
@@ -564,13 +568,13 @@ def _bg_probe_infra():
                     if pw_file and os.path.isfile(pw_file):
                         sshpass_cmd = [
                             "sshpass", "-f", pw_file, "ssh", "-n",
-                            "-o", "ConnectTimeout=3",
+                            "-o", f"ConnectTimeout={IDRAC_READ_CONNECT_TIMEOUT}",
                             "-o", "StrictHostKeyChecking=accept-new",
                         ] + idrac_opts + [
                             f"{idrac_user}@{dev.ip}",
                             "racadm getsysinfo -s",
                         ]
-                        proc2 = subprocess.run(sshpass_cmd, capture_output=True, text=True, timeout=15)
+                        proc2 = subprocess.run(sshpass_cmd, capture_output=True, text=True, timeout=IDRAC_READ_COMMAND_TIMEOUT)
                         r = type("R", (), {"returncode": proc2.returncode, "stdout": proc2.stdout, "stderr": proc2.stderr})()
                 if r.returncode == 0 and r.stdout.strip():
                     d["reachable"] = True

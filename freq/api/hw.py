@@ -24,6 +24,10 @@ from freq.modules.serve import (
 from freq.modules.vault import vault_get
 
 
+IDRAC_READ_CONNECT_TIMEOUT = 10
+IDRAC_READ_COMMAND_TIMEOUT = 30
+
+
 # -- Handlers ----------------------------------------------------------------
 
 
@@ -101,8 +105,8 @@ def handle_idrac(handler):
             host=ip,
             command=cmd,
             key_path=idrac_key,
-            connect_timeout=3,
-            command_timeout=15,
+            connect_timeout=IDRAC_READ_CONNECT_TIMEOUT,
+            command_timeout=IDRAC_READ_COMMAND_TIMEOUT,
             htype="idrac",
             use_sudo=False,
             cfg=cfg,

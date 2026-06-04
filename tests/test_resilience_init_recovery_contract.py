@@ -45,6 +45,7 @@ REPO = Path(__file__).parent.parent
 INIT_CMD_PY = REPO / "freq" / "modules" / "init_cmd.py"
 SERVE_PY = REPO / "freq" / "modules" / "serve.py"
 FLEET_API_PY = REPO / "freq" / "api" / "fleet.py"
+HW_API_PY = REPO / "freq" / "api" / "hw.py"
 USERS_PY = REPO / "freq" / "modules" / "users.py"
 CLI_PY = REPO / "freq" / "cli.py"
 
@@ -243,6 +244,26 @@ class TestLegacyHealthProbeIdrac(unittest.TestCase):
     def test_fleet_api_has_idrac_return_branch(self):
         src = FLEET_API_PY.read_text()
         self.assertIn('if htype == "idrac":', src)
+
+    def test_idrac_api_uses_legacy_read_timeout_constants(self):
+        src = HW_API_PY.read_text()
+        self.assertIn("IDRAC_READ_CONNECT_TIMEOUT = 10", src)
+        self.assertIn("IDRAC_READ_COMMAND_TIMEOUT = 30", src)
+        self.assertIn("connect_timeout=IDRAC_READ_CONNECT_TIMEOUT", src)
+        self.assertIn("command_timeout=IDRAC_READ_COMMAND_TIMEOUT", src)
+
+    def test_infra_quick_uses_legacy_read_timeout_constants(self):
+        src = SERVE_PY.read_text()
+        idx = src.find('elif dt == "idrac":')
+        self.assertGreater(idx, 0)
+        window = src[idx:src.find('\n            else:', idx)]
+        self.assertIn("IDRAC_READ_CONNECT_TIMEOUT", window)
+        self.assertIn("IDRAC_READ_COMMAND_TIMEOUT", window)
+
+    def test_live_e2e_does_not_accept_unreachable_bmc_as_success(self):
+        spec = (REPO / "tests" / "e2e" / "live-safe.spec.js").read_text()
+        self.assertNotIn("System Information|UNREACHABLE", spec)
+        self.assertIn("PowerEdge|System Information", spec)
 
 
 class TestShutdownMuxCleanupBudgeted(unittest.TestCase):

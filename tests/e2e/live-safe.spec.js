@@ -85,49 +85,79 @@ test.describe('live dashboard safe E2E', () => {
     }
   });
 
-  test('core system cards open and read-only actions produce visible output', async ({ page }) => {
+  for (const cardCase of [
+    { label: 'firewall', button: /STATUS/, expectText: /PFSENSE|states|uptime|interface/i },
+    { label: 'switch', button: /STATUS/, expectText: /SWITCH|uptime|version|interface/i },
+    { label: 'truenas', button: /SYSTEM/, expectText: /Host|Version|Memory|TrueNAS|truenas/i },
+    { label: 'bmc-10', button: /SYSTEM INFO/, expectText: /BMC-10|PowerEdge|System Information/i },
+    { label: 'bmc-11', button: /SYSTEM INFO/, expectText: /BMC-11|PowerEdge|System Information/i }
+  ]) {
+    test(`core system card opens and reads ${cardCase.label}`, async ({ page }) => {
+      await goFleet(page);
+      const card = page.locator(`.infra-role-card:visible[data-label="${cardCase.label}"]`).first();
+      await expect(card).toBeVisible();
+      await card.click();
+      await page.locator('#host-overlay.open').waitFor();
+      await expect(page.locator('#hd-infra-out')).toHaveCount(1);
+
+      const readButton = page.locator('#host-overlay button').filter({ hasText: cardCase.button }).first();
+      await expect(readButton, `${cardCase.label} read button`).toBeVisible();
+      await readButton.click();
+
+      const out = page.locator('#hd-infra-out');
+      await expect(out).toBeVisible();
+      await expect(out, `${cardCase.label} readable output`).toContainText(cardCase.expectText, { timeout: 35_000 });
+
+      await page.locator('#host-overlay [data-action="closeCard"]').click();
+      await page.locator('#host-overlay').waitFor({ state: 'hidden' });
+    });
+  }
+
+  test('visible core system cards are clickable', async ({ page }) => {
     await goFleet(page);
     const cards = await page.locator('.infra-role-card:visible').count();
     expect(cards).toBeGreaterThanOrEqual(4);
 
     for (let i = 0; i < cards; i += 1) {
       const card = page.locator('.infra-role-card:visible').nth(i);
-      const label = (await card.getAttribute('data-label')) || `card-${i}`;
       await card.click();
       await page.locator('#host-overlay.open').waitFor();
       await expect(page.locator('#hd-infra-out')).toHaveCount(1);
-
-      const readButton = page.locator(
-        '#host-overlay button:has-text("STATUS"), #host-overlay button:has-text("SYSTEM"), #host-overlay button:has-text("POOLS")'
-      ).first();
-      await expect(readButton, `${label} read button`).toBeVisible();
-      await readButton.click();
-      await expect(page.locator('#hd-infra-out')).toBeVisible();
-      if (label.toLowerCase().includes('bmc')) {
-        await expect(page.locator('#hd-infra-out'), `${label} final BMC output`).toContainText(/BMC-\d+|PowerEdge|System Information|UNREACHABLE/, { timeout: 35_000 });
-      } else {
-        await expect(page.locator('#hd-infra-out'), `${label} read output`).not.toHaveText(/^\s*$/);
-      }
-
       await page.locator('#host-overlay [data-action="closeCard"]').click();
       await page.locator('#host-overlay').waitFor({ state: 'hidden' });
     }
   });
 
-  test('safe core device read endpoints return real data', async ({ page }) => {
-    const checks = [
-      ['/api/infra/pfsense?action=status', body => body.reachable === true && body.auth_failed === false && String(body.output || '').length > 20],
-      ['/api/infra/truenas?action=pools', body => body.reachable === true && body.api_available !== false && String(body.output || body.raw || '').length > 5],
-      ['/api/switch?action=status', body => body.reachable === true && String(body.output || '').length > 5],
-      ['/api/infra/idrac?action=status&target=bmc-10', body => Array.isArray(body.targets) && body.targets.length === 1 && body.targets.every(t => t.reachable === true && String(t.output || '').length > 20)],
-      ['/api/infra/idrac?action=status&target=bmc-11', body => Array.isArray(body.targets) && body.targets.length === 1 && body.targets.every(t => t.reachable === true && String(t.output || '').length > 20)]
-    ];
-
-    for (const [path, predicate] of checks) {
+  for (const endpointCase of [
+    { name: 'pfSense status', path: '/api/infra/pfsense?action=status', predicate: body => body.reachable === true && body.auth_failed === false && String(body.output || '').length > 20 },
+    { name: 'TrueNAS pools', path: '/api/infra/truenas?action=pools', predicate: body => body.reachable === true && body.api_available !== false && String(body.output || body.raw || '').length > 5 },
+    { name: 'switch status', path: '/api/switch?action=status', predicate: body => body.reachable === true && String(body.output || '').length > 5 },
+    { name: 'bmc-10 status', path: '/api/infra/idrac?action=status&target=bmc-10', predicate: body => Array.isArray(body.targets) && body.targets.length === 1 && body.targets.every(t => t.reachable === true && String(t.output || '').length > 20) },
+    { name: 'bmc-11 status', path: '/api/infra/idrac?action=status&target=bmc-11', predicate: body => Array.isArray(body.targets) && body.targets.length === 1 && body.targets.every(t => t.reachable === true && String(t.output || '').length > 20) }
+  ]) {
+    test(`safe core endpoint returns real data: ${endpointCase.name}`, async ({ page }) => {
+      const path = endpointCase.path;
       const result = await api(page, path);
       expect(result.status, path).toBe(200);
-      expect(predicate(result.body), path).toBeTruthy();
-    }
+      expect(endpointCase.predicate(result.body), `${path}\n${JSON.stringify(result.body, null, 2)}`).toBeTruthy();
+    });
+  }
+
+  test('truenas alerts render as operator-readable output', async ({ page }) => {
+    await goFleet(page);
+    const truenasCard = page.locator('.infra-role-card:visible[data-label="truenas"]').first();
+    await expect(truenasCard).toBeVisible();
+    await truenasCard.click();
+    await page.locator('#host-overlay.open').waitFor();
+
+    const alertsButton = page.locator('#host-overlay button:has-text("ALERTS")').first();
+    await expect(alertsButton).toBeVisible();
+    await alertsButton.click();
+
+    const out = page.locator('#hd-infra-out');
+    await expect(out).toBeVisible();
+    await expect(out).toContainText(/No active TrueNAS alerts|What it means/, { timeout: 20_000 });
+    await expect(out).toContainText(/No active TrueNAS alerts|What to do/, { timeout: 20_000 });
   });
 
   test('terminal sessions open and close without touching power state', async ({ page }) => {
