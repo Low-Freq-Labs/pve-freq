@@ -175,6 +175,18 @@ function toast(msg,type){
   setTimeout(function(){t.classList.add('fadeout');},3500);
   setTimeout(function(){t.remove();if(_toastState[key]&&_toastState[key].el===t)delete _toastState[key];},4000);
 }
+function _recordBackgroundProbeEvent(message,type,payload){
+  payload=payload||{};
+  payload.message=message;
+  payload.type=type||'info';
+  payload.source=payload.source||'background_probe';
+  _uiLog('background_probe_event',payload);
+}
+function _activityShouldToast(d){
+  var t=String((d&&d.type)||'');
+  if(t==='ui_toast'||t==='health_change'||t==='probe_error')return false;
+  return true;
+}
 /* === Modal === */
 /* M-BLUETEAM-SECURITY-HARDENING-20260413AJ: safe confirmAction.
  *
@@ -2288,9 +2300,14 @@ function _silentFleetRefresh(){
           }
         });
     });
-    /* Fleet data freshness — show probe errors on fleet overview */
+    /* Fleet data freshness — background probe failures belong in the
+     * operator-truth banner + activity log, not recurring corner toasts. */
     if(fo.probe_status==='error'){
-      toast('Fleet probe failed'+(fo.probe_error?' — '+fo.probe_error:''),'error');
+      _recordBackgroundProbeEvent(
+        'Fleet probe failed'+(fo.probe_error?' — '+fo.probe_error:''),
+        'error',
+        {source:'fleet_overview',probe_error:fo.probe_error||''}
+      );
       var ci=document.getElementById('sse-conn-status');
       if(ci){ci.textContent='PROBE FAILED';ci.style.color='var(--red)';}
     }
@@ -2686,12 +2703,21 @@ function startSSE(){
     var label=(ns==='healthy'||ns==='live'||ns==='recovering')?'UP':ns==='stale'?'STALE':ns==='degraded'?'DEGRADED':ns==='auth_failed'?'AUTH FAILED':'DOWN';
     var kind=(ns==='healthy'||ns==='live'||ns==='recovering')?'success':(ns==='stale'||ns==='degraded')?'warn':'error';
     var detail=d.reason?' — '+d.reason:'';
-    toast(d.host+': SSH probe '+label+detail,kind);
+    _recordBackgroundProbeEvent(d.host+': SSH probe '+label+detail,kind,{
+      source:'sse_health_change',
+      host:d.host||'',
+      old:d.old||'',
+      state:ns
+    });
   });
 
   _evtSource.addEventListener('probe_error',function(e){
     var d=JSON.parse(e.data);
-    toast('Probe failed: '+d.key+(d.consecutive>1?' ('+d.consecutive+'x)':''),'error');
+    _recordBackgroundProbeEvent(
+      'Probe failed: '+d.key+(d.consecutive>1?' ('+d.consecutive+'x)':''),
+      'error',
+      {source:'sse_probe_error',key:d.key||'',consecutive:d.consecutive||1}
+    );
     /* Update LIVE DATA indicator if visible */
     var ldEl=document.querySelector('#hw-fleet-stats .st:nth-child(4) .stat-pair:first-child span:first-child');
     if(ldEl){ldEl.textContent='STALE';ldEl.style.color='var(--red)';}
@@ -2712,8 +2738,10 @@ function startSSE(){
 
   _evtSource.addEventListener('activity',function(e){
     var d=JSON.parse(e.data);
-    if(d.severity==='error')toast(d.message,'error');
-    else if(d.severity==='warning')toast(d.message,'warn');
+    if(_activityShouldToast(d)){
+      if(d.severity==='error')toast(d.message,'error');
+      else if(d.severity==='warning')toast(d.message,'warn');
+    }
     _updateActivityWidget(d);
   });
 

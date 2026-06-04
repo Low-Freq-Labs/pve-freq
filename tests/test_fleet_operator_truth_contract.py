@@ -181,7 +181,18 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
         self.assertIn("ns==='stale'?'STALE'", src)
         self.assertIn("(ns==='stale'||ns==='degraded')?'warn':'error'", src)
+        self.assertIn("_recordBackgroundProbeEvent(d.host+': SSH probe '+label+detail,kind", src)
         self.assertNotIn("var label=d['new']==='healthy'?'UP':'DOWN';", src)
+
+    def test_background_probe_events_do_not_corner_toast(self):
+        src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+        self.assertIn("function _recordBackgroundProbeEvent", src)
+        health_window = src.split("_evtSource.addEventListener('health_change'", 1)[1].split("_evtSource.addEventListener('probe_error'", 1)[0]
+        probe_window = src.split("_evtSource.addEventListener('probe_error'", 1)[1].split("_evtSource.addEventListener('vm_state'", 1)[0]
+        fleet_window = src.split("/* Fleet data freshness", 1)[1].split("}).catch(function()", 1)[0]
+        self.assertNotIn("toast(", health_window)
+        self.assertNotIn("toast(", probe_window)
+        self.assertNotIn("toast(", fleet_window)
 
     def test_legacy_rate_limit_health_changes_are_not_toast_events(self):
         src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
@@ -217,6 +228,10 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("logger.info(\n            \"ui_event\"", serve_src)
         self.assertIn("ui_level=level", serve_src)
         self.assertNotIn("\n            level=level,", serve_src)
+        serve_window = serve_src.split("def _serve_ui_event", 1)[1].split("    # \u2500\u2500 Topology", 1)[0]
+        self.assertNotIn("_activity_add(\"ui_toast\"", serve_window)
+        self.assertIn("function _activityShouldToast", src)
+        self.assertIn("t==='ui_toast'||t==='health_change'||t==='probe_error'", src)
 
     def test_core_system_cards_open_infra_detail_without_cache_lookup(self):
         src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()

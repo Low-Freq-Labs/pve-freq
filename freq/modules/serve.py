@@ -2737,8 +2737,6 @@ class FreqHandler(BaseHTTPRequestHandler):
             view=view,
             message=message,
         )
-        if event_type == "toast":
-            _activity_add("ui_toast", message, f"{level} {source}".strip(), level if level in ("info", "success", "warning", "error") else "info")
         self._json_response({"ok": True})
 
     # ── Topology ─────────────────────────────────────────────────────────
