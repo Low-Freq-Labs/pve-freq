@@ -22,7 +22,7 @@ echo "=== Deploy to ${USER}@${TARGET}:${REMOTE_DIR} ==="
 # back to the last commit. If local changes exist, force the full rsync path so
 # uncommitted fixes and docs are part of the deployed artifact.
 LOCAL_DIRTY=""
-if [ -n "$(git status --porcelain 2>/dev/null || true)" ]; then
+if [ -n "$(git status --short 2>/dev/null || true)" ]; then
     LOCAL_DIRTY="1"
 fi
 

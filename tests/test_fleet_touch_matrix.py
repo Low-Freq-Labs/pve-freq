@@ -14,53 +14,53 @@ Run: pytest tests/test_fleet_touch_matrix.py -v
 import os
 import subprocess
 import sys
-import tomllib
 import unittest
+from functools import lru_cache
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
 
 
+@lru_cache(maxsize=1)
+def _runtime_config():
+    from freq.core.config import load_config
+
+    return load_config(install_dir=REPO_ROOT)
+
+
 def _service_account():
     """Resolve the configured deployed service account from freq.toml."""
-    path = os.path.join(REPO_ROOT, "conf", "freq.toml")
-    try:
-        with open(path, "rb") as f:
-            data = tomllib.load(f)
-        return data.get("ssh", {}).get("service_account", "freq-admin")
-    except OSError:
-        return "freq-admin"
+    return _runtime_config().ssh_service_account
 
 
-def _ssh(ip, cmd, timeout=10):
-    """Run a command on a remote host via SSH. Returns (rc, stdout, stderr)."""
-    try:
-        r = subprocess.run(
-            ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
-             "-o", "StrictHostKeyChecking=no", ip, cmd],
-            capture_output=True, text=True, timeout=timeout,
-        )
-        return r.returncode, r.stdout.strip(), r.stderr.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return -1, "", "timeout or ssh not found"
+def _pve_rw_token_id():
+    """Resolve the configured runtime PVE RW token identity."""
+    cfg = _runtime_config()
+    return cfg.pve_api_token_id or f"{cfg.ssh_service_account}@pam!freq-rw"
+
+
+def _ssh(ip, cmd, timeout=10, htype="linux"):
+    """Run a command through freq's configured SSH transport."""
+    from freq.core.ssh import run
+
+    cfg = _runtime_config()
+    r = run(
+        host=ip,
+        command=cmd,
+        key_path=cfg.ssh_key_path,
+        connect_timeout=5,
+        command_timeout=timeout,
+        htype=htype,
+        use_sudo=False,
+        cfg=cfg,
+    )
+    return r.returncode, r.stdout.strip(), r.stderr.strip()
 
 
 def _ssh_switch(ip, cmd, password, timeout=10):
-    """SSH to a legacy Cisco switch with password auth and old ciphers."""
-    try:
-        r = subprocess.run(
-            ["sshpass", "-p", password,
-             "ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
-             "-o", "KexAlgorithms=+diffie-hellman-group14-sha1",
-             "-o", "HostKeyAlgorithms=+ssh-rsa",
-             "-o", "PubkeyAcceptedKeyTypes=+ssh-rsa",
-             f"{_service_account()}@{ip}", cmd],
-            capture_output=True, text=True, timeout=timeout,
-        )
-        return r.returncode, r.stdout.strip(), r.stderr.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return -1, "", "timeout or sshpass not found"
+    """SSH to a legacy Cisco switch through freq's transport."""
+    return _ssh(ip, cmd, timeout=timeout, htype="switch")
 
 
 def _curl_pve_api(ip, path, token_id, token_secret):
@@ -73,10 +73,12 @@ def _curl_pve_api(ip, path, token_id, token_secret):
              f"https://{ip}:8006/api2/json{path}"],
             capture_output=True, text=True, timeout=10,
         )
-        lines = r.stdout.strip().rsplit("\n", 1)
-        if len(lines) == 2:
-            return int(lines[1]), lines[0]
-        return -1, r.stdout
+        stdout = r.stdout
+        if "\n" in stdout:
+            body, status = stdout.rsplit("\n", 1)
+        else:
+            body, status = "", stdout
+        return int(status.strip()), body.strip()
     except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
         return -1, ""
 
@@ -140,7 +142,7 @@ class TestFleetSSHReachability(unittest.TestCase):
         for ip, label, htype, _ in HOSTS:
             if htype == "switch":
                 continue  # switch tested separately
-            rc, out, err = _ssh(ip, "hostname")
+            rc, out, err = _ssh(ip, "hostname", htype=htype)
             if rc != 0:
                 unreachable.append(f"{label} ({ip}): rc={rc} err={err[:80]}")
         self.assertEqual(unreachable, [],
@@ -152,7 +154,7 @@ class TestFleetSSHReachability(unittest.TestCase):
         for ip, label, htype, _ in HOSTS:
             if htype == "switch":
                 continue
-            rc, out, err = _ssh(ip, "hostname")
+            rc, out, err = _ssh(ip, "hostname", htype=htype)
             if rc != 0:
                 continue  # reachability tested above
             hostname = out.split(".")[0].lower()  # strip FQDN
@@ -178,7 +180,7 @@ class TestFleetSudoCapability(unittest.TestCase):
         for ip, label, htype, _ in HOSTS:
             if htype not in self.SUDO_TYPES:
                 continue
-            rc, out, err = _ssh(ip, "sudo -n whoami")
+            rc, out, err = _ssh(ip, "sudo -n whoami", htype=htype)
             if rc != 0 or "root" not in out:
                 failures.append(f"{label} ({ip}): rc={rc} out={out[:40]}")
         self.assertEqual(failures, [],
@@ -195,7 +197,7 @@ class TestPVENodeOperations(unittest.TestCase):
         """sudo qm list must succeed on every PVE node."""
         failures = []
         for ip in self.PVE_IPS:
-            rc, out, err = _ssh(ip, "sudo qm list")
+            rc, out, err = _ssh(ip, "sudo qm list", htype="pve")
             if rc != 0:
                 failures.append(f"{ip}: rc={rc} err={err[:80]}")
             elif "VMID" not in out:
@@ -211,14 +213,14 @@ class TestPVEAPIAccess(unittest.TestCase):
     PVE_IPS = [ip for ip, _, htype, _ in HOSTS if htype == "pve"]
 
     def test_rw_token_returns_200(self):
-        """freq-ops@pam!freq-rw must authenticate on all PVE nodes."""
+        """Configured runtime RW token must authenticate on all PVE nodes."""
         secret = _read_credential("/etc/freq/credentials/pve-token-rw")
         if not secret:
             self.skipTest("No PVE RW token available")
+        token_id = _pve_rw_token_id()
         failures = []
         for ip in self.PVE_IPS:
-            code, body = _curl_pve_api(ip, "/version",
-                                       "freq-ops@pam!freq-rw", secret)
+            code, body = _curl_pve_api(ip, "/version", token_id, secret)
             if code != 200:
                 failures.append(f"{ip}: HTTP {code}")
         self.assertEqual(failures, [],
@@ -252,9 +254,9 @@ class TestPVEAPIAccess(unittest.TestCase):
         secret = _read_credential("/etc/freq/credentials/pve-token-rw")
         if not secret:
             self.skipTest("No PVE RW token available")
+        token_id = _pve_rw_token_id()
         code, body = _curl_pve_api(
-            self.PVE_IPS[0], "/nodes",
-            "freq-ops@pam!freq-rw", secret,
+            self.PVE_IPS[0], "/nodes", token_id, secret,
         )
         self.assertEqual(code, 200)
         import json
@@ -288,7 +290,7 @@ class TestDockerHostOperations(unittest.TestCase):
         """sudo docker ps must succeed on every docker-type host."""
         failures = []
         for ip, label in self.DOCKER_HOSTS:
-            rc, out, err = _ssh(ip, "sudo docker ps --format '{{.Names}}'")
+            rc, out, err = _ssh(ip, "sudo docker ps --format '{{.Names}}'", htype="docker")
             if rc != 0:
                 failures.append(f"{label} ({ip}): rc={rc} err={err[:80]}")
         self.assertEqual(failures, [],

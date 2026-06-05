@@ -27,7 +27,7 @@ def settings(cfg, target) -> dict[str, str]:
 
         [truenas]
         type = "api_key"
-        url = "https://10.25.255.25/api/v2.0"
+        url = "https://truenas.example/api/v2.0"
         api_key_file = "/opt/pve-freq/data/secrets/truenas-prod.key"
         api_key_ref = "secrets://truenas-prod"
 

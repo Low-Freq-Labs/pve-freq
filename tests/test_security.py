@@ -116,6 +116,8 @@ class TestBayDevice(unittest.TestCase):
 
 def _make_cfg():
     """Create a minimal FreqConfig mock."""
+    from freq.core.types import FleetBoundaries
+
     cfg = MagicMock()
     cfg.pve_nodes = ["192.168.255.1"]
     cfg.ssh_key_path = "/tmp/test_key"
@@ -134,6 +136,13 @@ def _make_cfg():
     cfg.ssh_service_account = "freq-admin"
     cfg.protected_vmids = []
     cfg.protected_ranges = []
+    cfg.fleet_boundaries = FleetBoundaries(
+        tiers={"admin": ["view", "clone", "configure"]},
+        categories={
+            "templates": {"tier": "admin", "range_start": 100, "range_end": 199},
+            "lab": {"tier": "admin", "range_start": 5000, "range_end": 5999},
+        },
+    )
     return cfg
 
 

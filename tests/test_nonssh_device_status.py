@@ -62,7 +62,7 @@ class TestOperatorAuthMismatchNotDown(unittest.TestCase):
         """doctor _test must return operator_auth flag for legacy auth failures."""
         src = (FREQ_ROOT / "freq" / "core" / "doctor.py").read_text()
         self.assertIn("operator_auth", src)
-        self.assertIn("need svc account", src)
+        self.assertIn("needs svc account", src)
 
     def test_doctor_excludes_na_from_total(self):
         """doctor must use total_checkable (total - na) for the reachable ratio."""

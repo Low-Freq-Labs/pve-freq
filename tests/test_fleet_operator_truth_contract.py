@@ -146,7 +146,8 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
     def test_domain_api_errors_include_request_id(self):
         src = (REPO_ROOT / "freq" / "api" / "helpers.py").read_text()
         self.assertIn('if isinstance(data, dict) and "error" in data and "request_id" not in data:', src)
-        self.assertIn('data["request_id"] = getattr(handler, "_request_id", "")', src)
+        self.assertIn('request_id = getattr(handler, "_request_id", "")', src)
+        self.assertIn('data["request_id"] = request_id', src)
 
     def test_runtime_log_api_exposes_local_structured_logs(self):
         src = (REPO_ROOT / "freq" / "api" / "logs.py").read_text()

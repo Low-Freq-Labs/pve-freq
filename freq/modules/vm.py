@@ -404,16 +404,6 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
     fmt.header(f"Clone VM {src_vmid}")
     fmt.blank()
 
-    node_ip = _find_vm_node(cfg, src_vmid)
-    if not node_ip:
-        node_ip = _find_node(cfg)
-    if not node_ip:
-        fmt.step_fail("Cannot reach any PVE node")
-        _pve_unreachable_hint(cfg)
-        fmt.blank()
-        fmt.footer()
-        return 1
-
     new_name = getattr(args, "name", None) or f"clone-of-{src_vmid}"
     new_vmid = getattr(args, "vmid", None)
     target_node = getattr(args, "node", None)
@@ -421,8 +411,6 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
     ip_addr = getattr(args, "ip", None)
     vlan = getattr(args, "vlan", None)
 
-    if not _clone_source_allowed(cfg, src_vmid):
-        return 1
     if not validate.shell_safe_name(new_name):
         fmt.error("Invalid VM name: {}".format(new_name))
         fmt.info("Names: alphanumeric, hyphens, underscores, dots. Max 63 chars.")
@@ -436,6 +424,19 @@ def cmd_clone(cfg: FreqConfig, pack, args) -> int:
         return 1
     if vlan and not validate.vlan_id(vlan):
         fmt.error("Invalid VLAN ID: {} (must be 0-4094)".format(vlan))
+        return 1
+
+    if not _clone_source_allowed(cfg, src_vmid):
+        return 1
+
+    node_ip = _find_vm_node(cfg, src_vmid)
+    if not node_ip:
+        node_ip = _find_node(cfg)
+    if not node_ip:
+        fmt.step_fail("Cannot reach any PVE node")
+        _pve_unreachable_hint(cfg)
+        fmt.blank()
+        fmt.footer()
         return 1
 
     if not new_vmid:

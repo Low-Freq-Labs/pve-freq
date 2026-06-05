@@ -5198,7 +5198,7 @@ function loadHome(){
       if(nv)nv.textContent='V'+d.version+' \u00b7 '+d.dashboard_header.replace(/^PVE FREQ\s*\u00b7\s*/,'');
     }
   });
-  /* Watchdog probe status — distinguish not-installed (200 state), down (503), and working (200).
+  /* Watchdog health check / Watchdog probe status — distinguish not-installed (200 or 501 state), down (503), and working (200).
    * silent:true because this endpoint renders its own UI state for each status
    * code below; the generic _authFetch toast would overlap with the inline label. */
   _authFetch(API.WATCHDOG_HEALTH,{silent:true}).then(function(r){
@@ -5208,7 +5208,7 @@ function loadHome(){
     var el=document.getElementById('watchdog-status');if(!el)return;
     var d=res.data||{};
     /* Not installed — optional add-on, render plainly */
-    if(d.watchdog_installed===false){
+    if(res.status===501||d.watchdog_installed===false){
       el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: not installed (optional add-on)</span>';
       return;
     }

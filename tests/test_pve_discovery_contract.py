@@ -115,8 +115,8 @@ class TestHostClassification(unittest.TestCase):
     def test_unknown_is_linux(self):
         self.assertEqual(_classify_host_by_name("web-server"), "linux")
 
-    def test_generic_name_is_linux(self):
-        self.assertEqual(_classify_host_by_name("nexus"), "linux")
+    def test_nexus_name_is_truenas(self):
+        self.assertEqual(_classify_host_by_name("nexus"), "truenas")
 
     # Priority order: docker before pve
     def test_pve_docker_is_docker(self):

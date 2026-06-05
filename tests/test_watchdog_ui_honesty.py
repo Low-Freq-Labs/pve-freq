@@ -1,11 +1,11 @@
 """Watchdog UI honesty tests.
 
 Proves the dashboard watchdog widget shows honest state under:
-1. Daemon running + healthy → "WATCHDOG: OK" (green)
-2. Daemon running + degraded → "WATCHDOG: DEGRADED" (yellow)
-3. Daemon down (503) → "WATCHDOG: offline" (dim)
-4. Proxy error (502) → "WATCHDOG: offline" (dim)
-5. Network failure → "WATCHDOG: not reachable" (dim)
+1. Daemon running + healthy → probe evidence (green)
+2. Daemon running + degraded → probe evidence (yellow)
+3. Watchdog not installed → optional add-on copy (dim)
+4. Daemon down (503) → daemon not reachable (yellow)
+5. Network failure → status unavailable (dim)
 """
 
 import os
@@ -59,30 +59,31 @@ class TestWatchdogWidgetStates(unittest.TestCase):
             src = f.read()
         # Find the watchdog health check section
         idx = src.index("Watchdog health check")
-        return src[idx:idx + 1000]
+        return src[idx:idx + 2500]
 
     def test_error_response_shows_offline(self):
-        """JSON with error field → 'WATCHDOG: offline'."""
+        """JSON with error field renders a warning, not fake green."""
         src = self._widget_src()
         self.assertIn("d.error", src)
-        self.assertIn("WATCHDOG: offline", src)
+        self.assertIn("Watchdog: '+_esc", src)
+        self.assertIn("var(--yellow)", src)
 
     def test_network_failure_shows_not_reachable(self):
-        """Fetch catch → 'WATCHDOG: not reachable'."""
+        """Fetch catch → status unavailable."""
         src = self._widget_src()
-        self.assertIn("WATCHDOG: not reachable", src)
+        self.assertIn("Watchdog: status unavailable", src)
 
     def test_healthy_shows_green(self):
-        """status ok/healthy → green color."""
+        """Successful probe with hosts uses green."""
         src = self._widget_src()
         self.assertIn("'green'", src)
-        self.assertIn("'ok'", src)
-        self.assertIn("'healthy'", src)
+        self.assertIn("hosts>0", src)
 
     def test_degraded_shows_yellow(self):
-        """Non-ok status → yellow color."""
+        """Probe errors use yellow."""
         src = self._widget_src()
         self.assertIn("'yellow'", src)
+        self.assertIn("errors>0", src)
 
     def test_shows_host_count(self):
         """Widget shows host count when available."""
@@ -96,9 +97,10 @@ class TestWatchdogWidgetStates(unittest.TestCase):
         self.assertIn("text-dim", src)
 
     def test_status_uppercased(self):
-        """Status text is uppercased for consistency."""
+        """Status text is plain operator copy, not bare verdict text."""
         src = self._widget_src()
-        self.assertIn(".toUpperCase()", src)
+        self.assertIn("Watchdog:", src)
+        self.assertNotIn("WATCHDOG: OK", src)
 
 
 class TestWatchdogWidgetNotFakeGreen(unittest.TestCase):
@@ -109,7 +111,7 @@ class TestWatchdogWidgetNotFakeGreen(unittest.TestCase):
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
             src = f.read()
         idx = src.index("Watchdog health check")
-        widget = src[idx:idx + 800]
+        widget = src[idx:idx + 2500]
         # The error branch: if(d.error){...return;}
         # It must NOT contain 'green' before the return
         error_branch_start = widget.index("d.error")
@@ -123,8 +125,8 @@ class TestWatchdogWidgetNotFakeGreen(unittest.TestCase):
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
             src = f.read()
         idx = src.index("Watchdog health check")
-        widget = src[idx:idx + 800]
-        catch_start = widget.index(".catch(")
+        widget = src[idx:idx + 2500]
+        catch_start = widget.rindex("}).catch(function(){var el=")
         catch_block = widget[catch_start:]
         self.assertNotIn("green", catch_block,
                           "Catch block must not render green — would be misleading")

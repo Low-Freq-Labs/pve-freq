@@ -69,14 +69,11 @@ class TestMarkerWrittenOnlyOnSuccess(unittest.TestCase):
     def test_verify_does_not_write_on_failure(self):
         """_phase_verify returns False and skips marker write when fails > 0."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
-        # Find the fails > 0 branch
-        import re
-        # Look for: else: fmt.step_fail(f"NOT initialized ...)
-        match = re.search(
-            r'else:\s+fmt\.step_fail\(f"NOT initialized',
-            src
-        )
-        self.assertIsNotNone(match)
+        idx = src.find('fmt.step_fail(f"NOT initialized')
+        self.assertNotEqual(idx, -1)
+        failure_branch = src[src.rfind("else:", 0, idx):idx + 300]
+        self.assertIn("os.unlink(INIT_MARKER)", failure_branch)
+        self.assertNotIn('open(INIT_MARKER, "w")', failure_branch)
 
 
 if __name__ == "__main__":

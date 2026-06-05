@@ -104,8 +104,8 @@ class TestPyprojectClassifiers(unittest.TestCase):
     def setUp(self):
         self.toml = _read("pyproject.toml")
 
-    def test_production_stable_status(self):
-        self.assertIn("Production/Stable", self.toml)
+    def test_beta_status(self):
+        self.assertIn("Development Status :: 4 - Beta", self.toml)
 
     def test_console_environment(self):
         self.assertIn("Environment :: Console", self.toml)

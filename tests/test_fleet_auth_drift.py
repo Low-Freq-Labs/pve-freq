@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import unittest
+from functools import lru_cache
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -32,6 +33,13 @@ def _load_freq_config():
     with open(toml_path, "rb") as f:
         data = tomllib.load(f)
     return data.get("ssh", {})
+
+
+@lru_cache(maxsize=1)
+def _load_runtime_config():
+    from freq.core.config import load_config
+
+    return load_config(install_dir=REPO_ROOT)
 
 
 def _parse_hosts_conf():
@@ -63,17 +71,25 @@ class TestSSHServiceAccountExists(unittest.TestCase):
         account = ssh_cfg.get("service_account", "freq-admin")
         hosts = _parse_hosts_conf()
         pve_hosts = [ip for ip, _, htype in hosts if htype == "pve"]
-        missing = []
+        failures = []
+        cfg = _load_runtime_config()
+        from freq.core.ssh import run
         for ip in pve_hosts:
-            r = subprocess.run(
-                ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
-                 "-o", "StrictHostKeyChecking=no", ip, f"id {account}"],
-                capture_output=True, text=True, timeout=10,
+            r = run(
+                host=ip,
+                command=f"id {account}",
+                key_path=cfg.ssh_key_path,
+                connect_timeout=5,
+                command_timeout=10,
+                htype="pve",
+                use_sudo=False,
+                cfg=cfg,
             )
             if r.returncode != 0:
-                missing.append(ip)
-        self.assertEqual(missing, [],
-                         f"Account '{account}' missing on: {missing}")
+                reason = (r.stderr or r.stdout or "").strip()[:80]
+                failures.append(f"{ip}: {reason or 'unable to verify account'}")
+        self.assertEqual(failures, [],
+                         f"Account '{account}' could not be verified:\n" + "\n".join(failures))
 
     def test_service_account_has_sudo_on_pve_nodes(self):
         ssh_cfg = _load_freq_config()
@@ -81,17 +97,24 @@ class TestSSHServiceAccountExists(unittest.TestCase):
         hosts = _parse_hosts_conf()
         pve_hosts = [ip for ip, _, htype in hosts if htype == "pve"]
         failures = []
+        cfg = _load_runtime_config()
+        from freq.core.ssh import run
         for ip in pve_hosts:
-            r = subprocess.run(
-                ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
-                 "-o", "StrictHostKeyChecking=no", ip,
-                 f"sudo -u {account} sudo -n whoami"],
-                capture_output=True, text=True, timeout=10,
+            r = run(
+                host=ip,
+                command="sudo -n whoami",
+                key_path=cfg.ssh_key_path,
+                connect_timeout=5,
+                command_timeout=10,
+                htype="pve",
+                use_sudo=False,
+                cfg=cfg,
             )
-            if "root" not in r.stdout:
-                failures.append(ip)
+            if r.returncode != 0 or "root" not in r.stdout:
+                reason = (r.stderr or r.stdout or "").strip()[:80]
+                failures.append(f"{ip}: {reason or 'sudo check failed'}")
         self.assertEqual(failures, [],
-                         f"Account '{account}' lacks sudo on: {failures}")
+                         f"Account '{account}' sudo could not be verified:\n" + "\n".join(failures))
 
 
 @unittest.skipUnless(FLEET_AVAILABLE, SKIP_MSG)
@@ -103,6 +126,7 @@ class TestSSHKeyDeployment(unittest.TestCase):
         candidates = [
             os.path.join(REPO_ROOT, "data", "keys", "freq_id_ed25519"),
             os.path.expanduser("~/.ssh/id_ed25519"),
+            os.path.expanduser("~/.ssh/fleet_key"),
             os.path.join(REPO_ROOT, "data", "keys", "freq_id_rsa"),
             os.path.expanduser("~/.ssh/id_rsa"),
         ]
@@ -115,6 +139,7 @@ class TestSSHKeyDeployment(unittest.TestCase):
         candidates = [
             os.path.join(REPO_ROOT, "data", "keys", "freq_id_ed25519"),
             os.path.expanduser("~/.ssh/id_ed25519"),
+            os.path.expanduser("~/.ssh/fleet_key"),
             os.path.join(REPO_ROOT, "data", "keys", "freq_id_rsa"),
             os.path.expanduser("~/.ssh/id_rsa"),
         ]
@@ -145,11 +170,17 @@ class TestPVETokenValidity(unittest.TestCase):
         secret = self._read_credential("/etc/freq/credentials/pve-token-rw")
         if not secret:
             self.skipTest("No RW token file")
+        import tomllib
+        with open(os.path.join(REPO_ROOT, "conf", "freq.toml"), "rb") as f:
+            data = tomllib.load(f)
+        token_id = data.get("pve", {}).get("token_id") or (
+            data.get("ssh", {}).get("service_account", "freq-admin") + "@pam!freq-rw"
+        )
         for ip in self.PVE_IPS:
             r = subprocess.run(
                 ["curl", "-sk", "--max-time", "5", "-w", "%{http_code}",
                  "-o", "/dev/null",
-                 "-H", f"Authorization: PVEAPIToken=freq-ops@pam!freq-rw={secret}",
+                 "-H", f"Authorization: PVEAPIToken={token_id}={secret}",
                  f"https://{ip}:8006/api2/json/version"],
                 capture_output=True, text=True, timeout=10,
             )

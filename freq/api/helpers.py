@@ -17,7 +17,10 @@ def json_response(handler, data, status=200):
     """Send a JSON response through the HTTP handler."""
     if isinstance(data, dict) and "error" in data and "request_id" not in data:
         data = dict(data)
-        data["request_id"] = getattr(handler, "_request_id", "")
+        request_id = getattr(handler, "_request_id", "")
+        if not isinstance(request_id, str):
+            request_id = ""
+        data["request_id"] = request_id
     body = json.dumps(data).encode()
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")

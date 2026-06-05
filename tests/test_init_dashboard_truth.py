@@ -170,13 +170,14 @@ class TestSetupStatusAccuracy(unittest.TestCase):
             self.assertTrue(data["first_run"])
 
     def test_version_matches_module_version(self):
-        """version field must match freq.__version__ exactly."""
+        """version field must match freq.__version__ for authenticated setup status."""
         import freq
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg = _mock_cfg(tmpdir)
             h = _make_handler("/api/setup/status")
             with patch("freq.modules.serve.load_config", return_value=cfg), \
-                 patch("freq.modules.serve._is_first_run", return_value=True):
+                 patch("freq.modules.serve._is_first_run", return_value=True), \
+                 patch("freq.modules.serve._check_session_role", return_value=("admin", None)):
                 h._serve_setup_status()
             data = _get_json(h)
             self.assertEqual(data["version"], freq.__version__,

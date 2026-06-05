@@ -736,7 +736,7 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     if reachable == total_checkable and total_checkable > 0:
         unmanaged_suffix = f"; {unmanaged_count} unmanaged inventory-only" if unmanaged_count else ""
         if na:
-            fmt.step_ok(f"Fleet SSH: {reachable}/{total_checkable} live ({na} n/a — credential/session context{unmanaged_suffix})")
+            fmt.step_ok(f"Fleet SSH: {reachable}/{total_checkable} live ({na} n/a — needs svc account / credential session context{unmanaged_suffix})")
         else:
             fmt.step_ok(f"Fleet SSH: {reachable}/{total} hosts live{unmanaged_suffix}")
         return 0
@@ -866,7 +866,7 @@ def _check_legacy_passwords(cfg: FreqConfig) -> int:
             return 0
         parent = os.path.dirname(pw_file)
         if parent and not os.access(parent, os.R_OK):
-            fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)} (in secure dir)")
+            fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)} (in secure svc dir; in secure dir)")
             return 0
         # Check if path is under service account home — if yes, file is
         # (very likely) in a secure 700 dir we can't stat from operator context.
@@ -878,7 +878,7 @@ def _check_legacy_passwords(cfg: FreqConfig) -> int:
             except (KeyError, ImportError):
                 svc_home = f"/home/{svc}"
             if svc_home and pw_file.startswith(svc_home + os.sep):
-                fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)} (in secure dir)")
+                fmt.step_ok(f"Legacy password file: {os.path.basename(pw_file)} (in secure svc dir; in secure dir)")
                 return 0
         fmt.step_warn(f"Legacy password file configured but missing: {pw_file}")
         return 2

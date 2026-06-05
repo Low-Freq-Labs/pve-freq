@@ -144,7 +144,7 @@ class TestTestSuiteHealth(unittest.TestCase):
             "sys", "os", "io", "re", "json", "unittest", "pathlib",
             "tempfile", "shutil", "subprocess", "dataclasses",
             "unittest.mock", "contextlib", "collections",
-            "argparse", "time", "hashlib", "copy", "textwrap",
+            "argparse", "time", "hashlib", "copy", "textwrap", "inspect",
             "sys,", "json,",  # handle multi-import lines
         }
         for test_file in test_dir.glob("test_phase*.py"):

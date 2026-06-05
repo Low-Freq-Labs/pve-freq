@@ -31,7 +31,7 @@ class TestDiscoveryUsesSaveNotAppend(unittest.TestCase):
         import re
         # Find the headless auto-register block
         block = re.search(
-            r'# Auto-register all in headless mode.*?save_hosts_toml\(cfg\.hosts_file, cfg\.hosts\)',
+            r'# Auto-register .*? in headless mode\..*?save_hosts_toml\(cfg\.hosts_file, cfg\.hosts\)',
             src, re.DOTALL
         )
         self.assertIsNotNone(block, "Headless registration must use save_hosts_toml")

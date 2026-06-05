@@ -3466,7 +3466,16 @@ def _classify_host_by_name(name):
     if "truenas" in name_lower or "freenas" in name_lower:
         return "truenas"
     # NAS-like hostnames (standalone "nas" as whole name or hyphen-delimited segment)
-    if name_lower == "nas" or name_lower.startswith("nas-") or "-nas-" in name_lower or name_lower.endswith("-nas"):
+    if (
+        name_lower == "nexus"
+        or name_lower.startswith("nexus-")
+        or "-nexus-" in name_lower
+        or name_lower.endswith("-nexus")
+        or name_lower == "nas"
+        or name_lower.startswith("nas-")
+        or "-nas-" in name_lower
+        or name_lower.endswith("-nas")
+    ):
         return "truenas"
     # Docker before PVE (a "pve-docker" host is a docker host)
     if any(k in name_lower for k in ("docker", "plex", "arr", "qbit", "tdarr", "sabnzbd", "portainer")):
@@ -6787,7 +6796,8 @@ def _phase_verify(cfg, ctx):
     # Fleet host connectivity — ALL platform types.
     # Parallelized to bound total verification time. Serial loops over ~22
     # hosts × 20s worst-case timeout = 440s; with 8 workers + 60s cap, the
-    # phase completes in bounded time even when some hosts are slow.
+    # phase completes in bounded time even when some hosts are slow. Stragglers
+    # are reported as "Phase 12 timeout" instead of hanging init.
     deployed_ips = ctx.get("deployed_ips", set())
     if cfg.hosts:
         import concurrent.futures

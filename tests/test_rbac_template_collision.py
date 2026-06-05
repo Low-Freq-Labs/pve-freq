@@ -34,8 +34,9 @@ class TestCommentedLineNotFoolsCheck(unittest.TestCase):
         import re
         # Find the headless RBAC block
         headless_rbac = re.search(
-            r'roles_file = os\.path\.join\(cfg\.conf_dir, "roles\.conf"\)\s+existing_lines',
-            src
+            r'roles_file = os\.path\.join\(cfg\.conf_dir, "roles\.conf"\).*?active_roles = \[l\.strip\(\) for l in existing_lines',
+            src,
+            re.DOTALL,
         )
         self.assertIsNotNone(headless_rbac,
                              "Headless RBAC must use existing_lines pattern, not substring 'existing'")

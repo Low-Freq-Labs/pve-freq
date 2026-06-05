@@ -329,7 +329,8 @@ class TestFileInventory(unittest.TestCase):
         """No certificate/key files in the repo."""
         pem_files = list(FREQ_ROOT.glob("**/*.pem"))
         pem_files += list(FREQ_ROOT.glob("**/*.key"))
-        pem_files = [f for f in pem_files if ".git" not in str(f)]
+        ignored_parts = {".git", ".venv", "venv", "node_modules"}
+        pem_files = [f for f in pem_files if not any(part in ignored_parts for part in f.relative_to(FREQ_ROOT).parts)]
         self.assertEqual(pem_files, [],
                          f"Key/cert files found: {pem_files}")
 

@@ -3142,8 +3142,10 @@ a:hover{{text-decoration:underline}}
         # Use the actual resolved key path — re-detect on each call so we
         # catch keys created after serve started (e.g., init runs post-serve)
         key_path = cfg.ssh_key_path
-        if not key_path or not os.path.isfile(key_path):
-            # Re-detect in case key was created after load_config cached the path
+        if not key_path:
+            # Re-detect only when no configured key path exists. If config names
+            # a key path, setup status should report that path's disk state
+            # instead of finding an unrelated fallback key elsewhere.
             from freq.core.config import _detect_ssh_key
             key_path = _detect_ssh_key(cfg) or key_path
         key_exists = bool(key_path and os.path.isfile(key_path))

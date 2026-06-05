@@ -50,10 +50,11 @@ class TestSkipReasonSpecific(unittest.TestCase):
         self.assertIn("ssh port", reason.lower())
 
     def test_permission_denied(self):
-        """Permission denied → auth failed."""
+        """Permission denied → auth failed with key detail."""
         from freq.modules.init_cmd import _skip_reason
         reason = _skip_reason("Permission denied (publickey,password).")
-        self.assertEqual(reason, "auth failed")
+        self.assertTrue(reason.startswith("auth failed"))
+        self.assertIn("key", reason)
 
     def test_host_key_mismatch(self):
         """Host key verification → host key mismatch."""

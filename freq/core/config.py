@@ -399,7 +399,29 @@ import time as _time
 
 _config_cache = None
 _config_cache_ts = 0
+_config_cache_install_dir = None
+_config_cache_file_state = None
 _CONFIG_TTL = 5  # seconds
+
+
+def _config_file_state(install_dir: str) -> tuple:
+    conf_dir = os.path.join(install_dir, "conf")
+    state = []
+    for name in (
+        "freq.toml",
+        "hosts.toml",
+        "vlans.toml",
+        "distros.toml",
+        "containers.toml",
+        "fleet-boundaries.toml",
+    ):
+        path = os.path.join(conf_dir, name)
+        try:
+            st = os.stat(path)
+            state.append((name, st.st_mtime_ns, st.st_size))
+        except OSError:
+            state.append((name, None, None))
+    return tuple(state)
 
 
 def load_config(install_dir: Optional[str] = None, force: bool = False) -> FreqConfig:
@@ -409,12 +431,20 @@ def load_config(install_dir: Optional[str] = None, force: bool = False) -> FreqC
     If config is broken or missing, FREQ runs on defaults.
     Caches result for 5 seconds to avoid redundant disk reads.
     """
-    global _config_cache, _config_cache_ts
+    global _config_cache, _config_cache_ts, _config_cache_install_dir, _config_cache_file_state
     now = _time.time()
-    if not force and _config_cache and (now - _config_cache_ts) < _CONFIG_TTL and install_dir is None:
+    resolved_install_dir = install_dir or resolve_install_dir()
+    file_state = _config_file_state(resolved_install_dir)
+    if (
+        not force
+        and _config_cache
+        and (now - _config_cache_ts) < _CONFIG_TTL
+        and _config_cache_install_dir == resolved_install_dir
+        and _config_cache_file_state == file_state
+    ):
         return _config_cache
     cfg = FreqConfig()
-    cfg.install_dir = install_dir or resolve_install_dir()
+    cfg.install_dir = resolved_install_dir
     _resolve_paths(cfg)
 
     # Bootstrap conf/ from package data if missing
@@ -490,6 +520,8 @@ def load_config(install_dir: Optional[str] = None, force: bool = False) -> FreqC
         pass  # Validation should never block startup
 
     _config_cache = cfg
+    _config_cache_install_dir = cfg.install_dir
+    _config_cache_file_state = _config_file_state(cfg.install_dir)
     _config_cache_ts = _time.time()
     return cfg
 
