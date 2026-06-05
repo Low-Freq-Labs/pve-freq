@@ -37,7 +37,8 @@ from freq.core import log as logger
 from freq.api.helpers import require_post, json_response, get_params
 from freq.api.auth import current_user
 from freq.core.config import load_config
-from freq.core.device_credentials import resolve_device_ssh_auth
+from freq.core.device_credentials import resolve_device_ssh_auth, resolve_staged_device_ssh_auth
+from freq.core.ssh import _build_ssh_cmd, run as ssh_single
 from freq.modules.serve import _check_session_role
 
 
@@ -185,6 +186,73 @@ def _extract_guest_ipv4(raw: str) -> str:
     return ""
 
 
+def _terminal_ssh_auth(cfg, htype: str) -> dict:
+    """Return the SSH identity used for an interactive terminal.
+
+    This deliberately mirrors the read APIs instead of blindly using staged
+    root-only device credentials. The dashboard process runs as the deployed
+    service account, so a terminal command must use files that account can
+    actually read.
+    """
+    htype = (htype or "linux").lower()
+    if htype == "pfsense":
+        auth = resolve_device_ssh_auth(cfg, "pfsense")
+        return {
+            "user": auth["user"],
+            "key_path": auth["key_path"],
+            "password_file": auth.get("password_file") or None,
+            "sudo_password_file": False,
+            "local_user": auth.get("local_user") or None,
+        }
+
+    if htype in ("idrac", "switch", "truenas"):
+        return resolve_staged_device_ssh_auth(cfg, htype)
+
+    key_path = getattr(cfg, "ssh_key_path", "")
+    if htype in ("idrac", "switch"):
+        key_path = getattr(cfg, "ssh_rsa_key_path", "") or key_path
+
+    password_file = None
+    if htype == "switch":
+        password_file = getattr(cfg, "legacy_password_file", "") or None
+
+    return {
+        "user": getattr(cfg, "ssh_service_account", "") or "freq-admin",
+        "key_path": key_path,
+        "password_file": password_file,
+        "sudo_password_file": False,
+        "local_user": None,
+    }
+
+
+def _terminal_preflight(cfg, htype: str, host: str, auth: dict) -> tuple[bool, str]:
+    """Preflight only cases where a spawned terminal would be misleading."""
+    if htype != "truenas":
+        return True, ""
+    r = ssh_single(
+        host=host,
+        command="true",
+        user=auth["user"],
+        key_path=auth["key_path"],
+        connect_timeout=4,
+        command_timeout=6,
+        htype=htype,
+        use_sudo=False,
+        local_user=auth.get("local_user") or None,
+        password_file=auth.get("password_file"),
+        sudo_password_file=auth.get("sudo_password_file", False),
+        cfg=cfg,
+        failure_log_level="warn",
+    )
+    if r.returncode == 0:
+        return True, ""
+    evidence = (r.stderr or r.stdout or "").strip()
+    low = evidence.lower()
+    if "permission denied" in low or "publickey" in low:
+        return False, "Terminal unavailable: TrueNAS SSH credentials were rejected. TrueNAS reads are API-backed; stage working SSH credentials to open an interactive shell."
+    return False, f"Terminal unavailable: TrueNAS SSH preflight failed ({evidence[:180] or 'no output'})."
+
+
 def handle_terminal_open(handler):
     """POST /api/terminal/open — create a new terminal session."""
     if require_post(handler, "Terminal open"):
@@ -261,44 +329,20 @@ def handle_terminal_open(handler):
             return
 
     htype = params.get("htype", ["linux"])[0]
-    # Build SSH command with device-type-aware options. Physical devices can
-    # use staged runtime credentials (for example pfSense freq-ops/fleet_key)
-    # while normal VM/node hosts use the managed service account.
-    auth = resolve_device_ssh_auth(cfg, htype)
+    # Build SSH command with device-type-aware options. Physical devices use
+    # the same auth family as their read APIs, not unreadable root-only staged
+    # credential files.
+    auth = _terminal_ssh_auth(cfg, htype)
     key_path = auth["key_path"]
     ssh_user = auth["user"] or cfg.ssh_service_account or "freq-admin"
+    password_file = auth.get("password_file") or None
+    sudo_password_file = auth.get("sudo_password_file", False)
+    local_user = auth.get("local_user") or None
 
-    # Base SSH options
-    ssh_opts = (
-        f"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
-        f"-o ServerAliveInterval=15 -o ServerAliveCountMax=3 "
-        f"-i {shlex.quote(key_path)}"
-    )
-
-    # Device-specific SSH options from ssh.py platform config
-    from freq.core.ssh import _PLATFORM_SSH_BASE
-
-    platform = _PLATFORM_SSH_BASE.get(htype, _PLATFORM_SSH_BASE.get("linux", {}))
-    extra_opts = platform.get("extra_opts", [])
-    if extra_opts:
-        ssh_opts += " " + " ".join(extra_opts)
-
-    # Legacy devices (iDRAC/switch) need RSA key and may need password auth
-    sshpass_prefix = ""
-    if htype in ("idrac", "switch"):
-        rsa_key = getattr(cfg, "ssh_rsa_key_path", "")
-        if rsa_key:
-            ssh_opts = ssh_opts.replace(f"-i {shlex.quote(key_path)}", f"-i {shlex.quote(rsa_key)}")
-        # Password auth via sshpass if configured
-        pw_file = auth.get("password_file") or getattr(cfg, "legacy_password_file", "")
-        if pw_file and os.path.isfile(pw_file):
-            sshpass_prefix = f"sshpass -f {shlex.quote(pw_file)} "
-
-    # Note: -T (no remote PTY) is used for non-interactive switch commands
-    # but for terminal sessions we need the PTY for interactive IOS CLI
-    local_prefix = ""
-    if auth.get("local_user"):
-        local_prefix = f"sudo -n -u {shlex.quote(auth['local_user'])} "
+    ok, preflight_error = _terminal_preflight(cfg, htype, resolved_ip, auth)
+    if not ok:
+        json_response(handler, {"error": preflight_error}, 400)
+        return
 
     if term_type == "ct":
         # SSH to PVE node, then pct exec into container
@@ -309,9 +353,37 @@ def handle_terminal_open(handler):
             if not node:
                 json_response(handler, {"error": "No PVE node reachable"}, 400)
                 return
-        cmd = f"{local_prefix}ssh {ssh_opts} {ssh_user}@{node} sudo pct enter {target}"
+        cmd = shlex.join(
+            _build_ssh_cmd(
+                host=node,
+                command=f"sudo pct enter {target}",
+                user=ssh_user,
+                key_path=key_path,
+                htype=htype,
+                use_sudo=False,
+                extra_opts=["-tt"],
+                local_user=local_user,
+                password_file=password_file,
+                sudo_password_file=sudo_password_file,
+                cfg=cfg,
+            )
+        )
     else:
-        cmd = f"{local_prefix}{sshpass_prefix}ssh {ssh_opts} {ssh_user}@{resolved_ip}"
+        cmd = shlex.join(
+            _build_ssh_cmd(
+                host=resolved_ip,
+                command="",
+                user=ssh_user,
+                key_path=key_path,
+                htype=htype,
+                use_sudo=False,
+                extra_opts=["-tt"],
+                local_user=local_user,
+                password_file=password_file,
+                sudo_password_file=sudo_password_file,
+                cfg=cfg,
+            )
+        )
 
     # Spawn in PTY
     try:

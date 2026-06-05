@@ -2384,6 +2384,10 @@ class FreqHandler(BaseHTTPRequestHandler):
     # Class-level caches for PVE metrics polling
     _pve_metrics_cache = None
     _pve_metrics_ts = 0
+    _doctor_cache = None
+    _doctor_cache_ts = 0
+    _doctor_lock = threading.Lock()
+    _doctor_cache_ttl = 15
     # per-node last-seen tracking so the
     # dashboard can render 'STALE 47s' instead of a bare 'offline' chip.
     _pve_last_seen_ts: dict = {}
@@ -5356,20 +5360,35 @@ a:hover{{text-decoration:underline}}
     def _serve_doctor(self):
         """Run FREQ self-diagnostic and return results as JSON."""
         try:
+            now = time.monotonic()
+            cached = FreqHandler._doctor_cache
+            if cached is not None and now - FreqHandler._doctor_cache_ts < FreqHandler._doctor_cache_ttl:
+                self._json_response(cached)
+                return
+
             from freq.core.doctor import run as doctor_run
             import io, contextlib, json as _json
 
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                from freq.core.config import load_config as _lc
+            with FreqHandler._doctor_lock:
+                now = time.monotonic()
+                cached = FreqHandler._doctor_cache
+                if cached is not None and now - FreqHandler._doctor_cache_ts < FreqHandler._doctor_cache_ttl:
+                    self._json_response(cached)
+                    return
 
-                cfg = _lc()
-                result = doctor_run(cfg, json_output=True)
-            # doctor_run with json_output prints JSON to stdout
-            try:
-                data = _json.loads(buf.getvalue())
-            except (ValueError, _json.JSONDecodeError):
-                data = {"ok": result == 0, "output": buf.getvalue(), "exit_code": result}
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    from freq.core.config import load_config as _lc
+
+                    cfg = _lc()
+                    result = doctor_run(cfg, json_output=True)
+                # doctor_run with json_output prints JSON to stdout
+                try:
+                    data = _json.loads(buf.getvalue())
+                except (ValueError, _json.JSONDecodeError):
+                    data = {"ok": result == 0, "output": buf.getvalue(), "exit_code": result}
+                FreqHandler._doctor_cache = data
+                FreqHandler._doctor_cache_ts = time.monotonic()
             self._json_response(data)
         except Exception as e:
             self._json_response({"error": f"Doctor failed: {e}"}, 500)

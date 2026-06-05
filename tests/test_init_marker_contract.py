@@ -57,6 +57,15 @@ class TestMarkerWrittenOnlyOnSuccess(unittest.TestCase):
         self.assertIn("if fails == 0:", block)
         self.assertIn("open(INIT_MARKER", block)
 
+    def test_phase_verify_is_only_marker_writer(self):
+        """Headless/interactive summaries must not rewrite .initialized."""
+        src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
+        self.assertEqual(
+            src.count('open(INIT_MARKER, "w")'),
+            1,
+            ".initialized must be written only by _phase_verify",
+        )
+
     def test_verify_does_not_write_on_failure(self):
         """_phase_verify returns False and skips marker write when fails > 0."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()

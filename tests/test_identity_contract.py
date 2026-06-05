@@ -27,6 +27,9 @@ class TestIdentityContractDoc(unittest.TestCase):
         self.assertIn("`freq-ops` is the bootstrap/sudo identity", src)
         self.assertIn("`cfg.ssh_service_account` is the deployed fleet service account", src)
         self.assertIn("`freq-admin` is only the default deployed service-account name", src)
+        self.assertIn("TrueNAS has a two-phase identity contract", src)
+        self.assertIn("A TrueNAS API key alone is valid for read-only storage metrics", src)
+        self.assertIn("not deployment auth", src)
         # the runtime PVE API
         # identity is derived from cfg.ssh_service_account, NOT the
         # legacy freq-ops@pam@pam token.
@@ -100,11 +103,10 @@ class TestInitLifecycleIdentityBoundaries(unittest.TestCase):
 
     def test_runtime_terminal_uses_configured_service_account(self):
         src = _read("freq/api/terminal.py")
-        # the silent `or "freq-admin"`
-        # fallback was replaced with an explicit if-not check that logs a warning.
-        # The contract: cfg.ssh_service_account is the primary; fallback is visible.
-        self.assertIn('ssh_user = cfg.ssh_service_account', src)
-        self.assertIn('identity contract violation', src)
+        self.assertIn("def _terminal_ssh_auth", src)
+        self.assertIn('if htype in ("idrac", "switch", "truenas")', src)
+        self.assertIn("resolve_staged_device_ssh_auth(cfg, htype)", src)
+        self.assertIn('ssh_user = auth["user"]', src)
         self.assertNotIn('cfg.ssh_service_account or "freq-ops"', src)
 
     def test_pve_api_identity_uses_service_account(self):

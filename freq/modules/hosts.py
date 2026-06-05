@@ -309,6 +309,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             "label": h.label,
             "htype": h.htype,
             "groups": getattr(h, "groups", "") or "",
+            "vmid": getattr(h, "vmid", 0) or 0,
             "all_ips": getattr(h, "all_ips", []) or [],
             "managed": getattr(h, "managed", True),
         }
@@ -477,6 +478,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                 "vmid": vmid,
                 "source": "pve",
                 "all_ips": real_all_ips,
+                "managed": e.get("managed", True),
             }
         else:
             # Default group based on VLAN — mgmt VLAN = prod, other = derive from VLAN name
@@ -515,6 +517,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                 "vmid": 0,
                 "source": "pve-node",
                 "all_ips": e.get("all_ips", []),
+                "managed": e.get("managed", True),
             }
         elif node_ip not in discovered:
             discovered[node_ip] = {
@@ -533,6 +536,9 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             ip = dev.ip
             if ip in existing:
                 e = existing[ip]
+                managed = e.get("managed", True)
+                if dev.device_type == "truenas" and dev.scope != "lab":
+                    managed = True
                 discovered[ip] = {
                     "label": e["label"],
                     "htype": e["htype"],
@@ -540,7 +546,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                     "vmid": 0,
                     "source": "fleet-boundaries",
                     "all_ips": e.get("all_ips", []),
-                    "managed": e.get("managed", True),
+                    "managed": managed,
                 }
             elif ip not in discovered:
                 # Sanitize label — hosts.toml labels should be simple identifiers
@@ -553,7 +559,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
                     "vmid": 0,
                     "source": "fleet-boundaries",
                     "all_ips": [],
-                    "managed": dev.scope != "lab" and dev.device_type != "truenas",
+                    "managed": dev.scope != "lab",
                 }
         fmt.step_ok(f"Fleet boundaries: {len(fb.physical)} physical devices")
 
@@ -606,10 +612,31 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
     new_hosts = [ip for ip in discovered if ip not in existing]
     removed_hosts = [ip for ip in existing if ip not in discovered]
 
+    def _sync_list(value):
+        if isinstance(value, str):
+            return tuple(sorted(v for v in value.split(",") if v))
+        return tuple(sorted(str(v) for v in (value or []) if v))
+
+    def _sync_identity(entry):
+        return {
+            "label": entry.get("label", ""),
+            "htype": entry.get("htype", ""),
+            "groups": entry.get("groups", "") or "",
+            "vmid": int(entry.get("vmid") or 0),
+            "managed": bool(entry.get("managed", True)),
+            "all_ips": _sync_list(entry.get("all_ips", [])),
+        }
+
+    changed_hosts = [
+        ip
+        for ip in discovered
+        if ip in existing and _sync_identity(discovered[ip]) != _sync_identity(existing[ip])
+    ]
+
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}Sync Summary:{fmt.C.RESET}")
     fmt.line(
-        f"    Existing: {len(existing)}  |  Discovered: {len(discovered)}  |  New: {fmt.C.GREEN}{len(new_hosts)}{fmt.C.RESET}  |  Removed: {fmt.C.RED}{len(removed_hosts)}{fmt.C.RESET}"
+        f"    Existing: {len(existing)}  |  Discovered: {len(discovered)}  |  New: {fmt.C.GREEN}{len(new_hosts)}{fmt.C.RESET}  |  Changed: {fmt.C.YELLOW}{len(changed_hosts)}{fmt.C.RESET}  |  Removed: {fmt.C.RED}{len(removed_hosts)}{fmt.C.RESET}"
     )
     fmt.blank()
 
@@ -627,13 +654,20 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
             fmt.line(f"    {fmt.C.YELLOW}?{fmt.C.RESET} {ip}  {e['label']}  [{e['htype']}]")
         fmt.blank()
 
+    if changed_hosts:
+        fmt.line(f"  {fmt.C.YELLOW}Hosts to repair/update:{fmt.C.RESET}")
+        for ip in sorted(changed_hosts):
+            d = discovered[ip]
+            fmt.line(f"    {fmt.C.YELLOW}~{fmt.C.RESET} {ip}  {d['label']}  [{d['htype']}]  (from {d['source']})")
+        fmt.blank()
+
     if unresolved:
         fmt.line(f"  {fmt.C.DIM}Unresolved VMs (no guest agent or unreachable):{fmt.C.RESET}")
         for vmid, vname, reason in sorted(unresolved):
             fmt.line(f"    {fmt.C.DIM}-{fmt.C.RESET} {vmid}  {vname}  ({reason})")
         fmt.blank()
 
-    if not new_hosts and not removed_hosts:
+    if not new_hosts and not removed_hosts and not changed_hosts:
         fmt.step_ok("hosts.toml is up to date — no changes needed")
         _auto_populate_fleet_boundaries(cfg, discovered)
         fmt.blank()
@@ -693,7 +727,7 @@ def _hosts_sync(cfg: FreqConfig, dry_run: bool = False) -> int:
     save_hosts_toml(cfg.hosts_file, all_hosts)
     cfg.hosts = all_hosts
 
-    fmt.step_ok(f"Fleet registry updated: {len(discovered)} hosts ({len(new_hosts)} new)")
+    fmt.step_ok(f"Fleet registry updated: {len(discovered)} hosts ({len(new_hosts)} new, {len(changed_hosts)} changed)")
 
     # ── Step 9: Auto-populate fleet-boundaries.toml with discovered devices ──
     _auto_populate_fleet_boundaries(cfg, discovered)

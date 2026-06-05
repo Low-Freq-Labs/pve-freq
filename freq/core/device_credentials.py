@@ -84,6 +84,85 @@ def _entry_for(data: dict, htype: str) -> dict:
     return {}
 
 
+def _infer_local_user_for_key(key_path: str) -> str:
+    if not key_path:
+        return ""
+    parts = os.path.normpath(key_path).split(os.sep)
+    if len(parts) >= 4 and parts[1] == "home" and parts[3] == ".ssh":
+        return parts[2]
+    return ""
+
+
+def resolve_staged_device_ssh_auth(cfg, htype: str) -> dict:
+    """Resolve staged runtime SSH auth for physical devices.
+
+    Unlike resolve_device_ssh_auth(), this preserves root-owned password
+    file paths and marks them for sudo-backed sshpass. That lets a
+    systemd service account use secrets staged under /etc/freq/credentials
+    without broadening file permissions.
+    """
+    htype = (htype or "").lower()
+    data = _load(device_credentials_path(cfg))
+    entry = _entry_for(data, htype)
+    if htype == "truenas":
+        svc_entry = data.get("service_account")
+        if isinstance(svc_entry, dict) and (
+            svc_entry.get("password_file")
+            or svc_entry.get("ssh_key_file")
+            or svc_entry.get("key_file")
+            or svc_entry.get("key_path")
+        ):
+            svc_key = getattr(cfg, "ssh_key_path", "") or svc_entry.get("ssh_key_file") or svc_entry.get("key_file") or svc_entry.get("key_path") or ""
+            entry = dict(svc_entry)
+            if svc_key and os.path.isfile(svc_key):
+                entry["ssh_key_file"] = svc_key
+                entry.pop("password_file", None)
+    user = entry.get("user") or entry.get("username") or getattr(cfg, "ssh_service_account", "") or "freq-admin"
+    key_path = entry.get("ssh_key_file") or entry.get("key_file") or entry.get("key_path") or ""
+    password_file = entry.get("password_file") or ""
+    local_user = entry.get("local_user") or entry.get("run_as_user") or entry.get("run_as") or ""
+
+    if key_path and not local_user:
+        local_user = _infer_local_user_for_key(key_path)
+    if key_path and not os.path.isfile(key_path):
+        key_path = ""
+
+    if password_file and os.path.isfile(password_file):
+        return {
+            "user": user,
+            "key_path": "",
+            "password_file": password_file,
+            "sudo_password_file": not os.access(password_file, os.R_OK),
+            "local_user": "",
+            "source": "device-credentials",
+        }
+
+    if key_path:
+        return {
+            "user": user,
+            "key_path": key_path,
+            "password_file": "",
+            "sudo_password_file": False,
+            "local_user": local_user,
+            "source": "device-credentials",
+        }
+
+    key_path = getattr(cfg, "ssh_key_path", "")
+    if htype in {"idrac", "switch"}:
+        key_path = getattr(cfg, "ssh_rsa_key_path", "") or key_path
+    password_file = ""
+    if htype == "switch":
+        password_file = getattr(cfg, "legacy_password_file", "") or ""
+    return {
+        "user": user,
+        "key_path": key_path,
+        "password_file": password_file,
+        "sudo_password_file": False,
+        "local_user": "",
+        "source": "config",
+    }
+
+
 def resolve_device_ssh_auth(cfg, htype: str) -> dict:
     """Resolve runtime SSH user/key/password-file for a device type.
 
@@ -96,9 +175,7 @@ def resolve_device_ssh_auth(cfg, htype: str) -> dict:
     password_file = entry.get("password_file") or ""
     local_user = entry.get("local_user") or entry.get("run_as_user") or entry.get("run_as") or ""
     if key_path and not local_user:
-        parts = os.path.normpath(key_path).split(os.sep)
-        if len(parts) >= 4 and parts[1] == "home" and parts[3] == ".ssh":
-            local_user = parts[2]
+        local_user = _infer_local_user_for_key(key_path)
     if key_path and not local_user and (not os.path.isfile(key_path) or not os.access(key_path, os.R_OK)):
         key_path = ""
     if password_file and (not os.path.isfile(password_file) or not os.access(password_file, os.R_OK)):

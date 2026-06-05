@@ -269,6 +269,76 @@ def _persist_legacy_password_file(cfg, svc_name, password):
         fmt.step_warn(f"Could not save device password to {pass_path}: {e}")
 
 
+def _credentials_dir(cfg):
+    """Canonical runtime credentials directory."""
+    return getattr(cfg, "credentials_dir", "") or "/etc/freq/credentials"
+
+
+def _upsert_toml_section(path, section, values):
+    """Upsert a simple TOML section while preserving unrelated sections."""
+    existing = []
+    if os.path.isfile(path):
+        with open(path) as f:
+            existing = f.readlines()
+
+    out = []
+    i = 0
+    target = f"[{section}]"
+    replaced = False
+    while i < len(existing):
+        line = existing[i]
+        if line.strip().lower() == target.lower():
+            if out and out[-1].strip():
+                out.append("\n")
+            out.append(f"{target}\n")
+            for key, value in values.items():
+                escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+                out.append(f'{key} = "{escaped}"\n')
+            replaced = True
+            i += 1
+            while i < len(existing) and not existing[i].strip().startswith("["):
+                i += 1
+            continue
+        out.append(line)
+        i += 1
+
+    if not replaced:
+        if out and out[-1].strip():
+            out.append("\n")
+        out.append(f"{target}\n")
+        for key, value in values.items():
+            escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+            out.append(f'{key} = "{escaped}"\n')
+
+    with open(path, "w") as f:
+        f.writelines(out)
+
+
+def _persist_service_account_credentials_metadata(cfg, svc_name, password):
+    """Stage service-account SSH metadata for runtime physical-device auth."""
+    if not svc_name or not password:
+        return
+
+    cred_dir = _credentials_dir(cfg)
+    try:
+        os.makedirs(cred_dir, mode=0o750, exist_ok=True)
+        pass_path = os.path.join(cred_dir, f"{svc_name}-password")
+        with open(pass_path, "w") as f:
+            f.write(password)
+        os.chmod(pass_path, 0o600)
+
+        creds_path = os.path.join(cred_dir, "device-credentials.toml")
+        _upsert_toml_section(
+            creds_path,
+            "service_account",
+            {"username": svc_name, "password_file": pass_path},
+        )
+        os.chmod(creds_path, 0o644)
+        fmt.step_ok(f"Service account credentials staged in {creds_path}")
+    except OSError as e:
+        fmt.step_warn(f"Could not stage service account credentials metadata: {e}")
+
+
 def _home_dir_for_user(user_name):
     """Return a real home dir for a local account, or empty string if unknown."""
     import pwd
@@ -741,8 +811,18 @@ def _seed_truenas_api_key_from_device_creds(cfg, device_creds):
                 "TrueNAS API key not supplied — add api_key_file/api_key under "
                 "[truenas] in --device-credentials for fully green storage metrics"
             )
+
+
+def _device_cred_has_ssh_material(cred):
+    """Return True when a device credential entry can actually open SSH."""
+    if not cred:
         return False
-    return True
+    return bool(
+        cred.get("password")
+        or cred.get("key_path")
+        or cred.get("ssh_key_file")
+        or cred.get("password_file")
+    )
 
 
 def _validate_device_scoped_service_password(device_creds, svc_pass):
@@ -2131,6 +2211,7 @@ def _phase_service_account(cfg, ctx, args=None):
         fmt.step_ok(f"Password stored in vault (key: {vault_key})")
     else:
         fmt.step_fail(f"Failed to store password in vault (key: {vault_key})")
+    _persist_service_account_credentials_metadata(cfg, svc_name, ctx["svc_pass"])
 
     # Update config
     _update_toml(cfg, "ssh", "service_account", svc_name)
@@ -3413,7 +3494,7 @@ def _is_managed_auto_host(label, htype, vmid=0, source=""):
         return source == "pve-node" or not vmid
 
     if htype == "truenas":
-        return False
+        return "lab" not in label_lower
 
     if htype in {"pfsense", "truenas", "switch", "idrac", "opnsense"}:
         return True
@@ -3964,7 +4045,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     discovered[ip] = {
                         "label": "truenas", "htype": "truenas",
                         "groups": "infrastructure", "vmid": 0,
-                        "source": "infra-probe", "managed": False, "all_ips": [ip],
+                        "source": "infra-probe", "managed": True, "all_ips": [ip],
                     }
                     infra_truenas = ip
                     fmt.step_ok(f"TrueNAS detected: {ip}")
@@ -3985,7 +4066,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
             break
     if not infra_truenas:
         for ip in _credential_hosts("truenas"):
-            _add_staged_device(ip, "truenas", "truenas", managed=False)
+            _add_staged_device(ip, "truenas", "truenas", managed=True)
             infra_truenas = ip
             fmt.step_ok(f"TrueNAS from device credentials: {ip}")
             break
@@ -4231,12 +4312,11 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
     pfsense_hosts = [h for h in managed_hosts if h.category == "firewall"]
     device_hosts = [h for h in managed_hosts if h.category in ("bmc", "switch")]
     nas_hosts = [h for h in managed_hosts if h.category == "nas"]
-    # NAS hosts use server deployer (same SSH+useradd flow)
-    linux_hosts.extend(nas_hosts)
 
-    total = len(linux_hosts) + len(pfsense_hosts) + len(device_hosts)
+    total = len(linux_hosts) + len(nas_hosts) + len(pfsense_hosts) + len(device_hosts)
     fmt.line(
         f"  {fmt.C.DIM}Fleet: {len(linux_hosts)} server, "
+        f"{len(nas_hosts)} NAS, "
         f"{len(pfsense_hosts)} firewall, "
         f"{len(device_hosts)} device(s) — {total} total{fmt.C.RESET}"
     )
@@ -4305,6 +4385,76 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                             fail += 1
             else:
                 fmt.step_warn("Skipping Linux hosts")
+
+    # ── NAS hosts (TrueNAS) ──
+    if nas_hosts:
+        fmt.blank()
+        fmt.line(f"  {fmt.C.BOLD}NAS hosts ({len(nas_hosts)}){fmt.C.RESET}")
+        fmt.blank()
+
+        tn_creds = device_creds.get("truenas")
+        if tn_creds and not _device_cred_has_ssh_material(tn_creds):
+            fmt.step_fail(
+                "Core TrueNAS has API credentials only. Add user + password_file/password "
+                "or ssh_key_file under [truenas] in --device-credentials so init can "
+                f"create and verify {ctx.get('svc_name', 'the service account')} over SSH."
+            )
+            fail += len(nas_hosts)
+        elif tn_creds:
+            tn_user = tn_creds["user"]
+            tn_pass = tn_creds.get("password", "")
+            tn_key = tn_creds.get("key_path", "")
+            fmt.step_ok(f"Using device credentials for TrueNAS: {tn_user}")
+            for h in nas_hosts:
+                fmt.blank()
+                fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [truenas]")
+                before = audit.snapshot_host(h.ip, ctx["svc_name"], "truenas", cfg)
+                if _deploy_to_host_dispatch(h.ip, "truenas", ctx, tn_pass, tn_key, tn_user):
+                    ok += 1
+                    deployed_ips.add(h.ip)
+                    after = audit.snapshot_host(h.ip, ctx["svc_name"], "truenas", cfg)
+                    audit.record_change(h.ip, "deploy_user", before, after)
+                else:
+                    fail += 1
+        elif has_bootstrap:
+            tn_user = bootstrap_user or "root"
+            fmt.step_ok(f"Using bootstrap auth for TrueNAS: {tn_user} via {bootstrap_key}")
+            for h in nas_hosts:
+                fmt.blank()
+                fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [truenas]")
+                before = audit.snapshot_host(h.ip, ctx["svc_name"], "truenas", cfg)
+                if _deploy_to_host_dispatch(h.ip, "truenas", ctx, "", bootstrap_key, tn_user):
+                    ok += 1
+                    deployed_ips.add(h.ip)
+                    after = audit.snapshot_host(h.ip, ctx["svc_name"], "truenas", cfg)
+                    audit.record_change(h.ip, "deploy_user", before, after)
+                else:
+                    fail += 1
+        else:
+            fmt.line(f"  {fmt.C.DIM}How to authenticate to TrueNAS?{fmt.C.RESET}")
+            fmt.line(f"    {fmt.C.BOLD}A{fmt.C.RESET}) Admin password")
+            fmt.line(f"    {fmt.C.BOLD}B{fmt.C.RESET}) Existing SSH key")
+            fmt.line(f"    {fmt.C.BOLD}S{fmt.C.RESET}) Skip")
+            fmt.blank()
+
+            choice = _input("Choice", "A").upper()
+            if choice != "S":
+                tn_user = _input("Auth user", "root")
+                tn_pass, tn_key = _get_auth_creds(choice, "TrueNAS")
+                if tn_pass or tn_key:
+                    for h in nas_hosts:
+                        fmt.blank()
+                        fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [truenas]")
+                        before = audit.snapshot_host(h.ip, ctx["svc_name"], "truenas", cfg)
+                        if _deploy_to_host_dispatch(h.ip, "truenas", ctx, tn_pass, tn_key, tn_user):
+                            ok += 1
+                            deployed_ips.add(h.ip)
+                            after = audit.snapshot_host(h.ip, ctx["svc_name"], "truenas", cfg)
+                            audit.record_change(h.ip, "deploy_user", before, after)
+                        else:
+                            fail += 1
+            else:
+                fmt.step_warn("Skipping TrueNAS hosts")
 
     # ── pfSense hosts ──
     if pfsense_hosts:
@@ -6456,6 +6606,28 @@ def _verify_host(ip, htype, svc_name, key_path, rsa_key_path, cfg=None):
     For legacy devices (iDRAC/switch), falls back to sshpass password auth
     if cfg.legacy_password_file is configured and key auth fails.
     """
+    if htype == "truenas" and cfg is not None:
+        from freq.core.device_credentials import resolve_staged_device_ssh_auth
+        from freq.core.ssh import run as ssh_run
+
+        auth = resolve_staged_device_ssh_auth(cfg, "truenas")
+        r = ssh_run(
+            host=ip,
+            command="sudo -n true",
+            user=auth.get("user") or svc_name,
+            key_path=auth.get("key_path") or key_path,
+            connect_timeout=5,
+            command_timeout=VERIFY_TIMEOUT,
+            htype="truenas",
+            use_sudo=False,
+            local_user=auth.get("local_user") or None,
+            password_file=auth.get("password_file") or None,
+            sudo_password_file=auth.get("sudo_password_file", False),
+            cfg=cfg,
+            failure_log_level="warn",
+        )
+        return r.returncode == 0, (r.stderr or r.stdout)
+
     # Select key and command based on platform
     if htype in ("linux", "pve", "docker", "truenas"):
         key = key_path
@@ -6840,6 +7012,12 @@ def _phase_verify(cfg, ctx):
         logger.info("init_phase_complete: Phase 12 - verify", phase=12, passes=passes, fails=fails, warns=warns)
         return True
     else:
+        if INIT_MARKER and os.path.isfile(INIT_MARKER):
+            try:
+                os.unlink(INIT_MARKER)
+                fmt.step_warn(f"Removed stale init marker: {INIT_MARKER}")
+            except OSError as e:
+                fmt.step_warn(f"Could not remove stale init marker: {e}")
         fmt.step_fail(f"NOT initialized ({fails} failures — fix and re-run 'freq init')")
         logger.error("init_phase_failed: Phase 12 - verify", phase=12, passes=passes, fails=fails, warns=warns)
         return False
@@ -7928,7 +8106,7 @@ def _init_dry_run(cfg):
         ("Phase 5", "PVE Node Deployment", f"Deploy {cfg.ssh_service_account} to {len(cfg.pve_nodes) if cfg.pve_nodes else 0} PVE node(s)"),
         ("Phase 6", "PVE API Token", f"Create {cfg.ssh_service_account}@pam!freq-rw token, save to /etc/freq/credentials/"),
         ("Phase 7", "Fleet Discovery", "PVE API + multi-VLAN sweep, detect infrastructure, write hosts.toml + fleet-boundaries"),
-        ("Phase 8", "Fleet Deployment", f"Deploy {cfg.ssh_service_account} to all discovered hosts (Linux, pfSense, iDRAC, switch)"),
+        ("Phase 8", "Fleet Deployment", f"Deploy {cfg.ssh_service_account} to all discovered hosts (Linux, TrueNAS, pfSense, iDRAC, switch)"),
         ("Phase 9", "Fleet Configuration", "Docker host tagging, metrics agent deploy, VM categorization"),
         ("Phase 10", "PDM Setup", "Optional Proxmox Datacenter Manager integration"),
         ("Phase 11", "Admin Accounts", "Configure RBAC roles (admin for current user + service account)"),
@@ -8333,8 +8511,6 @@ def _init_headless(cfg, args):
     unmanaged_count = len(cfg.hosts) - len(managed_hosts)
     total_hosts = len(managed_hosts)
     if verified:
-        with open(INIT_MARKER, "w") as f:
-            f.write(f"{cfg.version}\n")
         if deployed_count >= total_hosts:
             fmt.line(f"  {fmt.C.GREEN}{fmt.C.BOLD}FREQ initialized — {deployed_count}/{total_hosts} managed hosts deployed (headless).{fmt.C.RESET}")
         else:
@@ -8388,6 +8564,7 @@ def _headless_local_account(cfg, ctx):
 
     vault_key = f"{svc_name}-pass"
     vault_set(cfg, "DEFAULT", vault_key, svc_pass)
+    _persist_service_account_credentials_metadata(cfg, svc_name, svc_pass)
     fmt.step_ok(f"Password stored in vault (key: {vault_key})")
 
     # Config
@@ -8500,7 +8677,6 @@ def _mark_host_unmanaged(cfg, ip):
         if (
             dev.ip == ip
             and getattr(dev, "scope", "core") != "lab"
-            and getattr(dev, "device_type", "") != "truenas"
         ):
             fmt.step_fail(
                 f"{getattr(dev, 'label', ip)} ({ip}) is core physical infrastructure; "
@@ -8690,11 +8866,16 @@ def _headless_fleet_deploy(
         fmt.line(f"  {fmt.C.BOLD}{label}{fmt.C.RESET} ({ip}) [{htype}]")
 
         # Determine auth credentials based on host type
-        if (
-            htype in DEVICE_HTYPES
-            and htype in device_creds
-            and not device_creds[htype].get("api_key_only")
-        ):
+        if htype == "truenas" and htype in device_creds and not _device_cred_has_ssh_material(device_creds[htype]):
+            fmt.step_fail(
+                "Core TrueNAS has API credentials only. Add user + password_file/password "
+                "or ssh_key_file under [truenas] in --device-credentials so init can "
+                f"create and verify {ctx.get('svc_name', 'the service account')} over SSH."
+            )
+            fail += 1
+            continue
+
+        if htype in DEVICE_HTYPES and htype in device_creds:
             # Per-device credentials from --device-credentials TOML
             dcred = device_creds[htype]
             auth_user = dcred["user"]
@@ -8793,12 +8974,13 @@ def _headless_fleet_deploy(
                     pass
             if rc != 0:
                 reason = _skip_reason(err) if err.strip() else _ssh_error_msg(rc, err)
-                # TrueNAS uses its own root account — add specific hint
+                # TrueNAS must have explicit SSH bootstrap material; API keys
+                # alone are read-only dashboard credentials, not deploy auth.
                 if htype == "truenas" and "auth failed" in reason:
                     if htype in device_creds:
-                        reason = "auth failed (credentials supplied but rejected — check [truenas] password in --device-credentials)"
+                        reason = "auth failed (TrueNAS SSH credentials supplied but rejected — check [truenas] user plus password_file/password or ssh_key_file)"
                     else:
-                        reason = "auth failed (add [truenas] to --device-credentials with root user)"
+                        reason = "auth failed (add [truenas] SSH bootstrap credentials: user plus password_file/password or ssh_key_file)"
 
                 # Guest agent fallback: if SSH bootstrap fails for a PVE-hosted
                 # VM, deploy via qm guest exec on the host PVE node instead.
@@ -8852,3 +9034,6 @@ def _headless_fleet_deploy(
         f"{fmt.C.RED}{fail} failed{fmt.C.RESET}, "
         f"{fmt.C.YELLOW}{skip} skipped{fmt.C.RESET}"
     )
+    ctx["fleet_deploy_ok"] = ok
+    ctx["fleet_deploy_failures"] = fail
+    ctx["fleet_deploy_skips"] = skip

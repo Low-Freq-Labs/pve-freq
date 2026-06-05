@@ -1,16 +1,14 @@
 """Tests for nexus/TrueNAS auth model during Phase 8 deploy.
 
-Bug: Clean-5005 init skipped nexus with generic "auth failed". The
-device-creds.toml had no [truenas] section. Headless deploy fell
-through to bootstrap credentials, which
-don't exist on TrueNAS (it uses root + its own password). The error
-message didn't tell the operator what to do.
+TrueNAS has two distinct auth phases:
+1. init reaches TrueNAS with an SSH-capable bootstrap identity, commonly
+   ``freq-ops`` plus the fleet key staged in ``[truenas]``.
+2. runtime must use the service account created by init, not the bootstrap
+   identity and not an API-key-only TrueNAS stanza.
 
-Fixes:
-1. _read_entry accepts both 'user' and 'username' as key for account name
-   (parser tolerance — E2E device-creds.toml uses 'username')
-2. When TrueNAS deploy fails with auth failed, message includes hint
-   to add [truenas] to --device-credentials
+The contract bug this guards against: API-key-only ``[truenas]`` entries
+used to let init drift into misleading fallback paths. Core TrueNAS must
+either carry SSH bootstrap material or fail with an actionable message.
 """
 import os
 import sys
@@ -76,12 +74,14 @@ password = "pw"
 
 
 class TestTruenasAuthFailedMessage(unittest.TestCase):
-    """TrueNAS auth failures must include actionable device-credentials hint."""
+    """TrueNAS auth failures must include actionable SSH-bootstrap hints."""
 
     def test_source_has_truenas_hint(self):
         """Source code must have the TrueNAS-specific auth-failed hint."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
-        self.assertIn("add [truenas] to --device-credentials", src)
+        self.assertIn("Core TrueNAS has API credentials only", src)
+        self.assertIn("ssh_key_file under [truenas]", src)
+        self.assertNotIn("with root user", src)
 
     def test_hint_only_for_truenas(self):
         """Hint is conditional on htype == 'truenas'."""
@@ -89,7 +89,7 @@ class TestTruenasAuthFailedMessage(unittest.TestCase):
         import re
         # The hint must be inside an 'if htype == "truenas"' block
         match = re.search(
-            r'if htype == "truenas"[^}]*?add \[truenas\]',
+            r'if htype == "truenas"[^}]*?Core TrueNAS has API credentials only',
             src, re.DOTALL
         )
         self.assertIsNotNone(match)
@@ -107,6 +107,9 @@ class TestTruenasDeployerTemplateTruth(unittest.TestCase):
         src = (FREQ_ROOT / "freq" / "deployers" / "nas" / "truenas.py").read_text()
         self.assertNotIn('svc_home="/home/{svc_name}"', src)
         self.assertNotIn("echo '{svc_name} ALL=(ALL) NOPASSWD: ALL'", src)
+        scale_verify = src.split("test \"$(midclt call user.query", 1)[1].split("elif [ \"$VARIANT\" = \"core\" ]", 1)[0]
+        self.assertNotIn("{svc_name}", scale_verify)
+        self.assertIn("%(svc_name)s", scale_verify)
 
     def test_remove_script_has_no_literal_percent_placeholders(self):
         src = (FREQ_ROOT / "freq" / "deployers" / "nas" / "truenas.py").read_text()

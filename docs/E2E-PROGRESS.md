@@ -38,12 +38,12 @@ For the E2E gauntlet, verify this split between every major `freq init` step:
 | 3 | `--hosts-file` import calls .conf parser on TOML files | **Yes** (commit a2664c9) |
 | 4 | Init marks initialized with garbage hosts (downstream of #3) | Fixed by #3 |
 | 5 | TOML values had embedded double quotes (downstream of #3) | Fixed by #3 |
-| 6 | TrueNAS deployer can't create accounts (middleware-managed) | **Limitation** (TrueNAS Core middleware manages accounts — documented) |
+| 6 | TrueNAS deployer can't create accounts (middleware-managed) | **No — stale finding** (TrueNAS deployer uses middleware-aware `midclt`/`pw`; init must route core TrueNAS through it with SSH bootstrap credentials) |
 | 7 | Init discovery misses pfSense (10.25.255.1) | **By design** (discovery uses PVE guest agent — non-VM devices added via fleet-boundaries.toml) |
 | 8 | Init discovery misses production TrueNAS (10.25.255.25) | **By design** (same — non-VM, use fleet-boundaries) |
 | 9 | Init discovery misses known-offline BMC (10.25.255.12) | **By design** (offline devices not discoverable — add manually) |
 | 10 | `--fix` treats undeployed hosts as unreachable, won't deploy | **Needs live verify** (code includes unreachable in fix candidates — bootstrap auth may need testing) |
-| 11 | TrueNAS middleware doesn't propagate SSH keys for new users | **Limitation** (TrueNAS Core middleware — manual SSH key setup required) |
+| 11 | TrueNAS middleware doesn't propagate SSH keys for new users | **No — stale finding** (deployer writes middleware-managed account/key state; runtime must verify the managed service account after deploy) |
 | 12 | Init registers same host twice from different VLANs (dup label) | **Yes** (commit 7b72e38 — label-based dedup in _hosts_sync) |
 
 ### CLI (Tier 1)

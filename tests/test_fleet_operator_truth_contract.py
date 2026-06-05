@@ -219,6 +219,23 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("state = STATE_DEGRADED", window)
         self.assertIn("legacy device reachable; metrics probe failed", window)
 
+    def test_api_doctor_is_serialized_and_short_cached(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        window = src.split("def _serve_doctor", 1)[1].split("\n    def ", 1)[0]
+        self.assertIn("_doctor_lock = threading.Lock()", src)
+        self.assertIn("_doctor_cache_ttl = 15", src)
+        self.assertIn("with FreqHandler._doctor_lock:", window)
+        self.assertIn("now - FreqHandler._doctor_cache_ts < FreqHandler._doctor_cache_ttl", window)
+        self.assertIn("FreqHandler._doctor_cache = data", window)
+
+    def test_fleet_doctor_is_cross_process_serialized(self):
+        src = (REPO_ROOT / "freq" / "core" / "doctor.py").read_text()
+        window = src.split("def _check_fleet_connectivity", 1)[1].split("\ndef _check_service_account", 1)[0]
+        self.assertIn("def _doctor_fleet_lock", src)
+        self.assertIn("fcntl.flock", src)
+        self.assertIn("doctor-fleet-connectivity.lock", src)
+        self.assertIn("with _doctor_fleet_lock(cfg):", window)
+
     def test_ui_toasts_are_logged_to_server(self):
         src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
         serve_src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
@@ -306,10 +323,10 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         init_src = (REPO_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
         hosts_src = (REPO_ROOT / "freq" / "modules" / "hosts.py").read_text()
         self.assertIn("core physical host(s) marked unmanaged", doctor_src)
-        self.assertIn('getattr(dev, "device_type", "") == "truenas"', doctor_src)
+        self.assertNotIn('if dev_type == "truenas":\n                continue', doctor_src)
         self.assertIn("is core physical infrastructure", init_src)
         self.assertIn("leaving managed so doctor/verify must fail", init_src)
-        self.assertIn('"managed": dev.scope != "lab" and dev.device_type != "truenas"', hosts_src)
+        self.assertIn('"managed": dev.scope != "lab"', hosts_src)
         self.assertIn('managed=d.get("managed", True)', hosts_src)
 
     def test_truenas_action_endpoint_is_action_aware_and_truthful(self):
@@ -322,8 +339,8 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("api_action_supported = truenas_api.action_endpoint(action) is not None", src)
         self.assertIn("if api_action_supported and", src)
         self.assertIn('{"system": "status", "log": "syslog"}.get(action, action)', src)
-        self.assertIn("truenas_api_key_unsupported", src)
-        self.assertIn("not falling back to SSH", src)
+        self.assertIn("resolve_staged_device_ssh_auth", src)
+        self.assertIn("sudo_password_file=auth.get", src)
         self.assertIn("truenas_api_key", helper_src + src)
         self.assertIn('"snapshots": ("GET", "/pool/snapshot")', helper_src)
         self.assertNotIn("/zfs/snapshot", helper_src)

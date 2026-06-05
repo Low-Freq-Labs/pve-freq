@@ -25,6 +25,7 @@ import time
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
+from freq.core.device_credentials import resolve_staged_device_ssh_auth
 from freq.core.ssh import run as ssh_run
 
 # Infrastructure timeouts
@@ -66,14 +67,20 @@ def _device_cmd(cfg, args, title, ip, htype, actions, timeout=INFRA_CMD_TIMEOUT,
     fmt.line("{b}{d}{r}".format(b=fmt.C.BOLD, d=desc, r=fmt.C.RESET))
     fmt.blank()
 
+    auth = resolve_staged_device_ssh_auth(cfg, htype) if htype in {"pfsense", "truenas", "idrac", "switch"} else {}
     r = ssh_run(
         host=ip,
         command=cmd,
-        key_path=cfg.ssh_key_path,
+        user=auth.get("user") or None,
+        key_path=auth.get("key_path") or cfg.ssh_key_path,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
         htype=htype,
         use_sudo=use_sudo,
+        local_user=auth.get("local_user") or None,
+        password_file=auth.get("password_file") or None,
+        sudo_password_file=auth.get("sudo_password_file", False),
+        cfg=cfg,
     )
 
     if r.returncode == 0 and r.stdout:

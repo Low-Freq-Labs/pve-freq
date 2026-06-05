@@ -63,6 +63,50 @@ async function waitForHealthyDoctor(page) {
   throw new Error(`doctor did not settle healthy: ${JSON.stringify(last)}`);
 }
 
+async function terminalRoundTrip(page, path, input, expected) {
+  const opened = await api(page, path, { method: 'POST' });
+  expect(opened.status, path).toBe(200);
+  expect(opened.body.ok, path).toBe(true);
+  expect(opened.body.session, path).toBeTruthy();
+
+  const text = await page.evaluate(async ({ session, input }) => {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${proto}//${location.host}/api/terminal/ws?session=${encodeURIComponent(session)}`);
+    let out = '';
+    return await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        try { ws.close(); } catch {}
+        resolve(out);
+      }, 8000);
+      ws.onerror = () => {
+        clearTimeout(timer);
+        reject(new Error('terminal websocket failed'));
+      };
+      ws.onmessage = async event => {
+        if (event.data instanceof Blob) {
+          out += await event.data.text();
+        } else {
+          out += String(event.data || '');
+        }
+      };
+      ws.onopen = () => {
+        setTimeout(() => {
+          try { ws.send(input); } catch {}
+        }, 800);
+      };
+      ws.onclose = () => {
+        clearTimeout(timer);
+        resolve(out);
+      };
+    });
+  }, { session: opened.body.session, input });
+
+  const closed = await api(page, `/api/terminal/close?session=${encodeURIComponent(opened.body.session)}`, { method: 'POST' });
+  expect(closed.status).toBe(200);
+  expect(closed.body.ok).toBe(true);
+  expect(text, path).toMatch(expected);
+}
+
 test.describe('live dashboard safe E2E', () => {
   test.beforeEach(async ({ page }) => {
     requireLiveCredentials();
@@ -213,6 +257,34 @@ test.describe('live dashboard safe E2E', () => {
       expect(closed.status).toBe(200);
       expect(closed.body.ok).toBe(true);
     }
+  });
+
+  test('core device terminals return real websocket output', async ({ page }) => {
+    await terminalRoundTrip(
+      page,
+      '/api/terminal/open?type=host&target=10.25.255.1&htype=pfsense&cols=100&rows=24',
+      'hostname\n',
+      /pfsense|freq-ops@pfsense/i
+    );
+    await terminalRoundTrip(
+      page,
+      '/api/terminal/open?type=host&target=10.25.255.5&htype=switch&cols=100&rows=24',
+      'show version | include uptime\n',
+      /uptime is|gigecolo/i
+    );
+    await terminalRoundTrip(
+      page,
+      '/api/terminal/open?type=host&target=10.25.255.10&htype=idrac&cols=100&rows=24',
+      'racadm getsysinfo -s\n',
+      /Power Status|CMC|iDRAC|System Model/i
+    );
+
+    await terminalRoundTrip(
+      page,
+      '/api/terminal/open?type=host&target=10.25.255.25&htype=truenas&cols=100&rows=24',
+      'hostname\n',
+      /truenas|freenas|dc01-admin/i
+    );
   });
 
   test('dashboard does not emit page errors during safe navigation', async ({ page }) => {

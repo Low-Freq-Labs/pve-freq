@@ -242,6 +242,41 @@ class TestHostsSync(unittest.TestCase):
         self.assertIn("switch", content)
 
     @patch("freq.core.ssh.run")
+    def test_core_truenas_boundary_repairs_stale_unmanaged_host(self, mock_ssh):
+        """A core TrueNAS physical device must not stay hidden as unmanaged."""
+        existing = [
+            Host(
+                ip="192.168.255.25",
+                label="truenas",
+                htype="truenas",
+                groups="infrastructure",
+                managed=False,
+            )
+        ]
+        fb = FleetBoundaries()
+        fb.physical = {
+            "truenas": PhysicalDevice(
+                key="truenas",
+                ip="192.168.255.25",
+                label="truenas",
+                device_type="truenas",
+                groups="infrastructure",
+                scope="core",
+            ),
+        }
+        cfg = _make_cfg(self.tmpdir, hosts=existing, fleet_boundaries=fb, pve_nodes=[], pve_node_names=[])
+
+        mock_ssh.return_value = _fake_ssh_result(stdout="[]")
+
+        from freq.modules.hosts import _hosts_sync
+        _hosts_sync(cfg)
+
+        content = self._read_hosts_conf_raw(cfg)
+        block = content.split('label = "truenas"', 1)[1].split("[[host]]", 1)[0]
+        self.assertNotIn("managed = false", block)
+        self.assertTrue(cfg.hosts[0].managed)
+
+    @patch("freq.core.ssh.run")
     def test_label_sanitization_spaces_to_hyphens(self, mock_ssh):
         """Physical device labels with spaces get sanitized to hyphens."""
         fb = FleetBoundaries()

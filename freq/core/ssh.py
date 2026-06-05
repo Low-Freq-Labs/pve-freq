@@ -162,6 +162,8 @@ def _build_ssh_cmd(
     use_sudo: bool = True,
     extra_opts: Optional[list] = None,
     local_user: Optional[str] = None,
+    password_file: Optional[str] = None,
+    sudo_password_file: bool = False,
     cfg=None,
 ) -> list:
     """Build an SSH command list for subprocess execution."""
@@ -170,7 +172,7 @@ def _build_ssh_cmd(
 
     ssh_user = user or platform["user"]
     sudo_prefix = platform["sudo"] if use_sudo else ""
-    password_file = platform.get("password_file", "")
+    password_file = password_file if password_file is not None else platform.get("password_file", "")
 
     # Resolve: only use password auth if the file actually exists on disk.
     # If configured but missing, fall back to key auth with BatchMode=yes
@@ -226,6 +228,9 @@ def _build_ssh_cmd(
     elif command:
         cmd.append(command)
 
+    if sudo_password_file and prefix:
+        prefix = ["sudo", "-n"] + prefix
+
     if local_user:
         return ["sudo", "-n", "-u", local_user] + prefix + cmd
     return prefix + cmd
@@ -241,6 +246,8 @@ def run(
     htype: str = "linux",
     use_sudo: bool = True,
     local_user: Optional[str] = None,
+    password_file: Optional[str] = None,
+    sudo_password_file: bool = False,
     cfg=None,
     failure_log_level: str = "error",
 ) -> CmdResult:
@@ -257,6 +264,8 @@ def run(
         htype=htype,
         use_sudo=use_sudo,
         local_user=local_user,
+        password_file=password_file,
+        sudo_password_file=sudo_password_file,
         cfg=cfg,
     )
 
@@ -349,6 +358,8 @@ async def async_run(
     htype: str = "linux",
     use_sudo: bool = True,
     local_user: Optional[str] = None,
+    password_file: Optional[str] = None,
+    sudo_password_file: bool = False,
     cfg=None,
 ) -> CmdResult:
     """Execute a command on a remote host via SSH (async).
@@ -364,6 +375,8 @@ async def async_run(
         htype=htype,
         use_sudo=use_sudo,
         local_user=local_user,
+        password_file=password_file,
+        sudo_password_file=sudo_password_file,
         cfg=cfg,
     )
 

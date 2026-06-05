@@ -9,13 +9,13 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 """
 
 import json
-import os
 import re
 import subprocess
 
 from freq.core import log as logger
 from freq.api.helpers import require_post, json_response, get_json_body
 from freq.core.config import load_config
+from freq.core.device_credentials import resolve_staged_device_ssh_auth
 from freq.core.health_state import STATE_AUTH_FAILED, classify_probe_failure
 from freq.core.ssh import run as ssh_run_fn
 from freq.core import truenas_api
@@ -77,6 +77,10 @@ def _resolve_truenas_target(cfg, target: str = ""):
             scope="core",
         )
     return None
+
+
+def _truenas_ssh_auth(cfg) -> dict:
+    return resolve_staged_device_ssh_auth(cfg, "truenas")
 
 
 def handle_truenas(handler):
@@ -158,46 +162,20 @@ def handle_truenas(handler):
             )
             return
 
-    if (
-        api_settings.get("type") == "api_key"
-        and api_settings.get("api_key")
-        and not api_action_supported
-    ):
-        msg = (
-            f"TrueNAS {action} is not available through the configured API-key read path. "
-            "This install is intentionally not falling back to SSH for TrueNAS dashboard reads."
-        )
-        json_response(
-            handler,
-            {
-                "configured": True,
-                "host": target.ip,
-                "ip": target.ip,
-                "label": target.label,
-                "action": action,
-                "reachable": _ping_check(target.ip),
-                "api_available": True,
-                "ssh_available": False,
-                "probe_method": "truenas_api_key_unsupported",
-                "unsupported": True,
-                "output": msg,
-            },
-        )
-        return
-
-    fleet_key = os.path.join(cfg.key_dir, "fleet_key")
-    if not os.path.isfile(fleet_key):
-        fleet_key = cfg.ssh_key_path
+    auth = _truenas_ssh_auth(cfg)
 
     r = ssh_run_fn(
         host=target.ip,
         command=read_actions[action],
-        user=cfg.ssh_service_account,
-        key_path=fleet_key,
+        user=auth["user"],
+        key_path=auth["key_path"],
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=15,
         htype="truenas",
         use_sudo=True,
+        local_user=auth.get("local_user") or None,
+        password_file=auth.get("password_file") or None,
+        sudo_password_file=auth.get("sudo_password_file", False),
         cfg=cfg,
         failure_log_level="warn",
     )
@@ -347,14 +325,20 @@ def handle_storage_health(handler):
 
 def _truenas_ssh(cfg, cmd, timeout=15):
     """SSH to TrueNAS and return result."""
+    auth = _truenas_ssh_auth(cfg)
     return ssh_run_fn(
         host=cfg.truenas_ip,
         command=cmd,
-        key_path=cfg.ssh_key_path,
+        user=auth["user"],
+        key_path=auth["key_path"],
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
         htype="truenas",
         use_sudo=False,
+        local_user=auth.get("local_user") or None,
+        password_file=auth.get("password_file") or None,
+        sudo_password_file=auth.get("sudo_password_file", False),
+        cfg=cfg,
     )
 
 

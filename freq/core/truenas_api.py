@@ -1,10 +1,10 @@
 """TrueNAS API-key helpers.
 
-TrueNAS is not treated like a generic Linux host here. In DC01 ground
-truth, the FREQ service account is intentionally not present on TrueNAS,
-and TrueNAS sshd may restrict allowed users. Read-only dashboard data
-therefore uses the TrueNAS API key path when configured, while SSH remains
-an explicit diagnostic/fallback path elsewhere.
+TrueNAS is not treated like a generic Linux host here. Read-only
+dashboard storage data uses the TrueNAS API key path when configured.
+SSH is still a first-class requirement for the core TrueNAS device
+because terminals and midclt-backed actions need a service account that
+init can create and verify.
 """
 
 from __future__ import annotations

@@ -345,6 +345,36 @@ class TestHeadlessFleetDeployTruth(unittest.TestCase):
         self.assertEqual(dispatch_args[4], "")
         self.assertEqual(dispatch_args[5], "root")
 
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_core_truenas_api_only_credentials_do_not_fallback_to_bootstrap(self, mock_fmt, mock_run, mock_dispatch):
+        from freq.modules.init_cmd import _headless_fleet_deploy
+
+        cfg = types.SimpleNamespace(
+            pve_nodes=[],
+            pve_node_names=[],
+            hosts=[types.SimpleNamespace(ip="10.0.0.25", label="truenas", htype="truenas")],
+            ssh_service_account="freq-admin",
+        )
+        ctx = {"svc_name": "freq-admin", "svc_pass": "SvcPass2026!"}
+
+        _headless_fleet_deploy(
+            cfg,
+            ctx,
+            bootstrap_key="/home/freq-ops/.ssh/fleet_key",
+            bootstrap_user="freq-ops",
+            bootstrap_pass="",
+            device_creds={"truenas": {"api_key": "tn-secret", "api_key_only": True, "host": "10.0.0.25"}},
+            pve_only=False,
+        )
+
+        mock_run.assert_not_called()
+        mock_dispatch.assert_not_called()
+        fail_messages = " ".join(str(c.args[0]) for c in mock_fmt.step_fail.call_args_list)
+        self.assertIn("Core TrueNAS has API credentials only", fail_messages)
+        self.assertIn("ssh_key_file", fail_messages)
+
 
 # ═══════════════════════════════════════════════════════════════════
 # _load_device_credentials() tests
@@ -1677,8 +1707,9 @@ class TestPhaseDiscoverScopedHosts(unittest.TestCase):
         self.assertIn("switch", by_label)
         self.assertIn("bmc-10", by_label)
         self.assertIn("bmc-11", by_label)
+        self.assertIn("truenas", by_label)
+        self.assertTrue(by_label["truenas"].managed)
         self.assertNotIn("firewall", by_label)
-        self.assertNotIn("truenas", by_label)
         self.assertNotIn("truenas-lab", by_label)
         self.assertEqual(cfg.pfsense_ip, "10.25.255.1")
         self.assertEqual(cfg.switch_ip, "10.25.255.5")

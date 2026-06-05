@@ -22,6 +22,7 @@ Design decisions:
 """
 
 import os
+import contextlib
 import shutil
 import ssl
 import subprocess
@@ -37,6 +38,31 @@ from freq.core.ssh import run as ssh_run
 # Doctor check timeouts
 DOCTOR_CMD_TIMEOUT = 5
 DOCTOR_PVE_TIMEOUT = 10
+DOCTOR_FLEET_LOCK_TIMEOUT = 45
+
+
+@contextlib.contextmanager
+def _doctor_fleet_lock(cfg: FreqConfig):
+    """Serialize fleet SSH doctor probes across API and CLI processes."""
+    import fcntl
+
+    lock_dir = os.path.join(getattr(cfg, "data_dir", "") or "/tmp", "cache")
+    os.makedirs(lock_dir, exist_ok=True)
+    path = os.path.join(lock_dir, "doctor-fleet-connectivity.lock")
+    with open(path, "w") as f:
+        started = time.monotonic()
+        while True:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() - started > DOCTOR_FLEET_LOCK_TIMEOUT:
+                    raise TimeoutError("Timed out waiting for fleet SSH doctor lock")
+                time.sleep(0.25)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def run(cfg: FreqConfig, json_output: bool = False) -> int:
@@ -620,6 +646,18 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     def _test(h):
         cmd = VERIFY_CMDS.get(h.htype, "echo ok")
         key = cfg.ssh_key_path
+        user = cfg.ssh_service_account
+        local_user = None
+        password_file = None
+        sudo_password_file = False
+        if h.htype in ("pfsense", "idrac", "switch", "truenas"):
+            from freq.core.device_credentials import resolve_staged_device_ssh_auth
+            auth = resolve_staged_device_ssh_auth(cfg, h.htype)
+            key = auth.get("key_path") or key
+            user = auth.get("user") or user
+            local_user = auth.get("local_user") or None
+            password_file = auth.get("password_file") or None
+            sudo_password_file = auth.get("sudo_password_file", False)
         is_legacy = h.htype in ("idrac", "switch")
         if is_legacy:
             key = getattr(cfg, "ssh_rsa_key_path", None) or cfg.ssh_key_path
@@ -629,12 +667,17 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
         r = ssh_run(
             host=h.ip,
             command=cmd,
+            user=user,
             key_path=key,
             connect_timeout=ct,
             command_timeout=ct_cmd,
             htype=h.htype,
             use_sudo=False,
+            local_user=local_user,
+            password_file=password_file,
+            sudo_password_file=sudo_password_file,
             cfg=cfg,
+            failure_log_level="warn",
         )
         if r.returncode == 0:
             return h, STATE_LIVE, "ssh probe OK", False
@@ -648,37 +691,44 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
         # operator doesn't have the service account's RSA key. Flag it
         # so the summary line can surface it as n/a without lying.
         raw_joined = f"{raw_stderr}\n{raw_stdout}".lower()
+        legacy_session_busy = is_legacy and "no more sessions are available" in raw_joined
         operator_auth = is_legacy and (
             "permission denied" in raw_joined
             or "publickey" in raw_joined
             or state == STATE_AUTH_FAILED
+            or legacy_session_busy
         )
         return h, state, reason, operator_auth
 
-    reachable = 0
-    unreachable = []
-    auth_failed_hosts = []
-    degraded_hosts = []
-    na = 0
-    total = len(hosts)
-    # Stash worst-case reason for each non-live class so the step_*
-    # output can name the failure instead of just counting it.
-    worst_reason_by_state: dict[str, tuple[str, str]] = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
-        for h, state, reason, operator_auth in pool.map(lambda h: _test(h), hosts):
-            if state == STATE_LIVE:
-                reachable += 1
-                continue
-            if operator_auth:
-                na += 1  # Don't count as down — operator context mismatch
-                continue
-            worst_reason_by_state.setdefault(state, (h.label, reason))
-            if state == STATE_AUTH_FAILED:
-                auth_failed_hosts.append(h.label)
-            elif state == STATE_DEGRADED:
-                degraded_hosts.append(h.label)
-            else:
-                unreachable.append(h.label)
+    try:
+        with _doctor_fleet_lock(cfg):
+            reachable = 0
+            unreachable = []
+            auth_failed_hosts = []
+            degraded_hosts = []
+            na = 0
+            total = len(hosts)
+            # Stash worst-case reason for each non-live class so the step_*
+            # output can name the failure instead of just counting it.
+            worst_reason_by_state: dict[str, tuple[str, str]] = {}
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+                for h, state, reason, operator_auth in pool.map(lambda h: _test(h), hosts):
+                    if state == STATE_LIVE:
+                        reachable += 1
+                        continue
+                    if operator_auth:
+                        na += 1  # Don't count as down — operator context mismatch
+                        continue
+                    worst_reason_by_state.setdefault(state, (h.label, reason))
+                    if state == STATE_AUTH_FAILED:
+                        auth_failed_hosts.append(h.label)
+                    elif state == STATE_DEGRADED:
+                        degraded_hosts.append(h.label)
+                    else:
+                        unreachable.append(h.label)
+    except TimeoutError as e:
+        fmt.step_warn(f"Fleet SSH: skipped — {e}")
+        return 2
 
     total_checkable = total - na
     total_bad = len(auth_failed_hosts) + len(unreachable) + len(degraded_hosts)
@@ -686,7 +736,7 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     if reachable == total_checkable and total_checkable > 0:
         unmanaged_suffix = f"; {unmanaged_count} unmanaged inventory-only" if unmanaged_count else ""
         if na:
-            fmt.step_ok(f"Fleet SSH: {reachable}/{total_checkable} live ({na} n/a — need svc account{unmanaged_suffix})")
+            fmt.step_ok(f"Fleet SSH: {reachable}/{total_checkable} live ({na} n/a — credential/session context{unmanaged_suffix})")
         else:
             fmt.step_ok(f"Fleet SSH: {reachable}/{total} hosts live{unmanaged_suffix}")
         return 0
@@ -902,8 +952,6 @@ def _check_hosts(cfg: FreqConfig) -> int:
             if getattr(dev, "scope", "core") == "lab":
                 continue
             dev_type = getattr(dev, "device_type", "")
-            if dev_type == "truenas":
-                continue
             if dev_type in {"pfsense", "opnsense"} and getattr(dev, "tier", "probe") == "probe":
                 continue
             h = unmanaged_by_ip.get(dev.ip)

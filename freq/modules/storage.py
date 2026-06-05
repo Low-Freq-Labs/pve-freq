@@ -21,6 +21,7 @@ import os
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
+from freq.core.device_credentials import resolve_staged_device_ssh_auth
 from freq.core.ssh import run as ssh_run
 from freq.core import log as logger
 
@@ -34,14 +35,20 @@ TRUENAS_TIMEOUT = 30
 
 def _nas_ssh(ip, cmd, cfg, timeout=TRUENAS_TIMEOUT):
     """Run a command on TrueNAS via SSH."""
+    auth = resolve_staged_device_ssh_auth(cfg, "truenas")
     r = ssh_run(
         host=ip,
         command=cmd,
-        key_path=cfg.ssh_key_path,
+        user=auth["user"],
+        key_path=auth["key_path"],
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
         htype="truenas",
         use_sudo=True,
+        local_user=auth.get("local_user") or None,
+        password_file=auth.get("password_file") or None,
+        sudo_password_file=auth.get("sudo_password_file", False),
+        cfg=cfg,
     )
     return r.stdout or "", r.returncode == 0
 

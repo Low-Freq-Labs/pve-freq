@@ -121,7 +121,7 @@ if result.returncode != 0:
 
 print("ACCOUNT_OK")
 PY
-    test "$(midclt call user.query "[[\\"username\\",\\"=\\",\\"{svc_name}\\"]]" | python3 -c 'import json,sys; data=json.load(sys.stdin); print("1" if data else "")')" = "1" || { echo ACCOUNT_MISSING; exit 1; }
+    test "$(midclt call user.query "[[\\"username\\",\\"=\\",\\"%(svc_name)s\\"]]" | python3 -c 'import json,sys; data=json.load(sys.stdin); print("1" if data else "")')" = "1" || { echo ACCOUNT_MISSING; exit 1; }
 elif [ "$VARIANT" = "core" ]; then
     if ! id '%(svc_name)s' >/dev/null 2>&1; then
         pw useradd '%(svc_name)s' -m -s /bin/sh -c "FREQ Service Account" || { echo USERADD_FAIL; exit 1; }
@@ -176,6 +176,8 @@ echo DEPLOY_OK
     rc, out, err = _ssh(deploy_script % {"svc_name": svc_name, "pass_b64": pass_b64, "pubkey_b64": pubkey_b64, "pubkey": pubkey}, as_root=True)
     if "USERADD_FAIL" in out or "ACCOUNT_MISSING" in out:
         fmt.step_fail(f"Failed to create account '{svc_name}'")
+        if err.strip():
+            fmt.step_warn(err.strip()[:160])
         return False
     elif MARKER_DEPLOY_OK not in out:
         fmt.step_fail(f"Deploy script failed ({(err or out)[:80]})")

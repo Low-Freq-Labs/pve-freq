@@ -228,6 +228,123 @@ ssh_key_file = "{key_path}"
         self.assertEqual(auth["key_path"], key_path)
         self.assertEqual(auth["local_user"], "freq-ops")
 
+    def test_staged_runtime_resolver_preserves_root_owned_password_file(self):
+        from freq.core import device_credentials
+
+        password_path = os.path.join(self.tmpdir, "truenas-password")
+        with open(password_path, "w") as f:
+            f.write("secret\n")
+        os.chmod(password_path, 0)
+        with open(self.creds_path, "w") as f:
+            f.write(f"""
+[truenas]
+user = "dc01-admin"
+password_file = "{password_path}"
+""")
+        old = device_credentials.DEVICE_CREDENTIAL_CANDIDATES
+        device_credentials.DEVICE_CREDENTIAL_CANDIDATES = (self.creds_path,)
+        try:
+            auth = device_credentials.resolve_staged_device_ssh_auth(self._cfg(), "truenas")
+        finally:
+            device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old
+            os.chmod(password_path, 0o600)
+
+        self.assertEqual(auth["user"], "dc01-admin")
+        self.assertEqual(auth["password_file"], password_path)
+        self.assertEqual(auth["key_path"], "")
+        self.assertTrue(auth["sudo_password_file"])
+
+    def test_truenas_staged_runtime_resolver_uses_service_account_when_truenas_is_api_only(self):
+        from freq.core import device_credentials
+
+        password_path = os.path.join(self.tmpdir, "dc01-admin-password")
+        with open(password_path, "w") as f:
+            f.write("secret\n")
+        with open(self.creds_path, "w") as f:
+            f.write(f"""
+[truenas]
+api_key_file = "/opt/pve-freq/data/secrets/truenas-prod.key"
+url = "https://10.25.255.25/api/v2.0"
+
+[service_account]
+username = "dc01-admin"
+password_file = "{password_path}"
+""")
+        old = device_credentials.DEVICE_CREDENTIAL_CANDIDATES
+        device_credentials.DEVICE_CREDENTIAL_CANDIDATES = (self.creds_path,)
+        try:
+            auth = device_credentials.resolve_staged_device_ssh_auth(self._cfg(), "truenas")
+        finally:
+            device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old
+
+        self.assertEqual(auth["user"], "dc01-admin")
+        self.assertEqual(auth["password_file"], password_path)
+        self.assertEqual(auth["source"], "device-credentials")
+
+    def test_truenas_staged_runtime_resolver_prefers_service_account_over_bootstrap_key(self):
+        from freq.core import device_credentials
+
+        password_path = os.path.join(self.tmpdir, "dc01-admin-password")
+        with open(password_path, "w") as f:
+            f.write("secret\n")
+        with open(self.creds_path, "w") as f:
+            f.write(f"""
+[truenas]
+host = "10.25.255.25"
+username = "freq-ops"
+ssh_key_file = "{self.key_path}"
+api_key_file = "/opt/pve-freq/data/secrets/truenas-prod.key"
+
+[service_account]
+username = "dc01-admin"
+password_file = "{password_path}"
+""")
+        old = device_credentials.DEVICE_CREDENTIAL_CANDIDATES
+        device_credentials.DEVICE_CREDENTIAL_CANDIDATES = (self.creds_path,)
+        try:
+            auth = device_credentials.resolve_staged_device_ssh_auth(self._cfg(), "truenas")
+        finally:
+            device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old
+
+        self.assertEqual(auth["user"], "dc01-admin")
+        self.assertEqual(auth["password_file"], password_path)
+        self.assertEqual(auth["key_path"], "")
+
+    def test_truenas_staged_runtime_resolver_prefers_service_account_key_when_present(self):
+        from freq.core import device_credentials
+
+        managed_key = os.path.join(self.tmpdir, "managed_key")
+        with open(managed_key, "w") as f:
+            f.write("not-a-real-key\n")
+        os.chmod(managed_key, 0o600)
+        password_path = os.path.join(self.tmpdir, "dc01-admin-password")
+        with open(password_path, "w") as f:
+            f.write("secret\n")
+        with open(self.creds_path, "w") as f:
+            f.write(f"""
+[truenas]
+host = "10.25.255.25"
+username = "freq-ops"
+ssh_key_file = "{self.key_path}"
+api_key_file = "/opt/pve-freq/data/secrets/truenas-prod.key"
+
+[service_account]
+username = "dc01-admin"
+password_file = "{password_path}"
+""")
+        cfg = self._cfg()
+        cfg.ssh_key_path = managed_key
+        old = device_credentials.DEVICE_CREDENTIAL_CANDIDATES
+        device_credentials.DEVICE_CREDENTIAL_CANDIDATES = (self.creds_path,)
+        try:
+            auth = device_credentials.resolve_staged_device_ssh_auth(cfg, "truenas")
+        finally:
+            device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old
+
+        self.assertEqual(auth["user"], "dc01-admin")
+        self.assertEqual(auth["key_path"], managed_key)
+        self.assertEqual(auth["password_file"], "")
+
     def test_runtime_resolver_falls_back_to_managed_account(self):
         from freq.core import device_credentials
 
@@ -245,6 +362,8 @@ ssh_key_file = "{key_path}"
         fw_src = (FREQ_ROOT / "freq" / "api" / "fw.py").read_text()
         serve_src = (FREQ_ROOT / "freq" / "modules" / "serve.py").read_text()
         ssh_src = (FREQ_ROOT / "freq" / "core" / "ssh.py").read_text()
+        doctor_src = (FREQ_ROOT / "freq" / "core" / "doctor.py").read_text()
+        terminal_src = (FREQ_ROOT / "freq" / "api" / "terminal.py").read_text()
 
         self.assertIn("resolve_device_ssh_auth(cfg, \"pfsense\")", fw_src)
         self.assertIn("user=auth[\"user\"]", fw_src)
@@ -255,6 +374,57 @@ ssh_key_file = "{key_path}"
         self.assertIn("key_path=pf_auth[\"key_path\"]", serve_src)
         self.assertIn("local_user=pf_auth.get(\"local_user\")", serve_src)
         self.assertIn("[\"sudo\", \"-n\", \"-u\", local_user]", ssh_src)
+        self.assertIn("resolve_staged_device_ssh_auth(cfg, h.htype)", doctor_src)
+        self.assertIn('if h.htype in ("pfsense", "idrac", "switch", "truenas")', doctor_src)
+        self.assertIn('sudo_password_file = auth.get("sudo_password_file", False)', doctor_src)
+        self.assertIn("password_file=password_file", doctor_src)
+        self.assertIn("sudo_password_file=sudo_password_file", doctor_src)
+        self.assertIn("local_user=local_user", doctor_src)
+        self.assertNotIn("resolve_device_ssh_auth(cfg, h.htype)", doctor_src)
+        self.assertIn("def _terminal_ssh_auth", terminal_src)
+        self.assertIn("_build_ssh_cmd(", terminal_src)
+        self.assertIn("password_file=password_file", terminal_src)
+        self.assertIn("sudo_password_file=sudo_password_file", terminal_src)
+        self.assertIn("extra_opts=[\"-tt\"]", terminal_src)
+        self.assertNotIn("sshpass_prefix", terminal_src)
+
+
+class TestInitStagesServiceAccountCredentials(unittest.TestCase):
+    """Init must write runtime service-account metadata, not rely on manual staging."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="freq-test-init-stage-creds-")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_service_account_metadata_preserves_existing_truenas_section(self):
+        from freq.modules.init_cmd import _persist_service_account_credentials_metadata
+
+        cred_dir = os.path.join(self.tmpdir, "credentials")
+        os.makedirs(cred_dir)
+        creds_path = os.path.join(cred_dir, "device-credentials.toml")
+        with open(creds_path, "w") as f:
+            f.write("""
+[truenas]
+host = "10.25.255.25"
+username = "freq-ops"
+ssh_key_file = "/home/freq-ops/.ssh/fleet_key"
+api_key_file = "/opt/pve-freq/data/secrets/truenas-prod.key"
+""")
+        cfg = SimpleNamespace(credentials_dir=cred_dir)
+
+        _persist_service_account_credentials_metadata(cfg, "dc01-admin", "SvcPass2026!")
+
+        text = Path(creds_path).read_text()
+        self.assertIn("[truenas]", text)
+        self.assertIn('username = "freq-ops"', text)
+        self.assertIn('api_key_file = "/opt/pve-freq/data/secrets/truenas-prod.key"', text)
+        self.assertIn("[service_account]", text)
+        self.assertIn('username = "dc01-admin"', text)
+        self.assertIn(f'password_file = "{cred_dir}/dc01-admin-password"', text)
+        self.assertEqual(Path(cred_dir, "dc01-admin-password").read_text(), "SvcPass2026!")
 
 
 if __name__ == "__main__":

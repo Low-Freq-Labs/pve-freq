@@ -18,6 +18,9 @@ If the user does not choose another name, `cfg.ssh_service_account` defaults to 
 4. The runtime PVE API identity is `cfg.ssh_service_account@pam!freq-rw`.
 By default this resolves to `freq-admin@pam!freq-rw`. The legacy `freq-ops@pam!freq-rw` token is an infrastructure-only construct and must not be presented as the FREQ runtime PVE API identity.
 
+5. TrueNAS has a two-phase identity contract.
+`[truenas]` device credentials may contain SSH-capable bootstrap material, such as `freq-ops` plus a fleet key, so init can reach TrueNAS and create the deployed service account. After init, TrueNAS terminal, syslog, doctor, storage actions, and verification must resolve to `cfg.ssh_service_account` and its FREQ SSH key/password metadata. A TrueNAS API key alone is valid for read-only storage metrics, but it is not deployment auth and must not make init look complete.
+
 ## Init Lifecycle Checkpoints
 
 These checkpoints are release-gate rules and must be verified.
@@ -34,11 +37,13 @@ These checkpoints are release-gate rules and must be verified.
 - Phase 3 creates the deployed service account named by `cfg.ssh_service_account`.
 - If the user does nothing, that deployed account name is `freq-admin`.
 - Every deployment/verification step must use the configured service account, not a hardcoded account name.
+- Core TrueNAS deployment must use an SSH-capable bootstrap credential and the TrueNAS deployer. It must not be routed through a generic Linux deploy path or allowed to pass with API-key-only credentials.
 - **Phase 3 must reject `cfg.ssh_service_account == "freq-ops"` (or any other RESERVED_SERVICE_ACCOUNT_NAMES value) with an explicit contract error before invoking `useradd`, `chpasswd`, or `_setup_sudoers`.** The rejection happens both at config-load time (config.py overrides to default with a stderr warning) and at the Phase 3 interactive prompt (`_phase_service_account` returns 1 with `fmt.step_fail`).
 
 ### After `freq init`
 
 - Fleet SSH and runtime verification use `cfg.ssh_service_account`.
+- TrueNAS runtime SSH uses the deployed service account, even if `[truenas]` still carries bootstrap `freq-ops` SSH material and API-key metadata.
 - Dashboard login remains a human/operator identity concern, not a service-account concern.
 - PVE API token creation uses `cfg.ssh_service_account@pam!freq-rw` (default `freq-admin@pam!freq-rw`).
 - The `freq-ops` account on the install host is unchanged from its pre-init state. Its password, sudoers entry, SSH keys, home directory ownership, and PVE @pam record (if any) are exactly as the operator left them before running `freq init`.
@@ -51,6 +56,8 @@ The following are contract violations:
 - treating `freq-admin` as a fixed sacred identity instead of a default
 - hardcoding `freq-admin` in runtime deployment paths when `cfg.ssh_service_account` is available
 - using `freq-ops` where the deployed service account should be used
+- letting core TrueNAS pass init with API-key-only credentials
+- using bootstrap TrueNAS credentials for post-init runtime terminal/syslog/doctor actions when the deployed service account metadata exists
 - presenting `freq-ops@pam!freq-rw` as the runtime PVE API identity (it is now Jarvis-only infra; runtime is `cfg.ssh_service_account@pam!freq-rw`)
 - any `freq init` code path that creates, modifies, chowns, chmods, sudoers-writes, ssh-key-manages, or otherwise touches the local `freq-ops` user, its home directory, or its credentials
 - any `freq init` code path that creates the `freq-ops@pam` user on a PVE cluster as part of the runtime contract (legacy migration: pre-existing `freq-ops@pam` users from older installs are left untouched and the operator may delete them manually via `pveum user delete freq-ops@pam` once the new identity is verified)

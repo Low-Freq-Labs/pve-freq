@@ -46,9 +46,17 @@ def test_terminal_api_supports_direct_host_targets_and_device_credentials():
 
     assert "host: SSH directly to a host/device IP" in source
     assert 'term_type = params.get("type", ["vm"])[0]  # vm, host, ct, node' in source
-    assert "resolve_device_ssh_auth(cfg, htype)" in source
-    assert "local_prefix = f\"sudo -n -u" in source
+    assert "def _terminal_ssh_auth" in source
+    assert 'resolve_device_ssh_auth(cfg, "pfsense")' in source
+    assert "from freq.core.ssh import _build_ssh_cmd" in source
+    assert "cmd = shlex.join(" in source
+    assert "password_file=password_file" in source
+    assert "sudo_password_file=sudo_password_file" in source
+    assert "extra_opts=[\"-tt\"]" in source
+    assert "local_user=local_user" in source
+    assert 'htype in ("idrac", "switch", "truenas")' in source
     assert 'if term_type == "vm" and target.isdigit()' in source
+    assert "def _terminal_preflight" in source
 
 
 def test_infra_detail_cards_have_single_output_target():
@@ -100,6 +108,14 @@ def test_terminal_vm_resolution_uses_live_pve_inventory_not_host_discover():
     assert "pve_api" in source
     assert "The VM is visible in PVE" in source
     assert "Run 'freq host discover' to populate hosts.toml with VMIDs" not in source
+
+
+def test_terminal_truenas_ssh_auth_failure_is_explicit_not_blank_session():
+    source = (REPO_ROOT / "freq" / "api" / "terminal.py").read_text()
+
+    assert "TrueNAS SSH credentials were rejected" in source
+    assert "stage working SSH credentials to open an interactive shell" in source
+    assert "json_response(handler, {\"error\": preflight_error}, 400)" in source
 
 
 def test_terminal_guest_agent_ipv4_parser_accepts_raw_and_wrapped_json():

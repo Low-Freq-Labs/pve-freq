@@ -380,6 +380,34 @@ class TestSSHResultEdgeCases(unittest.TestCase):
         # The command should be wrapped in sudo sh -c '...'
         self.assertIn("sudo sh -c", cmd_str)
 
+    def test_build_ssh_cmd_can_sudo_root_only_password_file(self):
+        """Root-owned staged device secrets can be consumed via sudo sshpass."""
+        import tempfile
+        from freq.core.ssh import _build_ssh_cmd
+
+        cmd = _build_ssh_cmd(
+            host="10.0.0.1",
+            command="show version",
+            htype="switch",
+            use_sudo=False,
+            user="freq-ops",
+            password_file="/tmp/no-such-secret",
+            sudo_password_file=True,
+        )
+        self.assertNotIn("sudo", cmd)
+
+        with tempfile.NamedTemporaryFile() as f:
+            cmd = _build_ssh_cmd(
+                host="10.0.0.1",
+                command="show version",
+                htype="switch",
+                use_sudo=False,
+                user="freq-ops",
+                password_file=f.name,
+                sudo_password_file=True,
+            )
+        self.assertEqual(cmd[:4], ["sudo", "-n", "sshpass", "-f"])
+
 
 # ---------------------------------------------------------------------------
 # 6. FleetBoundaries edge cases
