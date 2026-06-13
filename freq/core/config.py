@@ -96,7 +96,7 @@ _DEFAULTS = {
     "timezone": "UTC",
     "dashboard_port": 8888,
     "watchdog_port": 9900,
-    "watchdog_enabled": False,  # Watchdog is an optional add-on, not installed by default
+    "watchdog_enabled": True,
     "agent_port": 9990,
 }
 
@@ -117,6 +117,7 @@ class FreqConfig:
     data_dir: str = ""
     log_file: str = ""
     conf_dir: str = ""
+    credentials_dir: str = ""
     hosts_file: str = ""
     vault_dir: str = ""
     vault_file: str = ""
@@ -274,6 +275,7 @@ def _resolve_paths(cfg: FreqConfig) -> None:
     """Resolve all paths relative to install_dir."""
     base = Path(cfg.install_dir)
     cfg.conf_dir = str(base / "conf")
+    cfg.credentials_dir = "/etc/freq/credentials"
     cfg.data_dir = str(base / "data")
     cfg.log_file = str(base / "data" / "log" / "freq.log")
     cfg.hosts_file = str(base / "conf" / "hosts.toml")
@@ -622,6 +624,26 @@ def _safe_int(value, default):
         return default
 
 
+def _safe_bool(value, default):
+    """Coerce TOML/user values to bool without treating 'false' as True."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"1", "true", "yes", "on"}:
+            return True
+        if text in {"0", "false", "no", "off"}:
+            return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    from freq.core import log as logger
+
+    logger.warn(f"config: expected bool, got {type(value).__name__}: {value!r}, using default {default}")
+    return default
+
+
 def _safe_storage_entry(node: str, info) -> dict:
     """Normalize a [pve.storage] entry without crashing on malformed data."""
     if isinstance(info, dict):
@@ -755,7 +777,7 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     services = data.get("services", {})
     cfg.dashboard_port = _safe_int(services.get("dashboard_port"), cfg.dashboard_port)
     cfg.watchdog_port = _safe_int(services.get("watchdog_port"), cfg.watchdog_port)
-    cfg.watchdog_enabled = bool(services.get("watchdog_enabled", cfg.watchdog_enabled))
+    cfg.watchdog_enabled = _safe_bool(services.get("watchdog_enabled"), cfg.watchdog_enabled)
     cfg.agent_port = _safe_int(services.get("agent_port"), cfg.agent_port)
     cfg.tls_cert = services.get("tls_cert", cfg.tls_cert)
     cfg.tls_key = services.get("tls_key", cfg.tls_key)

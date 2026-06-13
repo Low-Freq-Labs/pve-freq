@@ -76,6 +76,25 @@ class TestInfraProbeMethodField(unittest.TestCase):
         self.assertIn('key_path=pfsense_auth["key_path"]', block)
         self.assertNotIn("user=svc_user", block)
 
+    def test_background_health_probe_uses_staged_device_credentials(self):
+        """Main health loop must not fall back to service-account auth for devices."""
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        block = src.split("def _bg_probe_health", 1)[1].split("\ndef _bg_loop", 1)[0]
+        self.assertIn("resolve_staged_device_ssh_auth(cfg, htype)", block)
+        self.assertIn('if htype in ("pfsense", "idrac", "switch", "truenas")', block)
+        self.assertIn("user=probe_user", block)
+        self.assertIn("local_user=probe_local_user", block)
+        self.assertIn("password_file=probe_password_file", block)
+
+    def test_fleet_connectivity_uses_health_cache_and_staged_device_auth(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        block = src.split("def _serve_fleet_connectivity", 1)[1].split("\n    def _serve_host_diagnostic", 1)[0]
+        self.assertIn('source": "health_cache"', block)
+        self.assertIn("resolve_staged_device_ssh_auth(cfg, htype)", block)
+        self.assertIn("local_user=local_user", block)
+
 
 class TestInfraAuthFailureKeepsNetworkTruth(unittest.TestCase):
     """SSH auth failure must not erase network reachability."""

@@ -250,23 +250,10 @@ def cmd_idrac(cfg: FreqConfig, pack, args) -> int:
 
 
 def cmd_watch(cfg: FreqConfig, pack, args) -> int:
-    """Monitoring daemon — periodic fleet health checks."""
-    fmt.header("Watch")
-    fmt.blank()
-    fmt.line(f"{fmt.C.BOLD}Fleet monitoring — Ctrl+C to stop{fmt.C.RESET}")
-    fmt.blank()
+    """Compatibility wrapper for the local watchdog daemon."""
+    from freq.modules.watchdog import cmd_watch as _cmd_watch
 
-    from freq.modules.fleet import cmd_status
-
-    interval = 30  # seconds
-    try:
-        while True:
-            cmd_status(cfg, pack, args)
-            print(f"\n  {fmt.C.DIM}Next check in {interval}s... (Ctrl+C to stop){fmt.C.RESET}")
-            time.sleep(interval)
-    except KeyboardInterrupt:
-        print(f"\n  {fmt.C.YELLOW}Watch stopped.{fmt.C.RESET}")
-        return 0
+    return _cmd_watch(cfg, pack, args)
 
 
 # --- Rescue ---

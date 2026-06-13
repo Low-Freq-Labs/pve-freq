@@ -179,8 +179,16 @@ def handle_capacity_snapshot(handler):
     from freq.jarvis.capacity import save_snapshot
 
     cfg = load_config()
-    with _bg_lock:
-        health = _bg_cache.get("health")
+    health = None
+    lock_acquired = _bg_lock.acquire(blocking=False)
+    if lock_acquired:
+        try:
+            health = _bg_cache.get("health")
+        finally:
+            _bg_lock.release()
+    else:
+        json_response(handler, {"error": "Health cache busy; retry shortly"}, 503)
+        return
     if not health:
         json_response(handler, {"error": "No health data available yet"}, 503)
         return
@@ -280,12 +288,31 @@ def handle_metrics_prometheus(handler):
         "# TYPE freq_uptime_seconds gauge",
         f"freq_uptime_seconds {uptime}",
     ]
-    with _bg_lock:
-        health = _bg_cache.get("health")
+    health = None
+    lock_acquired = _bg_lock.acquire(blocking=False)
+    if lock_acquired:
+        try:
+            health = _bg_cache.get("health")
+        finally:
+            _bg_lock.release()
+    else:
+        lines.extend(
+            [
+                "# HELP freq_health_cache_locked Health cache lock was busy during scrape",
+                "# TYPE freq_health_cache_locked gauge",
+                "freq_health_cache_locked 1",
+            ]
+        )
     if health and "hosts" in health:
         hosts = health["hosts"]
         total = len(hosts)
-        healthy = sum(1 for h in hosts if h.get("reachable"))
+        healthy = sum(
+            1
+            for h in hosts
+            if h.get("reachable") is True
+            or str(h.get("state", "")).lower() == "live"
+            or str(h.get("status", "")).lower() in {"healthy", "ok", "reachable", "up"}
+        )
         unreachable = total - healthy
         total_vms = sum(h.get("vm_count", 0) for h in hosts if isinstance(h.get("vm_count"), int))
         lines.extend(
@@ -305,11 +332,13 @@ def handle_metrics_prometheus(handler):
             ]
         )
     body = "\n".join(lines) + "\n"
+    body_bytes = body.encode()
     handler.send_response(200)
     handler.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body_bytes)))
     handler.send_header("X-Content-Type-Options", "nosniff")
     handler.end_headers()
-    handler.wfile.write(body.encode())
+    handler.wfile.write(body_bytes)
 
 
 def handle_db_status(handler):

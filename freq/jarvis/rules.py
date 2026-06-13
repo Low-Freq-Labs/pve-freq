@@ -43,6 +43,9 @@ class Rule:
     severity: str = "warning"  # info, warning, critical
     cooldown: int = 300  # seconds between repeated alerts for same rule+host
     enabled: bool = True
+    exclude_types: tuple[str, ...] = ()
+    exclude_groups: tuple[str, ...] = ()
+    exclude_categories: tuple[str, ...] = ()
 
 
 @dataclass
@@ -86,6 +89,9 @@ def load_rules(conf_dir: str) -> list:
                 severity=cfg.get("severity", "warning"),
                 cooldown=int(cfg.get("cooldown", 300)),
                 enabled=cfg.get("enabled", True),
+                exclude_types=_as_tuple(cfg.get("exclude_types", ())),
+                exclude_groups=_as_tuple(cfg.get("exclude_groups", ())),
+                exclude_categories=_as_tuple(cfg.get("exclude_categories", ())),
             )
         )
 
@@ -107,6 +113,12 @@ def save_rules(conf_dir: str, rules: list) -> bool:
             lines.append(f'severity = "{r.severity}"')
             lines.append(f"cooldown = {r.cooldown}")
             lines.append(f"enabled = {'true' if r.enabled else 'false'}")
+            if r.exclude_types:
+                lines.append(f"exclude_types = {_toml_string_list(r.exclude_types)}")
+            if r.exclude_groups:
+                lines.append(f"exclude_groups = {_toml_string_list(r.exclude_groups)}")
+            if r.exclude_categories:
+                lines.append(f"exclude_categories = {_toml_string_list(r.exclude_categories)}")
             lines.append("")
         with open(path, "w") as f:
             f.write("\n".join(lines))
@@ -145,8 +157,28 @@ def _default_rules() -> list:
             duration=0,
             severity="warning",
             cooldown=3600,
+            exclude_types=("truenas",),
+            exclude_groups=("lab",),
+            exclude_categories=("lab",),
         ),
     ]
+
+
+def _as_tuple(value) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, (list, tuple, set)):
+        values = value
+    else:
+        values = [value]
+    return tuple(str(item).strip().lower() for item in values if str(item).strip())
+
+
+def _toml_string_list(values: tuple[str, ...]) -> str:
+    escaped = [str(v).replace("\\", "\\\\").replace('"', '\\"') for v in values]
+    return "[" + ", ".join(f'"{v}"' for v in escaped) + "]"
 
 
 # ── Rule State ──────────────────────────────────────────────────────────
@@ -215,8 +247,47 @@ def _matches_target(host_label: str, target: str) -> bool:
     return host_label == target
 
 
+def _host_values(host: dict, keys: tuple[str, ...]) -> set[str]:
+    values = set()
+    for key in keys:
+        raw = host.get(key)
+        if raw is None:
+            continue
+        if isinstance(raw, (list, tuple, set)):
+            items = raw
+        else:
+            items = str(raw).replace(";", ",").split(",")
+        for item in items:
+            text = str(item).strip().lower()
+            if text:
+                values.add(text)
+    return values
+
+
+def _rule_excludes_host(rule: Rule, host: dict) -> bool:
+    if rule.exclude_types:
+        host_types = _host_values(host, ("type", "kind", "platform"))
+        if host_types.intersection(rule.exclude_types):
+            return True
+
+    if rule.exclude_groups:
+        host_groups = _host_values(host, ("groups", "group", "tags", "scope"))
+        if host_groups.intersection(rule.exclude_groups):
+            return True
+
+    if rule.exclude_categories:
+        host_categories = _host_values(host, ("category", "categories", "scope", "tier"))
+        if host_categories.intersection(rule.exclude_categories):
+            return True
+
+    return False
+
+
 def _parse_ram_percent(ram_str: str) -> Optional[float]:
     """Parse RAM string like '1234/8192MB' into percent used."""
+    if ram_str is None:
+        return None
+    ram_str = str(ram_str)
     m = re.match(r"(\d+)/(\d+)", ram_str)
     if m:
         used, total = int(m.group(1)), int(m.group(2))
@@ -227,6 +298,9 @@ def _parse_ram_percent(ram_str: str) -> Optional[float]:
 
 def _parse_disk_percent(disk_str: str) -> Optional[float]:
     """Parse disk string like '45%' into float."""
+    if disk_str is None:
+        return None
+    disk_str = str(disk_str)
     m = re.match(r"(\d+)%", disk_str)
     if m:
         return float(m.group(1))
@@ -302,6 +376,9 @@ def evaluate_rules(health_data: dict, rules: list, state: dict) -> list:
 
 def _check_condition(rule: Rule, host: dict) -> bool:
     """Check if a single rule condition is met for a host."""
+    if _rule_excludes_host(rule, host):
+        return False
+
     status = host.get("status", "")
     cond = rule.condition
 
@@ -378,6 +455,9 @@ def rules_to_dicts(rules: list) -> list:
             "severity": r.severity,
             "cooldown": r.cooldown,
             "enabled": r.enabled,
+            "exclude_types": list(r.exclude_types),
+            "exclude_groups": list(r.exclude_groups),
+            "exclude_categories": list(r.exclude_categories),
         }
         for r in rules
     ]

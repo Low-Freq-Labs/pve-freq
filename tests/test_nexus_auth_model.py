@@ -1,19 +1,4 @@
-"""Tests for nonstandard host auth model — managed flag and classification.
-
-Bug: Discovery auto-registered nexus (TrueNAS) as type=linux. Fleet deploy
-couldn't deploy freq-admin to it. Fleet status permanently showed it as
-DOWN with permission denied, polluting health surfaces.
-
-Root cause: _classify_host_by_name("nexus") returned "linux" because
-"nexus" didn't match any TrueNAS patterns. No mechanism existed to mark
-discovered-but-not-deployed hosts as unmanaged.
-
-Fix:
-1. Added "nexus" to TrueNAS classification patterns
-2. Added managed=false field to Host model for hosts that were discovered
-   but not deployed to
-3. Fleet health probes and fleet status skip unmanaged hosts
-"""
+"""Tests for operator-host auth model and unmanaged inventory behavior."""
 import sys
 import unittest
 from pathlib import Path
@@ -24,19 +9,19 @@ FREQ_ROOT = Path(__file__).parent.parent
 
 
 class TestNexusClassification(unittest.TestCase):
-    """Nexus must be classified as TrueNAS, not linux."""
+    """Nexus must not be auto-classified as TrueNAS."""
 
-    def test_nexus_classified_as_truenas(self):
-        """_classify_host_by_name('nexus') must return 'truenas'."""
+    def test_nexus_not_classified_as_truenas(self):
+        """_classify_host_by_name('nexus') must not return 'truenas'."""
         from freq.modules.init_cmd import _classify_host_by_name
-        self.assertEqual(_classify_host_by_name("nexus"), "truenas")
+        self.assertEqual(_classify_host_by_name("nexus"), "linux")
 
-    def test_nexus_variants_classified(self):
-        """Nexus variations should classify as truenas."""
+    def test_nexus_variants_not_classified_as_truenas(self):
+        """Nexus variations should not classify as truenas."""
         from freq.modules.init_cmd import _classify_host_by_name
         for name in ["nexus", "Nexus", "NEXUS", "nexus-backup", "my-nexus"]:
-            self.assertEqual(_classify_host_by_name(name), "truenas",
-                             f"Expected truenas for '{name}'")
+            self.assertNotEqual(_classify_host_by_name(name), "truenas",
+                                f"Did not expect truenas for '{name}'")
 
     def test_nas_standalone_classified(self):
         """Standalone 'nas' or hyphen-delimited 'nas' should classify as truenas."""

@@ -74,6 +74,10 @@ class TestConfigDefaultsTruth(unittest.TestCase):
         self.assertEqual(self.defaults["watchdog_port"], 9900)
         self.assertIn("| `watchdog_port` | int | `9900`", self.doc)
 
+    def test_watchdog_enabled_default(self):
+        self.assertTrue(self.defaults["watchdog_enabled"])
+        self.assertIn("| `watchdog_enabled` | bool | `true`", self.doc)
+
     def test_agent_port_default(self):
         self.assertEqual(self.defaults["agent_port"], 9990)
         self.assertIn("| `agent_port` | int | `9990`", self.doc)

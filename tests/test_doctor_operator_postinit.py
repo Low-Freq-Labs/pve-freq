@@ -51,6 +51,50 @@ class TestServiceAccountSeverity(unittest.TestCase):
         src = self._handler_src()
         self.assertIn("verified", src)
 
+    def test_service_account_check_only_samples_unix_managed_hosts(self):
+        """Physical devices use device-specific probes, not Unix sudo checks."""
+        src = self._handler_src()
+        self.assertIn('service_account_htypes = {"linux", "pve", "docker", "truenas"}', src)
+        self.assertIn("h.htype in service_account_htypes", src)
+
+
+class TestDoctorFleetLockPermissions(unittest.TestCase):
+    def _src(self):
+        with open(os.path.join(REPO_ROOT, "freq/core/doctor.py")) as f:
+            return f.read()
+
+    def test_lock_file_does_not_require_write_access_to_existing_root_file(self):
+        src = self._src()
+        lock_block = src.split("def _doctor_fleet_lock")[1].split("\ndef ", 1)[0]
+        self.assertIn("os.open(path, os.O_RDWR | os.O_CREAT, 0o664)", lock_block)
+        self.assertIn("os.fchmod(fd, 0o664)", lock_block)
+        self.assertIn("except PermissionError", lock_block)
+        self.assertIn("os.open(path, os.O_RDONLY)", lock_block)
+
+
+class TestDoctorOperatorCredentialContext(unittest.TestCase):
+    def _src(self):
+        with open(os.path.join(REPO_ROOT, "freq/core/doctor.py")) as f:
+            return f.read()
+
+    def test_detects_operator_context_mismatch(self):
+        src = self._src()
+        self.assertIn("def _doctor_operator_context_mismatch", src)
+        self.assertIn("not os.access(key_dir, os.X_OK)", src)
+
+    def test_fleet_check_skips_wrong_operator_key_context(self):
+        src = self._src()
+        block = src.split("def _check_fleet_connectivity")[1].split("\ndef ", 1)[0]
+        self.assertIn("context_mismatch", block)
+        self.assertIn("Run `sudo freq doctor` or use /api/doctor", block)
+        self.assertIn("return 2", block)
+
+    def test_service_account_check_skips_wrong_operator_key_context(self):
+        src = self._src()
+        block = src.split("def _check_service_account")[1].split("\ndef ", 1)[0]
+        self.assertIn("context_mismatch", block)
+        self.assertIn("installed service SSH keys are not readable", block)
+
 
 if __name__ == "__main__":
     unittest.main()

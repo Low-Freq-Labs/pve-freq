@@ -124,6 +124,7 @@ minimal = [100]
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `dashboard_port` | int | `8888` | HTTP port for dashboard |
+| `watchdog_enabled` | bool | `true` | Enable local read-only watchdog truth auditor |
 | `watchdog_port` | int | `9900` | Watchdog service port |
 | `agent_port` | int | `9990` | Agent service port |
 

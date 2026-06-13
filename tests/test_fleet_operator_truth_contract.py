@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from freq.core.config import load_fleet_boundaries
 
@@ -48,12 +49,141 @@ class TestFleetPhysicalScope(unittest.TestCase):
     def test_dashboard_splits_lab_physical_from_core(self):
         src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
         self.assertIn("_isLabPhysical", src)
+        self.assertIn("_normalizeFleetPhysical", src)
         self.assertIn("corePhysicals", src)
         self.assertIn("labPhysicals", src)
         self.assertIn("infraLabels", src)
-        self.assertIn("var corePhysical=fo.physical?fo.physical.filter(function(p){return !_isLabPhysical(p);}):[];", src)
+        self.assertIn("var corePhysical=fo.core_physical||[];", src)
         self.assertIn("var tnDev=corePhysical.find(function(p){return p.type==='truenas'})||null;", src)
-        self.assertIn("(fo.physical||[]).filter(function(p){return !_isLabPhysical(p);}).forEach(function(p)", src)
+        self.assertIn("(fo.core_physical||[]).forEach(function(p)", src)
+
+    def test_fleet_overview_returns_core_physical_as_primary_physical(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        window = src.split("def _bg_probe_fleet_overview", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn('"physical": core_physical', window)
+        self.assertIn('"core_physical": core_physical', window)
+        self.assertIn('"lab_physical": lab_physical', window)
+        self.assertIn('"all_physical": physical', window)
+
+    def test_admin_ui_can_set_physical_scope(self):
+        src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+        self.assertIn("PHYSICAL INFRASTRUCTURE SCOPE", src)
+        self.assertIn("function updatePhysicalScope(device,scope)", src)
+        self.assertIn("action=update_physical_scope", src)
+
+    def test_fleet_overview_uses_operator_vm_contract_not_deployed_hosts(self):
+        from freq.modules import serve
+
+        owned_vmids = [100, 101, 102, 103, 104, 105, 999, 5000, 5001, 5002, 5003, 5005, 201, 202, 203, 204, 301]
+        out_of_contract = [400, 404, 802, 804, 900, 901, 902, 903]
+        cfg = SimpleNamespace(
+            hosts=[
+                SimpleNamespace(label="plex", htype="docker", managed=True, vmid=101),
+            ],
+            fleet_boundaries=SimpleNamespace(
+                categories={
+                    "production": {"tier": "operator", "vmids": [100, 101, 102, 103, 104, 105, 999, 201, 202, 203, 204, 301]},
+                    "lab": {"tier": "admin", "vmids": [5000, 5001, 5002, 5003, 5005]},
+                    "templates": {"tier": "probe", "vmids": list(range(9000, 9010))},
+                    "out_of_contract": {"tier": "probe", "vmids": out_of_contract},
+                },
+                categorize=lambda vmid: (
+                    "out_of_contract" if vmid in out_of_contract
+                    else "templates" if vmid >= 9000
+                    else "lab" if vmid >= 5000
+                    else "production",
+                    "probe" if vmid in out_of_contract or vmid >= 9000 else "operator",
+                ),
+                allowed_actions=lambda vmid: ["view"],
+                is_prod=lambda vmid: True,
+            ),
+        )
+        pve_vms = [
+            {"vmid": vmid, "name": f"vm-{vmid}", "node": "pve01", "status": "running", "type": "qemu"}
+            for vmid in owned_vmids + out_of_contract
+        ]
+        pve_vms.append({"vmid": 9000, "name": "debian-template", "node": "pve01", "status": "stopped", "type": "qemu"})
+
+        with patch.object(serve, "_get_discovered_node_ips", return_value=["10.25.255.26"]), \
+             patch("freq.modules.pve._pve_call", return_value=(pve_vms, True)), \
+             patch.object(serve, "get_vm_tags", return_value=[]):
+            result = serve._get_fleet_vms(cfg)
+
+        vmids = {v["vmid"] for v in result}
+        self.assertEqual(set(owned_vmids) | {9000}, vmids)
+        self.assertFalse(set(out_of_contract) & vmids)
+
+    def test_init_categorizes_explicit_contract_and_out_of_contract_vms(self):
+        from freq.modules import init_cmd
+
+        owned_vmids = {100, 101, 102, 103, 104, 105, 999, 5000, 5001, 5002, 5003, 5005, 201, 202, 203, 204, 301}
+        template_vmids = set(range(9000, 9010))
+        out_of_contract = {400, 404, 802, 804, 900, 901, 902, 903}
+        resources = []
+        for vmid in sorted(owned_vmids | out_of_contract):
+            tags = "dev" if 5000 <= vmid < 5100 else "prod"
+            resources.append({"vmid": vmid, "name": f"vm-{vmid}", "type": "qemu", "tags": tags})
+        resources.extend(
+            {"vmid": vmid, "name": f"template-{vmid}", "type": "qemu", "tags": ""}
+            for vmid in sorted(template_vmids)
+        )
+        cfg = SimpleNamespace(
+            pve_nodes=["10.25.255.26"],
+            _owned_vmids=owned_vmids,
+            _contract_template_vmids=template_vmids,
+        )
+
+        with patch.object(init_cmd, "_fetch_pve_resources", return_value=resources):
+            categories = init_cmd._categorize_vms(cfg)
+
+        modeled_owned = set(categories["production"]["vmids"]) | set(categories["lab"]["vmids"])
+        self.assertEqual(owned_vmids, modeled_owned)
+        self.assertEqual(template_vmids, set(categories["templates"]["vmids"]))
+        self.assertEqual(out_of_contract, set(categories["out_of_contract"]["vmids"]))
+        self.assertEqual("admin", categories["sandbox"]["tier"])
+        self.assertEqual(6000, categories["sandbox"]["range_start"])
+        self.assertEqual(6099, categories["sandbox"]["range_end"])
+        self.assertEqual([], categories["sandbox"]["vmids"])
+
+    def test_init_accepts_operator_vm_contract_toml(self):
+        from freq.modules import init_cmd
+
+        with tempfile.TemporaryDirectory(prefix="freq-vm-contract-") as tmp:
+            contract = Path(tmp) / "vm-contract.toml"
+            contract.write_text(
+                "\n".join(
+                    [
+                        "[fleet]",
+                        "owned_vmids = [100, 101, 102, 103, 104, 105, 999, 5000, 5001, 5002, 5003, 5005, 201, 202, 203, 204, 301]",
+                        'template_vmids = ["9000-9009"]',
+                        "acknowledged_out_of_contract_vmids = [400, 404, 802, 804, 900, 901, 902, 903]",
+                    ]
+                )
+            )
+            cfg = SimpleNamespace()
+            args = SimpleNamespace(
+                vm_contract=str(contract),
+                owned_vmids=None,
+                template_vmids=None,
+                acknowledged_out_of_contract_vmids=None,
+            )
+
+            init_cmd._apply_operator_vm_contract_args(cfg, args)
+
+        self.assertEqual(
+            {100, 101, 102, 103, 104, 105, 999, 5000, 5001, 5002, 5003, 5005, 201, 202, 203, 204, 301},
+            cfg._owned_vmids,
+        )
+        self.assertEqual(set(range(9000, 9010)), cfg._contract_template_vmids)
+        self.assertEqual({400, 404, 802, 804, 900, 901, 902, 903}, cfg._acknowledged_out_of_contract_vmids)
+
+    def test_acknowledged_out_of_contract_does_not_become_owned_or_fail_gate(self):
+        src = (REPO_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
+        self.assertIn("acknowledged_out_of_contract_vmids", src)
+        self.assertIn("unexpected_out_of_contract_vmids", src)
+        self.assertIn("Acknowledged out-of-contract PVE VMs discovered", src)
+        self.assertIn("0 unexpected out-of-contract PVE VMs", src)
+        self.assertNotIn("0 out-of-contract PVE VMs (saw", src)
 
 
 class TestFleetProbeNoiseContract(unittest.TestCase):
@@ -62,7 +192,10 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
     def test_doctor_uses_managed_hosts_only(self):
         src = (REPO_ROOT / "freq" / "core" / "doctor.py").read_text()
         self.assertIn("hosts = [h for h in cfg.hosts if getattr(h, \"managed\", True)]", src)
-        self.assertIn("hosts_for_check = [h for h in cfg.hosts if getattr(h, \"managed\", True)]", src)
+        service_block = src.split("def _check_service_account", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn("hosts_for_check = [", service_block)
+        self.assertIn('getattr(h, "managed", True)', service_block)
+        self.assertIn("h.htype in service_account_htypes", service_block)
 
     def test_operator_doctor_does_not_fake_fleet_outage_without_service_key(self):
         src = (REPO_ROOT / "freq" / "core" / "doctor.py").read_text()
@@ -220,6 +353,17 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("state = STATE_DEGRADED", window)
         self.assertIn("legacy device reachable; metrics probe failed", window)
 
+    def test_infra_quick_reuses_recent_legacy_success(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        window = src.split("def _bg_probe_infra", 1)[1].split("\ndef _bg_probe_health", 1)[0]
+        self.assertIn("def _reuse_recent_infra_device_success", src)
+        self.assertIn('reused["probe_method"] = "recent_success_reused"', src)
+        self.assertIn("previous_devices", window)
+        self.assertIn('item.setdefault("probed_at", previous_probed_at)', window)
+        self.assertIn("def _reuse_recent_device(reason):", window)
+        self.assertIn("except subprocess.TimeoutExpired as e:", window)
+        self.assertIn("return reused", window)
+
     def test_api_doctor_is_serialized_and_short_cached(self):
         src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
         window = src.split("def _serve_doctor", 1)[1].split("\n    def ", 1)[0]
@@ -277,11 +421,21 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("from freq.core import truenas_api", src)
         self.assertIn('truenas_api.request(api_settings, "pools"', src)
         self.assertIn('d["probe_method"] = "truenas_api_key"', src)
+        self.assertIn('d["probe_method"] = "ssh"', src)
+        self.assertIn('resolve_staged_device_ssh_auth(cfg, "truenas")', src)
         self.assertIn("TrueNAS API key missing", helper_src)
         self.assertIn("pool_metrics", helper_src)
         self.assertIn("_m('REACHABLE','NETWORK','var(--green)')", web_src)
         self.assertIn("METRICS UNAVAILABLE", web_src)
         self.assertIn("dev.type==='truenas'?'API':'SSH'", web_src)
+
+    def test_status_api_uses_device_aware_health_cache(self):
+        src = (REPO_ROOT / "freq" / "api" / "fleet.py").read_text()
+        block = src.split("def handle_status", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn('cached_health = _bg_cache.get("health")', block)
+        self.assertIn('"source": "health_cache"', block)
+        self.assertIn("STATE_AUTH_FAILED", block)
+        self.assertIn("STATE_UNREACHABLE", block)
 
     def test_truenas_settings_can_read_api_key_file(self):
         from freq.core import truenas_api

@@ -243,6 +243,19 @@ class TestUpdateFbToml(unittest.TestCase):
                 self.assertEqual(count, 1, "VMID 100 should appear only once")
                 return
 
+    def test_update_physical_scope(self):
+        """Change a physical device between core and lab."""
+        handler = self._make_handler()
+        handler._update_fb_toml(self.fb_path, "update_physical_scope",
+                                device_key="pfsense", scope="lab")
+        content = self._read_toml()
+        self.assertIn('scope = "lab"', content)
+
+        handler._update_fb_toml(self.fb_path, "update_physical_scope",
+                                device_key="pfsense", scope="core")
+        content = self._read_toml()
+        self.assertIn('scope = "core"', content)
+
     def test_remove_vmid(self):
         """Remove VMID 802 from personal."""
         handler = self._make_handler()

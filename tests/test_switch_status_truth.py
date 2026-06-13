@@ -4,7 +4,7 @@ Bug (follow-up to K): After the K fix, fleet status and doctor correctly
 marked iDRAC devices as n/a (needs svc account), but switch could still
 show DOWN in some races because the detection check missed stderr
 variations. Also, _check_legacy_passwords still produced false warnings
-for /home/freq-admin/.ssh/switch-pass because os.path.isdir(parent)
+for the service account legacy-device password file because os.path.isdir(parent)
 returns False on 700 dirs (not just os.access R_OK = False).
 
 Fix:

@@ -758,7 +758,7 @@ def _auto_populate_fleet_boundaries(cfg, discovered: dict):
             key = d["label"].replace("-", "_").replace(" ", "_")
             label_l = (d.get("label") or "").lower()
             groups = d.get("groups", "")
-            scope = "lab" if d.get("vmid", 0) in lab_vmids or "lab" in label_l or "lab" in groups.split(",") else "core"
+            scope = d.get("scope") or ("lab" if d.get("vmid", 0) in lab_vmids or "lab" in label_l or "lab" in groups.split(",") else "core")
             if scope == "lab" and "lab" not in groups.split(","):
                 groups = ",".join([g for g in [groups, "lab"] if g])
             infra_devices[key] = {

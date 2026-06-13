@@ -9,12 +9,15 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 
 import json
 import copy
+import os
+import re
 import time
 
 from freq.core import log as logger
 from freq.api.helpers import require_post, json_response
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
+from freq.modules import serve as serve_module
 from freq.modules.serve import (
     _bg_cache,
     _bg_cache_ts,
@@ -27,6 +30,111 @@ from freq.modules.vault import vault_get
 
 IDRAC_READ_CONNECT_TIMEOUT = 10
 IDRAC_READ_COMMAND_TIMEOUT = 30
+IDRAC_INVENTORY_COMMAND_TIMEOUT = 75
+IDRAC_STATUS_CACHE_SECONDS = 360
+# Share the same iDRAC throttle as background health/infra probes. These
+# legacy controllers have tiny SSH session limits, and a per-module lock still
+# lets dashboard reads collide with service health probes inside one process.
+IDRAC_SESSION_LOCK = serve_module.IDRAC_SESSION_LOCK
+IDRAC_SESSION_GAP_SECONDS = serve_module.IDRAC_SESSION_GAP_SECONDS
+_idrac_read_cache = {}
+
+
+def _read_named_cache(cfg, name: str):
+    path = os.path.join(cfg.data_dir, "cache", f"{name}.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None, 0.0
+    if isinstance(raw, dict) and "data" in raw:
+        return raw.get("data"), float(raw.get("ts") or 0)
+    return raw, 0.0
+
+
+def _cached_idrac_result(ip: str, cmd: str):
+    item = _idrac_read_cache.get((ip, cmd))
+    if not item:
+        return None
+    if time.time() - item["ts"] > IDRAC_STATUS_CACHE_SECONDS:
+        return None
+    return type(
+        "R",
+        (),
+        {
+            "returncode": 0,
+            "stdout": item["stdout"],
+            "stderr": "",
+            "duration": 0.0,
+            "from_cache": True,
+        },
+    )()
+
+
+def _store_idrac_result(ip: str, cmd: str, r) -> None:
+    if getattr(r, "returncode", 1) != 0 or not (getattr(r, "stdout", "") or "").strip():
+        return
+    _idrac_read_cache[(ip, cmd)] = {"ts": time.time(), "stdout": r.stdout}
+
+
+def _idrac_status_from_probe_cache(cfg, name: str, ip: str):
+    """Return fresh BMC status from background probe truth when available."""
+    now = time.time()
+    with _bg_lock:
+        health = _bg_cache.get("health") or {}
+        health_ts = _bg_cache_ts.get("health", 0) or 0
+        infra = _bg_cache.get("infra_quick") or {}
+        infra_ts = _bg_cache_ts.get("infra_quick", 0) or 0
+
+    # The background threads persist cache to disk independently of API reads.
+    # A dashboard button must not open a scarce iDRAC SSH session just because
+    # this worker's in-memory cache is cold or slightly behind the persisted
+    # truth written by the probe loop.
+    if not isinstance(health, dict) or not health.get("hosts"):
+        health, health_ts = _read_named_cache(cfg, "health")
+        health = health if isinstance(health, dict) else {}
+    if not isinstance(infra, dict) or not infra.get("devices"):
+        infra, infra_ts = _read_named_cache(cfg, "infra_quick")
+        infra = infra if isinstance(infra, dict) else {}
+
+    for row in health.get("hosts", []) or []:
+        if row.get("ip") != ip and str(row.get("label", "")).lower() != name.lower():
+            continue
+        age = now - float(row.get("probed_at") or health_ts or 0)
+        if age > IDRAC_STATUS_CACHE_SECONDS:
+            continue
+        state = str(row.get("state") or row.get("status") or "").lower()
+        if state not in {"live", "healthy", "recovering"}:
+            continue
+        metrics = row.get("management_metrics") or row
+        model = metrics.get("model") or row.get("model") or "unknown"
+        power = metrics.get("power") or row.get("power") or "unknown"
+        output = (
+            "System Information:\n"
+            f"System Model            = {model}\n"
+            f"Power Status            = {power}\n"
+            f"iDRAC Probe Source      = health cache ({age:.0f}s old)\n"
+        )
+        return type("R", (), {"returncode": 0, "stdout": output, "stderr": "", "duration": 0.0})()
+
+    for row in infra.get("devices", []) or []:
+        if row.get("ip") != ip and str(row.get("label", "")).lower() != name.lower():
+            continue
+        age = now - float(infra_ts or 0)
+        if age > IDRAC_STATUS_CACHE_SECONDS or not row.get("reachable"):
+            continue
+        metrics = row.get("metrics") or {}
+        model = metrics.get("model") or "unknown"
+        power = metrics.get("power") or "unknown"
+        output = (
+            "System Information:\n"
+            f"System Model            = {model}\n"
+            f"Power Status            = {power}\n"
+            f"iDRAC Probe Source      = infra cache ({age:.0f}s old)\n"
+        )
+        return type("R", (), {"returncode": 0, "stdout": output, "stderr": "", "duration": 0.0})()
+
+    return None
 
 
 def _is_auth_failure(text: str) -> bool:
@@ -37,6 +145,12 @@ def _is_auth_failure(text: str) -> bool:
 def _idrac_failure_evidence(r) -> str:
     stderr = (getattr(r, "stderr", "") or "").strip()
     stdout = (getattr(r, "stdout", "") or "").strip()
+    combined = f"{stderr}\n{stdout}".lower()
+    if "no more sessions are available" in combined:
+        return (
+            "iDRAC SSH session limit reached. Wait for old BMC sessions to expire, "
+            "then retry one action at a time."
+        )
     if stderr:
         return stderr[:300]
     if stdout:
@@ -44,7 +158,7 @@ def _idrac_failure_evidence(r) -> str:
     return f"SSH command failed with rc={getattr(r, 'returncode', '?')} and no stderr"
 
 
-def _run_idrac_read(cfg, ip: str, cmd: str):
+def _run_idrac_read(cfg, ip: str, cmd: str, command_timeout: int = IDRAC_READ_COMMAND_TIMEOUT):
     """Run iDRAC reads in the same order as init/infra quick.
 
     Dell iDRAC is legacy SSH. The product contract is key-first with the
@@ -52,35 +166,179 @@ def _run_idrac_read(cfg, ip: str, cmd: str):
     Generic ssh.run prefers legacy_password_file when present, so call it
     with a copy that disables password auth for the first pass.
     """
-    idrac_key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
-    key_cfg = copy.copy(cfg)
-    key_cfg.legacy_password_file = ""
-    r = ssh_single(
-        host=ip,
-        command=cmd,
-        user=cfg.ssh_service_account,
-        key_path=idrac_key,
-        connect_timeout=IDRAC_READ_CONNECT_TIMEOUT,
-        command_timeout=IDRAC_READ_COMMAND_TIMEOUT,
-        htype="idrac",
-        use_sudo=False,
-        cfg=key_cfg,
-        failure_log_level="warn",
-    )
-    if r.returncode != 0 and _is_auth_failure(f"{r.stderr}\n{r.stdout}") and getattr(cfg, "legacy_password_file", ""):
+    if cmd == "racadm getsysinfo -s":
+        cached = _cached_idrac_result(ip, cmd)
+        if cached is not None:
+            return cached
+
+    with IDRAC_SESSION_LOCK:
+        since = time.monotonic() - serve_module._idrac_last_session_at
+        if since < IDRAC_SESSION_GAP_SECONDS:
+            time.sleep(IDRAC_SESSION_GAP_SECONDS - since)
+        idrac_key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
+        key_cfg = copy.copy(cfg)
+        key_cfg.legacy_password_file = ""
         r = ssh_single(
             host=ip,
             command=cmd,
             user=cfg.ssh_service_account,
             key_path=idrac_key,
             connect_timeout=IDRAC_READ_CONNECT_TIMEOUT,
-            command_timeout=IDRAC_READ_COMMAND_TIMEOUT,
+            command_timeout=command_timeout,
             htype="idrac",
             use_sudo=False,
-            cfg=cfg,
+            cfg=key_cfg,
             failure_log_level="warn",
         )
+        if r.returncode != 0 and _is_auth_failure(f"{r.stderr}\n{r.stdout}") and getattr(cfg, "legacy_password_file", ""):
+            r = ssh_single(
+                host=ip,
+                command=cmd,
+                user=cfg.ssh_service_account,
+                key_path=idrac_key,
+                connect_timeout=IDRAC_READ_CONNECT_TIMEOUT,
+                command_timeout=command_timeout,
+                htype="idrac",
+                use_sudo=False,
+                cfg=cfg,
+                failure_log_level="warn",
+            )
+        serve_module._idrac_last_session_at = time.monotonic()
+    _store_idrac_result(ip, cmd, r)
     return r
+
+
+def _idrac_int(value):
+    m = re.search(r"([0-9][0-9,]*)", str(value or ""))
+    if not m:
+        return None
+    return int(m.group(1).replace(",", ""))
+
+
+def _idrac_status_bad(value):
+    low = str(value or "").lower()
+    return any(token in low for token in ("error", "critical", "failed", "failure", "degraded"))
+
+
+def _parse_idrac_hwinventory(text: str) -> dict:
+    """Parse Dell iDRAC `racadm hwinventory` output into operator stats."""
+    blocks = []
+    current = None
+    for line in str(text or "").splitlines():
+        stripped = line.strip()
+        if not stripped or set(stripped) <= {"-"}:
+            continue
+        m = re.match(r"\[InstanceID:\s*(.+?)\s*\]", stripped)
+        if m:
+            if current:
+                blocks.append(current)
+            current = {"instance_id": m.group(1).strip(), "fields": {}}
+            continue
+        if current and "=" in stripped:
+            key, value = stripped.split("=", 1)
+            current["fields"][key.strip()] = value.strip()
+    if current:
+        blocks.append(current)
+
+    system = {}
+    cpus = []
+    dimms = []
+    disks = []
+    controllers = []
+    psus = []
+    fans = []
+    for block in blocks:
+        inst = block["instance_id"]
+        fields = block["fields"]
+        low = inst.lower()
+        if low.startswith("system."):
+            system = fields
+        elif low.startswith("cpu.socket"):
+            cpus.append(fields)
+        elif low.startswith("dimm."):
+            dimms.append(fields)
+        elif low.startswith("disk.bay"):
+            disks.append(fields)
+        elif low.startswith("raid.") or "perc" in str(fields.get("ProductName") or fields.get("Model") or "").lower():
+            controllers.append(fields)
+        elif low.startswith("powersupply.") or low.startswith("psu."):
+            psus.append(fields)
+        elif low.startswith("fan."):
+            fans.append(fields)
+
+    cpu_models = sorted(
+        {c.get("Model") or c.get("DeviceDescription") for c in cpus if c.get("Model") or c.get("DeviceDescription")}
+    )
+    cpu_cores = sum(_idrac_int(c.get("NumberOfEnabledCores")) or 0 for c in cpus)
+    cpu_threads = sum(_idrac_int(c.get("NumberOfEnabledThreads")) or 0 for c in cpus)
+    cpu_socket_count = len(cpus) or (_idrac_int(system.get("PopulatedCPUSockets")) or 0)
+    cpu_statuses = [c.get("PrimaryStatus") for c in cpus if c.get("PrimaryStatus")]
+
+    ram_mb = _idrac_int(system.get("SysMemTotalSize")) or 0
+    if not ram_mb:
+        ram_mb = sum(_idrac_int(d.get("Size")) or _idrac_int(d.get("SizeInMB")) or 0 for d in dimms)
+    dimm_populated = _idrac_int(system.get("PopulatedDIMMSlots")) or len(
+        [d for d in dimms if (_idrac_int(d.get("Size")) or _idrac_int(d.get("SizeInMB")) or 0) > 0]
+    )
+
+    disk_total_bytes = sum(_idrac_int(d.get("SizeInBytes")) or 0 for d in disks)
+    disk_bad = [
+        d
+        for d in disks
+        if _idrac_status_bad(d.get("PrimaryStatus"))
+        or _idrac_status_bad(d.get("RaidStatus"))
+        or _idrac_status_bad(d.get("PredictiveFailureState"))
+    ]
+    media_counts = {}
+    for disk in disks:
+        media = disk.get("MediaType") or "unknown"
+        media_counts[media] = media_counts.get(media, 0) + 1
+
+    controller = controllers[0] if controllers else {}
+    raid_controller = (
+        controller.get("ProductName")
+        or controller.get("Model")
+        or controller.get("DeviceDescription")
+        or ""
+    )
+    raid_cache_mb = _idrac_int(controller.get("CacheSizeInMB")) or _idrac_int(controller.get("CacheSize")) or 0
+
+    health_fields = {
+        "system_rollup": system.get("RollupStatus") or system.get("PrimaryStatus") or "",
+        "cpu_status": system.get("CPURollupStatus") or ", ".join(cpu_statuses),
+        "memory_status": system.get("MemoryRollupStatus") or "",
+        "storage_status": system.get("StorageRollupStatus") or ("ERROR" if disk_bad else "OK" if disks else ""),
+        "fan_status": system.get("FanRollupStatus") or "",
+        "psu_status": system.get("PSRollupStatus") or "",
+    }
+    bad_health = [k for k, v in health_fields.items() if _idrac_status_bad(v)]
+
+    return {
+        "cpu_sockets": cpu_socket_count,
+        "cpu_cores": cpu_cores,
+        "cpu_threads": cpu_threads,
+        "cpu_models": cpu_models,
+        "cpu_model": ", ".join(cpu_models[:2]),
+        "ram_mb": ram_mb,
+        "ram_gb": round(ram_mb / 1024, 1) if ram_mb else 0,
+        "dimm_populated": dimm_populated,
+        "dimm_slots": _idrac_int(system.get("MaxDIMMSlots")) or 0,
+        "disk_count": len(disks),
+        "disk_total_bytes": disk_total_bytes,
+        "disk_total_tb": round(disk_total_bytes / 1000**4, 1) if disk_total_bytes else 0,
+        "disk_bad_count": len(disk_bad),
+        "disk_media": media_counts,
+        "raid_controller": raid_controller,
+        "raid_cache_mb": raid_cache_mb,
+        "power_state": system.get("PowerState") or "",
+        "system_model": system.get("Model") or system.get("ProductName") or "",
+        "service_tag": system.get("ServiceTag") or system.get("ChassisServiceTag") or "",
+        "psu_count": len(psus),
+        "fan_count": len(fans),
+        "bad_health": bad_health,
+        "health_ok": not bad_health,
+        **health_fields,
+    }
 
 
 # -- Handlers ----------------------------------------------------------------
@@ -89,7 +347,8 @@ def _run_idrac_read(cfg, ip: str, cmd: str):
 def handle_idrac(handler):
     """GET /api/infra/idrac -- iDRAC data + write ops via SSH/racadm.
 
-    Read actions: status, sensors, sel, storage, network, license, firmware, power
+    Read actions: status, sensors, sel, storage, network, license, firmware, power,
+        inventory
     Write actions (admin only): poweron, poweroff, powercycle, hardreset,
         graceshutdown, clearsel, bootpxe, bootbios
     """
@@ -111,18 +370,29 @@ def handle_idrac(handler):
             return
         idrac_ips = matched
     else:
-        idrac_ips = targets
+        json_response(
+            handler,
+            {
+                "error": (
+                    "target required for iDRAC actions; legacy iDRAC controllers "
+                    "have tiny SSH session limits, so dashboard reads are one BMC at a time"
+                )
+            },
+            400,
+        )
+        return
 
     # -- Read actions (no role check) --
     read_actions = {
         "status": "racadm getsysinfo -s",
         "sensors": "racadm getsensorinfo",
-        "sel": "racadm getsel -i 1-10",
-        "storage": "racadm raid get vdisks",
+        "sel": "racadm getsel",
+        "storage": "racadm raid get status",
         "network": "racadm getniccfg",
         "license": "racadm license view",
         "firmware": "racadm getversion",
         "power": "racadm serveraction powerstatus",
+        "inventory": "racadm hwinventory",
     }
 
     # -- Write actions (admin only) --
@@ -155,16 +425,22 @@ def handle_idrac(handler):
 
     results = []
     for name, ip in idrac_ips.items():
-        r = _run_idrac_read(cfg, ip, cmd)
-        results.append(
-            {
-                "name": name,
-                "ip": ip,
-                "reachable": r.returncode == 0,
-                "output": r.stdout[:2000] if r.returncode == 0 else "",
-                "error": _idrac_failure_evidence(r) if r.returncode != 0 else "",
-            }
-        )
+        command_timeout=IDRAC_READ_COMMAND_TIMEOUT
+        if action == "inventory":
+            command_timeout = IDRAC_INVENTORY_COMMAND_TIMEOUT
+        r = _idrac_status_from_probe_cache(cfg, name, ip) if action == "status" else None
+        if r is None:
+            r = _run_idrac_read(cfg, ip, cmd, command_timeout=command_timeout)
+        item = {
+            "name": name,
+            "ip": ip,
+            "reachable": r.returncode == 0,
+            "output": r.stdout[:4000] if r.returncode == 0 else "",
+            "error": _idrac_failure_evidence(r) if r.returncode != 0 else "",
+        }
+        if action == "inventory" and r.returncode == 0:
+            item["inventory"] = _parse_idrac_hwinventory(r.stdout)
+        results.append(item)
 
     json_response(handler, {"action": action, "targets": results})
 

@@ -93,6 +93,45 @@ def _infer_local_user_for_key(key_path: str) -> str:
     return ""
 
 
+def _service_account_entry(data: dict) -> dict:
+    entry = data.get("service_account")
+    return entry if isinstance(entry, dict) else {}
+
+
+def _service_account_ssh_auth(cfg, htype: str, data: dict | None = None, source: str = "service-account") -> dict:
+    """Return post-init runtime auth for the configured service account.
+
+    Per-device credential sections can carry bootstrap material used by init,
+    but runtime probes/actions/terminals must not keep using that bootstrap
+    username after the managed service account exists.
+    """
+    data = data or {}
+    svc_entry = _service_account_entry(data)
+    user = getattr(cfg, "ssh_service_account", "") or svc_entry.get("user") or svc_entry.get("username") or "freq-admin"
+    key_path = getattr(cfg, "ssh_key_path", "") or svc_entry.get("ssh_key_file") or svc_entry.get("key_file") or svc_entry.get("key_path") or ""
+    if (htype or "").lower() in {"idrac", "switch"}:
+        key_path = getattr(cfg, "ssh_rsa_key_path", "") or key_path
+    if key_path and not os.path.isfile(key_path):
+        key_path = ""
+    password_file = ""
+    if (htype or "").lower() in {"idrac", "switch"}:
+        password_file = getattr(cfg, "legacy_password_file", "") or ""
+    if key_path and (htype or "").lower() == "truenas":
+        password_file = ""
+    if not password_file and not key_path:
+        password_file = svc_entry.get("password_file") or ""
+    if password_file and not os.path.isfile(password_file):
+        password_file = ""
+    return {
+        "user": user,
+        "key_path": key_path,
+        "password_file": password_file,
+        "sudo_password_file": False,
+        "local_user": "",
+        "source": source,
+    }
+
+
 def resolve_staged_device_ssh_auth(cfg, htype: str) -> dict:
     """Resolve staged runtime SSH auth for physical devices.
 
@@ -104,6 +143,17 @@ def resolve_staged_device_ssh_auth(cfg, htype: str) -> dict:
     htype = (htype or "").lower()
     data = _load(device_credentials_path(cfg))
     entry = _entry_for(data, htype)
+    if htype in {"pfsense", "idrac", "switch"}:
+        return _service_account_ssh_auth(cfg, htype, data, source="service-account")
+    if (
+        htype == "truenas"
+        and (
+            _service_account_entry(data)
+            or os.path.isfile(getattr(cfg, "ssh_key_path", "") or "")
+            or (entry.get("user") or entry.get("username") or "") not in {"", getattr(cfg, "ssh_service_account", "")}
+        )
+    ):
+        return _service_account_ssh_auth(cfg, htype, data, source="service-account")
     if htype == "truenas":
         svc_entry = data.get("service_account")
         if isinstance(svc_entry, dict) and (
@@ -125,7 +175,13 @@ def resolve_staged_device_ssh_auth(cfg, htype: str) -> dict:
     if key_path and not local_user:
         local_user = _infer_local_user_for_key(key_path)
     if key_path and not os.path.isfile(key_path):
-        key_path = ""
+        # A dashboard/service process may not be able to traverse another
+        # user's 700 home directory. Keep declared home-key paths when we
+        # know the local user so freq.core.ssh can run the probe via
+        # `sudo -u <local_user>` instead of falling back to the service
+        # account and reporting a false auth failure.
+        if not local_user:
+            key_path = ""
 
     if password_file and os.path.isfile(password_file):
         return {
@@ -169,7 +225,13 @@ def resolve_device_ssh_auth(cfg, htype: str) -> dict:
     Falls back to the managed service-account config when no staged
     device credentials exist, so generic installs keep working.
     """
-    entry = _entry_for(_load(device_credentials_path(cfg)), htype)
+    htype = (htype or "").lower()
+    data = _load(device_credentials_path(cfg))
+    entry = _entry_for(data, htype)
+    if htype in {"pfsense", "idrac", "switch", "truenas"}:
+        auth = _service_account_ssh_auth(cfg, htype, data, source="service-account")
+        auth.pop("sudo_password_file", None)
+        return auth
     user = entry.get("user") or entry.get("username") or getattr(cfg, "ssh_service_account", "")
     key_path = entry.get("ssh_key_file") or entry.get("key_file") or entry.get("key_path") or ""
     password_file = entry.get("password_file") or ""

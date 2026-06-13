@@ -108,6 +108,21 @@ class TestSetupHealthSummary(unittest.TestCase):
         self.assertIn("web-setup-only", src,
                        "setup_health must include web-setup-only tier")
 
+    def test_failed_init_artifacts_are_not_reported_as_never_run(self):
+        """Generated init artifacts must override the no-marker default reason."""
+        src = self._handler_src()
+        self.assertIn("_init_blocker_from_artifacts", src)
+        self.assertIn("init-failed", src)
+        self.assertIn("init_blocker or \"freq init not yet run", src)
+
+    def test_operator_contract_blocker_names_out_of_contract(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        helper = src.split("def _init_blocker_from_artifacts", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn("out_of_contract", helper)
+        self.assertIn("operator VM contract", helper)
+        self.assertIn("out-of-contract PVE VM", helper)
+
 
 if __name__ == "__main__":
     unittest.main()

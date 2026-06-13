@@ -78,6 +78,61 @@ def _get_json(handler):
     return json.loads(body.decode())
 
 
+class BusyLock:
+    """Lock stub that simulates a background probe holding the cache lock."""
+
+    def acquire(self, blocking=True):
+        return False
+
+    def release(self):
+        raise AssertionError("release should not be called when acquire returned False")
+
+
+class ReadyLock:
+    def acquire(self, blocking=True):
+        return True
+
+    def release(self):
+        return None
+
+
+def test_metrics_prometheus_returns_when_health_cache_lock_is_busy():
+    from freq.api import observe
+
+    h = _make_handler("/api/metrics/prometheus")
+    with patch.object(observe, "_bg_lock", BusyLock()):
+        observe.handle_metrics_prometheus(h)
+
+    h.wfile.seek(0)
+    body = h.wfile.read().decode()
+    assert h._status_code == 200
+    assert "freq_info" in body
+    assert "freq_uptime_seconds" in body
+    assert "freq_health_cache_locked 1" in body
+
+
+def test_metrics_prometheus_counts_health_cache_status_shapes():
+    from freq.api import observe
+
+    h = _make_handler("/api/metrics/prometheus")
+    health = {
+        "hosts": [
+            {"label": "a", "state": "live"},
+            {"label": "b", "status": "healthy"},
+            {"label": "c", "reachable": True},
+            {"label": "d", "status": "down"},
+        ]
+    }
+    with patch.object(observe, "_bg_lock", ReadyLock()), patch.object(observe, "_bg_cache", {"health": health}):
+        observe.handle_metrics_prometheus(h)
+
+    h.wfile.seek(0)
+    body = h.wfile.read().decode()
+    assert "freq_hosts_total 4" in body
+    assert "freq_hosts_healthy 3" in body
+    assert "freq_hosts_unreachable 1" in body
+
+
 # ── Mock config ─────────────────────────────────────────────────────────
 
 def _mock_cfg(**overrides):
@@ -281,6 +336,27 @@ class TestServeMediaRestart:
         data = _get_json(h)
         assert "error" in data
 
+    @patch("freq.modules.serve._check_session_role", return_value=("operator", ""))
+    @patch("freq.modules.serve.ssh_single")
+    @patch("freq.modules.serve.load_config")
+    def test_restart_returns_structured_failure(self, mock_cfg_fn, mock_ssh_single, _role):
+        from freq.core.types import Container, ContainerVM
+
+        vm = ContainerVM(vm_id=0, ip="10.0.0.30", label="plex", containers={
+            "plex": Container(name="plex", vm_id=0),
+        })
+        mock_cfg_fn.return_value = _mock_cfg(container_vms={"plex": vm})
+        mock_ssh_single.return_value = _mock_ssh_result("", "permission denied", 255)
+
+        h = _make_handler("/api/media/restart?name=plex")
+        h.command = "POST"
+        h._serve_media_restart()
+
+        data = _get_json(h)
+        assert data["ok"] is False
+        assert data["returncode"] == 255
+        assert "permission denied" in data["error"]
+
 
 class TestServeMediaLogs:
     """Test /api/media/logs endpoint."""
@@ -294,6 +370,72 @@ class TestServeMediaLogs:
 
         data = _get_json(h)
         assert "error" in data
+
+    @patch("freq.modules.serve.ssh_single")
+    @patch("freq.modules.serve.load_config")
+    def test_logs_returns_structured_failure(self, mock_cfg_fn, mock_ssh_single):
+        from freq.core.types import Container, ContainerVM
+
+        vm = ContainerVM(vm_id=0, ip="10.0.0.30", label="plex", containers={
+            "plex": Container(name="plex", vm_id=0),
+        })
+        mock_cfg_fn.return_value = _mock_cfg(container_vms={"plex": vm})
+        mock_ssh_single.return_value = _mock_ssh_result("", "docker unavailable", 1)
+
+        h = _make_handler("/api/media/logs?name=plex")
+        h._serve_media_logs()
+
+        data = _get_json(h)
+        assert data["ok"] is False
+        assert data["returncode"] == 1
+        assert data["logs"] == ""
+        assert "docker unavailable" in data["error"]
+
+
+class TestServeContainerActions:
+    """Test Docker host-detail container endpoints."""
+
+    @patch("freq.modules.serve._check_session_role", return_value=("operator", ""))
+    @patch("freq.modules.serve.ssh_single")
+    @patch("freq.modules.serve.load_config")
+    def test_container_action_resolves_container_vm_label(self, mock_cfg_fn, mock_ssh_single, _role):
+        from freq.core.types import ContainerVM
+
+        mock_cfg_fn.return_value = _mock_cfg(
+            hosts=[],
+            container_vms={"plex": ContainerVM(vm_id=0, ip="10.0.0.30", label="plex")},
+        )
+        mock_ssh_single.return_value = _mock_ssh_result("plex", "", 0)
+
+        h = _make_handler("/api/containers/action?host=plex&name=plex&action=restart")
+        h.command = "POST"
+        h._serve_container_action()
+
+        data = _get_json(h)
+        assert data["ok"] is True
+        assert data["resolved_host"] == "plex"
+        assert data["ip"] == "10.0.0.30"
+        assert mock_ssh_single.call_args.kwargs["host"] == "10.0.0.30"
+
+    @patch("freq.modules.serve.ssh_single")
+    @patch("freq.modules.serve.load_config")
+    def test_container_logs_resolves_container_vm_label_and_reports_failure(self, mock_cfg_fn, mock_ssh_single):
+        from freq.core.types import ContainerVM
+
+        mock_cfg_fn.return_value = _mock_cfg(
+            hosts=[],
+            container_vms={"plex": ContainerVM(vm_id=0, ip="10.0.0.30", label="plex")},
+        )
+        mock_ssh_single.return_value = _mock_ssh_result("", "no such container", 1)
+
+        h = _make_handler("/api/containers/logs?host=plex&name=plex")
+        h._serve_container_logs()
+
+        data = _get_json(h)
+        assert data["ok"] is False
+        assert data["returncode"] == 1
+        assert data["output"] == ""
+        assert "no such container" in data["error"]
 
 
 class TestServeMediaUpdate:

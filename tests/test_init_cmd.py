@@ -13,10 +13,21 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    tomllib = None
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from freq.modules.init_cmd import _run_with_input, _ssh_with_pass
-from freq.modules.init_cmd import _reset_local_init_state, INIT_LIVE_CONFIG_FILES, INIT_GENERATED_TOKEN_FILES
+from freq.modules.init_cmd import _init_dry_run
+from freq.modules.init_cmd import (
+    _reset_local_init_state,
+    INIT_LIVE_CONFIG_FILES,
+    INIT_GENERATED_TOKEN_FILES,
+    INIT_GENERATED_WATCHDOG_FILES,
+)
 from freq.core.config import FreqConfig, _resolve_paths
 
 
@@ -139,6 +150,339 @@ class TestInitResetLocalState(unittest.TestCase):
     def test_reset_inventory_names_external_generated_pve_tokens(self):
         self.assertIn("/etc/freq/credentials/pve-token-rw", INIT_GENERATED_TOKEN_FILES)
         self.assertIn("/etc/freq/credentials/pve-token", INIT_GENERATED_TOKEN_FILES)
+        self.assertIn("pve-inventory.toml", INIT_LIVE_CONFIG_FILES)
+
+    def test_reset_removes_generated_runtime_truth_state(self):
+        cache_dir = os.path.join(self.cfg.data_dir, "cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        self._touch(os.path.join(cache_dir, "health.json"), '{"stale":true}\n')
+        self._touch(os.path.join(cache_dir, "fleet_overview.json"), '{"stale":true}\n')
+        self._touch(os.path.join(cache_dir, "infra_quick.json"), '{"stale":true}\n')
+        self._touch(os.path.join(cache_dir, "rule_state.json"), '{"stale":true}\n')
+        self._touch(os.path.join(cache_dir, "doctor-fleet-connectivity.lock"), "")
+        self._touch(os.path.join(cache_dir, ".gitkeep"), "")
+
+        with tempfile.TemporaryDirectory(prefix="freq-watchdog-state-") as watch_dir:
+            watchdog_files = (
+                os.path.join(watch_dir, "status.json"),
+                os.path.join(watch_dir, "state.json"),
+            )
+            for path in watchdog_files:
+                self._touch(path, '{"status":"degraded"}\n')
+
+            with patch("freq.modules.init_cmd.fmt") as _fmt:
+                _fmt.step_ok = MagicMock()
+                _fmt.step_warn = MagicMock()
+                with patch("freq.modules.init_cmd.INIT_GENERATED_TOKEN_FILES", ()):
+                    with patch("freq.modules.init_cmd.INIT_GENERATED_WATCHDOG_FILES", watchdog_files):
+                        _reset_local_init_state(self.cfg)
+
+            for name in (
+                "health.json",
+                "fleet_overview.json",
+                "infra_quick.json",
+                "rule_state.json",
+                "doctor-fleet-connectivity.lock",
+            ):
+                self.assertFalse(
+                    os.path.exists(os.path.join(cache_dir, name)),
+                    f"stale runtime cache survived reset: {name}",
+                )
+            self.assertTrue(
+                os.path.isfile(os.path.join(cache_dir, ".gitkeep")),
+                "cache placeholder should survive runtime truth cleanup",
+            )
+            for path in watchdog_files:
+                self.assertFalse(os.path.exists(path), f"watchdog state survived reset: {path}")
+
+    def test_reset_inventory_names_generated_watchdog_state(self):
+        self.assertIn("/var/lib/freq-watchdog/status.json", INIT_GENERATED_WATCHDOG_FILES)
+        self.assertIn("/var/lib/freq-watchdog/state.json", INIT_GENERATED_WATCHDOG_FILES)
+
+    def test_missing_generated_runtime_truth_is_clean_not_warning(self):
+        from freq.modules.init_cmd import _clear_generated_runtime_truth_state
+
+        with tempfile.TemporaryDirectory(prefix="freq-runtime-clean-") as tmp:
+            cfg = types.SimpleNamespace(data_dir=os.path.join(tmp, "data"))
+            watchdog_files = (
+                os.path.join(tmp, "watchdog", "status.json"),
+                os.path.join(tmp, "watchdog", "state.json"),
+            )
+            with patch("freq.modules.init_cmd.INIT_GENERATED_WATCHDOG_FILES", watchdog_files):
+                with patch("freq.modules.init_cmd.fmt") as mock_fmt:
+                    mock_fmt.step_ok = MagicMock()
+                    mock_fmt.step_warn = MagicMock()
+                    _clear_generated_runtime_truth_state(cfg)
+
+            mock_fmt.step_warn.assert_not_called()
+            messages = " ".join(str(c.args[0]) for c in mock_fmt.step_ok.call_args_list)
+            self.assertIn("Runtime truth cache clean", messages)
+            self.assertIn("Watchdog state status.json already clean", messages)
+
+
+class TestPureNothingInitContract(unittest.TestCase):
+    """Pure first-run init must create the runtime world from empty state."""
+
+    def _src(self):
+        return (Path(__file__).parent.parent / "freq" / "modules" / "init_cmd.py").read_text()
+
+    def test_phase1_creates_config_data_cache_secrets_and_credentials_dirs(self):
+        src = self._src()
+        phase1 = src.split("def _phase_welcome")[1].split("\ndef _seed_config_files")[0]
+        self.assertIn("cfg.conf_dir", phase1)
+        self.assertIn('os.path.join(cfg.data_dir, "cache")', phase1)
+        self.assertIn('os.path.join(cfg.data_dir, "secrets")', phase1)
+        self.assertIn("_credentials_dir(cfg)", phase1)
+
+    def test_config_has_canonical_credentials_dir(self):
+        cfg = FreqConfig()
+        cfg.install_dir = "/tmp/freq-test"
+        _resolve_paths(cfg)
+        self.assertEqual(cfg.credentials_dir, "/etc/freq/credentials")
+
+    def test_headless_init_clears_runtime_truth_before_phase_one(self):
+        src = self._src()
+        headless = src.split("def _init_headless")[1].split("\ndef _headless_local_account")[0]
+        cleanup = headless.index("_clear_generated_runtime_truth_state(cfg)")
+        phase_one = headless.index('_phase(1, headless_total, "Prerequisites")')
+        self.assertLess(cleanup, phase_one)
+
+    def test_phase6_writes_token_where_runtime_reads(self):
+        src = self._src()
+        token_block = src.split("def _phase_pve_api_token")[1].split("\ndef ")[0]
+        self.assertIn("cred_dir = _credentials_dir(cfg)", token_block)
+        self.assertIn('cred_path = os.path.join(cred_dir, "pve-token-rw")', token_block)
+        self.assertIn("_chown(f\"root:{svc_name}\", cred_path)", token_block)
+
+    def test_service_account_metadata_is_readable_by_runtime_group(self):
+        src = self._src()
+        block = src.split("def _persist_service_account_credentials_metadata")[1].split("\ndef ")[0]
+        self.assertIn("os.chmod(pass_path, 0o640)", block)
+        self.assertIn("_chown(f\"root:{svc_name}\", pass_path)", block)
+        self.assertIn("os.chmod(creds_path, 0o640)", block)
+        self.assertIn("_chown(f\"root:{svc_name}\", creds_path)", block)
+
+    def test_phase9_owns_canonical_credentials_dir_not_install_local_ghost(self):
+        src = self._src()
+        block = src.split("Fix ownership for dashboard")[1].split("logger.info(\"init_phase_complete: Phase 9")[0]
+        self.assertIn("cred_dir = _credentials_dir(cfg)", block)
+        self.assertIn('_chown(f"root:{svc_name}", cred_dir, recursive=False)', block)
+        self.assertNotIn('"credentials"', block.split("for subdir in", 1)[1].split("]:", 1)[0])
+
+    def test_dry_run_plan_honors_cli_service_account_and_pve_nodes(self):
+        cfg = FreqConfig()
+        cfg.install_dir = "/opt/pve-freq"
+        _resolve_paths(cfg)
+        args = types.SimpleNamespace(
+            service_account="dc01-admin",
+            pve_nodes="10.25.255.26,10.25.255.27",
+        )
+        lines = []
+        colors = types.SimpleNamespace(DIM="", RESET="", BOLD="")
+        with patch("freq.modules.init_cmd.fmt") as mock_fmt:
+            mock_fmt.C = colors
+            mock_fmt.header = MagicMock()
+            mock_fmt.blank = MagicMock()
+            mock_fmt.line.side_effect = lines.append
+            _init_dry_run(cfg, args)
+
+        plan = "\n".join(lines)
+        self.assertIn("Deploy dc01-admin to 2 PVE node(s)", plan)
+        self.assertIn("Create dc01-admin@pam!freq-rw token", plan)
+        self.assertNotIn("Deploy freq-admin to 0 PVE node(s)", plan)
+
+    def test_init_dry_run_is_no_write_cli_path(self):
+        src = (Path(__file__).parent.parent / "freq" / "cli.py").read_text()
+        self.assertIn("readonly_init_dry_run", src)
+        self.assertIn('getattr(args, "domain", "") == "init"', src)
+        self.assertIn('getattr(args, "dry_run", False)', src)
+        self.assertIn("watchdog_command", src)
+        self.assertIn("if not readonly_init_dry_run and not watchdog_command:", src)
+
+    def test_cli_has_explicit_dashboard_admin_inputs(self):
+        src = (Path(__file__).parent.parent / "freq" / "cli.py").read_text()
+        self.assertIn('"--dashboard-user"', src)
+        self.assertIn('"--dashboard-password-file"', src)
+
+    def test_headless_dashboard_auth_seeds_explicit_human_not_bootstrap(self):
+        from freq.modules.init_cmd import _seed_headless_dashboard_auth
+        from freq.api.auth import verify_password
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = types.SimpleNamespace(
+                conf_dir=td,
+                vault_file=os.path.join(td, "vault.enc"),
+            )
+            written = {}
+
+            def fake_vault_init(_cfg):
+                written["init"] = True
+                return True
+
+            def fake_vault_set(_cfg, section, key, value):
+                written[(section, key)] = value
+                return True
+
+            def fake_vault_get(_cfg, section, key):
+                return written.get((section, key), "")
+
+            with patch("freq.modules.vault.vault_init", side_effect=fake_vault_init), \
+                 patch("freq.modules.vault.vault_set", side_effect=fake_vault_set), \
+                 patch("freq.modules.vault.vault_get", side_effect=fake_vault_get), \
+                 patch("freq.modules.init_cmd.fmt"):
+                ok = _seed_headless_dashboard_auth(
+                    cfg,
+                    "sonny-aif",
+                    "correct-horse-battery-staple",
+                    "dc01-admin",
+                    verbose=True,
+                )
+
+            self.assertTrue(ok)
+            roles = Path(td, "roles.conf").read_text()
+            users = Path(td, "users.conf").read_text()
+            self.assertIn("sonny-aif:admin", roles)
+            self.assertIn("sonny-aif admin", users)
+            self.assertNotIn("freq-ops", roles)
+            self.assertNotIn("freq-ops", users)
+            stored_hash = written[("auth", "password_sonny-aif")]
+            self.assertTrue(verify_password("correct-horse-battery-staple", stored_hash))
+
+    def test_headless_dashboard_auth_returns_false_on_vault_write_failure(self):
+        from freq.modules.init_cmd import _seed_headless_dashboard_auth
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = types.SimpleNamespace(
+                conf_dir=td,
+                vault_file=os.path.join(td, "vault.enc"),
+            )
+            with patch("freq.modules.vault.vault_init", return_value=True), \
+                 patch("freq.modules.vault.vault_set", return_value=False), \
+                 patch("freq.modules.init_cmd.fmt"):
+                ok = _seed_headless_dashboard_auth(
+                    cfg,
+                    "sonny-aif",
+                    "correct-horse-battery-staple",
+                    "dc01-admin",
+                    verbose=True,
+                )
+
+            self.assertFalse(ok)
+
+    @patch("freq.modules.init_cmd.fmt")
+    def test_explicit_skip_pdm_is_not_warning(self, mock_fmt):
+        from freq.modules.init_cmd import _phase_pdm
+
+        args = types.SimpleNamespace(skip_pdm=True, install_pdm=False, headless=True)
+        _phase_pdm(types.SimpleNamespace(), {}, args)
+
+        mock_fmt.step_ok.assert_called_with("PDM setup intentionally skipped (--skip-pdm)")
+        mock_fmt.step_warn.assert_not_called()
+
+    def test_phase12_verifies_all_metrics_agents_not_spot_check(self):
+        src = self._src()
+        block = src.split("# Metrics agent verification for every generic systemd agent host.")[1].split("# Dashboard readiness")[0]
+        self.assertIn("for h in agent_hosts:", block)
+        self.assertIn('f"Metrics agents responding: {agent_ok}/{len(agent_hosts)}"', block)
+        self.assertNotIn("test_host = linux_hosts[0]", block)
+
+    def test_truenas_not_generic_systemd_metrics_agent_target(self):
+        from freq.modules.init_cmd import _metrics_agent_hosts, _non_systemd_metrics_hosts
+
+        hosts = [
+            types.SimpleNamespace(label="linux-a", htype="linux", managed=True),
+            types.SimpleNamespace(label="docker-a", htype="docker", managed=True),
+            types.SimpleNamespace(label="pve-a", htype="pve", managed=True),
+            types.SimpleNamespace(label="truenas-a", htype="truenas", managed=True),
+            types.SimpleNamespace(label="switch-a", htype="switch", managed=True),
+            types.SimpleNamespace(label="linux-unmanaged", htype="linux", managed=False),
+        ]
+
+        self.assertEqual(
+            [h.label for h in _metrics_agent_hosts(hosts)],
+            ["linux-a", "docker-a", "pve-a"],
+        )
+        self.assertEqual(
+            [h.label for h in _non_systemd_metrics_hosts(hosts)],
+            ["truenas-a"],
+        )
+
+    def test_init_check_device_labels_do_not_claim_sudo(self):
+        src = self._src()
+        block = src.split("def _init_check")[1].split("if json_output:")[0]
+        self.assertIn('detail = f"SSH verified [{htype}]"', block)
+        self.assertIn('elif htype in ("pfsense", "idrac", "switch")', block)
+        self.assertNotIn('detail = "account + key verified"', block)
+
+    def test_init_check_truenas_deep_check_uses_remote_home(self):
+        src = self._src()
+        block = src.split('elif htype == "truenas":')[1].split('elif htype == "pfsense":')[0]
+        self.assertIn("test -f ~/.ssh/authorized_keys", block)
+        self.assertNotIn("auth_keys", block)
+
+    def test_verify_host_uses_staged_device_auth_for_pfsense(self):
+        src = self._src()
+        block = src.split('if htype == "pfsense" and cfg is not None:')[1].split("# Select key and command", 1)[0]
+        self.assertIn('resolve_staged_device_ssh_auth(cfg, "pfsense")', block)
+        self.assertIn('local_user=auth.get("local_user")', block)
+
+    def test_pfsense_deployable_uses_ssh_material_not_root_admin_only(self):
+        src = self._src()
+        block = src.split("def _pfsense_is_deployable():", 1)[1].split("\n    def ", 1)[0]
+        self.assertIn("_device_cred_has_ssh_material(pfsense_creds)", block)
+        self.assertNotIn('user in {"root", "admin"}', block)
+
+    def test_init_check_deep_check_does_not_auto_pass_pfsense(self):
+        src = self._src()
+        deep_check = src.split("def _deep_check(entry):", 1)[1].split("with _cf.ThreadPoolExecutor", 1)[0]
+        block = deep_check.split('elif htype == "pfsense":', 1)[1].split("else:", 1)[0]
+        self.assertIn('cmd = "echo DEEP_CHECK_OK"', block)
+        self.assertIn("use_key = key_file", block)
+        self.assertNotIn("return label, ip, htype, True", block)
+
+    def test_auth_failures_are_not_skip_warnings(self):
+        from freq.modules.init_cmd import _is_skip_error
+
+        self.assertFalse(_is_skip_error("Permission denied (publickey,password)"))
+        self.assertFalse(_is_skip_error("authentication failed"))
+        self.assertTrue(_is_skip_error("connection timed out"))
+
+    def test_pve_inventory_model_includes_all_resources_and_separates_templates(self):
+        if tomllib is None:
+            self.skipTest("tomllib unavailable")
+        from freq.modules.init_cmd import _write_pve_inventory_toml
+
+        with tempfile.TemporaryDirectory(prefix="freq-pve-inventory-") as tmp:
+            cfg = types.SimpleNamespace(conf_dir=tmp)
+            path, vm_count, template_count, container_count = _write_pve_inventory_toml(cfg, [
+                {"vmid": 100, "name": "pve-freq", "node": "pve01", "type": "qemu", "status": "running"},
+                {"vmid": 400, "name": "RunescapeBotVM", "node": "pve01", "type": "qemu", "status": "running"},
+                {"vmid": 9000, "name": "debian-template", "node": "pve02", "type": "qemu", "status": "stopped"},
+                {"vmid": 500, "name": "flag-template", "node": "pve03", "type": "qemu", "status": "stopped", "template": 1},
+            ])
+
+            self.assertEqual(vm_count, 2)
+            self.assertEqual(template_count, 2)
+            self.assertEqual(container_count, 0)
+            with open(path, "rb") as f:
+                data = tomllib.load(f)
+
+        self.assertEqual(data["summary"]["resource_count"], 4)
+        self.assertEqual(data["summary"]["vm_count"], 2)
+        self.assertEqual(data["summary"]["template_count"], 2)
+        by_vmid = {r["vmid"]: r for r in data["resource"]}
+        self.assertEqual(by_vmid[100]["kind"], "vm")
+        self.assertEqual(by_vmid[400]["kind"], "vm")
+        self.assertEqual(by_vmid[9000]["kind"], "template")
+        self.assertEqual(by_vmid[500]["kind"], "template")
+
+    def test_phase12_verifies_pve_inventory_toml(self):
+        src = self._src()
+        block = src.split("# pve-inventory.toml")[1].split("# containers.toml", 1)[0]
+        self.assertIn('inv_path = os.path.join(cfg.conf_dir, "pve-inventory.toml")', block)
+        self.assertIn('r.get("kind") == "vm"', block)
+        self.assertIn('r.get("kind") == "template"', block)
+        self.assertIn("summary mismatch", block)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -308,8 +652,202 @@ class TestIdracParsing(unittest.TestCase):
 
         self.assertGreaterEqual(IDRAC_SLOT_QUERY_TIMEOUT, 15)
 
+    def test_idrac_command_failure_includes_command_context(self):
+        from freq.modules.init_cmd import _run_idrac_command
+
+        def fake_ssh(cmd, extra_opts=None, timeout=None):
+            return 255, "", "Permission denied (publickey,password)."
+
+        ok, details = _run_idrac_command(
+            fake_ssh,
+            [],
+            "racadm set iDRAC.Users.8.Privilege 0x1ff",
+        )
+
+        self.assertFalse(ok)
+        self.assertIn("iDRAC.Users.8.Privilege", details)
+        self.assertIn("Permission denied", details)
+
+    @patch("freq.modules.init_cmd.time.sleep")
+    def test_idrac_command_retries_transient_auth_failure(self, mock_sleep):
+        from freq.modules.init_cmd import _run_idrac_command
+
+        calls = []
+
+        def flaky_ssh(cmd, extra_opts=None, timeout=None):
+            calls.append(cmd)
+            if len(calls) == 1:
+                return 255, "", "Permission denied (publickey,password)."
+            return 0, "Object value modified successfully", ""
+
+        ok, details = _run_idrac_command(
+            flaky_ssh,
+            [],
+            "racadm set iDRAC.Users.8.Privilege 0x1ff",
+        )
+
+        self.assertTrue(ok)
+        self.assertIn("modified successfully", details)
+        self.assertEqual(len(calls), 2)
+        mock_sleep.assert_called_once_with(5)
+
+    @patch("freq.modules.init_cmd._run_with_input")
+    def test_init_ssh_pipes_sensitive_input_without_ssh_n(self, mock_run_with_input):
+        from freq.modules.init_cmd import _init_ssh
+
+        mock_run_with_input.return_value = (0, "", "")
+        ssh = _init_ssh("10.25.255.10", "", "/tmp/fleet_key", "freq-ops")
+        ssh("read -r secret; echo OK", input_text="secret-value\n")
+
+        cmd = mock_run_with_input.call_args[0][0]
+        self.assertNotIn("-n", cmd)
+        self.assertNotIn("secret-value", " ".join(cmd))
+        self.assertEqual(mock_run_with_input.call_args[0][1], "secret-value\n")
+
+    @patch("freq.modules.init_cmd.audit")
+    @patch("freq.modules.init_cmd.logger")
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.init_cmd._run_idrac_interactive_command")
+    @patch("freq.modules.init_cmd._query_idrac_slots")
+    @patch("freq.modules.init_cmd._init_ssh")
+    def test_idrac_password_is_piped_not_embedded_in_command_line(
+        self,
+        mock_init_ssh,
+        mock_query_slots,
+        mock_interactive,
+        mock_fmt,
+        _logger,
+        _audit,
+    ):
+        from freq.modules.init_cmd import _deploy_idrac
+
+        secret = "SvcPass-Not-On-Command"
+        calls = []
+
+        def fake_ssh(cmd, extra_opts=None, timeout=None, as_root=False, input_text=None):
+            calls.append({"cmd": cmd, "input_text": input_text})
+            return 0, "Object value modified successfully", ""
+
+        mock_query_slots.return_value = (8, None)
+        mock_init_ssh.return_value = fake_ssh
+        mock_interactive.return_value = (True, "Object value modified successfully")
+
+        ok = _deploy_idrac(
+            "10.25.255.10",
+            {
+                "svc_name": "dc01-admin",
+                "svc_pass": secret,
+                "rsa_pubkey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ test",
+            },
+            "bootstrap-pass",
+            "",
+            "freq-ops",
+        )
+
+        self.assertTrue(ok)
+        command_text = "\n".join(c["cmd"] for c in calls)
+        self.assertNotIn(secret, command_text)
+        interactive_args = mock_interactive.call_args_list[0][0]
+        self.assertEqual(interactive_args[5], f"racadm set iDRAC.Users.8.Password {secret}")
+        self.assertEqual(mock_interactive.call_args_list[0][1]["redact"], secret)
+
+    @patch("freq.modules.init_cmd._ssh_with_pass")
+    def test_idrac_interactive_command_redacts_echoed_secret(self, mock_ssh_with_pass):
+        from freq.modules.init_cmd import _run_idrac_interactive_command
+
+        secret = "SvcPass-Not-In-Logs"
+        mock_ssh_with_pass.return_value = (
+            255,
+            f"/admin1-> racadm set iDRAC.Users.8.Password {secret}\nObject value modified successfully\n/admin1-> exit\n",
+            "CLP Session terminated",
+        )
+
+        ok, details = _run_idrac_interactive_command(
+            "10.25.255.10",
+            "bootstrap-pass",
+            "",
+            "freq-ops",
+            ["-o", "KexAlgorithms=+diffie-hellman-group14-sha1"],
+            f"racadm set iDRAC.Users.8.Password {secret}",
+            redact=secret,
+        )
+
+        self.assertTrue(ok)
+        self.assertNotIn(secret, details)
+        self.assertIn("<redacted>", details)
+        cmd = mock_ssh_with_pass.call_args[0][1]
+        self.assertNotIn(secret, " ".join(cmd))
+        self.assertIn(secret, mock_ssh_with_pass.call_args[1]["input_text"])
+
 
 class TestHeadlessFleetDeployTruth(unittest.TestCase):
+    @patch("freq.modules.init_cmd._run")
+    def test_init_ssh_uses_noninteractive_sudo_for_privileged_bootstrap(self, mock_run):
+        from freq.modules.init_cmd import _init_ssh
+
+        mock_run.return_value = (0, "", "")
+        ssh = _init_ssh("10.0.0.1", "", "/tmp/bootstrap-key", "freq-ops")
+        ssh("id", as_root=True)
+
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("sudo -n sh", cmd[-1])
+
+    @patch("freq.modules.init_cmd.audit")
+    @patch("freq.modules.init_cmd.logger")
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.init_cmd._init_ssh")
+    def test_truenas_deploy_uses_storage_timeout_and_reports_timeout(self, mock_init_ssh, mock_fmt, _logger, _audit):
+        from freq.modules.init_cmd import _deploy_linux, TRUENAS_DEPLOY_TIMEOUT
+
+        calls = []
+
+        def fake_ssh(cmd, extra_opts=None, timeout=None, as_root=False):
+            calls.append({"cmd": cmd, "timeout": timeout, "as_root": as_root})
+            if cmd == "echo OK":
+                return 0, "OK\n", ""
+            return 124, "", f"command timed out after {timeout}s"
+
+        mock_init_ssh.return_value = fake_ssh
+        ok = _deploy_linux(
+            "10.25.10.201",
+            {"svc_name": "dc01-admin", "svc_pass": "secret", "pubkey": "ssh-ed25519 AAA test"},
+            "",
+            "/tmp/fleet_key",
+            "freq-ops",
+            htype="truenas",
+        )
+
+        self.assertFalse(ok)
+        self.assertEqual(calls[1]["timeout"], TRUENAS_DEPLOY_TIMEOUT)
+        messages = " ".join(str(c.args[0]) for c in mock_fmt.step_fail.call_args_list)
+        self.assertIn("TrueNAS deploy script timed out", messages)
+
+    @patch("freq.modules.init_cmd.fmt")
+    def test_truenas_target_api_only_credentials_fail_preflight(self, mock_fmt):
+        from freq.modules.init_cmd import _validate_truenas_deployment_credentials
+
+        ok = _validate_truenas_deployment_credentials({
+            "truenas": {"api_key": "tn-secret", "api_key_only": True, "host": "10.25.255.25"},
+            "truenas-lab": {"api_key": "tn-lab-secret", "api_key_only": True, "host": "10.25.10.201"},
+        })
+
+        self.assertFalse(ok)
+        messages = " ".join(str(c.args[0]) for c in mock_fmt.step_fail.call_args_list)
+        self.assertIn("TrueNAS target [truenas] has host(s) but only API credentials", messages)
+        self.assertIn("TrueNAS target [truenas-lab] has host(s) but only API credentials", messages)
+
+    @patch("freq.modules.init_cmd.fmt")
+    def test_truenas_target_with_ssh_credentials_passes_preflight(self, mock_fmt):
+        from freq.modules.init_cmd import _validate_truenas_deployment_credentials
+
+        ok = _validate_truenas_deployment_credentials({
+            "truenas": {"user": "root", "password": "secret", "host": "10.25.255.25"},
+            "truenas-lab": {"user": "root", "key_path": "/tmp/fleet_key", "host": "10.25.10.201"},
+        })
+
+        self.assertTrue(ok)
+        mock_fmt.step_fail.assert_not_called()
+
     @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
     @patch("freq.modules.init_cmd._run")
     @patch("freq.modules.init_cmd.fmt")
@@ -372,8 +910,71 @@ class TestHeadlessFleetDeployTruth(unittest.TestCase):
         mock_run.assert_not_called()
         mock_dispatch.assert_not_called()
         fail_messages = " ".join(str(c.args[0]) for c in mock_fmt.step_fail.call_args_list)
-        self.assertIn("Core TrueNAS has API credentials only", fail_messages)
+        self.assertIn("TrueNAS 'truenas' has API credentials only", fail_messages)
         self.assertIn("ssh_key_file", fail_messages)
+
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_named_truenas_api_only_credentials_fail_deploy(self, mock_fmt, mock_run, mock_dispatch):
+        from freq.modules.init_cmd import _headless_fleet_deploy
+
+        cfg = types.SimpleNamespace(
+            pve_nodes=[],
+            pve_node_names=[],
+            hosts=[types.SimpleNamespace(ip="10.25.10.201", label="truenas-lab", htype="truenas")],
+            ssh_service_account="freq-admin",
+        )
+        ctx = {"svc_name": "freq-admin", "svc_pass": "SvcPass2026!"}
+
+        _headless_fleet_deploy(
+            cfg,
+            ctx,
+            bootstrap_key="/home/freq-ops/.ssh/fleet_key",
+            bootstrap_user="freq-ops",
+            bootstrap_pass="",
+            device_creds={"truenas-lab": {"api_key": "tn-lab-secret", "api_key_only": True, "host": "10.25.10.201"}},
+            pve_only=False,
+        )
+
+        mock_run.assert_not_called()
+        mock_dispatch.assert_not_called()
+        self.assertEqual(ctx.get("fleet_deploy_failures"), 1)
+        fail_messages = " ".join(str(c.args[0]) for c in mock_fmt.step_fail.call_args_list)
+        self.assertIn("TrueNAS 'truenas-lab' has API credentials only", fail_messages)
+
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch")
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.fmt")
+    def test_named_truenas_uses_matching_ssh_credentials(self, mock_fmt, mock_run, mock_dispatch):
+        from freq.modules.init_cmd import _headless_fleet_deploy
+
+        cfg = types.SimpleNamespace(
+            pve_nodes=[],
+            pve_node_names=[],
+            hosts=[types.SimpleNamespace(ip="10.25.10.201", label="truenas-lab", htype="truenas")],
+            ssh_service_account="freq-admin",
+        )
+        ctx = {"svc_name": "freq-admin", "svc_pass": "SvcPass2026!"}
+        mock_run.return_value = (0, "OK", "")
+        mock_dispatch.return_value = True
+
+        _headless_fleet_deploy(
+            cfg,
+            ctx,
+            bootstrap_key="/home/freq-ops/.ssh/fleet_key",
+            bootstrap_user="freq-ops",
+            bootstrap_pass="",
+            device_creds={"truenas-lab": {"user": "root", "password": "labpass", "host": "10.25.10.201"}},
+            pve_only=False,
+        )
+
+        ssh_check = mock_run.call_args_list[0][0][0]
+        self.assertIn("root@10.25.10.201", ssh_check)
+        self.assertIn("sshpass", ssh_check)
+        dispatch_args = mock_dispatch.call_args[0]
+        self.assertEqual(dispatch_args[3], "labpass")
+        self.assertEqual(dispatch_args[5], "root")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1666,6 +2267,146 @@ class TestPhaseDiscoverScopedHosts(unittest.TestCase):
         with open(self.freq_toml) as f:
             self.assertNotIn('truenas_ip = "192.168.255.25"', f.read())
 
+    def test_device_credentials_parse_physical_scope(self):
+        from freq.modules.init_cmd import _load_device_credentials
+
+        cred_path = os.path.join(self.tmpdir, "device-credentials.toml")
+        pw_path = os.path.join(self.tmpdir, "pw")
+        with open(pw_path, "w") as f:
+            f.write("secret")
+        with open(cred_path, "w") as f:
+            f.write("[pfsense]\n")
+            f.write('host = "10.25.10.1"\n')
+            f.write('user = "admin"\n')
+            f.write(f'password_file = "{pw_path}"\n')
+            f.write('scope = "lab"\n')
+            f.write('label = "lab-firewall"\n')
+
+        creds = _load_device_credentials(cred_path)
+
+        self.assertEqual(creds["pfsense"]["scope"], "lab")
+        self.assertEqual(creds["pfsense"]["label"], "lab-firewall")
+
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.discover.scan_and_identify")
+    @patch("freq.modules.init_cmd._run")
+    def test_lab_scoped_physical_credentials_do_not_write_core_infra(self, mock_run, mock_scan, mock_fmt):
+        from freq.modules.init_cmd import _phase_fleet_discover
+
+        cfg = MagicMock()
+        cfg.conf_dir = self.tmpdir
+        cfg.hosts_file = self.cfg_hosts_file
+        cfg.hosts = []
+        cfg.pve_nodes = ["10.25.255.26"]
+        cfg.pve_node_names = ["pve01"]
+        cfg.vlans = []
+        cfg.vm_gateway = ""
+        cfg.pfsense_ip = ""
+        cfg.truenas_ip = ""
+        cfg.switch_ip = ""
+        cfg.fleet_boundaries = types.SimpleNamespace(categories={}, physical={})
+        cfg.pve_api_token_id = ""
+        cfg.pve_api_token_secret = ""
+
+        ctx = {
+            "key_path": "/tmp/fake",
+            "svc_name": "freq-admin",
+            "device_creds": {
+                "pfsense": {
+                    "user": "admin",
+                    "password": "secret",
+                    "host": "10.25.10.1",
+                    "scope": "lab",
+                    "label": "lab-firewall",
+                },
+                "truenas": {
+                    "user": "root",
+                    "password": "secret",
+                    "host": "10.25.10.201",
+                    "scope": "lab",
+                    "label": "lab-truenas",
+                },
+            },
+        }
+        args = types.SimpleNamespace(
+            headless=True,
+            hosts_file=None,
+            device_credentials=None,
+            core_devices=None,
+            lab_devices=None,
+        )
+
+        mock_run.return_value = (1, "", "not mocked")
+        mock_scan.return_value = ([], [])
+
+        _phase_fleet_discover(cfg, ctx, args)
+
+        self.assertEqual(cfg.pfsense_ip, "")
+        self.assertEqual(cfg.truenas_ip, "")
+        self.assertTrue(any(h.label == "lab-firewall" and "lab" in h.groups for h in cfg.hosts))
+        self.assertTrue(any(h.label == "lab-truenas" and "lab" in h.groups for h in cfg.hosts))
+
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.discover.scan_and_identify")
+    @patch("freq.modules.init_cmd._run")
+    def test_device_credential_host_merges_pve_multinic_discovery(self, mock_run, mock_scan, mock_fmt):
+        from freq.modules.init_cmd import _phase_fleet_discover
+
+        cfg = MagicMock()
+        cfg.conf_dir = self.tmpdir
+        cfg.hosts_file = self.cfg_hosts_file
+        cfg.hosts = []
+        cfg.pve_nodes = ["10.25.255.26"]
+        cfg.pve_node_names = ["pve01"]
+        cfg.vlans = []
+        cfg.vm_gateway = ""
+        cfg.pfsense_ip = ""
+        cfg.truenas_ip = ""
+        cfg.switch_ip = ""
+        cfg.fleet_boundaries = types.SimpleNamespace(categories={}, physical={})
+        cfg.pve_api_token_id = ""
+        cfg.pve_api_token_secret = ""
+
+        ctx = {
+            "key_path": "/tmp/fake",
+            "svc_name": "freq-admin",
+            "device_creds": {
+                "truenas-lab": {"user": "root", "password": "secret", "host": "10.25.10.201"},
+            },
+        }
+        args = types.SimpleNamespace(headless=True, hosts_file=None, device_credentials=None)
+
+        vm_list = '[{"vmid":5001,"name":"truenas-lab","status":"running","type":"qemu","node":"pve01"}]'
+        agent_ips = (
+            '{"result":[{"name":"eth0","ip-addresses":['
+            '{"ip-address-type":"ipv4","ip-address":"192.168.255.25"},'
+            '{"ip-address-type":"ipv4","ip-address":"192.168.25.25"},'
+            '{"ip-address-type":"ipv4","ip-address":"10.25.10.201"}]}]}'
+        )
+
+        def run_side_effect(cmd, timeout=30):
+            cmd_str = " ".join(cmd)
+            if "/cluster/resources --type vm" in cmd_str:
+                return 0, vm_list, ""
+            if "qm agent 5001 network-get-interfaces" in cmd_str:
+                return 0, agent_ips, ""
+            return 1, "", "not mocked"
+
+        mock_run.side_effect = run_side_effect
+        mock_scan.return_value = ([], [])
+
+        _phase_fleet_discover(cfg, ctx, args)
+
+        lab_hosts = [h for h in cfg.hosts if h.label == "truenas-lab"]
+        self.assertEqual(len(lab_hosts), 1)
+        self.assertEqual(lab_hosts[0].ip, "10.25.10.201")
+        self.assertEqual(lab_hosts[0].vmid, 5001)
+        self.assertTrue(lab_hosts[0].managed)
+        self.assertIn("192.168.255.25", lab_hosts[0].all_ips)
+        self.assertIn("192.168.25.25", lab_hosts[0].all_ips)
+        self.assertIn("10.25.10.201", lab_hosts[0].all_ips)
+        self.assertFalse(any(h.ip == "192.168.255.25" for h in cfg.hosts))
+
     @patch("freq.modules.init_cmd.fmt")
     @patch("freq.modules.discover.scan_and_identify")
     @patch("freq.modules.init_cmd._run")
@@ -1708,9 +2449,11 @@ class TestPhaseDiscoverScopedHosts(unittest.TestCase):
         self.assertIn("bmc-10", by_label)
         self.assertIn("bmc-11", by_label)
         self.assertIn("truenas", by_label)
+        self.assertIn("truenas-lab", by_label)
+        self.assertIn("firewall", by_label)
+        self.assertTrue(by_label["firewall"].managed)
         self.assertTrue(by_label["truenas"].managed)
-        self.assertNotIn("firewall", by_label)
-        self.assertNotIn("truenas-lab", by_label)
+        self.assertTrue(by_label["truenas-lab"].managed)
         self.assertEqual(cfg.pfsense_ip, "10.25.255.1")
         self.assertEqual(cfg.switch_ip, "10.25.255.5")
         self.assertEqual(cfg.truenas_ip, "10.25.255.25")
@@ -1723,7 +2466,62 @@ class TestPhaseDiscoverScopedHosts(unittest.TestCase):
     @patch("freq.modules.init_cmd.fmt")
     @patch("freq.modules.discover.scan_and_identify")
     @patch("freq.modules.init_cmd._run")
-    def test_existing_pfsense_with_bootstrap_creds_is_repaired_to_probe_only(self, mock_run, mock_scan, mock_fmt):
+    def test_truenas_credentials_override_nexus_storage_vlan_discovery(self, mock_run, mock_scan, mock_fmt):
+        from freq.modules.init_cmd import _phase_fleet_discover
+
+        cfg = MagicMock()
+        cfg.conf_dir = self.tmpdir
+        cfg.hosts_file = self.cfg_hosts_file
+        cfg.hosts = []
+        cfg.pve_nodes = ["10.25.255.26"]
+        cfg.pve_node_names = ["pve01"]
+        cfg.vlans = []
+        cfg.vm_gateway = ""
+        cfg.pfsense_ip = ""
+        cfg.truenas_ip = ""
+        cfg.switch_ip = ""
+        cfg.fleet_boundaries = types.SimpleNamespace(categories={}, physical={})
+
+        ctx = {
+            "key_path": "/tmp/fake",
+            "svc_name": "freq-admin",
+            "device_creds": {
+                "truenas": {"api_key": "secret", "api_key_only": True, "host": "10.25.255.25"},
+            },
+        }
+        args = types.SimpleNamespace(headless=True, hosts_file=None, device_credentials=None)
+
+        vm_list = '[{"vmid":108,"name":"nexus","status":"running","type":"qemu","node":"pve01"}]'
+        agent_ips = '{"result":[{"name":"eth0","ip-addresses":[{"ip-address-type":"ipv4","ip-address":"10.25.255.8"},{"ip-address-type":"ipv4","ip-address":"10.25.25.8"}]}]}'
+
+        def run_side_effect(cmd, timeout=30):
+            cmd_str = " ".join(cmd)
+            if "/cluster/resources --type vm" in cmd_str:
+                return 0, vm_list, ""
+            if "qm agent 108 network-get-interfaces" in cmd_str:
+                return 0, agent_ips, ""
+            return 1, "", "not mocked"
+
+        mock_run.side_effect = run_side_effect
+        mock_scan.return_value = ([], [])
+
+        _phase_fleet_discover(cfg, ctx, args)
+
+        by_label = {h.label: h for h in cfg.hosts}
+        self.assertIn("truenas", by_label)
+        self.assertEqual(by_label["truenas"].ip, "10.25.255.25")
+        self.assertTrue(by_label["truenas"].managed)
+        self.assertNotIn("nexus", by_label)
+        self.assertEqual(cfg.truenas_ip, "10.25.255.25")
+        with open(self.freq_toml) as f:
+            content = f.read()
+        self.assertIn('truenas_ip = "10.25.255.25"', content)
+        self.assertNotIn('truenas_ip = "10.25.255.8"', content)
+
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.discover.scan_and_identify")
+    @patch("freq.modules.init_cmd._run")
+    def test_existing_pfsense_with_bootstrap_creds_stays_managed(self, mock_run, mock_scan, mock_fmt):
         from freq.core.config import Host, save_hosts_toml
         from freq.modules.init_cmd import _phase_fleet_discover
 
@@ -1762,9 +2560,9 @@ class TestPhaseDiscoverScopedHosts(unittest.TestCase):
 
         _phase_fleet_discover(cfg, ctx, args)
 
-        self.assertFalse(cfg.hosts[0].managed)
+        self.assertTrue(cfg.hosts[0].managed)
         with open(cfg.hosts_file) as f:
-            self.assertIn("managed = false", f.read())
+            self.assertNotIn("managed = false", f.read())
 
     @patch("freq.modules.vault._vault_key", return_value="0" * 64)
     def test_truenas_vault_seeding_preserves_core_and_lab_namespaces(self, _mock_key):

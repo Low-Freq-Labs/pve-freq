@@ -24,7 +24,9 @@ class TestIdentityContractDoc(unittest.TestCase):
 
     def test_identity_contract_pins_core_rules(self):
         src = _read("docs/IDENTITY-CONTRACT.md")
+        self.assertIn("`root` and `freq-ops` are the only bootstrap/run-as identities", src)
         self.assertIn("`freq-ops` is the bootstrap/sudo identity", src)
+        self.assertIn("`pve-freq-svc-account`", src)
         self.assertIn("`cfg.ssh_service_account` is the deployed fleet service account", src)
         self.assertIn("`freq-admin` is only the default deployed service-account name", src)
         self.assertIn("TrueNAS has a two-phase identity contract", src)
@@ -85,7 +87,8 @@ class TestInitLifecycleIdentityBoundaries(unittest.TestCase):
     def test_init_phase_plan_keeps_service_account_and_pve_api_separate(self):
         src = _read("freq/modules/init_cmd.py")
         plan_block = src.split('("Phase 2", "Cluster Config + VLAN Discovery"')[1].split('("SSH Account", cfg.ssh_service_account),')[0]
-        self.assertIn("Create '{cfg.ssh_service_account}'", plan_block)
+        self.assertIn("bootstrap auth as root/freq-ops", plan_block)
+        self.assertIn("Create pve-freq-svc-account '{cfg.ssh_service_account}'", plan_block)
         # Phase 6 plan line uses
         # an f-string so the displayed token id always matches the
         # currently-configured service account, not a hardcoded legacy.
@@ -94,17 +97,19 @@ class TestInitLifecycleIdentityBoundaries(unittest.TestCase):
             plan_block,
         )
         self.assertNotIn("Create freq-ops@pam!freq-rw token", plan_block)
+        self.assertIn("service account is not a web login", plan_block)
+        self.assertIn("store/verify platform credentials or mark unconfigured", plan_block)
 
-    def test_headless_seed_only_bootstrap_user_gets_dashboard_password(self):
+    def test_headless_seed_only_human_dashboard_user_gets_dashboard_password(self):
         src = _read("freq/modules/init_cmd.py")
         block = src.split("def _seed_headless_dashboard_auth")[1].split("\ndef ")[0]
-        self.assertIn("Only the bootstrap user gets a dashboard password", block)
+        self.assertIn("Only a human dashboard user gets a dashboard password", block)
         self.assertIn("service account runs", block)
 
     def test_runtime_terminal_uses_configured_service_account(self):
         src = _read("freq/api/terminal.py")
         self.assertIn("def _terminal_ssh_auth", src)
-        self.assertIn('if htype in ("idrac", "switch", "truenas")', src)
+        self.assertIn('if htype in ("pfsense", "idrac", "switch", "truenas")', src)
         self.assertIn("resolve_staged_device_ssh_auth(cfg, htype)", src)
         self.assertIn('ssh_user = auth["user"]', src)
         self.assertNotIn('cfg.ssh_service_account or "freq-ops"', src)
@@ -125,6 +130,14 @@ class TestInitLifecycleIdentityBoundaries(unittest.TestCase):
         # The legacy hardcoded strings must not return.
         self.assertNotIn("freq-ops@pam!freq-rw", token_block)
         self.assertNotIn("pveum user add freq-ops@pam", token_block)
+
+    def test_init_does_not_seed_service_account_as_web_admin(self):
+        """The managed service account must not become a human dashboard principal."""
+        src = _read("freq/modules/init_cmd.py")
+        self.assertNotIn('f.write(f"{svc_name}:admin\\n")', src)
+        self.assertNotIn('f.write(f"{svc_name} admin\\n")', src)
+        self.assertIn("Service account {svc_name} is runtime-only, not a web login", src)
+        self.assertIn("users.conf seeded with dashboard admin", src)
 
 
 if __name__ == "__main__":

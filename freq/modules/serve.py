@@ -37,6 +37,7 @@ import socket
 import ssl
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -48,7 +49,7 @@ from urllib.parse import urlparse, parse_qs
 from freq.core import audit
 from freq.core import log as logger
 from freq.core import resolve as res
-from freq.core.config import load_config
+from freq.core.config import load_config, load_toml
 from freq.core.health_state import (
     STATE_LIVE,
     STATE_STALE,
@@ -64,7 +65,7 @@ from freq.core.health_state import (
 )
 from freq.core.ssh import run as ssh_single, run_many as ssh_run_many
 from freq.core import truenas_api
-from freq.core.device_credentials import resolve_device_ssh_auth
+from freq.core.device_credentials import resolve_device_ssh_auth, resolve_staged_device_ssh_auth
 from freq.core.validate import (
     label as valid_label,
 )
@@ -78,6 +79,20 @@ from freq.jarvis.risk import _load_kill_chain
 
 IDRAC_READ_CONNECT_TIMEOUT = 10
 IDRAC_READ_COMMAND_TIMEOUT = 30
+IDRAC_SESSION_LOCK = threading.Lock()
+IDRAC_SESSION_GAP_SECONDS = 2.0
+_idrac_last_session_at = 0.0
+
+
+def _redact_device_command_output(output: str) -> str:
+    """Strip secrets from raw device CLI output before it reaches the UI."""
+    text = str(output or "")
+    text = re.sub(
+        r"(?im)^(\s*(?:private key|preshared key)\s*:\s*).*$",
+        r"\1[redacted]",
+        text,
+    )
+    return text
 
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
@@ -122,6 +137,18 @@ _host_backoff_started_at = {}    # ip -> unix ts when current backoff began
 _host_recovering = set()         # ip -> just came back, hold 'recovering' one cycle
 _SERVER_START_TIME = time.monotonic()
 DEFAULT_LOG_LINES = 50
+
+
+def _run_idrac_subprocess(cmd, timeout):
+    """Serialize iDRAC SSH reads to avoid exhausting legacy BMC sessions."""
+    global _idrac_last_session_at
+    with IDRAC_SESSION_LOCK:
+        since = time.monotonic() - _idrac_last_session_at
+        if since < IDRAC_SESSION_GAP_SECONDS:
+            time.sleep(IDRAC_SESSION_GAP_SECONDS - since)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        _idrac_last_session_at = time.monotonic()
+        return proc
 
 # ── BACKGROUND CACHE ENGINE ──────────────────────────────────────────────
 # Probes run in a background thread on a loop. API endpoints always serve
@@ -287,6 +314,71 @@ def _reuse_skipped_health(prev: dict, now_wall: float, skip_reason: str) -> dict
     return mark_stale(prev, now_wall, skip_reason)
 
 
+def _reuse_recent_legacy_success(prev: dict, now_wall: float, failure_reason: str):
+    """Reuse a recent successful legacy-controller probe after transient noise.
+
+    iDRAC and older switches have tiny SSH session pools and occasionally
+    reject or stall a read while remaining reachable. If the previous real
+    probe was green and still inside the legacy freshness window, preserve that
+    truth and annotate the transient failure instead of turning the dashboard
+    red for a session-limit/timeout blip.
+    """
+    if not isinstance(prev, dict):
+        return None
+    state = str(prev.get("state") or prev.get("status") or "").lower()
+    if state not in {STATE_LIVE, STATE_RECOVERING}:
+        return None
+    try:
+        probed_at = float(prev.get("probed_at") or prev.get("last_success_at") or 0)
+    except (TypeError, ValueError):
+        probed_at = 0
+    if not probed_at:
+        return None
+    age = now_wall - probed_at
+    if age < 0 or age > (LEGACY_PROBE_INTERVAL * 6):
+        return None
+    reused = dict(prev)
+    reused["freshness"] = "recent_success_reused"
+    reused["freshness_reason"] = f"transient legacy probe failure: {failure_reason}"
+    reused["last_transient_error"] = failure_reason
+    reused["age_seconds"] = round(age, 1)
+    return reused
+
+
+def _reuse_recent_infra_device_success(prev: dict, now_wall: float, failure_reason: str):
+    """Reuse recent green infra truth for slow legacy management devices.
+
+    The health probe already preserves recent green iDRAC/switch evidence after
+    transient session-limit or timeout noise. The infra_quick probe needs the
+    same behavior because watchdog treats core infra_quick failures as hard
+    health failures.
+    """
+    if not isinstance(prev, dict):
+        return None
+    if prev.get("reachable") is not True or prev.get("auth_failed"):
+        return None
+    try:
+        probed_at = float(prev.get("probed_at") or 0)
+    except (TypeError, ValueError):
+        probed_at = 0
+    if not probed_at:
+        return None
+    age = now_wall - probed_at
+    if age < 0 or age > (LEGACY_PROBE_INTERVAL * 6):
+        return None
+    reused = dict(prev)
+    metrics = dict(reused.get("metrics") or {})
+    metrics["note"] = f"Recent green reused after transient legacy probe failure: {failure_reason}"
+    reused["metrics"] = metrics
+    reused["probe_method"] = "recent_success_reused"
+    reused["freshness"] = "recent_success_reused"
+    reused["freshness_reason"] = failure_reason
+    reused["age_seconds"] = round(age, 1)
+    reused["reachable"] = True
+    reused["auth_failed"] = False
+    return reused
+
+
 # ── ACTIVITY FEED ────────────────────────────────────────────────────────
 # Ring buffer for recent system events — powers the dashboard activity widget.
 # Max 200 events kept in memory, newest first.
@@ -381,6 +473,22 @@ def _bg_probe_infra():
         return  # Config load failure should not crash background probes
     fb = cfg.fleet_boundaries
     start = time.monotonic()
+    now_wall = time.time()
+    previous_devices = {}
+    try:
+        with _bg_lock:
+            previous = _bg_cache.get("infra_quick")
+        if isinstance(previous, dict):
+            previous_probed_at = previous.get("probed_at")
+            for item in previous.get("devices", []) or []:
+                if isinstance(item, dict):
+                    item = dict(item)
+                    item.setdefault("probed_at", previous_probed_at)
+                    token = item.get("key") or item.get("label") or item.get("ip")
+                    if token:
+                        previous_devices[str(token)] = item
+    except Exception:
+        previous_devices = {}
 
     def _ping_check(ip):
         """Quick ICMP fallback for devices where SSH/API isn't available."""
@@ -415,7 +523,7 @@ def _bg_probe_infra():
     svc_user = cfg.ssh_service_account
     svc_key = cfg.ssh_key_path
     legacy_key = cfg.ssh_rsa_key_path or svc_key
-    pfsense_auth = resolve_device_ssh_auth(cfg, "pfsense")
+    pfsense_auth = resolve_staged_device_ssh_auth(cfg, "pfsense")
 
     def _is_auth_failure(stderr):
         """Detect SSH permission denied in stderr.
@@ -429,8 +537,37 @@ def _bg_probe_infra():
         return "permission denied" in s or "publickey" in s
 
     def _probe_device(key, dev):
-        d = {"key": key, "label": dev.label, "type": dev.device_type, "ip": dev.ip, "reachable": False, "auth_failed": False, "probe_method": "none", "metrics": {}}
+        d = {
+            "key": key,
+            "label": dev.label,
+            "type": dev.device_type,
+            "ip": dev.ip,
+            "groups": dev.groups,
+            "scope": dev.scope,
+            "reachable": False,
+            "auth_failed": False,
+            "probe_method": "none",
+            "metrics": {},
+            "probed_at": now_wall,
+        }
+        prev_device = (
+            previous_devices.get(str(key))
+            or previous_devices.get(str(dev.label))
+            or previous_devices.get(str(dev.ip))
+        )
         dt = dev.device_type
+        def _reuse_recent_device(reason):
+            if dt not in LEGACY_HTYPES:
+                return None
+            reused = _reuse_recent_infra_device_success(prev_device, now_wall, reason)
+            if reused is not None:
+                logger.info(
+                    "infra_quick_reused_recent_legacy_success",
+                    device=dev.label,
+                    reason=reason,
+                    age_seconds=reused.get("age_seconds"),
+                )
+            return reused
         try:
             if dt == "pfsense":
                 r = ssh_single(
@@ -439,6 +576,8 @@ def _bg_probe_infra():
                     key_path=pfsense_auth["key_path"],
                     user=pfsense_auth["user"],
                     local_user=pfsense_auth.get("local_user"),
+                    password_file=pfsense_auth.get("password_file") or None,
+                    sudo_password_file=pfsense_auth.get("sudo_password_file", False),
                     connect_timeout=2,
                     command_timeout=5,
                     htype="pfsense",
@@ -485,13 +624,55 @@ def _bg_probe_infra():
                     if not alert_err and isinstance(alerts, list):
                         d["metrics"]["alerts"] = len(alerts)
                 else:
-                    d["api_available"] = False
-                    d["reachable"] = _ping_check(dev.ip)
-                    d["probe_method"] = "truenas_api_key_failed" if d["reachable"] else "truenas_api_unreachable"
-                    d["metrics"]["note"] = (
-                        pool_err["error"] if d["reachable"]
-                        else f"Network unreachable; {pool_err['error']}"
+                    auth = resolve_staged_device_ssh_auth(cfg, "truenas")
+                    r = ssh_single(
+                        host=dev.ip,
+                        command=(
+                            "hostname && uptime && "
+                            "zpool list -o name,size,alloc,free,health -H 2>/dev/null"
+                        ),
+                        user=auth.get("user") or cfg.ssh_service_account,
+                        key_path=auth.get("key_path") or svc_key,
+                        local_user=auth.get("local_user") or None,
+                        password_file=auth.get("password_file") or None,
+                        sudo_password_file=auth.get("sudo_password_file", False),
+                        connect_timeout=5,
+                        command_timeout=10,
+                        htype="truenas",
+                        use_sudo=False,
+                        cfg=cfg,
+                        failure_log_level="warn",
                     )
+                    if r.returncode == 0 and r.stdout.strip():
+                        d["api_available"] = False
+                        d["ssh_available"] = True
+                        d["reachable"] = True
+                        d["probe_method"] = "ssh"
+                        lines = [line.strip() for line in r.stdout.splitlines() if line.strip()]
+                        if len(lines) > 1:
+                            d["metrics"]["uptime"] = lines[1][:120]
+                        pools = []
+                        for line in lines[2:]:
+                            parts = re.split(r"\s+", line)
+                            if len(parts) >= 5:
+                                pools.append({
+                                    "name": parts[0],
+                                    "size": parts[1],
+                                    "alloc": parts[2],
+                                    "free": parts[3],
+                                    "health": parts[4],
+                                })
+                        if pools:
+                            d["metrics"]["pools"] = pools
+                            d["metrics"]["pool_health"] = pools[0].get("health", "")
+                    else:
+                        d["api_available"] = False
+                        d["reachable"] = _ping_check(dev.ip)
+                        d["probe_method"] = "truenas_api_unreachable" if not d["reachable"] else "network"
+                        if d["reachable"]:
+                            d["metrics"]["note"] = "Network reachable, no TrueNAS API or SSH metrics"
+                        else:
+                            d["metrics"]["note"] = f"Network unreachable; {pool_err['error']}"
             elif dt == "switch":
                 # Switch: password auth via sshpass (Cisco IOS needs legacy ciphers)
                 sw_pass_file = os.path.join(os.path.dirname(cfg.conf_dir), "credentials", "switch-password")
@@ -558,7 +739,7 @@ def _bg_probe_infra():
                     f"{idrac_user}@{dev.ip}",
                     "racadm getsysinfo -s",
                 ]
-                proc = subprocess.run(idrac_cmd, capture_output=True, text=True, timeout=IDRAC_READ_COMMAND_TIMEOUT)
+                proc = _run_idrac_subprocess(idrac_cmd, IDRAC_READ_COMMAND_TIMEOUT)
                 r = type("R", (), {"returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})()
 
                 # Fallback: if key auth hit a permission-denied, try sshpass
@@ -575,7 +756,7 @@ def _bg_probe_infra():
                             f"{idrac_user}@{dev.ip}",
                             "racadm getsysinfo -s",
                         ]
-                        proc2 = subprocess.run(sshpass_cmd, capture_output=True, text=True, timeout=IDRAC_READ_COMMAND_TIMEOUT)
+                        proc2 = _run_idrac_subprocess(sshpass_cmd, IDRAC_READ_COMMAND_TIMEOUT)
                         r = type("R", (), {"returncode": proc2.returncode, "stdout": proc2.stdout, "stderr": proc2.stderr})()
                 if r.returncode == 0 and r.stdout.strip():
                     d["reachable"] = True
@@ -601,6 +782,9 @@ def _bg_probe_infra():
                     d["reachable"] = _network_reachable(dev)
                     d["probe_method"] = "network" if d["reachable"] else "none"
                     if d["reachable"]:
+                        reused = _reuse_recent_device((r.stderr or r.stdout or "no SSH metrics").strip()[:200])
+                        if reused is not None:
+                            return reused
                         d["metrics"]["note"] = "Network reachable, no SSH metrics"
             else:
                 # Unknown device type — ping-only probe. The health probe
@@ -610,7 +794,18 @@ def _bg_probe_infra():
                 d["probe_method"] = "network" if d["reachable"] else "none"
                 if d["reachable"]:
                     d["metrics"]["note"] = "Network reachable — see /api/health for SSH probe state"
+        except subprocess.TimeoutExpired as e:
+            reused = _reuse_recent_device(f"timeout after {getattr(e, 'timeout', 'unknown')}s")
+            if reused is not None:
+                return reused
+            d["reachable"] = _network_reachable(dev)
+            d["probe_method"] = "network" if d["reachable"] else "none"
+            d["metrics"]["note"] = f"Legacy probe timed out after {getattr(e, 'timeout', 'unknown')}s"
+            logger.warning(f"bg_probe_infra: probe timed out for {key} ({dev.ip}): {e}")
         except Exception as e:
+            reused = _reuse_recent_device(str(e)[:200])
+            if reused is not None:
+                return reused
             logger.warning(f"bg_probe_infra: probe failed for {key} ({dev.ip}): {e}")
         return d
 
@@ -623,7 +818,15 @@ def _bg_probe_infra():
             except Exception as e:
                 logger.warning(f"bg_probe_infra: future failed for {futures[f]}: {e}")
 
-    result = {"devices": devices, "duration": round(time.monotonic() - start, 2), "probed_at": time.time()}
+    core_devices = [d for d in devices if d.get("scope", "core") != "lab"]
+    lab_devices = [d for d in devices if d.get("scope", "core") == "lab"]
+    result = {
+        "devices": devices,
+        "core_devices": core_devices,
+        "lab_devices": lab_devices,
+        "duration": round(time.monotonic() - start, 2),
+        "probed_at": time.time(),
+    }
     with _bg_lock:
         _bg_cache["infra_quick"] = result
         _bg_cache_ts["infra_quick"] = time.time()
@@ -707,21 +910,58 @@ def _bg_probe_health():
         cmd = HEALTH_CMDS.get(htype, HEALTH_CMDS["linux"])
         use_sudo = False
         probe_key = (cfg.ssh_rsa_key_path or cfg.ssh_key_path) if htype in ("idrac", "switch") else cfg.ssh_key_path
+        probe_user = None
+        probe_local_user = None
+        probe_password_file = None
+        probe_sudo_password_file = False
+        if htype in ("pfsense", "idrac", "switch", "truenas"):
+            auth = resolve_staged_device_ssh_auth(cfg, htype)
+            probe_key = auth.get("key_path") or probe_key
+            probe_user = auth.get("user") or None
+            probe_local_user = auth.get("local_user") or None
+            probe_password_file = auth.get("password_file") or None
+            probe_sudo_password_file = auth.get("sudo_password_file", False)
         now = time.time()
         _groups = getattr(h, "groups", "") or ""
         prev_failures = _host_fail_count.get(h.ip, 0)
         last_success_at = _host_last_success_at.get(h.ip)
 
-        r = ssh_single(
-            host=h.ip,
-            command=cmd,
-            key_path=probe_key,
-            connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=15,
-            htype=htype,
-            use_sudo=use_sudo,
-            cfg=cfg,
-        )
+        if htype == "idrac":
+            global _idrac_last_session_at
+            with IDRAC_SESSION_LOCK:
+                since = time.monotonic() - _idrac_last_session_at
+                if since < IDRAC_SESSION_GAP_SECONDS:
+                    time.sleep(IDRAC_SESSION_GAP_SECONDS - since)
+                r = ssh_single(
+                    host=h.ip,
+                    command=cmd,
+                    key_path=probe_key,
+                    user=probe_user,
+                    local_user=probe_local_user,
+                    password_file=probe_password_file,
+                    sudo_password_file=probe_sudo_password_file,
+                    connect_timeout=cfg.ssh_connect_timeout,
+                    command_timeout=15,
+                    htype=htype,
+                    use_sudo=use_sudo,
+                    cfg=cfg,
+                )
+                _idrac_last_session_at = time.monotonic()
+        else:
+            r = ssh_single(
+                host=h.ip,
+                command=cmd,
+                key_path=probe_key,
+                user=probe_user,
+                local_user=probe_local_user,
+                password_file=probe_password_file,
+                sudo_password_file=probe_sudo_password_file,
+                connect_timeout=cfg.ssh_connect_timeout,
+                command_timeout=15,
+                htype=htype,
+                use_sudo=use_sudo,
+                cfg=cfg,
+            )
 
         # ── Failure path ────────────────────────────────────────────
         if r.returncode != 0 or not r.stdout.strip():
@@ -729,6 +969,17 @@ def _bg_probe_health():
                 r.returncode, r.stderr or "", r.stdout or ""
             )
             if htype in LEGACY_HTYPES and state == STATE_UNREACHABLE and _legacy_network_reachable(h):
+                prev = None
+                with _bg_lock:
+                    cached = _bg_cache.get("health")
+                    if isinstance(cached, dict):
+                        for cached_host in cached.get("hosts", []) or []:
+                            if isinstance(cached_host, dict) and cached_host.get("ip") == h.ip:
+                                prev = cached_host
+                                break
+                reused = _reuse_recent_legacy_success(prev, now, reason)
+                if reused is not None:
+                    return reused
                 state = STATE_DEGRADED
                 reason = f"legacy device reachable; metrics probe failed: {reason}"
             entry = entry_base(
@@ -763,8 +1014,21 @@ def _bg_probe_health():
 
         if htype == "idrac":
             # iDRAC reachability = "racadm getsysinfo -s returned something".
-            # BMC-irrelevant columns stay "-"; the dashboard already
-            # renders them dim for legacy-device types.
+            # BMCs are management controllers, not compute hosts. CPU/RAM/disk
+            # resource columns are not applicable and must be flagged as such
+            # so renderers do not coerce "-" into fake numeric metrics.
+            bmc_metrics = {}
+            for line in r.stdout.strip().split("\n"):
+                low = line.lower()
+                if "power status" in low:
+                    val = line.split("=")[-1].strip() if "=" in line else line.split(":")[-1].strip()
+                    bmc_metrics["power"] = "ON" if "on" in val.lower() else "OFF"
+                elif "inlet temp" in low:
+                    bmc_metrics["inlet_temp"] = (
+                        line.split("=")[-1].strip() if "=" in line else line.split(":")[-1].strip()
+                    )
+                elif "system model" in low:
+                    bmc_metrics["model"] = line.split("=")[-1].strip() if "=" in line else line.split(":")[-1].strip()
             entry = entry_base(
                 h,
                 state=success_state,
@@ -776,9 +1040,13 @@ def _bg_probe_health():
                 groups=_groups,
             )
             entry.update({
-                "cores": "-", "ram": "-", "disk": "-",
+                "cores": None, "ram": None, "disk": None,
                 "load": "-", "docker": "0",
+                "resource_metrics_supported": False,
+                "unsupported_metrics": ["cpu", "ram", "disk", "load"],
+                "management_metrics": bmc_metrics,
             })
+            entry.update(bmc_metrics)
             return entry
 
         if htype == "switch":
@@ -789,6 +1057,10 @@ def _bg_probe_health():
                 host=h.ip,
                 command="show processes memory | include Processor",
                 key_path=sw_key2,
+                user=probe_user,
+                local_user=probe_local_user,
+                password_file=probe_password_file,
+                sudo_password_file=probe_sudo_password_file,
                 connect_timeout=3,
                 command_timeout=10,
                 htype="switch",
@@ -1413,10 +1685,16 @@ def _bg_probe_fleet_overview():
             f"all {len(_pve_states)} PVE nodes live; "
             f"{real_vm_count} real VMs + {template_count} templates tracked"
         )
+    core_physical = [p for p in physical if p.get("scope", "core") != "lab"]
+    lab_physical = [p for p in physical if p.get("scope", "core") == "lab"]
+
     result = {
         "vms": vm_list,
         "vm_nics": {str(k): v for k, v in vm_nics.items()},
-        "physical": physical,
+        "physical": core_physical,
+        "core_physical": core_physical,
+        "lab_physical": lab_physical,
+        "all_physical": physical,
         "pve_nodes": pve_nodes,
         "fleet_state": _fleet_state,
         "fleet_reason": _fleet_reason,
@@ -2181,6 +2459,34 @@ def _resolve_container_vm_ip(vm) -> str:
     return vm.ip
 
 
+def _container_vm_host(cfg, target: str):
+    """Resolve a Docker host target from host label/IP or container VM label."""
+    from freq.core.resolve import by_target
+    from freq.core.types import Host
+
+    h = by_target(cfg.hosts, target)
+    if h:
+        return h
+    target_l = str(target or "").strip().lower()
+    for vm in cfg.container_vms.values():
+        vmid = int(getattr(vm, "vm_id", 0) or 0)
+        candidates = {
+            str(getattr(vm, "label", "") or "").lower(),
+            str(getattr(vm, "ip", "") or "").lower(),
+        }
+        if vmid:
+            candidates.update({str(vmid), f"vm:{vmid}"})
+        if target_l in candidates:
+            return Host(
+                ip=_resolve_container_vm_ip(vm),
+                label=vm.label,
+                htype="docker",
+                groups="docker",
+                vmid=vmid,
+            )
+    return None
+
+
 _INLINE_STYLE_CSP_HASHES: list[str] = []
 _INLINE_STYLE_CSP_LOCK = threading.Lock()
 
@@ -2313,6 +2619,36 @@ def _is_first_run():
     return False
 
 
+def _init_blocker_from_artifacts(cfg):
+    """Return a truthful not-initialized reason from generated init artifacts."""
+    fb_path = os.path.join(cfg.conf_dir, "fleet-boundaries.toml")
+    inv_path = os.path.join(cfg.conf_dir, "pve-inventory.toml")
+    fb_data = load_toml(fb_path)
+    inv_data = load_toml(inv_path)
+    if not fb_data and not inv_data:
+        return ""
+
+    categories = fb_data.get("categories", {}) if isinstance(fb_data, dict) else {}
+    out_cat = categories.get("out_of_contract", {}) if isinstance(categories, dict) else {}
+    out_vmids = []
+    if isinstance(out_cat, dict):
+        for vmid in out_cat.get("vmids", []) or []:
+            try:
+                out_vmids.append(int(vmid))
+            except (TypeError, ValueError):
+                continue
+    if out_vmids:
+        formatted = ", ".join(str(vmid) for vmid in sorted(set(out_vmids)))
+        return (
+            f"freq init ran and is blocked by operator VM contract: "
+            f"{len(set(out_vmids))} out-of-contract PVE VM(s) discovered ({formatted})"
+        )
+
+    if inv_data:
+        return "freq init ran but did not mark initialized; run freq init --check for the failing check"
+    return ""
+
+
 def _get_fleet_vms(cfg):
     """Fetch VM list from PVE cluster, enriched with fleet boundary data.
 
@@ -2321,6 +2657,7 @@ def _get_fleet_vms(cfg):
     Returns list of VM dicts.
     """
     fb = cfg.fleet_boundaries
+    dashboard_scope = _dashboard_vm_scope(cfg)
     vm_list = []
     for node_ip in _get_discovered_node_ips():
         # Try API first, fall back to SSH
@@ -2339,11 +2676,34 @@ def _get_fleet_vms(cfg):
                 for v in vms:
                     vmid = v.get("vmid", 0)
                     template_flag = v.get("template", 0)
-                    if bool(template_flag) or 9000 <= int(vmid or 0) < 10000:
+                    is_template = bool(template_flag) or 9000 <= int(vmid or 0) < 10000
+                    if not is_template and not _dashboard_vm_visible(v, dashboard_scope):
+                        continue
+                    if is_template:
                         cat_name, tier = "templates", "protected"
                     else:
                         cat_name, tier = fb.categorize(vmid)
                     tags = get_vm_tags(vmid)
+                    vm_name = str(v.get("name", "") or "").strip()
+                    if not vm_name and vmid and v.get("node"):
+                        cfg_result, cfg_ok = _pve_call(
+                            cfg,
+                            node_ip,
+                            api_endpoint=f"/nodes/{v.get('node')}/qemu/{vmid}/config",
+                            ssh_command=(
+                                f"pvesh get /nodes/{v.get('node')}/qemu/{vmid}/config "
+                                "--output-format json"
+                            ),
+                            timeout=10,
+                        )
+                        if cfg_ok and cfg_result:
+                            try:
+                                vm_config = cfg_result if isinstance(cfg_result, dict) else json.loads(cfg_result)
+                                vm_name = str(vm_config.get("name", "") or "").strip()
+                            except (json.JSONDecodeError, TypeError, AttributeError):
+                                vm_name = ""
+                    if not vm_name:
+                        vm_name = f"vm-{vmid}"
                     # cpu field: real utilization (0.0-1.0), maxcpu: allocated cores
                     # mem field: real used bytes, maxmem: allocated bytes
                     cpu_real = v.get("cpu", 0)
@@ -2353,7 +2713,7 @@ def _get_fleet_vms(cfg):
                     vm_list.append(
                         {
                             "vmid": vmid,
-                            "name": v.get("name", ""),
+                            "name": vm_name,
                             "node": v.get("node", ""),
                             "status": v.get("status", ""),
                             "cpu": v.get("maxcpu", 0),
@@ -2373,6 +2733,107 @@ def _get_fleet_vms(cfg):
                 pass
         break  # Only need one node for cluster-wide view
     return vm_list
+
+
+def _label_key(value):
+    return str(value or "").strip().lower().replace("_", "-")
+
+
+def _managed_dashboard_vm_identities(cfg):
+    """Return managed VM identities allowed to appear in dashboard VM lists."""
+    labels = set()
+    vmids = set()
+    for h in getattr(cfg, "hosts", []) or []:
+        if not getattr(h, "managed", True):
+            continue
+        if getattr(h, "htype", "") == "pve":
+            continue
+        label = _label_key(getattr(h, "label", ""))
+        if label:
+            labels.add(label)
+        try:
+            vmid = int(getattr(h, "vmid", 0) or 0)
+        except (TypeError, ValueError):
+            vmid = 0
+        if vmid:
+            vmids.add(vmid)
+    return labels, vmids
+
+
+def _category_vmids(cat):
+    vmids = set()
+    for vmid in cat.get("vmids", []) or []:
+        try:
+            vmids.add(int(vmid))
+        except (TypeError, ValueError):
+            continue
+    try:
+        start = int(cat.get("range_start"))
+        end = int(cat.get("range_end"))
+    except (TypeError, ValueError):
+        return vmids
+    if start > end:
+        start, end = end, start
+    vmids.update(range(start, end + 1))
+    return vmids
+
+
+def _dashboard_vm_scope(cfg):
+    """Return explicit dashboard VM visibility contract."""
+    visible_vmids = set()
+    hidden_vmids = set()
+    fb = getattr(cfg, "fleet_boundaries", None)
+    categories = getattr(fb, "categories", {}) or {}
+    hidden_categories = {
+        "out_of_contract",
+        "discovered_unowned",
+        "inventory_only",
+        "unowned",
+    }
+    visible_categories = {
+        "production",
+        "lab",
+        "infrastructure",
+        "prod_media",
+        "prod_other",
+        "personal",
+    }
+    for name, cat in categories.items():
+        cat_vmids = _category_vmids(cat)
+        if name in hidden_categories:
+            hidden_vmids.update(cat_vmids)
+            continue
+        if name == "templates":
+            continue
+        if name in visible_categories or str(cat.get("tier", "")) in {"operator", "admin"}:
+            visible_vmids.update(cat_vmids)
+
+    managed_labels, managed_vmids = _managed_dashboard_vm_identities(cfg)
+    return {
+        "visible_vmids": visible_vmids,
+        "hidden_vmids": hidden_vmids,
+        "managed_labels": managed_labels,
+        "managed_vmids": managed_vmids,
+        "has_boundary_contract": bool(visible_vmids or hidden_vmids),
+    }
+
+
+def _dashboard_vm_visible(vm, scope):
+    """Dashboard VM cards are for operator-owned guests, not raw PVE inventory."""
+    try:
+        vmid = int((vm or {}).get("vmid", 0) or 0)
+    except (TypeError, ValueError):
+        vmid = 0
+    if vmid and vmid in scope["hidden_vmids"]:
+        return False
+    if vmid and vmid in scope["visible_vmids"]:
+        return True
+    if scope["has_boundary_contract"]:
+        return False
+    if vmid and vmid in scope["managed_vmids"]:
+        return True
+    name = _label_key((vm or {}).get("name", ""))
+    return bool(name and name in scope["managed_labels"])
 
 
 class FreqHandler(BaseHTTPRequestHandler):
@@ -3166,9 +3627,10 @@ a:hover{{text-decoration:underline}}
         # "web-setup-only" = web wizard done but freq init not yet run
         # "partial" = config items exist but neither marker
         # "unconfigured" = nothing configured yet
+        init_blocker = "" if is_initialized else _init_blocker_from_artifacts(cfg)
         missing = []
         if not is_initialized:
-            missing.append("freq init not yet run (no .initialized marker)")
+            missing.append(init_blocker or "freq init not yet run (no .initialized marker)")
         if not key_readable:
             missing.append("ssh key missing or unreadable")
         if not has_nodes:
@@ -3178,6 +3640,9 @@ a:hover{{text-decoration:underline}}
         if is_initialized and key_readable and has_hosts and has_nodes:
             setup_health = "configured"
             setup_reason = "freq init completed, key readable, hosts + nodes configured"
+        elif init_blocker:
+            setup_health = "init-failed"
+            setup_reason = init_blocker
         elif is_web_setup_complete and not is_initialized:
             setup_health = "web-setup-only"
             setup_reason = "web setup complete — run freq init to deploy fleet service account"
@@ -4131,14 +4596,15 @@ a:hover{{text-decoration:underline}}
         }
 
         cmd = actions.get(action, actions["status"])
-        pf_auth = resolve_device_ssh_auth(cfg, "pfsense")
-        remote_cmd = cmd if pf_auth["user"] in ("root", "admin") else f"sudo sh -c {shlex.quote(cmd)}"
+        pf_auth = resolve_staged_device_ssh_auth(cfg, "pfsense")
         r = ssh_single(
             host=pf_ip,
-            command=remote_cmd,
+            command=cmd,
             key_path=pf_auth["key_path"],
             user=pf_auth["user"],
             local_user=pf_auth.get("local_user"),
+            password_file=pf_auth.get("password_file") or None,
+            sudo_password_file=pf_auth.get("sudo_password_file", False),
             connect_timeout=cfg.ssh_connect_timeout,
             command_timeout=15,
             htype="pfsense",
@@ -4156,7 +4622,7 @@ a:hover{{text-decoration:underline}}
                 "reachable": r.returncode == 0,
                 "auth_failed": auth_failed,
                 "probe_method": "ssh_auth_failed" if auth_failed else ("ssh" if r.returncode == 0 else "ssh_failed"),
-                "output": r.stdout if r.returncode == 0 else "",
+                "output": _redact_device_command_output(r.stdout) if r.returncode == 0 else "",
                 "error": r.stderr[:100] if r.returncode != 0 else "",
             }
         )
@@ -4597,9 +5063,10 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": f"container not found: {name}"}, 404)
             return
 
+        safe_name = shlex.quote(container.name)
         r = ssh_single(
             host=_resolve_container_vm_ip(vm),
-            command=f"docker restart {container.name}",
+            command=f"docker restart {safe_name} 2>&1",
             key_path=cfg.ssh_key_path,
             connect_timeout=3,
             command_timeout=60,
@@ -4612,6 +5079,9 @@ a:hover{{text-decoration:underline}}
                 "ok": r.returncode == 0,
                 "container": container.name,
                 "vm": vm.label,
+                "returncode": r.returncode,
+                "output": r.stdout.strip() if r.stdout else "",
+                "error": r.stderr.strip() if r.returncode != 0 else "",
             }
         )
 
@@ -4635,9 +5105,10 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": f"container not found: {name}"}, 404)
             return
 
+        safe_name = shlex.quote(container.name)
         r = ssh_single(
             host=_resolve_container_vm_ip(vm),
-            command=f"docker logs --tail {lines} {container.name} 2>&1",
+            command=f"docker logs --tail {lines} {safe_name} 2>&1",
             key_path=cfg.ssh_key_path,
             connect_timeout=3,
             command_timeout=15,
@@ -4647,9 +5118,12 @@ a:hover{{text-decoration:underline}}
         )
         self._json_response(
             {
+                "ok": r.returncode == 0,
                 "container": container.name,
                 "vm": vm.label,
-                "logs": r.stdout if r.returncode == 0 else r.stderr,
+                "returncode": r.returncode,
+                "logs": r.stdout if r.returncode == 0 else "",
+                "error": r.stderr.strip() if r.returncode != 0 else "",
             }
         )
 
@@ -5054,8 +5528,26 @@ a:hover{{text-decoration:underline}}
                 "tiers": fb.tiers,
                 "categories": cats,
                 "physical": {
-                    k: {"ip": d.ip, "label": d.label, "type": d.device_type, "tier": d.tier, "detail": d.detail}
+                    k: {
+                        "ip": d.ip,
+                        "label": d.label,
+                        "type": d.device_type,
+                        "tier": d.tier,
+                        "detail": d.detail,
+                        "groups": d.groups,
+                        "scope": d.scope,
+                    }
                     for k, d in fb.physical.items()
+                },
+                "core_physical": {
+                    k: {"ip": d.ip, "label": d.label, "type": d.device_type, "tier": d.tier, "detail": d.detail, "groups": d.groups, "scope": d.scope}
+                    for k, d in fb.physical.items()
+                    if d.scope != "lab"
+                },
+                "lab_physical": {
+                    k: {"ip": d.ip, "label": d.label, "type": d.device_type, "tier": d.tier, "detail": d.detail, "groups": d.groups, "scope": d.scope}
+                    for k, d in fb.physical.items()
+                    if d.scope == "lab"
                 },
                 "pve_nodes": {k: {"ip": n.ip, "detail": n.detail} for k, n in fb.pve_nodes.items()},
                 "hosts": [
@@ -5144,6 +5636,18 @@ a:hover{{text-decoration:underline}}
                 return
             self._update_fb_toml(fb_path, "update_range", cat_name=cat_name, range_start=rs, range_end=re)
             self._json_response({"ok": True, "action": action})
+
+        elif action == "update_physical_scope":
+            device_key = params.get("device", [""])[0]
+            scope = params.get("scope", [""])[0].lower()
+            if not device_key or scope not in {"core", "lab"}:
+                self._json_response({"error": "device and scope=core|lab required"}, 400)
+                return
+            if device_key not in cfg.fleet_boundaries.physical:
+                self._json_response({"error": f"Unknown physical device: {device_key}"}, 404)
+                return
+            self._update_fb_toml(fb_path, "update_physical_scope", device_key=device_key, scope=scope)
+            self._json_response({"ok": True, "action": action, "device": device_key, "scope": scope})
 
         elif action == "update_tier_actions":
             tier_name = params.get("tier", [""])[0]
@@ -5270,6 +5774,33 @@ a:hover{{text-decoration:underline}}
                 if not saw_end:
                     additions.append(f"range_end = {re_val}\n")
                 lines[insert_at or len(lines):insert_at or len(lines)] = additions
+
+        elif op == "update_physical_scope":
+            device_key, scope = kw["device_key"], kw["scope"]
+            in_physical = False
+            inline_pat = re.compile(rf"^(\s*{re.escape(device_key)}\s*=\s*\{{)(.*)(\}}\s*)$")
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped == "[physical]":
+                    in_physical = True
+                    continue
+                if in_physical and stripped.startswith("["):
+                    break
+                if not in_physical:
+                    continue
+                m = inline_pat.match(line.rstrip("\n"))
+                if not m:
+                    continue
+                body = m.group(2)
+                if re.search(r"\bscope\s*=", body):
+                    body = re.sub(r'\bscope\s*=\s*"[^"]*"', f'scope = "{scope}"', body)
+                else:
+                    body = body.rstrip()
+                    if body and not body.endswith(","):
+                        body += ","
+                    body += f' scope = "{scope}"'
+                lines[i] = f"{m.group(1)}{body}{m.group(3)}\n"
+                break
 
         elif op == "update_tier_actions":
             tier_name, actions = kw["tier_name"], kw["actions"]
@@ -5557,30 +6088,32 @@ a:hover{{text-decoration:underline}}
         if not _re.match(r"^[a-zA-Z0-9._-]+$", name):
             self._json_response({"error": "Invalid container name"}, 400)
             return
-        from freq.core.ssh import run as ssh_single
-        from freq.core.resolve import by_target
-
-        h = by_target(cfg.hosts, host)
+        h = _container_vm_host(cfg, host)
         if not h:
             self._json_response({"error": f"Host not found: {host}"}, 404)
             return
+        safe_name = shlex.quote(name)
         r = ssh_single(
             host=h.ip,
-            command=f"docker {action} {name} 2>&1",
+            command=f"docker {action} {safe_name} 2>&1",
             key_path=cfg.ssh_key_path,
             connect_timeout=5,
             command_timeout=30,
-            htype=h.htype,
+            htype=h.htype or "docker",
             use_sudo=False,
             cfg=cfg,
         )
         self._json_response(
             {
                 "ok": r.returncode == 0,
-                "output": r.stdout.strip() if r else "",
+                "output": r.stdout.strip() if r and r.stdout else "",
+                "error": r.stderr.strip() if r and r.returncode != 0 else "",
+                "returncode": r.returncode if r else 1,
                 "action": action,
                 "container": name,
                 "host": host,
+                "resolved_host": h.label,
+                "ip": h.ip,
             }
         )
 
@@ -5599,50 +6132,104 @@ a:hover{{text-decoration:underline}}
         if not _re.match(r"^[a-zA-Z0-9._-]+$", name):
             self._json_response({"error": "Invalid container name"}, 400)
             return
-        from freq.core.ssh import run as ssh_single
-        from freq.core.resolve import by_target
-
-        h = by_target(cfg.hosts, host)
+        h = _container_vm_host(cfg, host)
         if not h:
             self._json_response({"error": f"Host not found: {host}"}, 404)
             return
+        safe_name = shlex.quote(name)
         r = ssh_single(
             host=h.ip,
-            command=f"docker logs --tail {lines} {name} 2>&1",
+            command=f"docker logs --tail {lines} {safe_name} 2>&1",
             key_path=cfg.ssh_key_path,
             connect_timeout=5,
             command_timeout=15,
-            htype=h.htype,
+            htype=h.htype or "docker",
             use_sudo=False,
             cfg=cfg,
         )
-        self._json_response({"output": r.stdout if r else "", "container": name, "host": host, "lines": lines})
+        self._json_response(
+            {
+                "ok": r.returncode == 0,
+                "output": r.stdout if r and r.returncode == 0 else "",
+                "error": r.stderr.strip() if r and r.returncode != 0 else "",
+                "returncode": r.returncode if r else 1,
+                "container": name,
+                "host": host,
+                "resolved_host": h.label,
+                "ip": h.ip,
+                "lines": lines,
+            }
+        )
 
     def _serve_fleet_connectivity(self):
         """Check SSH connectivity to all fleet hosts.
 
-        Uses per-host SSH config: legacy devices (iDRAC, switch) get RSA key
-        + legacy KexAlgorithms; modern hosts get ed25519.
+        Uses the dashboard health cache when available so connectivity matches
+        the main fleet view and device-specific auth model. Falls back to a
+        live device-aware probe only before the first health cache exists.
         """
         cfg = load_config()
-        from freq.core.ssh import run as ssh_single, PLATFORM_SSH
+        from freq.core.ssh import run as ssh_single
+
+        with _bg_lock:
+            health = _bg_cache.get("health")
+        health_by_ip = {}
+        if isinstance(health, dict):
+            for row in health.get("hosts", []) or []:
+                if isinstance(row, dict) and row.get("ip"):
+                    health_by_ip[row["ip"]] = row
 
         hosts = []
         for h in cfg.hosts:
-            # Select key and command based on device type
             htype = getattr(h, "htype", "linux")
+            cached = health_by_ip.get(h.ip)
+            if cached:
+                state = cached.get("state") or cached.get("status")
+                reachable = state not in {STATE_AUTH_FAILED, STATE_UNREACHABLE}
+                hosts.append(
+                    {
+                        "label": h.label,
+                        "ip": h.ip,
+                        "type": htype,
+                        "reachable": reachable,
+                        "user": cached.get("state") or cached.get("status") or "",
+                        "state": state,
+                        "reason": cached.get("reason", ""),
+                        "source": "health_cache",
+                    }
+                )
+                continue
+
             legacy_types = {"idrac", "switch"}
-            if htype in legacy_types:
-                key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
-            else:
-                key = cfg.ssh_key_path
+            cmd = "whoami"
+            key = cfg.ssh_key_path
+            user = cfg.ssh_service_account
+            local_user = None
+            password_file = None
+            sudo_password_file = False
+            if htype in ("pfsense", "idrac", "switch", "truenas"):
+                auth = resolve_staged_device_ssh_auth(cfg, htype)
+                key = auth.get("key_path") or ((cfg.ssh_rsa_key_path or cfg.ssh_key_path) if htype in legacy_types else cfg.ssh_key_path)
+                user = auth.get("user") or None
+                local_user = auth.get("local_user") or None
+                password_file = auth.get("password_file") or None
+                sudo_password_file = auth.get("sudo_password_file", False)
+                if htype == "pfsense":
+                    cmd = "echo OK"
+                elif htype == "idrac":
+                    cmd = "racadm getversion"
+                elif htype == "switch":
+                    cmd = "show version | include uptime"
 
             try:
                 r = ssh_single(
                     host=h.ip,
-                    command="whoami" if htype not in legacy_types else "racadm getversion" if htype == "idrac" else "show version | include uptime",
+                    command=cmd,
                     key_path=key,
-                    user=cfg.ssh_service_account if htype not in legacy_types else "",
+                    user=user,
+                    local_user=local_user,
+                    password_file=password_file,
+                    sudo_password_file=sudo_password_file,
                     connect_timeout=3,
                     command_timeout=5,
                     htype=htype,
@@ -5675,8 +6262,35 @@ a:hover{{text-decoration:underline}}
             return
         from freq.core.ssh import run as ssh_single
         from freq.core.resolve import by_target
+        from freq.core.types import Host
 
         h = by_target(cfg.hosts, target)
+        vm_match = re.match(r"^vm:(\d+)$", str(target or "").strip(), re.I)
+        if not h and vm_match:
+            vmid = int(vm_match.group(1))
+            for known in cfg.hosts:
+                if int(getattr(known, "vmid", 0) or 0) == vmid:
+                    h = known
+                    break
+            if not h:
+                try:
+                    from freq.api.terminal import (
+                        _find_live_vm_node_ip,
+                        _guest_agent_network_json,
+                        _extract_guest_ipv4,
+                    )
+
+                    node_ip, node_name = _find_live_vm_node_ip(cfg, vmid, "")
+                    if node_ip:
+                        raw, ok, _method = _guest_agent_network_json(cfg, vmid, node_ip, node_name)
+                        if ok:
+                            guest_ip = _extract_guest_ipv4(raw)
+                            if guest_ip:
+                                h = Host(ip=guest_ip, label=f"vm-{vmid}", htype="linux", groups="ad-hoc-vm", vmid=vmid)
+                except Exception as e:
+                    logger.warn(f"host diagnostic VM target resolve failed for VMID {vmid}: {e}")
+        if not h and re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", target):
+            h = Host(ip=target, label=target, htype="linux", groups="ad-hoc-vm")
         if not h:
             self._json_response({"error": f"Host not found: {target}"}, 404)
             return

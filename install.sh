@@ -556,11 +556,65 @@ SyslogIdentifier=freq-serve
 [Install]
 WantedBy=multi-user.target
 UNIT
+    if getent group "${svc_user}" >/dev/null 2>&1; then
+      if ! id -u freq-watch >/dev/null 2>&1; then
+        useradd --system --no-create-home --shell /usr/sbin/nologin --gid "${svc_user}" freq-watch
+      else
+        usermod -g "${svc_user}" freq-watch >/dev/null 2>&1 || true
+      fi
+      install -d -o freq-watch -g "${svc_user}" -m 0755 /var/lib/freq-watchdog
+    else
+      if ! id -u freq-watch >/dev/null 2>&1; then
+        useradd --system --no-create-home --shell /usr/sbin/nologin freq-watch
+      fi
+      install -d -o freq-watch -g freq-watch -m 0755 /var/lib/freq-watchdog
+      warn "Service-account group ${svc_user} does not exist yet; freq init will finalize watchdog group ownership."
+    fi
+    cat > /etc/systemd/system/freq-watchdog.service << UNIT
+[Unit]
+Description=PVE FREQ Watchdog
+After=network-online.target freq-serve.service
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=freq-watch
+Group=${svc_user}
+WorkingDirectory=${INSTALL_DIR}
+Environment=FREQ_DIR=${INSTALL_DIR}
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/local/bin/freq watchdog run --interval 15
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=10
+KillMode=mixed
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/freq-watchdog
+IPAddressDeny=any
+IPAddressAllow=localhost
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=96M
+CPUQuota=5%
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=freq-watchdog
+
+[Install]
+WantedBy=multi-user.target
+UNIT
     systemctl daemon-reload
     systemctl enable freq-serve
+    systemctl enable freq-watchdog
     ok "Systemd unit installed (freq-serve.service)"
+    ok "Systemd unit installed (freq-watchdog.service)"
     info " User=${svc_user}, FREQ_DIR=${INSTALL_DIR}"
     info "Start with: systemctl start freq-serve"
+    info "Watchdog starts with: systemctl start freq-watchdog"
     echo ""
   fi
 
@@ -638,6 +692,12 @@ do_uninstall() {
     rm -f /etc/systemd/system/freq-serve.service
     systemctl daemon-reload
     ok "Removed freq-serve.service"
+  fi
+  if [[ -f /etc/systemd/system/freq-watchdog.service ]]; then
+    systemctl disable --now freq-watchdog.service >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/freq-watchdog.service
+    systemctl daemon-reload
+    ok "Removed freq-watchdog.service"
   fi
 
   # Remove install directory

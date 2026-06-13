@@ -6,11 +6,11 @@ If code, docs, tests, or operator copy disagree with this file, they are wrong.
 
 ## Core Rules
 
-1. `freq-ops` is the bootstrap/sudo identity.
-It is the install-time or break-glass operator account used to run and complete `freq init`. **`freq init` MUST pass through `freq-ops` untouched** — no `useradd`, no `chpasswd`, no sudoers write, no chmod/chown, no SSH key management, no PVE token creation, nothing. `freq-ops` is bootstrap ingress only.
+1. `root` and `freq-ops` are the only bootstrap/run-as identities.
+They are the install-time or break-glass operator accounts used to run and complete `freq init`. `freq-ops` is the bootstrap/sudo identity when the operator is not running init directly as root. **`freq init` MUST pass through `freq-ops` untouched** — no `useradd`, no `chpasswd`, no sudoers write, no chmod/chown, no SSH key management, no PVE token creation, nothing. `freq-ops` is bootstrap ingress only.
 
-2. `cfg.ssh_service_account` is the deployed fleet service account.
-This is the account `freq init` creates, configures, and deploys across managed hosts. The value `freq-ops` is RESERVED and may NOT be used as a managed service-account name — `cfg.ssh_service_account` is rejected at config-load time and at the Phase 3 prompt if it equals any name in the reserved set.
+2. `cfg.ssh_service_account` names the `pve-freq`-created service account.
+`cfg.ssh_service_account` is the deployed fleet service account. This is the `pve-freq-svc-account`: the account `freq init` creates, configures, and deploys across managed hosts. The value `freq-ops` is RESERVED and may NOT be used as a managed service-account name — `cfg.ssh_service_account` is rejected at config-load time and at the Phase 3 prompt if it equals any name in the reserved set.
 
 3. `freq-admin` is only the default deployed service-account name.
 If the user does not choose another name, `cfg.ssh_service_account` defaults to `freq-admin`.
@@ -34,8 +34,10 @@ These checkpoints are release-gate rules and must be verified.
 ### During `freq init`
 
 - Bootstrap auth is the credential path used to reach hosts before deployment.
-- Phase 3 creates the deployed service account named by `cfg.ssh_service_account`.
+- Bootstrap/run-as auth is only `root` or `freq-ops`.
+- Phase 3 creates the `pve-freq-svc-account` named by `cfg.ssh_service_account`.
 - If the user does nothing, that deployed account name is `freq-admin`.
+- If the user configures a site-specific name, such as `dc01-admin`, that name is the service account, not the bootstrap identity.
 - Every deployment/verification step must use the configured service account, not a hardcoded account name.
 - Core TrueNAS deployment must use an SSH-capable bootstrap credential and the TrueNAS deployer. It must not be routed through a generic Linux deploy path or allowed to pass with API-key-only credentials.
 - **Phase 3 must reject `cfg.ssh_service_account == "freq-ops"` (or any other RESERVED_SERVICE_ACCOUNT_NAMES value) with an explicit contract error before invoking `useradd`, `chpasswd`, or `_setup_sudoers`.** The rejection happens both at config-load time (config.py overrides to default with a stderr warning) and at the Phase 3 interactive prompt (`_phase_service_account` returns 1 with `fmt.step_fail`).

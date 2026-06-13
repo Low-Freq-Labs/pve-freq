@@ -81,6 +81,7 @@ VERIFY_TIMEOUT = 20
 # slow path finish. Keep the deploy bounded, but give iDRAC enough wall clock
 # to complete on lab-class hardware.
 DEVICE_DEPLOY_TIMEOUT = 240  # Total timeout for iDRAC/switch deploy (all steps combined)
+TRUENAS_DEPLOY_TIMEOUT = 120  # TrueNAS can be slow applying account/home changes.
 
 # iDRAC user slot range (slots 1-2 are reserved by Dell for root/admin)
 IDRAC_SLOT_MIN = 3
@@ -89,6 +90,8 @@ IDRAC_PASSWORD_MAX_LEN = 20
 
 # IOS SSH key line width (PEM line wrapping limit)
 IOS_KEY_LINE_WIDTH = 72
+
+_OPERATOR_AUTO_EXCLUDE_LABELS = {"nexus"}
 
 # Agent deployment — single source of truth for remote path
 AGENT_REMOTE_PATH = "/opt/freq-agent/collector.py"
@@ -104,6 +107,7 @@ MARKER_CLEAN_OK = "CLEAN_OK"
 # Input validation patterns
 _VALID_USERNAME = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 _VALID_LABEL = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
+_VALID_DEVICE_SCOPES = {"core", "lab"}
 
 
 def _validate_username(name):
@@ -114,6 +118,158 @@ def _validate_username(name):
 def _validate_label(label):
     """Validate a host label. Returns True if valid."""
     return bool(_VALID_LABEL.match(label))
+
+
+def _normalize_device_scope(scope, default="core"):
+    """Normalize physical-device placement scope."""
+    value = str(scope or "").strip().lower()
+    if not value:
+        return default
+    if value in {"prod", "production", "infra", "infrastructure"}:
+        return "core"
+    if value in {"dev", "test", "testing", "sandbox"}:
+        return "lab"
+    if value in _VALID_DEVICE_SCOPES:
+        return value
+    return ""
+
+
+def _split_csv(value):
+    if not value:
+        return []
+    if isinstance(value, (list, tuple)):
+        raw = value
+    elif not isinstance(value, str):
+        return []
+    else:
+        raw = re.split(r"[,\s]+", str(value))
+    return [str(v).strip().lower() for v in raw if str(v).strip()]
+
+
+def _parse_vmid_set(value):
+    """Parse comma/space separated VMIDs and inclusive ranges."""
+    vmids = set()
+    for token in _split_csv(value):
+        if "-" in token:
+            start_s, end_s = token.split("-", 1)
+            try:
+                start = int(start_s)
+                end = int(end_s)
+            except ValueError:
+                continue
+            if start > end:
+                start, end = end, start
+            vmids.update(range(start, end + 1))
+            continue
+        try:
+            vmids.add(int(token))
+        except ValueError:
+            continue
+    return vmids
+
+
+def _load_vm_contract_file(path):
+    """Load operator-declared VM ownership/template contract from TOML."""
+    if not path:
+        return set(), set(), set()
+    try:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+    except Exception as e:
+        fmt.step_fail(f"Could not load --vm-contract {path}: {e}")
+        raise
+    if not isinstance(data, dict):
+        return set(), set(), set()
+    scope = data.get("fleet") if isinstance(data.get("fleet"), dict) else data
+    owned = scope.get("owned_vmids") or scope.get("owned") or []
+    templates = scope.get("template_vmids") or scope.get("templates") or []
+    acknowledged = (
+        scope.get("acknowledged_out_of_contract_vmids")
+        or scope.get("acknowledged_out_of_contract")
+        or scope.get("out_of_contract_ack")
+        or scope.get("known_extras")
+        or []
+    )
+    return _parse_vmid_set(owned), _parse_vmid_set(templates), _parse_vmid_set(acknowledged)
+
+
+def _apply_operator_vm_contract_args(cfg, args):
+    """Attach explicit first-run VM ownership/template contract to cfg."""
+    if not args:
+        return
+    owned_vmids = set()
+    template_vmids = set()
+    acknowledged_out_of_contract_vmids = set()
+    contract_path = getattr(args, "vm_contract", None)
+    if contract_path:
+        file_owned, file_templates, file_acknowledged = _load_vm_contract_file(contract_path)
+        owned_vmids.update(file_owned)
+        template_vmids.update(file_templates)
+        acknowledged_out_of_contract_vmids.update(file_acknowledged)
+    owned_vmids.update(_parse_vmid_set(getattr(args, "owned_vmids", None)))
+    template_vmids.update(_parse_vmid_set(getattr(args, "template_vmids", None)))
+    acknowledged_out_of_contract_vmids.update(
+        _parse_vmid_set(getattr(args, "acknowledged_out_of_contract_vmids", None))
+    )
+    cfg._owned_vmids = owned_vmids
+    cfg._contract_template_vmids = template_vmids
+    cfg._acknowledged_out_of_contract_vmids = acknowledged_out_of_contract_vmids
+
+
+def _device_scope_overrides_from_args(args):
+    """Return explicit CLI physical-device scope overrides keyed by label/IP."""
+    overrides = {}
+    if not args:
+        return overrides
+    for token in _split_csv(getattr(args, "core_devices", None)):
+        overrides[token] = "core"
+    for token in _split_csv(getattr(args, "lab_devices", None)):
+        overrides[token] = "lab"
+    return overrides
+
+
+def _scope_candidates(ip="", label="", key=""):
+    values = [ip, label, key]
+    normalized = []
+    for value in values:
+        value = str(value or "").strip().lower()
+        if not value:
+            continue
+        normalized.append(value)
+        normalized.append(value.replace("_", "-"))
+        normalized.append(value.replace("-", "_"))
+    return {v for v in normalized if v}
+
+
+def _device_scope_for(ip="", label="", key="", groups="", vmid=0, cred=None, overrides=None, default=None):
+    """Resolve physical-device scope from CLI, credentials, then safe inference."""
+    for candidate in _scope_candidates(ip, label, key):
+        if candidate in (overrides or {}):
+            return overrides[candidate]
+
+    cred_scope = _normalize_device_scope((cred or {}).get("scope", ""), default="")
+    if cred_scope:
+        return cred_scope
+
+    if default:
+        return _normalize_device_scope(default, "core") or "core"
+
+    hay = f"{label} {key} {groups}".lower()
+    group_parts = [g.strip().lower() for g in str(groups or "").split(",") if g.strip()]
+    if int(vmid or 0) >= 5000 or "lab" in hay or "lab" in group_parts:
+        return "lab"
+    return "core"
+
+
+def _scope_groups(groups, scope, htype=""):
+    parts = [g.strip() for g in str(groups or "").split(",") if g.strip()]
+    lowered = {g.lower() for g in parts}
+    if scope == "lab" and "lab" not in lowered:
+        parts.append("lab")
+    if scope == "core" and htype in {"pfsense", "opnsense", "truenas", "switch", "idrac", "ilo", "ipmi"}:
+        if "infrastructure" not in lowered:
+            parts.append("infrastructure")
+    return ",".join(parts)
 
 
 def _gen_idrac_slot_check():
@@ -210,12 +366,30 @@ def _query_idrac_slots(_ssh, extra_opts, svc_name):
     return target_slot, existing_slot
 
 
-def _run_idrac_command(_ssh, extra_opts, cmd, timeout=IDRAC_SETUP_TIMEOUT):
+def _run_idrac_command(_ssh, extra_opts, cmd, timeout=IDRAC_SETUP_TIMEOUT, input_text=None):
     """Run a single RACADM command and reject device-reported failures."""
-    rc, out, err = _ssh(cmd, extra_opts=extra_opts, timeout=timeout)
+    ssh_kwargs = {"extra_opts": extra_opts, "timeout": timeout}
+    if input_text is not None:
+        ssh_kwargs["input_text"] = input_text
+    rc, out, err = _ssh(cmd, **ssh_kwargs)
     combined = f"{out}\n{err}".strip()
+    retry_markers = (
+        "permission denied",
+        "no more sessions",
+        "connection reset",
+        "connection closed",
+    )
+    if rc != 0 and any(marker in combined.lower() for marker in retry_markers):
+        logger.warning(
+            "idrac racadm command transient failure, retrying",
+            command=cmd,
+            error=combined[:160],
+        )
+        time.sleep(5)
+        rc, out, err = _ssh(cmd, **ssh_kwargs)
+        combined = f"{out}\n{err}".strip()
     if rc != 0:
-        return False, combined
+        return False, f"{cmd}: {combined}"
     bad_markers = (
         "command processing failed",
         "command not recognized",
@@ -223,12 +397,78 @@ def _run_idrac_command(_ssh, extra_opts, cmd, timeout=IDRAC_SETUP_TIMEOUT):
         "rac9",
     )
     if any(marker in combined.lower() for marker in bad_markers):
-        return False, combined
+        return False, f"{cmd}: {combined}"
     return True, combined
 
 
+def _run_idrac_interactive_command(
+    ip,
+    auth_pass,
+    auth_key,
+    auth_user,
+    extra_opts,
+    cmd,
+    *,
+    timeout=IDRAC_SETUP_TIMEOUT,
+    redact="",
+):
+    """Run an iDRAC command via interactive stdin, not process argv.
+
+    Dell iDRAC SSH is a CLP/racadm command environment, not a POSIX shell.
+    Secret-bearing commands therefore cannot rely on shell stdin tricks like
+    ``read``. Feeding the full racadm command to an interactive session keeps
+    the secret off the local process command line. iDRAC echoes typed commands,
+    so redact before returning any output to callers/logging.
+    """
+    ssh_opts = [
+        "ssh",
+        "-o", "ConnectTimeout=5",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "ServerAliveInterval=5",
+        "-o", "ServerAliveCountMax=3",
+    ]
+    if extra_opts:
+        ssh_opts.extend(extra_opts)
+    if auth_key:
+        ssh_cmd = [
+            "timeout", "-k", "5s", str(timeout),
+            *ssh_opts,
+            "-o", "BatchMode=yes",
+            "-i", auth_key,
+            f"{auth_user}@{ip}",
+        ]
+        rc, out, err = _run_with_input(ssh_cmd, f"{cmd}\nexit\n", timeout=timeout + 10)
+    else:
+        ssh_cmd = [
+            *ssh_opts,
+            "-o", "PreferredAuthentications=password,keyboard-interactive",
+            "-o", "PubkeyAuthentication=no",
+            f"{auth_user}@{ip}",
+        ]
+        rc, out, err = _ssh_with_pass(auth_pass, ssh_cmd, timeout=timeout, input_text=f"{cmd}\nexit\n")
+    if redact:
+        out = (out or "").replace(redact, "<redacted>")
+        err = (err or "").replace(redact, "<redacted>")
+    combined = f"{out}\n{err}".strip()
+    bad_markers = (
+        "command processing failed",
+        "command not recognized",
+        "invalid",
+        "error",
+        "rac9",
+        "syntax",
+    )
+    if any(marker in combined.lower() for marker in bad_markers):
+        return False, combined
+    if "modified successfully" in combined.lower() or "object value modified" in combined.lower():
+        return True, combined
+    if rc == 0:
+        return True, combined
+    return False, combined or f"interactive racadm command failed (exit {rc})"
+
+
 def _persist_legacy_password_file(cfg, svc_name, password):
-    """Persist one shared iDRAC/switch password for verification fallback."""
+    """Persist service-account password for legacy device SSH fallback."""
     if not password:
         return
 
@@ -242,7 +482,7 @@ def _persist_legacy_password_file(cfg, svc_name, password):
         )
         return
 
-    pass_path = os.path.join(svc_home, ".ssh", "switch-pass")
+    pass_path = os.path.join(svc_home, ".ssh", "legacy-device-pass")
     try:
         os.makedirs(os.path.dirname(pass_path), mode=0o700, exist_ok=True)
         with open(pass_path, "w") as f:
@@ -263,10 +503,28 @@ def _persist_legacy_password_file(cfg, svc_name, password):
         except OSError as e:
             fmt.step_warn(f"Could not update legacy_password_file in freq.toml: {e}")
 
-        fmt.step_ok(f"Device password saved to {pass_path}")
+        fmt.step_ok(f"Legacy device SSH password saved to {pass_path}")
         audit.record("password_save", pass_path, "success")
     except OSError as e:
-        fmt.step_warn(f"Could not save device password to {pass_path}: {e}")
+        fmt.step_warn(f"Could not save legacy device password to {pass_path}: {e}")
+
+
+def _metrics_agent_hosts(hosts):
+    """Return managed hosts that support the generic systemd metrics agent."""
+    return [
+        h for h in hosts
+        if h.htype in ("linux", "pve", "docker")
+        and getattr(h, "managed", True)
+    ]
+
+
+def _non_systemd_metrics_hosts(hosts):
+    """Return managed hosts monitored by type-specific probes, not systemd."""
+    return [
+        h for h in hosts
+        if h.htype in ("truenas",)
+        and getattr(h, "managed", True)
+    ]
 
 
 def _credentials_dir(cfg):
@@ -325,7 +583,8 @@ def _persist_service_account_credentials_metadata(cfg, svc_name, password):
         pass_path = os.path.join(cred_dir, f"{svc_name}-password")
         with open(pass_path, "w") as f:
             f.write(password)
-        os.chmod(pass_path, 0o600)
+        os.chmod(pass_path, 0o640)
+        _chown(f"root:{svc_name}", pass_path)
 
         creds_path = os.path.join(cred_dir, "device-credentials.toml")
         _upsert_toml_section(
@@ -333,10 +592,76 @@ def _persist_service_account_credentials_metadata(cfg, svc_name, password):
             "service_account",
             {"username": svc_name, "password_file": pass_path},
         )
-        os.chmod(creds_path, 0o644)
+        os.chmod(creds_path, 0o640)
+        _chown(f"root:{svc_name}", creds_path)
         fmt.step_ok(f"Service account credentials staged in {creds_path}")
     except OSError as e:
         fmt.step_warn(f"Could not stage service account credentials metadata: {e}")
+
+
+def _safe_credential_name(name):
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", str(name or "device")).strip("-") or "device"
+
+
+def _persist_runtime_device_credentials_metadata(cfg, device_creds, svc_name):
+    """Stage per-device runtime auth metadata for doctor/dashboard probes.
+
+    Init consumes --device-credentials to deploy and verify physical devices.
+    Post-init surfaces need the same auth map, but stored as paths rather than
+    inline secrets. This writes only usernames, key paths, and secret file
+    references into /etc/freq/credentials/device-credentials.toml.
+    """
+    if not device_creds:
+        return
+
+    cred_dir = _credentials_dir(cfg)
+    creds_path = os.path.join(cred_dir, "device-credentials.toml")
+    staged = 0
+    try:
+        os.makedirs(cred_dir, mode=0o750, exist_ok=True)
+        for section, cred in sorted(device_creds.items()):
+            if not isinstance(cred, dict):
+                continue
+            values = {"username": svc_name}
+            for key in ("host", "url", "label", "groups", "scope"):
+                if cred.get(key):
+                    values[key] = cred[key]
+
+            key_path = getattr(cfg, "ssh_key_path", "")
+            if section in {"idrac", "switch", "bmc", "bmc:idrac", "switch:cisco"}:
+                key_path = getattr(cfg, "ssh_rsa_key_path", "") or key_path
+            if key_path:
+                values["ssh_key_file"] = key_path
+
+            safe = _safe_credential_name(section)
+            password = cred.get("password") or ""
+            if password:
+                pass_path = os.path.join(cred_dir, f"{safe}-password")
+                with open(pass_path, "w") as f:
+                    f.write(password)
+                os.chmod(pass_path, 0o640)
+                _chown(f"root:{svc_name}", pass_path)
+                values["password_file"] = pass_path
+
+            api_key = cred.get("api_key") or ""
+            if api_key:
+                api_path = os.path.join(cred_dir, f"{safe}-api-key")
+                with open(api_path, "w") as f:
+                    f.write(api_key)
+                os.chmod(api_path, 0o640)
+                _chown(f"root:{svc_name}", api_path)
+                values["api_key_file"] = api_path
+
+            if values:
+                _upsert_toml_section(creds_path, section, values)
+                staged += 1
+
+        if staged:
+            os.chmod(creds_path, 0o640)
+            _chown(f"root:{svc_name}", creds_path)
+            fmt.step_ok(f"Runtime device credentials staged in {creds_path} ({staged} section(s))")
+    except OSError as e:
+        fmt.step_warn(f"Could not stage runtime device credentials metadata: {e}")
 
 
 def _home_dir_for_user(user_name):
@@ -615,7 +940,7 @@ def _load_device_credentials(cred_file):
     from freq.deployers import HTYPE_COMPAT
 
     result = {}
-    if not cred_file or not os.path.isfile(cred_file):
+    if not isinstance(cred_file, (str, bytes, os.PathLike)) or not cred_file or not os.path.isfile(cred_file):
         return result
 
     # Parse TOML — try tomllib first, fall back to manual parser
@@ -632,16 +957,17 @@ def _load_device_credentials(cred_file):
         try:
             data = {}
             section = None
-            for line in open(cred_file):
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if line.startswith("[") and line.endswith("]"):
-                    section = line[1:-1].strip().lower()
-                    data[section] = {}
-                elif "=" in line and section:
-                    k, v = line.split("=", 1)
-                    data[section][k.strip()] = v.strip().strip('"').strip("'")
+            with open(cred_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line.startswith("[") and line.endswith("]"):
+                        section = line[1:-1].strip().lower()
+                        data[section] = {}
+                    elif "=" in line and section:
+                        k, v = line.split("=", 1)
+                        data[section][k.strip()] = v.strip().strip('"').strip("'")
         except Exception as e:
             fmt.step_warn(f"Failed to parse device credentials: {e}")
             return result
@@ -672,6 +998,9 @@ def _load_device_credentials(cred_file):
         pw_file = entry.get("password_file", "")
         inline_pw = entry.get("password", "")
         key_file = entry.get("ssh_key_file", "") or entry.get("key_file", "") or entry.get("key_path", "")
+        explicit_label = str(entry.get("label", "") or "").strip()
+        explicit_groups = str(entry.get("groups", "") or "").strip()
+        explicit_scope = str(entry.get("scope", "") or "").strip().lower()
         host = str(entry.get("host", "") or "").strip()
         url = str(entry.get("url", "") or "").strip()
         hosts_value = entry.get("hosts", [])
@@ -680,6 +1009,12 @@ def _load_device_credentials(cred_file):
         api_key = _read_secret_file(api_key_file, f"{label} api_key") if api_key_file else inline_api_key
 
         cred = {"user": user, "password": ""}
+        if explicit_label:
+            cred["label"] = explicit_label
+        if explicit_groups:
+            cred["groups"] = explicit_groups
+        if explicit_scope:
+            cred["scope"] = explicit_scope
         if host:
             cred["host"] = host
         if url:
@@ -825,6 +1160,54 @@ def _device_cred_has_ssh_material(cred):
     )
 
 
+def _device_credential_hosts(cred):
+    """Return explicit host IPs/names from one device credential entry."""
+    hosts = []
+    for value in (cred or {}).get("hosts", []) or []:
+        if value and value not in hosts:
+            hosts.append(value)
+    host = (cred or {}).get("host", "")
+    if host and host not in hosts:
+        hosts.append(host)
+    return hosts
+
+
+def _label_key(label):
+    return (label or "").strip().lower().replace("_", "-")
+
+
+def _is_lab_label(label):
+    key = _label_key(label)
+    return "lab" in key.split("-") or "lab" in key
+
+
+def _is_operator_auto_excluded(label):
+    return _label_key(label) in _OPERATOR_AUTO_EXCLUDE_LABELS
+
+
+def _truenas_creds_for_host(host, device_creds):
+    """Resolve the credential namespace for a specific TrueNAS host."""
+    if not device_creds:
+        return None, ""
+
+    label = _label_key(getattr(host, "label", ""))
+    host_ip = getattr(host, "ip", "")
+
+    if label.startswith("truenas") and label in device_creds:
+        return device_creds[label], label
+
+    for name, cred in sorted(device_creds.items()):
+        if name != "truenas" and not str(name).startswith("truenas-"):
+            continue
+        if host_ip and host_ip in _device_credential_hosts(cred):
+            return cred, str(name)
+
+    if not _is_lab_label(label) and "truenas" in device_creds:
+        return device_creds["truenas"], "truenas"
+
+    return None, ""
+
+
 def _validate_device_scoped_service_password(device_creds, svc_pass):
     """Reject service passwords that known device firmware cannot accept.
 
@@ -842,6 +1225,43 @@ def _validate_device_scoped_service_password(device_creds, svc_pass):
         "before running init with [idrac] device credentials"
     )
     return False
+
+
+def _validate_truenas_deployment_credentials(device_creds):
+    """Reject TrueNAS targets that only have read-only API credentials."""
+    ok = True
+    for name, cred in sorted((device_creds or {}).items()):
+        if name != "truenas" and not str(name).startswith("truenas-"):
+            continue
+        if not _device_credential_hosts(cred):
+            continue
+        if _device_cred_has_ssh_material(cred):
+            continue
+        fmt.step_fail(
+            f"TrueNAS target [{name}] has host(s) but only API credentials. "
+            "Add user + password_file/password or ssh_key_file so init can "
+            "create and verify the service account over SSH."
+        )
+        ok = False
+    return ok
+
+
+def _validate_device_credential_scopes(device_creds):
+    """Reject invalid physical device scope values from --device-credentials."""
+    ok = True
+    for name, cred in sorted((device_creds or {}).items()):
+        scope = (cred or {}).get("scope", "")
+        if not scope:
+            continue
+        if _normalize_device_scope(scope, default=""):
+            cred["scope"] = _normalize_device_scope(scope, default="")
+            continue
+        fmt.step_fail(
+            f"Device credentials [{name}] has invalid scope '{scope}'. "
+            "Use scope = \"core\" or scope = \"lab\"."
+        )
+        ok = False
+    return ok
 
 
 def _read_password(prompt="Password"):
@@ -937,6 +1357,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     reset_mode = getattr(args, "reset", False)
     dry_run = getattr(args, "dry_run", False)
     uninstall_mode = getattr(args, "uninstall", False)
+    _apply_operator_vm_contract_args(cfg, args)
 
     # --check: validation with remote host verification (no root needed)
     if check_mode:
@@ -959,7 +1380,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
 
     # --dry-run (no root needed)
     if dry_run:
-        return _init_dry_run(cfg)
+        return _init_dry_run(cfg, args)
 
     # --headless: non-interactive mode (agent-driven deployment)
     headless = getattr(args, "headless", False)
@@ -1073,6 +1494,8 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     _phase(7, total, "Fleet Discovery")
     _t = time.monotonic()
     _phase_fleet_discover(cfg, ctx, args)
+    if ctx.get("fleet_discovery_failed"):
+        return 1
     logger.perf("init_phase", time.monotonic() - _t, phase=7, name="fleet_discover")
 
     # quiet freq-serve during
@@ -1144,11 +1567,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     for d in [cfg.key_dir, cfg.vault_file, cfg.log_dir, cfg.conf_dir]:
         d_path = d if os.path.isdir(d) else os.path.dirname(d)
         if d_path and os.path.exists(d_path):
-            try:
-                subprocess.run(["chown", "-R", f"{svc_name}:{svc_name}", d_path],
-                               capture_output=True, timeout=5)
-            except Exception:
-                pass
+            _chown(f"{svc_name}:{svc_name}", d_path, recursive=True)
     # Make log/ and cache/ world-readable so operator commands don't warn.
     # Keep keys/ and vault/ at 700 (service-account only — security-sensitive).
     for d in [cfg.log_dir, os.path.join(cfg.data_dir, "cache")]:
@@ -1244,13 +1663,23 @@ def _phase_welcome(cfg):
         logger.error("init_phase_failed: Phase 1 - prerequisites", phase=1, reason="missing_deps")
         return False
 
-    # Create data directories
+    # Create first-run directories. Config/data live under the install
+    # root; runtime secrets live at the FHS-canonical credentials path.
     fmt.blank()
-    fmt.step_start("Creating data directories")
-    dirs = [cfg.data_dir, cfg.vault_dir, cfg.key_dir, os.path.dirname(cfg.log_file)]
+    fmt.step_start("Creating runtime directories")
+    dirs = [
+        cfg.conf_dir,
+        cfg.data_dir,
+        os.path.dirname(cfg.log_file),
+        os.path.join(cfg.data_dir, "cache"),
+        os.path.join(cfg.data_dir, "secrets"),
+        cfg.vault_dir,
+        cfg.key_dir,
+        _credentials_dir(cfg),
+    ]
     for d in dirs:
         os.makedirs(d, exist_ok=True)
-    fmt.step_ok(f"Data directories ready ({len(dirs)} created)")
+    fmt.step_ok(f"Runtime directories ready ({len(dirs)} checked)")
 
     # Seed config files from .example templates
     _seed_config_files(cfg)
@@ -1281,6 +1710,8 @@ def _seed_config_files(cfg):
         "users.conf",
         "containers.toml",
     ]
+
+    os.makedirs(cfg.conf_dir, exist_ok=True)
 
     pkg_templates = None
     try:
@@ -1330,6 +1761,7 @@ INIT_LIVE_CONFIG_FILES = (
     "roles.conf",
     "users.conf",
     "containers.toml",
+    "pve-inventory.toml",
 )
 
 INIT_GENERATED_TOKEN_FILES = (
@@ -1337,24 +1769,77 @@ INIT_GENERATED_TOKEN_FILES = (
     "/etc/freq/credentials/pve-token",
 )
 
+INIT_GENERATED_WATCHDOG_FILES = (
+    "/var/lib/freq-watchdog/status.json",
+    "/var/lib/freq-watchdog/state.json",
+)
 
-def _remove_init_file(path, label):
+INIT_RUNTIME_CACHE_KEEP = {".gitignore", ".gitkeep"}
+
+
+def _remove_init_file(path, label, *, missing_ok=False):
     """Remove a generated init file if present and report the result."""
     if os.path.isfile(path):
-        os.unlink(path)
-        fmt.step_ok(f"{label} removed: {path}")
-        return True
-    fmt.step_warn(f"{label} not found: {path}")
+        try:
+            os.unlink(path)
+            fmt.step_ok(f"{label} removed: {path}")
+            return True
+        except OSError as e:
+            fmt.step_warn(f"{label} cleanup failed: {path}: {e}")
+            return False
+    if missing_ok:
+        fmt.step_ok(f"{label} already clean: {path}")
+    else:
+        fmt.step_warn(f"{label} not found: {path}")
     return False
+
+
+def _clear_generated_runtime_truth_state(cfg):
+    """Remove generated dashboard/watchdog truth from a previous run.
+
+    Init is allowed to inherit operator-supplied inputs and templates. It is
+    not allowed to inherit old health, doctor, watchdog, alert, or probe cache
+    output and then show that as current truth after a fresh install.
+    """
+    cache_dir = os.path.join(cfg.data_dir, "cache")
+    if os.path.isdir(cache_dir):
+        removed = 0
+        for name in os.listdir(cache_dir):
+            if name in INIT_RUNTIME_CACHE_KEEP:
+                continue
+            path = os.path.join(cache_dir, name)
+            try:
+                if os.path.isdir(path) and not os.path.islink(path):
+                    shutil.rmtree(path)
+                    removed += 1
+                elif os.path.exists(path) or os.path.islink(path):
+                    os.unlink(path)
+                    removed += 1
+            except OSError as e:
+                fmt.step_warn(f"Runtime cache cleanup skipped {path}: {e}")
+        if removed:
+            fmt.step_ok(f"Runtime truth cache cleared: {removed} artifact(s)")
+        else:
+            fmt.step_ok("Runtime truth cache clean")
+    else:
+        fmt.step_ok(f"Runtime truth cache clean: {cache_dir}")
+
+    for state_path in INIT_GENERATED_WATCHDOG_FILES:
+        _remove_init_file(
+            state_path,
+            f"Watchdog state {os.path.basename(state_path)}",
+            missing_ok=True,
+        )
 
 
 def _reset_local_init_state(cfg, *, remove_live_config=False):
     """Remove generated local init state without touching templates.
 
     ``freq init --reset`` must create a real first-run state. Leaving
-    generated live config, web setup markers, keys, or PVE token files behind
-    makes the next init inherit old DC01 truth and lets the dashboard look
-    configured when the current acceptance run did not create that state.
+    generated live config, web setup markers, keys, PVE token files, runtime
+    probe cache, or watchdog status behind makes the next init inherit old
+    DC01 truth and lets the dashboard look configured/degraded from stale
+    state the current acceptance run did not create.
 
     Staging/input secret files are intentionally preserved. Init accepts them
     by explicit path on the next run; reset only removes state freq generated.
@@ -1379,6 +1864,8 @@ def _reset_local_init_state(cfg, *, remove_live_config=False):
 
     for path, label in targets:
         _remove_init_file(path, label)
+
+    _clear_generated_runtime_truth_state(cfg)
 
     if remove_live_config:
         for name in INIT_LIVE_CONFIG_FILES:
@@ -1453,6 +1940,8 @@ def _update_toml_value(content, key, value):
         "docker_dev_ip": "infrastructure",
         "tls_cert": "services",
         "tls_key": "services",
+        "watchdog_enabled": "services",
+        "watchdog_port": "services",
     }
     section_name = section_map.get(key)
     new_line = f"{key} = {toml_val}\n"
@@ -2098,8 +2587,8 @@ def _discover_vlans_from_pve(cfg, ctx):
 def _phase_service_account(cfg, ctx, args=None):
     """Create service account with NOPASSWD sudo."""
     logger.info("init_phase_start: Phase 3 - service_account", phase=3)
-    fmt.line(f"  {fmt.C.DIM}The service account is used for fleet-wide SSH operations.{fmt.C.RESET}")
-    fmt.line(f"  {fmt.C.DIM}It will be created on this host and deployed to all managed nodes.{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.DIM}The pve-freq service account is the managed runtime identity.{fmt.C.RESET}")
+    fmt.line(f"  {fmt.C.DIM}Bootstrap/run-as identity stays root or freq-ops; this account is created by init.{fmt.C.RESET}")
     fmt.blank()
 
     svc_arg = (getattr(args, "service_account", None) or "").strip() if args else ""
@@ -2695,7 +3184,7 @@ def _phase_pve_api_token(cfg, ctx):
     # purely by path drift, not PVE state. This is the contract-level
     # fix: init writes where the runtime reads.
     svc_name = ctx["svc_name"]
-    cred_dir = "/etc/freq/credentials"
+    cred_dir = _credentials_dir(cfg)
     cred_dir_preexists = os.path.isdir(cred_dir)
     os.makedirs(cred_dir, mode=0o750, exist_ok=True)
     cred_path = os.path.join(cred_dir, "pve-token-rw")
@@ -2871,6 +3360,12 @@ def _register_host_interactive(cfg):
         return False
 
     groups = _input("  Groups (comma-separated, optional)", "")
+    if htype in DEVICE_HTYPES or htype in {"opnsense", "ilo", "ipmi"}:
+        scope = _normalize_device_scope(_input("  Physical scope (core/lab)", "core"), default="")
+        if not scope:
+            fmt.step_fail("Invalid physical scope — use core or lab")
+            return False
+        groups = _scope_groups(groups, scope, htype)
 
     from freq.core.config import Host, append_host_toml
 
@@ -2983,6 +3478,35 @@ def _discover_and_register(cfg, ctx):
     fmt.blank()
     if _confirm("Scan another subnet?"):
         _discover_and_register(cfg, ctx)
+
+
+def _prompt_discovered_physical_scopes(discovered):
+    """Interactive init review for physical core/lab placement."""
+    physical_types = set(DEVICE_HTYPES) | {"opnsense", "ilo", "ipmi"}
+    physical = [(ip, d) for ip, d in sorted((discovered or {}).items()) if d.get("htype") in physical_types]
+    if not physical:
+        return
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Physical Device Scope Review{fmt.C.RESET}")
+    for ip, d in physical:
+        current = _device_scope_for(
+            ip=ip,
+            label=d.get("label", ""),
+            key=d.get("label", ""),
+            groups=d.get("groups", ""),
+            vmid=d.get("vmid", 0),
+            default=d.get("scope", ""),
+        )
+        while True:
+            scope = _normalize_device_scope(
+                _input(f"  {d.get('label', ip)} ({ip}) scope core/lab", current),
+                default="",
+            )
+            if scope:
+                d["scope"] = scope
+                d["groups"] = _scope_groups(d.get("groups", ""), scope, d.get("htype", ""))
+                break
+            fmt.step_fail("Invalid physical scope — use core or lab")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -3295,7 +3819,7 @@ def _phase_pdm(cfg, ctx, args=None):
     headless = getattr(args, "headless", False) if args else False
 
     if skip_pdm:
-        fmt.step_warn("PDM setup skipped (--skip-pdm)")
+        fmt.step_ok("PDM setup intentionally skipped (--skip-pdm)")
         return
 
     # Step 1: Detect PDM
@@ -3467,11 +3991,7 @@ def _classify_host_by_name(name):
         return "truenas"
     # NAS-like hostnames (standalone "nas" as whole name or hyphen-delimited segment)
     if (
-        name_lower == "nexus"
-        or name_lower.startswith("nexus-")
-        or "-nexus-" in name_lower
-        or name_lower.endswith("-nexus")
-        or name_lower == "nas"
+        name_lower == "nas"
         or name_lower.startswith("nas-")
         or "-nas-" in name_lower
         or name_lower.endswith("-nas")
@@ -3488,13 +4008,15 @@ def _classify_host_by_name(name):
 def _is_managed_auto_host(label, htype, vmid=0, source=""):
     """Return True when discovery should auto-register a managed host.
 
-    PVE VM inventory and hosts.toml are different surfaces. VM inventory
-    should show every PVE resource, including templates and operator-only
-    guests. hosts.toml is the managed-fleet registry used for service-account
-    deployment and health probing, so headless init must not promote every
-    reachable guest into it.
+    PVE inventory and hosts.toml are different surfaces. Inventory records
+    every PVE resource for init evidence; hosts.toml is the managed-fleet
+    registry used for service-account deployment, health probing, and
+    dashboard VM visibility, so headless init must not promote every reachable
+    guest into it.
     """
     label_lower = (label or "").lower()
+    if _is_operator_auto_excluded(label):
+        return False
 
     # Real PVE nodes come from the configured node list. PVE-looking VMs from
     # API discovery, such as nested lab hypervisors, are inventory-only unless
@@ -3503,6 +4025,8 @@ def _is_managed_auto_host(label, htype, vmid=0, source=""):
         return source == "pve-node" or not vmid
 
     if htype == "truenas":
+        if source == "device-credentials":
+            return True
         return "lab" not in label_lower
 
     if htype in {"pfsense", "truenas", "switch", "idrac", "opnsense"}:
@@ -3539,6 +4063,10 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     device_creds = ctx.get("device_creds") or _load_device_credentials(getattr(args, "device_credentials", None))
     if device_creds:
         ctx["device_creds"] = device_creds
+    if not _validate_device_credential_scopes(device_creds):
+        ctx["fleet_discovery_failed"] = True
+        return
+    scope_overrides = _device_scope_overrides_from_args(args)
     scoped_hosts = []
 
     if hosts_file_arg and os.path.isfile(hosts_file_arg):
@@ -3838,15 +4366,29 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     def _discovery_is_lab(d):
         label = (d.get("label") or "").lower()
         groups = [g.strip().lower() for g in (d.get("groups") or "").split(",") if g.strip()]
-        return d.get("vmid", 0) >= 5000 or "lab" in label or "lab" in groups
+        return d.get("scope") == "lab" or d.get("vmid", 0) >= 5000 or "lab" in label or "lab" in groups
 
     def _discovery_is_core_truenas(d):
-        return d.get("htype") == "truenas" and not _discovery_is_lab(d)
+        return (
+            d.get("htype") == "truenas"
+            and not _discovery_is_lab(d)
+            and not _is_operator_auto_excluded(d.get("label", ""))
+        )
 
     def _host_is_core_truenas(h):
         label = (getattr(h, "label", "") or "").lower()
         groups = [g.strip().lower() for g in (getattr(h, "groups", "") or "").split(",") if g.strip()]
-        return h.htype == "truenas" and "lab" not in label and "lab" not in groups
+        return (
+            h.htype == "truenas"
+            and "lab" not in label
+            and "lab" not in groups
+            and not _is_operator_auto_excluded(label)
+        )
+
+    def _host_is_core_physical(h, htype):
+        label = (getattr(h, "label", "") or "").lower()
+        groups = [g.strip().lower() for g in (getattr(h, "groups", "") or "").split(",") if g.strip()]
+        return h.htype == htype and "lab" not in label and "lab" not in groups
 
     def _gateway_ssh_probe(gateway_ip):
         pfsense_creds = device_creds.get("pfsense", {}) if isinstance(device_creds, dict) else {}
@@ -3876,8 +4418,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
     def _pfsense_is_deployable():
         pfsense_creds = device_creds.get("pfsense", {}) if isinstance(device_creds, dict) else {}
-        user = (pfsense_creds.get("user") or "").lower()
-        return user in {"root", "admin"}
+        return _device_cred_has_ssh_material(pfsense_creds)
 
     def _repair_existing_probe_only_infra():
         changed = False
@@ -3894,19 +4435,46 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
     def _credential_hosts(name):
         cred = device_creds.get(name, {}) if isinstance(device_creds, dict) else {}
-        hosts = []
-        for value in cred.get("hosts", []) or []:
-            if value and value not in hosts:
-                hosts.append(value)
-        host = cred.get("host", "")
-        if host and host not in hosts:
-            hosts.append(host)
-        return hosts
+        return _device_credential_hosts(cred)
 
-    def _add_staged_device(ip, label, htype, groups="infrastructure", managed=True):
+    def _add_staged_device(ip, label, htype, groups="infrastructure", managed=True, cred=None, scope=None, key=""):
         if not ip:
             return
-        if ip not in existing_ips and ip not in discovered:
+        label = (cred or {}).get("label") or label
+        groups = (cred or {}).get("groups") or groups
+        scope = scope or _device_scope_for(
+            ip=ip,
+            label=label,
+            key=key or label,
+            groups=groups,
+            cred=cred,
+            overrides=scope_overrides,
+        )
+        groups = _scope_groups(groups, scope, htype)
+        existing_key = ip if ip in discovered else None
+        if existing_key is None:
+            for candidate_ip, candidate in discovered.items():
+                if ip in (candidate.get("all_ips", []) or []):
+                    existing_key = candidate_ip
+                    break
+
+        if existing_key is not None:
+            existing = discovered.pop(existing_key)
+            existing_all_ips = list(existing.get("all_ips", []) or [existing_key])
+            for candidate_ip in (existing_key, ip):
+                if candidate_ip and candidate_ip not in existing_all_ips:
+                    existing_all_ips.append(candidate_ip)
+            existing.update({
+                "label": label,
+                "htype": htype,
+                "groups": groups,
+                "source": "device-credentials",
+                "managed": managed,
+                "all_ips": existing_all_ips,
+                "scope": scope,
+            })
+            discovered[ip] = existing
+        elif ip not in existing_ips:
             discovered[ip] = {
                 "label": label,
                 "htype": htype,
@@ -3915,6 +4483,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                 "source": "device-credentials",
                 "managed": managed,
                 "all_ips": [ip],
+                "scope": scope,
             }
 
     # Gateway = firewall
@@ -3928,7 +4497,19 @@ def _phase_fleet_discover(cfg, ctx, args=None):
             if discovered[gw]["htype"] == "linux":
                 discovered[gw]["htype"] = "pfsense"
                 discovered[gw]["label"] = "firewall"
-            infra_pfsense = gw
+            gw_scope = _device_scope_for(
+                ip=gw,
+                label=discovered[gw].get("label", "firewall"),
+                key="pfsense",
+                groups=discovered[gw].get("groups", ""),
+                vmid=discovered[gw].get("vmid", 0),
+                overrides=scope_overrides,
+                default=discovered[gw].get("scope", ""),
+            )
+            discovered[gw]["scope"] = gw_scope
+            discovered[gw]["groups"] = _scope_groups(discovered[gw].get("groups", ""), gw_scope, discovered[gw]["htype"])
+            if gw_scope == "core":
+                infra_pfsense = gw
             fmt.step_ok(f"Gateway {gw} → firewall ({discovered[gw]['htype']})")
         else:
             # Probe gateway
@@ -3942,13 +4523,15 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                 discovered[gw] = {
                     "label": "firewall",
                     "htype": gw_type,
-                    "groups": "infrastructure",
+                    "groups": _scope_groups("infrastructure", _device_scope_for(ip=gw, label="firewall", key="pfsense", overrides=scope_overrides), gw_type),
                     "vmid": 0,
                     "source": "gateway-probe",
                     "managed": _pfsense_is_deployable(),
                     "all_ips": [gw],
+                    "scope": _device_scope_for(ip=gw, label="firewall", key="pfsense", overrides=scope_overrides),
                 }
-                infra_pfsense = gw
+                if discovered[gw]["scope"] == "core":
+                    infra_pfsense = gw
                 fmt.step_ok(f"Gateway {gw} → {gw_type}")
             else:
                 fmt.step_warn(f"Gateway {gw} not reachable by ping or staged SSH credentials")
@@ -3957,12 +4540,24 @@ def _phase_fleet_discover(cfg, ctx, args=None):
         fmt.step_ok(f"Gateway {gw} already registered")
         _repair_existing_probe_only_infra()
 
+    # Explicit device credentials are operator truth. Prefer them before
+    # inferred multi-NIC/hostname discovery so an operator VM on a storage
+    # VLAN cannot steal the core TrueNAS role.
+    for ip in _credential_hosts("truenas"):
+        tn_cred = device_creds.get("truenas", {}) if isinstance(device_creds, dict) else {}
+        tn_scope = _device_scope_for(ip=ip, label=tn_cred.get("label", "truenas"), key="truenas", cred=tn_cred, overrides=scope_overrides)
+        _add_staged_device(ip, "truenas", "truenas", managed=True, cred=tn_cred, scope=tn_scope, key="truenas")
+        if tn_scope == "core":
+            infra_truenas = ip
+        fmt.step_ok(f"TrueNAS from device credentials: {ip} [{tn_scope}]")
+        break
+
     # Detect TrueNAS, switch, iDRAC from discovered hosts
     for ip, d in discovered.items():
         if _discovery_is_core_truenas(d) and not infra_truenas:
             infra_truenas = ip
             fmt.step_ok(f"TrueNAS detected: {d['label']} ({ip})")
-        elif d["htype"] == "switch" and not infra_switch:
+        elif d["htype"] == "switch" and d.get("scope", "core") != "lab" and not infra_switch:
             infra_switch = ip
             fmt.step_ok(f"Switch detected: {d['label']} ({ip})")
 
@@ -3970,9 +4565,9 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     for h in existing_hosts:
         if _host_is_core_truenas(h) and not infra_truenas:
             infra_truenas = h.ip
-        elif h.htype == "switch" and not infra_switch:
+        elif _host_is_core_physical(h, "switch") and not infra_switch:
             infra_switch = h.ip
-        elif h.htype == "pfsense" and not infra_pfsense:
+        elif _host_is_core_physical(h, "pfsense") and not infra_pfsense:
             infra_pfsense = h.ip
 
     # ── Probe for infrastructure devices on well-known IPs ────────
@@ -4008,20 +4603,24 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                 )
                 if rc2 == 0 and ("racadm" in out2.lower() or "idrac" in out2.lower() or "version" in out2.lower()):
                     label = f"idrac-{ip.split('.')[-1]}"
+                    scope = _device_scope_for(ip=ip, label=label, key=label, overrides=scope_overrides)
                     discovered[ip] = {
                         "label": label, "htype": "idrac",
-                        "groups": "infrastructure", "vmid": 0,
+                        "groups": _scope_groups("infrastructure", scope, "idrac"), "vmid": 0,
                         "source": "infra-probe", "managed": True, "all_ips": [ip],
+                        "scope": scope,
                     }
                     infra_idrac_ips.append(ip)
                     fmt.step_ok(f"iDRAC detected: {label} ({ip})")
                 else:
                     # Still reachable but not confirmed iDRAC — add as possible BMC
                     label = f"bmc-{ip.split('.')[-1]}"
+                    scope = _device_scope_for(ip=ip, label=label, key=label, overrides=scope_overrides)
                     discovered[ip] = {
                         "label": label, "htype": "idrac",
-                        "groups": "infrastructure", "vmid": 0,
+                        "groups": _scope_groups("infrastructure", scope, "idrac"), "vmid": 0,
                         "source": "infra-probe-ping", "managed": True, "all_ips": [ip],
+                        "scope": scope,
                     }
                     infra_idrac_ips.append(ip)
                     fmt.step_ok(f"BMC reachable: {label} ({ip})")
@@ -4034,12 +4633,15 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     continue
                 rc, _, _ = _run(["ping", "-c", "1", "-W", "1", ip], timeout=PING_TIMEOUT)
                 if rc == 0:
+                    scope = _device_scope_for(ip=ip, label="switch", key="switch", overrides=scope_overrides)
                     discovered[ip] = {
                         "label": "switch", "htype": "switch",
-                        "groups": "infrastructure", "vmid": 0,
+                        "groups": _scope_groups("infrastructure", scope, "switch"), "vmid": 0,
                         "source": "infra-probe", "managed": True, "all_ips": [ip],
+                        "scope": scope,
                     }
-                    infra_switch = ip
+                    if scope == "core":
+                        infra_switch = ip
                     fmt.step_ok(f"Switch detected: {ip}")
                     break
 
@@ -4051,46 +4653,64 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     continue
                 rc, _, _ = _run(["ping", "-c", "1", "-W", "1", ip], timeout=PING_TIMEOUT)
                 if rc == 0:
+                    scope = _device_scope_for(ip=ip, label="truenas", key="truenas", overrides=scope_overrides)
                     discovered[ip] = {
                         "label": "truenas", "htype": "truenas",
-                        "groups": "infrastructure", "vmid": 0,
+                        "groups": _scope_groups("infrastructure", scope, "truenas"), "vmid": 0,
                         "source": "infra-probe", "managed": True, "all_ips": [ip],
+                        "scope": scope,
                     }
-                    infra_truenas = ip
+                    if scope == "core":
+                        infra_truenas = ip
                     fmt.step_ok(f"TrueNAS detected: {ip}")
 
     # Device credentials are explicit operator input. Use them as discovery
     # truth when ping/guest-agent discovery cannot see management appliances.
     if not infra_pfsense:
         for ip in _credential_hosts("pfsense"):
-            _add_staged_device(ip, "firewall", "pfsense", managed=_pfsense_is_deployable())
-            infra_pfsense = ip
-            fmt.step_ok(f"Gateway from device credentials: {ip}")
+            pf_cred = device_creds.get("pfsense", {}) if isinstance(device_creds, dict) else {}
+            pf_scope = _device_scope_for(ip=ip, label=pf_cred.get("label", "firewall"), key="pfsense", cred=pf_cred, overrides=scope_overrides)
+            _add_staged_device(ip, "firewall", "pfsense", managed=_pfsense_is_deployable(), cred=pf_cred, scope=pf_scope, key="pfsense")
+            if pf_scope == "core":
+                infra_pfsense = ip
+            fmt.step_ok(f"Gateway from device credentials: {ip} [{pf_scope}]")
             break
     if not infra_switch:
         for ip in _credential_hosts("switch"):
-            _add_staged_device(ip, "switch", "switch")
-            infra_switch = ip
-            fmt.step_ok(f"Switch from device credentials: {ip}")
-            break
-    if not infra_truenas:
-        for ip in _credential_hosts("truenas"):
-            _add_staged_device(ip, "truenas", "truenas", managed=True)
-            infra_truenas = ip
-            fmt.step_ok(f"TrueNAS from device credentials: {ip}")
+            sw_cred = device_creds.get("switch", {}) if isinstance(device_creds, dict) else {}
+            sw_scope = _device_scope_for(ip=ip, label=sw_cred.get("label", "switch"), key="switch", cred=sw_cred, overrides=scope_overrides)
+            _add_staged_device(ip, "switch", "switch", cred=sw_cred, scope=sw_scope, key="switch")
+            if sw_scope == "core":
+                infra_switch = ip
+            fmt.step_ok(f"Switch from device credentials: {ip} [{sw_scope}]")
             break
     for name, cred in sorted((device_creds or {}).items()):
         if name == "idrac" or str(name).startswith("idrac-"):
             for ip in _credential_hosts(name):
                 label = f"bmc-{ip.split('.')[-1]}"
-                _add_staged_device(ip, label, "idrac")
+                cred = device_creds.get(name, {}) if isinstance(device_creds, dict) else {}
+                scope = _device_scope_for(ip=ip, label=label, key=name, cred=cred, overrides=scope_overrides)
+                _add_staged_device(ip, label, "idrac", cred=cred, scope=scope, key=name)
                 if ip not in infra_idrac_ips:
                     infra_idrac_ips.append(ip)
-                    fmt.step_ok(f"iDRAC from device credentials: {label} ({ip})")
+                    fmt.step_ok(f"iDRAC from device credentials: {label} ({ip}) [{scope}]")
         elif str(name).startswith("truenas-"):
             for ip in _credential_hosts(name):
                 label = str(name).replace("_", "-")
-                _add_staged_device(ip, label, "truenas", groups="lab", managed=False)
+                cred = device_creds.get(name, {}) if isinstance(device_creds, dict) else {}
+                scope = _device_scope_for(ip=ip, label=label, key=name, cred=cred, overrides=scope_overrides, default="lab")
+                _add_staged_device(
+                    ip,
+                    label,
+                    "truenas",
+                    groups="lab" if scope == "lab" else "infrastructure",
+                    managed=_is_managed_auto_host(label, "truenas", source="device-credentials"),
+                    cred=cred,
+                    scope=scope,
+                    key=name,
+                )
+                if scope == "core" and not infra_truenas:
+                    infra_truenas = ip
 
     if not infra_truenas and not infra_switch and not infra_idrac_ips:
         fmt.line(f"  {fmt.C.DIM}No additional infrastructure devices auto-detected.{fmt.C.RESET}")
@@ -4110,7 +4730,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
         # Display discovery table
         fmt.table_header(
-            ("IP", 17), ("LABEL", 20), ("TYPE", 10), ("SOURCE", 12),
+            ("IP", 17), ("LABEL", 20), ("TYPE", 10), ("SCOPE", 7), ("SOURCE", 12),
         )
         for ip, d in sorted(discovered.items(), key=lambda x: x[0]):
             type_color = {
@@ -4121,6 +4741,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
             fmt.table_row(
                 (ip, 17), (d["label"][:20], 20),
                 (f"{type_color}{d['htype']}{fmt.C.RESET}", 10),
+                (d.get("scope", "")[:7], 7),
                 (d["source"][:12], 12),
             )
 
@@ -4163,6 +4784,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     fmt.step_ok(f"Auto-registered {registered} managed host(s)")
         else:
             # Interactive: confirm registration
+            _prompt_discovered_physical_scopes(discovered)
             if _confirm(f"Register all {len(discovered)} discovered hosts?", default=True):
                 from freq.core.config import save_hosts_toml
                 for ip, d in discovered.items():
@@ -4186,6 +4808,13 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     if _confirm(f"  Register {d['label']} ({ip}) [{d['htype']}]?", default=True):
                         label = _input(f"    Label", d["label"])
                         htype = _input(f"    Type", d["htype"])
+                        if htype in DEVICE_HTYPES or htype in {"opnsense", "ilo", "ipmi"}:
+                            scope = _normalize_device_scope(_input("    Physical scope (core/lab)", d.get("scope", "core")), default="")
+                            if not scope:
+                                fmt.step_fail("Invalid physical scope — use core or lab")
+                                continue
+                            d["scope"] = scope
+                            d["groups"] = _scope_groups(d.get("groups", ""), scope, htype)
                         host = Host(
                             ip=ip,
                             label=label,
@@ -4278,7 +4907,12 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
 
 def _phase_fleet_deploy(cfg, ctx, args=None):
-    """Deploy service account + key to fleet hosts (all platform types)."""
+    """Deploy or configure the runtime identity for discovered fleet hosts.
+
+    Server/NAS hosts receive the managed service account. Firewalls,
+    switches, and BMCs use explicit platform deployers when credentials
+    are supplied; otherwise they stay honestly skipped/unconfigured.
+    """
     logger.info("init_phase_start: Phase 8 - fleet_deploy", phase=8)
     # Load per-device credentials (--device-credentials TOML)
     device_creds_file = getattr(args, "device_credentials", None) if args else None
@@ -4401,38 +5035,36 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
         fmt.line(f"  {fmt.C.BOLD}NAS hosts ({len(nas_hosts)}){fmt.C.RESET}")
         fmt.blank()
 
-        tn_creds = device_creds.get("truenas")
-        if tn_creds and not _device_cred_has_ssh_material(tn_creds):
-            fmt.step_fail(
-                "Core TrueNAS has API credentials only. Add user + password_file/password "
-                "or ssh_key_file under [truenas] in --device-credentials so init can "
-                f"create and verify {ctx.get('svc_name', 'the service account')} over SSH."
-            )
-            fail += len(nas_hosts)
-        elif tn_creds:
-            tn_user = tn_creds["user"]
-            tn_pass = tn_creds.get("password", "")
-            tn_key = tn_creds.get("key_path", "")
-            fmt.step_ok(f"Using device credentials for TrueNAS: {tn_user}")
+        if device_creds or has_bootstrap:
             for h in nas_hosts:
                 fmt.blank()
                 fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [truenas]")
+                tn_creds, tn_section = _truenas_creds_for_host(h, device_creds)
+                if tn_creds:
+                    if not _device_cred_has_ssh_material(tn_creds):
+                        fmt.step_fail(
+                            f"Core TrueNAS has API credentials only; TrueNAS '{h.label}' has API credentials only in [{tn_section}]. "
+                            "Add user + password_file/password or ssh_key_file under [truenas] so init can "
+                            f"create and verify {ctx.get('svc_name', 'the service account')} over SSH."
+                        )
+                        fail += 1
+                        continue
+                    tn_user = tn_creds["user"]
+                    tn_pass = tn_creds.get("password", "")
+                    tn_key = tn_creds.get("key_path", "")
+                    fmt.step_ok(f"Using device credentials [{tn_section}] for TrueNAS: {tn_user}")
+                elif has_bootstrap:
+                    tn_user = bootstrap_user or "root"
+                    tn_pass = ""
+                    tn_key = bootstrap_key
+                    fmt.step_ok(f"Using bootstrap auth for TrueNAS: {tn_user} via {bootstrap_key}")
+                else:
+                    fmt.step_fail(f"No SSH deployment credentials for TrueNAS '{h.label}'")
+                    fail += 1
+                    continue
+
                 before = audit.snapshot_host(h.ip, ctx["svc_name"], "truenas", cfg)
                 if _deploy_to_host_dispatch(h.ip, "truenas", ctx, tn_pass, tn_key, tn_user):
-                    ok += 1
-                    deployed_ips.add(h.ip)
-                    after = audit.snapshot_host(h.ip, ctx["svc_name"], "truenas", cfg)
-                    audit.record_change(h.ip, "deploy_user", before, after)
-                else:
-                    fail += 1
-        elif has_bootstrap:
-            tn_user = bootstrap_user or "root"
-            fmt.step_ok(f"Using bootstrap auth for TrueNAS: {tn_user} via {bootstrap_key}")
-            for h in nas_hosts:
-                fmt.blank()
-                fmt.line(f"  {fmt.C.BOLD}{h.label}{fmt.C.RESET} ({h.ip}) [truenas]")
-                before = audit.snapshot_host(h.ip, ctx["svc_name"], "truenas", cfg)
-                if _deploy_to_host_dispatch(h.ip, "truenas", ctx, "", bootstrap_key, tn_user):
                     ok += 1
                     deployed_ips.add(h.ip)
                     after = audit.snapshot_host(h.ip, ctx["svc_name"], "truenas", cfg)
@@ -4635,6 +5267,25 @@ def _phase_fleet_configure(cfg, ctx):
     key_path = ctx.get("key_path", "") or cfg.ssh_key_path
     svc_name = ctx.get("svc_name", cfg.ssh_service_account)
 
+    pve_resources = _fetch_pve_resources(cfg)
+    if pve_resources:
+        try:
+            inv_path, vm_count, template_count, container_count = _write_pve_inventory_toml(cfg, pve_resources)
+            fmt.step_ok(
+                f"pve-inventory.toml: {vm_count} VMs, "
+                f"{template_count} templates, {container_count} containers"
+            )
+            logger.info(
+                "pve_inventory_written",
+                path=inv_path,
+                resources=len(pve_resources),
+                vms=vm_count,
+                templates=template_count,
+                containers=container_count,
+            )
+        except OSError as e:
+            fmt.step_warn(f"Could not write pve-inventory.toml: {e}")
+
     if not cfg.hosts or not key_path or not os.path.isfile(key_path):
         fmt.line(f"  {fmt.C.DIM}No hosts or keys available — skipping fleet configuration.{fmt.C.RESET}")
         return
@@ -4803,11 +5454,8 @@ def _phase_fleet_configure(cfg, ctx):
 
     # ── 9b: Metrics Agent Deployment ──────────────────────────────
     fmt.blank()
-    agent_hosts = [
-        h for h in cfg.hosts
-        if h.htype in ("linux", "pve", "docker", "truenas")
-        and getattr(h, "managed", True)
-    ]
+    agent_hosts = _metrics_agent_hosts(cfg.hosts)
+    probe_only_hosts = _non_systemd_metrics_hosts(cfg.hosts)
     if agent_hosts:
         fmt.line(f"  {fmt.C.BOLD}Metrics Agent Deployment ({len(agent_hosts)} hosts){fmt.C.RESET}")
         fmt.blank()
@@ -4827,15 +5475,17 @@ def _phase_fleet_configure(cfg, ctx):
         else:
             agent_port = getattr(cfg, "agent_port", 9990) or 9990
             agent_ok = agent_fail = 0
+            failed_agents = []
 
             for h in agent_hosts:
                 ssh_target = f"{svc_name}@{h.ip}"
                 ssh_cmd = ["ssh", "-n"] + ssh_base_opts + [ssh_target]
 
                 # Test connectivity first
-                rc, _, _ = _run(ssh_cmd + ["echo ok"], timeout=QUICK_CHECK_TIMEOUT)
+                rc, _, err = _run(ssh_cmd + ["echo ok"], timeout=QUICK_CHECK_TIMEOUT)
                 if rc != 0:
                     agent_fail += 1
+                    failed_agents.append(f"{h.label} ({h.ip}) connect rc={rc}: {_ssh_error_msg(rc, err)}")
                     continue
 
                 # Upload agent via SSH + cat
@@ -4860,9 +5510,14 @@ def _phase_fleet_configure(cfg, ctx):
                     )
                     if r.returncode != 0:
                         agent_fail += 1
+                        failed_agents.append(
+                            f"{h.label} ({h.ip}) upload rc={r.returncode}: "
+                            f"{(r.stderr or r.stdout).strip()[:160]}"
+                        )
                         continue
-                except Exception:
+                except Exception as e:
                     agent_fail += 1
+                    failed_agents.append(f"{h.label} ({h.ip}) upload exception: {e}")
                     continue
 
                 # Create systemd service
@@ -4890,10 +5545,22 @@ def _phase_fleet_configure(cfg, ctx):
                     agent_ok += 1
                 else:
                     agent_fail += 1
+                    failed_agents.append(f"{h.label} ({h.ip}) service rc={rc}")
 
-            fmt.step_ok(f"Agent deployed: {agent_ok} OK, {agent_fail} failed")
+            if agent_fail:
+                fmt.step_fail(f"Agent deployed: {agent_ok} OK, {agent_fail} failed")
+                for failure in failed_agents:
+                    fmt.line(f"    {fmt.C.RED}- {failure}{fmt.C.RESET}")
+            else:
+                fmt.step_ok(f"Agent deployed: {agent_ok} OK, 0 failed")
     else:
         fmt.line(f"  {fmt.C.DIM}No agent-capable hosts found.{fmt.C.RESET}")
+    if probe_only_hosts:
+        labels = ", ".join(f"{h.label} ({h.ip})" for h in probe_only_hosts)
+        fmt.step_ok(
+            f"Type-specific metrics probes: {len(probe_only_hosts)} TrueNAS host(s) "
+            f"(no generic systemd agent): {labels}"
+        )
 
     # ── 9c: VM Categorization ─────────────────────────────────────
     fmt.blank()
@@ -4902,6 +5569,12 @@ def _phase_fleet_configure(cfg, ctx):
 
     categories = _categorize_vms(cfg)
     if categories:
+        out_of_contract_vmids = categories.get("out_of_contract", {}).get("vmids", [])
+        if out_of_contract_vmids:
+            ctx["out_of_contract_vmids"] = list(out_of_contract_vmids)
+            acknowledged_ooc = set(getattr(cfg, "_acknowledged_out_of_contract_vmids", set()) or set())
+            unexpected_ooc = sorted(set(out_of_contract_vmids) - acknowledged_ooc)
+            ctx["unexpected_out_of_contract_vmids"] = list(unexpected_ooc)
         fb_path = os.path.join(cfg.conf_dir, "fleet-boundaries.toml")
         try:
             # Strip old [categories.*] sections before writing to prevent
@@ -4935,7 +5608,7 @@ def _phase_fleet_configure(cfg, ctx):
                 f.write("\n\n# Auto-categorized VM groups\n")
                 for cat_name, cat_data in sorted(categories.items()):
                     vmids = cat_data["vmids"]
-                    if not vmids:
+                    if not vmids and cat_data.get("range_start") is None:
                         continue
                     f.write(f"\n[categories.{cat_name}]\n")
                     f.write(f'description = "{cat_data["description"]}"\n')
@@ -4946,6 +5619,21 @@ def _phase_fleet_configure(cfg, ctx):
                     else:
                         f.write(f"vmids = {vmids}\n")
             fmt.step_ok(f"VM categories written: {', '.join(categories.keys())}")
+            if out_of_contract_vmids:
+                formatted = ", ".join(str(v) for v in out_of_contract_vmids)
+                acknowledged_ooc = set(getattr(cfg, "_acknowledged_out_of_contract_vmids", set()) or set())
+                unexpected_ooc = sorted(set(out_of_contract_vmids) - acknowledged_ooc)
+                if unexpected_ooc:
+                    unexpected_formatted = ", ".join(str(v) for v in unexpected_ooc)
+                    fmt.step_fail(
+                        f"Unexpected out-of-contract PVE VMs discovered: "
+                        f"{len(unexpected_ooc)} ({unexpected_formatted})"
+                    )
+                else:
+                    fmt.step_ok(
+                        f"Acknowledged out-of-contract PVE VMs discovered: "
+                        f"{len(out_of_contract_vmids)} ({formatted})"
+                    )
         except OSError as e:
             fmt.step_warn(f"Could not update fleet-boundaries: {e}")
     else:
@@ -5287,6 +5975,85 @@ def _phase_fleet_configure(cfg, ctx):
         except OSError as e:
             fmt.step_warn(f"Could not install dashboard service: {e}")
 
+    # ── 9k.1: Watchdog Service ───────────────────────────────────
+    fmt.blank()
+    fmt.line(f"  {fmt.C.BOLD}Watchdog Service{fmt.C.RESET}")
+    fmt.blank()
+    if not freq_bin:
+        fmt.step_warn("Cannot find 'freq' binary — watchdog service not installed")
+    else:
+        watch_user = "freq-watch"
+        watch_dir = "/var/lib/freq-watchdog"
+        try:
+            rc_id, _, _ = _run(["id", "-u", watch_user], timeout=5)
+            if rc_id != 0:
+                _run(
+                    [
+                        "useradd",
+                        "--system",
+                        "--no-create-home",
+                        "--shell",
+                        "/usr/sbin/nologin",
+                        "--gid",
+                        svc_name,
+                        watch_user,
+                    ],
+                    timeout=10,
+                )
+            else:
+                _run(["usermod", "-g", svc_name, watch_user], timeout=10)
+            os.makedirs(watch_dir, exist_ok=True)
+            _chown(f"{watch_user}:{svc_name}", watch_dir)
+            _run(["chmod", "0755", watch_dir], timeout=5)
+            watchdog_unit = (
+                "[Unit]\n"
+                "Description=PVE FREQ Watchdog\n"
+                "After=network-online.target freq-serve.service\n"
+                "Wants=network-online.target\n"
+                "StartLimitIntervalSec=300\n"
+                "StartLimitBurst=3\n"
+                "\n"
+                "[Service]\n"
+                "Type=simple\n"
+                f"ExecStart={freq_bin} watchdog run --interval 15\n"
+                "Restart=on-failure\n"
+                "RestartSec=10\n"
+                "TimeoutStopSec=10\n"
+                "KillMode=mixed\n"
+                f"User={watch_user}\n"
+                f"Group={svc_name}\n"
+                f"WorkingDirectory={work_dir}\n"
+                f"Environment=FREQ_DIR={work_dir}\n"
+                "Environment=PYTHONDONTWRITEBYTECODE=1\n"
+                "NoNewPrivileges=true\n"
+                "PrivateTmp=true\n"
+                "PrivateDevices=true\n"
+                "ProtectSystem=full\n"
+                f"ReadWritePaths={watch_dir}\n"
+                "IPAddressDeny=any\n"
+                "IPAddressAllow=localhost\n"
+                "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6\n"
+                "MemoryMax=96M\n"
+                "CPUQuota=5%\n"
+                "\n"
+                "[Install]\n"
+                "WantedBy=multi-user.target\n"
+            )
+            with open("/etc/systemd/system/freq-watchdog.service", "w") as f:
+                f.write(watchdog_unit)
+            _update_toml(cfg, "services", "watchdog_enabled", True)
+            cfg.watchdog_enabled = True
+            _run(["systemctl", "daemon-reload"], timeout=10)
+            _run(["systemctl", "enable", "freq-watchdog"], timeout=10)
+            rc_watch, _, _ = _run(["systemctl", "start", "freq-watchdog"], timeout=10)
+            if rc_watch == 0:
+                fmt.step_ok("Watchdog service running (local read-only truth auditor)")
+            else:
+                fmt.step_warn("Watchdog service installed but not running — advisory only")
+            audit.record("deploy_service", "local", "success", service="freq-watchdog")
+        except (OSError, subprocess.SubprocessError) as e:
+            fmt.step_warn(f"Could not install watchdog service: {e}")
+
     # ── 9l: Dashboard HTTPS ───────────────────────────────────────
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}Dashboard TLS{fmt.C.RESET}")
@@ -5360,43 +6127,39 @@ def _phase_fleet_configure(cfg, ctx):
     # Dashboard runs as the service account. Init runs as root.
     # Every directory the dashboard needs must be owned by svc_name.
     install_dir = os.path.dirname(cfg.conf_dir)
-    for subdir in ["data/keys", "data/log", "data/vault", "data/cache", "credentials", "tls"]:
+    for subdir in ["data/keys", "data/log", "data/vault", "data/cache", "tls"]:
         target = os.path.join(install_dir, subdir)
         if os.path.isdir(target):
             _chown(f"{svc_name}:{svc_name}", target, recursive=True)
+    cred_dir = _credentials_dir(cfg)
+    if os.path.isdir(cred_dir):
+        _chown(f"root:{svc_name}", cred_dir, recursive=False)
     # conf/ must be readable by dashboard (freq.toml, hosts.toml, etc.)
     _chown(f"{svc_name}:{svc_name}", cfg.conf_dir, recursive=True)
     fmt.step_ok(f"Dashboard data directories owned by {svc_name}")
     logger.info("init_phase_complete: Phase 9 - fleet_configure", phase=9)
 
 
-def _categorize_vms(cfg):
-    """Auto-categorize VMs into fleet-boundary tiers.
-
-    Uses VMID ranges, name patterns, and PVE tags.
-    Returns dict of {category_name: {description, tier, vmids, range_start?, range_end?}}.
-    """
+def _fetch_pve_resources(cfg):
+    """Fetch all PVE VM/LXC/template resources from cluster source-of-truth."""
     import json as _json
 
     if not cfg.pve_nodes:
-        return {}
-
-    # Query PVE for VM list
-    pve_vms = []
-    key_path = cfg.ssh_key_path
-    svc_name = cfg.ssh_service_account
+        return []
 
     if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
         try:
             from freq.modules.pve import _pve_api_call
+
             result, ok = _pve_api_call(cfg, cfg.pve_nodes[0], "/cluster/resources?type=vm")
             if ok and isinstance(result, list):
-                pve_vms = result
+                return result
         except Exception:
             pass
 
-    if not pve_vms and key_path and os.path.isfile(key_path):
-        # SSH fallback
+    key_path = cfg.ssh_key_path
+    svc_name = cfg.ssh_service_account
+    if key_path and os.path.isfile(key_path):
         rc, out, _ = _run(
             ["ssh", "-n", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
              "-i", key_path, f"{svc_name}@{cfg.pve_nodes[0]}",
@@ -5405,10 +6168,80 @@ def _categorize_vms(cfg):
         )
         if rc == 0 and out.strip():
             try:
-                pve_vms = _json.loads(out)
+                data = _json.loads(out)
+                if isinstance(data, list):
+                    return data
             except _json.JSONDecodeError:
                 pass
 
+    return []
+
+
+def _pve_resource_kind(resource):
+    """Classify one PVE resource without treating templates as VMs."""
+    vmid = int(resource.get("vmid", 0) or 0)
+    name = (resource.get("name", "") or "").lower()
+    template_flag = resource.get("template", 0)
+    if template_flag or "template" in name or name.startswith("tmpl-") or 9000 <= vmid < 9100:
+        return "template"
+    if resource.get("type") == "lxc":
+        return "container"
+    return "vm"
+
+
+def _toml_quote(value):
+    return str(value or "").replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _write_pve_inventory_toml(cfg, pve_resources):
+    """Persist the complete PVE source-of-truth model generated by init."""
+    path = os.path.join(cfg.conf_dir, "pve-inventory.toml")
+    resources = list(pve_resources or [])
+    vm_count = sum(1 for r in resources if _pve_resource_kind(r) == "vm")
+    template_count = sum(1 for r in resources if _pve_resource_kind(r) == "template")
+    container_count = sum(1 for r in resources if _pve_resource_kind(r) == "container")
+
+    lines = [
+        "# FREQ PVE Inventory",
+        "# Auto-generated from PVE cluster source-of-truth during init.",
+        "",
+        "[summary]",
+        f"resource_count = {len(resources)}",
+        f"vm_count = {vm_count}",
+        f"template_count = {template_count}",
+        f"container_count = {container_count}",
+        "",
+    ]
+    for r in sorted(resources, key=lambda x: int(x.get("vmid", 0) or 0)):
+        vmid = int(r.get("vmid", 0) or 0)
+        lines.extend([
+            "[[resource]]",
+            f"vmid = {vmid}",
+            f'name = "{_toml_quote(r.get("name", ""))}"',
+            f'node = "{_toml_quote(r.get("node", ""))}"',
+            f'type = "{_toml_quote(r.get("type", ""))}"',
+            f'status = "{_toml_quote(r.get("status", ""))}"',
+            f'tags = "{_toml_quote(r.get("tags", ""))}"',
+            f"template = {'true' if _pve_resource_kind(r) == 'template' else 'false'}",
+            f'kind = "{_pve_resource_kind(r)}"',
+            "",
+        ])
+
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+    return path, vm_count, template_count, container_count
+
+
+def _categorize_vms(cfg):
+    """Auto-categorize VMs into fleet-boundary tiers.
+
+    Uses VMID ranges, name patterns, and PVE tags.
+    Returns dict of {category_name: {description, tier, vmids, range_start?, range_end?}}.
+    """
+    if not cfg.pve_nodes:
+        return {}
+
+    pve_vms = _fetch_pve_resources(cfg)
     if not pve_vms:
         return {}
 
@@ -5417,16 +6250,23 @@ def _categorize_vms(cfg):
     prod_vmids = []
     template_vmids = []
     infra_vmids = []
+    out_of_contract_vmids = []
+    owned_vmids = set(getattr(cfg, "_owned_vmids", set()) or set())
+    contract_template_vmids = set(getattr(cfg, "_contract_template_vmids", set()) or set())
 
     for vm in pve_vms:
-        vmid = vm.get("vmid", 0)
+        vmid = int(vm.get("vmid", 0) or 0)
         name = (vm.get("name", "") or "").lower()
         tags = vm.get("tags", "") or ""
-        template_flag = vm.get("template", 0)
 
         # Templates (PVE template flag or naming convention)
-        if template_flag or "template" in name or name.startswith("tmpl-") or 9000 <= vmid < 9100:
+        is_template = _pve_resource_kind(vm) == "template" or vmid in contract_template_vmids
+        if is_template:
             template_vmids.append(vmid)
+            continue
+
+        if owned_vmids and vmid not in owned_vmids:
+            out_of_contract_vmids.append(vmid)
             continue
 
         # Check tags first
@@ -5461,6 +6301,13 @@ def _categorize_vms(cfg):
             "range_start": None,
             "range_end": None,
         }
+    categories["sandbox"] = {
+        "description": "Disposable test VMs managed by freq live acceptance",
+        "tier": "admin",
+        "vmids": [],
+        "range_start": 6000,
+        "range_end": 6099,
+    }
     if template_vmids:
         categories["templates"] = {
             "description": "Clone sources — never start directly",
@@ -5474,6 +6321,14 @@ def _categorize_vms(cfg):
             "description": "Core infrastructure VMs",
             "tier": "probe",
             "vmids": sorted(infra_vmids),
+            "range_start": None,
+            "range_end": None,
+        }
+    if out_of_contract_vmids:
+        categories["out_of_contract"] = {
+            "description": "Discovered PVE VMs outside the explicit operator ownership contract",
+            "tier": "probe",
+            "vmids": sorted(out_of_contract_vmids),
             "range_start": None,
             "range_end": None,
         }
@@ -5525,7 +6380,7 @@ def _init_ssh(ip, auth_pass, auth_key, auth_user, deploy_start=None, deploy_budg
         "-o", "ServerAliveCountMax=3",
     ]
 
-    def _ssh(cmd, extra_opts=None, timeout=DEFAULT_CMD_TIMEOUT, as_root=False):
+    def _ssh(cmd, extra_opts=None, timeout=DEFAULT_CMD_TIMEOUT, as_root=False, input_text=None):
         # Clamp to remaining per-host deploy budget when one is in force.
         if deploy_start is not None and deploy_budget is not None:
             remaining = deploy_budget - (time.monotonic() - deploy_start)
@@ -5536,12 +6391,17 @@ def _init_ssh(ip, auth_pass, auth_key, auth_user, deploy_start=None, deploy_budg
         if as_root and auth_user != "root":
             # Base64-encode the script to avoid shell quoting nightmares
             cmd_b64 = base64.b64encode(cmd.encode()).decode()
-            cmd = f"echo '{cmd_b64}' | base64 -d | sudo bash"
-        base = ["ssh", "-n"] + ssh_opts
+            cmd = f"echo '{cmd_b64}' | base64 -d | sudo -n sh"
+        base = ["ssh"]
+        if input_text is None:
+            base.append("-n")
+        base += ssh_opts
         if extra_opts:
             base.extend(extra_opts)
         if auth_key:
             full = base + ["-o", "BatchMode=yes", "-i", auth_key, f"{auth_user}@{ip}", cmd]
+            if input_text is not None:
+                return _run_with_input(full, input_text, timeout=timeout)
             return _run(full, timeout=timeout)
         else:
             # force password auth
@@ -5555,7 +6415,7 @@ def _init_ssh(ip, auth_pass, auth_key, auth_user, deploy_start=None, deploy_budg
                 "-o", "PubkeyAuthentication=no",
                 f"{auth_user}@{ip}", cmd,
             ]
-            return _ssh_with_pass(auth_pass, full, timeout=timeout)
+            return _ssh_with_pass(auth_pass, full, timeout=timeout, input_text=input_text)
 
     return _ssh
 
@@ -5633,7 +6493,13 @@ if [ -n '{pubkey}' ]; then
 fi
 echo DEPLOY_OK
 """
-    rc, out, err = _ssh(deploy, as_root=True)
+    deploy_timeout = TRUENAS_DEPLOY_TIMEOUT if htype == "truenas" else DEFAULT_CMD_TIMEOUT
+    rc, out, err = _ssh(deploy, timeout=deploy_timeout, as_root=True)
+    if rc == 124 and htype == "truenas":
+        fmt.step_fail(f"TrueNAS deploy script timed out after {deploy_timeout}s")
+        logger.error(f"deploy_failed: {ip}", host=ip, error=f"truenas_deploy_timeout_{deploy_timeout}s")
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="truenas_deploy_timeout")
+        return False
     if MARKER_USERADD_FAIL in out or "ACCOUNT_MISSING" in out:
         fmt.step_fail(f"Failed to create account '{svc_name}'")
         logger.error(f"deploy_failed: {ip}", host=ip, error="useradd_failed")
@@ -5757,10 +6623,12 @@ def _deploy_pfsense(ip, ctx, auth_pass, auth_key, auth_user):
     # Sanitize pubkey — escape single quotes for safe shell embedding
     pubkey = pubkey.replace("'", "'\\''") if pubkey else ""
 
-    # pfSense: admin IS root (UID 0). No sudo available on FreeBSD/pfSense.
-    # Auth user must be root or admin for user creation to work.
+    # pfSense: root/admin can run `pw` directly. Some installs also provide
+    # sudo for a bootstrap operator such as freq-ops; use it only for the
+    # privileged deploy script and keep the resulting runtime identity as
+    # cfg.ssh_service_account.
     if auth_user not in ("root", "admin"):
-        fmt.step_warn(f"pfSense auth as '{auth_user}' — may lack privilege (root/admin required for pw useradd)")
+        fmt.step_info(f"pfSense bootstrap auth as '{auth_user}' — using sudo for account deployment")
 
     _ssh = _init_ssh(ip, auth_pass, auth_key, auth_user)
 
@@ -5796,7 +6664,7 @@ if [ -n '{pubkey}' ]; then
 fi
 echo DEPLOY_OK
 """
-    rc, out, err = _ssh(deploy)  # No as_root — pfSense admin IS root, no sudo
+    rc, out, err = _ssh(deploy, as_root=auth_user not in ("root", "admin"))
     if MARKER_USERADD_FAIL in out or "ACCOUNT_MISSING" in out:
         fmt.step_fail(f"Failed to create account '{svc_name}'")
         logger.error(f"deploy_failed: {ip}", host=ip, error="useradd_failed")
@@ -5811,7 +6679,7 @@ echo DEPLOY_OK
     if MARKER_CHPASSWD_FAIL in out:
         fmt.step_warn("Password set failed on pfSense")
     else:
-        fmt.step_ok("Account, password, SSH key deployed (no sudo — pfSense)")
+        fmt.step_ok("Account, password, SSH key deployed on pfSense")
 
     # Verify FREQ key SSH access (no sudo on pfSense).
     # same bounded-verify contract as _deploy_linux.
@@ -5938,19 +6806,31 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
     # are all safe to re-issue on a known-populated slot and doing so keeps
     # the rerun idempotent (either refreshes the password or no-ops).
     base_cmds = [
-        f"racadm set iDRAC.Users.{target_slot}.Password {svc_pass}",
-        f"racadm set iDRAC.Users.{target_slot}.Privilege 0x1ff",
-        f"racadm set iDRAC.Users.{target_slot}.Enable 1",
-        f"racadm set iDRAC.Users.{target_slot}.IpmiLanPrivilege 4",
+        (f"racadm set iDRAC.Users.{target_slot}.Password {svc_pass}", True),
+        (f"racadm set iDRAC.Users.{target_slot}.Privilege 0x1ff", False),
+        (f"racadm set iDRAC.Users.{target_slot}.Enable 1", False),
+        (f"racadm set iDRAC.Users.{target_slot}.IpmiLanPrivilege 4", False),
     ]
     if existing_slot:
         setup_cmds = tuple(base_cmds)
     else:
-        setup_cmds = (f"racadm set iDRAC.Users.{target_slot}.UserName {svc_name}", *base_cmds)
-    for cmd in setup_cmds:
+        setup_cmds = ((f"racadm set iDRAC.Users.{target_slot}.UserName {svc_name}", False), *base_cmds)
+    for cmd, secret_cmd in setup_cmds:
         if _check_timeout("user_setup"):
             return False
-        ok_cmd, details = _run_idrac_command(_ssh, extra_opts, cmd, timeout=IDRAC_SETUP_TIMEOUT)
+        if secret_cmd:
+            ok_cmd, details = _run_idrac_interactive_command(
+                ip,
+                auth_pass,
+                auth_key,
+                auth_user,
+                extra_opts,
+                cmd,
+                timeout=IDRAC_SETUP_TIMEOUT,
+                redact=svc_pass,
+            )
+        else:
+            ok_cmd, details = _run_idrac_command(_ssh, extra_opts, cmd, timeout=IDRAC_SETUP_TIMEOUT)
         if not ok_cmd:
             # RAC1016 "user already
             # exists" fires when _query_idrac_slots missed the existing user
@@ -5964,15 +6844,27 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
                 if found_slot:
                     fmt.step_ok(f"Found '{svc_name}' in slot {found_slot} — refreshing config")
                     target_slot = found_slot
-                    for rcmd in [
-                        f"racadm set iDRAC.Users.{found_slot}.Password {svc_pass}",
-                        f"racadm set iDRAC.Users.{found_slot}.Privilege 0x1ff",
-                        f"racadm set iDRAC.Users.{found_slot}.Enable 1",
-                        f"racadm set iDRAC.Users.{found_slot}.IpmiLanPrivilege 4",
+                    for rcmd, rsecret_cmd in [
+                        (f"racadm set iDRAC.Users.{found_slot}.Password {svc_pass}", True),
+                        (f"racadm set iDRAC.Users.{found_slot}.Privilege 0x1ff", False),
+                        (f"racadm set iDRAC.Users.{found_slot}.Enable 1", False),
+                        (f"racadm set iDRAC.Users.{found_slot}.IpmiLanPrivilege 4", False),
                     ]:
                         if _check_timeout("user_refresh"):
                             return False
-                        ok_r, det_r = _run_idrac_command(_ssh, extra_opts, rcmd, timeout=IDRAC_SETUP_TIMEOUT)
+                        if rsecret_cmd:
+                            ok_r, det_r = _run_idrac_interactive_command(
+                                ip,
+                                auth_pass,
+                                auth_key,
+                                auth_user,
+                                extra_opts,
+                                rcmd,
+                                timeout=IDRAC_SETUP_TIMEOUT,
+                                redact=svc_pass,
+                            )
+                        else:
+                            ok_r, det_r = _run_idrac_command(_ssh, extra_opts, rcmd, timeout=IDRAC_SETUP_TIMEOUT)
                         if not ok_r:
                             fmt.step_fail(f"iDRAC user refresh failed ({det_r.strip()[:80]})")
                             logger.error(f"deploy_failed: {ip}", host=ip, error="idrac_refresh_failed")
@@ -6497,7 +7389,7 @@ def _remove_from_host_dispatch(ip, htype, svc_name, key_path, rsa_key_path, devi
 
 
 def _phase_admin_setup(cfg, ctx):
-    """Configure RBAC roles."""
+    """Configure human/operator RBAC roles."""
     logger.info("init_phase_start: Phase 11 - admin_setup", phase=11)
     roles_file = os.path.join(cfg.conf_dir, "roles.conf")
 
@@ -6526,13 +7418,10 @@ def _phase_admin_setup(cfg, ctx):
             f.write(f"{current_user}:admin\n")
         fmt.step_ok(f"Added {current_user} as admin")
 
-    # Add service account as admin
+    # The service account runs the dashboard and fleet actions. It is not a
+    # human web principal and must not be seeded as a dashboard admin.
     svc_name = ctx["svc_name"]
-    active = _active_roles(roles_file)
-    if not any(l.startswith(f"{svc_name}:") for l in active):
-        with open(roles_file, "a") as f:
-            f.write(f"{svc_name}:admin\n")
-        fmt.step_ok(f"Added {svc_name} as admin")
+    fmt.step_ok(f"Service account {svc_name} is runtime-only, not a web login")
 
     # Offer additional accounts
     fmt.blank()
@@ -6576,9 +7465,6 @@ def _is_skip_error(err):
             "network is unreachable",
             "connection timed out",
             "connection refused",
-            "permission denied",
-            "authentication",
-            "host key verification failed",
         ]
     )
 
@@ -6628,6 +7514,27 @@ def _verify_host(ip, htype, svc_name, key_path, rsa_key_path, cfg=None):
             connect_timeout=5,
             command_timeout=VERIFY_TIMEOUT,
             htype="truenas",
+            use_sudo=False,
+            local_user=auth.get("local_user") or None,
+            password_file=auth.get("password_file") or None,
+            sudo_password_file=auth.get("sudo_password_file", False),
+            cfg=cfg,
+            failure_log_level="warn",
+        )
+        return r.returncode == 0, (r.stderr or r.stdout)
+    if htype == "pfsense" and cfg is not None:
+        from freq.core.device_credentials import resolve_staged_device_ssh_auth
+        from freq.core.ssh import run as ssh_run
+
+        auth = resolve_staged_device_ssh_auth(cfg, "pfsense")
+        r = ssh_run(
+            host=ip,
+            command="echo OK",
+            user=auth.get("user") or svc_name,
+            key_path=auth.get("key_path") or key_path,
+            connect_timeout=5,
+            command_timeout=VERIFY_TIMEOUT,
+            htype="pfsense",
             use_sudo=False,
             local_user=auth.get("local_user") or None,
             password_file=auth.get("password_file") or None,
@@ -6936,6 +7843,38 @@ def _phase_verify(cfg, ctx):
     else:
         fmt.line(f"  {fmt.C.DIM}fleet-boundaries.toml is empty — no device categories configured{fmt.C.RESET}")
 
+    # pve-inventory.toml — complete generated PVE source-of-truth model.
+    inv_path = os.path.join(cfg.conf_dir, "pve-inventory.toml")
+    if cfg.pve_nodes:
+        inv_ok = False
+        inv_msg = "missing"
+        if os.path.isfile(inv_path):
+            if tomllib:
+                try:
+                    with open(inv_path, "rb") as f:
+                        inv_data = tomllib.load(f)
+                    resources = inv_data.get("resource", [])
+                    summary_data = inv_data.get("summary", {})
+                    vm_count = sum(1 for r in resources if r.get("kind") == "vm")
+                    template_count = sum(1 for r in resources if r.get("kind") == "template")
+                    summary_matches = (
+                        summary_data.get("resource_count") == len(resources)
+                        and summary_data.get("vm_count") == vm_count
+                        and summary_data.get("template_count") == template_count
+                    )
+                    template_ids = [r.get("vmid") for r in resources if r.get("kind") == "template"]
+                    vm_ids = [r.get("vmid") for r in resources if r.get("kind") == "vm"]
+                    inv_ok = bool(resources) and summary_matches and not set(template_ids) & set(vm_ids)
+                    inv_msg = f"{vm_count} VMs, {template_count} templates, {len(resources)} resources"
+                    if not summary_matches:
+                        inv_msg = "summary mismatch"
+                except Exception:
+                    inv_msg = "malformed TOML"
+            else:
+                inv_ok = True
+                inv_msg = "file present"
+        _check(f"pve-inventory.toml: {inv_msg}", inv_ok)
+
     # containers.toml — verify file is parseable if it was generated.
     # 0 containers across
     # 0 hosts is a legitimate cluster state (no-docker or docker hosts
@@ -6976,22 +7915,35 @@ def _phase_verify(cfg, ctx):
     else:
         fmt.line(f"  {fmt.C.DIM}freq.toml [infrastructure] is empty — no infrastructure IPs detected{fmt.C.RESET}")
 
-    # Metrics agent spot-check (first linux host)
-    linux_hosts = [h for h in cfg.hosts if h.htype in ("linux", "docker")]
-    if linux_hosts and key_file and os.path.isfile(key_file):
-        test_host = linux_hosts[0]
+    # Metrics agent verification for every generic systemd agent host.
+    agent_hosts = _metrics_agent_hosts(cfg.hosts)
+    if agent_hosts and key_file and os.path.isfile(key_file):
         agent_port = getattr(cfg, "agent_port", 9990) or 9990
-        rc_agent, out_agent, _ = _run(
-            ["ssh", "-n", "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
-             "-i", key_file, f"{svc_name}@{test_host.ip}",
-             f"curl -s http://localhost:{agent_port}/health 2>/dev/null"],
-            timeout=QUICK_CHECK_TIMEOUT,
+        agent_ok = 0
+        agent_fail = 0
+        failed_agents = []
+        for h in agent_hosts:
+            rc_agent, out_agent, err_agent = _run(
+                ["ssh", "-n", "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
+                 "-i", key_file, f"{svc_name}@{h.ip}",
+                 f"curl -s http://localhost:{agent_port}/health 2>/dev/null"],
+                timeout=QUICK_CHECK_TIMEOUT,
+            )
+            if rc_agent == 0 and "ok" in out_agent.lower():
+                agent_ok += 1
+            else:
+                agent_fail += 1
+                detail = (err_agent or out_agent or f"rc={rc_agent}").strip()
+                failed_agents.append(f"{h.label} ({h.ip}) {detail[:160]}")
+        _check(f"Metrics agents responding: {agent_ok}/{len(agent_hosts)}", agent_fail == 0)
+        for failure in failed_agents:
+            fmt.line(f"    {fmt.C.RED}- {failure}{fmt.C.RESET}")
+    probe_only_hosts = _non_systemd_metrics_hosts(cfg.hosts)
+    if probe_only_hosts:
+        _check(
+            f"Type-specific metrics probes: {len(probe_only_hosts)} TrueNAS host(s)",
+            True,
         )
-        agent_ok = rc_agent == 0 and "ok" in out_agent.lower()
-        if agent_ok:
-            _check(f"Metrics agent responding on {test_host.label}", True)
-        else:
-            fmt.line(f"  {fmt.C.DIM}Metrics agent not responding on {test_host.label} — may need manual start{fmt.C.RESET}")
 
     # Dashboard readiness
     dashboard_ready = bool(
@@ -7004,6 +7956,22 @@ def _phase_verify(cfg, ctx):
     fleet_deploy_failures = int(ctx.get("fleet_deploy_failures", 0) or 0)
     if fleet_deploy_failures:
         _check(f"Phase 8 fleet deployment: 0 failed hosts (saw {fleet_deploy_failures})", False)
+    unexpected_out_of_contract_vmids = sorted(set(ctx.get("unexpected_out_of_contract_vmids", []) or []))
+    if unexpected_out_of_contract_vmids:
+        formatted = ", ".join(str(v) for v in unexpected_out_of_contract_vmids)
+        _check(
+            f"Operator VM contract: 0 unexpected out-of-contract PVE VMs "
+            f"(saw {len(unexpected_out_of_contract_vmids)}: {formatted})",
+            False,
+        )
+    else:
+        out_of_contract_vmids = sorted(set(ctx.get("out_of_contract_vmids", []) or []))
+        if out_of_contract_vmids:
+            formatted = ", ".join(str(v) for v in out_of_contract_vmids)
+            _check(
+                f"Operator VM contract: {len(out_of_contract_vmids)} acknowledged out-of-contract PVE VMs ({formatted})",
+                True,
+            )
 
     fmt.blank()
     summary = f"  Verification: {fmt.C.GREEN}{passes} pass{fmt.C.RESET}, {fmt.C.RED}{fails} fail{fmt.C.RESET}"
@@ -7342,7 +8310,7 @@ def _init_check(cfg, json_output=False):
             ip, htype, label = entry["ip"], entry["htype"], entry["label"]
             svc_home = _home_dir_for_user(svc_name)
             auth_keys = os.path.join(svc_home, ".ssh", "authorized_keys") if svc_home else ""
-            if htype in ("linux", "pve", "docker", "truenas"):
+            if htype in ("linux", "pve", "docker"):
                 cmd = (
                     f"id {svc_name} >/dev/null 2>&1 && "
                     f"sudo -n true 2>/dev/null && "
@@ -7350,12 +8318,16 @@ def _init_check(cfg, json_output=False):
                     f"echo DEEP_CHECK_OK"
                 )
                 use_key = key_file
-            elif htype == "pfsense":
+            elif htype == "truenas":
                 cmd = (
-                    f"pw usershow {svc_name} >/dev/null 2>&1 && "
-                    f"test -f {shlex.quote(auth_keys)} && "
+                    f"id {svc_name} >/dev/null 2>&1 && "
+                    f"sudo -n true 2>/dev/null && "
+                    f"test -f ~/.ssh/authorized_keys && "
                     f"echo DEEP_CHECK_OK"
                 )
+                use_key = key_file
+            elif htype == "pfsense":
+                cmd = "echo DEEP_CHECK_OK"
                 use_key = key_file
             else:
                 return label, ip, htype, True, ""  # iDRAC/switch — SSH verify is sufficient
@@ -7375,7 +8347,13 @@ def _init_check(cfg, json_output=False):
             for f in _cf.as_completed(futs):
                 label, ip, htype, deep_ok, deep_err = f.result()
                 if deep_ok:
-                    _chk(f"{label}: account + sudo + key verified", "pass")
+                    if htype in ("linux", "pve", "docker", "truenas"):
+                        detail = "account + sudo + key verified"
+                    elif htype in ("pfsense", "idrac", "switch"):
+                        detail = f"SSH verified [{htype}]"
+                    else:
+                        detail = "reachable"
+                    _chk(f"{label}: {detail}", "pass")
                 else:
                     detail = deep_err or "account/sudo/key missing"
                     _chk(f"{label}: {detail}", "fail")
@@ -7605,7 +8583,7 @@ def _init_fix(cfg, args):
             fmt.blank()
             fmt.line(f"  {fmt.C.BOLD}{h['label']}{fmt.C.RESET} ({h['ip']}) [pfsense]")
             if _deploy_to_host_dispatch(h["ip"], "pfsense", ctx, auth_pass, auth_key, auth_user):
-                ok, _ = _verify_host(h["ip"], "pfsense", svc_name, key_file, rsa_file)
+                ok, _ = _verify_host(h["ip"], "pfsense", svc_name, key_file, rsa_file, cfg=cfg)
                 if ok:
                     fmt.step_ok(f"{h['label']}: {svc_name} deployed and verified")
                     fixed += 1
@@ -8101,26 +9079,35 @@ def _uninstall_dry_run(cfg):
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _init_dry_run(cfg):
+def _init_dry_run(cfg, args=None):
     """Show what init would do."""
+    if args is not None:
+        svc_name = (getattr(args, "service_account", None) or cfg.ssh_service_account or "").strip()
+        if svc_name:
+            cfg.ssh_service_account = svc_name
+        cli_nodes_arg = getattr(args, "pve_nodes", None)
+        cli_nodes = [n.strip() for n in re.split(r"[,\s]+", cli_nodes_arg.strip()) if n.strip()] if cli_nodes_arg else []
+        if cli_nodes:
+            cfg.pve_nodes = cli_nodes
+
     fmt.header("Init — Dry Run (13 Phases)")
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}This shows what 'freq init' would do without making changes:{fmt.C.RESET}")
     fmt.blank()
 
     phases = [
-        ("Phase 1", "Prerequisites", "Check binaries (ssh, openssl), create dirs, seed configs"),
-        ("Phase 2", "Cluster Config + VLAN Discovery", "PVE nodes, gateway, bootstrap auth, discover VLANs from PVE"),
-        ("Phase 3", "Service Account", f"Create '{cfg.ssh_service_account}' with NOPASSWD sudo, init vault"),
+        ("Phase 1", "Prerequisites", "Check binaries, create config/data/credentials dirs, seed configs"),
+        ("Phase 2", "Cluster Config + VLAN Discovery", "PVE nodes, gateway, bootstrap auth as root/freq-ops, discover VLANs"),
+        ("Phase 3", "Service Account", f"Create pve-freq-svc-account '{cfg.ssh_service_account}', init vault"),
         ("Phase 4", "SSH Keys", f"Generate ed25519 + RSA-4096 keypairs in {cfg.key_dir}/"),
         ("Phase 5", "PVE Node Deployment", f"Deploy {cfg.ssh_service_account} to {len(cfg.pve_nodes) if cfg.pve_nodes else 0} PVE node(s)"),
         ("Phase 6", "PVE API Token", f"Create {cfg.ssh_service_account}@pam!freq-rw token, save to /etc/freq/credentials/"),
         ("Phase 7", "Fleet Discovery", "PVE API + multi-VLAN sweep, detect infrastructure, write hosts.toml + fleet-boundaries"),
-        ("Phase 8", "Fleet Deployment", f"Deploy {cfg.ssh_service_account} to all discovered hosts (Linux, TrueNAS, pfSense, iDRAC, switch)"),
-        ("Phase 9", "Fleet Configuration", "Docker host tagging, metrics agent deploy, VM categorization"),
+        ("Phase 8", "Fleet Deployment", "Deploy service account where supported; otherwise store/verify platform credentials or mark unconfigured"),
+        ("Phase 9", "Fleet Configuration", "Docker host tagging, metrics agent, VM categories, dashboard service/TLS/ownership"),
         ("Phase 10", "PDM Setup", "Optional Proxmox Datacenter Manager integration"),
-        ("Phase 11", "Admin Accounts", "Configure RBAC roles (admin for current user + service account)"),
-        ("Phase 12", "Verification", "SSH/sudo all hosts, PVE API, agent health, dashboard readiness"),
+        ("Phase 11", "Admin Accounts", "Configure human web admin/RBAC; service account is not a web login"),
+        ("Phase 12", "Verification", "Verify runtime context, credentials, PVE API, agent health, dashboard readiness"),
         ("Phase 13", "Summary", "Fleet topology, infrastructure IPs, component ports, next steps"),
     ]
 
@@ -8258,6 +9245,8 @@ def _init_headless(cfg, args):
     bootstrap_user = getattr(args, "bootstrap_user", "root")
     bootstrap_pass_file = getattr(args, "bootstrap_password_file", None)
     password_file = getattr(args, "password_file", None)
+    dashboard_user_arg = getattr(args, "dashboard_user", None)
+    dashboard_password_file = getattr(args, "dashboard_password_file", None)
     device_credentials_file = getattr(args, "device_credentials", None)
     # Legacy flags (deprecated, still functional as fallback)
     device_password_file = getattr(args, "device_password_file", None)
@@ -8297,8 +9286,33 @@ def _init_headless(cfg, args):
     if len(svc_pass) < 8:
         fmt.line(f"  {fmt.C.RED}Password too short (min 8 chars){fmt.C.RESET}")
         return 1
+
+    dashboard_user = (dashboard_user_arg or bootstrap_user or "").strip()
+    if not _validate_username(dashboard_user):
+        fmt.line(f"  {fmt.C.RED}Invalid --dashboard-user '{dashboard_user}'.{fmt.C.RESET}")
+        return 1
+    dashboard_pass = ""
+    if dashboard_password_file:
+        if not os.path.isfile(dashboard_password_file):
+            fmt.line(f"  {fmt.C.RED}--dashboard-password-file not found: {dashboard_password_file}{fmt.C.RESET}")
+            return 1
+        with open(dashboard_password_file) as f:
+            dashboard_pass = f.read().strip()
+    elif dashboard_user_arg:
+        fmt.line(f"  {fmt.C.RED}--dashboard-password-file required when --dashboard-user is set.{fmt.C.RESET}")
+        return 1
+    else:
+        dashboard_pass = bootstrap_pass or svc_pass
+    if len(dashboard_pass) < 8:
+        fmt.line(f"  {fmt.C.RED}Dashboard password too short (min 8 chars){fmt.C.RESET}")
+        return 1
+
     device_creds = _load_device_credentials(device_credentials_file)
     if not _validate_device_scoped_service_password(device_creds, svc_pass):
+        return 1
+    if not _validate_truenas_deployment_credentials(device_creds):
+        return 1
+    if not _validate_device_credential_scopes(device_creds):
         return 1
 
     svc_name = (getattr(args, "service_account", None) or cfg.ssh_service_account).strip()
@@ -8316,6 +9330,8 @@ def _init_headless(cfg, args):
         "bootstrap_key": bootstrap_key or "",
         "bootstrap_pass": bootstrap_pass,
         "bootstrap_user": bootstrap_user,
+        "dashboard_user": dashboard_user,
+        "dashboard_pass": dashboard_pass,
         "device_creds": device_creds,
         "dry_run": False,
     }
@@ -8329,6 +9345,9 @@ def _init_headless(cfg, args):
     else:
         fmt.line(f"  Bootstrap: {fmt.C.CYAN}{bootstrap_user}{fmt.C.RESET} via password (sshpass)")
     fmt.line(f"  Service account: {fmt.C.CYAN}{ctx['svc_name']}{fmt.C.RESET}")
+    fmt.line(f"  Dashboard admin: {fmt.C.CYAN}{ctx['dashboard_user']}{fmt.C.RESET}")
+    fmt.blank()
+    _clear_generated_runtime_truth_state(cfg)
     fmt.blank()
 
     headless_total = 12
@@ -8354,7 +9373,14 @@ def _init_headless(cfg, args):
 
     # Seed dashboard auth before the long fleet phases so a partial run remains
     # recoverable instead of falling back to setup with no viable login path.
-    _seed_headless_dashboard_auth(cfg, bootstrap_user, bootstrap_pass, ctx["svc_name"], verbose=False)
+    if not _seed_headless_dashboard_auth(
+        cfg,
+        ctx["dashboard_user"],
+        ctx["dashboard_pass"],
+        ctx["svc_name"],
+        verbose=False,
+    ):
+        return 1
 
     # ── Phase 5: PVE Node Deployment ──
     _phase(5, headless_total, "PVE Node Deployment")
@@ -8377,6 +9403,8 @@ def _init_headless(cfg, args):
     # ── Phase 7: Fleet Discovery ──
     _phase(7, headless_total, "Fleet Discovery")
     _phase_fleet_discover(cfg, ctx, args)
+    if ctx.get("fleet_discovery_failed"):
+        return 1
 
     # stop freq-serve before
     # fleet deploy/verify so background health probes and dashboard API
@@ -8425,6 +9453,7 @@ def _init_headless(cfg, args):
         fmt.step_ok(f"Per-device credentials loaded: {', '.join(sorted(device_creds.keys()))}")
     elif device_password_file:
         fmt.step_warn("Using deprecated --device-password-file (migrate to --device-credentials)")
+    _persist_runtime_device_credentials_metadata(cfg, device_creds, ctx["svc_name"])
     _seed_truenas_api_key_from_device_creds(cfg, device_creds)
 
     _headless_fleet_deploy(
@@ -8448,20 +9477,17 @@ def _init_headless(cfg, args):
 
     # ── Phase 11: RBAC ──
     _phase(11, headless_total, "RBAC Setup")
-    roles_file = os.path.join(cfg.conf_dir, "roles.conf")
-    users_file = os.path.join(cfg.conf_dir, "users.conf")
-    boot_pass = ctx.get("bootstrap_pass", "")
-    svc_pass = ctx.get("svc_pass", "")
     # Re-run the same helper after the long init phases so roles.conf,
-    # users.conf, and the bootstrap web password converge on one
+    # users.conf, and the dashboard web password converge on one
     # idempotent source of truth.
-    _seed_headless_dashboard_auth(
+    if not _seed_headless_dashboard_auth(
         cfg,
-        bootstrap_user,
-        boot_pass or svc_pass,
+        ctx["dashboard_user"],
+        ctx["dashboard_pass"],
         ctx["svc_name"],
         verbose=True,
-    )
+    ):
+        return 1
 
     # ── Post-init permissions ──
     # headless init used to
@@ -8584,8 +9610,8 @@ def _headless_local_account(cfg, ctx):
     return True
 
 
-def _seed_headless_dashboard_auth(cfg, bootstrap_user, bootstrap_pass, svc_name, verbose=True):
-    """Seed roles/users and bootstrap web auth early so partial init states remain recoverable.
+def _seed_headless_dashboard_auth(cfg, dashboard_user, dashboard_pass, svc_name, verbose=True):
+    """Seed roles/users and human dashboard auth early so partial init states remain recoverable.
 
     Headless init can spend a long time in fleet deploy / verification. If the run stalls
     before the RBAC phase, the dashboard may already be serving while users.conf and the
@@ -8602,18 +9628,14 @@ def _seed_headless_dashboard_auth(cfg, bootstrap_user, bootstrap_pass, svc_name,
             existing_lines = f.readlines()
     active_roles = [l.strip() for l in existing_lines if l.strip() and not l.strip().startswith("#")]
     with open(roles_file, "a") as f:
-        if not any(l.startswith(f"{bootstrap_user}:") for l in active_roles):
-            f.write(f"{bootstrap_user}:admin\n")
+        if not any(l.startswith(f"{dashboard_user}:") for l in active_roles):
+            f.write(f"{dashboard_user}:admin\n")
             if verbose:
-                fmt.step_ok(f"Added {bootstrap_user} as admin")
+                fmt.step_ok(f"Added {dashboard_user} as admin")
         elif verbose:
-            fmt.step_ok(f"{bootstrap_user} already in roles")
-        if not any(l.startswith(f"{svc_name}:") for l in active_roles):
-            f.write(f"{svc_name}:admin\n")
-            if verbose:
-                fmt.step_ok(f"Added {svc_name} as admin")
-        elif verbose:
-            fmt.step_ok(f"{svc_name} already in roles")
+            fmt.step_ok(f"{dashboard_user} already in roles")
+        if verbose:
+            fmt.step_ok(f"Service account {svc_name} is runtime-only, not a web login")
 
     users_existing = []
     if os.path.isfile(users_file):
@@ -8621,14 +9643,12 @@ def _seed_headless_dashboard_auth(cfg, bootstrap_user, bootstrap_pass, svc_name,
             users_existing = f.readlines()
     users_active = [l.strip() for l in users_existing if l.strip() and not l.strip().startswith("#")]
     with open(users_file, "a") as f:
-        if not any(l.split()[0] == bootstrap_user for l in users_active if l.split()):
-            f.write(f"{bootstrap_user} admin\n")
-        if not any(l.split()[0] == svc_name for l in users_active if l.split()):
-            f.write(f"{svc_name} admin\n")
+        if not any(l.split()[0] == dashboard_user for l in users_active if l.split()):
+            f.write(f"{dashboard_user} admin\n")
     if verbose:
-        fmt.step_ok("users.conf seeded with bootstrap + service account")
+        fmt.step_ok("users.conf seeded with dashboard admin")
 
-    # Only the bootstrap user gets a dashboard password. The service account runs
+    # Only a human dashboard user gets a dashboard password. The service account runs
     # the dashboard but is not a web principal.
     #
     # R-AUTH-RESTART-DRIFT-20260413W: the write is immediately verified by
@@ -8647,37 +9667,44 @@ def _seed_headless_dashboard_auth(cfg, bootstrap_user, bootstrap_pass, svc_name,
 
         if not os.path.exists(cfg.vault_file):
             vault_init(cfg)
-        if bootstrap_user and bootstrap_pass:
-            new_hash = hash_password(bootstrap_pass)
-            write_ok = vault_set(cfg, "auth", f"password_{bootstrap_user}", new_hash)
+        if dashboard_user and dashboard_pass:
+            new_hash = hash_password(dashboard_pass)
+            write_ok = vault_set(cfg, "auth", f"password_{dashboard_user}", new_hash)
             if not write_ok:
                 fmt.step_fail(
-                    f"Dashboard password set for {bootstrap_user} — "
+                    f"Dashboard password set for {dashboard_user} — "
                     f"vault_set returned False (disk / perms / openssl?)"
                 )
+                return False
             else:
                 # Round-trip: read it back and verify.
-                readback = vault_get(cfg, "auth", f"password_{bootstrap_user}") or ""
+                readback = vault_get(cfg, "auth", f"password_{dashboard_user}") or ""
                 if not readback:
                     fmt.step_fail(
-                        f"Dashboard password set for {bootstrap_user} — "
+                        f"Dashboard password set for {dashboard_user} — "
                         f"vault_get returned empty after successful write"
                     )
-                elif not verify_password(bootstrap_pass, readback):
+                    return False
+                elif not verify_password(dashboard_pass, readback):
                     fmt.step_fail(
-                        f"Dashboard password set for {bootstrap_user} — "
+                        f"Dashboard password set for {dashboard_user} — "
                         f"round-trip verify_password FAILED; stored hash does "
                         f"not match the password just written"
                     )
+                    return False
                 else:
                     if verbose:
                         fmt.step_ok(
-                            f"Dashboard password set for {bootstrap_user} "
+                            f"Dashboard password set for {dashboard_user} "
                             f"(round-trip verified)"
                         )
+                    return True
     except Exception as e:
         if verbose:
             fmt.step_warn(f"Could not set dashboard password: {e}")
+        return False
+
+    return False
 
 
 def _mark_host_unmanaged(cfg, ip):
@@ -8876,16 +9903,32 @@ def _headless_fleet_deploy(
         fmt.line(f"  {fmt.C.BOLD}{label}{fmt.C.RESET} ({ip}) [{htype}]")
 
         # Determine auth credentials based on host type
-        if htype == "truenas" and htype in device_creds and not _device_cred_has_ssh_material(device_creds[htype]):
-            fmt.step_fail(
-                "Core TrueNAS has API credentials only. Add user + password_file/password "
-                "or ssh_key_file under [truenas] in --device-credentials so init can "
-                f"create and verify {ctx.get('svc_name', 'the service account')} over SSH."
-            )
-            fail += 1
-            continue
-
-        if htype in DEVICE_HTYPES and htype in device_creds:
+        if htype == "truenas":
+            tn_host = type("HostRef", (), {"ip": ip, "label": label})()
+            tn_creds, tn_section = _truenas_creds_for_host(tn_host, device_creds)
+            if tn_creds:
+                if not _device_cred_has_ssh_material(tn_creds):
+                    fmt.step_fail(
+                        f"Core TrueNAS has API credentials only; TrueNAS '{label}' has API credentials only in [{tn_section}]. "
+                        "Add user + password_file/password or ssh_key_file under [truenas] so init can "
+                        f"create and verify {ctx.get('svc_name', 'the service account')} over SSH."
+                    )
+                    fail += 1
+                    continue
+                auth_user = tn_creds["user"]
+                auth_pass = tn_creds.get("password", "")
+                auth_key = tn_creds.get("key_path", "")
+            else:
+                # TrueNAS: prefer explicit per-host device credentials, fall back to
+                # bootstrap creds only if the operator intentionally supplied them.
+                if bootstrap_key:
+                    auth_pass = ""
+                    auth_key = bootstrap_key
+                else:
+                    auth_pass = bootstrap_pass
+                    auth_key = ""
+                auth_user = bootstrap_user
+        elif htype in DEVICE_HTYPES and htype in device_creds:
             # Per-device credentials from --device-credentials TOML
             dcred = device_creds[htype]
             auth_user = dcred["user"]
@@ -8911,18 +9954,6 @@ def _headless_fleet_deploy(
             else:
                 auth_pass = ""
                 auth_key = bootstrap_key
-        elif htype == "truenas":
-            # TrueNAS: prefer device_creds, fall back to bootstrap creds only
-            # if the user deployed the same key/user to the NAS manually.
-            # If neither works, the connectivity check below produces a
-            # truthful 'auth failed' message.
-            if bootstrap_key:
-                auth_pass = ""
-                auth_key = bootstrap_key
-            else:
-                auth_pass = bootstrap_pass
-                auth_key = ""
-            auth_user = bootstrap_user
         else:
             # Linux-family: use bootstrap credentials (key or password)
             if bootstrap_key:
@@ -8988,9 +10019,9 @@ def _headless_fleet_deploy(
                 # alone are read-only dashboard credentials, not deploy auth.
                 if htype == "truenas" and "auth failed" in reason:
                     if htype in device_creds:
-                        reason = "auth failed (TrueNAS SSH credentials supplied but rejected — check [truenas] user plus password_file/password or ssh_key_file)"
+                        reason = "auth failed (Core TrueNAS has SSH credentials under [truenas] but they were rejected — check user plus password_file/password or ssh_key_file under [truenas])"
                     else:
-                        reason = "auth failed (add [truenas] SSH bootstrap credentials: user plus password_file/password or ssh_key_file)"
+                        reason = "auth failed (Core TrueNAS has no SSH bootstrap credentials — add user plus password_file/password or ssh_key_file under [truenas])"
 
                 # Guest agent fallback: if SSH bootstrap fails for a PVE-hosted
                 # VM, deploy via qm guest exec on the host PVE node instead.

@@ -48,7 +48,7 @@ class TestNoPhantomDocKeys(unittest.TestCase):
         # Dashboard section
         "dashboard_port", "tls_cert", "tls_key",
         # Monitoring section
-        "agent_port", "watchdog_port",
+        "agent_port", "watchdog_enabled", "watchdog_port",
         # Docker section
         "docker_dev_ip", "docker_config_base", "docker_backup_dir",
         # Misc parsed directly

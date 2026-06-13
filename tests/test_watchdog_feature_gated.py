@@ -1,21 +1,8 @@
 """Tests for watchdog feature-gated contract.
 
-Bug: After clean init, /api/watchdog/health returned 503 'WATCHDOG daemon
-not reachable at localhost:9900' even though no freq-watchdog.service was
-ever installed. The 503 was misleading — it implied a transient daemon
-failure when the daemon was never meant to exist.
-
-Contract decision: Watchdog is an optional add-on. Default state is
-'not installed'. The feature must be explicitly enabled via
-watchdog_enabled=true in freq.toml [services].
-
-Fix:
-- cfg.watchdog_enabled defaults to False
-- Both proxy paths check watchdog_enabled first; if False, return 200
-  with truthful status='not_installed'. The dashboard polls this endpoint
-  automatically, so optional absence must not appear as a browser resource
-  failure.
-- If True but unreachable, still returns 503 (daemon was expected but down)
+Watchdog is now a core local truth-auditor, but it still has a feature flag so
+operators can disable the dashboard proxy intentionally. Default installs
+enable it and init installs freq-watchdog.service as an advisory service.
 """
 import sys
 import unittest
@@ -27,19 +14,19 @@ FREQ_ROOT = Path(__file__).parent.parent
 
 
 class TestWatchdogFeatureFlag(unittest.TestCase):
-    """Config must have watchdog_enabled flag defaulting to False."""
+    """Config must have watchdog_enabled flag defaulting to True."""
 
-    def test_default_disabled(self):
-        """cfg.watchdog_enabled defaults to False."""
+    def test_default_enabled(self):
+        """cfg.watchdog_enabled defaults to True."""
         from freq.core.config import FreqConfig
         cfg = FreqConfig()
-        self.assertFalse(cfg.watchdog_enabled)
+        self.assertTrue(cfg.watchdog_enabled)
 
     def test_defaults_dict_has_flag(self):
-        """_DEFAULTS must include watchdog_enabled = False."""
+        """_DEFAULTS must include watchdog_enabled = True."""
         from freq.core.config import _DEFAULTS
         self.assertIn("watchdog_enabled", _DEFAULTS)
-        self.assertFalse(_DEFAULTS["watchdog_enabled"])
+        self.assertTrue(_DEFAULTS["watchdog_enabled"])
 
     def test_config_loads_flag_from_services(self):
         """load_config reads watchdog_enabled from [services] section."""

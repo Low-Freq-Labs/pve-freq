@@ -24,6 +24,9 @@ class TestRuleDataTypes(unittest.TestCase):
         self.assertEqual(r.severity, "warning")
         self.assertEqual(r.cooldown, 300)
         self.assertTrue(r.enabled)
+        self.assertEqual(r.exclude_types, ())
+        self.assertEqual(r.exclude_groups, ())
+        self.assertEqual(r.exclude_categories, ())
 
     def test_alert_defaults(self):
         a = Alert(rule_name="r1", host="h1", message="msg", severity="critical")
@@ -36,6 +39,10 @@ class TestRuleDataTypes(unittest.TestCase):
         self.assertIn("host-unreachable", names)
         self.assertIn("disk-critical", names)
         self.assertIn("ram-pressure", names)
+        ram_rule = next(r for r in rules if r.name == "ram-pressure")
+        self.assertIn("truenas", ram_rule.exclude_types)
+        self.assertIn("lab", ram_rule.exclude_groups)
+        self.assertIn("lab", ram_rule.exclude_categories)
 
 
 class TestRuleLoading(unittest.TestCase):
@@ -85,6 +92,23 @@ enabled = true
         self.assertEqual(len(reloaded), 1)
         self.assertEqual(reloaded[0].name, "test")
         self.assertEqual(reloaded[0].condition, "disk_above")
+
+    def test_save_and_reload_exclusions(self):
+        rules = [
+            Rule(
+                name="safe-ram",
+                condition="ram_above",
+                threshold=95,
+                exclude_types=("truenas",),
+                exclude_groups=("lab",),
+                exclude_categories=("lab",),
+            )
+        ]
+        save_rules(self.tmpdir, rules)
+        reloaded = load_rules(self.tmpdir)
+        self.assertEqual(reloaded[0].exclude_types, ("truenas",))
+        self.assertEqual(reloaded[0].exclude_groups, ("lab",))
+        self.assertEqual(reloaded[0].exclude_categories, ("lab",))
 
 
 class TestRuleState(unittest.TestCase):
@@ -192,6 +216,42 @@ class TestEvaluation(unittest.TestCase):
         health = {"hosts": [{"label": "h1", "status": "ok", "ram": "7500/8192MB"}]}
         alerts = evaluate_rules(health, rules, {})
         self.assertEqual(len(alerts), 1)
+
+    def test_custom_ram_rule_can_target_truenas(self):
+        rules = [Rule(name="ram", condition="ram_above", threshold=95, duration=0)]
+        health = {"hosts": [{"label": "truenas", "type": "truenas", "status": "ok", "ram": "1879/1974MB"}]}
+        alerts = evaluate_rules(health, rules, {})
+        self.assertEqual(len(alerts), 1)
+
+    def test_default_ram_pressure_excludes_truenas_and_lab(self):
+        rules = _default_rules()
+        health = {
+            "hosts": [
+                {"label": "truenas", "type": "truenas", "status": "ok", "ram": "1879/1974MB"},
+                {"label": "truenas-lab", "type": "truenas", "groups": "lab", "status": "ok", "ram": "1879/1974MB"},
+                {"label": "lab-vm", "type": "linux", "groups": ["lab"], "status": "ok", "ram": "1879/1974MB"},
+            ]
+        }
+        alerts = evaluate_rules(health, rules, {})
+        self.assertEqual([a.rule_name for a in alerts if a.rule_name == "ram-pressure"], [])
+
+    def test_null_resource_metrics_do_not_crash_rule_evaluation(self):
+        rules = _default_rules()
+        health = {
+            "hosts": [
+                {
+                    "label": "bmc-10",
+                    "type": "idrac",
+                    "status": "healthy",
+                    "state": "live",
+                    "ram": None,
+                    "disk": None,
+                    "load": "-",
+                }
+            ]
+        }
+        alerts = evaluate_rules(health, rules, {})
+        self.assertEqual(alerts, [])
 
     def test_disk_above_fires(self):
         rules = [Rule(name="disk", condition="disk_above", threshold=80, duration=0)]

@@ -1,7 +1,7 @@
-"""Tests for doctor switch-pass false warning after green init.
+"""Tests for doctor legacy-device password false warning after green init.
 
 Bug: Doctor warned "Legacy password file configured but missing" even
-though the file existed at /home/freq-admin/.ssh/switch-pass (600).
+though the file existed in /home/freq-admin/.ssh/ with mode 600.
 The parent dir ~/.ssh/ is 700 owned by freq-admin. When freq-ops runs
 doctor, os.path.isfile() returns False because the dir is inaccessible.
 

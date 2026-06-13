@@ -318,6 +318,46 @@ class TestCiscoParseCdpDetail(unittest.TestCase):
         self.assertEqual(self.parse(""), [])
 
 
+class TestCiscoTransportContract(unittest.TestCase):
+    """Cisco switch transport must preserve configured runtime identity."""
+
+    def test_cisco_ssh_passes_cfg_to_transport(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from freq.deployers.switch import cisco
+
+        cfg = SimpleNamespace(
+            ssh_rsa_key_path="/tmp/freq_id_rsa",
+            ssh_key_path="/tmp/freq_id_ed25519",
+            ssh_connect_timeout=5,
+            ssh_service_account="dc01-admin",
+        )
+        with patch("freq.deployers.switch.cisco.ssh_run") as mock_run:
+            mock_run.return_value = SimpleNamespace(returncode=0, stdout="", stderr="")
+            cisco._ssh("10.25.255.5", "show version", cfg)
+
+        self.assertIs(mock_run.call_args.kwargs["cfg"], cfg)
+        self.assertEqual(mock_run.call_args.kwargs["command"], "show version")
+
+    def test_cisco_show_command_with_blank_stdout_is_not_ok(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from freq.deployers.switch import cisco
+
+        cfg = SimpleNamespace(
+            ssh_rsa_key_path="/tmp/freq_id_rsa",
+            ssh_key_path="/tmp/freq_id_ed25519",
+            ssh_connect_timeout=5,
+            ssh_service_account="dc01-admin",
+        )
+        with patch("freq.deployers.switch.cisco.ssh_run") as mock_run:
+            mock_run.return_value = SimpleNamespace(returncode=0, stdout="", stderr="")
+            output, ok = cisco._ssh("10.25.255.5", "show version", cfg)
+
+        self.assertEqual(output, "")
+        self.assertFalse(ok)
+
+
 # ---------------------------------------------------------------------------
 # Target Resolution Tests
 # ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ When:  Called by serve.py dispatcher via _V1_ROUTES fallback.
 import json
 import os
 import re
+import threading
 import time
 import concurrent.futures
 
@@ -17,6 +18,7 @@ from freq.api.helpers import require_post,  json_response, get_params
 from freq.core.config import load_config
 from freq.core import resolve as res
 from freq.core import log as logger
+from freq.core.types import Host
 from freq.core.ssh import run as ssh_single, run_many as ssh_run_many, result_for
 from freq.core.health_state import (
     STATE_LIVE,
@@ -48,6 +50,44 @@ from freq.jarvis.agent import _load_agents
 import freq
 
 
+IDRAC_SESSION_LOCK = threading.Lock()
+IDRAC_SESSION_GAP_SECONDS = 2.0
+_idrac_last_session_at = 0.0
+
+
+def _target_host_or_direct_ip(cfg, target: str):
+    """Resolve configured hosts and dashboard VM guest IPs for safe SSH actions."""
+    host = res.by_target(cfg.hosts, target)
+    if host:
+        return host
+    vm_match = re.match(r"^vm:(\d+)$", str(target or "").strip(), re.I)
+    if vm_match:
+        vmid = int(vm_match.group(1))
+        for h in cfg.hosts:
+            if int(getattr(h, "vmid", 0) or 0) == vmid:
+                return h
+        try:
+            from freq.api.terminal import (
+                _find_live_vm_node_ip,
+                _guest_agent_network_json,
+                _extract_guest_ipv4,
+            )
+
+            node_ip, node_name = _find_live_vm_node_ip(cfg, vmid, "")
+            if node_ip:
+                raw, ok, _method = _guest_agent_network_json(cfg, vmid, node_ip, node_name)
+                if ok:
+                    guest_ip = _extract_guest_ipv4(raw)
+                    if guest_ip:
+                        return Host(ip=guest_ip, label=f"vm-{vmid}", htype="linux", groups="ad-hoc-vm", vmid=vmid)
+        except Exception as e:
+            logger.warn(f"vm target resolve failed for VMID {vmid}: {e}")
+        return None
+    if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", target):
+        return Host(ip=target, label=target, htype="linux", groups="ad-hoc-vm")
+    return None
+
+
 # -- Handlers ----------------------------------------------------------------
 
 
@@ -56,6 +96,51 @@ def handle_status(handler):
     cfg = load_config()
     hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]
     start = time.monotonic()
+
+    with _bg_lock:
+        cached_health = _bg_cache.get("health")
+        cached_ts = _bg_cache_ts.get("health", 0)
+    if isinstance(cached_health, dict):
+        by_ip = {
+            row.get("ip"): row
+            for row in cached_health.get("hosts", []) or []
+            if isinstance(row, dict) and row.get("ip")
+        }
+        if by_ip:
+            host_data = []
+            up = down = 0
+            bad_states = {STATE_AUTH_FAILED, STATE_UNREACHABLE}
+            for h in hosts:
+                cached = by_ip.get(h.ip)
+                state = cached.get("state") or cached.get("status") if cached else STATE_UNREACHABLE
+                is_up = state not in bad_states
+                up += 1 if is_up else 0
+                down += 0 if is_up else 1
+                host_data.append(
+                    {
+                        "label": h.label,
+                        "ip": h.ip,
+                        "type": h.htype,
+                        "status": "up" if is_up else "down",
+                        "state": state,
+                        "uptime": (cached or {}).get("uptime", ""),
+                        "reason": (cached or {}).get("reason", ""),
+                        "source": "health_cache",
+                    }
+                )
+            json_response(
+                handler,
+                {
+                    "total": len(hosts),
+                    "up": up,
+                    "down": down,
+                    "duration": round(time.monotonic() - start, 1),
+                    "cached": True,
+                    "age_seconds": round(time.time() - cached_ts, 1) if cached_ts else None,
+                    "hosts": host_data,
+                },
+            )
+            return
 
     results = ssh_run_many(
         hosts=hosts,
@@ -184,16 +269,34 @@ def handle_health_api(handler):
         now = time.time()
         _groups = getattr(h, "groups", "") or ""
 
-        r = ssh_single(
-            host=h.ip,
-            command=cmd,
-            key_path=probe_key,
-            connect_timeout=cfg.ssh_connect_timeout,
-            command_timeout=15,
-            htype=htype,
-            use_sudo=use_sudo,
-            cfg=cfg,
-        )
+        if htype == "idrac":
+            global _idrac_last_session_at
+            with IDRAC_SESSION_LOCK:
+                since = time.monotonic() - _idrac_last_session_at
+                if since < IDRAC_SESSION_GAP_SECONDS:
+                    time.sleep(IDRAC_SESSION_GAP_SECONDS - since)
+                r = ssh_single(
+                    host=h.ip,
+                    command=cmd,
+                    key_path=probe_key,
+                    connect_timeout=cfg.ssh_connect_timeout,
+                    command_timeout=15,
+                    htype=htype,
+                    use_sudo=use_sudo,
+                    cfg=cfg,
+                )
+                _idrac_last_session_at = time.monotonic()
+        else:
+            r = ssh_single(
+                host=h.ip,
+                command=cmd,
+                key_path=probe_key,
+                connect_timeout=cfg.ssh_connect_timeout,
+                command_timeout=15,
+                htype=htype,
+                use_sudo=use_sudo,
+                cfg=cfg,
+            )
 
         if r.returncode != 0 or not r.stdout.strip():
             state, reason = classify_probe_failure(
@@ -208,13 +311,31 @@ def handle_health_api(handler):
             return entry
 
         if htype == "idrac":
+            bmc_metrics = {}
+            for line in r.stdout.strip().split("\n"):
+                low = line.lower()
+                if "power status" in low:
+                    val = line.split("=")[-1].strip() if "=" in line else line.split(":")[-1].strip()
+                    bmc_metrics["power"] = "ON" if "on" in val.lower() else "OFF"
+                elif "inlet temp" in low:
+                    bmc_metrics["inlet_temp"] = (
+                        line.split("=")[-1].strip() if "=" in line else line.split(":")[-1].strip()
+                    )
+                elif "system model" in low:
+                    bmc_metrics["model"] = line.split("=")[-1].strip() if "=" in line else line.split(":")[-1].strip()
             entry = entry_base(
                 h, state=STATE_LIVE,
                 reason="racadm getsysinfo -s returned OK",
                 probed_at=now, last_success_at=now, failure_count=0, groups=_groups,
             )
-            entry.update({"cores": "-", "ram": "-", "disk": "-",
-                          "load": "-", "docker": "0"})
+            entry.update({
+                "cores": None, "ram": None, "disk": None,
+                "load": "-", "docker": "0",
+                "resource_metrics_supported": False,
+                "unsupported_metrics": ["cpu", "ram", "disk", "load"],
+                "management_metrics": bmc_metrics,
+            })
+            entry.update(bmc_metrics)
             return entry
 
         if htype == "switch":
@@ -559,7 +680,7 @@ def handle_exec(handler):
             if ttype:
                 hosts = ttype
             else:
-                host = res.by_target(cfg.hosts, target)
+                host = _target_host_or_direct_ip(cfg, target)
                 hosts = [host] if host else []
 
     if not hosts:
@@ -990,7 +1111,7 @@ def handle_diagnose(handler):
         json_response(handler, {"error": "target parameter required"}, 400)
         return
     try:
-        host = res.by_target(cfg.hosts, target)
+        host = _target_host_or_direct_ip(cfg, target)
         if not host:
             json_response(handler, {"error": f"Unknown host: {target}"}, 404)
             return
@@ -1034,7 +1155,7 @@ def handle_log(handler):
         json_response(handler, {"error": "target parameter required"}, 400)
         return
     try:
-        host = res.by_target(cfg.hosts, target)
+        host = _target_host_or_direct_ip(cfg, target)
         if not host:
             json_response(handler, {"error": f"Unknown host: {target}"}, 404)
             return
@@ -1482,10 +1603,10 @@ def handle_compare(handler):
 
     cfg = load_config()
     params = _parse_query(handler)
-    a = params.get("a", [""])[0].strip()
-    b = params.get("b", [""])[0].strip()
+    a = (params.get("a") or params.get("host_a") or [""])[0].strip()
+    b = (params.get("b") or params.get("host_b") or [""])[0].strip()
     if not a or not b:
-        json_response(handler, {"error": "Parameters 'a' and 'b' required"}, 400)
+        json_response(handler, {"error": "Parameters 'a'/'host_a' and 'b'/'host_b' required"}, 400)
         return
     host_a = resolve_host(cfg.hosts, a)
     host_b = resolve_host(cfg.hosts, b)

@@ -142,7 +142,7 @@
   </div>
 </div>
 <!-- LXC Containers -->
-<div class="section layout-section" id="fleet-sec-ct">
+<div class="section layout-section d-none" id="fleet-sec-ct">
   <div class="section-header"><h3>LXC Containers</h3><div class="flex-1"></div>
     <button class="fleet-btn" data-action="loadLxcContainers">REFRESH</button>
     <span class="chev ml-8">▾</span>
@@ -511,6 +511,7 @@
   <div class="section-header"><h3>Policy Compliance</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
+      <input class="input w-240" id="policy-name" placeholder="Policy name (optional)">
       <button class="fleet-btn" data-action="policyAction" data-arg="check">CHECK COMPLIANCE</button>
       <button class="fleet-btn" data-action="policyAction" data-arg="diff">SHOW DRIFT</button>
       <button class="fleet-btn c-red" data-action="policyAction" data-arg="fix">APPLY FIX</button>

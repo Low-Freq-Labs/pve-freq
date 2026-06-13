@@ -94,6 +94,63 @@ setInterval(upTime,1000);upTime();
 
 /* === Utility === */
 function _esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function _resourceMetricsSupported(h){
+  if(!h)return true;
+  if(h.resource_metrics_supported===false||h.metrics_supported===false)return false;
+  var t=String(h.type||'').toLowerCase();
+  return !(t==='idrac'||t==='bmc'||t==='ilo'||t==='ipmi');
+}
+function _managementMetricRows(h){
+  var mm=(h&&h.management_metrics)||{};
+  var power=h&&h.power||mm.power;
+  var temp=h&&h.inlet_temp||mm.inlet_temp;
+  var model=h&&h.model||mm.model;
+  var html='';
+  if(power)html+=_mrow('POWER',_esc(power),power==='ON'?100:0,power==='ON'?'var(--green)':'var(--red)');
+  if(temp)html+=_mrow('INLET',_esc(temp),0,'var(--blue)');
+  if(model)html+='<div class="metric-row"><div class="metric-top"><span class="metric-label">MODEL</span><span class="metric-val">'+_esc(model)+'</span></div></div>';
+  html+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RESOURCE METRICS</span><span class="metric-val c-dim-fs11">N/A FOR BMC</span></div></div>';
+  return html;
+}
+function _replaceWithManagementMetrics(card,h){
+  if(!card)return;
+  var body=card.querySelector('.divider-light');
+  if(body)body.innerHTML=_managementMetricRows(h);
+}
+function _domSafeId(s){return String(s||'').toLowerCase().replace(/[^a-z0-9_-]+/g,'-');}
+function _bmcHealthColor(v){
+  return /error|critical|failed|failure|degraded/i.test(String(v||''))?'r':'g';
+}
+function _bmcInventoryStats(inv,reachable){
+  inv=inv||{};
+  var stats='';
+  var health=inv.system_rollup||'OK';
+  if(inv.bad_health&&inv.bad_health.length)health='CHECK '+inv.bad_health.length;
+  stats+=st('STATUS',reachable?'REACHABLE':'UNREACHABLE',reachable?_bmcHealthColor(health):'r');
+  if(inv.cpu_cores)stats+=st('CPU',(inv.cpu_sockets?inv.cpu_sockets+' CPU / ':'')+inv.cpu_cores+'C'+(inv.cpu_threads?' / '+inv.cpu_threads+'T':''),'p');
+  if(inv.ram_mb)stats+=st('RAM',_ramGB(inv.ram_mb)+(inv.dimm_populated?' / '+inv.dimm_populated+' DIMMs':''),'b');
+  if(inv.disk_count!==undefined)stats+=st('DISKS',inv.disk_count?inv.disk_count+' / '+_fmtBytes(inv.disk_total_bytes):'0 reported',inv.disk_bad_count?'r':'g');
+  if(inv.raid_controller)stats+=st('RAID',inv.raid_controller.replace(/^PERC\s*/i,''),'p');
+  if(inv.power_state)stats+=st('POWER',inv.power_state,/on/i.test(inv.power_state)?'g':'y');
+  if(inv.bad_health&&inv.bad_health.length)stats+=st('HEALTH',health,'r');
+  return stats;
+}
+function _loadBmcInventoryStats(label){
+  var el=document.getElementById('bmc-inventory-stats-'+_domSafeId(label));
+  if(!el)return;
+  _authFetch(API.INFRA_IDRAC+'?action=inventory&target='+encodeURIComponent(label),{silent:true}).then(function(r){return r.json();}).then(function(d){
+    var target=(d.targets||[])[0];
+    if(!target){return;}
+    if(!target.reachable){
+      el.innerHTML=st('STATUS','UNREACHABLE','r')+st('ERROR',target.error||'BMC read failed','r');
+      return;
+    }
+    el.innerHTML=_bmcInventoryStats(target.inventory,true)||el.innerHTML;
+  }).catch(function(e){
+    el.innerHTML+=st('INVENTORY','ERROR','r');
+    console.error(e);
+  });
+}
 /* Authenticated fetch — sends token via Authorization header. Cookie
  * auth is also supported server-side, so we set credentials:'same-origin'
  * explicitly and don't need the bearer for cookie-rehydrated sessions.
@@ -334,6 +391,135 @@ function confirmDestructive(msg,expected,onConfirm){
 }
 /* === Section toggle === */
 function toggleSection(el){el.closest('.section').classList.toggle('collapsed');}
+
+function _splitLegacyOnclick(src){
+  var parts=[],cur='',quote='',depth=0,esc=false;
+  for(var i=0;i<src.length;i++){
+    var ch=src[i];
+    if(esc){cur+=ch;esc=false;continue;}
+    if(ch==='\\'){cur+=ch;esc=true;continue;}
+    if(quote){cur+=ch;if(ch===quote)quote='';continue;}
+    if(ch==="'"||ch==='"'){quote=ch;cur+=ch;continue;}
+    if(ch==='('||ch==='{'||ch==='[')depth++;
+    if(ch===')'||ch==='}'||ch===']')depth=Math.max(0,depth-1);
+    if(ch===';'&&depth===0){if(cur.trim())parts.push(cur.trim());cur='';continue;}
+    cur+=ch;
+  }
+  if(cur.trim())parts.push(cur.trim());
+  return parts;
+}
+
+function _parseLegacyArgs(raw,el){
+  if(!raw.trim())return[];
+  var args=[],cur='',quote='',esc=false,depth=0;
+  function pushArg(v){
+    v=v.trim();
+    if(v==='this'){args.push(el);return;}
+    if(v==='true'||v==='false'){args.push(v==='true');return;}
+    if(v==='null'){args.push(null);return;}
+    if(/^[-]?\d+(\.\d+)?$/.test(v)){args.push(Number(v));return;}
+    if((v[0]==="'"&&v[v.length-1]==="'")||(v[0]==='"'&&v[v.length-1]==='"')){
+      args.push(v.slice(1,-1).replace(/\\'/g,"'").replace(/\\"/g,'"').replace(/\\\\/g,'\\'));
+      return;
+    }
+    throw new Error('unsupported legacy onclick arg: '+v);
+  }
+  for(var i=0;i<raw.length;i++){
+    var ch=raw[i];
+    if(esc){cur+=ch;esc=false;continue;}
+    if(ch==='\\'){cur+=ch;esc=true;continue;}
+    if(quote){cur+=ch;if(ch===quote)quote='';continue;}
+    if(ch==="'"||ch==='"'){quote=ch;cur+=ch;continue;}
+    if(ch==='('||ch==='['||ch==='{')depth++;
+    if(ch===')'||ch===']'||ch==='}')depth=Math.max(0,depth-1);
+    if(ch===','&&depth===0){pushArg(cur);cur='';continue;}
+    cur+=ch;
+  }
+  pushArg(cur);
+  return args;
+}
+
+function _legacyOnclickAllowlist(){
+  return {
+    addContainer:1,addContainerQuick:1,addHostManual:1,addVmidToCategory:1,
+    bkCheckSchedules:1,bkExportConfig:1,bkListSnaps:1,bkRestore:1,bkRestoreSnap:1,bkTakeSnap:1,
+    closeModal:1,ctDestroy:1,ctPower:1,deleteContainer:1,deleteRule:1,
+    demoteUser:1,doCtClone:1,doCtConfig:1,doCtCreate:1,doCtExec:1,doCtMigrate:1,
+    doCtResize:1,doCtRollback:1,doCtSnapshot:1,doRollback:1,editContainerRow:1,
+    fedRemove:1,fedToggle:1,filterUsers:1,fleetNewUser:1,fleetPasswdUpdate:1,
+    fleetSshKeyDeploy:1,ftRunExec:1,gitopsRollback:1,gwipeAction:1,gwipeBayAction:1,
+    gwipeBayClear:1,gwipeBayWipe:1,gwipeWipeAll:1,hdDiagnose:1,hdDockerLogs:1,
+    hdDockerRestart:1,hdExec:1,hdLogs:1,hdRunCmd:1,hideLabTool:1,labExec:1,
+    loadCosts:1,loadCtTemplates:1,loadMetrics:1,ltConnect:1,ltSaveConfig:1,
+    mediaLogs:1,monRunDoctor:1,monWatchStart:1,monWatchStop:1,netDnsCheck:1,
+    netPingAll:1,netPortScan:1,ntpFixAll:1,ntpFixSelected:1,openHost:1,
+    openManageTools:1,openPbRunner:1,openTerminal:1,openVmInfo:1,promoteUser:1,
+    quickStartHome:1,removeHomeWidget:1,removeLabTool:1,removeVmidFromCategory:1,
+    rescanContainers:1,runHostUpdate:1,runPbStep:1,runPlaybookAll:1,saveContainerEdit:1,
+    saveHostProps:1,saveNewTool:1,switchAddToolType:1,toggleHttps:1,toggleLabAssign:1,
+    toggleLabToolVis:1,toggleRule:1,vmPower:1,vmPushKey:1,_runPveNodeCmd:1,
+    _vmApplyNicCombo:1,_vmChangeId:1,_vmCheckAndAddNic:1,_vmDelAllSnaps:1,
+    _vmDelSnap:1,_vmDoMigrate:1,_vmDoResize:1,_vmListSnaps:1,_vmRename:1,
+    _vmSnapWarn:1,_vmToggleMigrate:1,_vmToggleResize:1
+  };
+}
+
+function _dispatchLegacyOnclickStatement(stmt,e,el){
+  if(stmt==='event.stopPropagation()'){e.stopPropagation();return true;}
+  var dm=stmt.match(/^document\.getElementById\('([^']+)'\)\.(innerHTML|textContent)='([^']*)'$/);
+  if(dm){
+    var target=document.getElementById(dm[1]);
+    if(target)target[dm[2]]=dm[3].replace(/\\'/g,"'");
+    return true;
+  }
+  var tm=stmt.match(/^setTimeout\(function\(\)\{(.+)\},\s*(\d+)\)$/);
+  if(tm){
+    setTimeout(function(){_dispatchLegacyOnclick(tm[1],e,el);},Number(tm[2]));
+    return true;
+  }
+  var cm=stmt.match(/^([A-Za-z_$][\w$]*)\(([\s\S]*)\)$/);
+  if(!cm)return false;
+  var name=cm[1],allow=_legacyOnclickAllowlist();
+  if(!allow[name]){console.warn('Blocked legacy onclick handler',name);return false;}
+  var fn=window[name];
+  if(typeof fn!=='function'){console.warn('Missing legacy onclick handler',name);return false;}
+  fn.apply(null,_parseLegacyArgs(cm[2],el));
+  return true;
+}
+
+function _dispatchLegacyOnclick(src,e,el){
+  var handled=false,parts=_splitLegacyOnclick(src||'');
+  for(var i=0;i<parts.length;i++){
+    handled=_dispatchLegacyOnclickStatement(parts[i],e,el)||handled;
+  }
+  return handled;
+}
+
+function _neutralizeLegacyOnclicks(root){
+  if(!root||!root.querySelectorAll)return;
+  var nodes=[];
+  if(root.nodeType===1&&root.hasAttribute&&root.hasAttribute('onclick'))nodes.push(root);
+  root.querySelectorAll('[onclick]').forEach(function(n){nodes.push(n);});
+  nodes.forEach(function(n){
+    var src=n.getAttribute('onclick');
+    if(src&&!n.getAttribute('data-legacy-onclick'))n.setAttribute('data-legacy-onclick',src);
+    n.removeAttribute('onclick');
+  });
+}
+
+function _startLegacyOnclickNeutralizer(){
+  _neutralizeLegacyOnclicks(document.body);
+  if(window.MutationObserver){
+    new MutationObserver(function(muts){
+      muts.forEach(function(m){
+        m.addedNodes&&m.addedNodes.forEach(function(n){_neutralizeLegacyOnclicks(n);});
+      });
+    }).observe(document.body,{childList:true,subtree:true});
+  }
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_startLegacyOnclickNeutralizer);
+else _startLegacyOnclickNeutralizer();
+
 /* Delegated listeners — replaces inline onclick for high-frequency patterns */
 document.addEventListener('click',function(e){
   /* Section-header collapse only fires when the click is on the bare
@@ -366,6 +552,9 @@ document.addEventListener('click',function(e){
     if(a==='vmPower'){vmPower(+da.dataset.vmid,g);return;}
     if(a==='vmDestroy'){vmDestroy(+da.dataset.vmid);return;}
     if(a==='vmSnap'){vmSnap(+da.dataset.vmid);return;}
+    if(a==='ctPower'){ctPower(+da.dataset.ctid,g);return;}
+    if(a==='ctDestroy'){ctDestroy(+da.dataset.ctid,da.dataset.name||'');return;}
+    if(a==='ctTerminal'){openTerminal('ct',da.dataset.ctid||'', '', da.dataset.label||('CT '+(da.dataset.ctid||'')));return;}
     if(a==='vmQuickTag'){var tags=prompt('Enter tags for VM '+da.dataset.vmid+' (comma-separated):');if(tags!==null)_authFetch(API.VM_TAG+'?vmid='+da.dataset.vmid+'&tags='+encodeURIComponent(tags),{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(d.ok)toast('Tags updated','success');else toast(d.error,'error');});return;}
     if(a==='openVmInfo'){openVmInfo(da.dataset.label,'',+da.dataset.vmid);return;}
     if(a==='openInfraDevice'){
@@ -381,6 +570,7 @@ document.addEventListener('click',function(e){
     if(a==='hdLogs'){hdLogs(da);return;}
     if(a==='hdExec'){hdExec(da);return;}
     if(a==='hdDiagnose'){hdDiagnose(da);return;}
+    if(a==='hdRestart'){hdRestart(da);return;}
     if(a==='togglePveGroup'){togglePveGroup(da);return;}
     if(a==='clearHarden'){document.getElementById('harden-c').innerHTML='';return;}
     /* Long-tail inline-handler extraction landed under
@@ -473,6 +663,12 @@ document.addEventListener('click',function(e){
       sshdPanel:sshdPanel
     };
     if(argFns[a]){argFns[a](g);return;}
+  }
+  var legacy=e.target.closest('[data-legacy-onclick],[onclick]');
+  if(legacy&&_dispatchLegacyOnclick(legacy.getAttribute('data-legacy-onclick')||legacy.getAttribute('onclick'),e,legacy)){
+    e.preventDefault();
+    e.stopPropagation();
+    return;
   }
 });
 /* === Global Settings === */
@@ -646,6 +842,7 @@ var API={
   VM_RESIZE:'/api/vm/resize',VM_RENAME:'/api/vm/rename',VM_CHANGE_ID:'/api/vm/change-id',
   VM_CHECK_IP:'/api/vm/check-ip',VM_ADD_NIC:'/api/vm/add-nic',VM_CLEAR_NICS:'/api/vm/clear-nics',
   VM_CHANGE_IP:'/api/vm/change-ip',VM_TEMPLATE:'/api/vm/template',
+  VM_WIZARD_DEFAULTS:'/api/vm/wizard-defaults',
   ADMIN_BOUNDARIES:'/api/admin/fleet-boundaries',ADMIN_BOUNDARIES_UPDATE:'/api/admin/fleet-boundaries/update',
   ADMIN_HOSTS_UPDATE:'/api/admin/hosts/update',
   HARDEN:'/api/harden',GROUPS:'/api/groups',DISTROS:'/api/distros',KEYS:'/api/keys',
@@ -654,11 +851,12 @@ var API={
   USERS_CREATE:'/api/users/create',USERS_PROMOTE:'/api/users/promote',USERS_DEMOTE:'/api/users/demote',
   LAB_TOOL_CONFIG:'/api/lab-tool/config',LAB_TOOL_PROXY:'/api/lab-tool/proxy',LAB_TOOL_SAVE:'/api/lab-tool/save-config',
   DOCTOR:'/api/doctor',DIAGNOSE:'/api/diagnose',LOG:'/api/log',
-  /* POLICY_CHECK, POLICY_FIX, POLICY_DIFF removed — zero consumers */
+  POLICY_CHECK:'/api/policy/check',POLICY_FIX:'/api/policy/fix',POLICY_DIFF:'/api/policy/diff',
   SWEEP:'/api/sweep',PATROL_STATUS:'/api/patrol/status',
   ZFS:'/api/zfs',BACKUP:'/api/backup',DISCOVER:'/api/discover',GWIPE:'/api/gwipe',
   VM_ADD_DISK:'/api/vm/add-disk',VM_TAG:'/api/vm/tag',VM_CLONE:'/api/vm/clone',VM_MIGRATE:'/api/vm/migrate',
   COMPOSE_UP:'/api/containers/compose-up',COMPOSE_DOWN:'/api/containers/compose-down',COMPOSE_VIEW:'/api/containers/compose-view',
+  STACK_STATUS:'/api/stack/status',STACK_HEALTH:'/api/stack/health',
   BACKUP_LIST:'/api/backup/list',BACKUP_CREATE:'/api/backup/create',BACKUP_RESTORE:'/api/backup/restore',
   EVENTS:'/api/events',
   /* ── Alerting ── */
@@ -691,6 +889,7 @@ var API={
   WEBHOOK_LIST:'/api/webhook/list',WEBHOOK_LOG:'/api/webhook/log',
   /* ── Inventory ── */
   INVENTORY:'/api/inventory',
+  INVENTORY_HOSTS:'/api/inventory/hosts',INVENTORY_VMS:'/api/inventory/vms',INVENTORY_CONTAINERS:'/api/inventory/containers',
   COMPARE:'/api/compare',REPORT:'/api/report',
   /* ── DR ── */
   BACKUP_POLICY_LIST:'/api/backup-policy/list',BACKUP_POLICY_STATUS:'/api/backup-policy/status',
@@ -755,7 +954,7 @@ var API={
   BACKUP_VERIFY_RUN:'/api/backup/verify',BACKUP_VERIFY_STATUS:'/api/backup/verify/status',
   CERT_EXPIRY:'/api/cert/expiry'
 };
-var _fleetCache={fo:null,hd:null};/* cached API responses for instant page switch */
+var _fleetCache={fo:null,hd:null,ct:null};/* cached API responses for instant page switch */
 
 function _showApp(){
   /* Post-login launch sequence: evidence-first, each stage reports
@@ -1154,7 +1353,7 @@ function _isDegradedSetupHealth(h){
   var s=String(h).toLowerCase();
   return s==='partial'||s==='incomplete'||s==='degraded'||
          s==='error'||s==='failed'||s==='unhealthy'||s==='broken'||
-         s==='web-setup-only';
+         s==='web-setup-only'||s==='init-failed';
 }
 /* Operator-truth product law: a missing required artifact is a
  * degradation regardless of whether the backend bothered to set
@@ -1186,7 +1385,7 @@ function _setupTruthSummary(d){
       body:'setup/status probe failed — the server may be down or stuck. '+
         'A login attempt is likely to fail until the backend recovers.'};
   }
-  if(d.first_run===true||(d.initialized===false&&!d.web_setup_complete)){
+  if(d.first_run===true){
     /* Append backend setup_reason so the operator sees both the
      * call-to-action ("finish first-run wizard") AND the actionable
      * detail ("init incomplete; ssh key missing or unreadable; ...")
@@ -1199,6 +1398,15 @@ function _setupTruthSummary(d){
       body:detailLine+
         ' Complete the first-run wizard at '+
         '<a href="/setup.html">/setup.html</a> before attempting to log in.'};
+  }
+  if(d.initialized===false){
+    var initDetail='This instance reports <strong>initialized: false</strong>.';
+    if(d.setup_reason)initDetail+=' Backend reason: <em>'+String(d.setup_reason)+'</em>.';
+    return {isErr:false,
+      title:'LOGIN AVAILABLE — INIT NOT GREEN',
+      body:initDetail+
+        ' Existing operator accounts are configured; log in to inspect the dashboard. '+
+        'Run <code>freq init --check</code> or rerun init after resolving the reported contract failure.'};
   }
   var missing=_missingSetupArtifacts(d);
   var degraded=_isDegradedSetupHealth(d.setup_health);
@@ -1253,7 +1461,7 @@ function _doctorTruthSummary(d){
     (parts.length?' — '+parts.join(', '):'');
   if(failNames.length)body+=' &middot; failed: '+failNames.slice(0,4).join(', ')+(failNames.length>4?'\u2026':'');
   if(warnNames.length)body+=' &middot; warn: '+warnNames.slice(0,4).join(', ')+(warnNames.length>4?'\u2026':'');
-  body+='. Run <code>freq doctor</code> for the full report.';
+  body+='. Run <code>sudo freq doctor</code> for the full service-context report.';
   return {isErr:failed>0,title:title,body:body};
 }
 function _probeSetupTruth(cb){
@@ -2201,6 +2409,7 @@ function _silentHealthRefresh(){
         /* Skip PVE nodes — their metrics come from the PVE API poller which
            gives real CPU%. The SSH health data uses load_average which is wrong. */
         if(h.type==='pve')return;
+        if(!_resourceMetricsSupported(h)){_replaceWithManagementMetrics(card,h);return;}
         var cores=parseInt(h.cores)||1;var loadVal=parseFloat(h.load)||0;
         var loadPct=cores>0?Math.min(Math.round(loadVal/cores*100),100):0;
         var ramParts=(h.ram||'').match(/(\d+)\/(\d+)/);
@@ -2555,12 +2764,18 @@ function startPveMetrics(){
    Renders inline on node cards next to the metric bars. */
 function _sparkline(canvas,points,color,fillColor){
   if(!canvas||!points||points.length<2)return;
+  var rect=canvas.getBoundingClientRect();
+  var parentRect=canvas.parentElement?canvas.parentElement.getBoundingClientRect():{width:0};
+  var w=Math.max(80,Math.round(rect.width||parentRect.width||120));
+  var h=Math.max(20,Math.min(40,Math.round(rect.height||28)));
+  var dpr=Math.max(1,window.devicePixelRatio||1);
+  var bw=Math.round(w*dpr),bh=Math.round(h*dpr);
+  if(canvas.width!==bw)canvas.width=bw;
+  if(canvas.height!==bh)canvas.height=bh;
+  canvas.style.width='100%';
+  canvas.style.height=h+'px';
   var ctx=canvas.getContext('2d');
-  var w=canvas.width;var h=canvas.height;
-  var dpr=window.devicePixelRatio||1;
-  canvas.width=w*dpr;canvas.height=h*dpr;
-  canvas.style.width=w+'px';canvas.style.height=h+'px';
-  ctx.scale(dpr,dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,w,h);
   var vals=points.map(function(p){return p.v;});
   var mn=Math.min.apply(null,vals);
@@ -2629,9 +2844,9 @@ function _renderSparklines(){
         sparkDiv.className='sparkline-row';
         /* sparkline-row class handles flex/gap/margin/padding/border */
         sparkDiv.innerHTML=
-          '<div style="flex:1;min-width:0"><div class="spark-label">CPU 1H</div><canvas class="spark-cpu" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>'+
-          '<div style="flex:1;min-width:0"><div class="spark-label">RAM 1H</div><canvas class="spark-ram" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>'+
-          '<div style="flex:1;min-width:0"><div class="spark-label">IO 1H</div><canvas class="spark-io" width="120" height="28" style="width:100%;height:28px;border-radius:3px"></canvas></div>';
+          '<div class="sparkline-cell"><div class="spark-label">CPU 1H</div><canvas class="spark-cpu" width="120" height="28"></canvas></div>'+
+          '<div class="sparkline-cell"><div class="spark-label">RAM 1H</div><canvas class="spark-ram" width="120" height="28"></canvas></div>'+
+          '<div class="sparkline-cell"><div class="spark-label">IO 1H</div><canvas class="spark-io" width="120" height="28"></canvas></div>';
         metricParent.appendChild(sparkDiv);
       }
       /* Render each sparkline */
@@ -2639,15 +2854,12 @@ function _renderSparklines(){
       var ramCanvas=sparkDiv.querySelector('.spark-ram');
       var ioCanvas=sparkDiv.querySelector('.spark-io');
       if(cpuCanvas&&nd.cpu&&nd.cpu.length>1){
-        cpuCanvas.width=cpuCanvas.parentElement.offsetWidth||120;
         _sparkline(cpuCanvas,nd.cpu,'#22C55E','rgba(34,197,94,0.08)');
       }
       if(ramCanvas&&nd.ram&&nd.ram.length>1){
-        ramCanvas.width=ramCanvas.parentElement.offsetWidth||120;
         _sparkline(ramCanvas,nd.ram,'#3B82F6','rgba(59,130,246,0.08)');
       }
       if(ioCanvas&&nd.iowait&&nd.iowait.length>1){
-        ioCanvas.width=ioCanvas.parentElement.offsetWidth||120;
         _sparkline(ioCanvas,nd.iowait,'#F97316','rgba(249,115,22,0.08)');
       }
   });
@@ -2900,12 +3112,12 @@ function _applyCompactMode(on){
 function loadFleetPage(){
   /* Render from cache immediately if available — never show skeletons on page switch */
   if(_fleetCache.fo||_fleetCache.hd){
-    _renderFleetData(_fleetCache.fo,_fleetCache.hd);
+    _renderFleetData(_fleetCache.fo,_fleetCache.hd,null,_fleetCache.ct);
   } else {
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   }
-  loadMetricsQuick();loadAgents();loadSpecialists();loadLxcContainers();startPveMetrics();
+  loadMetricsQuick();loadAgents();loadSpecialists();startPveMetrics();
   /* Overview cards — render immediately if cached, otherwise fetch */
   if(_fleetCache.fo){_renderFleetOverview(_fleetCache.fo);_loadFleetOverviewMedia();}
   else{_authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(e){console.error('Fleet overview load failed:',e);});}
@@ -2927,7 +3139,7 @@ function _renderFleetOverview(fo){
       var ci=document.getElementById('sse-conn-status');
       if(ci){ci.textContent='PROBE FAILED';ci.style.color='var(--red)';}
     }
-    fo.summary=fo.summary||{};fo.pve_nodes=fo.pve_nodes||[];fo.physical=fo.physical||[];
+    fo.summary=fo.summary||{};fo.pve_nodes=fo.pve_nodes||[];fo.physical=fo.physical||[];_normalizeFleetPhysical(fo);
     /* PVE summary */
     var nodeCount=fo.pve_nodes?fo.pve_nodes.length:0;
     var nodeNames=fo.pve_nodes?fo.pve_nodes.map(function(n){return n.name}).join(', '):'';
@@ -2938,7 +3150,7 @@ function _renderFleetOverview(fo){
     ps+=_mrow('STOPPED',fo.summary.stopped,0,fo.summary.stopped>0?'var(--red)':'var(--green)');
     var pse=document.getElementById('home-pve-summary');if(pse)pse.innerHTML=ps;
     /* pfSense */
-    var corePhysical=fo.physical?fo.physical.filter(function(p){return !_isLabPhysical(p);}):[];
+    var corePhysical=fo.core_physical||[];
     var pfDev=corePhysical.find(function(p){return p.type==='pfsense'})||null;
     var pf='';
     if(pfDev){pf+=_mrow('DEVICE',pfDev.detail,0,'var(--purple-light)');pf+=_mrow('IP',pfDev.ip,0,'var(--purple-light)');pf+=_mrow('STATUS',pfDev.reachable?'REACHABLE':'UNREACHABLE',0,pfDev.reachable?'var(--green)':'var(--red)');}
@@ -2963,8 +3175,8 @@ var _DEVICE_ACTIONS={
   pfsense:{actions:[{l:'STATUS',f:"pfAction('status')"},{l:'RULES',f:"pfAction('rules')"},{l:'NAT',f:"pfAction('nat')"},{l:'STATES',f:"pfAction('states')"},{l:'INTERFACES',f:"pfAction('interfaces')"},{l:'GATEWAYS',f:"pfAction('gateways')"},{l:'GATEWAY MONITOR',f:"pfAction('gateway_monitor')"},{l:'DNS',f:"pfAction('dns')"},{l:'TRAFFIC',f:"pfAction('traffic')"},{l:'VPN',f:"pfAction('vpn')"},{l:'SERVICES',f:"pfAction('services')"},{l:'FIREWALL LOG',f:"pfAction('log')"},{l:'SYSTEM LOG',f:"pfAction('syslog')"},{l:'ARP TABLE',f:"pfAction('arp')"},{l:'DHCP LEASES',f:"pfAction('dhcp')"},{l:'ALIASES',f:"pfAction('aliases')"},{l:'BACKUP CONFIG',f:"pfAction('backup')"}],outId:'pf-out'},
   truenas:{actions:[{l:'SYSTEM',f:"tnAction('status')"},{l:'POOLS',f:"tnAction('pools')"},{l:'HEALTH',f:"tnAction('health')"},{l:'DATASETS',f:"tnAction('datasets')"},{l:'SHARES',f:"tnAction('shares')"},{l:'ALERTS',f:"tnAction('alerts')"},{l:'SMART DISKS',f:"tnAction('smart')"},{l:'SNAPSHOTS',f:"tnAction('snapshots')"},{l:'REPLICATION',f:"tnAction('replication')"},{l:'SERVICES',f:"tnAction('services')"},{l:'NETWORK',f:"tnAction('network')"},{l:'SYSTEM LOG',f:"tnAction('syslog')"}],outId:'tn-out'},
   switch:{actions:[{l:'STATUS',f:"swAction('status')"},{l:'VLANS',f:"swAction('vlans')"},{l:'INTERFACES',f:"swAction('interfaces')"},{l:'MAC TABLE',f:"swAction('mac')"},{l:'TRUNKS',f:"swAction('trunk')"},{l:'PORT ERRORS',f:"swAction('errors')"},{l:'SPANNING TREE',f:"swAction('spanning')"},{l:'LOG',f:"swAction('log')"},{l:'CDP NEIGHBORS',f:"swAction('cdp')"},{l:'INVENTORY',f:"swAction('inventory')"}],outId:'sw-out'},
-  idrac:{actions:[{l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'POWER',f:"idracAction('power')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"}],outId:'idrac-out'},
-  bmc:{actions:[{l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'POWER',f:"idracAction('power')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"}],outId:'idrac-out'}
+  idrac:{actions:[{l:'INVENTORY',f:"idracAction('inventory')"},{l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'POWER',f:"idracAction('power')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"}],outId:'idrac-out'},
+  bmc:{actions:[{l:'INVENTORY',f:"idracAction('inventory')"},{l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'POWER',f:"idracAction('power')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"}],outId:'idrac-out'}
 };
 var _idracOutCount=0;
 function _initFleetData(fo){
@@ -2978,7 +3190,8 @@ function _initFleetData(fo){
     if(!ramGB){(n.detail||'').split(' \u00b7 ').forEach(function(p){var m=p.match(/^(\d+)GB$/);if(m)ramGB=parseInt(m[1]);});}
     PROD_HOSTS.push({label:n.name,ip:n.ip,type:'pve',role:'HYPERVISOR',cores:cores,ram:ramGB?ramGB+'GB':'-',vlans:['MGMT'],detail:n.detail||''});
   });
-  (fo.physical||[]).filter(function(p){return !_isLabPhysical(p);}).forEach(function(p){
+  _normalizeFleetPhysical(fo);
+  (fo.core_physical||[]).forEach(function(p){
     var h={label:p.label,ip:p.ip,type:p.type,role:(p.detail||p.type).split(' · ')[0].toUpperCase(),cores:0,ram:'-',vlans:['MGMT'],detail:p.detail||''};
     var da=_DEVICE_ACTIONS[p.type];
     if(da){h.actions=da.actions;h.outId=p.type==='idrac'?'idrac-out'+(++_idracOutCount>1?_idracOutCount:''):da.outId;}
@@ -3421,7 +3634,11 @@ function loadSecPosture(){
 function loadComplianceData(){
   /* Load compliance results on the compliance tab */
   _authFetch(API.COMPLY_RESULTS).then(function(r){return r.json()}).then(function(d){
-    var el=document.getElementById('policy-out');if(!el||!d.latest)return;
+    var el=document.getElementById('policy-out');if(!el)return;
+    if(!d.latest){
+      el.innerHTML='<div class="exec-out">No compliance scans recorded. Use <strong>DRY RUN</strong> under Compliance Scan to generate current results.</div>';
+      return;
+    }
     var scan=d.latest;var hosts=scan.hosts||{};
     var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Last scan: '+_esc(scan.scan_time||'unknown')+' &mdash; '+d.total_scans+' total scans</div>';
     h+='<table><thead><tr><th>Host</th><th>Pass</th><th>Fail</th><th>Score</th></tr></thead><tbody>';
@@ -3506,6 +3723,7 @@ function loadSwitchData(view){
   if(out)out.innerHTML='<div class="skeleton h-60"></div>';
   var urls={show:API.SWITCH_SHOW,facts:API.SWITCH_FACTS,interfaces:API.SWITCH_INTERFACES,vlans:API.SWITCH_VLANS,mac:API.SWITCH_MAC,arp:API.SWITCH_ARP,neighbors:API.SWITCH_NEIGHBORS,environment:API.SWITCH_ENV};
   var url=urls[view]||urls.facts;
+  function emptyRow(cols,msg){return '<tr><td colspan="'+cols+'" class="c-dim">'+_esc(msg)+'</td></tr>';}
   _authFetch(url).then(function(r){return r.json()}).then(function(d){
     if(d.error){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(d.error)+'</div>';return;}
     var h='<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">'+_esc(d.host||'')+' ('+_esc(d.ip||'')+')</div>';
@@ -3514,36 +3732,43 @@ function loadSwitchData(view){
       h+=_statCards([{l:'Ports',v:isum.total||0},{l:'Up',v:isum.up||0,c:'green'},{l:'Down',v:isum.down||0,c:isum.down>0?'yellow':'green'},{l:'VLANs',v:d.vlan_count||0,c:'purple'}]);
       h+='<table style="margin-top:12px"><tbody>';
       Object.keys(f).forEach(function(k){h+='<tr><td style="color:var(--text-dim);width:200px">'+_esc(k)+'</td><td>'+_esc(String(f[k]))+'</td></tr>';});
+      if(!Object.keys(f).length)h+=emptyRow(2,'No switch facts returned.');
       h+='</tbody></table>';
     }else if(view==='facts'){
       var f=d.facts||{};
       h+='<table><tbody>';
       Object.keys(f).forEach(function(k){h+='<tr><td style="color:var(--text-dim);width:200px">'+_esc(k)+'</td><td>'+_esc(String(f[k]))+'</td></tr>';});
+      if(!Object.keys(f).length)h+=emptyRow(2,'No switch facts returned.');
       h+='</tbody></table>';
     }else if(view==='interfaces'){
       var ifaces=d.interfaces||[];
       h+='<table><thead><tr><th>Interface</th><th>Status</th><th>Speed</th><th>VLAN</th><th>Description</th></tr></thead><tbody>';
       ifaces.forEach(function(i){h+='<tr><td>'+_esc(i.name||i.interface)+'</td><td>'+_statusBadge(i.status)+'</td><td>'+_esc(i.speed||'-')+'</td><td>'+_esc(i.vlan||'-')+'</td><td>'+_esc(i.description||'-')+'</td></tr>';});
+      if(!ifaces.length)h+=emptyRow(5,'No switch interfaces returned.');
       h+='</tbody></table>';
     }else if(view==='vlans'){
       var vlans=d.vlans||[];
       h+='<table><thead><tr><th>VLAN</th><th>Name</th><th>Ports</th><th>Status</th></tr></thead><tbody>';
       vlans.forEach(function(v){h+='<tr><td>'+_esc(String(v.id||v.vlan))+'</td><td>'+_esc(v.name||'-')+'</td><td>'+_esc(v.ports||'-')+'</td><td>'+_statusBadge(v.status||'active')+'</td></tr>';});
+      if(!vlans.length)h+=emptyRow(4,'No switch VLANs returned.');
       h+='</tbody></table>';
     }else if(view==='mac'){
       var macs=d.mac_table||[];
       h+='<table><thead><tr><th>MAC</th><th>VLAN</th><th>Type</th><th>Port</th></tr></thead><tbody>';
       macs.forEach(function(m){h+='<tr><td class="mono-11">'+_esc(m.mac)+'</td><td>'+_esc(String(m.vlan||'-'))+'</td><td>'+_esc(m.type||'-')+'</td><td>'+_esc(m.port||'-')+'</td></tr>';});
+      if(!macs.length)h+=emptyRow(4,'No switch MAC entries returned.');
       h+='</tbody></table>';
     }else if(view==='arp'){
       var arps=d.arp_table||[];
       h+='<table><thead><tr><th>IP</th><th>MAC</th><th>Interface</th><th>Age</th></tr></thead><tbody>';
       arps.forEach(function(a){h+='<tr><td class="mono-11">'+_esc(a.ip)+'</td><td class="mono-11">'+_esc(a.mac)+'</td><td>'+_esc(a.interface||'-')+'</td><td>'+_esc(a.age||'-')+'</td></tr>';});
+      if(!arps.length)h+=emptyRow(4,'No switch ARP entries returned.');
       h+='</tbody></table>';
     }else if(view==='neighbors'){
       var nb=d.neighbors||[];
       h+='<table><thead><tr><th>Local Port</th><th>Neighbor</th><th>Remote Port</th><th>Platform</th></tr></thead><tbody>';
       nb.forEach(function(n){h+='<tr><td>'+_esc(n.local_port||'-')+'</td><td>'+_esc(n.neighbor||n.device||'-')+'</td><td>'+_esc(n.remote_port||'-')+'</td><td>'+_esc(n.platform||'-')+'</td></tr>';});
+      if(!nb.length)h+=emptyRow(4,'No switch neighbors returned.');
       h+='</tbody></table>';
     }else if(view==='environment'){
       var env=d.environment||{};
@@ -3552,6 +3777,7 @@ function loadSwitchData(view){
         var v=env[k];
         h+='<tr><td style="color:var(--text-dim);width:200px">'+_esc(k)+'</td><td>'+(typeof v==='object'?'<pre style="margin:0;font-size:11px">'+_esc(JSON.stringify(v,null,2))+'</pre>':_esc(String(v)))+'</td></tr>';
       });
+      if(!Object.keys(env).length)h+=emptyRow(2,'No switch environment data returned.');
       h+='</tbody></table>';
     }
     if(out)out.innerHTML=h;
@@ -4443,6 +4669,14 @@ function loadLxcContainers(){
     if(cards)cards.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';
   });
 }
+function refreshLxcWorkloads(){
+  _authFetch(API.CT_LIST,{silent:true}).then(function(r){return r.ok?r.json():{containers:[]};}).then(function(d){
+    _fleetCache.ct=d||{containers:[]};
+    if(_currentView==='fleet')_renderFleetData(_fleetCache.fo,_fleetCache.hd,null,_fleetCache.ct);
+    var section=document.getElementById('fleet-sec-ct');
+    if(section&&section.style.display!=='none'&&!section.classList.contains('d-none'))loadLxcContainers();
+  }).catch(function(){if(_currentView==='fleet')loadMetricsQuick();});
+}
 function ctPower(ctid,action){
   var msg=action==='stop'?'Stop':'Reboot';
   if(action==='start')msg='Start';
@@ -4451,7 +4685,7 @@ function ctPower(ctid,action){
     _authFetch(API.CT_POWER+'?ctid='+ctid+'&action='+action,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok)toast('CT '+ctid+' '+action+' OK','success');
       else toast(d.error||'Failed','error');
-      setTimeout(loadLxcContainers,1500);
+      setTimeout(refreshLxcWorkloads,1500);
     }).catch(function(e){toast('Failed: '+e,'error');});
   });
 }
@@ -4461,7 +4695,7 @@ function ctDestroy(ctid,name){
     _authFetch(API.CT_DESTROY+'?ctid='+ctid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.ok)toast('CT '+ctid+' destroyed','success');
       else toast(d.error||'Failed','error');
-      setTimeout(loadLxcContainers,1500);
+      setTimeout(refreshLxcWorkloads,1500);
     }).catch(function(e){toast('Failed: '+e,'error');});
   });
 }
@@ -4526,7 +4760,7 @@ function doCtCreate(){
   _authFetch(API.CT_CREATE,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({template:tpl,hostname:name,cores:cores,ram:ram,disk:disk})})
   .then(function(r){return r.json()}).then(function(d){
-    if(d.ok){toast('CT '+d.ctid+' created','success');if(out)out.innerHTML='<div class="c-green">Container CT '+d.ctid+' ('+_esc(d.hostname)+') created.</div>';loadLxcContainers();}
+    if(d.ok){toast('CT '+d.ctid+' created','success');if(out)out.innerHTML='<div class="c-green">Container CT '+d.ctid+' ('+_esc(d.hostname)+') created.</div>';refreshLxcWorkloads();}
     else{toast(d.error||'Failed','error');if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
   }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
 }
@@ -4537,7 +4771,7 @@ function doCtClone(){
   if(out)out.innerHTML='<div class="c-yellow">Cloning CT '+ctid+'...</div>';
   _authFetch(API.CT_CLONE+'?ctid='+ctid+(name?'&name='+encodeURIComponent(name):''))
   .then(function(r){return r.json()}).then(function(d){
-    if(d.ok){toast('Cloned to CT '+d.new_ctid,'success');if(out)out.innerHTML='<div class="c-green">Cloned CT '+ctid+' → CT '+d.new_ctid+'</div>';loadLxcContainers();}
+    if(d.ok){toast('Cloned to CT '+d.new_ctid,'success');if(out)out.innerHTML='<div class="c-green">Cloned CT '+ctid+' → CT '+d.new_ctid+'</div>';refreshLxcWorkloads();}
     else{if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
   }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
 }
@@ -4548,7 +4782,7 @@ function doCtMigrate(){
   if(out)out.innerHTML='<div class="c-yellow">Migrating CT '+ctid+' → '+_esc(target)+'...</div>';
   _authFetch(API.CT_MIGRATE+'?ctid='+ctid+'&target='+encodeURIComponent(target))
   .then(function(r){return r.json()}).then(function(d){
-    if(d.ok){toast('CT '+ctid+' migrated to '+_esc(target),'success');if(out)out.innerHTML='<div class="c-green">Migrated</div>';loadLxcContainers();}
+    if(d.ok){toast('CT '+ctid+' migrated to '+_esc(target),'success');if(out)out.innerHTML='<div class="c-green">Migrated</div>';refreshLxcWorkloads();}
     else{if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
   }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
 }
@@ -4582,7 +4816,7 @@ function doCtRollback(){
     if(out)out.innerHTML='<div class="c-yellow">Rolling back...</div>';
     _authFetch(API.CT_ROLLBACK+'?ctid='+ctid+(name?'&name='+encodeURIComponent(name):''))
     .then(function(r){return r.json()}).then(function(d){
-      if(d.ok){toast('CT '+ctid+' rolled back','success');if(out)out.innerHTML='<div class="c-green">Rolled back to "'+_esc(d.snapshot)+'"</div>';loadLxcContainers();}
+      if(d.ok){toast('CT '+ctid+' rolled back','success');if(out)out.innerHTML='<div class="c-green">Rolled back to "'+_esc(d.snapshot)+'"</div>';refreshLxcWorkloads();}
       else{if(out)out.innerHTML='<div class="c-red">'+_esc(d.error)+'</div>';}
     }).catch(function(e){if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
   });
@@ -4793,7 +5027,8 @@ function loadCostAnalysis(type){
 /* API docs */
 function openApiDocs(){
   var el=document.getElementById('api-docs-out');if(!el)return;
-  el.innerHTML='<iframe src="'+API.API_DOCS+'" style="width:100%;height:600px;border:1px solid var(--border);border-radius:8px;background:#0d1117"></iframe>';
+  el.innerHTML='<div class="exec-out" style="margin-bottom:8px">API documentation: <code>'+_esc(API.API_DOCS)+'</code></div>'+
+    '<iframe src="'+API.API_DOCS+'" style="width:100%;height:600px;border:1px solid var(--border);border-radius:8px;background:#0d1117"></iframe>';
 }
 function loadOpenApi(){
   var el=document.getElementById('api-docs-out');if(!el)return;
@@ -5071,6 +5306,25 @@ function renderFleetAdmin(d){
     h+='</tr>';
   });
   h+='</tbody></table></div>';
+  /* Physical infrastructure scope */
+  h+='<div class="mb-24">';
+  h+='<h4 class="section-label-pl-ls">PHYSICAL INFRASTRUCTURE SCOPE</h4>';
+  h+='<table><thead><tr><th>Device</th><th>IP</th><th>Type</th><th>Groups</th><th>Scope</th></tr></thead><tbody>';
+  Object.keys(d.physical||{}).sort().forEach(function(key){
+    var p=d.physical[key]||{};
+    var scope=p.scope==='lab'?'lab':'core';
+    h+='<tr>';
+    h+='<td><strong>'+key+'</strong><div class="text-sub">'+(p.label||'')+'</div></td>';
+    h+='<td class="text-sub">'+(p.ip||'')+'</td>';
+    h+='<td>'+((p.type||'unknown').toUpperCase())+'</td>';
+    h+='<td class="text-sub">'+(p.groups||'')+'</td>';
+    h+='<td><select onchange="updatePhysicalScope(\''+key+'\',this.value)" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">';
+    h+='<option value="core"'+(scope==='core'?' selected':'')+'>core</option>';
+    h+='<option value="lab"'+(scope==='lab'?' selected':'')+'>lab</option>';
+    h+='</select></td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
   /* ── VM Categories ── */
   h+='<div class="mb-24">';
   h+='<h4 class="section-label-pl-ls">VM CATEGORIES & PERMISSIONS</h4>';
@@ -5149,6 +5403,12 @@ function updateCategoryTier(cat,tier){
     toast(cat+' tier \u2192 '+tier,'success');loadFleetAdmin();
   }).catch(function(e){toast('Failed: '+e,'error');});
 }
+function updatePhysicalScope(device,scope){
+  _authFetch(API.ADMIN_BOUNDARIES_UPDATE+'?action=update_physical_scope&device='+encodeURIComponent(device)+'&scope='+encodeURIComponent(scope),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+    if(d.error){toast('Error: '+d.error,'error');return;}
+    toast(device+' scope \u2192 '+scope,'success');loadFleetAdmin();
+  }).catch(function(e){toast('Failed: '+e,'error');});
+}
 function updateCategoryRange(cat){
   var rs=document.getElementById('rs-'+cat);
   var re=document.getElementById('re-'+cat);
@@ -5222,12 +5482,16 @@ function loadHome(){
       el.innerHTML='<span style="color:var(--yellow);font-size:11px;font-weight:600">Watchdog: '+_esc(String(d.error)).substring(0,60)+'</span>';
       return;
     }
-    /* Working — show probe evidence */
+    /* Working — show local audit evidence */
     var hosts=d.hosts||0;var errors=d.errors||0;var age=d.age_seconds?Math.round(d.age_seconds):null;
-    var clr=errors>0?'yellow':hosts>0?'green':'text-dim';
+    var wdStatus=String(d.status||'unknown');
+    var pending=d.pending_count||0;
+    var clr=(errors>0||pending>0||wdStatus==='pending'||wdStatus==='degraded')?'yellow':hosts>0?'green':'text-dim';
     var parts=[];
-    parts.push(hosts+' hosts probed');
+    parts.push(wdStatus);
+    parts.push(hosts+' hosts observed');
     if(errors>0)parts.push(errors+' errors');
+    if(pending>0)parts.push(pending+' pending');
     if(age!==null)parts.push(age+'s ago');
     el.innerHTML='<span style="color:var(--'+clr+');font-size:11px;font-weight:600">Watchdog: '+parts.join(' · ')+'</span>';
   }).catch(function(){var el=document.getElementById('watchdog-status');if(el)el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: status unavailable</span>';});
@@ -5418,12 +5682,12 @@ var INFRA_ACTIONS={
     {l:'\u2699 CREATE VLAN',f:"swWriteVlan('create')",w:1},{l:'\u2699 DELETE VLAN',f:"swWriteVlan('delete')",w:2},{l:'\u2699 MANAGE ACL',f:"swWriteAcl()",w:1}
   ],
   idrac:[
-    {l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"},
+    {l:'INVENTORY',f:"idracAction('inventory')"},{l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"},
     /* Write operations */
     {l:'\u26a1 POWER ON',f:"idracWrite('poweron')",w:1},{l:'\u26a1 POWER OFF',f:"idracWrite('poweroff')",w:2},{l:'\u26a1 POWER CYCLE',f:"idracWrite('powercycle')",w:2},{l:'\u26a1 HARD RESET',f:"idracWrite('hardreset')",w:2},{l:'\u26a1 GRACEFUL OFF',f:"idracWrite('graceshutdown')",w:1},{l:'\u2699 CLEAR SEL',f:"idracWrite('clearsel')",w:1},{l:'\u2699 BOOT PXE',f:"idracWrite('bootpxe')",w:1},{l:'\u2699 BOOT BIOS',f:"idracWrite('bootbios')",w:1}
   ],
   bmc:[
-    {l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"},
+    {l:'INVENTORY',f:"idracAction('inventory')"},{l:'SYSTEM INFO',f:"idracAction('status')"},{l:'SENSORS',f:"idracAction('sensors')"},{l:'EVENT LOG',f:"idracAction('sel')"},{l:'STORAGE / RAID',f:"idracAction('storage')"},{l:'NETWORK',f:"idracAction('network')"},{l:'FIRMWARE',f:"idracAction('firmware')"},{l:'LICENSE',f:"idracAction('license')"},
     /* Write operations */
     {l:'\u26a1 POWER ON',f:"idracWrite('poweron')",w:1},{l:'\u26a1 POWER OFF',f:"idracWrite('poweroff')",w:2},{l:'\u26a1 POWER CYCLE',f:"idracWrite('powercycle')",w:2},{l:'\u26a1 HARD RESET',f:"idracWrite('hardreset')",w:2},{l:'\u26a1 GRACEFUL OFF',f:"idracWrite('graceshutdown')",w:1},{l:'\u2699 CLEAR SEL',f:"idracWrite('clearsel')",w:1},{l:'\u2699 BOOT PXE',f:"idracWrite('bootpxe')",w:1},{l:'\u2699 BOOT BIOS',f:"idracWrite('bootbios')",w:1}
   ],
@@ -5451,7 +5715,7 @@ var INFRA_ACTIONS={
 function loadMetricsQuick(){
   /* If we have cached data, render instantly — no skeletons, no wait */
   if(_fleetCache.fo||_fleetCache.hd){
-    _renderFleetData(_fleetCache.fo,_fleetCache.hd);
+    _renderFleetData(_fleetCache.fo,_fleetCache.hd,null,_fleetCache.ct);
   } else {
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
@@ -5460,18 +5724,53 @@ function loadMetricsQuick(){
   Promise.all([
     _authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).catch(function(){return null;}),
     _authFetch(API.HEALTH).then(function(r){return r.json()}).catch(function(){return null;}),
-    _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).catch(function(){return null;})
+    _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).catch(function(){return null;}),
+    _authFetch(API.CT_LIST,{silent:true}).then(function(r){return r.ok?r.json():{containers:[]};}).catch(function(){return {containers:[]};})
   ]).then(function(results){
-    var fo=results[0];var hd=results[1];var md=results[2];
+    var fo=results[0];var hd=results[1];var md=results[2];var ctd=results[3];
     if(fo)_fleetCache.fo=fo;
     if(hd)_fleetCache.hd=hd;
-    _renderFleetData(_fleetCache.fo,_fleetCache.hd,md);
+    if(ctd)_fleetCache.ct=ctd;
+    _renderFleetData(_fleetCache.fo,_fleetCache.hd,md,_fleetCache.ct);
   });
 }
 /* ── Fleet rendering helpers (hoisted from _renderFleetData) ── */
 function _fStat(v,label,color){return '<div class="text-center"><div style="font-size:16px;font-weight:700;color:'+color+'">'+v+'</div><div style="font-size:12px;color:var(--text)">'+label+'</div></div>';}
 function _fGrp(title,cols,content){return '<div style="border:1px solid var(--border);border-radius:6px;padding:6px 4px 4px;background:var(--bg)"><div style="font-size:12px;color:var(--text);text-align:center;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;opacity:0.7">'+title+'</div><div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:4px">'+content+'</div></div>';}
 function _fDual(label,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+label+'</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'</span><span class="label-hint">'+l1+'</span></span><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'</span><span class="label-hint">'+l2+'</span></span></div></div>';}
+function _renderCtNodeCard(c){
+  var name=c.name||('ct-'+c.ctid);
+  var running=c.status==='running';
+  var cl=_hostColor(name,'ct',c.node||'');
+  var cpuPct=running?Math.round((Number(c.cpu)||0)*100):0;
+  var ramPct=running?Math.round(Number(c.mem_pct)||0):0;
+  var maxCpu=c.maxcpu||0;
+  var ramGB=c.maxmem>0?(c.maxmem/1073741824).toFixed(1).replace(/\.0$/,'')+'GB':'?';
+  var ramUsed=c.mem>0?(c.mem/1073741824).toFixed(1).replace(/\.0$/,'')+'GB':'0GB';
+  var diskGB=c.maxdisk>0?(c.maxdisk/1073741824).toFixed(1).replace(/\.0$/,'')+'GB':'?';
+  var safeName=_esc(name),safeNode=_esc(c.node||''),safeTags=_esc(c.tags||'');
+  var label='CT '+c.ctid+' '+name;
+  var h='<div class="host-card workload-card ct-workload-card" data-host-id="ct-'+c.ctid+'" style="cursor:pointer;">';
+  h+='<div class="host-head"><h3 style="color:'+cl+'">'+safeName+'</h3><div class="host-meta"><span>LXC '+c.ctid+'</span><span>\u00b7</span>'+(running?'<span class="c-green">RUNNING</span>':'<span class="c-red">'+_esc(String(c.status||'unknown').toUpperCase())+'</span>')+'</div></div>';
+  h+='<div class="divider-light">';
+  h+=_mrow('CPU',running?cpuPct+'% \u00b7 '+maxCpu+' Cores':maxCpu+' Cores',running?cpuPct:0,'var(--green)');
+  h+=_mrow('RAM',running?ramPct+'% \u00b7 '+ramUsed+' / '+ramGB:ramGB,running?ramPct:0,'var(--blue)');
+  h+='<div class="metric-row"><div class="metric-top"><span class="metric-label">NODE</span><span class="metric-val fs-11">'+safeNode+'</span></div></div>';
+  h+='<div class="metric-row"><div class="metric-top"><span class="metric-label">DISK</span><span class="metric-val fs-11">'+diskGB+'</span></div></div>';
+  if(safeTags)h+='<div class="metric-row"><div class="metric-top"><span class="metric-label">TAGS</span><span class="metric-val fs-11">'+safeTags+'</span></div></div>';
+  h+='</div>';
+  h+='<div class="vm-card-actions" style="flex-wrap:wrap">';
+  if(running){
+    h+='<button class="fleet-btn pill-warn-xs" data-action="ctPower" data-ctid="'+c.ctid+'" data-arg="stop">STOP</button>';
+    h+='<button class="fleet-btn pill-warn-xs" data-action="ctPower" data-ctid="'+c.ctid+'" data-arg="reboot">REBOOT</button>';
+    h+='<button class="fleet-btn pill-ok-3-8" data-action="ctTerminal" data-ctid="'+c.ctid+'" data-label="'+_esc(label)+'">TERM</button>';
+  }else{
+    h+='<button class="fleet-btn pill-ok-3-8" data-action="ctPower" data-ctid="'+c.ctid+'" data-arg="start">START</button>';
+    h+='<button class="fleet-btn pill-err-3-8" data-action="ctDestroy" data-ctid="'+c.ctid+'" data-name="'+safeName+'">DESTROY</button>';
+  }
+  h+='</div></div>';
+  return h;
+}
 function _buildLabHostCards(hosts,infraLabels,labLabels){
   var labCards='';
   if(!hosts)return labCards;
@@ -5490,12 +5789,16 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
     c+='<div class="divider-light">';
     if(up){
       var _isStorage=h.type==='truenas';
-      c+=_mrow('CPU',cores+(cores>1?' Cores':' Core')+' \u00b7 '+loadPct+'%',loadPct,'var(--purple-light)');
-      if(_isStorage){c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM (ARC)</span><span class="metric-val">'+_ramGB(ramUsed)+' / '+_ramGB(ramTotal)+'</span></div><div class="pbar"><div class="pbar-fill" style="width:'+ramPct+'%;background:var(--blue)"></div></div></div>';}
-      else{c+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,'var(--blue)');}
-      c+=_mrow('DISK',(h.disk||'?'),diskPct,'var(--green)');
-      c+='<div class="metric-row" id="ntp-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val c-dim-fs11" >...</span></div></div>';
-      c+='<div class="metric-row" id="upd-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">UPDATES</span><span class="metric-val c-dim-fs11" >...</span></div></div>';
+      if(!_resourceMetricsSupported(h)){
+        c+=_managementMetricRows(h);
+      } else {
+        c+=_mrow('CPU',cores+(cores>1?' Cores':' Core')+' \u00b7 '+loadPct+'%',loadPct,'var(--purple-light)');
+        if(_isStorage){c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">RAM (ARC)</span><span class="metric-val">'+_ramGB(ramUsed)+' / '+_ramGB(ramTotal)+'</span></div><div class="pbar"><div class="pbar-fill" style="width:'+ramPct+'%;background:var(--blue)"></div></div></div>';}
+        else{c+=_mrow('RAM',_ramGB(ramUsed)+' / '+_ramGB(ramTotal),ramPct,'var(--blue)');}
+        c+=_mrow('DISK',(h.disk||'?'),diskPct,'var(--green)');
+        c+='<div class="metric-row" id="ntp-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val c-dim-fs11" >...</span></div></div>';
+        c+='<div class="metric-row" id="upd-'+h.label.replace(/[^a-z0-9]/gi,'')+'"><div class="metric-top"><span class="metric-label">UPDATES</span><span class="metric-val c-dim-fs11" >...</span></div></div>';
+      }
     } else {
       c+='<p style="color:var(--text-dim);font-size:12px;padding:8px 0">Host unreachable</p>';
     }
@@ -5520,7 +5823,18 @@ function _isLabPhysical(ph){
   var hay=((ph.scope||'')+' '+(ph.groups||'')+' '+(ph.label||'')+' '+(ph.key||'')).toLowerCase();
   return hay.indexOf('lab')>=0;
 }
-function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
+function _normalizeFleetPhysical(fo){
+  if(!fo)return;
+  var all=fo.all_physical||[];
+  if(!all.length){
+    all=(fo.physical||[]).concat(fo.lab_physical||[]);
+  }
+  fo.core_physical=fo.core_physical||all.filter(function(p){return !_isLabPhysical(p);});
+  fo.lab_physical=fo.lab_physical||all.filter(function(p){return _isLabPhysical(p);});
+  fo.all_physical=all.length?all:fo.core_physical.concat(fo.lab_physical);
+  fo.physical=fo.core_physical;
+}
+function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labLabels){
   var nodeData={};
   pveNodes.forEach(function(pn){
     var nodeName=pn.name;
@@ -5528,11 +5842,16 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
     var live=healthMap[nodeName];
     var up=(live&&_healthIsLive(live))||pn.online===true;
     var nodeVms=(vmsByNode[nodeName]||[]).filter(function(v){return !labLabels[v.name]&&v.category!=='lab';});
+    var nodeCts=(ctsByNode[nodeName]||[]).filter(function(c){return !labLabels[c.name]&&!/\\blab\\b/i.test(String(c.tags||''));});
     var nVms=nodeVms.length;
+    var nLxc=nodeCts.length,lxcOnline=0,lxcOffline=0;
     var nCores=0,nRamMb=0,nOnline=0,nOffline=0;
     nodeVms.forEach(function(v){
       nCores+=v.cpu||0;nRamMb+=v.ram_mb||0;
       if(v.status==='running')nOnline++;else nOffline++;
+    });
+    nodeCts.forEach(function(c){
+      if(c.status==='running')lxcOnline++;else lxcOffline++;
     });
     var dockerCount=0,dockerUp=0,dockerDown=0;
     nodeVms.forEach(function(v){
@@ -5561,8 +5880,9 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
        * the fleet sweep. */
       nodeCard+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0">';
       nodeCard+=_fGrp('UTILIZATION',2,_fStat('...','CPU LOAD','var(--text-dim)')+_fStat('...','RAM USED','var(--text-dim)'));
-      nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'RUNNING','var(--green)')+_fStat(nOffline,'STOPPED','var(--red)'));
-      nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
+      nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'RUN','var(--green)')+_fStat(nOffline,'STOP','var(--red)'));
+      nodeCard+=_fGrp('LXC',3,_fStat(nLxc,'TOTAL','var(--cyan)')+_fStat(lxcOnline,'RUN','var(--green)')+_fStat(lxcOffline,'STOP',lxcOffline>0?'var(--yellow)':'var(--green)'));
+      nodeCard+=_fGrp('DOCKER',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
       nodeCard+='</div>';
       nodeCard+='<div style="margin:6px 0">';
       nodeCard+=_mrow('CPU','...',0,'var(--text-dim)');
@@ -5574,8 +5894,9 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels){
       /* same auto-fill responsive grid as the live-metrics branch above */
       nodeCard+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0">';
       nodeCard+=_fGrp('PVE NODE',2,_fStat(nCores,'CPU ALLOC','var(--purple-light)')+_fStat(nRamGb+'<span class="fs-12-fade">GB</span>','RAM ALLOC','var(--purple-light)'));
-      nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'RUNNING','var(--green)')+_fStat(nOffline,'STOPPED','var(--red)'));
-      nodeCard+=_fGrp('CONTAINERS',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
+      nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'RUN','var(--green)')+_fStat(nOffline,'STOP','var(--red)'));
+      nodeCard+=_fGrp('LXC',3,_fStat(nLxc,'TOTAL','var(--cyan)')+_fStat(lxcOnline,'RUN','var(--green)')+_fStat(lxcOffline,'STOP',lxcOffline>0?'var(--yellow)':'var(--green)'));
+      nodeCard+=_fGrp('DOCKER',3,_fStat(dockerCount,'TOTAL','var(--purple-light)')+_fStat(dockerUp,'UP','var(--green)')+_fStat(dockerDown,'DOWN',dockerDown>0?'var(--red)':'var(--green)'));
       nodeCard+='</div>';
       nodeCard+='<div id="pve-live-'+nodeName+'" style="margin:6px 0;padding:6px 8px;background:rgba(248,81,73,0.05);border:1px dashed var(--border);border-radius:6px;text-align:center">';
       nodeCard+='<span style="font-size:12px;color:var(--red);letter-spacing:0.5px">PVE METRICS: NOT REACHABLE</span>';
@@ -5679,11 +6000,11 @@ function _enrichFleetNtpUpdates(){
     });
   }).catch(function(e){console.error('API error:',e);});
 }
-function _renderFleetData(fo,hd,md){
+function _renderFleetData(fo,hd,md,ctd){
   try{
     if(!fo&&!hd){document.getElementById('metrics-cards').innerHTML='<p class="c-red">Both fleet overview and health APIs failed.</p>';return;}
     /* Guard against null sub-fields */
-    if(fo){fo.vms=fo.vms||[];fo.physical=fo.physical||[];fo.pve_nodes=fo.pve_nodes||[];fo.summary=fo.summary||{};}
+    if(fo){fo.vms=fo.vms||[];fo.physical=fo.physical||[];fo.pve_nodes=fo.pve_nodes||[];fo.summary=fo.summary||{};_normalizeFleetPhysical(fo);}
     if(hd){hd.hosts=hd.hosts||[];}
     /* Build container counts by VMID from media status data */
     var ctrByVmid={};
@@ -5704,18 +6025,25 @@ function _renderFleetData(fo,hd,md){
       });
     }
     /* Index VMs by node — optionally exclude templates */
-    var vmsByNode={};var _tplS=_loadSettings();
+    var vmsByNode={};var ctsByNode={};var _tplS=_loadSettings();
     var foVms=fo?fo.vms.filter(function(v){return _tplS.showTemplates||v.category!=='templates';}):[];
     foVms.forEach(function(v){var n=v.node||'unknown';if(!vmsByNode[n])vmsByNode[n]=[];vmsByNode[n].push(v);});
-    var physicals=fo?fo.physical:[];
+    var cts=(ctd&&ctd.containers)||[];
+    cts.forEach(function(c){
+      if(c.template&&!_tplS.showTemplates)return;
+      var n=c.node||'unknown';
+      if(!ctsByNode[n])ctsByNode[n]=[];
+      ctsByNode[n].push(c);
+    });
+    var physicals=fo?(fo.all_physical||fo.physical):[];
     var pveNodes=fo?fo.pve_nodes:[];
     var summary=fo?fo.summary:{};
     var foDuration=fo?fo.duration:0;
     var hdDuration=hd?hd.duration:0;
     /* Infrastructure role cards — sorted: firewall → switch → network_storage → bmc */
     var _infraOrder={pfsense:1,opnsense:1,switch:2,truenas:3,synology:3,unraid:3,bmc:4,idrac:4,ilo:4,ipmi:4};
-    var corePhysicals=physicals.filter(function(ph){return !_isLabPhysical(ph);});
-    var labPhysicals=physicals.filter(function(ph){return _isLabPhysical(ph);});
+    var corePhysicals=fo?(fo.core_physical||physicals.filter(function(ph){return !_isLabPhysical(ph);})): [];
+    var labPhysicals=fo?(fo.lab_physical||physicals.filter(function(ph){return _isLabPhysical(ph);})): [];
     var sortedPhysicals=corePhysicals.slice().sort(function(a,b){return (_infraOrder[a.type]||99)-(_infraOrder[b.type]||99);});
     var infraCards='';
     sortedPhysicals.forEach(function(ph){infraCards+=_infraRoleCard(ph,healthMap);});
@@ -5725,7 +6053,7 @@ function _renderFleetData(fo,hd,md){
     var labCards=_buildLabHostCards(hd?hd.hosts:null,infraLabels,labLabels);
     labPhysicals.forEach(function(ph){labCards+=_infraRoleCard(ph,healthMap);});
     /* PVE node cards */
-    var nodeData=_buildPveNodeData(pveNodes,healthMap,vmsByNode,ctrByVmid,labLabels);
+    var nodeData=_buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labLabels);
     /* VM cards grouped under nodes — skip lab-tagged VMs */
     foVms.forEach(function(v){
       if(labLabels[v.name]||v.category==='lab')return;
@@ -5748,6 +6076,13 @@ function _renderFleetData(fo,hd,md){
       if(v.tier)c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">TIER</span><span class="metric-val fs-11" >'+v.tier+'</span></div></div>';
       c+='</div></div>';
       nodeData[nodeName].vms+=c;
+    });
+    Object.keys(ctsByNode).sort().forEach(function(nodeName){
+      if(!nodeData[nodeName])nodeData[nodeName]={card:'',vms:''};
+      ctsByNode[nodeName].forEach(function(c){
+        if(labLabels[c.name]||/\\blab\\b/i.test(String(c.tags||'')))return;
+        nodeData[nodeName].vms+=_renderCtNodeCard(c);
+      });
     });
     /* Assemble and render */
     document.getElementById('metrics-cards').innerHTML=_assembleFleetOutput(infraCards,nodeData,pveNodes);
@@ -6125,12 +6460,17 @@ function switchVmMgmt(tab){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">VM</label><select id="vmt-ad-source" class="input-primary"><option value="">Loading...</option></select></div>'+
       '<div><label class="label-sub">DISK SIZE</label><div class="flex-center"><input id="vmt-ad-size" placeholder="e.g. 32" class="input-primary" style="width:100px" type="number" min="1"><select id="vmt-ad-unit" class="input-primary" style="width:80px"><option value="G" selected>GB</option><option value="T">TB</option></select></div></div>'+
-      '<div><label class="label-sub">STORAGE POOL</label><input id="vmt-ad-storage" placeholder="local-lvm" class="input-primary" value="local-lvm"></div>'+
+      '<div><label class="label-sub">STORAGE POOL</label><input id="vmt-ad-storage" placeholder="auto from PVE storage config" class="input-primary"></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtAddDisk" >ADD DISK</button></div>'+
       '</div><div id="vmt-ad-out" class="mt-12"></div>';
     _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
       var sel=document.getElementById('vmt-ad-source');if(!sel)return;sel.innerHTML='<option value="">Select VM...</option>';
       d.vms.forEach(function(v){sel.innerHTML+='<option value="'+v.vmid+'">'+v.vmid+' — '+v.name+' ('+v.node+')</option>';});
+    }).catch(function(e){console.error('API error:',e);});
+    _authFetch(API.VM_WIZARD_DEFAULTS).then(function(r){return r.json()}).then(function(d){
+      var storage=(d.defaults||{}).storage||'';
+      var input=document.getElementById('vmt-ad-storage');
+      if(input&&storage)input.value=storage;
     }).catch(function(e){console.error('API error:',e);});
   } else if(tab==='vmtag'){
     vmForm.innerHTML='<div class="form-vertical">'+
@@ -6223,7 +6563,7 @@ function vmtAddDisk(){
   var vmid=(document.getElementById('vmt-ad-source')||{}).value;
   var size=(document.getElementById('vmt-ad-size')||{}).value;
   var unit=(document.getElementById('vmt-ad-unit')||{}).value||'G';
-  var storage=(document.getElementById('vmt-ad-storage')||{}).value||'local-lvm';
+  var storage=(document.getElementById('vmt-ad-storage')||{}).value||'';
   if(!vmid){toast('Select a VM','error');return;}
   if(!size||+size<1){toast('Enter a valid disk size','error');return;}
   var out=document.getElementById('vmt-ad-out');if(out)out.innerHTML='<div class="c-yellow">Adding '+size+unit+' disk to VM '+vmid+'...</div>';
@@ -7254,14 +7594,39 @@ function loadStreams(){
 function mediaRestart(name){
   confirmAction('Restart container <strong>'+name+'</strong>?',function(){
     _authFetch(API.MEDIA_RESTART+'?name='+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
-      toast(d.ok?name+' restarted':'Restart failed: '+(d.error||'unknown'),d.ok?'success':'error');loadContainerSection();
+      if(d.ok){toast(name+' restarted','success');_mediaCache=null;loadContainerSection();loadServiceContainers();}
+      else{toast('Restart failed: '+(d.error||d.output||'unknown'),'error');}
     });
   });
 }
+function _containerLogsTarget(){
+  var roots=[
+    document.getElementById('docker-sub-'+_dockerSub),
+    document.getElementById('media-view'),
+    document.getElementById('docker-sub-all')
+  ];
+  for(var i=0;i<roots.length;i++){
+    var root=roots[i];
+    if(!root)continue;
+    if(getComputedStyle(root).display==='none')continue;
+    var el=root.querySelector('.container-logs-panel')||root.querySelector('#container-logs');
+    if(!el){
+      el=document.createElement('div');
+      el.className='exec-out container-logs-panel';
+      root.appendChild(el);
+    }
+    el.style.display='block';
+    return el;
+  }
+  return document.getElementById('container-logs');
+}
 function mediaLogs(name){
-  var el=document.getElementById('container-logs');el.style.display='block';
+  var el=_containerLogsTarget();if(!el)return;
   el.textContent='Loading logs for '+name+'...';
-  _authFetch(API.MEDIA_LOGS+'?name='+encodeURIComponent(name)+'&lines=50').then(function(r){return r.json()}).then(function(d){el.textContent=d.logs||'No logs available.';}).catch(function(e){el.textContent='Failed to load logs: '+e;toast('Failed to load logs','error');});
+  _authFetch(API.MEDIA_LOGS+'?name='+encodeURIComponent(name)+'&lines=50').then(function(r){return r.json()}).then(function(d){
+    if(d.ok===false){el.textContent=d.error||'Failed to load logs.';toast('Failed to load logs for '+name,'error');return;}
+    el.textContent=d.logs||'No logs available.';
+  }).catch(function(e){el.textContent='Failed to load logs: '+e;toast('Failed to load logs','error');});
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -7705,7 +8070,39 @@ function _infraFindKv(rows,regex){
   }
   return null;
 }
+function _renderIdracInventoryTarget(target){
+  var title=target.name.toUpperCase()+' ('+target.ip+')';
+  var inv=target.inventory||{};
+  var cards=[
+    {l:'CPU',v:(inv.cpu_sockets?inv.cpu_sockets+' CPU / ':'')+(inv.cpu_cores||'?')+'C'+(inv.cpu_threads?' / '+inv.cpu_threads+'T':''),c:'purple'},
+    {l:'RAM',v:inv.ram_mb?_ramGB(inv.ram_mb):'?',c:'blue'},
+    {l:'Disks',v:inv.disk_count?((inv.disk_count||0)+' / '+_fmtBytes(inv.disk_total_bytes)):'0 reported',c:inv.disk_bad_count?'red':'green'},
+    {l:'Health',v:(inv.bad_health&&inv.bad_health.length)?'CHECK '+inv.bad_health.length:'OK',c:(inv.bad_health&&inv.bad_health.length)?'red':'green'}
+  ];
+  if(inv.raid_controller)cards.push({l:'RAID',v:inv.raid_controller.replace(/^PERC\s*/i,''),c:'text'});
+  if(inv.power_state)cards.push({l:'Power',v:inv.power_state,c:/on/i.test(inv.power_state)?'green':'yellow'});
+  var rows=[
+    ['CPU model',inv.cpu_model||'-'],
+    ['CPU status',inv.cpu_status||'-'],
+    ['Memory',inv.ram_mb?(_ramGB(inv.ram_mb)+' / '+(inv.dimm_populated||'?')+' of '+(inv.dimm_slots||'?')+' DIMMs'):'-'],
+    ['Memory status',inv.memory_status||'-'],
+    ['Disk media',inv.disk_media?Object.keys(inv.disk_media).map(function(k){return k+': '+inv.disk_media[k];}).join(', '):'-'],
+    ['Disk status',inv.storage_status||'-'],
+    ['RAID controller',inv.raid_controller||'-'],
+    ['RAID cache',inv.raid_cache_mb?inv.raid_cache_mb+' MB':'-'],
+    ['System rollup',inv.system_rollup||'-'],
+    ['Fan rollup',inv.fan_status||'-'],
+    ['PSU rollup',inv.psu_status||'-'],
+    ['Service tag',inv.service_tag||'-']
+  ];
+  var h='<div style="color:var(--green);font-weight:800;margin-bottom:8px;font-size:12px">'+_esc(title+' — HARDWARE INVENTORY')+'</div>';
+  h+=_infraMiniStats(cards);
+  h+=_infraKvTable(rows);
+  if(inv.bad_health&&inv.bad_health.length)h+='<div class="c-red" style="font-size:12px;font-weight:700;margin-top:10px">Health attention: '+_esc(inv.bad_health.join(', '))+'</div>';
+  return h+_infraRawDetails('Raw '+title+' inventory',target.output);
+}
 function _renderIdracTargetOutput(target,action){
+  if(action==='inventory')return _renderIdracInventoryTarget(target);
   var title=target.name.toUpperCase()+' ('+target.ip+')';
   var rows=_infraKvFromLines(_infraLines(target.output));
   if(!rows.length)return _infraRenderTextDevice(title,action,target.output,{kind:action==='sel'?'log':''});
@@ -8579,7 +8976,11 @@ function vmSnap(vmid){
 }
 function vmPower(vmid,action){
   _authFetch(API.VM_POWER+'?vmid='+vmid+'&action='+action,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
-    toast(d.action+': '+(d.ok?d.output:d.error),d.ok?'success':'error');refreshCurrentView();
+    toast(d.action+': '+(d.ok?d.output:d.error),d.ok?'success':'error');
+    if(d.ok){
+      _fetchFreshVm(vmid).then(function(vm){_rerenderOpenVmCard(vmid,vm);}).catch(function(){});
+    }
+    refreshCurrentView();
   });
 }
 function vmPushKey(ip){
@@ -8959,12 +9360,20 @@ function renderInfraCard(config){
   var authFailed=qDev&&qDev.auth_failed;
   stats+=st('STATUS',authFailed?'AUTH FAILED':(up?'REACHABLE':'UNREACHABLE'),authFailed?'y':(up?'g':'r'));
   if(live){
-    if(live.cores)stats+=st('CPU',live.cores+' Cores','p');
-    if(live.ram)stats+=st('RAM',_ramStr(live.ram),'b');
-    if(live.disk)stats+=st('DISK',live.disk,'g');
+    if(!_resourceMetricsSupported(live)){
+      var mm=live.management_metrics||{};
+      stats+=st('METRICS','BMC ONLY','y');
+      if(live.power||mm.power)stats+=st('POWER',live.power||mm.power,(live.power||mm.power)==='ON'?'g':'y');
+      if(live.model||mm.model)stats+=st('MODEL',live.model||mm.model,'p');
+    } else {
+      if(live.cores)stats+=st('CPU',live.cores+' Cores','p');
+      if(live.ram)stats+=st('RAM',_ramStr(live.ram),'b');
+      if(live.disk)stats+=st('DISK',live.disk,'g');
+    }
     if(live.uptime)stats+=st('UPTIME',live.uptime.replace('up ','').split(',').slice(0,2).join(','),'p');
   }
-  var html='<div class="card-box"><div class="stats mb-0" >'+stats+'</div></div>';
+  var statsId=(infraType==='idrac'||infraType==='bmc'||infraType==='ilo'||infraType==='ipmi')?' id="bmc-inventory-stats-'+_domSafeId(label)+'"':'';
+  var html='<div class="card-box"><div class="stats mb-0" '+statsId+'>'+stats+'</div></div>';
   var actions=INFRA_ACTIONS[infraType];
   if(actions){
     var readBtns='',writeBtns='';
@@ -8991,6 +9400,7 @@ function renderInfraCard(config){
   }
   _infraOutputTarget='hd-infra-out';
   _cardReady(html);
+  if(infraType==='idrac'||infraType==='bmc'||infraType==='ilo'||infraType==='ipmi')_loadBmcInventoryStats(label);
 }
 
 /* ── Renderer: Host (async SSH probe) — adaptive layout ── */
@@ -9099,14 +9509,14 @@ function hdDockerRestart(name){
   if(!confirm('Restart container: '+name+'?'))return;
   var host=_cardState.host;
   _authFetch('/api/containers/action?host='+encodeURIComponent(host)+'&name='+encodeURIComponent(name)+'&action=restart',{method:'POST'})
-    .then(function(r){return r.json()}).then(function(d){toast(d.ok?'Restarted '+name:(d.error||'Failed'),'success');}).catch(function(e){toast('Error: '+e,'error');});
+    .then(function(r){return r.json()}).then(function(d){toast(d.ok?'Restarted '+name:(d.error||d.output||'Failed'),d.ok?'success':'error');}).catch(function(e){toast('Error: '+e,'error');});
 }
 function hdDockerLogs(name){
   var host=_cardState.host;
   var panel=document.getElementById('hd-tool-panel');if(panel)panel.style.display='block';
   var out=document.getElementById('hd-exec-out');if(out)out.textContent='Loading logs for '+name+'...';
   _authFetch('/api/containers/logs?host='+encodeURIComponent(host)+'&name='+encodeURIComponent(name))
-    .then(function(r){return r.json()}).then(function(d){if(out)out.textContent=d.output||'(no output)';}).catch(function(e){if(out)out.textContent='Error: '+e;});
+    .then(function(r){return r.json()}).then(function(d){if(out)out.textContent=d.ok===false?(d.error||'Failed to load logs'):(d.output||'(no output)');if(d.ok===false)toast('Failed to load logs for '+name,'error');}).catch(function(e){if(out)out.textContent='Error: '+e;});
 }
 
 /* ── VM Card helpers ── */
@@ -9239,12 +9649,56 @@ function _vmDockerFetch(vmid){
     }
   }).catch(function(e){console.error('API error:',e);});
 }
+function _mergeVmIntoFleetCache(vm){
+  if(!vm||vm.vmid===undefined||vm.vmid===null)return null;
+  if(!_fleetCache.fo)_fleetCache.fo={vms:[]};
+  if(!_fleetCache.fo.vms)_fleetCache.fo.vms=[];
+  var match=null;
+  for(var i=0;i<_fleetCache.fo.vms.length;i++){
+    if(Number(_fleetCache.fo.vms[i].vmid)===Number(vm.vmid)){
+      match=Object.assign({},_fleetCache.fo.vms[i],vm);
+      _fleetCache.fo.vms[i]=match;
+      break;
+    }
+  }
+  if(!match){
+    match=Object.assign({},vm);
+    _fleetCache.fo.vms.push(match);
+  }
+  return match;
+}
+function _fetchFreshVm(vmid){
+  return _authFetch(API.VMS+'?_='+Date.now()).then(function(r){return r.json()}).then(function(d){
+    var fresh=(d.vms||[]).find(function(v){return Number(v.vmid)===Number(vmid);});
+    if(!fresh)throw new Error('VM '+vmid+' not found');
+    return _mergeVmIntoFleetCache(fresh)||fresh;
+  });
+}
+function _rerenderOpenVmCard(vmid,vm){
+  if(_cardState.type!=='vm'||Number(_cardState.vmid)!==Number(vmid))return;
+  renderVmCard({label:(vm&&vm.name)||_cardState.host||('vm-'+vmid),ip:'',vmid:Number(vmid),_fresh:true});
+}
 
 /* ── Renderer: VM Card ── */
 function renderVmCard(config){
-  var label=config.label,ip=config.ip||'',vmid=config.vmid;
+  var label=config.label,ip=config.ip||'',vmid=Number(config.vmid);
+  if(!config._fresh){
+    _fetchFreshVm(vmid).then(function(fresh){
+      if(_cardState.type==='vm'&&Number(_cardState.vmid)===Number(vmid)){
+        renderVmCard({label:fresh.name||label,ip:ip,vmid:vmid,_fresh:true});
+      }
+    }).catch(function(){
+      if(_cardState.type==='vm'&&Number(_cardState.vmid)===Number(vmid)){
+        renderVmCard({label:label,ip:ip,vmid:vmid,_fresh:true});
+      }
+    });
+    return;
+  }
   var vm=null;
-  if(_fleetCache.fo&&_fleetCache.fo.vms){vm=_fleetCache.fo.vms.find(function(v){return v.vmid===vmid;});}
+  if(_fleetCache.fo&&_fleetCache.fo.vms){vm=_fleetCache.fo.vms.find(function(v){return Number(v.vmid)===Number(vmid);});}
+  if(vm&&vm.name)label=vm.name;
+  var titleEl=document.getElementById('hd-title');
+  if(titleEl)titleEl.textContent=(label||('VM '+vmid)).toUpperCase();
   var acts=vm?vm.allowed_actions||['view']:['view'];
   var cat=vm?vm.category||'unknown':'unknown';
   var tier=vm?vm.tier||'probe':'probe';
@@ -9268,6 +9722,7 @@ function renderVmCard(config){
   var kv=_kvRow;
   var _ips=_resolveVmIps(vmid,ip,liveHost);
   var allIps=_ips.allIps,subtitleIp=_ips.subtitleIp;
+  _cardState.host=(subtitleIp&&subtitleIp!=='?')?subtitleIp:label;
   document.getElementById('hd-subtitle').textContent=subtitleIp+' \u00b7 VM '+vmid+' \u00b7 '+(vm?vm.node:'?');
   /* Stats */
   var stats='';
@@ -9394,11 +9849,27 @@ function hdDiagnose(btn){
     document.getElementById('hd-exec-out').textContent=d.output||d.error||'No output.';
   }).catch(function(e){document.getElementById('hd-exec-out').textContent='Error: '+e;});
 }
-function hdRestart(){
-  confirmAction('Restart services on <strong>'+_cardState.host+'</strong>?',function(){
+function hdRestart(btn){
+  _hdBtn(btn);
+  var svc=prompt('Service to restart on '+_cardState.host+' (example: cron)');
+  if(svc===null)return;
+  svc=String(svc||'').trim();
+  if(!svc){toast('Enter a service name','error');return;}
+  if(!/^[A-Za-z0-9@_.:-]+$/.test(svc)){toast('Invalid service name','error');return;}
+  confirmAction('Restart <strong>'+svc+'</strong> on <strong>'+_cardState.host+'</strong>?',function(){
     document.getElementById('hd-tool-panel').style.display='block';
-    document.getElementById('hd-exec-out').textContent='Use CLI: freq fleet exec '+_cardState.host+' sudo systemctl restart <service>';
-    toast('Use CLI for service restarts','info');
+    document.getElementById('hd-exec-out').textContent='Restarting '+svc+' on '+_cardState.host+'...';
+    var cmd='sudo systemctl restart '+svc+' && sudo systemctl is-active '+svc;
+    _authFetch(API.EXEC+'?target='+encodeURIComponent(_cardState.host)+'&cmd='+encodeURIComponent(cmd),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+      var txt='';
+      var ok=d.ok!==false;
+      if(d.results){d.results.forEach(function(r){ok=ok&&r.ok!==false;txt+=(r.output||r.error||'')+'\n';});}
+      document.getElementById('hd-exec-out').textContent=txt||'Restart command completed.';
+      toast((ok?'Restarted ':'Restart failed for ')+svc,ok?'success':'error');
+    }).catch(function(e){
+      document.getElementById('hd-exec-out').textContent='Error: '+e;
+      toast('Restart failed: '+e,'error');
+    });
   });
 }
 function hdRunCmd(){
@@ -9811,12 +10282,27 @@ function loadPoliciesPage(){
 }
 function policyAction(action){
   var out=document.getElementById('policy-out');if(!out)return;
-  out.innerHTML='<span class="text-dim">Running policy '+action+'...</span>';
-  var url=action==='check'?API.POLICY_CHECK:action==='diff'?API.POLICY_DIFF:API.POLICY_FIX;
-  _authFetch(url).then(function(r){return r.json()}).then(function(d){
-    if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
-    out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No output')+'</pre>';
-  }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+  var policyEl=document.getElementById('policy-name');
+  var policy=policyEl?policyEl.value.trim():'';
+  if(!policy){
+    if(action==='check'){loadComplianceData();return;}
+    out.innerHTML='<div class="exec-out">Select a policy name before running '+_esc(action)+'. Run <code>freq state policies</code> from CLI to list available policies.</div>';
+    return;
+  }
+  function run(){
+    out.innerHTML='<span class="text-dim">Running policy '+action+' for '+_esc(policy)+'...</span>';
+    var url=action==='check'?API.POLICY_CHECK:action==='diff'?API.POLICY_DIFF:API.POLICY_FIX;
+    url+='?policy='+encodeURIComponent(policy);
+    _authFetch(url,{method:action==='fix'?'POST':'GET'}).then(function(r){return r.json()}).then(function(d){
+      if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+      out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'No output')+'</pre>';
+    }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
+  }
+  if(action==='fix'){
+    confirmAction('Apply policy remediation for <strong>'+_esc(policy)+'</strong>?',run);
+    return;
+  }
+  run();
 }
 function runSweep(doFix){
   var out=document.getElementById('sweep-out');if(!out)return;
@@ -9937,13 +10423,12 @@ function _renderTopology(svg,nodes,links){
   });
 
   /* Layout constants */
-  var padX=60,padY=50;
+  var padX=Math.max(44,Math.min(72,Math.round(W*0.055))),padY=50;
   var switchY=55;    /* switch hub — top center */
   var coreY=150;     /* other core infra — below switch */
   var tierY2=260;    /* PVE nodes */
-  var tierY3=380;    /* VMs start */
-  var vmSpacingX=110,vmSpacingY=56;
-  var vmColsMax=4;   /* max VMs per row under a PVE node */
+  var tierY3=395;    /* VMs start */
+  var vmSpacingY=68;
 
   /* Position Tier 1 — switch as elevated hub, others radiate below */
   var switchNode=tier1.find(function(n){return n.type==='switch';});
@@ -9968,9 +10453,13 @@ function _renderTopology(svg,nodes,links){
   var colWidth=(W-2*padX)/Math.max(pveCount,1);
   tier2.forEach(function(n,i){n.x=padX+colWidth*i+colWidth/2;n.y=tierY2;});
 
-  /* Position Tier 3 — VMs in columns under their parent PVE */
+  function _clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+
+  /* Position Tier 3 — VMs in bounded lanes under their parent PVE. The
+   * previous layout used a fixed four-column block per PVE node; dense nodes
+   * spilled across the adjacent hypervisor lane and made labels unreadable. */
   var maxVmRows=0;
-  tier2.forEach(function(pve){
+  tier2.forEach(function(pve,pveIdx){
     var vms=vmsByNode[pve.id]||[];
     /* Sort: running first, then by label */
     vms.sort(function(a,b){
@@ -9978,15 +10467,20 @@ function _renderTopology(svg,nodes,links){
       if(a.status!=='running'&&b.status==='running')return 1;
       return a.label<b.label?-1:1;
     });
-    var cols=Math.min(vms.length,vmColsMax);
-    var rows=Math.ceil(vms.length/vmColsMax);
+    var laneMin=padX+colWidth*pveIdx+18;
+    var laneMax=padX+colWidth*(pveIdx+1)-18;
+    var laneW=Math.max(80,laneMax-laneMin);
+    var maxColsForLane=laneW>=390?4:(laneW>=230?3:2);
+    var cols=Math.max(1,Math.min(vms.length,maxColsForLane));
+    var rows=Math.ceil(vms.length/cols);
     if(rows>maxVmRows)maxVmRows=rows;
-    var blockW=cols*vmSpacingX;
-    var startX=pve.x-blockW/2+vmSpacingX/2;
+    var vmSpacingX=cols>1?Math.min(116,Math.max(92,laneW/(cols-1))):0;
+    var blockW=(cols-1)*vmSpacingX;
+    var startX=pve.x-blockW/2;
     vms.forEach(function(vm,i){
-      var col=i%vmColsMax;
-      var row=Math.floor(i/vmColsMax);
-      vm.x=startX+col*vmSpacingX;
+      var col=i%cols;
+      var row=Math.floor(i/cols);
+      vm.x=cols===1?pve.x:_clamp(startX+col*vmSpacingX,laneMin,laneMax);
       vm.y=tierY3+row*vmSpacingY;
     });
   });
@@ -10069,9 +10563,17 @@ function _renderTopology(svg,nodes,links){
   });
 
   /* === Draw nodes === */
+  function topoLabel(n){
+    var label=String(n.label||'');
+    var limit=n.type==='vm'?14:(n.type==='pve'?18:20);
+    return label.length>limit?label.slice(0,limit-3)+'...':label;
+  }
   function drawNode(n){
     var g=document.createElementNS('http://www.w3.org/2000/svg','g');
     g.style.cursor='pointer';
+    var title=document.createElementNS('http://www.w3.org/2000/svg','title');
+    title.textContent=n.label||n.id||'node';
+    g.appendChild(title);
     var r=nodeRadius(n);
     var col=nodeColor(n);
 
@@ -10101,7 +10603,8 @@ function _renderTopology(svg,nodes,links){
     text.setAttribute('fill',isCore?'#c9d1d9':'#8b949e');
     text.setAttribute('font-size',n.type==='pve'?'12':n.type==='vm'?'9':'11');
     text.setAttribute('font-weight',isCore?'600':'normal');
-    text.textContent=n.label;
+    text.classList.add('topo-label');
+    text.textContent=topoLabel(n);
     g.appendChild(text);
 
     /* Type badge for core infra */
@@ -10173,7 +10676,7 @@ function _renderTopology(svg,nodes,links){
     _dragNode.querySelectorAll('text').forEach(function(t){
       t.setAttribute('x',n.x);
       /* Reposition label below node */
-      if(t.textContent===n.label){
+      if(t.classList.contains('topo-label')){
         var r=nodeRadius(n);
         t.setAttribute('y',n.type==='vm'?n.y+r+11:n.y+r+14);
       } else {
@@ -10682,6 +11185,33 @@ function runDoctor(){
   out.innerHTML='<span class="text-dim">Running self-diagnostic...</span>';
   _authFetch(API.DOCTOR).then(function(r){return r.json()}).then(function(d){
     if(d.error){out.innerHTML='<span style="color:var(--red)">'+d.error+'</span>';return;}
+    if(d&&(d.status!=null||d.checks||d.passed!=null||d.failed!=null)){
+      var passed=parseInt(d.passed||0)||0;
+      var failed=parseInt(d.failed||0)||0;
+      var warns=parseInt(d.warnings||0)||0;
+      var total=parseInt(d.total||(passed+failed+warns))||0;
+      var status=String(d.status||(failed>0?'unhealthy':warns>0?'degraded':'ok')).toUpperCase();
+      var lines=[];
+      lines.push('STATUS: '+status);
+      lines.push(passed+'/'+total+' passed  ·  '+failed+' failed  ·  '+warns+' warnings');
+      if(d.duration!=null)lines.push('duration: '+d.duration+'s');
+      if(d.checked_at)lines.push('checked_at: '+d.checked_at);
+      if(d.reason)lines.push('reason: '+d.reason);
+      lines.push('');
+      if(d.checks&&d.checks.length){
+        var bad=d.checks.filter(function(c){return c.status==='fail'||c.status==='warn';});
+        if(bad.length){
+          lines.push('--- FAILING / WARNING CHECKS ---');
+          bad.forEach(function(c){
+            lines.push('['+String(c.status||'?').toUpperCase()+'] '+(c.section?c.section+' · ':'')+(c.name||'')+(c.message?'  —  '+c.message:''));
+          });
+        }else{
+          lines.push('All '+total+' checks passing.');
+        }
+      }
+      out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(lines.join('\n'))+'</pre>';
+      return;
+    }
     out.innerHTML='<pre style="white-space:pre-wrap;font-size:12px;color:var(--text)">'+_esc(d.output||'OK')+'</pre>';
   }).catch(function(e){out.innerHTML='<span style="color:var(--red)">Error: '+e+'</span>';});
 }

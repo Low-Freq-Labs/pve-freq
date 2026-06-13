@@ -339,8 +339,8 @@ class TestDashboardTone(unittest.TestCase):
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/app.js")) as f:
             src = f.read()
         watchdog_block = src.split("Watchdog probe status")[1].split("status unavailable")[0]
-        self.assertIn("hosts probed", watchdog_block,
-                       "Watchdog must show what was probed")
+        self.assertIn("hosts observed", watchdog_block,
+                       "Watchdog must show local cache observation evidence")
         self.assertIn("errors", watchdog_block,
                        "Watchdog must surface error count")
         self.assertNotIn("WATCHDOG: OK", watchdog_block,

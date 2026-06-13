@@ -97,6 +97,9 @@ def parse_idrac_power(sensor_output: str) -> float:
 
 def _parse_ram_mb(ram_str: str) -> float:
     """Parse RAM string like '4096/8192MB' → used MB."""
+    if not ram_str:
+        return 0.0
+    ram_str = str(ram_str)
     m = re.match(r"(\d+)/(\d+)", ram_str)
     if m:
         return float(m.group(2))  # total
@@ -144,8 +147,19 @@ def compute_costs(health_data: dict, idrac_data: dict, cost_cfg: CostConfig) -> 
     costs = []
     pue = max(1.0, min(cost_cfg.pue, 3.0))
     rate = max(0.0, min(cost_cfg.rate_per_kwh, 2.0))
+    if not health_data:
+        return costs
+    if isinstance(health_data, dict):
+        hosts = health_data.get("hosts", [])
+    elif isinstance(health_data, list):
+        hosts = health_data
+    else:
+        logger.warn(f"cost: unsupported health data shape: {type(health_data).__name__}")
+        return costs
 
-    for h in health_data.get("hosts", []):
+    for h in hosts:
+        if not isinstance(h, dict):
+            continue
         label = h.get("label", "")
         if not label:
             continue

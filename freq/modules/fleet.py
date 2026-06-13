@@ -132,14 +132,17 @@ def cmd_status(cfg: FreqConfig, pack, args) -> int:
         is_legacy = cmd_hosts and cmd_hosts[0].htype in ("idrac", "switch")
         key = (cfg.ssh_rsa_key_path or cfg.ssh_key_path) if is_legacy else cfg.ssh_key_path
         ct = 10 if is_legacy else cfg.ssh_connect_timeout
-        cmd_timeout = 15 if is_legacy else FLEET_QUICK_TIMEOUT
+        # iDRAC/IOS shells have tight SSH session limits and slow command
+        # startup. Do not fan them out like normal Linux hosts.
+        cmd_timeout = FLEET_SLOW_TIMEOUT if is_legacy else FLEET_QUICK_TIMEOUT
+        max_parallel = 1 if is_legacy else cfg.ssh_max_parallel
         batch = ssh_run_many(
             hosts=cmd_hosts,
             command=cmd,
             key_path=key,
             connect_timeout=ct,
             command_timeout=cmd_timeout,
-            max_parallel=cfg.ssh_max_parallel,
+            max_parallel=max_parallel,
             use_sudo=False,
             cfg=cfg,
         )

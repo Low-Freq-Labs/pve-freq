@@ -77,7 +77,7 @@ async function terminalRoundTrip(page, path, input, expected) {
       const timer = setTimeout(() => {
         try { ws.close(); } catch {}
         resolve(out);
-      }, 8000);
+      }, 20000);
       ws.onerror = () => {
         clearTimeout(timer);
         reject(new Error('terminal websocket failed'));
@@ -105,6 +105,7 @@ async function terminalRoundTrip(page, path, input, expected) {
   expect(closed.status).toBe(200);
   expect(closed.body.ok).toBe(true);
   expect(text, path).toMatch(expected);
+  expect(text, `${path} must not use bootstrap identity after init`).not.toMatch(/freq-ops@/i);
 }
 
 test.describe('live dashboard safe E2E', () => {
@@ -114,8 +115,19 @@ test.describe('live dashboard safe E2E', () => {
   });
 
   test('doctor and infra quick are clean', async ({ page }) => {
+    const setup = await api(page, '/api/setup/status');
+    expect(setup.status).toBe(200);
+    expect(setup.body.initialized).toBe(true);
+    expect(String(setup.body.reason || ''), JSON.stringify(setup.body, null, 2)).not.toMatch(/partial|stale|setup required|not yet run/i);
+
     const doctor = await waitForHealthyDoctor(page);
     expect(doctor.status).toBe(200);
+
+    const watchdog = await api(page, '/api/watchdog/health');
+    expect(watchdog.status).toBe(200);
+    expect(watchdog.body.ok, JSON.stringify(watchdog.body, null, 2)).toBe(true);
+    expect(watchdog.body.status, JSON.stringify(watchdog.body, null, 2)).toBe('healthy');
+    expect(watchdog.body.errors || 0, JSON.stringify(watchdog.body, null, 2)).toBe(0);
 
     const quick = await api(page, '/api/infra/quick');
     expect(quick.status).toBe(200);
@@ -259,12 +271,13 @@ test.describe('live dashboard safe E2E', () => {
     }
   });
 
-  test('core device terminals return real websocket output', async ({ page }) => {
+  test('network device terminals return real websocket output', async ({ page }) => {
+    test.setTimeout(90_000);
     await terminalRoundTrip(
       page,
       '/api/terminal/open?type=host&target=10.25.255.1&htype=pfsense&cols=100&rows=24',
       'hostname\n',
-      /pfsense|freq-ops@pfsense/i
+      /pfsense|dc01-admin@pfsense/i
     );
     await terminalRoundTrip(
       page,
@@ -272,18 +285,35 @@ test.describe('live dashboard safe E2E', () => {
       'show version | include uptime\n',
       /uptime is|gigecolo/i
     );
-    await terminalRoundTrip(
-      page,
-      '/api/terminal/open?type=host&target=10.25.255.10&htype=idrac&cols=100&rows=24',
-      'racadm getsysinfo -s\n',
-      /Power Status|CMC|iDRAC|System Model/i
-    );
+  });
 
+  test('truenas terminal returns real websocket output', async ({ page }) => {
+    test.setTimeout(60_000);
     await terminalRoundTrip(
       page,
       '/api/terminal/open?type=host&target=10.25.255.25&htype=truenas&cols=100&rows=24',
       'hostname\n',
       /truenas|freenas|dc01-admin/i
+    );
+  });
+
+  test('idrac terminal returns real websocket output', async ({ page }) => {
+    test.skip(
+      process.env.PVE_FREQ_RUN_IDRAC_TERMINAL_E2E !== '1',
+      'iDRAC interactive terminal consumes scarce BMC SSH sessions; run explicitly after a cooldown.'
+    );
+    test.setTimeout(90_000);
+    // iDRAC 6/7 controllers keep SSH sessions occupied briefly after
+    // read-only racadm calls. The full live suite intentionally exercises
+    // BMC buttons immediately before terminal checks, so leave a cooldown
+    // before opening the interactive CLP session.
+    await page.waitForTimeout(30_000);
+
+    await terminalRoundTrip(
+      page,
+      '/api/terminal/open?type=host&target=10.25.255.10&htype=idrac&cols=100&rows=24',
+      'racadm getsysinfo -s\n',
+      /Power Status|CMC|iDRAC|System Model/i
     );
   });
 

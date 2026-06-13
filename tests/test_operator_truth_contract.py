@@ -128,6 +128,10 @@ class TestPreAuthSetupTruthBanner(unittest.TestCase):
         self.assertIn("initialized: false", summary,
                       "summary must name the initialized=false state verbatim")
         self.assertIn("SETUP REQUIRED", summary)
+        self.assertIn("d.first_run===true", summary,
+                      "setup-required must be limited to true first-run, not failed init with users")
+        self.assertIn("LOGIN AVAILABLE", summary,
+                      "failed/partial init with configured users must still allow login")
         self.assertIn("_probe_failed", summary,
                       "backend-unreachable branch must carry its own message")
 

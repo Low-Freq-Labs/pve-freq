@@ -27,19 +27,20 @@ class TestPhase11WritesUsersConf(unittest.TestCase):
     """Phase 11 must write users.conf alongside roles.conf."""
 
     def test_phase11_opens_users_conf(self):
-        """Phase 11 must reference users.conf (not just roles.conf)."""
+        """Phase 11 must seed users.conf via the shared dashboard-auth helper."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
-        # Find Phase 11 RBAC block (_phase(11, ...))
         idx = src.find('_phase(11, headless_total, "RBAC Setup")')
         self.assertNotEqual(idx, -1)
-        block = src[idx:idx + 3000]
+        block = src[idx:idx + 900]
+        self.assertIn("_seed_headless_dashboard_auth", block)
+        helper = src.split("def _seed_headless_dashboard_auth", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn('users_file = os.path.join(cfg.conf_dir, "users.conf")', helper)
         self.assertIn('users.conf', block)
-        self.assertIn("users_file", block)
 
     def test_phase11_writes_both_users(self):
-        """Phase 11 must write bootstrap_user AND svc_name to users.conf."""
+        """Phase 11 must write the explicit dashboard admin to users.conf."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
-        idx = src.find("users.conf seeded with bootstrap")
+        idx = src.find("users.conf seeded with dashboard admin")
         self.assertNotEqual(idx, -1)
 
     def test_phase11_ignores_commented_users(self):

@@ -62,6 +62,7 @@ def _gather_host_info(cfg: FreqConfig, host) -> dict:
         command_timeout=CMP_CMD_TIMEOUT,
         htype=host.htype,
         use_sudo=False,
+        cfg=cfg,
     )
 
     info = {"label": host.label, "ip": host.ip, "type": host.htype, "reachable": False}

@@ -49,7 +49,17 @@ def _doctor_fleet_lock(cfg: FreqConfig):
     lock_dir = os.path.join(getattr(cfg, "data_dir", "") or "/tmp", "cache")
     os.makedirs(lock_dir, exist_ok=True)
     path = os.path.join(lock_dir, "doctor-fleet-connectivity.lock")
-    with open(path, "w") as f:
+    read_only = False
+    try:
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o664)
+        try:
+            os.fchmod(fd, 0o664)
+        except OSError:
+            pass
+    except PermissionError:
+        fd = os.open(path, os.O_RDONLY)
+        read_only = True
+    with os.fdopen(fd, "r" if read_only else "r+") as f:
         started = time.monotonic()
         while True:
             try:
@@ -554,6 +564,15 @@ def _check_ssh_binary(cfg: FreqConfig) -> int:
 
 def _check_ssh_key(cfg: FreqConfig) -> int:
     if cfg.ssh_key_path and os.path.isfile(cfg.ssh_key_path):
+        context_mismatch, current_user = _doctor_operator_context_mismatch(cfg)
+        if context_mismatch:
+            key_dir = getattr(cfg, "key_dir", "")
+            fmt.step_warn(
+                f"SSH key: operator key {os.path.basename(cfg.ssh_key_path)} is readable, "
+                f"but installed service keys in {key_dir} are not readable from '{current_user}'. "
+                "Run `sudo freq doctor` or use /api/doctor for fleet SSH truth."
+            )
+            return 2
         key_file = os.path.basename(cfg.ssh_key_path)
         # Check permissions
         mode = oct(os.stat(cfg.ssh_key_path).st_mode)[-3:]
@@ -597,6 +616,20 @@ def _get_file_owner(path: str) -> str:
             return "unknown"
 
 
+def _doctor_operator_context_mismatch(cfg: FreqConfig) -> tuple[bool, str]:
+    """Return true when CLI doctor cannot access installed service credentials."""
+    import getpass
+
+    current_user = getpass.getuser()
+    svc = getattr(cfg, "ssh_service_account", "") or ""
+    if current_user in {"root", svc}:
+        return False, current_user
+    key_dir = getattr(cfg, "key_dir", "") or ""
+    if key_dir and os.path.isdir(key_dir) and not os.access(key_dir, os.X_OK):
+        return True, current_user
+    return False, current_user
+
+
 def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     """Test SSH connectivity to ALL fleet hosts in parallel with device-appropriate commands."""
     hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]
@@ -605,11 +638,15 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
         fmt.step_info("Fleet connectivity: no hosts to test")
         return 0
 
-    import getpass
-
-    current_user = getpass.getuser()
+    context_mismatch, current_user = _doctor_operator_context_mismatch(cfg)
     svc = getattr(cfg, "ssh_service_account", "") or ""
     key_dir = getattr(cfg, "key_dir", "")
+    if context_mismatch:
+        fmt.step_warn(
+            f"Fleet SSH: not checked from '{current_user}' — installed service keys in "
+            f"{key_dir} are not readable in this shell. Run `sudo freq doctor` or use /api/doctor."
+        )
+        return 2
     if not getattr(cfg, "ssh_key_path", "") and svc and current_user != svc:
         if key_dir and os.path.isdir(key_dir) and not os.access(key_dir, os.X_OK):
             fmt.step_warn(
@@ -661,9 +698,10 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
         is_legacy = h.htype in ("idrac", "switch")
         if is_legacy:
             key = getattr(cfg, "ssh_rsa_key_path", None) or cfg.ssh_key_path
-        # Legacy devices need longer timeouts (sshpass + cipher negotiation)
+        # Legacy devices need longer timeouts (sshpass + cipher negotiation +
+        # slow RACADM response on older iDRACs).
         ct = 10 if is_legacy else 3
-        ct_cmd = 15 if is_legacy else DOCTOR_CMD_TIMEOUT
+        ct_cmd = 30 if is_legacy else DOCTOR_CMD_TIMEOUT
         r = ssh_run(
             host=h.ip,
             command=cmd,
@@ -686,6 +724,36 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
         state, reason = classify_probe_failure(
             r.returncode, raw_stderr, raw_stdout
         )
+        raw_joined = f"{raw_stderr}\n{raw_stdout}".lower()
+        if is_legacy and (
+            state == STATE_UNREACHABLE
+            or "no more sessions are available" in raw_joined
+            or "probe command timed out" in reason
+        ):
+            import time
+            time.sleep(5)
+            r = ssh_run(
+                host=h.ip,
+                command=cmd,
+                user=user,
+                key_path=key,
+                connect_timeout=ct,
+                command_timeout=ct_cmd,
+                htype=h.htype,
+                use_sudo=False,
+                local_user=local_user,
+                password_file=password_file,
+                sudo_password_file=sudo_password_file,
+                cfg=cfg,
+                failure_log_level="warn",
+            )
+            if r.returncode == 0:
+                return h, STATE_LIVE, "ssh probe OK", False
+            raw_stderr = r.stderr or ""
+            raw_stdout = r.stdout or ""
+            state, reason = classify_probe_failure(
+                r.returncode, raw_stderr, raw_stdout
+            )
         # Operator-context auth issue: legacy device auth-failed against
         # the operator's own key. This is not a real DOWN — it means the
         # operator doesn't have the service account's RSA key. Flag it
@@ -780,15 +848,23 @@ def _check_fleet_connectivity(cfg: FreqConfig) -> int:
 
 def _check_service_account(cfg: FreqConfig) -> int:
     """Verify service account exists and has correct permissions on reachable hosts."""
-    hosts_for_check = [h for h in cfg.hosts if getattr(h, "managed", True)]
+    service_account_htypes = {"linux", "pve", "docker", "truenas"}
+    hosts_for_check = [
+        h for h in cfg.hosts
+        if getattr(h, "managed", True) and h.htype in service_account_htypes
+    ]
     if not hosts_for_check:
         return 0
 
-    import getpass
-
-    current_user = getpass.getuser()
+    context_mismatch, current_user = _doctor_operator_context_mismatch(cfg)
     svc = cfg.ssh_service_account
     key_dir = getattr(cfg, "key_dir", "")
+    if context_mismatch:
+        fmt.step_warn(
+            f"Service account '{svc}': not checked from '{current_user}' — "
+            "installed service SSH keys are not readable in this shell"
+        )
+        return 2
     if not getattr(cfg, "ssh_key_path", "") and svc and current_user != svc:
         if key_dir and os.path.isdir(key_dir) and not os.access(key_dir, os.X_OK):
             fmt.step_warn(
@@ -811,12 +887,7 @@ def _check_service_account(cfg: FreqConfig) -> int:
         return 0
 
     def _test(h):
-        if h.htype in ("idrac", "switch"):
-            return h, True, ""  # SSH verify is sufficient for these
-        if h.htype == "pfsense":
-            cmd = f"pw usershow {svc} && echo ACCT_OK"
-        else:
-            cmd = f"id {svc} && sudo -n true && echo ACCT_OK"
+        cmd = f"id {svc} && sudo -n true && echo ACCT_OK"
         r = ssh_run(
             host=h.ip, command=cmd, key_path=cfg.ssh_key_path,
             connect_timeout=3, command_timeout=DOCTOR_CMD_TIMEOUT,

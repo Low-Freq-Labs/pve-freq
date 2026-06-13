@@ -14,7 +14,7 @@ import shlex
 from freq.core import log as logger
 from freq.api.helpers import require_post,  json_response, get_json_body
 from freq.core.config import load_config
-from freq.core.device_credentials import resolve_device_ssh_auth
+from freq.core.device_credentials import resolve_staged_device_ssh_auth
 from freq.core.ssh import run as ssh_single
 from freq.modules.serve import _check_session_role
 
@@ -24,7 +24,7 @@ from freq.modules.serve import _check_session_role
 
 def _pf_ssh(cfg, cmd, timeout=15):
     """SSH to pfSense and return result."""
-    auth = resolve_device_ssh_auth(cfg, "pfsense")
+    auth = resolve_staged_device_ssh_auth(cfg, "pfsense")
     remote_cmd = cmd if auth["user"] in ("root", "admin") else f"sudo sh -c {shlex.quote(cmd)}"
     return ssh_single(
         host=cfg.pfsense_ip,
@@ -32,6 +32,8 @@ def _pf_ssh(cfg, cmd, timeout=15):
         user=auth["user"],
         key_path=auth["key_path"],
         local_user=auth.get("local_user"),
+        password_file=auth.get("password_file") or None,
+        sudo_password_file=auth.get("sudo_password_file", False),
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
         htype="pfsense",

@@ -49,8 +49,10 @@ class TestCommentedLineNotFoolsCheck(unittest.TestCase):
     def test_startswith_used_not_in(self):
         """Role checks must use startswith() on active lines."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
-        self.assertIn('l.startswith(f"{bootstrap_user}:")', src)
-        self.assertIn('l.startswith(f"{svc_name}:")', src)
+        self.assertIn('l.startswith(f"{current_user}:")', src)
+        self.assertIn('l.startswith(f"{dashboard_user}:")', src)
+        self.assertNotIn('l.startswith(f"{svc_name}:")', src)
+        self.assertIn("runtime-only, not a web login", src)
 
 
 class TestCommentedRolesIgnored(unittest.TestCase):

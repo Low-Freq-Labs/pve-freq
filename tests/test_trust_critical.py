@@ -507,7 +507,7 @@ class TestStaleCacheRegressions(unittest.TestCase):
 
     def test_health_api_includes_probe_status(self):
         """When health cache exists, response must include probe_status."""
-        from freq.api.fleet import handle_health_api, _bg_cache, _bg_cache_ts, _bg_cache_errors, _bg_lock
+        from freq.api.fleet import handle_health_api, _bg_cache, _bg_cache_ts, _bg_cache_errors, _bg_lock, _bg_cache_from_disk
         import time
 
         handler = MagicMock()
@@ -524,6 +524,7 @@ class TestStaleCacheRegressions(unittest.TestCase):
             _bg_cache["health"] = {"hosts": [], "duration": 0.1}
             _bg_cache_ts["health"] = time.time() - 30
             _bg_cache_errors.pop("health", None)
+            _bg_cache_from_disk.discard("health")
 
         with patch("freq.api.fleet._check_session_role", return_value=("viewer", None)), \
              patch("freq.api.fleet.json_response", mock_json_resp):
@@ -984,7 +985,8 @@ class TestDashboardSessionExpiry(unittest.TestCase):
         # Must detect 403 and call doLogout
         self.assertIn("r.status===403", content,
                        "_authFetch must check for 403")
-        self.assertIn("doLogout()", content.split("_authFetch")[1][:500],
+        window = content.split("function _authFetch", 1)[1][:800]
+        self.assertIn("doLogout()", window,
                        "_authFetch must call doLogout on auth failure")
 
     def test_authfetch_handles_401(self):

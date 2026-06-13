@@ -1,7 +1,8 @@
 """Tests for legacy password file persistence — must use svc_pass not device_pass.
 
 Bug: Phase 8 deploy persisted the DEVICE auth password (what init used to
-connect to the switch via --device-credentials) to /home/freq-admin/.ssh/switch-pass.
+connect to the switch via --device-credentials) to the service account's
+legacy device SSH fallback file.
 But after deploy, the switch has freq-admin configured with ctx['svc_pass']
 as the password, NOT the device auth password. Phase 12 sshpass fallback
 tried the wrong password → 'sshpass exit 5 wrong password' → switch marked

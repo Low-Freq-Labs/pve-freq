@@ -21,6 +21,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -100,7 +101,8 @@ user = "root"
 password_file = "/nonexistent/idrac-pass"
 password = "fallback_pw"
 """)
-        result = self._load(cred_file)
+        with patch("freq.modules.init_cmd.fmt"):
+            result = self._load(cred_file)
         self.assertIn("idrac", result)
         self.assertEqual(result["idrac"]["password"], "fallback_pw")
 
@@ -111,7 +113,8 @@ password = "fallback_pw"
 user = "admin"
 password_file = "/nonexistent/switch-pass"
 """)
-        result = self._load(cred_file)
+        with patch("freq.modules.init_cmd.fmt"):
+            result = self._load(cred_file)
         self.assertNotIn("switch", result)
 
     def test_no_password_no_password_file_skips(self):
@@ -120,7 +123,8 @@ password_file = "/nonexistent/switch-pass"
 [idrac]
 user = "root"
 """)
-        result = self._load(cred_file)
+        with patch("freq.modules.init_cmd.fmt"):
+            result = self._load(cred_file)
         self.assertNotIn("idrac", result)
 
     def test_category_vendor_format_with_inline(self):
@@ -134,7 +138,8 @@ password = "bmc_secret"
 user = "gigecolo"
 password = "cisco_secret"
 """)
-        result = self._load(cred_file)
+        with patch("freq.modules.init_cmd.fmt"):
+            result = self._load(cred_file)
         self.assertIn("idrac", result)
         self.assertEqual(result["idrac"]["password"], "bmc_secret")
         self.assertIn("switch", result)
@@ -180,7 +185,7 @@ class TestRuntimeDeviceCredentials(unittest.TestCase):
             ssh_key_path=os.path.join(self.tmpdir, "managed_key"),
         )
 
-    def test_runtime_resolver_uses_pfsense_staged_user_and_key(self):
+    def test_runtime_resolver_ignores_pfsense_bootstrap_user_and_key(self):
         from freq.core import device_credentials
 
         with open(self.creds_path, "w") as f:
@@ -196,12 +201,12 @@ ssh_key_file = "{self.key_path}"
         finally:
             device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old
 
-        self.assertEqual(auth["user"], "freq-ops")
-        self.assertEqual(auth["key_path"], self.key_path)
+        self.assertEqual(auth["user"], "dc01-admin")
+        self.assertEqual(auth["key_path"], "")
         self.assertEqual(auth["local_user"], "")
-        self.assertEqual(auth["source"], "device-credentials")
+        self.assertEqual(auth["source"], "service-account")
 
-    def test_runtime_resolver_infers_local_key_owner_for_home_ssh_keys(self):
+    def test_runtime_resolver_does_not_infer_bootstrap_local_key_owner_for_pfsense(self):
         from freq.core import device_credentials
 
         key_path = "/home/freq-ops/.ssh/fleet_key"
@@ -224,9 +229,37 @@ ssh_key_file = "{key_path}"
             device_credentials.os.path.isfile = old_isfile
             device_credentials.os.access = old_access
 
-        self.assertEqual(auth["user"], "freq-ops")
-        self.assertEqual(auth["key_path"], key_path)
-        self.assertEqual(auth["local_user"], "freq-ops")
+        self.assertEqual(auth["user"], "dc01-admin")
+        self.assertEqual(auth["key_path"], "")
+        self.assertEqual(auth["local_user"], "")
+
+    def test_staged_resolver_ignores_pfsense_bootstrap_key_when_service_cannot_stat_it(self):
+        from freq.core import device_credentials
+
+        key_path = "/home/freq-ops/.ssh/fleet_key"
+        with open(self.creds_path, "w") as f:
+            f.write(f"""
+[pfsense]
+username = "freq-ops"
+ssh_key_file = "{key_path}"
+""")
+        old_candidates = device_credentials.DEVICE_CREDENTIAL_CANDIDATES
+        old_isfile = device_credentials.os.path.isfile
+        old_access = device_credentials.os.access
+        device_credentials.DEVICE_CREDENTIAL_CANDIDATES = (self.creds_path,)
+        device_credentials.os.path.isfile = lambda path: path == self.creds_path
+        device_credentials.os.access = lambda path, mode: path == self.creds_path
+        try:
+            auth = device_credentials.resolve_staged_device_ssh_auth(self._cfg(), "pfsense")
+        finally:
+            device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old_candidates
+            device_credentials.os.path.isfile = old_isfile
+            device_credentials.os.access = old_access
+
+        self.assertEqual(auth["user"], "dc01-admin")
+        self.assertEqual(auth["key_path"], "")
+        self.assertEqual(auth["local_user"], "")
+        self.assertEqual(auth["source"], "service-account")
 
     def test_staged_runtime_resolver_preserves_root_owned_password_file(self):
         from freq.core import device_credentials
@@ -279,7 +312,7 @@ password_file = "{password_path}"
 
         self.assertEqual(auth["user"], "dc01-admin")
         self.assertEqual(auth["password_file"], password_path)
-        self.assertEqual(auth["source"], "device-credentials")
+        self.assertEqual(auth["source"], "service-account")
 
     def test_truenas_staged_runtime_resolver_prefers_service_account_over_bootstrap_key(self):
         from freq.core import device_credentials
@@ -345,6 +378,72 @@ password_file = "{password_path}"
         self.assertEqual(auth["key_path"], managed_key)
         self.assertEqual(auth["password_file"], "")
 
+    def test_legacy_device_staged_runtime_resolver_uses_post_init_service_account_rsa(self):
+        from freq.core import device_credentials
+
+        password_path = os.path.join(self.tmpdir, "idrac-bootstrap-password")
+        legacy_password_path = os.path.join(self.tmpdir, "legacy-device-pass")
+        rsa_key_path = os.path.join(self.tmpdir, "freq_id_rsa")
+        for path in (password_path, legacy_password_path, rsa_key_path):
+            with open(path, "w") as f:
+                f.write("secret\n")
+            os.chmod(path, 0o600)
+        with open(self.creds_path, "w") as f:
+            f.write(f"""
+[idrac]
+username = "freq-ops"
+password_file = "{password_path}"
+
+[switch]
+username = "freq-ops"
+password_file = "{password_path}"
+""")
+        cfg = self._cfg()
+        cfg.ssh_rsa_key_path = rsa_key_path
+        cfg.legacy_password_file = legacy_password_path
+        old = device_credentials.DEVICE_CREDENTIAL_CANDIDATES
+        device_credentials.DEVICE_CREDENTIAL_CANDIDATES = (self.creds_path,)
+        try:
+            for htype in ("idrac", "switch"):
+                auth = device_credentials.resolve_staged_device_ssh_auth(cfg, htype)
+                self.assertEqual(auth["user"], "dc01-admin")
+                self.assertEqual(auth["key_path"], rsa_key_path)
+                self.assertEqual(auth["password_file"], legacy_password_path)
+                self.assertEqual(auth["source"], "service-account")
+        finally:
+            device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old
+
+    def test_legacy_device_runtime_resolver_uses_post_init_service_account_rsa(self):
+        from freq.core import device_credentials
+
+        password_path = os.path.join(self.tmpdir, "switch-bootstrap-password")
+        legacy_password_path = os.path.join(self.tmpdir, "legacy-device-pass")
+        rsa_key_path = os.path.join(self.tmpdir, "freq_id_rsa")
+        for path in (password_path, legacy_password_path, rsa_key_path):
+            with open(path, "w") as f:
+                f.write("secret\n")
+            os.chmod(path, 0o600)
+        with open(self.creds_path, "w") as f:
+            f.write(f"""
+[switch]
+username = "freq-ops"
+password_file = "{password_path}"
+""")
+        cfg = self._cfg()
+        cfg.ssh_rsa_key_path = rsa_key_path
+        cfg.legacy_password_file = legacy_password_path
+        old = device_credentials.DEVICE_CREDENTIAL_CANDIDATES
+        device_credentials.DEVICE_CREDENTIAL_CANDIDATES = (self.creds_path,)
+        try:
+            auth = device_credentials.resolve_device_ssh_auth(cfg, "switch")
+        finally:
+            device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old
+
+        self.assertEqual(auth["user"], "dc01-admin")
+        self.assertEqual(auth["key_path"], rsa_key_path)
+        self.assertEqual(auth["password_file"], legacy_password_path)
+        self.assertEqual(auth["source"], "service-account")
+
     def test_runtime_resolver_falls_back_to_managed_account(self):
         from freq.core import device_credentials
 
@@ -365,11 +464,11 @@ password_file = "{password_path}"
         doctor_src = (FREQ_ROOT / "freq" / "core" / "doctor.py").read_text()
         terminal_src = (FREQ_ROOT / "freq" / "api" / "terminal.py").read_text()
 
-        self.assertIn("resolve_device_ssh_auth(cfg, \"pfsense\")", fw_src)
+        self.assertIn("resolve_staged_device_ssh_auth(cfg, \"pfsense\")", fw_src)
         self.assertIn("user=auth[\"user\"]", fw_src)
         self.assertIn("key_path=auth[\"key_path\"]", fw_src)
         self.assertIn("local_user=auth.get(\"local_user\")", fw_src)
-        self.assertIn("resolve_device_ssh_auth(cfg, \"pfsense\")", serve_src)
+        self.assertIn("resolve_staged_device_ssh_auth(cfg, \"pfsense\")", serve_src)
         self.assertIn("user=pf_auth[\"user\"]", serve_src)
         self.assertIn("key_path=pf_auth[\"key_path\"]", serve_src)
         self.assertIn("local_user=pf_auth.get(\"local_user\")", serve_src)
@@ -413,9 +512,13 @@ username = "freq-ops"
 ssh_key_file = "/home/freq-ops/.ssh/fleet_key"
 api_key_file = "/opt/pve-freq/data/secrets/truenas-prod.key"
 """)
-        cfg = SimpleNamespace(credentials_dir=cred_dir)
+        managed_key = os.path.join(self.tmpdir, "managed_key")
+        rsa_key = os.path.join(self.tmpdir, "managed_rsa")
+        cfg = SimpleNamespace(credentials_dir=cred_dir, ssh_key_path=managed_key, ssh_rsa_key_path=rsa_key)
 
-        _persist_service_account_credentials_metadata(cfg, "dc01-admin", "SvcPass2026!")
+        with patch("freq.modules.init_cmd._chown", return_value=True), \
+             patch("freq.modules.init_cmd.fmt"):
+            _persist_service_account_credentials_metadata(cfg, "dc01-admin", "SvcPass2026!")
 
         text = Path(creds_path).read_text()
         self.assertIn("[truenas]", text)
@@ -425,6 +528,42 @@ api_key_file = "/opt/pve-freq/data/secrets/truenas-prod.key"
         self.assertIn('username = "dc01-admin"', text)
         self.assertIn(f'password_file = "{cred_dir}/dc01-admin-password"', text)
         self.assertEqual(Path(cred_dir, "dc01-admin-password").read_text(), "SvcPass2026!")
+
+    def test_runtime_device_metadata_preserves_physical_device_auth(self):
+        from freq.modules.init_cmd import _persist_runtime_device_credentials_metadata
+
+        cred_dir = os.path.join(self.tmpdir, "credentials")
+        managed_key = os.path.join(self.tmpdir, "managed_key")
+        rsa_key = os.path.join(self.tmpdir, "managed_rsa")
+        cfg = SimpleNamespace(credentials_dir=cred_dir, ssh_key_path=managed_key, ssh_rsa_key_path=rsa_key)
+        device_creds = {
+            "pfsense": {
+                "user": "freq-ops",
+                "host": "10.25.255.1",
+                "key_path": "/home/freq-ops/.ssh/fleet_key",
+            },
+            "switch": {
+                "user": "freq-ops",
+                "host": "10.25.255.5",
+                "password": "switch-secret",
+            },
+        }
+
+        with patch("freq.modules.init_cmd._chown", return_value=True), \
+             patch("freq.modules.init_cmd.fmt"):
+            _persist_runtime_device_credentials_metadata(cfg, device_creds, "dc01-admin")
+
+        creds_path = Path(cred_dir, "device-credentials.toml")
+        text = creds_path.read_text()
+        self.assertIn("[pfsense]", text)
+        self.assertIn('username = "dc01-admin"', text)
+        self.assertIn('host = "10.25.255.1"', text)
+        self.assertIn(f'ssh_key_file = "{managed_key}"', text)
+        self.assertIn("[switch]", text)
+        self.assertIn(f'ssh_key_file = "{rsa_key}"', text)
+        self.assertIn(f'password_file = "{cred_dir}/switch-password"', text)
+        self.assertEqual(Path(cred_dir, "switch-password").read_text(), "switch-secret")
+        self.assertNotIn("switch-secret", text)
 
 
 if __name__ == "__main__":

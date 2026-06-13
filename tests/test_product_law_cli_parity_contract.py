@@ -199,6 +199,61 @@ class TestFleetStatusLiveClassification(unittest.TestCase):
         self.assertEqual(payload["online"], 1)
         self.assertEqual(payload["offline"], 3)
 
+    def test_legacy_status_batches_are_serial_and_slow_timeout(self):
+        from freq.modules import fleet as fleet_mod
+        from freq.core.types import CmdResult
+
+        hosts = [
+            self._make_host("pve01", "10.0.0.1", "pve"),
+            self._make_host("bmc-10", "10.0.0.10", "idrac"),
+            self._make_host("bmc-11", "10.0.0.11", "idrac"),
+        ]
+
+        class FakeCfg:
+            pass
+
+        cfg = FakeCfg()
+        cfg.hosts = hosts
+        cfg.ssh_key_path = "/tmp/fake-key"
+        cfg.ssh_rsa_key_path = "/tmp/fake-rsa-key"
+        cfg.ssh_connect_timeout = 3
+        cfg.ssh_max_parallel = 8
+        cfg.data_dir = "/tmp"
+
+        args = mock.Mock()
+        args.json_output = True
+        calls = []
+
+        def fake_run_many(hosts, command, **kw):
+            calls.append((list(hosts), command, kw))
+            return {
+                h.ip: CmdResult(
+                    returncode=0, stdout="ok", stderr="", duration=0.1,
+                )
+                for h in hosts
+            }
+
+        def fake_result_for(results, h):
+            return results.get(h.ip)
+
+        with mock.patch.object(fleet_mod, "ssh_run_many", side_effect=fake_run_many), \
+             mock.patch.object(fleet_mod, "result_for", side_effect=fake_result_for), \
+             mock.patch.object(fleet_mod, "_load_dashboard_health_cache", return_value={}), \
+             mock.patch("sys.stdout", io.StringIO()):
+            rc = fleet_mod.cmd_status(cfg, None, args)
+
+        self.assertEqual(rc, 0)
+        legacy_calls = [c for c in calls if c[1] == "racadm getsysinfo -s"]
+        self.assertEqual(len(legacy_calls), 1)
+        legacy_hosts, _cmd, legacy_kw = legacy_calls[0]
+        self.assertEqual([h.label for h in legacy_hosts], ["bmc-10", "bmc-11"])
+        self.assertEqual(legacy_kw["key_path"], "/tmp/fake-rsa-key")
+        self.assertEqual(legacy_kw["command_timeout"], fleet_mod.FLEET_SLOW_TIMEOUT)
+        self.assertEqual(legacy_kw["max_parallel"], 1)
+
+        linux_calls = [c for c in calls if c[1] != "racadm getsysinfo -s"]
+        self.assertEqual(linux_calls[0][2]["max_parallel"], cfg.ssh_max_parallel)
+
 
 class TestFleetDashboardCmdUsesClassifier(unittest.TestCase):
     """freq fleet dashboard (cmd_dashboard in freq/modules/fleet.py)

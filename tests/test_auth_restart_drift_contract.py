@@ -53,7 +53,7 @@ class TestSeedHeadlessRoundTripGuard(unittest.TestCase):
         # After vault_set, the helper must vault_get the value back.
         self.assertIn("readback = vault_get(", window)
         # And run it through verify_password with the same password.
-        self.assertIn("verify_password(bootstrap_pass, readback)", window)
+        self.assertIn("verify_password(dashboard_pass, readback)", window)
         # On mismatch the helper emits step_fail, not step_ok.
         self.assertIn("round-trip verify_password FAILED", window)
         # vault_set return value must be checked (not just ignored).

@@ -1,6 +1,10 @@
 const { defineConfig, devices } = require('@playwright/test');
 
 const baseURL = process.env.PVE_FREQ_BASE_URL || 'https://10.25.255.50:8888';
+const chromiumExecutablePath = process.env.PVE_FREQ_CHROMIUM_EXECUTABLE || '';
+const launchOptions = chromiumExecutablePath
+  ? { executablePath: chromiumExecutablePath }
+  : undefined;
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
@@ -21,7 +25,10 @@ module.exports = defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] }
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(launchOptions ? { launchOptions } : {})
+      }
     }
   ]
 });

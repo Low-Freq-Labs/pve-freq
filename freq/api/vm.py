@@ -15,6 +15,8 @@ import os
 import re
 import shlex
 import subprocess
+import threading
+import time
 
 from freq.core import log as logger
 from freq.api.helpers import json_response, get_params, get_json_body
@@ -65,6 +67,142 @@ def _find_vm_node_ip(cfg, vmid: int) -> str:
     return _find_vm_node(cfg, vmid, "")
 
 
+def _node_name_for_ip(cfg, node_ip: str) -> str:
+    """Resolve configured PVE node name for a node IP."""
+    for idx, ip in enumerate(getattr(cfg, "pve_nodes", []) or []):
+        if ip == node_ip and idx < len(getattr(cfg, "pve_node_names", []) or []):
+            return cfg.pve_node_names[idx]
+    return ""
+
+
+def _configured_image_storage(cfg, node_ip: str) -> str:
+    """Return the configured image storage pool for a node, if any."""
+    node_name = _node_name_for_ip(cfg, node_ip)
+    storage_map = getattr(cfg, "pve_storage", {}) or {}
+    if node_name and isinstance(storage_map.get(node_name), dict):
+        pool = str(storage_map[node_name].get("pool", "") or "").strip()
+        if pool:
+            return pool
+    pools = [
+        str(info.get("pool", "") or "").strip()
+        for info in storage_map.values()
+        if isinstance(info, dict) and str(info.get("pool", "") or "").strip()
+    ]
+    return pools[0] if len(set(pools)) == 1 else ""
+
+
+def _discover_image_storage(cfg, node_ip: str) -> str:
+    """Best-effort live storage discovery for image-capable PVE storage."""
+    stdout, ok = _pve_cmd(cfg, node_ip, "pvesm status --content images --enabled 1 --output-format json", timeout=15)
+    if ok and stdout:
+        try:
+            data = json.loads(stdout)
+            if isinstance(data, list):
+                active = [str(item.get("storage", "") or "") for item in data if item.get("active", 1)]
+                for preferred in ("local-zfs", "local-lvm"):
+                    if preferred in active:
+                        return preferred
+                for pool in active:
+                    if pool:
+                        return pool
+        except (TypeError, json.JSONDecodeError):
+            pass
+    return ""
+
+
+def _default_image_storage(cfg, node_ip: str) -> str:
+    """Choose the storage pool for VM disks without hardcoding a lab-only default."""
+    return _configured_image_storage(cfg, node_ip) or _discover_image_storage(cfg, node_ip) or "local-lvm"
+
+
+def _existing_vm_disk_storage(config_text: str) -> str:
+    """Return the storage ID used by an existing VM disk, if visible."""
+    preferred_prefixes = ("scsi", "virtio", "sata", "ide")
+    for line in (config_text or "").splitlines():
+        line = line.strip()
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        if not key.startswith(preferred_prefixes):
+            continue
+        disk_ref = value.strip().split(",", 1)[0]
+        if ":" in disk_ref:
+            storage = disk_ref.split(":", 1)[0].strip()
+            if storage:
+                return storage
+    return ""
+
+
+def _normalize_disk_allocation_size(size: str):
+    """Return Proxmox qm allocation size in GB, or an error string."""
+    raw = str(size or "").strip()
+    match = re.match(r"^(\d+)\s*([GgTt]?[Bb]?)?$", raw)
+    if not match:
+        return "", "Invalid size (use whole GB/TB, e.g. '32G' or '1T')"
+    value = int(match.group(1))
+    unit = (match.group(2) or "G").lower().rstrip("b")
+    if value <= 0:
+        return "", "Invalid size (must be greater than zero)"
+    if unit in ("", "g"):
+        return str(value), ""
+    if unit == "t":
+        return str(value * 1024), ""
+    return "", "Invalid size (use whole GB/TB, e.g. '32G' or '1T')"
+
+
+def _parse_qm_snapshot_names(output: str):
+    """Parse snapshot names from `qm listsnapshot` tree output."""
+    snaps = []
+    for raw_line in (output or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        line = re.sub(r"^[`|\\/\s-]*>\s*", "", line)
+        line = re.sub(r"^[`|\\/\s-]+", "", line).strip()
+        if not line:
+            continue
+        parts = line.split()
+        if not parts:
+            continue
+        name = parts[0].strip()
+        if name and name.lower() != "current":
+            snaps.append(name)
+    return snaps
+
+
+def _clear_health_backoff_for_vmid(cfg, vmid: int):
+    """Let health re-probe a VM immediately after an operator starts it.
+
+    A stopped VM can legitimately time out long enough to trip the health
+    circuit breaker. Once the VM power action succeeds, keeping the old backoff
+    hides recovery from the dashboard even though the operator explicitly
+    brought the VM back.
+    """
+    ips = {
+        h.ip
+        for h in getattr(cfg, "hosts", [])
+        if getattr(h, "vmid", 0) == vmid and getattr(h, "ip", "")
+    }
+    for vm in getattr(cfg, "container_vms", {}).values():
+        if getattr(vm, "vm_id", 0) == vmid and getattr(vm, "ip", ""):
+            ips.add(vm.ip)
+    if not ips:
+        return
+    try:
+        from freq.modules import serve as serve_module
+
+        with serve_module._bg_lock:
+            for ip in ips:
+                serve_module._host_fail_count.pop(ip, None)
+                serve_module._host_backoff_until.pop(ip, None)
+                serve_module._host_backoff_started_at.pop(ip, None)
+                serve_module._host_last_error.pop(ip, None)
+                serve_module._host_recovering.add(ip)
+        logger.info("vm_power_cleared_health_backoff", vmid=vmid, ips=",".join(sorted(ips)))
+    except Exception as e:
+        logger.warn(f"vm_power: failed to clear health backoff for VM {vmid}: {e}")
+
+
 def _parse_next_vmid(raw_value: str) -> int:
     """Parse the cluster next VMID output safely."""
     try:
@@ -76,6 +214,66 @@ def _parse_next_vmid(raw_value: str) -> int:
 def _respond_operation(handler, payload, ok, failure_status=502):
     """Return 200 on success and a real error status when the backend action failed."""
     json_response(handler, payload, 200 if ok else failure_status)
+
+
+def _refresh_fleet_overview_after_mutation(reason: str, vmid: int = 0):
+    """Refresh dashboard VM truth after a successful PVE mutation."""
+    def _run():
+        try:
+            from freq.modules import serve as serve_module
+
+            serve_module._bg_probe_fleet_overview()
+            logger.info("vm_mutation_refreshed_fleet_overview", reason=reason, vmid=vmid)
+        except Exception as e:
+            logger.warn(f"vm mutation {reason}: fleet overview refresh failed for VM {vmid}: {e}")
+
+    try:
+        threading.Thread(target=_run, name=f"freq-fleet-refresh-{reason}", daemon=True).start()
+    except Exception as e:
+        logger.warn(f"vm mutation {reason}: fleet overview refresh schedule failed for VM {vmid}: {e}")
+
+
+def _patch_fleet_overview_vm_status(vmid: int, status: str):
+    """Patch cached fleet VM status immediately after a successful power action."""
+    if status not in {"running", "stopped"}:
+        return
+    try:
+        from freq.modules import serve as serve_module
+
+        with serve_module._bg_lock:
+            fleet = serve_module._bg_cache.get("fleet_overview")
+            if not isinstance(fleet, dict):
+                return
+            changed = False
+            for vm in fleet.get("vms", []) or []:
+                if int(vm.get("vmid", 0) or 0) == int(vmid):
+                    vm["status"] = status
+                    changed = True
+                    break
+            if not changed:
+                return
+            non_template = [v for v in fleet.get("vms", []) or [] if v.get("category") != "templates"]
+            running = sum(1 for v in non_template if v.get("status") == "running")
+            stopped = sum(1 for v in non_template if v.get("status") == "stopped")
+            summary = fleet.setdefault("summary", {})
+            summary["running"] = running
+            summary["stopped"] = stopped
+            serve_module._bg_cache_ts["fleet_overview"] = time.time()
+        try:
+            serve_module._sse_broadcast("cache_update", {"key": "fleet_overview", "ts": time.time()})
+            serve_module._sse_broadcast("vm_state", {"vmid": vmid, "new": status})
+        except Exception:
+            pass
+        logger.info("vm_power_patched_fleet_overview", vmid=vmid, status=status)
+    except Exception as e:
+        logger.warn(f"vm power: failed to patch fleet overview status for VM {vmid}: {e}")
+
+
+def _respond_vm_mutation(handler, payload, ok, reason: str, vmid: int = 0, failure_status=502):
+    """Return a VM mutation response after bringing dashboard cache up to date."""
+    if ok:
+        _refresh_fleet_overview_after_mutation(reason, vmid)
+    _respond_operation(handler, payload, ok, failure_status=failure_status)
 
 
 def _token_param(value: str, label: str):
@@ -167,6 +365,7 @@ def handle_vm_create(handler):
             _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge 1", timeout=30)
             _respond_operation(handler, {"ok": False, "vmid": vmid, "name": name, "error": stdout}, ok=False)
         else:
+            _refresh_fleet_overview_after_mutation("create", vmid)
             json_response(handler, {"ok": True, "vmid": vmid, "name": name, "error": ""})
     except Exception as e:
         logger.error(f"api_vm_error: vm create failed: {e}", endpoint="vm/create")
@@ -206,7 +405,13 @@ def handle_vm_destroy(handler):
             return
         _pve_cmd(cfg, node_ip, f"qm stop {vmid}", timeout=30)
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge", timeout=120)
-        _respond_operation(handler, {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""}, ok=ok)
+        _respond_vm_mutation(
+            handler,
+            {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""},
+            ok=ok,
+            reason="destroy",
+            vmid=vmid,
+        )
     except Exception as e:
         logger.error(f"api_vm_error: vm destroy failed: {e}", endpoint="vm/destroy")
         json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
@@ -292,7 +497,13 @@ def handle_vm_resize(handler):
             json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
             return
         stdout, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} {' '.join(parts)}")
-        _respond_operation(handler, {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""}, ok=ok)
+        _respond_vm_mutation(
+            handler,
+            {"ok": ok, "vmid": vmid, "error": stdout if not ok else ""},
+            ok=ok,
+            reason="resize",
+            vmid=vmid,
+        )
     except Exception as e:
         logger.error(f"api_vm_error: vm resize failed: {e}", endpoint="vm/resize")
         json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
@@ -362,6 +573,11 @@ def handle_vm_power(handler):
         if not ok:
             result, ok = _pve_cmd(cfg, node_ip, ssh_cmd, timeout=60)
         output = result if isinstance(result, str) else json.dumps(result) if result else ""
+        if ok and action in ("start", "reset"):
+            _clear_health_backoff_for_vmid(cfg, vmid)
+        if ok and action in ("start", "stop", "reset"):
+            _patch_fleet_overview_vm_status(vmid, "running" if action in ("start", "reset") else "stopped")
+            _refresh_fleet_overview_after_mutation(f"power-{action}", vmid)
         _respond_operation(
             handler,
             {"ok": ok, "vmid": vmid, "action": action, "output": output, "error": "" if ok else output},
@@ -408,10 +624,12 @@ def handle_vm_template(handler):
             use_sudo=False,
             cfg=cfg,
         )
-        _respond_operation(
+        _respond_vm_mutation(
             handler,
             {"ok": r.returncode == 0, "vmid": vmid, "error": "" if r.returncode == 0 else (r.stderr or r.stdout)},
             ok=r.returncode == 0,
+            reason="template",
+            vmid=vmid,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm template failed: {e}", endpoint="vm/template")
@@ -459,10 +677,12 @@ def handle_vm_rename(handler):
             use_sudo=False,
             cfg=cfg,
         )
-        _respond_operation(
+        _respond_vm_mutation(
             handler,
             {"ok": r.returncode == 0, "vmid": vmid, "name": name, "error": "" if r.returncode == 0 else (r.stderr or r.stdout)},
             ok=r.returncode == 0,
+            reason="rename",
+            vmid=vmid,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm rename failed: {e}", endpoint="vm/rename")
@@ -491,17 +711,7 @@ def handle_vm_snapshots(handler):
         use_sudo=False,
         cfg=cfg,
     )
-    snaps = []
-    if r.returncode == 0:
-        for line in r.stdout.strip().split("\n"):
-            line = line.strip()
-            if (not line) or ("current" in line.lower() and "->" in line):
-                continue
-            parts = line.split()
-            if parts:
-                snap_name = parts[0].replace("`-", "").replace("->", "").strip()
-                if snap_name and snap_name != "current":
-                    snaps.append(snap_name)
+    snaps = _parse_qm_snapshot_names(r.stdout) if r.returncode == 0 else []
     json_response(handler, {"vmid": vmid, "snapshots": snaps, "count": len(snaps), "live_migration": len(snaps) == 0})
 
 
@@ -605,10 +815,24 @@ def handle_vm_change_id(handler):
             json_response(handler, {"error": f"VM {vmid} must be stopped first"}, 409)
             return
 
+        cfg_out, cfg_ok = _pve_cmd(cfg, node_ip, f"qm config {vmid}", timeout=15)
+        current_name = ""
+        if cfg_ok:
+            for line in (cfg_out or "").splitlines():
+                if line.startswith("name:"):
+                    current_name = line.split(":", 1)[1].strip()
+                    break
+        if current_name and not valid_label(current_name):
+            json_response(handler, {"error": f"Current VM name is invalid for clone: {current_name}"}, 400)
+            return
+
         # Clone to new ID then destroy old
+        clone_parts = ["sudo", "qm", "clone", str(vmid), str(newid), "--full"]
+        if current_name:
+            clone_parts.extend(["--name", current_name])
         r = ssh_single(
             host=node_ip,
-            command=f"sudo qm clone {vmid} {newid} --full",
+            command=" ".join(shlex.quote(part) for part in clone_parts),
             key_path=cfg.ssh_key_path,
             connect_timeout=3,
             command_timeout=300,
@@ -631,7 +855,7 @@ def handle_vm_change_id(handler):
             use_sudo=False,
             cfg=cfg,
         )
-        _respond_operation(
+        _respond_vm_mutation(
             handler,
             {
                 "ok": r2.returncode == 0,
@@ -640,6 +864,8 @@ def handle_vm_change_id(handler):
                 "error": "" if r2.returncode == 0 else (r2.stderr or r2.stdout),
             },
             ok=r2.returncode == 0,
+            reason="change-id",
+            vmid=newid,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm change-id failed: {e}", endpoint="vm/change-id")
@@ -759,10 +985,12 @@ def handle_vm_add_nic(handler):
             err = f"NIC create failed: {r1.stderr or r1.stdout}"
         elif r2.returncode != 0:
             err = f"IP config failed: {r2.stderr or r2.stdout}"
-        _respond_operation(
+        _respond_vm_mutation(
             handler,
             {"ok": ok, "vmid": vmid, "nic": f"net{next_nic}", "ip": new_ip, "vlan": vlan_id_val, "error": err},
             ok=ok,
+            reason="add-nic",
+            vmid=vmid,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm add-nic failed: {e}", endpoint="vm/add-nic")
@@ -827,6 +1055,7 @@ def handle_vm_clear_nics(handler):
                     if r2.returncode == 0:
                         deleted.append(key)
 
+        _refresh_fleet_overview_after_mutation("clear-nics", vmid)
         json_response(handler, {"ok": True, "vmid": vmid, "cleared": deleted, "count": len(deleted)})
     except Exception as e:
         logger.error(f"api_vm_error: vm clear-nics failed: {e}", endpoint="vm/clear-nics")
@@ -909,7 +1138,13 @@ def handle_vm_change_ip(handler):
             err = f"NIC create failed: {r1.stderr or r1.stdout}"
         elif r2.returncode != 0:
             err = f"IP config failed: {r2.stderr or r2.stdout}"
-        _respond_operation(handler, {"ok": ok, "vmid": vmid, "ip": new_ip, "nic": nic_idx, "error": err}, ok=ok)
+        _respond_vm_mutation(
+            handler,
+            {"ok": ok, "vmid": vmid, "ip": new_ip, "nic": nic_idx, "error": err},
+            ok=ok,
+            reason="change-ip",
+            vmid=vmid,
+        )
     except Exception as e:
         logger.error(f"api_vm_error: vm change-ip failed: {e}", endpoint="vm/change-ip")
         json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
@@ -1016,9 +1251,9 @@ def handle_vm_add_disk(handler):
         json_response(handler, {"error": err}, 403)
         return
 
-    # Validate size format
-    if not re.match(r"^\d+[GMTgmt]?$", size):
-        json_response(handler, {"error": "Invalid size (e.g. '32G', '100')"}, 400)
+    allocation_size, size_err = _normalize_disk_allocation_size(size)
+    if size_err:
+        json_response(handler, {"error": size_err}, 400)
         return
 
     try:
@@ -1044,10 +1279,10 @@ def handle_vm_add_disk(handler):
                 except ValueError:
                     pass
 
-        storage_target = storage or "local-lvm"
-        cmd = f"qm set {vmid} --scsi{next_idx} {storage_target}:{size}"
+        storage_target = storage or _existing_vm_disk_storage(stdout) or _default_image_storage(cfg, node_ip)
+        cmd = f"qm set {vmid} --scsi{next_idx} {storage_target}:{allocation_size}"
         stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=60)
-        _respond_operation(
+        _respond_vm_mutation(
             handler,
             {
                 "ok": ok,
@@ -1058,6 +1293,8 @@ def handle_vm_add_disk(handler):
                 "error": stdout if not ok else "",
             },
             ok=ok,
+            reason="add-disk",
+            vmid=vmid,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm add-disk failed: {e}", endpoint="vm/add-disk")
@@ -1106,7 +1343,7 @@ def handle_vm_tag(handler):
         pve_tags = ";".join(t.strip() for t in tags.split(",") if t.strip()) if tags else ""
         cmd = f'qm set {vmid} --tags "{pve_tags}"'
         stdout, ok = _pve_cmd(cfg, node_ip, cmd)
-        _respond_operation(
+        _respond_vm_mutation(
             handler,
             {
                 "ok": ok,
@@ -1115,6 +1352,8 @@ def handle_vm_tag(handler):
                 "error": stdout if not ok else "",
             },
             ok=ok,
+            reason="tag",
+            vmid=vmid,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm tag failed: {e}", endpoint="vm/tag")
@@ -1205,7 +1444,7 @@ def handle_vm_clone(handler):
         stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=300)
         if not ok:
             _pve_cmd(cfg, node_ip, f"qm destroy {parsed_new_vmid} --purge 1", timeout=30)
-        _respond_operation(
+        _respond_vm_mutation(
             handler,
             {
                 "ok": ok,
@@ -1218,6 +1457,8 @@ def handle_vm_clone(handler):
                 "error": stdout if not ok else "",
             },
             ok=ok,
+            reason="clone",
+            vmid=parsed_new_vmid,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm clone failed: {e}", endpoint="vm/clone")
@@ -1313,7 +1554,7 @@ def handle_vm_migrate(handler):
                 migrate_cmd += f" --targetstorage {target_storage}"
             stdout, ok = _pve_cmd(cfg, source_ip, migrate_cmd, timeout=600)
 
-        _respond_operation(
+        _respond_vm_mutation(
             handler,
             {
                 "ok": ok,
@@ -1327,6 +1568,8 @@ def handle_vm_migrate(handler):
                 "error": stdout if not ok else "",
             },
             ok=ok,
+            reason="migrate",
+            vmid=vmid,
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm migrate failed: {e}", endpoint="vm/migrate")
@@ -1345,6 +1588,7 @@ def handle_vm_wizard_defaults(handler):
                 "ram": cfg.vm_default_ram,
                 "disk": cfg.vm_default_disk,
                 "cpu": cfg.vm_cpu,
+                "storage": _configured_image_storage(cfg, cfg.pve_nodes[0] if cfg.pve_nodes else ""),
             },
             "profiles": profiles,
             "nodes": cfg.pve_node_names,
@@ -1410,13 +1654,7 @@ def handle_rollback(handler):
         json_response(handler, {"error": f"Cannot list snapshots for VM {vmid}"}, 500)
         return
 
-    snaps = []
-    for line in snap_out.strip().split("\n"):
-        line = line.strip().lstrip("`->").strip()
-        if line and "current" not in line.lower():
-            parts = line.split()
-            if parts:
-                snaps.append(parts[0])
+    snaps = _parse_qm_snapshot_names(snap_out)
 
     if not snaps:
         json_response(handler, {"error": f"No snapshots found for VM {vmid}"}, 404)

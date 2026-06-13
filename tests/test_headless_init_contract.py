@@ -6,7 +6,7 @@ on clean VM 5005 (2026-04-11) so they cannot silently regress:
 1. sshpass exit codes must always produce human-readable error messages
 2. Headless CLI requires password-file (no silent fallback)
 3. fleet-boundaries.toml categories must be idempotent across re-runs
-4. sshpass exit code 5 (wrong password) must be classified as skippable
+4. Network reachability errors may be skipped; auth rejections must not be
 5. Verification must validate TOML on disk, not just memory state
 """
 import os
@@ -73,14 +73,10 @@ class TestSshpassExitCodeContract(unittest.TestCase):
 # ─────────────────────────────────────────────────────────────
 
 class TestSkipClassificationContract(unittest.TestCase):
-    """sshpass auth failures must be correctly classified as skippable.
+    """Skip/fail classification must not hide rejected credentials."""
 
-    Regression for: truenas showed 'Cannot connect ()' (hard fail) instead
-    of 'auth failed (skipped)' when sshpass returned exit 5 with empty stderr.
-    """
-
-    def test_permission_denied_is_skippable(self):
-        self.assertTrue(_is_skip_error("Permission denied (publickey)"))
+    def test_permission_denied_is_not_skippable(self):
+        self.assertFalse(_is_skip_error("Permission denied (publickey)"))
 
     def test_connection_timeout_is_skippable(self):
         self.assertTrue(_is_skip_error("ssh: connect to host 10.0.0.1: Connection timed out"))
@@ -269,19 +265,19 @@ class TestVerificationDiskContract(unittest.TestCase):
 
 
 class TestBootstrapPasswordSource(unittest.TestCase):
-    """Headless init must seed dashboard password from the correct source.
+    """Headless init must seed dashboard password from the explicit human source.
 
     Contract:
-    - bootstrap_user gets bootstrap_pass (from --bootstrap-password-file)
+    - dashboard_user gets dashboard_pass (from --dashboard-password-file)
     - Service account does NOT get a web login (it runs the dashboard, not uses it)
-    - Key-based bootstrap (no bootstrap_pass) falls back to svc_pass
     """
 
-    def test_source_uses_bootstrap_pass_not_svc_pass(self):
-        """Phase 11 must hash bootstrap_pass for bootstrap_user, not svc_pass."""
+    def test_source_uses_dashboard_pass_not_svc_pass(self):
+        """Phase 11 must hash dashboard_pass for dashboard_user, not svc_pass."""
         src = (Path(__file__).parent.parent / "freq" / "modules" / "init_cmd.py").read_text()
-        # Must reference bootstrap_pass for the bootstrap user password
-        self.assertIn('boot_pass = ctx.get("bootstrap_pass"', src)
+        self.assertIn('dashboard_pass = f.read().strip()', src)
+        self.assertIn('dashboard_pass = bootstrap_pass or svc_pass', src)
+        self.assertIn('ctx["dashboard_pass"]', src)
 
     def test_service_account_no_web_login(self):
         """Service account must NOT get a dashboard password."""
@@ -289,16 +285,15 @@ class TestBootstrapPasswordSource(unittest.TestCase):
         # Must NOT seed password for service account
         self.assertNotIn('password_{svc_name}', src)
 
-    def test_only_bootstrap_user_seeded(self):
-        """Only bootstrap_user should get a dashboard password."""
+    def test_only_dashboard_user_seeded(self):
+        """Only dashboard_user should get a dashboard password."""
         src = (Path(__file__).parent.parent / "freq" / "modules" / "init_cmd.py").read_text()
-        self.assertIn('password_{bootstrap_user}', src)
+        self.assertIn('password_{dashboard_user}', src)
 
-    def test_key_based_bootstrap_fallback(self):
-        """When bootstrap_pass is empty (key-based), falls back to svc_pass."""
+    def test_service_account_runtime_only_message_present(self):
+        """The service account must be described as runtime-only, not a web principal."""
         src = (Path(__file__).parent.parent / "freq" / "modules" / "init_cmd.py").read_text()
-        # Must have fallback: boot_pass or svc_pass
-        self.assertIn('boot_pass or svc_pass', src)
+        self.assertIn("runtime-only, not a web login", src)
 
 
 if __name__ == "__main__":

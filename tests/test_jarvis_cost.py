@@ -75,6 +75,9 @@ class TestRamParsing(unittest.TestCase):
     def test_empty(self):
         self.assertEqual(_parse_ram_mb(""), 0.0)
 
+    def test_none(self):
+        self.assertEqual(_parse_ram_mb(None), 0.0)
+
 
 class TestWattEstimation(unittest.TestCase):
     def test_normal_host(self):
@@ -138,6 +141,26 @@ class TestComputeCosts(unittest.TestCase):
     def test_empty_hosts(self):
         costs = compute_costs({"hosts": []}, {}, CostConfig())
         self.assertEqual(len(costs), 0)
+
+    def test_none_health_returns_empty_costs(self):
+        costs = compute_costs(None, {}, CostConfig())
+        self.assertEqual(len(costs), 0)
+
+    def test_legacy_host_list_shape(self):
+        health = [{"label": "h1", "status": "ok", "ram": "4096/8192MB", "load": "2.0"}]
+        costs = compute_costs(health, {}, CostConfig())
+        self.assertEqual(len(costs), 1)
+        self.assertEqual(costs[0].label, "h1")
+
+    def test_unknown_health_shape_returns_empty_costs(self):
+        costs = compute_costs("bad-cache-shape", {}, CostConfig())
+        self.assertEqual(len(costs), 0)
+
+    def test_null_resource_fields_do_not_crash(self):
+        health = {"hosts": [{"label": "h1", "status": "ok", "ram": None, "load": None, "docker": None}]}
+        costs = compute_costs(health, {}, CostConfig())
+        self.assertEqual(len(costs), 1)
+        self.assertGreaterEqual(costs[0].watts, 5.0)
 
     def test_sorted_by_cost_descending(self):
         health = {"hosts": [

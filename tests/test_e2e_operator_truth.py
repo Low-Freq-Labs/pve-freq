@@ -98,7 +98,11 @@ class TestInitIdentityLifecycleTruth(unittest.TestCase):
         with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:
             src = f.read()
         self.assertIn(
-            '("Phase 3", "Service Account", f"Create \'{cfg.ssh_service_account}\' with NOPASSWD sudo, init vault")',
+            '("Phase 3", "Service Account", f"Create pve-freq-svc-account \'{cfg.ssh_service_account}\', init vault")',
+            src,
+        )
+        self.assertIn(
+            '("Phase 2", "Cluster Config + VLAN Discovery", "PVE nodes, gateway, bootstrap auth as root/freq-ops, discover VLANs")',
             src,
         )
         # Phase 6 token ID is

@@ -1,7 +1,8 @@
 # PVE FREQ — Fleet Boundary Definitions
 # This file is the single source of truth for what FREQ can do to each VM.
 # Categories define permission tiers. Tiers define allowed actions.
-# FREQ shows EVERYTHING. It only restricts ACTIONS.
+# FREQ shows operator-owned VMs and protected templates in the dashboard.
+# Out-of-contract discoveries are logged by init/check surfaces, not shown as managed dashboard VMs.
 
 [tiers]
 probe    = ["view"]
@@ -25,6 +26,12 @@ admin    = ["view", "start", "stop", "restart", "snapshot", "destroy", "clone", 
 # tier = "admin"
 # range_start = 5000
 # range_end = 5099
+#
+# [categories.sandbox]
+# description = "Disposable test VMs managed by freq live acceptance"
+# tier = "admin"
+# range_start = 6000
+# range_end = 6099
 #
 # [categories.templates]
 # description = "Clone sources — never start directly"

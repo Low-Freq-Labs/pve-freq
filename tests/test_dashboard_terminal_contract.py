@@ -47,16 +47,60 @@ def test_terminal_api_supports_direct_host_targets_and_device_credentials():
     assert "host: SSH directly to a host/device IP" in source
     assert 'term_type = params.get("type", ["vm"])[0]  # vm, host, ct, node' in source
     assert "def _terminal_ssh_auth" in source
-    assert 'resolve_device_ssh_auth(cfg, "pfsense")' in source
+    assert 'if htype in ("pfsense", "idrac", "switch", "truenas")' in source
+    assert "resolve_staged_device_ssh_auth(cfg, htype)" in source
     assert "from freq.core.ssh import _build_ssh_cmd" in source
     assert "cmd = shlex.join(" in source
     assert "password_file=password_file" in source
     assert "sudo_password_file=sudo_password_file" in source
     assert "extra_opts=[\"-tt\"]" in source
     assert "local_user=local_user" in source
-    assert 'htype in ("idrac", "switch", "truenas")' in source
     assert 'if term_type == "vm" and target.isdigit()' in source
     assert "def _terminal_preflight" in source
+
+
+def test_host_tool_restart_service_is_real_button_not_cli_hint():
+    source = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+
+    assert "if(a==='hdRestart'){hdRestart(da);return;}" in source
+    assert "function hdRestart(btn)" in source
+    assert "Use CLI: freq fleet exec" not in source
+    assert "sudo systemctl restart '+svc" in source
+    assert "API.EXEC+'?target='+encodeURIComponent(_cardState.host)" in source
+    assert "method:'POST'" in source.split("function hdRestart", 1)[1].split("function hdRunCmd", 1)[0]
+    assert "Invalid service name" in source
+
+
+def test_vm_add_disk_ui_uses_backend_storage_default_not_hardcoded_local_lvm():
+    source = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+
+    assert "VM_WIZARD_DEFAULTS:'/api/vm/wizard-defaults'" in source
+    add_disk_panel = source.split("} else if(tab==='vmadddisk')", 1)[1].split("} else if(tab==='vmtag')", 1)[0]
+    assert "auto from PVE storage config" in add_disk_panel
+    assert 'value="local-lvm"' not in add_disk_panel
+    add_disk_fn = source.split("function vmtAddDisk()", 1)[1].split("function vmtTag()", 1)[0]
+    assert "||'local-lvm'" not in add_disk_fn
+    assert "API.VM_WIZARD_DEFAULTS" in add_disk_panel
+
+
+def test_vm_card_host_tools_prefer_resolved_guest_ip():
+    source = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
+    render_vm = source.split("function renderVmCard", 1)[1].split("/* Snapshot info section */", 1)[0]
+
+    assert "_cardState.host=(subtitleIp&&subtitleIp!=='?')?subtitleIp:label;" in render_vm
+    assert 'data-action="hdExec"' in source or "hdExec(this)" in source
+    assert 'data-action="hdLogs"' in source or "hdLogs(this)" in source
+    assert 'data-action="hdDiagnose"' in source or "hdDiagnose(this)" in source
+    assert 'data-action="hdRestart"' in source or "hdRestart(this)" in source
+
+
+def test_host_diagnostic_route_accepts_direct_guest_ip():
+    source = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+    window = source.split("def _serve_host_diagnostic", 1)[1].split("def _request_body", 1)[0]
+
+    assert "from freq.core.types import Host" in window
+    assert "Host(ip=target, label=target, htype=\"linux\", groups=\"ad-hoc-vm\")" in window
+    assert "Host not found" in window
 
 
 def test_infra_detail_cards_have_single_output_target():

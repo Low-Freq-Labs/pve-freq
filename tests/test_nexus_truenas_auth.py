@@ -86,13 +86,9 @@ class TestTruenasAuthFailedMessage(unittest.TestCase):
     def test_hint_only_for_truenas(self):
         """Hint is conditional on htype == 'truenas'."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
-        import re
-        # The hint must be inside an 'if htype == "truenas"' block
-        match = re.search(
-            r'if htype == "truenas"[^}]*?Core TrueNAS has API credentials only',
-            src, re.DOTALL
-        )
-        self.assertIsNotNone(match)
+        block = src.split('if htype == "truenas":', 1)[1].split('elif htype in DEVICE_HTYPES', 1)[0]
+        self.assertIn("Core TrueNAS has API credentials only", block)
+        self.assertIn("ssh_key_file under [truenas]", block)
 
 
 class TestTruenasDeployerTemplateTruth(unittest.TestCase):

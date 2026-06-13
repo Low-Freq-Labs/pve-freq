@@ -83,12 +83,18 @@ def main(argv: list = None) -> int:
     if "--dry-run" in check_args:
         args.dry_run = True
 
-    # Init logging, audit trail, and performance tracking
-    log_dir = os.path.dirname(cfg.log_file)
-    logger.init(cfg.log_file)
-    logger.init_perf(log_dir)
-    from freq.core import audit
-    audit.init(log_dir)
+    # Init logging, audit trail, and performance tracking. Keep init dry-run
+    # genuinely no-write: operators use it to inspect a pure first-run state.
+    readonly_init_dry_run = getattr(args, "domain", "") == "init" and getattr(args, "dry_run", False)
+    watchdog_command = getattr(args, "domain", "") == "watchdog" or (
+        getattr(args, "domain", "") == "observe" and getattr(args, "subcmd", "") == "watch"
+    )
+    if not readonly_init_dry_run and not watchdog_command:
+        log_dir = os.path.dirname(cfg.log_file)
+        logger.init(cfg.log_file)
+        logger.init_perf(log_dir)
+        from freq.core import audit
+        audit.init(log_dir)
 
     # Set ASCII mode from config
     fmt.S.set_ascii(cfg.ascii_mode)
@@ -109,7 +115,8 @@ def main(argv: list = None) -> int:
     # Dispatch to command handler
     domain = getattr(args, "domain", "?")
     subcmd = getattr(args, "subcmd", "")
-    logger.info(f"command: {domain} {subcmd}".strip(), user=os.environ.get("USER", "unknown"))
+    if not readonly_init_dry_run and not watchdog_command:
+        logger.info(f"command: {domain} {subcmd}".strip(), user=os.environ.get("USER", "unknown"))
 
     try:
         result = args.func(cfg, pack, args)
@@ -201,6 +208,13 @@ def _register_utilities(sub):
     p.add_argument("--history", action="store_true", help="Show health check history")
     p.set_defaults(func=cmd_doctor)
 
+    p = sub.add_parser("watchdog", help="Local FREQ truth-auditor daemon")
+    p.add_argument("action", nargs="?", choices=["status", "once", "run"], default="status")
+    p.add_argument("--interval", type=int, default=15, help="Daemon check interval in seconds (default: 15)")
+    p.add_argument("--status-file", help="Override status file path")
+    p.add_argument("--state-file", help="Override state file path")
+    p.set_defaults(func=_cmd_watchdog)
+
     p = sub.add_parser("perf", help="Performance metrics")
     p.add_argument("--last", type=int, default=100, help="Number of entries to analyze (default: 100)")
     p.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
@@ -233,6 +247,14 @@ def _register_utilities(sub):
         help="Managed FREQ service account to create/deploy (default from freq.toml, usually freq-admin)",
     )
     p.add_argument("--password-file", help="Read service account password from file")
+    p.add_argument(
+        "--dashboard-user",
+        help="Human dashboard admin user to create during headless init (default: bootstrap user)",
+    )
+    p.add_argument(
+        "--dashboard-password-file",
+        help="Password file for the human dashboard admin created during headless init",
+    )
     p.add_argument("--pve-nodes", help="PVE node IPs (comma or space-separated)")
     p.add_argument("--pve-node-names", help="PVE node names (comma or space-separated, same order as --pve-nodes)")
     p.add_argument("--gateway", help="Network gateway IP for VM networking")
@@ -241,6 +263,30 @@ def _register_utilities(sub):
     p.add_argument("--ssh-mode", choices=["sudo", "root"], help="SSH mode: sudo (recommended) or root")
     p.add_argument("--hosts-file", help="Path to hosts file to import fleet hosts from")
     p.add_argument("--device-credentials", help="TOML file with per-device-type auth")
+    p.add_argument(
+        "--owned-vmids",
+        help="Comma/space-separated VMID list or ranges that belong in the operator fleet contract",
+    )
+    p.add_argument(
+        "--template-vmids",
+        help="Comma/space-separated VMID list or ranges that must be modeled as templates, not VMs",
+    )
+    p.add_argument(
+        "--acknowledged-out-of-contract-vmids",
+        help="Comma/space-separated VMID list or ranges to report as known out-of-contract guests without failing init",
+    )
+    p.add_argument(
+        "--vm-contract",
+        help="TOML file declaring owned/template/acknowledged out-of-contract VMIDs for first-run fleet ownership",
+    )
+    p.add_argument(
+        "--core-devices",
+        help="Comma-separated physical device labels/IPs that are core infrastructure",
+    )
+    p.add_argument(
+        "--lab-devices",
+        help="Comma-separated physical device labels/IPs that are lab infrastructure",
+    )
     p.add_argument("--device-password-file", help="(deprecated) Single password file for all devices")
     p.add_argument("--device-user", default="root", help="(deprecated) Single SSH user for all devices")
     p.add_argument("--install-pdm", action="store_true", help="Install Proxmox Datacenter Manager")
@@ -839,7 +885,11 @@ def _register_observe(sub):
     p.add_argument("--days", type=int, default=30, help="SLA period in days (default: 30)")
     p.set_defaults(func=_cmd_sla)
 
-    p = observe_sub.add_parser("watch", help="Monitoring daemon")
+    p = observe_sub.add_parser("watch", help="Local FREQ watchdog status/daemon")
+    p.add_argument("action", nargs="?", choices=["status", "once", "run"], default="status")
+    p.add_argument("--interval", type=int, default=15, help="Daemon check interval in seconds (default: 15)")
+    p.add_argument("--status-file", help="Override status file path")
+    p.add_argument("--state-file", help="Override state file path")
     p.set_defaults(func=_cmd_watch)
 
     p = observe_sub.add_parser("db", help="Fleet-wide database health (status/health/size)")
@@ -3516,9 +3566,15 @@ def _cmd_idrac(cfg: FreqConfig, pack, args) -> int:
 
 
 def _cmd_watch(cfg: FreqConfig, pack, args) -> int:
-    from freq.modules.infrastructure import cmd_watch
+    from freq.modules.watchdog import cmd_watch
 
     return cmd_watch(cfg, pack, args)
+
+
+def _cmd_watchdog(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.watchdog import cmd_watchdog
+
+    return cmd_watchdog(cfg, pack, args)
 
 
 def _cmd_init(cfg: FreqConfig, pack, args) -> int:

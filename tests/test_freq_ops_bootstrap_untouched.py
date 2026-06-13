@@ -299,9 +299,19 @@ class TestNoActiveCodeReferencesFreqOpsAsServiceAccount(unittest.TestCase):
 
     # Allow-list: the validator constant in config.py legitimately names
     # 'freq-ops' as a reserved-bootstrap value. That is the WHITELIST OF
-    # FORBIDDEN NAMES, not a use-as-managed-account.
+    # FORBIDDEN NAMES, not a use-as-managed-account. The init UI may also
+    # name freq-ops explicitly as a bootstrap/run-as identity so operators
+    # see the corrected split during init planning.
     ALLOWED_FREQ_OPS_REFERENCES = {
         ("freq/core/config.py", 'RESERVED_SERVICE_ACCOUNT_NAMES = frozenset({"freq-ops"})'),
+        (
+            "freq/modules/init_cmd.py",
+            'fmt.line(f"  {fmt.C.DIM}Bootstrap/run-as identity stays root or freq-ops; this account is created by init.{fmt.C.RESET}")',
+        ),
+        (
+            "freq/modules/init_cmd.py",
+            '("Phase 2", "Cluster Config + VLAN Discovery", "PVE nodes, gateway, bootstrap auth as root/freq-ops, discover VLANs"),',
+        ),
     }
 
     def test_no_freq_ops_in_active_product_runtime_code(self):

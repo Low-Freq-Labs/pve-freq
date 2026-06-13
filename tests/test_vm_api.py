@@ -14,6 +14,8 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from freq.api import vm as vm_api
+from freq.api import fleet as fleet_api
+from freq.core.types import CmdResult
 
 
 class _Handler:
@@ -44,6 +46,7 @@ class TestVmApiTrust(unittest.TestCase):
         class Cfg:
             pve_nodes = ["10.0.0.1"]
             pve_node_names = ["pve01"]
+            pve_storage = {"pve01": {"pool": "local-zfs", "type": "SSD"}}
             ssh_key_path = "/tmp/fake"
             ssh_connect_timeout = 3
             nic_bridge = "vmbr0"
@@ -54,6 +57,13 @@ class TestVmApiTrust(unittest.TestCase):
             pve_api_token_secret = ""
             protected_vmids = []
             protected_ranges = []
+            vm_default_cores = 2
+            vm_default_ram = 2048
+            vm_default_disk = 32
+            vm_cpu = "x86-64-v2-AES"
+            vlans = []
+            distros = []
+            template_profiles = {}
 
             class FB:
                 categories = {
@@ -143,6 +153,41 @@ class TestVmApiTrust(unittest.TestCase):
         data = _json(handler)
         self.assertFalse(data["ok"])
         self.assertEqual(data["error"], "qm failed")
+
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
+    @patch("freq.api.vm._find_vm_node_ip", return_value="10.0.0.1")
+    @patch("freq.api.vm._check_vm_permission", return_value=(True, ""))
+    @patch("freq.api.vm.ssh_single")
+    @patch("freq.api.vm._pve_cmd")
+    def test_change_id_preserves_vm_name_on_clone(
+        self, mock_pve_cmd, mock_ssh, _mock_permission, _mock_find_node, mock_load, _mock_role
+    ):
+        mock_load.return_value = self._cfg()
+        commands = []
+
+        def fake_pve(_cfg, _node_ip, command, timeout=60):
+            commands.append(command)
+            if command.startswith("qm config"):
+                return ("name: e2e-freq-controls-6000-renamed\n", True)
+            return ("", True)
+
+        def fake_ssh(**kwargs):
+            commands.append(kwargs["command"])
+            return CmdResult(returncode=0, stdout="stopped", stderr="")
+
+        mock_pve_cmd.side_effect = fake_pve
+        mock_ssh.side_effect = fake_ssh
+        handler = _Handler("/api/vm/change-id?vmid=6000&newid=6001")
+
+        vm_api.handle_vm_change_id(handler)
+
+        self.assertEqual(handler.status, 200)
+        self.assertIn(
+            "sudo qm clone 6000 6001 --full --name e2e-freq-controls-6000-renamed",
+            commands,
+        )
+        self.assertIn("sudo qm destroy 6000 --purge", commands)
 
     @patch("freq.api.vm._check_session_role", return_value=("admin", None))
     @patch("freq.api.vm.load_config")
@@ -246,6 +291,145 @@ class TestVmApiTrust(unittest.TestCase):
         data = _json(handler)
         self.assertIn("Target VMID blocked", data["error"])
         mock_pve_cmd.assert_not_called()
+
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
+    @patch("freq.api.vm._find_vm_node_ip", return_value="10.0.0.1")
+    @patch("freq.api.vm._pve_cmd")
+    def test_add_disk_uses_configured_node_storage_not_local_lvm(
+        self, mock_pve_cmd, _mock_find_node, mock_load, _mock_role
+    ):
+        mock_load.return_value = self._cfg()
+        commands = []
+
+        def fake_pve(_cfg, _node_ip, command, timeout=60):
+            commands.append(command)
+            if command.startswith("qm config"):
+                return ("", True)
+            return ("", True)
+
+        mock_pve_cmd.side_effect = fake_pve
+        handler = _Handler("/api/vm/add-disk?vmid=7000&size=1G")
+
+        with patch("freq.api.vm._check_vm_permission", return_value=(True, "")):
+            vm_api.handle_vm_add_disk(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["storage"], "local-zfs")
+        self.assertIn("qm set 7000 --scsi0 local-zfs:1", commands)
+
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
+    @patch("freq.api.vm._find_vm_node_ip", return_value="10.0.0.1")
+    @patch("freq.api.vm._pve_cmd")
+    def test_add_disk_inherits_existing_vm_disk_storage_when_unconfigured(
+        self, mock_pve_cmd, _mock_find_node, mock_load, _mock_role
+    ):
+        cfg = self._cfg()
+        cfg.pve_storage = {}
+        mock_load.return_value = cfg
+        commands = []
+
+        def fake_pve(_cfg, _node_ip, command, timeout=60):
+            commands.append(command)
+            if command.startswith("qm config"):
+                return ("scsi0: os-drive-ssd:vm-7000-disk-0,size=3G\n", True)
+            return ("", True)
+
+        mock_pve_cmd.side_effect = fake_pve
+        handler = _Handler("/api/vm/add-disk?vmid=7000&size=1G")
+
+        with patch("freq.api.vm._check_vm_permission", return_value=(True, "")):
+            vm_api.handle_vm_add_disk(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["storage"], "os-drive-ssd")
+        self.assertIn("qm set 7000 --scsi1 os-drive-ssd:1", commands)
+
+    def test_snapshot_parser_strips_proxmox_tree_markers(self):
+        raw = (
+            "`-> e2e-1781340291951           2026-06-13 03:44:52     no-description\n"
+            " `-> current                                            You are here!\n"
+        )
+
+        self.assertEqual(vm_api._parse_qm_snapshot_names(raw), ["e2e-1781340291951"])
+
+    @patch("freq.api.vm.load_config")
+    def test_wizard_defaults_expose_configured_storage(self, mock_load):
+        mock_load.return_value = self._cfg()
+        handler = _Handler("/api/vm/wizard-defaults", method="GET")
+
+        vm_api.handle_vm_wizard_defaults(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertEqual(data["defaults"]["storage"], "local-zfs")
+
+    @patch("freq.api.fleet._check_session_role", return_value=("admin", None))
+    @patch("freq.api.fleet.load_config")
+    @patch("freq.api.fleet.ssh_run_many")
+    def test_exec_accepts_direct_guest_ip_for_dashboard_vm_tools(
+        self, mock_ssh_many, mock_load, _mock_role
+    ):
+        cfg = self._cfg()
+        cfg.hosts = []
+        mock_load.return_value = cfg
+        mock_ssh_many.return_value = {
+            "10.25.255.222": CmdResult(stdout="ok\n", stderr="", returncode=0)
+        }
+        handler = _Handler("/api/exec?target=10.25.255.222&cmd=hostname")
+
+        fleet_api.handle_exec(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertEqual(data["results"][0]["host"], "10.25.255.222")
+        self.assertTrue(data["results"][0]["ok"])
+        host_arg = mock_ssh_many.call_args.kwargs["hosts"][0]
+        self.assertEqual(host_arg.ip, "10.25.255.222")
+        self.assertEqual(host_arg.htype, "linux")
+
+    @patch("freq.api.fleet.load_config")
+    @patch("freq.api.fleet.ssh_single")
+    def test_log_accepts_direct_guest_ip_for_dashboard_vm_tools(
+        self, mock_ssh, mock_load
+    ):
+        cfg = self._cfg()
+        cfg.hosts = []
+        mock_load.return_value = cfg
+        mock_ssh.return_value = CmdResult(stdout="log line\n", stderr="", returncode=0)
+        handler = _Handler("/api/log?target=10.25.255.222&lines=5", method="GET")
+
+        fleet_api.handle_log(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertEqual(data["ip"], "10.25.255.222")
+        self.assertEqual(data["lines"], ["log line", ""])
+        self.assertEqual(mock_ssh.call_args.kwargs["host"], "10.25.255.222")
+
+    @patch("freq.api.fleet.load_config")
+    @patch("freq.api.fleet.ssh_single")
+    def test_diagnose_accepts_direct_guest_ip_for_dashboard_vm_tools(
+        self, mock_ssh, mock_load
+    ):
+        cfg = self._cfg()
+        cfg.hosts = []
+        mock_load.return_value = cfg
+        mock_ssh.return_value = CmdResult(stdout="ok\n", stderr="", returncode=0)
+        handler = _Handler("/api/diagnose?target=10.25.255.222", method="GET")
+
+        fleet_api.handle_diagnose(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertEqual(data["ip"], "10.25.255.222")
+        self.assertIn("uptime", data["checks"])
+        self.assertEqual(mock_ssh.call_args.kwargs["host"], "10.25.255.222")
 
     @patch("freq.api.vm._check_session_role", return_value=("admin", None))
     @patch("freq.api.vm.load_config")

@@ -30,6 +30,7 @@ import select
 import signal
 import shlex
 import struct
+import subprocess
 import threading
 import time
 
@@ -37,8 +38,9 @@ from freq.core import log as logger
 from freq.api.helpers import require_post, json_response, get_params
 from freq.api.auth import current_user
 from freq.core.config import load_config
-from freq.core.device_credentials import resolve_device_ssh_auth, resolve_staged_device_ssh_auth
+from freq.core.device_credentials import resolve_staged_device_ssh_auth
 from freq.core.ssh import _build_ssh_cmd, run as ssh_single
+from freq.modules import serve as serve_module
 from freq.modules.serve import _check_session_role
 
 
@@ -48,6 +50,16 @@ _sessions = {}
 _sessions_lock = threading.Lock()
 _SESSION_TIMEOUT = 900  # 15 minutes idle timeout
 _MAX_SESSIONS = 20
+IDRAC_TERMINAL_SPAWN_GAP_SECONDS = 10.0
+
+
+def _wait_for_idrac_terminal_spawn_window() -> None:
+    """Throttle iDRAC terminal spawns after live BMC reads."""
+    with serve_module.IDRAC_SESSION_LOCK:
+        since = time.monotonic() - serve_module._idrac_last_session_at
+        if since < IDRAC_TERMINAL_SPAWN_GAP_SECONDS:
+            time.sleep(IDRAC_TERMINAL_SPAWN_GAP_SECONDS - since)
+        serve_module._idrac_last_session_at = time.monotonic()
 
 
 def _cleanup_stale():
@@ -65,7 +77,10 @@ def _kill_session(sid):
     if not s:
         return
     try:
-        os.kill(s["pid"], signal.SIGTERM)
+        if s.get("kill_pgrp"):
+            os.killpg(s["pid"], signal.SIGTERM)
+        else:
+            os.kill(s["pid"], signal.SIGTERM)
     except (OSError, ProcessLookupError):
         pass
     try:
@@ -195,17 +210,7 @@ def _terminal_ssh_auth(cfg, htype: str) -> dict:
     actually read.
     """
     htype = (htype or "linux").lower()
-    if htype == "pfsense":
-        auth = resolve_device_ssh_auth(cfg, "pfsense")
-        return {
-            "user": auth["user"],
-            "key_path": auth["key_path"],
-            "password_file": auth.get("password_file") or None,
-            "sudo_password_file": False,
-            "local_user": auth.get("local_user") or None,
-        }
-
-    if htype in ("idrac", "switch", "truenas"):
+    if htype in ("pfsense", "idrac", "switch", "truenas"):
         return resolve_staged_device_ssh_auth(cfg, htype)
 
     key_path = getattr(cfg, "ssh_key_path", "")
@@ -385,19 +390,43 @@ def handle_terminal_open(handler):
             )
         )
 
-    # Spawn in PTY
+    # Spawn in PTY. iDRAC uses subprocess+openpty instead of pty.fork()
+    # because forking a threaded HTTPS request handler while opening a legacy
+    # BMC SSH session can leave the POST response hung behind inherited fds.
     try:
-        pid, fd = pty.fork()
+        if htype == "idrac":
+            with serve_module.IDRAC_SESSION_LOCK:
+                since = time.monotonic() - serve_module._idrac_last_session_at
+                if since < IDRAC_TERMINAL_SPAWN_GAP_SECONDS:
+                    time.sleep(IDRAC_TERMINAL_SPAWN_GAP_SECONDS - since)
+                fd, slave_fd = pty.openpty()
+                try:
+                    env = os.environ.copy()
+                    env["TERM"] = "xterm-256color"
+                    proc = subprocess.Popen(
+                        ["bash", "-c", cmd],
+                        stdin=slave_fd,
+                        stdout=slave_fd,
+                        stderr=slave_fd,
+                        close_fds=True,
+                        start_new_session=True,
+                        env=env,
+                    )
+                    pid = proc.pid
+                    serve_module._idrac_last_session_at = time.monotonic()
+                finally:
+                    os.close(slave_fd)
+        else:
+            pid, fd = pty.fork()
+            if pid == 0:
+                # Child — exec SSH
+                os.environ["TERM"] = "xterm-256color"
+                os.execlp("bash", "bash", "-c", cmd)
+                os._exit(1)
     except OSError as e:
-        logger.error(f"api_terminal_error: PTY fork failed: {e}", endpoint="terminal/open")
-        json_response(handler, {"error": f"PTY fork failed: {e}"}, 500)
+        logger.error(f"api_terminal_error: PTY spawn failed: {e}", endpoint="terminal/open")
+        json_response(handler, {"error": f"PTY spawn failed: {e}"}, 500)
         return
-
-    if pid == 0:
-        # Child — exec SSH
-        os.environ["TERM"] = "xterm-256color"
-        os.execlp("bash", "bash", "-c", cmd)
-        os._exit(1)
 
     # Parent — store session
     # Set PTY size
@@ -422,12 +451,14 @@ def handle_terminal_open(handler):
             "fd": fd,
             "pid": pid,
             "type": term_type,
+            "htype": htype,
             "target": target,
             "created": time.time(),
             "last_active": time.time(),
             "cols": cols,
             "rows": rows,
             "user": creator,
+            "kill_pgrp": htype == "idrac",
         }
 
     json_response(
@@ -613,6 +644,24 @@ def _ws_bridge(sock, fd, session_id, leftover=b""):
     """Bridge websocket ↔ PTY using select()."""
     sock.setblocking(True)
     sock.settimeout(30)
+    with _sessions_lock:
+        htype = ((_sessions.get(session_id) or {}).get("htype") or "").lower()
+    idrac_wait_for_prompt = htype == "idrac"
+    idrac_prompt_ready = not idrac_wait_for_prompt
+    pending_input = bytearray()
+
+    def _write_to_pty(payload):
+        nonlocal pending_input
+        if idrac_wait_for_prompt:
+            payload = payload.replace(b"\n", b"\r")
+            if not idrac_prompt_ready:
+                pending_input.extend(payload)
+                return True
+        try:
+            os.write(fd, payload)
+            return True
+        except OSError:
+            return False
 
     while True:
         with _sessions_lock:
@@ -628,7 +677,8 @@ def _ws_bridge(sock, fd, session_id, leftover=b""):
             if payload is None:
                 break  # Close frame or corrupt data
             if payload:
-                os.write(fd, payload)
+                if not _write_to_pty(payload):
+                    break
             leftover = b""
             continue
 
@@ -643,6 +693,19 @@ def _ws_bridge(sock, fd, session_id, leftover=b""):
                 if not data:
                     break
                 _ws_send(sock, data)
+                if (
+                    idrac_wait_for_prompt
+                    and not idrac_prompt_ready
+                    and (b"->" in data or b"/admin" in data.lower())
+                ):
+                    idrac_prompt_ready = True
+                    if pending_input:
+                        try:
+                            time.sleep(0.25)
+                            os.write(fd, bytes(pending_input))
+                            pending_input.clear()
+                        except OSError:
+                            break
             except OSError:
                 break
 
@@ -651,9 +714,7 @@ def _ws_bridge(sock, fd, session_id, leftover=b""):
             if payload is None:
                 break
             if payload:
-                try:
-                    os.write(fd, payload)
-                except OSError:
+                if not _write_to_pty(payload):
                     break
 
 

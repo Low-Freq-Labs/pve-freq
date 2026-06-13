@@ -245,6 +245,7 @@ class TestHealthApiStalenessContract(unittest.TestCase):
             }
             serve._bg_cache_ts["health"] = now
             serve._bg_cache_errors.pop("health", None)
+            serve._bg_cache_from_disk.discard("health")
 
         h = _make_handler("/api/health")
         h.headers = MagicMock()

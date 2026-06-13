@@ -193,10 +193,12 @@ class TestPhase6SecretStorage(unittest.TestCase):
     """Contract 4+5: secret storage path + readability by runtime."""
 
     def test_cred_dir_is_etc_freq_credentials(self):
-        """Phase 6 must write the token secret to /etc/freq/credentials/, not a cfg-derived path."""
+        """Phase 6 must write through the canonical /etc/freq credentials helper."""
         src = _phase6_source()
-        self.assertIn('cred_dir = "/etc/freq/credentials"', src,
-                       "Phase 6 must write to /etc/freq/credentials/ (matches doctor hardcoded reads)")
+        self.assertIn("cred_dir = _credentials_dir(cfg)", src,
+                       "Phase 6 must write to the canonical credentials dir helper")
+        self.assertIn('return getattr(cfg, "credentials_dir", "") or "/etc/freq/credentials"', INIT_CMD,
+                       "Canonical credentials helper must default to /etc/freq/credentials")
         self.assertNotIn("os.path.dirname(cfg.conf_dir), \"credentials\"", src,
                           "Old cfg-derived credentials path must not return")
 
@@ -297,7 +299,8 @@ class TestPhase6DoctorPathAlignment(unittest.TestCase):
         """Init's cred_path and doctor's read path must match exactly."""
         init_src = INIT_CMD
         doctor_src = (FREQ_ROOT / "freq" / "core" / "doctor.py").read_text()
-        self.assertIn('cred_dir = "/etc/freq/credentials"', init_src)
+        self.assertIn("cred_dir = _credentials_dir(cfg)", init_src)
+        self.assertIn('return getattr(cfg, "credentials_dir", "") or "/etc/freq/credentials"', init_src)
         self.assertIn('"pve-token-rw"', init_src)
         self.assertIn("/etc/freq/credentials/pve-token-rw", doctor_src)
 

@@ -44,22 +44,27 @@ NEEDS_RSA = True
 def _ssh(ip, cmd, cfg, timeout=15):
     """Run a command on a Cisco switch via SSH.
 
-    Prepends 'terminal length 0' to disable paging.
+    Runs a single IOS command. Some legacy IOS SSH exec implementations
+    accept semicolon chaining but return no stdout, so read getters must
+    not prefix commands with 'terminal length 0 ;'.
     Returns (stdout, ok) tuple.
     """
-    full_cmd = f"terminal length 0 ; {cmd}"
     key = cfg.ssh_rsa_key_path or cfg.ssh_key_path
     r = ssh_run(
         host=ip,
-        command=full_cmd,
+        command=cmd,
         key_path=key,
         connect_timeout=cfg.ssh_connect_timeout,
         command_timeout=timeout,
         htype="switch",
         use_sudo=False,
+        cfg=cfg,
     )
-    ok = r.returncode == 0 and "% Invalid" not in (r.stdout or "")
-    return r.stdout or "", ok
+    stdout = r.stdout or ""
+    ok = r.returncode == 0 and "% Invalid" not in stdout
+    if cmd.strip().lower().startswith("show ") and not stdout.strip():
+        ok = False
+    return stdout, ok
 
 
 # ---------------------------------------------------------------------------

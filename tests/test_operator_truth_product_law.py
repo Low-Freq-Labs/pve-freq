@@ -191,6 +191,7 @@ class TestDoctorTruthSurfaces(unittest.TestCase):
         body = _fn_body(_app_js(), "_doctorTruthSummary")
         self.assertIn("failNames", body)
         self.assertIn("warnNames", body)
+        self.assertIn("sudo freq doctor", body)
 
     def test_doctor_probe_helper_exists(self):
         src = _app_js()
