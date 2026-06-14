@@ -1439,10 +1439,10 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
   .mn-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "brand user" "title status";
+    grid-template-areas: "brand user" "title title" "status status";
     align-items: center;
     column-gap: 8px;
-    row-gap: 3px;
+    row-gap: 2px;
     padding: 5px 8px;
   }
   .mn-header > .flex-gap-16-center:first-child {
@@ -1454,11 +1454,14 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
   }
   .mn-header > .flex-gap-16-center:last-child {
     grid-area: status;
-    justify-self: start;
+    justify-self: stretch;
     display: flex;
     justify-content: flex-start;
+    align-items: center;
     gap: 6px;
     max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
   }
   .pve-freq-wordmark { grid-area: brand; }
   #page-title {
@@ -1466,8 +1469,19 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
     font-size: 11px;
     line-height: 1.1;
   }
-  #stream-status { max-width: 112px; overflow: hidden; white-space: nowrap; }
-  #watchdog-status { max-width: 140px; overflow: hidden; white-space: nowrap; }
+  #stream-status { max-width: 98px; overflow: hidden; white-space: nowrap; flex: 0 0 auto; }
+  #watchdog-status {
+    min-width: 0;
+    max-width: calc(100vw - 132px);
+    overflow: hidden;
+    white-space: nowrap;
+    flex: 1 1 auto;
+    display: block;
+    line-height: 1.3;
+  }
+  .watchdog-label { font-size: 10px; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .watchdog-full { display: none; }
+  .watchdog-compact { display: inline; }
   #header-user-btn { grid-area: user; justify-self: end; max-width: 112px; }
   .header-user-name { max-width: 82px; }
   .mn-body { padding: 10px 12px; }
@@ -1630,6 +1644,8 @@ td .pbar { margin-top: 0; flex: 1; min-width: 50px; }
   border-color: rgba(255,60,60,0.35);
 }
 .stream-status.s-dead .stream-dot { background: var(--red); }
+.watchdog-label { font-size: 11px; font-weight: 600; }
+.watchdog-compact { display: none; }
 
 /* M-RESILIENCE-OPERATOR-TRUTH-20260413AI: persistent post-auth truth
    banner. Renders under the header on authenticated views whenever

@@ -5511,19 +5511,22 @@ function loadHome(){
   }).then(function(res){
     var el=document.getElementById('watchdog-status');if(!el)return;
     var d=res.data||{};
+    function wdHtml(color,full,compact){
+      return '<span class="watchdog-label" style="color:var(--'+color+')"><span class="watchdog-full">'+full+'</span><span class="watchdog-compact">'+compact+'</span></span>';
+    }
     /* Not installed — optional add-on, render plainly */
     if(res.status===501||d.watchdog_installed===false){
-      el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: not installed (optional add-on)</span>';
+      el.innerHTML=wdHtml('text-dim','Watchdog: not installed (optional add-on)','wd: off');
       return;
     }
     /* Installed but daemon unreachable (503) */
     if(res.status===503||d.watchdog_down){
-      el.innerHTML='<span style="color:var(--yellow);font-size:11px;font-weight:600">Watchdog: daemon not reachable</span>';
+      el.innerHTML=wdHtml('yellow','Watchdog: daemon not reachable','wd: down');
       return;
     }
     /* Error from daemon itself */
     if(d.error){
-      el.innerHTML='<span style="color:var(--yellow);font-size:11px;font-weight:600">Watchdog: '+_esc(String(d.error)).substring(0,60)+'</span>';
+      el.innerHTML=wdHtml('yellow','Watchdog: '+_esc(String(d.error)).substring(0,60),'wd: warn');
       return;
     }
     /* Working — show local audit evidence */
@@ -5537,8 +5540,12 @@ function loadHome(){
     if(errors>0)parts.push(errors+' errors');
     if(pending>0)parts.push(pending+' pending');
     if(age!==null)parts.push(age+'s ago');
-    el.innerHTML='<span style="color:var(--'+clr+');font-size:11px;font-weight:600">Watchdog: '+parts.join(' · ')+'</span>';
-  }).catch(function(){var el=document.getElementById('watchdog-status');if(el)el.innerHTML='<span style="color:var(--text-dim);font-size:11px">Watchdog: status unavailable</span>';});
+    var compact='wd: '+wdStatus;
+    if(hosts>0)compact+=' · '+hosts;
+    if(errors>0)compact+=' · '+errors+'e';
+    if(age!==null)compact+=' · '+age+'s';
+    el.innerHTML=wdHtml(clr,'Watchdog: '+parts.join(' · '),compact);
+  }).catch(function(){var el=document.getElementById('watchdog-status');if(el)el.innerHTML='<span class="watchdog-label" style="color:var(--text-dim)"><span class="watchdog-full">Watchdog: status unavailable</span><span class="watchdog-compact">wd: ?</span></span>';});
 }
 
 /* ═══════════════════════════════════════════════════════════════════

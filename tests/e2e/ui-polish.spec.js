@@ -136,14 +136,24 @@ test.describe('UI polish regressions', () => {
     const header = await page.evaluate(() => {
       const title = document.querySelector('#page-title')?.getBoundingClientRect();
       const stream = document.querySelector('#stream-status')?.getBoundingClientRect();
-      if (!title || !stream) return { overlap: false };
+      const watchdog = document.querySelector('#watchdog-status')?.getBoundingClientRect();
+      const user = document.querySelector('#header-user-btn')?.getBoundingClientRect();
+      if (!title || !stream || !watchdog || !user) return { overlap: false, viewport: window.innerWidth };
+      const overlaps = (a, b) => !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
       return {
-        overlap: !(title.right <= stream.left || stream.right <= title.left || title.bottom <= stream.top || stream.bottom <= title.top),
+        viewport: window.innerWidth,
+        overlap: overlaps(title, stream) || overlaps(title, watchdog) || overlaps(watchdog, user) || overlaps(stream, user),
         titleTop: title.top,
         streamTop: stream.top,
+        watchdogRight: watchdog.right,
+        streamRight: stream.right,
+        userRight: user.right,
       };
     });
     expect(header.overlap).toBe(false);
+    expect(header.watchdogRight).toBeLessThanOrEqual(header.viewport);
+    expect(header.streamRight).toBeLessThanOrEqual(header.viewport);
+    expect(header.userRight).toBeLessThanOrEqual(header.viewport);
 
     await context.close();
   });
