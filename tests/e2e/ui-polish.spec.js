@@ -20,6 +20,15 @@ async function openFleet(page) {
   await page.locator('#metrics-cards .pve-group').first().waitFor({ timeout: 30_000 });
 }
 
+async function openFleetMobile(page) {
+  const fleetButton = page.getByRole('button', { name: 'FLEET', exact: true });
+  if (!(await fleetButton.isVisible().catch(() => false))) {
+    await page.locator('.mobile-menu-btn').click();
+  }
+  await fleetButton.click();
+  await page.locator('#metrics-cards .pve-group').first().waitFor({ timeout: 30_000 });
+}
+
 test.describe('UI polish regressions', () => {
   test('mobile login card stays inside the viewport', async ({ browser }) => {
     requireLiveCredentials();
@@ -110,5 +119,88 @@ test.describe('UI polish regressions', () => {
     expect(synthetic.ctCards).toBe(1);
     expect(synthetic.cardText).toContain('LXC 7777');
     expect(synthetic.cardText).toContain('TERM');
+  });
+
+  test('mobile global nav remains available after login', async ({ browser }) => {
+    requireLiveCredentials();
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, ignoreHTTPSErrors: true });
+    const page = await context.newPage();
+    await login(page);
+
+    await expect(page.locator('.mobile-menu-btn')).toBeVisible();
+    await page.locator('.mobile-menu-btn').click();
+    await expect(page.locator('#nav-items')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'FLEET', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'SYSTEM', exact: true })).toBeVisible();
+
+    await context.close();
+  });
+
+  test('mobile tables and controls stay inside dark shell', async ({ browser }) => {
+    requireLiveCredentials();
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, ignoreHTTPSErrors: true });
+    const page = await context.newPage();
+    await login(page);
+
+    const geom = await page.evaluate(() => {
+      const host = document.createElement('div');
+      host.className = 'section-body ui-polish-proof';
+      host.innerHTML = `
+        <input id="ui-proof-input" placeholder="proof">
+        <select id="ui-proof-select"><option>proof</option></select>
+        <table id="ui-proof-table"><thead><tr>
+          <th>Very Long Header One</th><th>Very Long Header Two</th><th>Very Long Header Three</th>
+        </tr></thead><tbody><tr>
+          <td>alpha-alpha-alpha-alpha</td><td>beta-beta-beta-beta</td><td>gamma-gamma-gamma-gamma</td>
+        </tr></tbody></table>`;
+      document.querySelector('#home-view').prepend(host);
+      const table = document.querySelector('#ui-proof-table');
+      const input = document.querySelector('#ui-proof-input');
+      const select = document.querySelector('#ui-proof-select');
+      const tr = table.getBoundingClientRect();
+      const ir = input.getBoundingClientRect();
+      const sr = select.getBoundingClientRect();
+      const inputStyle = getComputedStyle(input);
+      const selectStyle = getComputedStyle(select);
+      return {
+        viewport: window.innerWidth,
+        tableLeft: tr.left,
+        tableRight: tr.right,
+        inputRight: ir.right,
+        selectRight: sr.right,
+        inputBg: inputStyle.backgroundColor,
+        selectBg: selectStyle.backgroundColor,
+        inputColor: inputStyle.color,
+      };
+    });
+
+    expect(geom.tableLeft).toBeGreaterThanOrEqual(0);
+    expect(geom.tableRight).toBeLessThanOrEqual(geom.viewport);
+    expect(geom.inputRight).toBeLessThanOrEqual(geom.viewport);
+    expect(geom.selectRight).toBeLessThanOrEqual(geom.viewport);
+    expect(geom.inputBg).not.toBe('rgb(255, 255, 255)');
+    expect(geom.selectBg).not.toBe('rgb(255, 255, 255)');
+    expect(geom.inputColor).not.toBe('rgb(0, 0, 0)');
+
+    await context.close();
+  });
+
+  test('Fleet optional enrichment degrades without stale loading rows', async ({ page }) => {
+    requireLiveCredentials();
+    const consoleErrors = [];
+    page.on('console', msg => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+    await page.route('**/api/fleet/ntp', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+    await page.route('**/api/fleet/updates', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+    await page.route('**/api/infra/quick', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+
+    await login(page);
+    await openFleet(page);
+    await page.waitForTimeout(500);
+
+    await expect(page.locator('#metrics-cards')).not.toContainText('Loading...');
+    await expect(page.locator('#metrics-cards')).toContainText(/PENDING|UNAVAILABLE|PROXMOX NODES/);
+    expect(consoleErrors.filter(text => /forEach|_renderFleetData error|infra quick error/.test(text))).toEqual([]);
   });
 });

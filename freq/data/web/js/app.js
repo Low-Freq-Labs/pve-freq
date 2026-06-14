@@ -94,6 +94,7 @@ setInterval(upTime,1000);upTime();
 
 /* === Utility === */
 function _esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function _arr(v){return Array.isArray(v)?v:[];}
 function _resourceMetricsSupported(h){
   if(!h)return true;
   if(h.resource_metrics_supported===false||h.metrics_supported===false)return false;
@@ -977,11 +978,13 @@ function _showApp(){
 
   _p(10,'CONNECTING','awaiting fleet overview');
   var p1=_authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){
-    _fleetCache.fo=fo;_initFleetData(fo);_p(40,'FLEET',fo.summary.total_vms+' VMs, '+fo.pve_nodes.length+' nodes');
+    fo=fo||{};fo.summary=fo.summary||{};fo.pve_nodes=_arr(fo.pve_nodes);fo.vms=_arr(fo.vms);
+    _fleetCache.fo=fo;_initFleetData(fo);_p(40,'FLEET',(fo.summary.total_vms||fo.vms.length||0)+' VMs, '+fo.pve_nodes.length+' nodes');
     return fo;
   }).catch(function(){_p(40,'FLEET','fleet overview unavailable');return null;});
 
   var p2=_authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(hd){
+    hd=hd||{};hd.hosts=_arr(hd.hosts);
     _fleetCache.hd=hd;
     var up=0;hd.hosts.forEach(function(h){if(_healthIsLive(h))up++;});
     _p(70,'HEALTH',up+'/'+hd.hosts.length+' hosts responded');
@@ -5559,7 +5562,7 @@ function _infraRoleCard(ph,healthMap){
   /* Live role-specific metrics — placeholder, filled by /api/infra/quick */
   c+='<div class="role-metrics" id="infra-metrics-'+safeId+'">';
   if(up){
-    c+='<div class="role-metric"><span class="rm-val c-dim">Loading...</span></div>';
+    c+='<div class="role-metric"><span class="rm-val c-dim">PENDING</span><span class="rm-lbl">METRICS</span></div>';
   } else {
     c+=_roleOfflineMetrics(ph.type,roleInfo);
   }
@@ -5577,7 +5580,8 @@ function _roleOfflineMetrics(type,roleInfo){
   return m;
 }
 function _enrichInfraCards(){
-  _authFetch(API.INFRA_QUICK).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.INFRA_QUICK,{silent:true}).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    d=d||{};d.devices=_arr(d.devices);
     var ageEl=document.getElementById('core-systems-age');
     if(d.warming){
       /* Cache still warming — tell the operator instead of silently
@@ -5594,10 +5598,17 @@ function _enrichInfraCards(){
       ageEl.style.color=a<30?'var(--green)':a<120?'var(--yellow)':'var(--red)';
     }
     _infraQuickCache={byLabel:{},byIp:{}};
-    (d.devices||[]).forEach(function(dev){
+    d.devices.forEach(function(dev){
       if(dev.label)_infraQuickCache.byLabel[dev.label]=dev;
       if(dev.ip)_infraQuickCache.byIp[dev.ip]=dev;
     });
+    if(!d.devices.length){
+      if(ageEl){ageEl.textContent='UNAVAILABLE';ageEl.style.color='var(--yellow)';}
+      document.querySelectorAll('[id^="infra-metrics-"]').forEach(function(el){
+        if(el)el.innerHTML='<div class="role-metric"><span class="rm-val c-dim">UNAVAILABLE</span><span class="rm-lbl">METRICS</span></div>';
+      });
+      return;
+    }
     d.devices.forEach(function(dev){
       var safeId=dev.label.replace(/[^a-zA-Z0-9]/g,'-');
       var el=document.getElementById('infra-metrics-'+safeId);
@@ -5662,7 +5673,12 @@ function _enrichInfraCards(){
       }
       el.innerHTML=h||'<div class="role-metric"><span class="rm-val c-green">OK</span></div>';
     });
-  }).catch(function(e){console.error('infra quick error:',e);});
+  }).catch(function(e){
+    console.error('infra quick error:',e);
+    document.querySelectorAll('[id^="infra-metrics-"]').forEach(function(el){
+      if(el)el.innerHTML='<div class="role-metric"><span class="rm-val c-dim">UNAVAILABLE</span><span class="rm-lbl">METRICS</span></div>';
+    });
+  });
 }
 /* Action buttons and output div IDs for physical infrastructure devices — keyed by device type */
 var INFRA_ACTIONS={
@@ -5722,9 +5738,9 @@ function loadMetricsQuick(){
   }
   /* Fetch fresh data in background and re-render */
   Promise.all([
-    _authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).catch(function(){return null;}),
-    _authFetch(API.HEALTH).then(function(r){return r.json()}).catch(function(){return null;}),
-    _authFetch(API.MEDIA_STATUS).then(function(r){return r.json()}).catch(function(){return null;}),
+    _authFetch(API.FLEET_OVERVIEW,{silent:true}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
+    _authFetch(API.HEALTH,{silent:true}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
+    _authFetch(API.MEDIA_STATUS,{silent:true}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
     _authFetch(API.CT_LIST,{silent:true}).then(function(r){return r.ok?r.json():{containers:[]};}).catch(function(){return {containers:[]};})
   ]).then(function(results){
     var fo=results[0];var hd=results[1];var md=results[2];var ctd=results[3];
@@ -5825,9 +5841,9 @@ function _isLabPhysical(ph){
 }
 function _normalizeFleetPhysical(fo){
   if(!fo)return;
-  var all=fo.all_physical||[];
+  var all=_arr(fo.all_physical);
   if(!all.length){
-    all=(fo.physical||[]).concat(fo.lab_physical||[]);
+    all=_arr(fo.physical).concat(_arr(fo.lab_physical));
   }
   fo.core_physical=fo.core_physical||all.filter(function(p){return !_isLabPhysical(p);});
   fo.lab_physical=fo.lab_physical||all.filter(function(p){return _isLabPhysical(p);});
@@ -5836,6 +5852,8 @@ function _normalizeFleetPhysical(fo){
 }
 function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labLabels){
   var nodeData={};
+  pveNodes=_arr(pveNodes);
+  healthMap=healthMap||{};vmsByNode=vmsByNode||{};ctsByNode=ctsByNode||{};ctrByVmid=ctrByVmid||{};labLabels=labLabels||{};
   pveNodes.forEach(function(pn){
     var nodeName=pn.name;
     var cl=_hostColor(nodeName,'pve');
@@ -5910,6 +5928,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labL
 }
 function _assembleFleetOutput(infraCards,nodeData,pveNodes){
   var out='';
+  nodeData=nodeData||{};pveNodes=_arr(pveNodes);
   if(infraCards){
     var ic=(infraCards.match(/infra-role-card/g)||[]).length;
     out+='<div style="margin-bottom:16px;border:3px solid var(--text);border-radius:10px;background:#000000;overflow:hidden">';
@@ -5952,8 +5971,9 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
   return out;
 }
 function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDuration,hdDuration,labPveNodes){
+  hd=hd||{};hd.hosts=_arr(hd.hosts);summary=summary||{};labLabels=labLabels||{};pveNodes=_arr(pveNodes);
   var labCount=Object.keys(labLabels).length;
-  var prodCount=(hd?hd.hosts.length:0)-labCount;
+  var prodCount=hd.hosts.length-labCount;
   var prodPveNodes=pveNodes.length;
   var responseDur=Math.max(foDuration,hdDuration);
   var hdAge=hd&&hd.age!==undefined?Math.round(hd.age):0;
@@ -5961,6 +5981,7 @@ function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDur
   var ageColor=hdAge<30?'var(--green)':hdAge<120?'var(--yellow)':'var(--red)';
   var vmRunning=summary.running||0;var vmStopped=summary.stopped||0;
   var sumEl=document.getElementById('metrics-summary');
+  if(!sumEl)return;
   sumEl.innerHTML=
     _fDual('FLEET SPLIT',summary.prod_count||0,'PROD','var(--purple-light)',summary.lab_count||0,'LAB','var(--cyan)')+
     _fDual('FLEET',prodCount,'PROD','var(--purple-light)',labCount,'LAB','var(--cyan)')+
@@ -5970,26 +5991,31 @@ function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDur
     _fDual('DATA',ageLabel,'AGE',ageColor,responseDur+'s','RESPONSE','var(--text-dim)')+
     st('CONTAINERS','...','p')+
     st('ACTIVITY','...','p');
-  _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(md){
+  _authFetch(API.MEDIA_DASHBOARD,{silent:true}).then(function(r){return r.ok?r.json():null;}).then(function(md){
+    md=md||{};
     var _cdn2=Math.max(0,md.containers_down||0);var c=sumEl.querySelector('.st:nth-child(7)');if(c)c.innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+(md.containers_running||0)+'</span><span class="label-hint">UP</span></span><span class="stat-pair"><span class="stat-big-red">'+_cdn2+'</span><span class="label-hint">DOWN</span></span></div>';
   }).catch(function(e){console.error('API error:',e);});
   Promise.all([
-    _authFetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return {count:0}}),
-    _authFetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return {count:0}})
+    _authFetch(API.MEDIA_DOWNLOADS,{silent:true}).then(function(r){return r.ok?r.json():{count:0}}).catch(function(){return {count:0}}),
+    _authFetch(API.MEDIA_STREAMS,{silent:true}).then(function(r){return r.ok?r.json():{count:0}}).catch(function(){return {count:0}})
   ]).then(function(res){
     var dl=res[0].count||0;var str=res[1].count||0;
     var a=sumEl.querySelector('.st:nth-child(8)');if(a)a.innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-orange">'+dl+'</span><span class="label-hint">DL</span></span><span class="stat-pair"><span class="stat-big-blue">'+str+'</span><span class="label-hint">STREAM</span></span></div>';
   });
 }
 function _enrichFleetNtpUpdates(){
-  _authFetch(API.FLEET_NTP).then(function(r){return r.json()}).then(function(nd){
-    nd.hosts.forEach(function(x){
+  _authFetch(API.FLEET_NTP,{silent:true}).then(function(r){return r.ok?r.json():null;}).then(function(nd){
+    var hosts=_arr(nd&&nd.hosts);
+    if(!hosts.length){document.querySelectorAll('[id^="ntp-"] .metric-val').forEach(function(el){el.textContent='UNAVAILABLE';el.classList.add('c-dim-fs11');});return;}
+    hosts.forEach(function(x){
       var el=document.getElementById('ntp-'+x.label.replace(/[^a-z0-9]/gi,''));
       if(el){var synced=x.synced;el.innerHTML='<div class="metric-top"><span class="metric-label">NTP</span><span class="metric-val" style="font-size:11px;color:'+(synced?'var(--green)':'var(--red)')+'">'+(synced?'SYNCED':'NOT SYNCED')+' <span style="color:var(--text-dim);font-weight:400">'+x.time+'</span></span></div>';}
     });
-  }).catch(function(e){console.error('API error:',e);});
-  _authFetch(API.FLEET_UPDATES).then(function(r){return r.json()}).then(function(ud){
-    ud.hosts.forEach(function(x){
+  }).catch(function(e){console.error('API error:',e);document.querySelectorAll('[id^="ntp-"] .metric-val').forEach(function(el){el.textContent='UNAVAILABLE';});});
+  _authFetch(API.FLEET_UPDATES,{silent:true}).then(function(r){return r.ok?r.json():null;}).then(function(ud){
+    var hosts=_arr(ud&&ud.hosts);
+    if(!hosts.length){document.querySelectorAll('[id^="upd-"] .metric-val').forEach(function(el){el.textContent='UNAVAILABLE';el.classList.add('c-dim-fs11');});return;}
+    hosts.forEach(function(x){
       var el=document.getElementById('upd-'+x.label.replace(/[^a-z0-9]/gi,''));
       if(el){
         var n=x.updates;var color=n>0?'var(--yellow)':'var(--green)';
@@ -5998,22 +6024,22 @@ function _enrichFleetNtpUpdates(){
         el.innerHTML='<div class="metric-top"><span class="metric-label">UPDATES</span><span class="metric-val" style="font-size:11px;color:'+color+'">'+txt+btn+'</span></div>';
       }
     });
-  }).catch(function(e){console.error('API error:',e);});
+  }).catch(function(e){console.error('API error:',e);document.querySelectorAll('[id^="upd-"] .metric-val').forEach(function(el){el.textContent='UNAVAILABLE';});});
 }
 function _renderFleetData(fo,hd,md,ctd){
   try{
     if(!fo&&!hd){document.getElementById('metrics-cards').innerHTML='<p class="c-red">Both fleet overview and health APIs failed.</p>';return;}
     /* Guard against null sub-fields */
-    if(fo){fo.vms=fo.vms||[];fo.physical=fo.physical||[];fo.pve_nodes=fo.pve_nodes||[];fo.summary=fo.summary||{};_normalizeFleetPhysical(fo);}
-    if(hd){hd.hosts=hd.hosts||[];}
+    if(fo){fo.vms=_arr(fo.vms);fo.physical=_arr(fo.physical);fo.pve_nodes=_arr(fo.pve_nodes);fo.summary=fo.summary||{};_normalizeFleetPhysical(fo);}
+    if(hd){hd.hosts=_arr(hd.hosts);}
     /* Build container counts by VMID from media status data */
     var ctrByVmid={};
-    if(md&&md.containers){md.containers.forEach(function(c){
+    _arr(md&&md.containers).forEach(function(c){
       var vid=String(c.vm_id);
       if(!ctrByVmid[vid])ctrByVmid[vid]={total:0,up:0,down:0};
       ctrByVmid[vid].total++;
       if(c.status==='up')ctrByVmid[vid].up++;else ctrByVmid[vid].down++;
-    });}
+    });
     /* Build lookup maps from API data */
     var healthMap={};var totalUp=0,totalDown=0,labPveNodes=0;
     var labLabels=_getLabLabels(hd?hd.hosts:null);
