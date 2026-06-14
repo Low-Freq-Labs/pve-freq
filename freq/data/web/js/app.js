@@ -95,6 +95,39 @@ setInterval(upTime,1000);upTime();
 /* === Utility === */
 function _esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function _arr(v){return Array.isArray(v)?v:[];}
+function _enhanceResponsiveTables(root){
+  root=root||document;
+  if(!root.querySelectorAll)return;
+  root.querySelectorAll('table').forEach(function(table){
+    table.classList.add('responsive-table');
+    var heads=[];
+    table.querySelectorAll('thead th').forEach(function(th){heads.push((th.textContent||'').trim());});
+    if(!heads.length){
+      var first=table.querySelector('tr');
+      if(first)first.querySelectorAll('th').forEach(function(th){heads.push((th.textContent||'').trim());});
+    }
+    if(!heads.length)return;
+    table.querySelectorAll('tbody tr').forEach(function(row){
+      row.querySelectorAll('td').forEach(function(td,i){
+        if(!td.getAttribute('data-label'))td.setAttribute('data-label',heads[i]||'');
+      });
+    });
+  });
+}
+function _startResponsiveTableObserver(){
+  _enhanceResponsiveTables(document);
+  if(!window.MutationObserver)return;
+  var body=document.getElementById('mn-body')||document.body;
+  if(!body||body._freqTableObserver)return;
+  body._freqTableObserver=true;
+  new MutationObserver(function(muts){
+    muts.forEach(function(m){
+      m.addedNodes&&m.addedNodes.forEach(function(n){
+        if(n&&n.nodeType===1)_enhanceResponsiveTables(n);
+      });
+    });
+  }).observe(body,{childList:true,subtree:true});
+}
 function _resourceMetricsSupported(h){
   if(!h)return true;
   if(h.resource_metrics_supported===false||h.metrics_supported===false)return false;
@@ -1624,12 +1657,14 @@ function registerInlineHandlerBindings(){
   bind('fleet-filter','input',function(){filterFleetCards(this.value);});
 }
 registerInlineHandlerBindings();
+_startResponsiveTableObserver();
 /* Belt-and-suspenders re-bind on DOMContentLoaded for the case where
  * app.js gets loaded before the input elements parse (shouldn't
  * happen because the <script> tag is at the bottom of <body>, but
  * the bind helper is idempotent so the extra call is free). */
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded',registerInlineHandlerBindings);
+  document.addEventListener('DOMContentLoaded',_startResponsiveTableObserver);
 }
 
 function _applyRoleUI(){

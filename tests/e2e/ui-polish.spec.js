@@ -133,6 +133,18 @@ test.describe('UI polish regressions', () => {
     await expect(page.getByRole('button', { name: 'FLEET', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'SYSTEM', exact: true })).toBeVisible();
 
+    const header = await page.evaluate(() => {
+      const title = document.querySelector('#page-title')?.getBoundingClientRect();
+      const stream = document.querySelector('#stream-status')?.getBoundingClientRect();
+      if (!title || !stream) return { overlap: false };
+      return {
+        overlap: !(title.right <= stream.left || stream.right <= title.left || title.bottom <= stream.top || stream.bottom <= title.top),
+        titleTop: title.top,
+        streamTop: stream.top,
+      };
+    });
+    expect(header.overlap).toBe(false);
+
     await context.close();
   });
 
@@ -154,6 +166,7 @@ test.describe('UI polish regressions', () => {
           <td>alpha-alpha-alpha-alpha</td><td>beta-beta-beta-beta</td><td>gamma-gamma-gamma-gamma</td>
         </tr></tbody></table>`;
       document.querySelector('#home-view').prepend(host);
+      if (window._enhanceResponsiveTables) window._enhanceResponsiveTables(host);
       const table = document.querySelector('#ui-proof-table');
       const input = document.querySelector('#ui-proof-input');
       const select = document.querySelector('#ui-proof-select');
@@ -171,6 +184,8 @@ test.describe('UI polish regressions', () => {
         inputBg: inputStyle.backgroundColor,
         selectBg: selectStyle.backgroundColor,
         inputColor: inputStyle.color,
+        tableClassed: table.classList.contains('responsive-table'),
+        firstLabel: table.querySelector('td')?.getAttribute('data-label') || '',
       };
     });
 
@@ -181,6 +196,8 @@ test.describe('UI polish regressions', () => {
     expect(geom.inputBg).not.toBe('rgb(255, 255, 255)');
     expect(geom.selectBg).not.toBe('rgb(255, 255, 255)');
     expect(geom.inputColor).not.toBe('rgb(0, 0, 0)');
+    expect(geom.tableClassed).toBe(true);
+    expect(geom.firstLabel).toBe('Very Long Header One');
 
     await context.close();
   });
