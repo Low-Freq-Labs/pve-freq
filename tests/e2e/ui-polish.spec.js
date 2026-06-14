@@ -168,9 +168,15 @@ test.describe('UI polish regressions', () => {
       document.querySelector('#home-view').prepend(host);
       if (window._enhanceResponsiveTables) window._enhanceResponsiveTables(host);
       const table = document.querySelector('#ui-proof-table');
+      const bare = document.createElement('table');
+      bare.id = 'ui-proof-bare-table';
+      bare.innerHTML = '<tr><th>Host</th><th>Watts</th><th>Description</th></tr><tr><td>nexus</td><td>125W</td><td>Long generated settings/plugin value</td></tr>';
+      host.appendChild(bare);
       const input = document.querySelector('#ui-proof-input');
       const select = document.querySelector('#ui-proof-select');
+      if (window._enhanceResponsiveTables) window._enhanceResponsiveTables(host);
       const tr = table.getBoundingClientRect();
+      const br = bare.getBoundingClientRect();
       const ir = input.getBoundingClientRect();
       const sr = select.getBoundingClientRect();
       const inputStyle = getComputedStyle(input);
@@ -186,6 +192,9 @@ test.describe('UI polish regressions', () => {
         inputColor: inputStyle.color,
         tableClassed: table.classList.contains('responsive-table'),
         firstLabel: table.querySelector('td')?.getAttribute('data-label') || '',
+        bareRight: br.right,
+        bareClassed: bare.classList.contains('responsive-table'),
+        bareLabel: bare.querySelector('td')?.getAttribute('data-label') || '',
       };
     });
 
@@ -198,6 +207,9 @@ test.describe('UI polish regressions', () => {
     expect(geom.inputColor).not.toBe('rgb(0, 0, 0)');
     expect(geom.tableClassed).toBe(true);
     expect(geom.firstLabel).toBe('Very Long Header One');
+    expect(geom.bareRight).toBeLessThanOrEqual(geom.viewport);
+    expect(geom.bareClassed).toBe(true);
+    expect(geom.bareLabel).toBe('Host');
 
     await context.close();
   });

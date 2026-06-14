@@ -98,7 +98,10 @@ function _arr(v){return Array.isArray(v)?v:[];}
 function _enhanceResponsiveTables(root){
   root=root||document;
   if(!root.querySelectorAll)return;
-  root.querySelectorAll('table').forEach(function(table){
+  var tables=[];
+  if(root.matches&&root.matches('table'))tables.push(root);
+  root.querySelectorAll('table').forEach(function(table){tables.push(table);});
+  tables.forEach(function(table){
     table.classList.add('responsive-table');
     var heads=[];
     table.querySelectorAll('thead th').forEach(function(th){heads.push((th.textContent||'').trim());});
@@ -107,7 +110,10 @@ function _enhanceResponsiveTables(root){
       if(first)first.querySelectorAll('th').forEach(function(th){heads.push((th.textContent||'').trim());});
     }
     if(!heads.length)return;
-    table.querySelectorAll('tbody tr').forEach(function(row){
+    var rows=table.querySelectorAll('tbody tr');
+    if(!rows.length)rows=table.querySelectorAll(':scope > tr');
+    rows.forEach(function(row){
+      if(row.querySelector('th'))return;
       row.querySelectorAll('td').forEach(function(td,i){
         if(!td.getAttribute('data-label'))td.setAttribute('data-label',heads[i]||'');
       });
