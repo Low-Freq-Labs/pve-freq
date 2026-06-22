@@ -909,7 +909,7 @@ var API={
   VM_SNAPSHOT:'/api/vm/snapshot',VM_SNAPSHOTS:'/api/vm/snapshots',VM_DELETE_SNAP:'/api/vm/delete-snapshot',
   VM_RESIZE:'/api/vm/resize',VM_RENAME:'/api/vm/rename',VM_CHANGE_ID:'/api/vm/change-id',
   VM_CHECK_IP:'/api/vm/check-ip',VM_ADD_NIC:'/api/vm/add-nic',VM_CLEAR_NICS:'/api/vm/clear-nics',
-  VM_CHANGE_IP:'/api/vm/change-ip',VM_TEMPLATE:'/api/vm/template',
+  VM_CHANGE_IP:'/api/vm/change-ip',VM_UPDATE_NIC:'/api/vm/update-nic',VM_DELETE_NIC:'/api/vm/delete-nic',VM_TEMPLATE:'/api/vm/template',
   VM_WIZARD_DEFAULTS:'/api/vm/wizard-defaults',
   ADMIN_BOUNDARIES:'/api/admin/fleet-boundaries',ADMIN_BOUNDARIES_UPDATE:'/api/admin/fleet-boundaries/update',
   ADMIN_HOSTS_UPDATE:'/api/admin/hosts/update',
@@ -1532,10 +1532,18 @@ function _setupTruthSummary(d){
   if(d.initialized===false){
     var initDetail='This instance reports <strong>initialized: false</strong>.';
     if(d.setup_reason)initDetail+=' Backend reason: <em>'+String(d.setup_reason)+'</em>.';
+    var accountDetail=' Dashboard account state is unknown from this unauthenticated probe.';
+    if(d.dashboard_accounts_configured===true&&d.dashboard_passwords_configured===true){
+      accountDetail=' At least one dashboard account has stored password material; if login fails, the entered password does not match the stored hash.';
+    }else if(d.dashboard_accounts_configured===true){
+      accountDetail=' Dashboard account rows exist, but no stored dashboard password hash was reported; reset the dashboard password from a trusted local shell.';
+    }else if(d.dashboard_accounts_configured===false){
+      accountDetail=' No dashboard accounts are configured; return to setup or create a recovery admin locally.';
+    }
     return {isErr:false,
       title:'LOGIN AVAILABLE — INIT NOT GREEN',
       body:initDetail+
-        ' Existing operator accounts are configured; log in to inspect the dashboard. '+
+        accountDetail+' '+
         'Run <code>freq init --check</code> or rerun init after resolving the reported contract failure.'};
   }
   var missing=_missingSetupArtifacts(d);
@@ -6203,7 +6211,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labL
     var nRamGb=Math.round(nRamMb/1024);
     var detailRam=(pn.detail||'').match(/(\d+)GB/);var nodeRamStr=detailRam?detailRam[1]+'GB':(pn.ram_gb?pn.ram_gb+'GB':'?');
     var nodeCard='<div class="host-card" data-host-id="'+nodeName.toLowerCase()+'" style="cursor:pointer;" onclick="openVmInfo(\''+nodeName+'\',\''+pn.ip+'\',0)">';
-    nodeCard+='<div class="mb-8"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
+    nodeCard+='<div class="mb-8"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div style="display:flex;align-items:center;gap:8px"><button class="fleet-btn" title="Create VM on '+nodeName+'" onclick="event.stopPropagation();openVmCreateForNode(\''+nodeName+'\')" style="width:28px;height:28px;padding:0;font-size:18px;line-height:1;color:var(--purple-light);border-color:var(--purple)">+</button><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
     nodeCard+='<div class="divider-light">';
     if(up){
       if(!live)live={cores:'0',load:'0',disk:'0%',ram:'0/0MB'};
@@ -6469,6 +6477,7 @@ function loadMetrics(){
   }).catch(function(e){content.innerHTML='<p class="c-red">Error: '+e+'</p>';toast('Deep scan failed','error');});
 }
 var _activeFleetTool=null;
+var _pendingVmCreateNode='';
 function fleetTool(tool){
   var panel=document.getElementById('fleet-tool-panel');
   var content=document.getElementById('fleet-tool-content');
@@ -6483,6 +6492,16 @@ function fleetTool(tool){
   document.querySelectorAll('.fqc-btn').forEach(function(b){b.classList.remove('active-view');});
   var btn=document.querySelector('.fqc-btn[data-fqc="'+tool+'"]');if(btn)btn.classList.add('active-view');
   _fleetToolInner(tool,panel,content);
+}
+function openVmCreateForNode(nodeName){
+  _pendingVmCreateNode=nodeName||'';
+  var panel=document.getElementById('fleet-tool-panel');
+  if(_activeFleetTool!=='vmmgmt'||!panel||panel.style.display!=='block')fleetTool('vmmgmt');
+  switchVmMgmt('vmcreate');
+  setTimeout(function(){
+    var sel=document.getElementById('vmt-c-node');
+    if(sel&&_pendingVmCreateNode)sel.value=_pendingVmCreateNode;
+  },100);
 }
 function _buildToolTabs(title,tabs,tabClass,switchFn,subtitleId,formId,content){
   var nav='<div style="display:flex;flex-direction:column;gap:8px;min-width:170px">';
@@ -6740,11 +6759,19 @@ function switchVmMgmt(tab){
       '<div><label class="label-sub">TARGET NODE</label><select id="vmt-c-node" class="input-primary"><option value="auto">Auto (least loaded)</option></select></div>'+
       '<div class="btn-row"><button class="fleet-btn c-purple-active" data-action="vmtCreate" >CREATE VM</button></div>'+
       '</div><div id="vmt-c-out" class="mt-12"></div>';
-    _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
-      var nodes={};d.vms.forEach(function(v){nodes[v.node]=true;});
+    _authFetch(API.VM_WIZARD_DEFAULTS).then(function(r){return r.json()}).then(function(d){
+      var nodes={};(d.nodes||[]).forEach(function(n){if(n)nodes[n]=true;});
       var sel=document.getElementById('vmt-c-node');if(!sel)return;
       Object.keys(nodes).sort().forEach(function(n){sel.innerHTML+='<option value="'+n+'">'+n+'</option>';});
-    }).catch(function(e){console.error('API error:',e);});
+      if(_pendingVmCreateNode&&nodes[_pendingVmCreateNode])sel.value=_pendingVmCreateNode;
+    }).catch(function(e){
+      _authFetch(API.VMS).then(function(r){return r.json()}).then(function(d){
+        var nodes={};(d.vms||[]).forEach(function(v){if(v.node)nodes[v.node]=true;});
+        var sel=document.getElementById('vmt-c-node');if(!sel)return;
+        Object.keys(nodes).sort().forEach(function(n){sel.innerHTML+='<option value="'+n+'">'+n+'</option>';});
+        if(_pendingVmCreateNode&&nodes[_pendingVmCreateNode])sel.value=_pendingVmCreateNode;
+      }).catch(function(err){console.error('API error:',err);});
+    });
   } else if(tab==='vmclone'){
     vmForm.innerHTML='<div class="form-vertical">'+
       '<div><label class="label-sub">SOURCE VMID</label><select id="vmt-cl-source" class="input-primary"><option value="">Loading...</option></select></div>'+
@@ -6860,10 +6887,11 @@ function vmtCreate(){
   var n=(document.getElementById('vmt-c-name')||{}).value;
   var c=(document.getElementById('vmt-c-cores')||{}).value;
   var r=(document.getElementById('vmt-c-ram')||{}).value;
+  var node=(document.getElementById('vmt-c-node')||{}).value||'auto';
   if(!n){toast('Enter a VM name','error');return;}
   var out=document.getElementById('vmt-c-out');if(out)out.innerHTML='<div class="c-yellow">Creating VM...</div>';
-  _authFetch(API.VM_CREATE+'?name='+encodeURIComponent(n)+'&cores='+c+'&ram='+r,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
-    if(d.ok){toast('VM '+d.vmid+' "'+d.name+'" created!','success');if(out)out.innerHTML='<div class="c-green">VM '+d.vmid+' created successfully.</div>';document.getElementById('vmt-c-name').value='';}
+  _authFetch(API.VM_CREATE+'?name='+encodeURIComponent(n)+'&cores='+c+'&ram='+r+'&node='+encodeURIComponent(node),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('VM '+d.vmid+' "'+d.name+'" created!','success');if(out)out.innerHTML='<div class="c-green">VM '+d.vmid+' created successfully on '+(d.node||node)+'.</div>';document.getElementById('vmt-c-name').value='';}
     else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<div class="c-red">'+d.error+'</div>';}
   });
 }
@@ -9507,6 +9535,10 @@ function _updateNicPreviewCombo(){
   });
   pre.innerHTML=lines.join('<br>');
 }
+function _lastOctet(ip){
+  var m=String(ip||'').match(/(\d+)(?:\/\d+)?$/);
+  return m?m[1]:'';
+}
 function _vmCheckAndAddNic(vmid){
   var sel=document.getElementById('vm-add-nic-vlan');if(!sel)return;
   var octet=(document.getElementById('vm-add-nic-octet')||{}).value;
@@ -9540,6 +9572,36 @@ function _vmCheckAndAddNic(vmid){
     });
   }).catch(function(e){if(status)status.innerHTML='<span class="c-red">Check failed</span>';});
 }
+function _vmUpdateNic(vmid,nicIdx){
+  var sel=document.getElementById('vm-edit-nic-vlan-'+nicIdx);
+  var oct=(document.getElementById('vm-edit-nic-octet-'+nicIdx)||{}).value;
+  if(!sel){toast('NIC editor not available','error');return;}
+  if(!oct||parseInt(oct)<1||parseInt(oct)>254){toast('Octet must be 1-254','error');return;}
+  var opt=sel.options[sel.selectedIndex];
+  var prefix=opt.getAttribute('data-prefix')||'';
+  var gw=opt.getAttribute('data-gw')||'';
+  var cidr=opt.getAttribute('data-cidr')||'24';
+  var vlan=sel.value;
+  var ip=prefix?prefix+'.'+oct+'/'+cidr:'';
+  var out=document.getElementById('vm-ctrl-out');
+  confirmAction('Update <strong>net'+nicIdx+'</strong> on VM <strong>'+vmid+'</strong>?<br><span style="font-family:monospace">'+opt.textContent+(ip?' \u2192 '+ip:'')+'</span><br><span class="c-dim">Only this NIC is changed. Reboot may be required.</span>',function(){
+    if(out)out.innerHTML='<span class="c-yellow">Updating net'+nicIdx+'...</span>';
+    _authFetch(API.VM_UPDATE_NIC+'?vmid='+vmid+'&nic='+nicIdx+'&vlan='+encodeURIComponent(vlan)+'&ip='+encodeURIComponent(ip)+'&gw='+encodeURIComponent(gw),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+      if(d.ok){toast('net'+nicIdx+' updated','success');if(out)out.innerHTML='<span class="c-green">net'+nicIdx+' updated \u2014 reboot VM if guest does not pick it up</span>';_fetchFreshVm(vmid).then(function(f){_rerenderOpenVmCard(vmid,f);});}
+      else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
+    }).catch(function(e){toast('NIC update failed','error');if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
+  });
+}
+function _vmDeleteNic(vmid,nicIdx,nicName){
+  var out=document.getElementById('vm-ctrl-out');
+  confirmAction('Delete <strong>'+(nicName||('net'+nicIdx))+'</strong> from VM <strong>'+vmid+'</strong>?<br><span class="c-yellow">This removes the NIC and matching cloud-init ipconfig.</span>',function(){
+    if(out)out.innerHTML='<span class="c-yellow">Deleting '+(nicName||('net'+nicIdx))+'...</span>';
+    _authFetch(API.VM_DELETE_NIC+'?vmid='+vmid+'&nic='+nicIdx,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+      if(d.ok){toast((nicName||('net'+nicIdx))+' deleted','success');if(out)out.innerHTML='<span class="c-green">'+(d.deleted||[]).join(', ')+' deleted</span>';_fetchFreshVm(vmid).then(function(f){_rerenderOpenVmCard(vmid,f);});}
+      else{toast('Error: '+d.error,'error');if(out)out.innerHTML='<span class="c-red">'+d.error+'</span>';}
+    }).catch(function(e){toast('NIC delete failed','error');if(out)out.innerHTML='<span class="c-red">'+e+'</span>';});
+  });
+}
 function _vmApplyNicCombo(vmid){
   var ids=_getNicCombo();
   var octet=(document.getElementById('vm-nic-octet')||{}).value;
@@ -9553,7 +9615,7 @@ function _vmApplyNicCombo(vmid){
   if(!configs.length){toast('No NICs configured','error');return;}
   var desc=configs.map(function(c){var v=_VLAN_MAP[c.vlan];return 'net'+c.nic+': '+v.name+' \u2192 '+c.ip;}).join('<br>');
   var out=document.getElementById('vm-ctrl-out');
-  confirmAction('<strong>Set VM '+vmid+' network ('+configs.length+' NIC'+(configs.length>1?'s':'')+')</strong><br><br><span style="font-family:monospace;line-height:1.8">'+desc+'</span><br><br><span class="c-yellow">All existing NICs will be CLEARED first.</span><br><span class="c-dim">Reboot required to activate.</span>',function(){
+  confirmAction('<strong>Replace VM '+vmid+' network layout ('+configs.length+' NIC'+(configs.length>1?'s':'')+')</strong><br><br><span style="font-family:monospace;line-height:1.8">'+desc+'</span><br><br><span class="c-yellow">All existing NICs will be CLEARED first.</span><br><span class="c-dim">Use the per-NIC UPDATE controls below for ordinary edits. Reboot required to activate.</span>',function(){
     if(out)out.innerHTML='<span class="c-yellow">Clearing existing NICs...</span>';
     _authFetch(API.VM_CLEAR_NICS+'?vmid='+vmid,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(out)out.innerHTML='<span class="c-yellow">Applying '+configs.length+' NICs...</span>';
@@ -9893,7 +9955,7 @@ function _vmConfigPanel(vmid,label){
   h+='</select>';
   h+='<span style="color:var(--text-dim);font-size:12px;font-weight:600">OCTET:</span>';
   h+='<input id="vm-nic-octet" type="number" min="1" max="254" placeholder="x" oninput="_updateNicPreviewCombo()" style="background:var(--card);border:2px solid var(--input-border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;font-family:monospace;width:55px">';
-  h+='<button class="fleet-btn pill-pad6" onclick="_vmApplyNicCombo('+vmid+')" >APPLY</button>';
+  h+='<button class="fleet-btn pill-pad6" onclick="_vmApplyNicCombo('+vmid+')" title="Replace all VM NICs with this generated layout">REPLACE</button>';
   h+='</div>';
   h+='<div id="vm-nic-preview" style="font-size:11px;color:var(--text-dim);font-family:monospace;line-height:1.6"></div>';
   h+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--input-border)">';
@@ -9914,16 +9976,27 @@ function _vmNicCards(allIps){
   var h='<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;letter-spacing:0.5px">CONNECTED NETWORKS</div>';
   allIps.forEach(function(a){
     var c=VLAN_COLORS[a.vlan]||'var(--text-dim)';
-    var nicGw='?';
-    Object.keys(_VLAN_MAP).forEach(function(vid){var v=_VLAN_MAP[vid];if(v.name===a.vlan){if(v.gw)nicGw=v.gw;else if(v.prefix)nicGw=v.prefix+'.1';}});
+    var nicGw='?';var currentVid=a.tag||'';
+    Object.keys(_VLAN_MAP).forEach(function(vid){var v=_VLAN_MAP[vid];if(v.name===a.vlan){currentVid=vid;if(v.gw)nicGw=v.gw;else if(v.prefix)nicGw=v.prefix+'.1';}});
+    var idx=parseInt(String(a.nic||'').replace('net',''));if(isNaN(idx))idx=0;
     h+='<div style="background:rgba(0,0,0,0.15);border:1px solid var(--input-border);border-radius:6px;padding:8px 10px;margin-bottom:6px">';
     h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
     h+='<span style="font-size:11px;color:var(--text-dim);font-family:monospace;font-weight:600">'+a.nic+'</span>';
     h+='<span style="background:rgba(0,0,0,0.3);border:1px solid '+c+';color:'+c+';padding:1px 8px;border-radius:3px;font-size:11px;font-weight:600;letter-spacing:0.3px">'+a.vlan+'</span>';
+    h+='<button class="fleet-btn" onclick="_vmDeleteNic(_cardState.vmid,'+idx+',\''+a.nic+'\')" style="margin-left:auto;padding:2px 8px;font-size:10px;color:var(--red)">DELETE</button>';
     h+='</div>';
     h+='<div style="display:flex;gap:16px;font-size:11px;font-family:monospace">';
     h+='<span style="color:var(--blue);font-weight:600">'+a.ip+'</span>';
     h+='<span class="c-dim">GW '+nicGw+'</span>';
+    h+='</div>';
+    h+='<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">';
+    h+='<span style="font-size:10px;color:var(--text-dim);font-weight:600">EDIT</span>';
+    h+='<select id="vm-edit-nic-vlan-'+idx+'" style="background:var(--card);border:1px solid var(--input-border);color:var(--text);padding:4px 6px;border-radius:5px;font-size:11px;font-family:inherit">';
+    Object.keys(_VLAN_MAP).forEach(function(vid){var vl=_VLAN_MAP[vid];h+='<option value="'+vid+'" data-prefix="'+vl.prefix+'" data-gw="'+(vl.gw||'')+'" data-cidr="'+(vl.cidr||'24')+'"'+(String(currentVid)===String(vid)?' selected':'')+'>'+vl.name+'</option>';});
+    h+='</select>';
+    h+='<span style="color:var(--text-dim);font-size:13px;font-weight:700">.</span>';
+    h+='<input id="vm-edit-nic-octet-'+idx+'" type="number" min="1" max="254" value="'+(_lastOctet(a.ip)||'')+'" placeholder="x" style="background:var(--card);border:1px solid var(--input-border);color:var(--text);padding:4px 6px;border-radius:5px;font-size:11px;font-family:monospace;width:48px">';
+    h+='<button class="fleet-btn" onclick="_vmUpdateNic(_cardState.vmid,'+idx+')" style="padding:4px 9px;font-size:10px">UPDATE</button>';
     h+='</div>';
     h+='</div>';
   });
@@ -9977,10 +10050,10 @@ function _resolveVmIps(vmid,ip,liveHost){
   if(_vmNicData.length){
     _vmNicData.forEach(function(n){
       var prefix=_vlanPrefixes[n.vlan_name]||'';
-      allIps.push({nic:n.nic,vlan:n.vlan_name,ip:octet?(prefix+'.'+octet):'?'});
+      allIps.push({nic:n.nic,vlan:n.vlan_name,tag:n.tag||'',ip:octet?(prefix+'.'+octet):'?'});
     });
   } else if(knownIp){
-    allIps.push({nic:'net0',vlan:'?',ip:knownIp});
+    allIps.push({nic:'net0',vlan:'?',tag:'',ip:knownIp});
   }
   var subtitleIp=knownIp||((allIps.length&&allIps[0].ip!=='?')?allIps[0].ip:'?');
   return {allIps:allIps,subtitleIp:subtitleIp};
@@ -11767,6 +11840,7 @@ function _buildSearchIndex(){
   _searchItems.push({type:'action',label:'Check NTP Sync',detail:'View NTP sync status for all hosts',action:function(){closeSearch();showView('fleet');fleetTool('ntp');}});
   _searchItems.push({type:'action',label:'Check OS Updates',detail:'View pending updates across fleet',action:function(){closeSearch();showView('fleet');fleetTool('updates');}});
   _searchItems.push({type:'action',label:'Fleet Exec',detail:'Run a command across all hosts',action:function(){closeSearch();showView('fleet');fleetTool('exec');}});
+  _searchItems.push({type:'action',label:'VM Management',detail:'Create, clone, migrate, resize, snapshot, and roll back VMs',action:function(){closeSearch();showView('fleet');fleetTool('vmmgmt');}});
   /* ── Tools ── */
   _searchItems.push({type:'tool',label:'pfSense Status',detail:'Query pfSense firewall',action:function(){closeSearch();showView('fleet');if(typeof pfAction==='function')pfAction('status');}});
   _searchItems.push({type:'tool',label:'TrueNAS Status',detail:'Query TrueNAS storage',action:function(){closeSearch();showView('fleet');if(typeof tnAction==='function')tnAction('status');}});

@@ -4132,7 +4132,6 @@ a:hover{{text-decoration:underline}}
         key_readable = key_exists and os.access(key_path, os.R_OK)
         has_hosts = bool(cfg.hosts)
         has_nodes = bool(cfg.pve_nodes)
-
         # Check markers — .initialized is ONLY written by freq init (CLI).
         # .web-setup-complete is written by the web setup wizard.
         # The two are distinct: web setup alone does NOT mean init ran.
@@ -4172,6 +4171,20 @@ a:hover{{text-decoration:underline}}
             setup_health = "unconfigured"
             setup_reason = "no setup performed"
 
+        dashboard_users = []
+        dashboard_accounts_configured = False
+        dashboard_passwords_configured = False
+        try:
+            dashboard_users = _load_users(cfg)
+            dashboard_accounts_configured = bool(dashboard_users)
+            dashboard_passwords_configured = any(
+                bool(vault_get(cfg, "auth", f"password_{u.get('username', '')}"))
+                for u in dashboard_users
+                if u.get("username")
+            )
+        except Exception as e:
+            logger.warn(f"setup_status_dashboard_user_health_failed: {e}")
+
         # F11 of R-SECURITY-TRUST-AUDIT-20260413P: this endpoint is in the
         # AUTH_WHITELIST so an unauth caller hits it during setup wizard
         # bootstrap. Don't leak the absolute SSH key filesystem path —
@@ -4195,12 +4208,23 @@ a:hover{{text-decoration:underline}}
             "setup_reason": setup_reason,
             "initialized": is_initialized,
             "web_setup_complete": is_web_setup_complete,
+            "dashboard_accounts_configured": dashboard_accounts_configured,
+            "dashboard_passwords_configured": dashboard_passwords_configured,
             "checked_at": time.time(),
         }
         if is_authed:
             payload["version"] = __version__
             payload["ssh_key_path"] = key_path or ""
             payload["host_count"] = len(cfg.hosts)
+            payload["dashboard_users"] = [
+                {
+                    "username": u.get("username", ""),
+                    "role": u.get("role", ""),
+                    "has_password": bool(vault_get(cfg, "auth", f"password_{u.get('username', '')}")),
+                }
+                for u in dashboard_users
+                if u.get("username")
+            ]
         self._json_response(payload)
 
     def _serve_setup_create_admin(self):

@@ -114,6 +114,36 @@ class TestVmApiTrust(unittest.TestCase):
 
     @patch("freq.api.vm._check_session_role", return_value=("admin", None))
     @patch("freq.api.vm.load_config")
+    @patch("freq.api.vm._refresh_fleet_overview_after_mutation")
+    def test_vm_create_honors_selected_node(self, _mock_refresh, mock_load, _mock_role):
+        cfg = self._cfg()
+        cfg.pve_nodes = ["10.0.0.1", "10.0.0.2"]
+        cfg.pve_node_names = ["pve01", "pve02"]
+        mock_load.return_value = cfg
+        commands = []
+
+        def fake_pve(_cfg, node_ip, command, timeout=60):
+            commands.append((node_ip, command))
+            if command == "pvesh get /cluster/nextid":
+                return ("5005", True)
+            if command.startswith("qm create"):
+                return ("", True)
+            return ("[]", True)
+
+        with patch("freq.api.vm._find_reachable_node", return_value="10.0.0.1"), \
+             patch("freq.api.vm._pve_cmd", side_effect=fake_pve):
+            handler = _Handler("/api/vm/create?name=testvm&node=pve02")
+            vm_api.handle_vm_create(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["node"], "pve02")
+        self.assertIn(("10.0.0.2", "pvesh get /cluster/nextid"), commands)
+        self.assertTrue(any(node == "10.0.0.2" and cmd.startswith("qm create 5005") for node, cmd in commands))
+
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
     def test_vm_create_requires_name_with_400(self, mock_load, _mock_role):
         mock_load.return_value = self._cfg()
         handler = _Handler("/api/vm/create")
@@ -349,6 +379,65 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertEqual(data["storage"], "os-drive-ssd")
         self.assertIn("qm set 7000 --scsi1 os-drive-ssd:1", commands)
+
+    @patch("freq.api.vm._check_session_role", return_value=("operator", None))
+    @patch("freq.api.vm.load_config")
+    @patch("freq.api.vm._find_vm_node_ip", return_value="10.0.0.1")
+    @patch("freq.api.vm._check_vm_permission", return_value=(True, ""))
+    @patch("freq.api.vm._refresh_fleet_overview_after_mutation")
+    @patch("freq.api.vm._pve_cmd")
+    def test_update_nic_preserves_existing_model_mac(
+        self, mock_pve_cmd, _mock_refresh, _mock_permission, _mock_find_node, mock_load, _mock_role
+    ):
+        mock_load.return_value = self._cfg()
+        commands = []
+
+        def fake_pve(_cfg, _node_ip, command, timeout=60):
+            commands.append(command)
+            if command.startswith("qm config"):
+                return ("net1: virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr0,tag=10,firewall=1\n", True)
+            return ("", True)
+
+        mock_pve_cmd.side_effect = fake_pve
+        handler = _Handler("/api/vm/update-nic?vmid=7000&nic=1&bridge=vmbr1&vlan=20&ip=192.168.20.44/24&gw=192.168.20.1")
+
+        vm_api.handle_vm_update_nic(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertTrue(data["ok"])
+        self.assertTrue(any("virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr1,tag=20,firewall=1" in cmd for cmd in commands))
+        self.assertTrue(any("ip=192.168.20.44/24,gw=192.168.20.1" in cmd for cmd in commands))
+
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
+    @patch("freq.api.vm._find_vm_node_ip", return_value="10.0.0.1")
+    @patch("freq.api.vm._check_vm_permission", return_value=(True, ""))
+    @patch("freq.api.vm._refresh_fleet_overview_after_mutation")
+    @patch("freq.api.vm._pve_cmd")
+    def test_delete_nic_deletes_selected_net_and_ipconfig(
+        self, mock_pve_cmd, _mock_refresh, _mock_permission, _mock_find_node, mock_load, _mock_role
+    ):
+        mock_load.return_value = self._cfg()
+        commands = []
+
+        def fake_pve(_cfg, _node_ip, command, timeout=60):
+            commands.append(command)
+            if command.startswith("qm config"):
+                return ("net1: virtio,bridge=vmbr0\nipconfig1: ip=192.168.10.55/24\n", True)
+            return ("", True)
+
+        mock_pve_cmd.side_effect = fake_pve
+        handler = _Handler("/api/vm/delete-nic?vmid=7000&nic=1")
+
+        vm_api.handle_vm_delete_nic(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["deleted"], ["net1", "ipconfig1"])
+        self.assertIn("qm set 7000 --delete net1", commands)
+        self.assertIn("qm set 7000 --delete ipconfig1", commands)
 
     def test_snapshot_parser_strips_proxmox_tree_markers(self):
         raw = (

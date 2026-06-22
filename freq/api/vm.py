@@ -285,6 +285,81 @@ def _token_param(value: str, label: str):
     return value, ""
 
 
+def _node_ip_for_name(cfg, node_name: str) -> str:
+    """Resolve a configured PVE node name to its IP."""
+    if not node_name:
+        return ""
+    for idx, name in enumerate(getattr(cfg, "pve_node_names", []) or []):
+        if name == node_name and idx < len(getattr(cfg, "pve_nodes", []) or []):
+            return cfg.pve_nodes[idx]
+    return ""
+
+
+def _nic_index_param(handler, params, default=None):
+    """Parse a netN index bounded to Proxmox's practical NIC range."""
+    idx = _get_int_param(handler, params, "nic", default=default, required=default is None)
+    if idx is None:
+        return None
+    if idx < 0 or idx > 31:
+        json_response(handler, {"error": "Invalid nic index (0-31)"}, 400)
+        return None
+    return idx
+
+
+def _parse_qm_config_kv(config_text: str) -> dict:
+    """Parse `qm config` output into a key/value mapping."""
+    config = {}
+    for raw_line in (config_text or "").splitlines():
+        if ":" not in raw_line:
+            continue
+        key, value = raw_line.split(":", 1)
+        key = key.strip()
+        if key:
+            config[key] = value.strip()
+    return config
+
+
+def _parse_net_config(value: str) -> tuple[str, dict]:
+    """Return the NIC model/MAC prefix and comma key-values from a netN line."""
+    parts = [part.strip() for part in (value or "").split(",") if part.strip()]
+    if not parts:
+        return "virtio", {}
+    first = parts[0]
+    opts = {}
+    for part in parts[1:]:
+        if "=" not in part:
+            continue
+        key, val = part.split("=", 1)
+        opts[key.strip()] = val.strip()
+    if "=" not in first:
+        return first or "virtio", opts
+    first_key = first.split("=", 1)[0].strip()
+    if first_key in {"bridge", "tag", "firewall", "rate", "queues", "link_down", "mtu"}:
+        key, val = first.split("=", 1)
+        opts[key.strip()] = val.strip()
+        return "virtio", opts
+    return first, opts
+
+
+def _build_net_config(existing: str, bridge: str, vlan: str, firewall: str) -> str:
+    """Build a netN value while preserving model/MAC where possible."""
+    model, opts = _parse_net_config(existing)
+    opts["bridge"] = bridge
+    if vlan:
+        opts["tag"] = vlan
+    else:
+        opts.pop("tag", None)
+    if firewall != "":
+        opts["firewall"] = "1" if firewall in {"1", "true", "yes", "on"} else "0"
+    ordered = [model]
+    for key in ("bridge", "tag", "firewall", "rate", "queues", "link_down", "mtu"):
+        if key in opts and opts[key] != "":
+            ordered.append(f"{key}={opts[key]}")
+    for key in sorted(k for k in opts if k not in {"bridge", "tag", "firewall", "rate", "queues", "link_down", "mtu"}):
+        ordered.append(f"{key}={opts[key]}")
+    return ",".join(ordered)
+
+
 def _clone_source_allowed(cfg, vmid: int):
     """Allow read-only clone use of templates while keeping them mutation-protected."""
     cat_name, tier = cfg.fleet_boundaries.categorize(vmid)
@@ -314,6 +389,7 @@ def handle_vm_create(handler):
     cfg = load_config()
     params = get_params(handler)
     name = params.get("name", [""])[0]
+    requested_node = params.get("node", params.get("target_node", [""]))[0]
     cores = _get_int_param(handler, params, "cores", default=2)
     if cores is None:
         return
@@ -329,7 +405,15 @@ def handle_vm_create(handler):
     vmid = None
     node_ip = None
     try:
-        node_ip = _find_reachable_node(cfg)
+        requested_node, node_err = _token_param(requested_node, "node")
+        if node_err:
+            json_response(handler, {"error": node_err}, 400)
+            return
+        node_ip = _node_ip_for_name(cfg, requested_node) if requested_node and requested_node != "auto" else ""
+        if requested_node and requested_node != "auto" and not node_ip:
+            json_response(handler, {"error": f"Unknown configured PVE node: {requested_node}"}, 400)
+            return
+        node_ip = node_ip or _find_reachable_node(cfg)
         if not node_ip:
             json_response(handler, {"error": "No PVE node reachable"}, 502)
             return
@@ -366,7 +450,16 @@ def handle_vm_create(handler):
             _respond_operation(handler, {"ok": False, "vmid": vmid, "name": name, "error": stdout}, ok=False)
         else:
             _refresh_fleet_overview_after_mutation("create", vmid)
-            json_response(handler, {"ok": True, "vmid": vmid, "name": name, "error": ""})
+            json_response(
+                handler,
+                {
+                    "ok": True,
+                    "vmid": vmid,
+                    "name": name,
+                    "node": _node_name_for_ip(cfg, node_ip) or requested_node or "auto",
+                    "error": "",
+                },
+            )
     except Exception as e:
         logger.error(f"api_vm_error: vm create failed: {e}", endpoint="vm/create")
         if vmid and node_ip:
@@ -994,6 +1087,144 @@ def handle_vm_add_nic(handler):
         )
     except Exception as e:
         logger.error(f"api_vm_error: vm add-nic failed: {e}", endpoint="vm/add-nic")
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
+
+
+def handle_vm_update_nic(handler):
+    """POST /api/vm/update-nic — update one existing NIC without touching others."""
+    if _require_post(handler, "VM update NIC"):
+        return
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
+    cfg = load_config()
+    query = get_params(handler)
+    vmid = _get_int_param(handler, query, "vmid", required=True)
+    nic_idx = _nic_index_param(handler, query)
+    if vmid is None or nic_idx is None:
+        return
+    bridge = query.get("bridge", [getattr(cfg, "nic_bridge", "vmbr0")])[0] or getattr(cfg, "nic_bridge", "vmbr0")
+    vlan_id_val = query.get("vlan", [""])[0]
+    firewall = query.get("firewall", [""])[0].lower()
+    new_ip = query.get("ip", [""])[0]
+    gateway = query.get("gw", [""])[0]
+    bridge, bridge_err = _token_param(bridge, "bridge")
+    if bridge_err:
+        json_response(handler, {"error": bridge_err}, 400)
+        return
+    if vlan_id_val and not valid_vlan(vlan_id_val):
+        json_response(handler, {"error": "Invalid VLAN ID"}, 400)
+        return
+    if firewall and firewall not in {"0", "1", "true", "false", "yes", "no", "on", "off"}:
+        json_response(handler, {"error": "Invalid firewall value"}, 400)
+        return
+    if new_ip:
+        bare_ip = new_ip.split("/")[0] if "/" in new_ip else new_ip
+        if not valid_ip(bare_ip):
+            json_response(handler, {"error": "Invalid IP address"}, 400)
+            return
+        if gateway and not valid_ip(gateway):
+            json_response(handler, {"error": "Invalid gateway IP"}, 400)
+            return
+    allowed, err = _check_vm_permission(cfg, vmid, "configure")
+    if not allowed:
+        json_response(handler, {"error": err}, 403)
+        return
+
+    try:
+        node_ip = _find_vm_node_ip(cfg, vmid)
+        if not node_ip:
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
+            return
+        config_text, config_ok = _pve_cmd(cfg, node_ip, f"qm config {vmid}", timeout=15)
+        if not config_ok:
+            _respond_operation(handler, {"ok": False, "vmid": vmid, "error": config_text}, ok=False)
+            return
+        config = _parse_qm_config_kv(config_text)
+        net_key = f"net{nic_idx}"
+        if net_key not in config:
+            json_response(handler, {"error": f"{net_key} does not exist on VM {vmid}"}, 404)
+            return
+        net_value = _build_net_config(config[net_key], bridge, vlan_id_val, firewall)
+        stdout, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} --{net_key} {shlex.quote(net_value)}", timeout=30)
+        if ok and new_ip:
+            cidr = new_ip if "/" in new_ip else new_ip + "/24"
+            gw_part = f",gw={gateway}" if gateway else ""
+            stdout, ok = _pve_cmd(
+                cfg,
+                node_ip,
+                f"qm set {vmid} --ipconfig{nic_idx} {shlex.quote('ip=' + cidr + gw_part)}",
+                timeout=30,
+            )
+        _respond_vm_mutation(
+            handler,
+            {
+                "ok": ok,
+                "vmid": vmid,
+                "nic": net_key,
+                "bridge": bridge,
+                "vlan": vlan_id_val,
+                "ip": new_ip,
+                "error": stdout if not ok else "",
+            },
+            ok=ok,
+            reason="update-nic",
+            vmid=vmid,
+        )
+    except Exception as e:
+        logger.error(f"api_vm_error: vm update-nic failed: {e}", endpoint="vm/update-nic")
+        json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
+
+
+def handle_vm_delete_nic(handler):
+    """POST /api/vm/delete-nic — delete one NIC and matching ipconfig."""
+    if _require_post(handler, "VM delete NIC"):
+        return
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
+    cfg = load_config()
+    query = get_params(handler)
+    vmid = _get_int_param(handler, query, "vmid", required=True)
+    nic_idx = _nic_index_param(handler, query)
+    if vmid is None or nic_idx is None:
+        return
+    allowed, err = _check_vm_permission(cfg, vmid, "configure")
+    if not allowed:
+        json_response(handler, {"error": err}, 403)
+        return
+
+    try:
+        node_ip = _find_vm_node_ip(cfg, vmid)
+        if not node_ip:
+            json_response(handler, {"error": f"Cannot find VM {vmid} on any PVE node"}, 404)
+            return
+        net_key = f"net{nic_idx}"
+        ip_key = f"ipconfig{nic_idx}"
+        config_text, config_ok = _pve_cmd(cfg, node_ip, f"qm config {vmid}", timeout=15)
+        if config_ok and net_key not in _parse_qm_config_kv(config_text):
+            json_response(handler, {"error": f"{net_key} does not exist on VM {vmid}"}, 404)
+            return
+        deleted = []
+        stdout, ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} --delete {net_key}", timeout=30)
+        if ok:
+            deleted.append(net_key)
+            ip_out, ip_ok = _pve_cmd(cfg, node_ip, f"qm set {vmid} --delete {ip_key}", timeout=30)
+            if ip_ok:
+                deleted.append(ip_key)
+            else:
+                stdout = ip_out
+        _respond_vm_mutation(
+            handler,
+            {"ok": ok, "vmid": vmid, "deleted": deleted, "error": stdout if not ok else ""},
+            ok=ok,
+            reason="delete-nic",
+            vmid=vmid,
+        )
+    except Exception as e:
+        logger.error(f"api_vm_error: vm delete-nic failed: {e}", endpoint="vm/delete-nic")
         json_response(handler, {"error": f"SSH operation failed: {e}"}, 502)
 
 
@@ -1822,6 +2053,8 @@ def register(routes: dict):
     routes["/api/vm/change-id"] = handle_vm_change_id
     routes["/api/vm/check-ip"] = handle_vm_check_ip
     routes["/api/vm/add-nic"] = handle_vm_add_nic
+    routes["/api/vm/update-nic"] = handle_vm_update_nic
+    routes["/api/vm/delete-nic"] = handle_vm_delete_nic
     routes["/api/vm/clear-nics"] = handle_vm_clear_nics
     routes["/api/vm/change-ip"] = handle_vm_change_ip
     routes["/api/vm/push-key"] = handle_vm_push_key

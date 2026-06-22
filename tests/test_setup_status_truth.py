@@ -94,6 +94,14 @@ class TestSetupHealthSummary(unittest.TestCase):
         self.assertIn('"web_setup_complete"', src,
                        "Response must include web_setup_complete field")
 
+    def test_response_includes_dashboard_account_health(self):
+        """Setup status must name dashboard account/hash health without exposing secrets."""
+        src = self._handler_src()
+        self.assertIn('"dashboard_accounts_configured"', src)
+        self.assertIn('"dashboard_passwords_configured"', src)
+        self.assertIn('"dashboard_users"', src)
+        self.assertIn('"has_password"', src)
+
     def test_checks_both_marker_files(self):
         """Must check both .initialized and .web-setup-complete in conf_dir."""
         src = self._handler_src()
