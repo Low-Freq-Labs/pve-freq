@@ -124,5 +124,44 @@ class TestSetupHealthSummary(unittest.TestCase):
         self.assertIn("out-of-contract PVE VM", helper)
 
 
+class TestWebInitRuntimeHandoff(unittest.TestCase):
+    """Web Init must leave one managed dashboard runtime after init exits."""
+
+    def test_setup_init_job_schedules_runtime_handoff(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        job = src.split("def _run_setup_init_job", 1)[1].split("\ndef _init_blocker_from_artifacts", 1)[0]
+        self.assertIn("FREQ_WEB_INIT", job)
+        self.assertIn("_schedule_setup_runtime_handoff", job)
+        self.assertIn("scheduled dashboard handoff to freq-serve.service", job)
+
+    def test_runtime_handoff_stops_setup_listener_before_restart(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        helper = src.split("def _schedule_setup_runtime_handoff", 1)[1].split("\ndef _run_setup_init_job", 1)[0]
+        self.assertIn("systemd-run", helper)
+        self.assertIn("pve-freq-setup.service", helper)
+        self.assertIn("freq-serve.service", helper)
+        self.assertIn("kill -TERM", helper)
+
+
+class TestFleetNicProbeContract(unittest.TestCase):
+    """Fleet NIC inventory should not timeout on slow per-VM qm config loops."""
+
+    def test_nic_inventory_reads_pve_config_files(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        block = src.split("# VM NIC data", 1)[1].split("duration = round", 1)[0]
+        self.assertIn("/etc/pve/qemu-server/", block)
+        self.assertNotIn("qm config", block)
+
+    def test_vm_tag_inventory_reads_pve_config_files(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        block = src.split("def _bg_fetch_vm_tags", 1)[1].split("result = {\"tags\"", 1)[0]
+        self.assertIn("/etc/pve/qemu-server/", block)
+        self.assertNotIn("qm config", block)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1634,7 +1634,10 @@ def _bg_probe_fleet_overview():
             continue
         cmd_parts = []
         for vid in vmids:
-            cmd_parts.append(f"echo VMID:{vid}; qm config {vid} 2>/dev/null | grep ^net")
+            cmd_parts.append(
+                f"echo VMID:{vid}; "
+                f"grep '^net' /etc/pve/qemu-server/{int(vid)}.conf 2>/dev/null || true"
+            )
         batch_cmd = "; ".join(cmd_parts)
         r = ssh_single(
             host=nip,
@@ -1931,10 +1934,15 @@ def _bg_fetch_vm_tags():
             nip = node_ip_map.get(node_name)
             if not nip:
                 continue
-            # Build batch command: for each VMID, print "VMID:<id>" then grep tags
+            # Build batch command: for each VMID, print "VMID:<id>" then grep tags.
+            # Reading PVE's config file is much faster than repeated CLI config
+            # calls and avoids timeout noise on nodes with many VMs.
             cmd_parts = []
             for vid in vmids:
-                cmd_parts.append(f"echo VMID:{vid}; qm config {vid} 2>/dev/null | grep ^tags || true")
+                cmd_parts.append(
+                    f"echo VMID:{vid}; "
+                    f"grep '^tags' /etc/pve/qemu-server/{int(vid)}.conf 2>/dev/null || true"
+                )
             batch_cmd = "; ".join(cmd_parts)
             r = ssh_single(
                 host=nip,
@@ -2979,8 +2987,100 @@ def _redact_setup_init_line(line, secret_dir):
     return text
 
 
+def _schedule_setup_runtime_handoff(cfg):
+    """Move Web Init from the bootstrap listener to the managed service.
+
+    Web-launched init runs inside a temporary setup listener so the browser can
+    stream progress before the managed service account exists. Once init has
+    created freq-serve.service, that bootstrap process must get out of the way
+    or it will keep old config cached and compete with the real dashboard.
+    """
+    try:
+        has_service = subprocess.run(
+            ["systemctl", "cat", "freq-serve.service"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        ).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        has_service = False
+    if not has_service:
+        return False
+
+    current_pid = os.getpid()
+    current_user = ""
+    try:
+        import pwd
+
+        current_user = pwd.getpwuid(os.geteuid()).pw_name
+    except Exception:
+        current_user = ""
+    if current_user and current_user == getattr(cfg, "ssh_service_account", ""):
+        return False
+
+    prefix = []
+    if os.geteuid() != 0:
+        prefix = ["sudo", "-n"]
+    script = (
+        " ".join(shlex.quote(part) for part in prefix + ["systemctl", "stop", "pve-freq-setup.service"])
+        + " >/dev/null 2>&1 || true; "
+        + f"kill -TERM {current_pid} >/dev/null 2>&1 || true; "
+        + "sleep 2; "
+        + " ".join(shlex.quote(part) for part in prefix + ["systemctl", "restart", "freq-serve.service"])
+        + " >/dev/null 2>&1 || "
+        + " ".join(shlex.quote(part) for part in prefix + ["systemctl", "start", "freq-serve.service"])
+        + " >/dev/null 2>&1 || true"
+    )
+    run_cmd = prefix + [
+        "systemd-run",
+        "--quiet",
+        "--collect",
+        "--unit=pve-freq-web-init-handoff",
+        "--on-active=5",
+        "/bin/sh",
+        "-c",
+        script,
+    ]
+    try:
+        scheduled = subprocess.run(
+            run_cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        ).returncode == 0
+        if scheduled:
+            logger.info("setup_runtime_handoff_scheduled", pid=current_pid, method="systemd-run")
+            return True
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    fallback_script = (
+        "sleep 5; "
+        + f"kill -TERM {current_pid} >/dev/null 2>&1 || true; "
+        + "sleep 2; "
+        + " ".join(shlex.quote(part) for part in prefix + ["systemctl", "restart", "freq-serve.service"])
+        + " >/dev/null 2>&1 || "
+        + " ".join(shlex.quote(part) for part in prefix + ["systemctl", "start", "freq-serve.service"])
+        + " >/dev/null 2>&1 || true"
+    )
+    try:
+        subprocess.Popen(
+            ["/bin/sh", "-c", fallback_script],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        logger.info("setup_runtime_handoff_scheduled", pid=current_pid, method="detached-shell")
+        return True
+    except OSError as e:
+        logger.warn(f"setup runtime handoff scheduling failed: {e}")
+        return False
+
+
 def _run_setup_init_job(job_id, cmd, env, secret_dir):
     proc = None
+    handoff_cfg = None
     try:
         proc = subprocess.Popen(
             cmd,
@@ -3003,6 +3103,7 @@ def _run_setup_init_job(job_id, cmd, env, secret_dir):
                     _setup_init_job["lines"] = _setup_init_job["lines"][-1000:]
         rc = proc.wait()
         cfg = load_config(force=True)
+        handoff_cfg = cfg
         initialized = os.path.isfile(os.path.join(cfg.conf_dir, ".initialized"))
         with _setup_init_lock:
             if _setup_init_job and _setup_init_job.get("id") == job_id:
@@ -3019,6 +3120,14 @@ def _run_setup_init_job(job_id, cmd, env, secret_dir):
                 _setup_init_job["finished_at"] = time.time()
                 _setup_init_job["updated_at"] = time.time()
     finally:
+        if env.get("FREQ_WEB_INIT") == "1" and handoff_cfg is not None:
+            if _schedule_setup_runtime_handoff(handoff_cfg):
+                with _setup_init_lock:
+                    if _setup_init_job and _setup_init_job.get("id") == job_id:
+                        _setup_init_job.setdefault("lines", []).append(
+                            "scheduled dashboard handoff to freq-serve.service"
+                        )
+                        _setup_init_job["updated_at"] = time.time()
         try:
             shutil.rmtree(secret_dir)
         except Exception:
