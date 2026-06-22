@@ -24,6 +24,12 @@ def json_response(handler, data, status=200):
     body = json.dumps(data).encode()
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
+    try:
+        from freq.api.auth import maybe_send_session_refresh_cookie
+
+        maybe_send_session_refresh_cookie(handler)
+    except Exception:
+        pass
     # M-BLUETEAM-SECURITY-HARDENING-20260413AJ: reflected-origin ACAO
     # removed — same-origin only, no cross-origin CORS exposure. See
     # serve.py _json_response for the full rationale.

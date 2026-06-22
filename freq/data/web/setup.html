@@ -3,75 +3,248 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PVE FREQ — Setup</title>
+<title>PVE FREQ | Zero-State Init</title>
 <link rel="stylesheet" href="/static/css/setup.css">
 </head>
 <body>
-<div class="setup">
-  <div class="logo">
-    <h1>PVE FREQ</h1>
-    <p>Fleet dashboard — first-run setup</p>
-  </div>
-  <div class="steps">
-    <div class="step-dot active" id="dot-0"></div>
-    <div class="step-dot" id="dot-1"></div>
-    <div class="step-dot" id="dot-2"></div>
-    <div class="step-dot" id="dot-3"></div>
-  </div>
-
-  <!-- Step 0: First operator login -->
-  <div class="pane active" id="pane-0">
-    <h2>First operator login</h2>
-    <p class="desc">Creates the first web operator. Seeds users.conf with a PBKDF2 hash. The fleet service account is deployed later by freq init over SSH; the default name is freq-admin, but it is configurable via ssh.service_account. This step only covers the dashboard login.</p>
-    <label>Username</label>
-    <input type="text" id="s-user" placeholder="admin" autocomplete="username">
-    <label>Password</label>
-    <input type="password" id="s-pass" placeholder="Minimum 8 characters" autocomplete="new-password">
-    <label>Confirm password</label>
-    <input type="password" id="s-pass2" placeholder="Re-enter password" autocomplete="new-password" onkeydown="if(event.key==='Enter')nextStep()">
-    <div class="err" id="err-0"></div>
-    <div class="btn-row"><button class="btn" onclick="nextStep()">Create account</button></div>
-  </div>
-
-  <!-- Step 1: Cluster identity -->
-  <div class="pane" id="pane-1">
-    <h2>Cluster identity</h2>
-    <p class="desc">Optional — written to freq.toml. PVE node IPs are used by the API poller. All fields can be changed later with freq config.</p>
-    <label>Cluster name</label>
-    <input type="text" id="s-cluster" placeholder="dc01">
-    <label>Timezone</label>
-    <input type="text" id="s-tz" placeholder="UTC" value="UTC">
-    <label>PVE node IPs (comma-separated)</label>
-    <input type="text" id="s-nodes" placeholder="10.25.255.26, 10.25.255.27, 10.25.255.28">
-    <div class="err" id="err-1"></div>
-    <div class="btn-row">
-      <button class="btn btn-ghost" onclick="prevStep()">Back</button>
-      <button class="btn" onclick="nextStep()">Continue</button>
+<main class="setup-shell">
+  <header class="setup-hero">
+    <div>
+      <p class="eyebrow">first-run full init</p>
+      <h1>PVE FREQ</h1>
+      <p class="hero-copy">Build the dashboard operator, cluster identity, fleet access, device credentials, PDM choice, and SSL posture from the web UI.</p>
     </div>
-  </div>
+    <aside class="status-card" aria-live="polite">
+      <span class="status-label">setup status</span>
+      <strong id="setup-health">probing</strong>
+      <p id="setup-reason">Checking setup truth from /api/setup/status.</p>
+    </aside>
+  </header>
 
-  <!-- Step 2: SSH key -->
-  <div class="pane" id="pane-2">
-    <h2>Service-account SSH key</h2>
-    <p class="desc">ed25519 keypair for fleet SSH. Generate now, or skip and run freq init later to deploy the real service account.</p>
-    <div id="key-status"></div>
-    <div class="err" id="err-2"></div>
-    <div class="btn-row">
-      <button class="btn btn-ghost" onclick="prevStep()">Back</button>
-      <button class="btn" id="btn-keygen" onclick="genKey()">Generate keypair</button>
-      <button class="btn" onclick="nextStep()">Continue</button>
-    </div>
-    <div class="skip" onclick="nextStep()">Skip — configure via freq init</div>
-  </div>
+  <section class="contract-strip" aria-label="init contract">
+    <div><span>01</span> Operator login</div>
+    <div><span>02</span> Cluster + network</div>
+    <div><span>03</span> SSH + secrets</div>
+    <div><span>04</span> Fleet + devices</div>
+    <div><span>05</span> PDM + SSL</div>
+    <div><span>06</span> Run + verify</div>
+  </section>
 
-  <!-- Step 3: Done -->
-  <div class="pane" id="pane-3">
-    <h2>Web setup complete</h2>
-    <p class="desc">Web login is ready. freq init still has to run to deploy the fleet service account over SSH, register hosts, and write the .initialized marker. The default service-account name is freq-admin unless you configure a different one. setup_health will report "web-setup-only" until freq init completes.</p>
-    <div class="result" id="summary"></div>
-    <div class="btn-row"><button class="btn" onclick="launch()">Launch dashboard</button></div>
-  </div>
-</div>
+  <form id="init-form" class="setup-grid" autocomplete="off">
+    <section class="panel panel-operator">
+      <div class="panel-head">
+        <p>Operator</p>
+        <h2>First web operator</h2>
+      </div>
+      <p class="panel-copy">Creates the first human dashboard operator. The fleet service account is separate runtime identity and is deployed by full init.</p>
+      <div class="field-row">
+        <label>Username
+          <input id="operator-user" name="operator_user" type="text" value="admin" autocomplete="username">
+        </label>
+        <label>Password
+          <input id="operator-pass" name="operator_pass" type="password" autocomplete="new-password">
+        </label>
+        <label>Confirm
+          <input id="operator-pass2" name="operator_pass2" type="password" autocomplete="new-password">
+        </label>
+      </div>
+    </section>
+
+    <section class="panel panel-cluster">
+      <div class="panel-head">
+        <p>Cluster</p>
+        <h2>Identity and network</h2>
+      </div>
+      <div class="field-row">
+        <label>Cluster name
+          <input id="cluster-name" name="cluster_name" type="text" placeholder="dc01">
+        </label>
+        <label>Timezone
+          <input id="timezone" name="timezone" type="text" value="America/Chicago">
+        </label>
+        <label>Gateway
+          <input id="gateway" name="gateway" type="text" placeholder="10.25.255.1">
+        </label>
+        <label>Nameserver
+          <input id="nameserver" name="nameserver" type="text" value="1.1.1.1">
+        </label>
+      </div>
+      <div class="subhead-row">
+        <h3>PVE nodes</h3>
+        <button class="mini-btn" type="button" data-action="add-node">Add node</button>
+      </div>
+      <div id="pve-node-list" class="stack-list"></div>
+    </section>
+
+    <section class="panel panel-access">
+      <div class="panel-head">
+        <p>Access</p>
+        <h2>Bootstrap and service account</h2>
+      </div>
+      <div class="field-row access-grid">
+        <label>SSH mode
+          <select id="ssh-mode" name="ssh_mode">
+            <option value="sudo">sudo</option>
+            <option value="root">root</option>
+          </select>
+        </label>
+        <label>Bootstrap user
+          <input id="bootstrap-user" name="bootstrap_user" type="text" value="root">
+        </label>
+        <label>Bootstrap auth
+          <select id="bootstrap-auth" name="bootstrap_auth">
+            <option value="password">Password secret</option>
+            <option value="key">Private key secret</option>
+            <option value="key-path">Existing key path</option>
+          </select>
+        </label>
+        <label>Bootstrap secret
+          <textarea id="bootstrap-secret" name="bootstrap_secret" rows="2" placeholder="Password, private key, or key path"></textarea>
+        </label>
+        <label>Service account
+          <input id="service-account" name="service_account" type="text" value="freq-admin">
+        </label>
+        <label>Service password
+          <input id="service-pass" name="service_pass" type="password" autocomplete="new-password">
+        </label>
+      </div>
+    </section>
+
+    <section class="panel panel-fleet">
+      <div class="panel-head">
+        <p>Fleet</p>
+        <h2>Ownership, hosts, and devices</h2>
+      </div>
+      <div class="field-row">
+        <label>Owned VMIDs
+          <input id="owned-vmids" name="owned_vmids" type="text" placeholder="100, 200-210">
+        </label>
+        <label>Template VMIDs
+          <input id="template-vmids" name="template_vmids" type="text" placeholder="9000-9010">
+        </label>
+        <label>Acknowledged out-of-contract VMIDs
+          <input id="ack-vmids" name="ack_vmids" type="text" placeholder="5005">
+        </label>
+      </div>
+      <div class="field-row">
+        <label>Core devices
+          <input id="core-devices" name="core_devices" type="text" placeholder="pfsense:10.25.255.1, truenas:10.25.255.10">
+        </label>
+        <label>Lab devices
+          <input id="lab-devices" name="lab_devices" type="text" placeholder="switch-lab:10.25.60.2">
+        </label>
+      </div>
+      <label>Optional hosts import
+        <textarea id="hosts-import" name="hosts_import" rows="4" placeholder="Paste hosts.toml or plain host lines if discovery needs a seed. Leave blank for discovery-only init."></textarea>
+      </label>
+      <div class="subhead-row">
+        <h3>Device credentials</h3>
+        <button class="mini-btn" type="button" data-action="add-device">Add credential</button>
+      </div>
+      <div id="device-list" class="stack-list"></div>
+    </section>
+
+    <section class="panel panel-pdm">
+      <div class="panel-head">
+        <p>PDM</p>
+        <h2>Datacenter manager</h2>
+      </div>
+      <div class="choice-grid" role="radiogroup" aria-label="PDM setup choice">
+        <label><input type="radio" name="pdm_mode" value="skip" checked> Skip PDM</label>
+        <label><input type="radio" name="pdm_mode" value="install"> Install PDM</label>
+        <label><input type="radio" name="pdm_mode" value="existing"> Use existing PDM</label>
+      </div>
+      <div class="field-row">
+        <label>root@pam password
+          <input id="pdm-pass" name="pdm_pass" type="password">
+        </label>
+        <label>Remote name
+          <input id="pdm-remote" name="pdm_remote" type="text" placeholder="dc01">
+        </label>
+      </div>
+    </section>
+
+    <section class="panel panel-ssl">
+      <div class="panel-head">
+        <p>SSL</p>
+        <h2>Certificate path</h2>
+      </div>
+      <p class="panel-copy">Base init can finish without SSL. Choose existing SSL if infra already owns certs or a proxy. Choose bootstrap only when Cloudflare setup is desired.</p>
+      <div class="choice-grid ssl-choice" role="radiogroup" aria-label="SSL setup choice">
+        <label><input type="radio" name="ssl_mode" value="defer" checked> Finish init without SSL</label>
+        <label><input type="radio" name="ssl_mode" value="adopt-existing"> Adopt existing SSL</label>
+        <label><input type="radio" name="ssl_mode" value="bootstrap-new"> Bootstrap new SSL after init</label>
+      </div>
+      <div class="ssl-fields" data-ssl-fields="adopt-existing">
+        <div class="field-row">
+          <label>Base domain
+            <input id="ssl-adopt-domain" name="ssl_adopt_domain" type="text" placeholder="dc01.example.com">
+          </label>
+          <label>Cert source
+            <select id="ssl-adopt-source" name="ssl_adopt_source">
+              <option value="reverse-proxy">Reverse proxy owns TLS</option>
+              <option value="managed-paths">Existing fullchain/key paths</option>
+            </select>
+          </label>
+          <label>Reverse proxy host
+            <input id="ssl-proxy-host" name="ssl_proxy_host" type="text" placeholder="web-host-01">
+          </label>
+        </div>
+        <div class="field-row">
+          <label>Fullchain path
+            <input id="ssl-fullchain-path" name="ssl_fullchain_path" type="text" placeholder="/etc/ssl/example/fullchain.pem">
+          </label>
+          <label>Key path
+            <input id="ssl-key-path" name="ssl_key_path" type="text" placeholder="/etc/ssl/example/privkey.pem">
+          </label>
+          <label>Target hostnames
+            <input id="ssl-targets" name="ssl_targets" type="text" placeholder="pve01.dc01.example.com, freq.dc01.example.com">
+          </label>
+        </div>
+      </div>
+      <div class="ssl-fields" data-ssl-fields="bootstrap-new">
+        <div class="field-row">
+          <label>Base domain
+            <input id="ssl-bootstrap-domain" name="ssl_bootstrap_domain" type="text" placeholder="dc01.example.com">
+          </label>
+          <label>Cloudflare token path
+            <input id="cloudflare-token-path" name="cloudflare_token_path" type="text" placeholder="/etc/freq/credentials/cloudflare_dns_token">
+          </label>
+          <label>Target hostnames
+            <input id="ssl-bootstrap-targets" name="ssl_bootstrap_targets" type="text" placeholder="pve01.dc01.example.com, freq.dc01.example.com">
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel panel-run">
+      <div class="panel-head">
+        <p>Run</p>
+        <h2>Start full init</h2>
+      </div>
+      <p class="panel-copy">This UI is intentionally honest: it does not mark setup complete until a backend init runner starts, streams phases, and /api/setup/status reports initialized/configured.</p>
+      <div class="action-row">
+        <button id="start-init" class="btn-primary" type="submit">Start Web Init</button>
+        <button id="refresh-status" class="btn-secondary" type="button">Refresh Status</button>
+      </div>
+      <div id="form-error" class="blocker" hidden></div>
+      <div class="progress-box">
+        <div class="progress-head">
+          <span id="progress-state">idle</span>
+          <span id="progress-phase">waiting for backend runner</span>
+        </div>
+        <pre id="phase-log">No init run has started in this browser session.</pre>
+      </div>
+      <div class="contract-note">
+        <strong>Backend endpoint contract required:</strong>
+        <code>POST /api/setup/init/start</code>,
+        <code>GET /api/setup/init/status</code>,
+        <code>GET /api/setup/init/logs</code>,
+        <code>GET /api/cert/lifecycle/reconcile</code>.
+      </div>
+    </section>
+  </form>
+</main>
 
 <script src="/static/js/setup.js"></script>
 </body>

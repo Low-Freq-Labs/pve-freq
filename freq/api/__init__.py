@@ -37,6 +37,7 @@ def build_routes() -> dict:
         "freq.api.secure",
         "freq.api.observe",
         "freq.api.state",
+        "freq.api.v1_stubs",
         "freq.api.net",
         "freq.api.docker_api",
         "freq.api.hw",
@@ -47,7 +48,6 @@ def build_routes() -> dict:
         "freq.api.user",
         "freq.api.plugin",
         "freq.api.terminal",
-        "freq.api.v1_stubs",
         "freq.api.fw",
         "freq.api.opnsense",
         "freq.api.ipmi",
@@ -56,6 +56,7 @@ def build_routes() -> dict:
         "freq.api.synology",
         "freq.api.logs",
         "freq.api.backup_verify",
+        "freq.api.cert_lifecycle",
     ]
 
     import_errors = []

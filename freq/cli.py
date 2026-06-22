@@ -1695,6 +1695,46 @@ def _register_cert(sub):
     p = cert_sub.add_parser("issued", help="List tracked issued certificates")
     p.set_defaults(func=_cmd_cert_issued_list)
 
+    p = cert_sub.add_parser("plan", help="Show certificate lifecycle plan")
+    p.add_argument("--json", action="store_true", help="Output plan as JSON")
+    p.set_defaults(func=_cmd_cert_plan)
+
+    p = cert_sub.add_parser("bootstrap", help="Configure cert lifecycle from a Cloudflare token file")
+    p.add_argument("--base-domain", required=True, help="Base domain for fleet certificates, e.g. dc01.example.com")
+    p.add_argument("--cloudflare-token-file", required=True, help="Path to Cloudflare API token file")
+    p.add_argument("--token-dest", help="Managed destination path for the Cloudflare token")
+    p.add_argument("--replace", action="store_true", help="Replace existing certificate config tables")
+    p.add_argument("--dry-run", action="store_true", help="Preview generated config without writing")
+    p.add_argument("--json", action="store_true", help="Output bootstrap result as JSON")
+    p.set_defaults(func=_cmd_cert_bootstrap)
+
+    p = cert_sub.add_parser("issue", help="Issue configured certificate via ACME DNS-01")
+    p.add_argument("--dry-run", action="store_true", help="Print ACME command without executing")
+    p.add_argument("--json", action="store_true", help="Output command as JSON")
+    p.set_defaults(func=_cmd_cert_issue)
+
+    p = cert_sub.add_parser("renew", help="Renew configured certificate via ACME")
+    p.add_argument("--deploy", action="store_true", help="Deploy after successful renewal")
+    p.add_argument("--dry-run", action="store_true", help="Print ACME command without executing")
+    p.add_argument("--json", action="store_true", help="Output command as JSON")
+    p.set_defaults(func=_cmd_cert_renew)
+
+    p = cert_sub.add_parser("deploy", help="Deploy configured certificate to appliances")
+    p.add_argument("target", nargs="?", help="Optional target label, hostname, or IP")
+    p.add_argument("--dry-run", action="store_true", help="Preview deployment steps without mutation")
+    p.add_argument("--json", action="store_true", help="Output deployment result as JSON")
+    p.set_defaults(func=_cmd_cert_deploy)
+
+    p = cert_sub.add_parser("dns-sync", help="Create/update Cloudflare DNS records for cert targets")
+    p.add_argument("--dry-run", action="store_true", help="Preview DNS record changes without mutation")
+    p.add_argument("--json", action="store_true", help="Output DNS sync result as JSON")
+    p.set_defaults(func=_cmd_cert_dns_sync)
+
+    p = cert_sub.add_parser("verify", help="Verify configured certificate targets")
+    p.add_argument("target", nargs="?", help="Optional target label, hostname, or IP")
+    p.add_argument("--json", action="store_true", help="Output verification result as JSON")
+    p.set_defaults(func=_cmd_cert_verify)
+
     cert.set_defaults(func=_cmd_cert)
 
 
@@ -3479,6 +3519,48 @@ def _cmd_cert_issued_list(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.cert_management import cmd_cert_issued_list
 
     return cmd_cert_issued_list(cfg, pack, args)
+
+
+def _cmd_cert_plan(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert_management import cmd_cert_plan
+
+    return cmd_cert_plan(cfg, pack, args)
+
+
+def _cmd_cert_bootstrap(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert_management import cmd_cert_bootstrap
+
+    return cmd_cert_bootstrap(cfg, pack, args)
+
+
+def _cmd_cert_issue(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert_management import cmd_cert_issue
+
+    return cmd_cert_issue(cfg, pack, args)
+
+
+def _cmd_cert_renew(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert_management import cmd_cert_renew
+
+    return cmd_cert_renew(cfg, pack, args)
+
+
+def _cmd_cert_deploy(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert_management import cmd_cert_deploy
+
+    return cmd_cert_deploy(cfg, pack, args)
+
+
+def _cmd_cert_dns_sync(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert_management import cmd_cert_dns_sync
+
+    return cmd_cert_dns_sync(cfg, pack, args)
+
+
+def _cmd_cert_verify(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.cert_management import cmd_cert_verify
+
+    return cmd_cert_verify(cfg, pack, args)
 
 
 # --- Proxy Management ---

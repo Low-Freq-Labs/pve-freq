@@ -220,6 +220,13 @@ class FreqConfig:
     tls_cert: str = ""
     tls_key: str = ""
 
+    # Certificate lifecycle management. This is intentionally separate
+    # from dashboard TLS above: dashboard TLS serves freq itself, while
+    # [certificates] + [[cert_target]] describe fleet cert issuance,
+    # DNS records, distribution drivers, and verification.
+    certificates: dict = field(default_factory=dict)
+    cert_targets: list = field(default_factory=list)
+
     # R-SECURITY-ARCH-DEBT-20260413U T-7: trusted reverse-proxy source list.
     # When set, the dashboard's rate limiter and auth logger will read the
     # leftmost non-trusted IP from the X-Forwarded-For header — but ONLY if
@@ -781,6 +788,15 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.agent_port = _safe_int(services.get("agent_port"), cfg.agent_port)
     cfg.tls_cert = services.get("tls_cert", cfg.tls_cert)
     cfg.tls_key = services.get("tls_key", cfg.tls_key)
+
+    certs = data.get("certificates", {})
+    if isinstance(certs, dict):
+        cfg.certificates = dict(certs)
+    raw_cert_targets = data.get("cert_target", [])
+    if isinstance(raw_cert_targets, dict):
+        raw_cert_targets = [raw_cert_targets]
+    if isinstance(raw_cert_targets, list):
+        cfg.cert_targets = [dict(t) for t in raw_cert_targets if isinstance(t, dict)]
     # R-SECURITY-ARCH-DEBT-20260413U T-7: trusted reverse-proxy source list
     # for X-Forwarded-For client-IP resolution. Accept [services] or
     # [dashboard] table — operators reasonably expect either namespace.

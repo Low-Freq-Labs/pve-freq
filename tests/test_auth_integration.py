@@ -261,6 +261,95 @@ class TestSessionExpiry(unittest.TestCase):
         self.assertIsNone(role)
         self.assertIn("expired", err.lower())
 
+    def test_old_session_with_recent_activity_is_accepted(self):
+        """Absolute login age must not expire a session that was recently active."""
+        from freq.api.auth import check_session_role, _auth_tokens, _auth_lock, SESSION_TIMEOUT_SECONDS
+
+        token = "recent-activity-token"
+        now = time.time()
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": now - SESSION_TIMEOUT_SECONDS - 120,
+                "last_activity_ts": now - 30,
+            }
+
+        h = MagicMock()
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": f"Bearer {token}",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+        h.path = "/api/fleet/overview"
+
+        role, err = check_session_role(h, "viewer")
+        self.assertEqual(role, "admin")
+        self.assertIsNone(err)
+
+    def test_session_refresh_requires_user_activity_header(self):
+        """Background polls must not reset idle time without user activity."""
+        from freq.api.auth import check_session_role, _auth_tokens, _auth_lock
+
+        token = "idle-no-touch-token"
+        original_activity = time.time() - 120
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": time.time() - 600,
+                "last_activity_ts": original_activity,
+            }
+
+        h = MagicMock()
+        h.headers = MagicMock()
+        h.headers.get = lambda key, default="": {
+            "Authorization": f"Bearer {token}",
+            "Cookie": "",
+            "Origin": "",
+        }.get(key, default)
+        h.path = "/api/health"
+
+        role, err = check_session_role(h, "viewer")
+        self.assertEqual(role, "admin")
+        self.assertIsNone(err)
+        with _auth_lock:
+            self.assertEqual(_auth_tokens[token]["last_activity_ts"], original_activity)
+
+    def test_user_activity_refreshes_idle_timer_and_cookie(self):
+        """A request marked with user activity must slide idle expiry and cookie Max-Age."""
+        from freq.api.auth import check_session_role, _auth_tokens, _auth_lock, SESSION_TIMEOUT_SECONDS
+
+        token = "idle-touch-token"
+        original_activity = time.time() - 120
+        with _auth_lock:
+            _auth_tokens[token] = {
+                "user": "admin", "role": "admin",
+                "ts": time.time() - 600,
+                "last_activity_ts": original_activity,
+            }
+
+        h = _make_handler(
+            path="/api/health",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Cookie": "",
+                "Origin": "",
+                "X-Freq-User-Activity": "1",
+            },
+        )
+
+        role, err = check_session_role(h, "viewer")
+        self.assertEqual(role, "admin")
+        self.assertIsNone(err)
+        with _auth_lock:
+            self.assertGreater(_auth_tokens[token]["last_activity_ts"], original_activity)
+
+        h._json_response({"ok": True})
+        cookie = _get_header(h, "Set-Cookie")
+        self.assertIsNotNone(cookie)
+        self.assertIn("freq_session=", cookie)
+        self.assertIn(f"Max-Age={SESSION_TIMEOUT_SECONDS}", cookie)
+
     def test_api_wrapper_preserves_expired_session_reason(self):
         """Protected API routes must return the specific expired-session reason."""
         from freq.api.auth import _auth_tokens, _auth_lock, SESSION_TIMEOUT_SECONDS

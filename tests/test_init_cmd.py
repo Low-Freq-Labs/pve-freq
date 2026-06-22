@@ -379,6 +379,28 @@ class TestPureNothingInitContract(unittest.TestCase):
         mock_fmt.step_ok.assert_called_with("PDM setup intentionally skipped (--skip-pdm)")
         mock_fmt.step_warn.assert_not_called()
 
+    def test_pdm_token_creation_uses_configured_service_account(self):
+        from freq.modules.init_cmd import _pdm_create_pve_token
+
+        cfg = types.SimpleNamespace(ssh_service_account="dc01-admin")
+        ctx = {"key_path": "/tmp/freq_id_ed25519"}
+        token_json = '{"full-tokenid":"pdm@pve!pdm","value":"secret-value"}'
+
+        with patch("freq.modules.init_cmd._run") as mock_run:
+            mock_run.side_effect = [
+                (0, "[]", ""),
+                (0, "", ""),
+                (0, "", ""),
+                (0, token_json, ""),
+            ]
+
+            token_id, token_secret = _pdm_create_pve_token("10.25.255.26", ctx, cfg)
+
+        self.assertEqual(token_id, "pdm@pve!pdm")
+        self.assertEqual(token_secret, "secret-value")
+        first_cmd = mock_run.call_args_list[0].args[0]
+        self.assertIn("dc01-admin@10.25.255.26", first_cmd)
+
     def test_phase12_verifies_all_metrics_agents_not_spot_check(self):
         src = self._src()
         block = src.split("# Metrics agent verification for every generic systemd agent host.")[1].split("# Dashboard readiness")[0]

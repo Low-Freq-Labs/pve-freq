@@ -73,6 +73,7 @@ class TestParsing(unittest.TestCase):
     def test_parse_ram_pct_invalid(self):
         self.assertEqual(_parse_ram_pct("invalid"), -1)
         self.assertEqual(_parse_ram_pct(""), -1)
+        self.assertEqual(_parse_ram_pct(None), -1)
 
     def test_parse_ram_pct_zero_total(self):
         self.assertEqual(_parse_ram_pct("0/0MB"), -1)
@@ -86,6 +87,7 @@ class TestParsing(unittest.TestCase):
     def test_parse_disk_pct_invalid(self):
         self.assertEqual(_parse_disk_pct("unknown"), -1)
         self.assertEqual(_parse_disk_pct(""), -1)
+        self.assertEqual(_parse_disk_pct(None), -1)
 
 
 class TestLinearRegression(unittest.TestCase):

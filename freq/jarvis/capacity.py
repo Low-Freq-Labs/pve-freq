@@ -101,6 +101,7 @@ def load_snapshots(data_dir: str) -> list:
 
 def _parse_ram_pct(ram_str: str) -> float:
     """Parse RAM string '1234/8192MB' into percentage."""
+    ram_str = str(ram_str or "")
     m = re.match(r"(\d+)/(\d+)", ram_str)
     if m:
         used, total = int(m.group(1)), int(m.group(2))
@@ -111,6 +112,7 @@ def _parse_ram_pct(ram_str: str) -> float:
 
 def _parse_disk_pct(disk_str: str) -> float:
     """Parse disk string '45%' into float."""
+    disk_str = str(disk_str or "")
     m = re.match(r"(\d+)%", disk_str)
     if m:
         return float(m.group(1))

@@ -144,6 +144,77 @@ def handle_switch_environment(handler):
     json_response(handler, {"host": label, "ip": ip, "environment": env})
 
 
+def _switch_inventory_targets(cfg):
+    from freq.modules.switch_orchestration import _get_switch_hosts
+
+    hosts = list(_get_switch_hosts(cfg))
+    if hosts:
+        return hosts
+    if getattr(cfg, "switch_ip", ""):
+        from types import SimpleNamespace
+
+        return [SimpleNamespace(ip=cfg.switch_ip, label="switch", htype="switch")]
+    return []
+
+
+def handle_switches(handler):
+    """GET /api/v1/net/switches -- switch inventory for dashboard."""
+    cfg = load_config()
+    switches = []
+    profiles = []
+    online = 0
+    total_ports = 0
+    for host in _switch_inventory_targets(cfg):
+        status = "down"
+        facts = {}
+        interfaces = []
+        error = ""
+        try:
+            ip, label, deployer = _resolve_switch(cfg, getattr(host, "label", "") or getattr(host, "ip", ""))
+            if not deployer:
+                raise RuntimeError("No switch deployer available")
+            facts = deployer.get_facts(ip, cfg) or {}
+            interfaces = deployer.get_interfaces(ip, cfg) or []
+            status = "online"
+            online += 1
+        except Exception as e:
+            ip = getattr(host, "ip", "")
+            label = getattr(host, "label", "") or ip
+            error = str(e)
+            logger.warn(f"switch inventory failed for {label or ip}: {e}")
+        port_count = len(interfaces)
+        total_ports += port_count
+        switches.append(
+            {
+                "name": label,
+                "ip": ip,
+                "model": facts.get("model") or facts.get("platform") or "",
+                "firmware": facts.get("os_version") or facts.get("version") or facts.get("image") or "",
+                "ports": port_count,
+                "uptime": facts.get("uptime") or "",
+                "status": status,
+                "error": error,
+            }
+        )
+    if switches:
+        profiles.append({"name": "Managed Switches", "description": f"{len(switches)} switch target(s) from hosts.toml"})
+    json_response(
+        handler,
+        {
+            "stats": {
+                "total": len(switches),
+                "online": online,
+                "offline": max(0, len(switches) - online),
+                "total_ports": total_ports,
+                "profiles": len(profiles),
+            },
+            "switches": switches,
+            "profiles": profiles,
+            "message": "" if switches else "No switches configured",
+        },
+    )
+
+
 # -- Legacy Endpoint (backwards compat for dashboard) ----------------------
 
 
@@ -526,6 +597,8 @@ def handle_switch_acl(handler):
 
 def register(routes: dict):
     """Register network API routes into the master route table."""
+    routes["/api/v1/net/switches"] = handle_switches
+
     # V1 switch endpoints (deployer-backed)
     routes["/api/v1/net/switch/show"] = handle_switch_show
     routes["/api/v1/net/switch/facts"] = handle_switch_facts

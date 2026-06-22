@@ -2270,7 +2270,7 @@ def _parse_network_interfaces(text):
                     except ValueError:
                         pass
 
-        # Match address lines: "address 10.25.255.50/24"
+        # Match address lines such as "address 192.0.2.50/24".
         elif line.startswith("address ") and current_iface:
             addr = line.split(None, 1)[1].strip()
             # Apply to VLAN if this iface is a VLAN subinterface
@@ -2288,7 +2288,7 @@ def _parse_network_interfaces(text):
                 except ValueError:
                     pass
 
-        # Match gateway lines: "gateway 10.25.255.1"
+        # Match gateway lines such as "gateway 192.0.2.1".
         elif line.startswith("gateway ") and current_iface:
             gw = line.split(None, 1)[1].strip()
             if "." in current_iface:
@@ -3737,14 +3737,14 @@ def _pdm_add_remote(remote_name, token_id, token_secret, node_entries, cookies, 
     return ok
 
 
-def _pdm_create_pve_token(pve_ip, ctx):
+def _pdm_create_pve_token(pve_ip, ctx, cfg=None):
     """Create pdm@pve user and API token on a PVE node via SSH.
 
     Uses the already-deployed freq service account for SSH access.
     Returns (token_id, token_secret) or (None, None).
     """
     key_path = ctx.get("key_path", "")
-    svc_name = ctx.get("svc_name", cfg.ssh_service_account if hasattr(cfg, "ssh_service_account") else "freq-admin")
+    svc_name = ctx.get("svc_name") or getattr(cfg, "ssh_service_account", "freq-admin")
 
     ssh_base = [
         "ssh",
@@ -3912,7 +3912,7 @@ def _phase_pdm(cfg, ctx, args=None):
     first_node = cfg.pve_nodes[0] if isinstance(cfg.pve_nodes, list) else cfg.pve_nodes.split()[0]
     fmt.step_start(f"Creating pdm@pve API token on {first_node}...")
 
-    token_id, token_secret = _pdm_create_pve_token(first_node, ctx)
+    token_id, token_secret = _pdm_create_pve_token(first_node, ctx, cfg)
     if not token_id:
         fmt.step_fail("Could not create PVE API token")
         fmt.line(
@@ -9413,14 +9413,18 @@ def _init_headless(cfg, args):
     # the log with misleading "Permission denied" for hosts where the
     # service account hasn't been deployed yet. Restart after Phase 12.
     _serve_was_running = False
-    try:
-        rc_chk, _, _ = _run(["systemctl", "is-active", "freq-serve"], timeout=5)
-        if rc_chk == 0:
-            _serve_was_running = True
-            _run(["systemctl", "stop", "freq-serve"], timeout=10)
-            fmt.step_ok("Dashboard stopped for fleet deploy/verify (will restart after Phase 12)")
-    except Exception:
-        pass
+    _web_init_runner = os.environ.get("FREQ_WEB_INIT") == "1"
+    if _web_init_runner:
+        fmt.step_warn("Dashboard remains online for web-launched init progress")
+    else:
+        try:
+            rc_chk, _, _ = _run(["systemctl", "is-active", "freq-serve"], timeout=5)
+            if rc_chk == 0:
+                _serve_was_running = True
+                _run(["systemctl", "stop", "freq-serve"], timeout=10)
+                fmt.step_ok("Dashboard stopped for fleet deploy/verify (will restart after Phase 12)")
+        except Exception:
+            pass
 
     # ── Phase 8: Fleet Deployment ──
     _phase(8, headless_total, "Fleet Deployment")

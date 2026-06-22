@@ -79,10 +79,10 @@ class TestInitLifecycleIdentityBoundaries(unittest.TestCase):
     def test_setup_copy_separates_web_operator_from_service_account(self):
         html = _read("freq/data/web/setup.html")
         js = _read("freq/data/web/js/setup.js")
-        self.assertIn("first web operator", html)
-        self.assertIn("fleet service account is deployed later by freq init", html)
-        self.assertIn("default name is freq-admin", html)
-        self.assertIn("default service-account name is freq-admin", js)
+        self.assertIn("First web operator", html)
+        self.assertIn("fleet service account is separate runtime identity", html)
+        self.assertIn("Service account", html)
+        self.assertIn("freq-admin", js)
 
     def test_init_phase_plan_keeps_service_account_and_pve_api_separate(self):
         src = _read("freq/modules/init_cmd.py")

@@ -19,6 +19,7 @@ Design decisions:
       Only the serve module actually needs the HTML; other importers skip it.
 """
 
+import hashlib
 import importlib.resources
 
 
@@ -37,12 +38,18 @@ def _load_app_html() -> str:
     """Load main dashboard — HTML with linked CSS and JS.
 
     Substitutes {{VERSION}} placeholders in asset cache-bust tokens with
-    the actual product version so cache busters never drift from real
-    versioning. Operators reading view-source see one true version.
+    the product version plus a short hash of the actual frontend assets.
+    The product version keeps view-source honest; the asset hash prevents
+    dev/deploy UI ghosts when app.css/app.js change without a package
+    version bump.
     """
     html = _read_asset("app.html")
     from freq import __version__
-    return html.replace("{{VERSION}}", __version__)
+    digest = hashlib.sha256()
+    for asset in ("app.html", "css/app.css", "js/app.js"):
+        digest.update(_read_asset(asset).encode("utf-8"))
+    token = f"{__version__}-{digest.hexdigest()[:12]}"
+    return html.replace("{{VERSION}}", token)
 
 
 # Module-level __getattr__ returns a FRESH read each time.

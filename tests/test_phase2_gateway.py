@@ -8,8 +8,10 @@ import os
 import sys
 import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
 from dataclasses import dataclass
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -34,10 +36,16 @@ class MockConfig:
             MockHost("10.25.255.1", "pfsense", "pfsense"),
         ]
         self.pfsense_ip = "10.25.255.1"
+        self.truenas_ip = "10.25.255.25"
+        self.pve_nodes = ["10.25.255.26", "10.25.255.27", "10.25.255.28"]
+        self.pve_node_names = ["pve01", "pve02", "pve03"]
         self.switch_ip = "10.25.255.5"
         self.ssh_key_path = "/tmp/test"
         self.ssh_rsa_key_path = "/tmp/test_rsa"
         self.ssh_connect_timeout = 5
+        self.ssh_service_account = "dc01-admin"
+        self.certificates = {}
+        self.cert_targets = []
 
 
 # ---------------------------------------------------------------------------
@@ -192,8 +200,17 @@ class TestCertImports(unittest.TestCase):
         from freq.modules.cert_management import (
             cmd_cert_inspect, cmd_cert_fleet_check,
             cmd_cert_acme_status, cmd_cert_issued_list,
+            cmd_cert_plan, cmd_cert_bootstrap, cmd_cert_issue,
+            cmd_cert_renew, cmd_cert_deploy, cmd_cert_dns_sync, cmd_cert_verify,
         )
         self.assertTrue(callable(cmd_cert_inspect))
+        self.assertTrue(callable(cmd_cert_plan))
+        self.assertTrue(callable(cmd_cert_bootstrap))
+        self.assertTrue(callable(cmd_cert_issue))
+        self.assertTrue(callable(cmd_cert_renew))
+        self.assertTrue(callable(cmd_cert_deploy))
+        self.assertTrue(callable(cmd_cert_dns_sync))
+        self.assertTrue(callable(cmd_cert_verify))
 
 
 class TestCertIssuedStorage(unittest.TestCase):
@@ -212,6 +229,266 @@ class TestCertIssuedStorage(unittest.TestCase):
         _save_issued(cfg, data)
         reloaded = _load_issued(cfg)
         self.assertEqual(len(reloaded["certs"]), 1)
+
+
+class TestCertLifecyclePlan(unittest.TestCase):
+    """Test TLS lifecycle planning without live mutation."""
+
+    def test_plan_normalizes_dc01_target(self):
+        from freq.modules.cert_management import _build_lifecycle_plan
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        token_path = os.path.join(cfg.conf_dir, "cloudflare.token")
+        with open(token_path, "w") as f:
+            f.write("not-a-real-token")
+        cfg.certificates = {
+            "base_domain": "dc01.lowfreqlabs.com",
+            "wildcard": True,
+            "issuer": "acme.sh",
+            "dns_provider": "cloudflare",
+            "dns_token_path": token_path,
+            "cloudflare_zone_id": "zone-id",
+            "record_strategy": "public-private-a",
+        }
+        cfg.cert_targets = [
+            {
+                "label": "pve01",
+                "target_type": "proxmox_ve_node",
+                "hostname": "pve01.dc01.lowfreqlabs.com",
+                "ip": "10.25.255.26",
+                "port": 8006,
+                "deploy_driver": "proxmox_pvenode",
+                "restart_policy": "pveproxy_restart",
+            }
+        ]
+
+        plan = _build_lifecycle_plan(cfg)
+
+        self.assertEqual(plan["wildcard_name"], "*.dc01.lowfreqlabs.com")
+        self.assertEqual(plan["targets"][0]["deploy_driver"], "proxmox_pvenode")
+        self.assertIn("public-private-a publishes private IPs", " ".join(plan["warnings"]))
+
+    def test_bootstrap_infers_default_targets_from_existing_config(self):
+        from freq.modules.cert_management import _infer_cert_targets
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        targets = _infer_cert_targets(cfg, "dc01.lowfreqlabs.com")
+
+        self.assertEqual([t["label"] for t in targets[:3]], ["pve01", "pve02", "pve03"])
+        self.assertIn("truenas", [t["label"] for t in targets])
+        self.assertIn("pfsense", [t["label"] for t in targets])
+        pfsense = next(t for t in targets if t["label"] == "pfsense")
+        self.assertEqual(pfsense["deploy_driver"], "pfsense_config")
+        self.assertTrue(pfsense["host_header_check"])
+        self.assertTrue(pfsense["resolver_private_domain"])
+
+    def test_service_catalog_expands_one_host_into_multiple_web_ui_targets(self):
+        from freq.modules.cert_management import _build_lifecycle_plan, _cert_targets_from_catalog
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        token_path = os.path.join(cfg.conf_dir, "cloudflare.token")
+        with open(token_path, "w") as f:
+            f.write("not-a-real-token")
+        cfg.certificates = {
+            "base_domain": "example.internal",
+            "dns_provider": "cloudflare",
+            "dns_token_path": token_path,
+            "cloudflare_zone_id": "zone-id",
+            "record_strategy": "public-private-a",
+            "reverse_proxy_host": "proxy01",
+        }
+        cfg.cert_targets = _cert_targets_from_catalog(
+            [
+                {"name": "sonarr", "ip": "192.0.2.50", "port": 8989, "mode": "behind-proxy"},
+                {"name": "radarr", "ip": "192.0.2.50", "port": 7878, "mode": "behind-proxy"},
+                {"name": "router", "ip": "192.0.2.1", "port": 4443, "mode": "direct", "type": "pfsense"},
+                {"name": "ignored", "ip": "192.0.2.99", "enabled": False},
+            ],
+            "example.internal",
+            reverse_proxy_host="proxy01",
+        )
+
+        plan = _build_lifecycle_plan(cfg)
+        targets = {t["label"]: t for t in plan["targets"]}
+
+        self.assertEqual(len(targets), 3)
+        self.assertEqual(targets["sonarr"]["hostname"], "sonarr.example.internal")
+        self.assertEqual(targets["sonarr"]["deploy_driver"], "reverse_proxy")
+        self.assertEqual(targets["sonarr"]["origin_ip"], "192.0.2.50")
+        self.assertEqual(targets["sonarr"]["origin_port"], 8989)
+        self.assertEqual(targets["radarr"]["origin_port"], 7878)
+        self.assertEqual(targets["router"]["ip"], "192.0.2.1")
+
+    def test_pfsense_plan_includes_rebind_and_unbound_actions(self):
+        from freq.modules.cert_management import _build_lifecycle_plan
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        token_path = os.path.join(cfg.conf_dir, "cloudflare.token")
+        with open(token_path, "w") as f:
+            f.write("not-a-real-token")
+        cfg.certificates = {
+            "base_domain": "dc01.lowfreqlabs.com",
+            "dns_provider": "cloudflare",
+            "dns_token_path": token_path,
+            "cloudflare_zone_id": "zone-id",
+            "record_strategy": "public-private-a",
+        }
+        cfg.cert_targets = [
+            {
+                "label": "pfsense",
+                "target_type": "pfsense",
+                "hostname": "pfsense.dc01.lowfreqlabs.com",
+                "ip": "10.25.255.1",
+                "port": 4443,
+                "deploy_driver": "pfsense_config",
+            }
+        ]
+
+        plan = _build_lifecycle_plan(cfg)
+        actions = plan["targets"][0]["rebind_actions"]
+        self.assertIn("webgui_althostname", [a["type"] for a in actions])
+        self.assertIn("unbound_private_domain", [a["type"] for a in actions])
+        deploy_command = " ".join(
+            step.get("command", "") for step in plan["targets"][0]["deploy_steps"]
+        )
+        self.assertIn("althostnames", deploy_command)
+        self.assertIn("private-domain", deploy_command)
+
+    def test_bootstrap_dry_run_uses_single_cloudflare_token_file(self):
+        from freq.modules.cert_management import cmd_cert_bootstrap
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        token_path = os.path.join(cfg.conf_dir, "cf.token")
+        with open(token_path, "w") as f:
+            f.write("token-value")
+        args = Namespace(
+            base_domain="dc01.lowfreqlabs.com",
+            cloudflare_token_file=token_path,
+            token_dest="",
+            replace=False,
+            dry_run=True,
+            json=True,
+            yes=False,
+        )
+
+        with patch("freq.modules.cert_management._discover_cloudflare_zone_id") as discover:
+            discover.return_value = {"zone_id": "zone-id", "zone_name": "lowfreqlabs.com", "errors": []}
+            rc = cmd_cert_bootstrap(cfg, None, args)
+
+        self.assertEqual(rc, 0)
+        self.assertFalse(os.path.exists(os.path.join(cfg.conf_dir, "freq.toml")))
+        discover.assert_called_once_with(token_path, "dc01.lowfreqlabs.com")
+
+    def test_issue_requires_bootstrap_config(self):
+        from freq.modules.cert_management import cmd_cert_issue
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        args = Namespace(dry_run=True, json=True)
+
+        self.assertEqual(cmd_cert_issue(cfg, None, args), 1)
+
+    def test_adopted_existing_ssl_does_not_require_cloudflare_token(self):
+        from freq.modules.cert_management import _build_lifecycle_plan
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        cfg.certificates = {
+            "base_domain": "dc01.lowfreqlabs.com",
+            "management_mode": "adopted_existing",
+            "issuer": "existing",
+            "record_strategy": "existing-dns",
+            "reverse_proxy_host": "dc01-proxy",
+            "renewal_owner": "external",
+        }
+        cfg.cert_targets = [
+            {
+                "label": "pve01",
+                "target_type": "proxmox_ve_node",
+                "hostname": "pve01.dc01.lowfreqlabs.com",
+                "ip": "10.25.255.26",
+                "port": 8006,
+                "deploy_driver": "proxmox_pvenode",
+            }
+        ]
+
+        plan = _build_lifecycle_plan(cfg)
+        warnings = " ".join(plan["warnings"])
+
+        self.assertEqual(plan["settings"]["management_mode"], "adopted_existing")
+        self.assertNotIn("dns_provider", warnings)
+        self.assertNotIn("dns_token_path", warnings)
+        self.assertNotIn("cloudflare_zone_id", warnings)
+        self.assertNotIn("public-private-a publishes private IPs", warnings)
+
+    def test_served_cert_classifier_uses_sni_san_and_fingerprint(self):
+        from freq.modules.cert_management import _classify_tls_probe
+
+        settings = {"base_domain": "dc01.lowfreqlabs.com"}
+        target = {"hostname": "pve01.dc01.lowfreqlabs.com"}
+        probe = {
+            "ok": True,
+            "hostname": "pve01.dc01.lowfreqlabs.com",
+            "issuer": "Let's Encrypt",
+            "sans": ["*.dc01.lowfreqlabs.com"],
+            "fingerprint_sha256": "abc",
+            "self_signed": False,
+        }
+
+        self.assertEqual(
+            _classify_tls_probe(settings, target, probe, managed_fingerprint="abc"),
+            "SERVING_MANAGED_WILDCARD",
+        )
+        probe["fingerprint_sha256"] = "other"
+        self.assertEqual(
+            _classify_tls_probe(settings, target, probe, managed_fingerprint="abc"),
+            "SERVING_MANAGED_WILDCARD",
+        )
+        probe["issuer"] = "Self Signed"
+        probe["self_signed"] = True
+        self.assertEqual(
+            _classify_tls_probe(settings, target, probe, managed_fingerprint="abc"),
+            "SELF_SIGNED_OR_OTHER",
+        )
+        self.assertEqual(
+            _classify_tls_probe(settings, target, {"ok": False}, managed_fingerprint="abc"),
+            "UNREACHABLE",
+        )
+
+    def test_dns_sync_upserts_cloudflare_records(self):
+        from freq.modules.cert_management import cmd_cert_dns_sync
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        token_path = os.path.join(cfg.conf_dir, "cf.token")
+        with open(token_path, "w") as f:
+            f.write("token-value")
+        cfg.certificates = {
+            "base_domain": "dc01.lowfreqlabs.com",
+            "dns_provider": "cloudflare",
+            "dns_token_path": token_path,
+            "cloudflare_zone_id": "zone-id",
+            "record_strategy": "public-private-a",
+        }
+        cfg.cert_targets = [
+            {
+                "label": "pve01",
+                "target_type": "proxmox_ve_node",
+                "hostname": "pve01.dc01.lowfreqlabs.com",
+                "ip": "10.25.255.26",
+                "port": 8006,
+                "deploy_driver": "proxmox_pvenode",
+            }
+        ]
+        args = Namespace(dry_run=False, json=True, yes=True)
+
+        with patch("freq.modules.cert_management._cloudflare_upsert_dns_record") as upsert:
+            upsert.return_value = {
+                "action": "updated",
+                "hostname": "pve01.dc01.lowfreqlabs.com",
+                "value": "10.25.255.26",
+            }
+            rc = cmd_cert_dns_sync(cfg, None, args)
+
+        self.assertEqual(rc, 0)
+        upsert.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -334,6 +611,44 @@ class TestPhase2CLIRegistration(unittest.TestCase):
     def test_cert_issued(self):
         args = self._parse("cert issued")
         self.assertTrue(hasattr(args, "func"))
+
+    def test_cert_plan(self):
+        args = self._parse("cert plan --json")
+        self.assertTrue(hasattr(args, "func"))
+        self.assertTrue(args.json)
+
+    def test_cert_bootstrap(self):
+        args = self._parse("cert bootstrap --base-domain dc01.lowfreqlabs.com --cloudflare-token-file /tmp/cf --dry-run")
+        self.assertEqual(args.base_domain, "dc01.lowfreqlabs.com")
+        self.assertEqual(args.cloudflare_token_file, "/tmp/cf")
+        self.assertTrue(args.dry_run)
+
+    def test_cert_issue(self):
+        args = self._parse("cert issue --dry-run")
+        self.assertTrue(hasattr(args, "func"))
+        self.assertTrue(args.dry_run)
+
+    def test_cert_renew(self):
+        args = self._parse("cert renew --deploy --dry-run")
+        self.assertTrue(hasattr(args, "func"))
+        self.assertTrue(args.deploy)
+
+    def test_cert_deploy(self):
+        args = self._parse("cert deploy pve01 --dry-run --json")
+        self.assertEqual(args.target, "pve01")
+        self.assertTrue(args.dry_run)
+        self.assertTrue(args.json)
+
+    def test_cert_dns_sync(self):
+        args = self._parse("cert dns-sync --dry-run --json")
+        self.assertTrue(hasattr(args, "func"))
+        self.assertTrue(args.dry_run)
+        self.assertTrue(args.json)
+
+    def test_cert_verify(self):
+        args = self._parse("cert verify pfsense --json")
+        self.assertEqual(args.target, "pfsense")
+        self.assertTrue(args.json)
 
     # Proxy
     def test_proxy_status(self):

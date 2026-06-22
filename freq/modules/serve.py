@@ -36,6 +36,7 @@ import shutil
 import socket
 import ssl
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -202,6 +203,8 @@ NODE_DISCOVERY_INTERVAL = 300  # 5 min — discover PVE cluster nodes
 VM_TAGS_INTERVAL = 300  # 5 min — refresh PVE VM tags
 _bg_lock = threading.Lock()
 _setup_lock = threading.Lock()
+_setup_init_lock = threading.Lock()
+_setup_init_job = None
 _shutdown_flag = threading.Event()  # Set on SIGTERM to stop background loops
 
 # ── SSE EVENT BUS ────────────────────────────────────────────────────────
@@ -2487,6 +2490,125 @@ def _container_vm_host(cfg, target: str):
     return None
 
 
+_MEDIA_DEFAULT_PORTS = {
+    "tautulli": 8181,
+    "sabnzbd": 8080,
+    "qbittorrent": 8080,
+    "qbit": 8080,
+    "plex": 32400,
+}
+
+
+def _media_default_port(name: str) -> int:
+    lname = (name or "").lower()
+    for key, port in _MEDIA_DEFAULT_PORTS.items():
+        if key in lname:
+            return port
+    return 0
+
+
+def _media_container_port(container) -> int:
+    return int(getattr(container, "port", 0) or _media_default_port(getattr(container, "name", "")) or 0)
+
+
+def _media_ssh_user_from_key(cfg) -> str:
+    key_path = getattr(cfg, "ssh_key_path", "") or ""
+    parts = key_path.split(os.sep)
+    if len(parts) >= 3 and parts[-2] == ".ssh" and parts[-3]:
+        return parts[-3]
+    return ""
+
+
+def _media_ssh_single(cfg, vm, command: str, timeout: int = 10):
+    def _run(**overrides):
+        merged = dict(kwargs)
+        merged.update(overrides)
+        return ssh_single(**merged)
+
+    kwargs = {
+        "host": _resolve_container_vm_ip(vm),
+        "command": command,
+        "key_path": cfg.ssh_key_path,
+        "connect_timeout": 3,
+        "command_timeout": timeout,
+        "htype": "docker",
+        "use_sudo": False,
+        "cfg": cfg,
+    }
+    r = _run()
+    if r.returncode == 255 and "Permission denied" in (r.stderr or ""):
+        key_user = _media_ssh_user_from_key(cfg)
+        if key_user and key_user != getattr(cfg, "ssh_service_account", ""):
+            r = _run(user=key_user)
+    if r.returncode != 0 and "docker.sock" in (r.stderr or "") and "permission denied" in (r.stderr or "").lower():
+        retry = {"use_sudo": True}
+        key_user = _media_ssh_user_from_key(cfg)
+        if key_user and key_user != getattr(cfg, "ssh_service_account", ""):
+            retry["user"] = key_user
+        r = _run(**retry)
+    return r
+
+
+def _docker_exec_json(cfg, vm, container_name: str, script: str, timeout: int = 10):
+    r = _media_ssh_single(
+        cfg,
+        vm,
+        f"docker exec {shlex.quote(container_name)} sh -lc {shlex.quote(script)}",
+        timeout=timeout,
+    )
+    if r.returncode != 0:
+        return None, r
+    try:
+        return json.loads(r.stdout), r
+    except (json.JSONDecodeError, TypeError):
+        return None, r
+
+
+def _parse_sab_downloads(data, vm_label: str) -> list:
+    downloads = []
+    queue = data.get("queue", {}) if isinstance(data, dict) else {}
+    speed_str = str(queue.get("speed", "0"))
+    speed_val = float(speed_str.replace(" M", "").replace(" K", "").replace(" G", "") or 0)
+    if "M" in speed_str:
+        speed_val *= 1048576
+    elif "K" in speed_str:
+        speed_val *= 1024
+    elif "G" in speed_str:
+        speed_val *= 1073741824
+    for s in queue.get("slots", []):
+        pct = int(float(s.get("percentage", 0)))
+        size_mb = float(s.get("mb", 0)) * 1048576
+        downloads.append(
+            {
+                "name": s.get("filename", "?"),
+                "size": int(size_mb),
+                "progress": pct,
+                "speed": int(speed_val),
+                "client": "SABnzbd",
+                "vm": vm_label,
+            }
+        )
+    return downloads
+
+
+def _parse_qbit_downloads(data, vm_label: str) -> list:
+    downloads = []
+    if not isinstance(data, list):
+        return downloads
+    for t in data:
+        downloads.append(
+            {
+                "name": t.get("name", "?"),
+                "size": t.get("size", 0),
+                "progress": round(t.get("progress", 0) * 100),
+                "speed": t.get("dlspeed", 0),
+                "client": "qBittorrent",
+                "vm": vm_label,
+            }
+        )
+    return downloads
+
+
 _INLINE_STYLE_CSP_HASHES: list[str] = []
 _INLINE_STYLE_CSP_LOCK = threading.Lock()
 
@@ -2617,6 +2739,252 @@ def _is_first_run():
 
     # Users exist but no markers — treat as configured (user added manually)
     return False
+
+
+def _setup_marker_exists(cfg):
+    """True when setup or init has already crossed a completion boundary."""
+    return any(
+        os.path.isfile(path)
+        for path in (
+            os.path.join(cfg.data_dir, "setup-complete"),
+            os.path.join(cfg.conf_dir, ".initialized"),
+            os.path.join(cfg.conf_dir, ".web-setup-complete"),
+        )
+    )
+
+
+def _allow_setup_admin_window(handler):
+    """Allow setup continuation after first admin creation, before markers.
+
+    The first setup call creates users.conf, which intentionally makes
+    _is_first_run() false. Continuing setup after that point must be
+    authenticated as the freshly-created admin, and only while no setup/init
+    marker exists.
+    """
+    cfg = load_config()
+    if _setup_marker_exists(cfg):
+        handler._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
+        return False
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        handler._json_response({"error": err}, 403)
+        return False
+    return True
+
+
+def _setup_init_snapshot():
+    with _setup_init_lock:
+        if not _setup_init_job:
+            return {"running": False, "job": None}
+        job = dict(_setup_init_job)
+        job["lines"] = list(_setup_init_job.get("lines", []))[-300:]
+        return {"running": job.get("state") == "running", "job": job}
+
+
+def _setup_secret_dir(cfg, job_id):
+    path = os.path.join(cfg.data_dir, "secrets", "setup-init", job_id)
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(path, 0o700)
+    except OSError:
+        pass
+    return path
+
+
+def _write_setup_secret(secret_dir, name, value):
+    if not value:
+        return ""
+    path = os.path.join(secret_dir, name)
+    with open(path, "w") as f:
+        f.write(str(value))
+        if not str(value).endswith("\n"):
+            f.write("\n")
+    os.chmod(path, 0o600)
+    return path
+
+
+def _toml_scalar(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_toml_scalar(v) for v in value) + "]"
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _write_setup_device_credentials(secret_dir, device_credentials):
+    if not isinstance(device_credentials, dict) or not device_credentials:
+        return ""
+    lines = []
+    for section, raw in device_credentials.items():
+        if not isinstance(raw, dict):
+            continue
+        safe_section = re.sub(r"[^A-Za-z0-9_.-]", "", str(section).strip())
+        if not safe_section:
+            continue
+        lines.append(f"[{safe_section}]")
+        for key, value in raw.items():
+            if value in (None, ""):
+                continue
+            if key == "password":
+                pw_path = _write_setup_secret(secret_dir, f"{safe_section}-password", value)
+                lines.append(f"password_file = {_toml_scalar(pw_path)}")
+            elif key == "api_key":
+                api_path = _write_setup_secret(secret_dir, f"{safe_section}-api-key", value)
+                lines.append(f"api_key_file = {_toml_scalar(api_path)}")
+            elif key in {
+                "user",
+                "host",
+                "hosts",
+                "url",
+                "ssh_key_file",
+                "api_key_file",
+                "password_file",
+                "scope",
+                "api_key_only",
+                "sudo_password_file",
+            }:
+                lines.append(f"{key} = {_toml_scalar(value)}")
+        lines.append("")
+    if not lines:
+        return ""
+    path = os.path.join(secret_dir, "device-credentials.toml")
+    with open(path, "w") as f:
+        f.write("\n".join(lines).rstrip() + "\n")
+    os.chmod(path, 0o600)
+    return path
+
+
+def _list_value(value):
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    return [v.strip() for v in re.split(r"[,\s]+", str(value or "")) if v.strip()]
+
+
+def _setup_init_command(cfg, body, job_id):
+    secret_dir = _setup_secret_dir(cfg, job_id)
+    service_password = str(body.get("service_account_password") or body.get("password") or "").strip()
+    dashboard_password = str(body.get("dashboard_password") or "").strip()
+    bootstrap_password = str(body.get("bootstrap_password") or "").strip()
+    pdm_password = str(body.get("pdm_password") or "").strip()
+    if len(service_password) < 8:
+        raise ValueError("service_account_password is required and must be at least 8 characters")
+    if body.get("dashboard_user") and len(dashboard_password) < 8:
+        raise ValueError("dashboard_password is required when dashboard_user is set")
+
+    service_password_file = _write_setup_secret(secret_dir, "service-account-password", service_password)
+    dashboard_password_file = _write_setup_secret(secret_dir, "dashboard-password", dashboard_password)
+    bootstrap_password_file = _write_setup_secret(secret_dir, "bootstrap-password", bootstrap_password)
+    pdm_password_file = _write_setup_secret(secret_dir, "pdm-password", pdm_password)
+    device_credentials_file = _write_setup_device_credentials(secret_dir, body.get("device_credentials") or {})
+
+    code = "import sys; from freq.cli import main; raise SystemExit(main(sys.argv[1:]))"
+    cmd = [sys.executable, "-c", code, "init", "--headless", "--yes", "--password-file", service_password_file]
+    if body.get("bootstrap_user"):
+        cmd.extend(["--bootstrap-user", str(body.get("bootstrap_user")).strip()])
+    if bootstrap_password_file:
+        cmd.extend(["--bootstrap-password-file", bootstrap_password_file])
+    elif body.get("bootstrap_key"):
+        cmd.extend(["--bootstrap-key", os.path.expanduser(str(body.get("bootstrap_key")).strip())])
+    if body.get("service_account"):
+        cmd.extend(["--service-account", str(body.get("service_account")).strip()])
+    if body.get("dashboard_user"):
+        cmd.extend(["--dashboard-user", str(body.get("dashboard_user")).strip()])
+    if dashboard_password_file:
+        cmd.extend(["--dashboard-password-file", dashboard_password_file])
+    pve_nodes = _list_value(body.get("pve_nodes")) or list(getattr(cfg, "pve_nodes", []) or [])
+    if pve_nodes:
+        cmd.extend(["--pve-nodes", ",".join(pve_nodes)])
+    pve_names = _list_value(body.get("pve_node_names")) or list(getattr(cfg, "pve_node_names", []) or [])
+    if pve_names:
+        cmd.extend(["--pve-node-names", ",".join(pve_names)])
+    for field, flag in (
+        ("gateway", "--gateway"),
+        ("nameserver", "--nameserver"),
+        ("cluster_name", "--cluster-name"),
+        ("ssh_mode", "--ssh-mode"),
+        ("hosts_file", "--hosts-file"),
+        ("owned_vmids", "--owned-vmids"),
+        ("template_vmids", "--template-vmids"),
+        ("acknowledged_out_of_contract_vmids", "--acknowledged-out-of-contract-vmids"),
+        ("vm_contract", "--vm-contract"),
+        ("core_devices", "--core-devices"),
+        ("lab_devices", "--lab-devices"),
+        ("pdm_remote_name", "--pdm-remote-name"),
+    ):
+        if body.get(field):
+            cmd.extend([flag, str(body.get(field)).strip()])
+    if device_credentials_file:
+        cmd.extend(["--device-credentials", device_credentials_file])
+    if body.get("install_pdm"):
+        cmd.append("--install-pdm")
+    if body.get("skip_pdm"):
+        cmd.append("--skip-pdm")
+    if pdm_password_file:
+        cmd.extend(["--pdm-pass", pdm_password_file])
+
+    env = os.environ.copy()
+    env["FREQ_DIR"] = cfg.install_dir
+    env["FREQ_WEB_INIT"] = "1"
+    env.setdefault("PYTHONUNBUFFERED", "1")
+    if os.geteuid() != 0:
+        cmd = ["sudo", "-n", "env", f"FREQ_DIR={cfg.install_dir}", "FREQ_WEB_INIT=1", "PYTHONUNBUFFERED=1"] + cmd
+    return cmd, env, secret_dir
+
+
+def _redact_setup_init_line(line, secret_dir):
+    text = str(line or "").rstrip()
+    if secret_dir:
+        text = text.replace(secret_dir, "[setup-secret-dir]")
+    return text
+
+
+def _run_setup_init_job(job_id, cmd, env, secret_dir):
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=env.get("FREQ_DIR") or None,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        with _setup_init_lock:
+            if _setup_init_job and _setup_init_job.get("id") == job_id:
+                _setup_init_job["pid"] = proc.pid
+        for line in proc.stdout or []:
+            with _setup_init_lock:
+                if _setup_init_job and _setup_init_job.get("id") == job_id:
+                    _setup_init_job.setdefault("lines", []).append(_redact_setup_init_line(line, secret_dir))
+                    _setup_init_job["updated_at"] = time.time()
+                    _setup_init_job["lines"] = _setup_init_job["lines"][-1000:]
+        rc = proc.wait()
+        cfg = load_config(force=True)
+        initialized = os.path.isfile(os.path.join(cfg.conf_dir, ".initialized"))
+        with _setup_init_lock:
+            if _setup_init_job and _setup_init_job.get("id") == job_id:
+                _setup_init_job["state"] = "succeeded" if rc == 0 and initialized else "failed"
+                _setup_init_job["returncode"] = rc
+                _setup_init_job["initialized"] = initialized
+                _setup_init_job["finished_at"] = time.time()
+                _setup_init_job["updated_at"] = time.time()
+    except Exception as exc:
+        with _setup_init_lock:
+            if _setup_init_job and _setup_init_job.get("id") == job_id:
+                _setup_init_job["state"] = "failed"
+                _setup_init_job["error"] = str(exc)
+                _setup_init_job["finished_at"] = time.time()
+                _setup_init_job["updated_at"] = time.time()
+    finally:
+        try:
+            shutil.rmtree(secret_dir)
+        except Exception:
+            pass
 
 
 def _init_blocker_from_artifacts(cfg):
@@ -2915,6 +3283,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         # ── Infrastructure routes (stay in serve.py) ──────────────────
         "/": "_serve_app",
         "/dashboard": "_serve_app",
+        "/setup": "_serve_setup_page",
+        "/setup.html": "_serve_setup_page",
         # ── Auth (stays in serve.py) ──────────────────────────────────
         "/api/pve/metrics": "_serve_pve_metrics",
         "/api/pve/rrd": "_serve_pve_rrd",
@@ -2933,6 +3303,8 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/setup/generate-key": "_serve_setup_generate_key",
         "/api/setup/complete": "_serve_setup_complete",
         "/api/setup/test-ssh": "_serve_setup_test_ssh",
+        "/api/setup/init/start": "_serve_setup_init_start",
+        "/api/setup/init/status": "_serve_setup_init_status",
         "/api/setup/reset": "_serve_setup_reset",
         # ── SSE / orchestration (stays in serve.py) ───────────────────
         "/api/events": "_serve_events",
@@ -3773,7 +4145,13 @@ a:hover{{text-decoration:underline}}
                 self._json_response({"error": f"Failed to store password: {e}"}, 500)
                 return
 
-            self._json_response({"ok": True, "user": username, "role": "admin"})
+            try:
+                from freq.api.auth import establish_session
+
+                establish_session(self, username, "admin")
+            except Exception as e:
+                logger.warn(f"setup_create_admin_session_failed: {e}")
+            self._json_response({"ok": True, "user": username, "role": "admin", "session_started": True})
         finally:
             _setup_lock.release()
 
@@ -3782,8 +4160,7 @@ a:hover{{text-decoration:underline}}
 
         POST body: {"cluster_name": "...", "timezone": "...", "pve_nodes": [...]}
         """
-        if not _is_first_run():
-            self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
+        if not _is_first_run() and not _allow_setup_admin_window(self):
             return
 
         if self.command != "POST":
@@ -3878,8 +4255,7 @@ a:hover{{text-decoration:underline}}
 
     def _serve_setup_generate_key(self):
         """Generate SSH keypair during first-run setup. POST only."""
-        if not _is_first_run():
-            self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
+        if not _is_first_run() and not _allow_setup_admin_window(self):
             return
 
         if self.command != "POST":
@@ -3955,8 +4331,7 @@ a:hover{{text-decoration:underline}}
 
     def _serve_setup_complete(self):
         """Mark setup as complete — writes marker file."""
-        if not _is_first_run():
-            self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
+        if not _is_first_run() and not _allow_setup_admin_window(self):
             return
 
         if self.command != "POST":
@@ -3969,8 +4344,7 @@ a:hover{{text-decoration:underline}}
 
         try:
             # Re-check after acquiring lock (another request may have completed setup)
-            if not _is_first_run():
-                self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
+            if not _is_first_run() and not _allow_setup_admin_window(self):
                 return
 
             cfg = load_config()
@@ -4144,7 +4518,84 @@ a:hover{{text-decoration:underline}}
         except OSError as e:
             self._json_response({"error": f"Failed to reset setup: {e}"}, 500)
 
+    def _serve_setup_init_start(self):
+        """POST /api/setup/init/start — run full headless init from web setup."""
+        global _setup_init_job
+        if self.command != "POST":
+            self._json_response({"error": "Setup init start requires POST"}, 405)
+            return
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}, 403)
+            return
+        cfg = load_config()
+        if os.path.isfile(os.path.join(cfg.conf_dir, ".initialized")):
+            self._json_response({"error": "freq init is already complete"}, 409)
+            return
+        with _setup_init_lock:
+            if _setup_init_job and _setup_init_job.get("state") == "running":
+                self._json_response({"error": "setup init already running", "job": dict(_setup_init_job)}, 409)
+                return
+        try:
+            body = self._request_body()
+            job_id = uuid.uuid4().hex[:12]
+            cmd, env, secret_dir = _setup_init_command(cfg, body, job_id)
+        except ValueError as exc:
+            self._json_response({"error": str(exc)}, 400)
+            return
+        except Exception as exc:
+            self._json_response({"error": f"could not prepare setup init: {exc}"}, 500)
+            return
+
+        now = time.time()
+        with _setup_init_lock:
+            _setup_init_job = {
+                "id": job_id,
+                "state": "running",
+                "pid": None,
+                "started_at": now,
+                "updated_at": now,
+                "finished_at": None,
+                "returncode": None,
+                "initialized": False,
+                "lines": ["starting web-launched freq init --headless"],
+            }
+        threading.Thread(
+            target=_run_setup_init_job,
+            args=(job_id, cmd, env, secret_dir),
+            daemon=True,
+            name=f"freq-setup-init-{job_id}",
+        ).start()
+        self._json_response({"ok": True, "job": _setup_init_snapshot()["job"]})
+
+    def _serve_setup_init_status(self):
+        """GET /api/setup/init/status — return current web-launched init job."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}, 403)
+            return
+        self._json_response({"ok": True, **_setup_init_snapshot()})
+
     # ── Legacy + Main HTML ───────────────────────────────────────────────
+
+    def _serve_setup_page(self):
+        """Serve the setup wizard while setup/init has not completed."""
+        cfg = load_config()
+        if os.path.isfile(os.path.join(cfg.conf_dir, ".initialized")) and _setup_marker_exists(cfg):
+            self._serve_app()
+            return
+        from freq.modules.web_ui import SETUP_HTML
+
+        body = SETUP_HTML.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Connection", "close")
+        self._send_security_headers()
+        self.end_headers()
+        self.wfile.write(body)
 
     def _serve_pve_metrics(self):
         """Real-time PVE node metrics via PVE API.
@@ -4857,29 +5308,43 @@ a:hover{{text-decoration:underline}}
         """Active downloads from qBit + SABnzbd."""
         cfg = load_config()
         downloads = []
+        warnings = []
+        sources = []
         for vm in cfg.container_vms.values():
-            resolved_ip = _resolve_container_vm_ip(vm)
             for cname, container in vm.containers.items():
+                port = _media_container_port(container)
                 if "qbittorrent" in cname.lower():
+                    data, r = _docker_exec_json(
+                        cfg,
+                        vm,
+                        container.name,
+                        f'curl -s --connect-timeout 3 "http://localhost:{port}/api/v2/torrents/info?filter=downloading"',
+                    )
+                    if isinstance(data, list):
+                        downloads.extend(_parse_qbit_downloads(data, vm.label))
+                        sources.append({"client": "qBittorrent", "vm": vm.label, "source": "container-local"})
+                        continue
+
                     # qBit needs session cookie auth — try login first
                     qb_user = vault_get(cfg, "DEFAULT", "qbittorrent_user") or "admin"
                     qb_pass = vault_get(cfg, "DEFAULT", "qbittorrent_password") or ""
                     if not qb_pass:
-                        logger.warn("qBittorrent password not in vault — skipping download check")
+                        warnings.append({
+                            "client": "qBittorrent",
+                            "vm": vm.label,
+                            "reason": "auth_required",
+                        })
+                        logger.warn("qBittorrent password not in vault and container-local query was not authorized")
                         continue
-                    r = ssh_single(
-                        host=resolved_ip,
-                        command=f"curl -s -c /tmp/qb.cookie --connect-timeout 3 "
-                        f"'http://localhost:{container.port}/api/v2/auth/login' "
+                    r = _media_ssh_single(
+                        cfg,
+                        vm,
+                        f"curl -s -c /tmp/qb.cookie --connect-timeout 3 "
+                        f"'http://localhost:{port}/api/v2/auth/login' "
                         f"-d 'username={qb_user}&password={qb_pass}' && "
                         f"curl -s -b /tmp/qb.cookie --connect-timeout 3 "
-                        f"'http://localhost:{container.port}/api/v2/torrents/info?filter=downloading'",
-                        key_path=cfg.ssh_key_path,
-                        connect_timeout=3,
-                        command_timeout=10,
-                        htype="docker",
-                        use_sudo=False,
-                        cfg=cfg,
+                        f"'http://localhost:{port}/api/v2/torrents/info?filter=downloading'",
+                        timeout=10,
                     )
                     if r.returncode == 0:
                         # Response may have "Ok.\n" or "Fails.\n" prefix from login
@@ -4888,64 +5353,59 @@ a:hover{{text-decoration:underline}}
                         if bracket >= 0:
                             stdout = stdout[bracket:]
                         try:
-                            for t in json.loads(stdout):
-                                downloads.append(
-                                    {
-                                        "name": t.get("name", "?"),
-                                        "size": t.get("size", 0),
-                                        "progress": round(t.get("progress", 0) * 100),
-                                        "speed": t.get("dlspeed", 0),
-                                        "client": "qBittorrent",
-                                        "vm": vm.label,
-                                    }
-                                )
+                            downloads.extend(_parse_qbit_downloads(json.loads(stdout), vm.label))
+                            sources.append({"client": "qBittorrent", "vm": vm.label, "source": "vault-auth"})
                         except (json.JSONDecodeError, TypeError):
-                            pass
-                elif "sabnzbd" in cname.lower() and container.port:
+                            warnings.append({"client": "qBittorrent", "vm": vm.label, "reason": "bad_json"})
+                    else:
+                        warnings.append({"client": "qBittorrent", "vm": vm.label, "reason": "query_failed"})
+                elif "sabnzbd" in cname.lower() and port:
                     # SABnzbd uses API key auth
                     api_key = ""
-                    try:
-                        api_key = vault_get(cfg, "DEFAULT", container.vault_key) or ""
-                    except Exception as e:
-                        logger.warn(f"vault read failed for {cname}: {e}")
-                    r = ssh_single(
-                        host=resolved_ip,
-                        command=f"curl -s --connect-timeout 3 "
-                        f"'http://localhost:{container.port}/api?mode=queue&apikey={api_key}&output=json'",
-                        key_path=cfg.ssh_key_path,
-                        connect_timeout=3,
-                        command_timeout=10,
-                        htype="docker",
-                        use_sudo=False,
-                        cfg=cfg,
-                    )
-                    if r.returncode == 0:
+                    if container.vault_key:
                         try:
-                            data = json.loads(r.stdout)
-                            for s in data.get("queue", {}).get("slots", []):
-                                pct = int(float(s.get("percentage", 0)))
-                                size_mb = float(s.get("mb", 0)) * 1048576
-                                speed_str = data.get("queue", {}).get("speed", "0")
-                                speed_val = float(speed_str.replace(" M", "").replace(" K", "").replace(" G", "") or 0)
-                                if "M" in speed_str:
-                                    speed_val *= 1048576
-                                elif "K" in speed_str:
-                                    speed_val *= 1024
-                                elif "G" in speed_str:
-                                    speed_val *= 1073741824
-                                downloads.append(
-                                    {
-                                        "name": s.get("filename", "?"),
-                                        "size": int(size_mb),
-                                        "progress": pct,
-                                        "speed": int(speed_val),
-                                        "client": "SABnzbd",
-                                        "vm": vm.label,
-                                    }
-                                )
-                        except (json.JSONDecodeError, TypeError, ValueError):
-                            pass
-        self._json_response({"downloads": downloads, "count": len(downloads)})
+                            api_key = vault_get(cfg, "DEFAULT", container.vault_key) or ""
+                        except Exception as e:
+                            logger.warn(f"vault read failed for {cname}: {e}")
+                    if api_key:
+                        r = _media_ssh_single(
+                            cfg,
+                            vm,
+                            f"curl -s --connect-timeout 3 "
+                            f"'http://localhost:{port}/api?mode=queue&apikey={api_key}&output=json'",
+                            timeout=10,
+                        )
+                        if r.returncode == 0:
+                            try:
+                                downloads.extend(_parse_sab_downloads(json.loads(r.stdout), vm.label))
+                                sources.append({"client": "SABnzbd", "vm": vm.label, "source": "vault-auth"})
+                                continue
+                            except (json.JSONDecodeError, TypeError, ValueError):
+                                warnings.append({"client": "SABnzbd", "vm": vm.label, "reason": "bad_json"})
+
+                    data, r = _docker_exec_json(
+                        cfg,
+                        vm,
+                        container.name,
+                        "key=$(grep -Ei '^api_key[[:space:]]*=' /config/sabnzbd.ini | head -1 | "
+                        "cut -d= -f2- | tr -d '[:space:]'); "
+                        '[ -n "$key" ] || exit 42; '
+                        f'curl -s --connect-timeout 3 "http://localhost:{port}/api?mode=queue&apikey=$key&output=json"',
+                    )
+                    if isinstance(data, dict):
+                        try:
+                            downloads.extend(_parse_sab_downloads(data, vm.label))
+                            sources.append({"client": "SABnzbd", "vm": vm.label, "source": "container-config"})
+                        except (TypeError, ValueError):
+                            warnings.append({"client": "SABnzbd", "vm": vm.label, "reason": "bad_json"})
+                    else:
+                        warnings.append({"client": "SABnzbd", "vm": vm.label, "reason": "query_failed"})
+        self._json_response({
+            "downloads": downloads,
+            "count": len(downloads),
+            "warnings": warnings,
+            "sources": sources,
+        })
 
     def _serve_media_streams(self):
         """Active Plex streams via Tautulli."""
@@ -4953,40 +5413,68 @@ a:hover{{text-decoration:underline}}
 
         container, vm = res.container_by_name(cfg.container_vms, "tautulli")
         sessions = []
+        warnings = []
+        sources = []
         if container and vm:
+            port = _media_container_port(container)
             # Get API key from vault
             api_key = ""
-            try:
-                api_key = vault_get(cfg, "DEFAULT", container.vault_key) or ""
-            except Exception as e:
-                logger.warn(f"vault read failed for {container.vault_key}: {e}")
-            r = ssh_single(
-                host=_resolve_container_vm_ip(vm),
-                command=f"curl -s --connect-timeout 3 "
-                f"'http://localhost:{container.port}/api/v2?apikey={api_key}&cmd=get_activity'",
-                key_path=cfg.ssh_key_path,
-                connect_timeout=3,
-                command_timeout=10,
-                htype="docker",
-                use_sudo=False,
-                cfg=cfg,
-            )
-            if r.returncode == 0:
+            if container.vault_key:
                 try:
-                    data = json.loads(r.stdout)
-                    for s in data.get("response", {}).get("data", {}).get("sessions", []):
-                        sessions.append(
-                            {
-                                "user": s.get("friendly_name", "?"),
-                                "title": s.get("full_title", s.get("title", "?")),
-                                "type": s.get("media_type", "?"),
-                                "quality": s.get("video_resolution", "?"),
-                                "state": s.get("state", "?"),
-                            }
-                        )
-                except (json.JSONDecodeError, TypeError):
-                    pass
-        self._json_response({"sessions": sessions, "count": len(sessions)})
+                    api_key = vault_get(cfg, "DEFAULT", container.vault_key) or ""
+                except Exception as e:
+                    logger.warn(f"vault read failed for {container.vault_key}: {e}")
+            if api_key:
+                r = _media_ssh_single(
+                    cfg,
+                    vm,
+                    f"curl -s --connect-timeout 3 "
+                    f"'http://localhost:{port}/api/v2?apikey={api_key}&cmd=get_activity'",
+                    timeout=10,
+                )
+                if r.returncode == 0:
+                    try:
+                        data = json.loads(r.stdout)
+                        sources.append({"client": "Tautulli", "vm": vm.label, "source": "vault-auth"})
+                    except (json.JSONDecodeError, TypeError):
+                        data = None
+                        warnings.append({"client": "Tautulli", "vm": vm.label, "reason": "bad_json"})
+                else:
+                    data = None
+                    warnings.append({"client": "Tautulli", "vm": vm.label, "reason": "query_failed"})
+            else:
+                data, r = _docker_exec_json(
+                    cfg,
+                    vm,
+                    container.name,
+                    "key=$(grep -Ei '^api_key[[:space:]]*=' /config/config.ini | head -1 | "
+                    "cut -d= -f2- | tr -d '[:space:]'); "
+                    '[ -n "$key" ] || exit 42; '
+                    f'curl -s --connect-timeout 3 "http://localhost:{port}/api/v2?apikey=$key&cmd=get_activity"',
+                )
+                if isinstance(data, dict):
+                    sources.append({"client": "Tautulli", "vm": vm.label, "source": "container-config"})
+                else:
+                    warnings.append({"client": "Tautulli", "vm": vm.label, "reason": "query_failed"})
+            if isinstance(data, dict):
+                for s in data.get("response", {}).get("data", {}).get("sessions", []):
+                    sessions.append(
+                        {
+                            "user": s.get("friendly_name", "?"),
+                            "title": s.get("full_title", s.get("title", "?")),
+                            "type": s.get("media_type", "?"),
+                            "quality": s.get("video_resolution", "?"),
+                            "state": s.get("state", "?"),
+                        }
+                    )
+        else:
+            warnings.append({"client": "Tautulli", "reason": "not_configured"})
+        self._json_response({
+            "sessions": sessions,
+            "count": len(sessions),
+            "warnings": warnings,
+            "sources": sources,
+        })
 
     def _serve_media_dashboard(self):
         """Aggregate media dashboard data — from health cache (instant)."""
@@ -6367,7 +6855,7 @@ a:hover{{text-decoration:underline}}
         #   style-src: the shipped dashboard still uses runtime
         #     element.style writes and generated style="..." fragments
         #     across progress bars, modals, health colors, terminal layout,
-        #     operator cards, and the 46 remaining inline style attributes
+        #     operator cards, and the 44 remaining inline style attributes
         #     in app.html. A previous contract tried to keep
         #     style-src hash-only and rely on style-src-attr for runtime
         #     property writes. Chromium browser smoke proved that was false:
@@ -6412,6 +6900,12 @@ a:hover{{text-decoration:underline}}
         body = json.dumps(data).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        try:
+            from freq.api.auth import maybe_send_session_refresh_cookie
+
+            maybe_send_session_refresh_cookie(self)
+        except Exception:
+            pass
         # M-BLUETEAM-SECURITY-HARDENING-20260413AJ: reflected-origin
         # Access-Control-Allow-Origin removed. The dashboard is same-
         # origin by design — no cross-origin caller should be able to

@@ -74,28 +74,27 @@ class TestSetupUXHonesty(unittest.TestCase):
         self.assertIn("first-run", src.lower(),
                        "Setup heading must say 'first-run' not just 'complete'")
 
-    def test_setup_summary_points_to_init(self):
-        """Setup JS summary must show the next lifecycle step: freq init.
-        (Old guidance pointed at freq doctor; the real lifecycle is now
-        bootstrap -> web setup -> freq init -> .initialized marker.)"""
+    def test_setup_summary_points_to_web_init_runner(self):
+        """Setup JS must submit the full web-init contract to a runner.
+        Old guidance pointed back to manual CLI init; the zero-state
+        contract is now browser -> backend runner -> .initialized marker."""
         with open(os.path.join(REPO_ROOT, "freq/data/web/js/setup.js")) as f:
             src = f.read()
-        self.assertIn("Next", src,
-                       "Summary must show a 'Next' step")
-        self.assertIn("freq init", src,
-                       "Summary must tell user to run freq init")
+        self.assertIn("/api/setup/init/start", src,
+                       "Setup JS must submit to the web init runner endpoint")
+        self.assertIn("zero-state-web-init-v1", src,
+                       "Setup JS must name the full init payload contract")
         self.assertNotIn("freq doctor", src,
                           "Old 'freq doctor' guidance must be gone — init is the next step")
 
     def test_setup_html_mentions_fleet_discovery(self):
-        """Setup completion text must mention fleet discovery is separate."""
+        """Setup run text must mention real init/status work."""
         with open(os.path.join(REPO_ROOT, "freq/data/web/setup.html")) as f:
             src = f.read()
-        # The description should mention that fleet work is still needed
-        pane3 = src.split("pane-3")[1].split("</div>")[0] if "pane-3" in src else ""
+        pane3 = src.split('class="panel panel-run"')[1].split("</section>")[0]
         self.assertTrue(
-            "fleet" in pane3.lower() or "discovery" in pane3.lower() or "host" in pane3.lower(),
-            "Setup completion must mention fleet/discovery/host work remaining"
+            "init" in pane3.lower() and "/api/setup/status" in pane3,
+            "Run panel must describe real init and status verification"
         )
 
 

@@ -20,13 +20,13 @@ from freq.modules.vault import vault_get, vault_set, vault_init
 
 # ── Constants ──────────────────────────────────────────────────────────────
 
-SESSION_TIMEOUT_HOURS = 8
+SESSION_TIMEOUT_HOURS = 1
 SESSION_TIMEOUT_SECONDS = SESSION_TIMEOUT_HOURS * 3600
 
 
 # ── Token Store (in-memory, cleared on restart) ───────────────────────────
 
-_auth_tokens = {}  # token -> {user, role, ts}
+_auth_tokens = {}  # token -> {user, role, ts, last_activity_ts}
 _auth_lock = threading.Lock()
 
 
@@ -220,18 +220,67 @@ def _request_has_query_token(handler) -> bool:
     return False
 
 
-def _lookup_session(token: str):
+def _session_touch_requested(handler) -> bool:
+    try:
+        return str(handler.headers.get("X-Freq-User-Activity", "")).lower() in {"1", "true", "yes"}
+    except Exception:
+        return False
+
+
+def _set_session_refresh_cookie(handler, token: str):
+    try:
+        handler._refresh_session_cookie = token
+    except Exception:
+        pass
+
+
+def establish_session(handler, username: str, role: str) -> str:
+    """Create a browser session and queue the response cookie on handler."""
+    token = secrets.token_urlsafe(32)
+    now = time.time()
+    with _auth_lock:
+        _auth_tokens[token] = {
+            "user": username,
+            "role": role,
+            "ts": now,
+            "last_activity_ts": now,
+        }
+    _set_session_refresh_cookie(handler, token)
+    return token
+
+
+def maybe_send_session_refresh_cookie(handler):
+    token = getattr(handler, "_refresh_session_cookie", "")
+    if not token:
+        return
+    import ssl as _ssl
+    is_tls = isinstance(getattr(handler, "request", None), _ssl.SSLSocket)
+    secure_flag = "; Secure" if is_tls else ""
+    handler.send_header(
+        "Set-Cookie",
+        f"freq_session={token}; HttpOnly; SameSite=Strict; Path=/; "
+        f"Max-Age={SESSION_TIMEOUT_SECONDS}{secure_flag}",
+    )
+
+
+def _lookup_session(token: str, touch: bool = False, handler=None):
     """Return the session dict for a token, or None on miss/expiry.
     Side-effect: removes expired entries from the in-memory store."""
     if not token:
         return None
+    now = time.time()
     with _auth_lock:
         session = _auth_tokens.get(token)
         if not session:
             return None
-        if time.time() - session["ts"] > SESSION_TIMEOUT_SECONDS:
+        last_activity = session.get("last_activity_ts", session.get("ts", now))
+        if now - last_activity > SESSION_TIMEOUT_SECONDS:
             del _auth_tokens[token]
             return None
+        if touch:
+            session["last_activity_ts"] = now
+            if handler is not None:
+                _set_session_refresh_cookie(handler, token)
         return session
 
 
@@ -244,7 +293,7 @@ def current_user(handler) -> str:
     role minimum — the role check is the caller's job.
     """
     token = _extract_session_token(handler)
-    session = _lookup_session(token)
+    session = _lookup_session(token, touch=_session_touch_requested(handler), handler=handler)
     return session["user"] if session else ""
 
 
@@ -265,7 +314,7 @@ def check_session_role(handler, min_role="operator"):
                 "R-SECURITY-TRUST-AUDIT-20260413P F7.",
             )
         return None, "Authentication required"
-    session = _lookup_session(token)
+    session = _lookup_session(token, touch=_session_touch_requested(handler), handler=handler)
     if not session:
         return None, "Session expired or invalid"
     role_order = {"viewer": 0, "operator": 1, "admin": 2, "protected": 3}
@@ -396,13 +445,7 @@ def handle_auth_login(handler):
 
     record_login_attempt(client_ip, True, username)
 
-    token = secrets.token_urlsafe(32)
-    with _auth_lock:
-        _auth_tokens[token] = {
-            "user": username,
-            "role": user["role"],
-            "ts": time.time(),
-        }
+    token = establish_session(handler, username, user["role"])
     # Set auth cookie for SSE and cookie-based auth (HttpOnly, SameSite=Strict)
     handler.send_response(200)
     handler.send_header("Content-Type", "application/json")
@@ -473,20 +516,22 @@ def handle_auth_verify(handler):
     was no way to tell a new session from one that was about to
     expire mid-keystroke."""
     token = _extract_session_token(handler)
-    session = _lookup_session(token)
+    session = _lookup_session(token, touch=_session_touch_requested(handler), handler=handler)
     if not session:
         handler._json_response({"valid": False})
         return
     now = time.time()
     issued = session.get("ts", now)
     age = max(0, int(now - issued))
-    ttl = max(0, SESSION_TIMEOUT_SECONDS - age)
+    idle = max(0, int(now - session.get("last_activity_ts", issued)))
+    ttl = max(0, SESSION_TIMEOUT_SECONDS - idle)
     handler._json_response(
         {
             "valid": True,
             "user": session["user"],
             "role": session["role"],
             "session_age_s": age,
+            "session_idle_s": idle,
             "session_ttl_s": ttl,
             "session_timeout_s": SESSION_TIMEOUT_SECONDS,
         }
@@ -521,7 +566,7 @@ def handle_auth_change_password(handler):
         current_password = ""
         new_password = ""
 
-    session = _lookup_session(token)
+    session = _lookup_session(token, touch=_session_touch_requested(handler), handler=handler)
     if not session:
         handler._json_response({"error": "Not authenticated"}, 401)
         return

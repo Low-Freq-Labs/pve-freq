@@ -24,18 +24,16 @@ class TestSetupHtmlCopy(unittest.TestCase):
 
     def test_no_homelab_in_tagline(self):
         src = self._src()
-        # The logo <p> tag tagline must not call itself a homelab CLI
-        logo_block = src.split('<div class="logo">')[1].split('</div>')[0]
-        self.assertNotIn("homelab", logo_block.lower(),
-                          "Setup logo block must not mention homelab")
+        hero_block = src.split('<header class="setup-hero">')[1].split('</header>')[0]
+        self.assertNotIn("homelab", hero_block.lower(),
+                          "Setup hero block must not mention homelab")
 
     def test_tagline_is_operational(self):
         src = self._src()
-        logo_block = src.split('<div class="logo">')[1].split('</div>')[0]
-        # Should mention "first-run setup" or "fleet dashboard"
+        logo_block = src.split('<header class="setup-hero">')[1].split('</header>')[0]
         self.assertTrue(
-            "first-run" in logo_block.lower() or "fleet dashboard" in logo_block.lower(),
-            "Setup tagline must identify as first-run setup or fleet dashboard"
+            "first-run" in logo_block.lower() or "full init" in logo_block.lower(),
+            "Setup tagline must identify as first-run full init"
         )
 
     def test_no_soft_password_coaching(self):
@@ -43,14 +41,14 @@ class TestSetupHtmlCopy(unittest.TestCase):
         self.assertNotIn("Choose a strong password", src,
                           "Must not coach with 'Choose a strong password'")
 
-    def test_step_3_references_real_init_flow(self):
-        """Step 3 must reference freq init and partial setup_health."""
+    def test_run_panel_references_real_init_flow(self):
+        """Run panel must reference backend runner and setup/status truth."""
         src = self._src()
-        step3 = src.split('id="pane-3"')[1].split("</div>")[0]
-        self.assertIn("freq init", step3,
-                       "Step 3 must point operator to freq init")
-        self.assertIn("setup_health", step3,
-                       "Step 3 must mention setup_health state")
+        run = src.split('class="panel panel-run"')[1].split("</section>")[0]
+        self.assertIn("/api/setup/status", run,
+                       "Run panel must point at setup/status truth")
+        self.assertIn("initialized/configured", run,
+                       "Run panel must not claim success before configured status")
 
     def test_step_0_not_dashboard_admin_account(self):
         """Step 0 must not call itself 'Dashboard admin account' — that's
@@ -58,7 +56,7 @@ class TestSetupHtmlCopy(unittest.TestCase):
         'first operator'; freq-admin is a separate SSH service account
         deployed by init."""
         src = self._src()
-        step0 = src.split('id="pane-0"')[1].split("</div>")[0]
+        step0 = src.split('class="panel panel-operator"')[1].split("</section>")[0]
         self.assertNotIn("Dashboard admin account", step0,
                           "Step 0 must not use old 'Dashboard admin account' framing")
         self.assertNotIn("Dashboard admin", step0,
@@ -67,39 +65,44 @@ class TestSetupHtmlCopy(unittest.TestCase):
     def test_step_0_mentions_first_operator_or_login(self):
         """Step 0 heading/description must identify as operator/login setup."""
         src = self._src()
-        step0 = src.split('id="pane-0"')[1].split("</div>")[0]
+        step0 = src.split('class="panel panel-operator"')[1].split("</section>")[0]
         self.assertTrue(
             "operator" in step0.lower() or "web login" in step0.lower(),
             "Step 0 must identify as first operator / web login setup"
         )
 
     def test_step_0_clarifies_service_account_separation(self):
-        """Step 0 description must disambiguate: freq-admin is deployed
-        by init, not created by this web form."""
+        """Operator copy must disambiguate web operator and service account."""
         src = self._src()
-        step0 = src.split('id="pane-0"')[1].split("</div>")[0]
-        self.assertIn("freq-admin", step0,
-                       "Step 0 must explicitly name freq-admin")
-        self.assertIn("freq init", step0,
-                       "Step 0 must say freq-admin is deployed by freq init")
+        step0 = src.split('class="panel panel-operator"')[1].split("</section>")[0]
+        self.assertIn("fleet service account", step0,
+                       "Operator panel must name the separate fleet service account")
+        self.assertIn("full init", step0,
+                       "Operator panel must say full init deploys runtime identity")
 
-    def test_step_3_not_dashboard_admin_configured(self):
-        """Step 3 must not say 'Dashboard admin is configured' — that's
+    def test_run_panel_not_dashboard_admin_configured(self):
+        """Run panel must not say 'Dashboard admin is configured' — that's
         the old account model."""
         src = self._src()
-        step3 = src.split('id="pane-3"')[1].split("</div>")[0]
+        step3 = src.split('class="panel panel-run"')[1].split("</section>")[0]
         self.assertNotIn("Dashboard admin is configured", step3,
-                          "Step 3 must not use old 'Dashboard admin is configured' phrasing")
+                          "Run panel must not use old 'Dashboard admin is configured' phrasing")
 
-    def test_step_3_describes_real_init_side_effects(self):
-        """Step 3 must tell operator what init actually does: deploy
-        freq-admin, register hosts, write .initialized."""
+    def test_setup_collects_real_init_inputs(self):
+        """Setup must collect the inputs needed for full headless init."""
         src = self._src()
-        step3 = src.split('id="pane-3"')[1].split("</div>")[0]
-        self.assertIn("freq-admin", step3,
-                       "Step 3 must name freq-admin as what init deploys")
-        self.assertIn(".initialized", step3,
-                       "Step 3 must mention .initialized marker init writes")
+        self.assertIn("Service account", src)
+        self.assertIn("PVE nodes", src)
+        self.assertIn("Device credentials", src)
+        self.assertIn("Certificate path", src)
+
+    def test_ssl_contract_has_defer_adopt_and_bootstrap_paths(self):
+        """SSL setup must not force Cloudflare during base init."""
+        src = self._src()
+        self.assertIn("Finish init without SSL", src)
+        self.assertIn("Adopt existing SSL", src)
+        self.assertIn("Bootstrap new SSL after init", src)
+        self.assertIn("Cloudflare token path", src)
 
 
 class TestSetupJsCopy(unittest.TestCase):
@@ -111,27 +114,34 @@ class TestSetupJsCopy(unittest.TestCase):
 
     def test_summary_references_init_flow(self):
         src = self._src()
-        # Summary should mention freq init and setup_health
-        summary_fn = src.split("function renderSummary")[1].split("\nfunction ")[0]
-        self.assertIn("freq init", summary_fn,
-                       "Summary must point operator to freq init")
-        self.assertIn("setup_health", summary_fn,
-                       "Summary must explain setup_health=partial state")
+        self.assertIn("zero-state-web-init-v1", src,
+                       "Setup JS must collect the full web init payload contract")
+        self.assertIn("/api/setup/init/start", src,
+                       "Setup JS must call the backend init runner endpoint")
+        self.assertIn("/api/setup/status", src,
+                       "Setup JS must use setup/status as final truth")
 
     def test_summary_names_freq_admin_as_init_artifact(self):
-        """Summary must tell operator that freq init is what deploys
-        freq-admin — clears up the admin vs service-account confusion."""
+        """JS must keep the runtime service-account default explicit."""
         src = self._src()
-        summary_fn = src.split("function renderSummary")[1].split("\nfunction ")[0]
-        self.assertIn("freq-admin", summary_fn,
-                       "Summary must name freq-admin as an init artifact")
+        self.assertIn("freq-admin", src,
+                       "Setup JS must name freq-admin as the default service account")
+
+    def test_js_payload_includes_two_ssl_objects(self):
+        """Payload must distinguish adopt-existing from bootstrap-new SSL."""
+        src = self._src()
+        self.assertIn("adopt_existing", src)
+        self.assertIn("bootstrap_new", src)
+        self.assertIn("defer_base_init_ssl", src)
+        self.assertIn("/api/cert/lifecycle/reconcile", src)
+        self.assertIn("cert_targets", src)
+        self.assertIn("target_source", src)
 
     def test_summary_not_dashboard_admin_label(self):
         """Summary must not label the first user as 'Dashboard admin' —
         that's the old standalone-dashboard model."""
         src = self._src()
-        summary_fn = src.split("function renderSummary")[1].split("\nfunction ")[0]
-        self.assertNotIn("Dashboard admin:", summary_fn,
+        self.assertNotIn("Dashboard admin:", src,
                           "Summary must not label first user as 'Dashboard admin:'")
 
     def test_no_hobbyist_language(self):

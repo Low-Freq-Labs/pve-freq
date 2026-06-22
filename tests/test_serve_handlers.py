@@ -304,6 +304,148 @@ class TestFleetOverviewApi:
 # Lab / Media Endpoints
 # ══════════════════════════════════════════════════════════════════════════
 
+class TestServeMediaActivity:
+    """Test live media activity endpoints."""
+
+    @patch("freq.modules.serve.ssh_single")
+    @patch("freq.modules.serve.load_config")
+    def test_streams_fallback_reads_tautulli_config_inside_container(self, mock_cfg_fn, mock_ssh_single):
+        from freq.core.types import Container, ContainerVM
+
+        vm = ContainerVM(
+            vm_id=0,
+            ip="10.0.0.31",
+            label="arr-stack",
+            containers={
+                "tautulli": Container(name="tautulli", vm_id=0, port=0, vault_key=""),
+            },
+        )
+        mock_cfg_fn.return_value = _mock_cfg(container_vms={"arr-stack": vm})
+        mock_ssh_single.return_value = _mock_ssh_result(json.dumps({
+            "response": {
+                "data": {
+                    "sessions": [
+                        {
+                            "friendly_name": "sonny",
+                            "full_title": "Live Proof",
+                            "media_type": "movie",
+                            "video_resolution": "1080",
+                            "state": "playing",
+                        }
+                    ]
+                }
+            }
+        }))
+
+        h = _make_handler("/api/media/streams")
+        h._serve_media_streams()
+
+        data = _get_json(h)
+        assert data["count"] == 1
+        assert data["sessions"][0]["title"] == "Live Proof"
+        assert data["sources"][0]["source"] == "container-config"
+        command = mock_ssh_single.call_args.kwargs["command"]
+        assert "docker exec tautulli" in command
+        assert "/config/config.ini" in command
+        assert "localhost:8181" in command
+
+    @patch("freq.modules.serve.ssh_single")
+    @patch("freq.modules.serve.load_config")
+    def test_streams_retry_uses_key_owner_when_service_account_denied(self, mock_cfg_fn, mock_ssh_single):
+        from freq.core.types import Container, ContainerVM
+
+        vm = ContainerVM(
+            vm_id=0,
+            ip="10.0.0.31",
+            label="arr-stack",
+            containers={
+                "tautulli": Container(name="tautulli", vm_id=0, port=0, vault_key=""),
+            },
+        )
+        mock_cfg_fn.return_value = _mock_cfg(
+            container_vms={"arr-stack": vm},
+            ssh_key_path="/home/freq-ops/.ssh/fleet_key",
+            ssh_service_account="dc01-admin",
+        )
+        mock_ssh_single.side_effect = [
+            _mock_ssh_result("", "dc01-admin@10.0.0.31: Permission denied (publickey,password).", 255),
+            _mock_ssh_result(json.dumps({"response": {"data": {"sessions": []}}})),
+        ]
+
+        h = _make_handler("/api/media/streams")
+        h._serve_media_streams()
+
+        data = _get_json(h)
+        assert data["sources"][0]["source"] == "container-config"
+        assert mock_ssh_single.call_count == 2
+        assert "user" not in mock_ssh_single.call_args_list[0].kwargs
+        assert mock_ssh_single.call_args_list[1].kwargs["user"] == "freq-ops"
+
+    @patch("freq.modules.serve.ssh_single")
+    @patch("freq.modules.serve.load_config")
+    def test_downloads_fallback_reads_sab_config_inside_container(self, mock_cfg_fn, mock_ssh_single):
+        from freq.core.types import Container, ContainerVM
+
+        vm = ContainerVM(
+            vm_id=0,
+            ip="10.0.0.150",
+            label="sabnzbd",
+            containers={
+                "sabnzbd": Container(name="sabnzbd", vm_id=0, port=0, vault_key=""),
+            },
+        )
+        mock_cfg_fn.return_value = _mock_cfg(container_vms={"sabnzbd": vm})
+        mock_ssh_single.return_value = _mock_ssh_result(json.dumps({
+            "queue": {
+                "speed": "2 M",
+                "slots": [
+                    {"filename": "ubuntu.iso", "percentage": "50", "mb": "100"},
+                ],
+            }
+        }))
+
+        h = _make_handler("/api/media/downloads")
+        h._serve_media_downloads()
+
+        data = _get_json(h)
+        assert data["count"] == 1
+        assert data["downloads"][0]["name"] == "ubuntu.iso"
+        assert data["downloads"][0]["speed"] == 2097152
+        assert data["sources"][0]["source"] == "container-config"
+        command = mock_ssh_single.call_args.kwargs["command"]
+        assert "docker exec sabnzbd" in command
+        assert "/config/sabnzbd.ini" in command
+        assert "localhost:8080" in command
+
+    @patch("freq.modules.serve.ssh_single")
+    @patch("freq.modules.serve.load_config")
+    def test_downloads_retry_sudo_when_docker_socket_denied(self, mock_cfg_fn, mock_ssh_single):
+        from freq.core.types import Container, ContainerVM
+
+        vm = ContainerVM(
+            vm_id=0,
+            ip="10.0.0.150",
+            label="sabnzbd",
+            containers={
+                "sabnzbd": Container(name="sabnzbd", vm_id=0, port=0, vault_key=""),
+            },
+        )
+        mock_cfg_fn.return_value = _mock_cfg(container_vms={"sabnzbd": vm})
+        mock_ssh_single.side_effect = [
+            _mock_ssh_result("", "permission denied while trying to connect to the docker API at unix:///var/run/docker.sock", 1),
+            _mock_ssh_result(json.dumps({"queue": {"speed": "0", "slots": []}})),
+        ]
+
+        h = _make_handler("/api/media/downloads")
+        h._serve_media_downloads()
+
+        data = _get_json(h)
+        assert data["sources"][0]["source"] == "container-config"
+        assert mock_ssh_single.call_count == 2
+        assert mock_ssh_single.call_args_list[0].kwargs["use_sudo"] is False
+        assert mock_ssh_single.call_args_list[1].kwargs["use_sudo"] is True
+
+
 class TestServeLabStatus:
     """Test /api/lab/status endpoint."""
 
@@ -558,6 +700,53 @@ class TestSetupHandlers:
             with open(os.path.join(td, "freq.toml")) as f:
                 content = f.read()
             assert 'node_names = ["pve01", "pve02"]' in content
+
+    @patch("freq.modules.serve._check_session_role", return_value=("admin", None))
+    @patch("freq.modules.serve._is_first_run", return_value=False)
+    @patch("freq.modules.serve.load_config")
+    def test_setup_configure_continues_after_admin_creation_with_admin_session(
+        self, mock_cfg_fn, _mock_first_run, _mock_role
+    ):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _mock_cfg(conf_dir=td, data_dir=os.path.join(td, "data"))
+            mock_cfg_fn.return_value = cfg
+
+            h = _make_handler("/api/setup/configure")
+            h.command = "POST"
+            h._request_body = lambda: {
+                "cluster_name": "dc01",
+                "timezone": "UTC",
+                "pve_nodes": ["10.0.0.1"],
+            }
+
+            h._serve_setup_configure()
+
+            assert h._status_code == 200
+            data = _get_json(h)
+            assert data["cluster_name"] == "dc01"
+
+    @patch("freq.modules.serve._check_session_role", return_value=(None, "Authentication required"))
+    @patch("freq.modules.serve._is_first_run", return_value=False)
+    @patch("freq.modules.serve.load_config")
+    def test_setup_configure_after_admin_creation_requires_admin_session(
+        self, mock_cfg_fn, _mock_first_run, _mock_role
+    ):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _mock_cfg(conf_dir=td, data_dir=os.path.join(td, "data"))
+            mock_cfg_fn.return_value = cfg
+
+            h = _make_handler("/api/setup/configure")
+            h.command = "POST"
+            h._request_body = lambda: {
+                "cluster_name": "dc01",
+                "timezone": "UTC",
+                "pve_nodes": ["10.0.0.1"],
+            }
+
+            h._serve_setup_configure()
+
+            assert h._status_code == 403
+            assert _get_json(h)["error"] == "Authentication required"
 
     @patch("freq.modules.serve._check_session_role", return_value=("admin", None))
     @patch("freq.modules.serve._is_first_run", return_value=True)

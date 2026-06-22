@@ -118,9 +118,10 @@
 <div class="section layout-section" id="fleet-sec-terminal">
   <div class="section-header"><h3>Terminal</h3><span class="chev ml-8">▾</span></div>
   <div class="section-body">
-    <div class="helptext-sm-mb8">Open a live SSH shell to any host, VM, or LXC container.</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-      <div>
+    <div class="fleet-terminal-shell">
+      <div class="helptext-sm-mb8 fleet-terminal-help">Open a live SSH shell to any host, VM, or LXC container.</div>
+      <div class="fleet-terminal-picker">
+      <div class="fleet-terminal-field fleet-terminal-type">
         <label class="c-dim-fs12">Type</label>
         <select id="term-type" class="input w-120">
           <option value="node">PVE Node</option>
@@ -133,11 +134,12 @@
           <option value="switch">Switch</option>
         </select>
       </div>
-      <div>
+      <div class="fleet-terminal-field fleet-terminal-target">
         <label class="c-dim-fs12">Target</label>
         <select id="term-target" class="input w-260"><option value="">Select...</option></select>
       </div>
       <button class="fleet-btn c-purple-active" data-action="launchTermFromPicker" style="color:var(--cyan)">&#9002; OPEN TERMINAL</button>
+      </div>
     </div>
   </div>
 </div>
@@ -226,25 +228,25 @@
 <div class="section layout-section" id="docker-sec-containers">
   <div class="section-header"><h3>Containers</h3><div class="stats" id="container-stats"></div><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="flex-row-8-center mb-8">
+    <div class="docker-subnav mb-8">
       <button class="fleet-btn docker-sub active-view" data-dsub="docker-services" data-action="switchDockerSub" data-arg="services">SERVICES</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-all" data-action="switchDockerSub" data-arg="all">ALL</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-registry" data-action="switchDockerSub" data-arg="registry">REGISTRY</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-compose" data-action="switchDockerSub" data-arg="compose">COMPOSE</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-fleet-inv" data-action="switchDockerSub" data-arg="fleet-inv">FLEET INVENTORY</button>
+      <div class="docker-subnav-actions">
+        <button class="fleet-btn docker-stack-action" data-action="loadStackInfo" data-arg="status">STACK STATUS</button>
+        <button class="fleet-btn docker-stack-action" data-action="loadStackInfo" data-arg="health">STACK HEALTH</button>
+      </div>
     </div>
     <!-- SERVICES sub-view (default) -->
     <div id="docker-sub-services">
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <button class="fleet-btn" data-action="loadStackInfo" data-arg="status">STACK STATUS</button>
-        <button class="fleet-btn" data-action="loadStackInfo" data-arg="health">STACK HEALTH</button>
-      </div>
       <div id="stack-info" class="mb-12"></div>
-      <div id="services-container-cards" class="cards"></div>
+      <div id="services-container-cards" class="cards docker-container-grid"></div>
     </div>
     <!-- ALL containers sub-view -->
     <div id="docker-sub-all" class="d-none">
-      <div id="container-cards" class="cards"></div>
+      <div id="container-cards" class="cards docker-container-grid"></div>
       <div class="exec-out" id="container-logs">Select a container to view logs...</div>
     </div>
     <!-- REGISTRY sub-view -->
@@ -1102,7 +1104,7 @@
 </div>
 
 <!-- ============================================================
-     CERTIFICATES VIEW — TLS inventory, expiry tracking
+     CERTIFICATES VIEW — SSL lifecycle manager
      ============================================================ -->
 <div id="certs-view" class="d-none">
 <div class="sub-tabs" id="subtabs-certs">
@@ -1115,11 +1117,43 @@
   <button class="sub-tab active-sub" data-view="certs">Certs</button>
   <button class="sub-tab" data-view="vpn">VPN</button>
 </div>
-<div class="section">
-  <div class="section-header"><h3>TLS Certificate Inventory</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadCertsPage">REFRESH</button><span class="chev">&#9662;</span></div>
-  <div class="section-body">
-    <div class="stats" id="cert-stats"></div>
-    <table><thead><tr><th>Domain</th><th>Issuer</th><th>Expires</th><th>Days Left</th><th>Status</th></tr></thead><tbody id="cert-tbl"></tbody></table>
+<div class="cert-manager">
+  <div class="section cert-overview-section">
+    <div class="section-header"><h3>SSL Manager</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadCertsPage">REFRESH</button><span class="chev">&#9662;</span></div>
+    <div class="section-body">
+      <div class="stats" id="cert-stats"></div>
+      <div id="cert-overview"></div>
+    </div>
+  </div>
+  <div class="two cert-manager-grid">
+    <div class="section">
+      <div class="section-header"><h3>Bootstrap</h3><span class="chev">&#9662;</span></div>
+      <div class="section-body" id="cert-setup"></div>
+    </div>
+    <div class="section">
+      <div class="section-header"><h3>Lifecycle Actions</h3><span class="chev">&#9662;</span></div>
+      <div class="section-body" id="cert-actions"></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-header"><h3>Targets</h3><span class="chev">&#9662;</span></div>
+    <div class="section-body" id="cert-targets"></div>
+  </div>
+  <div class="two cert-manager-grid">
+    <div class="section">
+      <div class="section-header"><h3>DNS Plan</h3><span class="chev">&#9662;</span></div>
+      <div class="section-body" id="cert-dns"></div>
+    </div>
+    <div class="section">
+      <div class="section-header"><h3>Result Evidence</h3><span class="chev">&#9662;</span></div>
+      <div class="section-body" id="cert-result"><div class="exec-out">Run a dry-run or verification action to see exact backend evidence here.</div></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-header"><h3>TLS Inventory</h3><span class="chev">&#9662;</span></div>
+    <div class="section-body">
+      <div id="cert-inventory"></div>
+    </div>
   </div>
 </div>
 </div>

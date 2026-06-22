@@ -215,6 +215,24 @@ function _loadBmcInventoryStats(label){
 var _authFailing=false;
 var _apiErrorToastState={};
 var _toastState={};
+var _lastUserActivityAt=0;
+var _lastSessionTouchAt=0;
+var _SESSION_TOUCH_WINDOW_MS=60000;
+function _markUserActivity(){
+  if(!_authToken)return;
+  _lastUserActivityAt=Date.now();
+}
+function _shouldTouchSession(){
+  if(!_authToken||!_lastUserActivityAt)return false;
+  var now=Date.now();
+  if(now-_lastUserActivityAt>_SESSION_TOUCH_WINDOW_MS)return false;
+  if(_lastUserActivityAt<=_lastSessionTouchAt)return false;
+  _lastSessionTouchAt=now;
+  return true;
+}
+['click','keydown','pointerdown','touchstart'].forEach(function(ev){
+  document.addEventListener(ev,_markUserActivity,{capture:true,passive:true});
+});
 function _shouldToastApiError(url,status){
   var now=Date.now();
   var key=String(url||'').replace(/\?.*/,'')+'#'+status;
@@ -232,6 +250,7 @@ function _authFetch(url, opts) {
     if (silent) delete opts.silent;
     if (!opts.headers) opts.headers = {};
     if (_authToken) opts.headers['Authorization'] = 'Bearer ' + _authToken;
+    if (_shouldTouchSession()) opts.headers['X-Freq-User-Activity'] = '1';
     if (!opts.credentials) opts.credentials = 'same-origin';
     return fetch(url, opts).then(function(r){
       if(r.status===403||r.status===401){
@@ -650,6 +669,12 @@ document.addEventListener('click',function(e){
       gitopsInit:gitopsInit,launchTermFromPicker:launchTermFromPicker,
       loadAutomationPage:loadAutomationPage,loadBackupPolicies:loadBackupPolicies,
       loadCapacity:loadCapacity,loadCapRecommend:loadCapRecommend,
+      certBootstrapPreview:certBootstrapPreview,certBootstrapApply:certBootstrapApply,
+      certDnsDryRun:certDnsDryRun,certDnsApply:certDnsApply,
+      certIssueDryRun:certIssueDryRun,certIssueApply:certIssueApply,
+      certRenewDryRun:certRenewDryRun,certRenewApply:certRenewApply,
+      certDeployDryRun:certDeployDryRun,certDeployApply:certDeployApply,
+      certVerify:certVerify,
       loadCertsPage:loadCertsPage,loadChaos:loadChaos,loadConfigHistory:loadConfigHistory,
       loadContainerRegistry:loadContainerRegistry,loadCosts:loadCosts,
       loadDepMap:loadDepMap,loadDnsInventory:loadDnsInventory,loadDnsPage:loadDnsPage,
@@ -784,6 +809,8 @@ function doLogin(){
       return;
     }
     _authToken=d.token;_currentUser=d.user;_currentRole=d.role;
+    _lastUserActivityAt=Date.now();
+    _lastSessionTouchAt=_lastUserActivityAt;
     /* Fresh session — clear the auth-failing guard so _authFetch is armed
      * again for subsequent 401/403 surfacing. */
     _authFailing=false;
@@ -848,6 +875,7 @@ function doLogout(){
   }catch(e){}
 
   _authToken='';_currentUser='';_currentRole='operator';
+  _lastUserActivityAt=0;_lastSessionTouchAt=0;
   /* Clear any legacy storage tokens */
   try{sessionStorage.removeItem('freq_auth_token');sessionStorage.removeItem('freq_auth_user');}catch(e){}
   try{localStorage.removeItem('freq_auth_token');localStorage.removeItem('freq_auth_user');}catch(e){}
@@ -908,7 +936,9 @@ var API={
   CAPACITY_RECOMMEND:'/api/capacity/recommend',
   /* ── Security/Compliance ── */
   COMPLY_STATUS:'/api/comply/status',COMPLY_RESULTS:'/api/comply/results',
-  CERT_INVENTORY:'/api/cert/inventory',DNS_INVENTORY:'/api/dns/inventory',
+  CERT_INVENTORY:'/api/cert/inventory',CERT_LIFECYCLE:'/api/cert/lifecycle',
+  CERT_BOOTSTRAP:'/api/cert/lifecycle/bootstrap',CERT_ACTION:'/api/cert/lifecycle/action',
+  DNS_INVENTORY:'/api/dns/inventory',
   PATCH_STATUS:'/api/patch/status',SECRETS_AUDIT:'/api/secrets/audit',
   SECRETS_LEASES:'/api/secrets/leases',SECRETS_SCAN:'/api/secrets/scan',
   BASELINE_LIST:'/api/baseline/list',
@@ -995,6 +1025,64 @@ var API={
   CERT_EXPIRY:'/api/cert/expiry'
 };
 var _fleetCache={fo:null,hd:null,ct:null};/* cached API responses for instant page switch */
+var _fleetActivityCache=null,_fleetActivityInFlight=null,_fleetActivityCacheTs=0;
+var _FLEET_ACTIVITY_CACHE_MS=15000;
+function _loadFleetActivityCounts(force){
+  var now=Date.now();
+  if(!force&&_fleetActivityCache&&(now-_fleetActivityCacheTs)<_FLEET_ACTIVITY_CACHE_MS){
+    return Promise.resolve(_fleetActivityCache);
+  }
+  if(_fleetActivityInFlight)return _fleetActivityInFlight;
+  _fleetActivityInFlight=Promise.all([
+    _authFetch(API.MEDIA_DOWNLOADS,{silent:true}).then(function(r){return r.ok?r.json():{count:0};}).catch(function(){return {count:0};}),
+    _authFetch(API.MEDIA_STREAMS,{silent:true}).then(function(r){return r.ok?r.json():{count:0};}).catch(function(){return {count:0};})
+  ]).then(function(res){
+    var data={
+      downloads:res[0]||{count:0},
+      streams:res[1]||{count:0},
+      dl:(res[0]&&res[0].count)||0,
+      stream:(res[1]&&res[1].count)||0
+    };
+    _fleetActivityCache=data;
+    _fleetActivityCacheTs=Date.now();
+    return data;
+  }).catch(function(){
+    var data={downloads:{count:0},streams:{count:0},dl:0,stream:0};
+    _fleetActivityCache=data;
+    _fleetActivityCacheTs=Date.now();
+    return data;
+  }).then(function(data){
+    _fleetActivityInFlight=null;
+    return data;
+  });
+  return _fleetActivityInFlight;
+}
+function _fleetActivityHtml(res,withFresh){
+  res=res||{downloads:{count:0},streams:{count:0},dl:0,stream:0};
+  var fresh=withFresh?_freshChip(_ageFromPayload(res.downloads)||_ageFromPayload(res.streams)):'';
+  return '<div class="lb">ACTIVITY'+fresh+'</div>'+
+    '<div class="flex-row-24">'+
+      '<span class="stat-pair"><span class="stat-big-orange">'+(res.dl||0)+'</span><span class="label-hint">DL</span></span>'+
+      '<span class="stat-pair"><span class="stat-big-blue">'+(res.stream||0)+'</span><span class="label-hint">STREAM</span></span>'+
+    '</div>';
+}
+function _refreshFleetActivityWidgets(force){
+  return _loadFleetActivityCounts(force).then(function(res){
+    var home=document.querySelector('#hw-fleet-stats .st:nth-child(7)');
+    if(home){
+      home.setAttribute('data-view','media');
+      home.style.cursor='pointer';
+      home.innerHTML=_fleetActivityHtml(res,true);
+    }
+    var fleet=document.querySelector('#metrics-summary .st:nth-child(5)');
+    if(fleet){
+      fleet.setAttribute('data-view','media');
+      fleet.style.cursor='pointer';
+      fleet.innerHTML=_fleetActivityHtml(res,false);
+    }
+    return res;
+  });
+}
 
 function _showApp(){
   /* Post-login launch sequence: evidence-first, each stage reports
@@ -1063,7 +1151,6 @@ function _showApp(){
       var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)'};
       var iconEl=document.getElementById('header-user-icon');if(iconEl)iconEl.style.background=rc[_currentRole]||'var(--green)';
       _applyRoleUI();
-      _renderHomeWidgets();
       _checkForUpdate();
       /* Background data loops — gated behind successful auth so the
        * bootstrap fetchers never fire unauthenticated and kick
@@ -1071,6 +1158,7 @@ function _showApp(){
        * startSSE / loadHome all ran at script load synchronously,
        * producing a pre-auth logout storm on top of EventSource
        * 403-retry noise. */
+      try{startSilentRefresh();}catch(e){console.error('startSilentRefresh failed:',e);}
       try{startSparklines();}catch(e){console.error('startSparklines failed:',e);}
       /* Seed the stream indicator before startSSE resolves so the
        * header never shows an empty slot — EventSource onopen flips
@@ -1208,12 +1296,12 @@ function openUserMenu(){
     var el=document.getElementById('user-menu-session-badge');
     if(!el)return;
     if(!d||!d.valid){el.textContent='SESSION: unknown';el.style.color='var(--yellow)';return;}
-    var age=_formatDuration(d.session_age_s||0);
+    var idle=_formatDuration(d.session_idle_s||0);
     var ttl=_formatDuration(d.session_ttl_s||0);
-    var pct=d.session_timeout_s?Math.round(100*(d.session_age_s||0)/d.session_timeout_s):0;
+    var pct=d.session_timeout_s?Math.round(100*(d.session_idle_s||0)/d.session_timeout_s):0;
     var clr=pct<50?'var(--green)':pct<85?'var(--yellow)':'var(--red)';
-    el.innerHTML='SESSION AGE <span style="color:'+clr+';font-weight:700">'+age+'</span>'+
-      ' &middot; EXPIRES IN <span style="color:'+clr+';font-weight:700">'+ttl+'</span>';
+    el.innerHTML='IDLE <span style="color:'+clr+';font-weight:700">'+idle+'</span>'+
+      ' &middot; EXPIRES AFTER <span style="color:'+clr+';font-weight:700">'+ttl+'</span>';
   }).catch(function(){
     var el=document.getElementById('user-menu-session-badge');
     if(el){el.textContent='SESSION: probe failed';el.style.color='var(--yellow)';}
@@ -1690,12 +1778,12 @@ var WIDGET_REGISTRY=[
   {id:'w-fleet-infra',page:'FLEET',label:'Hosts & VMs & LXC',ref:'fleet-sec-infra',preload:function(){loadFleetPage();}},
   {id:'w-fleet-overview',page:'FLEET',label:'Overview',loader:function(el){
     /* Summary cards row — cluster-level stats */
-    var g='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">';
+    var g='<div class="cards" style="--card-track:220px;margin-bottom:16px">';
     g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">PVE NODES</h3><div class="host-meta"><span>HYPERVISOR</span></div></div><div class="divider-light"><div id="hw-pve-sum"><div class="skeleton h-60" ></div></div></div></div>';
     g+='<div class="host-card"><div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PROXMOX</span></div></div><div class="divider-light"><div id="hw-vms"><div class="skeleton h-60" ></div></div></div></div>';
     g+='<div class="host-card"><div class="host-head"><h3 class="c-green">MEDIA</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div><div class="divider-light"><div id="hw-media"><div class="skeleton h-60" ></div></div></div></div></div>';
-    /* Infrastructure device cards — responsive grid */
-    g+='<div id="hw-physical-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px"></div>';
+    /* Infrastructure device cards — centered wrapping row */
+    g+='<div id="hw-physical-cards" class="cards" style="--card-track:220px"></div>';
     el.innerHTML=g;
     /* Populate physical device cards as individual grid items */
     var pc='';PROD_HOSTS.filter(function(h){return h.type!=='pve'}).forEach(function(h){var tc={pfsense:'var(--text)',truenas:'var(--blue)',switch:'var(--cyan)',idrac:'var(--orange)'}; pc+='<div class="host-card" data-host-id="'+h.label.toLowerCase()+'"><div class="host-head"><h3 style="color:'+(tc[h.type]||'var(--text)')+'">'+h.label.toUpperCase()+'</h3><div class="host-meta"><span>'+h.ip+'</span><span>·</span><span>'+h.role+'</span></div></div><div class="divider-light"><div id="hw-'+h.label.toLowerCase().replace(/[^a-z0-9]/g,'-')+'"><div class="skeleton h-60" ></div></div></div></div>';});
@@ -2059,16 +2147,7 @@ function _loadHomeFleetStats(){
           '</div>';
       }
     }).catch(function(e){console.error('API error:',e);});
-    Promise.all([_authFetch(API.MEDIA_DOWNLOADS).then(function(r){return r.json()}).catch(function(){return{count:0}}),_authFetch(API.MEDIA_STREAMS).then(function(r){return r.json()}).catch(function(){return{count:0}})]).then(function(res){
-      var c=el.querySelector('.st:nth-child(7)');if(c){
-        c.setAttribute('data-view','media');c.style.cursor='pointer';
-        c.innerHTML='<div class="lb">ACTIVITY'+_freshChip(_ageFromPayload(res[0])||_ageFromPayload(res[1]))+'</div>'+
-          '<div class="flex-row-24">'+
-            '<span class="stat-pair"><span class="stat-big-orange">'+(res[0].count||0)+'</span><span class="label-hint">DL</span></span>'+
-            '<span class="stat-pair"><span class="stat-big-blue">'+(res[1].count||0)+'</span><span class="label-hint">STREAM</span></span>'+
-          '</div>';
-      }
-    });
+    _refreshFleetActivityWidgets();
   });
 }
 function _loadWidgetOverview(){
@@ -2322,12 +2401,14 @@ function refreshCurrentView(){_safe(VIEW_LOADERS[_currentView]||loadHome);}
 /* Silent background refresh — updates values in-place without rebuilding DOM.
    Health (CPU/RAM/disk): every 10s — lightweight SSH.
    Fleet overview (VM status): every 60s — heavier PVE API call. */
-var _healthTimer=null,_fleetTimer=null,_healthInFlight=false,_fleetInFlight=false;
+var _healthTimer=null,_fleetTimer=null,_activityTimer=null,_healthInFlight=false,_fleetInFlight=false;
 function startSilentRefresh(){
   if(_healthTimer)clearInterval(_healthTimer);
   if(_fleetTimer)clearInterval(_fleetTimer);
+  if(_activityTimer)clearInterval(_activityTimer);
   _healthTimer=setInterval(_silentHealthRefresh,10000);
   _fleetTimer=setInterval(_silentFleetRefresh,45000);
+  _activityTimer=setInterval(function(){_refreshFleetActivityWidgets(true);},15000);
 }
 /* M-RESILIENCE-OPERATOR-TRUTH-20260413AI: consecutive-failure streaks
  * for the silent background pollers. After N consecutive failures the
@@ -2514,6 +2595,7 @@ function _silentFleetRefresh(){
       _fleetFailStreak=0;_clearApiDegraded();
     }
     _fleetCache.fo=fo;/* keep cache fresh */
+    _refreshFleetActivityWidgets(true);
     /* Densification: refresh per-VM card freshness on every silent
      * tick so the chip counts up between probes without requiring a
      * view reload. Decorator is idempotent and respects stale
@@ -2570,7 +2652,6 @@ function _silentFleetRefresh(){
     if(_fleetFailStreak>=2)_markApiDegraded('fleet overview','network');
   });
 }
-startSilentRefresh();
 
 /* === Skeleton Timeout ===
    If any skeleton loader is still visible after 15s, the API call failed
@@ -3025,8 +3106,10 @@ function startSSE(){
     /* SSE connected — slow down polling to safety fallback */
     if(_healthTimer)clearInterval(_healthTimer);
     if(_fleetTimer)clearInterval(_fleetTimer);
+    if(_activityTimer)clearInterval(_activityTimer);
     _healthTimer=setInterval(_silentHealthRefresh,30000);
     _fleetTimer=setInterval(_silentFleetRefresh,90000);
+    _activityTimer=setInterval(function(){_refreshFleetActivityWidgets(true);},15000);
     /* Catch up on any events missed during disconnect gap */
     _silentHealthRefresh();_silentFleetRefresh();
     /* Update connection indicator */
@@ -3039,8 +3122,10 @@ function startSSE(){
     /* SSE disconnected — restore fast polling until reconnect */
     if(_healthTimer)clearInterval(_healthTimer);
     if(_fleetTimer)clearInterval(_fleetTimer);
+    if(_activityTimer)clearInterval(_activityTimer);
     _healthTimer=setInterval(_silentHealthRefresh,10000);
     _fleetTimer=setInterval(_silentFleetRefresh,45000);
+    _activityTimer=setInterval(function(){_refreshFleetActivityWidgets(true);},15000);
     /* Update connection indicator */
     var ci=document.getElementById('sse-conn-status');
     if(ci){ci.textContent='CACHED';ci.style.color='var(--yellow)';}
@@ -3932,34 +4017,225 @@ function loadFwRules(){
   var c=document.getElementById('fw-rules-content');
   if(c)c.innerHTML='<div class="skeleton h-60"></div>';
   _authFetch('/api/v1/fw/rules').then(function(r){return r.json();}).then(function(d){
-    if(c&&d.rules)c.innerHTML='<table><thead><tr><th>#</th><th>Action</th><th>Proto</th><th>Source</th><th>Dest</th><th>Port</th></tr></thead><tbody>'+d.rules.map(function(r,i){return '<tr><td>'+(i+1)+'</td><td>'+_esc(r.action)+'</td><td>'+_esc(r.proto||'*')+'</td><td>'+_esc(r.src||'*')+'</td><td>'+_esc(r.dst||'*')+'</td><td>'+_esc(r.port||'*')+'</td></tr>';}).join('')+'</tbody></table>';
+    if(!c)return;
+    if(d.error){c.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(d.error)+'</div>';return;}
+    var rules=d.rules||[];
+    if(!rules.length){c.innerHTML='<div class="exec-out">No firewall rules returned.</div>';return;}
+    c.innerHTML='<table><thead><tr><th>#</th><th>Action</th><th>Proto</th><th>Source</th><th>Dest</th><th>Port</th></tr></thead><tbody>'+rules.map(function(r,i){return '<tr><td>'+(i+1)+'</td><td>'+_esc(r.action)+'</td><td>'+_esc(r.proto||'*')+'</td><td>'+_esc(r.src||'*')+'</td><td>'+_esc(r.dst||'*')+'</td><td>'+_esc(r.port||'*')+'</td></tr>';}).join('')+'</tbody></table>';
   }).catch(function(e){if(c)c.innerHTML='<div class="exec-out">Failed to load rules: '+_esc(e.toString())+'</div>';});
 }
 function loadFwNat(){
   var c=document.getElementById('fw-rules-content');
   if(c)c.innerHTML='<div class="skeleton h-60"></div>';
   _authFetch('/api/v1/fw/nat').then(function(r){return r.json();}).then(function(d){
-    if(c)c.innerHTML='<pre>'+_esc(JSON.stringify(d.rules||d,null,2))+'</pre>';
+    if(!c)return;
+    if(d.error){c.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(d.error)+'</div>';return;}
+    var rules=d.rules||[];
+    if(!rules.length){c.innerHTML='<div class="exec-out">No NAT rules returned.</div>';return;}
+    c.innerHTML='<pre>'+_esc(JSON.stringify(rules,null,2))+'</pre>';
   }).catch(function(e){if(c)c.innerHTML='<div class="exec-out">Failed: '+_esc(e.toString())+'</div>';});
 }
 function loadFwStates(){
   var c=document.getElementById('fw-rules-content');
   if(c)c.innerHTML='<div class="skeleton h-60"></div>';
   _authFetch('/api/v1/fw/states').then(function(r){return r.json();}).then(function(d){
-    if(c)c.innerHTML='<pre>'+_esc(JSON.stringify(d.states||d,null,2))+'</pre>';
+    if(!c)return;
+    if(d.error){c.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(d.error)+'</div>';return;}
+    var states=d.states||[];
+    if(!states.length){c.innerHTML='<div class="exec-out">No active firewall states returned.</div>';return;}
+    c.innerHTML='<pre>'+_esc(JSON.stringify(states,null,2))+'</pre>';
   }).catch(function(e){if(c)c.innerHTML='<div class="exec-out">Failed: '+_esc(e.toString())+'</div>';});
 }
-function loadCertsPage(){
-  _fetchAndRender('/api/v1/cert/list','cert-tbl',function(d){
-    var s=d.stats||{};
-    var el=document.getElementById('cert-stats');
-    if(el)el.innerHTML=_statCards([{l:'Total',v:s.total||0},{l:'Valid',v:s.valid||0,c:'green'},{l:'Expiring',v:s.expiring||0,c:'yellow'},{l:'Expired',v:s.expired||0,c:'red'}]);
-    var tbl=document.getElementById('cert-tbl');
-    if(tbl&&d.certs)tbl.innerHTML=d.certs.map(function(c){
-      var color=c.days_left<7?'red':c.days_left<30?'yellow':'green';
-      return '<tr><td>'+_esc(c.domain)+'</td><td>'+_esc(c.issuer||'-')+'</td><td>'+_esc(c.expires||'-')+'</td><td><span style="color:var(--'+color+')">'+c.days_left+'</span></td><td>'+_statusBadge(c.status)+'</td></tr>';
-    }).join('');
+function _certText(v,empty){if(v===0)return '0';return v==null||v===''?(empty||'—'):_esc(v);}
+function _certBoolBadge(v){return v?_statusBadge('ok'):_statusBadge('missing');}
+function _certLevelBadge(level,label){
+  var l=(level||'info').toLowerCase();
+  var c=l==='error'||l==='critical'?'red':l==='warning'||l==='warn'?'yellow':l==='ok'||l==='pass'?'green':'text-dim';
+  return '<span class="cert-pill cert-pill-'+c+'">'+_esc(label||level||'info')+'</span>';
+}
+function _certField(id,label,placeholder,value,type){
+  return '<label class="cert-field"><span>'+_esc(label)+'</span><input id="'+id+'" class="input" type="'+(type||'text')+'" placeholder="'+_esc(placeholder||'')+'" value="'+_esc(value||'')+'"></label>';
+}
+function _certSelectedTarget(){
+  var el=document.getElementById('cert-action-target');
+  return el?el.value:'';
+}
+function _certSetResult(html){var el=document.getElementById('cert-result');if(el)el.innerHTML=html;}
+function _certActionBody(action,dryRun){
+  return {action:action,dry_run:dryRun,target:_certSelectedTarget(),confirm:!dryRun};
+}
+function _certPostJson(url,body){
+  return _authFetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}).then(function(r){
+    return r.json().then(function(d){d._httpStatus=r.status;return d;}).catch(function(){return {_httpStatus:r.status,error:'Invalid JSON response'};});
   });
+}
+function _renderCertResult(d){
+  var ok=d&&d.ok;
+  var data=(d&&d.data)||d||{};
+  var title=(d&&d.action)?String(d.action).replace('-',' ').toUpperCase():(d&&d.dry_run?'DRY RUN':'RESULT');
+  var detail='';
+  if(data.error||d.error)detail+='<div class="cert-result-error">'+_esc(data.error||d.error)+'</div>';
+  if(data.zone)detail+='<div class="cert-kv"><span>Cloudflare zone</span><strong>'+_esc(data.zone.name||data.zone.zone_id||'discovered')+'</strong></div>';
+  if(data.config_path)detail+='<div class="cert-kv"><span>Config path</span><strong>'+_esc(data.config_path)+'</strong></div>';
+  if(data.config_block)detail+='<pre class="cert-pre">'+_esc(data.config_block)+'</pre>';
+  else if(data.output)detail+='<pre class="cert-pre">'+_esc(data.output)+'</pre>';
+  else detail+='<pre class="cert-pre">'+_esc(JSON.stringify(data,null,2))+'</pre>';
+  return '<div class="cert-result '+(ok?'is-ok':'is-bad')+'"><div class="cert-result-head"><strong>'+_esc(title)+'</strong>'+_statusBadge(ok?'ok':'fail')+'</div>'+detail+'</div>';
+}
+function _renderCertSetup(plan,status){
+  var settings=(plan&&plan.settings)||{};
+  var warnings=(plan&&plan.warnings)||[];
+  var h='<div class="cert-copy">Credential values never go in the browser. Provide a Cloudflare token file path that already exists on the host.</div>';
+  h+='<div class="cert-form-grid">';
+  h+=_certField('cert-base-domain','Base domain','example.com',settings.base_domain||'');
+  h+=_certField('cert-token-path','Cloudflare token path','/root/.secrets/cloudflare.token',settings.dns_token_path||'');
+  h+='</div>';
+  h+='<label class="cert-check"><input type="checkbox" id="cert-bootstrap-replace"> <span>Replace existing [cert_management] block when applying bootstrap.</span></label>';
+  h+='<div class="cert-action-row"><button class="fleet-btn btn-cyan" data-action="certBootstrapPreview">PREVIEW BOOTSTRAP</button><button class="fleet-btn btn-green" data-action="certBootstrapApply">APPLY BOOTSTRAP</button></div>';
+  h+='<div class="cert-setup-state">';
+  h+='<div class="cert-kv"><span>Configured</span><strong>'+_certBoolBadge(status&&status.configured)+'</strong></div>';
+  h+='<div class="cert-kv"><span>ACME client</span><strong>'+_certBoolBadge(status&&status.acme_available)+'</strong></div>';
+  h+='<div class="cert-kv"><span>DNS provider</span><strong>'+_certText(settings.dns_provider)+'</strong></div>';
+  h+='<div class="cert-kv"><span>Record strategy</span><strong>'+_certText(settings.record_strategy)+'</strong></div>';
+  h+='</div>';
+  if(warnings.length){
+    h+='<div class="cert-warning-list">'+warnings.map(function(w){return '<div class="cert-warning">'+_certLevelBadge(w.level||'warning','warning')+'<span>'+_esc(w.message||w)+'</span></div>';}).join('')+'</div>';
+  }
+  return h;
+}
+function _renderCertActions(plan){
+  var targets=(plan&&plan.targets)||[];
+  var targetOpts='<option value="">All deploy-capable targets</option>'+targets.map(function(t){
+    return '<option value="'+_esc(t.label||t.hostname||t.ip||'')+'">'+_esc((t.label||t.hostname||'target')+' · '+(t.deploy_driver||'driver'))+'</option>';
+  }).join('');
+  var h='<div class="cert-copy">Every mutating action supports dry-run first. Apply actions require an explicit confirmation and never echo secret values.</div>';
+  h+='<label class="cert-field"><span>Deploy / verify target</span><select id="cert-action-target" class="input">'+targetOpts+'</select></label>';
+  h+='<div class="cert-action-grid">';
+  h+='<div class="cert-action-card"><h4>DNS Sync</h4><p>Create or update wildcard and target records in Cloudflare.</p><div><button class="fleet-btn btn-cyan" data-action="certDnsDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certDnsApply">APPLY</button></div></div>';
+  h+='<div class="cert-action-card"><h4>Issue</h4><p>Run ACME issue for the wildcard certificate source.</p><div><button class="fleet-btn btn-cyan" data-action="certIssueDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certIssueApply">ISSUE</button></div></div>';
+  h+='<div class="cert-action-card"><h4>Renew</h4><p>Renew the source certificate without deploying unless explicitly applied.</p><div><button class="fleet-btn btn-cyan" data-action="certRenewDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certRenewApply">RENEW</button></div></div>';
+  h+='<div class="cert-action-card"><h4>Deploy</h4><p>Push issued cert material to configured drivers and restart/reload safely.</p><div><button class="fleet-btn btn-cyan" data-action="certDeployDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certDeployApply">DEPLOY</button></div></div>';
+  h+='<div class="cert-action-card cert-action-card-wide"><h4>Verify</h4><p>Probe certificate, SAN, expiry, driver state, and public/private DNS truth.</p><div><button class="fleet-btn btn-orange" data-action="certVerify">VERIFY NOW</button></div></div>';
+  h+='</div>';
+  return h;
+}
+function _renderCertTargets(plan){
+  var targets=(plan&&plan.targets)||[];
+  if(!targets.length)return '<div class="empty-state"><p>No cert deploy targets configured or inferred yet.</p></div>';
+  return '<div class="cert-target-grid">'+targets.map(function(t){
+    var alts=(t.althostnames||t.alt_names||[]).join(', ');
+    var actions=(t.rebind_actions||[]).map(function(a){return a.kind||a.action||a;}).join(', ');
+    return '<div class="cert-target-card">'+
+      '<div class="cert-target-head"><h4>'+_esc(t.label||t.name||'target')+'</h4>'+_certLevelBadge(t.enabled===false?'warning':'ok',t.enabled===false?'disabled':'enabled')+'</div>'+
+      '<div class="cert-kv"><span>Driver</span><strong>'+_certText(t.deploy_driver||t.driver)+'</strong></div>'+
+      '<div class="cert-kv"><span>Host</span><strong>'+_certText(t.ip||t.connect_host||t.address)+'</strong></div>'+
+      '<div class="cert-kv"><span>Domain</span><strong>'+_certText(t.hostname||t.domain||t.fqdn)+'</strong></div>'+
+      '<div class="cert-kv"><span>Alt names</span><strong>'+_certText(alts)+'</strong></div>'+
+      '<div class="cert-kv"><span>Port</span><strong>'+_certText(t.port||443)+'</strong></div>'+
+      (actions?'<div class="cert-kv"><span>Rebind</span><strong>'+_esc(actions)+'</strong></div>':'')+
+      '</div>';
+  }).join('')+'</div>';
+}
+function _renderCertDns(plan){
+  var records=(plan&&plan.dns_records)||[];
+  if(!records.length)return '<div class="exec-out">No DNS records planned yet. Bootstrap with a base domain and token path.</div>';
+  var h='<div class="cert-record-grid">';
+  records.forEach(function(r){
+    var value=r.value||r.content||r.target||'';
+    var pri=(String(value).match(/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/))?' cert-record-risk':'';
+    h+='<div class="cert-record'+pri+'"><div><strong>'+_esc(r.hostname||r.name||r.host||'record')+'</strong><span>'+_esc(r.type||'A')+'</span></div><code>'+_esc(value||'—')+'</code></div>';
+  });
+  h+='</div>';
+  return h;
+}
+function _renderCertInventory(inventory){
+  var certs=(inventory&&inventory.certs)||[];
+  if(!certs.length)return '<div class="exec-out">No certificate inventory data yet.</div>';
+  var h='<table><thead><tr><th>Domain</th><th>Issuer</th><th>Expires</th><th>Days Left</th><th>Status</th></tr></thead><tbody>';
+  h+=certs.map(function(c){
+    var dl=c.days_left==null?'—':c.days_left;
+    var color=dl==='—'?'text-dim':dl<7?'red':dl<30?'yellow':'green';
+    return '<tr><td>'+_esc(c.domain||c.name||'-')+'</td><td>'+_esc(c.issuer||'-')+'</td><td>'+_esc(c.expires||c.not_after||'-')+'</td><td><span style="color:var(--'+color+')">'+_esc(dl)+'</span></td><td>'+_statusBadge(c.status||'unknown')+'</td></tr>';
+  }).join('');
+  return h+'</tbody></table>';
+}
+function _renderCertLifecycle(d){
+  var plan=d.plan||{},status=d.status||{},inventory=d.inventory||{};
+  var stats=document.getElementById('cert-stats');
+  if(stats)stats.innerHTML=_statCards([
+    {l:'Configured',v:status.configured?'YES':'NO',c:status.configured?'green':'yellow'},
+    {l:'Targets',v:status.targets||0,c:(status.targets||0)>0?'green':'yellow'},
+    {l:'DNS Records',v:status.dns_records||0,c:(status.dns_records||0)>0?'green':'yellow'},
+    {l:'Warnings',v:status.warnings||0,c:(status.warnings||0)>0?'yellow':'green'}
+  ]);
+  var overview=document.getElementById('cert-overview');
+  if(overview){
+    var settings=plan.settings||{};
+    overview.innerHTML='<div class="cert-overview-grid">'+
+      '<div class="cert-kv"><span>Wildcard</span><strong>'+_certText(plan.wildcard_name||('*.'.concat(settings.base_domain||'')))+'</strong></div>'+
+      '<div class="cert-kv"><span>Source cert</span><strong>'+_certText(((plan.source_paths||{}).cert)||settings.cert_path)+'</strong></div>'+
+      '<div class="cert-kv"><span>Source key</span><strong>'+_certText(((plan.source_paths||{}).key)||settings.key_path)+'</strong></div>'+
+      '<div class="cert-kv"><span>Issued cache</span><strong>'+_certText((d.issued&&d.issued.issued_at)||'not recorded')+'</strong></div>'+
+      '</div>';
+  }
+  var setup=document.getElementById('cert-setup');if(setup)setup.innerHTML=_renderCertSetup(plan,status);
+  var actions=document.getElementById('cert-actions');if(actions)actions.innerHTML=_renderCertActions(plan);
+  var targets=document.getElementById('cert-targets');if(targets)targets.innerHTML=_renderCertTargets(plan);
+  var dns=document.getElementById('cert-dns');if(dns)dns.innerHTML=_renderCertDns(plan);
+  var inv=document.getElementById('cert-inventory');if(inv)inv.innerHTML=_renderCertInventory(inventory);
+  _enhanceResponsiveTables(document.getElementById('certs-view')||document);
+}
+function loadCertsPage(){
+  var ids=['cert-stats','cert-overview','cert-setup','cert-actions','cert-targets','cert-dns','cert-inventory'];
+  ids.forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML='<div class="skeleton h-60"></div>';});
+  _authFetch(API.CERT_LIFECYCLE).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok&&d.error){throw new Error(d.error);}
+    _renderCertLifecycle(d);
+  }).catch(function(e){
+    var el=document.getElementById('cert-overview');
+    if(el)el.innerHTML='<div class="exec-out" style="color:var(--red)">Failed to load SSL manager: '+_esc(e.toString())+'</div>';
+  });
+}
+function certBootstrapPreview(){_certBootstrap(true);}
+function certBootstrapApply(){_certBootstrap(false);}
+function _certBootstrap(dryRun){
+  var base=(document.getElementById('cert-base-domain')||{}).value||'';
+  var token=(document.getElementById('cert-token-path')||{}).value||'';
+  var replace=!!((document.getElementById('cert-bootstrap-replace')||{}).checked);
+  if(!base.trim()||!token.trim()){toast('Base domain and token path are required','error');return;}
+  function run(){
+    _certSetResult('<div class="skeleton h-60"></div>');
+    _certPostJson(API.CERT_BOOTSTRAP,{base_domain:base.trim(),cloudflare_token_path:token.trim(),replace:replace,dry_run:dryRun}).then(function(d){
+      _certSetResult(_renderCertResult(d));
+      if(d.ok){toast(dryRun?'Bootstrap preview complete':'Bootstrap applied','success');loadCertsPage();}
+      else toast(d.error||'Bootstrap failed','error');
+    }).catch(function(e){_certSetResult('<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>');});
+  }
+  if(dryRun)run();
+  else confirmAction('Apply SSL bootstrap for <strong>'+_esc(base.trim())+'</strong>?<br>Secret material is read from the provided file path, never from the browser.',run);
+}
+function certDnsDryRun(){_certAction('dns-sync',true);}
+function certDnsApply(){_certAction('dns-sync',false);}
+function certIssueDryRun(){_certAction('issue',true);}
+function certIssueApply(){_certAction('issue',false);}
+function certRenewDryRun(){_certAction('renew',true);}
+function certRenewApply(){_certAction('renew',false);}
+function certDeployDryRun(){_certAction('deploy',true);}
+function certDeployApply(){_certAction('deploy',false);}
+function certVerify(){_certAction('verify',false);}
+function _certAction(action,dryRun){
+  var target=_certSelectedTarget();
+  var label=action.toUpperCase()+(target?' for '+target:'');
+  function run(){
+    _certSetResult('<div class="skeleton h-60"></div>');
+    _certPostJson(API.CERT_ACTION,_certActionBody(action,dryRun)).then(function(d){
+      _certSetResult(_renderCertResult(d));
+      if(d.ok){toast((dryRun?'Dry-run ':'')+label+' complete','success');loadCertsPage();}
+      else toast(d.error||label+' failed','error');
+    }).catch(function(e){_certSetResult('<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>');});
+  }
+  if(dryRun||action==='verify')run();
+  else confirmAction('Run <strong>'+_esc(label)+'</strong>?<br>This may update DNS, issue certificates, deploy cert material, or reload target services.',run);
 }
 function loadDnsPage(){
   _fetchAndRender('/api/v1/dns/status','dns-stats',function(d){
@@ -4060,12 +4336,12 @@ function loadOncall(){
   /* Who is on call */
   _authFetch(API.ONCALL_WHOAMI).then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('oncall-info');if(!el)return;
-    var h='<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">';
-    h+='<div class="crd" style="padding:12px 20px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--green)">'+_esc(d.oncall||'unset')+'</div><div class="c-dim-fs12">CURRENT ON-CALL</div></div>';
-    h+='<div class="crd" style="padding:12px 20px;text-align:center"><div style="font-size:16px;font-weight:600">'+_esc(d.rotation||'weekly')+'</div><div class="c-dim-fs12">ROTATION</div></div>';
-    var users=d.users||[];
-    if(users.length){h+='<div style="flex:1"><span class="c-dim-fs12">ROSTER: </span>';users.forEach(function(u){h+='<span class="badge ok" style="margin-right:4px">'+_esc(u)+'</span>';});h+='</div>';}
+    var h='<div class="cards oncall-card-grid">';
+    h+='<div class="crd oncall-card"><div class="oncall-card-value c-green">'+_esc(d.oncall||'unset')+'</div><div class="oncall-card-label">CURRENT ON-CALL</div></div>';
+    h+='<div class="crd oncall-card"><div class="oncall-card-value oncall-card-value-sm">'+_esc(d.rotation||'weekly')+'</div><div class="oncall-card-label">ROTATION</div></div>';
     h+='</div>';
+    var users=d.users||[];
+    if(users.length){h+='<div class="oncall-roster"><span class="c-dim-fs12">ROSTER: </span>';users.forEach(function(u){h+='<span class="badge ok oncall-roster-badge">'+_esc(u)+'</span>';});h+='</div>';}
     el.innerHTML=h;
   }).catch(function(e){var el=document.getElementById('oncall-info');if(el)el.innerHTML='<div class="exec-out">'+_esc(e.toString())+'</div>';});
   /* On-call incidents */
@@ -5800,7 +6076,7 @@ function loadMetricsQuick(){
 }
 /* ── Fleet rendering helpers (hoisted from _renderFleetData) ── */
 function _fStat(v,label,color){return '<div class="text-center"><div style="font-size:16px;font-weight:700;color:'+color+'">'+v+'</div><div style="font-size:12px;color:var(--text)">'+label+'</div></div>';}
-function _fGrp(title,cols,content){return '<div style="border:1px solid var(--border);border-radius:6px;padding:6px 4px 4px;background:var(--bg)"><div style="font-size:12px;color:var(--text);text-align:center;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;opacity:0.7">'+title+'</div><div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:4px">'+content+'</div></div>';}
+function _fGrp(title,cols,content){return '<div style="flex:0 1 170px;min-width:min(150px,100%);border:1px solid var(--border);border-radius:6px;padding:6px 4px 4px;background:var(--bg)"><div style="font-size:12px;color:var(--text);text-align:center;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;opacity:0.7">'+title+'</div><div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:4px">'+content+'</div></div>';}
 function _fDual(label,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+label+'</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'</span><span class="label-hint">'+l1+'</span></span><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'</span><span class="label-hint">'+l2+'</span></span></div></div>';}
 function _renderCtNodeCard(c){
   var name=c.name||('ct-'+c.ctid);
@@ -5939,12 +6215,12 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labL
       var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
       /* Initial render — PVE API poller fills real values within 2 seconds */
       var ramColor=ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';
-      /* auto-fill so the 3 sub-group grid collapses to 1 column inside
+      /* Centered fixed-width tracks so the sub-group row collapses to 1 column inside
        * a narrow host-card (mobile ~230px divider-light width) instead
        * of clipping content. Previously repeat(3,1fr) forced 3 equal
        * ~74px columns on mobile, producing 40+ clipped overflows in
        * the fleet sweep. */
-      nodeCard+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0">';
+      nodeCard+='<div style="display:flex;flex-wrap:wrap;gap:8px;margin:6px 0;justify-content:center">';
       nodeCard+=_fGrp('UTILIZATION',2,_fStat('...','CPU LOAD','var(--text-dim)')+_fStat('...','RAM USED','var(--text-dim)'));
       nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'RUN','var(--green)')+_fStat(nOffline,'STOP','var(--red)'));
       nodeCard+=_fGrp('LXC',3,_fStat(nLxc,'TOTAL','var(--cyan)')+_fStat(lxcOnline,'RUN','var(--green)')+_fStat(lxcOffline,'STOP',lxcOffline>0?'var(--yellow)':'var(--green)'));
@@ -5957,8 +6233,8 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labL
       nodeCard+=_mrow('STORAGE','...',0,'var(--text-dim)');
       nodeCard+='</div>';
     } else {
-      /* same auto-fill responsive grid as the live-metrics branch above */
-      nodeCard+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0">';
+      /* same centered responsive row as the live-metrics branch above */
+      nodeCard+='<div style="display:flex;flex-wrap:wrap;gap:8px;margin:6px 0;justify-content:center">';
       nodeCard+=_fGrp('PVE NODE',2,_fStat(nCores,'CPU ALLOC','var(--purple-light)')+_fStat(nRamGb+'<span class="fs-12-fade">GB</span>','RAM ALLOC','var(--purple-light)'));
       nodeCard+=_fGrp('VMs',3,_fStat(nVms,'TOTAL','var(--purple-light)')+_fStat(nOnline,'RUN','var(--green)')+_fStat(nOffline,'STOP','var(--red)'));
       nodeCard+=_fGrp('LXC',3,_fStat(nLxc,'TOTAL','var(--cyan)')+_fStat(lxcOnline,'RUN','var(--green)')+_fStat(lxcOffline,'STOP',lxcOffline>0?'var(--yellow)':'var(--green)'));
@@ -5981,13 +6257,10 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
     var ic=(infraCards.match(/infra-role-card/g)||[]).length;
     out+='<div style="margin-bottom:16px;border:3px solid var(--text);border-radius:10px;background:#000000;overflow:hidden">';
     out+='<div class="flex-between-pad-top"><span style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text);opacity:0.85">CORE SYSTEMS</span><span id="core-systems-age" class="fs-10-dim-600-ls"></span></div>';
-    /* core-systems-grid is an auto-fill grid with a 180px min track —
-     * 3 columns on a desktop 1200px column, 2 on a laptop, 1 on a
-     * mobile 390px viewport. Previously this was a fixed
-     * repeat(3,1fr) grid that crushed infra-role-cards to ~130px on
-     * mobile while their content wanted 149-215px, producing 20+
-     * clipped overflows per fleet load. */
-    out+='<div class="core-systems-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;padding:12px 16px 16px">'+infraCards+'</div>';
+    /* core-systems-grid uses centered fixed-width tracks so wrapped
+     * rows do not hug the left edge. Previously repeat(3,1fr) crushed
+     * infra-role-cards on mobile while wide rows stretched unevenly. */
+    out+='<div class="core-systems-grid cards" style="padding:12px 16px 16px">'+infraCards+'</div>';
     out+='</div>';
   }
   var nodeOrder=pveNodes.map(function(n){return n.name;}).sort();
@@ -6003,10 +6276,9 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
     pveContent+='<div class="flex-1 min-w-0">'+nd.card+'</div>';
     pveContent+='</div>';
     if(nd.vms){
-      /* auto-fill with a 160px min track instead of a fixed column
-       * count — lets VM cards stack cleanly on mobile (2 at 390px,
-       * 1 at 280px) while still packing 3-4 on desktop. */
-      pveContent+='<div class="pve-vms" style="display:none;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;padding:8px 12px 12px;border-top:1px solid var(--border)">'+nd.vms+'</div>';
+      /* centered fixed-width tracks let VM cards stack cleanly on
+       * mobile while keeping short desktop rows from hugging the left. */
+      pveContent+='<div class="pve-vms cards" style="--card-track:220px;display:none;gap:10px;padding:8px 12px 12px;border-top:1px solid var(--border)">'+nd.vms+'</div>';
     }
     pveContent+='</div>';
   });
@@ -6020,36 +6292,22 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
 }
 function _renderFleetStats(hd,summary,labLabels,pveNodes,totalUp,totalDown,foDuration,hdDuration,labPveNodes){
   hd=hd||{};hd.hosts=_arr(hd.hosts);summary=summary||{};labLabels=labLabels||{};pveNodes=_arr(pveNodes);
-  var labCount=Object.keys(labLabels).length;
-  var prodCount=hd.hosts.length-labCount;
-  var prodPveNodes=pveNodes.length;
-  var responseDur=Math.max(foDuration,hdDuration);
-  var hdAge=hd&&hd.age!==undefined?Math.round(hd.age):0;
-  var ageLabel=hdAge<60?hdAge+'s':Math.round(hdAge/60)+'m';
-  var ageColor=hdAge<30?'var(--green)':hdAge<120?'var(--yellow)':'var(--red)';
+  var corePhysicalCount=_arr(_fleetCache.fo&&_fleetCache.fo.core_physical).length;
+  var fleetProdCount=(summary.prod_count||0)+corePhysicalCount+pveNodes.length;
   var vmRunning=summary.running||0;var vmStopped=summary.stopped||0;
   var sumEl=document.getElementById('metrics-summary');
   if(!sumEl)return;
   sumEl.innerHTML=
-    _fDual('FLEET SPLIT',summary.prod_count||0,'PROD','var(--purple-light)',summary.lab_count||0,'LAB','var(--cyan)')+
-    _fDual('FLEET',prodCount,'PROD','var(--purple-light)',labCount,'LAB','var(--cyan)')+
-    _fDual('PVE NODES',prodPveNodes,'PROD','var(--purple-light)',labPveNodes,'LAB','var(--cyan)')+
+    _fDual('FLEET',fleetProdCount,'PROD','var(--purple-light)',summary.lab_count||0,'LAB','var(--cyan)')+
     _fDual('SSH PROBE',totalUp,'UP','var(--green)',totalDown,'DOWN','var(--red)')+
     _fDual('VMs',vmRunning,'RUN','var(--green)',vmStopped,'STOP','var(--red)')+
-    _fDual('DATA',ageLabel,'AGE',ageColor,responseDur+'s','RESPONSE','var(--text-dim)')+
     st('CONTAINERS','...','p')+
     st('ACTIVITY','...','p');
   _authFetch(API.MEDIA_DASHBOARD,{silent:true}).then(function(r){return r.ok?r.json():null;}).then(function(md){
     md=md||{};
-    var _cdn2=Math.max(0,md.containers_down||0);var c=sumEl.querySelector('.st:nth-child(7)');if(c)c.innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+(md.containers_running||0)+'</span><span class="label-hint">UP</span></span><span class="stat-pair"><span class="stat-big-red">'+_cdn2+'</span><span class="label-hint">DOWN</span></span></div>';
+    var _cdn2=Math.max(0,md.containers_down||0);var c=sumEl.querySelector('.st:nth-child(4)');if(c)c.innerHTML='<div class="lb">CONTAINERS</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-green">'+(md.containers_running||0)+'</span><span class="label-hint">UP</span></span><span class="stat-pair"><span class="stat-big-red">'+_cdn2+'</span><span class="label-hint">DOWN</span></span></div>';
   }).catch(function(e){console.error('API error:',e);});
-  Promise.all([
-    _authFetch(API.MEDIA_DOWNLOADS,{silent:true}).then(function(r){return r.ok?r.json():{count:0}}).catch(function(){return {count:0}}),
-    _authFetch(API.MEDIA_STREAMS,{silent:true}).then(function(r){return r.ok?r.json():{count:0}}).catch(function(){return {count:0}})
-  ]).then(function(res){
-    var dl=res[0].count||0;var str=res[1].count||0;
-    var a=sumEl.querySelector('.st:nth-child(8)');if(a)a.innerHTML='<div class="lb">ACTIVITY</div><div class="flex-row-24"><span class="stat-pair"><span class="stat-big-orange">'+dl+'</span><span class="label-hint">DL</span></span><span class="stat-pair"><span class="stat-big-blue">'+str+'</span><span class="label-hint">STREAM</span></span></div>';
-  });
+  _refreshFleetActivityWidgets();
 }
 function _enrichFleetNtpUpdates(){
   _authFetch(API.FLEET_NTP,{silent:true}).then(function(r){return r.ok?r.json():null;}).then(function(nd){
@@ -9052,9 +9310,32 @@ function vmPower(vmid,action){
   _authFetch(API.VM_POWER+'?vmid='+vmid+'&action='+action,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     toast(d.action+': '+(d.ok?d.output:d.error),d.ok?'success':'error');
     if(d.ok){
-      _fetchFreshVm(vmid).then(function(vm){_rerenderOpenVmCard(vmid,vm);}).catch(function(){});
+      _vmWaitForPowerState(vmid,action).then(function(vm){_rerenderOpenVmCard(vmid,vm);}).catch(function(){
+        _fetchFreshVm(vmid).then(function(vm){_rerenderOpenVmCard(vmid,vm);}).catch(function(){});
+      });
     }
     refreshCurrentView();
+  });
+}
+function _vmWaitForPowerState(vmid,action){
+  var wantRunning=action==='start'||action==='restart';
+  var wantStopped=action==='stop'||action==='shutdown';
+  if(!wantRunning&&!wantStopped)return _fetchFreshVm(vmid);
+  var tries=0;
+  return new Promise(function(resolve,reject){
+    function tick(){
+      tries++;
+      _fetchFreshVm(vmid).then(function(vm){
+        var running=vm&&vm.status==='running';
+        if((wantRunning&&running)||(wantStopped&&!running)){resolve(vm);return;}
+        if(tries>=24){reject(new Error('VM '+vmid+' did not settle after '+action));return;}
+        setTimeout(tick,1500);
+      }).catch(function(e){
+        if(tries>=24){reject(e);return;}
+        setTimeout(tick,1500);
+      });
+    }
+    tick();
   });
 }
 function vmPushKey(ip){
@@ -9648,7 +9929,7 @@ function _vmNicCards(allIps){
   });
   return h;
 }
-function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip,termIp){
+function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip,termIp,hostToolTarget){
   var ctrl='<div style="display:flex;gap:16px;margin:12px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">';
   if(acts.indexOf('configure')>=0){
     ctrl+=_vmConfigPanel(vmid,label);
@@ -9667,11 +9948,15 @@ function _vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip,termIp){
   if(acts.indexOf('destroy')>=0)ctrl+='<button class="fleet-btn btn-red pad-v8-fs11" data-action="vmDestroy" data-vmid="'+vmid+'" >DESTROY</button>';
   if(acts.length<=1)ctrl+='<span class="text-sm text-dim" style="grid-column:1/-1">View only \u2014 no actions for '+catLabel+'</span>';
   ctrl+='<div style="grid-column:1/-1;border-top:1px solid var(--input-border);margin-top:6px;padding-top:8px;font-size:11px;color:var(--text-dim);letter-spacing:0.5px">HOST TOOLS</div>';
-  ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdExec" >RUN CMD</button>';
-  ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdLogs" >LOGS</button>';
-  ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdDiagnose" >DIAGNOSE</button>';
-  ctrl+='<button class="fleet-btn pad-v8-warn" data-action="hdRestart" >RESTART SVC</button>';
-  ctrl+='<button class="fleet-btn pad-v8-fs11" onclick="vmPushKey(\''+(ip||'')+'\')" >PUSH KEY</button>';
+  if(hostToolTarget){
+    ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdExec" >RUN CMD</button>';
+    ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdLogs" >LOGS</button>';
+    ctrl+='<button class="fleet-btn pad-v8-fs11" data-action="hdDiagnose" >DIAGNOSE</button>';
+    ctrl+='<button class="fleet-btn pad-v8-warn" data-action="hdRestart" >RESTART SVC</button>';
+  }else{
+    ctrl+='<span class="text-sm text-dim" style="grid-column:1/-1">Host tools unavailable — no resolved SSH target for '+catLabel+'.</span>';
+  }
+  if(ip)ctrl+='<button class="fleet-btn pad-v8-fs11" onclick="vmPushKey(\''+(ip||'')+'\')" >PUSH KEY</button>';
   if(isRunning){
     if(termIp)ctrl+='<button class="fleet-btn pad-v8-fs11" style="color:var(--cyan)" onclick="openTerminal(\'host\',\''+_esc(termIp)+'\',\'\',\''+_esc(label)+'\',\'linux\')">&#9002; TERMINAL</button>';
     else ctrl+='<button class="fleet-btn pad-v8-fs11" style="color:var(--cyan)" onclick="openTerminal(\'vm\',\''+vmid+'\',\''+_esc(vm?vm.node:'')+'\',\''+_esc(label)+'\')">&#9002; TERMINAL</button>';
@@ -9813,8 +10098,13 @@ function renderVmCard(config){
     if(vm){stats+=st('CPU',vm.cpu+' cores','p');stats+=st('RAM',_ramGB(vm.ram_mb),'b');}
   }
   var html='<div class="card-box"><div class="stats mb-0" >'+stats+'</div></div>';
-  html+=_vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip,subtitleIp&&subtitleIp!=='?'?subtitleIp:'');
-  html+=_toolPanelHtml();
+  var hostToolTarget='';
+  if(liveHost&&_healthIsLive(liveHost))hostToolTarget=liveHost.label||liveHost.ip||'';
+  else if(ip)hostToolTarget=ip;
+  else if(subtitleIp&&subtitleIp!=='?')hostToolTarget=subtitleIp;
+  _cardState.host=hostToolTarget||label;
+  html+=_vmControlPanel(vmid,label,acts,tier,isRunning,catLabel,vm,ip,subtitleIp&&subtitleIp!=='?'?subtitleIp:'',hostToolTarget);
+  if(hostToolTarget)html+=_toolPanelHtml();
   /* Build reusable data */
   var sys='';
   sys+=kv('LABEL',label.toUpperCase());

@@ -575,6 +575,13 @@ class TestRouteTable(unittest.TestCase):
         v1_routes = build_routes()
         self.assertIn("/api/fleet/overview", v1_routes)
 
+    def test_network_switches_route_uses_real_network_handler(self):
+        from freq.api import build_routes
+        from freq.api import net
+
+        v1_routes = build_routes()
+        self.assertIs(v1_routes.get("/api/v1/net/switches"), net.handle_switches)
+
     def test_api_media_status_exists(self):
         self.assertIn("/api/media/status", self.handler_cls._ROUTES)
 

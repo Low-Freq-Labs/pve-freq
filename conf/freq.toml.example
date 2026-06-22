@@ -99,6 +99,60 @@ agent_port = 9990
 # tls_cert = "/etc/freq/tls/cert.pem"
 # tls_key = "/etc/freq/tls/key.pem"
 
+# Fleet certificate lifecycle.
+# Happy path:
+#   1. Create a Cloudflare API token with DNS edit access for your zone.
+#   2. Put the token in a local 0600 file.
+#   3. Run:
+#      freq --yes cert bootstrap --base-domain home.example.com --cloudflare-token-file /path/to/cloudflare-token
+#   4. Run:
+#      freq cert plan
+#      freq cert dns-sync --dry-run
+#      freq --yes cert dns-sync
+#      freq --yes cert issue
+#      freq cert deploy --dry-run
+#      freq --yes cert deploy
+#      freq cert verify
+#
+# Bootstrap discovers the Cloudflare zone id, stages only the token path,
+# infers Proxmox/TrueNAS/pfSense targets from existing config, and writes
+# the managed block. Secrets stay in files, never inline.
+# [certificates]
+# base_domain = "home.example.com"
+# wildcard = true
+# issuer = "acme.sh"
+# acme_home = "~/.acme.sh"
+# acme_auto_install = true
+# acme_keylength = "ec-256"
+# dns_provider = "cloudflare"
+# dns_token_path = "/etc/freq/credentials/cloudflare_dns_token"
+# cloudflare_zone_id = "zone-id"
+# record_strategy = "public-private-a"  # publishes private IPs in public DNS
+#
+# [[cert_target]]
+# label = "pve-a"
+# target_type = "proxmox_ve_node"
+# hostname = "pve-a.home.example.com"
+# ip = "192.0.2.26"
+# port = 8006
+# deploy_driver = "proxmox_pvenode"
+# cert_source = "wildcard"
+# restart_policy = "pveproxy_restart"
+# verify_hostname = true
+#
+# [[cert_target]]
+# label = "pfsense"
+# target_type = "pfsense"
+# hostname = "firewall.home.example.com"
+# ip = "192.0.2.1"
+# port = 4443
+# deploy_driver = "pfsense_config"
+# cert_source = "wildcard"
+# restart_policy = "webgui_unbound_restart"
+# verify_hostname = true
+# host_header_check = true
+# resolver_private_domain = true
+
 [notifications]
 discord_webhook = ""
 slack_webhook = ""
