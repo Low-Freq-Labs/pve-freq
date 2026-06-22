@@ -144,12 +144,14 @@
       owned_vmids: payload.fleet.owned_vmids,
       template_vmids: payload.fleet.template_vmids,
       acknowledged_out_of_contract_vmids: payload.fleet.acknowledged_out_of_contract_vmids,
+      vm_contract: payload.fleet.vm_contract,
       core_devices: payload.fleet.core_devices,
       lab_devices: payload.fleet.lab_devices,
       install_pdm: payload.pdm.mode === 'install',
       skip_pdm: payload.pdm.mode === 'skip',
       pdm_password: payload.pdm.root_pam_password,
       pdm_remote_name: payload.pdm.remote_name,
+      device_credentials_file: payload.fleet.device_credentials_file,
       device_credentials: payload.fleet.device_credentials,
       ssl_mode: payload.ssl.mode
     };
@@ -204,9 +206,11 @@
         owned_vmids: val('owned-vmids'),
         template_vmids: val('template-vmids'),
         acknowledged_out_of_contract_vmids: val('ack-vmids'),
+        vm_contract: val('vm-contract'),
         core_devices: val('core-devices'),
         lab_devices: val('lab-devices'),
         hosts_import: $('hosts-import').value,
+        device_credentials_file: val('device-credentials-file'),
         device_credentials: collectDevices()
       },
       pdm: {

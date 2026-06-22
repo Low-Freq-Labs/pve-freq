@@ -2896,6 +2896,11 @@ def _setup_init_command(cfg, body, job_id):
         body.get("bootstrap_key_path") or body.get("bootstrap_key_file"),
         "bootstrap_key",
     )
+    vm_contract_file = _setup_existing_secret_file(body.get("vm_contract"), "vm_contract")
+    device_credentials_file = _setup_existing_secret_file(
+        body.get("device_credentials_file"),
+        "device_credentials",
+    )
     if not service_password_file:
         if len(service_password) < 8:
             raise ValueError("service_account_password is required and must be at least 8 characters")
@@ -2907,7 +2912,8 @@ def _setup_init_command(cfg, body, job_id):
     if bootstrap_password and not bootstrap_password_file:
         bootstrap_password_file = _write_setup_secret(secret_dir, "bootstrap-password", bootstrap_password)
     pdm_password_file = _write_setup_secret(secret_dir, "pdm-password", pdm_password)
-    device_credentials_file = _write_setup_device_credentials(secret_dir, body.get("device_credentials") or {})
+    if not device_credentials_file:
+        device_credentials_file = _write_setup_device_credentials(secret_dir, body.get("device_credentials") or {})
 
     code = "import sys; from freq.cli import main; raise SystemExit(main(sys.argv[1:]))"
     cmd = [sys.executable, "-c", code, "init", "--headless", "--yes", "--password-file", service_password_file]
@@ -2940,13 +2946,14 @@ def _setup_init_command(cfg, body, job_id):
         ("owned_vmids", "--owned-vmids"),
         ("template_vmids", "--template-vmids"),
         ("acknowledged_out_of_contract_vmids", "--acknowledged-out-of-contract-vmids"),
-        ("vm_contract", "--vm-contract"),
         ("core_devices", "--core-devices"),
         ("lab_devices", "--lab-devices"),
         ("pdm_remote_name", "--pdm-remote-name"),
     ):
         if body.get(field):
             cmd.extend([flag, str(body.get(field)).strip()])
+    if vm_contract_file:
+        cmd.extend(["--vm-contract", vm_contract_file])
     if device_credentials_file:
         cmd.extend(["--device-credentials", device_credentials_file])
     if body.get("install_pdm"):

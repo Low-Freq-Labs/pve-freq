@@ -94,6 +94,8 @@ class TestSetupHtmlCopy(unittest.TestCase):
         self.assertIn("Service account", src)
         self.assertIn("PVE nodes", src)
         self.assertIn("Device credentials", src)
+        self.assertIn("VM contract path", src)
+        self.assertIn("Device credentials path", src)
         self.assertIn("Certificate path", src)
 
     def test_ssl_contract_has_defer_adopt_and_bootstrap_paths(self):
@@ -144,6 +146,8 @@ class TestSetupJsCopy(unittest.TestCase):
         self.assertIn("bootstrap_key_path", src)
         self.assertIn("service_account_password_file", src)
         self.assertIn("dashboard_password_file", src)
+        self.assertIn("vm_contract", src)
+        self.assertIn("device_credentials_file", src)
         self.assertIn("password_file", src)
 
     def test_summary_not_dashboard_admin_label(self):
