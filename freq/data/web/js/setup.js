@@ -129,11 +129,9 @@
     var nodes = payload.cluster.pve_nodes;
     var start = {
       contract_version: payload.contract_version,
-      service_account_password: payload.ssh.service_password,
       bootstrap_user: payload.ssh.bootstrap_user,
       service_account: payload.ssh.service_account,
       dashboard_user: payload.operator.username,
-      dashboard_password: payload.operator.password,
       pve_nodes: nodes.map(function(n){return n.ip;}),
       pve_node_names: nodes.map(function(n){return n.name;}),
       gateway: payload.cluster.gateway,
@@ -155,8 +153,20 @@
       device_credentials: payload.fleet.device_credentials,
       ssl_mode: payload.ssl.mode
     };
+    if(payload.ssh.service_password_source === 'path'){
+      start.service_account_password_file = payload.ssh.service_password;
+    }else{
+      start.service_account_password = payload.ssh.service_password;
+    }
+    if(payload.operator.password_source === 'path'){
+      start.dashboard_password_file = payload.operator.password;
+    }else{
+      start.dashboard_password = payload.operator.password;
+    }
     if(payload.ssh.bootstrap_auth === 'password'){
       start.bootstrap_password = payload.ssh.bootstrap_secret;
+    }else if(payload.ssh.bootstrap_auth === 'password-path'){
+      start.bootstrap_password_file = payload.ssh.bootstrap_secret;
     }else if(payload.ssh.bootstrap_auth === 'key'){
       start.bootstrap_key = payload.ssh.bootstrap_secret;
     }else{
@@ -171,6 +181,7 @@
       contract_version: 'zero-state-web-init-v1',
       operator: {
         username: val('operator-user').toLowerCase(),
+        password_source: val('operator-pass-source') || 'secret',
         password: $('operator-pass').value
       },
       cluster: {
@@ -186,6 +197,7 @@
         bootstrap_auth: val('bootstrap-auth') || 'password',
         bootstrap_secret: $('bootstrap-secret').value,
         service_account: val('service-account') || 'freq-admin',
+        service_password_source: val('service-pass-source') || 'secret',
         service_password: $('service-pass').value
       },
       fleet: {
@@ -228,12 +240,14 @@
     if(!/^[a-z_][a-z0-9_-]{0,31}$/.test(payload.operator.username)){
       return 'Operator username must be lowercase with letters, numbers, underscores, or hyphens.';
     }
-    if(!payload.operator.password || payload.operator.password.length < 8){return 'Operator password must be at least 8 characters.';}
-    if(payload.operator.password !== $('operator-pass2').value){return 'Operator passwords do not match.';}
+    if(!payload.operator.password){return 'Operator password or password file path is required.';}
+    if(payload.operator.password_source !== 'path' && payload.operator.password.length < 8){return 'Operator password must be at least 8 characters.';}
+    if(payload.operator.password_source !== 'path' && payload.operator.password !== $('operator-pass2').value){return 'Operator passwords do not match.';}
     if(!payload.cluster.cluster_name){return 'Cluster name is required for full init.';}
     if(!payload.cluster.pve_nodes.length){return 'At least one PVE node is required.';}
     if(!payload.ssh.bootstrap_secret){return 'Bootstrap secret is required so web init can reach the fleet.';}
-    if(!payload.ssh.service_password || payload.ssh.service_password.length < 8){return 'Service account password must be at least 8 characters.';}
+    if(!payload.ssh.service_password){return 'Service account password or password file path is required.';}
+    if(payload.ssh.service_password_source !== 'path' && payload.ssh.service_password.length < 8){return 'Service account password must be at least 8 characters.';}
     if(payload.ssl.mode === 'adopt-existing'){
       if(!payload.ssl.adopt_existing.base_domain){return 'Existing SSL adoption requires a base domain.';}
       if(payload.ssl.adopt_existing.cert_source === 'managed-paths' &&
@@ -276,7 +290,8 @@
     appendLog('Creating first operator session via '+API.createAdmin+'.');
     return postJson(API.createAdmin,{
       username: payload.operator.username,
-      password: payload.operator.password
+      password: payload.operator.password_source === 'path' ? '' : payload.operator.password,
+      password_file: payload.operator.password_source === 'path' ? payload.operator.password : ''
     }).then(function(data){
       appendLog('Operator session ready: '+(data.user || payload.operator.username)+'.');
       return data;

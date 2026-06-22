@@ -137,6 +137,15 @@ class TestSetupJsCopy(unittest.TestCase):
         self.assertIn("cert_targets", src)
         self.assertIn("target_source", src)
 
+    def test_js_preserves_credential_path_fields(self):
+        """Path-mode credentials must remain path fields for the backend."""
+        src = self._src()
+        self.assertIn("bootstrap_password_file", src)
+        self.assertIn("bootstrap_key_path", src)
+        self.assertIn("service_account_password_file", src)
+        self.assertIn("dashboard_password_file", src)
+        self.assertIn("password_file", src)
+
     def test_summary_not_dashboard_admin_label(self):
         """Summary must not label the first user as 'Dashboard admin' —
         that's the old standalone-dashboard model."""

@@ -41,8 +41,14 @@
         <label>Username
           <input id="operator-user" name="operator_user" type="text" value="admin" autocomplete="username">
         </label>
+        <label>Password source
+          <select id="operator-pass-source" name="operator_pass_source">
+            <option value="secret">Typed password</option>
+            <option value="path">Password file path</option>
+          </select>
+        </label>
         <label>Password
-          <input id="operator-pass" name="operator_pass" type="password" autocomplete="new-password">
+          <input id="operator-pass" name="operator_pass" type="password" autocomplete="new-password" placeholder="Password or server-side password file path">
         </label>
         <label>Confirm
           <input id="operator-pass2" name="operator_pass2" type="password" autocomplete="new-password">
@@ -57,13 +63,13 @@
       </div>
       <div class="field-row">
         <label>Cluster name
-          <input id="cluster-name" name="cluster_name" type="text" placeholder="dc01">
+          <input id="cluster-name" name="cluster_name" type="text" placeholder="home-lab">
         </label>
         <label>Timezone
           <input id="timezone" name="timezone" type="text" value="America/Chicago">
         </label>
         <label>Gateway
-          <input id="gateway" name="gateway" type="text" placeholder="10.25.255.1">
+          <input id="gateway" name="gateway" type="text" placeholder="192.0.2.1">
         </label>
         <label>Nameserver
           <input id="nameserver" name="nameserver" type="text" value="1.1.1.1">
@@ -94,18 +100,25 @@
         <label>Bootstrap auth
           <select id="bootstrap-auth" name="bootstrap_auth">
             <option value="password">Password secret</option>
+            <option value="password-path">Password file path</option>
             <option value="key">Private key secret</option>
             <option value="key-path">Existing key path</option>
           </select>
         </label>
         <label>Bootstrap secret
-          <textarea id="bootstrap-secret" name="bootstrap_secret" rows="2" placeholder="Password, private key, or key path"></textarea>
+          <textarea id="bootstrap-secret" name="bootstrap_secret" rows="2" placeholder="Password, password file path, private key, or key path"></textarea>
         </label>
         <label>Service account
           <input id="service-account" name="service_account" type="text" value="freq-admin">
         </label>
+        <label>Service password source
+          <select id="service-pass-source" name="service_pass_source">
+            <option value="secret">Typed password</option>
+            <option value="path">Password file path</option>
+          </select>
+        </label>
         <label>Service password
-          <input id="service-pass" name="service_pass" type="password" autocomplete="new-password">
+          <input id="service-pass" name="service_pass" type="password" autocomplete="new-password" placeholder="Password or server-side password file path">
         </label>
       </div>
     </section>

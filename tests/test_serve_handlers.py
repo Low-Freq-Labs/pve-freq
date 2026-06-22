@@ -1123,3 +1123,75 @@ class TestAuthWhitelist:
         for route in dangerous:
             assert route not in FreqHandler._AUTH_WHITELIST, \
                 f"Dangerous route {route} should NOT be in auth whitelist"
+
+
+class TestSetupInitCredentialPaths:
+    """Web init runner must support server-side credential paths."""
+
+    def _cfg(self, tmpdir):
+        return SimpleNamespace(
+            data_dir=os.path.join(tmpdir, "data"),
+            install_dir="/opt/pve-freq",
+            pve_nodes=[],
+            pve_node_names=[],
+        )
+
+    def _secret(self, tmpdir, name, value="secret-value-123"):
+        path = os.path.join(tmpdir, name)
+        with open(path, "w") as f:
+            f.write(value)
+        os.chmod(path, 0o600)
+        return path
+
+    def test_setup_init_accepts_bootstrap_key_path(self):
+        from freq.modules.serve import _setup_init_command
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = self._cfg(tmpdir)
+            service_pw = self._secret(tmpdir, "service-pass", "service-password-123")
+            dash_pw = self._secret(tmpdir, "dash-pass", "dashboard-password-123")
+            key_path = self._secret(tmpdir, "bootstrap-key", "not-a-real-key")
+
+            cmd, _env, _secret_dir = _setup_init_command(
+                cfg,
+                {
+                    "service_account_password_file": service_pw,
+                    "dashboard_user": "admin",
+                    "dashboard_password_file": dash_pw,
+                    "bootstrap_user": "freq-ops",
+                    "bootstrap_key_path": key_path,
+                },
+                "jobtest",
+            )
+
+        assert "--bootstrap-key" in cmd
+        assert cmd[cmd.index("--bootstrap-key") + 1] == key_path
+        assert "--service-account" not in cmd
+
+    def test_setup_init_accepts_password_file_paths(self):
+        from freq.modules.serve import _setup_init_command
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = self._cfg(tmpdir)
+            service_pw = self._secret(tmpdir, "service-pass", "service-password-123")
+            dash_pw = self._secret(tmpdir, "dash-pass", "dashboard-password-123")
+            bootstrap_pw = self._secret(tmpdir, "bootstrap-pass", "bootstrap-password-123")
+
+            cmd, _env, _secret_dir = _setup_init_command(
+                cfg,
+                {
+                    "service_account_password_file": service_pw,
+                    "dashboard_user": "admin",
+                    "dashboard_password_file": dash_pw,
+                    "bootstrap_user": "freq-ops",
+                    "bootstrap_password_file": bootstrap_pw,
+                },
+                "jobtest",
+            )
+
+        assert "--password-file" in cmd
+        assert cmd[cmd.index("--password-file") + 1] == service_pw
+        assert "--dashboard-password-file" in cmd
+        assert cmd[cmd.index("--dashboard-password-file") + 1] == dash_pw
+        assert "--bootstrap-password-file" in cmd
+        assert cmd[cmd.index("--bootstrap-password-file") + 1] == bootstrap_pw

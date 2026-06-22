@@ -2803,6 +2803,23 @@ def _write_setup_secret(secret_dir, name, value):
     return path
 
 
+def _setup_existing_secret_file(value, label):
+    path = os.path.expanduser(str(value or "").strip())
+    if not path:
+        return ""
+    if not os.path.isfile(path):
+        raise ValueError(f"{label} file not found: {path}")
+    return path
+
+
+def _read_setup_secret_file(value, label):
+    path = _setup_existing_secret_file(value, label)
+    if not path:
+        return ""
+    with open(path, "r") as f:
+        return f.read().strip()
+
+
 def _toml_scalar(value):
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -2869,14 +2886,26 @@ def _setup_init_command(cfg, body, job_id):
     dashboard_password = str(body.get("dashboard_password") or "").strip()
     bootstrap_password = str(body.get("bootstrap_password") or "").strip()
     pdm_password = str(body.get("pdm_password") or "").strip()
-    if len(service_password) < 8:
-        raise ValueError("service_account_password is required and must be at least 8 characters")
-    if body.get("dashboard_user") and len(dashboard_password) < 8:
-        raise ValueError("dashboard_password is required when dashboard_user is set")
-
-    service_password_file = _write_setup_secret(secret_dir, "service-account-password", service_password)
-    dashboard_password_file = _write_setup_secret(secret_dir, "dashboard-password", dashboard_password)
-    bootstrap_password_file = _write_setup_secret(secret_dir, "bootstrap-password", bootstrap_password)
+    service_password_file = _setup_existing_secret_file(
+        body.get("service_account_password_file") or body.get("password_file"),
+        "service_account_password",
+    )
+    dashboard_password_file = _setup_existing_secret_file(body.get("dashboard_password_file"), "dashboard_password")
+    bootstrap_password_file = _setup_existing_secret_file(body.get("bootstrap_password_file"), "bootstrap_password")
+    bootstrap_key_path = _setup_existing_secret_file(
+        body.get("bootstrap_key_path") or body.get("bootstrap_key_file"),
+        "bootstrap_key",
+    )
+    if not service_password_file:
+        if len(service_password) < 8:
+            raise ValueError("service_account_password is required and must be at least 8 characters")
+        service_password_file = _write_setup_secret(secret_dir, "service-account-password", service_password)
+    if body.get("dashboard_user") and not dashboard_password_file:
+        if len(dashboard_password) < 8:
+            raise ValueError("dashboard_password is required when dashboard_user is set")
+        dashboard_password_file = _write_setup_secret(secret_dir, "dashboard-password", dashboard_password)
+    if bootstrap_password and not bootstrap_password_file:
+        bootstrap_password_file = _write_setup_secret(secret_dir, "bootstrap-password", bootstrap_password)
     pdm_password_file = _write_setup_secret(secret_dir, "pdm-password", pdm_password)
     device_credentials_file = _write_setup_device_credentials(secret_dir, body.get("device_credentials") or {})
 
@@ -2886,6 +2915,8 @@ def _setup_init_command(cfg, body, job_id):
         cmd.extend(["--bootstrap-user", str(body.get("bootstrap_user")).strip()])
     if bootstrap_password_file:
         cmd.extend(["--bootstrap-password-file", bootstrap_password_file])
+    elif bootstrap_key_path:
+        cmd.extend(["--bootstrap-key", bootstrap_key_path])
     elif body.get("bootstrap_key"):
         cmd.extend(["--bootstrap-key", os.path.expanduser(str(body.get("bootstrap_key")).strip())])
     if body.get("service_account"):
@@ -4060,7 +4091,8 @@ a:hover{{text-decoration:underline}}
         """Create admin account during first-run setup.
 
         Accepts POST with JSON body only. Credentials must not be in URLs.
-        POST body: {"username": "...", "password": "..."}
+        POST body: {"username": "...", "password": "..."} or
+        {"username": "...", "password_file": "/path/to/operator-password"}.
 
         T-8 of R-SECURITY-ARCH-DEBT-20260413U: wrapped in _setup_lock
         with a double-checked _is_first_run() inside the lock. Pre-fix
@@ -4088,7 +4120,10 @@ a:hover{{text-decoration:underline}}
         try:
             body = self._request_body()
             username = body.get("username", "").strip().lower()
-            password = body.get("password", "")
+            if body.get("password_file"):
+                password = _read_setup_secret_file(body.get("password_file"), "operator password")
+            else:
+                password = body.get("password", "")
         except Exception:
             pass
 
