@@ -1195,3 +1195,20 @@ class TestSetupInitCredentialPaths:
         assert cmd[cmd.index("--dashboard-password-file") + 1] == dash_pw
         assert "--bootstrap-password-file" in cmd
         assert cmd[cmd.index("--bootstrap-password-file") + 1] == bootstrap_pw
+
+    def test_setup_init_places_global_yes_before_init_subcommand(self):
+        from freq.modules.serve import _setup_init_command
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = self._cfg(tmpdir)
+            service_pw = self._secret(tmpdir, "service-pass", "service-password-123")
+
+            cmd, _env, _secret_dir = _setup_init_command(
+                cfg,
+                {"service_account_password_file": service_pw},
+                "jobtest",
+            )
+
+        assert "--yes" in cmd
+        assert "init" in cmd
+        assert cmd.index("--yes") < cmd.index("init")

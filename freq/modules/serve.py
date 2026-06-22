@@ -2916,7 +2916,7 @@ def _setup_init_command(cfg, body, job_id):
         device_credentials_file = _write_setup_device_credentials(secret_dir, body.get("device_credentials") or {})
 
     code = "import sys; from freq.cli import main; raise SystemExit(main(sys.argv[1:]))"
-    cmd = [sys.executable, "-c", code, "init", "--headless", "--yes", "--password-file", service_password_file]
+    cmd = [sys.executable, "-c", code, "--yes", "init", "--headless", "--password-file", service_password_file]
     if body.get("bootstrap_user"):
         cmd.extend(["--bootstrap-user", str(body.get("bootstrap_user")).strip()])
     if bootstrap_password_file:
