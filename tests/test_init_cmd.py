@@ -1754,6 +1754,74 @@ class TestUninstallLocalCleanup(unittest.TestCase):
         userdel_idx = next(i for i, cmd in enumerate(calls) if cmd[:2] == ["userdel", "-r"])
         self.assertLess(disable_idx, userdel_idx, "freq-serve must be stopped before userdel")
 
+    @patch("freq.modules.init_cmd.logger")
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.init_cmd._remove_from_host_dispatch", return_value=(True, "not_found"))
+    @patch("freq.modules.init_cmd._borrow_container_uninstall_keys", return_value=("", "", None))
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.os.unlink")
+    @patch("freq.modules.init_cmd.os.path.isfile")
+    def test_uninstall_uses_bootstrap_when_generated_keys_are_missing(
+        self,
+        mock_isfile,
+        mock_unlink,
+        mock_run,
+        _mock_borrow,
+        mock_remove,
+        _mock_fmt,
+        _mock_logger,
+    ):
+        from freq.modules.init_cmd import _uninstall_execute
+
+        def fake_isfile(path):
+            if path in {self.ed_key, self.rsa_key}:
+                return False
+            if path == "/etc/sudoers.d/freq-freq-admin":
+                return False
+            return os.path.exists(path)
+
+        def fake_run(cmd, *args, **kwargs):
+            if cmd[:3] == ["systemctl", "is-enabled", "freq-serve"]:
+                return (1, "", "")
+            if cmd[:3] == ["systemctl", "is-active", "freq-serve"]:
+                return (1, "", "")
+            if cmd[:2] == ["id", "freq-admin"]:
+                return (1, "", "")
+            if cmd[:3] == ["getent", "group", "freq-admin"]:
+                return (1, "", "")
+            return (0, "", "")
+
+        mock_isfile.side_effect = fake_isfile
+        mock_run.side_effect = fake_run
+
+        cfg = MagicMock()
+        cfg.key_dir = self.key_dir
+        cfg.vault_file = self.vault_file
+        cfg.conf_dir = self.conf_dir
+        args = types.SimpleNamespace(
+            device_credentials=None,
+            bootstrap_user="freq-ops",
+            bootstrap_key="/home/freq-ops/.ssh/fleet_key",
+            bootstrap_password_file=None,
+            purge_docker_volumes=False,
+        )
+
+        rc = _uninstall_execute(
+            cfg,
+            "freq-admin",
+            self.ed_key,
+            self.rsa_key,
+            [("10.25.255.55", "linux", "VM5005 freq-test")],
+            args,
+        )
+
+        self.assertEqual(rc, 0)
+        mock_remove.assert_called_once()
+        self.assertEqual(
+            mock_remove.call_args.kwargs["bootstrap_auth"],
+            {"user": "freq-ops", "password": "", "key_path": "/home/freq-ops/.ssh/fleet_key"},
+        )
+
 
 # ═══════════════════════════════════════════════════════════════════
 # _update_toml_value() tests

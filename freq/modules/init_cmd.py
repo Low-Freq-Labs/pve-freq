@@ -9342,6 +9342,8 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
                 fmt.step_warn(f"No FREQ SSH keys — using fallback: {fallback_key}")
                 ed_key = fallback_key
                 has_ed_key = True
+            elif _has_uninstall_auth(bootstrap_auth):
+                fmt.step_warn("No FREQ SSH keys — using bootstrap auth for remote cleanup")
             else:
                 fmt.step_warn("No FREQ SSH keys found — cannot reach remote hosts")
                 fmt.blank()
@@ -9355,7 +9357,7 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
                 fmt.blank()
                 skip = len(targets)
 
-        if has_ed_key or has_rsa_key:
+        if has_ed_key or has_rsa_key or _has_uninstall_auth(bootstrap_auth):
             for ip, htype, label in targets:
                 fmt.line(f"  {fmt.C.BOLD}{label}{fmt.C.RESET} [{htype}]")
 
