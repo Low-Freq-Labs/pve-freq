@@ -28,6 +28,7 @@ Design decisions:
 import base64
 import datetime
 import getpass
+import json
 import math
 import os
 import re
@@ -56,6 +57,40 @@ from freq.core.ssh import PLATFORM_SSH
 DEVICE_HTYPES = ("pfsense", "idrac", "switch", "truenas")
 
 INIT_MARKER = None  # Set in cmd_init from cfg
+
+
+def _init_status_path(cfg):
+    return os.path.join(cfg.conf_dir, "init-status.json")
+
+
+def _clear_init_status(cfg):
+    try:
+        os.unlink(_init_status_path(cfg))
+    except FileNotFoundError:
+        pass
+    except OSError:
+        pass
+
+
+def _write_init_status(cfg, data):
+    """Persist the last init result for setup/status surfaces."""
+    path = _init_status_path(cfg)
+    payload = dict(data or {})
+    payload["checked_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    tmp = f"{path}.tmp"
+    try:
+        os.makedirs(cfg.conf_dir, exist_ok=True)
+        with open(tmp, "w") as f:
+            json.dump(payload, f, sort_keys=True)
+            f.write("\n")
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+        except OSError:
+            pass
+        fmt.step_warn(f"Could not write init status: {e}")
 
 # ── Constants ────────────────────────────────────────────────────────────
 
@@ -1573,6 +1608,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
             os.unlink(INIT_MARKER)
     except OSError:
         pass
+    _clear_init_status(cfg)
 
     # State passed between phases
     ctx = {
@@ -8083,6 +8119,7 @@ def _phase_verify(cfg, ctx):
     svc_name = ctx["svc_name"]
     passes = 0
     fails = 0
+    failed_checks = []
 
     def _check(label, condition):
         nonlocal passes, fails
@@ -8092,6 +8129,7 @@ def _phase_verify(cfg, ctx):
         else:
             fmt.step_fail(label)
             fails += 1
+            failed_checks.append(label)
 
     # Service account
     rc, _, _ = _run(["id", svc_name])
@@ -8450,6 +8488,22 @@ def _phase_verify(cfg, ctx):
         with open(INIT_MARKER, "w") as f:
             f.write(marker + "\n")
         fmt.step_ok(f"Marked initialized: {INIT_MARKER}")
+        _write_init_status(
+            cfg,
+            {
+                "initialized": True,
+                "passes": passes,
+                "fails": fails,
+                "warns": warns,
+                "failed_checks": [],
+                "fleet_deploy_failures": int(ctx.get("fleet_deploy_failures", 0) or 0),
+                "out_of_contract_vmids": sorted(set(ctx.get("out_of_contract_vmids", []) or [])),
+                "unexpected_out_of_contract_vmids": sorted(
+                    set(ctx.get("unexpected_out_of_contract_vmids", []) or [])
+                ),
+                "reason": "freq init completed",
+            },
+        )
         if warns:
             fmt.step_warn(f"{warns} hosts unreachable — re-run freq init when they come online")
         logger.info("init_phase_complete: Phase 12 - verify", phase=12, passes=passes, fails=fails, warns=warns)
@@ -8461,6 +8515,23 @@ def _phase_verify(cfg, ctx):
                 fmt.step_warn(f"Removed stale init marker: {INIT_MARKER}")
             except OSError as e:
                 fmt.step_warn(f"Could not remove stale init marker: {e}")
+        reason = failed_checks[0] if failed_checks else "freq init verification failed"
+        _write_init_status(
+            cfg,
+            {
+                "initialized": False,
+                "passes": passes,
+                "fails": fails,
+                "warns": warns,
+                "failed_checks": failed_checks,
+                "fleet_deploy_failures": int(ctx.get("fleet_deploy_failures", 0) or 0),
+                "out_of_contract_vmids": sorted(set(ctx.get("out_of_contract_vmids", []) or [])),
+                "unexpected_out_of_contract_vmids": sorted(
+                    set(ctx.get("unexpected_out_of_contract_vmids", []) or [])
+                ),
+                "reason": reason,
+            },
+        )
         fmt.step_fail(f"NOT initialized ({fails} failures — fix and re-run 'freq init')")
         logger.error("init_phase_failed: Phase 12 - verify", phase=12, passes=passes, fails=fails, warns=warns)
         return False
@@ -9763,6 +9834,7 @@ def _init_headless(cfg, args):
             os.unlink(INIT_MARKER)
     except OSError:
         pass
+    _clear_init_status(cfg)
 
     if os.geteuid() != 0:
         fmt.blank()

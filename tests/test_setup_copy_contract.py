@@ -6,6 +6,7 @@ for homelabbers" tagline, no "Choose a strong password" coaching.
 """
 
 import os
+import tempfile
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -163,6 +164,52 @@ class TestSetupJsCopy(unittest.TestCase):
         for phrase in banned:
             self.assertNotIn(phrase, src,
                               f"Setup JS must not use hobbyist phrase: {phrase}")
+
+
+class TestSetupDeviceCredentialWriter(unittest.TestCase):
+    """Web setup inline device credentials must become init-readable TOML."""
+
+    def test_web_switch_row_writes_switch_section_and_secret_file(self):
+        from freq.modules.serve import _write_setup_device_credentials
+
+        with tempfile.TemporaryDirectory() as td:
+            path = _write_setup_device_credentials(td, {
+                "switch_1": {
+                    "type": "switch",
+                    "target": "10.25.255.5",
+                    "username": "freq-ops",
+                    "secret": "switch-secret",
+                }
+            })
+            with open(path) as f:
+                content = f.read()
+
+            self.assertIn("[switch]", content)
+            self.assertIn('user = "freq-ops"', content)
+            self.assertIn('host = "10.25.255.5"', content)
+            self.assertIn("password_file =", content)
+            self.assertNotIn("[switch_1]", content)
+
+    def test_web_bmc_row_writes_idrac_section(self):
+        from freq.modules.serve import _write_setup_device_credentials
+
+        with tempfile.TemporaryDirectory() as td:
+            path = _write_setup_device_credentials(td, {
+                "bmc_1": {
+                    "type": "bmc",
+                    "target": "bmc-10",
+                    "username": "freq-ops",
+                    "secret": "idrac-secret",
+                }
+            })
+            with open(path) as f:
+                content = f.read()
+
+            self.assertIn("[idrac]", content)
+            self.assertIn('label = "bmc-10"', content)
+            self.assertIn('user = "freq-ops"', content)
+            self.assertIn("password_file =", content)
+            self.assertNotIn("[bmc_1]", content)
 
 
 if __name__ == "__main__":

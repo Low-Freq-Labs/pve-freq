@@ -10,6 +10,9 @@ Proves:
 """
 
 import os
+import json
+import tempfile
+import types
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -134,9 +137,51 @@ class TestSetupHealthSummary(unittest.TestCase):
         with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
             src = f.read()
         helper = src.split("def _init_blocker_from_artifacts", 1)[1].split("\ndef ", 1)[0]
-        self.assertIn("out_of_contract", helper)
+        self.assertIn("unexpected_out_of_contract_vmids", helper)
         self.assertIn("operator VM contract", helper)
-        self.assertIn("out-of-contract PVE VM", helper)
+        self.assertIn("unexpected out-of-contract PVE VM", helper)
+
+    def test_init_status_prefers_real_failed_check_over_acknowledged_vmids(self):
+        from freq.modules.serve import _init_blocker_from_artifacts
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = types.SimpleNamespace(conf_dir=td)
+            with open(os.path.join(td, "init-status.json"), "w") as f:
+                json.dump(
+                    {
+                        "initialized": False,
+                        "failed_checks": ["Phase 8 fleet deployment: 0 failed hosts (saw 1)"],
+                        "out_of_contract_vmids": [400, 404, 802],
+                        "unexpected_out_of_contract_vmids": [],
+                    },
+                    f,
+                )
+
+            reason = _init_blocker_from_artifacts(cfg)
+
+        self.assertIn("Phase 8 fleet deployment", reason)
+        self.assertNotIn("operator VM contract", reason)
+
+    def test_init_status_reports_unexpected_vm_contract_blocker(self):
+        from freq.modules.serve import _init_blocker_from_artifacts
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = types.SimpleNamespace(conf_dir=td)
+            with open(os.path.join(td, "init-status.json"), "w") as f:
+                json.dump(
+                    {
+                        "initialized": False,
+                        "failed_checks": ["Operator VM contract: 0 unexpected out-of-contract PVE VMs (saw 1: 106)"],
+                        "out_of_contract_vmids": [106],
+                        "unexpected_out_of_contract_vmids": [106],
+                    },
+                    f,
+                )
+
+            reason = _init_blocker_from_artifacts(cfg)
+
+        self.assertIn("operator VM contract", reason)
+        self.assertIn("106", reason)
 
 
 class TestWebInitRuntimeHandoff(unittest.TestCase):

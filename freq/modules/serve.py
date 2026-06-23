@@ -2843,14 +2843,35 @@ def _write_setup_device_credentials(secret_dir, device_credentials):
     if not isinstance(device_credentials, dict) or not device_credentials:
         return ""
     lines = []
+    type_sections = {
+        "pfsense": "pfsense",
+        "truenas": "truenas",
+        "switch": "switch",
+        "bmc": "idrac",
+        "idrac": "idrac",
+    }
     for section, raw in device_credentials.items():
         if not isinstance(raw, dict):
             continue
-        safe_section = re.sub(r"[^A-Za-z0-9_.-]", "", str(section).strip())
+        row_type = str(raw.get("type") or "").strip().lower()
+        section_name = type_sections.get(row_type) or str(section).strip()
+        safe_section = re.sub(r"[^A-Za-z0-9_.:-]", "", section_name)
         if not safe_section:
             continue
         lines.append(f"[{safe_section}]")
-        for key, value in raw.items():
+        normalized = dict(raw)
+        if normalized.get("username") and not normalized.get("user"):
+            normalized["user"] = normalized.get("username")
+        if normalized.get("secret") and not normalized.get("password"):
+            normalized["password"] = normalized.get("secret")
+        if normalized.get("target"):
+            target = str(normalized.get("target") or "").strip()
+            if target:
+                if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", target) and not normalized.get("host"):
+                    normalized["host"] = target
+                elif not normalized.get("label"):
+                    normalized["label"] = target
+        for key, value in normalized.items():
             if value in (None, ""):
                 continue
             if key == "password":
@@ -2863,6 +2884,7 @@ def _write_setup_device_credentials(secret_dir, device_credentials):
                 "user",
                 "host",
                 "hosts",
+                "label",
                 "url",
                 "ssh_key_file",
                 "api_key_file",
@@ -3136,6 +3158,38 @@ def _run_setup_init_job(job_id, cmd, env, secret_dir):
 
 def _init_blocker_from_artifacts(cfg):
     """Return a truthful not-initialized reason from generated init artifacts."""
+    status_path = os.path.join(cfg.conf_dir, "init-status.json")
+    try:
+        with open(status_path) as f:
+            status = json.load(f)
+    except (OSError, ValueError, TypeError):
+        status = {}
+    if isinstance(status, dict) and status:
+        if status.get("initialized") is True:
+            return ""
+        unexpected = []
+        for vmid in status.get("unexpected_out_of_contract_vmids", []) or []:
+            try:
+                unexpected.append(int(vmid))
+            except (TypeError, ValueError):
+                continue
+        if unexpected:
+            formatted = ", ".join(str(vmid) for vmid in sorted(set(unexpected)))
+            return (
+                f"freq init ran and is blocked by operator VM contract: "
+                f"{len(set(unexpected))} unexpected out-of-contract PVE VM(s) discovered ({formatted})"
+            )
+        failed_checks = [
+            str(item).strip()
+            for item in status.get("failed_checks", []) or []
+            if str(item).strip()
+        ]
+        if failed_checks:
+            return f"freq init ran and failed verification: {failed_checks[0]}"
+        reason = str(status.get("reason") or "").strip()
+        if reason:
+            return f"freq init ran and failed verification: {reason}"
+
     fb_path = os.path.join(cfg.conf_dir, "fleet-boundaries.toml")
     inv_path = os.path.join(cfg.conf_dir, "pve-inventory.toml")
     fb_data = load_toml(fb_path)
@@ -3152,13 +3206,6 @@ def _init_blocker_from_artifacts(cfg):
                 out_vmids.append(int(vmid))
             except (TypeError, ValueError):
                 continue
-    if out_vmids:
-        formatted = ", ".join(str(vmid) for vmid in sorted(set(out_vmids)))
-        return (
-            f"freq init ran and is blocked by operator VM contract: "
-            f"{len(set(out_vmids))} out-of-contract PVE VM(s) discovered ({formatted})"
-        )
-
     if inv_data:
         return "freq init ran but did not mark initialized; run freq init --check for the failing check"
     return ""
