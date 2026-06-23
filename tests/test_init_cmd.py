@@ -1607,6 +1607,36 @@ class TestPveUninstall(unittest.TestCase):
             switch_auth,
         )
 
+    @patch("freq.modules.init_cmd._run_idrac_command")
+    @patch("freq.modules.init_cmd._query_idrac_slots")
+    @patch("freq.modules.init_cmd._uninstall_auth_ssh")
+    def test_idrac_uninstall_treats_empty_key_slot_as_clean(
+        self,
+        mock_auth_ssh,
+        mock_query_slots,
+        mock_run_idrac,
+    ):
+        from freq.modules.init_cmd import _remove_idrac_with_auth
+
+        ssh = MagicMock(return_value=(0, "OK\n", ""))
+        mock_auth_ssh.return_value = ssh
+        mock_query_slots.return_value = ({8: "freq-admin"}, 8)
+        mock_run_idrac.side_effect = [
+            (False, 'racadm sshpkauth -i 8 -k 1 -t "": ERROR: Key not present'),
+            (True, "Object value modified successfully"),
+            (True, "Object value modified successfully"),
+        ]
+
+        ok, reason = _remove_idrac_with_auth(
+            "10.25.255.10",
+            "freq-admin",
+            {"user": "freq-ops", "password": "", "key_path": "/tmp/fleet_key"},
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+        self.assertEqual(mock_run_idrac.call_count, 3)
+
 
 class TestUninstallTargetMap(unittest.TestCase):
     """Uninstall must support explicit re-zero target contracts."""

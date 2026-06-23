@@ -7665,6 +7665,8 @@ def _remove_idrac(ip, svc_name, key_path):
     for cmd, is_final in remove_cmds:
         ok_cmd, details = _run_idrac_command(_ssh, extra_opts, cmd, timeout=30)
         if not ok_cmd:
+            if "sshpkauth" in cmd and "error: key" in details.lower():
+                continue
             # Connection-closed on the final Enable=0 is expected —
             # the disable killed our session, which means it worked.
             if is_final and ("timed out" in details.lower()
@@ -7703,6 +7705,8 @@ def _remove_idrac_with_auth(ip, svc_name, auth):
     ]:
         ok_cmd, details = _run_idrac_command(_ssh, extra_opts, cmd, timeout=30)
         if ok_cmd:
+            continue
+        if "sshpkauth" in cmd and "error: key" in details.lower():
             continue
         if is_final and (
             "timed out" in details.lower()
