@@ -1442,6 +1442,9 @@ class TestPfSenseUninstall(unittest.TestCase):
         mock_auth_ssh.assert_called_once_with(
             "10.0.0.1", "admin", auth_key="", auth_pass="secret"
         )
+        remove_cmd = ssh.call_args_list[1].args[0]
+        self.assertIn("sh -c", remove_cmd)
+        self.assertNotIn("sh -lc", remove_cmd)
 
     @patch("freq.modules.init_cmd._uninstall_ssh")
     def test_remove_pfsense_without_admin_auth_is_key_only(self, mock_uninstall_ssh):

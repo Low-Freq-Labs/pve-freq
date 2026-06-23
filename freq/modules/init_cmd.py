@@ -7553,7 +7553,7 @@ def _remove_pfsense(ip, svc_name, key_path, admin_auth=None):
             return False, err or out
 
         remove_cmd = (
-            "sh -lc "
+            "sh -c "
             + shlex.quote(
                 f"if pw usershow {quoted_user} >/dev/null 2>&1; then "
                 f"pkill -u {quoted_user} >/dev/null 2>&1 || true; "
