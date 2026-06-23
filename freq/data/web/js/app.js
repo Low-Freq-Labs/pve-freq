@@ -13,6 +13,7 @@ var _viewLabels={
   docker:'containers',
   media:'media stack',
   security:'security',
+  certs:'security',
   tools:'tools',
   lab:'lab',
   settings:'settings'
@@ -515,7 +516,7 @@ function _legacyOnclickAllowlist(){
     openManageTools:1,openPbRunner:1,openTerminal:1,openVmInfo:1,promoteUser:1,
     quickStartHome:1,removeHomeWidget:1,removeLabTool:1,removeVmidFromCategory:1,
     rescanContainers:1,runHostUpdate:1,runPbStep:1,runPlaybookAll:1,saveContainerEdit:1,
-    saveHostProps:1,saveNewTool:1,switchAddToolType:1,toggleHttps:1,toggleLabAssign:1,
+    saveHostProps:1,saveNewTool:1,switchAddToolType:1,toggleHttps:1,toggleLabAssign:1,toggleDeviceAssign:1,
     toggleLabToolVis:1,toggleRule:1,vmPower:1,vmPushKey:1,_runPveNodeCmd:1,
     _vmApplyNicCombo:1,_vmChangeId:1,_vmCheckAndAddNic:1,_vmDelAllSnaps:1,
     _vmDelSnap:1,_vmDoMigrate:1,_vmDoResize:1,_vmListSnaps:1,_vmRename:1,
@@ -1532,6 +1533,10 @@ function _setupTruthSummary(d){
     var initDetail='This instance reports <strong>initialized: false</strong>.';
     if(d.setup_reason)initDetail+=' Backend reason: <em>'+String(d.setup_reason)+'</em>.';
     var accountDetail=' Dashboard account state is unknown from this unauthenticated probe.';
+    if(d.dashboard_accounts_configured===true&&d.dashboard_passwords_configured===true&&
+       d.setup_health==='init-failed'&&/out-of-contract PVE VM/i.test(String(d.setup_reason||''))){
+      return null;
+    }
     if(d.dashboard_accounts_configured===true&&d.dashboard_passwords_configured===true){
       accountDetail=' At least one dashboard account has stored password material; if login fails, the entered password does not match the stored hash.';
     }else if(d.dashboard_accounts_configured===true){
@@ -2342,11 +2347,12 @@ var _viewCleanup=[];
 function _onViewCleanup(fn){_viewCleanup.push(fn);}
 function _runViewCleanup(){_viewCleanup.forEach(function(fn){try{fn();}catch(e){}});_viewCleanup=[];}
 var VIEW_IDS=['home','fleet','topology','capacity','network','docker','media','security','sec-hardening','sec-access','sec-vault','sec-compliance','firewall','certs','vpn','tools','playbooks','gitops','chaos','dns','dr','incidents','metrics','automation','plugins','lab','settings'];
+var VIEW_ALIASES={security:'certs','sec-hardening':'certs','sec-access':'certs','sec-vault':'certs','sec-compliance':'certs',firewall:'fleet',vpn:'certs',media:'docker',topology:'network',capacity:'fleet',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools'};
 var VIEW_TITLES={home:'HOME',fleet:'FLEET',topology:'TOPOLOGY',capacity:'CAPACITY',network:'NETWORK',docker:'DOCKER',media:'MEDIA',security:'SECURITY','sec-hardening':'HARDENING','sec-access':'ACCESS','sec-vault':'VAULT','sec-compliance':'COMPLIANCE',firewall:'FIREWALL',certs:'CERTIFICATES',vpn:'VPN',tools:'SYSTEM',playbooks:'PLAYBOOKS',gitops:'CONFIG SYNC',chaos:'CHAOS',dns:'DNS',dr:'DISASTER RECOVERY',incidents:'INCIDENTS',metrics:'METRICS',automation:'AUTOMATION',plugins:'PLUGINS',lab:'LAB',settings:'SETTINGS'};
 var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},topology:function(){loadTopology()},capacity:function(){loadCapacity()},network:function(){loadNetworkPage()},docker:function(){loadDockerPage()},media:function(){loadMediaPage()},security:function(){loadSecurityOverview()},'sec-hardening':function(){loadSecHardening()},'sec-access':function(){loadSecAccess()},'sec-vault':function(){loadSecVault()},'sec-compliance':function(){loadSecCompliance()},firewall:function(){loadFirewallPage()},certs:function(){loadCertsPage()},vpn:function(){loadVpnPage()},tools:function(){loadToolsPage()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},chaos:function(){loadChaos()},dns:function(){loadDnsPage()},dr:function(){loadDrPage()},incidents:function(){loadIncidentsPage()},metrics:function(){loadMetricsPage()},automation:function(){loadAutomationPage()},plugins:function(){loadPluginsPage()},lab:function(){loadLabPage()},settings:function(){loadSettingsPage()}};
 /* Nav grouping — maps sub-views to their parent nav button */
-var VIEW_TO_NAV={home:'home',fleet:'fleet',topology:'fleet',capacity:'fleet',network:'fleet',docker:'docker',media:'media',security:'security','sec-hardening':'security','sec-access':'security','sec-vault':'security','sec-compliance':'security',firewall:'security',certs:'security',vpn:'security',tools:'tools',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'lab',settings:'settings'};
-var NAV_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',media:'MEDIA',security:'SECURITY',tools:'SYSTEM',lab:'LAB',settings:'SETTINGS'};
+var VIEW_TO_NAV={home:'home',fleet:'fleet',topology:'fleet',capacity:'fleet',network:'fleet',docker:'docker',media:'docker',security:'certs','sec-hardening':'certs','sec-access':'certs','sec-vault':'certs','sec-compliance':'certs',firewall:'fleet',certs:'certs',vpn:'certs',tools:'tools',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools',settings:'settings'};
+var NAV_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',certs:'SECURITY',tools:'SYSTEM',settings:'SETTINGS'};
 
 function nav(p){
   try{
@@ -2377,6 +2383,7 @@ function load(p){
   }catch(e){console.error('load error:',e);}
 }
 function switchView(view, skipPush){
+  view=VIEW_ALIASES[view]||view;
   _runViewCleanup();
   _currentView=view;
   /* Hide all views */
@@ -3351,15 +3358,15 @@ function _initFleetData(fo){
   _assignNodeColors();
   _assignVlanColors();
 }
-var _dockerSub='services';
+var _dockerSub='all';
 function switchDockerSub(sub){
   _dockerSub=sub;
-  ['all','services','registry','compose','fleet-inv'].forEach(function(s){var el=document.getElementById('docker-sub-'+s);if(el){if(s===sub){el.classList.remove('d-none');el.style.display='';}else{el.classList.add('d-none');el.style.display='';}}});
+  ['all','services','media','registry','fleet-inv'].forEach(function(s){var el=document.getElementById('docker-sub-'+s);if(el){if(s===sub){el.classList.remove('d-none');el.style.display='';}else{el.classList.add('d-none');el.style.display='';}}});
   document.querySelectorAll('.docker-sub').forEach(function(b){b.classList.remove('active-view');});
   var btn=document.querySelector('.docker-sub[data-dsub="docker-'+sub+'"]');if(btn)btn.classList.add('active-view');
   if(sub==='services')loadServiceContainers();
+  if(sub==='media'){loadMediaContainers();loadDownloads();loadStreams();}
   if(sub==='registry')loadContainerRegistry();
-  if(sub==='compose')loadComposeVMs();
   if(sub==='fleet-inv')loadDockerFleet();
 }
 var _serverMediaTags=null;
@@ -3842,6 +3849,7 @@ function loadLabPage(){loadLabTools();}
 function loadSettingsPage(){loadCosts();loadFederation();_loadSettingsPrefs();_loadLabAssignments();}
 /* ── Domain Dashboard Loaders ── */
 function loadNetworkPage(){
+  loadTopology();
   _fetchAndRender('/api/v1/net/switches','net-switch-tbl',function(d){
     var stats=d.stats||{};
     var el=document.getElementById('net-switch-stats');
@@ -5466,8 +5474,15 @@ function updatePref(key,val){
   }
   toast('Preference saved: '+key+' = '+val,'ok');
 }
-/* ── Lab Assignment — tag fleet members as LAB ── */
+/* ── Device Assignment — classify fleet members for dashboard grouping ── */
 var _labAssignments;try{_labAssignments=JSON.parse(localStorage.getItem('freq_lab_assign')||'{}');}catch(e){_labAssignments={};}
+function _deviceAssignment(label,serverValue){
+  var v=_labAssignments&&_labAssignments[label];
+  if(v===true)return 'lab';
+  if(v===false)return 'prod';
+  if(v==='prod'||v==='lab'||v==='template')return v;
+  return serverValue||'prod';
+}
 function _getLabLabels(healthHosts){
   /* Merge: server-side groups + label matching + client-side overrides */
   var labels={};
@@ -5479,7 +5494,7 @@ function _getLabLabels(healthHosts){
   PROD_VMS.forEach(function(v){if(v.category==='lab')labels[v.label]=true;});
   /* Apply user overrides from Settings */
   if(_labAssignments&&typeof _labAssignments==='object'){Object.keys(_labAssignments).forEach(function(k){
-    if(_labAssignments[k])labels[k]=true;
+    if(_deviceAssignment(k)==='lab')labels[k]=true;
     else delete labels[k];
   });}
   return labels;
@@ -5495,42 +5510,46 @@ function _loadLabAssignments(){
     var items=[];
     /* Add all hosts from health data */
     if(hd&&hd.hosts)hd.hosts.forEach(function(h){
-      var serverLab=h.groups&&h.groups.indexOf('lab')>=0;
-      items.push({label:h.label,type:h.type||'linux',node:'',status:_healthIsLive(h)?'online':_healthIsStale(h)?'stale':'offline',serverLab:serverLab,source:'host'});
+      var serverCat=h.groups&&h.groups.indexOf('lab')>=0?'lab':(h.groups&&h.groups.indexOf('template')>=0?'template':'prod');
+      items.push({label:h.label,type:h.type||'linux',node:'',status:_healthIsLive(h)?'online':_healthIsStale(h)?'stale':'offline',serverCat:serverCat,source:'host'});
     });
     /* Add VMs not already covered by hosts (VMs without SSH entries) */
     var hostSet={};items.forEach(function(i){hostSet[i.label]=true;});
     if(fo&&fo.vms)fo.vms.forEach(function(v){
       if(hostSet[v.name])return;
-      items.push({label:v.name,type:'vm',node:v.node||'',status:v.status||'stopped',serverLab:v.category==='lab',source:'pve'});
+      items.push({label:v.name,type:'vm',node:v.node||'',status:v.status||'stopped',serverCat:v.category==='lab'?'lab':v.category==='templates'?'template':'prod',source:'pve'});
     });
     /* Sort: lab items first, then alphabetical */
     items.sort(function(a,b){
-      var aLab=_labAssignments[a.label]!==undefined?_labAssignments[a.label]:a.serverLab;
-      var bLab=_labAssignments[b.label]!==undefined?_labAssignments[b.label]:b.serverLab;
+      var aLab=_deviceAssignment(a.label,a.serverCat)==='lab';
+      var bLab=_deviceAssignment(b.label,b.serverCat)==='lab';
       if(aLab&&!bLab)return -1;if(!aLab&&bLab)return 1;
       return a.label<b.label?-1:1;
     });
-    var h='<table><thead><tr><th>Name</th><th>Type</th><th>Node</th><th>Status</th><th class="text-center">LAB</th></tr></thead><tbody>';
+    var h='<table><thead><tr><th>Name</th><th>Type</th><th>Node</th><th>Status</th><th class="text-center">Assignment</th></tr></thead><tbody>';
     items.forEach(function(it){
-      var isLab=_labAssignments[it.label]!==undefined?_labAssignments[it.label]:it.serverLab;
+      var assignment=_deviceAssignment(it.label,it.serverCat);
       var statusColor=it.status==='online'||it.status==='running'?'var(--green)':'var(--text-dim)';
       h+='<tr><td><strong>'+it.label+'</strong></td>';
       h+='<td class="mono-11">'+it.type.toUpperCase()+'</td>';
       h+='<td class="mono-11">'+(it.node||'-')+'</td>';
       h+='<td><span style="color:'+statusColor+'">'+it.status.toUpperCase()+'</span></td>';
-      h+='<td class="text-center"><span onclick="toggleLabAssign(\''+it.label+'\','+!isLab+')" style="cursor:pointer;display:inline-block;padding:2px 10px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid '+(isLab?'var(--green)':'var(--border-light)')+';background:'+(isLab?'rgba(63,185,80,0.15)':'transparent')+';color:'+(isLab?'var(--green)':'var(--text-dim)')+'">'+(isLab?'LAB':'—')+'</span></td>';
+      h+='<td class="text-center">'+['prod','lab','template'].map(function(opt){var on=assignment===opt;var color=opt==='lab'?'var(--cyan)':opt==='template'?'var(--yellow)':'var(--green)';return '<span onclick="toggleDeviceAssign(\''+it.label+'\',\''+opt+'\')" style="cursor:pointer;display:inline-block;margin:0 2px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid '+(on?color:'var(--border-light)')+';background:'+(on?'rgba(255,255,255,0.08)':'transparent')+';color:'+(on?color:'var(--text-dim)')+'">'+opt.toUpperCase()+'</span>';}).join('')+'</td>';
       h+='</tr>';
     });
     h+='</tbody></table>';
     el.innerHTML=h;
   }).catch(function(e){el.innerHTML='<span class="c-red">Failed to load fleet: '+e+'</span>';});
 }
-function toggleLabAssign(label,isLab){
-  _labAssignments[label]=isLab;
+function toggleDeviceAssign(label,assignment){
+  _labAssignments[label]=assignment;
   localStorage.setItem('freq_lab_assign',JSON.stringify(_labAssignments));
   _loadLabAssignments();
-  toast(label+(isLab?' tagged as LAB':' removed from LAB'),'success');
+  toast(label+' assigned to '+String(assignment).toUpperCase(),'success');
+  refreshCurrentView();
+}
+function toggleLabAssign(label,isLab){
+  toggleDeviceAssign(label,isLab?'lab':'prod');
 }
 function loadSystemPage(){renderGlobalSettings();loadFleetAdmin();loadConfig();loadJournal();loadDistros();loadGroups();loadNotify();loadRules();loadAlertHistory();}
 
@@ -6164,6 +6183,22 @@ function _buildLabHostCards(hosts,infraLabels,labLabels){
   });
   return labCards;
 }
+function _plainLabDeviceCard(dev){
+  dev=dev||{};
+  var label=dev.label||dev.name||'device';
+  var type=dev.type||'device';
+  var cl=_hostColor(label,type);
+  var up=String(dev.status||'').toLowerCase()==='online'||String(dev.status||'').toLowerCase()==='running';
+  var c='<div class="host-card cursor-ptr" data-host-id="'+_esc(label.toLowerCase())+'" onclick="openHost(\''+_esc(label)+'\')" >';
+  c+='<div class="host-head"><h3 style="color:'+cl+'">'+_esc(label)+'</h3><div class="host-meta">';
+  if(dev.ip)c+='<span>'+_esc(dev.ip)+'</span><span>\u00b7</span>';
+  c+='<span>'+_esc(String(type).toUpperCase())+'</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div>';
+  c+='<div class="divider-light">';
+  c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">ASSIGNMENT</span><span class="metric-val fs-11">LAB</span></div></div>';
+  if(dev.detail)c+='<div class="metric-row"><div class="metric-top"><span class="metric-label">DETAIL</span><span class="metric-val fs-11">'+_esc(dev.detail)+'</span></div></div>';
+  c+='</div></div>';
+  return c;
+}
 function _isLabPhysical(ph){
   var hay=((ph.scope||'')+' '+(ph.groups||'')+' '+(ph.label||'')+' '+(ph.key||'')).toLowerCase();
   return hay.indexOf('lab')>=0;
@@ -6381,6 +6416,12 @@ function _renderFleetData(fo,hd,md,ctd){
     var _infraOrder={pfsense:1,opnsense:1,switch:2,truenas:3,synology:3,unraid:3,bmc:4,idrac:4,ilo:4,ipmi:4};
     var corePhysicals=fo?(fo.core_physical||physicals.filter(function(ph){return !_isLabPhysical(ph);})): [];
     var labPhysicals=fo?(fo.lab_physical||physicals.filter(function(ph){return _isLabPhysical(ph);})): [];
+    var userLabPhysical={};
+    Object.keys(labLabels||{}).forEach(function(label){userLabPhysical[label]=true;});
+    corePhysicals=corePhysicals.filter(function(ph){
+      if(userLabPhysical[ph.label]){labPhysicals.push(ph);return false;}
+      return true;
+    });
     var sortedPhysicals=corePhysicals.slice().sort(function(a,b){return (_infraOrder[a.type]||99)-(_infraOrder[b.type]||99);});
     var infraCards='';
     sortedPhysicals.forEach(function(ph){infraCards+=_infraRoleCard(ph,healthMap);});
@@ -6388,7 +6429,16 @@ function _renderFleetData(fo,hd,md,ctd){
     var infraLabels={};physicals.forEach(function(p){infraLabels[p.label]=true;});
     pveNodes.forEach(function(pn){infraLabels[pn.name]=true;});
     var labCards=_buildLabHostCards(hd?hd.hosts:null,infraLabels,labLabels);
-    labPhysicals.forEach(function(ph){labCards+=_infraRoleCard(ph,healthMap);});
+    labPhysicals.forEach(function(ph){
+      var live=healthMap[ph.label]||{};
+      labCards+=_plainLabDeviceCard({
+        label:ph.label,
+        ip:ph.ip,
+        type:ph.type||'device',
+        status:(live&&_healthIsLive(live))?'online':'offline',
+        detail:ph.detail||''
+      });
+    });
     /* PVE node cards */
     var nodeData=_buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labLabels);
     /* VM cards grouped under nodes — skip lab-tagged VMs */
@@ -11764,36 +11814,15 @@ function _buildSearchIndex(){
     {label:'Home',view:'home',keys:'dashboard home overview'},
     {label:'Fleet',view:'fleet',keys:'fleet hosts vms nodes'},
     {label:'Docker',view:'docker',keys:'docker containers services'},
-    {label:'Media',view:'media',keys:'media plex streams downloads'},
-    {label:'Security',view:'security',keys:'security audit hardening'},
+    {label:'Security',view:'certs',keys:'security certificates ssl tls certs'},
     {label:'System',view:'tools',keys:'system settings config'},
-    {label:'Lab',view:'lab',keys:'lab sandbox test'},
     {label:'Settings',view:'settings',keys:'settings preferences config'},
-    {label:'Topology',view:'topology',keys:'topology map network'},
-    {label:'Capacity',view:'capacity',keys:'capacity planning resources'},
-    {label:'Playbooks',view:'playbooks',keys:'playbooks automation runbooks'}
+    {label:'Network',view:'network',keys:'topology map network switches'}
   ];
   views.forEach(function(v){_searchItems.push({type:'nav',label:'Go to '+v.label,detail:v.keys,action:function(){showView(v.view);closeSearch();}});});
-  /* ── Security sub-views ── */
-  var secViews=[
-    {label:'Hardening',view:'sec-hardening'},{label:'Access Control',view:'sec-access'},
-    {label:'Vault',view:'sec-vault'},{label:'Compliance',view:'sec-compliance'},
-    {label:'Firewall',view:'firewall'},{label:'Certificates',view:'certs'},{label:'VPN',view:'vpn'}
-  ];
-  secViews.forEach(function(v){_searchItems.push({type:'nav',label:'Security \u203a '+v.label,detail:'security '+v.label.toLowerCase(),action:function(){switchView(v.view);closeSearch();}});});
-  /* ── System sub-views ── */
-  var sysViews=[
-    {label:'Config',view:'sys-config'},{label:'Doctor',view:'sys-doctor'},
-    {label:'Journal',view:'sys-journal'},{label:'Groups',view:'sys-groups'},
-    {label:'Alert Rules',view:'sys-alerts'},{label:'Notifications',view:'sys-notify'},
-    {label:'About',view:'sys-about'}
-  ];
-  sysViews.forEach(function(v){_searchItems.push({type:'nav',label:'System \u203a '+v.label,detail:'system '+v.label.toLowerCase(),action:function(){switchView(v.view);closeSearch();}});});
   /* ── Actions ── */
   _searchItems.push({type:'action',label:'Deep Scan',detail:'Run deep metrics scan on all hosts',action:function(){closeSearch();showView('fleet');loadMetrics();}});
   _searchItems.push({type:'action',label:'Rescan Containers',detail:'Discover containers across fleet',action:function(){closeSearch();showView('docker');rescanContainers();}});
-  _searchItems.push({type:'action',label:'Full Security Audit',detail:'Run all security audit checks',action:function(){closeSearch();switchView('sec-hardening');runAuditCheck('all');}});
-  _searchItems.push({type:'action',label:'Run Hardening Audit',detail:'Check hardening status across fleet',action:function(){closeSearch();switchView('sec-hardening');if(typeof runHarden==='function')runHarden();}});
   _searchItems.push({type:'action',label:'Check NTP Sync',detail:'View NTP sync status for all hosts',action:function(){closeSearch();showView('fleet');fleetTool('ntp');}});
   _searchItems.push({type:'action',label:'Check OS Updates',detail:'View pending updates across fleet',action:function(){closeSearch();showView('fleet');fleetTool('updates');}});
   _searchItems.push({type:'action',label:'Fleet Exec',detail:'Run a command across all hosts',action:function(){closeSearch();showView('fleet');fleetTool('exec');}});
@@ -11889,7 +11918,7 @@ function _highlightSearchItem(){
 /* ═══════════════════════════════════════════════════════════════════
    KEYBOARD SHORTCUTS
    ═══════════════════════════════════════════════════════════════════ */
-var _NAV_KEYS={'1':'home','2':'fleet','3':'docker','4':'media','5':'security','6':'topology','7':'capacity','8':'playbooks'};
+var _NAV_KEYS={'1':'home','2':'fleet','3':'docker','4':'certs','5':'tools','6':'settings'};
 /* ═══════════════════════════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════════════════════════ */

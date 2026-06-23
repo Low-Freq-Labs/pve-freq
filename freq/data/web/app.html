@@ -68,10 +68,8 @@
   <button class="fleet-btn view-btn active-view" data-view="home">HOME</button>
   <button class="fleet-btn view-btn" data-view="fleet">FLEET</button>
   <button class="fleet-btn view-btn" data-view="docker">DOCKER</button>
-  <button class="fleet-btn view-btn" data-view="media">MEDIA</button>
-  <button class="fleet-btn view-btn" data-view="security">SECURITY</button>
+  <button class="fleet-btn view-btn" data-view="certs">SECURITY</button>
   <button class="fleet-btn view-btn" data-view="tools">SYSTEM</button>
-  <button class="fleet-btn view-btn" data-view="lab">LAB</button>
   <div class="flex-1"></div>
   <button class="fleet-btn view-btn opacity-7" data-view="settings">&#9881; SETTINGS</button>
   </div>
@@ -97,9 +95,7 @@
 <!-- FLEET VIEW (hidden by default) -->
 <div id="fleet-view" class="d-none">
 <div class="sub-tabs" id="subtabs-fleet">
-  <button class="sub-tab active-sub" data-view="fleet">Fleet</button>
-  <button class="sub-tab" data-view="topology">Topology</button>
-  <button class="sub-tab" data-view="capacity">Capacity</button>
+  <button class="sub-tab active-sub" data-view="fleet">Infra</button>
   <button class="sub-tab" data-view="network">Network</button>
 </div>
 <!-- Fleet Stats group -->
@@ -205,10 +201,10 @@
   <div class="section-header"><h3>Containers</h3><div class="stats" id="container-stats"></div><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="docker-subnav mb-8">
-      <button class="fleet-btn docker-sub active-view" data-dsub="docker-services" data-action="switchDockerSub" data-arg="services">SERVICES</button>
-      <button class="fleet-btn docker-sub" data-dsub="docker-all" data-action="switchDockerSub" data-arg="all">ALL</button>
+      <button class="fleet-btn docker-sub active-view" data-dsub="docker-all" data-action="switchDockerSub" data-arg="all">ALL</button>
+      <button class="fleet-btn docker-sub" data-dsub="docker-services" data-action="switchDockerSub" data-arg="services">SERVICES</button>
+      <button class="fleet-btn docker-sub" data-dsub="docker-media" data-action="switchDockerSub" data-arg="media">MEDIA</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-registry" data-action="switchDockerSub" data-arg="registry">REGISTRY</button>
-      <button class="fleet-btn docker-sub" data-dsub="docker-compose" data-action="switchDockerSub" data-arg="compose">COMPOSE</button>
       <button class="fleet-btn docker-sub" data-dsub="docker-fleet-inv" data-action="switchDockerSub" data-arg="fleet-inv">FLEET INVENTORY</button>
       <div class="docker-subnav-actions">
         <button class="fleet-btn docker-stack-action" data-action="loadStackInfo" data-arg="status">STACK STATUS</button>
@@ -216,14 +212,33 @@
       </div>
     </div>
     <!-- SERVICES sub-view (default) -->
-    <div id="docker-sub-services">
+    <div id="docker-sub-services" class="d-none">
       <div id="stack-info" class="mb-12"></div>
       <div id="services-container-cards" class="cards docker-container-grid"></div>
     </div>
     <!-- ALL containers sub-view -->
-    <div id="docker-sub-all" class="d-none">
+    <div id="docker-sub-all">
       <div id="container-cards" class="cards docker-container-grid"></div>
       <div class="exec-out" id="container-logs">Select a container to view logs...</div>
+    </div>
+    <!-- MEDIA sub-view -->
+    <div id="docker-sub-media" class="d-none">
+      <div id="media-container-cards" class="cards mb-16"></div>
+      <div class="section">
+        <div class="section-header"><h3>Downloads</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDownloadDetail">DETAIL VIEW</button><span class="chev">▾</span></div>
+        <div class="section-body">
+          <div class="stats" id="dl-stats"></div>
+          <div id="dl-detail" class="mb-8"></div>
+          <table><thead><tr><th>Name</th><th>Client</th><th>VM</th><th>Size</th><th>Progress</th><th>Speed</th></tr></thead><tbody id="dl-table"></tbody></table>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-header"><h3>Streams</h3><span class="chev">▾</span></div>
+        <div class="section-body">
+          <div class="stats" id="stream-stats"></div>
+          <table><thead><tr><th>User</th><th>Title</th><th>Type</th><th>Quality</th><th>State</th></tr></thead><tbody id="stream-table"></tbody></table>
+        </div>
+      </div>
     </div>
     <!-- REGISTRY sub-view -->
     <div id="docker-sub-registry" class="d-none">
@@ -245,17 +260,6 @@
         </div>
       </div>
     </div>
-    <!-- COMPOSE sub-view -->
-    <div id="docker-sub-compose" class="d-none">
-      <div class="helptext-mb12">Manage Docker Compose stacks per VM. Select a VM to bring stacks up/down or view compose files.</div>
-      <div class="flex-row-8-mb12-center-wrap">
-        <select id="compose-vm-select" class="input w-240"><option value="">Select Docker VM...</option></select>
-        <button class="fleet-btn" data-action="composeUp">COMPOSE UP</button>
-        <button class="fleet-btn text-red-border-red" data-action="composeDown">COMPOSE DOWN</button>
-        <button class="fleet-btn" data-action="composeView">VIEW COMPOSE</button>
-      </div>
-      <div id="compose-out" class="exec-out">Select a Docker VM and an action.</div>
-    </div>
     <!-- FLEET INVENTORY sub-view -->
     <div id="docker-sub-fleet-inv" class="d-none">
       <div class="helptext-mb12">Live fleet-wide container inventory via SSH. Shows all Docker containers across all VMs.</div>
@@ -268,34 +272,6 @@
   </div>
 </div>
 </div><!-- close docker-view -->
-
-<!-- ============================================================
-     MEDIA VIEW — Top-level media dashboard
-     Services: Plex, Sonarr, Radarr, etc. status cards
-     Downloads: Active transfers with progress
-     Streams: Plex streams with user/quality info
-     ============================================================ -->
-<div id="media-view" class="d-none">
-  <!-- Media service status cards -->
-  <div id="media-container-cards" class="cards mb-16"></div>
-  <!-- Downloads -->
-  <div class="section">
-    <div class="section-header"><h3>Downloads</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadDownloadDetail">DETAIL VIEW</button><span class="chev">▾</span></div>
-    <div class="section-body">
-      <div class="stats" id="dl-stats"></div>
-      <div id="dl-detail" class="mb-8"></div>
-      <table><thead><tr><th>Name</th><th>Client</th><th>VM</th><th>Size</th><th>Progress</th><th>Speed</th></tr></thead><tbody id="dl-table"></tbody></table>
-    </div>
-  </div>
-  <!-- Streams -->
-  <div class="section">
-    <div class="section-header"><h3>Streams</h3><span class="chev">▾</span></div>
-    <div class="section-body">
-      <div class="stats" id="stream-stats"></div>
-      <table><thead><tr><th>User</th><th>Title</th><th>Type</th><th>Quality</th><th>State</th></tr></thead><tbody id="stream-table"></tbody></table>
-    </div>
-  </div>
-</div><!-- close media-view -->
 
 <!-- SECURITY VIEW — Overview -->
 <div id="security-view" class="d-none">
@@ -523,18 +499,6 @@
      Sections: Diagnostics, Logs, Storage, Network Scanner
      ============================================================ -->
 <div id="tools-view" class="d-none">
-<div class="sub-tabs" id="subtabs-tools">
-  <button class="sub-tab active-sub" data-view="tools">Overview</button>
-  <button class="sub-tab" data-view="playbooks">Playbooks</button>
-  <button class="sub-tab" data-view="gitops">Config Sync</button>
-  <button class="sub-tab c-red" data-view="chaos">Chaos</button>
-  <button class="sub-tab" data-view="dns">DNS</button>
-  <button class="sub-tab" data-view="dr">DR</button>
-  <button class="sub-tab" data-view="incidents">Incidents</button>
-  <button class="sub-tab" data-view="metrics">Metrics</button>
-  <button class="sub-tab" data-view="automation">Automation</button>
-  <button class="sub-tab" data-view="plugins">Plugins</button>
-</div>
 <!-- Diagnostics — health checks and host diagnosis -->
 <div class="section">
   <div class="section-header"><h3>Diagnostics</h3><span class="chev">▾</span></div>
@@ -665,68 +629,6 @@
 </div>
 <div id="lab-tools-container"></div>
 </div><!-- close lab-view -->
-
-<!-- TOPOLOGY VIEW -->
-<div id="topology-view" class="d-none">
-<div class="sub-tabs" id="subtabs-topology">
-  <button class="sub-tab" data-view="fleet">Fleet</button>
-  <button class="sub-tab active-sub" data-view="topology">Topology</button>
-  <button class="sub-tab" data-view="capacity">Capacity</button>
-  <button class="sub-tab" data-view="network">Network</button>
-</div>
-<div class="card-block-lg">
-  <div class="flex-between-mb12">
-    <h3 class="section-label-pl-h3">Network Topology</h3>
-    <span style="font-size:11px;color:var(--text-dim);margin-right:8px">Drag nodes to rearrange</span>
-    <button class="fleet-btn mr-4" data-action="resetTopoLayout">RESET LAYOUT</button>
-    <button class="fleet-btn" data-action="loadTopology">REFRESH</button>
-  </div>
-  <div id="topo-legend" class="helptext-sm-mb8">
-    <span style="color:var(--purple-light)">&#9632;</span> PVE Node &nbsp;
-    <span class="text-green">&#9632;</span> VM (running) &nbsp;
-    <span class="text-dim">&#9632;</span> VM (stopped) &nbsp;
-    <span class="c-red">&#9632;</span> Unreachable &nbsp;
-    <span style="color:var(--blue)">&#9632;</span> Device
-  </div>
-  <svg id="topo-svg" width="calc(100% + 32px)" height="700"></svg>
-  <div id="topo-info" class="helptext-mt8"></div>
-</div>
-</div><!-- close topology-view -->
-
-<!-- CAPACITY VIEW -->
-<div id="capacity-view" class="d-none">
-<div class="sub-tabs" id="subtabs-capacity">
-  <button class="sub-tab" data-view="fleet">Fleet</button>
-  <button class="sub-tab" data-view="topology">Topology</button>
-  <button class="sub-tab active-sub" data-view="capacity">Capacity</button>
-  <button class="sub-tab" data-view="network">Network</button>
-</div>
-<div class="card-block-lg">
-  <div class="flex-between-mb12">
-    <h3 class="section-label-pl-h3">Capacity Planner</h3>
-    <div class="flex-gap-8">
-      <button class="fleet-btn" data-action="forceCapSnapshot">TAKE SNAPSHOT</button>
-      <button class="fleet-btn" data-action="loadCapacity">REFRESH</button>
-    </div>
-  </div>
-  <div id="cap-info" class="helptext-mb12"></div>
-  <div id="cap-table"></div>
-</div>
-<div class="card-block-lg">
-  <div class="flex-between-mb12">
-    <h3 class="section-label-pl-h3">Capacity Trends</h3>
-    <div class="flex-gap-8"><button class="fleet-btn" data-action="takeTrendSnapshot">TAKE SNAPSHOT</button><button class="fleet-btn" data-action="loadTrendData">LOAD TRENDS</button></div>
-  </div>
-  <div id="trend-data"><div class="exec-out">Click to load trend data.</div></div>
-</div>
-<div class="card-block-lg">
-  <div class="flex-between-mb12">
-    <h3 class="section-label-pl-h3">Migration Recommendations</h3>
-    <button class="fleet-btn" data-action="loadCapRecommend">ANALYZE</button>
-  </div>
-  <div id="cap-recommend"><div class="exec-out">Click ANALYZE to get optimization suggestions.</div></div>
-</div>
-</div><!-- close capacity-view -->
 
 <!-- PLAYBOOKS VIEW -->
 <div id="playbooks-view" class="d-none">
@@ -905,11 +807,11 @@
       </div>
     </div>
   </div>
-  <!-- Lab Assignment — tag any fleet member as LAB -->
+  <!-- Device Assignment — classify fleet members for UI grouping -->
   <div class="section">
-    <div class="section-header"><h3>Lab Assignment</h3><span class="chev">▾</span></div>
+    <div class="section-header"><h3>Device Assignment</h3><span class="chev">▾</span></div>
     <div class="section-body">
-      <div class="helptext-mb12">Tag any host or VM as Lab Equipment. Tagged items appear in the LAB EQUIPMENT section on the Fleet page.</div>
+      <div class="helptext-mb12">Classify hosts and existing VMs as Prod, Lab, or Template. Lab assignments use plain node-color cards in Fleet instead of core-device role cards.</div>
       <div id="lab-assign-list"><div class="skeleton"></div></div>
     </div>
   </div>
@@ -969,10 +871,22 @@
      ============================================================ -->
 <div id="network-view" class="d-none">
 <div class="sub-tabs" id="subtabs-network">
-  <button class="sub-tab" data-view="fleet">Fleet</button>
-  <button class="sub-tab" data-view="topology">Topology</button>
-  <button class="sub-tab" data-view="capacity">Capacity</button>
+  <button class="sub-tab" data-view="fleet">Infra</button>
   <button class="sub-tab active-sub" data-view="network">Network</button>
+</div>
+<div class="section">
+  <div class="section-header"><h3>Network Topology</h3><div class="flex-1"></div><button class="fleet-btn mr-4" data-action="resetTopoLayout">RESET LAYOUT</button><button class="fleet-btn" data-action="loadTopology">REFRESH</button><span class="chev">&#9662;</span></div>
+  <div class="section-body">
+    <div id="topo-legend" class="helptext-sm-mb8">
+      <span style="color:var(--purple-light)">&#9632;</span> PVE Node &nbsp;
+      <span class="text-green">&#9632;</span> VM (running) &nbsp;
+      <span class="text-dim">&#9632;</span> VM (stopped) &nbsp;
+      <span class="c-red">&#9632;</span> Unreachable &nbsp;
+      <span style="color:var(--blue)">&#9632;</span> Device
+    </div>
+    <svg id="topo-svg" width="calc(100% + 32px)" height="700"></svg>
+    <div id="topo-info" class="helptext-mt8"></div>
+  </div>
 </div>
 <div class="section">
   <div class="section-header"><h3>Switch Fleet</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadNetworkPage">REFRESH</button><span class="chev">&#9662;</span></div>
@@ -1082,16 +996,6 @@
      CERTIFICATES VIEW — SSL lifecycle manager
      ============================================================ -->
 <div id="certs-view" class="d-none">
-<div class="sub-tabs" id="subtabs-certs">
-  <button class="sub-tab" data-view="security">Overview</button>
-  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
-  <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-vault">Vault</button>
-  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
-  <button class="sub-tab" data-view="firewall">Firewall</button>
-  <button class="sub-tab active-sub" data-view="certs">Certs</button>
-  <button class="sub-tab" data-view="vpn">VPN</button>
-</div>
 <div class="cert-manager">
   <div class="section cert-overview-section">
     <div class="section-header"><h3>SSL Manager</h3><div class="flex-1"></div><button class="fleet-btn" data-action="loadCertsPage">REFRESH</button><span class="chev">&#9662;</span></div>
