@@ -2414,6 +2414,7 @@ def _check_vm_permission(cfg, vmid, action):
 # Auth functions delegated to freq.api.auth
 from freq.api.auth import (
     hash_password as _hash_password,
+    verify_password as _verify_password,
     check_session_role as _check_session_role,
     _request_has_query_token,
     handle_auth_login,
@@ -4307,10 +4308,6 @@ a:hover{{text-decoration:underline}}
           - Re-check _is_first_run INSIDE the lock so a racing
             complete/create-admin can't slip through.
         """
-        if not _is_first_run():
-            self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
-            return
-
         if self.command != "POST":
             self._json_response({"error": "Use POST with JSON body"}, 405)
             return
@@ -4326,6 +4323,33 @@ a:hover{{text-decoration:underline}}
                 password = body.get("password", "")
         except Exception:
             pass
+
+        first_run = _is_first_run()
+        cfg = load_config()
+        if not first_run:
+            if _setup_marker_exists(cfg):
+                self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
+                return
+            if not username or not password:
+                self._json_response({"error": "Setup admin session resume failed"}, 403)
+                return
+            if not re.match(r"^[a-z_][a-z0-9_-]{0,31}$", username) or len(password) < 8:
+                self._json_response({"error": "Setup admin session resume failed"}, 403)
+                return
+            users = _load_users(cfg)
+            user = next((u for u in users if u.get("username") == username), None)
+            stored_hash = vault_get(cfg, "auth", f"password_{username}") if user else ""
+            if not user or user.get("role") != "admin" or not stored_hash or not _verify_password(password, stored_hash):
+                self._json_response({"error": "Setup admin session resume failed"}, 403)
+                return
+            try:
+                from freq.api.auth import establish_session
+
+                establish_session(self, username, "admin")
+            except Exception as e:
+                logger.warn(f"setup_create_admin_resume_session_failed: {e}")
+            self._json_response({"ok": True, "user": username, "role": "admin", "session_started": True, "resumed": True})
+            return
 
         if not username or not password:
             self._json_response({"error": "Username and password required"}, 400)
@@ -4355,8 +4379,6 @@ a:hover{{text-decoration:underline}}
             if not _is_first_run():
                 self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
                 return
-
-            cfg = load_config()
 
             # Create user in users.conf
             users = _load_users(cfg)

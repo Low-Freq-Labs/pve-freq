@@ -75,6 +75,7 @@ def _mock_cfg(tmpdir):
         brand="FREQ",
         build="dev",
         cluster_name="testcluster",
+        _toml_users=[],
     )
 
 
@@ -408,6 +409,28 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
 
             self.assertEqual(h._status, 200)
             self.assertTrue(os.path.isfile(os.path.join(cfg.conf_dir, "users.conf")))
+
+    def test_create_admin_resumes_no_marker_setup_window(self):
+        """Retrying create-admin during partial setup must refresh admin session."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = _mock_cfg(tmpdir)
+            os.makedirs(cfg.conf_dir, exist_ok=True)
+            existing_users = [{"username": "admin", "role": "admin", "groups": ""}]
+            body = '{"username":"admin","password":"validpass123"}'
+            h = self._setup_handler(body)
+
+            with patch("freq.modules.serve.load_config", return_value=cfg), \
+                 patch("freq.modules.serve._is_first_run", return_value=False), \
+                 patch("freq.modules.serve._load_users", return_value=existing_users), \
+                 patch("freq.modules.serve.vault_get", return_value="stored-hash"), \
+                 patch("freq.modules.serve._verify_password", return_value=True), \
+                 patch("freq.api.auth.establish_session") as mock_session:
+                h._serve_setup_create_admin()
+
+            self.assertEqual(h._status, 200)
+            data = _get_json(h)
+            self.assertTrue(data["resumed"])
+            mock_session.assert_called_once_with(h, "admin", "admin")
 
     def test_save_failure_returns_filesystem_reason(self):
         """create-admin must not collapse filesystem failures to a vague 500."""
