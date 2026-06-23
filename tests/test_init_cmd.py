@@ -1574,6 +1574,39 @@ class TestPveUninstall(unittest.TestCase):
         cleanup_cmd = ssh.call_args_list[1].args[0]
         self.assertIn("sudo -n sh -lc", cleanup_cmd)
 
+    @patch("freq.modules.init_cmd._remove_switch_with_auth")
+    @patch("freq.deployers.get_deployer")
+    def test_switch_uninstall_fallback_uses_switch_device_credentials(
+        self,
+        mock_get_deployer,
+        mock_remove_switch_with_auth,
+    ):
+        from freq.modules.init_cmd import _remove_from_host_dispatch
+
+        deployer = MagicMock()
+        deployer.remove.return_value = (False, "Permission denied (publickey)")
+        mock_get_deployer.return_value = deployer
+        mock_remove_switch_with_auth.return_value = (True, "")
+        switch_auth = {"user": "freq-ops", "password": "switch-pass", "key_path": ""}
+
+        ok, reason = _remove_from_host_dispatch(
+            "10.25.255.5",
+            "switch",
+            "freq-admin",
+            "/tmp/freq_id_ed25519",
+            "/tmp/freq_id_rsa",
+            device_creds={"switch": switch_auth},
+            bootstrap_auth={"user": "freq-ops", "password": "", "key_path": "/tmp/fleet_key"},
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+        mock_remove_switch_with_auth.assert_called_once_with(
+            "10.25.255.5",
+            "freq-admin",
+            switch_auth,
+        )
+
 
 class TestUninstallTargetMap(unittest.TestCase):
     """Uninstall must support explicit re-zero target contracts."""

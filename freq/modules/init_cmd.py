@@ -7811,10 +7811,18 @@ def _remove_from_host_dispatch(
     """Route to platform-specific remover. Returns (success, error_info)."""
     from freq.deployers import resolve_htype, get_deployer, RSA_REQUIRED_CATEGORIES
 
-    def _fallback(primary_error):
-        if not _has_uninstall_auth(bootstrap_auth):
+    def _credential_auth(*keys):
+        for key in keys:
+            cred = (device_creds or {}).get(key, {})
+            if _has_uninstall_auth(cred):
+                return cred
+        return bootstrap_auth
+
+    def _fallback(primary_error, auth=None):
+        auth = auth or bootstrap_auth
+        if not _has_uninstall_auth(auth):
             return False, primary_error
-        ok, reason = _remove_with_bootstrap_auth(ip, htype, svc_name, bootstrap_auth)
+        ok, reason = _remove_with_bootstrap_auth(ip, htype, svc_name, auth)
         if ok:
             return ok, reason
         return False, reason or primary_error
@@ -7829,12 +7837,13 @@ def _remove_from_host_dispatch(
         if not pf_creds and _has_uninstall_auth(bootstrap_auth):
             pf_creds = bootstrap_auth
         ok, reason = _remove_pfsense(ip, svc_name, key_path, admin_auth=pf_creds)
-        return (ok, reason) if ok else _fallback(reason)
+        return (ok, reason) if ok else _fallback(reason, pf_creds)
     deployer = get_deployer(category, vendor)
     if deployer:
         use_key = rsa_key_path if category in RSA_REQUIRED_CATEGORIES else key_path
         ok, reason = deployer.remove(ip, svc_name, use_key, rsa_key_path=rsa_key_path)
-        return (ok, reason) if ok else _fallback(reason)
+        fallback_auth = _credential_auth(htype, f"{category}:{vendor}", category, vendor)
+        return (ok, reason) if ok else _fallback(reason, fallback_auth)
 
     return _fallback(f"no deployer for {htype} ({category}:{vendor})")
 
