@@ -1493,6 +1493,34 @@ class TestUninstallTargetMap(unittest.TestCase):
         self.assertEqual(cmd[:2], ["sh", "-lc"])
         self.assertIn("docker compose down -v", cmd[2])
 
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.init_cmd.shutil.which", return_value="/usr/bin/docker")
+    @patch("freq.modules.init_cmd._run")
+    def test_borrows_uninstall_keys_from_running_container(self, mock_run, _mock_which, _mock_fmt):
+        from freq.modules.init_cmd import _borrow_container_uninstall_keys
+
+        def fake_run(cmd, timeout=None):
+            if cmd[:2] == ["docker", "cp"]:
+                Path(cmd[3]).write_text("key material\n")
+                return (0, "", "")
+            return (1, "", "unexpected")
+
+        mock_run.side_effect = fake_run
+        cfg = types.SimpleNamespace(key_dir="/opt/pve-freq/data/keys")
+
+        ed_key, rsa_key, tmp_dir = _borrow_container_uninstall_keys(cfg)
+        try:
+            self.assertTrue(ed_key.endswith("freq_id_ed25519"))
+            self.assertTrue(rsa_key.endswith("freq_id_rsa"))
+            self.assertTrue(os.path.isfile(ed_key))
+            self.assertTrue(os.path.isfile(rsa_key))
+            first_cp = mock_run.call_args_list[0].args[0]
+            self.assertEqual(first_cp[:2], ["docker", "cp"])
+            self.assertIn("pve-freq:/opt/pve-freq/data/keys/freq_id_ed25519", first_cp[2])
+        finally:
+            if tmp_dir:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+
 
 class TestUninstallLocalCleanup(unittest.TestCase):
     """Local uninstall must stop the dashboard service before userdel."""

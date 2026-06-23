@@ -8918,6 +8918,42 @@ def _purge_local_docker_volumes(cfg, args=None):
     return False
 
 
+def _borrow_container_uninstall_keys(cfg):
+    """Copy generated uninstall keys out of a running container if host paths are empty."""
+    if not shutil.which("docker"):
+        return "", "", None
+
+    tmp_dir = tempfile.mkdtemp(prefix="freq-uninstall-keys-")
+    key_names = ("freq_id_ed25519", "freq_id_rsa")
+    container_names = ("pve-freq", "freq")
+    container_key_dirs = []
+    if cfg.key_dir:
+        container_key_dirs.append(cfg.key_dir)
+    if "/opt/pve-freq/data/keys" not in container_key_dirs:
+        container_key_dirs.append("/opt/pve-freq/data/keys")
+
+    try:
+        for container in container_names:
+            copied = {}
+            for key_name in key_names:
+                dest = os.path.join(tmp_dir, key_name)
+                for key_dir in container_key_dirs:
+                    src = f"{container}:{os.path.join(key_dir, key_name)}"
+                    rc, _, _ = _run(["docker", "cp", src, dest], timeout=15)
+                    if rc == 0 and os.path.isfile(dest):
+                        os.chmod(dest, 0o600)
+                        copied[key_name] = dest
+                        break
+            if copied:
+                fmt.step_warn(f"No host FREQ SSH keys — borrowed uninstall keys from Docker container {container}")
+                return copied.get("freq_id_ed25519", ""), copied.get("freq_id_rsa", ""), tmp_dir
+    except Exception as e:
+        fmt.step_warn(f"Docker key borrow skipped: {e}")
+
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    return "", "", None
+
+
 # ═══════════════════════════════════════════════════════════════════
 # --uninstall: fleet-wide teardown
 # ═══════════════════════════════════════════════════════════════════
@@ -9005,6 +9041,7 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
     Returns 0 on full success, 1 on partial failure.
     """
     ok = fail = skip = manual = 0
+    borrowed_key_dir = None
     device_creds = _load_device_credentials(getattr(args, "device_credentials", None)) if args else {}
     if "pfsense" not in device_creds and args:
         bootstrap_key = getattr(args, "bootstrap_key", "") or ""
@@ -9029,6 +9066,15 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
 
         has_ed_key = os.path.isfile(ed_key)
         has_rsa_key = os.path.isfile(rsa_key)
+
+        if not has_ed_key and not has_rsa_key:
+            borrowed_ed, borrowed_rsa, borrowed_key_dir = _borrow_container_uninstall_keys(cfg)
+            if borrowed_ed:
+                ed_key = borrowed_ed
+                has_ed_key = True
+            if borrowed_rsa:
+                rsa_key = borrowed_rsa
+                has_rsa_key = True
 
         if not has_ed_key and not has_rsa_key:
             # Try bootstrap key fallback
@@ -9098,6 +9144,9 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
             f"{fmt.C.YELLOW}{skip} skipped{fmt.C.RESET}, "
             f"{fmt.C.YELLOW}{manual} manual{fmt.C.RESET}"
         )
+
+    if borrowed_key_dir:
+        shutil.rmtree(borrowed_key_dir, ignore_errors=True)
 
     # ── Phase 2: Local cleanup ──
     fmt.blank()
