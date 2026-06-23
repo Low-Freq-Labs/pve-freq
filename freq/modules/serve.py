@@ -2816,13 +2816,24 @@ def _setup_existing_secret_file(value, label):
     path = os.path.expanduser(str(value or "").strip())
     if not path:
         return ""
+    def _sudo_file_exists(candidate):
+        try:
+            return subprocess.run(
+                ["sudo", "-n", "test", "-f", candidate],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            ).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
+
     if not os.path.isfile(path):
         prefix = "/root/freq-init-inputs/"
         if path.startswith(prefix):
             alias = os.path.join("/freq-init-inputs", path[len(prefix):])
-            if os.path.isfile(alias):
+            if os.path.isfile(alias) or _sudo_file_exists(alias):
                 path = alias
-    if not os.path.isfile(path):
+    if not os.path.isfile(path) and not _sudo_file_exists(path):
         raise ValueError(f"{label} file not found: {path}")
     return path
 
@@ -2831,8 +2842,19 @@ def _read_setup_secret_file(value, label):
     path = _setup_existing_secret_file(value, label)
     if not path:
         return ""
-    with open(path, "r") as f:
-        return f.read().strip()
+    try:
+        with open(path, "r") as f:
+            return f.read().strip()
+    except PermissionError:
+        result = subprocess.run(
+            ["sudo", "-n", "cat", path],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            raise PermissionError(f"{label} file is not readable: {path}")
+        return result.stdout.strip()
 
 
 def _toml_scalar(value):

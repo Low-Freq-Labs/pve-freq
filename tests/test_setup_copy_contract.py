@@ -234,6 +234,24 @@ class TestSetupDeviceCredentialWriter(unittest.TestCase):
             except OSError:
                 pass
 
+    def test_setup_path_validator_accepts_sudo_readable_files(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        helper = src.split("def _setup_existing_secret_file", 1)[1].split("\ndef _read_setup_secret_file", 1)[0]
+
+        self.assertIn("sudo", helper)
+        self.assertIn("test", helper)
+        self.assertIn("-f", helper)
+
+    def test_setup_secret_reader_can_use_sudo_cat(self):
+        with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:
+            src = f.read()
+        helper = src.split("def _read_setup_secret_file", 1)[1].split("\ndef _toml_scalar", 1)[0]
+
+        self.assertIn("PermissionError", helper)
+        self.assertIn("sudo", helper)
+        self.assertIn("cat", helper)
+
 
 if __name__ == "__main__":
     unittest.main()
