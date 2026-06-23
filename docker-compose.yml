@@ -28,6 +28,7 @@ services:
       # user cannot initialize from the Web UI.
       - freq-conf:/opt/pve-freq/conf
       - freq-data:/opt/pve-freq/data
+      - freq-etc:/etc/freq
       # SSH keys — mount your fleet SSH key (read-only)
       # Uncomment and adjust the path to your SSH key:
       # - ~/.ssh/id_ed25519:/home/freq/.ssh/id_ed25519:ro
@@ -59,3 +60,4 @@ services:
 volumes:
   freq-conf:
   freq-data:
+  freq-etc:

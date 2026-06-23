@@ -9,9 +9,10 @@ def test_default_compose_uses_named_state_volumes():
 
     assert "freq-conf:/opt/pve-freq/conf" in compose
     assert "freq-data:/opt/pve-freq/data" in compose
+    assert "freq-etc:/etc/freq" in compose
     assert "./conf:/opt/pve-freq/conf" not in compose
     assert "./data:/opt/pve-freq/data" not in compose
-    assert "\nvolumes:\n  freq-conf:\n  freq-data:\n" in compose
+    assert "\nvolumes:\n  freq-conf:\n  freq-data:\n  freq-etc:\n" in compose
 
 
 def test_default_compose_allows_web_init_sudo_path():
