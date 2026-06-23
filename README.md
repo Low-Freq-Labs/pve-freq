@@ -293,6 +293,17 @@ sudo bash install.sh --uninstall   # remove from management host
 
 Linux/PVE/TrueNAS/Docker hosts and iDRAC/switch devices get full removal of the FREQ service account. pfSense hosts get **full removal only when you supply admin credentials** via `--device-credentials` — without them, FREQ revokes the service-account SSH key and reports the host as needing manual cleanup (the FreeBSD account itself cannot delete itself). The management-host uninstall removes the wrapper, `pve-freq.pth` site-packages files, the `freq-serve.service` systemd unit (if installed), and `$INSTALL_DIR`.
 
+For repeatable lab re-initialization, drive uninstall from an explicit target map instead of live discovery:
+
+```bash
+sudo freq init --uninstall --headless \
+  --target-map ./rezero-targets.md \
+  --pve-nodes "10.0.0.11,10.0.0.12,10.0.0.13" \
+  --purge-docker-volumes
+```
+
+`--target-map` accepts a TOML target list or a markdown table with VM/device IPs. `--purge-docker-volumes` removes local Docker Compose named state volumes so the next Web Init starts from a real first-run surface.
+
 ---
 
 ## Documentation

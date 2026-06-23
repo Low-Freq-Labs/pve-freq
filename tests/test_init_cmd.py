@@ -1391,6 +1391,109 @@ class TestUninstallSSH(unittest.TestCase):
         self.assertIn("KexAlgorithms=+diffie-hellman-group1-sha1", cmd)
 
 
+class TestPveUninstall(unittest.TestCase):
+    """PVE uninstall must remove cluster auth, not just the Linux user."""
+
+    @patch("freq.modules.init_cmd._uninstall_ssh")
+    def test_remove_pve_deletes_token_user_and_agent_residue(self, mock_uninstall_ssh):
+        from freq.modules.init_cmd import _remove_pve
+
+        ssh = MagicMock(side_effect=[
+            (0, "OK\n", ""),
+            (0, "PVE_REMOVE_OK\n", ""),
+        ])
+        mock_uninstall_ssh.return_value = ssh
+
+        ok, reason = _remove_pve("10.25.255.26", "freq-admin", "/tmp/freq_id_ed25519")
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+        cleanup_cmd = ssh.call_args_list[1].args[0]
+        self.assertIn("pveum user token remove freq-admin@pam freq-rw", cleanup_cmd)
+        self.assertIn("pveum user delete freq-admin@pam", cleanup_cmd)
+        self.assertIn("freq-agent.service", cleanup_cmd)
+        self.assertIn("/opt/freq-agent", cleanup_cmd)
+        self.assertIn("userdel -r freq-admin", cleanup_cmd)
+
+
+class TestUninstallTargetMap(unittest.TestCase):
+    """Uninstall must support explicit re-zero target contracts."""
+
+    def test_loads_explicit_markdown_target_map(self):
+        from freq.modules.init_cmd import _load_uninstall_target_map
+
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(
+                """# Re-Zero Target Map
+## VMs
+| VMID | IP | name | node | access / notes |
+|------|----|------|------|----------------|
+| 106 | 10.25.255.38 | dc01-proxy | pve01 | freq-ops |
+| 5000 | 10.25.10.200 | pfsense-lab | pve01 | dev pfSense |
+## Core devices
+| device | IP | access |
+|--------|----|--------|
+| switch (gigecolo) | 10.25.255.5 | Cisco IOS |
+## Out of re-zero scope
+| 900 | 10.0.0.9 | do-not-touch |
+"""
+            )
+            path = f.name
+
+        try:
+            targets = _load_uninstall_target_map(path)
+        finally:
+            os.unlink(path)
+
+        self.assertIn(("10.25.255.38", "linux", "VM106 dc01-proxy"), targets)
+        self.assertIn(("10.25.10.200", "pfsense", "VM5000 pfsense-lab"), targets)
+        self.assertIn(("10.25.255.5", "switch", "switch (gigecolo)"), targets)
+        self.assertFalse(any(t[0] == "10.0.0.9" for t in targets))
+
+    def test_uninstall_targets_use_explicit_map_and_cli_pve_nodes(self):
+        from freq.modules.init_cmd import _uninstall_targets_from_config
+
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(
+                """## VMs
+| VMID | IP | name | node | access / notes |
+|------|----|------|------|----------------|
+| 106 | 10.25.255.38 | dc01-proxy | pve01 | freq-ops |
+"""
+            )
+            path = f.name
+
+        try:
+            cfg = types.SimpleNamespace(pve_nodes=["10.25.255.99"], hosts=[])
+            args = types.SimpleNamespace(target_map=path, pve_nodes="10.25.255.26,10.25.255.27")
+            targets = _uninstall_targets_from_config(cfg, args)
+        finally:
+            os.unlink(path)
+
+        self.assertEqual(targets[0], ("10.25.255.26", "pve", "PVE 10.25.255.26"))
+        self.assertEqual(targets[1], ("10.25.255.27", "pve", "PVE 10.25.255.27"))
+        self.assertIn(("10.25.255.38", "linux", "VM106 dc01-proxy"), targets)
+        self.assertFalse(any(t[0] == "10.25.255.99" for t in targets))
+
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.init_cmd.shutil.which", return_value="/usr/bin/docker")
+    @patch("freq.modules.init_cmd._run")
+    def test_purge_local_docker_volumes_is_explicit_compose_down_v(self, mock_run, _mock_which, _mock_fmt):
+        from freq.modules.init_cmd import _purge_local_docker_volumes
+
+        mock_run.return_value = (0, "removed\n", "")
+        with tempfile.TemporaryDirectory() as td:
+            Path(td, "docker-compose.yml").write_text("services: {}\n")
+            cfg = types.SimpleNamespace(install_dir=td)
+            args = types.SimpleNamespace(compose_dir="")
+
+            self.assertTrue(_purge_local_docker_volumes(cfg, args))
+
+        cmd = mock_run.call_args.args[0]
+        self.assertEqual(cmd[:2], ["sh", "-lc"])
+        self.assertIn("docker compose down -v", cmd[2])
+
+
 class TestUninstallLocalCleanup(unittest.TestCase):
     """Local uninstall must stop the dashboard service before userdel."""
 

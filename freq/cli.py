@@ -232,6 +232,16 @@ def _register_utilities(sub):
     p.add_argument("--fix", action="store_true", help="Scan fleet, find broken hosts, redeploy service account")
     p.add_argument("--reset", action="store_true", help="Wipe generated init state and live config (fresh start)")
     p.add_argument("--uninstall", action="store_true", help="Remove FREQ service account from all hosts")
+    p.add_argument("--target-map", help="Explicit zero-state target map (TOML or markdown table)")
+    p.add_argument(
+        "--purge-docker-volumes",
+        action="store_true",
+        help="During uninstall, run docker compose down -v for local named state volumes",
+    )
+    p.add_argument(
+        "--compose-dir",
+        help="Directory containing docker-compose.yml for --purge-docker-volumes (default: install dir)",
+    )
     p.add_argument("--dry-run", action="store_true", help="Show what init would do (or would remove with --uninstall)")
     p.add_argument("--headless", action="store_true", help="Non-interactive mode (no prompts)")
     p.add_argument("--bootstrap-key", help="SSH key for initial auth to fleet hosts")

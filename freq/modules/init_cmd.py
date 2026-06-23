@@ -168,6 +168,96 @@ def _parse_vmid_set(value):
     return vmids
 
 
+def _infer_target_htype(label, section=""):
+    text = f"{label or ''} {section or ''}".lower()
+    if "pfsense" in text or "firewall" in text:
+        return "pfsense"
+    if "truenas" in text or "nas" in text:
+        return "truenas"
+    if "idrac" in text:
+        return "idrac"
+    if "switch" in text or "gigecolo" in text:
+        return "switch"
+    return "linux"
+
+
+def _load_target_map_toml(path):
+    if tomllib is None:
+        raise RuntimeError("TOML target maps require Python 3.11+ tomllib")
+    with open(path, "rb") as f:
+        data = tomllib.load(f)
+    raw_targets = []
+    if isinstance(data.get("targets"), list):
+        raw_targets.extend(data.get("targets") or [])
+    for key in ("vms", "devices", "core_devices"):
+        value = data.get(key)
+        if isinstance(value, list):
+            raw_targets.extend(value)
+        elif isinstance(value, dict):
+            raw_targets.extend(value.values())
+
+    targets = []
+    for item in raw_targets:
+        if not isinstance(item, dict):
+            continue
+        ip = str(item.get("ip") or item.get("host") or "").strip()
+        if not ip:
+            continue
+        label = str(item.get("label") or item.get("name") or ip).strip()
+        htype = str(item.get("htype") or item.get("type") or _infer_target_htype(label)).strip().lower()
+        targets.append((ip, htype, label))
+    return targets
+
+
+def _load_target_map_markdown(path):
+    """Load explicit re-zero markdown tables into uninstall targets."""
+    targets = []
+    section = ""
+    with open(path, encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            lower = line.lower()
+            if lower.startswith("## "):
+                if "out of re-zero scope" in lower:
+                    section = "out"
+                elif "vms" in lower:
+                    section = "vms"
+                elif "core devices" in lower:
+                    section = "core"
+                else:
+                    section = ""
+                continue
+            if section not in {"vms", "core"} or not line.startswith("|"):
+                continue
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if not cells or cells[0].lower() in {"vmid", "device"} or set(cells[0]) <= {"-"}:
+                continue
+            if section == "vms" and len(cells) >= 3:
+                ip = cells[1]
+                label = f"VM{cells[0]} {cells[2]}".strip()
+            elif section == "core" and len(cells) >= 2:
+                label = cells[0]
+                ip = cells[1]
+            else:
+                continue
+            if not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
+                continue
+            targets.append((ip, _infer_target_htype(label, section), label))
+    return targets
+
+
+def _load_uninstall_target_map(path):
+    """Load an explicit uninstall/re-zero target map from TOML or markdown."""
+    if not path:
+        return []
+    expanded = os.path.expanduser(path)
+    if not os.path.isfile(expanded):
+        raise FileNotFoundError(f"target map not found: {path}")
+    if expanded.endswith(".toml"):
+        return _load_target_map_toml(expanded)
+    return _load_target_map_markdown(expanded)
+
+
 def _load_vm_contract_file(path):
     """Load operator-declared VM ownership/template contract from TOML."""
     if not path:
@@ -214,6 +304,38 @@ def _apply_operator_vm_contract_args(cfg, args):
     cfg._owned_vmids = owned_vmids
     cfg._contract_template_vmids = template_vmids
     cfg._acknowledged_out_of_contract_vmids = acknowledged_out_of_contract_vmids
+
+
+def _pve_nodes_from_args_or_config(cfg, args):
+    raw = getattr(args, "pve_nodes", None) if args else None
+    if raw:
+        return [v for v in re.split(r"[,\s]+", str(raw).strip()) if v]
+    return list(cfg.pve_nodes or [])
+
+
+def _uninstall_targets_from_config(cfg, args=None):
+    targets = []
+    pve_nodes = _pve_nodes_from_args_or_config(cfg, args)
+    for ip in pve_nodes:
+        targets.append((ip, "pve", f"PVE {ip}"))
+
+    target_map = getattr(args, "target_map", None) if args else None
+    if target_map:
+        targets.extend(_load_uninstall_target_map(target_map))
+    elif cfg.hosts:
+        pve_set = set(pve_nodes)
+        for h in cfg.hosts:
+            if h.ip not in pve_set:
+                targets.append((h.ip, h.htype, f"{h.label} ({h.ip})"))
+
+    deduped = []
+    seen = set()
+    for ip, htype, label in targets:
+        if not ip or ip in seen:
+            continue
+        seen.add(ip)
+        deduped.append((ip, htype or "linux", label or ip))
+    return deduped
 
 
 def _device_scope_overrides_from_args(args):
@@ -1408,7 +1530,7 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     # --uninstall [--dry-run]: remove FREQ from all hosts
     if uninstall_mode:
         if dry_run:
-            return _uninstall_dry_run(cfg)
+            return _uninstall_dry_run(cfg, args)
         headless = getattr(args, "headless", False)
         if headless:
             return _uninstall_headless(cfg, args)
@@ -7238,6 +7360,39 @@ def _remove_linux(ip, svc_name, key_path):
     return True, ""
 
 
+def _remove_pve(ip, svc_name, key_path):
+    """Remove FREQ service account from a PVE node and cluster auth."""
+    _ssh = _uninstall_ssh(ip, svc_name, key_path)
+
+    rc, out, err = _ssh("echo OK")
+    if rc != 0:
+        return False, err
+
+    pve_user = f"{svc_name}@pam"
+    token_name = "freq-rw"
+    quoted_user = shlex.quote(svc_name)
+    quoted_pve_user = shlex.quote(pve_user)
+    quoted_token = shlex.quote(token_name)
+    cleanup = (
+        "sudo sh -lc "
+        + shlex.quote(
+            f"pveum user token remove {quoted_pve_user} {quoted_token} >/dev/null 2>&1 || true; "
+            f"pveum user delete {quoted_pve_user} >/dev/null 2>&1 || true; "
+            f"rm -f /etc/sudoers.d/freq-{quoted_user}; "
+            f"rm -rf {AGENT_REMOTE_DIR}; "
+            f"systemctl disable --now freq-agent.service >/dev/null 2>&1 || true; "
+            f"rm -f /etc/systemd/system/freq-agent.service; "
+            f"pkill -u {quoted_user} >/dev/null 2>&1 || true; "
+            f"userdel -r {quoted_user} >/dev/null 2>&1 || userdel {quoted_user} >/dev/null 2>&1 || true; "
+            "echo PVE_REMOVE_OK"
+        )
+    )
+    rc, out, err = _ssh(cleanup, timeout=QUICK_CHECK_TIMEOUT)
+    if rc != 0 or "PVE_REMOVE_OK" not in (out or ""):
+        return False, (err or out or "PVE cleanup failed").strip()
+    return True, ""
+
+
 def _remove_pfsense(ip, svc_name, key_path, admin_auth=None):
     """Remove FREQ service account from pfSense (FreeBSD).
 
@@ -7407,6 +7562,9 @@ def _remove_switch(ip, svc_name, key_path):
 def _remove_from_host_dispatch(ip, htype, svc_name, key_path, rsa_key_path, device_creds=None):
     """Route to platform-specific remover. Returns (success, error_info)."""
     from freq.deployers import resolve_htype, get_deployer, RSA_REQUIRED_CATEGORIES
+
+    if htype == "pve":
+        return _remove_pve(ip, svc_name, key_path)
 
     category, vendor = resolve_htype(htype)
     if category == "firewall" and vendor == "pfsense":
@@ -8739,6 +8897,27 @@ def _init_reset(cfg):
     return 0
 
 
+def _purge_local_docker_volumes(cfg, args=None):
+    """Remove local Docker Compose state volumes for a true container zero-state."""
+    compose_dir = os.path.expanduser(
+        getattr(args, "compose_dir", "") or getattr(cfg, "install_dir", "") or os.getcwd()
+    )
+    compose_file = os.path.join(compose_dir, "docker-compose.yml")
+    if not os.path.isfile(compose_file):
+        fmt.step_warn(f"Docker volume purge skipped: no docker-compose.yml in {compose_dir}")
+        return False
+    if not shutil.which("docker"):
+        fmt.step_warn("Docker volume purge skipped: docker CLI not found")
+        return False
+    cmd = f"cd {shlex.quote(compose_dir)} && docker compose down -v"
+    rc, out, err = _run(["sh", "-lc", cmd], timeout=120)
+    if rc == 0:
+        fmt.step_ok("Docker Compose state volumes purged")
+        return True
+    fmt.step_fail(f"Docker Compose volume purge failed: {(err or out).strip()[:160]}")
+    return False
+
+
 # ═══════════════════════════════════════════════════════════════════
 # --uninstall: fleet-wide teardown
 # ═══════════════════════════════════════════════════════════════════
@@ -8766,16 +8945,7 @@ def _uninstall_interactive(cfg, args):
     fmt.blank()
     fmt.line(f"  {fmt.C.DIM}Service account: {fmt.C.BOLD}{svc_name}{fmt.C.RESET}")
 
-    # Count targets
-    targets = []
-    if cfg.pve_nodes:
-        for ip in cfg.pve_nodes:
-            targets.append((ip, "pve", f"PVE {ip}"))
-    if cfg.hosts:
-        pve_set = set(cfg.pve_nodes) if cfg.pve_nodes else set()
-        for h in cfg.hosts:
-            if h.ip not in pve_set:
-                targets.append((h.ip, h.htype, f"{h.label} ({h.ip})"))
+    targets = _uninstall_targets_from_config(cfg, args)
 
     fmt.line(f"  {fmt.C.DIM}Remote hosts:    {len(targets)}{fmt.C.RESET}")
     fmt.blank()
@@ -8787,6 +8957,8 @@ def _uninstall_interactive(cfg, args):
     fmt.line(f"    - Remove vault, roles, init marker")
     fmt.line(f"    - Remove local sudoers for '{svc_name}'")
     fmt.line(f"    - Delete local account '{svc_name}'")
+    if getattr(args, "purge_docker_volumes", False):
+        fmt.line(f"    - Stop local Docker Compose app and remove named state volumes")
     fmt.blank()
 
     if not _confirm("Proceed with uninstall?"):
@@ -8819,15 +8991,7 @@ def _uninstall_headless(cfg, args):
     ed_key = os.path.join(cfg.key_dir, "freq_id_ed25519")
     rsa_key = os.path.join(cfg.key_dir, "freq_id_rsa")
 
-    targets = []
-    if cfg.pve_nodes:
-        for ip in cfg.pve_nodes:
-            targets.append((ip, "pve", f"PVE {ip}"))
-    if cfg.hosts:
-        pve_set = set(cfg.pve_nodes) if cfg.pve_nodes else set()
-        for h in cfg.hosts:
-            if h.ip not in pve_set:
-                targets.append((h.ip, h.htype, f"{h.label} ({h.ip})"))
+    targets = _uninstall_targets_from_config(cfg, args)
 
     fmt.header("Init — Uninstall (headless)")
     fmt.blank()
@@ -8950,6 +9114,35 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
 
     _reset_local_init_state(cfg, remove_live_config=True)
 
+    for path in (
+        "/etc/systemd/system/freq-agent.service",
+        "/etc/systemd/system/freq-watchdog.service",
+        "/var/lib/freq-watchdog/status.json",
+        "/var/lib/freq-watchdog/state.json",
+    ):
+        if os.path.exists(path):
+            _remove_init_file(path, os.path.basename(path), missing_ok=True)
+    if os.path.isdir(AGENT_REMOTE_DIR):
+        try:
+            shutil.rmtree(AGENT_REMOTE_DIR)
+            fmt.step_ok(f"Local agent dir removed: {AGENT_REMOTE_DIR}")
+        except OSError as e:
+            fmt.step_warn(f"Local agent dir cleanup skipped: {e}")
+    cred_dir = _credentials_dir(cfg)
+    if os.path.isdir(cred_dir):
+        try:
+            shutil.rmtree(cred_dir)
+            fmt.step_ok(f"Generated credential dir removed: {cred_dir}")
+        except OSError as e:
+            fmt.step_warn(f"Credential dir cleanup skipped: {e}")
+    etc_dir = os.path.dirname(cred_dir)
+    if etc_dir and etc_dir != "/" and os.path.isdir(etc_dir):
+        try:
+            os.rmdir(etc_dir)
+            fmt.step_ok(f"Generated config dir removed: {etc_dir}")
+        except OSError:
+            pass
+
     # Remove key directory if empty
     if os.path.isdir(cfg.key_dir):
         try:
@@ -9043,10 +9236,12 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
     fmt.footer()
 
     logger.info("uninstall complete", removed=ok, failed=fail, skipped=skip, manual=manual)
+    if getattr(args, "purge_docker_volumes", False):
+        _purge_local_docker_volumes(cfg, args)
     return 0 if fail == 0 and manual == 0 else 1
 
 
-def _uninstall_dry_run(cfg):
+def _uninstall_dry_run(cfg, args=None):
     """Show what --uninstall would remove without making changes."""
     svc_name = cfg.ssh_service_account
 
@@ -9059,35 +9254,20 @@ def _uninstall_dry_run(cfg):
     step_n = 1
 
     # Remote hosts
-    if cfg.pve_nodes:
-        for ip in cfg.pve_nodes:
-            steps.append(f"{step_n}. Remove '{svc_name}' from PVE {ip}: userdel + sudoers + authorized_keys")
-            step_n += 1
-
-    if cfg.hosts:
-        pve_set = set(cfg.pve_nodes) if cfg.pve_nodes else set()
-        for h in cfg.hosts:
-            if h.ip in pve_set:
-                continue
-            if h.htype in ("linux", "pve", "docker", "truenas"):
-                steps.append(
-                    f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): userdel + sudoers + key [{h.htype}]"
-                )
-            elif h.htype == "pfsense":
-                steps.append(
-                    f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): account + home with admin creds, else SSH key only [pfsense]"
-                )
-            elif h.htype == "idrac":
-                steps.append(
-                    f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): disable slot + clear RSA key [iDRAC]"
-                )
-            elif h.htype == "switch":
-                steps.append(
-                    f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): no username + clear pubkey-chain [switch]"
-                )
-            else:
-                steps.append(f"{step_n}. Remove '{svc_name}' from {h.label} ({h.ip}): [{h.htype}]")
-            step_n += 1
+    for ip, htype, label in _uninstall_targets_from_config(cfg, args):
+        if htype in ("linux", "pve", "docker", "truenas"):
+            steps.append(f"{step_n}. Remove '{svc_name}' from {label}: userdel + sudoers + key [{htype}]")
+        elif htype == "pfsense":
+            steps.append(
+                f"{step_n}. Remove '{svc_name}' from {label}: account + home with admin creds, else SSH key only [pfsense]"
+            )
+        elif htype == "idrac":
+            steps.append(f"{step_n}. Remove '{svc_name}' from {label}: disable slot + clear RSA key [iDRAC]")
+        elif htype == "switch":
+            steps.append(f"{step_n}. Remove '{svc_name}' from {label}: no username + clear pubkey-chain [switch]")
+        else:
+            steps.append(f"{step_n}. Remove '{svc_name}' from {label}: [{htype}]")
+        step_n += 1
 
     # Local cleanup
     steps.extend(
@@ -9100,6 +9280,8 @@ def _uninstall_dry_run(cfg):
             f"{step_n + 5}. Delete local account '{svc_name}' + home directory",
         ]
     )
+    if args and getattr(args, "purge_docker_volumes", False):
+        steps.append(f"{step_n + 6}. Stop local Docker Compose app and remove named state volumes")
 
     for step in steps:
         fmt.line(f"    {step}")
