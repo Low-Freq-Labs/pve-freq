@@ -24,6 +24,13 @@ def test_default_compose_allows_web_init_sudo_path():
     assert "/home/freq:uid=1000,gid=1000,mode=755" in compose
 
 
+def test_default_compose_mounts_web_init_input_contract():
+    """Web Init must see operator-provided host setup input paths."""
+    compose = Path("docker-compose.yml").read_text()
+
+    assert "${FREQ_INIT_INPUTS_DIR:-/root/freq-init-inputs}:/root/freq-init-inputs:ro" in compose
+
+
 def test_docker_image_installs_sudo_for_web_init():
     """The non-root Docker dashboard must be able to launch sudo freq init."""
     dockerfile = Path("Dockerfile").read_text()
