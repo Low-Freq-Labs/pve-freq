@@ -32,7 +32,7 @@ services:
       # Optional host-side setup inputs for Web Init contracts. Operators can
       # put bootstrap-only TOML/key/token files here and reference the same
       # absolute paths from the setup UI without editing container config.
-      - ${FREQ_INIT_INPUTS_DIR:-/root/freq-init-inputs}:/root/freq-init-inputs:ro
+      - ${FREQ_INIT_INPUTS_DIR:-/root/freq-init-inputs}:/freq-init-inputs:ro
       # SSH keys — mount your fleet SSH key (read-only)
       # Uncomment and adjust the path to your SSH key:
       # - ~/.ssh/id_ed25519:/home/freq/.ssh/id_ed25519:ro

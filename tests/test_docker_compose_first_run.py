@@ -28,7 +28,7 @@ def test_default_compose_mounts_web_init_input_contract():
     """Web Init must see operator-provided host setup input paths."""
     compose = Path("docker-compose.yml").read_text()
 
-    assert "${FREQ_INIT_INPUTS_DIR:-/root/freq-init-inputs}:/root/freq-init-inputs:ro" in compose
+    assert "${FREQ_INIT_INPUTS_DIR:-/root/freq-init-inputs}:/freq-init-inputs:ro" in compose
 
 
 def test_docker_image_installs_sudo_for_web_init():

@@ -211,6 +211,29 @@ class TestSetupDeviceCredentialWriter(unittest.TestCase):
             self.assertIn("password_file =", content)
             self.assertNotIn("[bmc_1]", content)
 
+    def test_root_freq_init_inputs_path_aliases_to_container_mount(self):
+        from freq.modules.serve import _setup_existing_secret_file
+
+        alias_dir = "/freq-init-inputs"
+        try:
+            os.makedirs(alias_dir, exist_ok=True)
+            path = os.path.join(alias_dir, "alias-contract-test")
+            with open(path, "w") as f:
+                f.write("ok\n")
+        except OSError as exc:
+            self.skipTest(f"{alias_dir} is not writable in this test environment: {exc}")
+        try:
+            resolved = _setup_existing_secret_file(
+                "/root/freq-init-inputs/alias-contract-test",
+                "vm_contract",
+            )
+            self.assertEqual(path, resolved)
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2817,6 +2817,12 @@ def _setup_existing_secret_file(value, label):
     if not path:
         return ""
     if not os.path.isfile(path):
+        prefix = "/root/freq-init-inputs/"
+        if path.startswith(prefix):
+            alias = os.path.join("/freq-init-inputs", path[len(prefix):])
+            if os.path.isfile(alias):
+                path = alias
+    if not os.path.isfile(path):
         raise ValueError(f"{label} file not found: {path}")
     return path
 
