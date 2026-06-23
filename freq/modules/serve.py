@@ -3452,6 +3452,7 @@ class FreqHandler(BaseHTTPRequestHandler):
         "/api/setup/test-ssh": "_serve_setup_test_ssh",
         "/api/setup/init/start": "_serve_setup_init_start",
         "/api/setup/init/status": "_serve_setup_init_status",
+        "/api/setup/init/logs": "_serve_setup_init_logs",
         "/api/setup/reset": "_serve_setup_reset",
         # ── SSE / orchestration (stays in serve.py) ───────────────────
         "/api/events": "_serve_events",
@@ -4750,7 +4751,40 @@ a:hover{{text-decoration:underline}}
         if err:
             self._json_response({"error": err}, 403)
             return
-        self._json_response({"ok": True, **_setup_init_snapshot()})
+        snap = _setup_init_snapshot()
+        job = snap.get("job") or {}
+        lines = list(job.get("lines") or [])
+        state = job.get("state") or ("running" if snap.get("running") else "idle")
+        payload = {"ok": True, **snap, "state": state, "log_tail": lines}
+        if lines:
+            payload["phase"] = lines[-1]
+        if state == "succeeded":
+            payload["state"] = "complete"
+        if state == "failed":
+            payload["blocker"] = job.get("error") or (lines[-1] if lines else "setup init failed")
+        self._json_response(payload)
+
+    def _serve_setup_init_logs(self):
+        """GET /api/setup/init/logs — return current web-launched init log tail."""
+        role, err = _check_session_role(self, "admin")
+        if err:
+            self._json_response({"error": err}, 403)
+            return
+        snap = _setup_init_snapshot()
+        job = snap.get("job") or {}
+        lines = list(job.get("lines") or [])
+        self._json_response(
+            {
+                "ok": True,
+                "running": snap.get("running", False),
+                "state": "complete" if job.get("state") == "succeeded" else job.get("state", "idle"),
+                "job_id": job.get("id"),
+                "lines": lines,
+                "log_tail": lines,
+                "returncode": job.get("returncode"),
+                "initialized": job.get("initialized", False),
+            }
+        )
 
     # ── Legacy + Main HTML ───────────────────────────────────────────────
 

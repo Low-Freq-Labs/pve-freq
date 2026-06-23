@@ -422,17 +422,21 @@
 
   function pollRun(){
     fetch(API.runStatus,{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(data){
-      progressState.textContent = data.state || 'running';
-      progressPhase.textContent = data.phase || '';
-      if(data.log_tail){phaseLog.textContent = data.log_tail.join ? data.log_tail.join('\n') : String(data.log_tail);}
-      if(data.state === 'complete'){
+      var job = data.job || {};
+      var state = data.state || job.state || (data.running ? 'running' : 'idle');
+      var logTail = data.log_tail || job.lines || [];
+      if(state === 'succeeded'){state = 'complete';}
+      progressState.textContent = state || 'running';
+      progressPhase.textContent = data.phase || (logTail.length ? logTail[logTail.length - 1] : '');
+      if(logTail.length){phaseLog.textContent = logTail.join ? logTail.join('\n') : String(logTail);}
+      if(state === 'complete'){
         refreshStatus();
         refreshCertTruth();
         $('start-init').textContent = 'Init Complete';
         return;
       }
-      if(data.state === 'failed' || data.blocker){
-        setError(data.blocker || data.error || 'Init failed. See phase log.');
+      if(state === 'failed' || data.blocker){
+        setError(data.blocker || job.error || data.error || 'Init failed. See phase log.');
         $('start-init').disabled = false;
         $('start-init').textContent = 'Start Web Init';
         return;
