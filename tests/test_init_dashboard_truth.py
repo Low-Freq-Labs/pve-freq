@@ -392,6 +392,40 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
             data = _get_json(h)
             self.assertIn("Invalid username", data["error"])
 
+    def test_create_admin_creates_missing_conf_dir(self):
+        """Zero-state create-admin must create conf_dir before users.conf."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = _mock_cfg(tmpdir)
+            cfg.vault_dir = os.path.join(tmpdir, "vault")
+            cfg.vault_file = os.path.join(cfg.vault_dir, "freq-vault.enc")
+            body = '{"username":"newadmin","password":"validpass123"}'
+            h = self._setup_handler(body)
+
+            with patch("freq.modules.serve.load_config", return_value=cfg), \
+                 patch("freq.modules.serve._is_first_run", return_value=True), \
+                 patch("freq.modules.vault._vault_key", return_value="a" * 64):
+                h._serve_setup_create_admin()
+
+            self.assertEqual(h._status, 200)
+            self.assertTrue(os.path.isfile(os.path.join(cfg.conf_dir, "users.conf")))
+
+    def test_save_failure_returns_filesystem_reason(self):
+        """create-admin must not collapse filesystem failures to a vague 500."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = _mock_cfg(tmpdir)
+            body = '{"username":"newadmin","password":"validpass123"}'
+            h = self._setup_handler(body)
+
+            with patch("freq.modules.serve.load_config", return_value=cfg), \
+                 patch("freq.modules.serve._is_first_run", return_value=True), \
+                 patch("freq.modules.serve._load_users", return_value=[]), \
+                 patch("freq.modules.serve._save_users_error", return_value="Permission denied: users.conf"):
+                h._serve_setup_create_admin()
+
+            self.assertEqual(h._status, 500)
+            data = _get_json(h)
+            self.assertIn("Permission denied", data["error"])
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # Setup gating — all setup endpoints reject after completion

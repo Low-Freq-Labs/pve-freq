@@ -23,8 +23,11 @@ services:
       - TZ=${TZ:-UTC}
 
     volumes:
-      - ./conf:/opt/pve-freq/conf
-      - ./data:/opt/pve-freq/data
+      # Named volumes avoid the first-run bind-mount trap where Docker creates
+      # ./conf and ./data as root-owned directories that the non-root container
+      # user cannot initialize from the Web UI.
+      - freq-conf:/opt/pve-freq/conf
+      - freq-data:/opt/pve-freq/data
       # SSH keys — mount your fleet SSH key (read-only)
       # Uncomment and adjust the path to your SSH key:
       # - ~/.ssh/id_ed25519:/home/freq/.ssh/id_ed25519:ro
@@ -56,3 +59,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  freq-conf:
+  freq-data:

@@ -85,10 +85,11 @@ def _load_users(cfg: FreqConfig) -> list:
     return users
 
 
-def _save_users(cfg: FreqConfig, users: list) -> bool:
-    """Save users to users.conf."""
+def _save_users_error(cfg: FreqConfig, users: list) -> str:
+    """Save users to users.conf and return an error string on failure."""
     path = os.path.join(cfg.conf_dir, "users.conf")
     try:
+        os.makedirs(cfg.conf_dir, exist_ok=True)
         with open(path, "w") as f:
             f.write("# FREQ Users — USERNAME ROLE [GROUPS]\n")
             for u in sorted(users, key=lambda x: x["username"]):
@@ -97,9 +98,15 @@ def _save_users(cfg: FreqConfig, users: list) -> bool:
                     f.write(f"{u['username']} {u['role']} {groups}\n")
                 else:
                     f.write(f"{u['username']} {u['role']}\n")
-        return True
-    except OSError:
-        return False
+        return ""
+    except OSError as e:
+        logger.error(f"failed to save users.conf at {path}: {e}")
+        return str(e)
+
+
+def _save_users(cfg: FreqConfig, users: list) -> bool:
+    """Save users to users.conf."""
+    return not _save_users_error(cfg, users)
 
 
 def _valid_username(username: str) -> bool:

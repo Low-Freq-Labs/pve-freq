@@ -71,7 +71,7 @@ from freq.core.validate import (
     label as valid_label,
 )
 from freq.modules.pve import _find_reachable_node, _pve_cmd
-from freq.modules.users import _load_users, _save_users
+from freq.modules.users import _load_users, _save_users, _save_users_error
 from freq.modules.vault import vault_get, vault_set, vault_init
 from freq.jarvis.agent import TEMPLATES, _load_agents, _save_agents
 from freq.jarvis.notify import notify as jarvis_notify
@@ -4306,8 +4306,9 @@ a:hover{{text-decoration:underline}}
 
             users.append({"username": username, "role": "admin", "groups": ""})
             os.makedirs(cfg.conf_dir, exist_ok=True)
-            if not _save_users(cfg, users):
-                self._json_response({"error": "Failed to save user"}, 500)
+            save_error = _save_users_error(cfg, users)
+            if save_error:
+                self._json_response({"error": f"Failed to save user: {save_error}"}, 500)
                 return
 
             # Store password hash in vault
