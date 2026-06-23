@@ -721,7 +721,7 @@ document.addEventListener('click',function(e){
       ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,
       updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart,
       /* 20260413O additions */
-      deployAgent:deployAgent,hardenAction:hardenAction,loadBackups:loadBackups,
+      hardenAction:hardenAction,loadBackups:loadBackups,
       loadCostAnalysis:loadCostAnalysis,loadInventoryView:loadInventoryView,
       loadStackInfo:loadStackInfo,loadSwitchData:loadSwitchData,loadSysInfo:loadSysInfo,
       openCtTool:openCtTool,policyAction:policyAction,runNetScan:runNetScan,
@@ -900,7 +900,7 @@ var API={
   MEDIA_DOWNLOADS:'/api/media/downloads',MEDIA_STREAMS:'/api/media/streams',MEDIA_RESTART:'/api/media/restart',
   MEDIA_LOGS:'/api/media/logs',MEDIA_UPDATE:'/api/media/update',
   USERS:'/api/users',VAULT:'/api/vault',CONFIG:'/api/config',JOURNAL:'/api/journal',
-  AGENTS:'/api/agents',POLICIES:'/api/policies',SPECIALISTS:'/api/specialists',
+  POLICIES:'/api/policies',
   INFRA_QUICK:'/api/infra/quick',INFRA_OVERVIEW:'/api/infra/overview',
   INFRA_PFSENSE:'/api/infra/pfsense',INFRA_TRUENAS:'/api/infra/truenas',INFRA_IDRAC:'/api/infra/idrac',
   HOST_DETAIL:'/api/host/detail',LAB_STATUS:'/api/lab/status',
@@ -971,9 +971,8 @@ var API={
   /* ── Remaining endpoints ── */
   DB_STATUS:'/api/db/status',LOGS_STATS:'/api/logs/stats',
   PATCH_COMPLIANCE:'/api/patch/compliance',NETMON_INTERFACES:'/api/netmon/interfaces',
-  MIGRATE_PLAN:'/api/migrate-plan',DEPLOY_AGENT:'/api/deploy-agent',
+  MIGRATE_PLAN:'/api/migrate-plan',
   PROXY_STATUS:'/api/proxy/status',PROXY_LIST:'/api/proxy/list',
-  AGENT_CREATE:'/api/agent/create',AGENT_DESTROY:'/api/agent/destroy',
   MIGRATE_VMWARE:'/api/migrate-vmware/status',
   POOL:'/api/pool',ROLLBACK:'/api/rollback',
   MEDIA_DOWNLOADS_DETAIL:'/api/media/downloads/detail',
@@ -1471,7 +1470,7 @@ var _setupTruthCache=null;
 /* Cached doctor snapshot. Shape:
  *   { status, passed, failed, warnings, total, checks:[{section,name,status}] } */
 var _doctorTruthCache=null;
-/* M-BLUETEAM-SECURITY-HARDENING-20260413AJ regression fix: the AI
+/* M-BLUETEAM-SECURITY-HARDENING-20260413AJ regression fix: the setup
  * banner used "setup_health !== 'ok' && !== 'healthy'" which marked
  * every OTHER value as degraded — including the legitimate healthy
  * state 'configured' the backend returns on a fully set-up instance.
@@ -1798,8 +1797,6 @@ var WIDGET_REGISTRY=[
     var pcd=document.getElementById('hw-physical-cards');if(pcd)pcd.innerHTML=pc;
     _loadWidgetOverview();
   }},
-  {id:'w-fleet-agents',page:'FLEET',label:'Agents',ref:'fleet-sec-agents',preload:function(){loadAgents();}},
-  {id:'w-fleet-specialists',page:'FLEET',label:'Sandbox VMs',ref:'fleet-sec-specialists',preload:function(){loadSpecialists();}},
   {id:'w-docker-containers',page:'DOCKER',label:'Containers',loader:function(el){
     el.innerHTML='<div class="stats" id="hw-ctr-stats"></div><div id="hw-ctr-cards" class="cards"><div class="skeleton"></div></div>';
     _authFetch(API.MEDIA_DASHBOARD).then(function(r){return r.json()}).then(function(d){
@@ -2189,7 +2186,7 @@ function _loadWidgetOverview(){
 }
 var VIEW_SECTIONS={
   home:[],
-  fleet:['fleet-sec-stats','fleet-sec-infra','fleet-sec-overview','fleet-lab-section','fleet-sec-agents','fleet-sec-specialists'],
+  fleet:['fleet-sec-stats','fleet-sec-infra','fleet-sec-overview','fleet-lab-section'],
   docker:['docker-sec-containers'],
   security:['sec-risk','sec-policies'],
   'sec-hardening':['sec-audit','sec-harden'],
@@ -3254,7 +3251,7 @@ function loadFleetPage(){
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   }
-  loadMetricsQuick();loadAgents();loadSpecialists();startPveMetrics();
+  loadMetricsQuick();startPveMetrics();
   /* Overview cards — render immediately if cached, otherwise fetch */
   if(_fleetCache.fo){_renderFleetOverview(_fleetCache.fo);_loadFleetOverviewMedia();}
   else{_authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(e){console.error('Fleet overview load failed:',e);});}
@@ -5221,7 +5218,7 @@ function loadStackInfo(type){
 function loadSysInfo(type){
   var el=document.getElementById('sysinfo-out');if(!el)return;
   el.innerHTML='<div class="skeleton h-40"></div>';
-  var urls={db:API.DB_STATUS,logs:API.LOGS_STATS,proxy:API.PROXY_LIST,pool:API.POOL,deploy:API.DEPLOY_AGENT,setup:API.SETUP_STATUS};
+  var urls={db:API.DB_STATUS,logs:API.LOGS_STATS,proxy:API.PROXY_LIST,pool:API.POOL,setup:API.SETUP_STATUS};
   _authFetch(urls[type]||urls.db).then(function(r){return r.json()}).then(function(d){
     if(d.info||d.message){el.innerHTML='<div class="exec-out">'+_esc(d.info||d.message)+(d.usage?'<br><code>'+_esc(d.usage)+'</code>':'')+(d.note?'<br><span style="color:var(--text-dim)">'+_esc(d.note)+'</span>':'')+'</div>';return;}
     if(type==='db'){
@@ -6462,7 +6459,7 @@ function loadMetrics(){
   content.innerHTML='<h3 class="section-label-pl">DEEP SCAN</h3><div class="skeleton"></div><div class="skeleton"></div><p class="c-dim-fs11-mt8">Collecting deep metrics from all reachable hosts...</p>';
   _authFetch(API.METRICS).then(function(r){return r.json()}).then(function(d){
     var html='<h3 class="section-label-pl">DEEP SCAN — '+d.hosts.length+' HOSTS</h3>';
-    if(!d.hosts.length){html+='<div class="empty-state"><p>0 hosts returned deep metrics \u2014 check agent deploy and connectivity</p></div>';}
+    if(!d.hosts.length){html+='<div class="empty-state"><p>0 hosts returned deep metrics \u2014 check metrics collection and connectivity</p></div>';}
     d.hosts.forEach(function(m,i){
       var hn=m.hostname||m.system&&m.system.hostname||'unknown';var cpu=m.cpu||{};var mem=m.memory||{};var cl=HC[i%HC.length];
       html+='<div class="crd mb-12" ><h3 style="color:'+cl+'">'+hn+' <span class="text-meta">via '+m.source+'</span></h3>';
@@ -6979,27 +6976,6 @@ function doRollback(){
       if(d.ok){toast('VM '+vmid+' rolled back to '+d.snapshot,'success');if(out)out.innerHTML='<div class="c-green">Rolled back to "'+_esc(d.snapshot)+'"'+(d.started?' — VM is running':' — VM stopped')+'</div>';}
       else{toast(d.error||'Rollback failed','error');if(out)out.innerHTML='<div class="c-red">'+(d.error||'Rollback failed')+'</div>';}
     }).catch(function(e){toast('Rollback failed','error');if(out)out.innerHTML='<div class="c-red">'+_esc(e.toString())+'</div>';});
-  });
-}
-function deployAgent(target){
-  target=target||'all';
-  confirmAction('Deploy FREQ metrics agent to <strong>'+_esc(target)+'</strong>?<br>Requires sudo on target hosts.',function(){
-    toast('Deploying agent to '+target+'...','info');
-    _authFetch(API.DEPLOY_AGENT+'?target='+encodeURIComponent(target)).then(function(r){return r.json()}).then(function(d){
-      if(d.error){toast(d.error,'error');return;}
-      toast(d.deployed+'/'+d.total+' deployed, '+d.failed+' failed','success');
-      /* Show results in sysinfo panel if available */
-      var el=document.getElementById('sysinfo-out');if(!el)return;
-      var h=_statCards([{l:'Deployed',v:d.deployed,c:'green'},{l:'Failed',v:d.failed,c:d.failed>0?'red':'green'},{l:'Port',v:d.agent_port}]);
-      h+='<table style="margin-top:8px"><thead><tr><th>Host</th><th>Status</th><th>Steps</th></tr></thead><tbody>';
-      (d.results||[]).forEach(function(r){
-        var color=r.status==='deployed'?'green':r.status==='failed'?'red':'yellow';
-        var steps=(r.steps||[]).map(function(s){return (s.ok?'<span class="c-green">'+_esc(s.step)+'</span>':'<span class="c-red">'+_esc(s.step)+'</span>');}).join(' → ');
-        h+='<tr><td><strong>'+_esc(r.host)+'</strong></td><td>'+_statusBadge(r.status)+'</td><td>'+steps+'</td></tr>';
-      });
-      h+='</tbody></table>';
-      el.innerHTML=h;
-    }).catch(function(e){toast('Deploy failed: '+e,'error');});
   });
 }
 function vmtResize(){
@@ -7852,25 +7828,6 @@ function runHostUpdate(label){
     });
   });
 }
-function loadAgents(){
-  _authFetch(API.AGENTS).then(function(r){return r.json()}).then(function(d){
-    document.getElementById('agent-stats').innerHTML=s('Agents',d.count,'p');
-    if(d.count>0){var h='<table><thead><tr><th>Name</th><th>Template</th><th>VMID</th><th>Status</th><th>Created</th></tr></thead><tbody>';
-      d.agents.forEach(function(a){h+='<tr><td><strong>'+a.name+'</strong></td><td>'+a.template+'</td><td>'+a.vmid+'</td><td>'+badge(a.status)+'</td><td>'+(a.created||'')+'</td></tr>';});
-      h+='</tbody></table>';document.getElementById('agent-list').innerHTML=h;
-    }else{document.getElementById('agent-list').innerHTML='<div class="empty-state"><p>0 agents registered \u2014 <code class="c-purple">freq agent create &lt;template&gt;</code></p></div>';}
-  });
-  var tpls=[{n:'Infra-Manager',d:'Infrastructure operator — fleet monitoring, incident response, maintenance'},{n:'Security-Ops',d:'Security specialist — auditing, hardening, compliance'},{n:'Dev',d:'Development specialist — building, testing, shipping code'},{n:'Media-Ops',d:'Media stack operator — Plex, Sonarr, Radarr, downloads'},{n:'Blank',d:'Empty template — start from scratch'}];
-  var h='';tpls.forEach(function(t){h+='<div class="crd"><h3>'+t.n+'</h3><p>'+t.d+'</p></div>';});
-  document.getElementById('agent-templates').innerHTML=h;
-}
-function loadSpecialists(){
-  _authFetch(API.SPECIALISTS).then(function(r){return r.json()}).then(function(d){
-    var h='';d.agents.forEach(function(a){h+='<tr><td><strong>'+a.name+'</strong></td><td>'+a.template+'</td><td>'+(a.vmid||'-')+'</td><td>'+a.status+'</td></tr>';});
-    document.getElementById('specialist-table').innerHTML=h||'<tr><td colspan="4" class="c-dim">No specialists registered.</td></tr>';
-  });
-}
-
 /* ═══════════════════════════════════════════════════════════════════
    VMs
    ═══════════════════════════════════════════════════════════════════ */

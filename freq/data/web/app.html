@@ -197,29 +197,6 @@
     <div id="fleet-lab-cards" class="cards grid-auto-240" ></div>
   </div>
 </div>
-<!-- Agents -->
-<div class="section layout-section mt-20" id="fleet-sec-agents" >
-  <div class="section-header"><h3>Agents</h3><span class="chev">▾</span></div>
-  <div class="section-body">
-    <div class="stats" id="agent-stats"></div>
-    <h4 class="section-label-pl-md">Templates</h4>
-    <div id="agent-templates" class="cards"></div>
-    <h4 class="section-label-pl-md">Registered Agents</h4>
-    <div id="agent-list"></div>
-  </div>
-</div>
-<!-- Sandbox VMs -->
-<div class="section layout-section" id="fleet-sec-specialists">
-  <div class="section-header"><h3>Sandbox VMs</h3><span class="chev">▾</span></div>
-  <div class="section-body">
-    <div class="cards mb-12" >
-      <div class="crd"><h3>Create Specialist</h3><p><code>freq specialist create &lt;host&gt; --role dev</code></p></div>
-      <div class="crd"><h3>Check Health</h3><p><code>freq specialist health &lt;host&gt;</code></p></div>
-      <div class="crd"><h3>Roles</h3><p>sandbox, dev, infra, security, media</p></div>
-    </div>
-    <table><thead><tr><th>Name</th><th>Role</th><th>VMID</th><th>Status</th></tr></thead><tbody id="specialist-table"></tbody></table>
-  </div>
-</div>
 </div><!-- close fleet-view -->
 
 <!-- DOCKER VIEW -->
@@ -647,7 +624,7 @@
     <div id="inventory-out"><div class="exec-out">Click to load fleet inventory.</div></div>
   </div>
 </div>
-<!-- System Info — DB, logs, proxies, agents, pools -->
+<!-- System Info — DB, logs, proxies, pools -->
 <div class="section">
   <div class="section-header"><h3>System Info</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
@@ -656,7 +633,6 @@
       <button class="fleet-btn" data-action="loadSysInfo" data-arg="logs">LOG STATS</button>
       <button class="fleet-btn" data-action="loadSysInfo" data-arg="proxy">PROXY LIST</button>
       <button class="fleet-btn" data-action="loadSysInfo" data-arg="pool">STORAGE POOLS</button>
-      <button class="fleet-btn" data-action="deployAgent" data-arg="all">DEPLOY AGENT</button>
       <button class="fleet-btn" data-action="loadSysInfo" data-arg="setup">SETUP STATUS</button>
     </div>
     <div id="sysinfo-out"><div class="exec-out">Select a category above.</div></div>
@@ -1586,14 +1562,13 @@
     <div class="crd" style="margin-bottom:24px;border-left:3px solid var(--purple)">
       <h3 class="fs-16">About PVE FREQ</h3>
       <p class="mt-8">FREQ is a zero-dependency Proxmox fleet management tool. Pure Python stdlib. One binary. Every command you need to manage VMs, containers, networking, storage, and monitoring across your entire cluster.</p>
-      <p class="mt-8">Built from scratch — 16,000+ lines of bash rewritten into clean Python. SSH to 6 platform types. Personality system. Knowledge base. Risk analysis. Auto-audit pipeline. Agent platform for AI-driven infrastructure.</p>
+      <p class="mt-8">Built from scratch — 16,000+ lines of bash rewritten into clean Python. SSH to 6 platform types. Knowledge base. Risk analysis. Auto-audit pipeline. Practical infrastructure control for the DC01 fleet.</p>
       <p class="section-label-pl-mt12"><em>"freq did not come to play."</em></p>
     </div>
     <h3 style="color:var(--purple-light);font-size:14px;margin-bottom:16px">Capabilities</h3>
     <div class="timeline">
       <div class="timeline-item"><h3>Fleet Management</h3><div class="meta">Core</div><p>Create, clone, destroy, resize, migrate, snapshot VMs across your entire cluster. Safety gates protect production. Fleet boundaries enforce VMID discipline.</p></div>
       <div class="timeline-item"><h3>Smart Commands</h3><div class="meta">Intelligence</div><p>learn (knowledge base), risk (kill-chain blast radius), sweep (auto-audit pipeline), patrol (continuous monitoring). Your cluster's operational memory.</p></div>
-      <div class="timeline-item"><h3>Agent Platform</h3><div class="meta">AI-Powered</div><p>freq agent create security-ops — VM created, cloud image downloaded, CLAUDE.md generated. AI specialists on your infrastructure in 2 minutes.</p></div>
       <div class="timeline-item"><h3>Web Dashboard</h3><div class="meta">This page</div><p>Real-time fleet overview, VM management, container ops, network tools, and monitoring. Zero external dependencies. Pure Python stdlib HTTP server.</p></div>
       <div class="timeline-item" style="border-left-color:var(--purple)"><h3>Zero Dependencies</h3><div class="meta">Philosophy</div><p>No pip install. No node_modules. No Docker required. Just Python 3.7+ and SSH. Runs on any Linux host that can reach your PVE nodes.</p></div>
     </div>
