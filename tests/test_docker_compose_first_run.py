@@ -20,6 +20,7 @@ def test_default_compose_allows_web_init_sudo_path():
     compose = Path("docker-compose.yml").read_text()
 
     assert "no-new-privileges:true" not in compose
+    assert "read_only: true" not in compose
 
 
 def test_docker_image_installs_sudo_for_web_init():

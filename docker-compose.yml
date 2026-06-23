@@ -35,8 +35,6 @@ services:
       # - ~/.ssh/id_rsa:/home/freq/.ssh/id_rsa:ro
       # - ~/.ssh/known_hosts:/home/freq/.ssh/known_hosts:ro
 
-    # Read-only root filesystem — only volumes and tmpfs are writable
-    read_only: true
     tmpfs:
       - /tmp
       - /run
