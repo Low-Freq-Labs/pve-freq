@@ -41,10 +41,6 @@ services:
       - /run
       - /home/freq
 
-    # Prevent in-container privilege escalation
-    security_opt:
-      - no-new-privileges:true
-
     # Resource limits (adjust to your needs)
     deploy:
       resources:

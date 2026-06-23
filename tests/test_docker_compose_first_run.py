@@ -12,3 +12,19 @@ def test_default_compose_uses_named_state_volumes():
     assert "./conf:/opt/pve-freq/conf" not in compose
     assert "./data:/opt/pve-freq/data" not in compose
     assert "\nvolumes:\n  freq-conf:\n  freq-data:\n" in compose
+
+
+def test_default_compose_allows_web_init_sudo_path():
+    """Web init runs from a non-root dashboard and needs sudo inside Docker."""
+    compose = Path("docker-compose.yml").read_text()
+
+    assert "no-new-privileges:true" not in compose
+
+
+def test_docker_image_installs_sudo_for_web_init():
+    """The non-root Docker dashboard must be able to launch sudo freq init."""
+    dockerfile = Path("Dockerfile").read_text()
+
+    assert " sudo " in dockerfile
+    assert "/etc/sudoers.d/freq" in dockerfile
+    assert "NOPASSWD:ALL" in dockerfile

@@ -12,7 +12,7 @@ LABEL org.opencontainers.image.source="https://github.com/Low-Freq-Labs/pve-freq
 # System deps — single layer, cleanup included
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        openssh-client sshpass curl jq tini && \
+        openssh-client sshpass curl jq sudo tini && \
     rm -rf /var/lib/apt/lists/*
 
 # Generate machine-id (needed for vault key derivation)
@@ -25,7 +25,9 @@ RUN groupadd --gid 1000 freq \
     && mkdir -p /opt/pve-freq/conf /opt/pve-freq/data/log \
                /opt/pve-freq/data/vault /opt/pve-freq/data/keys \
                /opt/pve-freq/data/cache /opt/pve-freq/data/knowledge \
-    && chown -R freq:freq /opt/pve-freq
+    && chown -R freq:freq /opt/pve-freq \
+    && echo 'freq ALL=(root) NOPASSWD:ALL' > /etc/sudoers.d/freq \
+    && chmod 0440 /etc/sudoers.d/freq
 
 WORKDIR /opt/pve-freq
 
