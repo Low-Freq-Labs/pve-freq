@@ -2698,7 +2698,7 @@ function _markHostCardStale(card,n){
     badge=document.createElement('span');
     badge.className='stale-badge';
     badge.style.cssText='display:inline-block;margin-left:6px;padding:1px 6px;border-radius:3px;background:rgba(245,158,11,0.18);color:var(--yellow);font-size:10px;font-weight:700;letter-spacing:0.5px;border:1px solid var(--yellow)';
-    var hdr=card.querySelector('.host-name')||card.querySelector('.host-meta')||card.firstChild;
+    var hdr=card.querySelector('.host-actions')||card.querySelector('.host-name')||card.querySelector('.host-meta')||card.firstChild;
     if(hdr&&hdr.appendChild)hdr.appendChild(badge);
   }
   /* Show "STALE 47s" when last_seen_ts is available, otherwise just STALE. */
@@ -2734,7 +2734,7 @@ function _decorateHostCardFresh(card,ageSec){
   if(!chip){
     chip=document.createElement('span');
     chip.className='host-fresh-chip';
-    var hdr=card.querySelector('.host-head')||card.querySelector('.host-meta')||card.firstChild;
+    var hdr=card.querySelector('.host-actions')||card.querySelector('.host-head')||card.querySelector('.host-meta')||card.firstChild;
     if(hdr&&hdr.appendChild)hdr.appendChild(chip);
   }
   var thr={green:30,yellow:120};
@@ -6211,7 +6211,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labL
     var nRamGb=Math.round(nRamMb/1024);
     var detailRam=(pn.detail||'').match(/(\d+)GB/);var nodeRamStr=detailRam?detailRam[1]+'GB':(pn.ram_gb?pn.ram_gb+'GB':'?');
     var nodeCard='<div class="host-card" data-host-id="'+nodeName.toLowerCase()+'" style="cursor:pointer;" onclick="openVmInfo(\''+nodeName+'\',\''+pn.ip+'\',0)">';
-    nodeCard+='<div class="mb-8"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div style="display:flex;align-items:center;gap:8px"><button class="fleet-btn" title="Create VM on '+nodeName+'" onclick="event.stopPropagation();openVmCreateForNode(\''+nodeName+'\')" style="width:28px;height:28px;padding:0;font-size:18px;line-height:1;color:var(--purple-light);border-color:var(--purple)">+</button><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div></div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
+    nodeCard+='<div class="mb-8"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div><div class="host-actions" style="display:flex;align-items:center;gap:6px;margin-left:auto"><button class="fleet-btn" title="Create VM on '+nodeName+'" onclick="event.stopPropagation();openVmCreateForNode(\''+nodeName+'\')" style="width:28px;height:28px;padding:0;font-size:18px;line-height:1;color:'+cl+';border-color:'+cl+'">+</button></div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
     nodeCard+='<div class="divider-light">';
     if(up){
       if(!live)live={cores:'0',load:'0',disk:'0%',ram:'0/0MB'};
