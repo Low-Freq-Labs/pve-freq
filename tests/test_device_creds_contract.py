@@ -15,6 +15,7 @@ Fix: _read_entry() now supports both password_file (priority) and inline
 password. When password_file is unreadable but inline password exists,
 it falls back to inline with a warning.
 """
+import builtins
 import os
 import sys
 import tempfile
@@ -144,6 +145,47 @@ password = "cisco_secret"
         self.assertEqual(result["idrac"]["password"], "bmc_secret")
         self.assertIn("switch", result)
         self.assertEqual(result["switch"]["password"], "cisco_secret")
+
+    def test_web_init_container_path_aliases_load_nested_secret_files(self):
+        """Web Init must translate host paths inside device_credentials TOML."""
+        from freq.modules.init_cmd import _load_device_credentials
+
+        cred_file = "/root/freq-init-inputs/device-credentials.run.toml"
+        cred_alias = "/freq-init-inputs/device-credentials.run.toml"
+        switch_pass = "/root/freq-init-inputs/switch-password"
+        switch_pass_alias = "/freq-init-inputs/switch-password"
+        host_key = "/home/freq-ops/.ssh/fleet_key"
+        container_key = "/home/freq/.ssh/fleet_key"
+        files = {
+            cred_alias: f"""
+[switch:cisco]
+user = "gigecolo"
+password_file = "{switch_pass}"
+
+[firewall:pfsense]
+user = "root"
+ssh_key_file = "{host_key}"
+""",
+            switch_pass_alias: "switch-secret\n",
+            container_key: "not-a-real-key\n",
+        }
+
+        def fake_isfile(path):
+            return path in files
+
+        def fake_open(path, *args, **kwargs):
+            if path not in files:
+                raise FileNotFoundError(path)
+            return unittest.mock.mock_open(read_data=files[path]).return_value
+
+        with patch.dict(os.environ, {"FREQ_WEB_INIT": "1"}), \
+             patch("freq.modules.init_cmd.os.path.isfile", side_effect=fake_isfile), \
+             patch.object(builtins, "open", side_effect=fake_open), \
+             patch("freq.modules.init_cmd.fmt"):
+            result = _load_device_credentials(cred_file)
+
+        self.assertEqual(result["switch"]["password"], "switch-secret")
+        self.assertEqual(result["pfsense"]["key_path"], container_key)
 
 
 class TestHeadlessFleetDeployUsesDeviceCreds(unittest.TestCase):

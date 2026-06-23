@@ -1103,6 +1103,25 @@ def _run_with_input(cmd, input_text, timeout=DEFAULT_CMD_TIMEOUT):
     return _run_bounded(cmd, timeout=timeout, input_text=input_text)
 
 
+def _resolve_web_init_input_path(path):
+    """Translate host-authored Web Init paths to paths visible in the container."""
+    raw = os.path.expanduser(str(path or "").strip())
+    if not raw:
+        return ""
+    candidates = [raw]
+    if os.environ.get("FREQ_WEB_INIT"):
+        input_prefix = "/root/freq-init-inputs/"
+        if raw.startswith(input_prefix):
+            candidates.append(os.path.join("/freq-init-inputs", raw[len(input_prefix):]))
+        ssh_prefix = "/home/freq-ops/.ssh/"
+        if raw.startswith(ssh_prefix):
+            candidates.append(os.path.join("/home/freq/.ssh", raw[len(ssh_prefix):]))
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return raw
+
+
 def _load_device_credentials(cred_file):
     """Load per-device-type credentials from a TOML file.
 
@@ -1123,6 +1142,7 @@ def _load_device_credentials(cred_file):
     from freq.deployers import HTYPE_COMPAT
 
     result = {}
+    cred_file = _resolve_web_init_input_path(cred_file)
     if not isinstance(cred_file, (str, bytes, os.PathLike)) or not cred_file or not os.path.isfile(cred_file):
         return result
 
@@ -1178,16 +1198,18 @@ def _load_device_credentials(cred_file):
         Accepts both 'user' and 'username' as key for the account name.
         """
         user = entry.get("user") or entry.get("username") or "root"
-        pw_file = entry.get("password_file", "")
+        pw_file = _resolve_web_init_input_path(entry.get("password_file", ""))
         inline_pw = entry.get("password", "")
-        key_file = entry.get("ssh_key_file", "") or entry.get("key_file", "") or entry.get("key_path", "")
+        key_file = _resolve_web_init_input_path(
+            entry.get("ssh_key_file", "") or entry.get("key_file", "") or entry.get("key_path", "")
+        )
         explicit_label = str(entry.get("label", "") or "").strip()
         explicit_groups = str(entry.get("groups", "") or "").strip()
         explicit_scope = str(entry.get("scope", "") or "").strip().lower()
         host = str(entry.get("host", "") or "").strip()
         url = str(entry.get("url", "") or "").strip()
         hosts_value = entry.get("hosts", [])
-        api_key_file = entry.get("api_key_file", "") or entry.get("api_key_path", "")
+        api_key_file = _resolve_web_init_input_path(entry.get("api_key_file", "") or entry.get("api_key_path", ""))
         inline_api_key = entry.get("api_key", "")
         api_key = _read_secret_file(api_key_file, f"{label} api_key") if api_key_file else inline_api_key
 
