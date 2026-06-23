@@ -1476,6 +1476,21 @@ class TestUninstallSSH(unittest.TestCase):
         self.assertIn("svc-test@10.0.0.10", cmd)
         self.assertIn("KexAlgorithms=+diffie-hellman-group1-sha1", cmd)
 
+    @patch("freq.modules.init_cmd.os.path.isfile", return_value=True)
+    @patch("freq.modules.init_cmd._run")
+    def test_uninstall_auth_ssh_accepts_call_time_extra_opts(self, mock_run, _mock_isfile):
+        from freq.modules.init_cmd import _uninstall_auth_ssh
+
+        mock_run.return_value = (0, "OK\n", "")
+        ssh = _uninstall_auth_ssh("10.0.0.10", "freq-ops", auth_key="/tmp/bootstrap")
+        ssh("racadm getsysinfo", extra_opts=["-o", "KexAlgorithms=+diffie-hellman-group1-sha1"])
+
+        cmd = mock_run.call_args.args[0]
+        self.assertIn("-i", cmd)
+        self.assertIn("/tmp/bootstrap", cmd)
+        self.assertIn("freq-ops@10.0.0.10", cmd)
+        self.assertIn("KexAlgorithms=+diffie-hellman-group1-sha1", cmd)
+
 
 class TestPveUninstall(unittest.TestCase):
     """PVE uninstall must remove cluster auth, not just the Linux user."""
@@ -1500,6 +1515,61 @@ class TestPveUninstall(unittest.TestCase):
         self.assertIn("freq-agent.service", cleanup_cmd)
         self.assertIn("/opt/freq-agent", cleanup_cmd)
         self.assertIn("userdel -r freq-admin", cleanup_cmd)
+        self.assertLess(
+            cleanup_cmd.index("echo PVE_REMOVE_OK"),
+            cleanup_cmd.index("userdel -r freq-admin"),
+            "PVE uninstall must emit success before scheduling self-deletion",
+        )
+
+    @patch("freq.modules.init_cmd._remove_pve_with_auth")
+    @patch("freq.modules.init_cmd._remove_pve")
+    def test_dispatch_falls_back_to_bootstrap_auth_when_service_account_fails(
+        self,
+        mock_remove_pve,
+        mock_remove_pve_with_auth,
+    ):
+        from freq.modules.init_cmd import _remove_from_host_dispatch
+
+        mock_remove_pve.return_value = (False, "Permission denied (publickey)")
+        mock_remove_pve_with_auth.return_value = (True, "not_found")
+
+        ok, reason = _remove_from_host_dispatch(
+            "10.25.255.26",
+            "pve",
+            "freq-admin",
+            "/tmp/freq_id_ed25519",
+            "/tmp/freq_id_rsa",
+            bootstrap_auth={"user": "freq-ops", "key_path": "/tmp/bootstrap", "password": ""},
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "not_found")
+        mock_remove_pve_with_auth.assert_called_once_with(
+            "10.25.255.26",
+            "freq-admin",
+            {"user": "freq-ops", "key_path": "/tmp/bootstrap", "password": ""},
+        )
+
+    @patch("freq.modules.init_cmd._uninstall_auth_ssh")
+    def test_linux_bootstrap_cleanup_treats_missing_account_as_clean(self, mock_auth_ssh):
+        from freq.modules.init_cmd import _remove_unix_with_auth
+
+        ssh = MagicMock(side_effect=[
+            (0, "OK\n", ""),
+            (0, "NOT_FOUND\n", ""),
+        ])
+        mock_auth_ssh.return_value = ssh
+
+        ok, reason = _remove_unix_with_auth(
+            "10.25.255.55",
+            "freq-admin",
+            {"user": "freq-ops", "key_path": "/tmp/bootstrap", "password": ""},
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "not_found")
+        cleanup_cmd = ssh.call_args_list[1].args[0]
+        self.assertIn("sudo -n sh -lc", cleanup_cmd)
 
 
 class TestUninstallTargetMap(unittest.TestCase):

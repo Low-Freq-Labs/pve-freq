@@ -7289,7 +7289,7 @@ def _uninstall_ssh(ip, svc_name, key_path, extra_opts=None):
 def _uninstall_auth_ssh(ip, auth_user, auth_key="", auth_pass="", extra_opts=None):
     """Build an SSH runner for uninstall using bootstrap/admin auth."""
 
-    def _ssh(cmd, timeout=DEFAULT_CMD_TIMEOUT):
+    def _ssh(cmd, extra_opts=extra_opts, timeout=DEFAULT_CMD_TIMEOUT):
         ssh_cmd = [
             "ssh",
             "-n",
@@ -7308,6 +7308,115 @@ def _uninstall_auth_ssh(ip, auth_user, auth_key="", auth_pass="", extra_opts=Non
         return _run(ssh_cmd, timeout=timeout)
 
     return _ssh
+
+
+def _uninstall_bootstrap_auth(args):
+    """Return bootstrap/admin auth usable for uninstall fallback cleanup."""
+    if not args:
+        return {}
+    bootstrap_key = getattr(args, "bootstrap_key", "") or ""
+    bootstrap_user = getattr(args, "bootstrap_user", "root") or "root"
+    bootstrap_password_file = getattr(args, "bootstrap_password_file", None)
+    bootstrap_pass = ""
+    if bootstrap_password_file and os.path.isfile(bootstrap_password_file):
+        with open(bootstrap_password_file) as f:
+            bootstrap_pass = f.read().strip()
+    if not bootstrap_key and not bootstrap_pass:
+        return {}
+    return {
+        "user": bootstrap_user,
+        "password": bootstrap_pass,
+        "key_path": bootstrap_key,
+    }
+
+
+def _has_uninstall_auth(auth):
+    return bool(auth and (auth.get("key_path") or auth.get("password")))
+
+
+def _sudo_shell(script):
+    """Wrap cleanup script so root and NOPASSWD-sudo bootstrap users both work."""
+    quoted = shlex.quote(script)
+    return (
+        "sh -lc "
+        + shlex.quote(
+            f"if [ \"$(id -u)\" = 0 ]; then sh -lc {quoted}; "
+            f"elif command -v sudo >/dev/null 2>&1; then sudo -n sh -lc {quoted}; "
+            "else exit 126; fi"
+        )
+    )
+
+
+def _remove_unix_with_auth(ip, svc_name, auth, htype="linux"):
+    """Remove service account from Linux/Unix-family hosts via bootstrap auth."""
+    if not _has_uninstall_auth(auth):
+        return False, "no bootstrap auth available"
+    _ssh = _uninstall_auth_ssh(
+        ip,
+        auth.get("user", "root") or "root",
+        auth_key=auth.get("key_path", "") or "",
+        auth_pass=auth.get("password", "") or "",
+        extra_opts=PLATFORM_SSH.get(htype, {}).get("extra_opts", []),
+    )
+    rc, out, err = _ssh("echo OK")
+    if rc != 0:
+        return False, err or out
+
+    quoted_user = shlex.quote(svc_name)
+    script = f"""
+set -u
+svc={quoted_user}
+removed=0
+systemctl disable --now freq-agent.service >/dev/null 2>&1 || true
+rm -f /etc/systemd/system/freq-agent.service /etc/sudoers.d/freq-$svc /usr/local/etc/sudoers.d/freq-$svc 2>/dev/null || true
+rm -rf {shlex.quote(AGENT_REMOTE_DIR)} 2>/dev/null || true
+gpasswd -d "$svc" docker >/dev/null 2>&1 || true
+if command -v midclt >/dev/null 2>&1; then
+  python3 - "$svc" <<'PY'
+import json, subprocess, sys
+svc = sys.argv[1]
+q = subprocess.run(["midclt", "call", "user.query", json.dumps([["username", "=", svc]])], capture_output=True, text=True, timeout=30)
+if q.returncode != 0:
+    print("REMOVE_FAIL: " + (q.stderr or q.stdout)[:160])
+    sys.exit(2)
+users = json.loads(q.stdout or "[]")
+if users:
+    d = subprocess.run(["midclt", "call", "user.delete", str(users[0]["id"]), json.dumps({{"delete_group": True}})], capture_output=True, text=True, timeout=30)
+    if d.returncode != 0:
+        print("REMOVE_FAIL: " + (d.stderr or d.stdout)[:160])
+        sys.exit(3)
+    print("ACCOUNT_REMOVED")
+else:
+    print("NOT_FOUND")
+PY
+  exit $?
+fi
+if command -v pw >/dev/null 2>&1; then
+  if pw usershow "$svc" >/dev/null 2>&1; then
+    pkill -u "$svc" >/dev/null 2>&1 || true
+    pw userdel "$svc" -r >/dev/null 2>&1 || pw userdel "$svc" >/dev/null 2>&1 || exit 4
+    echo ACCOUNT_REMOVED
+  else
+    echo NOT_FOUND
+  fi
+  exit 0
+fi
+if id "$svc" >/dev/null 2>&1; then
+  pkill -u "$svc" >/dev/null 2>&1 || true
+  userdel -r "$svc" >/dev/null 2>&1 || userdel "$svc" >/dev/null 2>&1 || exit 5
+  echo ACCOUNT_REMOVED
+else
+  echo NOT_FOUND
+fi
+"""
+    rc, out, err = _ssh(_sudo_shell(script), timeout=DEFAULT_CMD_TIMEOUT)
+    if rc != 0:
+        return False, (err or out or "bootstrap cleanup failed").strip()
+    if "NOT_FOUND" in (out or ""):
+        return True, "not_found"
+    if "ACCOUNT_REMOVED" in (out or ""):
+        return True, ""
+    return False, (err or out or "unknown bootstrap cleanup failure").strip()
 
 
 def _remove_linux(ip, svc_name, key_path):
@@ -7370,18 +7479,57 @@ def _remove_pve(ip, svc_name, key_path):
             f"pveum user token remove {quoted_pve_user} {quoted_token} >/dev/null 2>&1 || true; "
             f"pveum user delete {quoted_pve_user} >/dev/null 2>&1 || true; "
             f"rm -f /etc/sudoers.d/freq-{quoted_user}; "
-            f"rm -rf {AGENT_REMOTE_DIR}; "
             f"systemctl disable --now freq-agent.service >/dev/null 2>&1 || true; "
             f"rm -f /etc/systemd/system/freq-agent.service; "
-            f"pkill -u {quoted_user} >/dev/null 2>&1 || true; "
-            f"userdel -r {quoted_user} >/dev/null 2>&1 || userdel {quoted_user} >/dev/null 2>&1 || true; "
-            "echo PVE_REMOVE_OK"
+            f"rm -rf {AGENT_REMOTE_DIR}; "
+            "echo PVE_REMOVE_OK; "
+            f"nohup sh -lc 'sleep 1; pkill -u {quoted_user} >/dev/null 2>&1 || true; "
+            f"userdel -r {quoted_user} >/dev/null 2>&1 || userdel {quoted_user} >/dev/null 2>&1 || true' "
+            ">/dev/null 2>&1 &"
         )
     )
     rc, out, err = _ssh(cleanup, timeout=QUICK_CHECK_TIMEOUT)
     if rc != 0 or "PVE_REMOVE_OK" not in (out or ""):
         return False, (err or out or "PVE cleanup failed").strip()
     return True, ""
+
+
+def _remove_pve_with_auth(ip, svc_name, auth):
+    """Remove service account from a PVE node via bootstrap auth."""
+    if not _has_uninstall_auth(auth):
+        return False, "no bootstrap auth available"
+    _ssh = _uninstall_auth_ssh(
+        ip,
+        auth.get("user", "root") or "root",
+        auth_key=auth.get("key_path", "") or "",
+        auth_pass=auth.get("password", "") or "",
+    )
+    rc, out, err = _ssh("echo OK")
+    if rc != 0:
+        return False, err or out
+
+    pve_user = f"{svc_name}@pam"
+    quoted_user = shlex.quote(svc_name)
+    quoted_pve_user = shlex.quote(pve_user)
+    script = (
+        f"pveum user token remove {quoted_pve_user} freq-rw >/dev/null 2>&1 || true; "
+        f"pveum user delete {quoted_pve_user} >/dev/null 2>&1 || true; "
+        f"systemctl disable --now freq-agent.service >/dev/null 2>&1 || true; "
+        f"rm -f /etc/systemd/system/freq-agent.service /etc/sudoers.d/freq-{quoted_user}; "
+        f"rm -rf {shlex.quote(AGENT_REMOTE_DIR)}; "
+        f"if id {quoted_user} >/dev/null 2>&1; then "
+        f"pkill -u {quoted_user} >/dev/null 2>&1 || true; "
+        f"userdel -r {quoted_user} >/dev/null 2>&1 || userdel {quoted_user} >/dev/null 2>&1 || exit 5; "
+        "echo ACCOUNT_REMOVED; else echo NOT_FOUND; fi"
+    )
+    rc, out, err = _ssh(_sudo_shell(script), timeout=DEFAULT_CMD_TIMEOUT)
+    if rc != 0:
+        return False, (err or out or "PVE bootstrap cleanup failed").strip()
+    if "NOT_FOUND" in (out or ""):
+        return True, "not_found"
+    if "ACCOUNT_REMOVED" in (out or ""):
+        return True, ""
+    return False, (err or out or "unknown PVE bootstrap cleanup failure").strip()
 
 
 def _remove_pfsense(ip, svc_name, key_path, admin_auth=None):
@@ -7492,6 +7640,44 @@ def _remove_idrac(ip, svc_name, key_path):
     return True, ""
 
 
+def _remove_idrac_with_auth(ip, svc_name, auth):
+    """Remove FREQ service account from iDRAC via bootstrap/admin auth."""
+    if not _has_uninstall_auth(auth):
+        return False, "no bootstrap auth available"
+    extra_opts = PLATFORM_SSH.get("idrac", {}).get("extra_opts", [])
+    _ssh = _uninstall_auth_ssh(
+        ip,
+        auth.get("user", "root") or "root",
+        auth_key=auth.get("key_path", "") or "",
+        auth_pass=auth.get("password", "") or "",
+        extra_opts=extra_opts,
+    )
+    rc, out, err = _ssh("racadm getsysinfo", timeout=IDRAC_VERIFY_TIMEOUT)
+    if rc != 0:
+        return False, err or out
+
+    _, target_slot = _query_idrac_slots(_ssh, extra_opts, svc_name)
+    if not target_slot:
+        return True, "not_found"
+
+    for cmd, is_final in [
+        (f'racadm sshpkauth -i {target_slot} -k 1 -t ""', False),
+        (f'racadm set iDRAC.Users.{target_slot}.UserName ""', False),
+        (f"racadm set iDRAC.Users.{target_slot}.Enable 0", True),
+    ]:
+        ok_cmd, details = _run_idrac_command(_ssh, extra_opts, cmd, timeout=30)
+        if ok_cmd:
+            continue
+        if is_final and (
+            "timed out" in details.lower()
+            or "connection" in details.lower()
+            or not details.strip()
+        ):
+            break
+        return False, f"removal failed: {details.strip()[:80]}"
+    return True, ""
+
+
 def _remove_switch(ip, svc_name, key_path):
     """Remove FREQ service account from Cisco IOS switch.
 
@@ -7550,23 +7736,107 @@ def _remove_switch(ip, svc_name, key_path):
     return True, "key_only"
 
 
-def _remove_from_host_dispatch(ip, htype, svc_name, key_path, rsa_key_path, device_creds=None):
+def _remove_switch_with_auth(ip, svc_name, auth):
+    """Remove FREQ service account from Cisco IOS via bootstrap/admin auth."""
+    if not _has_uninstall_auth(auth):
+        return False, "no bootstrap auth available"
+    extra_opts = PLATFORM_SSH.get("switch", {}).get("extra_opts", [])
+    ssh_opts = [
+        "ssh",
+        "-T",
+        "-o",
+        "ConnectTimeout=5",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+    ]
+    key_path = auth.get("key_path", "") or ""
+    auth_pass = auth.get("password", "") or ""
+    if key_path and os.path.isfile(key_path):
+        ssh_opts.extend(["-i", key_path, "-o", "BatchMode=yes"])
+    else:
+        ssh_opts.extend(["-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "PubkeyAuthentication=no"])
+    if extra_opts:
+        ssh_opts.extend(extra_opts)
+    ssh_opts.append(f"{auth.get('user', 'root') or 'root'}@{ip}")
+
+    ios_cmds = [
+        "configure terminal",
+        f"no username {svc_name}",
+        "ip ssh pubkey-chain",
+        f"  no username {svc_name}",
+        "  exit",
+        "exit",
+        "write memory",
+    ]
+    ios_script = "\n".join(ios_cmds) + "\n"
+    if auth_pass:
+        rc, out, err = _ssh_with_pass(auth_pass, ssh_opts, timeout=SWITCH_CONFIG_TIMEOUT, input_text=ios_script)
+    else:
+        rc, out, err = _run_with_input(ssh_opts, ios_script, timeout=SWITCH_CONFIG_TIMEOUT)
+    combined = f"{out}\n{err}".lower()
+    if rc != 0 and "invalid input" not in combined:
+        return False, (err or out or "switch bootstrap cleanup failed").strip()
+    if "invalid input" in combined:
+        return False, (out or err or "switch rejected cleanup command").strip()[:120]
+    return True, ""
+
+
+def _remove_with_bootstrap_auth(ip, htype, svc_name, bootstrap_auth):
+    """Best-effort generated-account cleanup through bootstrap/admin auth."""
+    from freq.deployers import resolve_htype
+
+    category, vendor = resolve_htype(htype)
+    if htype == "pve":
+        return _remove_pve_with_auth(ip, svc_name, bootstrap_auth)
+    if category == "firewall" and vendor == "pfsense":
+        return _remove_pfsense(ip, svc_name, "", admin_auth=bootstrap_auth)
+    if category == "bmc" and vendor == "idrac":
+        return _remove_idrac_with_auth(ip, svc_name, bootstrap_auth)
+    if category == "switch" and vendor == "cisco":
+        return _remove_switch_with_auth(ip, svc_name, bootstrap_auth)
+    if category in {"server", "nas"} or htype in {"linux", "docker", "truenas"}:
+        return _remove_unix_with_auth(ip, svc_name, bootstrap_auth, htype=htype)
+    return False, f"no bootstrap remover for {htype} ({category}:{vendor})"
+
+
+def _remove_from_host_dispatch(
+    ip,
+    htype,
+    svc_name,
+    key_path,
+    rsa_key_path,
+    device_creds=None,
+    bootstrap_auth=None,
+):
     """Route to platform-specific remover. Returns (success, error_info)."""
     from freq.deployers import resolve_htype, get_deployer, RSA_REQUIRED_CATEGORIES
 
+    def _fallback(primary_error):
+        if not _has_uninstall_auth(bootstrap_auth):
+            return False, primary_error
+        ok, reason = _remove_with_bootstrap_auth(ip, htype, svc_name, bootstrap_auth)
+        if ok:
+            return ok, reason
+        return False, reason or primary_error
+
     if htype == "pve":
-        return _remove_pve(ip, svc_name, key_path)
+        ok, reason = _remove_pve(ip, svc_name, key_path)
+        return (ok, reason) if ok else _fallback(reason)
 
     category, vendor = resolve_htype(htype)
     if category == "firewall" and vendor == "pfsense":
         pf_creds = (device_creds or {}).get("pfsense", {})
-        return _remove_pfsense(ip, svc_name, key_path, admin_auth=pf_creds)
+        if not pf_creds and _has_uninstall_auth(bootstrap_auth):
+            pf_creds = bootstrap_auth
+        ok, reason = _remove_pfsense(ip, svc_name, key_path, admin_auth=pf_creds)
+        return (ok, reason) if ok else _fallback(reason)
     deployer = get_deployer(category, vendor)
     if deployer:
         use_key = rsa_key_path if category in RSA_REQUIRED_CATEGORIES else key_path
-        return deployer.remove(ip, svc_name, use_key, rsa_key_path=rsa_key_path)
+        ok, reason = deployer.remove(ip, svc_name, use_key, rsa_key_path=rsa_key_path)
+        return (ok, reason) if ok else _fallback(reason)
 
-    return False, f"no deployer for {htype} ({category}:{vendor})"
+    return _fallback(f"no deployer for {htype} ({category}:{vendor})")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -9034,20 +9304,9 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
     ok = fail = skip = manual = 0
     borrowed_key_dir = None
     device_creds = _load_device_credentials(getattr(args, "device_credentials", None)) if args else {}
-    if "pfsense" not in device_creds and args:
-        bootstrap_key = getattr(args, "bootstrap_key", "") or ""
-        bootstrap_user = getattr(args, "bootstrap_user", "root") or "root"
-        bootstrap_password_file = getattr(args, "bootstrap_password_file", None)
-        bootstrap_pass = ""
-        if bootstrap_password_file and os.path.isfile(bootstrap_password_file):
-            with open(bootstrap_password_file) as f:
-                bootstrap_pass = f.read().strip()
-        if bootstrap_key or bootstrap_pass:
-            device_creds["pfsense"] = {
-                "user": bootstrap_user,
-                "password": bootstrap_pass,
-                "key_path": bootstrap_key,
-            }
+    bootstrap_auth = _uninstall_bootstrap_auth(args)
+    if "pfsense" not in device_creds and _has_uninstall_auth(bootstrap_auth):
+        device_creds["pfsense"] = bootstrap_auth
 
     # ── Phase 1: Remote host teardown ──
     if targets:
@@ -9107,6 +9366,7 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
                     ed_key,
                     rsa_key,
                     device_creds=device_creds,
+                    bootstrap_auth=bootstrap_auth,
                 )
 
                 if success:
