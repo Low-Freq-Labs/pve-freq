@@ -998,6 +998,92 @@ class TestHeadlessFleetDeployTruth(unittest.TestCase):
         self.assertEqual(dispatch_args[3], "labpass")
         self.assertEqual(dispatch_args[5], "root")
 
+    @patch("freq.modules.init_cmd._persist_legacy_password_file")
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch", return_value=True)
+    @patch("freq.modules.init_cmd.fmt")
+    def test_legacy_devices_use_bootstrap_password_when_no_device_creds(
+        self, _mock_fmt, mock_dispatch, mock_persist
+    ):
+        from freq.modules.init_cmd import _headless_fleet_deploy
+
+        cfg = types.SimpleNamespace(
+            pve_nodes=[],
+            pve_node_names=[],
+            hosts=[
+                types.SimpleNamespace(ip="10.25.255.10", label="bmc-10", htype="idrac"),
+                types.SimpleNamespace(ip="10.25.255.5", label="switch", htype="switch"),
+            ],
+            ssh_service_account="freq-admin",
+        )
+        ctx = {"svc_name": "freq-admin", "svc_pass": "SvcPass2026!"}
+
+        _headless_fleet_deploy(
+            cfg,
+            ctx,
+            bootstrap_key="",
+            bootstrap_user="freq-ops",
+            bootstrap_pass="BootstrapPass2026!",
+            device_creds={},
+            pve_only=False,
+        )
+
+        calls = [call.args for call in mock_dispatch.call_args_list]
+        self.assertEqual(len(calls), 2)
+        for args in calls:
+            self.assertEqual(args[3], "BootstrapPass2026!")
+            self.assertEqual(args[4], "")
+            self.assertEqual(args[5], "freq-ops")
+        mock_persist.assert_called_once_with(cfg, "freq-admin", "SvcPass2026!")
+
+    @patch("freq.modules.init_cmd._persist_legacy_password_file")
+    @patch("freq.modules.init_cmd._deploy_to_host_dispatch", return_value=True)
+    @patch("freq.modules.init_cmd._run", return_value=(0, "OK", ""))
+    @patch("freq.modules.init_cmd.fmt")
+    def test_legacy_password_not_persisted_when_only_linux_deployed(
+        self, _mock_fmt, _mock_run, _mock_dispatch, mock_persist
+    ):
+        from freq.modules.init_cmd import _headless_fleet_deploy
+
+        cfg = types.SimpleNamespace(
+            pve_nodes=[],
+            pve_node_names=[],
+            hosts=[types.SimpleNamespace(ip="10.25.255.40", label="pdm-manager", htype="linux")],
+            ssh_service_account="freq-admin",
+        )
+        ctx = {"svc_name": "freq-admin", "svc_pass": "SvcPass2026!"}
+
+        _headless_fleet_deploy(
+            cfg,
+            ctx,
+            bootstrap_key="",
+            bootstrap_user="freq-ops",
+            bootstrap_pass="BootstrapPass2026!",
+            device_creds={},
+            pve_only=False,
+        )
+
+        mock_persist.assert_not_called()
+
+    @patch("freq.modules.init_cmd._chown", return_value=True)
+    @patch("freq.modules.init_cmd.fmt")
+    def test_legacy_password_persist_uses_credentials_dir(self, _mock_fmt, _mock_chown):
+        from freq.modules.init_cmd import _persist_legacy_password_file
+
+        with tempfile.TemporaryDirectory() as td:
+            conf_dir = os.path.join(td, "conf")
+            os.makedirs(conf_dir)
+            Path(conf_dir, "freq.toml").write_text("[ssh]\nlegacy_password_file = \"\"\n")
+            cfg = types.SimpleNamespace(conf_dir=conf_dir, credentials_dir=os.path.join(td, "credentials"))
+
+            _persist_legacy_password_file(cfg, "freq-admin", "SvcPass2026!")
+
+            self.assertEqual(
+                cfg.legacy_password_file,
+                os.path.join(td, "credentials", "freq-admin-legacy-device-pass"),
+            )
+            self.assertEqual(Path(cfg.legacy_password_file).read_text(), "SvcPass2026!")
+            self.assertIn(cfg.legacy_password_file, Path(conf_dir, "freq.toml").read_text())
+
 
 # ═══════════════════════════════════════════════════════════════════
 # _load_device_credentials() tests

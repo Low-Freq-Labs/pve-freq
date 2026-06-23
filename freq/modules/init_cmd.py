@@ -594,25 +594,15 @@ def _persist_legacy_password_file(cfg, svc_name, password):
     if not password:
         return
 
-    import pwd
-
+    cred_dir = _credentials_dir(cfg)
+    pass_path = os.path.join(cred_dir, f"{_safe_credential_name(svc_name)}-legacy-device-pass")
     try:
-        svc_home = pwd.getpwnam(svc_name).pw_dir
-    except KeyError:
-        fmt.step_fail(
-            f"Cannot persist legacy password file before service account '{svc_name}' exists"
-        )
-        return
-
-    pass_path = os.path.join(svc_home, ".ssh", "legacy-device-pass")
-    try:
-        os.makedirs(os.path.dirname(pass_path), mode=0o700, exist_ok=True)
+        os.makedirs(os.path.dirname(pass_path), mode=0o750, exist_ok=True)
         with open(pass_path, "w") as f:
             f.write(password)
-        os.chmod(pass_path, 0o600)
-        pw = pwd.getpwnam(svc_name)
-        os.chown(pass_path, pw.pw_uid, pw.pw_gid)
-        os.chown(os.path.dirname(pass_path), pw.pw_uid, pw.pw_gid)
+        os.chmod(pass_path, 0o640)
+        _chown(f"root:{svc_name}", pass_path)
+        _chown(f"root:{svc_name}", os.path.dirname(pass_path))
 
         cfg.legacy_password_file = pass_path
         toml_path = os.path.join(cfg.conf_dir, "freq.toml")
@@ -5396,7 +5386,8 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
     # as the password. The legacy_passwords set collected the OLD device auth
     # passwords used to connect for deploy — those don't belong to the service account.
     svc_pass_value = ctx.get("svc_pass", "")
-    if device_hosts and ok > 0 and svc_pass_value:
+    deployed_legacy_devices = any(h.ip in deployed_ips for h in device_hosts)
+    if deployed_legacy_devices and svc_pass_value:
         _persist_legacy_password_file(cfg, ctx["svc_name"], svc_pass_value)
 
     # Store deployed IPs for Phase 12 — deployed hosts MUST pass verification
@@ -10212,8 +10203,17 @@ def _headless_fleet_deploy(
                 auth_pass = device_pass
                 auth_key = ""
                 auth_user = device_user
+            elif bootstrap_key or bootstrap_pass:
+                # Web/headless init may use a bootstrap operator such as
+                # freq-ops for every in-band target, including legacy devices.
+                auth_user = bootstrap_user
+                auth_pass = "" if bootstrap_key else bootstrap_pass
+                auth_key = bootstrap_key or ""
             else:
-                fmt.step_warn(f"No device credentials for {htype} — skipping (provide --device-credentials)")
+                fmt.step_warn(
+                    f"No device credentials for {htype} — skipping "
+                    "(provide --device-credentials or bootstrap auth)"
+                )
                 skip += 1
                 continue
         elif htype == "pfsense":
@@ -10332,9 +10332,11 @@ def _headless_fleet_deploy(
     # to authenticate into the device for deploy — it's not the service account's
     # password. Using device_creds here breaks Phase 12 verification because
     # sshpass auth uses the wrong password.
-    has_devices = any(t["htype"] in ("idrac", "switch") for t in targets)
+    deployed_legacy_devices = any(
+        t["htype"] in ("idrac", "switch") and t["ip"] in deployed_ips for t in targets
+    )
     svc_pass_value = ctx.get("svc_pass", "")
-    if has_devices and ok > 0 and svc_pass_value:
+    if deployed_legacy_devices and svc_pass_value:
         _persist_legacy_password_file(
             cfg,
             ctx.get("svc_name", cfg.ssh_service_account if hasattr(cfg, "ssh_service_account") else "freq-admin"),
