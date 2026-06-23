@@ -12,7 +12,7 @@ LABEL org.opencontainers.image.source="https://github.com/Low-Freq-Labs/pve-freq
 # System deps — single layer, cleanup included
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        openssh-client sshpass curl jq sudo tini && \
+        openssh-client sshpass curl jq sudo tini iputils-ping && \
     rm -rf /var/lib/apt/lists/*
 
 # Generate machine-id (needed for vault key derivation)

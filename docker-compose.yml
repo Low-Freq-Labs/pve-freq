@@ -38,7 +38,7 @@ services:
     tmpfs:
       - /tmp
       - /run
-      - /home/freq
+      - /home/freq:uid=1000,gid=1000,mode=755
 
     # Resource limits (adjust to your needs)
     deploy:

@@ -21,6 +21,7 @@ def test_default_compose_allows_web_init_sudo_path():
 
     assert "no-new-privileges:true" not in compose
     assert "read_only: true" not in compose
+    assert "/home/freq:uid=1000,gid=1000,mode=755" in compose
 
 
 def test_docker_image_installs_sudo_for_web_init():
@@ -30,3 +31,10 @@ def test_docker_image_installs_sudo_for_web_init():
     assert " sudo " in dockerfile
     assert "/etc/sudoers.d/freq" in dockerfile
     assert "NOPASSWD:ALL" in dockerfile
+
+
+def test_docker_image_installs_ping_for_discovery():
+    """Zero-state discovery should not warn just because slim image lacks ping."""
+    dockerfile = Path("Dockerfile").read_text()
+
+    assert "iputils-ping" in dockerfile

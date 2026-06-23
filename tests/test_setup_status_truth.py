@@ -69,7 +69,7 @@ class TestSetupHealthSummary(unittest.TestCase):
     def test_configured_requires_key_and_hosts(self):
         """'configured' state must require readable key + hosts + nodes."""
         src = self._handler_src()
-        config_block_idx = src.index('"configured"')
+        config_block_idx = src.index('setup_health = "configured"')
         preceding = src[max(0, config_block_idx - 800):config_block_idx]
         self.assertIn("key_readable", preceding)
         self.assertIn("has_hosts", preceding)
@@ -77,7 +77,7 @@ class TestSetupHealthSummary(unittest.TestCase):
     def test_configured_requires_initialized_marker(self):
         """'configured' must require .initialized — partial init is NOT configured."""
         src = self._handler_src()
-        config_block_idx = src.index('"configured"')
+        config_block_idx = src.index('setup_health = "configured"')
         preceding = src[max(0, config_block_idx - 800):config_block_idx]
         self.assertIn("is_initialized", preceding,
                        "'configured' state must check .initialized marker")
@@ -115,6 +115,13 @@ class TestSetupHealthSummary(unittest.TestCase):
         src = self._handler_src()
         self.assertIn("web-setup-only", src,
                        "setup_health must include web-setup-only tier")
+
+    def test_running_init_is_not_reported_as_failed(self):
+        """A running Web Init job must not show stale init-failed blocker text."""
+        src = self._handler_src()
+        self.assertIn("init-running", src)
+        self.assertIn("_setup_init_snapshot", src)
+        self.assertIn("init_is_running", src)
 
     def test_failed_init_artifacts_are_not_reported_as_never_run(self):
         """Generated init artifacts must override the no-marker default reason."""

@@ -4141,12 +4141,21 @@ a:hover{{text-decoration:underline}}
         web_setup_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
         is_web_setup_complete = os.path.isfile(web_setup_marker)
 
-        # Honest health — four tiers:
+        running_job = None
+        try:
+            snap = _setup_init_snapshot()
+            running_job = snap.get("job") if snap else None
+        except Exception:
+            running_job = None
+        init_is_running = bool(running_job and running_job.get("state") == "running")
+
+        # Honest health — five tiers:
         # "configured" = freq init completed (.initialized) + config items
+        # "init-running" = web-launched init is still running
         # "web-setup-only" = web wizard done but freq init not yet run
         # "partial" = config items exist but neither marker
         # "unconfigured" = nothing configured yet
-        init_blocker = "" if is_initialized else _init_blocker_from_artifacts(cfg)
+        init_blocker = "" if is_initialized or init_is_running else _init_blocker_from_artifacts(cfg)
         missing = []
         if not is_initialized:
             missing.append(init_blocker or "freq init not yet run (no .initialized marker)")
@@ -4159,6 +4168,9 @@ a:hover{{text-decoration:underline}}
         if is_initialized and key_readable and has_hosts and has_nodes:
             setup_health = "configured"
             setup_reason = "freq init completed, key readable, hosts + nodes configured"
+        elif init_is_running:
+            setup_health = "init-running"
+            setup_reason = "freq init is running"
         elif init_blocker:
             setup_health = "init-failed"
             setup_reason = init_blocker

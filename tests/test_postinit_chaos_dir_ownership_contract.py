@@ -121,6 +121,26 @@ class TestEnsurePostInitDataOwnership(unittest.TestCase):
                 ok = init_cmd._ensure_post_init_data_ownership(cfg, "nosuchuser")
             self.assertFalse(ok)
 
+    def test_web_init_uses_sudo_user_as_runtime_owner(self):
+        """Docker Web Init must not chown persisted app state to the fleet account."""
+        from freq.modules import init_cmd
+        with tempfile.TemporaryDirectory() as td:
+            cfg = self._make_fake_cfg(td)
+            chown_targets = []
+
+            def fake_chown(owner, *paths, recursive=False):
+                chown_targets.append(owner)
+                return True
+
+            with mock.patch.dict(os.environ, {"FREQ_WEB_INIT": "1", "SUDO_USER": "freq"}), \
+                 mock.patch.object(init_cmd, "_chown", side_effect=fake_chown), \
+                 mock.patch("pwd.getpwnam", return_value=self._fake_pwnam()):
+                ok = init_cmd._ensure_post_init_data_ownership(cfg, "freq-admin")
+
+            self.assertTrue(ok)
+            self.assertIn("freq:freq", chown_targets)
+            self.assertNotIn("freq-admin:freq-admin", chown_targets)
+
     def test_python_fallback_when_chown_binary_fails(self):
         """If `chown -R` returns non-zero (missing binary, busybox
         edge cases), the helper falls back to a Python walk and
@@ -167,14 +187,14 @@ class TestInitCallSites(unittest.TestCase):
         idx = src.find("Fix post-init ownership")
         self.assertGreater(idx, 0, "interactive init post-init comment must exist")
         window = src[idx:idx + 1500]
-        self.assertIn("_ensure_post_init_data_ownership(cfg, svc_name)", window)
+        self.assertIn("_ensure_post_init_runtime_state_ownership(cfg, svc_name)", window)
 
     def test_headless_init_calls_helper(self):
         src = INIT_CMD_PY.read_text()
         idx = src.find("Post-init permissions")
         self.assertGreater(idx, 0, "headless init post-init comment must exist")
         window = src[idx:idx + 1500]
-        self.assertIn("_ensure_post_init_data_ownership(cfg, ctx[\"svc_name\"])", window)
+        self.assertIn("_ensure_post_init_runtime_state_ownership(cfg, ctx[\"svc_name\"])", window)
 
 
 class TestChaosLogStillHasDefensiveCatch(unittest.TestCase):

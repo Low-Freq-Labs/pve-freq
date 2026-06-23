@@ -695,8 +695,32 @@ POST_INIT_DATA_SUBDIRS = (
 )
 
 
+def _post_init_runtime_owner(svc_name):
+    """Return the local user that must own runtime state after init.
+
+    Bare-metal installs usually run the dashboard as the managed service
+    account. Docker Web Init is different: the dashboard runs as the image's
+    non-root runtime user, then sudo launches init as root to create the fleet
+    service account. In that path, persistent conf/data must remain readable by
+    the dashboard runtime user or the freshly-seeded vault becomes unusable.
+    """
+    if os.environ.get("FREQ_WEB_INIT") == "1":
+        sudo_user = os.environ.get("SUDO_USER", "").strip()
+        if sudo_user and sudo_user != "root":
+            return sudo_user
+        sudo_uid = os.environ.get("SUDO_UID", "").strip()
+        if sudo_uid:
+            try:
+                import pwd
+
+                return pwd.getpwuid(int(sudo_uid)).pw_name
+            except (KeyError, ValueError, OSError):
+                pass
+    return svc_name
+
+
 def _ensure_post_init_data_ownership(cfg, svc_name):
-    """Create + chown every post-init data/ subdir to {svc_name}:{svc_name}.
+    """Create + chown every post-init data/ subdir to the runtime owner.
 
     the fix Finn asked for.
 
@@ -709,18 +733,19 @@ def _ensure_post_init_data_ownership(cfg, svc_name):
     chaos, exist_ok=True)` it got PermissionError and T-6 of the red-team
     pass caught it with an empty-response fallback. That fallback is a
     safety net, not a fix. The fix is: during every init run, recursively
-    chown data/ to the current service account AND pre-create the known
+    chown data/ to the dashboard runtime owner AND pre-create the known
     post-init subdirs so first-use doesn't race with dir creation.
 
     This helper is idempotent — safe to call from both interactive and
     headless init paths multiple times.
     """
     import pwd
+    owner_name = _post_init_runtime_owner(svc_name)
     try:
-        pw = pwd.getpwnam(svc_name)
+        pw = pwd.getpwnam(owner_name)
     except KeyError:
         fmt.step_warn(
-            f"Post-init data ownership: user '{svc_name}' not found — skipping"
+            f"Post-init data ownership: user '{owner_name}' not found — skipping"
         )
         return False
 
@@ -747,12 +772,12 @@ def _ensure_post_init_data_ownership(cfg, svc_name):
         except OSError as e:
             logger.warn(f"post_init_subdir: cannot create {sub_path}: {e}")
 
-    # 3. Recursive chown of the whole data/ tree to svc_name:svc_name.
+    # 3. Recursive chown of the whole data/ tree to the runtime owner.
     #    Route through _chown() so return-code failures are tracked in the
     #    init summary instead of disappearing behind a bare subprocess call.
     #    Keep the Python walk fallback for hosts where recursive chown is not
     #    available or fails part-way through a mixed-permission tree.
-    if not _chown(f"{svc_name}:{svc_name}", data_dir, recursive=True):
+    if not _chown(f"{owner_name}:{owner_name}", data_dir, recursive=True):
         logger.warn(f"post_init_chown_R failed for {data_dir} — using Python fallback")
         # Python fallback — walk the tree ourselves.
         try:
@@ -768,10 +793,21 @@ def _ensure_post_init_data_ownership(cfg, svc_name):
             return False
 
     fmt.step_ok(
-        f"Post-init data ownership: {data_dir} tree owned by {svc_name} "
+        f"Post-init data ownership: {data_dir} tree owned by {owner_name} "
         f"({len(POST_INIT_DATA_SUBDIRS)} subdirs pre-created)"
     )
     return True
+
+
+def _ensure_post_init_runtime_state_ownership(cfg, svc_name):
+    """Keep persistent runtime state owned by the process that serves FREQ."""
+    owner_name = _post_init_runtime_owner(svc_name)
+    ok = _ensure_post_init_data_ownership(cfg, svc_name)
+    for d in [cfg.key_dir, cfg.vault_file, cfg.log_dir, cfg.conf_dir]:
+        d_path = d if os.path.isdir(d) else os.path.dirname(d)
+        if d_path and os.path.exists(d_path):
+            ok = _chown(f"{owner_name}:{owner_name}", d_path, recursive=True) and ok
+    return ok
 
 
 def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
@@ -1561,13 +1597,14 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     # correct ownership. Prevents first-runtime-caller PermissionError on
     # data/chaos and any other canonical subdir the dashboard writes into.
     svc_name = ctx["svc_name"]
-    _ensure_post_init_data_ownership(cfg, svc_name)
+    runtime_owner = _post_init_runtime_owner(svc_name)
+    _ensure_post_init_runtime_state_ownership(cfg, svc_name)
     # Keep the other canonical paths (keys, vault, log, conf) chowned too —
     # these may live outside data_dir on some install layouts.
     for d in [cfg.key_dir, cfg.vault_file, cfg.log_dir, cfg.conf_dir]:
         d_path = d if os.path.isdir(d) else os.path.dirname(d)
         if d_path and os.path.exists(d_path):
-            _chown(f"{svc_name}:{svc_name}", d_path, recursive=True)
+            _chown(f"{runtime_owner}:{runtime_owner}", d_path, recursive=True)
     # Make log/ and cache/ world-readable so operator commands don't warn.
     # Keep keys/ and vault/ at 700 (service-account only — security-sensitive).
     for d in [cfg.log_dir, os.path.join(cfg.data_dir, "cache")]:
@@ -9501,7 +9538,7 @@ def _init_headless(cfg, args):
     # from the dashboard service account failed with PermissionError.
     # Run the same helper the interactive path uses so both flows
     # pre-create + chown every canonical post-init subdir.
-    _ensure_post_init_data_ownership(cfg, ctx["svc_name"])
+    _ensure_post_init_runtime_state_ownership(cfg, ctx["svc_name"])
 
     # Config files must not be world-writable (init runs as root, umask may be 000)
     if cfg.conf_dir and os.path.exists(cfg.conf_dir):
