@@ -408,6 +408,34 @@ class TestPureNothingInitContract(unittest.TestCase):
         self.assertIn('f"Metrics agents responding: {agent_ok}/{len(agent_hosts)}"', block)
         self.assertNotIn("test_host = linux_hosts[0]", block)
 
+    def test_reconcile_existing_hosts_demotes_operator_and_ooc_hosts(self):
+        from freq.modules.init_cmd import _reconcile_existing_managed_hosts
+
+        hosts = [
+            types.SimpleNamespace(label="pve-freq", ip="10.25.255.50", htype="pve", vmid=100, managed=True, all_ips=["10.25.255.50"]),
+            types.SimpleNamespace(label="blue", ip="10.25.255.75", htype="linux", vmid=0, managed=True, all_ips=["10.25.255.75"]),
+            types.SimpleNamespace(label="plex", ip="10.25.255.30", htype="docker", vmid=201, managed=True, all_ips=["10.25.255.30"]),
+        ]
+        cfg = types.SimpleNamespace(
+            hosts=hosts,
+            hosts_file="/tmp/hosts.toml",
+            pve_nodes=["10.25.255.26"],
+            _owned_vmids={100, 201},
+            _acknowledged_out_of_contract_vmids={802},
+        )
+        ctx = {
+            "ip_vmid_map": {"10.25.255.75": 802},
+            "label_vmid_map": {"blue": 802},
+        }
+        with patch("freq.core.config.save_hosts_toml") as mock_save:
+            changed = _reconcile_existing_managed_hosts(cfg, ctx)
+
+        self.assertEqual(len(changed), 2)
+        self.assertFalse(hosts[0].managed)
+        self.assertFalse(hosts[1].managed)
+        self.assertTrue(hosts[2].managed)
+        mock_save.assert_called_once()
+
     def test_truenas_not_generic_systemd_metrics_agent_target(self):
         from freq.modules.init_cmd import _metrics_agent_hosts, _non_systemd_metrics_hosts
 

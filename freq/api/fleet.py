@@ -853,9 +853,11 @@ def handle_deploy_agent(handler):
 
         # Step 5: Verify
         time.sleep(1)
+        from freq.modules.agent_health import remote_agent_health_command
+
         r = ssh_single(
             host=h.ip,
-            command=f"curl -s http://localhost:{agent_port}/health 2>/dev/null",
+            command=remote_agent_health_command(agent_port),
             key_path=cfg.ssh_key_path,
             connect_timeout=3,
             command_timeout=5,

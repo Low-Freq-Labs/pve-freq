@@ -126,7 +126,7 @@ IDRAC_PASSWORD_MAX_LEN = 20
 # IOS SSH key line width (PEM line wrapping limit)
 IOS_KEY_LINE_WIDTH = 72
 
-_OPERATOR_AUTO_EXCLUDE_LABELS = {"nexus"}
+_OPERATOR_AUTO_EXCLUDE_LABELS = {"nexus", "pve-freq"}
 
 # Agent deployment — single source of truth for remote path
 AGENT_REMOTE_PATH = "/opt/freq-agent/collector.py"
@@ -4249,6 +4249,52 @@ def _is_managed_auto_host(label, htype, vmid=0, source=""):
     return False
 
 
+def _resolve_existing_host_vmid(ctx, host):
+    """Resolve a stale host row to a PVE VMID using current discovery maps."""
+    direct = int(getattr(host, "vmid", 0) or 0)
+    if direct:
+        return direct
+    ip_vmid_map = ctx.get("ip_vmid_map", {}) or {}
+    for ip in [getattr(host, "ip", "")] + list(getattr(host, "all_ips", []) or []):
+        vmid = int(ip_vmid_map.get(ip, 0) or 0)
+        if vmid:
+            return vmid
+    label_map = ctx.get("label_vmid_map", {}) or {}
+    return int(label_map.get(_label_key(getattr(host, "label", "")), 0) or 0)
+
+
+def _reconcile_existing_managed_hosts(cfg, ctx):
+    """Downgrade stale auto-managed hosts that the current contract excludes."""
+    from freq.core.config import save_hosts_toml
+
+    owned_vmids = set(getattr(cfg, "_owned_vmids", set()) or set())
+    acknowledged = set(getattr(cfg, "_acknowledged_out_of_contract_vmids", set()) or set())
+    changed = []
+    for h in getattr(cfg, "hosts", []) or []:
+        if not getattr(h, "managed", True):
+            continue
+        label = getattr(h, "label", "")
+        vmid = _resolve_existing_host_vmid(ctx, h)
+        reason = ""
+        if _is_operator_auto_excluded(label):
+            reason = "operator/product host"
+        elif vmid and vmid in acknowledged:
+            reason = f"acknowledged out-of-contract VMID {vmid}"
+        elif owned_vmids and vmid and vmid not in owned_vmids:
+            reason = f"outside owned VM contract (VMID {vmid})"
+        elif getattr(h, "htype", "") == "pve" and vmid and getattr(h, "ip", "") not in set(getattr(cfg, "pve_nodes", []) or []):
+            reason = f"PVE-looking guest VMID {vmid}, not a configured PVE node"
+        if reason:
+            h.managed = False
+            changed.append(f"{label} ({getattr(h, 'ip', '')}) — {reason}")
+    if changed:
+        save_hosts_toml(cfg.hosts_file, cfg.hosts)
+        fmt.step_ok(f"Reconciled {len(changed)} stale managed host(s) to inventory-only")
+        for item in changed[:8]:
+            fmt.line(f"    {fmt.C.DIM}- {item}{fmt.C.RESET}")
+    return changed
+
+
 def _phase_fleet_discover(cfg, ctx, args=None):
     """Discover all fleet hosts via PVE API + multi-VLAN sweep.
 
@@ -4293,6 +4339,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     discovered = {}
     vmid_node_map = ctx.setdefault("vmid_node_map", {})
     ip_vmid_map = ctx.setdefault("ip_vmid_map", {})
+    label_vmid_map = ctx.setdefault("label_vmid_map", {})
     existing_hosts = list(cfg.hosts)
     seen_existing = {h.ip for h in existing_hosts}
     for h in scoped_hosts:
@@ -4363,6 +4410,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
 
             if not name or vmid < 100:
                 continue
+            label_vmid_map[_label_key(name)] = vmid
 
             # Find PVE node IP for this VM
             node_ip = None
@@ -4457,6 +4505,7 @@ def _phase_fleet_discover(cfg, ctx, args=None):
                     safe_label = sanitize_label(name)
                 except ImportError:
                     safe_label = name.lower().replace(" ", "-")
+                label_vmid_map[_label_key(safe_label)] = vmid
                 managed = _is_managed_auto_host(safe_label, htype, vmid=vmid, source="pve-api")
                 discovered[chosen_ip] = {
                     "label": safe_label,
@@ -4927,6 +4976,8 @@ def _phase_fleet_discover(cfg, ctx, args=None):
     fmt.blank()
     fmt.line(f"  {fmt.C.BOLD}Step 4: Fleet Registration{fmt.C.RESET}")
     fmt.blank()
+
+    _reconcile_existing_managed_hosts(cfg, ctx)
 
     if not discovered:
         fmt.line(f"  {fmt.C.DIM}No new hosts discovered.{fmt.C.RESET}")
@@ -8451,11 +8502,15 @@ def _phase_verify(cfg, ctx):
         agent_ok = 0
         agent_fail = 0
         failed_agents = []
+        from freq.modules.agent_health import remote_agent_health_command
+
+        health_cmd = remote_agent_health_command(agent_port)
         for h in agent_hosts:
             rc_agent, out_agent, err_agent = _run(
                 ["ssh", "-n", "-o", "ConnectTimeout=3", "-o", "BatchMode=yes",
+                 "-o", "StrictHostKeyChecking=accept-new",
                  "-i", key_file, f"{svc_name}@{h.ip}",
-                 f"curl -s http://localhost:{agent_port}/health 2>/dev/null"],
+                 health_cmd],
                 timeout=QUICK_CHECK_TIMEOUT,
             )
             if rc_agent == 0 and "ok" in out_agent.lower():

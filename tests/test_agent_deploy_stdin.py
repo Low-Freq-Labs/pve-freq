@@ -62,5 +62,30 @@ class TestAgentCollectorExists(unittest.TestCase):
         self.assertIn("/health", src)
 
 
+class TestAgentHealthCheckCommand(unittest.TestCase):
+    """Agent health verification must not require curl on target hosts."""
+
+    def test_remote_health_command_has_python_fallback(self):
+        from freq.modules.agent_health import remote_agent_health_command
+
+        cmd = remote_agent_health_command(9990)
+        self.assertIn("command -v curl", cmd)
+        self.assertIn("command -v python3", cmd)
+        self.assertIn("urllib.request", cmd)
+        self.assertIn("command -v wget", cmd)
+        self.assertIn("FREQ_AGENT_HEALTH_CHECK_NO_CLIENT", cmd)
+
+    def test_init_verification_uses_shared_agent_health_command(self):
+        src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
+        block = src.split("# Metrics agent verification for every generic systemd agent host.")[1].split("# Dashboard readiness")[0]
+        self.assertIn("remote_agent_health_command(agent_port)", block)
+        self.assertIn("StrictHostKeyChecking=accept-new", block)
+        self.assertNotIn("curl -s http://localhost:{agent_port}/health", block)
+
+    def test_api_deploy_agent_uses_shared_agent_health_command(self):
+        src = (FREQ_ROOT / "freq" / "api" / "fleet.py").read_text()
+        self.assertIn("remote_agent_health_command(agent_port)", src)
+
+
 if __name__ == "__main__":
     unittest.main()

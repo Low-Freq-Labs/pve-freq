@@ -481,6 +481,7 @@ class TestFleetInventoryContracts(unittest.TestCase):
         self.assertTrue(_is_managed_auto_host("bmc-10", "idrac"))
         self.assertTrue(_is_managed_auto_host("pdm-manager", "linux", vmid=101, source="pve-api"))
         self.assertFalse(_is_managed_auto_host("jarvis-ai", "linux", vmid=666))
+        self.assertFalse(_is_managed_auto_host("pve-freq", "pve", vmid=100, source="pve-api"))
         self.assertFalse(_is_managed_auto_host("blue", "linux", vmid=802))
         self.assertFalse(_is_managed_auto_host("freq-test", "linux", vmid=5005))
         self.assertFalse(_is_managed_auto_host("lab-pve1", "pve", vmid=5002, source="pve-api"))
