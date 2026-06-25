@@ -1166,6 +1166,7 @@ function _showApp(){
        * it to s-live, onerror to s-cached/s-dead. */
       _renderStreamStatus('cached');
       try{startSSE();}catch(e){console.error('startSSE failed:',e);}
+      try{startWatchdogHeaderRefresh();}catch(e){console.error('startWatchdogHeaderRefresh failed:',e);}
       /* Post-auth operator-truth check: cache setup/status so a
        * persistent banner can surface "setup incomplete" even after
        * a successful login. */
@@ -2401,6 +2402,7 @@ function switchView(view, skipPush){
   /* Update header subtitle — deterministic per-view label from _viewLabels */
   var tl=document.getElementById('header-tagline');
   if(tl)tl.textContent=rt(navGroup);
+  refreshWatchdogHeader();
   /* Make sure we're on p-home */
   document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active')});
   document.getElementById('p-home').classList.add('active');
@@ -2410,7 +2412,13 @@ function switchView(view, skipPush){
   _safe(VIEW_LOADERS[view]||loadHome);
 }
 var showView=switchView;
-function refreshCurrentView(){_safe(VIEW_LOADERS[_currentView]||loadHome);}
+function refreshCurrentView(){refreshWatchdogHeader();_safe(VIEW_LOADERS[_currentView]||loadHome);}
+var _watchdogHeaderTimer=null;
+function startWatchdogHeaderRefresh(){
+  refreshWatchdogHeader();
+  if(_watchdogHeaderTimer)clearInterval(_watchdogHeaderTimer);
+  _watchdogHeaderTimer=setInterval(refreshWatchdogHeader,30000);
+}
 /* Silent background refresh — updates values in-place without rebuilding DOM.
    Health (CPU/RAM/disk): every 10s — lightweight SSH.
    Fleet overview (VM status): every 60s — heavier PVE API call. */
@@ -5803,6 +5811,9 @@ function loadHome(){
       if(nv)nv.textContent='V'+d.version+' \u00b7 '+d.dashboard_header.replace(/^PVE FREQ\s*\u00b7\s*/,'');
     }
   });
+  refreshWatchdogHeader();
+}
+function refreshWatchdogHeader(){
   /* Watchdog health check / Watchdog probe status — distinguish not-installed (200 or 501 state), down (503), and working (200).
    * silent:true because this endpoint renders its own UI state for each status
    * code below; the generic _authFetch toast would overlap with the inline label. */
@@ -6526,9 +6537,28 @@ function loadMetrics(){
 }
 var _activeFleetTool=null;
 var _pendingVmCreateNode='';
-function fleetTool(tool){
+function _ensureFleetToolPanel(){
   var panel=document.getElementById('fleet-tool-panel');
   var content=document.getElementById('fleet-tool-content');
+  if(panel&&content)return {panel:panel,content:content};
+  var anchor=document.getElementById('metrics-cards')||document.getElementById('fleet-view');
+  if(!anchor)return null;
+  panel=document.createElement('div');
+  panel.id='fleet-tool-panel';
+  panel.className='crd mt-12';
+  panel.style.display='none';
+  content=document.createElement('div');
+  content.id='fleet-tool-content';
+  panel.appendChild(content);
+  if(anchor.parentNode)anchor.parentNode.insertBefore(panel,anchor.nextSibling);
+  else anchor.appendChild(panel);
+  return {panel:panel,content:content};
+}
+function fleetTool(tool){
+  var els=_ensureFleetToolPanel();
+  if(!els){toast('Fleet tool panel unavailable','error');return;}
+  var panel=els.panel;
+  var content=els.content;
   /* Toggle: clicking same button again collapses */
   if(_activeFleetTool===tool&&panel.style.display==='block'){
     panel.style.display='none';_activeFleetTool=null;
@@ -6543,13 +6573,14 @@ function fleetTool(tool){
 }
 function openVmCreateForNode(nodeName){
   _pendingVmCreateNode=nodeName||'';
-  var panel=document.getElementById('fleet-tool-panel');
+  var els=_ensureFleetToolPanel();
+  var panel=els&&els.panel;
   if(_activeFleetTool!=='vmmgmt'||!panel||panel.style.display!=='block')fleetTool('vmmgmt');
   switchVmMgmt('vmcreate');
   setTimeout(function(){
     var sel=document.getElementById('vmt-c-node');
     if(sel&&_pendingVmCreateNode)sel.value=_pendingVmCreateNode;
-  },100);
+  },250);
 }
 function _buildToolTabs(title,tabs,tabClass,switchFn,subtitleId,formId,content){
   var nav='<div style="display:flex;flex-direction:column;gap:8px;min-width:170px">';
