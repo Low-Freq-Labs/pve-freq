@@ -982,12 +982,17 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   flex: 0 0 auto;
   grid-column: 2;
   grid-row: 1;
+  display: flex;
+  gap: 10px;
+}
+.pve-node-card-actions .host-fresh-chip {
+  margin-left: 0 !important;
 }
 .pve-create-btn {
   border-color: color-mix(in srgb, var(--pve-node-color, var(--purple)) 48%, transparent);
   color: var(--text);
-  min-height: 42px;
-  padding: 5px 12px;
+  min-height: 34px;
+  padding: 3px 12px;
 }
 .pve-create-btn:hover {
   border-color: var(--pve-node-color, var(--purple));
@@ -1065,6 +1070,10 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 }
 .pve-node-metrics .pbar {
   height: 3px;
+}
+.pve-node-metrics > .sparkline-row {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 .pve-node-actions {
   display: flex;
