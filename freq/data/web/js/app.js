@@ -2999,12 +2999,30 @@ function _sparkline(canvas,points,color,fillColor){
   ctx.arc(lastX,lastY,2,0,Math.PI*2);
   ctx.fillStyle=color;
   ctx.fill();
+  canvas.classList.remove('spark-pending');
+  var row=canvas.closest?canvas.closest('.sparkline-row'):null;
+  if(row)row.setAttribute('data-spark-state','live');
 }
-var _rrdCache={};var _rrdTimer=null;
+var _pveRrdCacheKey='pve-freq:pve-rrd-cache:v1';
+function _loadPveRrdCache(){
+  try{
+    var raw=localStorage.getItem(_pveRrdCacheKey);
+    if(!raw)return {};
+    var parsed=JSON.parse(raw);
+    if(!parsed||!parsed.saved_at||!parsed.nodes)return {};
+    if(Date.now()-parsed.saved_at>10*60*1000)return {};
+    return parsed.nodes||{};
+  }catch(e){return {};}
+}
+function _savePveRrdCache(){
+  try{localStorage.setItem(_pveRrdCacheKey,JSON.stringify({saved_at:Date.now(),nodes:_rrdCache||{}}));}catch(e){}
+}
+var _rrdCache=_loadPveRrdCache();var _rrdTimer=null;
 function _fetchRrdData(){
   _authFetch('/api/pve/rrd').then(function(r){return r.json()}).then(function(d){
     if(!d.nodes)return;
     d.nodes.forEach(function(n){_rrdCache[n.name]=n;});
+    _savePveRrdCache();
     _renderSparklines();
   }).catch(function(e){console.error('API error:',e);});
 }
@@ -3026,12 +3044,13 @@ function _renderSparklines(){
         }
         if(!metricParent)return;
         sparkDiv=document.createElement('div');
-        sparkDiv.className='sparkline-row';
+        sparkDiv.className='sparkline-row pve-sparkline-shell';
+        sparkDiv.setAttribute('data-spark-state','cached');
         /* sparkline-row class handles flex/gap/margin/padding/border */
         sparkDiv.innerHTML=
-          '<div class="sparkline-cell"><div class="spark-label">CPU 1H</div><canvas class="spark-cpu" width="120" height="28"></canvas></div>'+
-          '<div class="sparkline-cell"><div class="spark-label">RAM 1H</div><canvas class="spark-ram" width="120" height="28"></canvas></div>'+
-          '<div class="sparkline-cell"><div class="spark-label">IO 1H</div><canvas class="spark-io" width="120" height="28"></canvas></div>';
+          '<div class="sparkline-cell"><div class="spark-label">CPU 1H</div><canvas class="spark-cpu spark-pending" width="120" height="28"></canvas></div>'+
+          '<div class="sparkline-cell"><div class="spark-label">RAM 1H</div><canvas class="spark-ram spark-pending" width="120" height="28"></canvas></div>'+
+          '<div class="sparkline-cell"><div class="spark-label">IO 1H</div><canvas class="spark-io spark-pending" width="120" height="28"></canvas></div>';
         metricParent.appendChild(sparkDiv);
       }
       /* Render each sparkline */
@@ -5553,20 +5572,32 @@ function _loadLabAssignments(){
   /* Need both fleet overview (for VMs) and health (for hosts) */
   Promise.all([
     _authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json();}),
-    _authFetch(API.HEALTH).then(function(r){return r.json();})
+    _authFetch(API.HEALTH).then(function(r){return r.json();}),
+    _authFetch(API.ADMIN_BOUNDARIES).then(function(r){return r.ok?r.json():{};}).catch(function(){return {};})
   ]).then(function(results){
-    var fo=results[0],hd=results[1];
+    var fo=results[0],hd=results[1],admin=results[2]||{};
     var items=[];
+    var adminHosts={};
+    (admin.hosts||[]).forEach(function(h){adminHosts[h.label]=h;});
     /* Add all hosts from health data */
     if(hd&&hd.hosts)hd.hosts.forEach(function(h){
+      var ah=adminHosts[h.label]||{};
       var serverCat=h.groups&&h.groups.indexOf('lab')>=0?'lab':(h.groups&&h.groups.indexOf('template')>=0?'template':'prod');
-      items.push({label:h.label,type:h.type||'linux',node:'',status:_healthIsLive(h)?'online':_healthIsStale(h)?'stale':'offline',serverCat:serverCat,source:'host'});
+      items.push({label:h.label,type:h.type||ah.type||'linux',node:'',status:_healthIsLive(h)?'online':_healthIsStale(h)?'stale':'offline',serverCat:serverCat,source:'host',managed:ah.managed!==false,vmid:ah.vmid||0});
+    });
+    /* Add inventory-only/unmanaged hosts that are intentionally absent from health. */
+    var healthSet={};items.forEach(function(i){healthSet[i.label]=true;});
+    Object.keys(adminHosts).forEach(function(label){
+      if(healthSet[label])return;
+      var ah=adminHosts[label]||{};
+      var serverCat=ah.groups&&ah.groups.indexOf('lab')>=0?'lab':(ah.groups&&ah.groups.indexOf('template')>=0?'template':'prod');
+      items.push({label:label,type:ah.type||'linux',node:'',status:ah.managed===false?'inventory':'unprobed',serverCat:serverCat,source:'host',managed:ah.managed!==false,vmid:ah.vmid||0});
     });
     /* Add VMs not already covered by hosts (VMs without SSH entries) */
     var hostSet={};items.forEach(function(i){hostSet[i.label]=true;});
     if(fo&&fo.vms)fo.vms.forEach(function(v){
       if(hostSet[v.name])return;
-      items.push({label:v.name,type:'vm',node:v.node||'',status:v.status||'stopped',serverCat:v.category==='lab'?'lab':v.category==='templates'?'template':'prod',source:'pve'});
+      items.push({label:v.name,type:'vm',node:v.node||'',status:v.status||'stopped',serverCat:v.category==='lab'?'lab':v.category==='templates'?'template':'prod',source:'pve',managed:false,vmid:v.vmid||0});
     });
     /* Sort: lab items first, then alphabetical */
     items.sort(function(a,b){
@@ -5575,15 +5606,17 @@ function _loadLabAssignments(){
       if(aLab&&!bLab)return -1;if(!aLab&&bLab)return 1;
       return a.label<b.label?-1:1;
     });
-    var h='<table><thead><tr><th>Name</th><th>Type</th><th>Node</th><th>Status</th><th class="text-center">Assignment</th></tr></thead><tbody>';
+    var h='<table><thead><tr><th>Name</th><th>Type</th><th>Node</th><th>Status</th><th class="text-center">Assignment</th><th class="text-center">Management</th></tr></thead><tbody>';
     items.forEach(function(it){
       var assignment=_deviceAssignment(it.label,it.serverCat);
       var statusColor=it.status==='online'||it.status==='running'?'var(--green)':'var(--text-dim)';
+      var manageable=it.source==='host';
       h+='<tr><td><strong>'+it.label+'</strong></td>';
       h+='<td class="mono-11">'+it.type.toUpperCase()+'</td>';
       h+='<td class="mono-11">'+(it.node||'-')+'</td>';
       h+='<td><span style="color:'+statusColor+'">'+it.status.toUpperCase()+'</span></td>';
       h+='<td class="text-center">'+['prod','lab','template'].map(function(opt){var on=assignment===opt;var color=opt==='lab'?'var(--cyan)':opt==='template'?'var(--yellow)':'var(--green)';return '<span onclick="toggleDeviceAssign(\''+it.label+'\',\''+opt+'\')" style="cursor:pointer;display:inline-block;margin:0 2px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid '+(on?color:'var(--border-light)')+';background:'+(on?'rgba(255,255,255,0.08)':'transparent')+';color:'+(on?color:'var(--text-dim)')+'">'+opt.toUpperCase()+'</span>';}).join('')+'</td>';
+      h+='<td class="text-center">'+(manageable?'<button class="fleet-btn pill-ok-sm" style="color:'+(it.managed?'var(--green)':'var(--yellow)')+'" onclick="toggleHostManaged(\''+it.label+'\','+(it.managed?'false':'true')+')">'+(it.managed?'MANAGED':'INVENTORY')+'</button>':'<span class="text-sub">PVE ONLY</span>')+'</td>';
       h+='</tr>';
     });
     h+='</tbody></table>';
@@ -5596,6 +5629,16 @@ function toggleDeviceAssign(label,assignment){
   _loadLabAssignments();
   toast(label+' assigned to '+String(assignment).toUpperCase(),'success');
   refreshCurrentView();
+}
+function toggleHostManaged(label,managed){
+  var url='/api/admin/hosts/update?label='+encodeURIComponent(label)+'&managed='+(managed?'true':'false');
+  _authFetch(url,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+    if(d.error){toast('Error: '+d.error,'error');return;}
+    toast(label+' '+(d.managed?'managed':'inventory-only'),'success');
+    _loadLabAssignments();
+    loadFleetAdmin();
+    refreshCurrentView();
+  }).catch(function(e){toast('Failed: '+e,'error');});
 }
 function toggleLabAssign(label,isLab){
   toggleDeviceAssign(label,isLab?'lab':'prod');
@@ -5685,8 +5728,8 @@ function renderFleetAdmin(d){
   /* ── Host Properties Editor ── */
   h+='<div class="mb-24">';
   h+='<h4 class="section-label-pl-ls">HOST PROPERTIES</h4>';
-  h+='<p class="desc-line">Change host type or groups. Updates hosts.toml immediately.</p>';
-  h+='<table><thead><tr><th>Label</th><th>IP</th><th>Type</th><th>Groups</th><th>Actions</th></tr></thead><tbody>';
+  h+='<p class="desc-line">Change host type, groups, or management. Inventory-only hosts stay visible without health alerts or doctor degradation.</p>';
+  h+='<table><thead><tr><th>Label</th><th>IP</th><th>Type</th><th>Groups</th><th>Management</th><th>Actions</th></tr></thead><tbody>';
   var validTypes=['linux','pve','truenas','pfsense','docker','idrac','switch','unknown'];
   (d.hosts||[]).forEach(function(host){
     var typeOpts='';validTypes.forEach(function(t){typeOpts+='<option value="'+t+'"'+(t===host.type?' selected':'')+'>'+t+'</option>';});
@@ -5695,6 +5738,7 @@ function renderFleetAdmin(d){
     h+='<td class="text-sub">'+host.ip+'</td>';
     h+='<td><select id="ht-'+host.label+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">'+typeOpts+'</select></td>';
     h+='<td><input id="hg-'+host.label+'" value="'+host.groups+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:160px" placeholder="prod,media"></td>';
+    h+='<td><select id="hm-'+host.label+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px"><option value="true"'+(host.managed!==false?' selected':'')+'>managed</option><option value="false"'+(host.managed===false?' selected':'')+'>inventory-only</option></select></td>';
     h+='<td><button class="fleet-btn pill-ok-sm" onclick="saveHostProps(\''+host.label+'\')" >SAVE</button></td>';
     h+='</tr>';
   });
@@ -5783,11 +5827,16 @@ function renderFleetAdmin(d){
 function saveHostProps(label){
   var typeEl=document.getElementById('ht-'+label);
   var groupEl=document.getElementById('hg-'+label);
+  var managedEl=document.getElementById('hm-'+label);
   if(!typeEl||!groupEl)return;
   var url='/api/admin/hosts/update?label='+encodeURIComponent(label)+'&type='+encodeURIComponent(typeEl.value)+'&groups='+encodeURIComponent(groupEl.value);
+  if(managedEl)url+='&managed='+encodeURIComponent(managedEl.value);
   _authFetch(url,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.error){toast('Error: '+d.error,'error');return;}
     toast(label+' updated','success');
+    loadFleetAdmin();
+    if(document.getElementById('lab-assign-list'))_loadLabAssignments();
+    refreshCurrentView();
   }).catch(function(e){toast('Failed: '+e,'error');});
 }
 function updateCategoryTier(cat,tier){
@@ -6155,6 +6204,13 @@ function loadMetricsQuick(){
 function _fStat(v,label,color){return '<div class="text-center"><div style="font-size:16px;font-weight:700;color:'+color+'">'+v+'</div><div style="font-size:12px;color:var(--text)">'+label+'</div></div>';}
 function _fGrp(title,cols,content){return '<div style="flex:0 1 170px;min-width:min(150px,100%);border:1px solid var(--border);border-radius:6px;padding:6px 4px 4px;background:var(--bg)"><div style="font-size:12px;color:var(--text);text-align:center;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;opacity:0.7">'+title+'</div><div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:4px">'+content+'</div></div>';}
 function _fDual(label,v1,l1,c1,v2,l2,c2){return '<div class="st"><div class="lb">'+label+'</div><div class="flex-row-24"><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c1+'">'+v1+'</span><span class="label-hint">'+l1+'</span></span><span class="stat-pair"><span style="font-size:20px;font-weight:700;color:'+c2+'">'+v2+'</span><span class="label-hint">'+l2+'</span></span></div></div>';}
+function _pveSparklineShell(){
+  return '<div class="sparkline-row pve-sparkline-shell" data-spark-state="cached">'+
+    '<div class="sparkline-cell"><div class="spark-label">CPU 1H</div><canvas class="spark-cpu spark-pending" width="120" height="28"></canvas></div>'+
+    '<div class="sparkline-cell"><div class="spark-label">RAM 1H</div><canvas class="spark-ram spark-pending" width="120" height="28"></canvas></div>'+
+    '<div class="sparkline-cell"><div class="spark-label">IO 1H</div><canvas class="spark-io spark-pending" width="120" height="28"></canvas></div>'+
+  '</div>';
+}
 function _renderCtNodeCard(c){
   var name=c.name||('ct-'+c.ctid);
   var running=c.status==='running';
@@ -6325,6 +6381,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labL
       nodeCard+=_mrow('RAM','...',0,'var(--text-dim)');
       nodeCard+=_mrow('DISK IO','...',0,'var(--text-dim)');
       nodeCard+=_mrow('STORAGE','...',0,'var(--text-dim)');
+      nodeCard+=_pveSparklineShell();
       nodeCard+='</div>';
     } else {
       /* same centered responsive row as the live-metrics branch above */

@@ -20,13 +20,26 @@ from functools import lru_cache
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
+LIVE_INSTALL_DIR = (
+    os.environ.get("FREQ_TEST_INSTALL_DIR")
+    or os.environ.get("FREQ_DIR")
+    or ("/opt/pve-freq" if os.path.isfile("/opt/pve-freq/conf/freq.toml") else "")
+)
+
+
+def _has_live_runtime_config():
+    return bool(
+        LIVE_INSTALL_DIR
+        and os.path.isfile(os.path.join(LIVE_INSTALL_DIR, "conf", "freq.toml"))
+        and os.path.isfile(os.path.join(LIVE_INSTALL_DIR, "conf", "hosts.toml"))
+    )
 
 
 @lru_cache(maxsize=1)
 def _runtime_config():
     from freq.core.config import load_config
 
-    return load_config(install_dir=REPO_ROOT)
+    return load_config(install_dir=LIVE_INSTALL_DIR, force=True)
 
 
 def _service_account():
@@ -85,6 +98,8 @@ def _curl_pve_api(ip, path, token_id, token_secret):
 
 def _has_fleet_access():
     """Check if we can reach the fleet (ping pve01)."""
+    if not _has_live_runtime_config():
+        return False
     try:
         r = subprocess.run(
             ["ping", "-c1", "-W2", "10.25.255.26"],
@@ -107,29 +122,21 @@ def _read_credential(path):
         return ""
 
 
-# Parse hosts.conf for the registered fleet
-def _parse_hosts_conf():
-    """Parse hosts.conf and return list of (ip, label, htype, groups)."""
-    hosts = []
-    path = os.path.join(REPO_ROOT, "conf", "hosts.conf")
-    if not os.path.isfile(path):
-        return hosts
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split()
-            if len(parts) >= 3:
-                ip, label, htype = parts[0], parts[1], parts[2]
-                groups = parts[3] if len(parts) > 3 else ""
-                hosts.append((ip, label, htype, groups))
-    return hosts
+def _managed_host_rows():
+    """Return live managed hosts as (ip, label, htype, groups)."""
+    if not _has_live_runtime_config():
+        return []
+    from freq.core.host_scope import managed_probe_hosts
+
+    return [
+        (h.ip, h.label, h.htype, h.groups)
+        for h in managed_probe_hosts(_runtime_config())
+    ]
 
 
 FLEET_AVAILABLE = _has_fleet_access()
-HOSTS = _parse_hosts_conf()
-SKIP_MSG = "Fleet not reachable from this environment"
+HOSTS = _managed_host_rows()
+SKIP_MSG = "Live fleet tests require FREQ_TEST_INSTALL_DIR/FREQ_DIR pointing at an initialized runtime config"
 
 
 @unittest.skipUnless(FLEET_AVAILABLE, SKIP_MSG)

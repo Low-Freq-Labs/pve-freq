@@ -191,10 +191,11 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
 
     def test_doctor_uses_managed_hosts_only(self):
         src = (REPO_ROOT / "freq" / "core" / "doctor.py").read_text()
-        self.assertIn("hosts = [h for h in cfg.hosts if getattr(h, \"managed\", True)]", src)
+        self.assertIn("from freq.core.host_scope import managed_probe_hosts", src)
+        self.assertIn("return managed_probe_hosts(cfg)", src)
         service_block = src.split("def _check_service_account", 1)[1].split("\ndef ", 1)[0]
         self.assertIn("hosts_for_check = [", service_block)
-        self.assertIn('getattr(h, "managed", True)', service_block)
+        self.assertIn("_doctor_managed_hosts(cfg)", service_block)
         self.assertIn("h.htype in service_account_htypes", service_block)
 
     def test_operator_doctor_does_not_fake_fleet_outage_without_service_key(self):
@@ -205,9 +206,9 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
 
     def test_api_health_fallback_uses_managed_hosts_only(self):
         src = (REPO_ROOT / "freq" / "api" / "fleet.py").read_text()
-        self.assertIn("active_hosts = [h for h in cfg.hosts if getattr(h, \"managed\", True)]", src)
+        self.assertIn("active_hosts = managed_probe_hosts(cfg)", src)
         self.assertIn("pool.submit(_probe_host, h): h for h in active_hosts", src)
-        self.assertIn("hosts = [h for h in cfg.hosts if getattr(h, \"managed\", True)]", src)
+        self.assertIn("hosts = managed_probe_hosts(cfg)", src)
 
     def test_init_deploy_phase_uses_managed_hosts_only(self):
         src = (REPO_ROOT / "freq" / "modules" / "init_cmd.py").read_text()

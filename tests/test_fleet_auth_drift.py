@@ -13,9 +13,24 @@ from functools import lru_cache
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
+LIVE_INSTALL_DIR = (
+    os.environ.get("FREQ_TEST_INSTALL_DIR")
+    or os.environ.get("FREQ_DIR")
+    or ("/opt/pve-freq" if os.path.isfile("/opt/pve-freq/conf/freq.toml") else "")
+)
+
+
+def _has_live_runtime_config():
+    return bool(
+        LIVE_INSTALL_DIR
+        and os.path.isfile(os.path.join(LIVE_INSTALL_DIR, "conf", "freq.toml"))
+        and os.path.isfile(os.path.join(LIVE_INSTALL_DIR, "conf", "hosts.toml"))
+    )
 
 
 def _has_fleet_access():
+    if not _has_live_runtime_config():
+        return False
     try:
         r = subprocess.run(
             ["ping", "-c1", "-W2", "10.25.255.26"],
@@ -27,39 +42,28 @@ def _has_fleet_access():
 
 
 def _load_freq_config():
-    """Load freq.toml SSH settings."""
-    import tomllib
-    toml_path = os.path.join(REPO_ROOT, "conf", "freq.toml")
-    with open(toml_path, "rb") as f:
-        data = tomllib.load(f)
-    return data.get("ssh", {})
+    """Load runtime SSH settings."""
+    cfg = _load_runtime_config()
+    return {"service_account": cfg.ssh_service_account}
 
 
 @lru_cache(maxsize=1)
 def _load_runtime_config():
     from freq.core.config import load_config
 
-    return load_config(install_dir=REPO_ROOT)
+    return load_config(install_dir=LIVE_INSTALL_DIR, force=True)
 
 
-def _parse_hosts_conf():
-    hosts = []
-    path = os.path.join(REPO_ROOT, "conf", "hosts.conf")
-    if not os.path.isfile(path):
-        return hosts
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split()
-            if len(parts) >= 3:
-                hosts.append((parts[0], parts[1], parts[2]))
-    return hosts
+def _managed_host_rows():
+    if not _has_live_runtime_config():
+        return []
+    from freq.core.host_scope import managed_probe_hosts
+
+    return [(h.ip, h.label, h.htype) for h in managed_probe_hosts(_load_runtime_config())]
 
 
 FLEET_AVAILABLE = _has_fleet_access()
-SKIP_MSG = "Fleet not reachable from this environment"
+SKIP_MSG = "Live fleet tests require FREQ_TEST_INSTALL_DIR/FREQ_DIR pointing at an initialized runtime config"
 
 
 @unittest.skipUnless(FLEET_AVAILABLE, SKIP_MSG)
@@ -69,7 +73,7 @@ class TestSSHServiceAccountExists(unittest.TestCase):
     def test_service_account_exists_on_pve_nodes(self):
         ssh_cfg = _load_freq_config()
         account = ssh_cfg.get("service_account", "freq-admin")
-        hosts = _parse_hosts_conf()
+        hosts = _managed_host_rows()
         pve_hosts = [ip for ip, _, htype in hosts if htype == "pve"]
         failures = []
         cfg = _load_runtime_config()
@@ -94,7 +98,7 @@ class TestSSHServiceAccountExists(unittest.TestCase):
     def test_service_account_has_sudo_on_pve_nodes(self):
         ssh_cfg = _load_freq_config()
         account = ssh_cfg.get("service_account", "freq-admin")
-        hosts = _parse_hosts_conf()
+        hosts = _managed_host_rows()
         pve_hosts = [ip for ip, _, htype in hosts if htype == "pve"]
         failures = []
         cfg = _load_runtime_config()
@@ -123,26 +127,16 @@ class TestSSHKeyDeployment(unittest.TestCase):
 
     def test_key_exists_in_data_keys_or_ssh(self):
         """At least one SSH key must be detectable by freq's key resolution."""
-        candidates = [
-            os.path.join(REPO_ROOT, "data", "keys", "freq_id_ed25519"),
-            os.path.expanduser("~/.ssh/id_ed25519"),
-            os.path.expanduser("~/.ssh/fleet_key"),
-            os.path.join(REPO_ROOT, "data", "keys", "freq_id_rsa"),
-            os.path.expanduser("~/.ssh/id_rsa"),
-        ]
+        cfg = _load_runtime_config()
+        candidates = [cfg.ssh_key_path, getattr(cfg, "ssh_rsa_key_path", "")]
         found = [p for p in candidates if os.path.isfile(p)]
         self.assertGreater(len(found), 0,
                            f"No SSH key found in freq key search path: {candidates}")
 
     def test_key_permissions_are_600(self):
         """SSH key files must have 600 permissions."""
-        candidates = [
-            os.path.join(REPO_ROOT, "data", "keys", "freq_id_ed25519"),
-            os.path.expanduser("~/.ssh/id_ed25519"),
-            os.path.expanduser("~/.ssh/fleet_key"),
-            os.path.join(REPO_ROOT, "data", "keys", "freq_id_rsa"),
-            os.path.expanduser("~/.ssh/id_rsa"),
-        ]
+        cfg = _load_runtime_config()
+        candidates = [cfg.ssh_key_path, getattr(cfg, "ssh_rsa_key_path", "")]
         for path in candidates:
             if os.path.isfile(path):
                 mode = oct(os.stat(path).st_mode)[-3:]
@@ -170,12 +164,8 @@ class TestPVETokenValidity(unittest.TestCase):
         secret = self._read_credential("/etc/freq/credentials/pve-token-rw")
         if not secret:
             self.skipTest("No RW token file")
-        import tomllib
-        with open(os.path.join(REPO_ROOT, "conf", "freq.toml"), "rb") as f:
-            data = tomllib.load(f)
-        token_id = data.get("pve", {}).get("token_id") or (
-            data.get("ssh", {}).get("service_account", "freq-admin") + "@pam!freq-rw"
-        )
+        cfg = _load_runtime_config()
+        token_id = cfg.pve_api_token_id or f"{cfg.ssh_service_account}@pam!freq-rw"
         for ip in self.PVE_IPS:
             r = subprocess.run(
                 ["curl", "-sk", "--max-time", "5", "-w", "%{http_code}",

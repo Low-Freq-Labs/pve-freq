@@ -98,12 +98,8 @@ class TestDoctorOperatorCredentialContext(unittest.TestCase):
     def test_global_doctor_skips_pve_hosts_outside_configured_cluster(self):
         src = self._src()
         helper = src.split("def _doctor_managed_hosts", 1)[1].split("\ndef ", 1)[0]
-        self.assertIn('getattr(h, "htype", "") == "pve"', helper)
-        self.assertIn('getattr(h, "ip", "") not in pve_node_ips', helper)
-        self.assertIn('category in {"out_of_contract", "templates"}', helper)
-        self.assertIn("boundaries.categorize(vmid)", helper)
-        self.assertIn('operator_auto_excluded_labels = {"nexus", "pve-freq"}', helper)
-        self.assertIn('getattr(h, "label", "")', helper)
+        self.assertIn("return managed_probe_hosts(cfg)", helper)
+        self.assertIn("from freq.core.host_scope import managed_probe_hosts", src)
         self.assertIn("_doctor_managed_hosts(cfg)", src.split("def _check_fleet_connectivity", 1)[1])
         self.assertIn("_doctor_managed_hosts(cfg)", src.split("def _check_service_account", 1)[1])
 

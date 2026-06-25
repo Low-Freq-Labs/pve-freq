@@ -2710,9 +2710,12 @@ body.compact .btn { font-size: 11px; padding: 4px 12px; }
 /* ═══════════════════════════════════════════════════════════════════
    UTILITY CLASSES — replace inline styles in JS
    ═══════════════════════════════════════════════════════════════════ */
-.sparkline-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); }
+.sparkline-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); min-height: 48px; }
 .sparkline-cell { min-width: 0; }
-.sparkline-row canvas { display: block; width: 100%; height: 28px; max-height: 28px; border-radius: 3px; }
+.sparkline-row canvas { display: block; width: 100%; height: 28px; max-height: 28px; border-radius: 3px; background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.014)); }
+.sparkline-row[data-spark-state="cached"] canvas { border: 1px solid rgba(255,255,255,0.045); }
+.sparkline-row[data-spark-state="live"] canvas { border: 0; }
+.sparkline-row .spark-pending { opacity: .72; }
 .spark-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
 .form-label { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
 .form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

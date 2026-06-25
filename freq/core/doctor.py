@@ -33,6 +33,7 @@ import urllib.request
 from freq.core.config import FreqConfig
 from freq.core import fmt
 from freq.core import log as logger
+from freq.core.host_scope import managed_probe_hosts
 from freq.core.ssh import run as ssh_run
 
 # Doctor check timeouts
@@ -632,27 +633,7 @@ def _doctor_operator_context_mismatch(cfg: FreqConfig) -> tuple[bool, str]:
 
 def _doctor_managed_hosts(cfg: FreqConfig) -> list:
     """Hosts that belong in global doctor fleet checks."""
-    pve_node_ips = set(getattr(cfg, "pve_nodes", []) or [])
-    boundaries = getattr(cfg, "fleet_boundaries", None)
-    operator_auto_excluded_labels = {"nexus", "pve-freq"}
-    hosts = []
-    for h in getattr(cfg, "hosts", []) or []:
-        if not getattr(h, "managed", True):
-            continue
-        if str(getattr(h, "label", "") or "").strip().lower() in operator_auto_excluded_labels:
-            continue
-        vmid = int(getattr(h, "vmid", 0) or 0)
-        if vmid and boundaries and hasattr(boundaries, "categorize"):
-            try:
-                category, _tier = boundaries.categorize(vmid)
-            except Exception:
-                category = ""
-            if category in {"out_of_contract", "templates"}:
-                continue
-        if getattr(h, "htype", "") == "pve" and getattr(h, "ip", "") not in pve_node_ips:
-            continue
-        hosts.append(h)
-    return hosts
+    return managed_probe_hosts(cfg)
 
 
 def _check_fleet_connectivity(cfg: FreqConfig) -> int:

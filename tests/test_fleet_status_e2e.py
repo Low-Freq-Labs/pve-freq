@@ -11,15 +11,21 @@ Run: python3 -m unittest tests.test_fleet_status_e2e -v
 import os
 import subprocess
 import sys
-import time
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
+LIVE_INSTALL_DIR = (
+    os.environ.get("FREQ_TEST_INSTALL_DIR")
+    or os.environ.get("FREQ_DIR")
+    or ("/opt/pve-freq" if os.path.isfile("/opt/pve-freq/conf/freq.toml") else "")
+)
 
 
 def _has_fleet_access():
+    if not _has_live_runtime_config():
+        return False
     try:
         r = subprocess.run(
             ["ping", "-c1", "-W2", "10.25.255.26"],
@@ -30,14 +36,22 @@ def _has_fleet_access():
         return False
 
 
+def _has_live_runtime_config():
+    return bool(
+        LIVE_INSTALL_DIR
+        and os.path.isfile(os.path.join(LIVE_INSTALL_DIR, "conf", "freq.toml"))
+        and os.path.isfile(os.path.join(LIVE_INSTALL_DIR, "conf", "hosts.toml"))
+    )
+
+
 FLEET_AVAILABLE = _has_fleet_access()
-SKIP_MSG = "Fleet not reachable from this environment"
+SKIP_MSG = "Live fleet tests require FREQ_TEST_INSTALL_DIR/FREQ_DIR pointing at an initialized runtime config"
 
 
 def _load_cfg():
     sys.path.insert(0, REPO_ROOT)
     from freq.core.config import load_config
-    return load_config(install_dir=REPO_ROOT)
+    return load_config(install_dir=LIVE_INSTALL_DIR, force=True)
 
 
 @unittest.skipUnless(FLEET_AVAILABLE, SKIP_MSG)
@@ -60,8 +74,9 @@ class TestFleetStatusE2E(unittest.TestCase):
         cls._run_many = staticmethod(run_many)
         cls._result_for = staticmethod(result_for)
 
-        # Run fleet status once and cache results for all tests
-        cls.hosts = cls.cfg.hosts
+        # Run fleet status once and cache results for all managed targets.
+        from freq.core.host_scope import managed_probe_hosts
+        cls.hosts = managed_probe_hosts(cls.cfg)
         cls.results = cls._run_many(
             hosts=cls.hosts,
             command="uptime -p 2>/dev/null || uptime",
@@ -92,12 +107,13 @@ class TestFleetStatusE2E(unittest.TestCase):
                 offline.append((h.label, h.htype, err))
         return offline
 
-    def test_all_14_hosts_online(self):
-        """All 14 registered hosts must respond to fleet status."""
+    def test_all_managed_hosts_online(self):
+        """Every managed host in the runtime config must respond to fleet status."""
         online = self._online_hosts()
+        self.assertGreater(len(self.hosts), 0, "Runtime config must define managed hosts")
         self.assertEqual(
-            len(online), 14,
-            f"Only {len(online)}/14 online. Offline: {self._offline_hosts()}")
+            len(online), len(self.hosts),
+            f"Only {len(online)}/{len(self.hosts)} online. Offline: {self._offline_hosts()}")
 
     def test_all_pve_nodes_online(self):
         """All 3 PVE nodes must be online."""
@@ -118,12 +134,16 @@ class TestFleetStatusE2E(unittest.TestCase):
         """TrueNAS must be online."""
         online = self._online_hosts()
         truenas = [l for l, t in online if t == "truenas"]
+        if not [h for h in self.hosts if h.htype == "truenas"]:
+            self.skipTest("No managed TrueNAS host in runtime config")
         self.assertEqual(len(truenas), 1)
 
     def test_pfsense_online(self):
         """pfSense must be online."""
         online = self._online_hosts()
         pf = [l for l, t in online if t == "pfsense"]
+        if not [h for h in self.hosts if h.htype == "pfsense"]:
+            self.skipTest("No managed pfSense host in runtime config")
         self.assertEqual(len(pf), 1)
 
     def test_uptime_output_is_sane(self):

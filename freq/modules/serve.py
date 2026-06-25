@@ -50,7 +50,7 @@ from urllib.parse import urlparse, parse_qs
 from freq.core import audit
 from freq.core import log as logger
 from freq.core import resolve as res
-from freq.core.config import load_config, load_toml
+from freq.core.config import load_config, load_toml, save_hosts_toml
 from freq.core.health_state import (
     STATE_LIVE,
     STATE_STALE,
@@ -2531,7 +2531,7 @@ def _media_ssh_single(cfg, vm, command: str, timeout: int = 10):
     def _run(**overrides):
         merged = dict(kwargs)
         merged.update(overrides)
-        return ssh_single(**merged)
+        return ssh_single(cfg=cfg, **merged)
 
     kwargs = {
         "host": _resolve_container_vm_ip(vm),
@@ -2541,7 +2541,6 @@ def _media_ssh_single(cfg, vm, command: str, timeout: int = 10):
         "command_timeout": timeout,
         "htype": "docker",
         "use_sudo": False,
-        "cfg": cfg,
     }
     r = _run()
     if r.returncode == 255 and "Permission denied" in (r.stderr or ""):
@@ -6357,7 +6356,15 @@ a:hover{{text-decoration:underline}}
                 },
                 "pve_nodes": {k: {"ip": n.ip, "detail": n.detail} for k, n in fb.pve_nodes.items()},
                 "hosts": [
-                    {"ip": h.ip, "label": h.label, "type": h.htype, "groups": h.groups, "all_ips": h.all_ips}
+                    {
+                        "ip": h.ip,
+                        "label": h.label,
+                        "type": h.htype,
+                        "groups": h.groups,
+                        "vmid": getattr(h, "vmid", 0),
+                        "managed": bool(getattr(h, "managed", True)),
+                        "all_ips": h.all_ips,
+                    }
                     for h in cfg.hosts
                 ],
             }
@@ -6632,9 +6639,9 @@ a:hover{{text-decoration:underline}}
         self._json_response({"ok": True})
 
     def _serve_admin_hosts_update(self):
-        """POST /api/admin/hosts/update — update host type or groups in hosts.toml.
+        """POST /api/admin/hosts/update — update host fields in hosts.toml.
 
-        Params: label, type (optional), groups (optional)
+        Params: label, type (optional), groups (optional), managed (optional)
         """
         if self.command != "POST":
             self._json_response({"error": "hosts update requires POST"}, 405)
@@ -6648,51 +6655,41 @@ a:hover{{text-decoration:underline}}
         label = params.get("label", [""])[0]
         new_type = params.get("type", [""])[0]
         new_groups = params.get("groups", [""])[0] if "groups" in params else None
+        new_managed = params.get("managed", [None])[0] if "managed" in params else None
         if not label:
             self._json_response({"error": "label required"}, 400)
             return
 
         cfg = load_config()
-        hosts_path = cfg.hosts_file
-        lines = []
-        try:
-            with open(hosts_path) as f:
-                lines = f.readlines()
-        except FileNotFoundError:
-            self._json_response({"error": "hosts.toml not found"}, 404)
-            return
-
-        found = False
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            parts = stripped.split()
-            if len(parts) >= 2 and parts[1].lower() == label.lower():
-                found = True
-                ip = parts[0]
-                htype = new_type if new_type else (parts[2] if len(parts) > 2 else "linux")
-                groups = new_groups if new_groups is not None else (parts[3] if len(parts) > 3 else "")
-                all_ips = parts[4] if len(parts) > 4 else ""
-                new_parts = [f"{ip:<16}", f"{parts[1]:<15}", f"{htype:<10}"]
-                if groups or all_ips:
-                    new_parts.append(f"{groups:<20}" if all_ips else groups)
-                if all_ips:
-                    new_parts.append(all_ips)
-                lines[i] = "  ".join(new_parts).rstrip() + "\n"
-                break
-
-        if not found:
+        host = next((h for h in cfg.hosts if h.label.lower() == label.lower()), None)
+        if not host:
             self._json_response({"error": f"Host '{label}' not found in hosts.toml"}, 404)
             return
+        if new_type:
+            host.htype = new_type
+        if new_groups is not None:
+            host.groups = new_groups
+        if new_managed is not None:
+            host.managed = str(new_managed).strip().lower() in {"1", "true", "yes", "on", "managed"}
 
         try:
-            with open(hosts_path, "w") as f:
-                f.writelines(lines)
+            save_hosts_toml(cfg.hosts_file, cfg.hosts)
         except OSError as e:
             self._json_response({"error": f"Failed to write hosts.toml: {e}"}, 500)
             return
-        self._json_response({"ok": True, "label": label})
+        with _bg_lock:
+            _bg_cache["health"] = None
+            _bg_cache_ts["health"] = 0
+            _bg_cache_errors.pop("health", None)
+        self._json_response(
+            {
+                "ok": True,
+                "label": host.label,
+                "type": host.htype,
+                "groups": host.groups,
+                "managed": bool(host.managed),
+            }
+        )
 
     # --- Phase 2: Feature parity endpoints ---
 
