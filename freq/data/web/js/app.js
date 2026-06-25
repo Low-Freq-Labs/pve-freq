@@ -3914,7 +3914,16 @@ function _populateCompareDropdowns(){
   }).catch(function(e){console.error('API error:',e);});
 }
 function loadLabPage(){loadLabTools();}
-function loadSettingsPage(){loadCosts();loadFederation();_loadSettingsPrefs();_loadLabAssignments();}
+function _ensureFleetAdminInSettings(){
+  var sec=document.getElementById('fleet-admin-section');
+  var settings=document.getElementById('settings-view');
+  if(!sec||!settings||settings.contains(sec))return;
+  var anchor=document.getElementById('lab-assign-list');
+  var deviceSection=anchor&&anchor.closest?anchor.closest('.section'):null;
+  if(deviceSection&&deviceSection.parentNode===settings)deviceSection.insertAdjacentElement('afterend',sec);
+  else settings.appendChild(sec);
+}
+function loadSettingsPage(){loadCosts();loadFederation();_loadSettingsPrefs();_loadLabAssignments();_ensureFleetAdminInSettings();loadFleetAdmin();}
 /* ── Domain Dashboard Loaders ── */
 function loadNetworkPage(){
   loadTopology();
@@ -5710,7 +5719,8 @@ function loadFleetAdmin(){
   var sec=document.getElementById('fleet-admin-section');
   if(!sec)return;
   /* Only show for admin role */
-  if(_currentRole!=='admin'&&_currentRole!=='protected'){sec.style.display='none';return;}
+  if(_currentRole!=='admin'&&_currentRole!=='protected'){sec.classList.add('d-none');sec.style.display='none';return;}
+  sec.classList.remove('d-none');
   sec.style.display='';
   var body=document.getElementById('fleet-admin-body');
   if(!body)return;
