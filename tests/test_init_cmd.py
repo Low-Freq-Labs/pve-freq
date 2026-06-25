@@ -24,6 +24,7 @@ from freq.modules.init_cmd import _run_with_input, _ssh_with_pass
 from freq.modules.init_cmd import _init_dry_run
 from freq.modules.init_cmd import (
     _reset_local_init_state,
+    _remote_home_probe,
     INIT_LIVE_CONFIG_FILES,
     INIT_GENERATED_TOKEN_FILES,
     INIT_GENERATED_WATCHDOG_FILES,
@@ -195,6 +196,26 @@ class TestInitResetLocalState(unittest.TestCase):
             for path in watchdog_files:
                 self.assertFalse(os.path.exists(path), f"watchdog state survived reset: {path}")
 
+    def test_reset_removes_generated_runtime_ssh_state(self):
+        fake_home = os.path.join(self.tmp, "home", "freq")
+        ssh_dir = os.path.join(fake_home, ".ssh")
+        mux_dir = os.path.join(ssh_dir, "freq-mux")
+        self._touch(os.path.join(ssh_dir, "known_hosts"), "old host key\n")
+        self._touch(os.path.join(ssh_dir, "known_hosts.old"), "older host key\n")
+        os.makedirs(mux_dir, exist_ok=True)
+        self._touch(os.path.join(mux_dir, "socket"), "")
+
+        with patch.dict(os.environ, {"HOME": fake_home}):
+            with patch("freq.modules.init_cmd.fmt") as _fmt:
+                _fmt.step_ok = MagicMock()
+                _fmt.step_warn = MagicMock()
+                with patch("freq.modules.init_cmd.INIT_GENERATED_TOKEN_FILES", ()):
+                    _reset_local_init_state(self.cfg)
+
+        self.assertFalse(os.path.exists(os.path.join(ssh_dir, "known_hosts")))
+        self.assertFalse(os.path.exists(os.path.join(ssh_dir, "known_hosts.old")))
+        self.assertFalse(os.path.exists(mux_dir))
+
     def test_reset_removes_generated_credentials_and_setup_init_secrets(self):
         cred_dir = os.path.join(self.tmp, "runtime-credentials")
         self.cfg.credentials_dir = cred_dir
@@ -308,6 +329,15 @@ class TestPureNothingInitContract(unittest.TestCase):
         self.assertIn("_chown(f\"root:{svc_name}\", pass_path)", block)
         self.assertIn("os.chmod(creds_path, 0o640)", block)
         self.assertIn("_chown(f\"root:{svc_name}\", creds_path)", block)
+
+    def test_init_fix_reuses_existing_service_account_password(self):
+        src = self._src()
+        helper = src.split("def _load_existing_service_account_password", 1)[1].split("\ndef ", 1)[0]
+        fix = src.split("def _init_fix", 1)[1].split("# Build deploy context", 1)[1].split("if not ctx[\"pubkey\"]", 1)[0]
+        self.assertIn("f\"{svc_name}-password\"", helper)
+        self.assertIn("_credentials_dir(cfg)", helper)
+        self.assertIn("_load_existing_service_account_password(cfg, svc_name)", fix)
+        self.assertIn("secrets.token_urlsafe(24)", fix)
 
     def test_phase9_owns_canonical_credentials_dir_not_install_local_ghost(self):
         src = self._src()
@@ -458,15 +488,20 @@ class TestPureNothingInitContract(unittest.TestCase):
     def test_reconcile_existing_hosts_demotes_operator_and_ooc_hosts(self):
         from freq.modules.init_cmd import _reconcile_existing_managed_hosts
 
+        boundaries = types.SimpleNamespace(
+            categorize=lambda vmid: ("out_of_contract", "probe") if vmid == 404 else ("production", "operator")
+        )
         hosts = [
             types.SimpleNamespace(label="pve-freq", ip="10.25.255.50", htype="pve", vmid=100, managed=True, all_ips=["10.25.255.50"]),
             types.SimpleNamespace(label="blue", ip="10.25.255.75", htype="linux", vmid=0, managed=True, all_ips=["10.25.255.75"]),
+            types.SimpleNamespace(label="email-server", ip="10.25.255.44", htype="linux", vmid=404, managed=True, all_ips=["10.25.255.44"]),
             types.SimpleNamespace(label="plex", ip="10.25.255.30", htype="docker", vmid=201, managed=True, all_ips=["10.25.255.30"]),
         ]
         cfg = types.SimpleNamespace(
             hosts=hosts,
             hosts_file="/tmp/hosts.toml",
             pve_nodes=["10.25.255.26"],
+            fleet_boundaries=boundaries,
             _owned_vmids={100, 201},
             _acknowledged_out_of_contract_vmids={802},
         )
@@ -477,11 +512,34 @@ class TestPureNothingInitContract(unittest.TestCase):
         with patch("freq.core.config.save_hosts_toml") as mock_save:
             changed = _reconcile_existing_managed_hosts(cfg, ctx)
 
-        self.assertEqual(len(changed), 2)
+        self.assertEqual(len(changed), 3)
         self.assertFalse(hosts[0].managed)
         self.assertFalse(hosts[1].managed)
-        self.assertTrue(hosts[2].managed)
+        self.assertFalse(hosts[2].managed)
+        self.assertTrue(hosts[3].managed)
         mock_save.assert_called_once()
+
+    def test_scan_fleet_skips_inventory_only_by_boundary_even_if_hosts_stale(self):
+        src = self._src()
+        scan_src = src.split("def _scan_fleet", 1)[1].split("def _init_check", 1)[0]
+        self.assertIn("not _inventory_only_reason(cfg, {}, h)", scan_src)
+
+    def test_headless_import_reconciles_managed_hosts_before_deploy(self):
+        src = self._src()
+        headless = src.split("def _init_headless", 1)[1]
+        import_block = headless.split("# Import hosts from --hosts-file if provided", 1)[1].split("# Load per-device credentials", 1)[0]
+        self.assertIn("_reconcile_existing_managed_hosts(cfg, ctx)", import_block)
+        self.assertLess(
+            import_block.index("_reconcile_existing_managed_hosts(cfg, ctx)"),
+            import_block.index('fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")'),
+        )
+
+    def test_init_flows_reconcile_again_after_fleet_categories(self):
+        src = self._src()
+        interactive = src.split("# Phase 10: PDM Setup (optional)", 1)[1].split("# Phase 11: Admin Accounts", 1)[0]
+        headless = src.split("# ── Phase 10: PDM Setup ──", 1)[1].split("# ── Phase 11: RBAC ──", 1)[0]
+        self.assertIn("_reconcile_existing_managed_hosts(cfg, ctx)", interactive)
+        self.assertIn("_reconcile_existing_managed_hosts(cfg, ctx)", headless)
 
     def test_truenas_not_generic_systemd_metrics_agent_target(self):
         from freq.modules.init_cmd import _metrics_agent_hosts, _non_systemd_metrics_hosts
@@ -516,6 +574,29 @@ class TestPureNothingInitContract(unittest.TestCase):
         block = src.split('elif htype == "truenas":')[1].split('elif htype == "pfsense":')[0]
         self.assertIn("test -f ~/.ssh/authorized_keys", block)
         self.assertNotIn("auth_keys", block)
+
+    def test_init_check_linux_deep_check_resolves_home_on_remote_host(self):
+        src = self._src()
+        check_src = src.split("def _init_check", 1)[1]
+        block = check_src.split('if htype in ("linux", "pve", "docker"):', 1)[1].split('elif htype == "truenas":', 1)[0]
+        self.assertIn("_remote_home_probe(svc_name)", block)
+        self.assertIn('test -f \\"$home/.ssh/authorized_keys\\"', block)
+        self.assertNotIn("_home_dir_for_user", block)
+
+    def test_remote_home_probe_has_safe_fallback(self):
+        probe = _remote_home_probe("freq-admin")
+        self.assertIn("getent passwd", probe)
+        self.assertIn("/home/freq-admin", probe)
+        self.assertIn("awk -F:", probe)
+
+    def test_init_check_container_runtime_does_not_require_local_service_account(self):
+        src = self._src()
+        check_src = src.split("def _init_check", 1)[1]
+        block = check_src.split("rc, _, _ = _run([\"id\", svc_name])", 1)[1].split("key_file =", 1)[0]
+        self.assertIn("_is_container_runtime()", block)
+        self.assertIn("_service_account_is_remote_runtime(cfg, True)", block)
+        self.assertIn("os.path.isfile(marker)", block)
+        self.assertIn("is remote-only on this runtime", block)
 
     def test_verify_host_uses_staged_device_auth_for_pfsense(self):
         src = self._src()

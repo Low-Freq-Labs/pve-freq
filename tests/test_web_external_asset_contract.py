@@ -67,6 +67,15 @@ class TestXtermVendored(unittest.TestCase):
         self.assertTrue(f.exists(), f"missing vendored {f}")
 
 
+class TestXtermPackageData(unittest.TestCase):
+    """Installed wheels must include the vendored terminal assets."""
+
+    def test_pyproject_includes_vendor_xterm_assets(self):
+        pyproject = (FREQ_ROOT / "pyproject.toml").read_text()
+        self.assertIn('"web/vendor/xterm/*.css"', pyproject)
+        self.assertIn('"web/vendor/xterm/*.js"', pyproject)
+
+
 class TestAppHtmlHasNoExternalAssets(unittest.TestCase):
     """app.html must reference the vendored files, not CDNs."""
 

@@ -7263,6 +7263,52 @@ a:hover{{text-decoration:underline}}
     # --- Phase 5: Medium Kills API Handlers ---
 
 
+def _is_container_runtime() -> bool:
+    if os.path.exists("/.dockerenv"):
+        return True
+    try:
+        with open("/proc/1/cgroup", encoding="utf-8", errors="ignore") as f:
+            return any(token in f.read() for token in ("docker", "kubepods", "containerd"))
+    except OSError:
+        return False
+
+
+def _port_is_listening(port: int) -> bool:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(0.2)
+    try:
+        return sock.connect_ex(("127.0.0.1", int(port))) == 0
+    finally:
+        sock.close()
+
+
+def _start_embedded_watchdog_if_needed(cfg) -> None:
+    if not getattr(cfg, "watchdog_enabled", False):
+        return
+    if not _is_container_runtime() and os.path.isdir("/run/systemd/system"):
+        return
+    wd_port = int(getattr(cfg, "watchdog_port", 9900) or 9900)
+    if _port_is_listening(wd_port):
+        return
+
+    def _run_watchdog():
+        try:
+            from freq.modules.watchdog import run_daemon
+
+            status_dir = os.path.join(cfg.data_dir, "watchdog")
+            run_daemon(
+                cfg,
+                interval=15,
+                status_file=os.path.join(status_dir, "status.json"),
+                state_file=os.path.join(status_dir, "state.json"),
+            )
+        except Exception as e:
+            logger.warning(f"embedded_watchdog_stopped: {e}")
+
+    threading.Thread(target=_run_watchdog, daemon=True, name="freq-embedded-watchdog").start()
+    logger.info("embedded_watchdog_started", port=wd_port)
+
+
 def cmd_serve(cfg, pack, args) -> int:
     """Start the FREQ web dashboard."""
     import signal
@@ -7271,6 +7317,7 @@ def cmd_serve(cfg, pack, args) -> int:
     print(f"\n  \033[38;5;93mPVE FREQ → Dashboard\033[0m")
     print(f"  Starting on port {port}...\n")
     start_background_cache()
+    _start_embedded_watchdog_if_needed(cfg)
 
     httpd = ThreadedHTTPServer(("0.0.0.0", port), FreqHandler)
 

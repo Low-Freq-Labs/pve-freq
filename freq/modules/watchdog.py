@@ -125,7 +125,27 @@ def _check_initialized(cfg: FreqConfig) -> Check:
     return Check("initialized_marker", "warn", ".initialized marker missing", {"path": marker})
 
 
+def _is_container_runtime() -> bool:
+    if os.path.exists("/.dockerenv"):
+        return True
+    path = Path("/proc/1/cgroup")
+    if not path.is_file():
+        return False
+    try:
+        text = path.read_text(errors="ignore")
+    except OSError:
+        return False
+    return any(token in text for token in ("docker", "kubepods", "containerd"))
+
+
 def _check_freq_serve_systemd() -> Check:
+    if _is_container_runtime():
+        return Check(
+            "freq_serve_runtime",
+            "pass",
+            "container runtime supervises freq serve",
+            {"runtime": "container"},
+        )
     if not shutil.which("systemctl"):
         return Check("freq_serve_systemd", "warn", "systemctl unavailable; cannot verify freq-serve")
     try:

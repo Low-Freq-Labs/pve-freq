@@ -47,6 +47,8 @@ include = ["freq*"]
     "web/*.html",
     "web/css/*.css",
     "web/js/*.js",
+    "web/vendor/xterm/*.css",
+    "web/vendor/xterm/*.js",
 ]
 
 [tool.setuptools.dynamic]

@@ -1545,7 +1545,7 @@ function _setupTruthSummary(d){
       accountDetail=' No dashboard accounts are configured; return to setup or create a recovery admin locally.';
     }
     return {isErr:false,
-      title:'LOGIN AVAILABLE — INIT NOT GREEN',
+      title:'LOGIN AVAILABLE — SETUP ATTENTION',
       body:initDetail+
         accountDetail+' '+
         'Run <code>freq init --check</code> or rerun init after resolving the reported contract failure.'};

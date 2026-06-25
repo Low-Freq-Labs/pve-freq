@@ -69,5 +69,23 @@ class TestProxyReturnsCleanStateWhenDisabled(unittest.TestCase):
                            "watchdog_enabled check must happen before urlopen")
 
 
+class TestWatchdogContainerRuntimeContract(unittest.TestCase):
+    """Containerized serve must not depend on systemd to expose watchdog health."""
+
+    def test_serve_starts_embedded_watchdog_for_container_runtime(self):
+        src = (FREQ_ROOT / "freq" / "modules" / "serve.py").read_text()
+        self.assertIn("def _start_embedded_watchdog_if_needed", src)
+        self.assertIn("_is_container_runtime()", src)
+        self.assertIn("freq-embedded-watchdog", src)
+        self.assertIn('os.path.join(cfg.data_dir, "watchdog")', src)
+        self.assertIn("_start_embedded_watchdog_if_needed(cfg)", src)
+
+    def test_watchdog_runtime_check_accepts_container_supervision(self):
+        src = (FREQ_ROOT / "freq" / "modules" / "watchdog.py").read_text()
+        self.assertIn("def _is_container_runtime", src)
+        self.assertIn("freq_serve_runtime", src)
+        self.assertIn("container runtime supervises freq serve", src)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -750,6 +750,18 @@ def _persist_service_account_credentials_metadata(cfg, svc_name, password):
         fmt.step_warn(f"Could not stage service account credentials metadata: {e}")
 
 
+def _load_existing_service_account_password(cfg, svc_name):
+    """Return stored service-account password material by path, if present."""
+    if not svc_name:
+        return ""
+    path = os.path.join(_credentials_dir(cfg), f"{svc_name}-password")
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
 def _safe_credential_name(name):
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", str(name or "device")).strip("-") or "device"
 
@@ -823,6 +835,43 @@ def _home_dir_for_user(user_name):
         return pwd.getpwnam(user_name).pw_dir
     except KeyError:
         return ""
+
+
+def _is_container_runtime():
+    """Return True when this CLI is running inside a containerized freq runtime."""
+    return os.path.exists("/.dockerenv") or os.path.isfile("/run/.containerenv")
+
+
+def _service_account_is_remote_runtime(cfg, initialized_marker):
+    """True when the service account is a managed fleet identity, not local."""
+    key_path = getattr(cfg, "ssh_key_path", "") or ""
+    return bool(initialized_marker and key_path and os.path.isfile(key_path))
+
+
+def _remote_home_probe(user_name):
+    """Shell snippet that resolves a service account home on the remote host."""
+    q_user = shlex.quote(user_name)
+    fallback = shlex.quote(f"/home/{user_name}")
+    return (
+        f"home=$(getent passwd {q_user} 2>/dev/null | awk -F: '{{print $6}}'); "
+        f"test -n \"$home\" || home={fallback}; "
+    )
+
+
+def _runtime_ssh_state_paths():
+    """Generated local SSH state that should not survive product-owned reset."""
+    paths = []
+    seen = set()
+    for base in (os.path.expanduser("~/.ssh"), os.path.join(os.path.expanduser("~"), ".ssh")):
+        for path in (
+            os.path.join(base, "known_hosts"),
+            os.path.join(base, "known_hosts.old"),
+            os.path.join(base, "freq-mux"),
+        ):
+            if path not in seen:
+                paths.append(path)
+                seen.add(path)
+    return paths
 
 
 # canonical list of data/ subdirs
@@ -1738,6 +1787,8 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
     _phase_pdm(cfg, ctx, args)
     logger.perf("init_phase", time.monotonic() - _t, phase=10, name="pdm")
 
+    _reconcile_existing_managed_hosts(cfg, ctx)
+
     # Phase 11: Admin Accounts
     _phase(11, total, "Admin Account Setup")
     _t = time.monotonic()
@@ -2078,6 +2129,16 @@ def _reset_local_init_state(cfg, *, remove_live_config=False):
         _remove_init_file(path, label)
 
     _clear_generated_runtime_truth_state(cfg)
+
+    for path in _runtime_ssh_state_paths():
+        if os.path.isdir(path):
+            try:
+                shutil.rmtree(path)
+                fmt.step_ok(f"Runtime SSH state removed: {path}")
+            except OSError as e:
+                fmt.step_warn(f"Runtime SSH state cleanup skipped: {e}")
+        else:
+            _remove_init_file(path, f"Runtime SSH state {os.path.basename(path)}", missing_ok=True)
 
     if remove_live_config:
         for name in INIT_LIVE_CONFIG_FILES:
@@ -4283,27 +4344,51 @@ def _resolve_existing_host_vmid(ctx, host):
     return int(label_map.get(_label_key(getattr(host, "label", "")), 0) or 0)
 
 
+def _inventory_only_reason(cfg, ctx, host):
+    """Return the reason a host should not be treated as managed, if any."""
+    label = getattr(host, "label", "")
+    vmid = _resolve_existing_host_vmid(ctx, host)
+    if _is_operator_auto_excluded(label):
+        return "operator/product host"
+
+    fb = getattr(cfg, "fleet_boundaries", None)
+    cat_name = ""
+    if vmid and fb and hasattr(fb, "categorize"):
+        try:
+            cat_name, _tier = fb.categorize(vmid)
+        except Exception:
+            cat_name = ""
+    if cat_name in {"out_of_contract", "templates"}:
+        return f"{cat_name.replace('_', '-')} VMID {vmid}"
+
+    acknowledged = set(getattr(cfg, "_acknowledged_out_of_contract_vmids", set()) or set())
+    if vmid and vmid in acknowledged:
+        return f"acknowledged out-of-contract VMID {vmid}"
+
+    owned_vmids = set(getattr(cfg, "_owned_vmids", set()) or set())
+    if owned_vmids and vmid and vmid not in owned_vmids:
+        return f"outside owned VM contract (VMID {vmid})"
+
+    if (
+        getattr(host, "htype", "") == "pve"
+        and vmid
+        and getattr(host, "ip", "") not in set(getattr(cfg, "pve_nodes", []) or [])
+    ):
+        return f"PVE-looking guest VMID {vmid}, not a configured PVE node"
+
+    return ""
+
+
 def _reconcile_existing_managed_hosts(cfg, ctx):
     """Downgrade stale auto-managed hosts that the current contract excludes."""
     from freq.core.config import save_hosts_toml
 
-    owned_vmids = set(getattr(cfg, "_owned_vmids", set()) or set())
-    acknowledged = set(getattr(cfg, "_acknowledged_out_of_contract_vmids", set()) or set())
     changed = []
     for h in getattr(cfg, "hosts", []) or []:
         if not getattr(h, "managed", True):
             continue
         label = getattr(h, "label", "")
-        vmid = _resolve_existing_host_vmid(ctx, h)
-        reason = ""
-        if _is_operator_auto_excluded(label):
-            reason = "operator/product host"
-        elif vmid and vmid in acknowledged:
-            reason = f"acknowledged out-of-contract VMID {vmid}"
-        elif owned_vmids and vmid and vmid not in owned_vmids:
-            reason = f"outside owned VM contract (VMID {vmid})"
-        elif getattr(h, "htype", "") == "pve" and vmid and getattr(h, "ip", "") not in set(getattr(cfg, "pve_nodes", []) or []):
-            reason = f"PVE-looking guest VMID {vmid}, not a configured PVE node"
+        reason = _inventory_only_reason(cfg, ctx, h)
         if reason:
             h.managed = False
             changed.append(f"{label} ({getattr(h, 'ip', '')}) — {reason}")
@@ -5216,6 +5301,7 @@ def _phase_fleet_deploy(cfg, ctx, args=None):
                 return
             shutil.copy2(hosts_file_arg, cfg.hosts_file)
             cfg.hosts = imported_hosts
+            _reconcile_existing_managed_hosts(cfg, ctx)
             fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")
         except Exception as e:
             fmt.step_fail(f"Failed to reload hosts: {e}")
@@ -8823,7 +8909,11 @@ def _scan_fleet(cfg):
 
     # Fleet hosts (skip PVE nodes already covered, skip unmanaged hosts)
     for h in cfg.hosts:
-        if h.ip not in pve_set and getattr(h, "managed", True):
+        if (
+            h.ip not in pve_set
+            and getattr(h, "managed", True)
+            and not _inventory_only_reason(cfg, {}, h)
+        ):
             all_hosts.append({"label": h.label, "ip": h.ip, "htype": h.htype})
 
     ok_list = []
@@ -8900,7 +8990,14 @@ def _init_check(cfg, json_output=False):
     fleet_severity = "warn" if web_only else "fail"
 
     rc, _, _ = _run(["id", svc_name])
-    _chk(f"Service account '{svc_name}' exists", "pass" if rc == 0 else fleet_severity)
+    if rc == 0:
+        _chk(f"Service account '{svc_name}' exists", "pass")
+    elif os.path.isfile(marker) and (
+        _is_container_runtime() or _service_account_is_remote_runtime(cfg, True)
+    ):
+        _chk(f"Service account '{svc_name}' is remote-only on this runtime", "pass")
+    else:
+        _chk(f"Service account '{svc_name}' exists", fleet_severity)
 
     key_file = os.path.join(cfg.key_dir, "freq_id_ed25519")
     rsa_file = os.path.join(cfg.key_dir, "freq_id_rsa")
@@ -8981,13 +9078,13 @@ def _init_check(cfg, json_output=False):
 
         def _deep_check(entry):
             ip, htype, label = entry["ip"], entry["htype"], entry["label"]
-            svc_home = _home_dir_for_user(svc_name)
-            auth_keys = os.path.join(svc_home, ".ssh", "authorized_keys") if svc_home else ""
             if htype in ("linux", "pve", "docker"):
+                home_probe = _remote_home_probe(svc_name)
                 cmd = (
+                    f"{home_probe}"
                     f"id {svc_name} >/dev/null 2>&1 && "
                     f"sudo -n true 2>/dev/null && "
-                    f"test -f {shlex.quote(auth_keys)} && "
+                    f"test -f \"$home/.ssh/authorized_keys\" && "
                     f"echo DEEP_CHECK_OK"
                 )
                 use_key = key_file
@@ -9099,9 +9196,13 @@ def _init_fix(cfg, args):
     if os.path.isfile(rsa_pub):
         with open(rsa_pub) as f:
             rsa_pubkey = f.read().strip()
+    svc_pass = _load_existing_service_account_password(cfg, svc_name)
+    if not svc_pass:
+        svc_pass = secrets.token_urlsafe(24)
+
     ctx = {
         "svc_name": svc_name,
-        "svc_pass": secrets.token_urlsafe(24),  # Auto-generate for --fix mode
+        "svc_pass": svc_pass,
         "key_path": key_file,
         "pubkey": pubkey,
         "rsa_key_path": rsa_file,
@@ -10185,6 +10286,7 @@ def _init_headless(cfg, args):
             else:
                 shutil.copy2(hosts_file_arg, cfg.hosts_file)
                 cfg.hosts = imported_hosts
+                _reconcile_existing_managed_hosts(cfg, ctx)
                 fmt.step_ok(f"Imported {len(cfg.hosts)} host(s) from {hosts_file_arg}")
         except Exception as e:
             fmt.step_fail(f"Failed to reload hosts: {e}")
@@ -10217,6 +10319,8 @@ def _init_headless(cfg, args):
     # ── Phase 10: PDM Setup ──
     _phase(10, headless_total, "PDM Setup")
     _phase_pdm(cfg, ctx, args)
+
+    _reconcile_existing_managed_hosts(cfg, ctx)
 
     # ── Phase 11: RBAC ──
     _phase(11, headless_total, "RBAC Setup")
