@@ -82,6 +82,40 @@ class TestFrontendMethodConsistency(unittest.TestCase):
                 )
 
 
+class TestPveNodeCardContract(unittest.TestCase):
+    """PVE node cards must render live, truthful summary state."""
+
+    def setUp(self):
+        root = os.path.join(os.path.dirname(__file__), "..")
+        with open(os.path.join(root, "freq", "data", "web", "js", "app.js")) as f:
+            self.js_source = f.read()
+        with open(os.path.join(root, "freq", "data", "web", "css", "app.css")) as f:
+            self.css_source = f.read()
+
+    def test_util_summary_uses_live_hooks_not_placeholders(self):
+        self.assertIn("class=\"pve-util-cpu\"", self.js_source)
+        self.assertIn("class=\"pve-util-ram\"", self.js_source)
+        self.assertIn("card.querySelector('.pve-util-cpu')", self.js_source)
+        self.assertIn("card.querySelector('.pve-util-ram')", self.js_source)
+        self.assertNotIn("<span>UTIL</span><strong>...</strong>", self.js_source)
+
+    def test_lxc_stop_and_docker_down_are_red_when_nonzero(self):
+        self.assertIn("lxcOffline>0?'var(--red)'", self.js_source)
+        self.assertNotIn("lxcOffline>0?'var(--yellow)'", self.js_source)
+        self.assertIn("dockerDown>0?'var(--red)'", self.js_source)
+
+    def test_docker_counts_keep_media_cache_across_rerenders(self):
+        self.assertIn("var _fleetCache={fo:null,hd:null,md:null,ct:null}", self.js_source)
+        self.assertIn("if(md)_fleetCache.md=md", self.js_source)
+        self.assertIn("_renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct)", self.js_source)
+        self.assertIn("c.vm_id!=null?c.vm_id:c.vmid", self.js_source)
+
+    def test_freshness_chip_centers_with_create_vm_action(self):
+        match = re.search(r"\.pve-node-card-actions\s*\{(?P<body>.*?)\}", self.css_source, re.S)
+        self.assertIsNotNone(match, "Missing .pve-node-card-actions CSS block")
+        self.assertIn("align-items: center", match.group("body"))
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # Static asset security headers
 # ══════════════════════════════════════════════════════════════════════════

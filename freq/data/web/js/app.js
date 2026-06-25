@@ -1028,7 +1028,7 @@ var API={
   BACKUP_VERIFY_RUN:'/api/backup/verify',BACKUP_VERIFY_STATUS:'/api/backup/verify/status',
   CERT_EXPIRY:'/api/cert/expiry'
 };
-var _fleetCache={fo:null,hd:null,ct:null};/* cached API responses for instant page switch */
+var _fleetCache={fo:null,hd:null,md:null,ct:null};/* cached API responses for instant page switch */
 var _fleetActivityCache=null,_fleetActivityInFlight=null,_fleetActivityCacheTs=0;
 var _FLEET_ACTIVITY_CACHE_MS=15000;
 function _loadFleetActivityCounts(force){
@@ -2868,6 +2868,18 @@ function _pveMetricsRefresh(){
         return;
       }
       _clearHostCardStale(card);
+      var utilCpu=card.querySelector('.pve-util-cpu');
+      if(utilCpu){
+        var utilCpuColor=n.cpu_pct>=80?'var(--red)':n.cpu_pct>=50?'var(--yellow)':'var(--green)';
+        utilCpu.textContent=n.cpu_pct+'%';
+        utilCpu.style.color=utilCpuColor;
+      }
+      var utilRam=card.querySelector('.pve-util-ram');
+      if(utilRam){
+        var utilRamColor=n.ram_pct>=80?'var(--red)':n.ram_pct>=50?'var(--yellow)':'var(--blue)';
+        utilRam.textContent=n.ram_pct+'%';
+        utilRam.style.color=utilRamColor;
+      }
         /* Update metric rows in-place — all from PVE API, same as PVE web UI */
         card.querySelectorAll('.metric-row').forEach(function(m){
           var lbl=m.querySelector('.metric-label');
@@ -3289,7 +3301,7 @@ function _applyCompactMode(on){
 function loadFleetPage(){
   /* Render from cache immediately if available — never show skeletons on page switch */
   if(_fleetCache.fo||_fleetCache.hd){
-    _renderFleetData(_fleetCache.fo,_fleetCache.hd,null,_fleetCache.ct);
+    _renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct);
   } else {
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
@@ -5042,7 +5054,7 @@ function loadLxcContainers(){
 function refreshLxcWorkloads(){
   _authFetch(API.CT_LIST,{silent:true}).then(function(r){return r.ok?r.json():{containers:[]};}).then(function(d){
     _fleetCache.ct=d||{containers:[]};
-    if(_currentView==='fleet')_renderFleetData(_fleetCache.fo,_fleetCache.hd,null,_fleetCache.ct);
+    if(_currentView==='fleet')_renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct);
     var section=document.getElementById('fleet-sec-ct');
     if(section&&section.style.display!=='none'&&!section.classList.contains('d-none'))loadLxcContainers();
   }).catch(function(){if(_currentView==='fleet')loadMetricsQuick();});
@@ -6119,7 +6131,7 @@ var INFRA_ACTIONS={
 function loadMetricsQuick(){
   /* If we have cached data, render instantly — no skeletons, no wait */
   if(_fleetCache.fo||_fleetCache.hd){
-    _renderFleetData(_fleetCache.fo,_fleetCache.hd,null,_fleetCache.ct);
+    _renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct);
   } else {
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
     document.getElementById('metrics-summary').innerHTML='<div class="skeleton h-50" ></div>';
@@ -6134,8 +6146,9 @@ function loadMetricsQuick(){
     var fo=results[0];var hd=results[1];var md=results[2];var ctd=results[3];
     if(fo)_fleetCache.fo=fo;
     if(hd)_fleetCache.hd=hd;
+    if(md)_fleetCache.md=md;
     if(ctd)_fleetCache.ct=ctd;
-    _renderFleetData(_fleetCache.fo,_fleetCache.hd,md,_fleetCache.ct);
+    _renderFleetData(_fleetCache.fo,_fleetCache.hd,_fleetCache.md,_fleetCache.ct);
   });
 }
 /* ── Fleet rendering helpers (hoisted from _renderFleetData) ── */
@@ -6295,15 +6308,16 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labL
       var ramUsed=ramParts?parseInt(ramParts[1]):0;var ramTotal=ramParts?parseInt(ramParts[2]):1;
       var ramPct=ramTotal>0?Math.round(ramUsed/ramTotal*100):0;
       /* Initial render — PVE API poller fills real values within 2 seconds */
+      var cpuColor=loadPct>=80?'var(--red)':loadPct>=50?'var(--yellow)':'var(--green)';
       var ramColor=ramPct>=80?'var(--red)':ramPct>=50?'var(--yellow)':'var(--blue)';
       /* Centered fixed-width tracks so the sub-group row collapses to 1 column inside
        * a narrow host-card (mobile ~230px divider-light width) instead
        * of clipping content. Previously repeat(3,1fr) forced 3 equal
        * ~74px columns on mobile, producing 40+ clipped overflows in
        * the fleet sweep. */
-      nodeCard+='<div class="pve-node-stat"><span>UTIL</span><strong>...</strong><em>CPU</em><strong>...</strong><em>RAM</em></div>';
+      nodeCard+='<div class="pve-node-stat"><span>UTIL</span><strong class="pve-util-cpu" style="color:'+cpuColor+'">'+loadPct+'%</strong><em>CPU</em><strong class="pve-util-ram" style="color:'+ramColor+'">'+ramPct+'%</strong><em>RAM</em></div>';
       nodeCard+='<div class="pve-node-stat"><span>VMs</span><strong style="color:var(--purple-light)">'+nVms+'</strong><em>TOTAL</em><strong style="color:var(--green)">'+nOnline+'</strong><em>RUN</em><strong style="color:var(--red)">'+nOffline+'</strong><em>STOP</em></div>';
-      nodeCard+='<div class="pve-node-stat"><span>LXC</span><strong style="color:var(--cyan)">'+nLxc+'</strong><em>TOTAL</em><strong style="color:var(--green)">'+lxcOnline+'</strong><em>RUN</em><strong style="color:'+(lxcOffline>0?'var(--yellow)':'var(--green)')+'">'+lxcOffline+'</strong><em>STOP</em></div>';
+      nodeCard+='<div class="pve-node-stat"><span>LXC</span><strong style="color:var(--cyan)">'+nLxc+'</strong><em>TOTAL</em><strong style="color:var(--green)">'+lxcOnline+'</strong><em>RUN</em><strong style="color:'+(lxcOffline>0?'var(--red)':'var(--green)')+'">'+lxcOffline+'</strong><em>STOP</em></div>';
       nodeCard+='<div class="pve-node-stat"><span>DOCKER</span><strong style="color:var(--purple-light)">'+dockerCount+'</strong><em>TOTAL</em><strong style="color:var(--green)">'+dockerUp+'</strong><em>UP</em><strong style="color:'+(dockerDown>0?'var(--red)':'var(--green)')+'">'+dockerDown+'</strong><em>DOWN</em></div>';
       nodeCard+='</div>';
       nodeCard+='<div class="pve-node-metrics">';
@@ -6316,7 +6330,7 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labL
       /* same centered responsive row as the live-metrics branch above */
       nodeCard+='<div class="pve-node-stat"><span>PVE NODE</span><strong style="color:var(--purple-light)">'+nCores+'</strong><em>CPU</em><strong style="color:var(--purple-light)">'+nRamGb+'GB</strong><em>RAM</em></div>';
       nodeCard+='<div class="pve-node-stat"><span>VMs</span><strong style="color:var(--purple-light)">'+nVms+'</strong><em>TOTAL</em><strong style="color:var(--green)">'+nOnline+'</strong><em>RUN</em><strong style="color:var(--red)">'+nOffline+'</strong><em>STOP</em></div>';
-      nodeCard+='<div class="pve-node-stat"><span>LXC</span><strong style="color:var(--cyan)">'+nLxc+'</strong><em>TOTAL</em><strong style="color:var(--green)">'+lxcOnline+'</strong><em>RUN</em><strong style="color:'+(lxcOffline>0?'var(--yellow)':'var(--green)')+'">'+lxcOffline+'</strong><em>STOP</em></div>';
+      nodeCard+='<div class="pve-node-stat"><span>LXC</span><strong style="color:var(--cyan)">'+nLxc+'</strong><em>TOTAL</em><strong style="color:var(--green)">'+lxcOnline+'</strong><em>RUN</em><strong style="color:'+(lxcOffline>0?'var(--red)':'var(--green)')+'">'+lxcOffline+'</strong><em>STOP</em></div>';
       nodeCard+='<div class="pve-node-stat"><span>DOCKER</span><strong style="color:var(--purple-light)">'+dockerCount+'</strong><em>TOTAL</em><strong style="color:var(--green)">'+dockerUp+'</strong><em>UP</em><strong style="color:'+(dockerDown>0?'var(--red)':'var(--green)')+'">'+dockerDown+'</strong><em>DOWN</em></div>';
       nodeCard+='</div>';
       nodeCard+='<div id="pve-live-'+nodeName+'" style="margin:6px 0;padding:6px 8px;background:rgba(248,81,73,0.05);border:1px dashed var(--border);border-radius:6px;text-align:center">';
@@ -6443,10 +6457,12 @@ function _renderFleetData(fo,hd,md,ctd){
     /* Build container counts by VMID from media status data */
     var ctrByVmid={};
     _arr(md&&md.containers).forEach(function(c){
-      var vid=String(c.vm_id);
+      var vid=String(c.vm_id!=null?c.vm_id:c.vmid);
+      if(!vid||vid==='undefined'||vid==='null')return;
       if(!ctrByVmid[vid])ctrByVmid[vid]={total:0,up:0,down:0};
       ctrByVmid[vid].total++;
-      if(c.status==='up')ctrByVmid[vid].up++;else ctrByVmid[vid].down++;
+      var st=String(c.status||c.state||'').toLowerCase();
+      if(st==='up'||st==='running'||st.indexOf('up')>=0)ctrByVmid[vid].up++;else ctrByVmid[vid].down++;
     });
     /* Build lookup maps from API data */
     var healthMap={};var totalUp=0,totalDown=0,labPveNodes=0;

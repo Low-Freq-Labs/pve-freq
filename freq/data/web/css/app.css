@@ -978,7 +978,7 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   margin-top: 4px;
 }
 .pve-node-card-actions {
-  align-items: flex-start;
+  align-items: center;
   flex: 0 0 auto;
   grid-column: 2;
   grid-row: 1;
