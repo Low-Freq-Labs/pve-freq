@@ -122,6 +122,37 @@ class TestDeployTestRefreshesPthFile(unittest.TestCase):
                         ".pth refresh must be inside the runtime-exists branch")
 
 
+class TestDeployTestRefreshesDockerRuntime(unittest.TestCase):
+    """deploy-test.sh must not leave Docker installs serving stale image code."""
+
+    def setUp(self):
+        self.script = (FREQ_ROOT / "contrib" / "deploy-test.sh").read_text()
+
+    def test_copies_runtime_source_into_pve_freq_container(self):
+        """Docker installs mount conf/data/etc, not source; source must be copied."""
+        self.assertIn("docker cp ${RUNTIME_DIR}/freq pve-freq:${RUNTIME_DIR}/", self.script)
+
+    def test_replaces_stale_container_site_packages_copy(self):
+        """The Docker wrapper can import site-packages/freq before /opt."""
+        self.assertIn("*/site-packages/freq", self.script)
+        self.assertIn("SITE_FREQ", self.script)
+        self.assertIn("docker exec -u root", self.script)
+        self.assertIn("docker cp ${RUNTIME_DIR}/freq pve-freq:", self.script)
+
+    def test_clears_container_python_cache_after_source_copy(self):
+        """Container pyc files must be cleared so restarted Python imports fresh code."""
+        self.assertIn("sudo docker exec -u root pve-freq find ${RUNTIME_DIR} /usr/local/lib", self.script)
+        self.assertIn("'*/__pycache__/*.pyc'", self.script)
+
+    def test_restarts_docker_dashboard_when_systemd_service_absent(self):
+        """Docker-backed dashboard must restart even when freq-serve.service is absent."""
+        systemd_idx = self.script.find("systemctl restart freq-serve")
+        docker_restart_idx = self.script.find("sudo docker restart pve-freq")
+        self.assertNotEqual(systemd_idx, -1)
+        self.assertNotEqual(docker_restart_idx, -1)
+        self.assertLess(systemd_idx, docker_restart_idx)
+
+
 class TestBashSyntax(unittest.TestCase):
     """Both install.sh and deploy-test.sh must still parse cleanly."""
 

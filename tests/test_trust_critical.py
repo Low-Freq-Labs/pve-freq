@@ -890,6 +890,21 @@ class TestSecurityHeaders(unittest.TestCase):
         src = inspect.getsource(FreqHandler._json_response)
         self.assertIn("_send_security_headers", src)
 
+    def test_json_response_disables_browser_cache(self):
+        """Live API truth must not be cached by the browser between deploys."""
+        import inspect
+        from freq.modules.serve import FreqHandler
+        from freq.api import helpers
+
+        for src in (
+            inspect.getsource(FreqHandler._json_response),
+            inspect.getsource(helpers.json_response),
+        ):
+            self.assertIn('"Cache-Control"', src)
+            self.assertIn("no-store, no-cache, must-revalidate", src)
+            self.assertIn('"Pragma"', src)
+            self.assertIn("no-cache", src)
+
     def test_app_html_has_security_headers(self):
         """_serve_app must call _send_security_headers."""
         import inspect

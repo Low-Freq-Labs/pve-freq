@@ -7219,6 +7219,8 @@ a:hover{{text-decoration:underline}}
         body = json.dumps(data).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.send_header("Pragma", "no-cache")
         try:
             from freq.api.auth import maybe_send_session_refresh_cookie
 

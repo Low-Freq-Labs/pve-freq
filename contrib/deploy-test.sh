@@ -133,6 +133,20 @@ if [ -d ${RUNTIME_DIR}/freq ]; then
         fi
     done
     echo 'pve-freq.pth refreshed'
+
+    # Docker-backed installs do not bind-mount the source tree; only conf/data/etc
+    # are mounted. Keep the container code in sync with the runtime install or
+    # browser/API verification can exercise stale image code after a deploy.
+    if command -v docker >/dev/null 2>&1 && sudo docker ps --format '{{.Names}}' | grep -qx 'pve-freq'; then
+        sudo docker exec -u root pve-freq sh -lc \"rm -rf ${RUNTIME_DIR}/freq ${RUNTIME_DIR}/build 2>/dev/null || true\"
+        sudo docker cp ${RUNTIME_DIR}/freq pve-freq:${RUNTIME_DIR}/
+        for SITE_FREQ in \$(sudo docker exec -u root pve-freq sh -lc \"find /usr/local/lib -path '*/site-packages/freq' -type d 2>/dev/null\"); do
+            sudo docker exec -u root pve-freq sh -lc \"rm -rf '\$SITE_FREQ'\"
+            sudo docker cp ${RUNTIME_DIR}/freq pve-freq:\"\$SITE_FREQ\"
+        done
+        sudo docker exec -u root pve-freq find ${RUNTIME_DIR} /usr/local/lib -path '*/__pycache__/*.pyc' -delete 2>/dev/null || true
+        echo 'Docker runtime source synced'
+    fi
 else
     echo 'No runtime install at ${RUNTIME_DIR} — skipped'
 fi
@@ -144,6 +158,9 @@ ssh -n "${USER}@${TARGET}" "
 if sudo systemctl is-active freq-serve >/dev/null 2>&1; then
     sudo systemctl restart freq-serve
     echo 'Dashboard restarted'
+elif command -v docker >/dev/null 2>&1 && sudo docker ps --format '{{.Names}}' | grep -qx 'pve-freq'; then
+    sudo docker restart pve-freq >/dev/null
+    echo 'Docker dashboard restarted'
 else
     echo 'Dashboard service not running — skipped'
 fi

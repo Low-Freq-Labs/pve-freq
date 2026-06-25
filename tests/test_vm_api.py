@@ -19,10 +19,14 @@ from freq.core.types import CmdResult
 
 
 class _Handler:
-    def __init__(self, path="/api/test", method="POST"):
+    def __init__(self, path="/api/test", method="POST", body=None):
         self.path = path
         self.command = method
-        self.headers = {}
+        raw = b""
+        if body is not None:
+            raw = json.dumps(body).encode()
+        self.headers = {"Content-Length": str(len(raw))}
+        self.rfile = io.BytesIO(raw)
         self.wfile = io.BytesIO()
         self.status = None
 
@@ -64,6 +68,8 @@ class TestVmApiTrust(unittest.TestCase):
             vlans = []
             distros = []
             template_profiles = {}
+            vm_gateway = "10.25.255.1"
+            vm_nameserver = "10.25.255.1"
 
             class FB:
                 categories = {
@@ -153,6 +159,132 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertEqual(handler.status, 400)
         data = _json(handler)
         self.assertEqual(data["error"], "Name required")
+
+    @patch("freq.api.vm._check_session_role", return_value=("operator", None))
+    @patch("freq.api.vm._get_fleet_vms", return_value=[])
+    @patch("freq.api.vm.load_config")
+    def test_vm_create_options_exposes_first_class_contract(self, mock_load, _mock_vms, _mock_role):
+        from freq.core.types import VLAN, Distro
+
+        cfg = self._cfg()
+        cfg.vlans = [VLAN(id=255, name="prod", subnet="10.25.255.0/24", prefix="10.25.255", gateway="10.25.255.1")]
+        cfg.distros = [Distro(key="debian12", name="Debian 12", url="", filename="", family="debian")]
+        mock_load.return_value = cfg
+        handler = _Handler("/api/vm/create/options", method="GET")
+
+        vm_api.handle_vm_create_options(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertTrue(data["ok"])
+        self.assertIn("nodes", data)
+        self.assertIn("storage", data)
+        self.assertIn("templates", data)
+        self.assertIn("vlans", data)
+        self.assertEqual(data["vlans"][0]["gateway"], "10.25.255.1")
+        self.assertTrue(data["vlans"][0]["gateway_in_subnet"])
+        self.assertEqual(data["cpu"]["default"], cfg.vm_cpu)
+
+    @patch("freq.api.vm._candidate_ip_available", return_value=True)
+    @patch("freq.api.vm._check_session_role", return_value=("operator", None))
+    @patch("freq.api.vm._get_fleet_vms", return_value=[])
+    @patch("freq.api.vm.load_config")
+    def test_vm_create_plan_derives_static_ip_and_gateway_from_vlan(self, mock_load, _mock_vms, _mock_role, _mock_ip):
+        from freq.core.types import Host, VLAN
+
+        cfg = self._cfg()
+        cfg.hosts = [Host(ip="10.25.255.10", label="used", htype="linux")]
+        cfg.vlans = [VLAN(id=255, name="prod", subnet="10.25.255.0/24", prefix="10.25.255", gateway="10.25.255.1")]
+        mock_load.return_value = cfg
+        handler = _Handler(
+            "/api/vm/create/plan",
+            body={"name": "new-vm", "node": "pve01", "vlan": "prod", "ip_mode": "static", "ip": "auto"},
+        )
+
+        vm_api.handle_vm_create_plan(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["plan"]["network"]["gateway"], "10.25.255.1")
+        self.assertEqual(data["plan"]["network"]["cidr"], "10.25.255.11/24")
+        self.assertEqual(data["plan"]["network"]["tag"], "255")
+        self.assertTrue(data["plan"]["network"]["gateway_in_subnet"])
+
+    @patch("freq.api.vm._candidate_ip_available", return_value=True)
+    @patch("freq.api.vm._check_session_role", return_value=("operator", None))
+    @patch("freq.api.vm._get_fleet_vms", return_value=[])
+    @patch("freq.api.vm.load_config")
+    def test_vm_create_plan_accepts_configured_gateway_outside_vlan_subnet_with_warning(self, mock_load, _mock_vms, _mock_role, _mock_ip):
+        from freq.core.types import VLAN
+
+        cfg = self._cfg()
+        cfg.vm_gateway = "10.25.255.1"
+        cfg.vlans = [VLAN(id=25, name="vlan25", subnet="10.25.25.0/24", prefix="10.25.25", gateway="")]
+        mock_load.return_value = cfg
+        handler = _Handler(
+            "/api/vm/create/plan",
+            body={"name": "new-vm", "node": "pve01", "vlan": "vlan25", "ip_mode": "static", "ip": "auto"},
+        )
+
+        vm_api.handle_vm_create_plan(handler)
+
+        self.assertEqual(handler.status, 200)
+        data = _json(handler)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["plan"]["network"]["gateway"], "10.25.255.1")
+        self.assertEqual(data["plan"]["network"]["cidr"], "10.25.25.10/24")
+        self.assertFalse(data["plan"]["network"]["gateway_in_subnet"])
+        self.assertTrue(any("outside selected IP network" in warning for warning in data["warnings"]))
+
+    @patch("freq.api.vm._check_session_role", return_value=("operator", None))
+    @patch("freq.api.vm._get_fleet_vms", return_value=[])
+    @patch("freq.api.vm.load_config")
+    def test_vm_create_plan_rejects_gateway_outside_static_network(self, mock_load, _mock_vms, _mock_role):
+        from freq.core.types import VLAN
+
+        cfg = self._cfg()
+        cfg.vlans = [VLAN(id=10, name="lab", subnet="10.25.10.0/24", prefix="10.25.10", gateway="10.25.10.1")]
+        mock_load.return_value = cfg
+        handler = _Handler(
+            "/api/vm/create/plan",
+            body={"name": "new-vm", "node": "pve01", "vlan": "lab", "ip_mode": "static", "ip": "10.25.10.50", "gateway": "10.25.255.1"},
+        )
+
+        vm_api.handle_vm_create_plan(handler)
+
+        self.assertEqual(handler.status, 400)
+        data = _json(handler)
+        self.assertFalse(data["ok"])
+        self.assertTrue(any("gateway" in err for err in data["errors"]))
+
+    @patch("freq.api.vm.threading.Thread")
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm._get_fleet_vms", return_value=[])
+    @patch("freq.api.vm.load_config")
+    def test_vm_create_submit_queues_async_job(self, mock_load, _mock_vms, _mock_role, mock_thread):
+        cfg = self._cfg()
+        mock_load.return_value = cfg
+        handler = _Handler("/api/vm/create/submit", body={"name": "new-vm", "node": "pve01", "ip_mode": "dhcp"})
+
+        vm_api.handle_vm_create_submit(handler)
+
+        self.assertEqual(handler.status, 202)
+        data = _json(handler)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["job"]["state"], "queued")
+        mock_thread.assert_called()
+
+    def test_vm_create_routes_registered(self):
+        routes = {}
+        vm_api.register(routes)
+        for path in (
+            "/api/vm/create/options",
+            "/api/vm/create/plan",
+            "/api/vm/create/submit",
+            "/api/vm/create/job",
+        ):
+            self.assertIn(path, routes)
 
     @patch("freq.api.vm._check_session_role", return_value=("operator", None))
     @patch("freq.api.vm.load_config")

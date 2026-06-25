@@ -11,12 +11,14 @@ that receives the HTTP handler as its first argument.
 """
 
 import json
+import ipaddress
 import os
 import re
 import shlex
 import subprocess
 import threading
 import time
+import uuid
 
 from freq.core import log as logger
 from freq.api.helpers import json_response, get_params, get_json_body
@@ -36,6 +38,11 @@ from freq.modules.serve import (
     _check_session_role,
     _get_discovered_node_ips,
 )
+
+
+_vm_create_jobs = {}
+_vm_create_jobs_lock = threading.Lock()
+_VM_CREATE_JOB_TAIL = 400
 
 
 def _require_post(handler, action="this operation"):
@@ -368,6 +375,479 @@ def _clone_source_allowed(cfg, vmid: int):
     return _check_vm_permission(cfg, vmid, "clone")
 
 
+def _coerce_int(value, default=0):
+    try:
+        if value in ("", None):
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _vm_create_body(handler):
+    body = get_json_body(handler) if handler.command in {"POST", "PUT"} else {}
+    if not isinstance(body, dict):
+        body = {}
+    params = get_params(handler)
+    for key, values in params.items():
+        if key not in body and values:
+            body[key] = values[0]
+    return body
+
+
+def _node_options(cfg):
+    nodes = []
+    for idx, ip in enumerate(getattr(cfg, "pve_nodes", []) or []):
+        name = ""
+        if idx < len(getattr(cfg, "pve_node_names", []) or []):
+            name = cfg.pve_node_names[idx]
+        name = name or f"node-{idx + 1}"
+        nodes.append(
+            {
+                "name": name,
+                "ip": ip,
+                "storage": _configured_image_storage(cfg, ip) or _default_image_storage(cfg, ip),
+                "default": idx == 0,
+            }
+        )
+    return nodes
+
+
+def _storage_options(cfg):
+    seen = set()
+    stores = []
+    for node_name, info in (getattr(cfg, "pve_storage", {}) or {}).items():
+        if not isinstance(info, dict):
+            continue
+        pool = str(info.get("pool", "") or "").strip()
+        if not pool or pool in seen:
+            continue
+        seen.add(pool)
+        stores.append({"id": pool, "label": pool, "node": node_name, "type": str(info.get("type", "") or "")})
+    if not stores:
+        stores.append({"id": "local-lvm", "label": "local-lvm", "node": "", "type": "fallback"})
+    return stores
+
+
+def _gateway_status(subnet, gateway):
+    gateway = str(gateway or "").split("/", 1)[0]
+    if not subnet or not gateway:
+        return {"in_subnet": True, "warning": ""}
+    try:
+        net = ipaddress.ip_network(subnet, strict=False)
+        in_subnet = ipaddress.ip_address(gateway) in net
+    except ValueError:
+        return {"in_subnet": False, "warning": f"gateway {gateway} cannot be validated against subnet {subnet}"}
+    if in_subnet:
+        return {"in_subnet": True, "warning": ""}
+    return {
+        "in_subnet": False,
+        "warning": f"configured gateway {gateway} is outside advertised subnet {subnet}",
+    }
+
+
+def _vlan_options(cfg):
+    rows = []
+    for vlan in getattr(cfg, "vlans", []) or []:
+        gateway = getattr(vlan, "gateway", "") or getattr(cfg, "vm_gateway", "")
+        gateway_source = "vlan" if getattr(vlan, "gateway", "") else ("global" if gateway else "")
+        gateway_status = _gateway_status(getattr(vlan, "subnet", ""), gateway)
+        rows.append(
+            {
+                "id": getattr(vlan, "id", 0),
+                "name": getattr(vlan, "name", "") or f"VLAN{getattr(vlan, 'id', 0)}",
+                "subnet": getattr(vlan, "subnet", ""),
+                "prefix": getattr(vlan, "prefix", ""),
+                "gateway": gateway,
+                "gateway_source": gateway_source,
+                "gateway_in_subnet": gateway_status["in_subnet"],
+                "gateway_warning": gateway_status["warning"],
+                "bridge": getattr(cfg, "nic_bridge", "vmbr0"),
+            }
+        )
+    return rows
+
+
+def _template_options(cfg):
+    templates = []
+    try:
+        for vm in _get_fleet_vms(cfg):
+            if vm.get("category") == "templates" or vm.get("template") is True:
+                templates.append(
+                    {
+                        "vmid": vm.get("vmid"),
+                        "name": vm.get("name") or vm.get("label") or f"template-{vm.get('vmid')}",
+                        "node": vm.get("node", ""),
+                        "status": vm.get("status", ""),
+                        "source": "pve",
+                    }
+                )
+    except Exception as e:
+        logger.warn(f"vm_create_options: template discovery failed: {e}")
+    return templates
+
+
+def _distro_options(cfg):
+    return [
+        {
+            "key": getattr(d, "key", ""),
+            "name": getattr(d, "name", "") or getattr(d, "key", ""),
+            "family": getattr(d, "family", ""),
+            "tier": getattr(d, "tier", ""),
+        }
+        for d in (getattr(cfg, "distros", []) or [])
+    ]
+
+
+def _existing_ip_set(cfg):
+    used = set()
+    for host in getattr(cfg, "hosts", []) or []:
+        for ip_value in [getattr(host, "ip", "")] + list(getattr(host, "all_ips", []) or []):
+            ip_text = str(ip_value or "").split("/", 1)[0]
+            if ip_text:
+                used.add(ip_text)
+    for ip_value in getattr(cfg, "pve_nodes", []) or []:
+        if ip_value:
+            used.add(str(ip_value))
+    try:
+        for vm in _get_fleet_vms(cfg):
+            ip_value = str(vm.get("ip", "") or "").split("/", 1)[0]
+            if ip_value:
+                used.add(ip_value)
+    except Exception:
+        pass
+    return used
+
+
+def _vlan_by_key(cfg, key):
+    key_text = str(key or "").strip().lower()
+    vlans = getattr(cfg, "vlans", []) or []
+    if not key_text and vlans:
+        return vlans[0]
+    for vlan in vlans:
+        if key_text in {str(getattr(vlan, "id", "")).lower(), str(getattr(vlan, "name", "")).lower()}:
+            return vlan
+    return None
+
+
+def _candidate_ip_available(ip_text):
+    try:
+        r = subprocess.run(["ping", "-c", "1", "-W", "1", ip_text], capture_output=True, timeout=3)
+        return r.returncode != 0
+    except (subprocess.TimeoutExpired, OSError):
+        return True
+
+
+def _next_free_ip(cfg, vlan, limit=160):
+    subnet = getattr(vlan, "subnet", "") if vlan else ""
+    if not subnet:
+        return "", "No subnet configured for selected network"
+    try:
+        net = ipaddress.ip_network(subnet, strict=False)
+    except ValueError:
+        return "", f"Invalid subnet for selected network: {subnet}"
+    used = _existing_ip_set(cfg)
+    gateway = str(getattr(vlan, "gateway", "") or getattr(cfg, "vm_gateway", "") or "").split("/", 1)[0]
+    if gateway:
+        used.add(gateway)
+    for idx, candidate in enumerate(net.hosts()):
+        if idx >= limit:
+            break
+        ip_text = str(candidate)
+        last = int(ip_text.rsplit(".", 1)[-1]) if "." in ip_text else 0
+        if last < 10 or ip_text in used:
+            continue
+        if _candidate_ip_available(ip_text):
+            return ip_text, ""
+    return "", f"No free IP found in {subnet} within first {limit} usable addresses"
+
+
+def _gateway_matches_subnet(ip_cidr, gateway):
+    if not ip_cidr or not gateway:
+        return True
+    try:
+        interface = ipaddress.ip_interface(ip_cidr)
+        return ipaddress.ip_address(gateway) in interface.network
+    except ValueError:
+        return False
+
+
+def _vm_create_options_payload(cfg):
+    return {
+        "ok": True,
+        "schema_version": 1,
+        "nodes": _node_options(cfg),
+        "storage": _storage_options(cfg),
+        "templates": _template_options(cfg),
+        "distros": _distro_options(cfg),
+        "vlans": _vlan_options(cfg),
+        "cpu": {
+            "default": getattr(cfg, "vm_cpu", "x86-64-v2-AES"),
+            "choices": ["host", "x86-64-v2-AES", "x86-64-v3", "kvm64"],
+        },
+        "memory": {
+            "default_mb": getattr(cfg, "vm_default_ram", 2048),
+            "ballooning_default": True,
+        },
+        "disk": {
+            "default_gb": getattr(cfg, "vm_default_disk", 32),
+            "default_storage": _storage_options(cfg)[0]["id"],
+        },
+        "bootstrap": {
+            "service_account": getattr(cfg, "ssh_service_account", ""),
+            "ssh_key_configured": bool(getattr(cfg, "ssh_key_path", "")),
+            "method": "cloud-init sshkeys + ciuser",
+        },
+    }
+
+
+def _vm_create_plan(cfg, payload, allocate_vmid=False):
+    errors = []
+    warnings = []
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        errors.append("name is required")
+    elif not valid_label(name):
+        errors.append("invalid VM name (alphanumeric + hyphens only)")
+
+    node_name = str(payload.get("node") or payload.get("target_node") or "auto").strip() or "auto"
+    node_ip = ""
+    if node_name != "auto":
+        node_name, node_err = _token_param(node_name, "node")
+        if node_err:
+            errors.append(node_err)
+        else:
+            node_ip = _node_ip_for_name(cfg, node_name)
+            if not node_ip:
+                errors.append(f"unknown configured PVE node: {node_name}")
+    else:
+        nodes = _node_options(cfg)
+        if nodes:
+            node_name = nodes[0]["name"]
+            node_ip = nodes[0]["ip"]
+        else:
+            errors.append("no PVE nodes configured")
+
+    cores = _coerce_int(payload.get("cores"), getattr(cfg, "vm_default_cores", 2))
+    ram = _coerce_int(payload.get("ram") or payload.get("memory_mb"), getattr(cfg, "vm_default_ram", 2048))
+    disk = _coerce_int(payload.get("disk") or payload.get("disk_gb"), getattr(cfg, "vm_default_disk", 32))
+    balloon = _coerce_int(payload.get("balloon"), 0)
+    if cores < 1 or cores > 256:
+        errors.append("cores must be between 1 and 256")
+    if ram < 256:
+        errors.append("memory must be at least 256MB")
+    if disk < 1:
+        errors.append("disk must be at least 1GB")
+    if balloon and balloon >= ram:
+        errors.append("balloon memory must be less than assigned memory")
+
+    cpu = str(payload.get("cpu") or getattr(cfg, "vm_cpu", "x86-64-v2-AES")).strip()
+    machine = str(payload.get("machine") or getattr(cfg, "vm_machine", "q35")).strip()
+    scsihw = str(payload.get("scsihw") or getattr(cfg, "vm_scsihw", "virtio-scsi-single")).strip()
+    storage = str(payload.get("storage") or (_configured_image_storage(cfg, node_ip) if node_ip else "") or _storage_options(cfg)[0]["id"]).strip()
+    storage, storage_err = _token_param(storage, "storage")
+    if storage_err:
+        errors.append(storage_err)
+
+    template_vmid = _coerce_int(payload.get("template_vmid") or payload.get("source_vmid"), 0)
+    if template_vmid:
+        allowed, err = _clone_source_allowed(cfg, template_vmid)
+        if not allowed:
+            errors.append(f"template/source blocked: {err}")
+
+    vmid = _coerce_int(payload.get("vmid") or payload.get("newid") or payload.get("target_vmid"), 0)
+    if allocate_vmid and not vmid and node_ip and not errors:
+        stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
+        if ok:
+            vmid = _parse_next_vmid(stdout)
+        if vmid <= 0:
+            errors.append(f"invalid next VMID from cluster: {(stdout or '').strip() or 'empty'}")
+    if vmid:
+        allowed, err = _check_vm_permission(cfg, vmid, "configure")
+        if not allowed:
+            errors.append(f"target VMID blocked: {err}")
+
+    vlan_key = payload.get("vlan") or payload.get("network") or ""
+    vlan = _vlan_by_key(cfg, vlan_key)
+    ip_mode = str(payload.get("ip_mode") or ("static" if payload.get("ip") else "dhcp")).lower()
+    requested_ip = str(payload.get("ip") or "").strip()
+    cidr = ""
+    gateway_explicit = any(str(payload.get(k) or "").strip() for k in ("gateway", "gw"))
+    configured_gateway = ""
+    gateway_source = ""
+    if vlan:
+        configured_gateway = str(getattr(vlan, "gateway", "") or getattr(cfg, "vm_gateway", "") or "").strip()
+        gateway_source = "vlan" if getattr(vlan, "gateway", "") else ("global" if configured_gateway else "")
+    gateway = str(payload.get("gateway") or payload.get("gw") or "").strip()
+    if vlan and not gateway:
+        gateway = configured_gateway
+    if ip_mode == "static":
+        if requested_ip in {"", "auto"}:
+            requested_ip, ip_err = _next_free_ip(cfg, vlan)
+            if ip_err:
+                errors.append(ip_err)
+        bare_ip = requested_ip.split("/", 1)[0]
+        if requested_ip and not valid_ip(bare_ip):
+            errors.append("invalid static IP address")
+        prefix = "24"
+        if requested_ip and "/" in requested_ip:
+            prefix = requested_ip.split("/", 1)[1]
+        elif vlan and getattr(vlan, "subnet", "") and "/" in getattr(vlan, "subnet", ""):
+            prefix = getattr(vlan, "subnet").split("/", 1)[1]
+        if requested_ip:
+            cidr = requested_ip if "/" in requested_ip else f"{requested_ip}/{prefix}"
+        if gateway and not valid_ip(gateway):
+            errors.append("invalid gateway IP")
+        if cidr and gateway and not _gateway_matches_subnet(cidr, gateway):
+            if configured_gateway and gateway == configured_gateway:
+                warnings.append(
+                    f"configured {gateway_source or 'network'} gateway {gateway} is outside selected IP network {cidr}; verify routed/on-link gateway handling before submit"
+                )
+            elif gateway_explicit:
+                errors.append(f"gateway {gateway} is not in selected IP network {cidr}")
+            else:
+                warnings.append(f"gateway {gateway} is outside selected IP network {cidr}")
+    elif ip_mode != "dhcp":
+        errors.append("ip_mode must be dhcp or static")
+
+    bridge = str(payload.get("bridge") or getattr(cfg, "nic_bridge", "vmbr0")).strip()
+    tag = str(getattr(vlan, "id", "") if vlan else (payload.get("tag") or "")).strip()
+    if tag and not valid_vlan(tag):
+        errors.append("invalid VLAN tag")
+
+    bootstrap = {
+        "ciuser": getattr(cfg, "ssh_service_account", ""),
+        "ssh_key_path": getattr(cfg, "ssh_key_path", ""),
+        "ssh_key_available": bool(getattr(cfg, "ssh_key_path", "") and os.path.isfile(getattr(cfg, "ssh_key_path", "") + ".pub")),
+        "nameserver": str(payload.get("nameserver") or getattr(cfg, "vm_nameserver", "")),
+    }
+    if not bootstrap["ssh_key_available"]:
+        warnings.append("service SSH public key is not readable; bootstrap will set ciuser but may not install sshkeys")
+
+    plan = {
+        "name": name,
+        "vmid": vmid,
+        "node": node_name,
+        "node_ip": node_ip,
+        "mode": "clone" if template_vmid else "create",
+        "template_vmid": template_vmid,
+        "cores": cores,
+        "ram_mb": ram,
+        "balloon_mb": balloon,
+        "disk_gb": disk,
+        "cpu": cpu,
+        "machine": machine,
+        "scsihw": scsihw,
+        "storage": storage,
+        "network": {
+            "mode": ip_mode,
+            "bridge": bridge,
+            "tag": tag,
+            "ip": requested_ip,
+            "cidr": cidr,
+            "gateway": gateway,
+            "gateway_source": gateway_source if gateway == configured_gateway else ("request" if gateway else ""),
+            "gateway_in_subnet": _gateway_matches_subnet(cidr, gateway),
+            "gateway_warning": _gateway_status(cidr, gateway)["warning"] if cidr and gateway else "",
+            "vlan": getattr(vlan, "name", "") if vlan else "",
+            "vlan_id": getattr(vlan, "id", 0) if vlan else 0,
+        },
+        "bootstrap": bootstrap,
+        "steps": [
+            "allocate VMID" if not vmid else "use requested VMID",
+            "clone template" if template_vmid else "create VM shell",
+            "configure CPU/memory/disk",
+            "configure NIC and cloud-init IP",
+            "install service account SSH key via cloud-init",
+            "refresh fleet inventory",
+        ],
+    }
+    return {"ok": not errors, "plan": plan, "errors": errors, "warnings": warnings}
+
+
+def _job_update(job_id, **updates):
+    with _vm_create_jobs_lock:
+        job = _vm_create_jobs.get(job_id)
+        if not job:
+            return
+        lines = updates.pop("lines", None)
+        if lines:
+            job.setdefault("lines", []).extend(lines)
+            job["lines"] = job["lines"][-_VM_CREATE_JOB_TAIL:]
+        job.update(updates)
+        job["updated_at"] = time.time()
+
+
+def _run_vm_create_job(job_id, payload):
+    cfg = load_config()
+    try:
+        result = _vm_create_plan(cfg, payload, allocate_vmid=True)
+        if not result["ok"]:
+            _job_update(job_id, state="failed", errors=result["errors"], finished_at=time.time(), lines=["validation failed"])
+            return
+        plan = result["plan"]
+        _job_update(job_id, state="running", plan=plan, warnings=result["warnings"], lines=[f"planned VM {plan['vmid']} on {plan['node']}"])
+        node_ip = plan["node_ip"]
+        vmid = plan["vmid"]
+        if plan["mode"] == "clone":
+            parts = ["qm", "clone", str(plan["template_vmid"]), str(vmid), "--name", plan["name"], "--full", "1"]
+            if plan["node"]:
+                parts.extend(["--target", plan["node"]])
+            if plan["storage"]:
+                parts.extend(["--storage", plan["storage"]])
+            cmd = " ".join(shlex.quote(p) for p in parts)
+        else:
+            net = f"virtio,bridge={plan['network']['bridge']}"
+            if plan["network"].get("tag"):
+                net += f",tag={plan['network']['tag']}"
+            cmd = (
+                f"qm create {vmid} --name {shlex.quote(plan['name'])} --cores {plan['cores']} "
+                f"--memory {plan['ram_mb']} --cpu {shlex.quote(plan['cpu'])} "
+                f"--machine {shlex.quote(plan['machine'])} --net0 {shlex.quote(net)} "
+                f"--scsihw {shlex.quote(plan['scsihw'])} --scsi0 {shlex.quote(plan['storage'] + ':' + str(plan['disk_gb']))}"
+            )
+            if plan["balloon_mb"]:
+                cmd += f" --balloon {plan['balloon_mb']}"
+        _job_update(job_id, lines=[f"running: {cmd}"])
+        stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=300)
+        if not ok:
+            _job_update(job_id, state="failed", error=stdout, finished_at=time.time(), lines=[stdout])
+            return
+
+        set_cmds = [
+            f"qm set {vmid} --ciuser {shlex.quote(plan['bootstrap']['ciuser'])}",
+            f"qm set {vmid} --citype nocloud",
+        ]
+        if plan["bootstrap"].get("nameserver"):
+            set_cmds.append(f"qm set {vmid} --nameserver {shlex.quote(plan['bootstrap']['nameserver'])}")
+        if plan["bootstrap"].get("ssh_key_available"):
+            pub = plan["bootstrap"]["ssh_key_path"] + ".pub"
+            tmp = f"/tmp/freq-sshkey-{vmid}.pub"
+            with open(pub) as f:
+                pubkey = f.read().strip()
+            set_cmds.append("printf '%s\\n' " + shlex.quote(pubkey) + f" > {tmp}")
+            set_cmds.append(f"qm set {vmid} --sshkeys {tmp}")
+        network = plan["network"]
+        if network["mode"] == "static":
+            ipconfig = f"ip={network['cidr']}"
+            if network.get("gateway"):
+                ipconfig += f",gw={network['gateway']}"
+        else:
+            ipconfig = "ip=dhcp"
+        set_cmds.append(f"qm set {vmid} --ipconfig0 {shlex.quote(ipconfig)}")
+        for set_cmd in set_cmds:
+            _job_update(job_id, lines=[f"running: {set_cmd}"])
+            out, ok = _pve_cmd(cfg, node_ip, set_cmd, timeout=60)
+            if not ok:
+                _job_update(job_id, state="failed", error=out, finished_at=time.time(), lines=[out])
+                return
+        _refresh_fleet_overview_after_mutation("create-wizard", vmid)
+        _job_update(job_id, state="succeeded", result={"ok": True, "vmid": vmid, "name": plan["name"], "node": plan["node"]}, finished_at=time.time(), lines=["create job succeeded"])
+    except Exception as e:
+        logger.error(f"api_vm_error: create job failed: {e}", endpoint="vm/create/submit")
+        _job_update(job_id, state="failed", error=str(e), finished_at=time.time(), lines=[str(e)])
+
+
 # ── Handlers ────────────────────────────────────────────────────────────
 
 
@@ -376,6 +856,89 @@ def handle_vm_list(handler):
     cfg = load_config()
     vm_list = _get_fleet_vms(cfg)
     json_response(handler, {"vms": vm_list, "count": len(vm_list)})
+
+
+def handle_vm_create_options(handler):
+    """GET /api/vm/create/options — first-class VM create wizard options."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
+    cfg = load_config()
+    json_response(handler, _vm_create_options_payload(cfg))
+
+
+def handle_vm_create_plan(handler):
+    """POST /api/vm/create/plan — validate and preview a VM create request."""
+    if _require_post(handler, "VM create plan"):
+        return
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
+    cfg = load_config()
+    payload = _vm_create_body(handler)
+    plan = _vm_create_plan(cfg, payload, allocate_vmid=False)
+    json_response(handler, plan, 200 if plan["ok"] else 400)
+
+
+def handle_vm_create_submit(handler):
+    """POST /api/vm/create/submit — launch first-class VM create job."""
+    if _require_post(handler, "VM create submit"):
+        return
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
+    cfg = load_config()
+    payload = _vm_create_body(handler)
+    preview = _vm_create_plan(cfg, payload, allocate_vmid=False)
+    if not preview["ok"]:
+        json_response(handler, preview, 400)
+        return
+    job_id = uuid.uuid4().hex[:12]
+    now = time.time()
+    with _vm_create_jobs_lock:
+        _vm_create_jobs[job_id] = {
+            "id": job_id,
+            "state": "queued",
+            "created_at": now,
+            "updated_at": now,
+            "lines": ["queued VM create job"],
+            "plan": preview["plan"],
+            "warnings": preview["warnings"],
+        }
+    threading.Thread(target=_run_vm_create_job, args=(job_id, payload), daemon=True, name=f"freq-vm-create-{job_id}").start()
+    with _vm_create_jobs_lock:
+        job = dict(_vm_create_jobs[job_id])
+        job["lines"] = list(job.get("lines", []))
+    json_response(handler, {"ok": True, "job": job}, 202)
+
+
+def handle_vm_create_job(handler):
+    """GET /api/vm/create/job?id=<job_id> — return VM create job status/log."""
+    role, err = _check_session_role(handler, "operator")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
+    params = get_params(handler)
+    job_id = params.get("id", params.get("job_id", [""]))[0]
+    if not job_id:
+        with _vm_create_jobs_lock:
+            jobs = [dict(job) for job in _vm_create_jobs.values()]
+        for job in jobs:
+            job["lines"] = list(job.get("lines", []))[-_VM_CREATE_JOB_TAIL:]
+        json_response(handler, {"ok": True, "jobs": sorted(jobs, key=lambda j: j.get("created_at", 0), reverse=True)[:20]})
+        return
+    with _vm_create_jobs_lock:
+        job = _vm_create_jobs.get(job_id)
+        if job:
+            job = dict(job)
+            job["lines"] = list(job.get("lines", []))[-_VM_CREATE_JOB_TAIL:]
+    if not job:
+        json_response(handler, {"error": f"VM create job not found: {job_id}"}, 404)
+        return
+    json_response(handler, {"ok": True, "job": job})
 
 
 def handle_vm_create(handler):
@@ -1810,10 +2373,18 @@ def handle_vm_migrate(handler):
 def handle_vm_wizard_defaults(handler):
     """GET /api/vm/wizard-defaults — defaults for VM creation wizard."""
     cfg = load_config()
+    options = _vm_create_options_payload(cfg)
     profiles = getattr(cfg, "template_profiles", {})
     json_response(
         handler,
         {
+            "schema_version": 1,
+            "first_class": {
+                "options_endpoint": "/api/vm/create/options",
+                "plan_endpoint": "/api/vm/create/plan",
+                "submit_endpoint": "/api/vm/create/submit",
+                "job_endpoint": "/api/vm/create/job",
+            },
             "defaults": {
                 "cores": cfg.vm_default_cores,
                 "ram": cfg.vm_default_ram,
@@ -1825,6 +2396,7 @@ def handle_vm_wizard_defaults(handler):
             "nodes": cfg.pve_node_names,
             "vlans": [{"name": v.name, "id": v.id, "subnet": v.subnet} for v in cfg.vlans],
             "distros": [{"key": d.key, "name": d.name} for d in cfg.distros],
+            "options": options,
         },
     )
 
@@ -2042,6 +2614,10 @@ def register(routes: dict):
     """
     routes["/api/vms"] = handle_vm_list
     routes["/api/vm/create"] = handle_vm_create
+    routes["/api/vm/create/options"] = handle_vm_create_options
+    routes["/api/vm/create/plan"] = handle_vm_create_plan
+    routes["/api/vm/create/submit"] = handle_vm_create_submit
+    routes["/api/vm/create/job"] = handle_vm_create_job
     routes["/api/vm/destroy"] = handle_vm_destroy
     routes["/api/vm/snapshot"] = handle_vm_snapshot
     routes["/api/vm/resize"] = handle_vm_resize

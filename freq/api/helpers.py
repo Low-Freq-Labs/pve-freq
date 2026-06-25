@@ -24,6 +24,8 @@ def json_response(handler, data, status=200):
     body = json.dumps(data).encode()
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
+    handler.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+    handler.send_header("Pragma", "no-cache")
     try:
         from freq.api.auth import maybe_send_session_refresh_cookie
 
