@@ -100,26 +100,85 @@ def _configured_image_storage(cfg, node_ip: str) -> str:
 
 def _discover_image_storage(cfg, node_ip: str) -> str:
     """Best-effort live storage discovery for image-capable PVE storage."""
-    stdout, ok = _pve_cmd(cfg, node_ip, "pvesm status --content images --enabled 1 --output-format json", timeout=15)
+    rows = _node_image_storage_options(cfg, node_ip)
+    if rows:
+        return rows[0]["id"]
+    stdout, ok = _pve_cmd(cfg, node_ip, "pvesm status --content images --enabled 1", timeout=15)
+    if ok and stdout:
+        parsed = []
+        for line in stdout.splitlines()[1:]:
+            parts = line.split()
+            if len(parts) >= 3 and parts[2] == "active":
+                parsed.append(parts[0])
+        for preferred in ("local-zfs", "local-lvm"):
+            if preferred in parsed:
+                return preferred
+        if parsed:
+            return parsed[0]
+    return ""
+
+
+def _node_image_storage_options(cfg, node_ip: str):
+    """Return enabled image-capable storage pools for a specific PVE node."""
+    node_name = _node_name_for_ip(cfg, node_ip)
+    if not node_name:
+        return []
+    stdout, ok = _pve_cmd(
+        cfg,
+        node_ip,
+        f"pvesh get /nodes/{shlex.quote(node_name)}/storage --content images --output-format json",
+        timeout=15,
+    )
     if ok and stdout:
         try:
             data = json.loads(stdout)
             if isinstance(data, list):
-                active = [str(item.get("storage", "") or "") for item in data if item.get("active", 1)]
-                for preferred in ("local-zfs", "local-lvm"):
-                    if preferred in active:
-                        return preferred
-                for pool in active:
-                    if pool:
-                        return pool
+                rows = []
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+                    storage = str(item.get("storage", "") or "").strip()
+                    if not storage:
+                        continue
+                    if int(item.get("enabled", 1) or 0) != 1 or int(item.get("active", 1) or 0) != 1:
+                        continue
+                    content = str(item.get("content", "") or "")
+                    if "images" not in {part.strip() for part in content.split(",")}:
+                        continue
+                    rows.append(
+                        {
+                            "id": storage,
+                            "label": storage,
+                            "node": node_name,
+                            "type": str(item.get("type", "") or ""),
+                            "shared": bool(item.get("shared", 0)),
+                        }
+                    )
+                rows.sort(key=lambda row: (1 if row.get("shared") else 0, 0 if row.get("type") in {"zfspool", "lvmthin"} else 1, row["id"]))
+                return rows
         except (TypeError, json.JSONDecodeError):
             pass
-    return ""
+    return []
 
 
 def _default_image_storage(cfg, node_ip: str) -> str:
     """Choose the storage pool for VM disks without hardcoding a lab-only default."""
     return _configured_image_storage(cfg, node_ip) or _discover_image_storage(cfg, node_ip) or "local-lvm"
+
+
+def _resolve_target_storage(cfg, node_ip: str, requested: str):
+    """Return a node-valid image storage pool plus any warning."""
+    requested = str(requested or "").strip()
+    live_rows = _node_image_storage_options(cfg, node_ip) if node_ip else []
+    if not live_rows:
+        return requested or _default_image_storage(cfg, node_ip), ""
+    live_ids = {row["id"] for row in live_rows}
+    if requested and requested in live_ids:
+        return requested, ""
+    fallback = live_rows[0]["id"]
+    if requested:
+        return fallback, f"requested storage {requested} is not enabled for images on target node; using {fallback}"
+    return fallback, ""
 
 
 def _existing_vm_disk_storage(config_text: str) -> str:
@@ -216,6 +275,78 @@ def _parse_next_vmid(raw_value: str) -> int:
         return int((raw_value or "").strip())
     except (ValueError, TypeError):
         return 0
+
+
+def _cluster_existing_vmids(cfg, node_ip: str):
+    """Return cluster VMIDs, or (None, error) when the list cannot be trusted."""
+    stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/resources --type vm --output-format json")
+    if not ok:
+        return None, (stdout or "").strip() or "cluster resource lookup failed"
+    try:
+        rows = json.loads(stdout or "[]")
+    except (TypeError, json.JSONDecodeError) as e:
+        return None, f"cluster resource lookup returned invalid JSON: {e}"
+    if not isinstance(rows, list):
+        return None, "cluster resource lookup returned non-list JSON"
+    existing = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            existing.add(int(row.get("vmid")))
+        except (TypeError, ValueError):
+            continue
+    return existing, ""
+
+
+def _create_vmid_ranges(cfg):
+    """Return configured VMID ranges where new VMs may be configured."""
+    ranges = []
+    categories = getattr(getattr(cfg, "fleet_boundaries", None), "categories", {}) or {}
+    preferred_order = {"sandbox": 0, "test": 1, "lab": 2, "dev": 3}
+    for name, cat in categories.items():
+        if not isinstance(cat, dict):
+            continue
+        start = cat.get("range_start")
+        end = cat.get("range_end")
+        try:
+            start = int(start)
+            end = int(end)
+        except (TypeError, ValueError):
+            continue
+        if start <= 0 or end < start:
+            continue
+        allowed, _ = _check_vm_permission(cfg, start, "configure")
+        if not allowed:
+            continue
+        ranges.append((preferred_order.get(str(name).lower(), 50), start, end, str(name)))
+    return sorted(ranges)
+
+
+def _allocate_create_vmid(cfg, node_ip: str):
+    """Allocate an allowed VMID for first-class create without trusting low nextid."""
+    stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
+    if not ok:
+        return 0, "cluster-nextid", f"cannot allocate VMID: {(stdout or '').strip() or 'cluster nextid failed'}"
+    next_vmid = _parse_next_vmid(stdout)
+    if next_vmid <= 0:
+        return 0, "cluster-nextid", f"Invalid next VMID from cluster: {(stdout or '').strip() or 'empty'}"
+    allowed, _ = _check_vm_permission(cfg, next_vmid, "configure")
+    if allowed:
+        return next_vmid, "cluster-nextid", ""
+
+    existing, err = _cluster_existing_vmids(cfg, node_ip)
+    if existing is None:
+        return 0, "fleet-boundary-range", f"cannot safely allocate allowed VMID after cluster nextid {next_vmid}: {err}"
+    for _order, start, end, name in _create_vmid_ranges(cfg):
+        for candidate in range(start, end + 1):
+            if candidate in existing:
+                continue
+            allowed, perm_err = _check_vm_permission(cfg, candidate, "configure")
+            if allowed:
+                return candidate, f"{name}-range", ""
+            return 0, f"{name}-range", f"configured create range {name} is not allowed: {perm_err}"
+    return 0, "fleet-boundary-range", f"cluster nextid {next_vmid} is outside create policy and no free configure-capable VMID range is configured"
 
 
 def _respond_operation(handler, payload, ok, failure_status=502):
@@ -375,6 +506,14 @@ def _clone_source_allowed(cfg, vmid: int):
     return _check_vm_permission(cfg, vmid, "clone")
 
 
+def _template_source(cfg, template_vmid: int):
+    """Return the PVE node that owns a template/source VM."""
+    if not template_vmid:
+        return "", ""
+    source_ip = _find_vm_node_ip(cfg, template_vmid)
+    return _node_name_for_ip(cfg, source_ip) or "", source_ip or ""
+
+
 def _coerce_int(value, default=0):
     try:
         if value in ("", None):
@@ -424,6 +563,13 @@ def _storage_options(cfg):
             continue
         seen.add(pool)
         stores.append({"id": pool, "label": pool, "node": node_name, "type": str(info.get("type", "") or "")})
+    for node_ip in getattr(cfg, "pve_nodes", []) or []:
+        for row in _node_image_storage_options(cfg, node_ip):
+            key = (row["id"], row.get("node", ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            stores.append(row)
     if not stores:
         stores.append({"id": "local-lvm", "label": "local-lvm", "node": "", "type": "fallback"})
     return stores
@@ -644,28 +790,41 @@ def _vm_create_plan(cfg, payload, allocate_vmid=False):
     cpu = str(payload.get("cpu") or getattr(cfg, "vm_cpu", "x86-64-v2-AES")).strip()
     machine = str(payload.get("machine") or getattr(cfg, "vm_machine", "q35")).strip()
     scsihw = str(payload.get("scsihw") or getattr(cfg, "vm_scsihw", "virtio-scsi-single")).strip()
-    storage = str(payload.get("storage") or (_configured_image_storage(cfg, node_ip) if node_ip else "") or _storage_options(cfg)[0]["id"]).strip()
+    storage_explicit = "storage" in payload and str(payload.get("storage") or "").strip() != ""
+    storage = str(payload.get("storage") or (_configured_image_storage(cfg, node_ip) if node_ip else "")).strip()
     storage, storage_err = _token_param(storage, "storage")
     if storage_err:
         errors.append(storage_err)
 
     template_vmid = _coerce_int(payload.get("template_vmid") or payload.get("source_vmid"), 0)
+    template_source_node = ""
+    template_source_node_ip = ""
     if template_vmid:
         allowed, err = _clone_source_allowed(cfg, template_vmid)
         if not allowed:
             errors.append(f"template/source blocked: {err}")
+        elif node_ip:
+            template_source_node, template_source_node_ip = _template_source(cfg, template_vmid)
+            if not template_source_node_ip:
+                errors.append(f"template/source VMID {template_vmid} was not found on any configured PVE node")
 
     vmid = _coerce_int(payload.get("vmid") or payload.get("newid") or payload.get("target_vmid"), 0)
+    vmid_source = "request" if vmid else ""
     if allocate_vmid and not vmid and node_ip and not errors:
-        stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
-        if ok:
-            vmid = _parse_next_vmid(stdout)
-        if vmid <= 0:
-            errors.append(f"invalid next VMID from cluster: {(stdout or '').strip() or 'empty'}")
+        vmid, vmid_source, vmid_err = _allocate_create_vmid(cfg, node_ip)
+        if vmid_err:
+            errors.append(vmid_err)
+        if vmid <= 0 and not vmid_err:
+            errors.append("could not allocate VMID")
     if vmid:
         allowed, err = _check_vm_permission(cfg, vmid, "configure")
         if not allowed:
             errors.append(f"target VMID blocked: {err}")
+
+    if node_ip and not errors and (storage_explicit or not storage):
+        storage, storage_warning = _resolve_target_storage(cfg, node_ip, storage)
+        if storage_warning:
+            warnings.append(storage_warning)
 
     vlan_key = payload.get("vlan") or payload.get("network") or ""
     vlan = _vlan_by_key(cfg, vlan_key)
@@ -727,10 +886,13 @@ def _vm_create_plan(cfg, payload, allocate_vmid=False):
     plan = {
         "name": name,
         "vmid": vmid,
+        "vmid_source": vmid_source,
         "node": node_name,
         "node_ip": node_ip,
         "mode": "clone" if template_vmid else "create",
         "template_vmid": template_vmid,
+        "template_source_node": template_source_node,
+        "template_source_node_ip": template_source_node_ip,
         "cores": cores,
         "ram_mb": ram,
         "balloon_mb": balloon,
@@ -778,6 +940,19 @@ def _job_update(job_id, **updates):
         job["updated_at"] = time.time()
 
 
+def _cleanup_created_vm_after_failed_create(cfg, vmid: int, node_ips):
+    """Best-effort cleanup for disposable create jobs after partial success."""
+    seen = set()
+    for node_ip in node_ips:
+        if not node_ip or node_ip in seen:
+            continue
+        seen.add(node_ip)
+        try:
+            _pve_cmd(cfg, node_ip, f"qm destroy {vmid} --purge 1", timeout=60)
+        except Exception:
+            pass
+
+
 def _run_vm_create_job(job_id, payload):
     cfg = load_config()
     try:
@@ -789,11 +964,15 @@ def _run_vm_create_job(job_id, payload):
         _job_update(job_id, state="running", plan=plan, warnings=result["warnings"], lines=[f"planned VM {plan['vmid']} on {plan['node']}"])
         node_ip = plan["node_ip"]
         vmid = plan["vmid"]
+        clone_node_ip = node_ip
+        cross_node_clone = False
         if plan["mode"] == "clone":
+            clone_node_ip = plan.get("template_source_node_ip") or node_ip
+            cross_node_clone = bool(clone_node_ip and node_ip and clone_node_ip != node_ip)
             parts = ["qm", "clone", str(plan["template_vmid"]), str(vmid), "--name", plan["name"], "--full", "1"]
-            if plan["node"]:
+            if plan["node"] and not cross_node_clone:
                 parts.extend(["--target", plan["node"]])
-            if plan["storage"]:
+            if plan["storage"] and not cross_node_clone:
                 parts.extend(["--storage", plan["storage"]])
             cmd = " ".join(shlex.quote(p) for p in parts)
         else:
@@ -808,11 +987,24 @@ def _run_vm_create_job(job_id, payload):
             )
             if plan["balloon_mb"]:
                 cmd += f" --balloon {plan['balloon_mb']}"
+            clone_node_ip = node_ip
         _job_update(job_id, lines=[f"running: {cmd}"])
-        stdout, ok = _pve_cmd(cfg, node_ip, cmd, timeout=300)
+        stdout, ok = _pve_cmd(cfg, clone_node_ip, cmd, timeout=300)
         if not ok:
             _job_update(job_id, state="failed", error=stdout, finished_at=time.time(), lines=[stdout])
             return
+
+        if cross_node_clone:
+            migrate_parts = ["qm", "migrate", str(vmid), plan["node"], "--with-local-disks"]
+            if plan["storage"]:
+                migrate_parts.extend(["--targetstorage", plan["storage"]])
+            migrate_cmd = " ".join(shlex.quote(p) for p in migrate_parts)
+            _job_update(job_id, lines=[f"running: {migrate_cmd}"])
+            out, ok = _pve_cmd(cfg, clone_node_ip, migrate_cmd, timeout=600)
+            if not ok:
+                _cleanup_created_vm_after_failed_create(cfg, vmid, [clone_node_ip, node_ip])
+                _job_update(job_id, state="failed", error=out, finished_at=time.time(), lines=[out, "cleanup attempted after failed migration"])
+                return
 
         set_cmds = [
             f"qm set {vmid} --ciuser {shlex.quote(plan['bootstrap']['ciuser'])}",
@@ -839,7 +1031,8 @@ def _run_vm_create_job(job_id, payload):
             _job_update(job_id, lines=[f"running: {set_cmd}"])
             out, ok = _pve_cmd(cfg, node_ip, set_cmd, timeout=60)
             if not ok:
-                _job_update(job_id, state="failed", error=out, finished_at=time.time(), lines=[out])
+                _cleanup_created_vm_after_failed_create(cfg, vmid, [node_ip, clone_node_ip])
+                _job_update(job_id, state="failed", error=out, finished_at=time.time(), lines=[out, "cleanup attempted after failed configuration"])
                 return
         _refresh_fleet_overview_after_mutation("create-wizard", vmid)
         _job_update(job_id, state="succeeded", result={"ok": True, "vmid": vmid, "name": plan["name"], "node": plan["node"]}, finished_at=time.time(), lines=["create job succeeded"])
@@ -980,27 +1173,13 @@ def handle_vm_create(handler):
         if not node_ip:
             json_response(handler, {"error": "No PVE node reachable"}, 502)
             return
-        stdout, ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/nextid")
-        if not ok:
-            json_response(handler, {"error": "Cannot allocate VMID"}, 502)
+        vmid, _vmid_source, vmid_err = _allocate_create_vmid(cfg, node_ip)
+        if vmid_err:
+            json_response(handler, {"error": vmid_err}, 502)
             return
-        vmid = _parse_next_vmid(stdout)
         if vmid <= 0:
-            json_response(handler, {"error": f"Invalid next VMID from cluster: {stdout.strip() or 'empty'}"}, 502)
+            json_response(handler, {"error": "Could not allocate VMID"}, 502)
             return
-        lab_cat = cfg.fleet_boundaries.categories.get("lab", {})
-        vmid_floor = lab_cat.get("range_start", 5000)
-        if vmid < vmid_floor:
-            vmid = vmid_floor
-            # Verify the floor VMID isn't already in use
-            check_out, check_ok = _pve_cmd(cfg, node_ip, "pvesh get /cluster/resources --type vm --output-format json")
-            if check_ok:
-                try:
-                    existing = {v.get("vmid") for v in __import__("json").loads(check_out)}
-                    while vmid in existing:
-                        vmid += 1
-                except Exception:
-                    pass  # Best effort — if parse fails, try the original vmid
         cmd = (
             f"qm create {vmid} --name {name} --cores {cores} --memory {ram} "
             f"--cpu {cfg.vm_cpu} --machine {cfg.vm_machine} "

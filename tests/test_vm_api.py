@@ -258,6 +258,160 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertFalse(data["ok"])
         self.assertTrue(any("gateway" in err for err in data["errors"]))
 
+    def test_vm_create_plan_rejects_explicit_out_of_contract_vmid(self):
+        cfg = self._cfg()
+
+        with patch("freq.api.vm._pve_cmd") as mock_pve:
+            result = vm_api._vm_create_plan(
+                cfg,
+                {"name": "new-vm", "node": "pve01", "ip_mode": "dhcp", "vmid": 107},
+                allocate_vmid=True,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(any("target VMID blocked" in err for err in result["errors"]))
+        mock_pve.assert_not_called()
+
+    def test_vm_create_plan_uses_allowed_cluster_nextid(self):
+        cfg = self._cfg()
+        commands = []
+
+        def fake_pve(_cfg, node_ip, command, timeout=60):
+            commands.append((node_ip, command))
+            return ("5005", True)
+
+        with patch("freq.api.vm._pve_cmd", side_effect=fake_pve):
+            result = vm_api._vm_create_plan(
+                cfg,
+                {"name": "new-vm", "node": "pve01", "ip_mode": "dhcp"},
+                allocate_vmid=True,
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["plan"]["vmid"], 5005)
+        self.assertEqual(result["plan"]["vmid_source"], "cluster-nextid")
+        self.assertEqual(commands, [("10.0.0.1", "pvesh get /cluster/nextid")])
+
+    def test_vm_create_plan_allocates_lab_range_when_cluster_nextid_is_blocked(self):
+        cfg = self._cfg()
+        commands = []
+
+        def fake_pve(_cfg, node_ip, command, timeout=60):
+            commands.append((node_ip, command))
+            if command == "pvesh get /cluster/nextid":
+                return ("107", True)
+            if command == "pvesh get /cluster/resources --type vm --output-format json":
+                return (json.dumps([{"vmid": 5000}, {"vmid": "5001"}]), True)
+            return ("", False)
+
+        with patch("freq.api.vm._pve_cmd", side_effect=fake_pve):
+            result = vm_api._vm_create_plan(
+                cfg,
+                {"name": "new-vm", "node": "pve01", "ip_mode": "dhcp"},
+                allocate_vmid=True,
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["plan"]["vmid"], 5002)
+        self.assertEqual(result["plan"]["vmid_source"], "lab-range")
+        self.assertIn(("10.0.0.1", "pvesh get /cluster/resources --type vm --output-format json"), commands)
+
+    def test_vm_create_plan_replaces_disabled_explicit_storage_with_target_storage(self):
+        cfg = self._cfg()
+        cfg.pve_nodes = ["10.0.0.1", "10.0.0.2"]
+        cfg.pve_node_names = ["pve01", "pve02"]
+        cfg.pve_storage = {}
+
+        def fake_pve(_cfg, node_ip, command, timeout=60):
+            if command == "pvesh get /cluster/nextid":
+                return ("5005", True)
+            if command == "pvesh get /nodes/pve02/storage --content images --output-format json":
+                return (
+                    json.dumps(
+                        [
+                            {"storage": "local-lvm", "enabled": 0, "active": 0, "content": "images,rootdir", "type": "lvmthin"},
+                            {"storage": "truenas-os-drive", "enabled": 1, "active": 1, "shared": 1, "content": "images,rootdir", "type": "nfs"},
+                            {"storage": "os-pool-ssd", "enabled": 1, "active": 1, "shared": 0, "content": "images,rootdir", "type": "zfspool"},
+                        ]
+                    ),
+                    True,
+                )
+            return ("[]", True)
+
+        with patch("freq.api.vm._pve_cmd", side_effect=fake_pve):
+            result = vm_api._vm_create_plan(
+                cfg,
+                {"name": "new-vm", "node": "pve02", "ip_mode": "dhcp", "storage": "local-lvm"},
+                allocate_vmid=True,
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["plan"]["storage"], "os-pool-ssd")
+        self.assertTrue(any("local-lvm" in warning and "os-pool-ssd" in warning for warning in result["warnings"]))
+
+    def test_vm_create_job_clones_template_from_source_node_then_configures_target(self):
+        cfg = self._cfg()
+        cfg.pve_nodes = ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+        cfg.pve_node_names = ["pve01", "pve02", "pve03"]
+        cfg.fleet_boundaries.categories["sandbox"] = {"range_start": 6000, "range_end": 6099, "tier": "admin"}
+        cfg.fleet_boundaries.categories["templates"] = {"vmids": [9001], "tier": "probe"}
+        calls = []
+
+        def fake_pve(_cfg, node_ip, command, timeout=60):
+            calls.append((node_ip, command))
+            if command == "pvesh get /cluster/nextid":
+                return ("107", True)
+            if command == "pvesh get /cluster/resources --type vm --output-format json":
+                return ("[]", True)
+            return ("", True)
+
+        job_id = "job-source-node"
+        with vm_api._vm_create_jobs_lock:
+            vm_api._vm_create_jobs[job_id] = {
+                "id": job_id,
+                "state": "queued",
+                "created_at": 0,
+                "updated_at": 0,
+                "lines": [],
+            }
+
+        with patch("freq.api.vm.load_config", return_value=cfg), \
+             patch("freq.api.vm._find_vm_node_ip", return_value="10.0.0.3"), \
+             patch("freq.api.vm._pve_cmd", side_effect=fake_pve), \
+             patch("freq.api.vm._refresh_fleet_overview_after_mutation"):
+            vm_api._run_vm_create_job(
+                job_id,
+                {
+                    "name": "new-vm",
+                    "node": "pve02",
+                    "template_vmid": 9001,
+                    "storage": "local-lvm",
+                    "ip_mode": "dhcp",
+                },
+            )
+
+        with vm_api._vm_create_jobs_lock:
+            job = dict(vm_api._vm_create_jobs.pop(job_id))
+
+        self.assertEqual(job["state"], "succeeded", job)
+        self.assertTrue(
+            any(
+                node == "10.0.0.3"
+                and cmd == "qm clone 9001 6000 --name new-vm --full 1"
+                for node, cmd in calls
+            ),
+            calls,
+        )
+        self.assertTrue(
+            any(
+                node == "10.0.0.3"
+                and cmd == "qm migrate 6000 pve02 --with-local-disks --targetstorage local-lvm"
+                for node, cmd in calls
+            ),
+            calls,
+        )
+        self.assertTrue(any(node == "10.0.0.2" and cmd.startswith("qm set 6000") for node, cmd in calls), calls)
+
     @patch("freq.api.vm.threading.Thread")
     @patch("freq.api.vm._check_session_role", return_value=("admin", None))
     @patch("freq.api.vm._get_fleet_vms", return_value=[])
