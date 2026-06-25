@@ -919,10 +919,118 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 .no-hover-fx .pve-chev:hover { box-shadow: none; transform: none; }
 
 /* ── PVE Group ── */
-.pve-group { transition: all var(--duration-normal) var(--ease-out); }
+.pve-group {
+  border-left: 4px solid var(--pve-node-color, var(--purple));
+  border-radius: 6px;
+  background: var(--bg2);
+  overflow: hidden;
+  transition: all var(--duration-normal) var(--ease-out);
+}
 .pve-group:hover { box-shadow: var(--shadow-md), var(--shadow-purple); transform: translateY(-2px); }
 .no-hover-fx .pve-group { transition: none; }
 .no-hover-fx .pve-group:hover { box-shadow: none; transform: none; }
+.pve-node-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 210px);
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.pve-node-card-wrap {
+  min-width: 0;
+}
+.pve-node-toggle {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-height: 92px;
+  border-color: color-mix(in srgb, var(--pve-node-color, var(--purple)) 48%, transparent);
+  color: var(--text);
+  background: rgba(255,255,255,0.025);
+}
+.pve-node-toggle:hover {
+  border-color: var(--pve-node-color, var(--purple));
+  background: rgba(255,255,255,0.055);
+}
+.pve-node-toggle .pve-chev {
+  color: var(--pve-node-color, var(--purple));
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+}
+.pve-toggle-count {
+  color: var(--text);
+  font-size: 12px;
+  letter-spacing: .08em;
+}
+.pve-toggle-label {
+  color: var(--purple-light);
+  font-size: 10px;
+  letter-spacing: .12em;
+}
+.pve-vms {
+  border-top: 1px solid var(--border);
+  padding: 0 12px 12px;
+}
+.pve-workload-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.pve-workload-bar span {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.pve-workload-hide,
+.pve-workload-footer {
+  border-color: color-mix(in srgb, var(--pve-node-color, var(--purple)) 46%, transparent);
+  color: var(--purple-light);
+}
+.pve-workload-hide:hover,
+.pve-workload-footer:hover {
+  border-color: var(--pve-node-color, var(--purple));
+  color: var(--text);
+}
+.pve-workload-grid {
+  --card-track: 220px;
+  gap: 10px;
+  padding: 10px 0 0;
+}
+.pve-workload-footer {
+  width: 100%;
+  margin-top: 10px;
+}
+@media (max-width: 820px) {
+  .pve-node-shell {
+    grid-template-columns: 1fr;
+  }
+  .pve-node-toggle {
+    min-height: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding: 9px 12px;
+  }
+  .pve-workload-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .pve-workload-hide {
+    width: 100%;
+  }
+}
 
 /* ── Sections — collapsible panels ── */
 .section {
@@ -1319,6 +1427,10 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: clamp(180px, 32vh, 330px);
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 .vmt-nic-row {
   border: 1px solid var(--border);
@@ -1362,6 +1474,14 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   flex-direction: column;
   gap: 10px;
 }
+.vmt-create-options {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+.vmt-check,
 .vmt-balloon {
   display: flex;
   align-items: center;
@@ -1377,20 +1497,12 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 }
 .vmt-create-actions {
   display: grid;
-  grid-template-columns: minmax(150px, .8fr) minmax(240px, 1.3fr) minmax(150px, .8fr);
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
   gap: 8px;
   align-items: center;
 }
 .vmt-create-actions .fleet-btn {
   width: 100%;
-}
-.vmt-create-arm {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin: 0;
-  text-align: center;
 }
 .vmt-plan-card {
   border: 1px solid var(--input-border);
@@ -1415,6 +1527,14 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   .vmt-nic-grid,
   .vmt-create-actions {
     grid-template-columns: 1fr;
+  }
+  .vmt-create-options {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .vmt-check {
+    justify-content: center;
   }
   .vmt-create-section-head {
     align-items: stretch;

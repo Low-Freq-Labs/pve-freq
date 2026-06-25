@@ -30,6 +30,7 @@ from freq.core.health_state import (
     classify_probe_failure,
     entry_base,
 )
+from freq.core.host_scope import managed_probe_hosts
 from freq.modules.serve import (
     _bg_cache,
     _bg_lock,
@@ -94,7 +95,7 @@ def _target_host_or_direct_ip(cfg, target: str):
 def handle_status(handler):
     """GET /api/status -- fleet host status via SSH uptime probe."""
     cfg = load_config()
-    hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]
+    hosts = managed_probe_hosts(cfg)
     start = time.monotonic()
 
     with _bg_lock:
@@ -400,7 +401,7 @@ def handle_health_api(handler):
         })
         return entry
 
-    active_hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]
+    active_hosts = managed_probe_hosts(cfg)
     host_data = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=cfg.ssh_max_parallel) as pool:
         futures = {pool.submit(_probe_host, h): h for h in active_hosts}

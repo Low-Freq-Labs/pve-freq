@@ -29,6 +29,7 @@ from freq.core.health_state import (
     STATE_UNREACHABLE,
     classify_probe_failure,
 )
+from freq.core.host_scope import managed_probe_hosts
 from freq.core.ssh import run_many as ssh_run_many, result_for
 
 # Health check thresholds
@@ -46,7 +47,7 @@ def cmd_health(cfg: FreqConfig, pack, args) -> int:
     fmt.header("Fleet Health")
     fmt.blank()
 
-    hosts = cfg.hosts
+    hosts = managed_probe_hosts(cfg)
     if not hosts:
         fmt.line(f"{fmt.C.YELLOW}No hosts registered.{fmt.C.RESET}")
         fmt.blank()

@@ -526,6 +526,22 @@ def _coerce_int(value, default=0):
         return default
 
 
+def _coerce_bool(value, default=False):
+    if value in ("", None):
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if lowered in {"0", "false", "no", "off", "disabled"}:
+            return False
+    return default
+
+
 def _vm_create_body(handler):
     body = get_json_body(handler) if handler.command in {"POST", "PUT"} else {}
     if not isinstance(body, dict):
@@ -1039,6 +1055,10 @@ def _vm_create_options_payload(cfg):
             "default_mb": getattr(cfg, "vm_default_ram", 2048),
             "ballooning_default": True,
         },
+        "lifecycle": {
+            "start_on_boot_default": False,
+            "accepted_keys": ["onboot", "start_on_boot"],
+        },
         "disk": {
             "default_gb": getattr(cfg, "vm_default_disk", 32),
             "default_storage": storage[0]["id"],
@@ -1092,6 +1112,7 @@ def _vm_create_plan(cfg, payload, allocate_vmid=False):
     if balloon and balloon >= ram:
         errors.append("balloon memory must be less than assigned memory")
 
+    start_on_boot = _coerce_bool(payload.get("onboot", payload.get("start_on_boot")), False)
     cpu = str(payload.get("cpu") or getattr(cfg, "vm_cpu", "x86-64-v2-AES")).strip()
     machine = str(payload.get("machine") or getattr(cfg, "vm_machine", "q35")).strip()
     scsihw = str(payload.get("scsihw") or getattr(cfg, "vm_scsihw", "virtio-scsi-single")).strip()
@@ -1269,6 +1290,8 @@ def _vm_create_plan(cfg, payload, allocate_vmid=False):
         "cpu": cpu,
         "machine": machine,
         "scsihw": scsihw,
+        "onboot": start_on_boot,
+        "start_on_boot": start_on_boot,
         "storage": storage,
         "network": networks[0] if networks else {},
         "networks": networks,
@@ -1277,6 +1300,7 @@ def _vm_create_plan(cfg, payload, allocate_vmid=False):
             "allocate VMID" if not vmid else "use requested VMID",
             "clone template" if template_vmid else "create VM shell",
             "configure CPU/memory/disk",
+            "configure boot behavior",
             "configure NIC(s) and cloud-init IP(s)",
             "install service account SSH key via cloud-init",
             "refresh fleet inventory",
@@ -1365,10 +1389,17 @@ def _run_vm_create_job(job_id, payload):
                 _job_update(job_id, state="failed", error=out, finished_at=time.time(), lines=[out, "cleanup attempted after failed migration"])
                 return
 
-        set_cmds = [
+        set_cmds = []
+        if plan["mode"] == "clone":
+            set_cmds.append(f"qm resize {vmid} scsi0 {plan['disk_gb']}G")
+        set_cmds.extend([
+            f"qm set {vmid} --cores {plan['cores']} --memory {plan['ram_mb']} --cpu {shlex.quote(plan['cpu'])}",
+            f"qm set {vmid} --machine {shlex.quote(plan['machine'])} --scsihw {shlex.quote(plan['scsihw'])}",
+            f"qm set {vmid} --balloon {plan['balloon_mb']}",
+            f"qm set {vmid} --onboot {1 if plan.get('start_on_boot') else 0}",
             f"qm set {vmid} --ciuser {shlex.quote(plan['bootstrap']['ciuser'])}",
             f"qm set {vmid} --citype nocloud",
-        ]
+        ])
         if plan["bootstrap"].get("nameserver"):
             set_cmds.append(f"qm set {vmid} --nameserver {shlex.quote(plan['bootstrap']['nameserver'])}")
         if plan["bootstrap"].get("ssh_key_available"):

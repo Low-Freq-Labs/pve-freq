@@ -184,6 +184,8 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertEqual(data["vlans"][0]["gateway"], "10.25.255.1")
         self.assertTrue(data["vlans"][0]["gateway_in_subnet"])
         self.assertEqual(data["cpu"]["default"], cfg.vm_cpu)
+        self.assertEqual(data["lifecycle"]["start_on_boot_default"], False)
+        self.assertIn("start_on_boot", data["lifecycle"]["accepted_keys"])
 
     @patch("freq.api.vm._candidate_ip_available", return_value=True)
     @patch("freq.api.vm._check_session_role", return_value=("operator", None))
@@ -211,6 +213,30 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertEqual(data["plan"]["network"]["tag"], "255")
         self.assertTrue(data["plan"]["network"]["gateway_in_subnet"])
         self.assertEqual(len(data["plan"]["networks"]), 1)
+
+    def test_vm_create_plan_accepts_start_on_boot_aliases(self):
+        from freq.core.types import VLAN
+
+        cfg = self._cfg()
+        cfg.vlans = [VLAN(id=10, name="lab", subnet="10.25.10.0/24", prefix="10.25.10", gateway="10.25.10.1")]
+
+        result = vm_api._vm_create_plan(
+            cfg,
+            {"name": "new-vm", "node": "pve01", "vlan": "10", "start_on_boot": True},
+            allocate_vmid=False,
+        )
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["plan"]["start_on_boot"])
+        self.assertTrue(result["plan"]["onboot"])
+
+        result = vm_api._vm_create_plan(
+            cfg,
+            {"name": "new-vm", "node": "pve01", "vlan": "10", "onboot": "off"},
+            allocate_vmid=False,
+        )
+        self.assertTrue(result["ok"], result)
+        self.assertFalse(result["plan"]["start_on_boot"])
+        self.assertFalse(result["plan"]["onboot"])
 
     @patch("freq.api.vm._candidate_ip_available", return_value=True)
     def test_vm_create_plan_reserves_host_octets_across_networks(self, _mock_ip):
@@ -404,6 +430,9 @@ class TestVmApiTrust(unittest.TestCase):
                     "template_vmid": 9001,
                     "storage": "local-lvm",
                     "ip_mode": "dhcp",
+                    "cores": 4,
+                    "ram": 4096,
+                    "balloon": 1024,
                 },
             )
 
@@ -427,6 +456,9 @@ class TestVmApiTrust(unittest.TestCase):
             ),
             calls,
         )
+        self.assertIn(("10.0.0.2", "qm resize 6000 scsi0 32G"), calls)
+        self.assertIn(("10.0.0.2", "qm set 6000 --cores 4 --memory 4096 --cpu x86-64-v2-AES"), calls)
+        self.assertIn(("10.0.0.2", "qm set 6000 --balloon 1024"), calls)
         self.assertTrue(any(node == "10.0.0.2" and cmd.startswith("qm set 6000") for node, cmd in calls), calls)
 
     def test_vm_create_plan_accepts_multiple_static_nics(self):
@@ -566,6 +598,7 @@ class TestVmApiTrust(unittest.TestCase):
                 {
                     "name": "new-vm",
                     "node": "pve01",
+                    "start_on_boot": True,
                     "nics": [
                         {"vlan": "10", "ip": "10.25.10.44/24", "gateway": "10.25.10.1"},
                         {"vlan": "66", "ip": "10.25.66.44/24", "gateway": "10.25.66.1"},
@@ -578,6 +611,9 @@ class TestVmApiTrust(unittest.TestCase):
 
         self.assertEqual(job["state"], "succeeded", job)
         commands = [cmd for _node, cmd in calls]
+        self.assertIn("qm set 6000 --cores 2 --memory 2048 --cpu x86-64-v2-AES", commands)
+        self.assertIn("qm set 6000 --balloon 0", commands)
+        self.assertIn("qm set 6000 --onboot 1", commands)
         self.assertIn("qm set 6000 --net0 virtio,bridge=vmbr0,tag=10", commands)
         self.assertIn("qm set 6000 --ipconfig0 ip=10.25.10.44/24,gw=10.25.10.1", commands)
         self.assertIn("qm set 6000 --net1 virtio,bridge=vmbr0,tag=66", commands)

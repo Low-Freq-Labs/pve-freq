@@ -64,6 +64,7 @@ from freq.core.health_state import (
     legacy_status_for,
     mark_stale,
 )
+from freq.core.host_scope import managed_probe_hosts
 from freq.core.ssh import run as ssh_single, run_many as ssh_run_many
 from freq.core import truenas_api
 from freq.core.device_credentials import resolve_device_ssh_auth, resolve_staged_device_ssh_auth
@@ -1151,10 +1152,8 @@ def _bg_probe_health():
 
     active_hosts = []
     skipped_hosts = []     # (host, reason) — reason is an operator-readable string
-    for h in cfg.hosts:
-        # Skip unmanaged hosts (discovered but not deployed to)
-        if not getattr(h, "managed", True):
-            continue
+    for h in managed_probe_hosts(cfg):
+        # Skip hosts in circuit-breaker backoff
         # Skip hosts in circuit-breaker backoff
         if _host_backoff_until.get(h.ip, 0) > now:
             remain = int(_host_backoff_until[h.ip] - now)

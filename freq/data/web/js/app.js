@@ -1185,6 +1185,7 @@ function _showApp(){
         if(_initPath&&VIEW_LOADERS[_initPath])switchView(_initPath);
         else loadHome();
       }catch(e){console.error('initial route failed:',e);}
+      try{setTimeout(_vmCreatePrewarmOptions,1200);}catch(e){console.error('VM create prewarm failed:',e);}
     },600);
   });
 }
@@ -2337,13 +2338,27 @@ function quickStartHome(){
   toast(QUICK_START_WIDGETS.length+' widgets loaded','info');
 }
 /* old _applyHomeLayout removed — generic system handles it */
+var _pveExpandedNodes={};
 function togglePveGroup(tab){
   var group=tab.closest('.pve-group');
   var vms=group.querySelector('.pve-vms');
-  var chev=tab.querySelector('.pve-chev')||tab;
+  var nodeName=group.getAttribute('data-pve-node')||'';
+  var expanded=vms&&vms.style.display==='none';
+  var chev=group.querySelector('.pve-chev');
   if(!vms)return;
-  if(vms.style.display==='none'){vms.style.display='grid';chev.textContent='▾';tab.style.opacity='1';}
-  else{vms.style.display='none';chev.textContent='▸';tab.style.opacity='0.7';}
+  if(expanded){
+    vms.style.display='block';
+    group.classList.add('pve-expanded');
+    if(nodeName)_pveExpandedNodes[nodeName]=true;
+    if(chev)chev.textContent='▾';
+    group.querySelectorAll('.pve-toggle-label').forEach(function(el){el.textContent='HIDE WORKLOADS';});
+  }else{
+    vms.style.display='none';
+    group.classList.remove('pve-expanded');
+    if(nodeName)delete _pveExpandedNodes[nodeName];
+    if(chev)chev.textContent='▸';
+    group.querySelectorAll('.pve-toggle-label').forEach(function(el){el.textContent='SHOW WORKLOADS';});
+  }
 }
 /* === Filter === */
 function filterFleetCards(q){
@@ -3280,6 +3295,7 @@ function loadFleetPage(){
     document.getElementById('metrics-cards').innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
   }
   loadMetricsQuick();startPveMetrics();
+  _vmCreatePrewarmOptions();
   /* Overview cards — render immediately if cached, otherwise fetch */
   if(_fleetCache.fo){_renderFleetOverview(_fleetCache.fo);_loadFleetOverviewMedia();}
   else{_authFetch(API.FLEET_OVERVIEW).then(function(r){return r.json()}).then(function(fo){_fleetCache.fo=fo;_renderFleetOverview(fo);_loadFleetOverviewMedia();}).catch(function(e){console.error('Fleet overview load failed:',e);});}
@@ -6334,15 +6350,23 @@ function _assembleFleetOutput(infraCards,nodeData,pveNodes){
     var nodeColor=(NODE_COLORS||{})[nodeName]||'var(--text)';
     var vmCount=nd.vms?(nd.vms.match(/host-card/g)||[]).length:0;
     var cols=Math.max(vmCount,3);if(cols>4)cols=4;
-    pveContent+='<div class="pve-group" style="border-left:4px solid '+nodeColor+';border-radius:6px;background:var(--bg2);overflow:hidden">';
-    pveContent+='<div data-action="togglePveGroup" style="cursor:pointer;padding:8px 12px;display:flex;align-items:center;gap:8px">';
-    pveContent+='<span class="pve-chev" style="color:'+nodeColor+';font-size:14px;font-weight:700">\u25b8</span>';
-    pveContent+='<div class="flex-1 min-w-0">'+nd.card+'</div>';
+    var workloadLabel=vmCount===1?'1 WORKLOAD':vmCount+' WORKLOADS';
+    var isExpanded=!!_pveExpandedNodes[nodeName];
+    pveContent+='<div class="pve-group'+(isExpanded?' pve-expanded':'')+'" data-pve-node="'+_esc(nodeName)+'" style="--pve-node-color:'+nodeColor+'">';
+    pveContent+='<div class="pve-node-shell">';
+    pveContent+='<div class="pve-node-card-wrap">'+nd.card+'</div>';
+    pveContent+='<button class="fleet-btn pve-node-toggle" data-action="togglePveGroup" type="button">';
+    pveContent+='<span class="pve-chev">'+(isExpanded?'\u25be':'\u25b8')+'</span><span class="pve-toggle-count">'+workloadLabel+'</span><span class="pve-toggle-label">'+(isExpanded?'HIDE WORKLOADS':'SHOW WORKLOADS')+'</span>';
+    pveContent+='</button>';
     pveContent+='</div>';
     if(nd.vms){
       /* centered fixed-width tracks let VM cards stack cleanly on
        * mobile while keeping short desktop rows from hugging the left. */
-      pveContent+='<div class="pve-vms cards" style="--card-track:220px;display:none;gap:10px;padding:8px 12px 12px;border-top:1px solid var(--border)">'+nd.vms+'</div>';
+      pveContent+='<div class="pve-vms" style="display:'+(isExpanded?'block':'none')+'">';
+      pveContent+='<div class="pve-workload-bar"><span>'+nodeName+' workloads</span><button class="fleet-btn pve-workload-hide" data-action="togglePveGroup" type="button">HIDE WORKLOADS</button></div>';
+      pveContent+='<div class="pve-workload-grid cards">'+nd.vms+'</div>';
+      pveContent+='<button class="fleet-btn pve-workload-footer" data-action="togglePveGroup" type="button">COLLAPSE '+nodeName+'</button>';
+      pveContent+='</div>';
     }
     pveContent+='</div>';
   });
@@ -6842,8 +6866,28 @@ function switchFleetOps(tab){
   _fleetToolInner(tab,fakePanel,foForm);
   var innerH3=foForm.querySelector('h3');if(innerH3)innerH3.remove();
 }
-var _vmCreateOptions=null,_vmCreateOptionsFetchedAt=0,_vmCreatePlan=null,_vmCreateJobTimer=null,_vmCreateNicSeq=0;
+var _vmCreateOptions=null,_vmCreateOptionsFetchedAt=0,_vmCreateOptionsPromise=null,_vmCreatePlan=null,_vmCreateJobTimer=null,_vmCreateNicSeq=0;
 function _vmCreateArr(v){return Array.isArray(v)?v:[];}
+function _vmCreateOptionsTtl(){
+  return ((_vmCreateOptions||{}).cache_ttl_s||30)*1000;
+}
+function _vmCreateOptionsFresh(){
+  return !!(_vmCreateOptions&&(Date.now()-_vmCreateOptionsFetchedAt)<_vmCreateOptionsTtl());
+}
+function _vmCreateFetchOptions(force){
+  if(!force&&_vmCreateOptionsFresh())return Promise.resolve(_vmCreateOptions);
+  if(_vmCreateOptionsPromise)return _vmCreateOptionsPromise;
+  _vmCreateOptionsPromise=_authFetch(API.VM_CREATE_OPTIONS,{silent:true}).then(function(r){return r.json();}).then(function(d){
+    if(!d||d.ok===false)throw new Error((d&&d.error)||'options failed');
+    _vmCreateOptions=d;_vmCreateOptionsFetchedAt=Date.now();
+    return d;
+  }).finally(function(){_vmCreateOptionsPromise=null;});
+  return _vmCreateOptionsPromise;
+}
+function _vmCreatePrewarmOptions(){
+  if(_vmCreateOptionsFresh()||_vmCreateOptionsPromise)return;
+  _vmCreateFetchOptions(false).catch(function(e){console.warn('VM create options prewarm failed:',e&&e.message?e.message:e);});
+}
 function _vmCreateSelectOptions(items,valueFn,labelFn,selected){
   var h='';
   _vmCreateArr(items).forEach(function(item){
@@ -6887,8 +6931,7 @@ function _vmCreateStorageOptions(node,selected){
 function _vmCreateSetPlanState(plan){
   _vmCreatePlan=plan||null;
   var btn=document.getElementById('vmt-c-submit');
-  var arm=document.getElementById('vmt-c-arm');
-  if(btn)btn.disabled=!_vmCreatePlan||!(arm&&arm.checked);
+  if(btn)btn.disabled=!_vmCreatePlan;
 }
 function _vmCreateClearPlan(){
   _vmCreateSetPlanState(null);
@@ -6948,6 +6991,7 @@ function _vmCreateAddNicRow(data){
   list.appendChild(wrap.firstChild);
   _vmCreateBindNicRow(row);
   _vmCreateRefreshNicRemoveButtons();
+  list.scrollTop=list.scrollHeight;
   _vmCreateClearPlan();
 }
 function _vmCreateRefreshNicRemoveButtons(){
@@ -6967,13 +7011,11 @@ function vmtRemoveNic(row){
   _vmCreateClearPlan();
 }
 function _vmCreateBindForm(){
-  ['vmt-c-name','vmt-c-node','vmt-c-template','vmt-c-cpu','vmt-c-cores','vmt-c-ram','vmt-c-balloon','vmt-c-disk','vmt-c-storage'].forEach(function(id){
+  ['vmt-c-name','vmt-c-node','vmt-c-template','vmt-c-cpu','vmt-c-cores','vmt-c-ram','vmt-c-balloon','vmt-c-onboot','vmt-c-disk','vmt-c-storage'].forEach(function(id){
     var el=document.getElementById(id);if(!el)return;
     el.addEventListener('change',function(){if(id==='vmt-c-node')_vmCreateUpdateStorageForNode();_vmCreateClearPlan();});
     if(el.tagName==='INPUT')el.addEventListener('input',_vmCreateClearPlan);
   });
-  var arm=document.getElementById('vmt-c-arm');
-  if(arm)arm.addEventListener('change',function(){_vmCreateSetPlanState(_vmCreatePlan);});
 }
 function _vmCreateUpdateStorageForNode(){
   var sel=document.getElementById('vmt-c-storage');
@@ -7009,6 +7051,8 @@ function _vmCreatePayload(){
     cpu:(document.getElementById('vmt-c-cpu')||{}).value||((opts.cpu||{}).default||'x86-64-v2-AES'),
     cpu_type:(document.getElementById('vmt-c-cpu')||{}).value||((opts.cpu||{}).default||'x86-64-v2-AES'),
     ballooning:!!((document.getElementById('vmt-c-balloon')||{}).checked),
+    onboot:!!((document.getElementById('vmt-c-onboot')||{}).checked),
+    start_on_boot:!!((document.getElementById('vmt-c-onboot')||{}).checked),
     nics:nics,
     vlan:first.vlan,
     vlan_id:first.vlan_id,
@@ -7052,11 +7096,13 @@ function _vmCreateRenderLoaded(opts){
       '</div>'+
     '</section>'+
     '<div class="vmt-create-footer">'+
-      '<label class="label-sub vmt-balloon"><input type="checkbox" id="vmt-c-balloon" '+(memory.ballooning_default!==false?'checked':'')+'> MEMORY BALLOONING</label>'+
+      '<div class="vmt-create-options">'+
+        '<label class="label-sub vmt-check"><input type="checkbox" id="vmt-c-balloon" '+(memory.ballooning_default!==false?'checked':'')+'> MEMORY BALLOONING</label>'+
+        '<label class="label-sub vmt-check"><input type="checkbox" id="vmt-c-onboot" checked> START ON BOOT</label>'+
+      '</div>'+
       '<div id="vmt-c-out" class="vmt-create-output"><div class="text-dim vmt-create-hint">Preview the plan before creating anything.</div></div>'+
       '<div class="vmt-create-actions">'+
         '<button class="fleet-btn btn-cyan" data-action="vmtPlanCreate">PREVIEW PLAN</button>'+
-        '<label class="label-sub vmt-create-arm"><input type="checkbox" id="vmt-c-arm"> I understand this creates a real VM</label>'+
         '<button id="vmt-c-submit" class="fleet-btn c-purple-active" data-action="vmtCreate" disabled>CREATE VM</button>'+
       '</div>'+
     '</div>'+
@@ -7067,14 +7113,16 @@ function _vmCreateRenderLoaded(opts){
 }
 function vmtLoadCreateOptions(){
   var vmForm=document.getElementById('vm-form');if(!vmForm)return;
-  var ttl=((_vmCreateOptions||{}).cache_ttl_s||30)*1000;
-  var fresh=_vmCreateOptions&&(Date.now()-_vmCreateOptionsFetchedAt)<ttl;
-  if(fresh){_vmCreateRenderLoaded(_vmCreateOptions);return;}
-  if(_vmCreateOptions){_vmCreateRenderLoaded(_vmCreateOptions);}
-  else vmForm.innerHTML='<div class="vmt-create-loading"><div class="skeleton"></div><div class="text-dim">Loading cached VM create options...</div></div>';
-  _authFetch(API.VM_CREATE_OPTIONS,{silent:true}).then(function(r){return r.json();}).then(function(d){
-    if(!d||d.ok===false)throw new Error((d&&d.error)||'options failed');
-    _vmCreateOptions=d;_vmCreateOptionsFetchedAt=Date.now();
+  if(_vmCreateOptions){
+    _vmCreateRenderLoaded(_vmCreateOptions);
+    if(!_vmCreateOptionsFresh())_vmCreateFetchOptions(false).then(function(d){
+      var stillCreate=document.getElementById('vmt-c-node');
+      if(stillCreate)_vmCreateRenderLoaded(d);
+    }).catch(function(e){console.warn('VM create options refresh failed:',e&&e.message?e.message:e);});
+    return;
+  }
+  vmForm.innerHTML='<div class="vmt-create-loading"><div class="skeleton"></div><div class="text-dim">Loading VM create options...</div><div class="text-dim" style="font-size:11px;margin-top:6px">First open may run live PVE/template/storage discovery.</div></div>';
+  _vmCreateFetchOptions(false).then(function(d){
     _vmCreateRenderLoaded(d);
   }).catch(function(e){
     if(!_vmCreateOptions)vmForm.innerHTML='<div class="c-red" style="padding:12px 0">Failed to load first-class VM create options.</div><div class="text-dim" style="font-size:12px">'+_esc(e.message||e)+'</div>';
@@ -7270,8 +7318,6 @@ function vmtCreate(){
   if(document.getElementById('vmt-c-template')){
     var out=document.getElementById('vmt-c-out');
     if(!_vmCreatePlan){toast('Preview the VM plan first','error');return;}
-    var arm=document.getElementById('vmt-c-arm');
-    if(!arm||!arm.checked){toast('Confirm this is a real VM create before submitting','error');return;}
     var confirmText=prompt('Type CREATE to submit this real VM create job.');
     if(confirmText!=='CREATE'){toast('Create cancelled','warn');return;}
     var payload=_vmCreatePayload();
