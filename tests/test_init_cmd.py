@@ -195,6 +195,43 @@ class TestInitResetLocalState(unittest.TestCase):
             for path in watchdog_files:
                 self.assertFalse(os.path.exists(path), f"watchdog state survived reset: {path}")
 
+    def test_reset_removes_generated_credentials_and_setup_init_secrets(self):
+        cred_dir = os.path.join(self.tmp, "runtime-credentials")
+        self.cfg.credentials_dir = cred_dir
+        self._touch(os.path.join(cred_dir, "device-credentials.toml"), "generated\n")
+        self._touch(os.path.join(cred_dir, "pve-token-rw"), "generated\n")
+        setup_secret = os.path.join(self.cfg.data_dir, "secrets", "setup-init", "job1", "dashboard-password")
+        self._touch(setup_secret, "generated\n")
+
+        with patch("freq.modules.init_cmd.fmt") as _fmt:
+            _fmt.step_ok = MagicMock()
+            _fmt.step_warn = MagicMock()
+            with patch("freq.modules.init_cmd.INIT_GENERATED_TOKEN_FILES", ()):
+                _reset_local_init_state(self.cfg, remove_live_config=True)
+
+        self.assertFalse(os.path.exists(cred_dir), "generated runtime credential dir survived reset")
+        self.assertFalse(
+            os.path.exists(os.path.join(self.cfg.data_dir, "secrets", "setup-init")),
+            "stale web-init secret dir survived reset",
+        )
+
+    def test_reset_removes_init_status_and_live_config_backups(self):
+        self._touch(os.path.join(self.cfg.conf_dir, "init-status.json"), '{"initialized":true}\n')
+        self._touch(os.path.join(self.cfg.conf_dir, "hosts.toml.bak"), "stale\n")
+        self._touch(os.path.join(self.cfg.conf_dir, "hosts.toml.tmp"), "stale\n")
+        self._touch(os.path.join(self.cfg.conf_dir, "hosts.toml.example"), "template\n")
+
+        with patch("freq.modules.init_cmd.fmt") as _fmt:
+            _fmt.step_ok = MagicMock()
+            _fmt.step_warn = MagicMock()
+            with patch("freq.modules.init_cmd.INIT_GENERATED_TOKEN_FILES", ()):
+                _reset_local_init_state(self.cfg, remove_live_config=True)
+
+        self.assertFalse(os.path.exists(os.path.join(self.cfg.conf_dir, "init-status.json")))
+        self.assertFalse(os.path.exists(os.path.join(self.cfg.conf_dir, "hosts.toml.bak")))
+        self.assertFalse(os.path.exists(os.path.join(self.cfg.conf_dir, "hosts.toml.tmp")))
+        self.assertTrue(os.path.isfile(os.path.join(self.cfg.conf_dir, "hosts.toml.example")))
+
     def test_reset_inventory_names_generated_watchdog_state(self):
         self.assertIn("/var/lib/freq-watchdog/status.json", INIT_GENERATED_WATCHDOG_FILES)
         self.assertIn("/var/lib/freq-watchdog/state.json", INIT_GENERATED_WATCHDOG_FILES)
@@ -246,6 +283,16 @@ class TestPureNothingInitContract(unittest.TestCase):
         cleanup = headless.index("_clear_generated_runtime_truth_state(cfg)")
         phase_one = headless.index('_phase(1, headless_total, "Prerequisites")')
         self.assertLess(cleanup, phase_one)
+
+    def test_reset_mode_is_dispatched_before_headless_init(self):
+        src = self._src()
+        cmd_init = src.split("def cmd_init")[1].split("\ndef _print_status_table")[0]
+        reset_idx = cmd_init.find("if reset_mode:")
+        headless_idx = cmd_init.find("# --headless: non-interactive mode")
+        self.assertNotEqual(reset_idx, -1)
+        self.assertNotEqual(headless_idx, -1)
+        self.assertLess(reset_idx, headless_idx, "--reset --headless must reset, not start headless init")
+        self.assertIn("assume_yes=getattr(args, \"headless\", False)", cmd_init)
 
     def test_phase6_writes_token_where_runtime_reads(self):
         src = self._src()
@@ -680,7 +727,7 @@ class TestIdracParsing(unittest.TestCase):
         self.assertEqual(target_slot, 4)
         self.assertEqual(existing_slot, 6)
 
-    def test_query_idrac_slots_prefers_higher_automation_slots_first(self):
+    def test_query_idrac_slots_prefers_lowest_service_slot_first(self):
         from freq.modules.init_cmd import _query_idrac_slots
 
         seen = []
@@ -688,14 +735,31 @@ class TestIdracParsing(unittest.TestCase):
         def fake_ssh(cmd, extra_opts=None, timeout=None):
             seen.append(cmd)
             slot = int(cmd.split(".")[2])
-            if slot == 8:
+            if slot == 3:
                 return 0, "[Key=iDRAC.Embedded.1#Users.8]\nUserName=\n", ""
             return 0, f"[Key=iDRAC.Embedded.1#Users.{slot}]\nUserName=occupied\n", ""
 
         target_slot, existing_slot = _query_idrac_slots(fake_ssh, [], "freq-admin")
-        self.assertEqual(target_slot, 8)
+        self.assertEqual(target_slot, 3)
         self.assertIsNone(existing_slot)
-        self.assertEqual(seen[0], "racadm get iDRAC.Users.8.UserName")
+        self.assertEqual(seen[0], "racadm get iDRAC.Users.3.UserName")
+
+    def test_query_idrac_slots_can_stop_at_first_empty_for_deploy(self):
+        from freq.modules.init_cmd import _query_idrac_slots
+
+        seen = []
+
+        def fake_ssh(cmd, extra_opts=None, timeout=None):
+            seen.append(cmd)
+            slot = int(cmd.split(".")[2])
+            if slot == 3:
+                return 0, "[Key=iDRAC.Embedded.1#Users.3]\nUserName=\n", ""
+            return 0, f"[Key=iDRAC.Embedded.1#Users.{slot}]\nUserName=freq-admin\n", ""
+
+        target_slot, existing_slot = _query_idrac_slots(fake_ssh, [], "freq-admin", stop_at_empty=True)
+        self.assertEqual(target_slot, 3)
+        self.assertIsNone(existing_slot)
+        self.assertEqual(len(seen), 1)
 
     def test_idrac_slot_query_timeout_matches_real_bmc_latency(self):
         from freq.modules.init_cmd import IDRAC_SLOT_QUERY_TIMEOUT
@@ -1471,8 +1535,8 @@ class TestPfSenseUninstall(unittest.TestCase):
             "10.0.0.1", "admin", auth_key="", auth_pass="secret"
         )
         remove_cmd = ssh.call_args_list[1].args[0]
-        self.assertIn("sh -c", remove_cmd)
-        self.assertNotIn("sh -lc", remove_cmd)
+        self.assertIn("sudo -n sh -c", remove_cmd)
+        self.assertIn("pw userdel svc-test", remove_cmd)
 
     @patch("freq.modules.init_cmd._uninstall_ssh")
     def test_remove_pfsense_without_admin_auth_is_key_only(self, mock_uninstall_ssh):
@@ -1488,6 +1552,32 @@ class TestPfSenseUninstall(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertEqual(reason, "key_only")
+
+    @patch("freq.modules.init_cmd._remove_pfsense")
+    def test_dispatch_uses_bootstrap_when_pfsense_creds_are_not_usable(self, mock_remove_pfsense):
+        from freq.modules.init_cmd import _remove_from_host_dispatch
+
+        mock_remove_pfsense.return_value = (True, "")
+        bootstrap_auth = {"user": "freq-ops", "password": "", "key_path": "/tmp/fleet_key"}
+
+        ok, reason = _remove_from_host_dispatch(
+            "10.25.255.1",
+            "pfsense",
+            "freq-admin",
+            "/tmp/freq_id_ed25519",
+            "/tmp/freq_id_rsa",
+            device_creds={"pfsense": {"user": "admin"}},
+            bootstrap_auth=bootstrap_auth,
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+        mock_remove_pfsense.assert_called_once_with(
+            "10.25.255.1",
+            "freq-admin",
+            "/tmp/freq_id_ed25519",
+            admin_auth=bootstrap_auth,
+        )
 
 
 class TestUninstallSSH(unittest.TestCase):
@@ -1600,11 +1690,11 @@ class TestPveUninstall(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(reason, "not_found")
         cleanup_cmd = ssh.call_args_list[1].args[0]
-        self.assertIn("sudo -n sh -lc", cleanup_cmd)
+        self.assertIn("sudo -n sh -c", cleanup_cmd)
 
     @patch("freq.modules.init_cmd._remove_switch_with_auth")
     @patch("freq.deployers.get_deployer")
-    def test_switch_uninstall_fallback_uses_switch_device_credentials(
+    def test_switch_uninstall_prefers_switch_device_credentials(
         self,
         mock_get_deployer,
         mock_remove_switch_with_auth,
@@ -1629,10 +1719,101 @@ class TestPveUninstall(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertEqual(reason, "")
+        deployer.remove.assert_not_called()
         mock_remove_switch_with_auth.assert_called_once_with(
             "10.25.255.5",
             "freq-admin",
             switch_auth,
+        )
+
+    @patch("freq.modules.init_cmd._ssh_with_pass")
+    def test_switch_bootstrap_cleanup_answers_confirm_and_verifies_absence(self, mock_ssh_with_pass):
+        from freq.modules.init_cmd import _remove_switch_with_auth
+
+        mock_ssh_with_pass.side_effect = [
+            (0, "switch#show running-config | include username freq-admin\nusername freq-admin privilege 15 secret 5 hash\n", ""),
+            (0, "switch(config)#no username freq-admin\nDo you want to continue? [confirm]\nswitch#write memory\n", ""),
+            (0, "switch#show running-config | include username freq-admin\nswitch#show running-config | section ip ssh pubkey-chain\nip ssh pubkey-chain\n  username freq-ops\n", ""),
+        ]
+
+        ok, reason = _remove_switch_with_auth(
+            "10.25.255.5",
+            "freq-admin",
+            {"user": "freq-ops", "password": "secret", "key_path": ""},
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+        cleanup_script = mock_ssh_with_pass.call_args_list[1].kwargs["input_text"]
+        self.assertIn("no username freq-admin\n\nend\nwrite memory", cleanup_script)
+
+    @patch("freq.modules.init_cmd._ssh_with_pass")
+    def test_switch_bootstrap_cleanup_fails_when_verification_still_shows_user(self, mock_ssh_with_pass):
+        from freq.modules.init_cmd import _remove_switch_with_auth
+
+        mock_ssh_with_pass.side_effect = [
+            (0, "switch#show running-config | include username freq-admin\nusername freq-admin privilege 15 secret 5 hash\n", ""),
+            (0, "switch(config)#no username freq-admin\nDo you want to continue? [confirm]\n", ""),
+            (0, "switch#show running-config | include username freq-admin\nusername freq-admin privilege 15 secret 5 hash\n", ""),
+        ]
+
+        ok, reason = _remove_switch_with_auth(
+            "10.25.255.5",
+            "freq-admin",
+            {"user": "freq-ops", "password": "secret", "key_path": ""},
+        )
+
+        self.assertFalse(ok)
+        self.assertIn("no username freq-admin", reason)
+
+    @patch("freq.modules.init_cmd._ssh_with_pass")
+    def test_switch_bootstrap_cleanup_treats_absent_user_as_clean(self, mock_ssh_with_pass):
+        from freq.modules.init_cmd import _remove_switch_with_auth
+
+        mock_ssh_with_pass.return_value = (
+            0,
+            "switch#show running-config | include username freq-admin\nswitch#show running-config | section ip ssh pubkey-chain\nip ssh pubkey-chain\n  username freq-ops\n",
+            "",
+        )
+
+        ok, reason = _remove_switch_with_auth(
+            "10.25.255.5",
+            "freq-admin",
+            {"user": "freq-ops", "password": "secret", "key_path": ""},
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "not_found")
+        self.assertEqual(mock_ssh_with_pass.call_count, 1)
+
+    @patch("freq.modules.init_cmd._remove_idrac_with_auth")
+    @patch("freq.deployers.get_deployer")
+    def test_idrac_uninstall_prefers_device_credentials(self, mock_get_deployer, mock_remove_idrac_with_auth):
+        from freq.modules.init_cmd import _remove_from_host_dispatch
+
+        deployer = MagicMock()
+        deployer.remove.return_value = (False, "Permission denied")
+        mock_get_deployer.return_value = deployer
+        idrac_auth = {"user": "freq-ops", "password": "idrac-pass", "key_path": ""}
+        mock_remove_idrac_with_auth.return_value = (True, "")
+
+        ok, reason = _remove_from_host_dispatch(
+            "10.25.255.10",
+            "idrac",
+            "freq-admin",
+            "/tmp/freq_id_ed25519",
+            "/tmp/freq_id_rsa",
+            device_creds={"idrac": idrac_auth},
+            bootstrap_auth={"user": "freq-ops", "password": "", "key_path": "/tmp/fleet_key"},
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+        deployer.remove.assert_not_called()
+        mock_remove_idrac_with_auth.assert_called_once_with(
+            "10.25.255.10",
+            "freq-admin",
+            idrac_auth,
         )
 
     @patch("freq.modules.init_cmd._run_idrac_command")
@@ -1724,6 +1905,27 @@ class TestUninstallTargetMap(unittest.TestCase):
         self.assertEqual(targets[1], ("10.25.255.27", "pve", "PVE 10.25.255.27"))
         self.assertIn(("10.25.255.38", "linux", "VM106 dc01-proxy"), targets)
         self.assertFalse(any(t[0] == "10.25.255.99" for t in targets))
+
+    def test_uninstall_targets_skip_inventory_only_hosts_from_live_config(self):
+        from freq.modules.init_cmd import _uninstall_targets_from_config
+
+        cfg = types.SimpleNamespace(
+            pve_nodes=["10.25.255.26"],
+            hosts=[
+                types.SimpleNamespace(ip="10.25.255.26", htype="pve", label="pve01", managed=True),
+                types.SimpleNamespace(ip="10.25.255.30", htype="docker", label="plex", managed=True),
+                types.SimpleNamespace(ip="10.25.255.50", htype="pve", label="pve-freq", managed=False),
+                types.SimpleNamespace(ip="10.25.255.8", htype="linux", label="nexus", managed=False),
+            ],
+        )
+        args = types.SimpleNamespace(target_map=None, pve_nodes=None)
+
+        targets = _uninstall_targets_from_config(cfg, args)
+
+        self.assertIn(("10.25.255.26", "pve", "PVE 10.25.255.26"), targets)
+        self.assertIn(("10.25.255.30", "docker", "plex (10.25.255.30)"), targets)
+        self.assertFalse(any(t[0] == "10.25.255.50" for t in targets))
+        self.assertFalse(any(t[0] == "10.25.255.8" for t in targets))
 
     @patch("freq.modules.init_cmd.fmt")
     @patch("freq.modules.init_cmd.shutil.which", return_value="/usr/bin/docker")

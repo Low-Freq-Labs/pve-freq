@@ -1,18 +1,9 @@
-"""Tests for PVE token key path regression — Phase 6 must see Phase 4 keys.
+"""Tests for PVE token key path regression — phases must see Phase 4 keys.
 
-Bug: Phase 4 generated keys in data/keys/ and set ctx["key_path"].
-Phase 6 checked ctx["key_path"] but sometimes the file was inaccessible
-because data/keys/ is 700 owned by the service account. Phase 6 skipped
-API token creation with "SSH key not available", breaking Phase 7 discovery.
-
-Root cause: Keys were generated in data/keys/ (700 owned by service account)
-but ctx["key_path"] pointed there. After chown, the directory was unreadable
-in some race conditions. Additionally, cfg.ssh_key_path was never updated
-from its initial empty value (detected at config load time before keys existed).
-
-Fix: Phase 4 now always syncs keys to ~/.ssh/ and repoints ctx["key_path"]
-and cfg.ssh_key_path to the synced location. This ensures Phase 6 and 7
-can always read the key regardless of data/keys/ permissions.
+Phase 4 generates keys in data/keys/. The runtime contract is that ctx and cfg
+continue to point at those product-owned key files. A best-effort copy may also
+be synced into the service account home, but that home path is not reliable
+inside containerized web-init runs and must not become the source of truth.
 """
 import sys
 import unittest
@@ -29,19 +20,22 @@ class TestKeyPathFlowContract(unittest.TestCase):
     def test_phase4_sets_cfg_ssh_key_path(self):
         """Phase 4 must update cfg.ssh_key_path after key generation."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
-        self.assertIn("cfg.ssh_key_path = svc_ed", src)
+        self.assertIn("cfg.ssh_key_path = ed_key", src)
+        self.assertNotIn("cfg.ssh_key_path = svc_ed", src)
 
     def test_phase4_sets_cfg_rsa_key_path(self):
         """Phase 4 must update cfg.ssh_rsa_key_path after key generation."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
-        self.assertIn("cfg.ssh_rsa_key_path = svc_rsa", src)
+        self.assertIn("cfg.ssh_rsa_key_path = rsa_key", src)
+        self.assertNotIn("cfg.ssh_rsa_key_path = svc_rsa", src)
 
-    def test_phase4_repoints_ctx_to_svc_ssh(self):
-        """Phase 4 must repoint ctx key_path to service account ~/.ssh/."""
+    def test_phase4_keeps_ctx_on_product_key_paths(self):
+        """Phase 4 must not repoint ctx key_path to service account ~/.ssh/."""
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
-        # ctx["key_path"] = svc_ed (which is ~/.ssh/id_ed25519)
-        self.assertIn('ctx["key_path"] = svc_ed', src)
-        self.assertIn('ctx["rsa_key_path"] = svc_rsa', src)
+        self.assertIn('ctx["key_path"] = ed_key', src)
+        self.assertIn('ctx["rsa_key_path"] = rsa_key', src)
+        self.assertNotIn('ctx["key_path"] = svc_ed', src)
+        self.assertNotIn('ctx["rsa_key_path"] = svc_rsa', src)
 
     def test_phase4_always_syncs_not_conditional(self):
         """Key sync to ~/.ssh/ must not be conditional on file absence."""

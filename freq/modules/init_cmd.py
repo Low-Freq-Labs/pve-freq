@@ -360,6 +360,8 @@ def _uninstall_targets_from_config(cfg, args=None):
     elif cfg.hosts:
         pve_set = set(pve_nodes)
         for h in cfg.hosts:
+            if not getattr(h, "managed", True):
+                continue
             if h.ip not in pve_set:
                 targets.append((h.ip, h.htype, f"{h.label} ({h.ip})"))
 
@@ -474,7 +476,7 @@ def _parse_idrac_slots(output, svc_name):
     return target_slot, existing_slot
 
 
-def _query_idrac_slots(_ssh, extra_opts, svc_name):
+def _query_idrac_slots(_ssh, extra_opts, svc_name, *, stop_at_empty=False):
     """Query iDRAC user slots via per-slot RACADM calls.
 
     three bulk query
@@ -489,7 +491,7 @@ def _query_idrac_slots(_ssh, extra_opts, svc_name):
     target_slot = None
     existing_slot = None
 
-    preferred_slots = list(range(8, IDRAC_SLOT_MAX)) + list(range(IDRAC_SLOT_MIN, 8))
+    preferred_slots = list(range(IDRAC_SLOT_MIN, IDRAC_SLOT_MAX))
     for slot in preferred_slots:
         rc, out, err = _ssh(
             f"racadm get iDRAC.Users.{slot}.UserName",
@@ -519,6 +521,8 @@ def _query_idrac_slots(_ssh, extra_opts, svc_name):
             break
         if not val and target_slot is None:
             target_slot = slot
+            if stop_at_empty:
+                break
 
     return target_slot, existing_slot
 
@@ -1109,13 +1113,12 @@ def _resolve_web_init_input_path(path):
     if not raw:
         return ""
     candidates = [raw]
-    if os.environ.get("FREQ_WEB_INIT"):
-        input_prefix = "/root/freq-init-inputs/"
-        if raw.startswith(input_prefix):
-            candidates.append(os.path.join("/freq-init-inputs", raw[len(input_prefix):]))
-        ssh_prefix = "/home/freq-ops/.ssh/"
-        if raw.startswith(ssh_prefix):
-            candidates.append(os.path.join("/home/freq/.ssh", raw[len(ssh_prefix):]))
+    input_prefix = "/root/freq-init-inputs/"
+    if raw.startswith(input_prefix):
+        candidates.append(os.path.join("/freq-init-inputs", raw[len(input_prefix):]))
+    ssh_prefix = "/home/freq-ops/.ssh/"
+    if raw.startswith(ssh_prefix):
+        candidates.append(os.path.join("/home/freq/.ssh", raw[len(ssh_prefix):]))
     for candidate in candidates:
         if candidate and os.path.isfile(candidate):
             return candidate
@@ -1583,6 +1586,11 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
             return _uninstall_headless(cfg, args)
         return _uninstall_interactive(cfg, args)
 
+    # --reset: wipe and start fresh. Must be handled before --headless, since
+    # reset+headless means non-interactive reset, not a headless init run.
+    if reset_mode:
+        return _init_reset(cfg, assume_yes=getattr(args, "headless", False) or getattr(args, "yes", False))
+
     # --dry-run (no root needed)
     if dry_run:
         return _init_dry_run(cfg, args)
@@ -1600,10 +1608,6 @@ def cmd_init(cfg: FreqConfig, pack, args) -> int:
         fmt.line(f"  {fmt.C.DIM}Run: sudo freq init{fmt.C.RESET}")
         fmt.blank()
         return 1
-
-    # --reset: wipe and start fresh
-    if reset_mode:
-        return _init_reset(cfg)
 
     # Splash
     splash(pack, cfg.version)
@@ -2060,6 +2064,7 @@ def _reset_local_init_state(cfg, *, remove_live_config=False):
         (marker, "Init marker"),
         (web_marker, "Web setup marker"),
         (setup_marker, "Setup marker"),
+        (_init_status_path(cfg), "Init status"),
     ]
 
     for key_name in ("freq_id_ed25519", "freq_id_rsa"):
@@ -2077,6 +2082,23 @@ def _reset_local_init_state(cfg, *, remove_live_config=False):
     if remove_live_config:
         for name in INIT_LIVE_CONFIG_FILES:
             _remove_init_file(os.path.join(cfg.conf_dir, name), f"Live config {name}")
+            _remove_init_file(os.path.join(cfg.conf_dir, f"{name}.bak"), f"Live config backup {name}.bak", missing_ok=True)
+            _remove_init_file(os.path.join(cfg.conf_dir, f"{name}.tmp"), f"Live config temp {name}.tmp", missing_ok=True)
+        cred_dir = _credentials_dir(cfg)
+        if os.path.isdir(cred_dir):
+            try:
+                shutil.rmtree(cred_dir)
+                fmt.step_ok(f"Generated credential dir removed: {cred_dir}")
+            except OSError as e:
+                fmt.step_warn(f"Credential dir cleanup skipped: {e}")
+
+    setup_secret_dir = os.path.join(cfg.data_dir, "secrets", "setup-init")
+    if os.path.isdir(setup_secret_dir):
+        try:
+            shutil.rmtree(setup_secret_dir)
+            fmt.step_ok(f"Setup init secret dir removed: {setup_secret_dir}")
+        except OSError as e:
+            fmt.step_warn(f"Setup init secret cleanup skipped: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -3068,6 +3090,8 @@ def _phase_ssh_keys(cfg, ctx):
 
     ctx["key_path"] = ed_key
     ctx["rsa_key_path"] = rsa_key
+    cfg.ssh_key_path = ed_key
+    cfg.ssh_rsa_key_path = rsa_key
 
     # Fix ownership — init runs as root but keys need to be readable by
     # the service account that runs the dashboard.
@@ -3124,8 +3148,6 @@ def _phase_ssh_keys(cfg, ctx):
         shutil.copy2(f"{ctx['key_path']}.pub", f"{svc_ed}.pub")
         os.chmod(svc_ed, 0o600)
         _chown(f"{svc_name}:{svc_name}", svc_ed, f"{svc_ed}.pub")
-        ctx["key_path"] = svc_ed
-        cfg.ssh_key_path = svc_ed  # Keep cfg in sync for phases that read cfg directly
         fmt.step_ok(f"ed25519 private key synced to {svc_name}/.ssh/")
 
         # RSA (legacy)
@@ -3135,8 +3157,6 @@ def _phase_ssh_keys(cfg, ctx):
             shutil.copy2(f"{rsa_key}.pub", f"{svc_rsa}.pub")
             os.chmod(svc_rsa, 0o600)
             _chown(f"{svc_name}:{svc_name}", svc_rsa, f"{svc_rsa}.pub")
-            ctx["rsa_key_path"] = svc_rsa
-            cfg.ssh_rsa_key_path = svc_rsa  # Keep cfg in sync
             fmt.step_ok(f"RSA private key synced to {svc_name}/.ssh/")
 
     # RSA key status for legacy devices
@@ -7041,7 +7061,7 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
 
     # Find an empty user slot (slots 3-16, 1-2 are reserved).
     fmt.step_info("Scanning iDRAC user slots")
-    target_slot, existing_slot = _query_idrac_slots(_ssh, extra_opts, svc_name)
+    target_slot, existing_slot = _query_idrac_slots(_ssh, extra_opts, svc_name, stop_at_empty=True)
 
     if _check_timeout("after_slot_query"):
         return False
@@ -7443,14 +7463,24 @@ def _has_uninstall_auth(auth):
     return bool(auth and (auth.get("key_path") or auth.get("password")))
 
 
+def _has_usable_uninstall_auth(auth):
+    """True when auth has material usable from this runtime namespace."""
+    if not auth:
+        return False
+    if auth.get("password"):
+        return True
+    key_path = auth.get("key_path") or ""
+    return bool(key_path and os.path.isfile(os.path.expanduser(key_path)))
+
+
 def _sudo_shell(script):
     """Wrap cleanup script so root and NOPASSWD-sudo bootstrap users both work."""
     quoted = shlex.quote(script)
     return (
-        "sh -lc "
+        "sh -c "
         + shlex.quote(
-            f"if [ \"$(id -u)\" = 0 ]; then sh -lc {quoted}; "
-            f"elif command -v sudo >/dev/null 2>&1; then sudo -n sh -lc {quoted}; "
+            f"if [ \"$(id -u)\" = 0 ]; then sh -c {quoted}; "
+            f"elif command -v sudo >/dev/null 2>&1; then sudo -n sh -c {quoted}; "
             "else exit 126; fi"
         )
     )
@@ -7659,24 +7689,21 @@ def _remove_pfsense(ip, svc_name, key_path, admin_auth=None):
 
         rc, out, err = _ssh("echo OK")
         if rc != 0:
-            return False, err or out
+            return False, err or out or "pfSense bootstrap auth failed"
 
-        remove_cmd = (
-            "sh -c "
-            + shlex.quote(
-                f"if pw usershow {quoted_user} >/dev/null 2>&1; then "
-                f"pkill -u {quoted_user} >/dev/null 2>&1 || true; "
-                f"pw userdel {quoted_user} -r >/dev/null 2>&1 "
-                f"|| pw userdel {quoted_user} >/dev/null 2>&1 "
-                f"|| rmuser -y {quoted_user} >/dev/null 2>&1 "
-                f"|| exit 4; "
-                "echo ACCOUNT_REMOVED; "
-                "else echo NOT_FOUND; fi"
-            )
+        remove_script = (
+            f"if pw usershow {quoted_user} >/dev/null 2>&1; then "
+            f"pkill -u {quoted_user} >/dev/null 2>&1 || true; "
+            f"pw userdel {quoted_user} -r >/dev/null 2>&1 "
+            f"|| pw userdel {quoted_user} >/dev/null 2>&1 "
+            f"|| rmuser -y {quoted_user} >/dev/null 2>&1 "
+            f"|| exit 4; "
+            "echo ACCOUNT_REMOVED; "
+            "else echo NOT_FOUND; fi"
         )
-        rc, out, err = _ssh(remove_cmd, timeout=QUICK_CHECK_TIMEOUT)
+        rc, out, err = _ssh(_sudo_shell(remove_script), timeout=QUICK_CHECK_TIMEOUT)
         if rc != 0:
-            return False, (err or out).strip()
+            return False, (err or out or "pfSense cleanup failed").strip()
         if "NOT_FOUND" in (out or ""):
             return True, "not_found"
         if "ACCOUNT_REMOVED" in (out or ""):
@@ -7872,25 +7899,48 @@ def _remove_switch_with_auth(ip, svc_name, auth):
         ssh_opts.extend(extra_opts)
     ssh_opts.append(f"{auth.get('user', 'root') or 'root'}@{ip}")
 
+    verify_script = (
+        f"show running-config | include username {svc_name}\n"
+        "show running-config | section ip ssh pubkey-chain\n"
+    )
+
+    def _run_switch(input_text, timeout=SWITCH_CONFIG_TIMEOUT):
+        if auth_pass:
+            return _ssh_with_pass(auth_pass, ssh_opts, timeout=timeout, input_text=input_text)
+        return _run_with_input(ssh_opts, input_text, timeout=timeout)
+
+    def _output_has_user(output):
+        needle = f"username {svc_name}"
+        for line in (output or "").splitlines():
+            stripped = line.strip()
+            if stripped == needle or stripped.startswith(f"{needle} "):
+                return True
+        return False
+
+    v_rc, v_out, v_err = _run_switch(verify_script)
+    if v_rc != 0:
+        return False, (v_err or v_out or "switch verification failed").strip()
+    if not _output_has_user(v_out):
+        return True, "not_found"
+
     ios_cmds = [
         "configure terminal",
         f"no username {svc_name}",
-        "ip ssh pubkey-chain",
-        f"  no username {svc_name}",
-        "  exit",
-        "exit",
+        "",
+        "end",
         "write memory",
     ]
     ios_script = "\n".join(ios_cmds) + "\n"
-    if auth_pass:
-        rc, out, err = _ssh_with_pass(auth_pass, ssh_opts, timeout=SWITCH_CONFIG_TIMEOUT, input_text=ios_script)
-    else:
-        rc, out, err = _run_with_input(ssh_opts, ios_script, timeout=SWITCH_CONFIG_TIMEOUT)
-    combined = f"{out}\n{err}".lower()
-    if rc != 0 and "invalid input" not in combined:
-        return False, (err or out or "switch bootstrap cleanup failed").strip()
-    if "invalid input" in combined:
-        return False, (out or err or "switch rejected cleanup command").strip()[:120]
+    rc, out, err = _run_switch(ios_script)
+    cleanup_text = f"{out}\n{err}".strip()
+
+    v_rc, v_out, v_err = _run_switch(verify_script)
+    if v_rc != 0:
+        return False, (v_err or v_out or cleanup_text or "switch verification failed").strip()
+
+    if _output_has_user(v_out):
+        reason = cleanup_text or v_out or "switch account still present after cleanup"
+        return False, reason.strip()[:200]
     return True, ""
 
 
@@ -7927,7 +7977,7 @@ def _remove_from_host_dispatch(
     def _credential_auth(*keys):
         for key in keys:
             cred = (device_creds or {}).get(key, {})
-            if _has_uninstall_auth(cred):
+            if _has_usable_uninstall_auth(cred):
                 return cred
         return bootstrap_auth
 
@@ -7947,10 +7997,16 @@ def _remove_from_host_dispatch(
     category, vendor = resolve_htype(htype)
     if category == "firewall" and vendor == "pfsense":
         pf_creds = (device_creds or {}).get("pfsense", {})
-        if not pf_creds and _has_uninstall_auth(bootstrap_auth):
+        if not _has_usable_uninstall_auth(pf_creds) and _has_uninstall_auth(bootstrap_auth):
             pf_creds = bootstrap_auth
         ok, reason = _remove_pfsense(ip, svc_name, key_path, admin_auth=pf_creds)
-        return (ok, reason) if ok else _fallback(reason, pf_creds)
+        return (ok, reason) if ok else _fallback(reason, pf_creds if _has_usable_uninstall_auth(pf_creds) else bootstrap_auth)
+    if category in {"bmc", "switch"}:
+        auth = _credential_auth(htype, f"{category}:{vendor}", category, vendor)
+        if _has_uninstall_auth(auth):
+            ok, reason = _remove_with_bootstrap_auth(ip, htype, svc_name, auth)
+            if ok:
+                return ok, reason
     deployer = get_deployer(category, vendor)
     if deployer:
         use_key = rsa_key_path if category in RSA_REQUIRED_CATEGORIES else key_path
@@ -9294,7 +9350,7 @@ def _init_fix(cfg, args):
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _init_reset(cfg):
+def _init_reset(cfg, *, assume_yes=False):
     """Reset FREQ to pre-init state."""
     fmt.header("Init Reset")
     fmt.blank()
@@ -9306,7 +9362,7 @@ def _init_reset(cfg):
     fmt.line(f"  {fmt.C.DIM}Templates and explicit staging credential files are preserved.{fmt.C.RESET}")
     fmt.blank()
 
-    if not _confirm("Are you sure?"):
+    if not assume_yes and not _confirm("Are you sure?"):
         fmt.line(f"  {fmt.C.DIM}Cancelled.{fmt.C.RESET}")
         return 0
 
