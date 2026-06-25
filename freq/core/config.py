@@ -421,6 +421,7 @@ def _config_file_state(install_dir: str) -> tuple:
         "freq.toml",
         "hosts.toml",
         "vlans.toml",
+        "network-profiles.toml",
         "distros.toml",
         "containers.toml",
         "fleet-boundaries.toml",
@@ -514,6 +515,9 @@ def load_config(install_dir: Optional[str] = None, force: bool = False) -> FreqC
     cfg.container_vms = load_containers(os.path.join(cfg.conf_dir, "containers.toml"))
     cfg.fleet_boundaries = load_fleet_boundaries(os.path.join(cfg.conf_dir, "fleet-boundaries.toml"))
     cfg.monitors = _load_monitors(data if data else {})
+    network_profiles = load_network_profiles(os.path.join(cfg.conf_dir, "network-profiles.toml"))
+    if network_profiles:
+        cfg.nic_profiles = network_profiles
 
     # Detect SSH keys
     cfg.ssh_key_path = _detect_ssh_key(cfg)
@@ -998,6 +1002,65 @@ def load_vlans(path: str) -> list:
             )
         )
     return vlans
+
+
+def load_network_profiles(path: str) -> dict:
+    """Load VM Create network profiles from network-profiles.toml."""
+    data = load_toml(path)
+    profiles = {}
+    for entry in data.get("profile", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        key = str(entry.get("id") or entry.get("key") or entry.get("name") or "").strip().lower()
+        if not key:
+            continue
+        profiles[key] = {
+            "id": key,
+            "name": entry.get("name", key),
+            "vlan": entry.get("vlan", entry.get("vlan_id", "")),
+            "bridge": entry.get("bridge", ""),
+            "purpose": entry.get("purpose", ""),
+            "gateway_role": entry.get("gateway_role", ""),
+            "description": entry.get("description", ""),
+        }
+    return profiles
+
+
+def save_network_profiles_toml(path: str, profiles: list) -> None:
+    """Write VM Create network profiles to TOML."""
+    def toml_string(value) -> str:
+        text = str(value or "")
+        return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+    lines = [
+        "# FREQ VM Network Profiles\n",
+        "# Managed by freq Settings. VM Create derives Proxmox bridge/tag from these profiles.\n\n",
+    ]
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            continue
+        pid = str(profile.get("id") or profile.get("key") or "").strip().lower()
+        name = str(profile.get("name") or pid).strip()
+        bridge = str(profile.get("bridge") or "").strip()
+        vlan = profile.get("vlan", profile.get("vlan_id", ""))
+        if not pid or not bridge:
+            continue
+        lines.append("[[profile]]\n")
+        lines.append(f"id = {toml_string(pid)}\n")
+        lines.append(f"name = {toml_string(name)}\n")
+        if str(vlan).strip() != "":
+            try:
+                lines.append(f"vlan = {int(vlan)}\n")
+            except (TypeError, ValueError):
+                lines.append(f"vlan = {toml_string(str(vlan).strip())}\n")
+        lines.append(f"bridge = {toml_string(bridge)}\n")
+        for key in ("purpose", "gateway_role", "description"):
+            value = str(profile.get(key) or "").strip()
+            if value:
+                lines.append(f"{key} = {toml_string(value)}\n")
+        lines.append("\n")
+    with open(path, "w") as f:
+        f.writelines(lines)
 
 
 def load_distros(path: str) -> list:

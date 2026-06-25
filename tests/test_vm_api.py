@@ -8,6 +8,7 @@ import io
 import json
 import os
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -51,9 +52,11 @@ class TestVmApiTrust(unittest.TestCase):
             pve_nodes = ["10.0.0.1"]
             pve_node_names = ["pve01"]
             pve_storage = {"pve01": {"pool": "local-zfs", "type": "SSD"}}
+            conf_dir = "/tmp"
             ssh_key_path = "/tmp/fake"
             ssh_connect_timeout = 3
             nic_bridge = "vmbr0"
+            nic_profiles = {}
             vm_cpu = "x86-64-v2-AES"
             vm_machine = "q35"
             vm_scsihw = "virtio-scsi-single"
@@ -181,11 +184,119 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertIn("storage", data)
         self.assertIn("templates", data)
         self.assertIn("vlans", data)
+        self.assertIn("network_profiles", data)
+        self.assertEqual(data["schema_version"], 3)
+        self.assertEqual(data["network_policy"]["primary_input"], "network_profile")
+        self.assertEqual(data["network_policy"]["bridge_input"], "advanced")
         self.assertEqual(data["vlans"][0]["gateway"], "10.25.255.1")
         self.assertTrue(data["vlans"][0]["gateway_in_subnet"])
         self.assertEqual(data["cpu"]["default"], cfg.vm_cpu)
         self.assertEqual(data["lifecycle"]["start_on_boot_default"], False)
         self.assertIn("start_on_boot", data["lifecycle"]["accepted_keys"])
+
+    def test_vm_create_options_exposes_configured_network_profiles(self):
+        from freq.core.types import VLAN
+
+        cfg = self._cfg()
+        cfg.nic_profiles = {
+            "tenant-prod": {
+                "name": "Tenant Prod",
+                "vlan": 25,
+                "bridge": "vmbr25",
+                "purpose": "storage",
+                "gateway_role": "none",
+            }
+        }
+        cfg.vlans = [VLAN(id=25, name="storage", subnet="10.25.25.0/24", prefix="10.25.25", gateway="10.25.25.1")]
+
+        with patch("freq.api.vm._get_fleet_vms", return_value=[]):
+            payload = vm_api._vm_create_options_payload(cfg)
+
+        profile = next(row for row in payload["network_profiles"] if row["id"] == "tenant-prod")
+        self.assertEqual(profile["bridge"], "vmbr25")
+        self.assertEqual(profile["vlan_id"], 25)
+        self.assertEqual(profile["gateway_role"], "none")
+
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
+    def test_vm_network_profiles_endpoint_persists_settings_mapping(self, mock_load, _mock_role):
+        from freq.core.config import load_network_profiles
+        from freq.core.types import VLAN
+
+        cfg = self._cfg()
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg.conf_dir = tmp
+            cfg.vlans = [VLAN(id=66, name="dirty", subnet="10.25.66.0/24", prefix="10.25.66", gateway="10.25.66.1")]
+            mock_load.return_value = cfg
+            handler = _Handler(
+                "/api/vm/network-profiles",
+                body={
+                    "profiles": [
+                        {
+                            "id": "dirty-public",
+                            "name": "Dirty / Public",
+                            "vlan": 66,
+                            "bridge": "vmbr0",
+                            "purpose": "dirty",
+                            "gateway_role": "default",
+                        }
+                    ]
+                },
+            )
+
+            vm_api.handle_vm_network_profiles(handler)
+
+            self.assertEqual(handler.status, 200)
+            data = _json(handler)
+            self.assertTrue(data["ok"])
+            saved = load_network_profiles(os.path.join(tmp, "network-profiles.toml"))
+            self.assertEqual(saved["dirty-public"]["bridge"], "vmbr0")
+            self.assertEqual(saved["dirty-public"]["vlan"], 66)
+
+    @patch("freq.api.vm._check_session_role", return_value=("admin", None))
+    @patch("freq.api.vm.load_config")
+    def test_vm_network_profiles_endpoint_rejects_invalid_bridge(self, mock_load, _mock_role):
+        cfg = self._cfg()
+        mock_load.return_value = cfg
+        handler = _Handler(
+            "/api/vm/network-profiles",
+            body={"profiles": [{"id": "bad", "vlan": 10, "bridge": "vmbr0;rm"}]},
+        )
+
+        vm_api.handle_vm_network_profiles(handler)
+
+        self.assertEqual(handler.status, 400)
+        data = _json(handler)
+        self.assertFalse(data["ok"])
+        self.assertTrue(any("valid bridge" in err for err in data["errors"]))
+
+    @patch("freq.api.vm._candidate_ip_available", return_value=True)
+    def test_vm_create_plan_derives_bridge_from_network_profile(self, _mock_ip):
+        from freq.core.types import VLAN
+
+        cfg = self._cfg()
+        cfg.nic_profiles = {
+            "dirty-public": {
+                "name": "Dirty / Public",
+                "vlan": 66,
+                "bridge": "vmbr66",
+                "purpose": "public-egress",
+                "gateway_role": "default",
+            }
+        }
+        cfg.vlans = [VLAN(id=66, name="dirty", subnet="10.25.66.0/24", prefix="10.25.66", gateway="10.25.66.1")]
+
+        result = vm_api._vm_create_plan(
+            cfg,
+            {"name": "new-vm", "node": "pve01", "network_profile": "dirty-public", "ip": "auto"},
+        )
+
+        self.assertTrue(result["ok"], result)
+        net = result["plan"]["network"]
+        self.assertEqual(net["network_profile"], "dirty-public")
+        self.assertEqual(net["bridge"], "vmbr66")
+        self.assertEqual(net["bridge_source"], "profile")
+        self.assertEqual(net["tag"], "66")
 
     @patch("freq.api.vm._candidate_ip_available", return_value=True)
     @patch("freq.api.vm._check_session_role", return_value=("operator", None))
@@ -619,6 +730,44 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertIn("qm set 6000 --net1 virtio,bridge=vmbr0,tag=66", commands)
         self.assertIn("qm set 6000 --ipconfig1 ip=10.25.66.44/24,gw=10.25.66.1", commands)
 
+    def test_vm_create_job_uses_profile_derived_bridge(self):
+        from freq.core.types import VLAN
+
+        cfg = self._cfg()
+        cfg.fleet_boundaries.categories["sandbox"] = {"range_start": 6000, "range_end": 6099, "tier": "admin"}
+        cfg.nic_profiles = {
+            "tenant": {"name": "Tenant", "vlan": 25, "bridge": "vmbr25", "gateway_role": "none"}
+        }
+        cfg.vlans = [VLAN(id=25, name="tenant", subnet="10.25.25.0/24", prefix="10.25.25", gateway="10.25.25.1")]
+        calls = []
+
+        def fake_pve(_cfg, node_ip, command, timeout=60):
+            calls.append((node_ip, command))
+            if command == "pvesh get /cluster/nextid":
+                return ("6000", True)
+            if command == "pvesh get /cluster/resources --type vm --output-format json":
+                return ("[]", True)
+            return ("", True)
+
+        job_id = "job-profile-net"
+        with vm_api._vm_create_jobs_lock:
+            vm_api._vm_create_jobs[job_id] = {"id": job_id, "state": "queued", "created_at": 0, "updated_at": 0, "lines": []}
+
+        with patch("freq.api.vm.load_config", return_value=cfg), \
+             patch("freq.api.vm._pve_cmd", side_effect=fake_pve), \
+             patch("freq.api.vm._refresh_fleet_overview_after_mutation"):
+            vm_api._run_vm_create_job(
+                job_id,
+                {"name": "new-vm", "node": "pve01", "network_profile": "tenant", "ip": "10.25.25.44/24"},
+            )
+
+        with vm_api._vm_create_jobs_lock:
+            job = dict(vm_api._vm_create_jobs.pop(job_id))
+
+        self.assertEqual(job["state"], "succeeded", job)
+        commands = [cmd for _node, cmd in calls]
+        self.assertIn("qm set 6000 --net0 virtio,bridge=vmbr25,tag=25", commands)
+
     @patch("freq.api.vm.threading.Thread")
     @patch("freq.api.vm._check_session_role", return_value=("admin", None))
     @patch("freq.api.vm._get_fleet_vms", return_value=[])
@@ -641,6 +790,7 @@ class TestVmApiTrust(unittest.TestCase):
         vm_api.register(routes)
         for path in (
             "/api/vm/create/options",
+            "/api/vm/network-profiles",
             "/api/vm/create/plan",
             "/api/vm/create/submit",
             "/api/vm/create/job",

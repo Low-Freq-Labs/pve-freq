@@ -22,7 +22,7 @@ import uuid
 
 from freq.core import log as logger
 from freq.api.helpers import json_response, get_params, get_json_body
-from freq.core.config import load_config
+from freq.core.config import load_config, save_network_profiles_toml
 from freq.core.ssh import run as ssh_single
 from freq.core.types import VLAN
 from freq.core.validate import (
@@ -620,6 +620,7 @@ def _gateway_status(subnet, gateway):
 def _vlan_options(cfg):
     rows = []
     for vlan in _vm_create_vlan_catalog(cfg):
+        profile = _profile_by_key(cfg, str(getattr(vlan, "id", "") or getattr(vlan, "name", ""))) or {}
         gateway = getattr(vlan, "gateway", "") or getattr(cfg, "vm_gateway", "")
         gateway_source = "vlan" if getattr(vlan, "gateway", "") else ("global" if gateway else "")
         gateway_status = _gateway_status(getattr(vlan, "subnet", ""), gateway)
@@ -633,7 +634,8 @@ def _vlan_options(cfg):
                 "gateway_source": gateway_source,
                 "gateway_in_subnet": gateway_status["in_subnet"],
                 "gateway_warning": gateway_status["warning"],
-                "bridge": getattr(cfg, "nic_bridge", "vmbr0"),
+                "bridge": profile.get("bridge") or getattr(cfg, "nic_bridge", "vmbr0"),
+                "network_profile": profile.get("id", ""),
             }
         )
     return rows
@@ -782,6 +784,135 @@ def _vlan_by_key(cfg, key):
         if key_text in {str(getattr(vlan, "id", "")).lower(), str(getattr(vlan, "name", "")).lower()}:
             return vlan
     return None
+
+
+def _profile_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9_-]+", "-", str(value or "").strip().lower()).strip("-")
+
+
+def _default_network_profile_for_vlan(cfg, vlan):
+    vlan_id = int(getattr(vlan, "id", 0) or 0)
+    name = getattr(vlan, "name", "") or f"VLAN{vlan_id}"
+    defaults = {
+        2550: ("management", "Management", "management", "none"),
+        25: ("storage", "Storage", "storage", "none"),
+        10: ("compute-dev", "Compute / Dev", "trusted-dev", "none"),
+        5: ("internal-internet", "Internal Internet", "internal-egress", "default"),
+        66: ("dirty-public", "Dirty / Public", "public-egress", "default"),
+    }
+    pid, label, purpose, gateway_role = defaults.get(
+        vlan_id,
+        (_profile_key(name) or f"vlan-{vlan_id}", name, "", ""),
+    )
+    return {
+        "id": pid,
+        "name": label,
+        "vlan": vlan_id,
+        "bridge": getattr(cfg, "nic_bridge", "vmbr0"),
+        "purpose": purpose,
+        "gateway_role": gateway_role,
+        "description": "",
+    }
+
+
+def _network_profiles(cfg):
+    """Return VM Create network profiles keyed by friendly profile id."""
+    profiles = {}
+    for vlan in _vm_create_vlan_catalog(cfg):
+        profile = _default_network_profile_for_vlan(cfg, vlan)
+        profiles[profile["id"]] = profile
+
+    configured = getattr(cfg, "nic_profiles", {}) or {}
+    if isinstance(configured, dict):
+        for key, raw in configured.items():
+            if not isinstance(raw, dict):
+                continue
+            pid = _profile_key(raw.get("id") or raw.get("key") or key)
+            if not pid:
+                continue
+            base = profiles.get(pid, {})
+            merged = dict(base)
+            merged.update(
+                {
+                    "id": pid,
+                    "name": raw.get("name") or base.get("name") or pid,
+                    "vlan": raw.get("vlan", raw.get("vlan_id", base.get("vlan", ""))),
+                    "bridge": raw.get("bridge") or base.get("bridge") or getattr(cfg, "nic_bridge", "vmbr0"),
+                    "purpose": raw.get("purpose", base.get("purpose", "")),
+                    "gateway_role": raw.get("gateway_role", base.get("gateway_role", "")),
+                    "description": raw.get("description", base.get("description", "")),
+                }
+            )
+            profiles[pid] = merged
+    return profiles
+
+
+def _profile_by_key(cfg, key):
+    key_text = str(key or "").strip().lower()
+    if not key_text:
+        return None
+    for profile in _network_profiles(cfg).values():
+        matches = {
+            str(profile.get("id", "")).lower(),
+            str(profile.get("name", "")).lower(),
+            str(profile.get("vlan", "")).lower(),
+        }
+        if key_text in matches:
+            return profile
+    return None
+
+
+def _profile_vlan(cfg, profile):
+    if not profile:
+        return None
+    vlan = _vlan_by_key(cfg, profile.get("vlan"))
+    if vlan:
+        return vlan
+    try:
+        vlan_id = int(profile.get("vlan", 0) or 0)
+    except (TypeError, ValueError):
+        vlan_id = 0
+    if not vlan_id:
+        return None
+    name = str(profile.get("name") or f"VLAN{vlan_id}")
+    return VLAN(id=vlan_id, name=name, subnet="", prefix="", gateway="")
+
+
+def _network_profile_options(cfg):
+    rows = []
+    policy = _gateway_policy(cfg)
+    def _sort_key(p):
+        try:
+            vlan_sort = int(p.get("vlan") or 0)
+        except (TypeError, ValueError):
+            vlan_sort = 0
+        return vlan_sort, str(p.get("id", ""))
+
+    for profile in sorted(_network_profiles(cfg).values(), key=_sort_key):
+        vlan = _profile_vlan(cfg, profile)
+        token = str(profile.get("vlan", "")).lower()
+        gateway = getattr(vlan, "gateway", "") or getattr(cfg, "vm_gateway", "")
+        gateway_role = str(profile.get("gateway_role") or "").strip().lower()
+        if not gateway_role:
+            gateway_role = "default" if token in policy["egress"] else "none" if token in policy["no_default"] else ""
+        rows.append(
+            {
+                "id": profile.get("id", ""),
+                "name": profile.get("name", ""),
+                "purpose": profile.get("purpose", ""),
+                "description": profile.get("description", ""),
+                "vlan_id": getattr(vlan, "id", profile.get("vlan", "")) if vlan else profile.get("vlan", ""),
+                "vlan_name": getattr(vlan, "name", "") if vlan else "",
+                "subnet": getattr(vlan, "subnet", "") if vlan else "",
+                "prefix": getattr(vlan, "prefix", "") if vlan else "",
+                "gateway": gateway,
+                "gateway_role": gateway_role,
+                "bridge": profile.get("bridge") or getattr(cfg, "nic_bridge", "vmbr0"),
+                "tag": str(profile.get("vlan", "") or ""),
+                "advanced_label": f"{profile.get('bridge') or getattr(cfg, 'nic_bridge', 'vmbr0')}" + (f" tag {profile.get('vlan')}" if str(profile.get("vlan", "")).strip() else ""),
+            }
+        )
+    return rows
 
 
 def _candidate_ip_available(ip_text):
@@ -955,31 +1086,43 @@ def _normalise_create_nics(cfg, payload):
     else:
         candidates = [
             {
+                "network_profile": payload.get("network_profile") or payload.get("network_profile_id") or payload.get("profile") or "",
                 "vlan": payload.get("vlan") or payload.get("network") or "",
                 "ip_mode": payload.get("ip_mode") or ("static" if payload.get("ip") else "static"),
                 "ip": payload.get("ip", "auto"),
                 "gateway": payload.get("gateway") or payload.get("gw") or "",
-                "bridge": payload.get("bridge") or getattr(cfg, "nic_bridge", "vmbr0"),
+                "bridge": payload.get("bridge") or "",
             }
         ]
     normalised = []
     for idx, nic in enumerate(candidates):
-        vlan = _vlan_by_key(cfg, nic.get("vlan") or nic.get("network") or nic.get("vlan_id") or "")
+        profile_key = nic.get("network_profile") or nic.get("network_profile_id") or nic.get("profile") or ""
+        profile = _profile_by_key(cfg, profile_key)
+        if not profile and nic.get("network"):
+            profile = _profile_by_key(cfg, nic.get("network"))
+        vlan_key = nic.get("vlan") or nic.get("vlan_id") or (profile.get("vlan") if profile else "") or nic.get("network") or ""
+        vlan = _profile_vlan(cfg, profile) if profile else _vlan_by_key(cfg, vlan_key)
         explicit_gateway = str(nic.get("gateway") or nic.get("gw") or "").strip()
         ip_mode = str(nic.get("ip_mode") or ("static" if nic.get("ip") else "static")).lower()
         if ip_mode == "auto":
             ip_mode = "static"
+        default_bridge = profile.get("bridge") if profile else ""
+        raw_bridge = str(nic.get("bridge") or "").strip()
         normalised.append(
             {
                 "index": idx,
                 "vlan": vlan,
-                "vlan_key": nic.get("vlan") or nic.get("network") or nic.get("vlan_id") or "",
+                "vlan_key": vlan_key,
+                "network_profile": profile.get("id", "") if profile else "",
+                "network_profile_name": profile.get("name", "") if profile else "",
+                "network_purpose": profile.get("purpose", "") if profile else "",
                 "ip_mode": ip_mode,
                 "requested_ip": str(nic.get("ip") or "auto").strip(),
                 "gateway": explicit_gateway,
                 "gateway_source": "request" if explicit_gateway else "",
                 "gateway_explicit": bool(explicit_gateway),
-                "bridge": str(nic.get("bridge") or getattr(cfg, "nic_bridge", "vmbr0")).strip(),
+                "bridge": default_bridge or raw_bridge or getattr(cfg, "nic_bridge", "vmbr0"),
+                "bridge_source": "profile" if default_bridge else ("advanced" if raw_bridge else "default"),
             }
         )
     if any(n["gateway_explicit"] for n in normalised):
@@ -1018,6 +1161,7 @@ def _vm_create_options_payload(cfg):
     storage = _storage_options(cfg)
     nodes = _node_options(cfg, storage)
     vlans = _vlan_options(cfg)
+    network_profiles = _network_profile_options(cfg)
     storage_by_node = {}
     for row in storage:
         node = str(row.get("node", "") or "")
@@ -1029,7 +1173,7 @@ def _vm_create_options_payload(cfg):
         ip_suggestions[key] = _inventory_ip_suggestions(cfg, vlan)
     return {
         "ok": True,
-        "schema_version": 2,
+        "schema_version": 3,
         "cache_ttl_s": _VM_CREATE_OPTIONS_TTL,
         "nodes": nodes,
         "storage": storage,
@@ -1037,6 +1181,7 @@ def _vm_create_options_payload(cfg):
         "templates": _template_options(cfg),
         "distros": _distro_options(cfg),
         "vlans": vlans,
+        "network_profiles": network_profiles,
         "ip_suggestions": ip_suggestions,
         "network_policy": {
             "default_ip_mode": "static",
@@ -1046,6 +1191,8 @@ def _vm_create_options_payload(cfg):
             "host_octet_reservation": "global",
             "manual_gateway_default": False,
             "multi_nic": True,
+            "primary_input": "network_profile",
+            "bridge_input": "advanced",
         },
         "cpu": {
             "default": getattr(cfg, "vm_cpu", "x86-64-v2-AES"),
@@ -1250,6 +1397,7 @@ def _vm_create_plan(cfg, payload, allocate_vmid=False):
                 "index": nic["index"],
                 "mode": ip_mode,
                 "bridge": nic["bridge"],
+                "bridge_source": nic.get("bridge_source", ""),
                 "tag": tag,
                 "ip": requested_ip,
                 "cidr": cidr,
@@ -1259,6 +1407,9 @@ def _vm_create_plan(cfg, payload, allocate_vmid=False):
                 "gateway_warning": _gateway_status(cidr, gateway)["warning"] if cidr and gateway else "",
                 "vlan": getattr(vlan, "name", "") if vlan else "",
                 "vlan_id": getattr(vlan, "id", 0) if vlan else 0,
+                "network_profile": nic.get("network_profile", ""),
+                "network_profile_name": nic.get("network_profile_name", ""),
+                "purpose": nic.get("network_purpose", ""),
             }
         )
     if not networks:
@@ -1464,6 +1615,106 @@ def handle_vm_create_options(handler):
     _vm_create_options_cache["payload"] = payload
     _vm_create_options_cache["ts"] = now
     json_response(handler, payload)
+
+
+def _validate_network_profile_payload(cfg, profiles):
+    errors = []
+    rows = []
+    seen = set()
+    vlan_keys = {
+        str(getattr(v, "id", "")).lower()
+        for v in _vm_create_vlan_catalog(cfg)
+        if str(getattr(v, "id", "")).strip()
+    }
+    for idx, raw in enumerate(profiles if isinstance(profiles, list) else []):
+        if not isinstance(raw, dict):
+            errors.append(f"profile {idx}: object required")
+            continue
+        pid = _profile_key(raw.get("id") or raw.get("key") or raw.get("name"))
+        if not pid:
+            errors.append(f"profile {idx}: id required")
+            continue
+        if pid in seen:
+            errors.append(f"profile {idx}: duplicate id {pid}")
+            continue
+        seen.add(pid)
+        name = str(raw.get("name") or pid).strip()
+        bridge = str(raw.get("bridge") or "").strip()
+        if not re.match(r"^[A-Za-z0-9_.:-]+$", bridge):
+            errors.append(f"profile {pid}: valid bridge required")
+        vlan = raw.get("vlan", raw.get("vlan_id", ""))
+        vlan_text = str(vlan).strip()
+        if vlan_text and not valid_vlan(vlan_text):
+            errors.append(f"profile {pid}: invalid VLAN tag {vlan_text}")
+        if vlan_keys and vlan_text and vlan_text.lower() not in vlan_keys:
+            errors.append(f"profile {pid}: VLAN {vlan_text} is not in the VM network catalog")
+        gateway_role = str(raw.get("gateway_role") or "").strip().lower()
+        if gateway_role and gateway_role not in {"none", "default", "manual"}:
+            errors.append(f"profile {pid}: gateway_role must be none, default, or manual")
+        rows.append(
+            {
+                "id": pid,
+                "name": name,
+                "vlan": int(vlan_text) if vlan_text else "",
+                "bridge": bridge,
+                "purpose": str(raw.get("purpose") or "").strip(),
+                "gateway_role": gateway_role,
+                "description": str(raw.get("description") or "").strip(),
+            }
+        )
+    if not isinstance(profiles, list):
+        errors.append("profiles must be an array")
+    return rows, errors
+
+
+def handle_vm_network_profiles(handler):
+    """GET/POST /api/vm/network-profiles — Settings-owned VM network profile mapping."""
+    if handler.command == "GET":
+        role, err = _check_session_role(handler, "operator")
+        if err:
+            json_response(handler, {"error": err}, 403)
+            return
+        cfg = load_config(force=True)
+        json_response(
+            handler,
+            {
+                "ok": True,
+                "schema_version": 1,
+                "config_file": os.path.join(cfg.conf_dir, "network-profiles.toml"),
+                "profiles": _network_profile_options(cfg),
+                "advanced_bridge_input": True,
+            },
+        )
+        return
+    if _require_post(handler, "VM network profile update"):
+        return
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
+    cfg = load_config(force=True)
+    body = get_json_body(handler) or {}
+    rows, errors = _validate_network_profile_payload(cfg, body.get("profiles", []))
+    if errors:
+        json_response(handler, {"ok": False, "errors": errors}, 400)
+        return
+    path = os.path.join(cfg.conf_dir, "network-profiles.toml")
+    try:
+        save_network_profiles_toml(path, rows)
+    except OSError as e:
+        json_response(handler, {"ok": False, "error": f"failed to write network profiles: {e}"}, 500)
+        return
+    _vm_create_options_cache["payload"] = None
+    _vm_create_options_cache["ts"] = 0
+    cfg = load_config(force=True)
+    json_response(
+        handler,
+        {
+            "ok": True,
+            "config_file": path,
+            "profiles": _network_profile_options(cfg),
+        },
+    )
 
 
 def handle_vm_create_plan(handler):
@@ -3199,6 +3450,7 @@ def register(routes: dict):
     routes["/api/vms"] = handle_vm_list
     routes["/api/vm/create"] = handle_vm_create
     routes["/api/vm/create/options"] = handle_vm_create_options
+    routes["/api/vm/network-profiles"] = handle_vm_network_profiles
     routes["/api/vm/create/plan"] = handle_vm_create_plan
     routes["/api/vm/create/submit"] = handle_vm_create_submit
     routes["/api/vm/create/job"] = handle_vm_create_job
