@@ -633,6 +633,8 @@ document.addEventListener('click',function(e){
     if(a==='hdDiagnose'){hdDiagnose(da);return;}
     if(a==='hdRestart'){hdRestart(da);return;}
     if(a==='togglePveGroup'){togglePveGroup(da);return;}
+    if(a==='vmtAddNic'){vmtAddNic();return;}
+    if(a==='vmtRemoveNic'){vmtRemoveNic(parseInt(da.dataset.index||'0',10));return;}
     if(a==='clearHarden'){document.getElementById('harden-c').innerHTML='';return;}
     /* Long-tail inline-handler extraction landed under
      * R-WEB-INLINE-CSP-CLEANUP-20260413O. Every function listed below
@@ -1582,9 +1584,12 @@ function _setupTruthSummary(d){
 function _doctorTruthSummary(d){
   if(!d)return null;
   if(d._probe_failed){
+    var detail=d._http_status?('/api/doctor returned HTTP '+d._http_status):'/api/doctor network fetch failed';
+    if(d._probe_ms)detail+=' after '+Math.round(d._probe_ms/1000)+'s';
+    if(d._error)detail+=' — '+String(d._error).slice(0,120);
     return {isErr:true,
       title:'DOCTOR PROBE FAILED',
-      body:'/api/doctor unreachable — cannot confirm backend health. '+
+      body:detail+' — cannot confirm backend health. '+
         'UI degradation indicators may lag reality.'};
   }
   var failed=parseInt(d.failed||0)||0;
@@ -1632,14 +1637,20 @@ function _probeSetupTruth(cb){
  * degradation in a single banner the operator can't miss. */
 var _doctorProbeTimer=null;
 function _probeDoctorTruth(){
+  var started=Date.now();
   _authFetch(API.DOCTOR,{silent:true}).then(function(r){
-    if(!r.ok)throw new Error('doctor http '+r.status);
-    return r.json();
+    if(!r.ok){
+      _doctorTruthCache={_probe_failed:true,_http_status:r.status,_probe_ms:Date.now()-started};
+      _renderPostAuthTruthBanner(_setupTruthCache);
+      return null;
+    }
+    return r.json().then(function(d){d=d||{};d._probe_ms=Date.now()-started;return d;});
   }).then(function(d){
+    if(!d)return;
     _doctorTruthCache=d||{};
     _renderPostAuthTruthBanner(_setupTruthCache);
-  }).catch(function(){
-    _doctorTruthCache={_probe_failed:true};
+  }).catch(function(e){
+    _doctorTruthCache={_probe_failed:true,_probe_ms:Date.now()-started,_error:String((e&&e.message)||e||'fetch failed')};
     _renderPostAuthTruthBanner(_setupTruthCache);
   });
 }
@@ -6581,7 +6592,7 @@ function openVmCreateForNode(nodeName){
   _activeFleetTool=null;
   var ov=document.getElementById('modal-container');
   if(!ov){toast('Create VM modal unavailable','error');return;}
-  ov.innerHTML='<div class="modal" style="width:min(92vw,860px);max-width:860px;max-height:88vh;overflow-y:auto">'+
+  ov.innerHTML='<div class="modal vm-create-modal">'+
     '<div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Create VM</h3><span class="close-x" data-action="closeModal">&times;</span></div>'+
     '<div id="vm-subtitle" class="d-none"></div><div id="vm-form"></div>'+
     '</div>';
@@ -6831,9 +6842,8 @@ function switchFleetOps(tab){
   _fleetToolInner(tab,fakePanel,foForm);
   var innerH3=foForm.querySelector('h3');if(innerH3)innerH3.remove();
 }
-var _vmCreateOptions=null,_vmCreatePlan=null,_vmCreateJobTimer=null;
+var _vmCreateOptions=null,_vmCreateOptionsFetchedAt=0,_vmCreatePlan=null,_vmCreateJobTimer=null,_vmCreateNicSeq=0;
 function _vmCreateArr(v){return Array.isArray(v)?v:[];}
-function _vmCreateFirst(v,fallback){return (v!==undefined&&v!==null&&v!=='')?v:fallback;}
 function _vmCreateSelectOptions(items,valueFn,labelFn,selected){
   var h='';
   _vmCreateArr(items).forEach(function(item){
@@ -6842,28 +6852,37 @@ function _vmCreateSelectOptions(items,valueFn,labelFn,selected){
   });
   return h;
 }
-function _vmCreateFindBy(items,field,value){
-  var arr=_vmCreateArr(items);
-  for(var i=0;i<arr.length;i++){if(String(arr[i][field])===String(value))return arr[i];}
-  return arr[0]||{};
-}
-function _vmCreateChosenTemplate(){
-  var opts=_vmCreateOptions||{};
-  var val=(document.getElementById('vmt-c-template')||{}).value||'';
-  var templates=_vmCreateArr(opts.templates);
+function _vmCreateNodeValue(n){return n&&typeof n==='object'?(n.name||n.node||''):n;}
+function _vmCreateVlanValue(n){return n&&typeof n==='object'?(n.id||n.vlan_id||n.tag||n.name||''):n;}
+function _vmCreateFindTemplate(val){
+  var templates=_vmCreateArr((_vmCreateOptions||{}).templates);
   for(var i=0;i<templates.length;i++){
     if(String(templates[i].vmid||templates[i].id||templates[i].name)===String(val))return templates[i];
   }
   return templates[0]||{};
 }
-function _vmCreateChosenNetwork(){
-  var opts=_vmCreateOptions||{};
-  var val=(document.getElementById('vmt-c-vlan')||{}).value||'';
-  var vlans=_vmCreateArr(opts.vlans||opts.networks);
+function _vmCreateFindVlan(val){
+  var vlans=_vmCreateArr((_vmCreateOptions||{}).vlans||(_vmCreateOptions||{}).networks);
   for(var i=0;i<vlans.length;i++){
-    if(String(vlans[i].id||vlans[i].vlan_id||vlans[i].tag||vlans[i].name)===String(val))return vlans[i];
+    if(String(_vmCreateVlanValue(vlans[i]))===String(val))return vlans[i];
   }
   return vlans[0]||{};
+}
+function _vmCreateStorageList(node){
+  var opts=_vmCreateOptions||{};
+  var byNode=opts.storage_by_node||{};
+  return _vmCreateArr(byNode[node]).length?_vmCreateArr(byNode[node]):_vmCreateArr(opts.storage);
+}
+function _vmCreateDefaultStorage(node){
+  var opts=_vmCreateOptions||{};
+  var disk=opts.disk||{};
+  var byNode=disk.default_by_node||{};
+  var list=_vmCreateStorageList(node);
+  return byNode[node]||disk.default_storage||((list[0]||{}).id)||((list[0]||{}).label)||'';
+}
+function _vmCreateStorageOptions(node,selected){
+  var pick=selected||_vmCreateDefaultStorage(node);
+  return _vmCreateSelectOptions(_vmCreateStorageList(node),function(s){return s.id||s.label||s.storage||s;},function(s){return (s.label||s.id||s.storage||s)+((s.shared)?' / shared':'');},pick);
 }
 function _vmCreateSetPlanState(plan){
   _vmCreatePlan=plan||null;
@@ -6874,119 +6893,191 @@ function _vmCreateSetPlanState(plan){
 function _vmCreateClearPlan(){
   _vmCreateSetPlanState(null);
   var out=document.getElementById('vmt-c-out');
-  if(out)out.innerHTML='<div class="text-dim" style="font-size:12px;padding:10px 0">Preview the plan before creating anything.</div>';
+  if(out)out.innerHTML='<div class="text-dim vmt-create-hint">Preview the plan before creating anything.</div>';
 }
-function _vmCreateToggleManualIp(){
-  var mode=(document.getElementById('vmt-c-ip-mode')||{}).value||'auto';
-  var row=document.getElementById('vmt-c-manual-ip-row');
-  if(row)row.style.display=mode==='manual'?'block':'none';
+function _vmCreateRowId(row,suffix){return 'vmt-c-nic-'+row+'-'+suffix;}
+function _vmCreateToggleManualIp(row){
+  var mode=(document.getElementById(_vmCreateRowId(row,'ip-mode'))||{}).value||'auto';
+  var field=document.getElementById(_vmCreateRowId(row,'ip-wrap'));
+  if(field)field.style.display=mode==='manual'?'block':'none';
 }
-function _vmCreateUpdateGateway(){
-  var net=_vmCreateChosenNetwork();
-  var gw=document.getElementById('vmt-c-gateway');
-  var truth=document.getElementById('vmt-c-net-truth');
-  if(gw)gw.value=net.gateway||net.gateway_ip||'';
-  if(truth){
-    var parts=[];
-    if(net.subnet)parts.push('SUBNET '+net.subnet);
-    if(net.gateway_source)parts.push('GATEWAY SOURCE '+String(net.gateway_source).toUpperCase());
-    if(net.gateway_in_subnet===false)parts.push('ROUTED GATEWAY');
-    truth.innerHTML=parts.length?parts.map(function(p){return '<span>'+_esc(p)+'</span>';}).join('<span style="opacity:.45">/</span>'):'';
-  }
+function _vmCreateNicTruth(row){
+  var vlan=_vmCreateFindVlan((document.getElementById(_vmCreateRowId(row,'vlan'))||{}).value||'');
+  var policy=(_vmCreateOptions||{}).network_policy||{};
+  var truth=document.getElementById(_vmCreateRowId(row,'truth'));
+  if(!truth)return;
+  var vlanId=String(_vmCreateVlanValue(vlan)||'');
+  var noGw=_vmCreateArr(policy.no_default_gateway_vlans).map(String).indexOf(vlanId)>=0;
+  var internet=_vmCreateArr(policy.internet_vlans).map(String).indexOf(vlanId)>=0;
+  var parts=[];
+  if(vlan.subnet)parts.push('SUBNET '+vlan.subnet);
+  parts.push(noGw?'NO DEFAULT GATEWAY':internet?'EGRESS GATEWAY ON PLAN':'BACKEND GATEWAY POLICY');
+  truth.innerHTML=parts.length?parts.map(function(p){return '<span>'+_esc(p)+'</span>';}).join('<span class="vmt-dot">/</span>'):'<span>BACKEND GATEWAY POLICY</span>';
+}
+function _vmCreateBindNicRow(row){
+  [_vmCreateRowId(row,'vlan'),_vmCreateRowId(row,'ip-mode'),_vmCreateRowId(row,'ip'),_vmCreateRowId(row,'bridge')].forEach(function(id){
+    var el=document.getElementById(id);if(!el)return;
+    el.addEventListener('change',function(){if(id===_vmCreateRowId(row,'ip-mode'))_vmCreateToggleManualIp(row);if(id===_vmCreateRowId(row,'vlan'))_vmCreateNicTruth(row);_vmCreateClearPlan();});
+    if(el.tagName==='INPUT')el.addEventListener('input',_vmCreateClearPlan);
+  });
+  _vmCreateToggleManualIp(row);
+  _vmCreateNicTruth(row);
+}
+function _vmCreateNicHtml(row,data){
+  var opts=_vmCreateOptions||{};
+  var vlans=_vmCreateArr(opts.vlans||opts.networks);
+  var vlan=data&&data.vlan?data.vlan:_vmCreateVlanValue(vlans[0]||25);
+  var ipMode=data&&data.ip_mode?data.ip_mode:'auto';
+  var bridge=(data&&data.bridge)||((_vmCreateFindVlan(vlan)||{}).bridge)||'vmbr0';
+  return '<div class="vmt-nic-row" data-nic-row="'+row+'">'+
+    '<div class="vmt-nic-head"><strong>NIC '+(row+1)+'</strong><button class="fleet-btn vmt-nic-remove" data-action="vmtRemoveNic" data-index="'+row+'" title="Remove NIC">&times;</button></div>'+
+    '<div class="vmt-nic-grid">'+
+      '<div><label class="label-sub">NETWORK</label><select id="'+_vmCreateRowId(row,'vlan')+'" class="input-primary">'+_vmCreateSelectOptions(vlans,function(n){return _vmCreateVlanValue(n);},function(n){return (n.name||('VLAN '+_vmCreateVlanValue(n)))+(n.subnet?' / '+n.subnet:'');},vlan)+'</select></div>'+
+      '<div><label class="label-sub">IP MODE</label><select id="'+_vmCreateRowId(row,'ip-mode')+'" class="input-primary"><option value="auto"'+(ipMode==='auto'?' selected':'')+'>Auto static IP</option><option value="dhcp"'+(ipMode==='dhcp'?' selected':'')+'>DHCP</option><option value="manual"'+(ipMode==='manual'?' selected':'')+'>Manual static IP</option></select></div>'+
+      '<div id="'+_vmCreateRowId(row,'ip-wrap')+'"><label class="label-sub">STATIC IP</label><input id="'+_vmCreateRowId(row,'ip')+'" class="input-primary" placeholder="10.25.25.x" value="'+_esc((data&&data.ip)||'')+'"></div>'+
+      '<div><label class="label-sub">BRIDGE</label><input id="'+_vmCreateRowId(row,'bridge')+'" class="input-primary" value="'+_esc(bridge)+'"></div>'+
+    '</div>'+
+    '<div id="'+_vmCreateRowId(row,'truth')+'" class="host-meta vmt-nic-truth"></div>'+
+  '</div>';
+}
+function _vmCreateAddNicRow(data){
+  var list=document.getElementById('vmt-c-nics');if(!list)return;
+  var row=_vmCreateNicSeq++;
+  var wrap=document.createElement('div');
+  wrap.innerHTML=_vmCreateNicHtml(row,data);
+  list.appendChild(wrap.firstChild);
+  _vmCreateBindNicRow(row);
+  _vmCreateRefreshNicRemoveButtons();
+  _vmCreateClearPlan();
+}
+function _vmCreateRefreshNicRemoveButtons(){
+  var rows=document.querySelectorAll('#vmt-c-nics .vmt-nic-row');
+  rows.forEach(function(r,i){
+    var label=r.querySelector('.vmt-nic-head strong');if(label)label.textContent='NIC '+(i+1);
+    var b=r.querySelector('.vmt-nic-remove');if(b)b.disabled=rows.length<=1;
+  });
+}
+function vmtAddNic(){_vmCreateAddNicRow({});}
+function vmtRemoveNic(row){
+  var rows=document.querySelectorAll('#vmt-c-nics .vmt-nic-row');
+  if(rows.length<=1){toast('At least one NIC is required','warn');return;}
+  var el=document.querySelector('#vmt-c-nics .vmt-nic-row[data-nic-row="'+row+'"]');
+  if(el&&el.parentNode)el.parentNode.removeChild(el);
+  _vmCreateRefreshNicRemoveButtons();
+  _vmCreateClearPlan();
 }
 function _vmCreateBindForm(){
-  ['vmt-c-name','vmt-c-node','vmt-c-template','vmt-c-cpu','vmt-c-cores','vmt-c-ram','vmt-c-balloon','vmt-c-disk','vmt-c-storage','vmt-c-vlan','vmt-c-ip-mode','vmt-c-ip','vmt-c-gateway'].forEach(function(id){
-    var el=document.getElementById(id);
-    if(!el)return;
-    el.addEventListener('change',function(){if(id==='vmt-c-vlan')_vmCreateUpdateGateway();if(id==='vmt-c-ip-mode')_vmCreateToggleManualIp();_vmCreateClearPlan();});
+  ['vmt-c-name','vmt-c-node','vmt-c-template','vmt-c-cpu','vmt-c-cores','vmt-c-ram','vmt-c-balloon','vmt-c-disk','vmt-c-storage'].forEach(function(id){
+    var el=document.getElementById(id);if(!el)return;
+    el.addEventListener('change',function(){if(id==='vmt-c-node')_vmCreateUpdateStorageForNode();_vmCreateClearPlan();});
     if(el.tagName==='INPUT')el.addEventListener('input',_vmCreateClearPlan);
   });
   var arm=document.getElementById('vmt-c-arm');
   if(arm)arm.addEventListener('change',function(){_vmCreateSetPlanState(_vmCreatePlan);});
 }
+function _vmCreateUpdateStorageForNode(){
+  var sel=document.getElementById('vmt-c-storage');
+  var node=(document.getElementById('vmt-c-node')||{}).value||'';
+  if(sel)sel.innerHTML=_vmCreateStorageOptions(node,'');
+}
 function _vmCreatePayload(){
   var opts=_vmCreateOptions||{};
-  var tmpl=_vmCreateChosenTemplate();
-  var net=_vmCreateChosenNetwork();
-  var ipMode=(document.getElementById('vmt-c-ip-mode')||{}).value||'auto';
-  var payload={
+  var tmpl=_vmCreateFindTemplate((document.getElementById('vmt-c-template')||{}).value||'');
+  var rows=document.querySelectorAll('#vmt-c-nics .vmt-nic-row');
+  var nics=[];
+  rows.forEach(function(row){
+    var idx=parseInt(row.getAttribute('data-nic-row')||'0',10);
+    var vlan=_vmCreateFindVlan((document.getElementById(_vmCreateRowId(idx,'vlan'))||{}).value||'');
+    var mode=(document.getElementById(_vmCreateRowId(idx,'ip-mode'))||{}).value||'auto';
+    var nic={vlan:_vmCreateVlanValue(vlan)||25,vlan_id:_vmCreateVlanValue(vlan)||25,bridge:(document.getElementById(_vmCreateRowId(idx,'bridge'))||{}).value||vlan.bridge||'vmbr0'};
+    if(mode==='dhcp'){nic.ip_mode='dhcp';nic.ip='dhcp';}
+    else if(mode==='manual'){nic.ip_mode='static';nic.ip=((document.getElementById(_vmCreateRowId(idx,'ip'))||{}).value||'').trim();}
+    else {nic.ip_mode='static';nic.ip='auto';}
+    nics.push(nic);
+  });
+  var first=nics[0]||{};
+  return {
     name:((document.getElementById('vmt-c-name')||{}).value||'').trim(),
     node:(document.getElementById('vmt-c-node')||{}).value||'',
     template:tmpl.name||tmpl.template||tmpl.label||'',
     template_vmid:tmpl.vmid||tmpl.template_vmid||tmpl.id||'',
-    storage:(document.getElementById('vmt-c-storage')||{}).value||((opts.disk||{}).default_storage||'local-lvm'),
+    storage:(document.getElementById('vmt-c-storage')||{}).value||_vmCreateDefaultStorage((document.getElementById('vmt-c-node')||{}).value||''),
     cores:parseInt((document.getElementById('vmt-c-cores')||{}).value,10)||2,
     ram:parseInt((document.getElementById('vmt-c-ram')||{}).value,10)||2048,
     memory:parseInt((document.getElementById('vmt-c-ram')||{}).value,10)||2048,
-    disk:parseInt((document.getElementById('vmt-c-disk')||{}).value,10)||32,
+    disk:parseInt((document.getElementById('vmt-c-disk')||{}).value,10)||((opts.disk||{}).default_gb||32),
     cpu:(document.getElementById('vmt-c-cpu')||{}).value||((opts.cpu||{}).default||'x86-64-v2-AES'),
     cpu_type:(document.getElementById('vmt-c-cpu')||{}).value||((opts.cpu||{}).default||'x86-64-v2-AES'),
     ballooning:!!((document.getElementById('vmt-c-balloon')||{}).checked),
-    vlan:net.id||net.vlan_id||net.tag||25,
-    vlan_id:net.id||net.vlan_id||net.tag||25,
-    bridge:net.bridge||'vmbr0'
+    nics:nics,
+    vlan:first.vlan,
+    vlan_id:first.vlan_id,
+    bridge:first.bridge,
+    ip:first.ip,
+    ip_mode:first.ip_mode
   };
-  if(ipMode==='auto'){payload.ip='auto';payload.gateway=(document.getElementById('vmt-c-gateway')||{}).value||net.gateway||'';}
-  else if(ipMode==='manual'){payload.ip=((document.getElementById('vmt-c-ip')||{}).value||'').trim();payload.gateway=(document.getElementById('vmt-c-gateway')||{}).value||net.gateway||'';}
-  return payload;
 }
 function _vmCreateRenderLoaded(opts){
   _vmCreateOptions=opts||{};
   _vmCreatePlan=null;
+  _vmCreateNicSeq=0;
   var vmForm=document.getElementById('vm-form');if(!vmForm)return;
   var nodes=_vmCreateArr(opts.nodes);
   var templates=_vmCreateArr(opts.templates);
-  var vlans=_vmCreateArr(opts.vlans||opts.networks);
-  var storage=_vmCreateArr(opts.storage);
   var cpu=opts.cpu||{};
   var memory=opts.memory||{};
   var disk=opts.disk||{};
-  var selectedNode=_pendingVmCreateNode||((nodes[0]||{}).name||nodes[0]||'');
+  var policy=opts.network_policy||{};
+  var selectedNode=_pendingVmCreateNode||_vmCreateNodeValue(nodes[0])||'';
   var defaultTemplate=templates[0]||{};
-  var defaultVlan=vlans[0]||{};
-  var defaultStorage=(disk.default_storage||((storage[0]||{}).id)||((storage[0]||{}).label)||'local-lvm');
   var defaultCpu=cpu.default||'x86-64-v2-AES';
-  var h='<div class="form-vertical" style="gap:12px">'+
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">'+
+  var h='<div class="vmt-create-shell">'+
+    '<div class="vmt-create-grid">'+
       '<div><label class="label-sub">VM NAME</label><input id="vmt-c-name" placeholder="e.g. web-lab-01" class="input-primary-lg"></div>'+
-      '<div><label class="label-sub">TARGET NODE</label><select id="vmt-c-node" class="input-primary">'+_vmCreateSelectOptions(nodes,function(n){return n.name||n.node||n;},function(n){return (n.name||n.node||n)+((n.default)?' (default)':'');},selectedNode)+'</select></div>'+
+      '<div><label class="label-sub">TARGET NODE</label><select id="vmt-c-node" class="input-primary">'+_vmCreateSelectOptions(nodes,function(n){return _vmCreateNodeValue(n);},function(n){return _vmCreateNodeValue(n)+((n.default)?' / default':'')+(n.ip?' / '+n.ip:'');},selectedNode)+'</select></div>'+
       '<div><label class="label-sub">OS TEMPLATE</label><select id="vmt-c-template" class="input-primary">'+_vmCreateSelectOptions(templates,function(t){return t.vmid||t.id||t.name;},function(t){return (t.name||t.label||t.template||'template')+(t.vmid?' / '+t.vmid:'')+(t.node?' / '+t.node:'');},defaultTemplate.vmid||defaultTemplate.id||defaultTemplate.name)+'</select></div>'+
       '<div><label class="label-sub">CPU TYPE</label><select id="vmt-c-cpu" class="input-primary">'+_vmCreateSelectOptions(cpu.choices||[defaultCpu],function(c){return c;},function(c){return c;},defaultCpu)+'</select></div>'+
       '<div><label class="label-sub">CPU CORES</label><select id="vmt-c-cores" class="input-primary"><option>1</option><option selected>2</option><option>4</option><option>8</option><option>16</option></select></div>'+
       '<div><label class="label-sub">MEMORY</label><select id="vmt-c-ram" class="input-primary"><option value="1024">1GB</option><option value="2048" selected>2GB</option><option value="4096">4GB</option><option value="8192">8GB</option><option value="16384">16GB</option><option value="32768">32GB</option></select></div>'+
       '<div><label class="label-sub">DISK GB</label><input id="vmt-c-disk" type="number" min="8" step="1" value="'+_esc(disk.default_gb||32)+'" class="input-primary"></div>'+
-      '<div><label class="label-sub">STORAGE</label><select id="vmt-c-storage" class="input-primary">'+_vmCreateSelectOptions(storage,function(s){return s.id||s.label||s.storage||s;},function(s){return s.label||s.id||s.storage||s;},defaultStorage)+'</select></div>'+
+      '<div><label class="label-sub">STORAGE</label><select id="vmt-c-storage" class="input-primary">'+_vmCreateStorageOptions(selectedNode,'')+'</select></div>'+
     '</div>'+
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;align-items:end">'+
-      '<div><label class="label-sub">NETWORK</label><select id="vmt-c-vlan" class="input-primary">'+_vmCreateSelectOptions(vlans,function(n){return n.id||n.vlan_id||n.tag||n.name;},function(n){return (n.name||('VLAN '+(n.id||n.vlan_id||n.tag||'')))+(n.subnet?' / '+n.subnet:'');},defaultVlan.id||defaultVlan.vlan_id||defaultVlan.tag||defaultVlan.name)+'</select></div>'+
-      '<div><label class="label-sub">IP MODE</label><select id="vmt-c-ip-mode" class="input-primary"><option value="auto" selected>Auto static IP</option><option value="dhcp">DHCP</option><option value="manual">Manual static IP</option></select></div>'+
-      '<div id="vmt-c-manual-ip-row" style="display:none"><label class="label-sub">STATIC IP</label><input id="vmt-c-ip" placeholder="10.25.25.x" class="input-primary"></div>'+
-      '<div><label class="label-sub">GATEWAY</label><input id="vmt-c-gateway" class="input-primary" value="'+_esc(defaultVlan.gateway||'')+'"></div>'+
-    '</div>'+
-    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
-      '<label class="label-sub" style="display:flex;align-items:center;gap:8px;margin:0"><input type="checkbox" id="vmt-c-balloon" '+(memory.ballooning_default!==false?'checked':'')+'> MEMORY BALLOONING</label>'+
-      '<div id="vmt-c-net-truth" class="host-meta" style="gap:7px"></div>'+
-    '</div>'+
-    '<div id="vmt-c-out" class="mt-12"><div class="text-dim" style="font-size:12px;padding:10px 0">Preview the plan before creating anything.</div></div>'+
-    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
-      '<button class="fleet-btn btn-cyan" data-action="vmtPlanCreate" style="flex:1 1 180px">PREVIEW PLAN</button>'+
-      '<label class="label-sub" style="display:flex;align-items:center;gap:8px;margin:0;flex:2 1 240px"><input type="checkbox" id="vmt-c-arm"> I understand this creates a real VM</label>'+
-      '<button id="vmt-c-submit" class="fleet-btn c-purple-active" data-action="vmtCreate" style="flex:1 1 180px" disabled>CREATE VM</button>'+
+    '<section class="vmt-create-section">'+
+      '<div class="vmt-create-section-head"><div><strong>NETWORK INTERFACES</strong><span>Gateway and free-IP policy are resolved by the backend.</span></div><button class="fleet-btn btn-cyan" data-action="vmtAddNic">ADD NIC</button></div>'+
+      '<div id="vmt-c-nics" class="vmt-nic-list"></div>'+
+      '<div class="host-meta vmt-policy">'+
+        '<span>SCHEMA '+_esc(opts.schema_version||'1')+'</span><span>/</span>'+
+        '<span>TTL '+_esc(opts.cache_ttl_s||30)+'s</span><span>/</span>'+
+        '<span>GATEWAY '+_esc((policy.gateway_source||'backend').replace(/_/g,' ').toUpperCase())+'</span>'+
+      '</div>'+
+    '</section>'+
+    '<div class="vmt-create-footer">'+
+      '<label class="label-sub vmt-balloon"><input type="checkbox" id="vmt-c-balloon" '+(memory.ballooning_default!==false?'checked':'')+'> MEMORY BALLOONING</label>'+
+      '<div id="vmt-c-out" class="vmt-create-output"><div class="text-dim vmt-create-hint">Preview the plan before creating anything.</div></div>'+
+      '<div class="vmt-create-actions">'+
+        '<button class="fleet-btn btn-cyan" data-action="vmtPlanCreate">PREVIEW PLAN</button>'+
+        '<label class="label-sub vmt-create-arm"><input type="checkbox" id="vmt-c-arm"> I understand this creates a real VM</label>'+
+        '<button id="vmt-c-submit" class="fleet-btn c-purple-active" data-action="vmtCreate" disabled>CREATE VM</button>'+
+      '</div>'+
     '</div>'+
   '</div>';
   vmForm.innerHTML=h;
-  _vmCreateUpdateGateway();
-  _vmCreateToggleManualIp();
+  _vmCreateAddNicRow({ip_mode:(policy.default_ip_mode==='dhcp'?'dhcp':'auto')});
   _vmCreateBindForm();
 }
 function vmtLoadCreateOptions(){
   var vmForm=document.getElementById('vm-form');if(!vmForm)return;
-  vmForm.innerHTML='<div class="skeleton"></div><div class="text-dim" style="padding:12px 0">Loading VM create options...</div>';
+  var ttl=((_vmCreateOptions||{}).cache_ttl_s||30)*1000;
+  var fresh=_vmCreateOptions&&(Date.now()-_vmCreateOptionsFetchedAt)<ttl;
+  if(fresh){_vmCreateRenderLoaded(_vmCreateOptions);return;}
+  if(_vmCreateOptions){_vmCreateRenderLoaded(_vmCreateOptions);}
+  else vmForm.innerHTML='<div class="vmt-create-loading"><div class="skeleton"></div><div class="text-dim">Loading cached VM create options...</div></div>';
   _authFetch(API.VM_CREATE_OPTIONS,{silent:true}).then(function(r){return r.json();}).then(function(d){
     if(!d||d.ok===false)throw new Error((d&&d.error)||'options failed');
+    _vmCreateOptions=d;_vmCreateOptionsFetchedAt=Date.now();
     _vmCreateRenderLoaded(d);
   }).catch(function(e){
-    vmForm.innerHTML='<div class="c-red" style="padding:12px 0">Failed to load first-class VM create options.</div><div class="text-dim" style="font-size:12px">'+_esc(e.message||e)+'</div>';
+    if(!_vmCreateOptions)vmForm.innerHTML='<div class="c-red" style="padding:12px 0">Failed to load first-class VM create options.</div><div class="text-dim" style="font-size:12px">'+_esc(e.message||e)+'</div>';
   });
 }
 function vmtPlanCreate(){
@@ -6995,7 +7086,7 @@ function vmtPlanCreate(){
   if(!payload.name){toast('Enter a VM name','error');return;}
   if(!payload.node){toast('Select a target node','error');return;}
   if(!payload.template_vmid&&!payload.template){toast('Select an OS template','error');return;}
-  if((document.getElementById('vmt-c-ip-mode')||{}).value==='manual'&&!payload.ip){toast('Enter a static IP or use auto','error');return;}
+  for(var i=0;i<payload.nics.length;i++){if(payload.nics[i].ip_mode==='static'&&payload.nics[i].ip!=='auto'&&!payload.nics[i].ip){toast('Enter static IP for NIC '+(i+1)+' or use auto','error');return;}}
   _vmCreateSetPlanState(null);
   if(out)out.innerHTML='<div class="c-yellow" style="padding:10px 0">Building VM create plan...</div>';
   _authFetch(API.VM_CREATE_PLAN,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json().then(function(d){return {status:r.status,body:d};});}).then(function(res){
@@ -7007,20 +7098,23 @@ function vmtPlanCreate(){
       return;
     }
     var plan=d.plan||d;
-    var net=plan.network||{};
-    var warnings=d.warnings||[];
+    var networks=_vmCreateArr(plan.networks);
+    if(!networks.length&&plan.network)networks=[plan.network];
+    var warnings=d.warnings||plan.warnings||[];
     _vmCreateSetPlanState(plan);
+    var netHtml=networks.map(function(net,i){
+      var nicPayload=payload.nics[i]||{};
+      return '<div><span class="text-dim">NIC '+(i+1)+'</span><br>'+_esc(net.vlan||('VLAN '+(net.vlan_id||nicPayload.vlan||'')))+' / '+_esc(net.cidr||net.ip||'DHCP')+'<br><span class="text-dim">GW '+_esc(net.gateway||'backend')+'</span></div>';
+    }).join('');
     var warnHtml=warnings.length?'<div class="c-yellow" style="font-size:12px;margin-top:8px">'+warnings.map(_esc).join('<br>')+'</div>':'';
-    if(out)out.innerHTML='<div style="border:1px solid var(--input-border);border-radius:8px;padding:12px;background:var(--card-solid)">'+
+    if(out)out.innerHTML='<div class="vmt-plan-card">'+
       '<div class="flex-between-mb8"><strong style="color:var(--purple-light)">PLAN READY</strong><span class="text-dim">VMID '+_esc(plan.vmid||'auto')+'</span></div>'+
-      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;font-size:12px">'+
+      '<div class="vmt-plan-grid">'+
         '<div><span class="text-dim">NODE</span><br>'+_esc(plan.node||payload.node)+'</div>'+
         '<div><span class="text-dim">MODE</span><br>'+_esc(plan.mode||'clone')+'</div>'+
         '<div><span class="text-dim">CPU/RAM</span><br>'+_esc(plan.cores||payload.cores)+' cores / '+_esc(plan.ram_mb||payload.ram)+'MB</div>'+
         '<div><span class="text-dim">DISK</span><br>'+_esc(plan.disk_gb||payload.disk)+'GB / '+_esc(plan.storage||payload.storage)+'</div>'+
-        '<div><span class="text-dim">NETWORK</span><br>'+_esc(net.vlan||('VLAN '+(net.vlan_id||payload.vlan_id)))+' / '+_esc(net.mode||'static')+'</div>'+
-        '<div><span class="text-dim">IP</span><br>'+_esc(net.cidr||net.ip||'DHCP')+'</div>'+
-        '<div><span class="text-dim">GATEWAY</span><br>'+_esc(net.gateway||payload.gateway||'DHCP')+'</div>'+
+        netHtml+
         '<div><span class="text-dim">BOOTSTRAP</span><br>'+_esc(((plan.bootstrap||{}).ciuser)||'freq-admin')+'</div>'+
       '</div>'+warnHtml+
     '</div>';

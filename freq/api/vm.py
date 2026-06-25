@@ -24,6 +24,7 @@ from freq.core import log as logger
 from freq.api.helpers import json_response, get_params, get_json_body
 from freq.core.config import load_config
 from freq.core.ssh import run as ssh_single
+from freq.core.types import VLAN
 from freq.core.validate import (
     ip as valid_ip,
     label as valid_label,
@@ -43,6 +44,8 @@ from freq.modules.serve import (
 _vm_create_jobs = {}
 _vm_create_jobs_lock = threading.Lock()
 _VM_CREATE_JOB_TAIL = 400
+_vm_create_options_cache = {"ts": 0.0, "payload": None}
+_VM_CREATE_OPTIONS_TTL = 30
 
 
 def _require_post(handler, action="this operation"):
@@ -534,7 +537,13 @@ def _vm_create_body(handler):
     return body
 
 
-def _node_options(cfg):
+def _node_options(cfg, storage_rows=None):
+    storage_rows = storage_rows or []
+    storage_by_node = {}
+    for row in storage_rows:
+        node = str(row.get("node", "") or "")
+        if node and node not in storage_by_node:
+            storage_by_node[node] = row.get("id") or row.get("storage") or row.get("label") or ""
     nodes = []
     for idx, ip in enumerate(getattr(cfg, "pve_nodes", []) or []):
         name = ""
@@ -545,7 +554,7 @@ def _node_options(cfg):
             {
                 "name": name,
                 "ip": ip,
-                "storage": _configured_image_storage(cfg, ip) or _default_image_storage(cfg, ip),
+                "storage": _configured_image_storage(cfg, ip) or storage_by_node.get(name) or _default_image_storage(cfg, ip),
                 "default": idx == 0,
             }
         )
@@ -594,7 +603,7 @@ def _gateway_status(subnet, gateway):
 
 def _vlan_options(cfg):
     rows = []
-    for vlan in getattr(cfg, "vlans", []) or []:
+    for vlan in _vm_create_vlan_catalog(cfg):
         gateway = getattr(vlan, "gateway", "") or getattr(cfg, "vm_gateway", "")
         gateway_source = "vlan" if getattr(vlan, "gateway", "") else ("global" if gateway else "")
         gateway_status = _gateway_status(getattr(vlan, "subnet", ""), gateway)
@@ -612,6 +621,56 @@ def _vlan_options(cfg):
             }
         )
     return rows
+
+
+def _vm_create_vlan_catalog(cfg):
+    """Return configured plus observed networks for the create wizard."""
+    by_id = {}
+    for vlan in getattr(cfg, "vlans", []) or []:
+        try:
+            by_id[int(getattr(vlan, "id", 0))] = vlan
+        except (TypeError, ValueError):
+            continue
+    observed = set()
+    for host in getattr(cfg, "hosts", []) or []:
+        for ip_value in [getattr(host, "ip", "")] + list(getattr(host, "all_ips", []) or []):
+            ip_text = str(ip_value or "").split("/", 1)[0]
+            try:
+                ip_obj = ipaddress.ip_address(ip_text)
+            except ValueError:
+                continue
+            if ip_obj.version != 4:
+                continue
+            parts = ip_text.split(".")
+            if len(parts) != 4:
+                continue
+            if parts[0] == "10" and parts[1] == "25":
+                net_octet = int(parts[2])
+                vlan_id = 2550 if net_octet == 255 else net_octet
+                observed.add((vlan_id, f"10.25.{net_octet}.0/24", f"10.25.{net_octet}"))
+    for ip_text in getattr(cfg, "pve_nodes", []) or []:
+        try:
+            ip_obj = ipaddress.ip_address(str(ip_text))
+        except ValueError:
+            continue
+        if ip_obj.version == 4 and str(ip_text).startswith("10.25."):
+            parts = str(ip_text).split(".")
+            net_octet = int(parts[2])
+            vlan_id = 2550 if net_octet == 255 else net_octet
+            observed.add((vlan_id, f"10.25.{net_octet}.0/24", f"10.25.{net_octet}"))
+    for vlan_id, subnet, prefix in observed:
+        if vlan_id in by_id:
+            existing = by_id[vlan_id]
+            if not getattr(existing, "gateway", ""):
+                existing.gateway = f"{prefix}.1"
+            if not getattr(existing, "subnet", ""):
+                existing.subnet = subnet
+            if not getattr(existing, "prefix", ""):
+                existing.prefix = prefix
+            continue
+        name = "Management" if vlan_id == 2550 else f"VLAN{vlan_id}"
+        by_id[vlan_id] = VLAN(id=vlan_id, name=name, subnet=subnet, prefix=prefix, gateway=f"{prefix}.1")
+    return [by_id[k] for k in sorted(by_id)]
 
 
 def _template_options(cfg):
@@ -665,9 +724,42 @@ def _existing_ip_set(cfg):
     return used
 
 
+def _reserved_host_octets(cfg):
+    """Return globally-reserved IPv4 host octets for create suggestions.
+
+    Sonny's operator rule: if .26 already means "pve01" anywhere in the
+    managed estate, Create VM must not suggest .26 on another VLAN just
+    because that subnet is technically open.
+    """
+    octets = set()
+    for ip_text in _existing_ip_set(cfg):
+        try:
+            ip_obj = ipaddress.ip_address(str(ip_text).split("/", 1)[0])
+        except ValueError:
+            continue
+        if ip_obj.version == 4:
+            octets.add(int(str(ip_obj).rsplit(".", 1)[-1]))
+    for vlan in getattr(cfg, "vlans", []) or []:
+        gateway = str(getattr(vlan, "gateway", "") or "").split("/", 1)[0]
+        try:
+            ip_obj = ipaddress.ip_address(gateway)
+        except ValueError:
+            continue
+        if ip_obj.version == 4:
+            octets.add(int(str(ip_obj).rsplit(".", 1)[-1]))
+    gateway = str(getattr(cfg, "vm_gateway", "") or "").split("/", 1)[0]
+    try:
+        ip_obj = ipaddress.ip_address(gateway)
+        if ip_obj.version == 4:
+            octets.add(int(str(ip_obj).rsplit(".", 1)[-1]))
+    except ValueError:
+        pass
+    return octets
+
+
 def _vlan_by_key(cfg, key):
     key_text = str(key or "").strip().lower()
-    vlans = getattr(cfg, "vlans", []) or []
+    vlans = _vm_create_vlan_catalog(cfg)
     if not key_text and vlans:
         return vlans[0]
     for vlan in vlans:
@@ -693,6 +785,7 @@ def _next_free_ip(cfg, vlan, limit=160):
     except ValueError:
         return "", f"Invalid subnet for selected network: {subnet}"
     used = _existing_ip_set(cfg)
+    reserved_octets = _reserved_host_octets(cfg)
     gateway = str(getattr(vlan, "gateway", "") or getattr(cfg, "vm_gateway", "") or "").split("/", 1)[0]
     if gateway:
         used.add(gateway)
@@ -701,11 +794,198 @@ def _next_free_ip(cfg, vlan, limit=160):
             break
         ip_text = str(candidate)
         last = int(ip_text.rsplit(".", 1)[-1]) if "." in ip_text else 0
-        if last < 10 or ip_text in used:
+        if last < 10 or ip_text in used or last in reserved_octets:
             continue
         if _candidate_ip_available(ip_text):
             return ip_text, ""
     return "", f"No free IP found in {subnet} within first {limit} usable addresses"
+
+
+def _inventory_ip_suggestions(cfg, vlan, count=5, limit=160):
+    """Cheap next-IP suggestions from inventory only.
+
+    The actual plan path still pings the candidate before committing. Options
+    must be fast enough for a modal open, so this does not walk the network.
+    """
+    subnet = getattr(vlan, "subnet", "") if vlan else ""
+    if not subnet:
+        return []
+    try:
+        net = ipaddress.ip_network(subnet, strict=False)
+    except ValueError:
+        return []
+    used = _existing_ip_set(cfg)
+    gateway = str(getattr(vlan, "gateway", "") or getattr(cfg, "vm_gateway", "") or "").split("/", 1)[0]
+    if gateway:
+        used.add(gateway)
+    reserved_octets = _reserved_host_octets(cfg)
+    ips = []
+    for idx, candidate in enumerate(net.hosts()):
+        if idx >= limit or len(ips) >= count:
+            break
+        ip_text = str(candidate)
+        last = int(ip_text.rsplit(".", 1)[-1]) if "." in ip_text else 0
+        if last < 10 or ip_text in used or last in reserved_octets:
+            continue
+        ips.append(ip_text)
+    return ips
+
+
+def _gateway_for_vlan(cfg, vlan):
+    if not vlan:
+        return "", ""
+    gateway = str(getattr(vlan, "gateway", "") or "").strip()
+    if gateway:
+        return gateway, "vlan"
+    gateway = str(getattr(cfg, "vm_gateway", "") or "").strip()
+    if gateway:
+        return gateway, "global"
+    return "", ""
+
+
+def _vlan_rule_token(vlan):
+    if not vlan:
+        return ""
+    return str(getattr(vlan, "id", "") or getattr(vlan, "name", "")).strip().lower()
+
+
+def _gateway_policy(cfg):
+    """Return operator-editable VM gateway rules, with DC01 auto-detect fallback."""
+    raw = getattr(cfg, "vm_gateway_rules", {}) or {}
+
+    def _token_set(value):
+        if isinstance(value, (list, tuple, set)):
+            return {str(v).strip().lower() for v in value if str(v).strip()}
+        if isinstance(value, str):
+            return {part.strip().lower() for part in value.split(",") if part.strip()}
+        return set()
+
+    egress = _token_set(raw.get("internet_vlans") or raw.get("egress_vlans"))
+    no_default = _token_set(raw.get("no_default_gateway_vlans") or raw.get("no_gateway_vlans"))
+    mode = str(raw.get("mode") or raw.get("default_gateway_mode") or "").strip().lower()
+    if not mode:
+        mode = "single_egress" if egress else "vlan_then_global"
+
+    vlan_ids = {str(getattr(v, "id", "")).lower() for v in _vm_create_vlan_catalog(cfg)}
+    if not raw and {"5", "10", "25", "66"}.issubset(vlan_ids):
+        egress = {"5", "66"}
+        no_default = {"10", "25", "255", "2550"}
+        mode = "single_egress"
+    return {"mode": mode, "egress": egress, "no_default": no_default}
+
+
+def _candidate_ip_for_octet(vlan, host_octet: int):
+    subnet = getattr(vlan, "subnet", "") if vlan else ""
+    if not subnet:
+        return ""
+    try:
+        net = ipaddress.ip_network(subnet, strict=False)
+        base = str(net.network_address).rsplit(".", 1)[0]
+        candidate = f"{base}.{int(host_octet)}"
+        ip_obj = ipaddress.ip_address(candidate)
+        if ip_obj in net and ip_obj not in {net.network_address, net.broadcast_address}:
+            return candidate
+    except (ValueError, TypeError):
+        return ""
+    return ""
+
+
+def _candidate_ip_allowed(cfg, ip_text, pending_ips=None):
+    pending_ips = pending_ips or set()
+    bare = str(ip_text or "").split("/", 1)[0]
+    if not bare or bare in pending_ips:
+        return False
+    try:
+        octet = int(bare.rsplit(".", 1)[-1])
+    except (ValueError, TypeError):
+        return False
+    if octet < 10 or octet in _reserved_host_octets(cfg) or bare in _existing_ip_set(cfg):
+        return False
+    return _candidate_ip_available(bare)
+
+
+def _next_common_host_octet(cfg, vlans, limit=160):
+    vlans = [v for v in vlans if v and getattr(v, "subnet", "")]
+    if not vlans:
+        return 0, "No subnet configured for selected network"
+    try:
+        anchor = ipaddress.ip_network(getattr(vlans[0], "subnet", ""), strict=False)
+    except ValueError:
+        return 0, f"Invalid subnet for selected network: {getattr(vlans[0], 'subnet', '')}"
+    reserved = _reserved_host_octets(cfg)
+    for idx, candidate in enumerate(anchor.hosts()):
+        if idx >= limit:
+            break
+        octet = int(str(candidate).rsplit(".", 1)[-1])
+        if octet < 10 or octet in reserved:
+            continue
+        pending = set()
+        ok = True
+        for vlan in vlans:
+            ip_text = _candidate_ip_for_octet(vlan, octet)
+            if not ip_text or not _candidate_ip_allowed(cfg, ip_text, pending):
+                ok = False
+                break
+            pending.add(ip_text)
+        if ok:
+            return octet, ""
+    return 0, "No common free host octet found across selected networks"
+
+
+def _normalise_create_nics(cfg, payload):
+    raw_nics = payload.get("nics")
+    if isinstance(raw_nics, list) and raw_nics:
+        candidates = [item if isinstance(item, dict) else {} for item in raw_nics]
+    else:
+        candidates = [
+            {
+                "vlan": payload.get("vlan") or payload.get("network") or "",
+                "ip_mode": payload.get("ip_mode") or ("static" if payload.get("ip") else "static"),
+                "ip": payload.get("ip", "auto"),
+                "gateway": payload.get("gateway") or payload.get("gw") or "",
+                "bridge": payload.get("bridge") or getattr(cfg, "nic_bridge", "vmbr0"),
+            }
+        ]
+    normalised = []
+    for idx, nic in enumerate(candidates):
+        vlan = _vlan_by_key(cfg, nic.get("vlan") or nic.get("network") or nic.get("vlan_id") or "")
+        explicit_gateway = str(nic.get("gateway") or nic.get("gw") or "").strip()
+        ip_mode = str(nic.get("ip_mode") or ("static" if nic.get("ip") else "static")).lower()
+        if ip_mode == "auto":
+            ip_mode = "static"
+        normalised.append(
+            {
+                "index": idx,
+                "vlan": vlan,
+                "vlan_key": nic.get("vlan") or nic.get("network") or nic.get("vlan_id") or "",
+                "ip_mode": ip_mode,
+                "requested_ip": str(nic.get("ip") or "auto").strip(),
+                "gateway": explicit_gateway,
+                "gateway_source": "request" if explicit_gateway else "",
+                "gateway_explicit": bool(explicit_gateway),
+                "bridge": str(nic.get("bridge") or getattr(cfg, "nic_bridge", "vmbr0")).strip(),
+            }
+        )
+    if any(n["gateway_explicit"] for n in normalised):
+        return normalised
+
+    policy = _gateway_policy(cfg)
+    egress = []
+    for nic in normalised:
+        token = _vlan_rule_token(nic["vlan"]) or str(nic["vlan_key"]).strip().lower()
+        if token in policy["no_default"]:
+            continue
+        if token in policy["egress"]:
+            egress.append(nic)
+    if len(egress) == 1:
+        gateway, source = _gateway_for_vlan(cfg, egress[0]["vlan"])
+        egress[0]["gateway"] = gateway
+        egress[0]["gateway_source"] = "gateway_rule:" + source if source else "gateway_rule"
+    elif len(egress) == 0 and policy["mode"] == "vlan_then_global" and normalised:
+        gateway, source = _gateway_for_vlan(cfg, normalised[0]["vlan"])
+        normalised[0]["gateway"] = gateway
+        normalised[0]["gateway_source"] = source
+    return normalised
 
 
 def _gateway_matches_subnet(ip_cidr, gateway):
@@ -719,14 +999,38 @@ def _gateway_matches_subnet(ip_cidr, gateway):
 
 
 def _vm_create_options_payload(cfg):
+    storage = _storage_options(cfg)
+    nodes = _node_options(cfg, storage)
+    vlans = _vlan_options(cfg)
+    storage_by_node = {}
+    for row in storage:
+        node = str(row.get("node", "") or "")
+        if node:
+            storage_by_node.setdefault(node, []).append(row)
+    ip_suggestions = {}
+    for vlan in _vm_create_vlan_catalog(cfg):
+        key = str(getattr(vlan, "id", "") or getattr(vlan, "name", ""))
+        ip_suggestions[key] = _inventory_ip_suggestions(cfg, vlan)
     return {
         "ok": True,
-        "schema_version": 1,
-        "nodes": _node_options(cfg),
-        "storage": _storage_options(cfg),
+        "schema_version": 2,
+        "cache_ttl_s": _VM_CREATE_OPTIONS_TTL,
+        "nodes": nodes,
+        "storage": storage,
+        "storage_by_node": storage_by_node,
         "templates": _template_options(cfg),
         "distros": _distro_options(cfg),
-        "vlans": _vlan_options(cfg),
+        "vlans": vlans,
+        "ip_suggestions": ip_suggestions,
+        "network_policy": {
+            "default_ip_mode": "static",
+            "gateway_source": _gateway_policy(cfg)["mode"],
+            "internet_vlans": sorted(_gateway_policy(cfg)["egress"]),
+            "no_default_gateway_vlans": sorted(_gateway_policy(cfg)["no_default"]),
+            "host_octet_reservation": "global",
+            "manual_gateway_default": False,
+            "multi_nic": True,
+        },
         "cpu": {
             "default": getattr(cfg, "vm_cpu", "x86-64-v2-AES"),
             "choices": ["host", "x86-64-v2-AES", "x86-64-v3", "kvm64"],
@@ -737,7 +1041,8 @@ def _vm_create_options_payload(cfg):
         },
         "disk": {
             "default_gb": getattr(cfg, "vm_default_disk", 32),
-            "default_storage": _storage_options(cfg)[0]["id"],
+            "default_storage": storage[0]["id"],
+            "default_by_node": {node["name"]: node["storage"] for node in nodes},
         },
         "bootstrap": {
             "service_account": getattr(cfg, "ssh_service_account", ""),
@@ -826,53 +1131,117 @@ def _vm_create_plan(cfg, payload, allocate_vmid=False):
         if storage_warning:
             warnings.append(storage_warning)
 
-    vlan_key = payload.get("vlan") or payload.get("network") or ""
-    vlan = _vlan_by_key(cfg, vlan_key)
-    ip_mode = str(payload.get("ip_mode") or ("static" if payload.get("ip") else "dhcp")).lower()
-    requested_ip = str(payload.get("ip") or "").strip()
-    cidr = ""
-    gateway_explicit = any(str(payload.get(k) or "").strip() for k in ("gateway", "gw"))
-    configured_gateway = ""
-    gateway_source = ""
-    if vlan:
-        configured_gateway = str(getattr(vlan, "gateway", "") or getattr(cfg, "vm_gateway", "") or "").strip()
-        gateway_source = "vlan" if getattr(vlan, "gateway", "") else ("global" if configured_gateway else "")
-    gateway = str(payload.get("gateway") or payload.get("gw") or "").strip()
-    if vlan and not gateway:
-        gateway = configured_gateway
-    if ip_mode == "static":
-        if requested_ip in {"", "auto"}:
-            requested_ip, ip_err = _next_free_ip(cfg, vlan)
-            if ip_err:
-                errors.append(ip_err)
-        bare_ip = requested_ip.split("/", 1)[0]
-        if requested_ip and not valid_ip(bare_ip):
-            errors.append("invalid static IP address")
-        prefix = "24"
-        if requested_ip and "/" in requested_ip:
-            prefix = requested_ip.split("/", 1)[1]
-        elif vlan and getattr(vlan, "subnet", "") and "/" in getattr(vlan, "subnet", ""):
-            prefix = getattr(vlan, "subnet").split("/", 1)[1]
-        if requested_ip:
-            cidr = requested_ip if "/" in requested_ip else f"{requested_ip}/{prefix}"
-        if gateway and not valid_ip(gateway):
-            errors.append("invalid gateway IP")
-        if cidr and gateway and not _gateway_matches_subnet(cidr, gateway):
-            if configured_gateway and gateway == configured_gateway:
-                warnings.append(
-                    f"configured {gateway_source or 'network'} gateway {gateway} is outside selected IP network {cidr}; verify routed/on-link gateway handling before submit"
-                )
-            elif gateway_explicit:
-                errors.append(f"gateway {gateway} is not in selected IP network {cidr}")
-            else:
-                warnings.append(f"gateway {gateway} is outside selected IP network {cidr}")
-    elif ip_mode != "dhcp":
-        errors.append("ip_mode must be dhcp or static")
+    networks = []
+    seen_static_ips = set()
+    normalised_nics = _normalise_create_nics(cfg, payload)
+    if not any(n["gateway_explicit"] for n in normalised_nics):
+        policy = _gateway_policy(cfg)
+        egress_count = 0
+        for nic in normalised_nics:
+            token = _vlan_rule_token(nic["vlan"]) or str(nic["vlan_key"]).strip().lower()
+            if token in policy["egress"]:
+                egress_count += 1
+        if egress_count > 1:
+            errors.append("multiple internet-egress NICs selected; choose one gateway network")
 
-    bridge = str(payload.get("bridge") or getattr(cfg, "nic_bridge", "vmbr0")).strip()
-    tag = str(getattr(vlan, "id", "") if vlan else (payload.get("tag") or "")).strip()
-    if tag and not valid_vlan(tag):
-        errors.append("invalid VLAN tag")
+    static_nics = [n for n in normalised_nics if n["ip_mode"] == "static"]
+    manual_octets = set()
+    for nic in static_nics:
+        req = nic["requested_ip"]
+        if req in {"", "auto"}:
+            continue
+        try:
+            manual_octets.add(int(req.split("/", 1)[0].rsplit(".", 1)[-1]))
+        except (ValueError, TypeError):
+            pass
+    common_octet = 0
+    if len(manual_octets) > 1:
+        errors.append("static NIC IPs must use the same host octet across networks")
+    elif len(manual_octets) == 1:
+        common_octet = next(iter(manual_octets))
+        if common_octet in _reserved_host_octets(cfg):
+            errors.append(f"host octet .{common_octet} is already reserved elsewhere in the fleet")
+    elif len(static_nics) > 1:
+        common_octet, octet_err = _next_common_host_octet(cfg, [n["vlan"] for n in static_nics])
+        if octet_err:
+            errors.append(octet_err)
+
+    pending_ips = set()
+    for nic in normalised_nics:
+        vlan = nic["vlan"]
+        ip_mode = nic["ip_mode"]
+        requested_ip = nic["requested_ip"]
+        cidr = ""
+        gateway = nic["gateway"]
+        gateway_source = nic["gateway_source"]
+        if ip_mode == "static":
+            if requested_ip in {"", "auto"}:
+                if common_octet:
+                    requested_ip = _candidate_ip_for_octet(vlan, common_octet)
+                    if not requested_ip or not _candidate_ip_allowed(cfg, requested_ip, pending_ips):
+                        errors.append(f"NIC {nic['index']}: host octet .{common_octet} is not available on selected network")
+                else:
+                    requested_ip, ip_err = _next_free_ip(cfg, vlan)
+                    if ip_err:
+                        errors.append(f"NIC {nic['index']}: {ip_err}")
+            bare_ip = requested_ip.split("/", 1)[0]
+            if requested_ip and not valid_ip(bare_ip):
+                errors.append(f"NIC {nic['index']}: invalid static IP address")
+            try:
+                octet = int(bare_ip.rsplit(".", 1)[-1])
+                if common_octet and octet != common_octet:
+                    errors.append(f"NIC {nic['index']}: static IP must use host octet .{common_octet}")
+                if not common_octet and octet in _reserved_host_octets(cfg):
+                    errors.append(f"NIC {nic['index']}: host octet .{octet} is already reserved elsewhere in the fleet")
+            except (ValueError, TypeError):
+                pass
+            if bare_ip in seen_static_ips:
+                errors.append(f"NIC {nic['index']}: duplicate static IP {bare_ip}")
+            if bare_ip:
+                seen_static_ips.add(bare_ip)
+                pending_ips.add(bare_ip)
+            prefix = "24"
+            if requested_ip and "/" in requested_ip:
+                prefix = requested_ip.split("/", 1)[1]
+            elif vlan and getattr(vlan, "subnet", "") and "/" in getattr(vlan, "subnet", ""):
+                prefix = getattr(vlan, "subnet").split("/", 1)[1]
+            if requested_ip:
+                cidr = requested_ip if "/" in requested_ip else f"{requested_ip}/{prefix}"
+            if gateway and not valid_ip(gateway):
+                errors.append(f"NIC {nic['index']}: invalid gateway IP")
+            if cidr and gateway and not _gateway_matches_subnet(cidr, gateway):
+                if gateway_source in {"vlan", "global"}:
+                    warnings.append(
+                        f"NIC {nic['index']}: configured {gateway_source} gateway {gateway} is outside selected IP network {cidr}; verify routed/on-link gateway handling before submit"
+                    )
+                elif nic["gateway_explicit"]:
+                    errors.append(f"NIC {nic['index']}: gateway {gateway} is not in selected IP network {cidr}")
+                else:
+                    warnings.append(f"NIC {nic['index']}: gateway {gateway} is outside selected IP network {cidr}")
+        elif ip_mode != "dhcp":
+            errors.append(f"NIC {nic['index']}: ip_mode must be dhcp or static")
+
+        tag = str(getattr(vlan, "id", "") if vlan else (nic["vlan_key"] or "")).strip()
+        if tag and not valid_vlan(tag):
+            errors.append(f"NIC {nic['index']}: invalid VLAN tag")
+        networks.append(
+            {
+                "index": nic["index"],
+                "mode": ip_mode,
+                "bridge": nic["bridge"],
+                "tag": tag,
+                "ip": requested_ip,
+                "cidr": cidr,
+                "gateway": gateway,
+                "gateway_source": gateway_source,
+                "gateway_in_subnet": _gateway_matches_subnet(cidr, gateway),
+                "gateway_warning": _gateway_status(cidr, gateway)["warning"] if cidr and gateway else "",
+                "vlan": getattr(vlan, "name", "") if vlan else "",
+                "vlan_id": getattr(vlan, "id", 0) if vlan else 0,
+            }
+        )
+    if not networks:
+        errors.append("at least one NIC is required")
 
     bootstrap = {
         "ciuser": getattr(cfg, "ssh_service_account", ""),
@@ -901,25 +1270,14 @@ def _vm_create_plan(cfg, payload, allocate_vmid=False):
         "machine": machine,
         "scsihw": scsihw,
         "storage": storage,
-        "network": {
-            "mode": ip_mode,
-            "bridge": bridge,
-            "tag": tag,
-            "ip": requested_ip,
-            "cidr": cidr,
-            "gateway": gateway,
-            "gateway_source": gateway_source if gateway == configured_gateway else ("request" if gateway else ""),
-            "gateway_in_subnet": _gateway_matches_subnet(cidr, gateway),
-            "gateway_warning": _gateway_status(cidr, gateway)["warning"] if cidr and gateway else "",
-            "vlan": getattr(vlan, "name", "") if vlan else "",
-            "vlan_id": getattr(vlan, "id", 0) if vlan else 0,
-        },
+        "network": networks[0] if networks else {},
+        "networks": networks,
         "bootstrap": bootstrap,
         "steps": [
             "allocate VMID" if not vmid else "use requested VMID",
             "clone template" if template_vmid else "create VM shell",
             "configure CPU/memory/disk",
-            "configure NIC and cloud-init IP",
+            "configure NIC(s) and cloud-init IP(s)",
             "install service account SSH key via cloud-init",
             "refresh fleet inventory",
         ],
@@ -976,9 +1334,10 @@ def _run_vm_create_job(job_id, payload):
                 parts.extend(["--storage", plan["storage"]])
             cmd = " ".join(shlex.quote(p) for p in parts)
         else:
-            net = f"virtio,bridge={plan['network']['bridge']}"
-            if plan["network"].get("tag"):
-                net += f",tag={plan['network']['tag']}"
+            first_network = (plan.get("networks") or [plan.get("network") or {}])[0]
+            net = f"virtio,bridge={first_network.get('bridge') or getattr(cfg, 'nic_bridge', 'vmbr0')}"
+            if first_network.get("tag"):
+                net += f",tag={first_network['tag']}"
             cmd = (
                 f"qm create {vmid} --name {shlex.quote(plan['name'])} --cores {plan['cores']} "
                 f"--memory {plan['ram_mb']} --cpu {shlex.quote(plan['cpu'])} "
@@ -1019,14 +1378,19 @@ def _run_vm_create_job(job_id, payload):
                 pubkey = f.read().strip()
             set_cmds.append("printf '%s\\n' " + shlex.quote(pubkey) + f" > {tmp}")
             set_cmds.append(f"qm set {vmid} --sshkeys {tmp}")
-        network = plan["network"]
-        if network["mode"] == "static":
-            ipconfig = f"ip={network['cidr']}"
-            if network.get("gateway"):
-                ipconfig += f",gw={network['gateway']}"
-        else:
-            ipconfig = "ip=dhcp"
-        set_cmds.append(f"qm set {vmid} --ipconfig0 {shlex.quote(ipconfig)}")
+        for network in plan.get("networks") or [plan["network"]]:
+            idx = int(network.get("index", 0) or 0)
+            net_value = f"virtio,bridge={network.get('bridge') or getattr(cfg, 'nic_bridge', 'vmbr0')}"
+            if network.get("tag"):
+                net_value += f",tag={network['tag']}"
+            set_cmds.append(f"qm set {vmid} --net{idx} {shlex.quote(net_value)}")
+            if network["mode"] == "static":
+                ipconfig = f"ip={network['cidr']}"
+                if network.get("gateway"):
+                    ipconfig += f",gw={network['gateway']}"
+            else:
+                ipconfig = "ip=dhcp"
+            set_cmds.append(f"qm set {vmid} --ipconfig{idx} {shlex.quote(ipconfig)}")
         for set_cmd in set_cmds:
             _job_update(job_id, lines=[f"running: {set_cmd}"])
             out, ok = _pve_cmd(cfg, node_ip, set_cmd, timeout=60)
@@ -1058,7 +1422,17 @@ def handle_vm_create_options(handler):
         json_response(handler, {"error": err}, 403)
         return
     cfg = load_config()
-    json_response(handler, _vm_create_options_payload(cfg))
+    now = time.monotonic()
+    cached = _vm_create_options_cache.get("payload")
+    if cached is not None and now - float(_vm_create_options_cache.get("ts") or 0) < _VM_CREATE_OPTIONS_TTL:
+        payload = dict(cached)
+        payload["cached"] = True
+        json_response(handler, payload)
+        return
+    payload = _vm_create_options_payload(cfg)
+    _vm_create_options_cache["payload"] = payload
+    _vm_create_options_cache["ts"] = now
+    json_response(handler, payload)
 
 
 def handle_vm_create_plan(handler):

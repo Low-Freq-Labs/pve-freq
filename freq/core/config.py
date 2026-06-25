@@ -144,6 +144,7 @@ class FreqConfig:
     vm_machine: str = _DEFAULTS["vm_machine"]
     vm_scsihw: str = "virtio-scsi-single"
     vm_gateway: str = _DEFAULTS["vm_gateway"]
+    vm_gateway_rules: dict = field(default_factory=dict)
     vm_nameserver: str = _DEFAULTS["vm_nameserver"]
 
     # Safety
@@ -714,6 +715,7 @@ def _apply_toml(cfg: FreqConfig, data: dict) -> None:
     cfg.vm_scsihw = vm.get("scsihw", cfg.vm_scsihw)
     cfg.vm_gateway = vm.get("gateway", cfg.vm_gateway)
     cfg.vm_nameserver = vm.get("nameserver", cfg.vm_nameserver)
+    cfg.vm_gateway_rules = data.get("vm", {}).get("gateway_rules", cfg.vm_gateway_rules)
 
     safety = data.get("safety", {})
     cfg.protected_vmids = safety.get("protected_vmids", cfg.protected_vmids)

@@ -210,6 +210,23 @@ class TestVmApiTrust(unittest.TestCase):
         self.assertEqual(data["plan"]["network"]["cidr"], "10.25.255.11/24")
         self.assertEqual(data["plan"]["network"]["tag"], "255")
         self.assertTrue(data["plan"]["network"]["gateway_in_subnet"])
+        self.assertEqual(len(data["plan"]["networks"]), 1)
+
+    @patch("freq.api.vm._candidate_ip_available", return_value=True)
+    def test_vm_create_plan_reserves_host_octets_across_networks(self, _mock_ip):
+        from freq.core.types import Host, VLAN
+
+        cfg = self._cfg()
+        cfg.hosts = [Host(ip="10.25.255.10", label="pve01", htype="pve")]
+        cfg.vlans = [VLAN(id=10, name="lab", subnet="10.25.10.0/24", prefix="10.25.10", gateway="10.25.10.1")]
+
+        result = vm_api._vm_create_plan(
+            cfg,
+            {"name": "new-vm", "node": "pve01", "vlan": "lab", "ip_mode": "static", "ip": "auto"},
+        )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["plan"]["network"]["cidr"], "10.25.10.11/24")
 
     @patch("freq.api.vm._candidate_ip_available", return_value=True)
     @patch("freq.api.vm._check_session_role", return_value=("operator", None))
@@ -411,6 +428,160 @@ class TestVmApiTrust(unittest.TestCase):
             calls,
         )
         self.assertTrue(any(node == "10.0.0.2" and cmd.startswith("qm set 6000") for node, cmd in calls), calls)
+
+    def test_vm_create_plan_accepts_multiple_static_nics(self):
+        from freq.core.types import VLAN
+
+        cfg = self._cfg()
+        cfg.vlans = [
+            VLAN(id=10, name="mgmt", subnet="10.25.10.0/24", prefix="10.25.10", gateway="10.25.10.1"),
+            VLAN(id=66, name="app", subnet="10.25.66.0/24", prefix="10.25.66", gateway="10.25.66.1"),
+        ]
+
+        with patch("freq.api.vm._candidate_ip_available", return_value=True):
+            result = vm_api._vm_create_plan(
+                cfg,
+                {
+                    "name": "new-vm",
+                    "node": "pve01",
+                    "nics": [
+                        {"vlan": "mgmt", "ip": "auto"},
+                        {"vlan": "app", "ip": "10.25.66.44"},
+                    ],
+                },
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(len(result["plan"]["networks"]), 2)
+        self.assertEqual(result["plan"]["networks"][0]["tag"], "10")
+        self.assertEqual(result["plan"]["networks"][1]["cidr"], "10.25.66.44/24")
+        self.assertEqual(result["plan"]["network"], result["plan"]["networks"][0])
+
+    def test_vm_create_plan_infers_dc01_single_gateway_nic_policy(self):
+        from freq.core.types import VLAN
+
+        cfg = self._cfg()
+        cfg.vlans = [
+            VLAN(id=2550, name="management", subnet="10.25.255.0/24", prefix="10.25.255", gateway="10.25.255.1"),
+            VLAN(id=25, name="storage", subnet="10.25.25.0/24", prefix="10.25.25", gateway="10.25.25.1"),
+            VLAN(id=10, name="compute", subnet="10.25.10.0/24", prefix="10.25.10", gateway="10.25.10.1"),
+            VLAN(id=5, name="public", subnet="10.25.5.0/24", prefix="10.25.5", gateway="10.25.5.1"),
+            VLAN(id=66, name="dirty", subnet="10.25.66.0/24", prefix="10.25.66", gateway="10.25.66.1"),
+        ]
+
+        with patch("freq.api.vm._candidate_ip_available", return_value=True):
+            result = vm_api._vm_create_plan(
+                cfg,
+                {
+                    "name": "new-vm",
+                    "node": "pve01",
+                    "nics": [
+                        {"vlan": "2550", "ip": "auto"},
+                        {"vlan": "25", "ip": "auto"},
+                        {"vlan": "5", "ip": "auto"},
+                    ],
+                },
+            )
+
+        self.assertTrue(result["ok"], result)
+        nets = result["plan"]["networks"]
+        self.assertEqual([n["cidr"].split("/", 1)[0].rsplit(".", 1)[-1] for n in nets], ["10", "10", "10"])
+        self.assertEqual(nets[0]["gateway"], "")
+        self.assertEqual(nets[1]["gateway"], "")
+        self.assertEqual(nets[2]["gateway"], "10.25.5.1")
+
+    def test_vm_create_plan_rejects_multiple_internet_egress_nics(self):
+        from freq.core.types import VLAN
+
+        cfg = self._cfg()
+        cfg.vlans = [
+            VLAN(id=5, name="public", subnet="10.25.5.0/24", prefix="10.25.5", gateway="10.25.5.1"),
+            VLAN(id=10, name="compute", subnet="10.25.10.0/24", prefix="10.25.10", gateway="10.25.10.1"),
+            VLAN(id=25, name="storage", subnet="10.25.25.0/24", prefix="10.25.25", gateway="10.25.25.1"),
+            VLAN(id=66, name="dirty", subnet="10.25.66.0/24", prefix="10.25.66", gateway="10.25.66.1"),
+        ]
+
+        with patch("freq.api.vm._candidate_ip_available", return_value=True):
+            result = vm_api._vm_create_plan(
+                cfg,
+                {
+                    "name": "new-vm",
+                    "node": "pve01",
+                    "nics": [
+                        {"vlan": "5", "ip": "auto"},
+                        {"vlan": "66", "ip": "auto"},
+                    ],
+                },
+            )
+
+        self.assertFalse(result["ok"], result)
+        self.assertTrue(any("multiple internet-egress" in err for err in result["errors"]))
+
+    def test_vm_create_options_derives_observed_network_catalog(self):
+        from freq.core.types import Host
+
+        cfg = self._cfg()
+        cfg.vlans = []
+        cfg.hosts = [
+            Host(ip="10.25.255.50", label="freq", htype="linux", all_ips=["10.25.255.50", "10.25.25.50", "10.25.10.50", "10.25.5.50"]),
+            Host(ip="10.25.66.37", label="web", htype="linux", all_ips=["10.25.66.37"]),
+        ]
+
+        with patch("freq.api.vm._get_fleet_vms", return_value=[]):
+            payload = vm_api._vm_create_options_payload(cfg)
+
+        vlan_ids = {row["id"] for row in payload["vlans"]}
+        self.assertTrue({2550, 25, 10, 5, 66}.issubset(vlan_ids))
+        self.assertEqual(payload["network_policy"]["gateway_source"], "single_egress")
+        self.assertEqual(set(payload["network_policy"]["internet_vlans"]), {"5", "66"})
+
+    def test_vm_create_job_writes_all_requested_nics(self):
+        cfg = self._cfg()
+        cfg.fleet_boundaries.categories["sandbox"] = {"range_start": 6000, "range_end": 6099, "tier": "admin"}
+        calls = []
+
+        def fake_pve(_cfg, node_ip, command, timeout=60):
+            calls.append((node_ip, command))
+            if command == "pvesh get /cluster/nextid":
+                return ("107", True)
+            if command == "pvesh get /cluster/resources --type vm --output-format json":
+                return ("[]", True)
+            return ("", True)
+
+        job_id = "job-multi-nic"
+        with vm_api._vm_create_jobs_lock:
+            vm_api._vm_create_jobs[job_id] = {
+                "id": job_id,
+                "state": "queued",
+                "created_at": 0,
+                "updated_at": 0,
+                "lines": [],
+            }
+
+        with patch("freq.api.vm.load_config", return_value=cfg), \
+             patch("freq.api.vm._pve_cmd", side_effect=fake_pve), \
+             patch("freq.api.vm._refresh_fleet_overview_after_mutation"):
+            vm_api._run_vm_create_job(
+                job_id,
+                {
+                    "name": "new-vm",
+                    "node": "pve01",
+                    "nics": [
+                        {"vlan": "10", "ip": "10.25.10.44/24", "gateway": "10.25.10.1"},
+                        {"vlan": "66", "ip": "10.25.66.44/24", "gateway": "10.25.66.1"},
+                    ],
+                },
+            )
+
+        with vm_api._vm_create_jobs_lock:
+            job = dict(vm_api._vm_create_jobs.pop(job_id))
+
+        self.assertEqual(job["state"], "succeeded", job)
+        commands = [cmd for _node, cmd in calls]
+        self.assertIn("qm set 6000 --net0 virtio,bridge=vmbr0,tag=10", commands)
+        self.assertIn("qm set 6000 --ipconfig0 ip=10.25.10.44/24,gw=10.25.10.1", commands)
+        self.assertIn("qm set 6000 --net1 virtio,bridge=vmbr0,tag=66", commands)
+        self.assertIn("qm set 6000 --ipconfig1 ip=10.25.66.44/24,gw=10.25.66.1", commands)
 
     @patch("freq.api.vm.threading.Thread")
     @patch("freq.api.vm._check_session_role", return_value=("admin", None))
