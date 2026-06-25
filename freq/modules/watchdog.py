@@ -38,6 +38,7 @@ DEFAULT_STATUS_MAX_AGE_SECONDS = 60
 
 GOOD_STATES = {"live", "healthy", "recovering"}
 GOOD_STATUSES = {"healthy", "ok", "up"}
+OPERATOR_AUTO_EXCLUDE_LABELS = {"nexus", "pve-freq"}
 
 
 @dataclass
@@ -118,6 +119,54 @@ def _cache_file(cfg: FreqConfig, name: str) -> str:
     return os.path.join(cfg.data_dir, "cache", f"{name}.json")
 
 
+def _label_key(value: str) -> str:
+    return str(value or "").strip().lower()
+
+
+def _host_indexes(cfg: FreqConfig) -> tuple[dict[str, Any], dict[str, Any]]:
+    by_label: dict[str, Any] = {}
+    by_ip: dict[str, Any] = {}
+    for host in getattr(cfg, "hosts", []) or []:
+        label = _label_key(getattr(host, "label", ""))
+        ip = str(getattr(host, "ip", "") or "").strip()
+        if label:
+            by_label[label] = host
+        if ip:
+            by_ip[ip] = host
+    return by_label, by_ip
+
+
+def _cache_item_in_watchdog_contract(cfg: FreqConfig, item: dict[str, Any], by_label: dict[str, Any], by_ip: dict[str, Any]) -> bool:
+    """True when a cached health/infra item belongs in watchdog's hard red count."""
+    label = _label_key(item.get("label") or item.get("key") or item.get("name"))
+    if label in OPERATOR_AUTO_EXCLUDE_LABELS:
+        return False
+
+    ip = str(item.get("ip", "") or "").strip()
+    host = by_label.get(label) or by_ip.get(ip)
+    if host is None:
+        return True
+    if not getattr(host, "managed", True):
+        return False
+    if _label_key(getattr(host, "label", "")) in OPERATOR_AUTO_EXCLUDE_LABELS:
+        return False
+
+    vmid = int(getattr(host, "vmid", 0) or 0)
+    boundaries = getattr(cfg, "fleet_boundaries", None)
+    if vmid and boundaries and hasattr(boundaries, "categorize"):
+        try:
+            category, _tier = boundaries.categorize(vmid)
+        except Exception:
+            category = ""
+        if category in {"out_of_contract", "templates"}:
+            return False
+
+    pve_node_ips = set(getattr(cfg, "pve_nodes", []) or [])
+    if getattr(host, "htype", "") == "pve" and getattr(host, "ip", "") not in pve_node_ips:
+        return False
+    return True
+
+
 def _check_initialized(cfg: FreqConfig) -> Check:
     marker = os.path.join(cfg.conf_dir, ".initialized")
     if os.path.isfile(marker):
@@ -191,8 +240,11 @@ def _check_health_cache(cfg: FreqConfig, max_age: int) -> tuple[Check, dict[str,
     hosts = data.get("hosts") or []
     age = _now() - ts if ts else None
     bad_hosts = []
+    by_label, by_ip = _host_indexes(cfg)
     for host in hosts:
         if not isinstance(host, dict):
+            continue
+        if not _cache_item_in_watchdog_contract(cfg, host, by_label, by_ip):
             continue
         state = str(host.get("state") or "").lower()
         status = str(host.get("status") or "").lower()
@@ -224,16 +276,20 @@ def _check_infra_quick(cfg: FreqConfig, max_age: int) -> Check:
     age, age_source = _age_for_path(path, ts)
     devices = data.get("devices") or []
     core = data.get("core_devices") or []
+    by_label, by_ip = _host_indexes(cfg)
     leaked_lab = [
         d.get("label") or d.get("key")
         for d in core
         if isinstance(d, dict)
+        and _cache_item_in_watchdog_contract(cfg, d, by_label, by_ip)
         and (str(d.get("scope") or "").lower() == "lab" or str(d.get("groups") or "").lower() == "lab")
     ]
     bad = [
         d.get("label") or d.get("key")
         for d in devices
-        if isinstance(d, dict) and (d.get("auth_failed") or d.get("reachable") is False)
+        if isinstance(d, dict)
+        and _cache_item_in_watchdog_contract(cfg, d, by_label, by_ip)
+        and (d.get("auth_failed") or d.get("reachable") is False)
     ]
     evidence = {
         "path": path,

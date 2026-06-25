@@ -875,6 +875,79 @@ class TestPVEApiEdgeCases(unittest.TestCase):
         self.assertFalse(ok)
 
     @patch("freq.modules.pve.urllib.request.urlopen")
+    def test_api_call_reads_runtime_rw_token_file(self, mock_urlopen):
+        """Runtime PVE API calls use the same RW token file doctor verifies."""
+        from freq.modules.pve import _pve_api_call
+        import tempfile
+
+        class _Resp:
+            status = 200
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                return False
+            def read(self):
+                return b'{"data":{"ok":true}}'
+
+        with tempfile.TemporaryDirectory() as root:
+            cred_dir = os.path.join(root, "credentials")
+            os.makedirs(cred_dir)
+            with open(os.path.join(cred_dir, "pve-token-rw"), "w") as f:
+                f.write("secret-from-file\n")
+            cfg = MagicMock()
+            cfg.pve_api_token_id = "freq@pam!freq-rw"
+            cfg.pve_api_token_secret = ""
+            cfg.pve_api_verify_ssl = False
+            cfg.credentials_dir = cred_dir
+            mock_urlopen.return_value = _Resp()
+
+            result, ok = _pve_api_call(cfg, "10.0.0.1", "/version")
+
+        self.assertTrue(ok)
+        self.assertEqual(result, {"ok": True})
+        req = mock_urlopen.call_args.args[0]
+        self.assertIn("PVEAPIToken=freq@pam!freq-rw=secret-from-file", req.headers.get("Authorization", ""))
+
+    @patch("freq.modules.pve._pve_cmd")
+    @patch("freq.modules.pve.urllib.request.urlopen")
+    def test_pve_call_uses_runtime_rw_token_before_ssh_fallback(self, mock_urlopen, mock_pve_cmd):
+        """Higher-level PVE calls also use the runtime RW token file before SSH."""
+        from freq.modules.pve import _pve_call
+        import tempfile
+
+        class _Resp:
+            status = 200
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                return False
+            def read(self):
+                return b'{"data":[{"vmid":100}]}'
+
+        with tempfile.TemporaryDirectory() as root:
+            cred_dir = os.path.join(root, "credentials")
+            os.makedirs(cred_dir)
+            with open(os.path.join(cred_dir, "pve-token-rw"), "w") as f:
+                f.write("secret-from-file\n")
+            cfg = MagicMock()
+            cfg.pve_api_token_id = "freq@pam!freq-rw"
+            cfg.pve_api_token_secret = ""
+            cfg.pve_api_verify_ssl = False
+            cfg.credentials_dir = cred_dir
+            mock_urlopen.return_value = _Resp()
+
+            result, ok = _pve_call(
+                cfg,
+                "10.0.0.1",
+                "/cluster/resources?type=vm",
+                "pvesh get /cluster/resources --type vm --output-format json",
+            )
+
+        self.assertTrue(ok)
+        self.assertEqual(result, [{"vmid": 100}])
+        mock_pve_cmd.assert_not_called()
+
+    @patch("freq.modules.pve.urllib.request.urlopen")
     def test_api_call_unreachable_returns_false(self, mock_urlopen):
         """Unreachable API returns error string and False."""
         from freq.modules.pve import _pve_api_call

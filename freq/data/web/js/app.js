@@ -617,6 +617,7 @@ document.addEventListener('click',function(e){
     if(a==='ctTerminal'){openTerminal('ct',da.dataset.ctid||'', '', da.dataset.label||('CT '+(da.dataset.ctid||'')));return;}
     if(a==='vmQuickTag'){var tags=prompt('Enter tags for VM '+da.dataset.vmid+' (comma-separated):');if(tags!==null)_authFetch(API.VM_TAG+'?vmid='+da.dataset.vmid+'&tags='+encodeURIComponent(tags),{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(d.ok)toast('Tags updated','success');else toast(d.error,'error');});return;}
     if(a==='openVmInfo'){openVmInfo(da.dataset.label,'',+da.dataset.vmid);return;}
+    if(a==='openVmCreateForNode'){openVmCreateForNode(da.dataset.node||g);return;}
     if(a==='openInfraDevice'){
       _uiLog('infra_card_click',{message:'open infra '+(da.dataset.label||''),source:'core_systems',label:da.dataset.label||'',infraType:da.dataset.infraType||'',ip:da.dataset.ip||''});
       openCard('infra',{label:da.dataset.label,infraType:da.dataset.infraType,ip:da.dataset.ip});
@@ -6242,8 +6243,8 @@ function _buildPveNodeData(pveNodes,healthMap,vmsByNode,ctsByNode,ctrByVmid,labL
     });
     var nRamGb=Math.round(nRamMb/1024);
     var detailRam=(pn.detail||'').match(/(\d+)GB/);var nodeRamStr=detailRam?detailRam[1]+'GB':(pn.ram_gb?pn.ram_gb+'GB':'?');
-    var nodeCard='<div class="host-card" data-host-id="'+nodeName.toLowerCase()+'" style="cursor:pointer;" onclick="openVmInfo(\''+nodeName+'\',\''+pn.ip+'\',0)">';
-    nodeCard+='<div class="mb-8"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div><div class="host-actions" style="display:flex;align-items:center;gap:6px;margin-left:auto"><button class="fleet-btn" title="Create VM on '+nodeName+'" onclick="event.stopPropagation();openVmCreateForNode(\''+nodeName+'\')" style="width:28px;height:28px;padding:0;font-size:18px;line-height:1;color:'+cl+';border-color:'+cl+'">+</button></div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
+    var nodeCard='<div class="host-card" data-host-id="'+nodeName.toLowerCase()+'" style="cursor:pointer;" data-action="openVmInfo" data-label="'+nodeName+'" data-vmid="0">';
+    nodeCard+='<div class="mb-8"><div class="host-head" style="margin-bottom:2px"><h3 style="color:'+cl+'">'+nodeName+'</h3><div class="host-meta"><span>'+pn.ip+'</span><span>\u00b7</span><span>HYPERVISOR</span><span>\u00b7</span>'+(up?'<span class="c-green">ONLINE</span>':'<span class="c-red">OFFLINE</span>')+'</div><div class="host-actions" style="display:flex;align-items:center;gap:6px;margin-left:auto"><button class="fleet-btn" title="Create VM on '+nodeName+'" data-action="openVmCreateForNode" data-node="'+nodeName+'" style="width:28px;height:28px;padding:0;font-size:18px;line-height:1;color:'+cl+';border-color:'+cl+'">+</button></div></div><div style="font-size:12px;color:var(--text);font-weight:400">'+pn.detail+'</div></div>';
     nodeCard+='<div class="divider-light">';
     if(up){
       if(!live)live={cores:'0',load:'0',disk:'0%',ram:'0/0MB'};

@@ -43,6 +43,25 @@ PVE_API_TIMEOUT = 15
 # ── PVE REST API Client ────────────────────────────────────────────────
 
 
+def _runtime_pve_api_token_secret(cfg: FreqConfig) -> str:
+    """Return configured PVE API token secret, with runtime credential fallback."""
+    secret = getattr(cfg, "pve_api_token_secret", "") or ""
+    if secret:
+        return secret
+    cred_dir = getattr(cfg, "credentials_dir", "") or "/etc/freq/credentials"
+    path = f"{cred_dir.rstrip('/')}/pve-token-rw"
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _has_pve_api_token(cfg: FreqConfig) -> bool:
+    """Return true when PVE API token auth is usable from config or credential file."""
+    return bool((getattr(cfg, "pve_api_token_id", "") or "") and _runtime_pve_api_token_secret(cfg))
+
+
 def _pve_api_call(
     cfg: FreqConfig, node_ip: str, endpoint: str, method: str = "GET", data: dict = None, timeout: int = PVE_API_TIMEOUT
 ) -> tuple:
@@ -51,18 +70,13 @@ def _pve_api_call(
     Returns (parsed_data, success_bool).
     Token auth header: PVEAPIToken=user@realm!tokenname=UUID-SECRET
     """
-    # pve.py is intentionally
-    # STRICT — both cfg attributes must be set, no file-path fallback.
-    # doctor.py is intentionally LENIENT — it falls back to the credential
-    # file at /etc/freq/credentials/pve-token-rw with a logged warning.
-    # The asymmetry is by design: pve.py is a runtime caller that should
-    # fail fast on misconfiguration; doctor.py is a diagnostic that should
-    # probe whatever evidence exists.
-    if not getattr(cfg, "pve_api_token_id", "") or not getattr(cfg, "pve_api_token_secret", ""):
+    token_id = getattr(cfg, "pve_api_token_id", "") or ""
+    token_secret = _runtime_pve_api_token_secret(cfg)
+    if not token_id or not token_secret:
         return "", False
 
     url = f"https://{node_ip}:{PVE_API_PORT}/api2/json{endpoint}"
-    auth = f"PVEAPIToken={cfg.pve_api_token_id}={cfg.pve_api_token_secret}"
+    auth = f"PVEAPIToken={token_id}={token_secret}"
 
     headers = {"Authorization": auth, "Accept": "application/json"}
 
@@ -101,7 +115,7 @@ def _pve_call(
     Returns (result, success_bool). Result is parsed JSON from API
     or stdout string from SSH.
     """
-    if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+    if _has_pve_api_token(cfg):
         result, ok = _pve_api_call(
             cfg, node_ip, api_endpoint, method=method, data=data, timeout=min(timeout, PVE_API_TIMEOUT)
         )
@@ -142,7 +156,7 @@ def _find_reachable_node(cfg: FreqConfig) -> str:
     """Find the first reachable PVE node. Tries API first, then SSH."""
     for ip in cfg.pve_nodes:
         # Try API first if token is configured
-        if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+        if _has_pve_api_token(cfg):
             _, ok = _pve_api_call(cfg, ip, "/version", timeout=PVE_QUICK_TIMEOUT)
             if ok:
                 return ip
@@ -603,7 +617,7 @@ def cmd_power(cfg: FreqConfig, pack, args) -> int:
     # Try API first: need to resolve which node hosts this VM
     ok = False
     result = ""
-    if getattr(cfg, "pve_api_token_id", "") and getattr(cfg, "pve_api_token_secret", ""):
+    if _has_pve_api_token(cfg):
         api_action, api_method = api_actions[action]
         # Find the VM's node via cluster resources
         res_data, res_ok = _pve_api_call(cfg, node_ip, f"/cluster/resources?type=vm", timeout=PVE_QUICK_TIMEOUT)

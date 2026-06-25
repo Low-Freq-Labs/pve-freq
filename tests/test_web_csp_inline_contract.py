@@ -130,8 +130,19 @@ class TestNoExternalStylesheet(unittest.TestCase):
                              f"setup.html references external host {host}")
 
 
+class TestDelegatedFleetActions(unittest.TestCase):
+    """Fleet card actions must survive inline-handler neutralization."""
+
+    def test_pve_node_create_button_uses_delegated_action(self):
+        app = (WEB_DIR / "js" / "app.js").read_text()
+        self.assertIn("openVmCreateForNode(da.dataset.node||g)", app)
+        self.assertIn('data-action="openVmCreateForNode"', app)
+        self.assertIn('data-node="', app)
+        self.assertNotIn("event.stopPropagation();openVmCreateForNode", app)
+
+
 EXPECTED_INLINE_HANDLERS = 0
-EXPECTED_INLINE_STYLES = 44
+EXPECTED_INLINE_STYLES = 43
 
 INLINE_HANDLER_RE = re.compile(r" on[a-z]+=")
 INLINE_STYLE_RE = re.compile(r' style="')

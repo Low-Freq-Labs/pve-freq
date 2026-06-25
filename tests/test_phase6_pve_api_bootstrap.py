@@ -208,7 +208,7 @@ class TestPhase6SecretStorage(unittest.TestCase):
         self.assertIn('"pve-token-rw"', src)
 
     def test_cred_file_mode_0640(self):
-        """Cred file mode must be 0640 (root-owned, svc_name group-readable)."""
+        """Cred file mode must be 0640 (root-owned, runtime-group-readable)."""
         src = _phase6_source()
         self.assertIn("os.chmod(cred_path, 0o640)", src)
 
@@ -219,7 +219,7 @@ class TestPhase6SecretStorage(unittest.TestCase):
             "_chown(f\"{svc_name}:{svc_name}\", cred_dir, recursive=True)",
             src,
         )
-        self.assertIn("_chown(f\"root:{svc_name}\", cred_path)", src)
+        self.assertIn("_chown(_credential_owner(svc_name), cred_path)", src)
 
     def test_dir_ownership_only_on_fresh_create(self):
         """If /etc/freq/credentials/ preexisted, Phase 6 must not rewrite its ownership."""

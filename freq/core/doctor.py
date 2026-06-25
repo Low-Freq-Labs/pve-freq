@@ -630,9 +630,34 @@ def _doctor_operator_context_mismatch(cfg: FreqConfig) -> tuple[bool, str]:
     return False, current_user
 
 
+def _doctor_managed_hosts(cfg: FreqConfig) -> list:
+    """Hosts that belong in global doctor fleet checks."""
+    pve_node_ips = set(getattr(cfg, "pve_nodes", []) or [])
+    boundaries = getattr(cfg, "fleet_boundaries", None)
+    operator_auto_excluded_labels = {"nexus", "pve-freq"}
+    hosts = []
+    for h in getattr(cfg, "hosts", []) or []:
+        if not getattr(h, "managed", True):
+            continue
+        if str(getattr(h, "label", "") or "").strip().lower() in operator_auto_excluded_labels:
+            continue
+        vmid = int(getattr(h, "vmid", 0) or 0)
+        if vmid and boundaries and hasattr(boundaries, "categorize"):
+            try:
+                category, _tier = boundaries.categorize(vmid)
+            except Exception:
+                category = ""
+            if category in {"out_of_contract", "templates"}:
+                continue
+        if getattr(h, "htype", "") == "pve" and getattr(h, "ip", "") not in pve_node_ips:
+            continue
+        hosts.append(h)
+    return hosts
+
+
 def _check_fleet_connectivity(cfg: FreqConfig) -> int:
     """Test SSH connectivity to ALL fleet hosts in parallel with device-appropriate commands."""
-    hosts = [h for h in cfg.hosts if getattr(h, "managed", True)]
+    hosts = _doctor_managed_hosts(cfg)
     unmanaged_count = len(cfg.hosts) - len(hosts)
     if not hosts:
         fmt.step_info("Fleet connectivity: no hosts to test")
@@ -850,7 +875,7 @@ def _check_service_account(cfg: FreqConfig) -> int:
     """Verify service account exists and has correct permissions on reachable hosts."""
     service_account_htypes = {"linux", "pve", "docker", "truenas"}
     hosts_for_check = [
-        h for h in cfg.hosts
+        h for h in _doctor_managed_hosts(cfg)
         if getattr(h, "managed", True) and h.htype in service_account_htypes
     ]
     if not hosts_for_check:

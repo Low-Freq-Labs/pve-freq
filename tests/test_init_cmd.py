@@ -320,15 +320,15 @@ class TestPureNothingInitContract(unittest.TestCase):
         token_block = src.split("def _phase_pve_api_token")[1].split("\ndef ")[0]
         self.assertIn("cred_dir = _credentials_dir(cfg)", token_block)
         self.assertIn('cred_path = os.path.join(cred_dir, "pve-token-rw")', token_block)
-        self.assertIn("_chown(f\"root:{svc_name}\", cred_path)", token_block)
+        self.assertIn("_chown(_credential_owner(svc_name), cred_path)", token_block)
 
     def test_service_account_metadata_is_readable_by_runtime_group(self):
         src = self._src()
         block = src.split("def _persist_service_account_credentials_metadata")[1].split("\ndef ")[0]
         self.assertIn("os.chmod(pass_path, 0o640)", block)
-        self.assertIn("_chown(f\"root:{svc_name}\", pass_path)", block)
+        self.assertIn("_chown(_credential_owner(svc_name), pass_path)", block)
         self.assertIn("os.chmod(creds_path, 0o640)", block)
-        self.assertIn("_chown(f\"root:{svc_name}\", creds_path)", block)
+        self.assertIn("_chown(_credential_owner(svc_name), creds_path)", block)
 
     def test_init_fix_reuses_existing_service_account_password(self):
         src = self._src()
@@ -343,7 +343,7 @@ class TestPureNothingInitContract(unittest.TestCase):
         src = self._src()
         block = src.split("Fix ownership for dashboard")[1].split("logger.info(\"init_phase_complete: Phase 9")[0]
         self.assertIn("cred_dir = _credentials_dir(cfg)", block)
-        self.assertIn('_chown(f"root:{svc_name}", cred_dir, recursive=False)', block)
+        self.assertIn("_chown(_credential_owner(svc_name), cred_dir, recursive=False)", block)
         self.assertNotIn('"credentials"', block.split("for subdir in", 1)[1].split("]:", 1)[0])
 
     def test_dry_run_plan_honors_cli_service_account_and_pve_nodes(self):

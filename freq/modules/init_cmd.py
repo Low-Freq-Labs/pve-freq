@@ -28,6 +28,7 @@ Design decisions:
 import base64
 import datetime
 import getpass
+import grp
 import json
 import math
 import os
@@ -640,8 +641,8 @@ def _persist_legacy_password_file(cfg, svc_name, password):
         with open(pass_path, "w") as f:
             f.write(password)
         os.chmod(pass_path, 0o640)
-        _chown(f"root:{svc_name}", pass_path)
-        _chown(f"root:{svc_name}", os.path.dirname(pass_path))
+        _chown(_credential_owner(svc_name), pass_path)
+        _chown(_credential_owner(svc_name), os.path.dirname(pass_path))
 
         cfg.legacy_password_file = pass_path
         toml_path = os.path.join(cfg.conf_dir, "freq.toml")
@@ -681,6 +682,24 @@ def _non_systemd_metrics_hosts(hosts):
 def _credentials_dir(cfg):
     """Canonical runtime credentials directory."""
     return getattr(cfg, "credentials_dir", "") or "/etc/freq/credentials"
+
+
+def _runtime_credentials_group(svc_name):
+    """Local group that should read runtime credential files."""
+    if svc_name:
+        try:
+            grp.getgrnam(svc_name)
+            return svc_name
+        except KeyError:
+            pass
+    try:
+        return grp.getgrgid(os.getgid()).gr_name
+    except KeyError:
+        return str(os.getgid())
+
+
+def _credential_owner(svc_name):
+    return f"root:{_runtime_credentials_group(svc_name)}"
 
 
 def _upsert_toml_section(path, section, values):
@@ -735,7 +754,7 @@ def _persist_service_account_credentials_metadata(cfg, svc_name, password):
         with open(pass_path, "w") as f:
             f.write(password)
         os.chmod(pass_path, 0o640)
-        _chown(f"root:{svc_name}", pass_path)
+        _chown(_credential_owner(svc_name), pass_path)
 
         creds_path = os.path.join(cred_dir, "device-credentials.toml")
         _upsert_toml_section(
@@ -744,7 +763,7 @@ def _persist_service_account_credentials_metadata(cfg, svc_name, password):
             {"username": svc_name, "password_file": pass_path},
         )
         os.chmod(creds_path, 0o640)
-        _chown(f"root:{svc_name}", creds_path)
+        _chown(_credential_owner(svc_name), creds_path)
         fmt.step_ok(f"Service account credentials staged in {creds_path}")
     except OSError as e:
         fmt.step_warn(f"Could not stage service account credentials metadata: {e}")
@@ -803,7 +822,7 @@ def _persist_runtime_device_credentials_metadata(cfg, device_creds, svc_name):
                 with open(pass_path, "w") as f:
                     f.write(password)
                 os.chmod(pass_path, 0o640)
-                _chown(f"root:{svc_name}", pass_path)
+                _chown(_credential_owner(svc_name), pass_path)
                 values["password_file"] = pass_path
 
             api_key = cred.get("api_key") or ""
@@ -812,7 +831,7 @@ def _persist_runtime_device_credentials_metadata(cfg, device_creds, svc_name):
                 with open(api_path, "w") as f:
                     f.write(api_key)
                 os.chmod(api_path, 0o640)
-                _chown(f"root:{svc_name}", api_path)
+                _chown(_credential_owner(svc_name), api_path)
                 values["api_key_file"] = api_path
 
             if values:
@@ -821,7 +840,7 @@ def _persist_runtime_device_credentials_metadata(cfg, device_creds, svc_name):
 
         if staged:
             os.chmod(creds_path, 0o640)
-            _chown(f"root:{svc_name}", creds_path)
+            _chown(_credential_owner(svc_name), creds_path)
             fmt.step_ok(f"Runtime device credentials staged in {creds_path} ({staged} section(s))")
     except OSError as e:
         fmt.step_warn(f"Could not stage runtime device credentials metadata: {e}")
@@ -3486,11 +3505,11 @@ def _phase_pve_api_token(cfg, ctx):
         # holding other credentials (switch-password, pfsense-password,
         # discord-*) with their own ownership model. Recursive chown
         # would clobber them.
-        _chown(f"root:{svc_name}", cred_path)
+        _chown(_credential_owner(svc_name), cred_path)
         # Only adjust the directory ownership when init created it;
         # pre-existing dirs keep their admin-chosen ownership.
         if not cred_dir_preexists:
-            _chown(f"root:{svc_name}", cred_dir)
+            _chown(_credential_owner(svc_name), cred_dir)
         fmt.step_ok(f"Token secret saved to {cred_path}")
     except OSError as e:
         fmt.step_fail(f"Failed to save token secret: {e}")
@@ -6498,7 +6517,7 @@ def _phase_fleet_configure(cfg, ctx):
             _chown(f"{svc_name}:{svc_name}", target, recursive=True)
     cred_dir = _credentials_dir(cfg)
     if os.path.isdir(cred_dir):
-        _chown(f"root:{svc_name}", cred_dir, recursive=False)
+        _chown(_credential_owner(svc_name), cred_dir, recursive=False)
     # conf/ must be readable by dashboard (freq.toml, hosts.toml, etc.)
     _chown(f"{svc_name}:{svc_name}", cfg.conf_dir, recursive=True)
     fmt.step_ok(f"Dashboard data directories owned by {svc_name}")
