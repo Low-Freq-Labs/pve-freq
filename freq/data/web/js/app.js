@@ -6573,9 +6573,18 @@ function fleetTool(tool){
 }
 function openVmCreateForNode(nodeName){
   _pendingVmCreateNode=nodeName||'';
-  var els=_ensureFleetToolPanel();
-  var panel=els&&els.panel;
-  if(_activeFleetTool!=='vmmgmt'||!panel||panel.style.display!=='block')fleetTool('vmmgmt');
+  var inlinePanel=document.getElementById('fleet-tool-panel');
+  var inlineContent=document.getElementById('fleet-tool-content');
+  if(inlinePanel){inlinePanel.style.display='none';}
+  if(inlineContent){inlineContent.innerHTML='';}
+  _activeFleetTool=null;
+  var ov=document.getElementById('modal-container');
+  if(!ov){toast('Create VM modal unavailable','error');return;}
+  ov.innerHTML='<div class="modal" style="max-width:560px;max-height:86vh;overflow-y:auto">'+
+    '<div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Create VM</h3><span class="close-x" data-action="closeModal">&times;</span></div>'+
+    '<div id="vm-subtitle" class="d-none"></div><div id="vm-form"></div>'+
+    '</div>';
+  ov.style.display='flex';
   switchVmMgmt('vmcreate');
   setTimeout(function(){
     var sel=document.getElementById('vmt-c-node');
