@@ -920,33 +920,155 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 
 /* ── PVE Group ── */
 .pve-group {
+  border: 1px solid color-mix(in srgb, var(--pve-node-color, var(--purple)) 44%, var(--border));
   border-left: 4px solid var(--pve-node-color, var(--purple));
-  border-radius: 6px;
-  background: var(--bg2);
+  border-radius: 8px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pve-node-color, var(--purple)) 9%, transparent), rgba(255,255,255,0.014) 36%, rgba(255,255,255,0.01));
   overflow: hidden;
   transition: all var(--duration-normal) var(--ease-out);
 }
-.pve-group:hover { box-shadow: var(--shadow-md), var(--shadow-purple); transform: translateY(-2px); }
+.pve-group:hover { border-color: color-mix(in srgb, var(--pve-node-color, var(--purple)) 70%, var(--border)); }
 .no-hover-fx .pve-group { transition: none; }
 .no-hover-fx .pve-group:hover { box-shadow: none; transform: none; }
 .pve-node-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(170px, 210px);
-  align-items: stretch;
-  gap: 10px;
-  padding: 10px 12px;
+  padding: 8px 10px 7px;
 }
 .pve-node-card-wrap {
   min-width: 0;
 }
-.pve-node-toggle {
-  align-self: stretch;
+.pve-node-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+.pve-node-card::after {
+  display: none;
+}
+.pve-node-main {
+  display: grid;
+  grid-template-columns: minmax(250px, .85fr) minmax(580px, 1.45fr) minmax(270px, .9fr) auto;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+.pve-node-id h3 {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  margin: 0 0 2px;
+}
+.pve-node-id .host-meta {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 6px;
-  min-height: 92px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  color: var(--text);
+  font-size: 10px;
+}
+.pve-node-detail {
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.3;
+  opacity: .64;
+  margin-top: 4px;
+}
+.pve-node-card-actions {
+  align-items: flex-start;
+  flex: 0 0 auto;
+}
+.pve-create-btn {
   border-color: color-mix(in srgb, var(--pve-node-color, var(--purple)) 48%, transparent);
+  color: var(--text);
+  min-height: 42px;
+  padding: 5px 12px;
+}
+.pve-create-btn:hover {
+  border-color: var(--pve-node-color, var(--purple));
+}
+.pve-node-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+.pve-node-stat {
+  display: grid;
+  grid-template-columns: repeat(6, auto);
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px 5px;
+  min-height: 46px;
+  padding: 6px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(0,0,0,0.34);
+  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+}
+.pve-node-stat span {
+  grid-column: 1 / -1;
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  opacity: .68;
+  margin-right: 0;
+  white-space: nowrap;
+}
+.pve-node-stat strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.pve-node-stat em {
+  color: var(--text-dim);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+.pve-node-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 8px;
+  min-width: 0;
+}
+.pve-node-metrics .metric-row {
+  margin: 0;
+  padding: 5px 0 0;
+  border-top: 0;
+}
+.pve-node-metrics .metric-top {
+  margin-bottom: 4px;
+  gap: 6px;
+}
+.pve-node-metrics .metric-label,
+.pve-node-metrics .metric-val {
+  font-size: 9px;
+  white-space: nowrap;
+}
+.pve-node-metrics .pbar {
+  height: 3px;
+}
+.pve-node-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px 8px;
+}
+.pve-node-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 5px 10px;
+  border-color: color-mix(in srgb, var(--pve-node-color, var(--purple)) 52%, transparent);
   color: var(--text);
   background: rgba(255,255,255,0.025);
 }
@@ -956,34 +1078,43 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 }
 .pve-node-toggle .pve-chev {
   color: var(--pve-node-color, var(--purple));
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 900;
   line-height: 1;
 }
 .pve-toggle-count {
   color: var(--text);
-  font-size: 12px;
-  letter-spacing: .08em;
+  font-size: 11px;
+  letter-spacing: .06em;
 }
 .pve-toggle-label {
   color: var(--purple-light);
   font-size: 10px;
-  letter-spacing: .12em;
+  letter-spacing: .08em;
+  text-transform: none;
+}
+.pve-node-hint {
+  display: none;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+.pve-expanded .pve-node-hint {
+  display: inline;
 }
 .pve-vms {
   border-top: 1px solid var(--border);
-  padding: 0 12px 12px;
+  padding: 0 10px 10px;
+  background: rgba(0,0,0,0.28);
+  cursor: pointer;
 }
 .pve-workload-bar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  padding: 9px 0;
-  background: var(--bg2);
+  padding: 9px 0 7px;
+  background: transparent;
   border-bottom: 1px solid var(--border);
 }
 .pve-workload-bar span {
@@ -1003,32 +1134,94 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   border-color: var(--pve-node-color, var(--purple));
   color: var(--text);
 }
-.pve-workload-grid {
-  --card-track: 220px;
-  gap: 10px;
-  padding: 10px 0 0;
+.pve-workload-table {
+  padding: 8px 0 4px;
 }
-.pve-workload-footer {
-  width: 100%;
-  margin-top: 10px;
+.pve-workload-head,
+.pve-workload-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.5fr) 72px 90px minmax(84px, .75fr) minmax(130px, 1fr) minmax(95px, .85fr);
+  gap: 10px;
+  align-items: center;
+}
+.pve-workload-head {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 0 10px 6px;
+}
+.pve-workload-row {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+.pve-workload-row:hover {
+  border-color: color-mix(in srgb, var(--pve-node-color, var(--purple)) 40%, transparent);
+  background: rgba(255,255,255,0.035);
+}
+.pve-workload-name {
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+@media (max-width: 1240px) {
+  .pve-node-main {
+    grid-template-columns: minmax(190px, .9fr) minmax(420px, 1.55fr) auto;
+  }
+  .pve-node-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  .pve-node-metrics {
+    grid-column: 2 / 3;
+    grid-row: 2;
+  }
+  .pve-node-card-actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
 }
 @media (max-width: 820px) {
-  .pve-node-shell {
-    grid-template-columns: 1fr;
-  }
-  .pve-node-toggle {
-    min-height: 0;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    padding: 9px 12px;
-  }
-  .pve-workload-bar {
+  .pve-node-main,
+  .pve-node-actions {
     align-items: stretch;
+    display: flex;
     flex-direction: column;
   }
-  .pve-workload-hide {
+  .pve-node-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  .pve-node-stat {
+    gap: 2px 4px;
+  }
+  .pve-node-stat span {
+    letter-spacing: .08em;
+  }
+  .pve-node-stat em {
+    letter-spacing: .04em;
+  }
+  .pve-node-metrics {
+    grid-template-columns: 1fr;
+  }
+  .pve-create-btn,
+  .pve-node-toggle {
     width: 100%;
+    justify-content: center;
+  }
+  .pve-workload-head {
+    display: none;
+  }
+  .pve-workload-row {
+    grid-template-columns: 1fr 78px;
+    gap: 5px 10px;
+  }
+  .pve-workload-row span:nth-child(n+4) {
+    color: var(--text-dim);
   }
 }
 
