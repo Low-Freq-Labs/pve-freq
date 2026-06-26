@@ -6,6 +6,7 @@ existing reverse proxy, or create a managed reverse-proxy VM from templates.
 """
 
 from types import SimpleNamespace
+import tempfile
 
 from freq.api import cert_lifecycle
 from freq.modules.cert_management import _ssl_onboarding_contract
@@ -64,6 +65,8 @@ def test_ssl_onboarding_dashboard_https_gap_is_explicit():
 
     assert contract["dashboard_https"]["state"] == "gap"
     assert "create_managed_reverse_proxy_vm" in contract["dashboard_https"]["recommended_actions"]
+    assert contract["trusted_proxy"]["configured"] is False
+    assert contract["trusted_proxy"]["configure_endpoint"] == "/api/cert/lifecycle/trusted-proxy"
 
 
 def test_ssl_onboarding_detects_dashboard_cert_target_as_managed():
@@ -91,3 +94,51 @@ def test_cert_lifecycle_registers_onboarding_endpoint():
     cert_lifecycle.register(routes)
 
     assert "/api/cert/lifecycle/onboarding" in routes
+
+
+def test_cert_lifecycle_registers_trusted_proxy_endpoint():
+    routes = {}
+    cert_lifecycle.register(routes)
+
+    assert "/api/cert/lifecycle/trusted-proxy" in routes
+
+
+def test_trusted_proxy_writer_updates_dashboard_section_without_toml_editing():
+    with tempfile.TemporaryDirectory() as td:
+        cfg = _cfg(conf_dir=td)
+        path = cert_lifecycle._write_dashboard_trusted_proxy_cidrs(
+            cfg,
+            cert_lifecycle._normalize_cidrs(["10.25.255.38/32"]),
+        )
+
+        with open(path) as f:
+            text = f.read()
+
+    assert "[dashboard]" in text
+    assert 'trusted_proxy_cidrs = ["10.25.255.38/32"]' in text
+
+
+def test_trusted_proxy_writer_replaces_existing_dashboard_key_only_once():
+    with tempfile.TemporaryDirectory() as td:
+        cfg = _cfg(conf_dir=td)
+        with open(f"{td}/freq.toml", "w") as f:
+            f.write('[services]\ndashboard_port = 8888\n\n[dashboard]\ntrusted_proxy_cidrs = ["10.0.0.1/32"]\n')
+
+        cert_lifecycle._write_dashboard_trusted_proxy_cidrs(
+            cfg,
+            cert_lifecycle._normalize_cidrs(["10.25.255.38/32", "10.25.255.38"]),
+        )
+        with open(f"{td}/freq.toml") as f:
+            text = f.read()
+
+    assert text.count("trusted_proxy_cidrs") == 1
+    assert 'trusted_proxy_cidrs = ["10.25.255.38/32"]' in text
+
+
+def test_trusted_proxy_cidr_validation_rejects_bad_values():
+    try:
+        cert_lifecycle._normalize_cidrs(["not-a-cidr"])
+    except ValueError as exc:
+        assert "invalid trusted proxy CIDR" in str(exc)
+    else:
+        raise AssertionError("invalid CIDR was accepted")

@@ -6,6 +6,7 @@ inline secrets. Operators pass credential paths; the backend reads files.
 
 import contextlib
 import io
+import ipaddress
 import json
 import os
 from types import SimpleNamespace
@@ -79,6 +80,75 @@ def _targets_from_request(cfg, base_domain, body, settings):
         return _cert_targets_from_catalog(targets, base_domain, settings.get("reverse_proxy_host", "")), "service_catalog"
     infer_targets = _truthy(body.get("infer_targets"), True)
     return (_infer_cert_targets(cfg, base_domain) if infer_targets else []), "inferred" if infer_targets else "none"
+
+
+def _normalize_cidrs(values):
+    cidrs = []
+    for raw in values or []:
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        try:
+            network = ipaddress.ip_network(text, strict=False)
+        except ValueError as exc:
+            raise ValueError(f"invalid trusted proxy CIDR: {text}") from exc
+        normalized = str(network)
+        if normalized not in cidrs:
+            cidrs.append(normalized)
+    return cidrs
+
+
+def _toml_array(values):
+    return "[" + ", ".join(json.dumps(str(v)) for v in values) + "]"
+
+
+def _write_dashboard_trusted_proxy_cidrs(cfg, cidrs):
+    """Persist trusted proxy CIDRs through the product config writer."""
+    toml_path = os.path.join(cfg.conf_dir, "freq.toml")
+    text = ""
+    if os.path.isfile(toml_path):
+        with open(toml_path) as f:
+            text = f.read()
+    lines = text.splitlines()
+    setting = f"trusted_proxy_cidrs = {_toml_array(cidrs)}"
+
+    dash_start = None
+    dash_end = len(lines)
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == "[dashboard]":
+            dash_start = idx
+            dash_end = len(lines)
+            for end_idx in range(idx + 1, len(lines)):
+                candidate = lines[end_idx].strip()
+                if candidate.startswith("[") and candidate.endswith("]"):
+                    dash_end = end_idx
+                    break
+            break
+
+    if dash_start is None:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.extend(["[dashboard]", setting])
+    else:
+        replaced = False
+        new_section = []
+        for line in lines[dash_start + 1:dash_end]:
+            if line.strip().startswith("trusted_proxy_cidrs"):
+                if not replaced:
+                    new_section.append(setting)
+                    replaced = True
+                continue
+            new_section.append(line)
+        if not replaced:
+            new_section.append(setting)
+        lines = lines[:dash_start + 1] + new_section + lines[dash_end:]
+
+    os.makedirs(cfg.conf_dir, exist_ok=True)
+    with open(toml_path, "w") as f:
+        f.write("\n".join(lines).rstrip() + "\n")
+    load_config(force=True)
+    return toml_path
 
 
 def handle_cert_lifecycle(handler):
@@ -222,6 +292,53 @@ def handle_cert_reconcile(handler):
         json_response(handler, {"ok": False, "error": str(exc)}, 500)
 
 
+def handle_cert_trusted_proxy(handler):
+    """POST /api/cert/lifecycle/trusted-proxy — configure proxy trust."""
+    if require_post(handler, "Certificate trusted proxy"):
+        return
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
+
+    body = get_json_body(handler)
+    raw = body.get("trusted_proxy_cidrs", body.get("cidrs", []))
+    if isinstance(raw, str):
+        raw = [part.strip() for part in raw.split(",")]
+    if not isinstance(raw, list):
+        json_response(handler, {"error": "trusted_proxy_cidrs must be a list or comma-separated string"}, 400)
+        return
+    dry_run = _truthy(body.get("dry_run"), True)
+    confirm = _truthy(body.get("confirm"), False)
+    if not dry_run and not confirm:
+        json_response(handler, {"error": "applying trusted proxy CIDRs requires confirm=true"}, 400)
+        return
+
+    cfg = load_config()
+    try:
+        cidrs = _normalize_cidrs(raw)
+    except ValueError as exc:
+        json_response(handler, {"error": str(exc)}, 400)
+        return
+    if not cidrs:
+        json_response(handler, {"error": "at least one trusted proxy CIDR is required"}, 400)
+        return
+
+    result = {
+        "ok": True,
+        "dry_run": dry_run,
+        "current": list(getattr(cfg, "trusted_proxy_cidrs", []) or []),
+        "trusted_proxy_cidrs": cidrs,
+        "restart_required": False,
+    }
+    if not dry_run:
+        _write_dashboard_trusted_proxy_cidrs(cfg, cidrs)
+        updated = load_config(force=True)
+        result["current"] = list(getattr(updated, "trusted_proxy_cidrs", []) or [])
+        result["applied"] = True
+    json_response(handler, result)
+
+
 def handle_cert_bootstrap(handler):
     """POST /api/cert/lifecycle/bootstrap — bootstrap config from token path."""
     if require_post(handler, "Certificate bootstrap"):
@@ -336,5 +453,6 @@ def register(routes: dict):
     routes["/api/cert/lifecycle/onboarding"] = handle_cert_onboarding
     routes["/api/cert/lifecycle/adopt-existing"] = handle_cert_adopt_existing
     routes["/api/cert/lifecycle/reconcile"] = handle_cert_reconcile
+    routes["/api/cert/lifecycle/trusted-proxy"] = handle_cert_trusted_proxy
     routes["/api/cert/lifecycle/bootstrap"] = handle_cert_bootstrap
     routes["/api/cert/lifecycle/action"] = handle_cert_action

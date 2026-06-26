@@ -264,6 +264,11 @@ def _ssl_onboarding_contract(cfg):
             "management_mode": settings.get("management_mode") or "managed",
         },
         "dashboard_https": _ssl_dashboard_status(cfg, settings, targets),
+        "trusted_proxy": {
+            "cidrs": list(getattr(cfg, "trusted_proxy_cidrs", []) or []),
+            "configured": bool(getattr(cfg, "trusted_proxy_cidrs", []) or []),
+            "configure_endpoint": "/api/cert/lifecycle/trusted-proxy",
+        },
     }
 
 
