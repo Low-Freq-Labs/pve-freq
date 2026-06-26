@@ -380,6 +380,10 @@ class TestF8TerminalSessionCreatorBinding(unittest.TestCase):
                       "open handler must capture the creating user")
         self.assertIn('"user": creator', block,
                       "session dict must store the creator's username")
+        self.assertIn("ws_nonce = secrets.token_urlsafe", block,
+                      "open handler must create a websocket nonce")
+        self.assertIn('"ws_nonce": ws_nonce', block,
+                      "session dict must store the websocket nonce")
 
     def test_ws_handler_refuses_cross_user_bind(self):
         src = (REPO_ROOT / "freq" / "api" / "terminal.py").read_text()
@@ -391,6 +395,9 @@ class TestF8TerminalSessionCreatorBinding(unittest.TestCase):
         self.assertIn("creator != requesting_user", block,
                       "WS handler must compare creator against requester")
         self.assertIn("Session belongs to another user", block)
+        self.assertIn("same_origin_or_absent(handler)", block)
+        self.assertIn("secrets.compare_digest(expected_nonce, supplied_nonce)", block)
+        self.assertIn("Terminal websocket nonce required", block)
 
 
 class TestF4VaultKeyNotInArgv(unittest.TestCase):

@@ -96,6 +96,8 @@ class TestFullAuthLifecycle(unittest.TestCase):
         self.assertEqual(h._status, 200, "Login should succeed")
         data = _get_json(h)
         self.assertIn("token", data)
+        self.assertIn("csrf_token", data)
+        self.assertEqual(data["auth_mode"], "cookie")
 
         # Verify cookie was set
         cookie = _get_header(h, "Set-Cookie")
@@ -171,6 +173,65 @@ class TestFullAuthLifecycle(unittest.TestCase):
         self.assertIsNone(err, "SSE cookie auth must authenticate")
         self.assertIsNotNone(role)
 
+    def test_cookie_post_requires_csrf(self):
+        """Unsafe cookie-authenticated API calls must carry X-Freq-CSRF."""
+        token, _ = self._login()
+        h = _make_handler(
+            path="/api/auth/change-password",
+            method="POST",
+            headers={
+                "Authorization": "",
+                "Cookie": f"freq_session={token}",
+                "Origin": "",
+                "Content-Length": "0",
+            },
+        )
+        h._dispatch()
+
+        self.assertEqual(h._status, 403)
+        self.assertEqual(_get_json(h)["error"], "CSRF token required")
+
+    def test_cookie_post_accepts_matching_csrf(self):
+        """Matching CSRF token lets cookie-authenticated unsafe API calls proceed."""
+        from freq.api.auth import _auth_tokens, _auth_lock
+
+        token, _ = self._login()
+        with _auth_lock:
+            csrf = _auth_tokens[token]["csrf_token"]
+        h = _make_handler(
+            path="/api/auth/change-password",
+            method="POST",
+            headers={
+                "Authorization": "",
+                "Cookie": f"freq_session={token}",
+                "Origin": "",
+                "X-Freq-CSRF": csrf,
+                "Content-Length": "0",
+            },
+            body="{}",
+        )
+        h._dispatch()
+
+        self.assertNotEqual(h._status, 403)
+
+    def test_bearer_post_does_not_require_csrf(self):
+        """Bearer API clients are not CSRF targets."""
+        token, _ = self._login()
+        h = _make_handler(
+            path="/api/auth/change-password",
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Cookie": "",
+                "Origin": "",
+                "Content-Length": "0",
+            },
+            body="{}",
+        )
+        h._dispatch()
+
+        self.assertNotEqual(h._status, 403)
+
     def test_sse_query_param_reports_removed_auth_channel(self):
         """SSE query-token callers must get a truthful migration reason."""
         from freq.api.auth import check_session_role
@@ -212,6 +273,34 @@ class TestFullAuthLifecycle(unittest.TestCase):
         csp = _get_header(h, "Content-Security-Policy")
         self.assertIsNotNone(csp, "JSON response must include CSP header")
         self.assertIn("default-src", csp)
+
+    def test_trusted_proxy_https_sets_hsts(self):
+        """Trusted proxy X-Forwarded-Proto=https counts as HTTPS for HSTS."""
+        h = _make_handler(
+            "/api/test",
+            headers={"X-Forwarded-Proto": "https", "Host": "freq.example.test"},
+        )
+        h.client_address = ("127.0.0.1", 4444)
+        cfg = MagicMock(trusted_proxy_cidrs=["127.0.0.1/32"])
+        with patch("freq.api.auth.load_config", return_value=cfg):
+            h._json_response({"ok": True})
+
+        hsts = _get_header(h, "Strict-Transport-Security")
+        self.assertIsNotNone(hsts)
+        self.assertIn("max-age=", hsts)
+
+    def test_untrusted_forwarded_proto_does_not_set_hsts(self):
+        """Direct clients cannot spoof HTTPS with X-Forwarded-Proto."""
+        h = _make_handler(
+            "/api/test",
+            headers={"X-Forwarded-Proto": "https", "Host": "freq.example.test"},
+        )
+        h.client_address = ("10.9.8.7", 4444)
+        cfg = MagicMock(trusted_proxy_cidrs=["127.0.0.1/32"])
+        with patch("freq.api.auth.load_config", return_value=cfg):
+            h._json_response({"ok": True})
+
+        self.assertIsNone(_get_header(h, "Strict-Transport-Security"))
 
     def test_mutating_endpoint_rejects_get(self):
         """Mutating setup endpoints must reject GET."""

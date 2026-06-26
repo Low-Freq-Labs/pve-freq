@@ -36,7 +36,7 @@ import time
 
 from freq.core import log as logger
 from freq.api.helpers import require_post, json_response, get_params
-from freq.api.auth import current_user
+from freq.api.auth import current_user, same_origin_or_absent
 from freq.core.config import load_config
 from freq.core.device_credentials import resolve_staged_device_ssh_auth
 from freq.core.ssh import _build_ssh_cmd, run as ssh_single
@@ -446,6 +446,7 @@ def handle_terminal_open(handler):
     # PTY and inherit the device credentials it was opened with.
     creator = current_user(handler)
     session_id = secrets.token_urlsafe(24)
+    ws_nonce = secrets.token_urlsafe(24)
     with _sessions_lock:
         _sessions[session_id] = {
             "fd": fd,
@@ -458,6 +459,7 @@ def handle_terminal_open(handler):
             "cols": cols,
             "rows": rows,
             "user": creator,
+            "ws_nonce": ws_nonce,
             "kill_pgrp": htype == "idrac",
         }
 
@@ -466,6 +468,7 @@ def handle_terminal_open(handler):
         {
             "ok": True,
             "session": session_id,
+            "ws_nonce": ws_nonce,
             "type": term_type,
             "target": target,
         },
@@ -569,6 +572,9 @@ def handle_terminal_ws(handler):
     if err:
         handler.send_error(403, err)
         return
+    if not same_origin_or_absent(handler):
+        handler.send_error(403, "WebSocket origin mismatch")
+        return
     requesting_user = current_user(handler)
     if not requesting_user:
         handler.send_error(403, "Authentication required")
@@ -577,6 +583,7 @@ def handle_terminal_ws(handler):
     parsed = urlparse(handler.path)
     qs = parse_qs(parsed.query)
     session_id = qs.get("session", [""])[0]
+    supplied_nonce = qs.get("nonce", [""])[0]
 
     with _sessions_lock:
         session = _sessions.get(session_id)
@@ -591,6 +598,15 @@ def handle_terminal_ws(handler):
                 endpoint="terminal/ws",
             )
             handler.send_error(403, "Session belongs to another user")
+            return
+        expected_nonce = session.get("ws_nonce", "")
+        if not expected_nonce or not secrets.compare_digest(expected_nonce, supplied_nonce):
+            logger.warn(
+                "api_terminal: WS nonce refused",
+                endpoint="terminal/ws",
+                session=session_id,
+            )
+            handler.send_error(403, "Terminal websocket nonce required")
             return
         fd = session["fd"]
 

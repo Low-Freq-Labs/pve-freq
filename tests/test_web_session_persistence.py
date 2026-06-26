@@ -19,6 +19,7 @@ over HTTP).
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -29,10 +30,10 @@ class TestSecureFlagBasedOnRequestScheme(unittest.TestCase):
     """Set-Cookie Secure flag must match the actual request scheme."""
 
     def test_secure_checks_sslsocket(self):
-        """handle_auth_login must check isinstance(handler.request, ssl.SSLSocket)."""
+        """Secure-cookie classification must check the actual socket."""
         src = (FREQ_ROOT / "freq" / "api" / "auth.py").read_text()
         self.assertIn("isinstance(getattr(handler,", src)
-        self.assertIn("ssl.SSLSocket", src)
+        self.assertIn("SSLSocket", src)
 
     def test_no_tls_cert_based_secure(self):
         """Must not set Secure based on cfg.tls_cert existence."""
@@ -47,9 +48,28 @@ class TestSecureFlagBasedOnRequestScheme(unittest.TestCase):
         self.assertIsNone(match, "Must not use tls_cert for Secure flag")
 
     def test_http_request_gets_no_secure_flag(self):
-        """When is_tls is False, secure_flag must be empty string."""
-        src = (FREQ_ROOT / "freq" / "api" / "auth.py").read_text()
-        self.assertIn('"; Secure" if is_tls else ""', src)
+        """Direct HTTP requests must not receive Secure cookies."""
+        from freq.api.auth import request_is_https
+
+        handler = MagicMock()
+        handler.request = object()
+        handler.client_address = ("10.0.0.5", 1234)
+        handler.headers.get = lambda key, default="": {"X-Forwarded-Proto": "https"}.get(key, default)
+        cfg = MagicMock(trusted_proxy_cidrs=["127.0.0.1/32"])
+        with patch("freq.api.auth.load_config", return_value=cfg):
+            self.assertFalse(request_is_https(handler))
+
+    def test_trusted_proxy_https_counts_for_secure_flag(self):
+        """Trusted proxy HTTPS requests must receive Secure cookies."""
+        from freq.api.auth import request_is_https
+
+        handler = MagicMock()
+        handler.request = object()
+        handler.client_address = ("127.0.0.1", 1234)
+        handler.headers.get = lambda key, default="": {"X-Forwarded-Proto": "https"}.get(key, default)
+        cfg = MagicMock(trusted_proxy_cidrs=["127.0.0.1/32"])
+        with patch("freq.api.auth.load_config", return_value=cfg):
+            self.assertTrue(request_is_https(handler))
 
 
 class TestTokenStorageUnchanged(unittest.TestCase):

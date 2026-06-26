@@ -95,6 +95,68 @@ def resolve_client_ip(handler) -> str:
     return peer_ip
 
 
+def _trusted_proxy_cidrs() -> list:
+    try:
+        cfg = load_config()
+        return getattr(cfg, "trusted_proxy_cidrs", None) or []
+    except Exception:
+        return []
+
+
+def _peer_is_trusted_proxy(handler) -> bool:
+    try:
+        peer_ip = handler.client_address[0]
+    except Exception:
+        return False
+    trusted = _trusted_proxy_cidrs()
+    return bool(trusted) and any(_ip_in_cidr(peer_ip, c) for c in trusted)
+
+
+def request_is_https(handler) -> bool:
+    """Return True for direct TLS or trusted-proxy HTTPS requests."""
+    import ssl as _ssl
+    if isinstance(getattr(handler, "request", None), _ssl.SSLSocket):
+        return True
+    if not _peer_is_trusted_proxy(handler):
+        return False
+    proto = str(handler.headers.get("X-Forwarded-Proto", "") or "").split(",", 1)[0].strip().lower()
+    return proto == "https"
+
+
+def same_origin_or_absent(handler) -> bool:
+    """Return True when Origin is absent or matches Host."""
+    origin = str(handler.headers.get("Origin", "") or "").strip()
+    if not origin:
+        return True
+    host = str(handler.headers.get("Host", "") or "").strip().lower()
+    if not host:
+        return False
+    try:
+        parsed = urlparse(origin)
+    except Exception:
+        return False
+    return parsed.netloc.lower() == host
+
+
+def _send_auth_security_headers(handler):
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+    handler.send_header(
+        "Permissions-Policy",
+        "geolocation=(), microphone=(), camera=(), usb=(), payment=(), "
+        "accelerometer=(), gyroscope=(), magnetometer=(), interest-cohort=()",
+    )
+    handler.send_header(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; connect-src 'self'; font-src 'self'; "
+        "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
+    )
+    if request_is_https(handler):
+        handler.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+
 def _prune_attempts(attempts_map: dict, key: str, now: float) -> list:
     attempts = attempts_map.get(key, [])
     attempts = [(t, s) for t, s in attempts if now - t < _RATE_WINDOW_SECONDS]
@@ -169,7 +231,7 @@ def verify_password(password: str, stored: str) -> bool:
 # ── Session Check ─────────────────────────────────────────────────────────
 
 
-def _extract_session_token(handler) -> str:
+def _extract_session_token_and_source(handler) -> tuple[str, str]:
     """Pull the session token from Authorization header or cookie.
 
     F7 of R-SECURITY-TRUST-AUDIT-20260413P removed the previous
@@ -182,13 +244,18 @@ def _extract_session_token(handler) -> str:
     """
     auth_header = handler.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
-        return auth_header[7:]
+        return auth_header[7:], "bearer"
     cookie_header = handler.headers.get("Cookie", "")
     for part in cookie_header.split(";"):
         part = part.strip()
         if part.startswith("freq_session="):
-            return part[len("freq_session="):]
-    return ""
+            return part[len("freq_session="):], "cookie"
+    return "", ""
+
+
+def _extract_session_token(handler) -> str:
+    token, _source = _extract_session_token_and_source(handler)
+    return token
 
 
 def _request_has_query_token(handler) -> bool:
@@ -244,6 +311,7 @@ def establish_session(handler, username: str, role: str) -> str:
             "role": role,
             "ts": now,
             "last_activity_ts": now,
+            "csrf_token": secrets.token_urlsafe(32),
         }
     _set_session_refresh_cookie(handler, token)
     return token
@@ -253,9 +321,7 @@ def maybe_send_session_refresh_cookie(handler):
     token = getattr(handler, "_refresh_session_cookie", "")
     if not token:
         return
-    import ssl as _ssl
-    is_tls = isinstance(getattr(handler, "request", None), _ssl.SSLSocket)
-    secure_flag = "; Secure" if is_tls else ""
+    secure_flag = "; Secure" if request_is_https(handler) else ""
     handler.send_header(
         "Set-Cookie",
         f"freq_session={token}; HttpOnly; SameSite=Strict; Path=/; "
@@ -297,13 +363,34 @@ def current_user(handler) -> str:
     return session["user"] if session else ""
 
 
+def current_csrf_token(handler) -> str:
+    token = _extract_session_token(handler)
+    session = _lookup_session(token, touch=False, handler=handler)
+    return session.get("csrf_token", "") if session else ""
+
+
+def check_csrf(handler) -> tuple[bool, str]:
+    """Require CSRF token for unsafe cookie-authenticated API requests."""
+    token, source = _extract_session_token_and_source(handler)
+    if source != "cookie":
+        return True, ""
+    session = _lookup_session(token, touch=False, handler=handler)
+    if not session:
+        return False, "Session expired or invalid"
+    expected = session.get("csrf_token", "")
+    supplied = str(handler.headers.get("X-Freq-CSRF", "") or "")
+    if not expected or not secrets.compare_digest(expected, supplied):
+        return False, "CSRF token required"
+    return True, ""
+
+
 def check_session_role(handler, min_role="operator"):
     """Check if the request has a valid session with sufficient role.
 
     Role hierarchy: viewer < operator < admin.
     Returns (role_str, None) if ok, or (None, error_str) if blocked.
     """
-    token = _extract_session_token(handler)
+    token, source = _extract_session_token_and_source(handler)
     if not token:
         if _request_has_query_token(handler):
             return (
@@ -323,6 +410,8 @@ def check_session_role(handler, min_role="operator"):
     try:
         handler._session_user = session["user"]
         handler._session_role = session["role"]
+        handler._session_auth_source = source
+        handler._session_csrf_token = session.get("csrf_token", "")
     except Exception:
         pass
     return session["role"], None
@@ -453,9 +542,7 @@ def handle_auth_login(handler):
     # based on tls_cert config is wrong: if the dashboard has tls_cert set but
     # the client talked to it over HTTP (e.g. TLS wrap failed, or reverse proxy),
     # the Secure cookie is dropped by the client and session persistence breaks.
-    import ssl as _ssl
-    is_tls = isinstance(getattr(handler, "request", None), _ssl.SSLSocket)
-    secure_flag = "; Secure" if is_tls else ""
+    secure_flag = "; Secure" if request_is_https(handler) else ""
     handler.send_header("Set-Cookie",
                         f"freq_session={token}; HttpOnly; SameSite=Strict; Path=/; "
                         f"Max-Age={SESSION_TIMEOUT_SECONDS}{secure_flag}")
@@ -463,10 +550,21 @@ def handle_auth_login(handler):
     # dropped on the auth surface too. The login endpoint is the most
     # sensitive cross-origin target in the app and must stay strictly
     # same-origin. See serve.py _json_response for the rationale.
-    handler.send_header("X-Content-Type-Options", "nosniff")
-    handler.send_header("X-Frame-Options", "DENY")
+    _send_auth_security_headers(handler)
     import json as _json
-    body = _json.dumps({"ok": True, "token": token, "user": username, "role": user["role"]}).encode()
+    csrf_token = ""
+    with _auth_lock:
+        csrf_token = (_auth_tokens.get(token) or {}).get("csrf_token", "")
+    body = _json.dumps(
+        {
+            "ok": True,
+            "token": token,
+            "csrf_token": csrf_token,
+            "auth_mode": "cookie",
+            "user": username,
+            "role": user["role"],
+        }
+    ).encode()
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
@@ -488,11 +586,10 @@ def handle_auth_logout(handler):
     # any clients enforcing Secure-flag symmetry get the matching directive.
     # Browsers honor Max-Age=0 regardless of Secure, so this is correctness
     # rather than functional — F10 in R-SECURITY-TRUST-AUDIT-20260413P.
-    import ssl as _ssl
-    is_tls = isinstance(getattr(handler, "request", None), _ssl.SSLSocket)
-    secure_flag = "; Secure" if is_tls else ""
+    secure_flag = "; Secure" if request_is_https(handler) else ""
     handler.send_response(200)
     handler.send_header("Content-Type", "application/json")
+    _send_auth_security_headers(handler)
     handler.send_header(
         "Set-Cookie",
         f"freq_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0{secure_flag}",
@@ -534,6 +631,8 @@ def handle_auth_verify(handler):
             "session_idle_s": idle,
             "session_ttl_s": ttl,
             "session_timeout_s": SESSION_TIMEOUT_SECONDS,
+            "csrf_token": session.get("csrf_token", ""),
+            "auth_mode": "cookie",
         }
     )
 

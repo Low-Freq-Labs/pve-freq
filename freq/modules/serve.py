@@ -2415,7 +2415,9 @@ from freq.api.auth import (
     hash_password as _hash_password,
     verify_password as _verify_password,
     check_session_role as _check_session_role,
+    check_csrf as _check_csrf,
     _request_has_query_token,
+    request_is_https as _request_is_https,
     handle_auth_login,
     handle_auth_logout,
     handle_auth_verify,
@@ -3620,6 +3622,27 @@ class FreqHandler(BaseHTTPRequestHandler):
     })
     # Path prefixes that don't require authentication
     _AUTH_WHITELIST_PREFIXES = ("/static/", "/dashboard")
+    _CSRF_EXEMPT = frozenset({
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/setup/status",
+        "/api/setup/create-admin",
+        "/api/setup/configure",
+        "/api/setup/generate-key",
+        "/api/setup/complete",
+        "/api/setup/test-ssh",
+        "/api/setup/init/start",
+        "/api/setup/reset",
+    })
+
+    def _requires_csrf(self, path: str) -> bool:
+        if self.command not in {"POST", "PUT", "PATCH", "DELETE"}:
+            return False
+        if not path.startswith("/api/"):
+            return False
+        if path in self._CSRF_EXEMPT:
+            return False
+        return True
 
     def _dispatch(self):
         """Route request to handler method or callable by path.
@@ -3666,6 +3689,18 @@ class FreqHandler(BaseHTTPRequestHandler):
                 return
             self._request_role = role or ""
             self._request_user = getattr(self, "_session_user", "")
+            if self._requires_csrf(path):
+                ok, csrf_err = _check_csrf(self)
+                if not ok:
+                    logger.warn(
+                        "http_csrf_rejected",
+                        request_id=getattr(self, "_request_id", ""),
+                        method=getattr(self, "command", "?"),
+                        path=path,
+                        reason=csrf_err,
+                    )
+                    self._json_response({"error": csrf_err}, 403)
+                    return
 
         # Check legacy routes first, then v1 domain routes
         handler_ref = self._ROUTES.get(path)
@@ -7153,8 +7188,7 @@ a:hover{{text-decoration:underline}}
         # HTTP-only deploys in an unrecoverable redirect loop via
         # browser pre-load. Short max-age (1 year) without preload.
         try:
-            import ssl as _ssl
-            if isinstance(getattr(self, "request", None), _ssl.SSLSocket):
+            if _request_is_https(self):
                 self.send_header("Strict-Transport-Security",
                                  "max-age=31536000; includeSubDomains")
         except Exception:
