@@ -25,6 +25,7 @@ from freq.modules.cert_management import (
     _load_issued,
     _render_cert_config_block,
     _reconcile_lifecycle_targets,
+    _ssl_onboarding_contract,
     _stage_cloudflare_token,
     _write_cert_config_block,
     cmd_cert_deploy,
@@ -92,6 +93,7 @@ def handle_cert_lifecycle(handler):
         issued = _load_issued(cfg)
         inventory = _load_cert_data(cfg)
         settings = plan.get("settings", {})
+        onboarding = _ssl_onboarding_contract(cfg)
         adopted_existing = settings.get("management_mode") == "adopted_existing"
         json_response(
             handler,
@@ -100,6 +102,7 @@ def handle_cert_lifecycle(handler):
                 "plan": plan,
                 "issued": issued,
                 "inventory": inventory,
+                "onboarding": onboarding,
                 "status": {
                     "configured": bool(
                         settings.get("base_domain")
@@ -116,6 +119,19 @@ def handle_cert_lifecycle(handler):
                 },
             },
         )
+    except Exception as exc:
+        json_response(handler, {"ok": False, "error": str(exc)}, 500)
+
+
+def handle_cert_onboarding(handler):
+    """GET /api/cert/lifecycle/onboarding — product SSL setup contract."""
+    role, err = _check_session_role(handler, "viewer")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
+    cfg = load_config()
+    try:
+        json_response(handler, {"ok": True, "onboarding": _ssl_onboarding_contract(cfg)})
     except Exception as exc:
         json_response(handler, {"ok": False, "error": str(exc)}, 500)
 
@@ -317,6 +333,7 @@ def handle_cert_action(handler):
 
 def register(routes: dict):
     routes["/api/cert/lifecycle"] = handle_cert_lifecycle
+    routes["/api/cert/lifecycle/onboarding"] = handle_cert_onboarding
     routes["/api/cert/lifecycle/adopt-existing"] = handle_cert_adopt_existing
     routes["/api/cert/lifecycle/reconcile"] = handle_cert_reconcile
     routes["/api/cert/lifecycle/bootstrap"] = handle_cert_bootstrap

@@ -4385,9 +4385,8 @@ a:hover{{text-decoration:underline}}
         except Exception:
             pass
 
-        first_run = _is_first_run()
         cfg = load_config()
-        if not first_run:
+        if not _is_first_run():
             if _setup_marker_exists(cfg):
                 self._json_response({"error": "Setup wizard already used — run freq init to complete fleet deployment"}, 403)
                 return

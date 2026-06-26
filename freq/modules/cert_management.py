@@ -59,6 +59,31 @@ DEFAULT_CERT_SETTINGS = {
     "renewal_owner": "",
 }
 
+SSL_ONBOARDING_DNS_PROVIDERS = [
+    {
+        "id": "cloudflare",
+        "label": "Cloudflare",
+        "status": "first_class",
+        "credential_mode": "token_path",
+        "required_fields": ["api_token_path"],
+        "optional_fields": ["zone_id"],
+        "inline_secret_allowed": False,
+    }
+]
+
+SSL_PROXY_VM_DEFAULTS = {
+    "engine": "caddy",
+    "source": "pve_template",
+    "template_selection": "operator_selected",
+    "cores": 2,
+    "memory_mb": 2048,
+    "disk_gb": 16,
+    "cpu": "x86-64-v2-AES",
+    "machine": "q35",
+    "onboot": True,
+    "migration_safe": True,
+}
+
 DRIVER_CAPABILITIES = {
     "proxmox_pvenode": {
         "mutates": ["pveproxy certificate"],
@@ -81,6 +106,165 @@ DRIVER_CAPABILITIES = {
         "verify": "TLS handshake with SNI hostname",
     },
 }
+
+
+def _ssl_dashboard_status(cfg, settings, targets):
+    """Return the product's own dashboard HTTPS onboarding state."""
+    dashboard_port = int(getattr(cfg, "dashboard_port", 8888) or 8888)
+    dashboard_targets = []
+    for target in targets:
+        service_name = str(target.get("service_name") or target.get("label") or "").lower()
+        target_type = str(target.get("target_type") or "").lower()
+        if service_name in ("freq", "pve-freq", "dashboard") or target_type in (
+            "freq_dashboard",
+            "pve_freq_dashboard",
+            "dashboard",
+        ):
+            dashboard_targets.append(target)
+    if dashboard_targets:
+        state = "managed"
+        message = "Dashboard HTTPS is covered by a configured cert target."
+    else:
+        state = "gap"
+        message = "Dashboard HTTPS is not covered yet; choose direct certs or a reverse-proxy route."
+    return {
+        "state": state,
+        "plain_http_port": dashboard_port,
+        "managed_targets": dashboard_targets,
+        "message": message,
+        "recommended_actions": [
+            "adopt_existing_route",
+            "add_dashboard_to_existing_proxy",
+            "create_managed_reverse_proxy_vm",
+            "serve_dashboard_tls_directly",
+        ],
+    }
+
+
+def _ssl_onboarding_contract(cfg):
+    """Provider-agnostic SSL Manager contract for UI and setup surfaces.
+
+    This is deliberately product-shaped instead of DC01-shaped. The UI should
+    render choices from this contract and never ask operators to edit TOML.
+    """
+    settings = _cert_settings(cfg)
+    targets = _cert_targets(cfg)
+    provider_ids = {p["id"] for p in SSL_ONBOARDING_DNS_PROVIDERS}
+    detected_provider = settings.get("dns_provider") if settings.get("dns_provider") in provider_ids else ""
+    base_domain = settings.get("base_domain", "")
+    existing_acme_hint = bool(base_domain and _acme_available(settings))
+    proxy_vm_defaults = dict(SSL_PROXY_VM_DEFAULTS)
+    proxy_vm_defaults["cpu"] = getattr(cfg, "vm_cpu", proxy_vm_defaults["cpu"]) or proxy_vm_defaults["cpu"]
+    proxy_vm_defaults["machine"] = getattr(cfg, "vm_machine", proxy_vm_defaults["machine"]) or proxy_vm_defaults["machine"]
+
+    return {
+        "schema_version": 1,
+        "manual_toml_edit_required": False,
+        "truth_source": "per_target_sni_tls_probe",
+        "credential_policy": {
+            "inline_secret_allowed": False,
+            "secret_inputs": "path_or_secret_store_reference",
+        },
+        "auto_detect": [
+            "dns_provider_credentials_by_path_or_env",
+            "existing_acme_store_acmesh_or_certbot",
+            "reverse_proxy_config_as_hint_only",
+            "per_target_served_certificate_via_sni",
+        ],
+        "ask_user": [
+            "base_domain_when_not_detected_or_ambiguous",
+            "dns_provider_and_token_path_when_provisioning",
+            "wildcard_or_explicit_san_set",
+            "deploy_model",
+            "targets_to_cover",
+            "reverse_proxy_vm_template_node_storage_network_when_creating_proxy",
+        ],
+        "never_assume": [
+            "reverse_proxy_exists",
+            "one_proxy_fronts_everything",
+            "proxy_product_or_config_format",
+            "proxy_terminates_tls",
+            "management_uis_are_proxied",
+            "dashboard_is_already_https",
+        ],
+        "unsafe_mutations_require_apply": [
+            "dns_record_write",
+            "certificate_issue_or_reissue",
+            "reverse_proxy_create_or_reconfigure",
+            "target_service_reload_or_restart",
+            "firewall_or_nat_change",
+        ],
+        "paths": [
+            {
+                "id": "adopt_existing",
+                "label": "Adopt existing SSL",
+                "intent": "Register and verify SSL that already works without reissuing certificates.",
+                "auto_detect": [
+                    "acme_store",
+                    "certbot_store",
+                    "dns_provider_credentials",
+                    "reverse_proxy_hints",
+                    "served_certificates",
+                ],
+                "requires": ["base_domain"],
+                "mutates_on_preview": False,
+                "apply_mutations": ["register_targets", "record_renewal_owner"],
+            },
+            {
+                "id": "provision_direct",
+                "label": "Provision direct target certs",
+                "intent": "Issue wildcard/SAN certs and deploy them directly to selected targets.",
+                "requires": ["dns_provider", "api_token_path", "base_domain", "target_selection"],
+                "mutates_on_preview": False,
+                "apply_mutations": ["issue_cert", "deploy_to_targets", "reload_selected_services"],
+            },
+            {
+                "id": "use_existing_reverse_proxy",
+                "label": "Use existing reverse proxy",
+                "intent": "Use a proxy the operator already runs; probe it as a hint, then verify served TLS.",
+                "requires": ["base_domain", "proxy_host_or_route", "target_selection"],
+                "mutates_on_preview": False,
+                "apply_mutations": ["write_proxy_routes_if_operator_confirms", "reload_proxy_if_operator_confirms"],
+            },
+            {
+                "id": "create_managed_reverse_proxy_vm",
+                "label": "Create managed reverse-proxy VM",
+                "intent": "Create a small proxy VM from an operator-selected PVE template and bind wildcard app routes.",
+                "requires": [
+                    "dns_provider",
+                    "api_token_path",
+                    "base_domain",
+                    "pve_node",
+                    "template_vmid",
+                    "storage_profile",
+                    "network_profile",
+                    "target_selection",
+                ],
+                "mutates_on_preview": False,
+                "apply_mutations": ["create_vm", "install_proxy", "issue_cert", "write_routes", "start_proxy"],
+                "vm_defaults": proxy_vm_defaults,
+            },
+            {
+                "id": "mixed",
+                "label": "Mixed proxy and direct certs",
+                "intent": "Proxy app-tier services while deploying direct certs to management appliances.",
+                "requires": ["dns_provider", "api_token_path", "base_domain", "target_selection"],
+                "mutates_on_preview": False,
+                "apply_mutations": ["issue_cert", "configure_proxy_routes", "deploy_direct_targets"],
+            },
+        ],
+        "dns_providers": SSL_ONBOARDING_DNS_PROVIDERS,
+        "current_detection": {
+            "base_domain": base_domain,
+            "dns_provider": detected_provider,
+            "acme_available": _acme_available(settings),
+            "existing_acme_hint": existing_acme_hint,
+            "configured_targets": len(targets),
+            "reverse_proxy_host": settings.get("reverse_proxy_host", ""),
+            "management_mode": settings.get("management_mode") or "managed",
+        },
+        "dashboard_https": _ssl_dashboard_status(cfg, settings, targets),
+    }
 
 
 def _cert_dir(cfg):

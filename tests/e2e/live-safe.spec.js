@@ -34,7 +34,19 @@ async function expectNoOperatorWarnings(page) {
 
 async function api(page, path, options = {}) {
   return await page.evaluate(async ({ path, options }) => {
-    const response = await fetch(path, options);
+    const requestOptions = { ...options };
+    const method = String(requestOptions.method || 'GET').toUpperCase();
+    if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+      const headers = { ...(requestOptions.headers || {}) };
+      if (!headers['X-Freq-CSRF']) {
+        const verify = await fetch('/api/auth/verify', { credentials: 'same-origin' });
+        const session = await verify.json().catch(() => ({}));
+        if (session.csrf_token) headers['X-Freq-CSRF'] = session.csrf_token;
+      }
+      requestOptions.headers = headers;
+    }
+    if (!requestOptions.credentials) requestOptions.credentials = 'same-origin';
+    const response = await fetch(path, requestOptions);
     let body = null;
     try {
       body = await response.json();
