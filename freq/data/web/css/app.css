@@ -1299,6 +1299,85 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   line-height: 1.45;
   margin: 0 0 10px;
 }
+.cert-onboarding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+}
+.cert-dashboard-state,
+.cert-onboarding-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(180px, .8fr);
+  gap: var(--gap-sm);
+}
+.cert-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap-sm);
+}
+.cert-dashboard-card,
+.cert-choice-card,
+.cert-provider-card,
+.cert-defaults-card {
+  min-width: 0;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+.cert-dashboard-card.is-gap { border-color: rgba(234,179,8,0.3); background: rgba(234,179,8,0.045); }
+.cert-dashboard-card.is-managed { border-color: rgba(34,197,94,0.24); background: rgba(34,197,94,0.045); }
+.cert-choice-card.is-primary { border-color: rgba(168,85,247,0.32); background: rgba(168,85,247,0.055); }
+.cert-dashboard-head,
+.cert-choice-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+.cert-dashboard-head h4,
+.cert-choice-head h4,
+.cert-provider-card h4,
+.cert-defaults-card h4 {
+  margin: 0;
+  color: var(--text-bright);
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.cert-dashboard-card p,
+.cert-choice-card p,
+.cert-provider-card p,
+.cert-defaults-card p {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0;
+}
+.cert-choice-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+.cert-mini-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--text-dim);
+  background: rgba(0,0,0,0.18);
+  font: 800 9px/1.3 var(--font-mono);
+  text-transform: uppercase;
+}
+.cert-defaults-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
 .cert-field {
   display: flex;
   flex-direction: column;
@@ -1517,11 +1596,16 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
 }
 @media(max-width: 1200px) {
   .cert-overview-grid,
-  .cert-setup-state { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cert-setup-state,
+  .cert-choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cert-dashboard-state,
+  .cert-onboarding-grid { grid-template-columns: 1fr; }
 }
 @media(max-width: 720px) {
   .cert-form-grid,
   .cert-action-grid,
+  .cert-choice-grid,
+  .cert-defaults-list,
   .cert-overview-grid,
   .cert-setup-state { grid-template-columns: 1fr; }
   .cert-action-card p { min-height: 0; }

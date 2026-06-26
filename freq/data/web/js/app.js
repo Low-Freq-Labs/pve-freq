@@ -696,6 +696,9 @@ document.addEventListener('click',function(e){
       gitopsInit:gitopsInit,launchTermFromPicker:launchTermFromPicker,
       loadAutomationPage:loadAutomationPage,loadBackupPolicies:loadBackupPolicies,
       loadCapacity:loadCapacity,loadCapRecommend:loadCapRecommend,
+      certAdoptPreview:certAdoptPreview,certAdoptApply:certAdoptApply,
+      certTrustedProxyPreview:certTrustedProxyPreview,certTrustedProxyApply:certTrustedProxyApply,
+      certProvisionPreview:certProvisionPreview,certProvisionApply:certProvisionApply,
       certBootstrapPreview:certBootstrapPreview,certBootstrapApply:certBootstrapApply,
       certDnsDryRun:certDnsDryRun,certDnsApply:certDnsApply,
       certIssueDryRun:certIssueDryRun,certIssueApply:certIssueApply,
@@ -968,6 +971,9 @@ var API={
   /* ── Security/Compliance ── */
   COMPLY_STATUS:'/api/comply/status',COMPLY_RESULTS:'/api/comply/results',
   CERT_INVENTORY:'/api/cert/inventory',CERT_LIFECYCLE:'/api/cert/lifecycle',
+  CERT_ONBOARDING:'/api/cert/lifecycle/onboarding',
+  CERT_ADOPT_EXISTING:'/api/cert/lifecycle/adopt-existing',
+  CERT_TRUSTED_PROXY:'/api/cert/lifecycle/trusted-proxy',
   CERT_BOOTSTRAP:'/api/cert/lifecycle/bootstrap',CERT_ACTION:'/api/cert/lifecycle/action',
   DNS_INVENTORY:'/api/dns/inventory',
   PATCH_STATUS:'/api/patch/status',SECRETS_AUDIT:'/api/secrets/audit',
@@ -4190,6 +4196,105 @@ function _certPostJson(url,body){
     return r.json().then(function(d){d._httpStatus=r.status;return d;}).catch(function(){return {_httpStatus:r.status,error:'Invalid JSON response'};});
   });
 }
+function _certHumanize(v){
+  return String(v||'').replace(/[_-]+/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
+}
+function _certCompactJson(v){
+  if(!v||typeof v!=='object')return v;
+  if(Array.isArray(v))return v.map(_certCompactJson);
+  var out={};
+  Object.keys(v).forEach(function(k){
+    if(k==='config_'+'block'||k==='config_'+'path')return;
+    out[k]=_certCompactJson(v[k]);
+  });
+  return out;
+}
+function _certPath(onboarding,id){
+  var paths=(onboarding&&onboarding.paths)||[];
+  if(Array.isArray(paths)){
+    for(var i=0;i<paths.length;i++){
+      if(paths[i]&&paths[i].id===id)return paths[i];
+    }
+    return {};
+  }
+  return paths[id]||{};
+}
+function _certMiniPills(items,limit){
+  var a=(items||[]).filter(Boolean);
+  if(limit&&a.length>limit)a=a.slice(0,limit).concat(['+'+(items.length-limit)]);
+  return a.map(function(i){return '<span class="cert-mini-pill">'+_esc(_certHumanize(i))+'</span>';}).join('');
+}
+function _certDashboardCard(onboarding){
+  var d=(onboarding&&onboarding.dashboard_https)||{};
+  var state=d.state||'unknown';
+  var actions=d.recommended_actions||[];
+  var h='<div class="cert-dashboard-card '+(state==='managed'?'is-managed':'is-gap')+'">';
+  h+='<div class="cert-dashboard-head"><h4>Dashboard HTTPS</h4>'+_certLevelBadge(state==='managed'?'ok':'warning',state)+'</div>';
+  h+='<p>'+_esc(d.message||'Dashboard HTTPS state is reported by the backend contract.')+'</p>';
+  h+='<div class="cert-choice-meta">';
+  if(d.plain_http_port)h+='<span class="cert-mini-pill">HTTP '+_esc(d.plain_http_port)+'</span>';
+  h+=_certMiniPills(actions,3);
+  h+='</div></div>';
+  return h;
+}
+function _certTrustedProxyCard(onboarding){
+  var trusted=(onboarding&&onboarding.trusted_proxy)||{};
+  var cidrs=trusted.cidrs||[];
+  var h='<div class="cert-dashboard-card '+(trusted.configured?'is-managed':'is-gap')+'">';
+  h+='<div class="cert-dashboard-head"><h4>App Trust</h4>'+_certLevelBadge(trusted.configured?'ok':'warning',trusted.configured?'trusted proxy':'needs trust')+'</div>';
+  h+='<p>Controls which reverse-proxy sources the dashboard trusts for public HTTPS forwarding. This is separate from certificate serving truth.</p>';
+  h+='<label class="cert-field"><span>Trusted proxy CIDRs</span><input id="cert-trusted-proxy-cidrs" class="input" type="text" placeholder="10.25.255.38/32" value="'+_esc(cidrs.join(', '))+'"></label>';
+  h+='<div class="cert-action-row"><button class="fleet-btn btn-cyan" data-action="certTrustedProxyPreview">PREVIEW TRUST</button><button class="fleet-btn btn-green" data-action="certTrustedProxyApply">APPLY TRUST</button></div>';
+  h+='</div>';
+  return h;
+}
+function _certChoiceCard(path,id,isPrimary){
+  path=path||{};
+  var requires=path.requires||[];
+  var apply=path.apply_mutations||path.apply||[];
+  var preview=path.preview||[];
+  var h='<div class="cert-choice-card '+(isPrimary?'is-primary':'')+'">';
+  h+='<div class="cert-choice-head"><h4>'+_esc(path.label||_certHumanize(id))+'</h4>'+_certLevelBadge(isPrimary?'ok':'info',isPrimary?'ready':'option')+'</div>';
+  h+='<p>'+_esc(path.intent||'Use this onboarding path when it matches the actual SSL ownership model.')+'</p>';
+  h+='<div class="cert-choice-meta">';
+  h+=_certMiniPills(requires,4);
+  h+=_certMiniPills(preview,2);
+  h+=_certMiniPills(apply,2);
+  h+='</div></div>';
+  return h;
+}
+function _certProviderCards(onboarding){
+  var providers=(onboarding&&onboarding.dns_providers)||[];
+  if(!providers.length)return '';
+  if(!Array.isArray(providers)){
+    providers=Object.keys(providers).map(function(name){
+      var p=providers[name]||{};
+      p.id=p.id||name;
+      return p;
+    });
+  }
+  return '<div class="cert-provider-card"><h4>DNS Provider Support</h4>'+
+    providers.map(function(p){
+      p=p||{};
+      var name=p.id||p.label||'provider';
+      return '<p><strong>'+_esc(p.label||_certHumanize(name))+'</strong> · '+_esc(p.status||p.support_level||'supported')+
+        ' · credentials: '+_esc(_certHumanize(p.credential_mode||'path'))+
+        ' · browser secret entry: '+(p.inline_secret_allowed?'allowed':'blocked')+'</p>';
+    }).join('')+'</div>';
+}
+function _certProxyDefaultsCard(onboarding){
+  var p=_certPath(onboarding,'create_managed_reverse_proxy_vm');
+  var defs=p.vm_defaults||{};
+  if(!Object.keys(defs).length)return '';
+  var pairs=[
+    ['Engine',defs.engine],['Cores',defs.cores],['Memory',defs.memory_mb?defs.memory_mb+' MB':''],
+    ['Disk',defs.disk_gb?defs.disk_gb+' GB':''],['CPU',defs.cpu],['Machine',defs.machine],
+    ['On boot',defs.onboot?'yes':'no'],['Migration safe',defs.migration_safe?'yes':'no']
+  ];
+  return '<div class="cert-defaults-card"><h4>Managed Proxy VM Defaults</h4><div class="cert-defaults-list">'+
+    pairs.map(function(p){return '<div class="cert-kv"><span>'+_esc(p[0])+'</span><strong>'+_certText(p[1])+'</strong></div>';}).join('')+
+    '</div></div>';
+}
 function _renderCertResult(d){
   var ok=d&&d.ok;
   var data=(d&&d.data)||d||{};
@@ -4197,32 +4302,64 @@ function _renderCertResult(d){
   var detail='';
   if(data.error||d.error)detail+='<div class="cert-result-error">'+_esc(data.error||d.error)+'</div>';
   if(data.zone)detail+='<div class="cert-kv"><span>Cloudflare zone</span><strong>'+_esc(data.zone.name||data.zone.zone_id||'discovered')+'</strong></div>';
-  if(data.config_path)detail+='<div class="cert-kv"><span>Config path</span><strong>'+_esc(data.config_path)+'</strong></div>';
-  if(data.config_block)detail+='<pre class="cert-pre">'+_esc(data.config_block)+'</pre>';
-  else if(data.output)detail+='<pre class="cert-pre">'+_esc(data.output)+'</pre>';
-  else detail+='<pre class="cert-pre">'+_esc(JSON.stringify(data,null,2))+'</pre>';
+  if(data.base_domain)detail+='<div class="cert-kv"><span>Base domain</span><strong>'+_esc(data.base_domain)+'</strong></div>';
+  if(data.target_source)detail+='<div class="cert-kv"><span>Target source</span><strong>'+_esc(_certHumanize(data.target_source))+'</strong></div>';
+  if(Array.isArray(data.targets))detail+='<div class="cert-kv"><span>Targets</span><strong>'+_esc(data.targets.length)+'</strong></div>';
+  if(data.output)detail+='<pre class="cert-pre">'+_esc(data.output)+'</pre>';
+  else detail+='<pre class="cert-pre">'+_esc(JSON.stringify(_certCompactJson(data),null,2))+'</pre>';
   return '<div class="cert-result '+(ok?'is-ok':'is-bad')+'"><div class="cert-result-head"><strong>'+_esc(title)+'</strong>'+_statusBadge(ok?'ok':'fail')+'</div>'+detail+'</div>';
 }
-function _renderCertSetup(plan,status){
+function _renderCertSetup(plan,status,onboarding){
   var settings=(plan&&plan.settings)||{};
   var warnings=(plan&&plan.warnings)||[];
-  var h='<div class="cert-copy">Credential values never go in the browser. Provide a Cloudflare token file path that already exists on the host.</div>';
-  h+='<div class="cert-form-grid">';
-  h+=_certField('cert-base-domain','Base domain','example.com',settings.base_domain||'');
-  h+=_certField('cert-token-path','Cloudflare token path','/root/.secrets/cloudflare.token',settings.dns_token_path||'');
+  onboarding=onboarding||{};
+  var detection=onboarding.current_detection||{};
+  var provider=settings.dns_provider||detection.dns_provider||'cloudflare';
+  var token=settings.dns_token_path||detection.dns_token_path||'';
+  var h='<div class="cert-onboarding">';
+  h+='<div class="cert-copy">Choose the SSL ownership path that matches this install. Browser forms only accept paths or host references for secrets; credential values stay server-side.</div>';
+  h+='<div class="cert-dashboard-state">'+_certDashboardCard(onboarding)+_certTrustedProxyCard(onboarding);
+  h+='<div class="cert-dashboard-card"><div class="cert-dashboard-head"><h4>Detection</h4>'+_certLevelBadge((status&&status.configured)?'ok':'warning',(status&&status.configured)?'configured':'needs setup')+'</div>'+
+    '<div class="cert-choice-meta">'+
+    '<span class="cert-mini-pill">Base '+_esc(detection.base_domain||settings.base_domain||'unset')+'</span>'+
+    '<span class="cert-mini-pill">ACME '+_esc(detection.acme_available?'available':'missing')+'</span>'+
+    '<span class="cert-mini-pill">Mode '+_esc(detection.management_mode||settings.management_mode||'managed')+'</span>'+
+    '</div></div></div>';
+  h+='<div class="cert-choice-grid">';
+  h+='<div class="cert-choice-card is-primary"><div class="cert-choice-head"><h4>'+_esc(_certPath(onboarding,'adopt_existing').label||'Adopt Existing SSL')+'</h4>'+_certLevelBadge('ok','safest first')+'</div>'+
+    '<p>'+_esc(_certPath(onboarding,'adopt_existing').intent||'Register and verify SSL that already works without issuing a certificate.')+'</p>'+
+    '<div class="cert-form-grid">'+
+    _certField('cert-adopt-base-domain','Base domain','example.com',settings.base_domain||detection.base_domain||'')+
+    _certField('cert-adopt-proxy-host','Reverse proxy host','proxy01 or 10.25.x.x',(detection.reverse_proxy_host||''))+
+    _certField('cert-adopt-fullchain','Existing fullchain path','optional host path','')+
+    _certField('cert-adopt-key','Existing key path','optional host path','')+
+    _certField('cert-adopt-owner','Renewal owner','external','external')+
+    '</div>'+
+    '<label class="cert-check"><input type="checkbox" id="cert-adopt-infer" checked> <span>Infer covered targets from current inventory</span></label>'+
+    '<label class="cert-check"><input type="checkbox" id="cert-adopt-replace"> <span>Replace the current SSL registration on apply</span></label>'+
+    '<div class="cert-action-row"><button class="fleet-btn btn-cyan" data-action="certAdoptPreview">PREVIEW ADOPT</button><button class="fleet-btn btn-green" data-action="certAdoptApply">ADOPT SSL</button></div></div>';
+  h+='<div class="cert-choice-card"><div class="cert-choice-head"><h4>'+_esc(_certPath(onboarding,'provision_direct').label||'Provision Direct Target Certs')+'</h4>'+_certLevelBadge('info','option')+'</div>'+
+    '<p>'+_esc(_certPath(onboarding,'provision_direct').intent||'Issue and deploy certificates directly to selected services when DNS credentials are configured by path.')+'</p>'+
+    '<div class="cert-form-grid">'+
+    _certField('cert-provision-base-domain','Base domain','example.com',settings.base_domain||detection.base_domain||'')+
+    _certField('cert-provision-token-path','Cloudflare token path','/root/.secrets/cloudflare.token',token)+
+    '</div>'+
+    '<label class="cert-check"><input type="checkbox" id="cert-provision-replace"> <span>Replace current SSL registration on apply</span></label>'+
+    '<div class="cert-action-row"><button class="fleet-btn btn-cyan" data-action="certProvisionPreview">PREVIEW PROVISION</button><button class="fleet-btn btn-green" data-action="certProvisionApply">APPLY PROVISION</button></div></div>';
+  h+=_certChoiceCard(_certPath(onboarding,'use_existing_reverse_proxy'),'use_existing_reverse_proxy',false);
+  h+=_certChoiceCard(_certPath(onboarding,'create_managed_reverse_proxy_vm'),'create_managed_reverse_proxy_vm',false);
   h+='</div>';
-  h+='<label class="cert-check"><input type="checkbox" id="cert-bootstrap-replace"> <span>Replace existing [cert_management] block when applying bootstrap.</span></label>';
-  h+='<div class="cert-action-row"><button class="fleet-btn btn-cyan" data-action="certBootstrapPreview">PREVIEW BOOTSTRAP</button><button class="fleet-btn btn-green" data-action="certBootstrapApply">APPLY BOOTSTRAP</button></div>';
+  h+='<div class="cert-onboarding-grid">'+_certProviderCards(onboarding)+_certProxyDefaultsCard(onboarding)+'</div>';
   h+='<div class="cert-setup-state">';
   h+='<div class="cert-kv"><span>Configured</span><strong>'+_certBoolBadge(status&&status.configured)+'</strong></div>';
   h+='<div class="cert-kv"><span>ACME client</span><strong>'+_certBoolBadge(status&&status.acme_available)+'</strong></div>';
-  h+='<div class="cert-kv"><span>DNS provider</span><strong>'+_certText(settings.dns_provider)+'</strong></div>';
-  h+='<div class="cert-kv"><span>Record strategy</span><strong>'+_certText(settings.record_strategy)+'</strong></div>';
+  h+='<div class="cert-kv"><span>DNS provider</span><strong>'+_certText(provider)+'</strong></div>';
+  h+='<div class="cert-kv"><span>Truth source</span><strong>'+_certText(onboarding.truth_source||'per-target probe')+'</strong></div>';
   h+='</div>';
   if(warnings.length){
     h+='<div class="cert-warning-list">'+warnings.map(function(w){return '<div class="cert-warning">'+_certLevelBadge(w.level||'warning','warning')+'<span>'+_esc(w.message||w)+'</span></div>';}).join('')+'</div>';
   }
-  return h;
+  return h+'</div>';
 }
 function _renderCertActions(plan){
   var targets=(plan&&plan.targets)||[];
@@ -4259,7 +4396,7 @@ function _renderCertTargets(plan){
 }
 function _renderCertDns(plan){
   var records=(plan&&plan.dns_records)||[];
-  if(!records.length)return '<div class="exec-out">No DNS records planned yet. Bootstrap with a base domain and token path.</div>';
+  if(!records.length)return '<div class="exec-out">No DNS records planned yet. Choose an SSL onboarding path and preview it first.</div>';
   var h='<div class="cert-record-grid">';
   records.forEach(function(r){
     var value=r.value||r.content||r.target||'';
@@ -4281,25 +4418,27 @@ function _renderCertInventory(inventory){
   return h+'</tbody></table>';
 }
 function _renderCertLifecycle(d){
-  var plan=d.plan||{},status=d.status||{},inventory=d.inventory||{};
+  var plan=d.plan||{},status=d.status||{},inventory=d.inventory||{},onboarding=d.onboarding||{};
+  var dash=(onboarding&&onboarding.dashboard_https)||{};
   var stats=document.getElementById('cert-stats');
   if(stats)stats.innerHTML=_statCards([
     {l:'Configured',v:status.configured?'YES':'NO',c:status.configured?'green':'yellow'},
+    {l:'Dashboard HTTPS',v:_certHumanize(dash.state||'UNKNOWN'),c:dash.state==='managed'?'green':'yellow'},
     {l:'Targets',v:status.targets||0,c:(status.targets||0)>0?'green':'yellow'},
-    {l:'DNS Records',v:status.dns_records||0,c:(status.dns_records||0)>0?'green':'yellow'},
     {l:'Warnings',v:status.warnings||0,c:(status.warnings||0)>0?'yellow':'green'}
   ]);
   var overview=document.getElementById('cert-overview');
   if(overview){
     var settings=plan.settings||{};
+    var detection=onboarding.current_detection||{};
     overview.innerHTML='<div class="cert-overview-grid">'+
       '<div class="cert-kv"><span>Wildcard</span><strong>'+_certText(plan.wildcard_name||('*.'.concat(settings.base_domain||'')))+'</strong></div>'+
-      '<div class="cert-kv"><span>Source cert</span><strong>'+_certText(((plan.source_paths||{}).cert)||settings.cert_path)+'</strong></div>'+
-      '<div class="cert-kv"><span>Source key</span><strong>'+_certText(((plan.source_paths||{}).key)||settings.key_path)+'</strong></div>'+
+      '<div class="cert-kv"><span>DNS provider</span><strong>'+_certText(settings.dns_provider||detection.dns_provider)+'</strong></div>'+
+      '<div class="cert-kv"><span>Management mode</span><strong>'+_certText(settings.management_mode||detection.management_mode)+'</strong></div>'+
       '<div class="cert-kv"><span>Issued cache</span><strong>'+_certText((d.issued&&d.issued.issued_at)||'not recorded')+'</strong></div>'+
       '</div>';
   }
-  var setup=document.getElementById('cert-setup');if(setup)setup.innerHTML=_renderCertSetup(plan,status);
+  var setup=document.getElementById('cert-setup');if(setup)setup.innerHTML=_renderCertSetup(plan,status,onboarding);
   var actions=document.getElementById('cert-actions');if(actions)actions.innerHTML=_renderCertActions(plan);
   var targets=document.getElementById('cert-targets');if(targets)targets.innerHTML=_renderCertTargets(plan);
   var dns=document.getElementById('cert-dns');if(dns)dns.innerHTML=_renderCertDns(plan);
@@ -4317,23 +4456,72 @@ function loadCertsPage(){
     if(el)el.innerHTML='<div class="exec-out" style="color:var(--red)">Failed to load SSL manager: '+_esc(e.toString())+'</div>';
   });
 }
+function certAdoptPreview(){_certAdoptExisting(true);}
+function certAdoptApply(){_certAdoptExisting(false);}
+function _certAdoptExisting(dryRun){
+  var base=(document.getElementById('cert-adopt-base-domain')||{}).value||'';
+  var fullchain=(document.getElementById('cert-adopt-fullchain')||{}).value||'';
+  var key=(document.getElementById('cert-adopt-key')||{}).value||'';
+  var proxy=(document.getElementById('cert-adopt-proxy-host')||{}).value||'';
+  var owner=(document.getElementById('cert-adopt-owner')||{}).value||'';
+  var infer=!!((document.getElementById('cert-adopt-infer')||{}).checked);
+  var replace=!!((document.getElementById('cert-adopt-replace')||{}).checked);
+  if(!base.trim()){toast('Base domain is required','error');return;}
+  if((fullchain.trim()&&!key.trim())||(!fullchain.trim()&&key.trim())){toast('Fullchain and key paths must be provided together','error');return;}
+  var body={base_domain:base.trim(),dry_run:dryRun,infer_targets:infer,replace:replace,renewal_owner:(owner.trim()||'external')};
+  if(fullchain.trim())body.cert_fullchain_path=fullchain.trim();
+  if(key.trim())body.cert_key_path=key.trim();
+  if(proxy.trim())body.reverse_proxy_host=proxy.trim();
+  function run(){
+    _certSetResult('<div class="skeleton h-60"></div>');
+    _certPostJson(API.CERT_ADOPT_EXISTING,body).then(function(d){
+      _certSetResult(_renderCertResult(d));
+      if(d.ok){toast(dryRun?'Adopt preview complete':'Existing SSL adopted','success');loadCertsPage();}
+      else toast(d.error||'SSL adopt failed','error');
+    }).catch(function(e){_certSetResult('<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>');});
+  }
+  if(dryRun)run();
+  else confirmAction('Adopt existing SSL for <strong>'+_esc(base.trim())+'</strong>?<br>This registers the selected ownership model and verifies served certificate truth.',run);
+}
+function certTrustedProxyPreview(){_certTrustedProxy(true);}
+function certTrustedProxyApply(){_certTrustedProxy(false);}
+function _certTrustedProxy(dryRun){
+  var raw=(document.getElementById('cert-trusted-proxy-cidrs')||{}).value||'';
+  var cidrs=raw.split(',').map(function(v){return v.trim();}).filter(Boolean);
+  if(!cidrs.length){toast('At least one trusted proxy CIDR is required','error');return;}
+  function run(){
+    _certSetResult('<div class="skeleton h-60"></div>');
+    _certPostJson(API.CERT_TRUSTED_PROXY,{trusted_proxy_cidrs:cidrs,dry_run:dryRun,confirm:!dryRun}).then(function(d){
+      _certSetResult(_renderCertResult(d));
+      if(d.ok){toast(dryRun?'Trusted proxy preview complete':'Trusted proxy applied','success');loadCertsPage();}
+      else toast(d.error||'Trusted proxy update failed','error');
+    }).catch(function(e){_certSetResult('<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>');});
+  }
+  if(dryRun)run();
+  else confirmAction('Apply dashboard trusted proxy sources?<br>This affects which proxy IPs the app trusts for forwarded HTTPS headers.',run);
+}
+function certProvisionPreview(){_certBootstrap(true);}
+function certProvisionApply(){_certBootstrap(false);}
 function certBootstrapPreview(){_certBootstrap(true);}
 function certBootstrapApply(){_certBootstrap(false);}
 function _certBootstrap(dryRun){
-  var base=(document.getElementById('cert-base-domain')||{}).value||'';
-  var token=(document.getElementById('cert-token-path')||{}).value||'';
-  var replace=!!((document.getElementById('cert-bootstrap-replace')||{}).checked);
+  var baseEl=document.getElementById('cert-provision-base-domain')||document.getElementById('cert-base-domain')||{};
+  var tokenEl=document.getElementById('cert-provision-token-path')||document.getElementById('cert-token-path')||{};
+  var replaceEl=document.getElementById('cert-provision-replace')||document.getElementById('cert-bootstrap-replace')||{};
+  var base=baseEl.value||'';
+  var token=tokenEl.value||'';
+  var replace=!!replaceEl.checked;
   if(!base.trim()||!token.trim()){toast('Base domain and token path are required','error');return;}
   function run(){
     _certSetResult('<div class="skeleton h-60"></div>');
     _certPostJson(API.CERT_BOOTSTRAP,{base_domain:base.trim(),cloudflare_token_path:token.trim(),replace:replace,dry_run:dryRun}).then(function(d){
       _certSetResult(_renderCertResult(d));
-      if(d.ok){toast(dryRun?'Bootstrap preview complete':'Bootstrap applied','success');loadCertsPage();}
-      else toast(d.error||'Bootstrap failed','error');
+      if(d.ok){toast(dryRun?'Provision preview complete':'SSL provisioning applied','success');loadCertsPage();}
+      else toast(d.error||'SSL provisioning failed','error');
     }).catch(function(e){_certSetResult('<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>');});
   }
   if(dryRun)run();
-  else confirmAction('Apply SSL bootstrap for <strong>'+_esc(base.trim())+'</strong>?<br>Secret material is read from the provided file path, never from the browser.',run);
+  else confirmAction('Apply SSL provisioning for <strong>'+_esc(base.trim())+'</strong>?<br>Secret material is read from the provided file path, never from the browser.',run);
 }
 function certDnsDryRun(){_certAction('dns-sync',true);}
 function certDnsApply(){_certAction('dns-sync',false);}
