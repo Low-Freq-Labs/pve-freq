@@ -192,9 +192,9 @@ function _loadBmcInventoryStats(label){
     console.error(e);
   });
 }
-/* Authenticated fetch — sends token via Authorization header. Cookie
- * auth is also supported server-side, so we set credentials:'same-origin'
- * explicitly and don't need the bearer for cookie-rehydrated sessions.
+/* Authenticated fetch — browser auth is cookie-first. The server still
+ * accepts bearer tokens for non-browser/API compatibility during the
+ * migration, but the dashboard uses HttpOnly cookies plus X-Freq-CSRF.
  *
  * 401/403 handling: route through _authFailing once. Prior versions
  * called doLogout() directly on every 401/403, and doLogout() itself
@@ -219,12 +219,35 @@ var _toastState={};
 var _lastUserActivityAt=0;
 var _lastSessionTouchAt=0;
 var _SESSION_TOUCH_WINDOW_MS=60000;
+var _csrfToken='';
+var _authMode='cookie';
+var _browserSessionActive=false;
+function _rememberAuthResponse(d){
+  d=d||{};
+  if(typeof d.csrf_token==='string'&&d.csrf_token){
+    _csrfToken=d.csrf_token;
+  }
+  if(typeof d.auth_mode==='string'&&d.auth_mode){
+    _authMode=d.auth_mode;
+  }
+}
+function _isUnsafeMethod(method){
+  method=String(method||'GET').toUpperCase();
+  return method!=='GET'&&method!=='HEAD'&&method!=='OPTIONS'&&method!=='TRACE';
+}
+function _withCsrfHeader(headers,method){
+  headers=headers||{};
+  if(_csrfToken&&_isUnsafeMethod(method)){
+    headers['X-Freq-CSRF']=_csrfToken;
+  }
+  return headers;
+}
 function _markUserActivity(){
-  if(!_authToken)return;
+  if(!_browserSessionActive)return;
   _lastUserActivityAt=Date.now();
 }
 function _shouldTouchSession(){
-  if(!_authToken||!_lastUserActivityAt)return false;
+  if(!_browserSessionActive||!_lastUserActivityAt)return false;
   var now=Date.now();
   if(now-_lastUserActivityAt>_SESSION_TOUCH_WINDOW_MS)return false;
   if(_lastUserActivityAt<=_lastSessionTouchAt)return false;
@@ -250,7 +273,7 @@ function _authFetch(url, opts) {
     var silent = opts.silent === true;
     if (silent) delete opts.silent;
     if (!opts.headers) opts.headers = {};
-    if (_authToken) opts.headers['Authorization'] = 'Bearer ' + _authToken;
+    opts.headers = _withCsrfHeader(opts.headers, opts.method || 'GET');
     if (_shouldTouchSession()) opts.headers['X-Freq-User-Activity'] = '1';
     if (!opts.credentials) opts.credentials = 'same-origin';
     return fetch(url, opts).then(function(r){
@@ -272,7 +295,7 @@ function _authFetch(url, opts) {
 function _uiLog(event,payload){
   try{
     payload=payload||{};payload.event=event;payload.view=(typeof _currentView!=='undefined'&&_currentView)?_currentView:'';
-    fetch('/api/ui/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),keepalive:true}).catch(function(){});
+    fetch('/api/ui/event',{method:'POST',credentials:'same-origin',headers:_withCsrfHeader({'Content-Type':'application/json'},'POST'),body:JSON.stringify(payload),keepalive:true}).catch(function(){});
   }catch(_e){}
 }
 function toast(msg,type){
@@ -812,7 +835,10 @@ function doLogin(){
       if(res.status===401)_probeSetupTruth();
       return;
     }
-    _authToken=d.token;_currentUser=d.user;_currentRole=d.role;
+    _rememberAuthResponse(d);
+    _authToken='';
+    _browserSessionActive=true;
+    _currentUser=d.user;_currentRole=d.role;
     _lastUserActivityAt=Date.now();
     _lastSessionTouchAt=_lastUserActivityAt;
     /* Fresh session — clear the auth-failing guard so _authFetch is armed
@@ -873,12 +899,12 @@ function doLogout(){
    * /api/auth/logout per second until the tab hung. Bare fetch returns
    * the response untouched. */
   try{
-    var _hdrs={};
-    if(_authToken)_hdrs['Authorization']='Bearer '+_authToken;
+    var _hdrs=_withCsrfHeader({},'POST');
     fetch('/api/auth/logout',{method:'POST',credentials:'same-origin',headers:_hdrs}).catch(function(){});
   }catch(e){}
 
   _authToken='';_currentUser='';_currentRole='operator';
+  _csrfToken='';_authMode='cookie';_browserSessionActive=false;
   _lastUserActivityAt=0;_lastSessionTouchAt=0;
   /* Clear any legacy storage tokens */
   try{sessionStorage.removeItem('freq_auth_token');sessionStorage.removeItem('freq_auth_user');}catch(e){}
@@ -1299,6 +1325,7 @@ function openUserMenu(){
   fetch(API.AUTH_VERIFY,{credentials:'same-origin'}).then(function(r){
     return r.ok?r.json():null;
   }).then(function(d){
+    _rememberAuthResponse(d);
     var el=document.getElementById('user-menu-session-badge');
     if(!el)return;
     if(!d||!d.valid){el.textContent='SESSION: unknown';el.style.color='var(--yellow)';return;}
@@ -1387,8 +1414,7 @@ function _submitChangePassword(btn,errEl){
    * the operator back to the login card. Only a _real_ session-
    * expired 401 should trigger logout, and the server differentiates
    * by error text. */
-  var hdrs={'Content-Type':'application/json'};
-  if(_authToken)hdrs['Authorization']='Bearer '+_authToken;
+  var hdrs=_withCsrfHeader({'Content-Type':'application/json'},'POST');
   fetch(API.AUTH_CHANGE_PW,{
     method:'POST',
     credentials:'same-origin',
@@ -1441,16 +1467,21 @@ function _checkSession(){
     if(d&&d.valid){
       /* Session is still live — rehydrate and launch straight into
        * the app without forcing re-auth. */
+      _rememberAuthResponse(d);
+      _authToken='';
+      _browserSessionActive=true;
       _currentUser=d.user||'';
       _currentRole=d.role||'operator';
       _showApp();
       return;
     }
     /* Verify said invalid — show login overlay */
+    _csrfToken='';_authMode='cookie';_browserSessionActive=false;
     _showLoginOverlay();
   }).catch(function(){
     /* Network / server down — fall through to login so the operator
      * isn't stuck staring at a spinner. */
+    _csrfToken='';_authMode='cookie';_browserSessionActive=false;
     _showLoginOverlay();
   });
 }
@@ -4863,11 +4894,12 @@ function openTerminal(type,target,node,label,htype){
     '&cols='+cols+'&rows='+rows,{method:'POST'})
   .then(function(r){return r.json()}).then(function(d){
     if(d.error){term.writeln('\x1b[31mError: '+d.error+'\x1b[0m');return;}
+    if(!d.ws_nonce){term.writeln('\x1b[31mError: terminal nonce missing from server response\x1b[0m');return;}
     _termSession=d.session;
 
     /* Open websocket */
     var proto=location.protocol==='https:'?'wss:':'ws:';
-    var ws=new WebSocket(proto+'//'+location.host+'/api/terminal/ws?session='+d.session);
+    var ws=new WebSocket(proto+'//'+location.host+'/api/terminal/ws?session='+encodeURIComponent(d.session)+'&nonce='+encodeURIComponent(d.ws_nonce));
     ws.binaryType='arraybuffer';
     _termSocket=ws;
 
@@ -7954,8 +7986,10 @@ function unlockVault(){
   if(!user||!pass){toast('Enter admin credentials','error');return;}
   /* Verify credentials by attempting actual login */
   toast('Verifying credentials...','info');
-  fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})}).then(function(r){return r.json()}).then(function(d){
+  fetch('/api/auth/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})}).then(function(r){return r.json()}).then(function(d){
     if(!d.ok||!d.token){toast('Invalid credentials','error');document.getElementById('vault-auth-pass').value='';return;}
+    _rememberAuthResponse(d);
+    _browserSessionActive=true;
     /* Login succeeded — now verify admin role */
     _authFetch(API.USERS).then(function(r){return r.json()}).then(function(ud){
       var isAdmin=ud.users.some(function(u){return u.username===user&&u.role==='admin';});

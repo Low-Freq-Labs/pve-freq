@@ -68,10 +68,11 @@ async function terminalRoundTrip(page, path, input, expected) {
   expect(opened.status, path).toBe(200);
   expect(opened.body.ok, path).toBe(true);
   expect(opened.body.session, path).toBeTruthy();
+  expect(opened.body.ws_nonce, path).toBeTruthy();
 
-  const text = await page.evaluate(async ({ session, input }) => {
+  const text = await page.evaluate(async ({ session, nonce, input }) => {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/api/terminal/ws?session=${encodeURIComponent(session)}`);
+    const ws = new WebSocket(`${proto}//${location.host}/api/terminal/ws?session=${encodeURIComponent(session)}&nonce=${encodeURIComponent(nonce)}`);
     let out = '';
     return await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -99,7 +100,7 @@ async function terminalRoundTrip(page, path, input, expected) {
         resolve(out);
       };
     });
-  }, { session: opened.body.session, input });
+  }, { session: opened.body.session, nonce: opened.body.ws_nonce, input });
 
   const closed = await api(page, `/api/terminal/close?session=${encodeURIComponent(opened.body.session)}`, { method: 'POST' });
   expect(closed.status).toBe(200);

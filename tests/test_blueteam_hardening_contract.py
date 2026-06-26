@@ -216,20 +216,21 @@ class TestHstsOnlyOnTls(unittest.TestCase):
     """HSTS must fire only when the current request arrived over TLS.
     Plain-http responses MUST NOT carry Strict-Transport-Security."""
 
-    def test_hsts_gated_on_ssl_socket(self):
+    def test_hsts_gated_on_request_https_helper(self):
         body = _py_fn_body(_serve_py(), "_send_security_headers")
         self.assertIn("Strict-Transport-Security", body)
-        self.assertIn("SSLSocket", body,
-                      "HSTS must be gated on an isinstance(request, SSLSocket) check")
+        self.assertIn("_request_is_https(self)", body,
+                      "HSTS must be gated on the trusted-proxy-aware "
+                      "request HTTPS helper")
         self.assertIn("max-age=31536000", body)
         self.assertIn("includeSubDomains", body)
         # Explicit: must not be inside an unconditional send_header at
-        # the top of the function. The isinstance gate must lexically
+        # the top of the function. The HTTPS helper gate must lexically
         # precede the Strict-Transport-Security send_header call.
         hsts_idx = body.find("Strict-Transport-Security")
-        ssl_idx = body.find("SSLSocket")
-        self.assertLess(ssl_idx, hsts_idx,
-                        "SSLSocket isinstance check must lexically precede "
+        https_idx = body.find("_request_is_https(self)")
+        self.assertLess(https_idx, hsts_idx,
+                        "request HTTPS helper check must lexically precede "
                         "the HSTS send_header call")
 
 
