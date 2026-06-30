@@ -704,6 +704,10 @@ document.addEventListener('click',function(e){
       certCloudflareTokenValidate:certCloudflareTokenValidate,certCloudflareTokenSave:certCloudflareTokenSave,
       certProvisionPreview:certProvisionPreview,certProvisionApply:certProvisionApply,
       certBootstrapPreview:certBootstrapPreview,certBootstrapApply:certBootstrapApply,
+      snmpSetupRefresh:snmpSetupRefresh,snmpSetupProbe:snmpSetupProbe,
+      snmpSetupCredentialDryRun:snmpSetupCredentialDryRun,snmpSetupCredentialSave:snmpSetupCredentialSave,
+      snmpSetupDryRun:snmpSetupDryRun,snmpSetupApply:snmpSetupApply,
+      snmpSetupSelectAll:snmpSetupSelectAll,snmpSetupSelectNone:snmpSetupSelectNone,
       certDnsDryRun:certDnsDryRun,certDnsApply:certDnsApply,
       certIssueDryRun:certIssueDryRun,certIssueApply:certIssueApply,
       certRenewDryRun:certRenewDryRun,certRenewApply:certRenewApply,
@@ -990,12 +994,14 @@ var API={
   BASELINE_LIST:'/api/baseline/list',
   /* ── Network ── */
   SWITCH_SHOW:'/api/v1/net/switch/show',SWITCH_FACTS:'/api/v1/net/switch/facts',
-  SWITCH_INTERFACES:'/api/v1/net/switch/interfaces',SWITCH_VLANS:'/api/v1/net/switch/vlans',
-  SWITCH_MAC:'/api/v1/net/switch/mac',SWITCH_ARP:'/api/v1/net/switch/arp',
-  SWITCH_NEIGHBORS:'/api/v1/net/switch/neighbors',SWITCH_ENV:'/api/v1/net/switch/environment',
-  CONFIG_HISTORY:'/api/v1/net/config/history',CONFIG_SEARCH:'/api/v1/net/config/search',
-  MAP_DATA:'/api/map/data',MAP_IMPACT:'/api/map/impact',
-  NETMON_DATA:'/api/netmon/data',
+      SWITCH_INTERFACES:'/api/v1/net/switch/interfaces',SWITCH_VLANS:'/api/v1/net/switch/vlans',
+      SWITCH_MAC:'/api/v1/net/switch/mac',SWITCH_ARP:'/api/v1/net/switch/arp',
+      SWITCH_NEIGHBORS:'/api/v1/net/switch/neighbors',SWITCH_ENV:'/api/v1/net/switch/environment',
+      CONFIG_HISTORY:'/api/v1/net/config/history',CONFIG_SEARCH:'/api/v1/net/config/search',
+      SNMP_SETUP_PLAN:'/api/v1/net/snmp/setup/plan',SNMP_SETUP_STATUS:'/api/v1/net/snmp/setup/status',
+      SNMP_SETUP_CREDENTIALS:'/api/v1/net/snmp/setup/credentials',SNMP_SETUP_APPLY:'/api/v1/net/snmp/setup/apply',
+      MAP_DATA:'/api/map/data',MAP_IMPACT:'/api/map/impact',
+      NETMON_DATA:'/api/netmon/data',
   /* ── Docker Fleet ── */
   DOCKER_FLEET:'/api/docker-fleet',
   /* ── Oncall ── */
@@ -3973,6 +3979,7 @@ function loadSettingsPage(){loadFederation();_loadSettingsPrefs();_loadLabAssign
 /* ── Domain Dashboard Loaders ── */
 function loadNetworkPage(){
   loadTopology();
+  loadSnmpSetup(false);
   _fetchAndRender('/api/v1/net/switches','net-switch-tbl',function(d){
     var stats=d.stats||{};
     var el=document.getElementById('net-switch-stats');
@@ -4132,6 +4139,210 @@ function loadNetmonData(){
     h+='</tbody></table>';
     if(out)out.innerHTML=h;
   }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
+}
+var _snmpSetupState={plan:null,status:null,lastDryRun:null,lastDryRunTargets:'',lastDryRunProbe:false,probe:false};
+function _snmpPostJson(url,body){
+  return _authFetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}).then(function(r){
+    return r.json().then(function(d){d._httpStatus=r.status;return d;}).catch(function(){return {_httpStatus:r.status,error:'Invalid JSON response'};});
+  });
+}
+function _snmpHumanize(v){
+  return String(v||'').replace(/[_-]+/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
+}
+function _snmpBadge(state){
+  state=String(state||'unknown').toLowerCase();
+  var cls='unknown';
+  if(['ok','ready','planned','changed','succeeded','stored','configured','adopted','adopt_only'].indexOf(state)>=0)cls='ok';
+  else if(['setup needed','dry_run','requires_decision','not_reachable','never_run'].indexOf(state)>=0)cls='warn';
+  else if(['failed','error','unreadable'].indexOf(state)>=0)cls='down';
+  return '<span class="badge '+cls+'">'+_esc(_snmpHumanize(state))+'</span>';
+}
+function _snmpClassLabel(v){
+  return {
+    linux_snmpd:'Linux snmpd',
+    truenas_midclt:'TrueNAS midclt',
+    cisco_ios_snmpv3:'Cisco IOS SNMPv3',
+    pfsense_net_snmp_package:'pfSense decision',
+    redfish_bmc_snmp:'BMC adopt/probe'
+  }[v]||_snmpHumanize(v||'unknown');
+}
+function _snmpTargets(plan){return (plan&&Array.isArray(plan.targets))?plan.targets:[];}
+function _snmpTargetKey(t){return String((t&&t.label)||t.ip||'').trim();}
+function _snmpSelectedTargets(){
+  return Array.prototype.slice.call(document.querySelectorAll('.snmp-target-check:checked')).map(function(el){return el.value;}).filter(Boolean);
+}
+function _snmpCurrentStateText(t){
+  var s=(t&&t.current_state)||{};
+  if(!s||!Object.keys(s).length)return 'not probed';
+  if(s.reachable)return 'reachable '+(s.version||'snmp');
+  return 'no SNMP response';
+}
+function _renderSnmpResult(d,title){
+  d=d||{};
+  var results=Array.isArray(d.results)?d.results:[];
+  var summary=d.summary||{};
+  var h='<div class="snmp-result '+((d.ok===false||d.error)?'is-bad':'is-ok')+'">';
+  h+='<div class="snmp-result-head"><strong>'+_esc(title||_snmpHumanize(d.mode||d.state||'Result'))+'</strong>'+_snmpBadge(d.state||((d.ok===false||d.error)?'failed':'ok'))+'</div>';
+  if(d.error)h+='<div class="snmp-result-error">'+_esc(d.error)+'</div>';
+  h+='<div class="snmp-result-summary">'+
+    '<span>Total <strong>'+_esc(summary.total==null?results.length:summary.total)+'</strong></span>'+
+    '<span>Planned <strong>'+_esc(summary.planned||0)+'</strong></span>'+
+    '<span>Changed <strong>'+_esc(summary.changed||0)+'</strong></span>'+
+    '<span>Adopted <strong>'+_esc(summary.adopted||0)+'</strong></span>'+
+    '<span>Decision <strong>'+_esc(summary.requires_decision||0)+'</strong></span>'+
+    '<span>Failed <strong>'+_esc(summary.failed||0)+'</strong></span>'+
+    '</div>';
+  if(results.length){
+    h+='<div class="snmp-target-table-wrap snmp-result-table"><table class="snmp-target-table"><thead><tr><th>Target</th><th>Class</th><th>State</th><th>Evidence</th></tr></thead><tbody>';
+    h+=results.map(function(r){
+      var evidence=r.error||r.note||r.stderr||r.stdout||'bounded result returned';
+      return '<tr><td><strong>'+_esc(r.label||r.ip||'target')+'</strong><code>'+_esc(r.ip||'')+'</code></td><td>'+_esc(_snmpClassLabel(r.setup_class))+'</td><td>'+_snmpBadge(r.state)+'</td><td class="snmp-table-note">'+_esc(evidence)+'</td></tr>';
+    }).join('');
+    h+='</tbody></table></div>';
+  }else if(d.state){
+    h+='<div class="exec-out">Last SNMP setup state: '+_esc(_snmpHumanize(d.state))+'. No per-target results were recorded.</div>';
+  }
+  return h+'</div>';
+}
+function _renderSnmpSetup(plan,status){
+  plan=plan||{};status=status||{};
+  var targets=_snmpTargets(plan);
+  var classCounts={};
+  targets.forEach(function(t){var k=t.setup_class||'unknown';classCounts[k]=(classCounts[k]||0)+1;});
+  var stats=document.getElementById('snmp-setup-stats');
+  if(stats)stats.innerHTML=_statCards([
+    {l:'Credentials',v:plan.credential_ready?'READY':'SETUP NEEDED',c:plan.credential_ready?'green':'yellow'},
+    {l:'Targets',v:targets.length,c:'purple'},
+    {l:'Classes',v:Object.keys(classCounts).length,c:'blue'},
+    {l:'Last Run',v:_snmpHumanize(status.state||'never_run'),c:(status.state==='failed'||status.state==='unreadable')?'red':(status.state==='never_run'?'yellow':'green')}
+  ]);
+  var classPills=Object.keys(classCounts).sort().map(function(k){return '<span class="snmp-mini-pill">'+_esc(_snmpClassLabel(k))+' '+classCounts[k]+'</span>';}).join('');
+  var h='<div class="snmp-setup-shell">';
+  h+='<div class="snmp-setup-top">';
+  h+='<div class="snmp-panel '+(plan.credential_ready?'is-ready':'is-needed')+'">'+
+    '<div class="snmp-panel-head"><div><h4>Credential Setup</h4><p>Write-only SNMPv3 credential intake. Secrets are stored server-side and are never echoed back to the browser.</p></div>'+_snmpBadge(plan.credential_ready?'ready':'setup needed')+'</div>'+
+    '<div class="snmp-credential-grid">'+
+      '<label class="cert-field"><span>SNMP user</span><input id="snmp-user" class="input" type="text" autocomplete="off" placeholder="freqsnmp"></label>'+
+      '<label class="cert-field"><span>Auth password</span><input id="snmp-auth-password" class="input" type="password" autocomplete="new-password" placeholder="auth passphrase"></label>'+
+      '<label class="cert-field"><span>Privacy password</span><input id="snmp-priv-password" class="input" type="password" autocomplete="new-password" placeholder="privacy passphrase"></label>'+
+      '<label class="cert-field"><span>Auth protocol</span><select id="snmp-auth-protocol" class="input"><option>SHA</option><option>SHA-256</option><option>SHA-512</option><option>MD5</option></select></label>'+
+      '<label class="cert-field"><span>Privacy protocol</span><select id="snmp-priv-protocol" class="input"><option>AES</option><option>AES128</option><option>AES-128</option><option>DES</option></select></label>'+
+    '</div>'+
+    '<div class="snmp-action-row"><button class="fleet-btn btn-cyan" data-action="snmpSetupCredentialDryRun">PREVIEW STORE</button><button class="fleet-btn btn-green" data-action="snmpSetupCredentialSave">SAVE CREDENTIALS</button></div>'+
+  '</div>';
+  h+='<div class="snmp-panel">'+
+    '<div class="snmp-panel-head"><div><h4>Setup Control</h4><p>Dry-run first, then apply only the selected targets after confirmation. pfSense and BMC rows stay explicit decision/adopt states.</p></div>'+_snmpBadge(_snmpSetupState.probe?'probe':'plan')+'</div>'+
+    '<div class="snmp-class-pills">'+(classPills||'<span class="snmp-mini-pill">no targets</span>')+'</div>'+
+    '<label class="cert-check snmp-check"><input type="checkbox" id="snmp-include-probe" '+(_snmpSetupState.probe?'checked':'')+'> <span>Probe current SNMP state</span></label>'+
+    '<div class="snmp-action-row"><button class="fleet-btn" data-action="snmpSetupSelectAll">SELECT ALL</button><button class="fleet-btn" data-action="snmpSetupSelectNone">SELECT NONE</button><button class="fleet-btn btn-cyan" data-action="snmpSetupDryRun">DRY RUN SELECTED</button><button class="fleet-btn btn-green" data-action="snmpSetupApply">APPLY SELECTED</button></div>'+
+  '</div>';
+  h+='</div>';
+  if(!plan.credential_ready){
+    h+='<div class="snmp-warning">'+_snmpBadge('setup needed')+'<span>SNMPv3 credentials are not configured yet. Planning is available, but mutating setup will fail until credentials are stored.</span></div>';
+  }
+  h+='<div class="snmp-target-table-wrap"><table class="snmp-target-table"><thead><tr><th>Select</th><th>Target</th><th>Class</th><th>Mutation</th><th>Current</th><th>Caveat</th></tr></thead><tbody>';
+  if(!targets.length){
+    h+='<tr><td colspan="6" class="c-dim">No supported SNMP setup targets were returned by the backend.</td></tr>';
+  }else{
+    h+=targets.map(function(t){
+      var key=_snmpTargetKey(t);
+      var caveats=(t.caveats||[]).join(' ');
+      return '<tr>'+
+        '<td><input type="checkbox" class="snmp-target-check" value="'+_esc(key)+'" checked></td>'+
+        '<td><div class="snmp-target-name"><strong>'+_esc(t.label||t.ip||'target')+'</strong><code>'+_esc(t.ip||'')+'</code></div></td>'+
+        '<td>'+_esc(_snmpClassLabel(t.setup_class))+'</td>'+
+        '<td>'+_esc(_snmpHumanize(t.mutation||'probe'))+'</td>'+
+        '<td>'+_esc(_snmpCurrentStateText(t))+'</td>'+
+        '<td class="snmp-table-note">'+_esc(caveats||'bounded automatic path')+'</td>'+
+      '</tr>';
+    }).join('');
+  }
+  h+='</tbody></table></div>';
+  h+='<div id="snmp-setup-result" class="snmp-evidence">'+_renderSnmpResult(_snmpSetupState.lastDryRun||status,'Result Evidence')+'</div>';
+  h+='</div>';
+  var main=document.getElementById('snmp-setup-main');
+  if(main)main.innerHTML=h;
+  _enhanceResponsiveTables(document.getElementById('snmp-setup-section')||document);
+}
+function loadSnmpSetup(probe){
+  _snmpSetupState.probe=!!probe;
+  var main=document.getElementById('snmp-setup-main');
+  if(main)main.innerHTML='<div class="skeleton h-60"></div>';
+  var q='?probe='+(_snmpSetupState.probe?'1':'0');
+  Promise.all([
+    _authFetch(API.SNMP_SETUP_PLAN+q,{silent:true}).then(function(r){return r.json();}),
+    _authFetch(API.SNMP_SETUP_STATUS,{silent:true}).then(function(r){return r.json();})
+  ]).then(function(res){
+    _snmpSetupState.plan=res[0]||{};
+    _snmpSetupState.status=res[1]||{};
+    _renderSnmpSetup(_snmpSetupState.plan,_snmpSetupState.status);
+  }).catch(function(e){
+    if(main)main.innerHTML='<div class="exec-out" style="color:var(--red)">Failed to load SNMP setup: '+_esc(e.toString())+'</div>';
+  });
+}
+function _snmpClearDryRun(){_snmpSetupState.lastDryRun=null;_snmpSetupState.lastDryRunTargets='';_snmpSetupState.lastDryRunProbe=false;}
+function snmpSetupRefresh(){_snmpClearDryRun();loadSnmpSetup(false);}
+function snmpSetupProbe(){_snmpClearDryRun();loadSnmpSetup(true);}
+function snmpSetupSelectAll(){Array.prototype.slice.call(document.querySelectorAll('.snmp-target-check')).forEach(function(el){el.checked=true;});}
+function snmpSetupSelectNone(){Array.prototype.slice.call(document.querySelectorAll('.snmp-target-check')).forEach(function(el){el.checked=false;});}
+function _snmpCredentialBody(dryRun){
+  var user=(document.getElementById('snmp-user')||{}).value||'';
+  var auth=(document.getElementById('snmp-auth-password')||{}).value||'';
+  var priv=(document.getElementById('snmp-priv-password')||{}).value||'';
+  var authProto=(document.getElementById('snmp-auth-protocol')||{}).value||'SHA';
+  var privProto=(document.getElementById('snmp-priv-protocol')||{}).value||'AES';
+  if(!user.trim()){toast('SNMP user is required','error');return null;}
+  if(auth.length<8||priv.length<8){toast('SNMP passphrases must be at least 8 characters','error');return null;}
+  return {dry_run:dryRun,confirm:!dryRun,user:user.trim(),auth_password:auth,priv_password:priv,auth_protocol:authProto,priv_protocol:privProto};
+}
+function snmpSetupCredentialDryRun(){_snmpStoreCredentials(true);}
+function snmpSetupCredentialSave(){_snmpStoreCredentials(false);}
+function _snmpStoreCredentials(dryRun){
+  var body=_snmpCredentialBody(dryRun);
+  if(!body)return;
+  function run(){
+    var out=document.getElementById('snmp-setup-result');
+    if(out)out.innerHTML='<div class="skeleton h-60"></div>';
+    _snmpPostJson(API.SNMP_SETUP_CREDENTIALS,body).then(function(d){
+      if(out)out.innerHTML=_renderSnmpResult({ok:!d.error,state:d.stored?'stored':(d.dry_run?'dry_run':'ok'),summary:{total:1},results:[]},d.dry_run?'Credential Store Preview':'Credential Store');
+      if(d.error){toast(d.error,'error');return;}
+      toast(dryRun?'Credential store preview complete':'SNMP credentials stored','success');
+      if(!dryRun){
+        ['snmp-auth-password','snmp-priv-password'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+        _snmpClearDryRun();
+        loadSnmpSetup(false);
+      }
+    }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
+  }
+  if(dryRun)run();
+  else confirmAction('Store SNMPv3 credentials?<br>Secret values are written server-side and will not be shown again.',run);
+}
+function snmpSetupDryRun(){_snmpApply(true);}
+function snmpSetupApply(){_snmpApply(false);}
+function _snmpApply(dryRun){
+  var targets=_snmpSelectedTargets();
+  if(!targets.length){toast('Select at least one SNMP setup target','error');return;}
+  var probe=!!((document.getElementById('snmp-include-probe')||{}).checked);
+  var targetSig=targets.slice().sort().join('|');
+  if(!dryRun&&!_snmpSetupState.lastDryRun){toast('Run a dry run before applying SNMP setup','error');return;}
+  if(!dryRun&&(_snmpSetupState.lastDryRunTargets!==targetSig||_snmpSetupState.lastDryRunProbe!==probe)){
+    toast('Run a fresh dry run for the currently selected SNMP targets','error');
+    return;
+  }
+  var body={dry_run:dryRun,confirm:!dryRun,targets:targets,probe:probe};
+  function run(){
+    var out=document.getElementById('snmp-setup-result');
+    if(out)out.innerHTML='<div class="skeleton h-60"></div>';
+    _snmpPostJson(API.SNMP_SETUP_APPLY,body).then(function(d){
+      if(dryRun){_snmpSetupState.lastDryRun=d;_snmpSetupState.lastDryRunTargets=targetSig;_snmpSetupState.lastDryRunProbe=probe;}
+      if(out)out.innerHTML=_renderSnmpResult(d,dryRun?'SNMP Dry Run':'SNMP Apply');
+      if(d.error){toast(d.error,'error');return;}
+      toast(dryRun?'SNMP dry run complete':'SNMP setup apply complete','success');
+      if(!dryRun){_snmpClearDryRun();loadSnmpSetup(probe);}
+    }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>';});
+  }
+  if(dryRun)run();
+  else confirmAction('Apply SNMP setup to <strong>'+targets.length+'</strong> selected target'+(targets.length===1?'':'s')+'?<br>This can install/configure SNMP on supported devices.',run);
 }
 function runNetScan(type){
   var out=document.getElementById('net-snmp-out');
