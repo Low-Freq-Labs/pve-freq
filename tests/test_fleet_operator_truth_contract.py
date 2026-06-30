@@ -65,11 +65,19 @@ class TestFleetPhysicalScope(unittest.TestCase):
         self.assertIn('"lab_physical": lab_physical', window)
         self.assertIn('"all_physical": physical', window)
 
-    def test_admin_ui_can_set_physical_scope(self):
+    def test_admin_ui_can_assign_device_scope_and_probe_mode(self):
+        html = (REPO_ROOT / "freq" / "data" / "web" / "app.html").read_text()
         src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()
-        self.assertIn("PHYSICAL INFRASTRUCTURE SCOPE", src)
-        self.assertIn("function updatePhysicalScope(device,scope)", src)
-        self.assertIn("action=update_physical_scope", src)
+        self.assertIn("Device Assignment", html)
+        self.assertIn("PROD, LAB, TEMP, or OOC", html)
+        self.assertIn("inventory-only devices stay visible without alerts or doctor degradation", html)
+        self.assertIn("var DEVICE_ASSIGNMENT_OPTIONS=", src)
+        self.assertIn("{value:'prod',label:'PROD'}", src)
+        self.assertIn("{value:'lab',label:'LAB'}", src)
+        self.assertIn("{value:'template',label:'TEMP'}", src)
+        self.assertIn("{value:'ooc',label:'OOC'}", src)
+        self.assertIn("data-action=\"saveDeviceAssignmentRow\"", src)
+        self.assertIn("<option value=\"false\"", src)
 
     def test_fleet_overview_uses_operator_vm_contract_not_deployed_hosts(self):
         from freq.modules import serve
@@ -299,6 +307,19 @@ class TestFleetProbeNoiseContract(unittest.TestCase):
         self.assertIn("return _tcp_check(dev.ip, (443, 80, 22)) or _icmp_check(dev.ip)", window)
         self.assertIn('["ping", "-c", "1", "-W", "1", ip]', window)
         self.assertNotIn('["ping", "-c", "1", "-W", "1", dev.ip]', window)
+
+    def test_fleet_overview_enriches_physical_identity_with_bounded_snmp(self):
+        src = (REPO_ROOT / "freq" / "modules" / "serve.py").read_text()
+        window = src.split("def _bg_probe_fleet_overview", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn("SNMP_IDENTITY_CACHE_TTL", src)
+        self.assertIn("def _snmp_identity_for_physical(dev, reachable):", window)
+        self.assertIn('timeout=2', window)
+        self.assertIn('if not auth.get("user") and dtype not in {"idrac", "bmc", "ilo", "ipmi"}:', window)
+        self.assertIn('"display_label": display_label', window)
+        self.assertIn('"identity_label": identity_label', window)
+        self.assertIn('item["snmp_identity"] = identity', window)
+        self.assertIn('item["identity_source"] = "snmp"', window)
+        self.assertIn('re.match(r"^(bmc|idrac|ilo|ipmi)[-_]?\\d+$", label)', window)
 
     def test_frontend_does_not_count_stale_as_down(self):
         src = (REPO_ROOT / "freq" / "data" / "web" / "js" / "app.js").read_text()

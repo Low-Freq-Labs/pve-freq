@@ -118,6 +118,9 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 # ── CONSTANTS ────────────────────────────────────────────────────────────
 
 BG_CACHE_REFRESH_INTERVAL = 15  # seconds between background cache refreshes
+SNMP_IDENTITY_CACHE_TTL = 300
+_snmp_identity_cache = {}
+_snmp_identity_cache_ts = {}
 DASHBOARD_AUTO_REFRESH_MS = 30000  # milliseconds between frontend auto-refreshes
 
 # ── CIRCUIT BREAKER — prevent sshguard blocking from aggressive probes ───
@@ -1514,15 +1517,87 @@ def _bg_probe_fleet_overview():
             return _tcp_check(dev.ip, (22,)) or _icmp_check(dev.ip)
         return _icmp_check(dev.ip)
 
+    def _generic_physical_label(label, dtype):
+        label = str(label or "").strip().lower()
+        dtype = str(dtype or "").strip().lower()
+        if not label:
+            return True
+        if label == dtype:
+            return True
+        if re.match(r"^(bmc|idrac|ilo|ipmi)[-_]?\d+$", label):
+            return True
+        if re.match(r"^\d+\.\d+\.\d+\.\d+$", label):
+            return True
+        return False
+
+    def _identity_label(identity, dtype):
+        raw = (
+            identity.get("sys_name")
+            or identity.get("physical_name")
+            or identity.get("serial")
+            or ""
+        )
+        raw = str(raw).strip()
+        if not raw:
+            return ""
+        label = re.sub(r"[^A-Za-z0-9_.-]+", "-", raw).strip("-_.").lower()
+        if not label:
+            return ""
+        if dtype in {"idrac", "bmc", "ilo", "ipmi"} and not label.startswith(("idrac", "ilo", "bmc", "ipmi")):
+            label = f"{dtype}-{label}"
+        return label[:64]
+
+    def _snmp_identity_for_physical(dev, reachable):
+        if not reachable:
+            return {}
+        dtype = (getattr(dev, "device_type", "") or "").lower()
+        try:
+            from freq.modules.snmp import _get_community, _get_snmp_auth, get_snmp_identity
+
+            auth = _get_snmp_auth(cfg, include_secret=True)
+            # Without configured SNMPv3 credentials, only try BMC-style
+            # v2c adoption probes. Broad public-community probing against
+            # every physical device would slow the fleet overview and create
+            # misleading "not configured" noise.
+            if not auth.get("user") and dtype not in {"idrac", "bmc", "ilo", "ipmi"}:
+                return {}
+            cache_key = f"{dev.ip}|{bool(auth.get('user'))}"
+            now = time.monotonic()
+            cached = _snmp_identity_cache.get(cache_key)
+            if cached is not None and now - _snmp_identity_cache_ts.get(cache_key, 0) < SNMP_IDENTITY_CACHE_TTL:
+                return cached
+            ident = get_snmp_identity(
+                dev.ip,
+                community=_get_community(cfg),
+                auth=auth if auth.get("user") else {},
+                timeout=2,
+            )
+            if not ident.get("reachable"):
+                ident = {}
+            _snmp_identity_cache[cache_key] = ident
+            _snmp_identity_cache_ts[cache_key] = now
+            return ident
+        except Exception as e:
+            logger.warn(f"snmp identity probe failed for {getattr(dev, 'label', dev.ip)}: {e}")
+            return {}
+
     # Physical devices — device-appropriate reachability in parallel.
     physical = []
 
     def _ping_device(dev):
         reachable = _physical_reachable(dev)
-        return {
+        identity = _snmp_identity_for_physical(dev, reachable)
+        dtype = getattr(dev, "device_type", "")
+        display_label = dev.label
+        identity_label = _identity_label(identity, dtype)
+        if identity_label and _generic_physical_label(dev.label, dtype):
+            display_label = identity_label
+        item = {
             "key": dev.key,
             "ip": dev.ip,
             "label": dev.label,
+            "display_label": display_label,
+            "identity_label": identity_label,
             "type": dev.device_type,
             "tier": dev.tier,
             "detail": dev.detail,
@@ -1530,6 +1605,13 @@ def _bg_probe_fleet_overview():
             "scope": dev.scope,
             "reachable": reachable,
         }
+        if identity:
+            item["snmp_identity"] = identity
+            item["identity_source"] = "snmp"
+            item["snmp_sys_name"] = identity.get("sys_name", "")
+            item["model"] = identity.get("model", "")
+            item["service_tag"] = identity.get("serial", "")
+        return item
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         futures = {pool.submit(_ping_device, dev): dev for dev in fb.physical.values()}
