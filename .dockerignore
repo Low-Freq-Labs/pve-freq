@@ -8,6 +8,7 @@
 .idea/
 
 # Python artifacts
+.venv/
 __pycache__
 *.pyc
 *.pyo
@@ -19,6 +20,9 @@ dist/
 # Tests and docs (not needed in image)
 tests/
 docs/
+node_modules/
+playwright-report/
+test-results/
 
 # Agent / workspace files
 reference/
@@ -28,6 +32,7 @@ journal/
 workspace/
 cold-storage/
 .claude/
+~freq-ops/
 resume-state.md
 CLAUDE.md
 CLAUDE-reference.md
