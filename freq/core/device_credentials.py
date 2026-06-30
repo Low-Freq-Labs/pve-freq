@@ -249,3 +249,65 @@ def resolve_device_ssh_auth(cfg, htype: str) -> dict:
         "local_user": local_user,
         "source": "device-credentials" if entry else "config",
     }
+
+
+def _read_secret(path: str) -> str:
+    if not path or not os.path.isfile(path):
+        return ""
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def resolve_device_api_auth(cfg, htype: str, include_secret: bool = False) -> dict:
+    """Resolve path-backed credentials for non-SSH device APIs.
+
+    This is for REST/SNMP style probes that need a username plus one or more
+    secret file paths. The default return shape never includes secret values.
+    Callers that need to execute the probe may opt in with include_secret=True;
+    they must not log or expose the returned secret fields.
+    """
+    htype = (htype or "").lower()
+    data = _load(device_credentials_path(cfg))
+    entry = _entry_for(data, htype)
+    if htype == "snmp":
+        entry = data.get("snmp") if isinstance(data.get("snmp"), dict) else entry
+    user = (
+        entry.get("user")
+        or entry.get("username")
+        or entry.get("v3_username")
+        or entry.get("snmpv3_user")
+        or ""
+    )
+    password_file = entry.get("password_file") or ""
+    auth_password_file = (
+        entry.get("auth_password_file")
+        or entry.get("auth_passphrase_file")
+        or entry.get("auth_file")
+        or password_file
+    )
+    priv_password_file = (
+        entry.get("priv_password_file")
+        or entry.get("privacy_password_file")
+        or entry.get("priv_passphrase_file")
+        or entry.get("privacy_file")
+        or password_file
+    )
+    auth = {
+        "user": user,
+        "password_file": password_file,
+        "auth_password_file": auth_password_file,
+        "priv_password_file": priv_password_file,
+        "auth_protocol": (entry.get("auth_protocol") or entry.get("auth_type") or "SHA").upper(),
+        "priv_protocol": (entry.get("priv_protocol") or entry.get("privacy_protocol") or "AES").upper(),
+        "version": str(entry.get("version") or entry.get("snmp_version") or ("3" if htype == "snmp" and user else "")).lower(),
+        "security_level": entry.get("security_level") or "authPriv",
+        "source": "device-credentials" if entry else "config",
+    }
+    if include_secret:
+        auth["password"] = _read_secret(password_file)
+        auth["auth_password"] = _read_secret(auth_password_file)
+        auth["priv_password"] = _read_secret(priv_password_file)
+    return auth

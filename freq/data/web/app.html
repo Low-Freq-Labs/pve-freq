@@ -69,6 +69,7 @@
   <button class="fleet-btn view-btn" data-view="fleet">FLEET</button>
   <button class="fleet-btn view-btn" data-view="docker">DOCKER</button>
   <button class="fleet-btn view-btn" data-view="certs">SECURITY</button>
+  <button class="fleet-btn view-btn" data-view="vault">VAULT</button>
   <button class="fleet-btn view-btn" data-view="tools">SYSTEM</button>
   <div class="flex-1"></div>
   <button class="fleet-btn view-btn opacity-7" data-view="settings">&#9881; SETTINGS</button>
@@ -165,28 +166,7 @@
     </div>
   </div>
 </div>
-<!-- Overview -->
-<div class="section layout-section" id="fleet-sec-overview">
-  <div class="section-header"><h3>Overview</h3><span class="chev">▾</span></div>
-  <div class="section-body">
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
-      <div id="overview-physical-cards"><!-- populated dynamically from fleet config --></div>
-      <div class="host-card">
-        <div class="host-head"><h3 class="c-purple">PVE<br>NODES</h3><div class="host-meta" id="pve-node-count"><span>HYPERVISOR</span></div></div>
-        <div class="divider-light"><div id="home-pve-summary"><div class="skeleton h-60" ></div></div></div>
-      </div>
-      <div class="host-card">
-        <div class="host-head"><h3 class="c-purple">VMs</h3><div class="host-meta"><span>PROXMOX</span></div></div>
-        <div class="divider-light"><div id="home-infra"><div class="skeleton h-60" ></div></div></div>
-      </div>
-      <div class="host-card">
-        <div class="host-head"><h3 class="c-green">MEDIA</h3><div class="host-meta"><span>CONTAINERS</span><span>·</span><span>DOCKER</span></div></div>
-        <div class="divider-light"><div id="home-media"><div class="skeleton h-60" ></div></div></div>
-      </div>
-    </div>
-  </div>
-</div>
-<!-- Lab Equipment (collapsed) -->
+  <!-- Lab Equipment (collapsed) -->
 <div class="section collapsed layout-section" id="fleet-lab-section">
   <div class="section-header"><h3>Lab Equipment</h3><span class="chev">▾</span></div>
   <div class="section-body">
@@ -279,7 +259,6 @@
   <button class="sub-tab active-sub" data-view="security">Overview</button>
   <button class="sub-tab" data-view="sec-hardening">Hardening</button>
   <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-vault">Vault</button>
   <button class="sub-tab" data-view="sec-compliance">Compliance</button>
   <button class="sub-tab" data-view="firewall">Firewall</button>
   <button class="sub-tab" data-view="certs">Certs</button>
@@ -334,7 +313,6 @@
   <button class="sub-tab" data-view="security">Overview</button>
   <button class="sub-tab active-sub" data-view="sec-hardening">Hardening</button>
   <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-vault">Vault</button>
   <button class="sub-tab" data-view="sec-compliance">Compliance</button>
   <button class="sub-tab" data-view="firewall">Firewall</button>
   <button class="sub-tab" data-view="certs">Certs</button>
@@ -379,7 +357,6 @@
   <button class="sub-tab" data-view="security">Overview</button>
   <button class="sub-tab" data-view="sec-hardening">Hardening</button>
   <button class="sub-tab active-sub" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-vault">Vault</button>
   <button class="sub-tab" data-view="sec-compliance">Compliance</button>
   <button class="sub-tab" data-view="firewall">Firewall</button>
   <button class="sub-tab" data-view="certs">Certs</button>
@@ -396,58 +373,48 @@
   <div class="section-header"><h3>SSH Keys</h3><span class="chev">▾</span></div>
   <div class="section-body"><div id="keys-c"><div class="skeleton"></div><div class="skeleton"></div></div></div>
 </div>
-<div class="section layout-section" id="sec-apikeys">
-  <div class="section-header"><h3>API Keys</h3><span class="chev">▾</span></div>
-  <div class="section-body">
-    <div class="exec-bar"><input id="v-key" placeholder="Key name"><input id="v-val" placeholder="Value" type="password"><select id="v-host"><option>DEFAULT</option></select><button data-action="vaultSet">Store</button></div>
-    <div id="vault-c"></div>
-  </div>
-</div>
 </div><!-- close sec-access-view -->
 
-<!-- SECURITY — Vault -->
-<div id="sec-vault-view" class="d-none">
-<div class="sub-tabs">
-  <button class="sub-tab" data-view="security">Overview</button>
-  <button class="sub-tab" data-view="sec-hardening">Hardening</button>
-  <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab active-sub" data-view="sec-vault">Vault</button>
-  <button class="sub-tab" data-view="sec-compliance">Compliance</button>
-  <button class="sub-tab" data-view="firewall">Firewall</button>
-  <button class="sub-tab" data-view="certs">Certs</button>
-  <button class="sub-tab" data-view="vpn">VPN</button>
-</div>
-<div class="section layout-section border-red" id="sec-vault-section">
-  <div class="section-header"><h3 style="background:rgba(248,81,73,0.15)">&#128274; Vault</h3><span class="chev">▾</span></div>
+<!-- LAB TOOLS VIEW — REMOVED: merged into TOOLS > Lab Tools section -->
+
+<!-- VAULT VIEW -->
+<div id="vault-view" class="d-none">
+<div class="section layout-section vault-shell" id="vault-main">
+  <div class="section-header"><h3>Vault</h3><div class="stats compact-stats" id="vault-stats"></div><span class="chev">▾</span></div>
   <div class="section-body">
-    <div id="vault-locked">
-      <div style="text-align:center;padding:24px 0">
-        <div style="font-size:32px;opacity:0.3;margin-bottom:12px">&#128274;</div>
-        <div style="font-size:14px;color:var(--text);margin-bottom:4px">Vault is Locked</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:16px">Admin credentials required to access sensitive data</div>
-        <div style="max-width:300px;margin:0 auto;display:flex;flex-direction:column;gap:8px">
-          <input id="vault-auth-user" placeholder="Admin username">
-          <input id="vault-auth-pass" type="password" placeholder="Password">
-          <button class="fleet-btn text-red-border-red" data-action="unlockVault">UNLOCK VAULT</button>
-        </div>
+    <div class="vault-toolbar">
+      <div class="vault-scope-tabs">
+        <button class="fleet-btn vault-filter active-view" data-action="vaultFilter" data-arg="all">ALL</button>
+        <button class="fleet-btn vault-filter" data-action="vaultFilter" data-arg="global">GLOBAL</button>
+        <button class="fleet-btn vault-filter" data-action="vaultFilter" data-arg="user">USER</button>
       </div>
+      <button class="fleet-btn c-purple-active" data-action="vaultOpenCreate">ADD CREDENTIAL</button>
+      <button class="fleet-btn" data-action="loadVaultCredentials">REFRESH</button>
     </div>
-    <div id="vault-unlocked" class="d-none">
-      <div class="flex-row-8-center">
-        <span style="color:var(--green);font-size:12px;font-weight:600">&#128275; UNLOCKED</span>
-        <button class="fleet-btn vault-tab active-view" data-vtab="users" data-action="switchVaultTab" data-arg="users">USERS</button>
-        <button class="fleet-btn vault-tab" data-vtab="apikeys" data-action="switchVaultTab" data-arg="apikeys">API KEYS</button>
-        <button class="fleet-btn vault-tab" data-vtab="all" data-action="switchVaultTab" data-arg="all">ALL</button>
-        <div class="flex-1"></div>
-        <button class="fleet-btn" data-action="lockVault" style="padding:3px 10px;font-size:12px;color:var(--red)">LOCK</button>
-      </div>
-      <div id="vault-sensitive-c"></div>
+    <div id="vault-alert" class="d-none"></div>
+    <div id="vault-credentials-c" class="vault-credential-grid"></div>
+  </div>
+</div>
+<div class="section layout-section vault-editor-section" id="vault-editor">
+  <div class="section-header"><h3>Add Credential</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="vault-editor-grid">
+      <label class="vault-field"><span>Scope</span><select id="vault-scope" class="input"><option value="user">User credential</option><option value="global">Global credential</option></select></label>
+      <label class="vault-field"><span>Name</span><input id="vault-label" class="input" placeholder="pfSense admin"></label>
+      <label class="vault-field"><span>Username</span><input id="vault-username" class="input" autocomplete="off" placeholder="root"></label>
+      <label class="vault-field"><span>Password / secret</span><input id="vault-secret" class="input" type="password" autocomplete="new-password" placeholder="Stored encrypted"></label>
+      <label class="vault-field"><span>URL</span><input id="vault-url" class="input" placeholder="https://service.example.com"></label>
+      <label class="vault-field"><span>Tags</span><input id="vault-tags" class="input" placeholder="pve, firewall, prod"></label>
+      <label class="vault-field vault-notes"><span>Notes</span><textarea id="vault-notes" class="input" rows="3" placeholder="Operator notes"></textarea></label>
+    </div>
+    <div class="vault-editor-actions">
+      <input type="hidden" id="vault-edit-id" value="">
+      <button class="fleet-btn c-purple-active" data-action="vaultCredentialSave">SAVE CREDENTIAL</button>
+      <button class="fleet-btn" data-action="vaultResetForm">CLEAR</button>
     </div>
   </div>
 </div>
-</div><!-- close sec-vault-view -->
-
-<!-- LAB TOOLS VIEW — REMOVED: merged into TOOLS > Lab Tools section -->
+</div><!-- close vault-view -->
 
 <!-- SECURITY — Compliance -->
 <div id="sec-compliance-view" class="d-none">
@@ -455,7 +422,6 @@
   <button class="sub-tab" data-view="security">Overview</button>
   <button class="sub-tab" data-view="sec-hardening">Hardening</button>
   <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-vault">Vault</button>
   <button class="sub-tab active-sub" data-view="sec-compliance">Compliance</button>
   <button class="sub-tab" data-view="firewall">Firewall</button>
   <button class="sub-tab" data-view="certs">Certs</button>
@@ -616,6 +582,29 @@
     <div id="compare-out"><div class="exec-out">Select two hosts and click COMPARE.</div></div>
   </div>
 </div>
+<!-- Fleet Costs -->
+<div class="section">
+  <div class="section-header"><h3>Fleet Costs</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-between-mb12">
+      <span class="helptext">Track infrastructure costs across the fleet.</span>
+      <div style="display:flex;gap:4px"><button class="fleet-btn" data-action="showCostConfig">CONFIG</button><button class="fleet-btn" data-action="loadCosts">REFRESH</button></div>
+    </div>
+    <div id="cost-summary" class="flex-gap-16-wrap-mb16"></div>
+    <div id="cost-table"></div>
+  </div>
+</div>
+<!-- Cost Analysis -->
+<div class="section">
+  <div class="section-header"><h3>Cost Analysis</h3><span class="chev">▾</span></div>
+  <div class="section-body">
+    <div class="flex-wrap-8-mb12">
+      <button class="fleet-btn" data-action="loadCostAnalysis" data-arg="compare">COMPARE COSTS</button>
+      <button class="fleet-btn" data-action="loadCostAnalysis" data-arg="waste">WASTE DETECTION</button>
+    </div>
+    <div id="cost-analysis-out"><div class="exec-out">Analyze fleet costs — find waste and compare spending.</div></div>
+  </div>
+</div>
 </div><!-- close tools-view -->
 
 <!-- ============================================================
@@ -706,7 +695,7 @@
 </div>
 </div><!-- close gitops-view -->
 
-<!-- COSTS VIEW — REMOVED: absorbed into SETTINGS > Fleet Costs -->
+<!-- COSTS VIEW — REMOVED: absorbed into SYSTEM > Fleet Costs -->
 <!-- FEDERATION VIEW — REMOVED: absorbed into SETTINGS > Sites -->
 
 <!-- CHAOS VIEW -->
@@ -756,7 +745,7 @@
 
 <!-- ============================================================
      SETTINGS VIEW — Dashboard configuration and management
-     Sections: Dashboard Layout, Fleet Costs, Sites (Federation),
+     Sections: Dashboard Layout, Sites (Federation), Device Assignment,
                User Preferences
      ============================================================ -->
 <div id="settings-view" class="d-none">
@@ -769,18 +758,6 @@
         <button class="fleet-btn" data-action="openHomeWidgetConfig">CONFIGURE HOME WIDGETS</button>
         <button class="fleet-btn" data-action="openLayoutConfig">CONFIGURE CURRENT VIEW</button>
       </div>
-    </div>
-  </div>
-  <!-- Fleet Costs — cost tracking (moved from Planning) -->
-  <div class="section">
-    <div class="section-header"><h3>Fleet Costs</h3><span class="chev">▾</span></div>
-    <div class="section-body">
-      <div class="flex-between-mb12">
-        <span class="helptext">Track infrastructure costs across the fleet.</span>
-        <div style="display:flex;gap:4px"><button class="fleet-btn" data-action="showCostConfig">CONFIG</button><button class="fleet-btn" data-action="loadCosts">REFRESH</button></div>
-      </div>
-      <div id="cost-summary" class="flex-gap-16-wrap-mb16"></div>
-      <div id="cost-table"></div>
     </div>
   </div>
   <!-- Sites — multi-site federation (moved from Planning) -->
@@ -811,19 +788,9 @@
   <div class="section">
     <div class="section-header"><h3>Device Assignment</h3><span class="chev">▾</span></div>
     <div class="section-body">
-      <div class="helptext-mb12">Classify hosts and existing VMs as Prod, Lab, or Template. Managed devices are probed and can affect health; inventory-only devices stay visible without alerts or doctor degradation.</div>
+      <div class="helptext-mb12">Classify hosts and existing VMs as PROD, LAB, TEMP, or OOC. Managed devices are probed and can affect health; inventory-only devices stay visible without alerts or doctor degradation.</div>
       <div id="lab-assign-list"><div class="skeleton"></div></div>
-    </div>
-  </div>
-  <!-- Cost Analysis -->
-  <div class="section">
-    <div class="section-header"><h3>Cost Analysis</h3><span class="chev">▾</span></div>
-    <div class="section-body">
-      <div class="flex-wrap-8-mb12">
-        <button class="fleet-btn" data-action="loadCostAnalysis" data-arg="compare">COMPARE COSTS</button>
-        <button class="fleet-btn" data-action="loadCostAnalysis" data-arg="waste">WASTE DETECTION</button>
-      </div>
-      <div id="cost-analysis-out"><div class="exec-out">Analyze fleet costs — find waste and compare spending.</div></div>
+      <div id="device-admin-mount" class="device-admin-mount"></div>
     </div>
   </div>
   <!-- API Documentation -->
@@ -966,7 +933,6 @@
   <button class="sub-tab" data-view="security">Overview</button>
   <button class="sub-tab" data-view="sec-hardening">Hardening</button>
   <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-vault">Vault</button>
   <button class="sub-tab" data-view="sec-compliance">Compliance</button>
   <button class="sub-tab active-sub" data-view="firewall">Firewall</button>
   <button class="sub-tab" data-view="certs">Certs</button>
@@ -1086,7 +1052,6 @@
   <button class="sub-tab" data-view="security">Overview</button>
   <button class="sub-tab" data-view="sec-hardening">Hardening</button>
   <button class="sub-tab" data-view="sec-access">Access</button>
-  <button class="sub-tab" data-view="sec-vault">Vault</button>
   <button class="sub-tab" data-view="sec-compliance">Compliance</button>
   <button class="sub-tab" data-view="firewall">Firewall</button>
   <button class="sub-tab" data-view="certs">Certs</button>

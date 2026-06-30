@@ -239,11 +239,10 @@ class TestAdminOnlyHandlersRejectOperator(unittest.TestCase):
         ("freq.api.state", "handle_gitops_apply", "GitOps apply"),
         ("freq.api.state", "handle_gitops_rollback", "GitOps rollback"),
         ("freq.api.state", "handle_gitops_init", "GitOps init"),
-        # ── Security / Vault (2 handlers) ──
-        ("freq.api.secure", "handle_vault_set", "Vault set"),
-        ("freq.api.secure", "handle_vault_delete", "Vault delete"),
-        # ── Users (3 handlers) ──
+        # ── Users (5 handlers) ──
         ("freq.api.user", "handle_user_create", "User create"),
+        ("freq.api.user", "handle_user_reset_password", "User password reset"),
+        ("freq.api.user", "handle_user_delete", "User delete"),
         ("freq.api.user", "handle_user_promote", "User promote"),
         ("freq.api.user", "handle_user_demote", "User demote"),
         # ── IPMI / Redfish (4 handlers) ──
@@ -355,8 +354,10 @@ class TestAnonymousRejected(unittest.TestCase):
     PROTECTED = [
         ("freq.api.vm", "handle_vm_destroy"),
         ("freq.api.ct", "handle_ct_destroy"),
-        ("freq.api.secure", "handle_vault_set"),
+        ("freq.api.secure", "handle_vault_credential_set"),
         ("freq.api.user", "handle_user_create"),
+        ("freq.api.user", "handle_user_reset_password"),
+        ("freq.api.user", "handle_user_delete"),
         ("freq.api.fleet", "handle_exec"),
     ]
 

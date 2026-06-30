@@ -78,14 +78,15 @@ class TestOpenApiStructure(unittest.TestCase):
         self.assertIn("bearerAuth", schemes)
         self.assertIn("cookieAuth", schemes)
 
-    def test_each_path_has_one_method(self):
-        """Each path must have exactly one HTTP method defined."""
+    DUAL_METHOD_PATHS = {"/api/vm/network-profiles"}
+
+    def test_each_path_has_expected_method_shape(self):
+        """Each path is single-method unless it is an intentional resource read/write path."""
         for path, methods in self.spec["paths"].items():
             method_keys = [k for k in methods if k in ("get", "post", "put", "delete", "patch")]
-            self.assertEqual(
-                len(method_keys), 1,
-                f"{path} must have exactly one method, found {method_keys}"
-            )
+            expected = 2 if path in self.DUAL_METHOD_PATHS else 1
+            self.assertEqual(len(method_keys), expected,
+                             f"{path} must have {expected} method(s), found {method_keys}")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -157,9 +158,11 @@ class TestOpenApiMethodTruth(unittest.TestCase):
             "/api/vm/power",
             "/api/ct/create",
             "/api/ct/destroy",
-            "/api/vault/set",
-            "/api/vault/delete",
+            "/api/vault/credentials/set",
+            "/api/vault/credentials/delete",
             "/api/users/create",
+            "/api/users/reset-password",
+            "/api/users/delete",
             "/api/containers/add",
             "/api/containers/delete",
             "/api/containers/edit",
@@ -265,7 +268,8 @@ class TestDocstringMethodConsistency(unittest.TestCase):
             if not has_require_post:
                 continue
             doc = (handler_fn.__doc__ or "").strip().split("\n")[0]
-            if not doc.lower().startswith("post "):
+            doc_lower = doc.lower()
+            if not (doc_lower.startswith("post ") or doc_lower.startswith("get/post ")):
                 mismatches.append(f"{path}: has require_post but doc='{doc[:60]}'")
 
         self.assertEqual(mismatches, [],

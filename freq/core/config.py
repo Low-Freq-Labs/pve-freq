@@ -904,6 +904,9 @@ def load_hosts_toml(path: str) -> list:
                 vmid=_safe_int(entry.get("vmid", 0), 0),
                 managed=managed,
                 all_ips=all_ips,
+                hostname=entry.get("hostname", "") or entry.get("fqdn", "") or entry.get("dns_name", ""),
+                service_tag=entry.get("service_tag", ""),
+                identity_source=entry.get("identity_source", ""),
             )
         )
     return hosts
@@ -929,6 +932,12 @@ def save_hosts_toml(path: str, hosts: list) -> None:
         if h.all_ips:
             ips_str = ", ".join(f'"{ip}"' for ip in h.all_ips)
             lines.append(f"all_ips = [{ips_str}]\n")
+        if getattr(h, "hostname", ""):
+            lines.append(f'hostname = "{h.hostname}"\n')
+        if getattr(h, "service_tag", ""):
+            lines.append(f'service_tag = "{h.service_tag}"\n')
+        if getattr(h, "identity_source", ""):
+            lines.append(f'identity_source = "{h.identity_source}"\n')
         lines.append("\n")
     with open(path, "w") as f:
         f.writelines(lines)
@@ -952,6 +961,12 @@ def append_host_toml(path: str, host) -> None:
     if host.all_ips:
         ips_str = ", ".join(f'"{ip}"' for ip in host.all_ips)
         lines.append(f"all_ips = [{ips_str}]\n")
+    if getattr(host, "hostname", ""):
+        lines.append(f'hostname = "{host.hostname}"\n')
+    if getattr(host, "service_tag", ""):
+        lines.append(f'service_tag = "{host.service_tag}"\n')
+    if getattr(host, "identity_source", ""):
+        lines.append(f'identity_source = "{host.identity_source}"\n')
     lines.append("\n")
     with open(path, "a") as f:
         f.writelines(lines)
@@ -1214,6 +1229,9 @@ def load_fleet_boundaries(path: str) -> FleetBoundaries:
                     "scope",
                     "lab" if "lab" in (f"{key} {info.get('label', '')} {info.get('groups', '')}").lower() else "core",
                 ),
+                hostname=info.get("hostname", "") or info.get("fqdn", "") or info.get("dns_name", ""),
+                service_tag=info.get("service_tag", ""),
+                identity_source=info.get("identity_source", ""),
             )
 
     # PVE nodes

@@ -6,7 +6,11 @@ existing reverse proxy, or create a managed reverse-proxy VM from templates.
 """
 
 from types import SimpleNamespace
+import io
+import json
+import os
 import tempfile
+from unittest.mock import patch
 
 from freq.api import cert_lifecycle
 from freq.modules.cert_management import _ssl_onboarding_contract
@@ -57,7 +61,20 @@ def test_ssl_onboarding_provider_is_pluggable_with_cloudflare_first_class():
     assert providers["cloudflare"]["status"] == "first_class"
     assert providers["cloudflare"]["credential_mode"] == "token_path"
     assert providers["cloudflare"]["inline_secret_allowed"] is False
+    assert contract["credential_policy"]["browser_secret_intake_allowed"] is True
+    assert contract["credential_policy"]["store_endpoint"] == "/api/cert/lifecycle/cloudflare-token"
+    assert contract["credential_policy"]["secret_response_policy"] == "never_echo_secret_value"
     assert "dns_provider_and_token_path_when_provisioning" in contract["ask_user"]
+    assert "dns_provider_token_paste_or_path_when_provisioning" in contract["ask_user"]
+
+
+def test_ssl_onboarding_adopt_existing_is_base_domain_wide_not_per_target():
+    contract = _ssl_onboarding_contract(_cfg())
+    detection = contract["current_detection"]
+
+    assert detection["adopt_existing_scope"]["mode"] == "wildcard_base_domain"
+    assert detection["adopt_existing_scope"]["single_apply_registers_all_inferred_targets"] is True
+    assert detection["adopt_existing_scope"]["infer_targets_default"] is True
 
 
 def test_ssl_onboarding_dashboard_https_gap_is_explicit():
@@ -89,6 +106,30 @@ def test_ssl_onboarding_detects_dashboard_cert_target_as_managed():
     assert contract["dashboard_https"]["managed_targets"][0]["hostname"] == "freq.example.com"
 
 
+def test_ssl_onboarding_detects_existing_proxy_dashboard_https():
+    with patch("freq.modules.cert_management._verify_tls_target") as verify:
+        verify.return_value = {
+            "ok": True,
+            "hostname": "pve-freq.dc01.lowfreqlabs.com",
+            "issuer": "Let's Encrypt",
+            "sans": ["*.dc01.lowfreqlabs.com", "dc01.lowfreqlabs.com"],
+            "expires": "Sep 18 00:39:31 2026 GMT",
+        }
+        contract = _ssl_onboarding_contract(
+            _cfg(
+                certificates={
+                    "base_domain": "dc01.lowfreqlabs.com",
+                    "management_mode": "adopted_existing",
+                    "reverse_proxy_host": "10.25.255.38",
+                }
+            )
+        )
+
+    assert contract["dashboard_https"]["state"] == "managed"
+    assert contract["dashboard_https"]["managed_targets"][0]["hostname"] == "pve-freq.dc01.lowfreqlabs.com"
+    assert contract["dashboard_https"]["probes"][0]["issuer"] == "Let's Encrypt"
+
+
 def test_cert_lifecycle_registers_onboarding_endpoint():
     routes = {}
     cert_lifecycle.register(routes)
@@ -101,6 +142,84 @@ def test_cert_lifecycle_registers_trusted_proxy_endpoint():
     cert_lifecycle.register(routes)
 
     assert "/api/cert/lifecycle/trusted-proxy" in routes
+
+
+def test_cert_lifecycle_registers_cloudflare_token_endpoint():
+    routes = {}
+    cert_lifecycle.register(routes)
+
+    assert "/api/cert/lifecycle/cloudflare-token" in routes
+
+
+def test_cloudflare_token_value_is_staged_without_value_exposure():
+    from freq.modules.cert_management import _cloudflare_token_status, _stage_cloudflare_token_value
+
+    with tempfile.TemporaryDirectory() as td:
+        cfg = _cfg(conf_dir=td)
+        path = _stage_cloudflare_token_value(cfg, "cf-token-value-1234567890", os.path.join(td, "secrets", "cf"))
+        status = _cloudflare_token_status(cfg, {"dns_provider": "cloudflare", "dns_token_path": path})
+
+        with open(path) as f:
+            stored = f.read().strip()
+
+    assert stored == "cf-token-value-1234567890"
+    assert status["ready"] is True
+    assert status["stored"] is True
+    assert status["mode"] == "0o600"
+    assert status["secret_ref"] == "cloudflare_dns_token"
+    assert status["value_exposed"] is False
+    assert "cf-token" not in json.dumps(status)
+
+
+def test_cloudflare_token_handler_never_echoes_pasted_secret():
+    secret = "cf-secret-token-value-1234567890"
+    body = json.dumps(
+        {
+            "cloudflare_token": secret,
+            "base_domain": "dc01.lowfreqlabs.com",
+            "dry_run": False,
+            "confirm": True,
+        }
+    ).encode()
+
+    class Handler:
+        command = "POST"
+        headers = {"Content-Length": str(len(body))}
+        rfile = io.BytesIO(body)
+        wfile = io.BytesIO()
+        _headers_buffer = []
+        _request_id = "test"
+
+        def send_response(self, code, msg=None):
+            self.status = code
+
+        def send_header(self, key, value):
+            pass
+
+        def end_headers(self):
+            pass
+
+    with tempfile.TemporaryDirectory() as td:
+        cfg = _cfg(conf_dir=td, certificates={}, cert_targets=[])
+        with patch.object(cert_lifecycle, "_check_session_role", return_value=("admin", "")):
+            with patch.object(cert_lifecycle, "load_config", return_value=cfg):
+                with patch.object(
+                    cert_lifecycle,
+                    "_discover_cloudflare_zone_id_for_token",
+                    return_value={"zone_id": "zone-id", "zone_name": "lowfreqlabs.com", "errors": []},
+                ):
+                    h = Handler()
+                    cert_lifecycle.handle_cert_cloudflare_token(h)
+
+        payload = h.wfile.getvalue().decode()
+
+    assert h.status == 200
+    assert secret not in payload
+    data = json.loads(payload)
+    assert data["ok"] is True
+    assert data["stored"] is True
+    assert data["token_status"]["value_exposed"] is False
+    assert data["token_status"]["ready"] is True
 
 
 def test_trusted_proxy_writer_updates_dashboard_section_without_toml_editing():

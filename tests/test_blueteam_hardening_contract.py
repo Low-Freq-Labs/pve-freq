@@ -343,13 +343,13 @@ class TestVaultRevealAutoHide(unittest.TestCase):
                              "timeout must be short enough to be safe (<=2min)")
 
     def test_vault_reveal_arms_timer(self):
-        body = _fn_body(_app_js(), "vaultReveal")
+        body = _fn_body(_app_js(), "vaultCredentialReveal")
         self.assertIn("setTimeout", body,
-                      "vaultReveal must arm a setTimeout on reveal")
+                      "vaultCredentialReveal must arm a setTimeout on reveal")
         self.assertIn("VAULT_REVEAL_TIMEOUT_MS", body,
-                      "vaultReveal must use the VAULT_REVEAL_TIMEOUT_MS constant")
+                      "vaultCredentialReveal must use the VAULT_REVEAL_TIMEOUT_MS constant")
         self.assertIn("_vaultRevealTimers", body,
-                      "vaultReveal must track timers in _vaultRevealTimers")
+                      "vaultCredentialReveal must track timers in _vaultRevealTimers")
 
     def test_hide_helper_clears_timer(self):
         body = _fn_body(_app_js(), "_hideVaultSecret")

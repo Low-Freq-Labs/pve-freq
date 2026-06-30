@@ -103,6 +103,9 @@ class Host:
     vmid: int = 0
     managed: bool = True  # False = discovered but not deployed to (no service account)
     all_ips: list = field(default_factory=list)
+    hostname: str = ""
+    service_tag: str = ""
+    identity_source: str = ""
     phase: Phase = Phase.PENDING
     current: dict = field(default_factory=dict)
     desired: dict = field(default_factory=dict)
@@ -254,6 +257,9 @@ class PhysicalDevice:
     detail: str = ""
     groups: str = ""
     scope: str = "core"
+    hostname: str = ""
+    service_tag: str = ""
+    identity_source: str = ""
 
 
 @dataclass

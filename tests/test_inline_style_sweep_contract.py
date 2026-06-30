@@ -89,8 +89,6 @@ Q_ID_RULES = [
     "container-logs",
     "rescan-results",
     "compose-out",
-    "vault-auth-user",
-    "vault-auth-pass",
     "log-out",
     "topo-svg",
     "pb-runner-title",

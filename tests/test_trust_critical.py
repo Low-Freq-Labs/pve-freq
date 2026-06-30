@@ -1062,10 +1062,10 @@ class TestPOSTEnforcementGap(unittest.TestCase):
         import inspect
         from freq.api.vm import handle_vm_destroy, handle_vm_clone
         from freq.api.fleet import handle_exec, handle_deploy_agent
-        from freq.api.secure import handle_vault_delete
+        from freq.api.secure import handle_vault_credential_delete
 
         for handler in [handle_vm_destroy, handle_vm_clone, handle_exec,
-                        handle_deploy_agent, handle_vault_delete]:
+                        handle_deploy_agent, handle_vault_credential_delete]:
             src = inspect.getsource(handler)
             self.assertIn("require_post", src,
                            f"{handler.__name__} must enforce POST")
@@ -1073,13 +1073,19 @@ class TestPOSTEnforcementGap(unittest.TestCase):
     def test_batch1_privilege_endpoints_enforce_post(self):
         """Privilege escalation + vault write + remote exec endpoints must enforce POST."""
         import inspect
-        from freq.api.user import handle_user_promote, handle_user_demote
-        from freq.api.secure import handle_vault_set
+        from freq.api.user import (
+            handle_user_delete,
+            handle_user_demote,
+            handle_user_promote,
+            handle_user_reset_password,
+        )
+        from freq.api.secure import handle_vault_credential_set, handle_vault_credential_reveal
         from freq.api.bench import handle_wol, handle_bench_run, handle_bench_netspeed
         from freq.api.net import handle_switch_acl
 
         for handler in [handle_user_promote, handle_user_demote,
-                        handle_vault_set,
+                        handle_user_reset_password, handle_user_delete,
+                        handle_vault_credential_set, handle_vault_credential_reveal,
                         handle_wol, handle_bench_run, handle_bench_netspeed,
                         handle_switch_acl]:
             src = inspect.getsource(handler)
@@ -1512,7 +1518,8 @@ class TestErrorPropagation(unittest.TestCase):
             "API.VM_CHANGE_IP", "API.VM_ADD_DISK", "API.VM_TAG",
             "API.CT_POWER", "API.CT_DESTROY",
             "API.USERS_CREATE", "API.USERS_PROMOTE", "API.USERS_DEMOTE",
-            "API.VAULT_SET", "API.VAULT_DELETE",
+            "API.USERS_RESET_PASSWORD", "API.USERS_DELETE",
+            "API.VAULT_CREDENTIAL_SET", "API.VAULT_CREDENTIAL_DELETE",
             "API.GWIPE",
         ]
         missing = []

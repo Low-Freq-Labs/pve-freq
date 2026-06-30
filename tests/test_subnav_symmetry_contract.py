@@ -38,9 +38,9 @@ def _html():
 # cluster. Every sub-view in a cluster must embed a sub-tab row that
 # links to every sibling in this list (plus itself as active-sub).
 CLUSTERS = {
-    "fleet": ["fleet", "topology", "capacity", "network"],
+    "fleet": ["fleet", "network"],
     "security": [
-        "security", "sec-hardening", "sec-access", "sec-vault",
+        "security", "sec-hardening", "sec-access",
         "sec-compliance", "firewall", "certs", "vpn",
     ],
     "tools": [

@@ -4093,6 +4093,9 @@ a:hover{{text-decoration:underline}}
                           "bench", "reboot", "add", "remove")
         # Paths that contain POST keywords but are actually GET (read-only)
         _GET_OVERRIDES = {"/api/fleet/updates", "/api/redfish/power-usage"}
+        # Product settings endpoints that intentionally expose read+write on
+        # one resource path: GET returns current shape, POST applies changes.
+        _DUAL_METHOD_ROUTES = {"/api/vm/network-profiles"}
 
         paths = {}
         for path, handler_ref in sorted(routes.items()):
@@ -4109,16 +4112,18 @@ a:hover{{text-decoration:underline}}
             path_tail = path.rsplit("/", 1)[-1]
             doc_lower = desc.lower()
             if path in _GET_OVERRIDES:
-                method = "get"
+                methods = ["get"]
+            elif path in _DUAL_METHOD_ROUTES:
+                methods = ["get", "post"]
             elif any(kw in path_tail for kw in _POST_KEYWORDS) or doc_lower.startswith("post "):
-                method = "post"
+                methods = ["post"]
             else:
-                method = "get"
+                methods = ["get"]
 
             responses = {
                 "200": {"description": "Successful response", "content": {"application/json": {}}},
             }
-            if method == "post":
+            if "post" in methods:
                 responses["400"] = {"description": "Validation error"}
                 responses["403"] = {"description": "Insufficient permissions"}
             responses["500"] = {"description": "Internal server error"}
@@ -4135,6 +4140,7 @@ a:hover{{text-decoration:underline}}
                     "summary": summary,
                     "responses": responses,
                 }
+                for method in methods
             }
 
         spec = {
@@ -7340,6 +7346,86 @@ def _start_embedded_watchdog_if_needed(cfg) -> None:
     logger.info("embedded_watchdog_started", port=wd_port)
 
 
+def _managed_cert_renewal_enabled(cfg) -> bool:
+    certs = getattr(cfg, "certificates", {}) or {}
+    if not isinstance(certs, dict):
+        return False
+    if str(certs.get("management_mode") or "managed").strip().lower() == "adopted_existing":
+        return False
+    if str(certs.get("renewal_owner") or "").strip().lower() == "external":
+        return False
+    return bool(certs.get("base_domain") and certs.get("dns_provider") and certs.get("dns_token_path"))
+
+
+def _start_cert_renewal_scheduler_if_needed(cfg) -> None:
+    """Run managed ACME renew+deploy daily in container/no-cron installs."""
+    if not _managed_cert_renewal_enabled(cfg):
+        return
+    state_dir = os.path.join(cfg.data_dir, "certs")
+    state_path = os.path.join(state_dir, "renewal-scheduler.json")
+
+    def _read_state():
+        try:
+            with open(state_path) as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def _write_state(data):
+        try:
+            os.makedirs(state_dir, mode=0o700, exist_ok=True)
+            with open(state_path, "w") as f:
+                json.dump(data, f, indent=2)
+        except OSError as e:
+            logger.warning(f"cert_renewal_scheduler_state_write_failed: {e}")
+
+    def _loop():
+        # Let the dashboard finish startup and cache warmup before network ACME.
+        time.sleep(300)
+        while not _shutdown_flag.is_set():
+            today = datetime.date.today().isoformat()
+            state = _read_state()
+            if state.get("last_attempt_day") != today:
+                cmd = [sys.executable, "-m", "freq", "--yes", "cert", "renew", "--deploy"]
+                started = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                logger.info("cert_renewal_scheduler_start", command="python -m freq --yes cert renew --deploy")
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        stdin=subprocess.DEVNULL,
+                        capture_output=True,
+                        text=True,
+                        timeout=1800,
+                    )
+                    _write_state(
+                        {
+                            "last_attempt_day": today,
+                            "last_attempt_at": started,
+                            "last_returncode": result.returncode,
+                            "last_stdout_tail": (result.stdout or "")[-2000:],
+                            "last_stderr_tail": (result.stderr or "")[-2000:],
+                        }
+                    )
+                    if result.returncode == 0:
+                        logger.info("cert_renewal_scheduler_ok", returncode=result.returncode)
+                    else:
+                        logger.warning(f"cert_renewal_scheduler_failed: rc={result.returncode}")
+                except Exception as e:
+                    _write_state(
+                        {
+                            "last_attempt_day": today,
+                            "last_attempt_at": started,
+                            "last_returncode": -1,
+                            "last_error": str(e),
+                        }
+                    )
+                    logger.warning(f"cert_renewal_scheduler_error: {e}")
+            _shutdown_flag.wait(3600)
+
+    threading.Thread(target=_loop, daemon=True, name="freq-cert-renewal").start()
+    logger.info("cert_renewal_scheduler_started")
+
+
 def cmd_serve(cfg, pack, args) -> int:
     """Start the FREQ web dashboard."""
     import signal
@@ -7349,6 +7435,7 @@ def cmd_serve(cfg, pack, args) -> int:
     print(f"  Starting on port {port}...\n")
     start_background_cache()
     _start_embedded_watchdog_if_needed(cfg)
+    _start_cert_renewal_scheduler_if_needed(cfg)
 
     httpd = ThreadedHTTPServer(("0.0.0.0", port), FreqHandler)
 

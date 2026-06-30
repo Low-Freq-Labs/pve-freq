@@ -78,10 +78,10 @@ def test_terminal_websocket_appends_backend_nonce():
     assert "terminal/ws?session='+d.session" not in terminal
 
 
-def test_vault_unlock_direct_login_refreshes_csrf_before_followup_api_call():
-    body = _function_body(_js(), "unlockVault")
+def test_vault_credential_reveal_uses_same_origin_csrf_api_call():
+    body = _function_body(_js(), "vaultCredentialReveal")
 
-    assert "fetch('/api/auth/login'" in body
-    assert "credentials:'same-origin'" in body
-    assert "_rememberAuthResponse(d);" in body
-    assert "_authFetch(API.USERS)" in body
+    assert "_authFetch(API.VAULT_CREDENTIAL_REVEAL" in body
+    assert "method:'POST'" in body
+    assert "'Content-Type':'application/json'" in body
+    assert "JSON.stringify({id:id,scope:scope})" in body

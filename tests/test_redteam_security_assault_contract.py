@@ -25,9 +25,9 @@ pins the fixes so they can't silently regress.
         init. Fix: gate on _is_first_run() — after setup completes,
         admins use freq doctor / freq host test.
 
-  T-5 — /api/vault/delete returns 200 ok:false on malformed body.
-        MEDIUM: contract lie — clients can't distinguish validation
-        error from empty lookup. Fix: return 400 on empty key.
+  T-5 — legacy /api/vault/delete compatibility shim existed after
+        Vault became scoped credentials. Fix: remove legacy product
+        route/handler entirely; use /api/vault/credentials/delete.
 
   T-6 — /api/chaos/log returns 500 on PermissionError.
         MEDIUM: post-init chaos dir ownership gap surfaced as a
@@ -249,47 +249,24 @@ class TestT4TestSshGatedFirstRun(unittest.TestCase):
         self.assertIn("Setup wizard already used", window)
 
 
-class TestT5VaultDeleteValidatesKey(unittest.TestCase):
-    """vault/delete must return 400 on empty key."""
+class TestT5VaultLegacyDeleteRemoved(unittest.TestCase):
+    """Legacy /api/vault/delete is no longer a product write path."""
 
-    def test_source_pins_key_validation(self):
+    def test_source_pins_legacy_removal(self):
         src = SECURE_PY.read_text()
-        idx = src.find("def handle_vault_delete")
-        self.assertGreater(idx, 0)
-        window_end = src.find("\ndef ", idx + 50)
-        window = src[idx:window_end]
-        self.assertIn('if not key:', window)
-        self.assertIn('"key required"', window)
+        self.assertNotIn("def handle_vault_delete", src)
+        self.assertNotIn("def handle_vault_set", src)
+        self.assertNotIn("def handle_vault(", src)
+        self.assertIn("def handle_vault_credential_delete", src)
 
-    def test_empty_key_returns_400(self):
-        from freq.api import secure as secure_mod
-        status = {}
+    def test_legacy_delete_route_is_not_registered(self):
+        from freq.api import build_routes
 
-        class FakeHandler:
-            command = "POST"
-            path = "/api/vault/delete"
-            headers = {}
-            def _json_response(self, data, code=200):
-                status["code"] = code
-                status["data"] = data
-
-        def fake_params(handler):
-            return {"key": [""], "host": ["DEFAULT"]}
-
-        def fake_require_post(h, label):
-            return False
-
-        def fake_role_check(h, minrole):
-            return "admin", None
-
-        with mock.patch("freq.api.secure.require_post", side_effect=fake_require_post), \
-             mock.patch("freq.api.secure._check_session_role", side_effect=fake_role_check), \
-             mock.patch("freq.api.secure.get_params", side_effect=fake_params), \
-             mock.patch("freq.api.secure.load_config", return_value=mock.Mock()), \
-             mock.patch("freq.api.secure.json_response",
-                        side_effect=lambda h, d, c=200: (status.update(code=c, data=d))):
-            secure_mod.handle_vault_delete(FakeHandler())
-        self.assertEqual(status.get("code"), 400)
+        routes = build_routes()
+        self.assertNotIn("/api/vault", routes)
+        self.assertNotIn("/api/vault/set", routes)
+        self.assertNotIn("/api/vault/delete", routes)
+        self.assertIn("/api/vault/credentials/delete", routes)
 
 
 class TestT6ChaosLogGracefulOnPermissionError(unittest.TestCase):

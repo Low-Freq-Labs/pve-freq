@@ -172,10 +172,13 @@ MUTATING_HANDLERS = [
     ("freq.api.state", "handle_gitops_rollback", "GitOps rollback"),
     ("freq.api.state", "handle_gitops_init", "GitOps init"),
     # ── Security / Vault ──
-    ("freq.api.secure", "handle_vault_set", "Vault set"),
-    ("freq.api.secure", "handle_vault_delete", "Vault delete"),
+    ("freq.api.secure", "handle_vault_credential_set", "Vault credential set"),
+    ("freq.api.secure", "handle_vault_credential_reveal", "Vault credential reveal"),
+    ("freq.api.secure", "handle_vault_credential_delete", "Vault credential delete"),
     # ── Users ──
     ("freq.api.user", "handle_user_create", "User create"),
+    ("freq.api.user", "handle_user_reset_password", "User password reset"),
+    ("freq.api.user", "handle_user_delete", "User delete"),
     ("freq.api.user", "handle_user_promote", "User promote"),
     ("freq.api.user", "handle_user_demote", "User demote"),
     # ── IPMI / Redfish ──

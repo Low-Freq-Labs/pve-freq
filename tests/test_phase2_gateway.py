@@ -11,6 +11,7 @@ import unittest
 from argparse import Namespace
 from pathlib import Path
 from dataclasses import dataclass
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -26,11 +27,15 @@ class MockHost:
     label: str
     htype: str
     groups: str = ""
+    hostname: str = ""
+    service_tag: str = ""
+    identity_source: str = ""
 
 
 class MockConfig:
     def __init__(self, tmpdir=None):
         self.conf_dir = tmpdir or tempfile.mkdtemp()
+        self.data_dir = os.path.join(self.conf_dir, "data")
         self.hosts = [
             MockHost("10.25.255.5", "switch", "switch"),
             MockHost("10.25.255.1", "pfsense", "pfsense"),
@@ -282,6 +287,150 @@ class TestCertLifecyclePlan(unittest.TestCase):
         self.assertTrue(pfsense["host_header_check"])
         self.assertTrue(pfsense["resolver_private_domain"])
 
+    def test_adopt_existing_infers_proxy_routes_and_direct_management_targets(self):
+        from freq.modules.cert_management import _infer_cert_targets
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        cfg.certificates = {
+            "base_domain": "dc01.lowfreqlabs.com",
+            "management_mode": "adopted_existing",
+            "record_strategy": "existing-dns",
+            "reverse_proxy_host": "10.25.255.38",
+            "renewal_owner": "external",
+        }
+        cfg.hosts = [
+            MockHost("10.25.255.5", "switch", "switch"),
+            MockHost(
+                "10.25.255.10",
+                "bmc-10",
+                "idrac",
+                hostname="idrac-truenas.dc01.lowfreqlabs.com",
+                service_tag="B065ND2",
+                identity_source="operator-curated",
+            ),
+            MockHost(
+                "10.25.255.11",
+                "bmc-11",
+                "idrac",
+                hostname="idrac-pve01.dc01.lowfreqlabs.com",
+                service_tag="69MGVV1",
+                identity_source="operator-curated",
+            ),
+            MockHost("10.25.255.1", "pfsense", "pfsense"),
+        ]
+        cfg.container_vms = {
+            "media": SimpleNamespace(
+                label="media",
+                ip="10.25.255.30",
+                containers={
+                    "plex": SimpleNamespace(name="plex", port=32400),
+                    "sonarr": SimpleNamespace(name="2e33fcf71920-sonarr", port=8989),
+                    "radarr": SimpleNamespace(name="radarr", port=7878),
+                    "prowlarr": SimpleNamespace(name="prowlarr", port=9696),
+                    "bazarr": SimpleNamespace(name="bazarr", port=6767),
+                    "overseerr": SimpleNamespace(name="overseerr", port=5055),
+                    "tautulli": SimpleNamespace(name="tautulli", port=8181),
+                    "huntarr": SimpleNamespace(name="huntarr", port=9705),
+                    "tdarr": SimpleNamespace(name="tdarr", port=8265),
+                    "tdarr-node": SimpleNamespace(name="tdarr-node", port=8266),
+                    "sabnzbd": SimpleNamespace(name="sabnzbd", port=8080),
+                },
+            ),
+            "qbit-01": SimpleNamespace(
+                label="qbit-01",
+                ip="10.25.255.31",
+                containers={"qbittorrent": SimpleNamespace(name="qbittorrent", port=8080)},
+            ),
+            "qbit-02": SimpleNamespace(
+                label="qbit-02",
+                ip="10.25.255.32",
+                containers={"qbittorrent": SimpleNamespace(name="qbittorrent", port=8080)},
+            ),
+        }
+
+        targets = _infer_cert_targets(cfg, "dc01.lowfreqlabs.com")
+        by_label = {t["label"]: t for t in targets}
+
+        expected = {
+            "pve-freq-dashboard",
+            "plex",
+            "sonarr",
+            "radarr",
+            "prowlarr",
+            "bazarr",
+            "overseerr",
+            "tautulli",
+            "huntarr",
+            "tdarr",
+            "qbit-01",
+            "qbit-02",
+            "sab",
+            "pve01",
+            "pve02",
+            "pve03",
+            "truenas",
+            "pfsense",
+            "switch",
+            "idrac-truenas",
+            "idrac-pve01",
+        }
+        self.assertEqual(set(by_label), expected)
+        self.assertEqual(len(targets), 21)
+        self.assertEqual(by_label["pve-freq-dashboard"]["deploy_driver"], "reverse_proxy")
+        self.assertEqual(by_label["sonarr"]["hostname"], "sonarr.dc01.lowfreqlabs.com")
+        self.assertEqual(by_label["sonarr"]["ip"], "10.25.255.38")
+        self.assertEqual(by_label["sonarr"]["origin_port"], 8989)
+        self.assertEqual(by_label["pfsense"]["port"], 4443)
+        self.assertNotIn("bmc-10", by_label)
+        self.assertNotIn("bmc-11", by_label)
+        self.assertEqual(by_label["idrac-truenas"]["hostname"], "idrac-truenas.dc01.lowfreqlabs.com")
+        self.assertEqual(by_label["idrac-pve01"]["hostname"], "idrac-pve01.dc01.lowfreqlabs.com")
+        self.assertEqual(by_label["idrac-truenas"]["service_tag"], "B065ND2")
+        self.assertEqual(by_label["idrac-pve01"]["service_tag"], "69MGVV1")
+        self.assertEqual(by_label["idrac-truenas"]["identity_source"], "operator-curated")
+        self.assertEqual(by_label["idrac-truenas"]["cert_source"], "wildcard_rsa")
+
+    def test_bmc_cert_target_inference_never_synthesizes_ip_derived_labels(self):
+        from freq.modules.cert_management import _infer_cert_targets
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        cfg.hosts = [MockHost("10.25.255.12", "bmc-12", "idrac")]
+
+        with patch("freq.modules.cert_management._snmp_device_identity", return_value={}):
+            targets = _infer_cert_targets(cfg, "dc01.lowfreqlabs.com")
+        labels = {t["label"] for t in targets}
+        bmc_target = next(t for t in targets if t["ip"] == "10.25.255.12")
+
+        self.assertNotIn("bmc-12", labels)
+        self.assertEqual(bmc_target["label"], "10.25.255.12")
+        self.assertEqual(bmc_target["hostname"], "")
+        self.assertFalse(bmc_target["verify_hostname"])
+        self.assertEqual(bmc_target["identity_source"], "unnamed_ip")
+
+    def test_bmc_cert_target_uses_snmp_identity_without_inventing_hostname(self):
+        from freq.modules.cert_management import _infer_cert_targets
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        cfg.hosts = [MockHost("10.25.255.10", "bmc-10", "idrac")]
+
+        with patch(
+            "freq.modules.cert_management._snmp_device_identity",
+            return_value={
+                "label": "idrac-b065nd2",
+                "hostname": "",
+                "service_tag": "B065ND2",
+                "identity_source": "snmp",
+            },
+        ):
+            targets = _infer_cert_targets(cfg, "dc01.lowfreqlabs.com")
+
+        bmc_target = next(t for t in targets if t["ip"] == "10.25.255.10")
+        self.assertEqual(bmc_target["label"], "idrac-b065nd2")
+        self.assertEqual(bmc_target["hostname"], "")
+        self.assertFalse(bmc_target["verify_hostname"])
+        self.assertEqual(bmc_target["service_tag"], "B065ND2")
+        self.assertEqual(bmc_target["identity_source"], "snmp")
+
     def test_service_catalog_expands_one_host_into_multiple_web_ui_targets(self):
         from freq.modules.cert_management import _build_lifecycle_plan, _cert_targets_from_catalog
 
@@ -387,6 +536,81 @@ class TestCertLifecyclePlan(unittest.TestCase):
 
         self.assertEqual(cmd_cert_issue(cfg, None, args), 1)
 
+    def test_managed_ssl_uses_persistent_acme_and_install_paths(self):
+        from freq.modules.cert_management import (
+            _build_acme_install_command,
+            _build_acme_issue_command,
+            _cert_settings,
+            _source_paths,
+        )
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        cfg.certificates = {
+            "base_domain": "dc01.lowfreqlabs.com",
+            "dns_provider": "cloudflare",
+            "dns_token_path": "/run/secrets/cf-token",
+        }
+
+        settings = _cert_settings(cfg)
+        source = _source_paths(settings)
+        issue = _build_acme_issue_command(settings)
+        install = _build_acme_install_command(settings)
+
+        self.assertEqual(settings["acme_home"], os.path.join(cfg.data_dir, "acme"))
+        self.assertTrue(source["fullchain"].startswith(cfg.data_dir))
+        self.assertTrue(source["key"].startswith(cfg.data_dir))
+        self.assertNotIn("--install-cert", issue)
+        self.assertIn("--install-cert", install)
+        self.assertIn("--fullchain-file", install)
+        self.assertIn("--key-file", install)
+        self.assertIn("--reloadcmd", install)
+        self.assertIn("freq --yes cert deploy", install)
+
+    def test_managed_ssl_reconcile_marks_supported_targets_renewal_hooked(self):
+        from freq.modules.cert_management import _reconcile_lifecycle_targets
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        cert_dir = os.path.join(cfg.data_dir, "certs", "managed", "dc01.lowfreqlabs.com")
+        os.makedirs(cert_dir, exist_ok=True)
+        fullchain = os.path.join(cert_dir, "fullchain.cer")
+        key = os.path.join(cert_dir, "dc01.lowfreqlabs.com.key")
+        Path(fullchain).write_text("not-a-real-cert")
+        Path(key).write_text("not-a-real-key")
+        cfg.certificates = {
+            "base_domain": "dc01.lowfreqlabs.com",
+            "management_mode": "managed",
+            "dns_provider": "cloudflare",
+            "dns_token_path": "/run/secrets/cf-token",
+            "cert_fullchain_path": fullchain,
+            "cert_key_path": key,
+        }
+        cfg.cert_targets = [
+            {
+                "label": "pve01",
+                "target_type": "proxmox_ve_node",
+                "hostname": "pve01.dc01.lowfreqlabs.com",
+                "ip": "10.25.255.26",
+                "port": 8006,
+                "deploy_driver": "proxmox_pvenode",
+            }
+        ]
+        with patch("freq.modules.cert_management._pem_cert_fingerprint", return_value="wire"), \
+             patch("freq.modules.cert_management._verify_tls_target") as verify:
+            verify.return_value = {
+                "ok": True,
+                "hostname": "pve01.dc01.lowfreqlabs.com",
+                "issuer": "Let's Encrypt",
+                "sans": ["*.dc01.lowfreqlabs.com"],
+                "self_signed": False,
+                "fingerprint_sha256": "wire",
+            }
+            result = _reconcile_lifecycle_targets(cfg)
+
+        self.assertEqual(result["targets"][0]["classification"], "SERVING_MANAGED_WILDCARD")
+        self.assertEqual(result["targets"][0]["renewal_status"], "hooked")
+        self.assertTrue(result["targets"][0]["renewal_hooked"])
+        self.assertFalse(result["targets"][0]["renewal_gap"])
+
     def test_adopted_existing_ssl_does_not_require_cloudflare_token(self):
         from freq.modules.cert_management import _build_lifecycle_plan
 
@@ -418,6 +642,9 @@ class TestCertLifecyclePlan(unittest.TestCase):
         self.assertNotIn("dns_token_path", warnings)
         self.assertNotIn("cloudflare_zone_id", warnings)
         self.assertNotIn("public-private-a publishes private IPs", warnings)
+        self.assertEqual(plan["source_paths"]["source_mode"], "external_existing")
+        self.assertNotIn(".acme.sh", warnings)
+        self.assertEqual(plan["targets"][0]["deploy_steps"][0]["kind"], "adopt_existing")
 
     def test_served_cert_classifier_uses_sni_san_and_fingerprint(self):
         from freq.modules.cert_management import _classify_tls_probe
@@ -448,10 +675,93 @@ class TestCertLifecyclePlan(unittest.TestCase):
             _classify_tls_probe(settings, target, probe, managed_fingerprint="abc"),
             "SELF_SIGNED_OR_OTHER",
         )
+        probe["issuer"] = "YE1"
+        probe["self_signed"] = False
+        self.assertEqual(
+            _classify_tls_probe(settings, target, probe, managed_fingerprint="abc"),
+            "SERVING_MANAGED_WILDCARD",
+        )
         self.assertEqual(
             _classify_tls_probe(settings, target, {"ok": False}, managed_fingerprint="abc"),
             "UNREACHABLE",
         )
+
+    def test_adopted_existing_external_owner_is_not_counted_as_renewal_gap(self):
+        from freq.modules.cert_management import _reconcile_lifecycle_targets
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        cfg.certificates = {
+            "base_domain": "dc01.lowfreqlabs.com",
+            "management_mode": "adopted_existing",
+            "issuer": "existing",
+            "record_strategy": "existing-dns",
+            "renewal_owner": "external",
+        }
+        cfg.cert_targets = [
+            {
+                "label": "pve01",
+                "target_type": "proxmox_ve_node",
+                "hostname": "pve01.dc01.lowfreqlabs.com",
+                "ip": "10.25.255.26",
+                "port": 8006,
+                "deploy_driver": "proxmox_pvenode",
+            }
+        ]
+        with patch("freq.modules.cert_management._verify_tls_target") as verify:
+            verify.return_value = {
+                "ok": True,
+                "hostname": "pve01.dc01.lowfreqlabs.com",
+                "issuer": "Let's Encrypt",
+                "sans": ["*.dc01.lowfreqlabs.com"],
+                "self_signed": False,
+                "fingerprint_sha256": "wire",
+            }
+            result = _reconcile_lifecycle_targets(cfg)
+
+        self.assertEqual(result["targets"][0]["classification"], "SERVING_MANAGED_WILDCARD")
+        self.assertEqual(result["targets"][0]["renewal_status"], "external_owner")
+        self.assertFalse(result["targets"][0]["renewal_gap"])
+        self.assertEqual(result["summary"]["renewal_gaps"], 0)
+        self.assertEqual(result["summary"]["external_renewal"], result["summary"]["total"])
+
+    def test_adopted_existing_synthesizes_issued_and_inventory_from_probe_truth(self):
+        from freq.modules.cert_management import _cert_inventory_from_reconcile, _issued_from_reconcile
+
+        cfg = MockConfig(tempfile.mkdtemp())
+        cfg.certificates = {
+            "base_domain": "dc01.lowfreqlabs.com",
+            "management_mode": "adopted_existing",
+            "issuer": "existing",
+            "record_strategy": "existing-dns",
+            "renewal_owner": "external",
+        }
+        reconcile = {
+            "generated_at": "2026-06-26T18:00:00-0500",
+            "source_paths": {"source_mode": "external_existing"},
+            "summary": {"total": 1, "serving_managed": 1, "pending": 0, "unreachable": 0},
+            "targets": [
+                {
+                    "ok": True,
+                    "label": "pve01",
+                    "hostname": "pve01.dc01.lowfreqlabs.com",
+                    "issuer": "Let's Encrypt",
+                    "expires": "Sep 18 00:39:31 2026 GMT",
+                    "classification": "SERVING_MANAGED_WILDCARD",
+                    "sans": ["*.dc01.lowfreqlabs.com"],
+                    "renewal_status": "external_owner",
+                }
+            ],
+        }
+
+        inventory = _cert_inventory_from_reconcile(cfg, {"certs": []}, reconcile=reconcile)
+        issued = _issued_from_reconcile(cfg, {"certs": []}, reconcile=reconcile, inventory=inventory)
+
+        self.assertEqual(inventory["source"], "reconcile_probe")
+        self.assertEqual(len(inventory["certs"]), 1)
+        self.assertEqual(inventory["certs"][0]["source"], "external_existing")
+        self.assertEqual(issued["issued_at"], "external existing")
+        self.assertEqual(issued["certs"][0]["status"], "externally managed")
+        self.assertEqual(issued["certs"][0]["domain"], "*.dc01.lowfreqlabs.com")
 
     def test_dns_sync_upserts_cloudflare_records(self):
         from freq.modules.cert_management import cmd_cert_dns_sync

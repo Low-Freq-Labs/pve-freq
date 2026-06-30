@@ -647,9 +647,10 @@ document.addEventListener('click',function(e){
       return;
     }
     if(a==='infraRead'){_runInfraAction(da.dataset.infraType||'',da.dataset.arg||'status',da.dataset.target||'');return;}
-    if(a==='vaultReveal'){vaultReveal(da.dataset.uid,da.dataset.host,da.dataset.key);return;}
-    if(a==='vaultCopy'){vaultCopy(da.dataset.host,da.dataset.key);return;}
-    if(a==='vaultDelGroup'){vaultDelGroup(g);return;}
+    if(a==='vaultCredentialReveal'){vaultCredentialReveal(da.dataset.id,da.dataset.scope);return;}
+    if(a==='vaultCredentialCopy'){vaultCredentialCopy(da.dataset.id,da.dataset.scope);return;}
+    if(a==='vaultCredentialDelete'){vaultCredentialDelete(da.dataset.id,da.dataset.scope);return;}
+    if(a==='saveDeviceAssignmentRow'){saveDeviceAssignmentRow(da);return;}
     if(a==='labDockerAction'){labDockerAction(da.dataset.name,g);return;}
     if(a==='hdLogs'){hdLogs(da);return;}
     if(a==='hdExec'){hdExec(da);return;}
@@ -674,8 +675,10 @@ document.addEventListener('click',function(e){
       openLayoutConfig:openLayoutConfig,hdRestart:hdRestart,
       vmtSnapshot:vmtSnapshot,vmtCreate:vmtCreate,vmtPlanCreate:vmtPlanCreate,vmtResize:vmtResize,vmtMigrate:vmtMigrate,
       vmtClone:vmtClone,vmtAddDisk:vmtAddDisk,vmtTag:vmtTag,vmtRollback:vmtRollback,
-      unlockVault:unlockVault,runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,
-      vaultSet:vaultSet,updateSelected:updateSelected,updateAll:updateAll,
+      runHarden:runHarden,testNotify:testNotify,userCreate:userCreate,
+      vaultOpenCreate:vaultOpenCreate,loadVaultCredentials:loadVaultCredentials,
+      vaultCredentialSave:vaultCredentialSave,vaultResetForm:vaultResetForm,
+      updateSelected:updateSelected,updateAll:updateAll,
       pfWriteService:pfWriteService,pfWriteDhcp:pfWriteDhcp,pfWriteRule:pfWriteRule,
       pfWriteNat:pfWriteNat,pfWriteWgPeer:pfWriteWgPeer,pfBackupNow:pfBackupNow,
       pfCheckUpdates:pfCheckUpdates,pfReboot:pfReboot,
@@ -698,13 +701,14 @@ document.addEventListener('click',function(e){
       loadCapacity:loadCapacity,loadCapRecommend:loadCapRecommend,
       certAdoptPreview:certAdoptPreview,certAdoptApply:certAdoptApply,
       certTrustedProxyPreview:certTrustedProxyPreview,certTrustedProxyApply:certTrustedProxyApply,
+      certCloudflareTokenValidate:certCloudflareTokenValidate,certCloudflareTokenSave:certCloudflareTokenSave,
       certProvisionPreview:certProvisionPreview,certProvisionApply:certProvisionApply,
       certBootstrapPreview:certBootstrapPreview,certBootstrapApply:certBootstrapApply,
       certDnsDryRun:certDnsDryRun,certDnsApply:certDnsApply,
       certIssueDryRun:certIssueDryRun,certIssueApply:certIssueApply,
       certRenewDryRun:certRenewDryRun,certRenewApply:certRenewApply,
       certDeployDryRun:certDeployDryRun,certDeployApply:certDeployApply,
-      certVerify:certVerify,
+      certVerify:certVerify,certReconcile:certReconcile,
       loadCertsPage:loadCertsPage,loadChaos:loadChaos,loadConfigHistory:loadConfigHistory,
       loadContainerRegistry:loadContainerRegistry,loadCosts:loadCosts,
       loadDepMap:loadDepMap,loadDnsInventory:loadDnsInventory,loadDnsPage:loadDnsPage,
@@ -724,7 +728,7 @@ document.addEventListener('click',function(e){
       loadSlaData:loadSlaData,loadSystemPage:loadSystemPage,loadTopology:loadTopology,
       loadTrendData:loadTrendData,loadVmwareMigration:loadVmwareMigration,
       loadVpnPage:loadVpnPage,loadWebhooks:loadWebhooks,loadZfs:loadZfs,
-      lockVault:lockVault,openAddTool:openAddTool,openApiDocs:openApiDocs,
+      openAddTool:openAddTool,openApiDocs:openApiDocs,
       openHomeWidgetConfig:openHomeWidgetConfig,openManageTools:openManageTools,
       recordSlaCheck:recordSlaCheck,rescanContainers:rescanContainers,
       resetTopoLayout:resetTopoLayout,runAlertCheck:runAlertCheck,runBackup:runBackup,
@@ -746,9 +750,10 @@ document.addEventListener('click',function(e){
       idracWrite:idracWrite,opnAction:opnAction,ipmiAction:ipmiAction,ipmiWrite:ipmiWrite,
       ipmiWriteBoot:ipmiWriteBoot,redfishAction:redfishAction,redfishWrite:redfishWrite,
       synAction:synAction,tnWriteSnapshot:tnWriteSnapshot,tnWriteDataset:tnWriteDataset,
-      swWriteVlan:swWriteVlan,switchVaultTab:switchVaultTab,switchDockerSub:switchDockerSub,
+      swWriteVlan:swWriteVlan,vaultFilter:vaultFilter,switchDockerSub:switchDockerSub,
       toggleMediaTag:toggleMediaTag,runHostUpdate:runHostUpdate,sshdRestartHost:sshdRestartHost,
       ntpFixHost:ntpFixHost,userPromote:userPromote,userDemote:userDemote,
+      userResetPassword:userResetPassword,userDelete:userDelete,
       updateCategoryRange:updateCategoryRange,mediaRestart:mediaRestart,
       /* 20260413O additions */
       hardenAction:hardenAction,loadBackups:loadBackups,
@@ -932,7 +937,7 @@ var API={
   MEDIA_STATUS:'/api/media/status',MEDIA_HEALTH:'/api/media/health',MEDIA_DASHBOARD:'/api/media/dashboard',
   MEDIA_DOWNLOADS:'/api/media/downloads',MEDIA_STREAMS:'/api/media/streams',MEDIA_RESTART:'/api/media/restart',
   MEDIA_LOGS:'/api/media/logs',MEDIA_UPDATE:'/api/media/update',
-  USERS:'/api/users',VAULT:'/api/vault',CONFIG:'/api/config',JOURNAL:'/api/journal',
+  USERS:'/api/users',VAULT_CREDENTIALS:'/api/vault/credentials',CONFIG:'/api/config',JOURNAL:'/api/journal',
   POLICIES:'/api/policies',
   INFRA_QUICK:'/api/infra/quick',INFRA_OVERVIEW:'/api/infra/overview',
   INFRA_PFSENSE:'/api/infra/pfsense',INFRA_TRUENAS:'/api/infra/truenas',INFRA_IDRAC:'/api/infra/idrac',
@@ -949,8 +954,10 @@ var API={
   ADMIN_HOSTS_UPDATE:'/api/admin/hosts/update',
   HARDEN:'/api/harden',GROUPS:'/api/groups',DISTROS:'/api/distros',KEYS:'/api/keys',
   SWITCH:'/api/switch',NOTIFY_TEST:'/api/notify/test',RISK:'/api/risk',LEARN:'/api/learn',METRICS:'/api/metrics',
-  VAULT_SET:'/api/vault/set',VAULT_DELETE:'/api/vault/delete',
+  VAULT_CREDENTIAL_SET:'/api/vault/credentials/set',VAULT_CREDENTIAL_REVEAL:'/api/vault/credentials/reveal',
+  VAULT_CREDENTIAL_DELETE:'/api/vault/credentials/delete',
   USERS_CREATE:'/api/users/create',USERS_PROMOTE:'/api/users/promote',USERS_DEMOTE:'/api/users/demote',
+  USERS_RESET_PASSWORD:'/api/users/reset-password',USERS_DELETE:'/api/users/delete',
   LAB_TOOL_CONFIG:'/api/lab-tool/config',LAB_TOOL_PROXY:'/api/lab-tool/proxy',LAB_TOOL_SAVE:'/api/lab-tool/save-config',
   DOCTOR:'/api/doctor',DIAGNOSE:'/api/diagnose',LOG:'/api/log',
   POLICY_CHECK:'/api/policy/check',POLICY_FIX:'/api/policy/fix',POLICY_DIFF:'/api/policy/diff',
@@ -973,7 +980,9 @@ var API={
   CERT_INVENTORY:'/api/cert/inventory',CERT_LIFECYCLE:'/api/cert/lifecycle',
   CERT_ONBOARDING:'/api/cert/lifecycle/onboarding',
   CERT_ADOPT_EXISTING:'/api/cert/lifecycle/adopt-existing',
+  CERT_RECONCILE:'/api/cert/lifecycle/reconcile',
   CERT_TRUSTED_PROXY:'/api/cert/lifecycle/trusted-proxy',
+  CERT_CLOUDFLARE_TOKEN:'/api/cert/lifecycle/cloudflare-token',
   CERT_BOOTSTRAP:'/api/cert/lifecycle/bootstrap',CERT_ACTION:'/api/cert/lifecycle/action',
   DNS_INVENTORY:'/api/dns/inventory',
   PATCH_STATUS:'/api/patch/status',SECRETS_AUDIT:'/api/secrets/audit',
@@ -1106,13 +1115,13 @@ function _refreshFleetActivityWidgets(force){
   return _loadFleetActivityCounts(force).then(function(res){
     var home=document.querySelector('#hw-fleet-stats .st:nth-child(7)');
     if(home){
-      home.setAttribute('data-view','media');
+      home.setAttribute('data-view','docker');
       home.style.cursor='pointer';
       home.innerHTML=_fleetActivityHtml(res,true);
     }
     var fleet=document.querySelector('#metrics-summary .st:nth-child(5)');
     if(fleet){
-      fleet.setAttribute('data-view','media');
+      fleet.setAttribute('data-view','docker');
       fleet.style.cursor='pointer';
       fleet.innerHTML=_fleetActivityHtml(res,false);
     }
@@ -1335,12 +1344,14 @@ function openUserMenu(){
     var el=document.getElementById('user-menu-session-badge');
     if(!el)return;
     if(!d||!d.valid){el.textContent='SESSION: unknown';el.style.color='var(--yellow)';return;}
+    var age=_formatDuration(d.session_age_s||0);
     var idle=_formatDuration(d.session_idle_s||0);
     var ttl=_formatDuration(d.session_ttl_s||0);
     var pct=d.session_timeout_s?Math.round(100*(d.session_idle_s||0)/d.session_timeout_s):0;
     var clr=pct<50?'var(--green)':pct<85?'var(--yellow)':'var(--red)';
-    el.innerHTML='IDLE <span style="color:'+clr+';font-weight:700">'+idle+'</span>'+
-      ' &middot; EXPIRES AFTER <span style="color:'+clr+';font-weight:700">'+ttl+'</span>';
+    el.innerHTML='SESSION AGE <span style="color:var(--text);font-weight:700">'+age+'</span>'+
+      ' &middot; IDLE <span style="color:'+clr+';font-weight:700">'+idle+'</span>'+
+      ' &middot; EXPIRES IN <span style="color:'+clr+';font-weight:700">'+ttl+'</span>';
   }).catch(function(){
     var el=document.getElementById('user-menu-session-badge');
     if(el){el.textContent='SESSION: probe failed';el.style.color='var(--yellow)';}
@@ -1808,7 +1819,6 @@ function registerInlineHandlerBindings(){
   bind('term-type','change',function(){updateTermTargets();});
   bind('pref-refresh','change',function(){updatePref('refresh',this.value);});
   bind('pref-density','change',function(){updatePref('density',this.value);});
-  bind('vault-auth-pass','keydown',function(e){if(e.key==='Enter')unlockVault();});
   bind('learn-q','keydown',function(e){if(e.key==='Enter')searchLearn();});
   bind('search-input','input',function(){_globalSearchFilter(this.value);});
   bind('search-input','keydown',function(e){_globalSearchKeydown(e);});
@@ -1866,12 +1876,11 @@ var WIDGET_REGISTRY=[
   }},
   {id:'w-sec-users',page:'SECURITY',label:'Users',ref:'sec-users',preload:function(){loadUsers();}},
   {id:'w-sec-sshkeys',page:'SECURITY',label:'SSH Keys',ref:'sec-sshkeys',preload:function(){loadKeys();}},
-  {id:'w-sec-apikeys',page:'SECURITY',label:'API Keys',ref:'sec-apikeys',preload:function(){loadVault();}},
   {id:'w-sec-audit',page:'SECURITY',label:'Audit',ref:'sec-audit'},
   {id:'w-sec-harden',page:'SECURITY',label:'Hardening',ref:'sec-harden'},
   {id:'w-sec-risk',page:'SECURITY',label:'Risk Analysis',ref:'sec-risk',preload:function(){loadRisk();}},
   {id:'w-sec-policies',page:'SECURITY',label:'Policies',ref:'sec-policies',preload:function(){loadPolicies();}},
-  {id:'w-sec-vault',page:'SECURITY',label:'Vault',ref:'sec-vault-section'},
+  {id:'w-vault-credentials',page:'VAULT',label:'Credentials',ref:'vault-main',preload:function(){loadVaultCredentials();}},
   {id:'w-activity-feed',page:'OPS',label:'Activity Feed',loader:function(el){
     el.innerHTML='<div id="hw-activity-list" class="activity-feed"><div class="skeleton"></div></div>';
     _loadActivityFeed();
@@ -2013,7 +2022,7 @@ var WIDGET_REGISTRY=[
     }).catch(function(e){var t=document.getElementById('hw-storage-pools');if(t)t.innerHTML='<div class="empty-state"><p>storage probe failed \u2014 check /api/storage/health</p></div>';});
   }},
   {id:'w-tdarr',page:'MEDIA',label:'Tdarr Transcode',loader:function(el){
-    el.innerHTML='<div id="hw-tdarr" data-view="media" style="cursor:pointer"><div class="skeleton"></div></div>';
+    el.innerHTML='<div id="hw-tdarr" data-view="docker" style="cursor:pointer"><div class="skeleton"></div></div>';
     _authFetch('/api/media/tdarr').then(function(r){return r.json()}).then(function(d){
       var t=document.getElementById('hw-tdarr');if(!t)return;
       if(d.status==='not_configured'){t.innerHTML='<div class="empty-state"><p>tdarr not installed</p></div>';return;}
@@ -2243,12 +2252,12 @@ function _loadWidgetOverview(){
 }
 var VIEW_SECTIONS={
   home:[],
-  fleet:['fleet-sec-stats','fleet-sec-infra','fleet-sec-overview','fleet-lab-section'],
+  fleet:['fleet-sec-stats','fleet-sec-infra','fleet-lab-section'],
   docker:['docker-sec-containers'],
   security:['sec-risk','sec-policies'],
   'sec-hardening':['sec-audit','sec-harden'],
-  'sec-access':['sec-users','sec-sshkeys','sec-apikeys'],
-  'sec-vault':['sec-vault-section'],
+  'sec-access':['sec-users','sec-sshkeys'],
+  vault:['vault-main','vault-editor'],
   'sec-compliance':[],
   lab:[]
 };
@@ -2412,13 +2421,13 @@ var _currentView='home';
 var _viewCleanup=[];
 function _onViewCleanup(fn){_viewCleanup.push(fn);}
 function _runViewCleanup(){_viewCleanup.forEach(function(fn){try{fn();}catch(e){}});_viewCleanup=[];}
-var VIEW_IDS=['home','fleet','topology','capacity','network','docker','media','security','sec-hardening','sec-access','sec-vault','sec-compliance','firewall','certs','vpn','tools','playbooks','gitops','chaos','dns','dr','incidents','metrics','automation','plugins','lab','settings'];
-var VIEW_ALIASES={security:'certs','sec-hardening':'certs','sec-access':'certs','sec-vault':'certs','sec-compliance':'certs',firewall:'fleet',vpn:'certs',media:'docker',topology:'network',capacity:'fleet',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools'};
-var VIEW_TITLES={home:'HOME',fleet:'FLEET',topology:'TOPOLOGY',capacity:'CAPACITY',network:'NETWORK',docker:'DOCKER',media:'MEDIA',security:'SECURITY','sec-hardening':'HARDENING','sec-access':'ACCESS','sec-vault':'VAULT','sec-compliance':'COMPLIANCE',firewall:'FIREWALL',certs:'CERTIFICATES',vpn:'VPN',tools:'SYSTEM',playbooks:'PLAYBOOKS',gitops:'CONFIG SYNC',chaos:'CHAOS',dns:'DNS',dr:'DISASTER RECOVERY',incidents:'INCIDENTS',metrics:'METRICS',automation:'AUTOMATION',plugins:'PLUGINS',lab:'LAB',settings:'SETTINGS'};
-var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},topology:function(){loadTopology()},capacity:function(){loadCapacity()},network:function(){loadNetworkPage()},docker:function(){loadDockerPage()},media:function(){loadMediaPage()},security:function(){loadSecurityOverview()},'sec-hardening':function(){loadSecHardening()},'sec-access':function(){loadSecAccess()},'sec-vault':function(){loadSecVault()},'sec-compliance':function(){loadSecCompliance()},firewall:function(){loadFirewallPage()},certs:function(){loadCertsPage()},vpn:function(){loadVpnPage()},tools:function(){loadToolsPage()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},chaos:function(){loadChaos()},dns:function(){loadDnsPage()},dr:function(){loadDrPage()},incidents:function(){loadIncidentsPage()},metrics:function(){loadMetricsPage()},automation:function(){loadAutomationPage()},plugins:function(){loadPluginsPage()},lab:function(){loadLabPage()},settings:function(){loadSettingsPage()}};
+var VIEW_IDS=['home','fleet','network','docker','security','sec-hardening','sec-access','sec-compliance','firewall','certs','vpn','vault','tools','playbooks','gitops','chaos','dns','dr','incidents','metrics','automation','plugins','lab','settings'];
+var VIEW_ALIASES={security:'certs','sec-hardening':'certs','sec-access':'certs','sec-compliance':'certs',firewall:'fleet',vpn:'certs',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools'};
+var VIEW_TITLES={home:'HOME',fleet:'FLEET',network:'NETWORK',docker:'DOCKER',security:'SECURITY','sec-hardening':'HARDENING','sec-access':'ACCESS','sec-compliance':'COMPLIANCE',firewall:'FIREWALL',certs:'CERTIFICATES',vpn:'VPN',vault:'VAULT',tools:'SYSTEM',playbooks:'PLAYBOOKS',gitops:'CONFIG SYNC',chaos:'CHAOS',dns:'DNS',dr:'DISASTER RECOVERY',incidents:'INCIDENTS',metrics:'METRICS',automation:'AUTOMATION',plugins:'PLUGINS',lab:'LAB',settings:'SETTINGS'};
+var VIEW_LOADERS={home:function(){loadHome()},fleet:function(){loadFleetPage()},network:function(){loadNetworkPage()},docker:function(){loadDockerPage()},security:function(){loadSecurityOverview()},'sec-hardening':function(){loadSecHardening()},'sec-access':function(){loadSecAccess()},'sec-compliance':function(){loadSecCompliance()},firewall:function(){loadFirewallPage()},certs:function(){loadCertsPage()},vpn:function(){loadVpnPage()},vault:function(){loadVaultCredentials()},tools:function(){loadToolsPage()},playbooks:function(){loadPlaybooks()},gitops:function(){loadGitops()},chaos:function(){loadChaos()},dns:function(){loadDnsPage()},dr:function(){loadDrPage()},incidents:function(){loadIncidentsPage()},metrics:function(){loadMetricsPage()},automation:function(){loadAutomationPage()},plugins:function(){loadPluginsPage()},lab:function(){loadLabPage()},settings:function(){loadSettingsPage()}};
 /* Nav grouping — maps sub-views to their parent nav button */
-var VIEW_TO_NAV={home:'home',fleet:'fleet',topology:'fleet',capacity:'fleet',network:'fleet',docker:'docker',media:'docker',security:'certs','sec-hardening':'certs','sec-access':'certs','sec-vault':'certs','sec-compliance':'certs',firewall:'fleet',certs:'certs',vpn:'certs',tools:'tools',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools',settings:'settings'};
-var NAV_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',certs:'SECURITY',tools:'SYSTEM',settings:'SETTINGS'};
+var VIEW_TO_NAV={home:'home',fleet:'fleet',network:'fleet',docker:'docker',security:'certs','sec-hardening':'certs','sec-access':'certs','sec-compliance':'certs',firewall:'fleet',certs:'certs',vpn:'certs',vault:'vault',tools:'tools',playbooks:'tools',gitops:'tools',chaos:'tools',dns:'tools',dr:'tools',incidents:'tools',metrics:'tools',automation:'tools',plugins:'tools',lab:'tools',settings:'settings'};
+var NAV_TITLES={home:'HOME',fleet:'FLEET',docker:'DOCKER',certs:'SECURITY',vault:'VAULT',tools:'SYSTEM',settings:'SETTINGS'};
 
 function nav(p){
   try{
@@ -3803,7 +3812,6 @@ function loadSecurityOverview(){
 }
 function loadSecHardening(){/* audit + hardening sections are button-triggered */}
 function loadSecAccess(){loadUsers();loadKeys();}
-function loadSecVault(){loadVault();}
 function loadSecCompliance(){loadPoliciesPage();loadComplianceData();}
 function loadSecPosture(){
   /* Secrets audit. Densification: header carries the freshness chip
@@ -3813,7 +3821,7 @@ function loadSecPosture(){
    * — the chip puts color on it so an old scan reads RED. */
   _authFetch(API.SECRETS_AUDIT).then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('sec-secrets-audit');if(!el)return;
-    el.setAttribute('data-view','sec-vault');el.style.cursor='pointer';
+    el.setAttribute('data-view','vault');el.style.cursor='pointer';
     el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span class="c-dim-fs12">SECRETS AUDIT</span>'+_freshChip(_ageFromPayload(d))+'</div>'+
       '<div style="display:flex;gap:16px;flex-wrap:wrap">'+
       '<div class="crd" style="flex:1;min-width:100px;text-align:center"><div style="font-size:20px;font-weight:700">'+d.leases+'</div><div class="c-dim-fs12">LEASES</div></div>'+
@@ -3939,7 +3947,7 @@ function loadSecretsScan(){
 }
 /* Stub loaders for extended views */
 function loadMediaPage(){loadMediaContainers();loadDownloads();loadStreams();}
-function loadToolsPage(){_populateHostDropdowns();_populateCompareDropdowns();}
+function loadToolsPage(){_populateHostDropdowns();_populateCompareDropdowns();loadCosts();}
 function _populateCompareDropdowns(){
   _authFetch(API.HEALTH).then(function(r){return r.json()}).then(function(d){
     var hosts=d.hosts||[];
@@ -3955,12 +3963,13 @@ function _ensureFleetAdminInSettings(){
   var sec=document.getElementById('fleet-admin-section');
   var settings=document.getElementById('settings-view');
   if(!sec||!settings||settings.contains(sec))return;
-  var anchor=document.getElementById('lab-assign-list');
-  var deviceSection=anchor&&anchor.closest?anchor.closest('.section'):null;
-  if(deviceSection&&deviceSection.parentNode===settings)deviceSection.insertAdjacentElement('afterend',sec);
-  else settings.appendChild(sec);
+  var mount=document.getElementById('device-admin-mount');
+  if(mount){
+    sec.classList.add('device-assignment-admin');
+    mount.appendChild(sec);
+  }else settings.appendChild(sec);
 }
-function loadSettingsPage(){loadCosts();loadFederation();_loadSettingsPrefs();_loadLabAssignments();_ensureFleetAdminInSettings();loadFleetAdmin();}
+function loadSettingsPage(){loadFederation();_loadSettingsPrefs();_loadLabAssignments();_ensureFleetAdminInSettings();loadFleetAdmin();}
 /* ── Domain Dashboard Loaders ── */
 function loadNetworkPage(){
   loadTopology();
@@ -4187,7 +4196,12 @@ function _certSelectedTarget(){
   var el=document.getElementById('cert-action-target');
   return el?el.value:'';
 }
-function _certSetResult(html){var el=document.getElementById('cert-result');if(el)el.innerHTML=html;}
+function _certSetResult(html){
+  var el=document.getElementById('cert-result');
+  var inline=document.getElementById('cert-result-inline');
+  if(el)el.innerHTML=html;
+  if(inline)inline.innerHTML=html;
+}
 function _certActionBody(action,dryRun){
   return {action:action,dry_run:dryRun,target:_certSelectedTarget(),confirm:!dryRun};
 }
@@ -4196,6 +4210,7 @@ function _certPostJson(url,body){
     return r.json().then(function(d){d._httpStatus=r.status;return d;}).catch(function(){return {_httpStatus:r.status,error:'Invalid JSON response'};});
   });
 }
+var _certLifecycleLast=null;
 function _certHumanize(v){
   return String(v||'').replace(/[_-]+/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
 }
@@ -4219,23 +4234,177 @@ function _certPath(onboarding,id){
   }
   return paths[id]||{};
 }
+function _certCloudflareTokenStatus(onboarding){
+  onboarding=onboarding||{};
+  var detection=onboarding.current_detection||{};
+  return detection.cloudflare_token||detection.cloudflare_token_status||onboarding.cloudflare_token||onboarding.token_status||{};
+}
+function _certBrowserSecretPolicy(onboarding){
+  onboarding=onboarding||{};
+  return onboarding.credential_policy||onboarding.secret_policy||{};
+}
+function _certBrowserSecretAllowed(onboarding){
+  var p=_certBrowserSecretPolicy(onboarding);
+  return p.browser_secret_intake_allowed!==false;
+}
+function _certStoredCloudflareTokenPath(plan,onboarding){
+  plan=plan||{};
+  var settings=plan.settings||{};
+  var detection=(onboarding&&onboarding.current_detection)||{};
+  var token=_certCloudflareTokenStatus(onboarding);
+  return settings.dns_token_path||detection.dns_token_path||token.path||token.secret_ref||'';
+}
+function _certCloudflareTokenReady(plan,onboarding){
+  var token=_certCloudflareTokenStatus(onboarding);
+  return !!(token.ready||token.configured||token.stored||_certStoredCloudflareTokenPath(plan,onboarding));
+}
+function _certCloudflareTokenPanel(plan,onboarding){
+  var settings=(plan&&plan.settings)||{};
+  var detection=(onboarding&&onboarding.current_detection)||{};
+  var token=_certCloudflareTokenStatus(onboarding);
+  var policy=_certBrowserSecretPolicy(onboarding);
+  var allowed=_certBrowserSecretAllowed(onboarding);
+  var ready=_certCloudflareTokenReady(plan,onboarding);
+  var base=settings.base_domain||detection.base_domain||'';
+  var zone=token.zone_id||(token.zone&&token.zone.zone_id)||(token.zone&&token.zone.name)||detection.cloudflare_zone_id||settings.cloudflare_zone_id||'';
+  var endpoint=policy.store_endpoint||API.CERT_CLOUDFLARE_TOKEN;
+  var h='<div class="cert-token-panel '+(ready?'is-ready':'is-needed')+'">';
+  h+='<div class="cert-token-head"><div><h4>Cloudflare Token</h4><p>Write-only DNS token intake for direct provisioning. Adopt Existing SSL does not need this for externally managed DC01 certificates.</p></div>'+_certLevelBadge(ready?'ok':'warning',ready?'stored':'not stored')+'</div>';
+  h+='<div class="cert-token-state">'+
+    '<div class="cert-kv"><span>Secret</span><strong>'+_esc(ready?'configured':'not stored')+'</strong></div>'+
+    '<div class="cert-kv"><span>Provider</span><strong>'+_esc(token.provider||settings.dns_provider||'cloudflare')+'</strong></div>'+
+    '<div class="cert-kv"><span>Zone</span><strong>'+_certText(zone,'pending validation')+'</strong></div>'+
+    '</div>';
+  if(!allowed){
+    h+='<div class="cert-warning">'+_certLevelBadge('warning','blocked')+'<span>Browser token intake is disabled by backend policy. Provisioning requires an operator-managed secret path.</span></div>';
+  }else{
+    h+='<div class="cert-token-form">'+
+      '<label class="cert-field cert-token-field"><span>Paste token</span><input id="cert-cloudflare-token" class="input" type="password" autocomplete="new-password" placeholder="Paste Cloudflare DNS token once"></label>'+
+      '<label class="cert-check cert-token-replace"><input type="checkbox" id="cert-cloudflare-token-replace"> <span>Replace stored token</span></label>'+
+      '<div class="cert-action-row cert-token-actions"><button class="fleet-btn btn-cyan" data-action="certCloudflareTokenValidate">VALIDATE TOKEN</button><button class="fleet-btn btn-green" data-action="certCloudflareTokenSave">SAVE TOKEN</button></div>'+
+      '</div>'+
+      '<div class="cert-token-foot">Endpoint: <code>'+_esc(endpoint)+'</code> · response policy: never echo secret value</div>';
+  }
+  return h+'</div>';
+}
 function _certMiniPills(items,limit){
   var a=(items||[]).filter(Boolean);
   if(limit&&a.length>limit)a=a.slice(0,limit).concat(['+'+(items.length-limit)]);
   return a.map(function(i){return '<span class="cert-mini-pill">'+_esc(_certHumanize(i))+'</span>';}).join('');
 }
+function _certStateCard(kind,title,state,message,pills){
+  var cls=kind==='green'?'is-managed':kind==='red'?'is-failing':kind==='blue'?'is-data':'is-gap';
+  var badgeKind=kind==='green'?'ok':kind==='red'?'error':kind==='blue'?'info':'warning';
+  var h='<div class="cert-dashboard-card '+cls+'">';
+  h+='<div class="cert-dashboard-head"><h4>'+_esc(title)+'</h4>'+_certLevelBadge(badgeKind,state)+'</div>';
+  h+='<p>'+_esc(message||'State is reported by the backend contract.')+'</p>';
+  if(pills&&pills.length)h+='<div class="cert-choice-meta">'+_certMiniPills(pills,5)+'</div>';
+  h+='</div>';
+  return h;
+}
+function _certConfigured(status){return !!(status&&status.configured);}
+function _certSetPanelTitle(bodyId,title){
+  var body=document.getElementById(bodyId);
+  var h=body&&body.closest('.section')&&body.closest('.section').querySelector('.section-header h3');
+  if(h)h.textContent=title;
+}
+function _certSetPanelHidden(bodyId,hidden){
+  var body=document.getElementById(bodyId);
+  var section=body&&body.closest('.section');
+  if(section)section.classList.toggle('d-none',!!hidden);
+}
+function _certCoverageSummary(plan,inventory){
+  var targets=(plan&&plan.targets)||[];
+  var certs=(inventory&&inventory.certs)||[];
+  var valid=certs.filter(function(c){return String(c.status||'').toLowerCase()==='valid';}).length;
+  return {targets:targets.length,certs:certs.length,valid:valid};
+}
+function _certCoverageCard(plan,inventory){
+  var c=_certCoverageSummary(plan,inventory);
+  var ok=c.targets>0&&c.valid>=c.targets;
+  var msg=ok?'Every configured SSL target is serving a valid cert in the current inventory.':'Coverage needs verification against the configured target list.';
+  return _certStateCard(ok?'green':'yellow','Coverage',c.valid+' / '+c.targets,msg,['targets '+c.targets,'inventory '+c.certs]);
+}
+function _certTargetSelect(plan){
+  var targets=(plan&&plan.targets)||[];
+  var targetOpts='<option value="">All SSL targets</option>'+targets.map(function(t){
+    return '<option value="'+_esc(t.label||t.hostname||t.ip||'')+'">'+_esc((t.label||t.hostname||'target')+' · '+(t.deploy_driver||'driver'))+'</option>';
+  }).join('');
+  return '<label class="cert-field cert-ops-target"><span>Verify / reconcile target</span><select id="cert-action-target" class="input">'+targetOpts+'</select></label>';
+}
+function _certResultPlaceholder(){
+  return '<div class="cert-inline-evidence">'+
+    '<div class="cert-inline-evidence-head"><h4>Result Evidence</h4><span>Latest SSL operation output</span></div>'+
+    '<div id="cert-result-inline" class="cert-inline-result"><div class="exec-out">Run a verify or reconcile action to see exact backend evidence here.</div></div>'+
+    '</div>';
+}
+function _certOperationsPanel(plan,status,inventory,onboarding){
+  var settings=(plan&&plan.settings)||{};
+  var detection=(onboarding&&onboarding.current_detection)||{};
+  var adoptedExternal=_certIsAdoptedExternal(plan,onboarding);
+  var base=settings.base_domain||detection.base_domain||'';
+  var mode=detection.management_mode||settings.management_mode||'managed';
+  var renewal=adoptedExternal?'external':(settings.renewal_owner||detection.renewal_owner||'pve-freq');
+  var acme=_certAcmeLabel(plan,status,onboarding);
+  var h='<div class="cert-ops-panel">';
+  h+=_certTargetSelect(plan);
+  h+='<div class="cert-ops-summary">'+
+    _certStateCard(_certConfigured(status)?'green':'yellow','SSL State',_certConfigured(status)?'configured':'setup needed',_certConfigured(status)?'SSL has an ownership model and target inventory.':'Choose a setup path before operating SSL.',[base||'base pending','mode '+mode])+
+    _certCoverageCard(plan,inventory)+
+    _certStateCard(adoptedExternal?'green':'blue','Ownership',adoptedExternal?'adopted existing':'managed',adoptedExternal?'Certificate renewal is owned outside pve-freq; this dashboard verifies served truth.':'pve-freq can issue, deploy, and renew according to the configured model.',['renewal '+renewal,'ACME '+acme])+
+    '</div>';
+  h+='<div class="cert-ops-actions">'+
+    '<button class="fleet-btn btn-orange" data-action="certVerify">VERIFY COVERAGE</button>'+
+    '<button class="fleet-btn btn-cyan" data-action="certReconcile">RECONCILE TARGETS</button>'+
+    '<button class="fleet-btn" data-action="loadCertsPage">REFRESH INVENTORY</button>'+
+    '</div>';
+  h+=_certTrustedProxyCard(onboarding);
+  h+=_certResultPlaceholder();
+  h+='</div>';
+  return h;
+}
+function _certWarningText(w){
+  var raw=String((w&&w.message)||w||'');
+  if(raw.indexOf('[certificates].base_domain')>=0)return 'Base domain is needed before direct certificate provisioning.';
+  if(raw.indexOf('[certificates].dns_provider')>=0)return 'DNS provider is not selected yet. Cloudflare is available as the first-class path.';
+  if(raw.indexOf('[certificates].dns_token_path')>=0)return 'DNS credential path is needed before issuing or updating public records.';
+  if(raw.indexOf('[[cert_target]]')>=0)return 'No SSL deploy targets are selected yet. Adopt existing SSL can infer targets from current inventory.';
+  if(raw.indexOf('record_strategy')>=0)return 'Current DNS record strategy may publish private addresses; preview DNS before applying.';
+  return raw;
+}
+function _certIsAdoptedExternal(plan,onboarding){
+  var settings=(plan&&plan.settings)||{};
+  var detection=(onboarding&&onboarding.current_detection)||{};
+  var mode=settings.management_mode||detection.management_mode||'';
+  var strategy=settings.record_strategy||detection.record_strategy||'';
+  return mode==='adopted_existing'||strategy==='existing-dns';
+}
+function _certDnsProviderLabel(plan,onboarding){
+  var settings=(plan&&plan.settings)||{};
+  var detection=(onboarding&&onboarding.current_detection)||{};
+  if(_certIsAdoptedExternal(plan,onboarding))return 'external / existing-dns';
+  return settings.dns_provider||detection.dns_provider||'';
+}
+function _certAcmeLabel(plan,status,onboarding){
+  if(_certIsAdoptedExternal(plan,onboarding))return 'externally managed';
+  return (status&&status.acme_available)?'available':'not ready';
+}
+function _certIssuedLabel(d){
+  var plan=(d&&d.plan)||{};
+  var onboarding=(d&&d.onboarding)||{};
+  var issued=(d&&d.issued)||{};
+  if(issued.issued_at)return issued.issued_at;
+  if(_certIsAdoptedExternal(plan,onboarding))return 'external existing';
+  return 'not recorded';
+}
 function _certDashboardCard(onboarding){
   var d=(onboarding&&onboarding.dashboard_https)||{};
   var state=d.state||'unknown';
   var actions=d.recommended_actions||[];
-  var h='<div class="cert-dashboard-card '+(state==='managed'?'is-managed':'is-gap')+'">';
-  h+='<div class="cert-dashboard-head"><h4>Dashboard HTTPS</h4>'+_certLevelBadge(state==='managed'?'ok':'warning',state)+'</div>';
-  h+='<p>'+_esc(d.message||'Dashboard HTTPS state is reported by the backend contract.')+'</p>';
-  h+='<div class="cert-choice-meta">';
-  if(d.plain_http_port)h+='<span class="cert-mini-pill">HTTP '+_esc(d.plain_http_port)+'</span>';
-  h+=_certMiniPills(actions,3);
-  h+='</div></div>';
-  return h;
+  var pills=[];
+  if(d.plain_http_port)pills.push('HTTP '+d.plain_http_port);
+  pills=pills.concat(actions||[]);
+  return _certStateCard(state==='managed'?'green':'yellow','Dashboard HTTPS',state,d.message||'Dashboard HTTPS needs an adoption or proxy path before the app is fully public-ready.',pills);
 }
 function _certTrustedProxyCard(onboarding){
   var trusted=(onboarding&&onboarding.trusted_proxy)||{};
@@ -4243,6 +4412,7 @@ function _certTrustedProxyCard(onboarding){
   var h='<div class="cert-dashboard-card '+(trusted.configured?'is-managed':'is-gap')+'">';
   h+='<div class="cert-dashboard-head"><h4>App Trust</h4>'+_certLevelBadge(trusted.configured?'ok':'warning',trusted.configured?'trusted proxy':'needs trust')+'</div>';
   h+='<p>Controls which reverse-proxy sources the dashboard trusts for public HTTPS forwarding. This is separate from certificate serving truth.</p>';
+  h+='<div class="cert-choice-meta">'+_certMiniPills(cidrs.length?cidrs:['no proxy cidrs'],5)+'</div>';
   h+='<label class="cert-field"><span>Trusted proxy CIDRs</span><input id="cert-trusted-proxy-cidrs" class="input" type="text" placeholder="10.25.255.38/32" value="'+_esc(cidrs.join(', '))+'"></label>';
   h+='<div class="cert-action-row"><button class="fleet-btn btn-cyan" data-action="certTrustedProxyPreview">PREVIEW TRUST</button><button class="fleet-btn btn-green" data-action="certTrustedProxyApply">APPLY TRUST</button></div>';
   h+='</div>';
@@ -4265,6 +4435,8 @@ function _certChoiceCard(path,id,isPrimary){
 }
 function _certProviderCards(onboarding){
   var providers=(onboarding&&onboarding.dns_providers)||[];
+  var policy=_certBrowserSecretPolicy(onboarding);
+  var browserSecretAllowed=_certBrowserSecretAllowed(onboarding);
   if(!providers.length)return '';
   if(!Array.isArray(providers)){
     providers=Object.keys(providers).map(function(name){
@@ -4279,7 +4451,7 @@ function _certProviderCards(onboarding){
       var name=p.id||p.label||'provider';
       return '<p><strong>'+_esc(p.label||_certHumanize(name))+'</strong> · '+_esc(p.status||p.support_level||'supported')+
         ' · credentials: '+_esc(_certHumanize(p.credential_mode||'path'))+
-        ' · browser secret entry: '+(p.inline_secret_allowed?'allowed':'blocked')+'</p>';
+        ' · browser secret entry: '+((p.inline_secret_allowed||browserSecretAllowed||policy.store_endpoint)?'write-only':'blocked')+'</p>';
     }).join('')+'</div>';
 }
 function _certProxyDefaultsCard(onboarding){
@@ -4309,24 +4481,25 @@ function _renderCertResult(d){
   else detail+='<pre class="cert-pre">'+_esc(JSON.stringify(_certCompactJson(data),null,2))+'</pre>';
   return '<div class="cert-result '+(ok?'is-ok':'is-bad')+'"><div class="cert-result-head"><strong>'+_esc(title)+'</strong>'+_statusBadge(ok?'ok':'fail')+'</div>'+detail+'</div>';
 }
-function _renderCertSetup(plan,status,onboarding){
+function _renderCertSetup(plan,status,onboarding,inventory){
   var settings=(plan&&plan.settings)||{};
   var warnings=(plan&&plan.warnings)||[];
   onboarding=onboarding||{};
   var detection=onboarding.current_detection||{};
-  var provider=settings.dns_provider||detection.dns_provider||'cloudflare';
-  var token=settings.dns_token_path||detection.dns_token_path||'';
-  var h='<div class="cert-onboarding">';
-  h+='<div class="cert-copy">Choose the SSL ownership path that matches this install. Browser forms only accept paths or host references for secrets; credential values stay server-side.</div>';
-  h+='<div class="cert-dashboard-state">'+_certDashboardCard(onboarding)+_certTrustedProxyCard(onboarding);
-  h+='<div class="cert-dashboard-card"><div class="cert-dashboard-head"><h4>Detection</h4>'+_certLevelBadge((status&&status.configured)?'ok':'warning',(status&&status.configured)?'configured':'needs setup')+'</div>'+
-    '<div class="cert-choice-meta">'+
-    '<span class="cert-mini-pill">Base '+_esc(detection.base_domain||settings.base_domain||'unset')+'</span>'+
-    '<span class="cert-mini-pill">ACME '+_esc(detection.acme_available?'available':'missing')+'</span>'+
-    '<span class="cert-mini-pill">Mode '+_esc(detection.management_mode||settings.management_mode||'managed')+'</span>'+
-    '</div></div></div>';
-  h+='<div class="cert-choice-grid">';
-  h+='<div class="cert-choice-card is-primary"><div class="cert-choice-head"><h4>'+_esc(_certPath(onboarding,'adopt_existing').label||'Adopt Existing SSL')+'</h4>'+_certLevelBadge('ok','safest first')+'</div>'+
+  var adoptedExternal=_certIsAdoptedExternal(plan,onboarding);
+  var provider=_certDnsProviderLabel(plan,onboarding)||(adoptedExternal?'external / existing-dns':'cloudflare');
+  var setupKind=(status&&status.configured)?'green':'yellow';
+  var configured=_certConfigured(status);
+  var acmeLabel=_certAcmeLabel(plan,status,onboarding);
+  var modeLabel=detection.management_mode||settings.management_mode||'managed';
+  var stateMsg=adoptedExternal?'pve-freq has adopted externally owned SSL and verifies served certificate truth without issuing or copying cert files.':((status&&status.configured)?'SSL management has a selected operating model.':'Choose Adopt Existing SSL or Provision Direct to move this out of setup mode.');
+  var statePills=['base '+(detection.base_domain||settings.base_domain||'pending'),'ACME '+acmeLabel,'mode '+modeLabel];
+  if(adoptedExternal){
+    statePills.push('DNS existing-dns');
+    statePills.push('renewal external');
+  }
+  var setupChoices='<div class="cert-choice-grid">';
+  setupChoices+='<div class="cert-choice-card is-primary"><div class="cert-choice-head"><h4>'+_esc(_certPath(onboarding,'adopt_existing').label||'Adopt Existing SSL')+'</h4>'+_certLevelBadge('ok','safest first')+'</div>'+
     '<p>'+_esc(_certPath(onboarding,'adopt_existing').intent||'Register and verify SSL that already works without issuing a certificate.')+'</p>'+
     '<div class="cert-form-grid">'+
     _certField('cert-adopt-base-domain','Base domain','example.com',settings.base_domain||detection.base_domain||'')+
@@ -4338,65 +4511,107 @@ function _renderCertSetup(plan,status,onboarding){
     '<label class="cert-check"><input type="checkbox" id="cert-adopt-infer" checked> <span>Infer covered targets from current inventory</span></label>'+
     '<label class="cert-check"><input type="checkbox" id="cert-adopt-replace"> <span>Replace the current SSL registration on apply</span></label>'+
     '<div class="cert-action-row"><button class="fleet-btn btn-cyan" data-action="certAdoptPreview">PREVIEW ADOPT</button><button class="fleet-btn btn-green" data-action="certAdoptApply">ADOPT SSL</button></div></div>';
-  h+='<div class="cert-choice-card"><div class="cert-choice-head"><h4>'+_esc(_certPath(onboarding,'provision_direct').label||'Provision Direct Target Certs')+'</h4>'+_certLevelBadge('info','option')+'</div>'+
-    '<p>'+_esc(_certPath(onboarding,'provision_direct').intent||'Issue and deploy certificates directly to selected services when DNS credentials are configured by path.')+'</p>'+
+  setupChoices+='<div class="cert-choice-card"><div class="cert-choice-head"><h4>'+_esc(_certPath(onboarding,'provision_direct').label||'Provision Direct Target Certs')+'</h4>'+_certLevelBadge('info','option')+'</div>'+
+    '<p>'+_esc(_certPath(onboarding,'provision_direct').intent||'Issue and deploy certificates directly to selected services after the product has a stored DNS token.')+'</p>'+
     '<div class="cert-form-grid">'+
     _certField('cert-provision-base-domain','Base domain','example.com',settings.base_domain||detection.base_domain||'')+
-    _certField('cert-provision-token-path','Cloudflare token path','/root/.secrets/cloudflare.token',token)+
     '</div>'+
+    _certCloudflareTokenPanel(plan,onboarding)+
     '<label class="cert-check"><input type="checkbox" id="cert-provision-replace"> <span>Replace current SSL registration on apply</span></label>'+
     '<div class="cert-action-row"><button class="fleet-btn btn-cyan" data-action="certProvisionPreview">PREVIEW PROVISION</button><button class="fleet-btn btn-green" data-action="certProvisionApply">APPLY PROVISION</button></div></div>';
-  h+=_certChoiceCard(_certPath(onboarding,'use_existing_reverse_proxy'),'use_existing_reverse_proxy',false);
-  h+=_certChoiceCard(_certPath(onboarding,'create_managed_reverse_proxy_vm'),'create_managed_reverse_proxy_vm',false);
-  h+='</div>';
-  h+='<div class="cert-onboarding-grid">'+_certProviderCards(onboarding)+_certProxyDefaultsCard(onboarding)+'</div>';
-  h+='<div class="cert-setup-state">';
-  h+='<div class="cert-kv"><span>Configured</span><strong>'+_certBoolBadge(status&&status.configured)+'</strong></div>';
-  h+='<div class="cert-kv"><span>ACME client</span><strong>'+_certBoolBadge(status&&status.acme_available)+'</strong></div>';
-  h+='<div class="cert-kv"><span>DNS provider</span><strong>'+_certText(provider)+'</strong></div>';
-  h+='<div class="cert-kv"><span>Truth source</span><strong>'+_certText(onboarding.truth_source||'per-target probe')+'</strong></div>';
-  h+='</div>';
+  setupChoices+=_certChoiceCard(_certPath(onboarding,'use_existing_reverse_proxy'),'use_existing_reverse_proxy',false);
+  setupChoices+=_certChoiceCard(_certPath(onboarding,'create_managed_reverse_proxy_vm'),'create_managed_reverse_proxy_vm',false);
+  setupChoices+='</div>';
+  setupChoices+='<div class="cert-onboarding-grid">'+_certProviderCards(onboarding)+_certProxyDefaultsCard(onboarding)+'</div>';
+  var setupState='<div class="cert-setup-state">'+
+    '<div class="cert-kv"><span>Setup path</span><strong>'+_esc(configured?'managed':'setup needed')+'</strong></div>'+
+    '<div class="cert-kv"><span>ACME client</span><strong>'+_esc(acmeLabel)+'</strong></div>'+
+    '<div class="cert-kv"><span>DNS provider</span><strong>'+_certText(provider)+'</strong></div>'+
+    '<div class="cert-kv"><span>Truth source</span><strong>'+_certText(onboarding.truth_source||'per-target probe')+'</strong></div>'+
+    '</div>';
+  var h='<div class="cert-onboarding">';
+  if(configured){
+    h+='<div class="cert-copy cert-copy-strong">SSL is configured. This screen is now operational: verify coverage, reconcile target truth, and manage app trust. Setup paths are available only when you intentionally change the SSL model.</div>';
+    h+=_certOperationsPanel(plan,status,inventory,onboarding);
+    h+='<details class="cert-advanced-setup"><summary>Change SSL setup / provisioning</summary><div class="cert-advanced-body">'+
+      setupState+setupChoices+
+      '</div></details>';
+  }else{
+    h+='<div class="cert-copy cert-copy-strong">Pick the SSL path that matches reality. Existing proxy/cert adoption is the cleanest first move; direct provisioning is available when a product-owned DNS token is stored.</div>';
+    h+='<div class="cert-dashboard-state">'+_certTrustedProxyCard(onboarding);
+    h+=_certStateCard(setupKind,'Onboarding State',adoptedExternal?'adopted external':'setup needed',stateMsg,statePills)+'</div>';
+    h+=setupChoices+setupState;
+  }
   if(warnings.length){
-    h+='<div class="cert-warning-list">'+warnings.map(function(w){return '<div class="cert-warning">'+_certLevelBadge(w.level||'warning','warning')+'<span>'+_esc(w.message||w)+'</span></div>';}).join('')+'</div>';
+    h+='<div class="cert-warning-list">'+warnings.map(function(w){return '<div class="cert-warning">'+_certLevelBadge(w.level||'warning','setup gap')+'<span>'+_esc(_certWarningText(w))+'</span></div>';}).join('')+'</div>';
   }
   return h+'</div>';
 }
-function _renderCertActions(plan){
+function _renderCertActions(plan,status,onboarding){
   var targets=(plan&&plan.targets)||[];
   var targetOpts='<option value="">All deploy-capable targets</option>'+targets.map(function(t){
     return '<option value="'+_esc(t.label||t.hostname||t.ip||'')+'">'+_esc((t.label||t.hostname||'target')+' · '+(t.deploy_driver||'driver'))+'</option>';
   }).join('');
-  var h='<div class="cert-copy">Every mutating action supports dry-run first. Apply actions require an explicit confirmation and never echo secret values.</div>';
+  var adoptedExternal=_certIsAdoptedExternal(plan,onboarding||{});
+  var configured=_certConfigured(status);
+  var h='<div class="cert-copy">'+(adoptedExternal?'This install uses externally managed SSL. Normal operations verify and reconcile served certificate truth; issue/deploy actions are hidden behind Advanced setup.':'Every mutating action supports dry-run first. Apply actions require an explicit confirmation and never echo secret values.')+'</div>';
   h+='<label class="cert-field"><span>Deploy / verify target</span><select id="cert-action-target" class="input">'+targetOpts+'</select></label>';
   h+='<div class="cert-action-grid">';
-  h+='<div class="cert-action-card"><h4>DNS Sync</h4><p>Create or update wildcard and target records in Cloudflare.</p><div><button class="fleet-btn btn-cyan" data-action="certDnsDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certDnsApply">APPLY</button></div></div>';
-  h+='<div class="cert-action-card"><h4>Issue</h4><p>Run ACME issue for the wildcard certificate source.</p><div><button class="fleet-btn btn-cyan" data-action="certIssueDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certIssueApply">ISSUE</button></div></div>';
-  h+='<div class="cert-action-card"><h4>Renew</h4><p>Renew the source certificate without deploying unless explicitly applied.</p><div><button class="fleet-btn btn-cyan" data-action="certRenewDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certRenewApply">RENEW</button></div></div>';
-  h+='<div class="cert-action-card"><h4>Deploy</h4><p>Push issued cert material to configured drivers and restart/reload safely.</p><div><button class="fleet-btn btn-cyan" data-action="certDeployDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certDeployApply">DEPLOY</button></div></div>';
-  h+='<div class="cert-action-card cert-action-card-wide"><h4>Verify</h4><p>Probe certificate, SAN, expiry, driver state, and public/private DNS truth.</p><div><button class="fleet-btn btn-orange" data-action="certVerify">VERIFY NOW</button></div></div>';
+  h+='<div class="cert-action-card"><h4>Verify Coverage</h4><p>Probe certificate, SAN, expiry, driver state, and public/private DNS truth.</p><div><button class="fleet-btn btn-orange" data-action="certVerify">VERIFY NOW</button></div></div>';
+  h+='<div class="cert-action-card"><h4>Reconcile Targets</h4><p>Refresh served-cert truth and compare the configured coverage set against what is actually reachable.</p><div><button class="fleet-btn btn-cyan" data-action="certReconcile">RECONCILE</button></div></div>';
+  h+='<div class="cert-action-card"><h4>Refresh Inventory</h4><p>Reload SSL state, target coverage, DNS truth, and TLS inventory from the backend.</p><div><button class="fleet-btn" data-action="loadCertsPage">REFRESH</button></div></div>';
+  if(!adoptedExternal&&configured){
+    h+='<div class="cert-action-card"><h4>DNS Sync</h4><p>Create or update wildcard and target records in Cloudflare.</p><div><button class="fleet-btn btn-cyan" data-action="certDnsDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certDnsApply">APPLY</button></div></div>';
+    h+='<div class="cert-action-card"><h4>Issue</h4><p>Run ACME issue for the wildcard certificate source.</p><div><button class="fleet-btn btn-cyan" data-action="certIssueDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certIssueApply">ISSUE</button></div></div>';
+    h+='<div class="cert-action-card"><h4>Renew</h4><p>Renew the source certificate without deploying unless explicitly applied.</p><div><button class="fleet-btn btn-cyan" data-action="certRenewDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certRenewApply">RENEW</button></div></div>';
+    h+='<div class="cert-action-card"><h4>Deploy</h4><p>Push issued cert material to configured drivers and restart/reload safely.</p><div><button class="fleet-btn btn-cyan" data-action="certDeployDryRun">DRY RUN</button><button class="fleet-btn btn-green" data-action="certDeployApply">DEPLOY</button></div></div>';
+  }
   h+='</div>';
   return h;
 }
 function _renderCertTargets(plan){
   var targets=(plan&&plan.targets)||[];
-  if(!targets.length)return '<div class="empty-state"><p>No cert deploy targets configured or inferred yet.</p></div>';
-  return '<div class="cert-target-grid">'+targets.map(function(t){
-    var alts=(t.althostnames||t.alt_names||[]).join(', ');
-    var actions=(t.rebind_actions||[]).map(function(a){return a.kind||a.action||a;}).join(', ');
-    return '<div class="cert-target-card">'+
-      '<div class="cert-target-head"><h4>'+_esc(t.label||t.name||'target')+'</h4>'+_certLevelBadge(t.enabled===false?'warning':'ok',t.enabled===false?'disabled':'enabled')+'</div>'+
-      '<div class="cert-kv"><span>Driver</span><strong>'+_certText(t.deploy_driver||t.driver)+'</strong></div>'+
-      '<div class="cert-kv"><span>Host</span><strong>'+_certText(t.ip||t.connect_host||t.address)+'</strong></div>'+
-      '<div class="cert-kv"><span>Domain</span><strong>'+_certText(t.hostname||t.domain||t.fqdn)+'</strong></div>'+
-      '<div class="cert-kv"><span>Alt names</span><strong>'+_certText(alts)+'</strong></div>'+
-      '<div class="cert-kv"><span>Port</span><strong>'+_certText(t.port||443)+'</strong></div>'+
-      (actions?'<div class="cert-kv"><span>Rebind</span><strong>'+_esc(actions)+'</strong></div>':'')+
-      '</div>';
-  }).join('')+'</div>';
+  if(!targets.length)return '<div class="cert-empty-state cert-empty-gap"><strong>Setup gap</strong><p>No SSL deploy targets are selected yet. Adopt existing SSL can infer targets from inventory, or provisioning can create an explicit target plan.</p></div>';
+  function scopeFor(t){
+    var driver=String(t.deploy_driver||t.driver||'').toLowerCase();
+    var type=String(t.target_type||t.type||'').toLowerCase();
+    if(driver.indexOf('reverse_proxy')>=0||type.indexOf('dashboard')>=0||type.indexOf('proxy')>=0)return 'proxy route';
+    if(type.indexOf('bmc')>=0||type.indexOf('idrac')>=0||driver.indexOf('legacy')>=0)return 'legacy direct';
+    return 'direct mgmt';
+  }
+  function endpointFor(t){
+    var host=t.ip||t.connect_host||t.origin_ip||t.address||'';
+    var port=t.port||t.origin_port||443;
+    return (host?host:'probe')+':'+port;
+  }
+  function notesFor(t){
+    var notes=[];
+    var actions=(t.rebind_actions||[]).map(function(a){return a.kind||a.action||a.type||a;}).filter(Boolean);
+    if(actions.length)notes.push('rebind '+actions.join(', '));
+    if(t.restart_policy)notes.push(_certHumanize(t.restart_policy));
+    if(t.cert_source)notes.push(_certHumanize(t.cert_source));
+    return notes.join(' · ');
+  }
+  var h='<div class="cert-target-table-wrap"><table class="cert-target-table"><thead><tr>'+
+    '<th>Target</th><th>Scope</th><th>Endpoint</th><th>Hostname</th><th>Driver</th><th>Cert</th><th>Notes</th>'+
+    '</tr></thead><tbody>';
+  h+=targets.map(function(t){
+    var enabled=t.enabled!==false;
+    return '<tr>'+
+      '<td><div class="cert-target-name"><strong>'+_esc(t.label||t.name||'target')+'</strong>'+_certLevelBadge(enabled?'ok':'warning',enabled?'enabled':'disabled')+'</div></td>'+
+      '<td>'+_esc(scopeFor(t))+'</td>'+
+      '<td><code>'+_esc(endpointFor(t))+'</code></td>'+
+      '<td class="cert-target-host">'+_certText(t.hostname||t.domain||t.fqdn)+'</td>'+
+      '<td>'+_certText(_certHumanize(t.deploy_driver||t.driver||t.target_type||'probe'))+'</td>'+
+      '<td>'+_certText(_certHumanize(t.cert_source||'wildcard'))+'</td>'+
+      '<td class="cert-target-notes">'+_certText(notesFor(t))+'</td>'+
+      '</tr>';
+  }).join('');
+  return h+'</tbody></table></div>';
 }
 function _renderCertDns(plan){
   var records=(plan&&plan.dns_records)||[];
-  if(!records.length)return '<div class="exec-out">No DNS records planned yet. Choose an SSL onboarding path and preview it first.</div>';
+  if(!records.length)return '<div class="cert-empty-state cert-empty-data"><strong>No DNS preview yet</strong><p>Choose an SSL onboarding path and run preview. This panel will show proposed record changes before any apply action.</p></div>';
   var h='<div class="cert-record-grid">';
   records.forEach(function(r){
     var value=r.value||r.content||r.target||'';
@@ -4408,7 +4623,7 @@ function _renderCertDns(plan){
 }
 function _renderCertInventory(inventory){
   var certs=(inventory&&inventory.certs)||[];
-  if(!certs.length)return '<div class="exec-out">No certificate inventory data yet.</div>';
+  if(!certs.length)return '<div class="cert-empty-state cert-empty-data"><strong>No certificate inventory yet</strong><p>Inventory will populate after adoption, provisioning, or a served-cert verification run.</p></div>';
   var h='<table><thead><tr><th>Domain</th><th>Issuer</th><th>Expires</th><th>Days Left</th><th>Status</th></tr></thead><tbody>';
   h+=certs.map(function(c){
     var dl=c.days_left==null?'—':c.days_left;
@@ -4418,28 +4633,37 @@ function _renderCertInventory(inventory){
   return h+'</tbody></table>';
 }
 function _renderCertLifecycle(d){
+  _certLifecycleLast=d||{};
   var plan=d.plan||{},status=d.status||{},inventory=d.inventory||{},onboarding=d.onboarding||{};
   var dash=(onboarding&&onboarding.dashboard_https)||{};
+  var trusted=(onboarding&&onboarding.trusted_proxy)||{};
+  var setupReady=!!(status&&status.configured);
+  _certSetPanelTitle('cert-setup',setupReady?'SSL Operations':'SSL Setup');
+  _certSetPanelTitle('cert-actions','Preview / Apply');
+  _certSetPanelTitle('cert-dns',setupReady?'DNS Truth':'DNS Plan');
+  _certSetPanelHidden('cert-actions',setupReady);
+  _certSetPanelHidden('cert-result',setupReady);
   var stats=document.getElementById('cert-stats');
   if(stats)stats.innerHTML=_statCards([
-    {l:'Configured',v:status.configured?'YES':'NO',c:status.configured?'green':'yellow'},
+    {l:'Setup State',v:setupReady?'MANAGED':'SETUP NEEDED',c:setupReady?'green':'yellow'},
     {l:'Dashboard HTTPS',v:_certHumanize(dash.state||'UNKNOWN'),c:dash.state==='managed'?'green':'yellow'},
-    {l:'Targets',v:status.targets||0,c:(status.targets||0)>0?'green':'yellow'},
+    {l:'App Trust',v:trusted.configured?'TRUSTED':'NEEDS TRUST',c:trusted.configured?'green':'yellow'},
     {l:'Warnings',v:status.warnings||0,c:(status.warnings||0)>0?'yellow':'green'}
   ]);
   var overview=document.getElementById('cert-overview');
   if(overview){
     var settings=plan.settings||{};
     var detection=onboarding.current_detection||{};
+    var base=settings.base_domain||detection.base_domain||'';
     overview.innerHTML='<div class="cert-overview-grid">'+
-      '<div class="cert-kv"><span>Wildcard</span><strong>'+_certText(plan.wildcard_name||('*.'.concat(settings.base_domain||'')))+'</strong></div>'+
-      '<div class="cert-kv"><span>DNS provider</span><strong>'+_certText(settings.dns_provider||detection.dns_provider)+'</strong></div>'+
+      '<div class="cert-kv"><span>Base domain</span><strong>'+_certText(base,'pending adoption')+'</strong></div>'+
+      '<div class="cert-kv"><span>DNS provider</span><strong>'+_certText(_certDnsProviderLabel(plan,onboarding))+'</strong></div>'+
       '<div class="cert-kv"><span>Management mode</span><strong>'+_certText(settings.management_mode||detection.management_mode)+'</strong></div>'+
-      '<div class="cert-kv"><span>Issued cache</span><strong>'+_certText((d.issued&&d.issued.issued_at)||'not recorded')+'</strong></div>'+
+      '<div class="cert-kv"><span>Issued cache</span><strong>'+_certText(_certIssuedLabel(d))+'</strong></div>'+
       '</div>';
   }
-  var setup=document.getElementById('cert-setup');if(setup)setup.innerHTML=_renderCertSetup(plan,status,onboarding);
-  var actions=document.getElementById('cert-actions');if(actions)actions.innerHTML=_renderCertActions(plan);
+  var setup=document.getElementById('cert-setup');if(setup)setup.innerHTML=_renderCertSetup(plan,status,onboarding,inventory);
+  var actions=document.getElementById('cert-actions');if(actions)actions.innerHTML=setupReady?'':_renderCertActions(plan,status,onboarding);
   var targets=document.getElementById('cert-targets');if(targets)targets.innerHTML=_renderCertTargets(plan);
   var dns=document.getElementById('cert-dns');if(dns)dns.innerHTML=_renderCertDns(plan);
   var inv=document.getElementById('cert-inventory');if(inv)inv.innerHTML=_renderCertInventory(inventory);
@@ -4504,24 +4728,74 @@ function certProvisionPreview(){_certBootstrap(true);}
 function certProvisionApply(){_certBootstrap(false);}
 function certBootstrapPreview(){_certBootstrap(true);}
 function certBootstrapApply(){_certBootstrap(false);}
-function _certBootstrap(dryRun){
-  var baseEl=document.getElementById('cert-provision-base-domain')||document.getElementById('cert-base-domain')||{};
-  var tokenEl=document.getElementById('cert-provision-token-path')||document.getElementById('cert-token-path')||{};
-  var replaceEl=document.getElementById('cert-provision-replace')||document.getElementById('cert-bootstrap-replace')||{};
-  var base=baseEl.value||'';
+function certCloudflareTokenValidate(){_certStoreCloudflareToken(true);}
+function certCloudflareTokenSave(){_certStoreCloudflareToken(false);}
+function _certRenderTokenStoreResult(d){
+  var ok=d&&d.ok;
+  var status=(d&&d.token_status)||{};
+  var zone=(d&&d.zone)||{};
+  var zoneLabel=zone.name||zone.zone_id||status.zone_id||d.base_domain||'pending';
+  return '<div class="cert-result '+(ok?'is-ok':'is-bad')+'">'+
+    '<div class="cert-result-head"><strong>'+_esc(d&&d.dry_run?'TOKEN VALIDATION':'TOKEN STORE')+'</strong>'+_statusBadge(ok?'ok':'fail')+'</div>'+
+    (d&&d.error?'<div class="cert-result-error">'+_esc(d.error)+'</div>':'')+
+    '<div class="cert-token-result-grid">'+
+      '<div class="cert-kv"><span>Provider</span><strong>'+_esc((status&&status.provider)||d.provider||'cloudflare')+'</strong></div>'+
+      '<div class="cert-kv"><span>Base domain</span><strong>'+_certText(d&&d.base_domain,'pending')+'</strong></div>'+
+      '<div class="cert-kv"><span>Zone</span><strong>'+_certText(zoneLabel,'pending')+'</strong></div>'+
+      '<div class="cert-kv"><span>Secret</span><strong>'+_esc((status&&status.ready)||d.stored?'ready':'not stored')+'</strong></div>'+
+    '</div>'+
+    '<div class="cert-token-result-note">Secret value was not returned by the API.</div>'+
+    '</div>';
+}
+function _certStoreCloudflareToken(dryRun){
+  var tokenEl=document.getElementById('cert-cloudflare-token')||{};
+  var baseEl=document.getElementById('cert-provision-base-domain')||document.getElementById('cert-adopt-base-domain')||{};
+  var replaceEl=document.getElementById('cert-cloudflare-token-replace')||{};
   var token=tokenEl.value||'';
+  var base=baseEl.value||'';
   var replace=!!replaceEl.checked;
-  if(!base.trim()||!token.trim()){toast('Base domain and token path are required','error');return;}
+  if(!base.trim()){toast('Base domain is required before storing a token','error');try{baseEl.focus();}catch(e){}return;}
+  if(!token.trim()){toast('Paste a Cloudflare DNS token first','error');try{tokenEl.focus();}catch(e){}return;}
+  var body={base_domain:base.trim(),cloudflare_token:token.trim(),dry_run:dryRun,confirm:!dryRun,replace:replace};
   function run(){
     _certSetResult('<div class="skeleton h-60"></div>');
-    _certPostJson(API.CERT_BOOTSTRAP,{base_domain:base.trim(),cloudflare_token_path:token.trim(),replace:replace,dry_run:dryRun}).then(function(d){
+    _certPostJson(API.CERT_CLOUDFLARE_TOKEN,body).then(function(d){
+      _certSetResult(_certRenderTokenStoreResult(d));
+      if(d.ok){
+        toast(dryRun?'Token validation complete':'Cloudflare token stored','success');
+        if(!dryRun){
+          tokenEl.value='';
+          loadCertsPage();
+        }
+      }else toast(d.error||'Cloudflare token store failed','error');
+    }).catch(function(e){_certSetResult('<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>');});
+  }
+  if(dryRun)run();
+  else confirmAction('Store Cloudflare DNS token for <strong>'+_esc(base.trim())+'</strong>?<br>The secret value is write-only and will not be shown again.',run);
+}
+function _certBootstrap(dryRun){
+  var baseEl=document.getElementById('cert-provision-base-domain')||document.getElementById('cert-base-domain')||{};
+  var replaceEl=document.getElementById('cert-provision-replace')||document.getElementById('cert-bootstrap-replace')||{};
+  var base=baseEl.value||'';
+  var replace=!!replaceEl.checked;
+  var last=_certLifecycleLast||{};
+  var tokenPath=_certStoredCloudflareTokenPath(last.plan||{},last.onboarding||{});
+  if(!base.trim()){toast('Base domain is required','error');try{baseEl.focus();}catch(e){}return;}
+  if(!tokenPath){
+    toast('Save the Cloudflare token before provisioning','error');
+    var tokenEl=document.getElementById('cert-cloudflare-token');if(tokenEl)try{tokenEl.focus();}catch(e){}
+    return;
+  }
+  function run(){
+    _certSetResult('<div class="skeleton h-60"></div>');
+    _certPostJson(API.CERT_BOOTSTRAP,{base_domain:base.trim(),cloudflare_token_path:tokenPath,replace:replace,dry_run:dryRun}).then(function(d){
       _certSetResult(_renderCertResult(d));
       if(d.ok){toast(dryRun?'Provision preview complete':'SSL provisioning applied','success');loadCertsPage();}
       else toast(d.error||'SSL provisioning failed','error');
     }).catch(function(e){_certSetResult('<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>');});
   }
   if(dryRun)run();
-  else confirmAction('Apply SSL provisioning for <strong>'+_esc(base.trim())+'</strong>?<br>Secret material is read from the provided file path, never from the browser.',run);
+  else confirmAction('Apply SSL provisioning for <strong>'+_esc(base.trim())+'</strong>?<br>Secret material is read from the product secret store and is never echoed to the browser.',run);
 }
 function certDnsDryRun(){_certAction('dns-sync',true);}
 function certDnsApply(){_certAction('dns-sync',false);}
@@ -4532,6 +4806,17 @@ function certRenewApply(){_certAction('renew',false);}
 function certDeployDryRun(){_certAction('deploy',true);}
 function certDeployApply(){_certAction('deploy',false);}
 function certVerify(){_certAction('verify',false);}
+function certReconcile(){
+  _certSetResult('<div class="skeleton h-60"></div>');
+  _authFetch(API.CERT_RECONCILE).then(function(r){
+    return r.json().then(function(d){d._httpStatus=r.status;return d;}).catch(function(){return {_httpStatus:r.status,error:'Invalid JSON response'};});
+  }).then(function(d){
+    var ok=!(d&&d.error);
+    _certSetResult(_renderCertResult({ok:ok,action:'reconcile',data:d}));
+    if(ok){toast('SSL target reconciliation complete','success');loadCertsPage();}
+    else toast(d.error||'SSL reconcile failed','error');
+  }).catch(function(e){_certSetResult('<div class="exec-out" style="color:var(--red)">'+_esc(e.toString())+'</div>');});
+}
 function _certAction(action,dryRun){
   var target=_certSelectedTarget();
   var label=action.toUpperCase()+(target?' for '+target:'');
@@ -5796,6 +6081,78 @@ function _getLabLabels(healthHosts){
   });}
   return labels;
 }
+function _deviceRowId(value){
+  return String(value||'device').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'device';
+}
+var DEVICE_ASSIGNMENT_OPTIONS=[
+  {value:'prod',label:'PROD'},
+  {value:'lab',label:'LAB'},
+  {value:'template',label:'TEMP'},
+  {value:'ooc',label:'OOC'}
+];
+function _deviceSpecialCategory(cat){
+  cat=String(cat||'').toLowerCase();
+  return cat==='lab'||cat==='template'||cat==='templates'||cat==='ooc'||cat==='out_of_contract'||cat==='sandbox';
+}
+function _deviceAssignmentFromCategory(cat,fallback){
+  cat=String(cat||fallback||'').toLowerCase();
+  if(cat==='lab')return 'lab';
+  if(cat==='template'||cat==='templates')return 'template';
+  if(cat==='ooc'||cat==='out_of_contract')return 'ooc';
+  return 'prod';
+}
+function _deviceCategoryForVmid(vmid,admin){
+  vmid=parseInt(vmid||0,10);
+  if(!vmid||!admin||!admin.categories)return '';
+  var found='';
+  Object.keys(admin.categories).some(function(cat){
+    var info=admin.categories[cat]||{};
+    var ids=info.vmids||[];
+    if(ids.indexOf(vmid)>=0){found=cat;return true;}
+    if(info.range_start!==undefined&&info.range_end!==undefined&&vmid>=info.range_start&&vmid<=info.range_end){found=cat;return true;}
+    return false;
+  });
+  return found;
+}
+function _deviceCategoryForAssignment(admin,assignment,current){
+  var cats=Object.keys((admin&&admin.categories)||{}).filter(function(cat){return String(cat).toLowerCase()!=='sandbox';});
+  function has(name){return cats.indexOf(name)>=0;}
+  if(assignment==='lab')return has('lab')?'lab':'';
+  if(assignment==='template')return has('templates')?'templates':has('template')?'template':'';
+  if(assignment==='ooc')return has('out_of_contract')?'out_of_contract':has('ooc')?'ooc':'';
+  if(current&&cats.indexOf(current)>=0&&!_deviceSpecialCategory(current))return current;
+  var preferred=['production','prod','prod_media','prod_other','personal','infrastructure'];
+  for(var i=0;i<preferred.length;i++){if(has(preferred[i]))return preferred[i];}
+  return cats.filter(function(cat){return !_deviceSpecialCategory(cat);})[0]||'';
+}
+function _deviceAssignmentSelect(rowId,current){
+  return '<select id="da-'+rowId+'" class="device-prop-select">'+DEVICE_ASSIGNMENT_OPTIONS.map(function(opt){
+    return '<option value="'+opt.value+'"'+(opt.value===current?' selected':'')+'>'+opt.label+'</option>';
+  }).join('')+'</select>';
+}
+function _deviceTypeSelect(rowId,current){
+  var validTypes=['linux','pve','truenas','pfsense','docker','idrac','switch','unknown'];
+  return '<select id="ht-'+rowId+'" class="device-prop-select">'+validTypes.map(function(t){
+    return '<option value="'+t+'"'+(t===current?' selected':'')+'>'+t+'</option>';
+  }).join('')+'</select>';
+}
+function _devicePermissionTags(admin,cat){
+  var info=admin&&admin.categories?admin.categories[cat]||{}:{};
+  var tier=info.tier||'view';
+  var perms=admin&&admin.tiers?admin.tiers[tier]||[]:[];
+  var h='<span class="tag">'+_esc(String(tier).toUpperCase())+'</span>';
+  perms.slice(0,4).forEach(function(p){h+='<span class="tag">'+_esc(p)+'</span>';});
+  if(perms.length>4)h+='<span class="tag">+'+(perms.length-4)+'</span>';
+  return h;
+}
+function _deviceGroupsForAssignment(groups,assignment){
+  var parts=String(groups||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+  var remove={prod:1,lab:1,template:1,templates:1,ooc:1,out_of_contract:1,sandbox:1};
+  parts=parts.filter(function(x){return !remove[x.toLowerCase()];});
+  var add=assignment==='template'?'template':assignment==='ooc'?'out_of_contract':assignment;
+  if(add&&parts.indexOf(add)<0)parts.push(add);
+  return parts.join(',');
+}
 function _loadLabAssignments(){
   var el=document.getElementById('lab-assign-list');if(!el)return;
   /* Need both fleet overview (for VMs) and health (for hosts) */
@@ -5805,28 +6162,32 @@ function _loadLabAssignments(){
     _authFetch(API.ADMIN_BOUNDARIES).then(function(r){return r.ok?r.json():{};}).catch(function(){return {};})
   ]).then(function(results){
     var fo=results[0],hd=results[1],admin=results[2]||{};
+    _fleetAdminData=admin;
     var items=[];
     var adminHosts={};
     (admin.hosts||[]).forEach(function(h){adminHosts[h.label]=h;});
     /* Add all hosts from health data */
     if(hd&&hd.hosts)hd.hosts.forEach(function(h){
       var ah=adminHosts[h.label]||{};
-      var serverCat=h.groups&&h.groups.indexOf('lab')>=0?'lab':(h.groups&&h.groups.indexOf('template')>=0?'template':'prod');
-      items.push({label:h.label,type:h.type||ah.type||'linux',node:'',status:_healthIsLive(h)?'online':_healthIsStale(h)?'stale':'offline',serverCat:serverCat,source:'host',managed:ah.managed!==false,vmid:ah.vmid||0});
+      var groupsText=String(h.groups||ah.groups||'').toLowerCase();
+      var serverCat=groupsText.indexOf('out_of_contract')>=0||groupsText.indexOf('ooc')>=0?'ooc':groupsText.indexOf('lab')>=0?'lab':groupsText.indexOf('template')>=0?'template':'prod';
+      items.push({label:h.label,type:h.type||ah.type||'linux',ip:h.ip||ah.ip||'',groups:ah.groups||h.groups||'',node:'',status:_healthIsLive(h)?'online':_healthIsStale(h)?'stale':'offline',serverCat:serverCat,source:'host',managed:ah.managed!==false,vmid:ah.vmid||0});
     });
     /* Add inventory-only/unmanaged hosts that are intentionally absent from health. */
     var healthSet={};items.forEach(function(i){healthSet[i.label]=true;});
     Object.keys(adminHosts).forEach(function(label){
       if(healthSet[label])return;
       var ah=adminHosts[label]||{};
-      var serverCat=ah.groups&&ah.groups.indexOf('lab')>=0?'lab':(ah.groups&&ah.groups.indexOf('template')>=0?'template':'prod');
-      items.push({label:label,type:ah.type||'linux',node:'',status:ah.managed===false?'inventory':'unprobed',serverCat:serverCat,source:'host',managed:ah.managed!==false,vmid:ah.vmid||0});
+      var groupsText=String(ah.groups||'').toLowerCase();
+      var serverCat=groupsText.indexOf('out_of_contract')>=0||groupsText.indexOf('ooc')>=0?'ooc':groupsText.indexOf('lab')>=0?'lab':groupsText.indexOf('template')>=0?'template':'prod';
+      items.push({label:label,type:ah.type||'linux',ip:ah.ip||'',groups:ah.groups||'',node:'',status:ah.managed===false?'inventory':'unprobed',serverCat:serverCat,source:'host',managed:ah.managed!==false,vmid:ah.vmid||0});
     });
     /* Add VMs not already covered by hosts (VMs without SSH entries) */
     var hostSet={};items.forEach(function(i){hostSet[i.label]=true;});
     if(fo&&fo.vms)fo.vms.forEach(function(v){
       if(hostSet[v.name])return;
-      items.push({label:v.name,type:'vm',node:v.node||'',status:v.status||'stopped',serverCat:v.category==='lab'?'lab':v.category==='templates'?'template':'prod',source:'pve',managed:false,vmid:v.vmid||0});
+      var vmCat=_deviceCategoryForVmid(v.vmid,admin)||v.category||'';
+      items.push({label:v.name,type:'vm',ip:'',groups:'',node:v.node||'',status:v.status||'stopped',serverCat:v.category==='lab'?'lab':v.category==='templates'?'template':v.category==='out_of_contract'?'ooc':'prod',source:'pve',managed:false,vmid:v.vmid||0,vmCategory:vmCat});
     });
     /* Sort: lab items first, then alphabetical */
     items.sort(function(a,b){
@@ -5835,17 +6196,28 @@ function _loadLabAssignments(){
       if(aLab&&!bLab)return -1;if(!aLab&&bLab)return 1;
       return a.label<b.label?-1:1;
     });
-    var h='<table><thead><tr><th>Name</th><th>Type</th><th>Node</th><th>Status</th><th class="text-center">Assignment</th><th class="text-center">Management</th></tr></thead><tbody>';
+    var h='<table class="device-assignment-table"><thead><tr><th>Name</th><th>Kind</th><th>Address</th><th>Status</th><th>Assignment</th><th>Host Properties</th><th>Management</th><th>Permissions</th><th>Save</th></tr></thead><tbody>';
     items.forEach(function(it){
-      var assignment=_deviceAssignment(it.label,it.serverCat);
+      var vmCat=it.source==='pve'?(_deviceCategoryForVmid(it.vmid,admin)||it.vmCategory||''):'';
+      var assignment=it.source==='pve'?_deviceAssignmentFromCategory(vmCat,it.serverCat):_deviceAssignment(it.label,it.serverCat);
       var statusColor=it.status==='online'||it.status==='running'?'var(--green)':'var(--text-dim)';
+      var rowId=_deviceRowId((it.source==='pve'?'vm-'+it.vmid:it.label));
       var manageable=it.source==='host';
-      h+='<tr><td><strong>'+it.label+'</strong></td>';
-      h+='<td class="mono-11">'+it.type.toUpperCase()+'</td>';
-      h+='<td class="mono-11">'+(it.node||'-')+'</td>';
+      var permissionHtml=it.source==='pve'?_devicePermissionTags(admin,vmCat):'<span class="tag">'+(it.managed?'managed':'inventory')+'</span>';
+      h+='<tr><td><strong>'+_esc(it.label)+'</strong>'+(it.vmid?'<div class="text-sub">VMID '+_esc(String(it.vmid))+'</div>':'')+'</td>';
+      h+='<td class="mono-11">'+_esc((it.type||'unknown').toUpperCase())+'</td>';
+      h+='<td class="mono-11">'+_esc(it.ip||it.node||'-')+'</td>';
       h+='<td><span style="color:'+statusColor+'">'+it.status.toUpperCase()+'</span></td>';
-      h+='<td class="text-center">'+['prod','lab','template'].map(function(opt){var on=assignment===opt;var color=opt==='lab'?'var(--cyan)':opt==='template'?'var(--yellow)':'var(--green)';return '<span onclick="toggleDeviceAssign(\''+it.label+'\',\''+opt+'\')" style="cursor:pointer;display:inline-block;margin:0 2px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid '+(on?color:'var(--border-light)')+';background:'+(on?'rgba(255,255,255,0.08)':'transparent')+';color:'+(on?color:'var(--text-dim)')+'">'+opt.toUpperCase()+'</span>';}).join('')+'</td>';
-      h+='<td class="text-center">'+(manageable?'<button class="fleet-btn pill-ok-sm" style="color:'+(it.managed?'var(--green)':'var(--yellow)')+'" onclick="toggleHostManaged(\''+it.label+'\','+(it.managed?'false':'true')+')">'+(it.managed?'MANAGED':'INVENTORY')+'</button>':'<span class="text-sub">PVE ONLY</span>')+'</td>';
+      h+='<td>'+_deviceAssignmentSelect(rowId,assignment)+'</td>';
+      if(manageable){
+        h+='<td><div class="device-props-grid">'+_deviceTypeSelect(rowId,it.type)+'<input id="hg-'+rowId+'" value="'+_esc(it.groups||'')+'" class="device-prop-input" placeholder="prod,media"></div></td>';
+        h+='<td><select id="hm-'+rowId+'" class="device-prop-select"><option value="true"'+(it.managed?' selected':'')+'>managed</option><option value="false"'+(!it.managed?' selected':'')+'>inventory-only</option></select></td>';
+      }else{
+        h+='<td><span class="text-sub">PVE inventory</span></td>';
+        h+='<td><span class="text-sub">PVE only</span></td>';
+      }
+      h+='<td><div class="device-permission-tags">'+permissionHtml+'</div></td>';
+      h+='<td><button class="fleet-btn pill-ok-sm" data-action="saveDeviceAssignmentRow" data-source="'+_esc(it.source)+'" data-label="'+_esc(it.label)+'" data-vmid="'+_esc(String(it.vmid||''))+'" data-row="'+_esc(rowId)+'">SAVE</button></td>';
       h+='</tr>';
     });
     h+='</tbody></table>';
@@ -5954,106 +6326,62 @@ function loadFleetAdmin(){
 function renderFleetAdmin(d){
   var body=document.getElementById('fleet-admin-body');
   if(!body)return;
-  var h='';
-  /* ── Host Properties Editor ── */
-  h+='<div class="mb-24">';
-  h+='<h4 class="section-label-pl-ls">HOST PROPERTIES</h4>';
-  h+='<p class="desc-line">Change host type, groups, or management. Inventory-only hosts stay visible without health alerts or doctor degradation.</p>';
-  h+='<table><thead><tr><th>Label</th><th>IP</th><th>Type</th><th>Groups</th><th>Management</th><th>Actions</th></tr></thead><tbody>';
-  var validTypes=['linux','pve','truenas','pfsense','docker','idrac','switch','unknown'];
-  (d.hosts||[]).forEach(function(host){
-    var typeOpts='';validTypes.forEach(function(t){typeOpts+='<option value="'+t+'"'+(t===host.type?' selected':'')+'>'+t+'</option>';});
-    h+='<tr>';
-    h+='<td><strong>'+host.label+'</strong></td>';
-    h+='<td class="text-sub">'+host.ip+'</td>';
-    h+='<td><select id="ht-'+host.label+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">'+typeOpts+'</select></td>';
-    h+='<td><input id="hg-'+host.label+'" value="'+host.groups+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;width:160px" placeholder="prod,media"></td>';
-    h+='<td><select id="hm-'+host.label+'" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px"><option value="true"'+(host.managed!==false?' selected':'')+'>managed</option><option value="false"'+(host.managed===false?' selected':'')+'>inventory-only</option></select></td>';
-    h+='<td><button class="fleet-btn pill-ok-sm" onclick="saveHostProps(\''+host.label+'\')" >SAVE</button></td>';
-    h+='</tr>';
-  });
-  h+='</tbody></table></div>';
-  /* Physical infrastructure scope */
-  h+='<div class="mb-24">';
-  h+='<h4 class="section-label-pl-ls">PHYSICAL INFRASTRUCTURE SCOPE</h4>';
-  h+='<table><thead><tr><th>Device</th><th>IP</th><th>Type</th><th>Groups</th><th>Scope</th></tr></thead><tbody>';
-  Object.keys(d.physical||{}).sort().forEach(function(key){
-    var p=d.physical[key]||{};
-    var scope=p.scope==='lab'?'lab':'core';
-    h+='<tr>';
-    h+='<td><strong>'+key+'</strong><div class="text-sub">'+(p.label||'')+'</div></td>';
-    h+='<td class="text-sub">'+(p.ip||'')+'</td>';
-    h+='<td>'+((p.type||'unknown').toUpperCase())+'</td>';
-    h+='<td class="text-sub">'+(p.groups||'')+'</td>';
-    h+='<td><select onchange="updatePhysicalScope(\''+key+'\',this.value)" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">';
-    h+='<option value="core"'+(scope==='core'?' selected':'')+'>core</option>';
-    h+='<option value="lab"'+(scope==='lab'?' selected':'')+'>lab</option>';
-    h+='</select></td>';
-    h+='</tr>';
-  });
-  h+='</tbody></table></div>';
-  /* ── VM Categories ── */
-  h+='<div class="mb-24">';
-  h+='<h4 class="section-label-pl-ls">VM CATEGORIES & PERMISSIONS</h4>';
-  h+='<p class="desc-line">Assign VMIDs to categories. Controls what actions are allowed per VM.</p>';
-  var tierNames=Object.keys(d.tiers||{});
-  Object.keys(d.categories||{}).forEach(function(cat){
-    var info=d.categories[cat];
-    var tierOpts='';tierNames.forEach(function(t){tierOpts+='<option value="'+t+'"'+(t===info.tier?' selected':'')+'>'+t+'</option>';});
-    h+='<div class="crd mb-8" >';
-    h+='<div class="flex-between-mb8">';
-    h+='<div><h3 style="font-size:14px;text-transform:uppercase">'+cat.replace(/_/g,' ')+'</h3>';
-    h+='<p class="fs-11-dim-mt2">'+info.description+'</p></div>';
-    h+='<div style="display:flex;align-items:center;gap:8px"><span class="text-meta">Tier:</span>';
-    h+='<select onchange="updateCategoryTier(\''+cat+'\',this.value)" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">'+tierOpts+'</select></div>';
-    h+='</div>';
-    /* VMIDs or range */
-    if(info.range_start!==undefined){
-      h+='<div class="flex-center mt-sm">';
-      h+='<span class="text-sub">VMID Range:</span>';
-      h+='<input id="rs-'+cat+'" type="number" value="'+info.range_start+'" class="input-sm">';
-      h+='<span class="c-dim">—</span>';
-      h+='<input id="re-'+cat+'" type="number" value="'+info.range_end+'" class="input-sm">';
-      h+='<button class="fleet-btn pill-ok-sm" data-action="updateCategoryRange" data-arg="'+cat+'" >SAVE</button>';
-      h+='</div>';
-    } else {
-      var vmids=(info.vmids||[]).join(', ');
-      h+='<div class="mt-8">';
-      h+='<div class="text-sm text-dim" style="margin-bottom:4px">VMIDs: <span style="color:var(--text)">'+vmids+'</span></div>';
-      h+='<div style="display:flex;gap:6px;align-items:center;margin-top:4px">';
-      h+='<input id="vmid-add-'+cat+'" type="number" placeholder="VMID" class="input-sm">';
-      h+='<button class="fleet-btn pill-ok-sm" onclick="addVmidToCategory(\''+cat+'\')" >+ ADD</button>';
-      /* Removable badges */
-      (info.vmids||[]).forEach(function(vid){
-        h+='<span style="display:inline-flex;align-items:center;gap:4px;background:var(--purple-faint);color:var(--purple-light);padding:2px 8px;border-radius:4px;font-size:12px">'+vid;
-        h+='<span onclick="removeVmidFromCategory(\''+cat+'\','+vid+')" style="cursor:pointer;color:var(--red);font-weight:700">&times;</span></span>';
-      });
-      h+='</div></div>';
-    }
-    /* Tier permissions display */
-    var perms=d.tiers[info.tier]||['view'];
-    h+='<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">';
-    perms.forEach(function(p){h+='<span class="tag">'+p+'</span>';});
-    h+='</div>';
-    h+='</div>';
-  });
-  h+='</div>';
-  /* ── Permission Tiers ── */
-  h+='<div class="mb-24">';
-  h+='<h4 class="section-label-pl-ls">PERMISSION TIERS</h4>';
-  h+='<p class="desc-line">Define what actions each tier allows. Tiers are assigned to categories above.</p>';
-  Object.keys(d.tiers||{}).forEach(function(tier){
-    var actions=d.tiers[tier]||[];
-    h+='<div class="crd mb-8" >';
-    h+='<h3 style="font-size:14px;text-transform:uppercase">'+tier+'</h3>';
-    h+='<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">';
-    actions.forEach(function(a){h+='<span class="tag">'+a+'</span>';});
-    h+='</div></div>';
-  });
-  h+='</div>';
-  body.innerHTML=h;
+  body.innerHTML='';
 }
 /* Fleet Admin actions */
+function saveDeviceAssignmentRow(btn){
+  var rowId=btn.dataset.row||'';
+  var source=btn.dataset.source||'';
+  var label=btn.dataset.label||'';
+  var vmid=parseInt(btn.dataset.vmid||'0',10);
+  var assignmentEl=document.getElementById('da-'+rowId);
+  var assignment=assignmentEl?assignmentEl.value:'prod';
+  if(source==='pve'){
+    saveVmidAssignment(vmid,assignment);
+    return;
+  }
+  var typeEl=document.getElementById('ht-'+rowId);
+  var groupEl=document.getElementById('hg-'+rowId);
+  var managedEl=document.getElementById('hm-'+rowId);
+  if(!typeEl||!groupEl){toast('Row controls unavailable','error');return;}
+  groupEl.value=_deviceGroupsForAssignment(groupEl.value,assignment);
+  var url='/api/admin/hosts/update?label='+encodeURIComponent(label)+'&type='+encodeURIComponent(typeEl.value)+'&groups='+encodeURIComponent(groupEl.value);
+  if(managedEl)url+='&managed='+encodeURIComponent(managedEl.value);
+  _authFetch(url,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+    if(d.error){toast('Error: '+d.error,'error');return;}
+    _labAssignments[label]=assignment;
+    localStorage.setItem('freq_lab_assign',JSON.stringify(_labAssignments));
+    toast(label+' updated','success');
+    loadFleetAdmin();
+    _loadLabAssignments();
+    refreshCurrentView();
+  }).catch(function(e){toast('Failed: '+e,'error');});
+}
+function saveVmidAssignment(vmid,assignment){
+  var admin=_fleetAdminData||{};
+  var current=_deviceCategoryForVmid(vmid,admin);
+  var target=_deviceCategoryForAssignment(admin,assignment,current);
+  if(!vmid){toast('VMID unavailable','error');return;}
+  if(!target){toast('No '+assignment.toUpperCase()+' category configured','error');return;}
+  var categories=Object.keys(admin.categories||{}).filter(function(cat){return String(cat).toLowerCase()!=='sandbox';});
+  var calls=[];
+  categories.forEach(function(cat){
+    if(cat===target)return;
+    var info=admin.categories[cat]||{};
+    if((info.vmids||[]).indexOf(vmid)>=0){
+      calls.push(_authFetch(API.ADMIN_BOUNDARIES_UPDATE+'?action=remove_vmid&category='+encodeURIComponent(cat)+'&vmid='+vmid,{method:'POST'}).then(function(r){return r.json();}));
+    }
+  });
+  calls.push(_authFetch(API.ADMIN_BOUNDARIES_UPDATE+'?action=add_vmid&category='+encodeURIComponent(target)+'&vmid='+vmid,{method:'POST'}).then(function(r){return r.json();}));
+  Promise.all(calls).then(function(results){
+    var bad=results.find(function(d){return d&&d.error;});
+    if(bad){toast('Error: '+bad.error,'error');return;}
+    toast('VMID '+vmid+' assigned to '+assignment.toUpperCase(),'success');
+    loadFleetAdmin();
+    _loadLabAssignments();
+    refreshCurrentView();
+  }).catch(function(e){toast('Failed: '+e,'error');});
+}
 function saveHostProps(label){
   var typeEl=document.getElementById('ht-'+label);
   var groupEl=document.getElementById('hg-'+label);
@@ -8166,135 +8494,60 @@ function openNewTool(){
   h+='</div>';
   ov.innerHTML=h;ov.style.display='flex';
 }
-/* Vault lock/unlock */
-var _vaultUnlocked=false;
-function unlockVault(){
-  var user=document.getElementById('vault-auth-user').value.trim();
-  var pass=document.getElementById('vault-auth-pass').value;
-  if(!user||!pass){toast('Enter admin credentials','error');return;}
-  /* Verify credentials by attempting actual login */
-  toast('Verifying credentials...','info');
-  fetch('/api/auth/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})}).then(function(r){return r.json()}).then(function(d){
-    if(!d.ok||!d.token){toast('Invalid credentials','error');document.getElementById('vault-auth-pass').value='';return;}
-    _rememberAuthResponse(d);
-    _browserSessionActive=true;
-    /* Login succeeded — now verify admin role */
-    _authFetch(API.USERS).then(function(r){return r.json()}).then(function(ud){
-      var isAdmin=ud.users.some(function(u){return u.username===user&&u.role==='admin';});
-      if(!isAdmin){toast('Access denied — admin role required','error');document.getElementById('vault-auth-pass').value='';return;}
-      _vaultUnlocked=true;
-      document.getElementById('vault-locked').classList.add('d-none');
-      document.getElementById('vault-unlocked').classList.remove('d-none');
-      toast('Vault unlocked','success');
-      loadSensitiveVault();
-    });
-  }).catch(function(){toast('Authentication failed','error');document.getElementById('vault-auth-pass').value='';});
-}
-function lockVault(){
-  _vaultUnlocked=false;
-  document.getElementById('vault-locked').classList.remove('d-none');
-  document.getElementById('vault-unlocked').classList.add('d-none');
-  document.getElementById('vault-sensitive-c').innerHTML='';
-  document.getElementById('vault-auth-pass').value='';
-  toast('Vault locked','info');
-}
 var _vaultData=null;
-var _vaultTab='users';
-function switchVaultTab(tab){
-  _vaultTab=tab;
-  document.querySelectorAll('.vault-tab').forEach(function(b){b.classList.remove('active-view');});
-  var btn=document.querySelector('.vault-tab[data-vtab="'+tab+'"]');if(btn)btn.classList.add('active-view');
-  renderVaultTab();
-}
-function loadSensitiveVault(){
-  _authFetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
-    _vaultData=d;
-    /* Also load FREQ users for the users tab */
-    _authFetch(API.USERS).then(function(r2){return r2.json()}).then(function(ud){
-      _vaultData._users=ud.users;
-      renderVaultTab();
-    }).catch(function(){renderVaultTab();});
+var _vaultFilter='all';
+function loadVaultCredentials(){
+  var c=document.getElementById('vault-credentials-c');
+  if(c)c.innerHTML='<div class="skeleton h-60"></div>';
+  _authFetch(API.VAULT_CREDENTIALS).then(function(r){return r.json().then(function(d){return {status:r.status,body:d};});}).then(function(res){
+    if(res.status>=400){throw new Error(res.body.error||('vault HTTP '+res.status));}
+    _vaultData=res.body||{};
+    renderVaultCredentials();
+  }).catch(function(e){
+    var el=document.getElementById('vault-credentials-c');
+    if(el)el.innerHTML='<div class="empty-state"><p>'+_esc(e.toString())+'</p></div>';
   });
 }
-function _isUserEntry(e){
-  var k=e.key.toLowerCase();
-  return k.indexOf('pass')>=0||k.indexOf('pwd')>=0||k.indexOf('ssh')>=0||k.indexOf('id_')>=0||k.indexOf('pub')>=0;
+function vaultFilter(scope){
+  _vaultFilter=scope||'all';
+  document.querySelectorAll('.vault-filter').forEach(function(b){b.classList.remove('active-view');});
+  var btn=document.querySelector('.vault-filter[data-arg="'+_vaultFilter+'"]');if(btn)btn.classList.add('active-view');
+  renderVaultCredentials();
 }
-function renderVaultTab(){
-  var d=_vaultData;
-  if(!d||!d.initialized){document.getElementById('vault-sensitive-c').innerHTML='<p class="c-yellow">Vault not initialized.</p>';return;}
-  var html='';
-  if(_vaultTab==='users'){
-    /* Users view — show each FREQ user with password + ssh key copy buttons */
-    var users=d._users||[];
-    var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)'};
-    html='<div class="cards grid-auto-280" >';
-    users.forEach(function(u,i){
-      var passEntry=d.entries.find(function(e){return e.host===u.username&&(e.key.toLowerCase().indexOf('pass')>=0||e.key==='password');});
-      var sshEntry=d.entries.find(function(e){return e.host===u.username&&(e.key.toLowerCase().indexOf('ssh')>=0||e.key.toLowerCase().indexOf('pub')>=0||e.key.toLowerCase().indexOf('id_')>=0);});
-      html+='<div class="crd border-red" >';
-      html+='<div class="flex-between-mb8"><h3 style="color:var(--text)">'+u.username.toUpperCase()+'</h3><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-size:12px;font-weight:600">'+u.role.toUpperCase()+'</span></div>';
-      html+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
-      if(passEntry){
-        html+='<button class="fleet-btn pill-purple-xs" data-action="vaultCopy" data-host="'+passEntry.host+'" data-key="'+passEntry.key+'" >&#128273; COPY PASSWORD</button>';
-      } else {
-        html+='<span class="fs-12-dim-pad4">No password stored</span>';
-      }
-      if(sshEntry){
-        html+='<button class="fleet-btn pill-purple-xs" data-action="vaultCopy" data-host="'+sshEntry.host+'" data-key="'+sshEntry.key+'" >&#128272; COPY SSH KEY</button>';
-      } else {
-        html+='<span class="fs-12-dim-pad4">No SSH key stored</span>';
-      }
-      html+='</div></div>';
-    });
-    if(!users.length)html+='<div class="empty-state"><p>0 users in users.conf</p></div>';
-    html+='</div>';
-  } else if(_vaultTab==='apikeys'){
-    var apiEntries=d.entries.filter(function(e){return !_isUserEntry(e);});
-    var groups={};
-    apiEntries.forEach(function(e){if(!groups[e.host])groups[e.host]=[];groups[e.host].push(e);});
-    html='<div class="cards grid-auto-300" >';
-    Object.keys(groups).sort().forEach(function(host){
-      var entries=groups[host];
-      html+='<div class="crd border-red" >';
-      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn pill-err-xs" data-action="vaultDelGroup" data-arg="'+host+'" >DELETE</button></div>';
-      entries.forEach(function(e){
-        var uid=host.replace(/[^a-z0-9]/gi,'')+'-'+e.key.replace(/[^a-z0-9]/gi,'');
-        html+='<div class="flex-border-row">';
-        html+='<span style="font-weight:600;color:var(--text);min-width:90px">'+e.key+'</span>';
-        html+='<span style="color:var(--text-dim);flex:1;font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="vk-'+uid+'">'+e.masked+'</span>';
-        html+='<button class="fleet-btn pill-2-8" data-action="vaultReveal" data-uid="'+uid+'" data-host="'+e.host+'" data-key="'+e.key+'" >SHOW</button>';
-        html+='<button class="fleet-btn pill-purple-2-8" data-action="vaultCopy" data-host="'+e.host+'" data-key="'+e.key+'" >COPY</button>';
-        html+='</div>';
-      });
-      html+='</div>';
-    });
-    if(!apiEntries.length)html+='<div class="empty-state"><p>0 API keys in vault</p></div>';
-    html+='</div>';
-  } else {
-    /* ALL tab */
-    var groups={};
-    d.entries.forEach(function(e){if(!groups[e.host])groups[e.host]=[];groups[e.host].push(e);});
-    html='<div class="cards grid-auto-300" >';
-    Object.keys(groups).sort().forEach(function(host){
-      var entries=groups[host];
-      html+='<div class="crd border-red" >';
-      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn pill-err-xs" data-action="vaultDelGroup" data-arg="'+host+'" >DELETE</button></div>';
-      entries.forEach(function(e){
-        var uid=host.replace(/[^a-z0-9]/gi,'')+'-'+e.key.replace(/[^a-z0-9]/gi,'');
-        html+='<div class="flex-border-row">';
-        html+='<span style="font-weight:600;color:var(--text);min-width:90px">'+e.key+'</span>';
-        html+='<span style="color:var(--text-dim);flex:1;font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="vk-'+uid+'">'+e.masked+'</span>';
-        html+='<button class="fleet-btn pill-2-8" data-action="vaultReveal" data-uid="'+uid+'" data-host="'+e.host+'" data-key="'+e.key+'" >SHOW</button>';
-        html+='<button class="fleet-btn pill-purple-2-8" data-action="vaultCopy" data-host="'+e.host+'" data-key="'+e.key+'" >COPY</button>';
-        html+='</div>';
-      });
-      html+='</div>';
-    });
-    if(!d.entries.length)html+='<div class="empty-state"><p>0 vault entries</p></div>';
-    html+='</div>';
+function _vaultVisibleCredentials(){
+  var list=(_vaultData&&_vaultData.credentials)||[];
+  if(_vaultFilter==='global'||_vaultFilter==='user')return list.filter(function(x){return x.scope===_vaultFilter;});
+  return list;
+}
+function renderVaultCredentials(){
+  var d=_vaultData||{};
+  var list=_vaultVisibleCredentials();
+  var stats=document.getElementById('vault-stats');
+  if(stats)stats.innerHTML=st('Global',(d.counts&&d.counts.global)||0,'p')+st('User',(d.counts&&d.counts.user)||0,'b')+st('Visible',list.length,'g');
+  var alert=document.getElementById('vault-alert');
+  if(alert){
+    alert.className='vault-scope-note';
+    alert.innerHTML='Global credentials are visible to operators and admins. User credentials are private to the signed-in operator.';
   }
-  document.getElementById('vault-sensitive-c').innerHTML=html;
+  var c=document.getElementById('vault-credentials-c');if(!c)return;
+  if(!d.initialized||!list.length){
+    c.innerHTML='<div class="empty-state"><p>0 credentials. Add a Global or User credential to start.</p></div>';
+    return;
+  }
+  var h='';
+  list.forEach(function(e){
+    var uid='vault-secret-'+String(e.id||'').replace(/[^a-z0-9]/gi,'');
+    var scopeCls=e.scope==='global'?'vault-global':'vault-user';
+    h+='<div class="vault-credential-card '+scopeCls+'">';
+    h+='<div class="vault-credential-head"><div><h3>'+_esc(e.label||'Credential')+'</h3><div class="text-meta">'+_esc(e.url||e.kind||'credential')+'</div></div><span class="vault-scope-badge">'+_esc((e.scope||'user').toUpperCase())+'</span></div>';
+    h+='<div class="vault-credential-row"><span>Username</span><strong>'+_esc(e.username||'-')+'</strong></div>';
+    h+='<div class="vault-secret-row"><span id="'+uid+'" class="vault-secret-value">'+_esc(e.masked||'********')+'</span><button class="fleet-btn" data-action="vaultCredentialReveal" data-id="'+_esc(e.id)+'" data-scope="'+_esc(e.scope)+'">SHOW</button><button class="fleet-btn" data-action="vaultCredentialCopy" data-id="'+_esc(e.id)+'" data-scope="'+_esc(e.scope)+'">COPY</button></div>';
+    if(e.tags&&e.tags.length)h+='<div class="vault-tags">'+e.tags.map(function(t){return '<span>'+_esc(t)+'</span>';}).join('')+'</div>';
+    if(e.notes)h+='<p class="vault-notes-text">'+_esc(e.notes)+'</p>';
+    h+='<div class="vault-card-actions"><button class="fleet-btn" data-action="vaultCredentialDelete" data-id="'+_esc(e.id)+'" data-scope="'+_esc(e.scope)+'">DELETE</button></div>';
+    h+='</div>';
+  });
+  c.innerHTML=h;
 }
 /* M-BLUETEAM-SECURITY-HARDENING-20260413AJ: vault reveal auto-hide.
  * Pre-fix, a revealed secret stayed visible until the operator clicked
@@ -8312,43 +8565,79 @@ function _clearVaultRevealTimer(uid){
     delete _vaultRevealTimers[uid];
   }
 }
+function _vaultSecretEl(id){
+  return document.getElementById('vault-secret-'+String(id||'').replace(/[^a-z0-9]/gi,''));
+}
 function _hideVaultSecret(uid,maskedValue){
-  var el=document.getElementById('vk-'+uid);
+  var el=_vaultSecretEl(uid);
   if(!el)return;
   el.textContent=maskedValue;
   el.removeAttribute('data-revealed');
   el.style.color='var(--text-dim)';
   _clearVaultRevealTimer(uid);
 }
-function vaultReveal(uid,host,key){
-  if(!_vaultData)return;
-  var entry=_vaultData.entries.find(function(e){return e.host===host&&e.key===key;});
+function vaultCredentialReveal(id,scope){
+  var el=_vaultSecretEl(id);if(!el)return;
+  var entry=((_vaultData&&_vaultData.credentials)||[]).find(function(e){return e.id===id&&e.scope===scope;});
   if(!entry)return;
-  var el=document.getElementById('vk-'+uid);if(!el)return;
   if(el.getAttribute('data-revealed')){
-    _hideVaultSecret(uid,entry.masked);
+    _hideVaultSecret(id,entry.masked||'********');
   } else {
-    el.textContent=entry.value||entry.masked;
-    el.setAttribute('data-revealed','1');
-    el.style.color='var(--yellow)';
-    _clearVaultRevealTimer(uid);
-    _vaultRevealTimers[uid]=setTimeout(function(){
-      _hideVaultSecret(uid,entry.masked);
-    },VAULT_REVEAL_TIMEOUT_MS);
+    _authFetch(API.VAULT_CREDENTIAL_REVEAL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,scope:scope})}).then(function(r){return r.json().then(function(d){return {status:r.status,body:d};});}).then(function(res){
+      if(res.status>=400||!res.body.ok){toast((res.body&&res.body.error)||'Reveal failed','error');return;}
+      el.textContent=res.body.secret||entry.masked||'********';
+      el.setAttribute('data-revealed','1');
+      el.style.color='var(--yellow)';
+      _clearVaultRevealTimer(id);
+      _vaultRevealTimers[id]=setTimeout(function(){_hideVaultSecret(id,entry.masked||'********');},VAULT_REVEAL_TIMEOUT_MS);
+    });
   }
 }
-function vaultCopy(host,key){
-  if(!_vaultData)return;
-  var entry=_vaultData.entries.find(function(e){return e.host===host&&e.key===key;});
-  if(!entry||!entry.value){toast('Cannot copy — value not available','error');return;}
-  try{
-    var ta=document.createElement('textarea');
-    ta.value=entry.value;ta.style.position='fixed';ta.style.left='-9999px';
-    document.body.appendChild(ta);ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    toast(key+' copied to clipboard','success');
-  }catch(e){toast('Copy failed','error');}
+function vaultCredentialCopy(id,scope){
+  _authFetch(API.VAULT_CREDENTIAL_REVEAL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,scope:scope})}).then(function(r){return r.json().then(function(d){return {status:r.status,body:d};});}).then(function(res){
+    if(res.status>=400||!res.body.ok){toast((res.body&&res.body.error)||'Copy failed','error');return;}
+    try{navigator.clipboard.writeText(res.body.secret||'').then(function(){toast('Credential copied','success');}).catch(function(){_fallbackCopy(res.body.secret||'');});}
+    catch(e){_fallbackCopy(res.body.secret||'');}
+  });
+}
+function _fallbackCopy(value){
+  var ta=document.createElement('textarea');
+  ta.value=value;ta.style.position='fixed';ta.style.left='-9999px';
+  document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+  toast('Credential copied','success');
+}
+function vaultCredentialDelete(id,scope){
+  confirmAction('Delete this <strong>'+String(scope||'credential').toUpperCase()+'</strong> credential?',function(){
+    _authFetch(API.VAULT_CREDENTIAL_DELETE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,scope:scope})}).then(function(r){return r.json()}).then(function(d){
+      if(d.ok){toast('Credential deleted','success');loadVaultCredentials();}else toast(d.error||'Delete failed','error');
+    });
+  });
+}
+function vaultOpenCreate(){
+  var el=document.getElementById('vault-editor');
+  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+  var label=document.getElementById('vault-label');if(label)label.focus();
+}
+function vaultResetForm(){
+  ['vault-edit-id','vault-label','vault-username','vault-secret','vault-url','vault-tags','vault-notes'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  var s=document.getElementById('vault-scope');if(s)s.value='user';
+}
+function vaultCredentialSave(){
+  var body={
+    id:(document.getElementById('vault-edit-id')||{}).value||'',
+    scope:(document.getElementById('vault-scope')||{}).value||'user',
+    label:(document.getElementById('vault-label')||{}).value||'',
+    username:(document.getElementById('vault-username')||{}).value||'',
+    secret:(document.getElementById('vault-secret')||{}).value||'',
+    url:(document.getElementById('vault-url')||{}).value||'',
+    tags:(document.getElementById('vault-tags')||{}).value||'',
+    notes:(document.getElementById('vault-notes')||{}).value||''
+  };
+  if(!body.label||!body.secret){toast('Name and secret required','error');return;}
+  _authFetch(API.VAULT_CREDENTIAL_SET,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json().then(function(d){return {status:r.status,body:d};});}).then(function(res){
+    if(res.status>=400||!res.body.ok){toast((res.body&&res.body.error)||'Save failed','error');return;}
+    toast('Credential saved','success');vaultResetForm();loadVaultCredentials();
+  });
 }
 /* Reset & copy password */
 /* Promote/demote functions */
@@ -9737,44 +10026,6 @@ function synReboot(){
 /* ═══════════════════════════════════════════════════════════════════
    SECURITY
    ═══════════════════════════════════════════════════════════════════ */
-function loadVault(){
-  _authFetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
-    if(!d.initialized){document.getElementById('vault-c').innerHTML='<p class="c-yellow">Vault not initialized. Store a credential to auto-initialize.</p>';return;}
-    var groups={};
-    d.entries.forEach(function(e){if(!groups[e.host])groups[e.host]=[];groups[e.host].push(e);});
-    var html='<div class="cards grid-auto-280" >';
-    Object.keys(groups).sort().forEach(function(host){
-      var entries=groups[host];
-      html+='<div class="crd">';
-      html+='<div class="flex-between-mb8"><h3>'+host.toUpperCase()+'</h3><button class="fleet-btn pill-err-xs" data-action="vaultDelGroup" data-arg="'+host+'" >DELETE ALL</button></div>';
-      entries.forEach(function(e){
-        html+='<div style="display:flex;gap:12px;padding:4px 0;border-top:1px solid var(--border);font-size:12px">';
-        html+='<span style="font-weight:600;color:var(--text)">'+e.key+'</span><span class="c-dim">'+e.masked+'</span>';
-        html+='</div>';
-      });
-      html+='</div>';
-    });
-    html+='</div><p class="c-dim-fs11-mt8">'+d.count+' credential(s) across '+Object.keys(groups).length+' service(s)</p>';
-    document.getElementById('vault-c').innerHTML=html;
-  });
-}
-function vaultSet(){
-  var k=document.getElementById('v-key').value;var v=document.getElementById('v-val').value;var h=document.getElementById('v-host').value;
-  if(!k||!v){toast('Key and value required','error');return;}
-  _authFetch(API.VAULT_SET+'?key='+encodeURIComponent(k)+'&value='+encodeURIComponent(v)+'&host='+h,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
-    if(d.ok){document.getElementById('v-key').value='';document.getElementById('v-val').value='';toast('Credential stored','success');loadVault();}else toast(d.error,'error');
-  });
-}
-function vaultDelGroup(host){
-  confirmAction('Delete ALL credentials for <strong>'+host.toUpperCase()+'</strong>?',function(){
-    _authFetch(API.VAULT).then(function(r){return r.json()}).then(function(d){
-      var promises=d.entries.filter(function(e){return e.host===host;}).map(function(e){
-        return _authFetch(API.VAULT_DELETE+'?host='+e.host+'&key='+encodeURIComponent(e.key));
-      });
-      Promise.all(promises).then(function(){toast(host.toUpperCase()+' credentials deleted','success');loadVault();});
-    });
-  });
-}
 function loadUsers(){
   _authFetch(API.USERS).then(function(r){return r.json()}).then(function(d){
     var rc={admin:'var(--red)',operator:'var(--yellow)',viewer:'var(--green)',protected:'var(--purple-light)'};
@@ -9788,15 +10039,18 @@ function loadUsers(){
     html+='<button class="fleet-btn user-filter c-green" data-filter="viewer" onclick="filterUsers(\'viewer\',this)" >VIEWER ('+counts.viewer+')</button>';
     html+='</div>';
     /* User table */
-    html+='<table class="w-full"><thead><tr><th>USERNAME</th><th>ROLE</th><th>PROMOTE / DEMOTE</th></tr></thead><tbody>';
+    html+='<table class="w-full"><thead><tr><th>USERNAME</th><th>ROLE</th><th>ACTIONS</th></tr></thead><tbody>';
     d.users.forEach(function(u,i){
+      var username=_esc(u.username||'');
       html+='<tr class="user-row" data-role="'+u.role+'">';
-      html+='<td><strong>'+u.username.toUpperCase()+'</strong></td>';
+      html+='<td><strong>'+username.toUpperCase()+'</strong></td>';
       html+='<td><span style="color:'+(rc[u.role]||'var(--text-dim)')+';font-weight:600">'+u.role.toUpperCase()+'</span></td>';
       html+='<td class="flex-gap-6">';
       if(_currentRole==='admin'){
-        if(u.role!=='admin')html+='<button class="fleet-btn pill-ok-3-10" data-action="userPromote" data-arg="'+u.username+'" >PROMOTE</button>';
-        if(u.role!=='viewer')html+='<button class="fleet-btn pill-warn-sm" data-action="userDemote" data-arg="'+u.username+'" >DEMOTE</button>';
+        if(u.role!=='admin')html+='<button class="fleet-btn pill-ok-3-10" data-action="userPromote" data-arg="'+username+'" >PROMOTE</button>';
+        if(u.role!=='viewer')html+='<button class="fleet-btn pill-warn-sm" data-action="userDemote" data-arg="'+username+'" >DEMOTE</button>';
+        html+='<button class="fleet-btn" data-action="userResetPassword" data-arg="'+username+'" >RESET PASSWORD</button>';
+        if(u.username!==_currentUser&&u.role!=='protected')html+='<button class="fleet-btn pill-danger-sm" data-action="userDelete" data-arg="'+username+'" >DELETE</button>';
         if(u.role==='admin')html+='<span class="text-sub">MAX</span>';
         if(u.role==='viewer')html+='<span class="text-sub">MIN</span>';
       } else {
@@ -9818,18 +10072,40 @@ function filterUsers(role,btn){
 function userCreate(){
   var n=document.getElementById('u-name').value;var r=document.getElementById('u-role').value;
   if(!n){toast('Username required','error');return;}
-  _authFetch(API.USERS_CREATE+'?username='+n+'&role='+r,{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+  _authFetch(API.USERS_CREATE+'?username='+encodeURIComponent(n)+'&role='+encodeURIComponent(r),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
     if(d.ok){document.getElementById('u-name').value='';toast('User created','success');loadUsers();}else toast(d.error,'error');
   });
 }
 function userPromote(u){
   confirmAction('Promote <strong>'+u+'</strong>?',function(){
-    _authFetch(API.USERS_PROMOTE+'?username='+u,{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' promoted','success');loadUsers();}else toast(d.error,'error');});
+    _authFetch(API.USERS_PROMOTE+'?username='+encodeURIComponent(u),{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' promoted','success');loadUsers();}else toast(d.error,'error');});
   });
 }
 function userDemote(u){
   confirmAction('Demote <strong>'+u+'</strong>?',function(){
-    _authFetch(API.USERS_DEMOTE+'?username='+u,{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' demoted','success');loadUsers();}else toast(d.error,'error');});
+    _authFetch(API.USERS_DEMOTE+'?username='+encodeURIComponent(u),{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(d.ok){toast(u+' demoted','success');loadUsers();}else toast(d.error,'error');});
+  });
+}
+function userResetPassword(u){
+  var pw=prompt('New password for '+u+' (8+ characters)');
+  if(pw===null)return;
+  if(!pw||pw.length<8){toast('Password must be at least 8 characters','error');return;}
+  var pw2=prompt('Confirm new password for '+u);
+  if(pw2===null)return;
+  if(pw!==pw2){toast('Passwords do not match','error');return;}
+  _authFetch(API.USERS_RESET_PASSWORD,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username:u,password:pw})
+  }).then(function(r){return r.json()}).then(function(d){
+    if(d.ok){toast('Password reset for '+u,'success');loadUsers();}else toast(d.error,'error');
+  });
+}
+function userDelete(u){
+  confirmAction('Delete dashboard user <strong>'+u+'</strong>?',function(){
+    _authFetch(API.USERS_DELETE+'?username='+encodeURIComponent(u),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+      if(d.ok){toast('User deleted: '+u,'success');loadUsers();}else toast(d.error,'error');
+    });
   });
 }
 function loadKeys(){
@@ -11111,7 +11387,7 @@ var LAB_TOOLS=[{
   },
   renderContent:function(host,key,pfx){gwipeRefreshBays(host,key,pfx);},
   renderExtra:function(host,key,pfx){gwipeRefreshHistory(host,key,pfx);},
-  offlineHint:'Enter the IP and API key above, or save to vault via CLI:<br><code class="c-purple">freq vault set gwipe gwipe_host &lt;ip&gt;</code><br><code class="c-purple">freq vault set gwipe gwipe_api_key &lt;key&gt;</code>',
+  offlineHint:'Enter the IP and API key above, then save the tool config. First-class credential storage lives in the Vault tab.',
   confirmActions:{'wipe-all':'WIPE ALL TESTED DRIVES? This is destructive and irreversible.'}
 }];
 /* Auto-register LAB_TOOLS as HOME widgets */
@@ -11136,7 +11412,7 @@ function _ltGenerateHTML(toolId,pfx,hideBtn){
   var hb=hideBtn||'';
   return '<div style="background:var(--bg2);border:2px solid var(--input-border);border-radius:8px;margin-bottom:16px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center"><div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px;font-weight:800;letter-spacing:2px;background:linear-gradient(135deg,var(--purple-light),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">'+t.name+'</span><span id="'+pfx+'lt-version" class="text-meta"></span><span id="'+pfx+'lt-live-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)"></span></div><div class="fs-11-dim-mt2">'+t.subtitle+'</div></div><div style="display:flex;align-items:center;gap:10px"><div id="'+pfx+'lt-station-label" class="text-sub"></div>'+hb+'</div></div>'+
     '<div class="stats" id="'+pfx+'lt-stats"></div>'+
-    '<div class="exec-bar mb-0" id="'+pfx+'lt-connect-bar" ><input id="'+pfx+'lt-host" placeholder="'+t.name+' station IP" style="max-width:200px" value=""><input id="'+pfx+'lt-key" type="password" placeholder="API key" class="flex-1"><button onclick="ltConnect(\''+toolId+'\',\''+pfx+'\')">CONNECT</button><button onclick="ltSaveConfig(\''+toolId+'\',\''+pfx+'\')" style="background:var(--card);border:2px solid var(--input-border);color:var(--text)">SAVE TO VAULT</button></div>'+
+    '<div class="exec-bar mb-0" id="'+pfx+'lt-connect-bar" ><input id="'+pfx+'lt-host" placeholder="'+t.name+' station IP" style="max-width:200px" value=""><input id="'+pfx+'lt-key" type="password" placeholder="API key" class="flex-1"><button onclick="ltConnect(\''+toolId+'\',\''+pfx+'\')">CONNECT</button><button onclick="ltSaveConfig(\''+toolId+'\',\''+pfx+'\')" style="background:var(--card);border:2px solid var(--input-border);color:var(--text)">SAVE CONFIG</button></div>'+
     '<div id="'+pfx+'lt-conn-status" style="font-size:11px;color:var(--text-dim);margin:6px 0 16px 2px"></div>'+
     '<div id="'+pfx+'lt-controls" style="display:none;margin-bottom:16px"><div style="display:flex;gap:8px;flex-wrap:wrap">'+(t.renderControls?t.renderControls(pfx):'')+'</div></div>'+
     '<div id="'+pfx+'lt-content"></div>'+
@@ -11145,7 +11421,7 @@ function _ltGenerateHTML(toolId,pfx,hideBtn){
      * gradient ghost of the tool name with opacity 0.15 on a black
      * field; that read as marketing hero, not an ops console. The
      * replacement is a single dense card: a monospace status tag
-     * ([STATION OFFLINE]), the tool name, and the vault/API bootstrap
+     * ([STATION OFFLINE]), the tool name, and the API bootstrap
      * hint — same information, zero decorative chrome. */
     '<div id="'+pfx+'lt-offline" style="padding:24px 20px;border:1px dashed var(--input-border);border-radius:6px;margin-top:4px">'+
       '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">'+
@@ -11222,7 +11498,7 @@ function _ltProxy(toolId,method,endpoint,host,key,callback){
 function ltSaveConfig(toolId,pfx){
   pfx=pfx||'';
   var host=((_ltEl(pfx,'lt-host')||{}).value||'').trim();var key=((_ltEl(pfx,'lt-key')||{}).value||'').trim();if(!host||!key)return;
-  _authFetch(API.LAB_TOOL_SAVE+'?tool='+encodeURIComponent(toolId)+'&host='+encodeURIComponent(host)+'&key='+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(){toast('Config saved to vault','success');});
+  _authFetch(API.LAB_TOOL_SAVE+'?tool='+encodeURIComponent(toolId)+'&host='+encodeURIComponent(host)+'&key='+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(){toast('Tool config saved','success');});
 }
 
 function ltAction(toolId,action,pfx,confirm){
@@ -11239,7 +11515,7 @@ var _customLabTools=JSON.parse(localStorage.getItem('freq_custom_lab_tools')||'[
 function _allLabTools(){
   var custom=_customLabTools.map(function(ct){
     var hint=ct.offlineHint||'Enter the IP and API key above to connect.';
-    return {id:ct.id,name:ct.name,subtitle:ct.subtitle||(ct.type==='freq'?'PVE FREQ':'Custom API Tool'),defaultPort:ct.port||0,connectEndpoint:ct.endpoint||'status',refreshInterval:ct.refresh||5000,isCustom:true,toolType:ct.type||'custom',vaultNamespace:ct.vaultNamespace||'',offlineHint:hint};
+    return {id:ct.id,name:ct.name,subtitle:ct.subtitle||(ct.type==='freq'?'PVE FREQ':'Custom API Tool'),defaultPort:ct.port||0,connectEndpoint:ct.endpoint||'status',refreshInterval:ct.refresh||5000,isCustom:true,toolType:ct.type||'custom',offlineHint:hint};
   });
   return LAB_TOOLS.concat(custom);
 }
@@ -11294,8 +11570,7 @@ function openAddTool(){
   h+='<div><label class="c-dim-fs12">Description</label><input class="input" id="at-subtitle" placeholder="Short description of what this tool does" style="width:100%;margin-top:4px"></div>';
   h+='<div><label class="c-dim-fs12">Default Port</label><input class="input" id="at-port" type="number" placeholder="8080" style="width:100%;margin-top:4px"></div>';
   h+='<div id="at-freq-fields">';
-  h+='<div class="mb-md"><label class="c-dim-fs12">Vault Namespace</label><input class="input" id="at-vault-ns" placeholder="tool-name (for freq vault set)" style="width:100%;margin-top:4px"></div>';
-  h+='<div><label class="c-dim-fs12">Vault Keys</label><div class="fs-11-dim-mt2">Auto-generated: <code style="color:var(--purple-light)">&lt;namespace&gt;_host</code>, <code style="color:var(--purple-light)">&lt;namespace&gt;_api_key</code></div></div>';
+  h+='<div class="fs-11-dim-mt2">Credentials are managed from the Vault tab. Tool connection saves only this tool config.</div>';
   h+='</div>';
   h+='<div id="at-custom-fields" style="display:none">';
   h+='<div class="mb-md"><label class="c-dim-fs12">Connect Endpoint</label><input class="input" id="at-endpoint" value="status" placeholder="status, health, api/v1/ping..." style="width:100%;margin-top:4px"></div>';
@@ -11323,11 +11598,9 @@ function saveNewTool(){
   for(var i=0;i<existing.length;i++){if(existing[i].id===id){toast('Tool ID "'+id+'" already exists','error');return;}}
   var tool={id:id,name:name,subtitle:(document.getElementById('at-subtitle').value||'').trim(),port:parseInt(document.getElementById('at-port').value)||0,type:_addToolType};
   if(_addToolType==='freq'){
-    var ns=(document.getElementById('at-vault-ns').value||'').trim()||id;
-    tool.vaultNamespace=ns;
     tool.endpoint='status';
     tool.refresh=3000;
-    tool.offlineHint='Enter the IP and API key above, or save to vault via CLI:<br><code class="c-purple">freq vault set '+_esc(ns)+' '+_esc(ns)+'_host &lt;ip&gt;</code><br><code class="c-purple">freq vault set '+_esc(ns)+' '+_esc(ns)+'_api_key &lt;key&gt;</code>';
+    tool.offlineHint='Enter the IP and API key above, then save the tool config. First-class credential storage lives in the Vault tab.';
   } else {
     tool.endpoint=(document.getElementById('at-endpoint').value||'status').trim();
     tool.refresh=parseInt(document.getElementById('at-refresh').value)||5000;
@@ -11572,7 +11845,7 @@ function loadTopology(){
 function _loadTopoPositions(){try{return JSON.parse(localStorage.getItem(_userKey('topo_positions'))||'{}');}catch(e){return {};}}
 function _saveTopoPositions(positions){localStorage.setItem(_userKey('topo_positions'),JSON.stringify(positions));}
 function resetTopoLayout(){localStorage.removeItem(_userKey('topo_positions'));loadTopology();}
-var _topoResizeTimer;window.addEventListener('resize',function(){clearTimeout(_topoResizeTimer);_topoResizeTimer=setTimeout(function(){if(_currentView==='topology')loadTopology();},250);});
+var _topoResizeTimer;window.addEventListener('resize',function(){clearTimeout(_topoResizeTimer);_topoResizeTimer=setTimeout(function(){if(_currentView==='network')loadTopology();},250);});
 
 function _renderTopology(svg,nodes,links){
   var W=Math.round(svg.getBoundingClientRect().width)||svg.clientWidth||900;

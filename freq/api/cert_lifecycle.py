@@ -9,6 +9,7 @@ import io
 import ipaddress
 import json
 import os
+import tempfile
 from types import SimpleNamespace
 
 from freq.api.auth import check_session_role as _check_session_role
@@ -20,14 +21,20 @@ from freq.modules.cert_management import (
     DEFAULT_CERT_SETTINGS,
     _acme_available,
     _build_lifecycle_plan,
+    _cert_settings,
+    _cert_targets,
     _cert_targets_from_catalog,
+    _cert_inventory_from_reconcile,
     _discover_cloudflare_zone_id,
     _infer_cert_targets,
+    _issued_from_reconcile,
     _load_issued,
     _render_cert_config_block,
     _reconcile_lifecycle_targets,
+    _cloudflare_token_status,
     _ssl_onboarding_contract,
     _stage_cloudflare_token,
+    _stage_cloudflare_token_value,
     _write_cert_config_block,
     cmd_cert_deploy,
     cmd_cert_dns_sync,
@@ -151,6 +158,21 @@ def _write_dashboard_trusted_proxy_cidrs(cfg, cidrs):
     return toml_path
 
 
+def _discover_cloudflare_zone_id_for_token(token, base_domain):
+    """Discover Cloudflare zone from a pasted token without persisting it."""
+    fd, path = tempfile.mkstemp(prefix="freq-cf-token-", suffix=".secret")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(str(token or "").strip() + "\n")
+        os.chmod(path, 0o600)
+        return _discover_cloudflare_zone_id(path, base_domain)
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
 def handle_cert_lifecycle(handler):
     """GET /api/cert/lifecycle — read-only cert lifecycle state."""
     role, err = _check_session_role(handler, "viewer")
@@ -160,8 +182,9 @@ def handle_cert_lifecycle(handler):
     cfg = load_config()
     try:
         plan = _build_lifecycle_plan(cfg)
-        issued = _load_issued(cfg)
-        inventory = _load_cert_data(cfg)
+        reconcile = _reconcile_lifecycle_targets(cfg)
+        inventory = _cert_inventory_from_reconcile(cfg, _load_cert_data(cfg), reconcile=reconcile)
+        issued = _issued_from_reconcile(cfg, _load_issued(cfg), reconcile=reconcile, inventory=inventory)
         settings = plan.get("settings", {})
         onboarding = _ssl_onboarding_contract(cfg)
         adopted_existing = settings.get("management_mode") == "adopted_existing"
@@ -339,6 +362,92 @@ def handle_cert_trusted_proxy(handler):
     json_response(handler, result)
 
 
+def handle_cert_cloudflare_token(handler):
+    """POST /api/cert/lifecycle/cloudflare-token — store Cloudflare token secret."""
+    if require_post(handler, "Certificate Cloudflare token store"):
+        return
+    role, err = _check_session_role(handler, "admin")
+    if err:
+        json_response(handler, {"error": err}, 403)
+        return
+
+    body = get_json_body(handler)
+    token = str(body.get("cloudflare_token") or body.get("token") or body.get("api_token") or "").strip()
+    if not token:
+        json_response(handler, {"error": "cloudflare_token is required"}, 400)
+        return
+    if len(token) < 8:
+        json_response(handler, {"error": "Cloudflare token is too short"}, 400)
+        return
+    dry_run = _truthy(body.get("dry_run"), True)
+    confirm = _truthy(body.get("confirm"), False)
+    if not dry_run and not confirm:
+        json_response(handler, {"error": "storing Cloudflare token requires confirm=true"}, 400)
+        return
+
+    cfg = load_config()
+    current = _cert_settings(cfg)
+    base_domain = str(body.get("base_domain") or current.get("base_domain") or "").strip().lower()
+    token_dest = str(body.get("token_dest") or "").strip()
+    replace = _truthy(body.get("replace"), False)
+    reverse_proxy_host = str(body.get("reverse_proxy_host") or current.get("reverse_proxy_host") or "").strip()
+
+    try:
+        zone = {"zone_id": "", "zone_name": "", "errors": []}
+        if base_domain:
+            zone = _discover_cloudflare_zone_id_for_token(token, base_domain)
+            if not zone.get("zone_id"):
+                json_response(handler, {"ok": False, "error": "could not discover Cloudflare zone", "zone": zone}, 400)
+                return
+        token_path = token_dest or _cloudflare_token_status(cfg, current).get("path", "")
+        if not token_path:
+            token_path = "/etc/freq/credentials/cloudflare_dns_token"
+        if not dry_run:
+            token_path = _stage_cloudflare_token_value(cfg, token, token_dest)
+
+        settings = dict(DEFAULT_CERT_SETTINGS)
+        settings.update(current)
+        settings.update(
+            {
+                "dns_provider": "cloudflare",
+                "dns_token_path": token_path,
+                "reverse_proxy_host": reverse_proxy_host,
+            }
+        )
+        if base_domain:
+            settings["base_domain"] = base_domain
+        if zone.get("zone_id"):
+            settings["cloudflare_zone_id"] = zone["zone_id"]
+
+        targets = _cert_targets_from_catalog(
+            body.get("service_catalog") or body.get("web_ui_catalog") or body.get("cert_targets") or [],
+            settings.get("base_domain", ""),
+            settings.get("reverse_proxy_host", ""),
+        ) or _cert_targets(cfg)
+
+        result = {
+            "ok": True,
+            "dry_run": dry_run,
+            "stored": not dry_run,
+            "provider": "cloudflare",
+            "base_domain": settings.get("base_domain", ""),
+            "zone": zone,
+            "token_status": _cloudflare_token_status(cfg, settings),
+            "config_path": os.path.join(cfg.conf_dir, "freq.toml"),
+            "value_exposed": False,
+        }
+        if dry_run:
+            result["planned_token_status"] = dict(result["token_status"], stored=False, ready=False)
+        else:
+            result["config_path"] = _write_cert_config_block(cfg, settings, targets, replace=replace)
+            updated = load_config(force=True)
+            result["token_status"] = _cloudflare_token_status(updated, _cert_settings(updated))
+            result["config_updated"] = True
+        json_response(handler, result)
+    except Exception as exc:
+        json_response(handler, {"ok": False, "error": str(exc)}, 500)
+
+
 def handle_cert_bootstrap(handler):
     """POST /api/cert/lifecycle/bootstrap — bootstrap config from token path."""
     if require_post(handler, "Certificate bootstrap"):
@@ -454,5 +563,6 @@ def register(routes: dict):
     routes["/api/cert/lifecycle/adopt-existing"] = handle_cert_adopt_existing
     routes["/api/cert/lifecycle/reconcile"] = handle_cert_reconcile
     routes["/api/cert/lifecycle/trusted-proxy"] = handle_cert_trusted_proxy
+    routes["/api/cert/lifecycle/cloudflare-token"] = handle_cert_cloudflare_token
     routes["/api/cert/lifecycle/bootstrap"] = handle_cert_bootstrap
     routes["/api/cert/lifecycle/action"] = handle_cert_action

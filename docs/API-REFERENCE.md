@@ -21,6 +21,8 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 |--------|----------|-------------|
 | GET | `/api/users` | List all users |
 | POST | `/api/users/create` | Create a new user |
+| POST | `/api/users/reset-password` | Reset another dashboard user's password |
+| POST | `/api/users/delete` | Delete a dashboard user |
 | POST | `/api/users/promote` | Promote user role |
 | POST | `/api/users/demote` | Demote user role |
 | GET | `/api/keys` | SSH key management |
@@ -105,6 +107,14 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | POST | `/api/containers/compose-up` | Start Docker Compose stack |
 | POST | `/api/containers/compose-down` | Stop Docker Compose stack |
 | GET | `/api/containers/compose-view` | View docker-compose.yml |
+| POST | `/api/ct/create` | Create a Proxmox LXC container |
+| POST | `/api/ct/destroy` | Destroy a Proxmox LXC container |
+| POST | `/api/ct/power` | Control LXC power state |
+| POST | `/api/ct/snapshot` | Create an LXC snapshot |
+| POST | `/api/ct/delete-snapshot` | Delete an LXC snapshot |
+| POST | `/api/ct/rollback` | Roll back an LXC snapshot |
+| POST | `/api/ct/clone` | Clone an LXC container |
+| POST | `/api/ct/migrate` | Migrate an LXC container |
 
 ## Media Stack
 
@@ -130,6 +140,16 @@ All endpoints return JSON. Most require session authentication via `Authorizatio
 | GET | `/api/harden` | Hardening status |
 | GET | `/api/sweep` | Full audit + policy sweep |
 | GET | `/api/patrol/status` | Continuous monitoring status |
+
+## SSL & Certificates
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/cert/lifecycle/adopt-existing` | Adopt existing wildcard SSL and infer/register covered endpoints |
+| POST | `/api/cert/lifecycle/trusted-proxy` | Configure trusted reverse-proxy CIDRs |
+| POST | `/api/cert/lifecycle/bootstrap` | Bootstrap managed certificate settings from Cloudflare token path |
+| POST | `/api/cert/lifecycle/action` | Run SSL lifecycle actions such as verify, issue, renew, deploy, or DNS sync |
+| POST | `/api/cert/lifecycle/cloudflare-token` | Store Cloudflare DNS token as a managed secret without echoing the value |
 
 ## Monitoring & Metrics
 

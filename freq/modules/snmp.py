@@ -33,6 +33,7 @@ from freq.core import log as logger
 # ---------------------------------------------------------------------------
 
 OID_SYS_DESCR = "1.3.6.1.2.1.1.1.0"
+OID_SYS_OBJECT_ID = "1.3.6.1.2.1.1.2.0"
 OID_SYS_UPTIME = "1.3.6.1.2.1.1.3.0"
 OID_SYS_NAME = "1.3.6.1.2.1.1.5.0"
 OID_SYS_CONTACT = "1.3.6.1.2.1.1.4.0"
@@ -56,6 +57,11 @@ OID_HR_STORAGE_SIZE = "1.3.6.1.2.1.25.2.3.1.5"  # hrStorageSize
 OID_HR_STORAGE_USED = "1.3.6.1.2.1.25.2.3.1.6"  # hrStorageUsed
 OID_HR_STORAGE_UNITS = "1.3.6.1.2.1.25.2.3.1.4"  # hrStorageAllocationUnits
 
+# ENTITY-MIB hardware identity.
+OID_ENT_PHYSICAL_NAME = "1.3.6.1.2.1.47.1.1.1.1.7"
+OID_ENT_PHYSICAL_SERIAL = "1.3.6.1.2.1.47.1.1.1.1.11"
+OID_ENT_PHYSICAL_MODEL = "1.3.6.1.2.1.47.1.1.1.1.13"
+
 SNMP_DATA_DIR = "snmp"
 DEFAULT_COMMUNITY = "public"
 
@@ -65,9 +71,33 @@ DEFAULT_COMMUNITY = "public"
 # ---------------------------------------------------------------------------
 
 
-def _snmp_get(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=5):
+def _snmp_auth_args(community=DEFAULT_COMMUNITY, version="2c", auth=None):
+    auth = auth or {}
+    version = str(auth.get("version") or version or "2c").lower()
+    if version in ("3", "v3", "snmpv3"):
+        user = auth.get("user") or auth.get("username") or ""
+        auth_password = auth.get("auth_password") or auth.get("password") or ""
+        priv_password = auth.get("priv_password") or auth_password
+        if not user or not auth_password or not priv_password:
+            return []
+        return [
+            "-v", "3",
+            "-l", auth.get("security_level") or "authPriv",
+            "-u", user,
+            "-a", auth.get("auth_protocol") or "SHA",
+            "-A", auth_password,
+            "-x", auth.get("priv_protocol") or "AES",
+            "-X", priv_password,
+        ]
+    return ["-v", version, "-c", community]
+
+
+def _snmp_get(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=5, auth=None):
     """Run snmpget and return the value string, or None on failure."""
-    cmd = ["snmpget", "-v", version, "-c", community, "-Ovq", "-t", str(timeout), ip, oid]
+    auth_args = _snmp_auth_args(community, version, auth)
+    if not auth_args:
+        return None
+    cmd = ["snmpget", *auth_args, "-Ovq", "-t", str(timeout), ip, oid]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 5)
         if r.returncode == 0 and r.stdout.strip():
@@ -77,9 +107,12 @@ def _snmp_get(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=5):
         return None
 
 
-def _snmp_walk(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=10):
+def _snmp_walk(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=10, auth=None):
     """Run snmpwalk and return list of (index, value) tuples."""
-    cmd = ["snmpwalk", "-v", version, "-c", community, "-Ovq", "-t", str(timeout), ip, oid]
+    auth_args = _snmp_auth_args(community, version, auth)
+    if not auth_args:
+        return []
+    cmd = ["snmpwalk", *auth_args, "-Ovq", "-t", str(timeout), ip, oid]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 10)
         if r.returncode != 0:
@@ -94,9 +127,12 @@ def _snmp_walk(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=10):
         return []
 
 
-def _snmp_walk_indexed(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=10):
+def _snmp_walk_indexed(ip, oid, community=DEFAULT_COMMUNITY, version="2c", timeout=10, auth=None):
     """Run snmpwalk with OID output to get (oid_suffix, value) pairs."""
-    cmd = ["snmpwalk", "-v", version, "-c", community, "-OQn", "-t", str(timeout), ip, oid]
+    auth_args = _snmp_auth_args(community, version, auth)
+    if not auth_args:
+        return {}
+    cmd = ["snmpwalk", *auth_args, "-OQn", "-t", str(timeout), ip, oid]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 10)
         if r.returncode != 0:
@@ -134,6 +170,21 @@ def _get_community(cfg, args=None):
     return getattr(cfg, "snmp_community", DEFAULT_COMMUNITY)
 
 
+def _get_snmp_auth(cfg, args=None, include_secret=True):
+    """Return path-backed SNMP auth, preferring v3 when configured."""
+    if args and getattr(args, "community", None):
+        return {}
+    try:
+        from freq.core.device_credentials import resolve_device_api_auth
+
+        auth = resolve_device_api_auth(cfg, "snmp", include_secret=include_secret)
+    except Exception:
+        auth = {}
+    if auth.get("version") in ("3", "v3", "snmpv3") and auth.get("user"):
+        return auth
+    return {}
+
+
 # ---------------------------------------------------------------------------
 # Data Storage
 # ---------------------------------------------------------------------------
@@ -168,27 +219,50 @@ def _save_poll(cfg, target, data):
 # ---------------------------------------------------------------------------
 
 
-def get_system_info(ip, community=DEFAULT_COMMUNITY):
+def get_system_info(ip, community=DEFAULT_COMMUNITY, auth=None, timeout=5):
     """Get system info via SNMP: sysDescr, sysUptime, sysName."""
     return {
-        "description": _snmp_get(ip, OID_SYS_DESCR, community) or "",
-        "uptime": _snmp_get(ip, OID_SYS_UPTIME, community) or "",
-        "hostname": _snmp_get(ip, OID_SYS_NAME, community) or "",
-        "contact": _snmp_get(ip, OID_SYS_CONTACT, community) or "",
-        "location": _snmp_get(ip, OID_SYS_LOCATION, community) or "",
+        "description": _snmp_get(ip, OID_SYS_DESCR, community, auth=auth, timeout=timeout) or "",
+        "object_id": _snmp_get(ip, OID_SYS_OBJECT_ID, community, auth=auth, timeout=timeout) or "",
+        "uptime": _snmp_get(ip, OID_SYS_UPTIME, community, auth=auth, timeout=timeout) or "",
+        "hostname": _snmp_get(ip, OID_SYS_NAME, community, auth=auth, timeout=timeout) or "",
+        "contact": _snmp_get(ip, OID_SYS_CONTACT, community, auth=auth, timeout=timeout) or "",
+        "location": _snmp_get(ip, OID_SYS_LOCATION, community, auth=auth, timeout=timeout) or "",
     }
 
 
-def get_interfaces(ip, community=DEFAULT_COMMUNITY):
+def get_snmp_identity(ip, community=DEFAULT_COMMUNITY, auth=None, timeout=5):
+    """Probe universal SNMP identity OIDs without making naming claims."""
+    system = get_system_info(ip, community, auth=auth, timeout=timeout)
+    serials = [v for v in _snmp_walk(ip, OID_ENT_PHYSICAL_SERIAL, community, auth=auth, timeout=timeout) if v]
+    models = [v for v in _snmp_walk(ip, OID_ENT_PHYSICAL_MODEL, community, auth=auth, timeout=timeout) if v]
+    names = [v for v in _snmp_walk(ip, OID_ENT_PHYSICAL_NAME, community, auth=auth, timeout=timeout) if v]
+    serial = next((v for v in serials if v and v not in ("0", "None", "Unknown")), "")
+    model = next((v for v in models if v and v not in ("0", "None", "Unknown")), "")
+    physical_name = next((v for v in names if v and v not in ("0", "None", "Unknown")), "")
+    return {
+        "ip": ip,
+        "source": "snmp",
+        "sys_name": system.get("hostname", ""),
+        "sys_descr": system.get("description", ""),
+        "sys_object_id": system.get("object_id", ""),
+        "serial": serial,
+        "model": model,
+        "physical_name": physical_name,
+        "reachable": bool(system.get("hostname") or system.get("description")),
+    }
+
+
+def get_interfaces(ip, community=DEFAULT_COMMUNITY, auth=None):
     """Get interface table via SNMP: name, status, speed, counters."""
-    names = _snmp_walk_indexed(ip, OID_IF_DESCR, community)
-    admin = _snmp_walk_indexed(ip, OID_IF_ADMIN, community)
-    oper = _snmp_walk_indexed(ip, OID_IF_OPER, community)
-    speeds = _snmp_walk_indexed(ip, OID_IF_SPEED, community)
-    in_oct = _snmp_walk_indexed(ip, OID_IF_IN_OCTETS, community)
-    out_oct = _snmp_walk_indexed(ip, OID_IF_OUT_OCTETS, community)
-    in_err = _snmp_walk_indexed(ip, OID_IF_IN_ERRORS, community)
-    out_err = _snmp_walk_indexed(ip, OID_IF_OUT_ERRORS, community)
+    names = _snmp_walk_indexed(ip, OID_IF_DESCR, community, auth=auth)
+    admin = _snmp_walk_indexed(ip, OID_IF_ADMIN, community, auth=auth)
+    oper = _snmp_walk_indexed(ip, OID_IF_OPER, community, auth=auth)
+    speeds = _snmp_walk_indexed(ip, OID_IF_SPEED, community, auth=auth)
+    in_oct = _snmp_walk_indexed(ip, OID_IF_IN_OCTETS, community, auth=auth)
+    out_oct = _snmp_walk_indexed(ip, OID_IF_OUT_OCTETS, community, auth=auth)
+    in_err = _snmp_walk_indexed(ip, OID_IF_IN_ERRORS, community, auth=auth)
+    out_err = _snmp_walk_indexed(ip, OID_IF_OUT_ERRORS, community, auth=auth)
 
     interfaces = []
     for idx, name in names.items():
@@ -224,9 +298,9 @@ def get_interfaces(ip, community=DEFAULT_COMMUNITY):
     return interfaces
 
 
-def get_cpu_load(ip, community=DEFAULT_COMMUNITY):
+def get_cpu_load(ip, community=DEFAULT_COMMUNITY, auth=None):
     """Get CPU load via SNMP (hrProcessorLoad)."""
-    loads = _snmp_walk(ip, OID_HR_PROC_LOAD, community)
+    loads = _snmp_walk(ip, OID_HR_PROC_LOAD, community, auth=auth)
     values = [_safe_int(v) for v in loads if v is not None]
     if not values:
         return None
@@ -264,9 +338,10 @@ def cmd_snmp_poll(cfg: FreqConfig, pack, args) -> int:
     target = getattr(args, "target", None)
     run_all = getattr(args, "all", False)
     community = _get_community(cfg, args)
+    auth = _get_snmp_auth(cfg, args)
 
     if run_all:
-        return _poll_all(cfg, community)
+        return _poll_all(cfg, community, auth)
 
     if not target:
         fmt.error("Usage: freq net snmp poll <target> or --all")
@@ -282,7 +357,7 @@ def cmd_snmp_poll(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     # System info
-    sys_info = get_system_info(ip, community)
+    sys_info = get_system_info(ip, community, auth=auth)
     if not sys_info.get("hostname") and not sys_info.get("description"):
         fmt.warn(f"No SNMP response from {ip}")
         fmt.info("Check: is snmpd running? Is the community string correct?")
@@ -298,7 +373,7 @@ def cmd_snmp_poll(cfg: FreqConfig, pack, args) -> int:
     fmt.blank()
 
     # Interfaces
-    interfaces = get_interfaces(ip, community)
+    interfaces = get_interfaces(ip, community, auth=auth)
     if interfaces:
         # Filter to physical/interesting interfaces
         shown = [i for i in interfaces if i["oper"] == "up" or i["in_errors"] > 0]
@@ -320,7 +395,7 @@ def cmd_snmp_poll(cfg: FreqConfig, pack, args) -> int:
         fmt.blank()
 
     # CPU
-    cpu = get_cpu_load(ip, community)
+    cpu = get_cpu_load(ip, community, auth=auth)
     if cpu is not None:
         color = fmt.C.GREEN if cpu < 60 else fmt.C.YELLOW if cpu < 85 else fmt.C.RED
         fmt.line(f"{fmt.C.BOLD}CPU:{fmt.C.RESET} {color}{cpu}%{fmt.C.RESET}")
@@ -343,7 +418,7 @@ def cmd_snmp_poll(cfg: FreqConfig, pack, args) -> int:
     return 0
 
 
-def _poll_all(cfg, community):
+def _poll_all(cfg, community, auth=None):
     """Poll all switch-type hosts via SNMP."""
     from freq.modules.switch_orchestration import _get_switch_hosts
 
@@ -357,9 +432,9 @@ def _poll_all(cfg, community):
 
     ok_count = 0
     for h in switches:
-        sys_info = get_system_info(h.ip, community)
+        sys_info = get_system_info(h.ip, community, auth=auth)
         if sys_info.get("hostname") or sys_info.get("description"):
-            cpu = get_cpu_load(h.ip, community)
+            cpu = get_cpu_load(h.ip, community, auth=auth)
             cpu_str = f"{cpu}%" if cpu is not None else "—"
             fmt.step_ok(f"{h.label} ({h.ip}) — {sys_info.get('hostname', '?')} — CPU: {cpu_str}")
             ok_count += 1
@@ -382,11 +457,12 @@ def cmd_snmp_interfaces(cfg: FreqConfig, pack, args) -> int:
 
     ip = _resolve_ip(target, cfg)
     community = _get_community(cfg, args)
+    auth = _get_snmp_auth(cfg, args)
 
     fmt.header(f"SNMP Interfaces: {target}", breadcrumb="FREQ > Net > SNMP")
     fmt.blank()
 
-    interfaces = get_interfaces(ip, community)
+    interfaces = get_interfaces(ip, community, auth=auth)
     if not interfaces:
         fmt.warn(f"No SNMP interface data from {ip}")
         fmt.footer()
@@ -434,11 +510,12 @@ def cmd_snmp_errors(cfg: FreqConfig, pack, args) -> int:
 
     ip = _resolve_ip(target, cfg)
     community = _get_community(cfg, args)
+    auth = _get_snmp_auth(cfg, args)
 
     fmt.header(f"SNMP Errors: {target}", breadcrumb="FREQ > Net > SNMP")
     fmt.blank()
 
-    interfaces = get_interfaces(ip, community)
+    interfaces = get_interfaces(ip, community, auth=auth)
     errors = [i for i in interfaces if i["in_errors"] > 0 or i["out_errors"] > 0]
 
     if not errors:
@@ -471,11 +548,12 @@ def cmd_snmp_cpu(cfg: FreqConfig, pack, args) -> int:
 
     ip = _resolve_ip(target, cfg)
     community = _get_community(cfg, args)
+    auth = _get_snmp_auth(cfg, args)
 
     fmt.header(f"SNMP CPU: {target}", breadcrumb="FREQ > Net > SNMP")
     fmt.blank()
 
-    cpu = get_cpu_load(ip, community)
+    cpu = get_cpu_load(ip, community, auth=auth)
     if cpu is None:
         fmt.warn(f"Could not retrieve CPU load from {ip}")
         fmt.footer()
@@ -485,7 +563,7 @@ def cmd_snmp_cpu(cfg: FreqConfig, pack, args) -> int:
     fmt.line(f"  {fmt.C.BOLD}CPU Load:{fmt.C.RESET} {color}{cpu}%{fmt.C.RESET}")
 
     # Also show per-core if available
-    loads = _snmp_walk(ip, OID_HR_PROC_LOAD, community)
+    loads = _snmp_walk(ip, OID_HR_PROC_LOAD, community, auth=auth)
     if loads and len(loads) > 1:
         fmt.blank()
         fmt.line(f"{fmt.C.BOLD}Per-Core:{fmt.C.RESET}")
@@ -496,6 +574,103 @@ def cmd_snmp_cpu(cfg: FreqConfig, pack, args) -> int:
 
     fmt.blank()
     logger.info("snmp_cpu", target=target, cpu=cpu)
+    fmt.footer()
+    return 0
+
+
+def _snmp_setup_class(htype):
+    htype = str(htype or "").strip().lower()
+    if htype in {"pve", "proxmox", "linux", "ubuntu", "debian"}:
+        return "linux_snmpd"
+    if htype in {"truenas", "nas"}:
+        return "truenas_midclt"
+    if htype in {"switch", "cisco"}:
+        return "cisco_ios_snmpv3"
+    if htype in {"idrac", "bmc", "ilo", "ipmi", "redfish"}:
+        return "redfish_bmc_snmp"
+    if htype in {"pfsense", "opnsense", "firewall"}:
+        return "pfsense_net_snmp_package"
+    return "unsupported"
+
+
+def build_snmp_setup_plan(cfg):
+    """Build an enterprise SNMP setup/probe plan without mutating devices."""
+    auth = _get_snmp_auth(cfg, include_secret=False)
+    targets = []
+    for host in getattr(cfg, "hosts", []) or []:
+        htype = getattr(host, "htype", "")
+        plan_class = _snmp_setup_class(htype)
+        if plan_class == "unsupported":
+            continue
+        caveats = []
+        if plan_class == "pfsense_net_snmp_package":
+            caveats.append("pfSense built-in bsnmpd is v1/v2c only; SNMPv3 requires net-snmp package")
+        if plan_class == "redfish_bmc_snmp":
+            caveats.append("detect existing agent first; Dell iDRAC may already answer v2c and should be hardened deliberately")
+        targets.append(
+            {
+                "label": getattr(host, "label", ""),
+                "ip": getattr(host, "ip", ""),
+                "type": htype,
+                "setup_class": plan_class,
+                "target_version": "v3",
+                "security_level": "authPriv",
+                "auth_protocol": auth.get("auth_protocol") or "SHA",
+                "priv_protocol": auth.get("priv_protocol") or "AES",
+                "credential_ref": "device-credentials:snmp" if auth.get("user") else "",
+                "mutation": "plan_only",
+                "caveats": caveats,
+            }
+        )
+    return {
+        "version": 1,
+        "mode": "plan_only",
+        "credential_ready": bool(auth.get("user")),
+        "credential_ref": "device-credentials:snmp" if auth.get("user") else "",
+        "targets": targets,
+    }
+
+
+def cmd_snmp_identity(cfg: FreqConfig, pack, args) -> int:
+    target = getattr(args, "target", None)
+    if not target:
+        fmt.error("Usage: freq net snmp identity <target>")
+        return 1
+    ip = _resolve_ip(target, cfg)
+    community = _get_community(cfg, args)
+    auth = _get_snmp_auth(cfg, args)
+    identity = get_snmp_identity(ip, community, auth=auth)
+    fmt.header(f"SNMP Identity: {target}", breadcrumb="FREQ > Net > SNMP")
+    fmt.blank()
+    if not identity.get("reachable"):
+        fmt.warn(f"No SNMP identity response from {ip}")
+        fmt.footer()
+        return 1
+    for key in ("sys_name", "sys_descr", "sys_object_id", "serial", "model", "physical_name"):
+        if identity.get(key):
+            fmt.line(f"  {fmt.C.CYAN}{key:<14}{fmt.C.RESET} {identity[key]}")
+    fmt.footer()
+    return 0
+
+
+def cmd_snmp_setup_plan(cfg: FreqConfig, pack, args) -> int:
+    plan = build_snmp_setup_plan(cfg)
+    fmt.header("SNMP Setup Plan", breadcrumb="FREQ > Net > SNMP")
+    fmt.blank()
+    fmt.info("Mode: plan-only. No devices are changed by this command.")
+    if not plan["credential_ready"]:
+        fmt.warn("SNMPv3 credential ref is not configured in device-credentials.")
+    fmt.table_header(("Device", 18), ("IP", 15), ("Class", 24), ("Auth", 10))
+    for target in plan["targets"]:
+        auth_state = "ready" if target.get("credential_ref") else "missing"
+        fmt.table_row(
+            (target["label"], 18),
+            (target["ip"], 15),
+            (target["setup_class"], 24),
+            (auth_state, 10),
+        )
+    fmt.blank()
+    fmt.info(f"{len(plan['targets'])} SNMP-capable target(s) in plan")
     fmt.footer()
     return 0
 

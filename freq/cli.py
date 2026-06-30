@@ -1549,6 +1549,14 @@ def _register_net(sub):
     p.add_argument("--community", help="SNMP community string")
     p.set_defaults(func=_cmd_snmp_cpu)
 
+    p = snmp_sub.add_parser("identity", help="Universal SNMP identity probe")
+    p.add_argument("target", help="Device IP or label")
+    p.add_argument("--community", help="SNMP community string")
+    p.set_defaults(func=_cmd_snmp_identity)
+
+    p = snmp_sub.add_parser("setup-plan", help="Plan enterprise SNMPv3 enablement")
+    p.set_defaults(func=_cmd_snmp_setup_plan)
+
     snmp.set_defaults(func=_cmd_snmp_poll)
 
     # freq net topology <action> — LLDP/CDP topology
@@ -1719,6 +1727,7 @@ def _register_cert(sub):
     p.set_defaults(func=_cmd_cert_bootstrap)
 
     p = cert_sub.add_parser("issue", help="Issue configured certificate via ACME DNS-01")
+    p.add_argument("--deploy", action="store_true", help="Deploy after successful issue")
     p.add_argument("--dry-run", action="store_true", help="Print ACME command without executing")
     p.add_argument("--json", action="store_true", help="Output command as JSON")
     p.set_defaults(func=_cmd_cert_issue)
@@ -3021,6 +3030,18 @@ def _cmd_snmp_cpu(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.snmp import cmd_snmp_cpu
 
     return cmd_snmp_cpu(cfg, pack, args)
+
+
+def _cmd_snmp_identity(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.snmp import cmd_snmp_identity
+
+    return cmd_snmp_identity(cfg, pack, args)
+
+
+def _cmd_snmp_setup_plan(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.snmp import cmd_snmp_setup_plan
+
+    return cmd_snmp_setup_plan(cfg, pack, args)
 
 
 # --- Topology ---

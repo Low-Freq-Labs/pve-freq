@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from dataclasses import dataclass
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -35,6 +36,7 @@ class MockConfig:
         self.ssh_key_path = "/tmp/test"
         self.ssh_rsa_key_path = "/tmp/test_rsa"
         self.ssh_connect_timeout = 5
+        self.snmp_community = "public"
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +137,92 @@ class TestSNMPResolveIP(unittest.TestCase):
     def test_unknown_label(self):
         cfg = MockConfig()
         self.assertEqual(self.resolve("unknown", cfg), "unknown")
+
+
+class TestSNMPEnterpriseIdentity(unittest.TestCase):
+    """Test enterprise SNMPv3 setup/probe primitives."""
+
+    def test_v3_auth_args_require_private_secret_material_at_call_site(self):
+        from freq.modules.snmp import _snmp_auth_args
+
+        args = _snmp_auth_args(
+            auth={
+                "version": "3",
+                "user": "freq-snmp",
+                "auth_password": "auth-secret",
+                "priv_password": "priv-secret",
+                "auth_protocol": "SHA",
+                "priv_protocol": "AES",
+                "security_level": "authPriv",
+            }
+        )
+
+        self.assertEqual(args[:2], ["-v", "3"])
+        self.assertIn("freq-snmp", args)
+        self.assertIn("auth-secret", args)
+        self.assertIn("priv-secret", args)
+
+    def test_v3_auth_args_refuse_incomplete_credentials(self):
+        from freq.modules.snmp import _snmp_auth_args
+
+        self.assertEqual(_snmp_auth_args(auth={"version": "3", "user": "freq-snmp"}), [])
+
+    def test_identity_probe_reads_universal_and_entity_oids(self):
+        from freq.modules import snmp
+
+        values = {
+            snmp.OID_SYS_DESCR: "Dell iDRAC",
+            snmp.OID_SYS_OBJECT_ID: "1.3.6.1.4.1.674",
+            snmp.OID_SYS_NAME: "idrac-B065ND2",
+        }
+
+        with patch("freq.modules.snmp._snmp_get", side_effect=lambda ip, oid, *a, **k: values.get(oid)), \
+             patch(
+                 "freq.modules.snmp._snmp_walk",
+                 side_effect=lambda ip, oid, *a, **k: {
+                     snmp.OID_ENT_PHYSICAL_SERIAL: ["", "B065ND2"],
+                     snmp.OID_ENT_PHYSICAL_MODEL: ["PowerEdge R530"],
+                     snmp.OID_ENT_PHYSICAL_NAME: ["System Board"],
+                 }.get(oid, []),
+             ):
+            identity = snmp.get_snmp_identity("10.25.255.10")
+
+        self.assertTrue(identity["reachable"])
+        self.assertEqual(identity["sys_name"], "idrac-B065ND2")
+        self.assertEqual(identity["serial"], "B065ND2")
+        self.assertEqual(identity["model"], "PowerEdge R530")
+
+    def test_setup_plan_is_plan_only_and_class_aware(self):
+        from freq.modules.snmp import build_snmp_setup_plan
+
+        cfg = MockConfig()
+        cfg.hosts.extend(
+            [
+                MockHost("10.25.255.10", "bmc-10", "idrac"),
+                MockHost("10.25.255.25", "truenas", "truenas"),
+                MockHost("10.25.255.1", "pfsense", "pfsense"),
+            ]
+        )
+
+        with patch(
+            "freq.modules.snmp._get_snmp_auth",
+            return_value={
+                "user": "freq-snmp",
+                "auth_protocol": "SHA",
+                "priv_protocol": "AES",
+            },
+        ):
+            plan = build_snmp_setup_plan(cfg)
+
+        by_label = {t["label"]: t for t in plan["targets"]}
+        self.assertTrue(plan["credential_ready"])
+        self.assertEqual(plan["mode"], "plan_only")
+        self.assertEqual(by_label["pve01"]["setup_class"], "linux_snmpd")
+        self.assertEqual(by_label["switch"]["setup_class"], "cisco_ios_snmpv3")
+        self.assertEqual(by_label["bmc-10"]["setup_class"], "redfish_bmc_snmp")
+        self.assertEqual(by_label["truenas"]["setup_class"], "truenas_midclt")
+        self.assertEqual(by_label["pfsense"]["setup_class"], "pfsense_net_snmp_package")
+        self.assertIn("SNMPv3 requires net-snmp package", " ".join(by_label["pfsense"]["caveats"]))
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +333,14 @@ class TestCLIWS2Registration(unittest.TestCase):
         args = self._parse("net snmp cpu switch")
         self.assertTrue(hasattr(args, "func"))
 
+    def test_snmp_identity(self):
+        args = self._parse("net snmp identity switch")
+        self.assertTrue(hasattr(args, "func"))
+
+    def test_snmp_setup_plan(self):
+        args = self._parse("net snmp setup-plan")
+        self.assertTrue(hasattr(args, "func"))
+
     # Topology
     def test_topology_discover(self):
         args = self._parse("net topology discover")
@@ -299,9 +395,15 @@ class TestWS2ModuleImports(unittest.TestCase):
     def test_snmp_imports(self):
         from freq.modules.snmp import (
             cmd_snmp_poll, cmd_snmp_interfaces, cmd_snmp_errors, cmd_snmp_cpu,
-            get_system_info, get_interfaces, get_cpu_load,
+            cmd_snmp_identity, cmd_snmp_setup_plan,
+            get_system_info, get_interfaces, get_cpu_load, get_snmp_identity,
+            build_snmp_setup_plan,
         )
         self.assertTrue(callable(cmd_snmp_poll))
+        self.assertTrue(callable(cmd_snmp_identity))
+        self.assertTrue(callable(cmd_snmp_setup_plan))
+        self.assertTrue(callable(get_snmp_identity))
+        self.assertTrue(callable(build_snmp_setup_plan))
 
     def test_topology_imports(self):
         from freq.modules.topology import (
@@ -330,8 +432,10 @@ class TestSNMPOIDs(unittest.TestCase):
         from freq.modules import snmp
         oids = [
             snmp.OID_SYS_DESCR, snmp.OID_SYS_UPTIME, snmp.OID_SYS_NAME,
+            snmp.OID_SYS_OBJECT_ID,
             snmp.OID_IF_DESCR, snmp.OID_IF_IN_OCTETS, snmp.OID_IF_OUT_OCTETS,
             snmp.OID_IF_IN_ERRORS, snmp.OID_IF_OUT_ERRORS, snmp.OID_HR_PROC_LOAD,
+            snmp.OID_ENT_PHYSICAL_SERIAL, snmp.OID_ENT_PHYSICAL_MODEL,
         ]
         import re
         for oid in oids:

@@ -6,7 +6,7 @@ What: Issue certificates via ACME (Let's Encrypt), manage private CA,
       Extends existing cert.py scan/list/check with write operations.
 Replaces: Manual certbot runs, step-ca CLI, SCP cert files, cert tracking
 Architecture:
-    - ACME: shells to certbot for issuance, parses output
+    - ACME: shells to acme.sh for issuance, parses output
     - CA: shells to step-ca for private CA operations
     - Deploy: SCP via ssh.py to push certs to target hosts
     - Inventory: extends conf/certs/ with issued cert tracking
@@ -44,7 +44,7 @@ DEFAULT_CERT_SETTINGS = {
     "wildcard": True,
     "management_mode": "managed",
     "issuer": "acme.sh",
-    "acme_home": "~/.acme.sh",
+    "acme_home": "",
     "acme_binary": "",
     "acme_auto_install": True,
     "acme_install_url": "https://get.acme.sh",
@@ -124,13 +124,37 @@ def _ssl_dashboard_status(cfg, settings, targets):
     if dashboard_targets:
         state = "managed"
         message = "Dashboard HTTPS is covered by a configured cert target."
+        probes = []
     else:
         state = "gap"
         message = "Dashboard HTTPS is not covered yet; choose direct certs or a reverse-proxy route."
+        probes = []
+        base_domain = str(settings.get("base_domain") or "").strip().lower()
+        reverse_proxy_host = str(settings.get("reverse_proxy_host") or "").strip()
+        candidate = str(settings.get("dashboard_hostname") or "").strip().lower()
+        if not candidate and base_domain:
+            candidate = f"pve-freq.{base_domain}"
+        if candidate and reverse_proxy_host:
+            probe_target = {
+                "label": "pve-freq-dashboard",
+                "service_name": "pve-freq",
+                "target_type": "freq_dashboard",
+                "hostname": candidate,
+                "ip": reverse_proxy_host,
+                "port": 443,
+                "deploy_driver": "reverse_proxy",
+            }
+            probe = _verify_tls_target(probe_target)
+            probes.append(probe)
+            if probe.get("ok"):
+                state = "managed"
+                message = "Dashboard HTTPS is served by the configured reverse proxy."
+                dashboard_targets = [probe_target]
     return {
         "state": state,
         "plain_http_port": dashboard_port,
         "managed_targets": dashboard_targets,
+        "probes": probes,
         "message": message,
         "recommended_actions": [
             "adopt_existing_route",
@@ -163,7 +187,10 @@ def _ssl_onboarding_contract(cfg):
         "truth_source": "per_target_sni_tls_probe",
         "credential_policy": {
             "inline_secret_allowed": False,
+            "browser_secret_intake_allowed": True,
             "secret_inputs": "path_or_secret_store_reference",
+            "store_endpoint": "/api/cert/lifecycle/cloudflare-token",
+            "secret_response_policy": "never_echo_secret_value",
         },
         "auto_detect": [
             "dns_provider_credentials_by_path_or_env",
@@ -174,6 +201,7 @@ def _ssl_onboarding_contract(cfg):
         "ask_user": [
             "base_domain_when_not_detected_or_ambiguous",
             "dns_provider_and_token_path_when_provisioning",
+            "dns_provider_token_paste_or_path_when_provisioning",
             "wildcard_or_explicit_san_set",
             "deploy_model",
             "targets_to_cover",
@@ -215,6 +243,7 @@ def _ssl_onboarding_contract(cfg):
                 "label": "Provision direct target certs",
                 "intent": "Issue wildcard/SAN certs and deploy them directly to selected targets.",
                 "requires": ["dns_provider", "api_token_path", "base_domain", "target_selection"],
+                "secret_store_endpoint": "/api/cert/lifecycle/cloudflare-token",
                 "mutates_on_preview": False,
                 "apply_mutations": ["issue_cert", "deploy_to_targets", "reload_selected_services"],
             },
@@ -240,6 +269,7 @@ def _ssl_onboarding_contract(cfg):
                     "network_profile",
                     "target_selection",
                 ],
+                "secret_store_endpoint": "/api/cert/lifecycle/cloudflare-token",
                 "mutates_on_preview": False,
                 "apply_mutations": ["create_vm", "install_proxy", "issue_cert", "write_routes", "start_proxy"],
                 "vm_defaults": proxy_vm_defaults,
@@ -249,6 +279,7 @@ def _ssl_onboarding_contract(cfg):
                 "label": "Mixed proxy and direct certs",
                 "intent": "Proxy app-tier services while deploying direct certs to management appliances.",
                 "requires": ["dns_provider", "api_token_path", "base_domain", "target_selection"],
+                "secret_store_endpoint": "/api/cert/lifecycle/cloudflare-token",
                 "mutates_on_preview": False,
                 "apply_mutations": ["issue_cert", "configure_proxy_routes", "deploy_direct_targets"],
             },
@@ -262,6 +293,12 @@ def _ssl_onboarding_contract(cfg):
             "configured_targets": len(targets),
             "reverse_proxy_host": settings.get("reverse_proxy_host", ""),
             "management_mode": settings.get("management_mode") or "managed",
+            "cloudflare_token": _cloudflare_token_status(cfg, settings),
+            "adopt_existing_scope": {
+                "mode": "wildcard_base_domain",
+                "single_apply_registers_all_inferred_targets": True,
+                "infer_targets_default": True,
+            },
         },
         "dashboard_https": _ssl_dashboard_status(cfg, settings, targets),
         "trusted_proxy": {
@@ -302,6 +339,15 @@ def _cert_settings(cfg):
     if isinstance(raw, dict):
         settings.update({k: v for k, v in raw.items() if v is not None})
     settings["wildcard"] = str(settings.get("wildcard", "true")).lower() not in ("0", "false", "no", "off")
+    data_dir = getattr(cfg, "data_dir", "") or os.path.join(getattr(cfg, "conf_dir", "."), "data")
+    if settings.get("management_mode") != "adopted_existing":
+        if not settings.get("acme_home"):
+            settings["acme_home"] = os.path.join(data_dir, "acme")
+        base_domain = str(settings.get("base_domain", "") or "").strip()
+        if base_domain:
+            managed_dir = os.path.join(data_dir, "certs", "managed", base_domain)
+            settings["cert_fullchain_path"] = settings.get("cert_fullchain_path") or os.path.join(managed_dir, "fullchain.cer")
+            settings["cert_key_path"] = settings.get("cert_key_path") or os.path.join(managed_dir, f"{base_domain}.key")
     return settings
 
 
@@ -318,9 +364,217 @@ def _slug(value):
     return text
 
 
+def _public_container_route_name(container_name, vm_label=""):
+    """Return a public route slug for a container, or "" for private sidecars."""
+    raw = str(container_name or "").strip().lower().replace("_", "-")
+    # Docker Compose prefixes often look like "2e33fcf71920-radarr"; strip
+    # opaque hash prefixes so the public route is the product/service name.
+    parts = [p for p in raw.split("-") if p]
+    if len(parts) > 1 and len(parts[0]) >= 8 and all(ch in "0123456789abcdef" for ch in parts[0]):
+        raw = "-".join(parts[1:])
+    sidecars = {
+        "gluetun",
+        "flaresolverr",
+        "kometa",
+        "recyclarr",
+        "qbit-port-sync",
+        "qbit-port-manager",
+        "tdarr-node",
+        "tdarr-node-cpu",
+    }
+    if raw in sidecars or raw.endswith("-node") or raw.endswith("-node-cpu"):
+        return ""
+    if raw in ("qbittorrent", "qbit"):
+        vm = str(vm_label or "").lower()
+        if "2" in vm or vm.endswith("-02"):
+            return "qbit-02"
+        return "qbit-01"
+    aliases = {"sabnzbd": "sab"}
+    return aliases.get(raw, raw)
+
+
+def _is_generic_bmc_label(label):
+    slug = _slug(label)
+    if slug in ("bmc", "idrac", "ilo", "ipmi", "redfish"):
+        return True
+    parts = slug.split("-")
+    return len(parts) == 2 and parts[0] in ("bmc", "idrac", "ilo", "ipmi", "redfish") and parts[1].isdigit()
+
+
+def _domain_from_hostname(hostname):
+    parts = str(hostname or "").strip().lower().split(".")
+    return ".".join(parts[1:]) if len(parts) > 1 else ""
+
+
+def _identity_value(source, *names):
+    for name in names:
+        if isinstance(source, dict):
+            value = source.get(name)
+        else:
+            value = getattr(source, name, "")
+        value = str(value or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _identity_record(source, default_type=""):
+    ip = _identity_value(source, "ip", "address")
+    htype = (
+        _identity_value(source, "device_type", "target_type", "type", "htype")
+        or default_type
+    ).lower()
+    label = _identity_value(source, "label", "name", "key")
+    hostname = _identity_value(source, "hostname", "fqdn", "dns_name", "manual_dns_entry").lower()
+    service_tag = _identity_value(source, "service_tag", "svctag", "serial").upper()
+    dns_rac_name = _identity_value(source, "dns_rac_name", "dnsracname").lower()
+    identity_source = _identity_value(source, "identity_source", "source")
+    return {
+        "ip": ip,
+        "type": htype,
+        "label": label,
+        "hostname": hostname,
+        "service_tag": service_tag,
+        "dns_rac_name": dns_rac_name,
+        "identity_source": identity_source,
+    }
+
+
+def _inventory_identity_records(cfg):
+    records = []
+    for dev in (getattr(getattr(cfg, "fleet_boundaries", None), "physical", {}) or {}).values():
+        rec = _identity_record(dev)
+        if rec["ip"]:
+            rec["identity_source"] = rec["identity_source"] or "fleet-boundaries"
+            records.append(rec)
+    for host in getattr(cfg, "hosts", []) or []:
+        rec = _identity_record(host)
+        if rec["ip"]:
+            rec["identity_source"] = rec["identity_source"] or "hosts"
+            records.append(rec)
+    return records
+
+
+def _usable_identity_label(record):
+    hostname = record.get("hostname", "")
+    if hostname and not _is_generic_bmc_label(hostname.split(".")[0]):
+        return hostname.split(".")[0], hostname
+    label = record.get("label", "")
+    if label and not _is_generic_bmc_label(label):
+        return _slug(label), ""
+    dns_rac_name = record.get("dns_rac_name", "")
+    if dns_rac_name and not _is_generic_bmc_label(dns_rac_name):
+        return _slug(dns_rac_name), ""
+    return "", ""
+
+
+def _curated_device_identity(cfg, ip, service_tag=""):
+    ip = str(ip or "").strip()
+    service_tag = str(service_tag or "").strip().upper()
+    for rec in _inventory_identity_records(cfg):
+        if rec.get("type") not in ("idrac", "ilo", "ipmi", "bmc", "redfish"):
+            continue
+        if ip and rec.get("ip") != ip:
+            continue
+        if service_tag and rec.get("service_tag") and rec.get("service_tag") != service_tag:
+            continue
+        label, hostname = _usable_identity_label(rec)
+        if label:
+            return {
+                "label": label,
+                "hostname": hostname,
+                "service_tag": rec.get("service_tag", ""),
+                "identity_source": rec.get("identity_source") or "curated_inventory",
+            }
+    return {}
+
+
+def _ptr_identity(ip):
+    try:
+        hostname = socket.gethostbyaddr(ip)[0].strip().lower()
+    except (OSError, socket.herror, socket.gaierror):
+        return {}
+    if hostname and not _is_generic_bmc_label(hostname.split(".")[0]):
+        return {"label": hostname.split(".")[0], "hostname": hostname, "identity_source": "ptr"}
+    return {}
+
+
+def _snmp_device_identity(cfg, ip):
+    """Return bounded SNMP self-report identity for generic device labels."""
+    try:
+        from freq.modules.snmp import get_snmp_identity
+
+        ident = get_snmp_identity(
+            ip,
+            community=getattr(cfg, "snmp_community", "public") or "public",
+            auth=None,
+            timeout=2,
+        )
+    except Exception:
+        return {}
+    if not ident.get("reachable"):
+        return {}
+    label = _slug(ident.get("sys_name", ""))
+    if not label or _is_generic_bmc_label(label):
+        label = ""
+    service_tag = str(ident.get("serial", "") or "").strip().upper()
+    result = {
+        "label": label,
+        "hostname": "",
+        "service_tag": service_tag,
+        "identity_source": "snmp",
+        "model": str(ident.get("model", "") or "").strip(),
+        "description": str(ident.get("sys_descr", "") or "").strip(),
+    }
+    return result if label or service_tag or result["model"] or result["description"] else {}
+
+
+def _cert_device_identity(cfg, host_or_raw, htype, ip, label, hostname, base_domain):
+    """Return display label/hostname for direct management certificate targets."""
+    htype = str(htype or "").strip().lower()
+    label = str(label or "").strip()
+    hostname = str(hostname or "").strip().lower()
+    ip = str(ip or "").strip()
+    raw_rec = _identity_record(host_or_raw, htype)
+    service_tag = raw_rec.get("service_tag", "")
+    domain = base_domain or _domain_from_hostname(hostname)
+    generic_input = _is_generic_bmc_label(label) or _is_generic_bmc_label(hostname.split(".")[0])
+
+    if htype in ("idrac", "ilo", "ipmi", "bmc", "redfish"):
+        curated = _curated_device_identity(cfg, ip, service_tag)
+        if curated:
+            resolved_hostname = curated.get("hostname") or (
+                f"{curated['label']}.{domain}" if domain else ""
+            )
+            return curated["label"], resolved_hostname, curated.get("service_tag", service_tag), curated.get("identity_source", "curated_inventory")
+
+        label_from_raw, hostname_from_raw = _usable_identity_label(raw_rec)
+        if label_from_raw:
+            return label_from_raw, hostname_from_raw or (f"{label_from_raw}.{domain}" if domain else ""), service_tag, raw_rec.get("identity_source") or "device_self_report"
+
+        snmp = _snmp_device_identity(cfg, ip)
+        if snmp:
+            snmp_label = snmp.get("label") or ip
+            return snmp_label, snmp.get("hostname", ""), snmp.get("service_tag", service_tag), snmp.get("identity_source", "snmp")
+
+        ptr = _ptr_identity(ip)
+        if ptr:
+            return ptr["label"], ptr["hostname"], service_tag, ptr["identity_source"]
+
+        if generic_input:
+            return ip, "", service_tag, "unnamed_ip"
+
+    if hostname and not _is_generic_bmc_label(hostname.split(".")[0]):
+        return hostname.split(".")[0], hostname, service_tag, raw_rec.get("identity_source", "")
+    slug = _slug(label or htype)
+    return slug, f"{slug}.{domain}" if slug and domain else hostname or slug, service_tag, raw_rec.get("identity_source", "")
+
+
 def _cert_targets(cfg):
     """Return normalized certificate deployment targets."""
     targets = []
+    settings = _cert_settings(cfg)
+    base_domain = str(settings.get("base_domain", "") or "").strip().lower()
     for idx, raw in enumerate(getattr(cfg, "cert_targets", []) or []):
         if not isinstance(raw, dict):
             continue
@@ -328,6 +582,19 @@ def _cert_targets(cfg):
         label = str(raw.get("label") or hostname or f"target-{idx + 1}").strip()
         target_type = str(raw.get("target_type") or raw.get("type") or "unknown").strip()
         driver = str(raw.get("deploy_driver") or target_type).strip()
+        service_tag = str(raw.get("service_tag", "")).strip().upper()
+        identity_source = str(raw.get("identity_source", "")).strip()
+        target_identity_type = target_type.lower()
+        if target_identity_type in ("idrac", "bmc", "ipmi", "ilo", "redfish") or driver == "idrac_racadm":
+            label, hostname, service_tag, identity_source = _cert_device_identity(
+                cfg,
+                raw,
+                target_identity_type if target_identity_type in ("idrac", "bmc", "ipmi", "ilo", "redfish") else "idrac",
+                raw.get("ip", ""),
+                label,
+                hostname,
+                base_domain,
+            )
         targets.append(
             {
                 "label": label,
@@ -342,6 +609,8 @@ def _cert_targets(cfg):
                 "mode": str(raw.get("mode", "")).strip(),
                 "origin_ip": str(raw.get("origin_ip", "")).strip(),
                 "origin_port": int(raw.get("origin_port", 0) or 0),
+                "service_tag": service_tag,
+                "identity_source": identity_source,
                 "credential_ref": str(raw.get("credential_ref", "")).strip(),
                 "scope": str(raw.get("scope", "")).strip(),
                 "hostname_override": str(raw.get("hostname_override", "")).strip(),
@@ -351,12 +620,25 @@ def _cert_targets(cfg):
                 "cert_key_path": str(raw.get("cert_key_path", "")).strip(),
                 "remote_cert_dir": str(raw.get("remote_cert_dir", "")).strip(),
                 "restart_policy": str(raw.get("restart_policy", "")).strip(),
-                "verify_hostname": _as_bool(raw.get("verify_hostname"), True),
+                "verify_hostname": _as_bool(raw.get("verify_hostname"), bool(hostname)),
                 "host_header_check": _as_bool(raw.get("host_header_check"), driver == "pfsense_config"),
                 "resolver_private_domain": _as_bool(raw.get("resolver_private_domain"), driver == "pfsense_config"),
             }
         )
     return targets
+
+
+def _merge_cert_targets(primary, discovered):
+    """Merge configured and discovered cert targets by hostname/label."""
+    merged = []
+    seen = set()
+    for target in list(primary or []) + list(discovered or []):
+        key = (target.get("hostname") or target.get("label") or "").strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        merged.append(target)
+    return merged
 
 
 def _cert_targets_from_catalog(catalog, base_domain, reverse_proxy_host=""):
@@ -427,6 +709,8 @@ def _source_paths(settings, target=None):
     base_domain = settings.get("base_domain", "")
     fullchain = target.get("cert_fullchain_path") or settings.get("cert_fullchain_path")
     key = target.get("cert_key_path") or settings.get("cert_key_path")
+    if settings.get("management_mode") == "adopted_existing" and not fullchain and not key:
+        return {"fullchain": "", "key": "", "source_mode": "external_existing"}
     if not fullchain or not key:
         acme_home = os.path.expanduser(settings.get("acme_home") or "~/.acme.sh")
         if base_domain:
@@ -436,6 +720,7 @@ def _source_paths(settings, target=None):
     return {
         "fullchain": os.path.expanduser(fullchain) if fullchain else "",
         "key": os.path.expanduser(key) if key else "",
+        "source_mode": "local_files",
     }
 
 
@@ -551,6 +836,29 @@ def _build_acme_issue_command(settings):
     return [part for part in cmd if part]
 
 
+def _build_acme_install_command(settings):
+    """Return an acme.sh install-cert command for persistent managed paths."""
+    base_domain = settings.get("base_domain", "")
+    source = _source_paths(settings)
+    for path in (source.get("fullchain"), source.get("key")):
+        if path:
+            os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    cmd = [
+        _acme_binary(settings),
+        "--install-cert",
+        "-d",
+        base_domain,
+        "--ecc",
+        "--fullchain-file",
+        source.get("fullchain", ""),
+        "--key-file",
+        source.get("key", ""),
+        "--reloadcmd",
+        "freq --yes cert deploy",
+    ]
+    return [part for part in cmd if part]
+
+
 def _build_acme_renew_command(settings):
     """Return an acme.sh renew command without embedding secrets."""
     base_domain = settings.get("base_domain", "")
@@ -562,6 +870,13 @@ def _build_deploy_steps(settings, target):
     """Build executable deployment steps for a target without secret values."""
     driver = target.get("deploy_driver", "")
     source = _source_paths(settings, target)
+    if source.get("source_mode") == "external_existing":
+        return [
+            {
+                "kind": "adopt_existing",
+                "message": "Existing certificate is externally owned; pve-freq verifies served TLS and does not copy local cert files.",
+            }
+        ]
     remote_dir = target.get("remote_cert_dir") or f"/tmp/freq-cert-{target.get('label') or target.get('hostname')}"
     remote_fullchain = f"{remote_dir}/fullchain.pem"
     remote_key = f"{remote_dir}/privkey.pem"
@@ -654,6 +969,8 @@ def _build_lifecycle_plan(cfg):
     targets = _cert_targets(cfg)
     warnings = []
     adopted_existing = settings.get("management_mode") == "adopted_existing"
+    if adopted_existing and settings.get("base_domain"):
+        targets = _merge_cert_targets(targets, _infer_cert_targets(cfg, settings.get("base_domain")))
 
     if not settings.get("base_domain"):
         warnings.append("missing [certificates].base_domain")
@@ -662,7 +979,7 @@ def _build_lifecycle_plan(cfg):
     token_path = settings.get("dns_token_path") or ""
     if not adopted_existing and not token_path:
         warnings.append("missing [certificates].dns_token_path")
-    elif not os.path.isfile(os.path.expanduser(token_path)):
+    elif token_path and not os.path.isfile(os.path.expanduser(token_path)):
         warnings.append(f"dns token path not found: {token_path}")
     if not adopted_existing and settings.get("dns_provider") == "cloudflare" and not settings.get("cloudflare_zone_id"):
         warnings.append("missing [certificates].cloudflare_zone_id")
@@ -672,7 +989,8 @@ def _build_lifecycle_plan(cfg):
         warnings.append("no [[cert_target]] entries configured")
 
     source = _source_paths(settings)
-    for label, path in source.items():
+    for label in ("fullchain", "key"):
+        path = source.get(label, "")
         if path and not os.path.isfile(path):
             warnings.append(f"certificate {label} path not found: {path}")
 
@@ -894,12 +1212,24 @@ def _verify_tls_target(target):
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
+    driver = str(target.get("deploy_driver") or "").lower()
+    target_type = str(target.get("target_type") or "").lower()
+    if driver in ("switch_ios", "idrac_racadm") or target_type in ("switch", "idrac"):
+        try:
+            ctx.set_ciphers("ALL:@SECLEVEL=0")
+        except ssl.SSLError:
+            pass
+        if hasattr(ssl, "TLSVersion"):
+            try:
+                ctx.minimum_version = ssl.TLSVersion.TLSv1
+            except (ValueError, ssl.SSLError):
+                pass
     started = time.monotonic()
     try:
         with socket.create_connection((connect_host, port), timeout=8) as sock:
             with ctx.wrap_socket(sock, server_hostname=host) as ssock:
-                cert = ssock.getpeercert()
                 der = ssock.getpeercert(binary_form=True)
+                cert = _decode_der_peer_cert(der) if der else {}
         duration = time.monotonic() - started
         subject = dict(x[0] for x in cert.get("subject", [])) if cert else {}
         issuer = dict(x[0] for x in cert.get("issuer", [])) if cert else {}
@@ -927,6 +1257,26 @@ def _verify_tls_target(target):
             "ok": False,
             "error": str(e),
         }
+
+
+def _decode_der_peer_cert(der):
+    """Decode an unverified peer DER cert into ssl.getpeercert()-style data."""
+    path = ""
+    try:
+        pem = ssl.DER_cert_to_PEM_cert(der)
+        fd, path = tempfile.mkstemp(prefix="freq-peer-cert-", suffix=".pem")
+        with os.fdopen(fd, "w") as f:
+            f.write(pem)
+        return ssl._ssl._test_decode_cert(path)
+    except Exception as e:
+        logger.warn(f"cert_management: failed to decode peer cert: {e}")
+        return {}
+    finally:
+        if path:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
 
 
 def _pem_cert_fingerprint(path):
@@ -962,7 +1312,8 @@ def _classify_tls_probe(settings, target, probe, managed_fingerprint=""):
     sans = probe.get("sans") or []
     san_match = any(_dnsname_matches(san, hostname) for san in sans)
     issuer = str(probe.get("issuer") or "").lower()
-    is_lets_encrypt = "let's encrypt" in issuer or "lets encrypt" in issuer
+    le_markers = ("let's encrypt", "lets encrypt", "ye1", "ye2", "r3", "r10", "r11", "e1", "e5", "e6")
+    is_lets_encrypt = any(marker in issuer for marker in le_markers)
     fp_match = bool(managed_fingerprint and probe.get("fingerprint_sha256") == managed_fingerprint)
     if fp_match or (is_lets_encrypt and san_match and not probe.get("self_signed")):
         return "SERVING_MANAGED_WILDCARD"
@@ -973,18 +1324,42 @@ def _reconcile_lifecycle_targets(cfg):
     """Probe configured cert targets and classify what is actually served."""
     settings = _cert_settings(cfg)
     targets = _cert_targets(cfg)
+    if settings.get("management_mode") == "adopted_existing" and settings.get("base_domain"):
+        targets = _merge_cert_targets(targets, _infer_cert_targets(cfg, settings.get("base_domain")))
     source = _source_paths(settings)
     managed_fingerprint = _pem_cert_fingerprint(source.get("fullchain"))
     results = []
+    external_renewal_owner = (
+        settings.get("management_mode") == "adopted_existing"
+        and str(settings.get("renewal_owner") or "external").strip().lower() == "external"
+    )
     for target in targets:
         probe = _verify_tls_target(target)
         probe["classification"] = _classify_tls_probe(settings, target, probe, managed_fingerprint)
         probe["managed_fingerprint_sha256"] = managed_fingerprint
-        # Until deploy hooks are modeled per target, surface the renewal gap
-        # truth explicitly for non-proxy appliance targets.
         driver = target.get("deploy_driver", "")
-        probe["renewal_hooked"] = driver == "reverse_proxy"
-        probe["renewal_gap"] = probe["classification"] == "SERVING_MANAGED_WILDCARD" and not probe["renewal_hooked"]
+        deploy_supported = driver in {
+            "reverse_proxy",
+            "proxmox_pvenode",
+            "truenas_api",
+            "pfsense_config",
+            "idrac_racadm",
+            "switch_ios",
+        }
+        managed_renewal = (
+            settings.get("management_mode") != "adopted_existing"
+            and bool(source.get("fullchain"))
+            and bool(source.get("key"))
+            and deploy_supported
+        )
+        probe["renewal_hooked"] = managed_renewal
+        probe["renewal_owner"] = str(settings.get("renewal_owner") or "").strip()
+        probe["renewal_status"] = "external_owner" if external_renewal_owner else ("hooked" if probe["renewal_hooked"] else "gap")
+        probe["renewal_gap"] = (
+            probe["classification"] == "SERVING_MANAGED_WILDCARD"
+            and not probe["renewal_hooked"]
+            and not external_renewal_owner
+        )
         results.append(probe)
     return {
         "ok": True,
@@ -999,7 +1374,91 @@ def _reconcile_lifecycle_targets(cfg):
             "pending": sum(1 for r in results if r.get("classification") == "SELF_SIGNED_OR_OTHER"),
             "unreachable": sum(1 for r in results if r.get("classification") == "UNREACHABLE"),
             "renewal_gaps": sum(1 for r in results if r.get("renewal_gap")),
+            "external_renewal": sum(1 for r in results if r.get("renewal_status") == "external_owner"),
         },
+    }
+
+
+def _cert_days_left(expires):
+    if not expires:
+        return None
+    try:
+        epoch = ssl.cert_time_to_seconds(expires)
+        return int((epoch - time.time()) // 86400)
+    except Exception:
+        return None
+
+
+def _cert_inventory_from_reconcile(cfg, existing=None, reconcile=None):
+    """Return persisted cert inventory, or synthesize it from live probes."""
+    existing = existing or {}
+    if existing.get("certs"):
+        return existing
+    reconcile = reconcile or _reconcile_lifecycle_targets(cfg)
+    certs = []
+    for probe in reconcile.get("targets", []):
+        if not probe.get("ok"):
+            continue
+        days_left = _cert_days_left(probe.get("expires", ""))
+        status = "valid"
+        if days_left is not None and days_left < 0:
+            status = "expired"
+        elif days_left is not None and days_left < 30:
+            status = "expiring"
+        certs.append(
+            {
+                "domain": probe.get("hostname", ""),
+                "name": probe.get("label") or probe.get("hostname", ""),
+                "issuer": probe.get("issuer", ""),
+                "expires": probe.get("expires", ""),
+                "not_after": probe.get("expires", ""),
+                "days_left": days_left,
+                "status": status,
+                "classification": probe.get("classification", ""),
+                "sans": probe.get("sans", []),
+                "source": reconcile.get("source_paths", {}).get("source_mode", "served_probe"),
+                "renewal_status": probe.get("renewal_status", ""),
+            }
+        )
+    return {
+        "certs": certs,
+        "scan_time": reconcile.get("generated_at", ""),
+        "source": "reconcile_probe",
+        "summary": reconcile.get("summary", {}),
+    }
+
+
+def _issued_from_reconcile(cfg, existing=None, reconcile=None, inventory=None):
+    """Return issued cache, or external ownership summary for adopted SSL."""
+    existing = existing or {}
+    if existing.get("certs"):
+        return existing
+    settings = _cert_settings(cfg)
+    if settings.get("management_mode") != "adopted_existing":
+        return existing or {"certs": []}
+    inventory = inventory or _cert_inventory_from_reconcile(cfg, reconcile=reconcile)
+    certs = inventory.get("certs", [])
+    if not certs:
+        return {
+            "certs": [],
+            "issued_at": "external existing",
+            "source": "external_existing",
+        }
+    first = certs[0]
+    return {
+        "certs": [
+            {
+                "domain": f"*.{settings.get('base_domain', '')}" if settings.get("wildcard", True) else settings.get("base_domain", ""),
+                "issuer": first.get("issuer", ""),
+                "expires": first.get("expires", ""),
+                "status": "externally managed",
+                "source": "external_existing",
+                "renewal_owner": settings.get("renewal_owner") or "external",
+            }
+        ],
+        "issued_at": "external existing",
+        "source": "external_existing",
+        "summary": inventory.get("summary", {}),
     }
 
 
@@ -1120,14 +1579,129 @@ def _stage_cloudflare_token(cfg, source_path, dest_path=""):
     raise RuntimeError(f"could not stage Cloudflare token: {last_error}")
 
 
+def _cloudflare_token_candidates(cfg, dest_path=""):
+    if dest_path:
+        return [os.path.expanduser(dest_path)]
+    conf_dir = getattr(cfg, "conf_dir", "") or ""
+    candidates = ["/etc/freq/credentials/cloudflare_dns_token"]
+    if conf_dir:
+        candidates.append(os.path.join(conf_dir, "secrets", "cloudflare_dns_token"))
+    return candidates
+
+
+def _stage_cloudflare_token_value(cfg, token, dest_path=""):
+    """Write a pasted Cloudflare token into a managed secret file."""
+    token = str(token or "").strip()
+    if not token:
+        raise RuntimeError("Cloudflare token is required")
+    if len(token) < 8:
+        raise RuntimeError("Cloudflare token is too short")
+    last_error = ""
+    for candidate in _cloudflare_token_candidates(cfg, dest_path):
+        try:
+            os.makedirs(os.path.dirname(candidate), mode=0o700, exist_ok=True)
+            fd = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                f.write(token + "\n")
+            os.chmod(candidate, 0o600)
+            return candidate
+        except OSError as e:
+            last_error = str(e)
+    raise RuntimeError(f"could not stage Cloudflare token: {last_error}")
+
+
+def _cloudflare_token_status(cfg, settings=None):
+    """Return token readiness metadata without exposing the token value."""
+    settings = settings or _cert_settings(cfg)
+    path = str(settings.get("dns_token_path") or "").strip()
+    if not path:
+        candidates = _cloudflare_token_candidates(cfg)
+        path = next((p for p in candidates if os.path.isfile(os.path.expanduser(p))), "")
+    expanded = os.path.expanduser(path) if path else ""
+    exists = bool(expanded and os.path.isfile(expanded))
+    readable = bool(exists and os.access(expanded, os.R_OK))
+    mode = ""
+    if exists:
+        try:
+            mode = oct(os.stat(expanded).st_mode & 0o777)
+        except OSError:
+            mode = ""
+    return {
+        "provider": settings.get("dns_provider") or "cloudflare",
+        "configured": bool(settings.get("dns_token_path")),
+        "stored": exists,
+        "ready": bool(readable),
+        "path": expanded,
+        "secret_ref": "cloudflare_dns_token" if expanded else "",
+        "mode": mode,
+        "value_exposed": False,
+        "store_endpoint": "/api/cert/lifecycle/cloudflare-token",
+    }
+
+
 def _infer_cert_targets(cfg, base_domain):
     """Infer default certificate targets from existing pve-freq inventory."""
     targets = []
+    seen = set()
+
+    def add_target(target):
+        key = (target.get("hostname") or target.get("label") or "").lower()
+        if not key or key in seen:
+            return
+        seen.add(key)
+        targets.append(target)
+
+    reverse_proxy_host = str((getattr(cfg, "certificates", {}) or {}).get("reverse_proxy_host", "") or "").strip()
+    if reverse_proxy_host:
+        add_target(
+            {
+                "label": "pve-freq-dashboard",
+                "service_name": "pve-freq",
+                "target_type": "freq_dashboard",
+                "hostname": f"pve-freq.{base_domain}",
+                "ip": reverse_proxy_host,
+                "port": 443,
+                "mode": "behind_proxy",
+                "deploy_driver": "reverse_proxy",
+                "cert_source": "wildcard",
+                "restart_policy": "external_proxy_reload",
+                "verify_hostname": True,
+                "reverse_proxy_host": reverse_proxy_host,
+                "scope": "include",
+            }
+        )
+
+        for vm in (getattr(cfg, "container_vms", {}) or {}).values():
+            vm_label = getattr(vm, "label", "") or ""
+            for container in (getattr(vm, "containers", {}) or {}).values():
+                route = _public_container_route_name(getattr(container, "name", ""), vm_label)
+                if not route:
+                    continue
+                add_target(
+                    {
+                        "label": route,
+                        "service_name": route,
+                        "target_type": "web_app",
+                        "hostname": f"{route}.{base_domain}",
+                        "ip": reverse_proxy_host,
+                        "port": 443,
+                        "origin_ip": getattr(vm, "ip", ""),
+                        "origin_port": int(getattr(container, "port", 0) or 0),
+                        "mode": "behind_proxy",
+                        "deploy_driver": "reverse_proxy",
+                        "cert_source": "wildcard",
+                        "restart_policy": "external_proxy_reload",
+                        "verify_hostname": True,
+                        "reverse_proxy_host": reverse_proxy_host,
+                        "scope": "include",
+                    }
+                )
+
     pve_nodes = list(getattr(cfg, "pve_nodes", []) or [])
     pve_names = list(getattr(cfg, "pve_node_names", []) or [])
     for idx, ip in enumerate(pve_nodes):
         name = pve_names[idx] if idx < len(pve_names) and pve_names[idx] else f"pve{idx + 1:02d}"
-        targets.append(
+        add_target(
             {
                 "label": name,
                 "target_type": "proxmox_ve_node",
@@ -1141,7 +1715,7 @@ def _infer_cert_targets(cfg, base_domain):
             }
         )
     if getattr(cfg, "truenas_ip", ""):
-        targets.append(
+        add_target(
             {
                 "label": "truenas",
                 "target_type": "truenas_scale",
@@ -1155,7 +1729,7 @@ def _infer_cert_targets(cfg, base_domain):
             }
         )
     if getattr(cfg, "pfsense_ip", ""):
-        targets.append(
+        add_target(
             {
                 "label": "pfsense",
                 "target_type": "pfsense",
@@ -1168,6 +1742,43 @@ def _infer_cert_targets(cfg, base_domain):
                 "verify_hostname": True,
                 "host_header_check": True,
                 "resolver_private_domain": True,
+            }
+        )
+    for host in getattr(cfg, "hosts", []) or []:
+        htype = str(getattr(host, "htype", "") or "").lower()
+        if htype not in ("idrac", "switch"):
+            continue
+        ip = str(getattr(host, "ip", "") or "").strip()
+        label = _slug(getattr(host, "label", "") or htype)
+        if not label:
+            continue
+        hostname = f"{label}.{base_domain}" if base_domain else label
+        service_tag = ""
+        identity_source = ""
+        if htype == "idrac":
+            label, hostname, service_tag, identity_source = _cert_device_identity(
+                cfg,
+                host,
+                htype,
+                ip,
+                label,
+                getattr(host, "hostname", "") or hostname,
+                base_domain,
+            )
+        add_target(
+            {
+                "label": label,
+                "target_type": htype,
+                "hostname": hostname,
+                "ip": ip,
+                "port": 443,
+                "deploy_driver": "idrac_racadm" if htype == "idrac" else "switch_ios",
+                "cert_source": "wildcard_rsa",
+                "restart_policy": "external_or_legacy_driver",
+                "verify_hostname": bool(hostname),
+                "service_tag": service_tag,
+                "identity_source": identity_source,
+                "scope": "include",
             }
         )
     return targets
@@ -1543,8 +2154,8 @@ def cmd_cert_bootstrap(cfg: FreqConfig, pack, args) -> int:
         fmt.error(str(e))
         return 1
 
-    settings = dict(DEFAULT_CERT_SETTINGS)
-    settings.update(
+    raw_settings = dict(DEFAULT_CERT_SETTINGS)
+    raw_settings.update(
         {
             "base_domain": base_domain,
             "wildcard": True,
@@ -1555,6 +2166,12 @@ def cmd_cert_bootstrap(cfg: FreqConfig, pack, args) -> int:
             "record_strategy": "public-private-a",
         }
     )
+    previous_certificates = getattr(cfg, "certificates", {})
+    try:
+        cfg.certificates = raw_settings
+        settings = _cert_settings(cfg)
+    finally:
+        cfg.certificates = previous_certificates
     targets = _infer_cert_targets(cfg, base_domain)
     result = {
         "ok": True,
@@ -1608,15 +2225,18 @@ def cmd_cert_issue(cfg: FreqConfig, pack, args) -> int:
             fmt.error(error)
         return 1
     command = _build_acme_issue_command(settings)
+    install_command = _build_acme_install_command(settings)
     dry_run = bool(getattr(args, "dry_run", False))
     if getattr(args, "json", False):
         print(
             json.dumps(
                 {
                     "command": command,
+                    "install_command": install_command,
                     "dry_run": dry_run,
                     "acme_available": _acme_available(settings),
                     "acme_install_planned": not _acme_available(settings),
+                    "source_paths": _source_paths(settings),
                 },
                 indent=2,
             )
@@ -1643,12 +2263,21 @@ def cmd_cert_issue(cfg: FreqConfig, pack, args) -> int:
             fmt.error((install.stderr or install.stdout or "acme.sh install failed")[:800])
             return install.returncode or 1
         command = _build_acme_issue_command(settings)
+        install_command = _build_acme_install_command(settings)
     result = _run_acme_command(settings, command)
     if result.returncode != 0:
         fmt.error((result.stderr or result.stdout or "acme.sh failed")[:800])
         return result.returncode or 1
+    install_result = _run_acme_command(settings, install_command)
+    if install_result.returncode != 0:
+        fmt.error((install_result.stderr or install_result.stdout or "acme.sh install-cert failed")[:800])
+        return install_result.returncode or 1
     fmt.step_ok("ACME issue completed")
+    fmt.step_ok("Installed certificate to persistent managed paths")
     fmt.footer()
+    if getattr(args, "deploy", False):
+        args.target = ""
+        return cmd_cert_deploy(cfg, pack, args)
     return 0
 
 
@@ -1668,15 +2297,18 @@ def cmd_cert_renew(cfg: FreqConfig, pack, args) -> int:
             fmt.error(error)
         return 1
     command = _build_acme_renew_command(settings)
+    install_command = _build_acme_install_command(settings)
     dry_run = bool(getattr(args, "dry_run", False))
     if getattr(args, "json", False):
         print(
             json.dumps(
                 {
                     "command": command,
+                    "install_command": install_command,
                     "dry_run": dry_run,
                     "acme_available": _acme_available(settings),
                     "acme_install_planned": not _acme_available(settings),
+                    "source_paths": _source_paths(settings),
                 },
                 indent=2,
             )
@@ -1703,11 +2335,17 @@ def cmd_cert_renew(cfg: FreqConfig, pack, args) -> int:
             fmt.error((install.stderr or install.stdout or "acme.sh install failed")[:800])
             return install.returncode or 1
         command = _build_acme_renew_command(settings)
+        install_command = _build_acme_install_command(settings)
     result = _run_acme_command(settings, command)
     if result.returncode != 0:
         fmt.error((result.stderr or result.stdout or "acme.sh failed")[:800])
         return result.returncode or 1
+    install_result = _run_acme_command(settings, install_command)
+    if install_result.returncode != 0:
+        fmt.error((install_result.stderr or install_result.stdout or "acme.sh install-cert failed")[:800])
+        return install_result.returncode or 1
     fmt.step_ok("ACME renew completed")
+    fmt.step_ok("Installed certificate to persistent managed paths")
     fmt.footer()
     if getattr(args, "deploy", False):
         args.target = ""

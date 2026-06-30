@@ -595,8 +595,8 @@ class TestHomeTileDensification(unittest.TestCase):
         )
         # CONTAINERS tile click-through to docker.
         self.assertIn("setAttribute('data-view','docker')", body)
-        # ACTIVITY tile click-through to media.
-        self.assertIn("setAttribute('data-view','media')", body)
+        # ACTIVITY tile click-through to Docker, where Media now lives as a subtab.
+        self.assertIn("setAttribute('data-view','docker')", body)
 
     def test_d_helper_returns_clickable_tile_when_view_present(self):
         body = _fn_body(_app_js(), "_loadHomeFleetStats")
@@ -723,7 +723,7 @@ class TestSecurityOverviewDensification(unittest.TestCase):
         # Every tile becomes a button to its detail view.
         self.assertIn("data-view", body,
             "loadSecPosture must thread data-view click-through")
-        for view in ("'sec-vault'", "'sec-compliance'", "'certs'"):
+        for view in ("'vault'", "'sec-compliance'", "'certs'"):
             self.assertIn(view, body,
                 "loadSecPosture must thread a view click-through for " + view)
 
@@ -758,7 +758,7 @@ class TestSmallWidgetDensification(unittest.TestCase):
         idx = src.find("'w-tdarr'")
         self.assertGreater(idx, 0)
         sub = src[idx:idx+2000]
-        self.assertIn('data-view="media"', sub)
+        self.assertIn('data-view="docker"', sub)
         self.assertIn("_freshChip", sub)
 
     def test_deploy_log_widget_carries_fresh_chip_and_view(self):

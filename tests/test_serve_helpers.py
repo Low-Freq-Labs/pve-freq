@@ -188,7 +188,7 @@ class TestParseQuery(unittest.TestCase):
         self.assertEqual(result["q"], ["hello world"])
 
     def test_token_extraction(self):
-        h = _mock_handler("/api/vault?token=abc123")
+        h = _mock_handler("/api/test?token=abc123")
         result = self.fn(h)
         self.assertEqual(result["token"], ["abc123"])
 
@@ -568,7 +568,8 @@ class TestRouteTable(unittest.TestCase):
     def test_api_vault_exists(self):
         from freq.api import build_routes
         v1_routes = build_routes()
-        self.assertIn("/api/vault", v1_routes)
+        self.assertIn("/api/vault/credentials", v1_routes)
+        self.assertNotIn("/api/vault", v1_routes)
 
     def test_api_fleet_overview_exists(self):
         from freq.api import build_routes
