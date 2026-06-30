@@ -20,8 +20,10 @@ Design decisions:
 import json
 import os
 import re
+import shlex
 import subprocess
 import time
+import tempfile
 
 from freq.core import fmt
 from freq.core.config import FreqConfig
@@ -64,6 +66,8 @@ OID_ENT_PHYSICAL_MODEL = "1.3.6.1.2.1.47.1.1.1.1.13"
 
 SNMP_DATA_DIR = "snmp"
 DEFAULT_COMMUNITY = "public"
+SNMP_SETUP_LAST_FILE = "setup-last.json"
+SNMP_SETUP_SCHEMA_VERSION = 1
 
 
 # ---------------------------------------------------------------------------
@@ -580,7 +584,7 @@ def cmd_snmp_cpu(cfg: FreqConfig, pack, args) -> int:
 
 def _snmp_setup_class(htype):
     htype = str(htype or "").strip().lower()
-    if htype in {"pve", "proxmox", "linux", "ubuntu", "debian"}:
+    if htype in {"pve", "proxmox", "proxmox_pvenode", "linux", "ubuntu", "debian", "docker"}:
         return "linux_snmpd"
     if htype in {"truenas", "nas"}:
         return "truenas_midclt"
@@ -593,42 +597,540 @@ def _snmp_setup_class(htype):
     return "unsupported"
 
 
-def build_snmp_setup_plan(cfg):
+def _snmp_setup_mutation(plan_class):
+    return {
+        "linux_snmpd": "install_or_update_snmpd_v3_readonly",
+        "truenas_midclt": "configure_truenas_snmpv3_readonly",
+        "cisco_ios_snmpv3": "configure_ios_snmpv3_readonly",
+        "redfish_bmc_snmp": "adopt_existing_bmc_snmp_only",
+        "pfsense_net_snmp_package": "requires_operator_decision",
+    }.get(plan_class, "unsupported")
+
+
+def _host_matches(host, selectors):
+    if not selectors:
+        return True
+    selectors = {str(s).strip().lower() for s in selectors if str(s).strip()}
+    label = str(getattr(host, "label", "") or "").lower()
+    ip = str(getattr(host, "ip", "") or "").lower()
+    return label in selectors or ip in selectors
+
+
+def _snmp_current_state(ip, community, auth, timeout=2):
+    identity = get_snmp_identity(ip, community=community, auth=auth, timeout=timeout)
+    if identity.get("reachable"):
+        return {
+            "reachable": True,
+            "version": str(auth.get("version") or "2c") if auth else "2c",
+            "identity": identity,
+        }
+    return {"reachable": False, "version": "", "identity": identity}
+
+
+def build_snmp_setup_plan(cfg, targets=None, include_probe=False):
     """Build an enterprise SNMP setup/probe plan without mutating devices."""
     auth = _get_snmp_auth(cfg, include_secret=False)
-    targets = []
+    community = _get_community(cfg)
+    planned_targets = []
     for host in getattr(cfg, "hosts", []) or []:
+        if not _host_matches(host, targets):
+            continue
         htype = getattr(host, "htype", "")
         plan_class = _snmp_setup_class(htype)
         if plan_class == "unsupported":
             continue
         caveats = []
         if plan_class == "pfsense_net_snmp_package":
-            caveats.append("pfSense built-in bsnmpd is v1/v2c only; SNMPv3 requires net-snmp package")
+            caveats.append("pfSense built-in bsnmpd is v1/v2c only; SNMPv3 requires net-snmp package and an operator decision")
         if plan_class == "redfish_bmc_snmp":
-            caveats.append("detect existing agent first; Dell iDRAC may already answer v2c and should be hardened deliberately")
-        targets.append(
-            {
-                "label": getattr(host, "label", ""),
-                "ip": getattr(host, "ip", ""),
-                "type": htype,
-                "setup_class": plan_class,
-                "target_version": "v3",
-                "security_level": "authPriv",
-                "auth_protocol": auth.get("auth_protocol") or "SHA",
-                "priv_protocol": auth.get("priv_protocol") or "AES",
-                "credential_ref": "device-credentials:snmp" if auth.get("user") else "",
-                "mutation": "plan_only",
-                "caveats": caveats,
-            }
-        )
+            caveats.append("BMC setup is adopt/probe only by default; firmware SNMP mutation must be explicit per vendor")
+        current_state = {}
+        if include_probe:
+            probe_auth = auth if auth.get("user") else {}
+            current_state = _snmp_current_state(getattr(host, "ip", ""), community, probe_auth)
+        planned_targets.append({
+            "label": getattr(host, "label", ""),
+            "ip": getattr(host, "ip", ""),
+            "type": htype,
+            "managed": bool(getattr(host, "managed", True)),
+            "setup_class": plan_class,
+            "target_version": "v3" if plan_class != "redfish_bmc_snmp" else "adopt_existing",
+            "security_level": auth.get("security_level") or "authPriv",
+            "auth_protocol": auth.get("auth_protocol") or "SHA",
+            "priv_protocol": auth.get("priv_protocol") or "AES",
+            "credential_ref": "device-credentials:snmp" if auth.get("user") else "",
+            "mutation": _snmp_setup_mutation(plan_class),
+            "caveats": caveats,
+            "current_state": current_state,
+        })
     return {
-        "version": 1,
+        "schema_version": SNMP_SETUP_SCHEMA_VERSION,
+        "version": 2,
         "mode": "plan_only",
         "credential_ready": bool(auth.get("user")),
         "credential_ref": "device-credentials:snmp" if auth.get("user") else "",
-        "targets": targets,
+        "targets": planned_targets,
     }
+
+
+def _snmp_setup_data_file(cfg):
+    base = getattr(cfg, "data_dir", "") or getattr(cfg, "conf_dir", "") or "."
+    path = os.path.join(base, SNMP_DATA_DIR)
+    os.makedirs(path, exist_ok=True)
+    return os.path.join(path, SNMP_SETUP_LAST_FILE)
+
+
+def read_last_snmp_setup_status(cfg):
+    path = _snmp_setup_data_file(cfg)
+    if not os.path.isfile(path):
+        return {"schema_version": SNMP_SETUP_SCHEMA_VERSION, "state": "never_run", "results": [], "summary": {}}
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {"schema_version": SNMP_SETUP_SCHEMA_VERSION, "state": "unreadable", "results": [], "summary": {}}
+
+
+def _write_last_snmp_setup_status(cfg, data):
+    path = _snmp_setup_data_file(cfg)
+    tmp = f"{path}.tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2, sort_keys=True)
+    os.replace(tmp, path)
+
+
+def _secret_ready(auth):
+    return bool(auth.get("user") and auth.get("auth_password") and auth.get("priv_password"))
+
+
+def _credential_group_name():
+    try:
+        import grp
+
+        return grp.getgrgid(os.getgid()).gr_name
+    except Exception:
+        return ""
+
+
+def _write_managed_secret(path, value, mode="0640"):
+    """Write a secret path directly, falling back to sudo install when needed."""
+    value = str(value or "").strip()
+    if not value:
+        raise RuntimeError("secret value is required")
+    directory = os.path.dirname(path)
+    try:
+        os.makedirs(directory, mode=0o750, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, int(mode, 8))
+        with os.fdopen(fd, "w") as f:
+            f.write(value + "\n")
+        os.chmod(path, int(mode, 8))
+        return path
+    except OSError:
+        pass
+
+    group = _credential_group_name()
+    fd, tmp = tempfile.mkstemp(prefix="freq-snmp-secret-", dir="/tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(value + "\n")
+        os.chmod(tmp, int(mode, 8))
+        mkdir_cmd = ["sudo", "-n", "install", "-d", "-m", "0750"]
+        if group:
+            mkdir_cmd.extend(["-o", "root", "-g", group])
+        mkdir_cmd.append(directory)
+        subprocess.run(mkdir_cmd, check=True, capture_output=True, text=True, timeout=10)
+        install_cmd = ["sudo", "-n", "install", "-m", mode]
+        if group:
+            install_cmd.extend(["-o", "root", "-g", group])
+        install_cmd.extend([tmp, path])
+        subprocess.run(install_cmd, check=True, capture_output=True, text=True, timeout=10)
+        return path
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError((e.stderr or e.stdout or str(e)).strip())
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def _read_text_if_exists(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def _write_managed_text(path, text, mode="0640"):
+    directory = os.path.dirname(path)
+    try:
+        os.makedirs(directory, mode=0o750, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, int(mode, 8))
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.chmod(path, int(mode, 8))
+        return path
+    except OSError:
+        pass
+
+    group = _credential_group_name()
+    fd, tmp = tempfile.mkstemp(prefix="freq-snmp-credentials-", dir="/tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.chmod(tmp, int(mode, 8))
+        mkdir_cmd = ["sudo", "-n", "install", "-d", "-m", "0750"]
+        if group:
+            mkdir_cmd.extend(["-o", "root", "-g", group])
+        mkdir_cmd.append(directory)
+        subprocess.run(mkdir_cmd, check=True, capture_output=True, text=True, timeout=10)
+        install_cmd = ["sudo", "-n", "install", "-m", mode]
+        if group:
+            install_cmd.extend(["-o", "root", "-g", group])
+        install_cmd.extend([tmp, path])
+        subprocess.run(install_cmd, check=True, capture_output=True, text=True, timeout=10)
+        return path
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError((e.stderr or e.stdout or str(e)).strip())
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def _replace_toml_section(text, section, body):
+    lines = (text or "").splitlines()
+    header = f"[{section}]"
+    out = []
+    i = 0
+    replaced = False
+    while i < len(lines):
+        if lines[i].strip().lower() == header.lower():
+            if not replaced:
+                if out and out[-1].strip():
+                    out.append("")
+                out.extend(body.rstrip().splitlines())
+                replaced = True
+            i += 1
+            while i < len(lines) and not (lines[i].strip().startswith("[") and lines[i].strip().endswith("]")):
+                i += 1
+            continue
+        out.append(lines[i])
+        i += 1
+    if not replaced:
+        if out and out[-1].strip():
+            out.append("")
+        out.extend(body.rstrip().splitlines())
+    return "\n".join(out).rstrip() + "\n"
+
+
+def _device_credentials_write_path(cfg):
+    from freq.core.device_credentials import device_credentials_path
+
+    existing = device_credentials_path(cfg)
+    if existing:
+        return existing
+    cred_dir = getattr(cfg, "credentials_dir", "") or "/etc/freq/credentials"
+    return os.path.join(cred_dir, "device-credentials.toml")
+
+
+def store_snmp_credentials(
+    cfg,
+    user,
+    auth_password,
+    priv_password,
+    auth_protocol="SHA",
+    priv_protocol="AES",
+    dry_run=True,
+):
+    """Store SNMPv3 credentials in managed files and update credential TOML."""
+    user = str(user or "").strip()
+    auth_password = str(auth_password or "").strip()
+    priv_password = str(priv_password or "").strip()
+    auth_protocol = str(auth_protocol or "SHA").strip().upper()
+    priv_protocol = str(priv_protocol or "AES").strip().upper()
+    if not user:
+        raise ValueError("user is required")
+    if not re.match(r"^[A-Za-z0-9_.@-]{1,64}$", user):
+        raise ValueError("user contains unsupported characters")
+    if len(auth_password) < 8 or len(priv_password) < 8:
+        raise ValueError("SNMPv3 auth and privacy passphrases must be at least 8 characters")
+    if auth_protocol not in {"MD5", "SHA", "SHA-256", "SHA-512"}:
+        raise ValueError("unsupported auth_protocol")
+    if priv_protocol not in {"AES", "AES128", "AES-128", "DES"}:
+        raise ValueError("unsupported priv_protocol")
+
+    cred_dir = getattr(cfg, "credentials_dir", "") or "/etc/freq/credentials"
+    auth_path = os.path.join(cred_dir, "snmp-auth-passphrase")
+    priv_path = os.path.join(cred_dir, "snmp-priv-passphrase")
+    credentials_path = _device_credentials_write_path(cfg)
+    section = "\n".join(
+        [
+            "[snmp]",
+            f'user = "{user}"',
+            'version = "3"',
+            'security_level = "authPriv"',
+            f'auth_protocol = "{auth_protocol}"',
+            f'priv_protocol = "{priv_protocol}"',
+            f'auth_password_file = "{auth_path}"',
+            f'priv_password_file = "{priv_path}"',
+        ]
+    )
+    result = {
+        "ok": True,
+        "dry_run": bool(dry_run),
+        "stored": not bool(dry_run),
+        "credential_ref": "device-credentials:snmp",
+        "credentials_path": credentials_path,
+        "auth_password_file": auth_path,
+        "priv_password_file": priv_path,
+        "value_exposed": False,
+    }
+    if dry_run:
+        result["planned_section"] = "[snmp]"
+        return result
+
+    _write_managed_secret(auth_path, auth_password)
+    _write_managed_secret(priv_path, priv_password)
+    current = _read_text_if_exists(credentials_path)
+    updated = _replace_toml_section(current, "snmp", section)
+    _write_managed_text(credentials_path, updated)
+    try:
+        from freq.core.config import load_config
+
+        load_config(force=True)
+    except Exception:
+        pass
+    return result
+
+
+def _snmp_conf_value(value):
+    return str(value or "").replace("\\", "\\\\").replace('"', '\\"').replace("\n", "")
+
+
+def _remote_script_runner(host, cfg, remote_command, script, timeout=90):
+    """Run a remote stdin script with bounded SSH and no secrets in argv."""
+    from freq.core.ssh import _build_ssh_cmd
+    from freq.core.device_credentials import resolve_staged_device_ssh_auth
+
+    auth = resolve_staged_device_ssh_auth(cfg, getattr(host, "htype", "linux"))
+    ssh_cmd = _build_ssh_cmd(
+        host=getattr(host, "ip", ""),
+        command=remote_command,
+        user=auth.get("user") or getattr(cfg, "ssh_service_account", ""),
+        key_path=auth.get("key_path") or getattr(cfg, "ssh_key_path", ""),
+        connect_timeout=getattr(cfg, "ssh_connect_timeout", 5),
+        htype=getattr(host, "htype", "linux"),
+        use_sudo=False,
+        local_user=auth.get("local_user") or "",
+        password_file=auth.get("password_file") or "",
+        sudo_password_file=bool(auth.get("sudo_password_file")),
+        cfg=cfg,
+    )
+    cmd = ["timeout", "-s", "KILL", str(timeout)] + ssh_cmd
+    start = time.monotonic()
+    try:
+        result = subprocess.run(
+            cmd,
+            input=script,
+            text=True,
+            capture_output=True,
+            timeout=timeout + 10,
+        )
+        duration = time.monotonic() - start
+        rc = 124 if result.returncode in (137, -9) else result.returncode
+        return {
+            "returncode": rc,
+            "stdout": (result.stdout or "").strip()[-2000:],
+            "stderr": (result.stderr or "").strip()[-2000:],
+            "duration": round(duration, 3),
+        }
+    except subprocess.TimeoutExpired:
+        return {"returncode": 124, "stdout": "", "stderr": f"Timeout after {timeout}s", "duration": round(time.monotonic() - start, 3)}
+    except OSError as e:
+        return {"returncode": 1, "stdout": "", "stderr": str(e), "duration": round(time.monotonic() - start, 3)}
+
+
+def _linux_snmpd_script(target, auth):
+    user = _snmp_conf_value(auth.get("user"))
+    auth_pw = _snmp_conf_value(auth.get("auth_password"))
+    priv_pw = _snmp_conf_value(auth.get("priv_password"))
+    auth_proto = _snmp_conf_value(auth.get("auth_protocol") or "SHA")
+    priv_proto = _snmp_conf_value(auth.get("priv_protocol") or "AES")
+    ip = _snmp_conf_value(target.get("ip"))
+    return f"""set -eu
+export DEBIAN_FRONTEND=noninteractive
+if command -v apt-get >/dev/null 2>&1; then
+  timeout 120 apt-get update
+  timeout 180 apt-get install -y snmp snmpd
+elif command -v dnf >/dev/null 2>&1; then
+  timeout 180 dnf install -y net-snmp net-snmp-utils
+elif command -v yum >/dev/null 2>&1; then
+  timeout 180 yum install -y net-snmp net-snmp-utils
+else
+  echo "unsupported package manager for snmpd" >&2
+  exit 42
+fi
+install -d -m 0755 /etc/snmp
+umask 077
+cat > /etc/snmp/snmpd.conf <<'FREQ_SNMPD_CONF'
+agentaddress udp:{ip}:161,udp:127.0.0.1:161
+sysLocation managed-by-freq
+sysContact freq
+createUser {user} {auth_proto} "{auth_pw}" {priv_proto} "{priv_pw}"
+rouser {user} authPriv
+FREQ_SNMPD_CONF
+rm -f /var/lib/snmp/snmpd.conf /var/lib/net-snmp/snmpd.conf 2>/dev/null || true
+systemctl enable snmpd >/dev/null 2>&1 || true
+systemctl restart snmpd
+systemctl is-active --quiet snmpd
+"""
+
+
+def _truenas_snmp_script(auth):
+    payload = {
+        "v3": True,
+        "v3_username": auth.get("user", ""),
+        "v3_authtype": auth.get("auth_protocol") or "SHA",
+        "v3_password": auth.get("auth_password") or "",
+        "v3_privproto": auth.get("priv_protocol") or "AES",
+        "v3_privpassphrase": auth.get("priv_password") or "",
+    }
+    quoted_payload = shlex.quote(json.dumps(payload))
+    return f"""set -eu
+command -v midclt >/dev/null 2>&1 || {{ echo "midclt not found" >&2; exit 42; }}
+midclt call snmp.update {quoted_payload} >/dev/null
+midclt call service.update snmp '{{"enable": true}}' >/dev/null
+midclt call service.start snmp >/dev/null 2>&1 || midclt call service.restart snmp >/dev/null
+"""
+
+
+def _cisco_ios_snmp_script(auth):
+    user = str(auth.get("user") or "").replace("\n", "")
+    auth_pw = str(auth.get("auth_password") or "").replace("\n", "")
+    priv_pw = str(auth.get("priv_password") or "").replace("\n", "")
+    return f"""terminal length 0
+configure terminal
+snmp-server view FREQ-RO iso included
+snmp-server group FREQ-V3 v3 priv read FREQ-RO
+snmp-server user {user} FREQ-V3 v3 auth sha {auth_pw} priv aes 128 {priv_pw}
+end
+write memory
+"""
+
+
+def _result_from_remote(target, remote, state_ok="changed"):
+    ok = remote.get("returncode") == 0
+    return {
+        **target,
+        "state": state_ok if ok else "failed",
+        "ok": ok,
+        "returncode": remote.get("returncode"),
+        "stdout": remote.get("stdout", ""),
+        "stderr": remote.get("stderr", ""),
+        "duration": remote.get("duration", 0),
+    }
+
+
+def _run_target_snmp_setup(host, target, cfg, auth, dry_run=True):
+    plan_class = target.get("setup_class")
+    if dry_run:
+        state = "requires_decision" if plan_class == "pfsense_net_snmp_package" else "planned"
+        if plan_class == "redfish_bmc_snmp":
+            state = "adopt_only"
+        return {**target, "state": state, "ok": True, "dry_run": True}
+
+    if plan_class in {"linux_snmpd", "truenas_midclt", "cisco_ios_snmpv3"} and not _secret_ready(auth):
+        return {**target, "state": "failed", "ok": False, "error": "SNMPv3 credentials missing from device-credentials:snmp"}
+
+    if plan_class == "linux_snmpd":
+        remote = _remote_script_runner(
+            host,
+            cfg,
+            'if [ "$(id -u)" -eq 0 ]; then sh -s; else sudo -n sh -s; fi',
+            _linux_snmpd_script(target, auth),
+            timeout=240,
+        )
+        return _result_from_remote(target, remote)
+
+    if plan_class == "truenas_midclt":
+        remote = _remote_script_runner(
+            host,
+            cfg,
+            'if [ "$(id -u)" -eq 0 ]; then sh -s; else sudo -n sh -s; fi',
+            _truenas_snmp_script(auth),
+            timeout=90,
+        )
+        return _result_from_remote(target, remote)
+
+    if plan_class == "cisco_ios_snmpv3":
+        remote = _remote_script_runner(host, cfg, "", _cisco_ios_snmp_script(auth), timeout=90)
+        return _result_from_remote(target, remote)
+
+    if plan_class == "redfish_bmc_snmp":
+        community = _get_community(cfg)
+        identity = get_snmp_identity(target.get("ip", ""), community=community, auth={}, timeout=3)
+        return {
+            **target,
+            "state": "adopted" if identity.get("reachable") else "not_reachable",
+            "ok": True,
+            "identity": identity,
+            "note": "BMC SNMP firmware mutation is intentionally not automatic",
+        }
+
+    if plan_class == "pfsense_net_snmp_package":
+        return {
+            **target,
+            "state": "requires_decision",
+            "ok": True,
+            "note": "pfSense SNMPv3 requires net-snmp package enablement; built-in bsnmpd is v1/v2c only",
+        }
+
+    return {**target, "state": "skipped", "ok": True, "note": "unsupported setup class"}
+
+
+def run_snmp_setup(cfg, targets=None, dry_run=True, include_probe=False):
+    """Run bounded per-host SNMP setup/adoption, returning structured truth."""
+    auth = _get_snmp_auth(cfg, include_secret=True)
+    plan = build_snmp_setup_plan(cfg, targets=targets, include_probe=include_probe)
+    hosts = [h for h in getattr(cfg, "hosts", []) or [] if _host_matches(h, targets)]
+    host_by_key = {}
+    for h in hosts:
+        host_by_key[str(getattr(h, "label", "") or "").lower()] = h
+        host_by_key[str(getattr(h, "ip", "") or "").lower()] = h
+    results = []
+    started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    for target in plan["targets"]:
+        key = str(target.get("label") or target.get("ip") or "").lower()
+        host = host_by_key.get(key) or host_by_key.get(str(target.get("ip", "")).lower())
+        if not host:
+            results.append({**target, "state": "failed", "ok": False, "error": "host missing from runtime config"})
+            continue
+        results.append(_run_target_snmp_setup(host, target, cfg, auth, dry_run=dry_run))
+    summary = {
+        "total": len(results),
+        "planned": sum(1 for r in results if r.get("state") == "planned"),
+        "changed": sum(1 for r in results if r.get("state") == "changed"),
+        "adopted": sum(1 for r in results if r.get("state") in {"adopted", "adopt_only"}),
+        "requires_decision": sum(1 for r in results if r.get("state") == "requires_decision"),
+        "skipped": sum(1 for r in results if r.get("state") == "skipped"),
+        "failed": sum(1 for r in results if r.get("state") == "failed"),
+    }
+    data = {
+        "schema_version": SNMP_SETUP_SCHEMA_VERSION,
+        "state": "dry_run" if dry_run else ("failed" if summary["failed"] else "succeeded"),
+        "mode": "dry_run" if dry_run else "apply",
+        "started_at": started,
+        "completed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "credential_ready": bool(plan.get("credential_ready")),
+        "credential_ref": plan.get("credential_ref", ""),
+        "summary": summary,
+        "results": results,
+    }
+    _write_last_snmp_setup_status(cfg, data)
+    return data
 
 
 def cmd_snmp_identity(cfg: FreqConfig, pack, args) -> int:
@@ -654,7 +1156,11 @@ def cmd_snmp_identity(cfg: FreqConfig, pack, args) -> int:
 
 
 def cmd_snmp_setup_plan(cfg: FreqConfig, pack, args) -> int:
-    plan = build_snmp_setup_plan(cfg)
+    plan = build_snmp_setup_plan(
+        cfg,
+        targets=getattr(args, "target", []) or [],
+        include_probe=bool(getattr(args, "probe", False)),
+    )
     fmt.header("SNMP Setup Plan", breadcrumb="FREQ > Net > SNMP")
     fmt.blank()
     fmt.info("Mode: plan-only. No devices are changed by this command.")
@@ -673,6 +1179,40 @@ def cmd_snmp_setup_plan(cfg: FreqConfig, pack, args) -> int:
     fmt.info(f"{len(plan['targets'])} SNMP-capable target(s) in plan")
     fmt.footer()
     return 0
+
+
+def cmd_snmp_setup_apply(cfg: FreqConfig, pack, args) -> int:
+    dry_run = not bool(getattr(args, "apply", False))
+    if not dry_run and not bool(getattr(args, "yes", False)):
+        fmt.error("SNMP setup mutation requires --apply --yes")
+        return 2
+    result = run_snmp_setup(
+        cfg,
+        targets=getattr(args, "target", []) or [],
+        dry_run=dry_run,
+        include_probe=bool(getattr(args, "probe", False)),
+    )
+    fmt.header("SNMP Setup", breadcrumb="FREQ > Net > SNMP")
+    fmt.blank()
+    fmt.info(f"Mode: {result.get('mode')}")
+    summary = result.get("summary", {})
+    fmt.info(
+        "Results: "
+        f"{summary.get('changed', 0)} changed, "
+        f"{summary.get('adopted', 0)} adopted, "
+        f"{summary.get('requires_decision', 0)} require decision, "
+        f"{summary.get('failed', 0)} failed"
+    )
+    fmt.table_header(("Device", 18), ("IP", 15), ("State", 18), ("Class", 24))
+    for item in result.get("results", []):
+        fmt.table_row(
+            (item.get("label", ""), 18),
+            (item.get("ip", ""), 15),
+            (item.get("state", ""), 18),
+            (item.get("setup_class", ""), 24),
+        )
+    fmt.footer()
+    return 1 if summary.get("failed", 0) else 0
 
 
 # ---------------------------------------------------------------------------

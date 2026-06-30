@@ -57,6 +57,7 @@ def build_routes() -> dict:
         "freq.api.logs",
         "freq.api.backup_verify",
         "freq.api.cert_lifecycle",
+        "freq.api.snmp",
     ]
 
     import_errors = []

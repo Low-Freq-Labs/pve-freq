@@ -1555,7 +1555,16 @@ def _register_net(sub):
     p.set_defaults(func=_cmd_snmp_identity)
 
     p = snmp_sub.add_parser("setup-plan", help="Plan enterprise SNMPv3 enablement")
+    p.add_argument("--target", action="append", default=[], help="Limit to a label or IP (repeatable)")
+    p.add_argument("--probe", action="store_true", help="Include current SNMP reachability probes")
     p.set_defaults(func=_cmd_snmp_setup_plan)
+
+    p = snmp_sub.add_parser("setup-apply", help="Apply bounded enterprise SNMPv3 enablement")
+    p.add_argument("--target", action="append", default=[], help="Limit to a label or IP (repeatable)")
+    p.add_argument("--probe", action="store_true", help="Include current SNMP reachability probes")
+    p.add_argument("--apply", action="store_true", help="Mutate devices; omitted means dry-run")
+    p.add_argument("--yes", action="store_true", help="Confirm mutation when --apply is set")
+    p.set_defaults(func=_cmd_snmp_setup_apply)
 
     snmp.set_defaults(func=_cmd_snmp_poll)
 
@@ -3042,6 +3051,12 @@ def _cmd_snmp_setup_plan(cfg: FreqConfig, pack, args) -> int:
     from freq.modules.snmp import cmd_snmp_setup_plan
 
     return cmd_snmp_setup_plan(cfg, pack, args)
+
+
+def _cmd_snmp_setup_apply(cfg: FreqConfig, pack, args) -> int:
+    from freq.modules.snmp import cmd_snmp_setup_apply
+
+    return cmd_snmp_setup_apply(cfg, pack, args)
 
 
 # --- Topology ---
