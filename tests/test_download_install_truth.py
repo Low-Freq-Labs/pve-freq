@@ -172,13 +172,16 @@ class TestDockerComposeTruth(unittest.TestCase):
             "Dockerfile must exist for docker compose build"
         )
 
-    def test_read_only_root(self):
-        """Container must use read_only root for security."""
-        self.assertIn("read_only: true", self.content)
+    def test_default_container_allows_web_init_sudo(self):
+        """Default Docker runtime must allow Web init to read setup inputs via sudo."""
+        self.assertNotIn("read_only: true", self.content)
+        self.assertNotIn("no-new-privileges:true", self.content)
 
-    def test_no_new_privileges(self):
-        """Container must prevent privilege escalation."""
-        self.assertIn("no-new-privileges", self.content)
+    def test_runtime_state_uses_named_volumes(self):
+        """Mutable runtime state must live in Docker volumes, not image rootfs."""
+        self.assertIn("freq-conf:/opt/pve-freq/conf", self.content)
+        self.assertIn("freq-data:/opt/pve-freq/data", self.content)
+        self.assertIn("freq-etc:/etc/freq", self.content)
 
 
 # ══════════════════════════════════════════════════════════════════════════

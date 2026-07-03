@@ -393,6 +393,26 @@ class TestSetupCreateAdminDuplicateGuard(unittest.TestCase):
             data = _get_json(h)
             self.assertIn("Invalid username", data["error"])
 
+    def test_password_file_read_failure_is_not_masked_as_blank_password(self):
+        """create-admin must surface unreadable setup password files directly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = _mock_cfg(tmpdir)
+            body = '{"username":"newadmin","password_file":"/freq-init-inputs/missing"}'
+            h = self._setup_handler(body)
+
+            with patch("freq.modules.serve.load_config", return_value=cfg), \
+                 patch("freq.modules.serve._is_first_run", return_value=True), \
+                 patch(
+                     "freq.modules.serve._read_setup_secret_file",
+                     side_effect=PermissionError("operator password file is not readable"),
+                 ):
+                h._serve_setup_create_admin()
+
+            self.assertEqual(h._status, 400)
+            data = _get_json(h)
+            self.assertIn("Could not read setup admin password file", data["error"])
+            self.assertNotIn("Username and password required", data["error"])
+
     def test_create_admin_creates_missing_conf_dir(self):
         """Zero-state create-admin must create conf_dir before users.conf."""
         with tempfile.TemporaryDirectory() as tmpdir:

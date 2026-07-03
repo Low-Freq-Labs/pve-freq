@@ -4470,8 +4470,12 @@ a:hover{{text-decoration:underline}}
                 password = _read_setup_secret_file(body.get("password_file"), "operator password")
             else:
                 password = body.get("password", "")
-        except Exception:
-            pass
+        except (ValueError, PermissionError, OSError, subprocess.SubprocessError) as exc:
+            self._json_response({"error": f"Could not read setup admin password file: {exc}"}, 400)
+            return
+        except Exception as exc:
+            self._json_response({"error": f"Invalid setup admin request: {exc}"}, 400)
+            return
 
         cfg = load_config()
         if not _is_first_run():
