@@ -2245,6 +2245,47 @@ class TestUninstallLocalCleanup(unittest.TestCase):
             {"user": "freq-ops", "password": "", "key_path": "/home/freq-ops/.ssh/fleet_key"},
         )
 
+    @patch("freq.modules.init_cmd.logger")
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.init_cmd._remove_from_host_dispatch", return_value=(False, "boom"))
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.os.unlink")
+    @patch("freq.modules.init_cmd.os.path.isfile")
+    def test_uninstall_preserves_local_state_when_remote_teardown_fails(
+        self,
+        mock_isfile,
+        mock_unlink,
+        mock_run,
+        _mock_remove,
+        _mock_fmt,
+        _mock_logger,
+    ):
+        from freq.modules.init_cmd import _uninstall_execute
+
+        def fake_isfile(path):
+            if path == "/etc/sudoers.d/freq-freq-admin":
+                return False
+            return os.path.exists(path)
+
+        mock_isfile.side_effect = fake_isfile
+        mock_run.return_value = (1, "", "")
+        cfg = MagicMock()
+        cfg.key_dir = self.key_dir
+        cfg.vault_file = self.vault_file
+        cfg.conf_dir = self.conf_dir
+
+        rc = _uninstall_execute(
+            cfg,
+            "freq-admin",
+            self.ed_key,
+            self.rsa_key,
+            [("10.25.255.30", "linux", "plex")],
+        )
+
+        self.assertEqual(rc, 1)
+        mock_unlink.assert_not_called()
+        self.assertTrue(os.path.exists(os.path.join(self.conf_dir, ".initialized")))
+
 
 # ═══════════════════════════════════════════════════════════════════
 # _update_toml_value() tests

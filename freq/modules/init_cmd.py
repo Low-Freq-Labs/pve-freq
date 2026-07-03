@@ -7659,7 +7659,9 @@ if command -v pw >/dev/null 2>&1; then
 fi
 if id "$svc" >/dev/null 2>&1; then
   pkill -u "$svc" >/dev/null 2>&1 || true
-  userdel -r "$svc" >/dev/null 2>&1 || userdel "$svc" >/dev/null 2>&1 || exit 5
+  sleep 1
+  pkill -9 -u "$svc" >/dev/null 2>&1 || true
+  userdel -r "$svc" >/dev/null 2>&1 || userdel "$svc" >/dev/null 2>&1 || {{ echo REMOVE_FAIL_USERDEL; exit 5; }}
   echo ACCOUNT_REMOVED
 else
   echo NOT_FOUND
@@ -7775,7 +7777,9 @@ def _remove_pve_with_auth(ip, svc_name, auth):
         f"rm -rf {shlex.quote(AGENT_REMOTE_DIR)}; "
         f"if id {quoted_user} >/dev/null 2>&1; then "
         f"pkill -u {quoted_user} >/dev/null 2>&1 || true; "
-        f"userdel -r {quoted_user} >/dev/null 2>&1 || userdel {quoted_user} >/dev/null 2>&1 || exit 5; "
+        "sleep 1; "
+        f"pkill -9 -u {quoted_user} >/dev/null 2>&1 || true; "
+        f"userdel -r {quoted_user} >/dev/null 2>&1 || userdel {quoted_user} >/dev/null 2>&1 || {{ echo REMOVE_FAIL_USERDEL; exit 5; }}; "
         "echo ACCOUNT_REMOVED; else echo NOT_FOUND; fi"
     )
     rc, out, err = _ssh(_sudo_shell(script), timeout=DEFAULT_CMD_TIMEOUT)
@@ -9751,6 +9755,18 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
             f"{fmt.C.YELLOW}{skip} skipped{fmt.C.RESET}, "
             f"{fmt.C.YELLOW}{manual} manual{fmt.C.RESET}"
         )
+        if fail or skip or manual:
+            fmt.blank()
+            fmt.step_fail(
+                "Remote teardown incomplete — preserving local config/state so uninstall can be retried"
+            )
+            fmt.line(
+                f"  {fmt.C.DIM}Fix the failed targets above, then rerun "
+                f"'freq init --uninstall'. Local first-run reset was not performed.{fmt.C.RESET}"
+            )
+            if borrowed_key_dir:
+                shutil.rmtree(borrowed_key_dir, ignore_errors=True)
+            return 1
 
     if borrowed_key_dir:
         shutil.rmtree(borrowed_key_dir, ignore_errors=True)
