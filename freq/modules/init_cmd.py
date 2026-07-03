@@ -7496,6 +7496,16 @@ def _deploy_to_host_dispatch(ip, htype, ctx, auth_pass, auth_key, auth_user):
 # ═══════════════════════════════════════════════════════════════════
 
 
+UNINSTALL_SSH_KNOWN_HOSTS_OPTS = [
+    "-o",
+    "UserKnownHostsFile=/dev/null",
+    "-o",
+    "GlobalKnownHostsFile=/dev/null",
+    "-o",
+    "LogLevel=ERROR",
+]
+
+
 def _uninstall_ssh(ip, svc_name, key_path, extra_opts=None):
     """Build an SSH runner for uninstall — auths as the FREQ service account."""
 
@@ -7512,6 +7522,7 @@ def _uninstall_ssh(ip, svc_name, key_path, extra_opts=None):
             "-o",
             "StrictHostKeyChecking=accept-new",
         ]
+        ssh_cmd.extend(UNINSTALL_SSH_KNOWN_HOSTS_OPTS)
         if extra_opts:
             ssh_cmd.extend(extra_opts)
         ssh_cmd.extend([f"{svc_name}@{ip}", cmd])
@@ -7532,6 +7543,7 @@ def _uninstall_auth_ssh(ip, auth_user, auth_key="", auth_pass="", extra_opts=Non
             "-o",
             "StrictHostKeyChecking=accept-new",
         ]
+        ssh_cmd.extend(UNINSTALL_SSH_KNOWN_HOSTS_OPTS)
         if auth_key and os.path.isfile(auth_key):
             ssh_cmd[1:1] = ["-i", auth_key]
         if extra_opts:
@@ -7968,6 +7980,7 @@ def _remove_switch(ip, svc_name, key_path):
         "-o",
         "StrictHostKeyChecking=accept-new",
     ]
+    ssh_cmd.extend(UNINSTALL_SSH_KNOWN_HOSTS_OPTS)
     if extra_opts:
         ssh_cmd.extend(extra_opts)
     ssh_cmd.append(f"{svc_name}@{ip}")
@@ -7994,6 +8007,7 @@ def _remove_switch_with_auth(ip, svc_name, auth):
         "-o",
         "StrictHostKeyChecking=accept-new",
     ]
+    ssh_opts.extend(UNINSTALL_SSH_KNOWN_HOSTS_OPTS)
     key_path = auth.get("key_path", "") or ""
     auth_pass = auth.get("password", "") or ""
     if key_path and os.path.isfile(key_path):

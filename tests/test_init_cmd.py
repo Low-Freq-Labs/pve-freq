@@ -1677,6 +1677,8 @@ class TestUninstallSSH(unittest.TestCase):
         self.assertIn("/tmp/freq_id_rsa", cmd)
         self.assertIn("svc-test@10.0.0.10", cmd)
         self.assertIn("KexAlgorithms=+diffie-hellman-group1-sha1", cmd)
+        self.assertIn("UserKnownHostsFile=/dev/null", cmd)
+        self.assertIn("GlobalKnownHostsFile=/dev/null", cmd)
 
     @patch("freq.modules.init_cmd.os.path.isfile", return_value=True)
     @patch("freq.modules.init_cmd._run")
@@ -1692,6 +1694,16 @@ class TestUninstallSSH(unittest.TestCase):
         self.assertIn("/tmp/bootstrap", cmd)
         self.assertIn("freq-ops@10.0.0.10", cmd)
         self.assertIn("KexAlgorithms=+diffie-hellman-group1-sha1", cmd)
+        self.assertIn("UserKnownHostsFile=/dev/null", cmd)
+        self.assertIn("GlobalKnownHostsFile=/dev/null", cmd)
+
+    def test_uninstall_direct_switch_paths_do_not_write_known_hosts(self):
+        src = Path(__file__).resolve().parents[1] / "freq" / "modules" / "init_cmd.py"
+        text = src.read_text()
+        switch_window = text.split("def _remove_switch(", 1)[1].split("def _remove_switch_with_auth", 1)[0]
+        switch_auth_window = text.split("def _remove_switch_with_auth", 1)[1].split("def _remove_with_bootstrap_auth", 1)[0]
+        self.assertIn("UNINSTALL_SSH_KNOWN_HOSTS_OPTS", switch_window)
+        self.assertIn("UNINSTALL_SSH_KNOWN_HOSTS_OPTS", switch_auth_window)
 
 
 class TestPveUninstall(unittest.TestCase):
