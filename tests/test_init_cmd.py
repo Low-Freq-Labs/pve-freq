@@ -1819,6 +1819,40 @@ class TestPveUninstall(unittest.TestCase):
             switch_auth,
         )
 
+    @patch("freq.modules.init_cmd._remove_with_bootstrap_auth")
+    @patch("freq.deployers.get_deployer")
+    def test_deployer_remove_exception_falls_back_to_bootstrap_auth(
+        self,
+        mock_get_deployer,
+        mock_remove_with_bootstrap_auth,
+    ):
+        from freq.modules.init_cmd import _remove_from_host_dispatch
+
+        deployer = MagicMock()
+        deployer.remove.side_effect = OSError("Read-only file system: '/root/.ssh'")
+        mock_get_deployer.return_value = deployer
+        bootstrap_auth = {"user": "freq-ops", "password": "", "key_path": "/tmp/fleet_key"}
+        mock_remove_with_bootstrap_auth.return_value = (True, "")
+
+        ok, reason = _remove_from_host_dispatch(
+            "10.25.10.201",
+            "truenas",
+            "freq-admin",
+            "/tmp/freq_id_ed25519",
+            "/tmp/freq_id_rsa",
+            device_creds={},
+            bootstrap_auth=bootstrap_auth,
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, "")
+        mock_remove_with_bootstrap_auth.assert_called_once_with(
+            "10.25.10.201",
+            "truenas",
+            "freq-admin",
+            bootstrap_auth,
+        )
+
     @patch("freq.modules.init_cmd._ssh_with_pass")
     def test_switch_bootstrap_cleanup_answers_confirm_and_verifies_absence(self, mock_ssh_with_pass):
         from freq.modules.init_cmd import _remove_switch_with_auth

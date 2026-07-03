@@ -8129,7 +8129,10 @@ def _remove_from_host_dispatch(
     deployer = get_deployer(category, vendor)
     if deployer:
         use_key = rsa_key_path if category in RSA_REQUIRED_CATEGORIES else key_path
-        ok, reason = deployer.remove(ip, svc_name, use_key, rsa_key_path=rsa_key_path)
+        try:
+            ok, reason = deployer.remove(ip, svc_name, use_key, rsa_key_path=rsa_key_path)
+        except Exception as e:
+            ok, reason = False, str(e)
         fallback_auth = _credential_auth(htype, f"{category}:{vendor}", category, vendor)
         return (ok, reason) if ok else _fallback(reason, fallback_auth)
 
