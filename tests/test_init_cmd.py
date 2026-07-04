@@ -1888,7 +1888,8 @@ class TestPveUninstall(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(reason, "")
         cleanup_script = mock_ssh_with_pass.call_args_list[1].kwargs["input_text"]
-        self.assertIn("no username freq-admin\n\nend\nwrite memory", cleanup_script)
+        self.assertIn("ip ssh pubkey-chain\nno username freq-admin\nexit", cleanup_script)
+        self.assertIn("exit\nno username freq-admin\n\nend\nwrite memory", cleanup_script)
 
     @patch("freq.modules.init_cmd._ssh_with_pass")
     def test_switch_bootstrap_cleanup_fails_when_verification_still_shows_user(self, mock_ssh_with_pass):

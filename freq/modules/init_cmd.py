@@ -8106,6 +8106,9 @@ def _remove_switch_with_auth(ip, svc_name, auth):
 
     ios_cmds = [
         "configure terminal",
+        "ip ssh pubkey-chain",
+        f"no username {svc_name}",
+        "exit",
         f"no username {svc_name}",
         "",
         "end",
