@@ -234,6 +234,14 @@ def _register_utilities(sub):
     p.add_argument("--uninstall", action="store_true", help="Remove FREQ service account from all hosts")
     p.add_argument("--target-map", help="Explicit zero-state target map (TOML or markdown table)")
     p.add_argument(
+        "--force-local-reset",
+        action="store_true",
+        help=(
+            "With --uninstall, reset local state even when remote teardown has only "
+            "unreachable/skipped hosts; failures and manual-cleanup targets still block"
+        ),
+    )
+    p.add_argument(
         "--purge-docker-volumes",
         action="store_true",
         help="During uninstall, run docker compose down -v for local named state volumes",

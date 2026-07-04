@@ -2303,6 +2303,88 @@ class TestUninstallLocalCleanup(unittest.TestCase):
         mock_unlink.assert_not_called()
         self.assertTrue(os.path.exists(os.path.join(self.conf_dir, ".initialized")))
 
+    @patch("freq.modules.init_cmd.logger")
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.init_cmd._remove_from_host_dispatch", return_value=(False, "connection timed out"))
+    @patch("freq.modules.init_cmd._reset_local_init_state")
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.os.path.isfile")
+    def test_uninstall_preserves_local_state_when_host_is_skipped_by_default(
+        self,
+        mock_isfile,
+        mock_run,
+        mock_reset,
+        _mock_remove,
+        _mock_fmt,
+        _mock_logger,
+    ):
+        from freq.modules.init_cmd import _uninstall_execute
+
+        mock_isfile.side_effect = lambda path: path in {self.ed_key, self.rsa_key}
+        mock_run.return_value = (1, "", "")
+        cfg = MagicMock()
+        cfg.key_dir = self.key_dir
+        cfg.vault_file = self.vault_file
+        cfg.conf_dir = self.conf_dir
+        args = types.SimpleNamespace(device_credentials=None, force_local_reset=False)
+
+        rc = _uninstall_execute(
+            cfg,
+            "freq-admin",
+            self.ed_key,
+            self.rsa_key,
+            [("10.25.66.69", "linux", "runescapebotvm")],
+            args,
+        )
+
+        self.assertEqual(rc, 1)
+        mock_reset.assert_not_called()
+
+    @patch("freq.modules.init_cmd.logger")
+    @patch("freq.modules.init_cmd.fmt")
+    @patch("freq.modules.init_cmd._remove_from_host_dispatch", return_value=(False, "connection timed out"))
+    @patch("freq.modules.init_cmd._credentials_dir", return_value="/tmp/freq-test-missing-creds")
+    @patch("freq.modules.init_cmd._reset_local_init_state")
+    @patch("freq.modules.init_cmd._run")
+    @patch("freq.modules.init_cmd.os.path.isfile")
+    def test_uninstall_force_local_reset_allows_skipped_unreachable_hosts(
+        self,
+        mock_isfile,
+        mock_run,
+        mock_reset,
+        _mock_credential_dir,
+        _mock_remove,
+        mock_fmt,
+        _mock_logger,
+    ):
+        from freq.modules.init_cmd import _uninstall_execute
+
+        mock_isfile.side_effect = lambda path: path in {self.ed_key, self.rsa_key}
+        mock_run.return_value = (1, "", "")
+        cfg = MagicMock()
+        cfg.key_dir = self.key_dir
+        cfg.vault_file = self.vault_file
+        cfg.conf_dir = self.conf_dir
+        args = types.SimpleNamespace(
+            device_credentials=None,
+            force_local_reset=True,
+            purge_docker_volumes=False,
+        )
+
+        rc = _uninstall_execute(
+            cfg,
+            "freq-admin",
+            self.ed_key,
+            self.rsa_key,
+            [("10.25.66.69", "linux", "runescapebotvm")],
+            args,
+        )
+
+        self.assertEqual(rc, 0)
+        mock_reset.assert_called_once_with(cfg, remove_live_config=True)
+        warnings = [call.args[0] for call in mock_fmt.step_warn.call_args_list]
+        self.assertTrue(any("--force-local-reset" in warning for warning in warnings))
+
 
 # ═══════════════════════════════════════════════════════════════════
 # _update_toml_value() tests

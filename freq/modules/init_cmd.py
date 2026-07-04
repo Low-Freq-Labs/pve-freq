@@ -9816,7 +9816,8 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
             f"{fmt.C.YELLOW}{skip} skipped{fmt.C.RESET}, "
             f"{fmt.C.YELLOW}{manual} manual{fmt.C.RESET}"
         )
-        if fail or skip or manual:
+        force_local_reset = bool(getattr(args, "force_local_reset", False))
+        if fail or manual or (skip and not force_local_reset):
             fmt.blank()
             fmt.step_fail(
                 "Remote teardown incomplete — preserving local config/state so uninstall can be retried"
@@ -9828,6 +9829,11 @@ def _uninstall_execute(cfg, svc_name, ed_key, rsa_key, targets, args=None):
             if borrowed_key_dir:
                 shutil.rmtree(borrowed_key_dir, ignore_errors=True)
             return 1
+        if skip and force_local_reset:
+            fmt.step_warn(
+                "Proceeding with local reset because --force-local-reset was set; "
+                "skipped unreachable host(s) may still have old FREQ residue"
+            )
 
     if borrowed_key_dir:
         shutil.rmtree(borrowed_key_dir, ignore_errors=True)
