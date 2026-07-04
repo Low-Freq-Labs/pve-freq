@@ -2844,6 +2844,27 @@ def _setup_marker_exists(cfg):
     )
 
 
+def _write_web_setup_markers(cfg):
+    """Record that the browser setup path completed.
+
+    This is intentionally separate from .initialized, which remains owned by
+    freq init after successful fleet verification.
+    """
+    from freq import __version__
+
+    os.makedirs(cfg.data_dir, exist_ok=True)
+    marker = os.path.join(cfg.data_dir, "setup-complete")
+    if not os.path.isfile(marker):
+        with open(marker, "w") as f:
+            f.write(f"Setup completed: {datetime.datetime.now().isoformat()}\n")
+
+    os.makedirs(cfg.conf_dir, exist_ok=True)
+    web_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
+    if not os.path.isfile(web_marker):
+        with open(web_marker, "w") as f:
+            f.write(f"PVE FREQ {__version__} — web setup {datetime.datetime.now().isoformat()}\n")
+
+
 def _allow_setup_admin_window(handler):
     """Allow setup continuation after first admin creation, before markers.
 
@@ -3238,11 +3259,19 @@ def _run_setup_init_job(job_id, cmd, env, secret_dir):
         cfg = load_config(force=True)
         handoff_cfg = cfg
         initialized = os.path.isfile(os.path.join(cfg.conf_dir, ".initialized"))
+        marker_error = None
+        if rc == 0 and initialized:
+            try:
+                _write_web_setup_markers(cfg)
+            except OSError as exc:
+                marker_error = str(exc)
         with _setup_init_lock:
             if _setup_init_job and _setup_init_job.get("id") == job_id:
-                _setup_init_job["state"] = "succeeded" if rc == 0 and initialized else "failed"
+                _setup_init_job["state"] = "succeeded" if rc == 0 and initialized and not marker_error else "failed"
                 _setup_init_job["returncode"] = rc
                 _setup_init_job["initialized"] = initialized
+                if marker_error:
+                    _setup_init_job["error"] = f"setup markers could not be written: {marker_error}"
                 _setup_init_job["finished_at"] = time.time()
                 _setup_init_job["updated_at"] = time.time()
     except Exception as exc:
@@ -4758,24 +4787,14 @@ a:hover{{text-decoration:underline}}
                 return
 
             cfg = load_config()
-            data_dir = cfg.data_dir
-            os.makedirs(data_dir, exist_ok=True)
-            marker = os.path.join(data_dir, "setup-complete")
-
-            with open(marker, "w") as f:
-                f.write(f"Setup completed: {datetime.datetime.now().isoformat()}\n")
-
-            # Write .web-setup-complete marker — distinct from .initialized
-            # which is ONLY written by freq init after a successful fleet
-            # deploy. The web wizard completing does NOT mean init ran.
+            # Write setup-complete + .web-setup-complete markers. The marker
+            # content says "web setup" so status can distinguish the browser
+            # setup path from full init.
+            # These markers are
+            # distinct from the init marker, which is ONLY written by freq
+            # init after a successful fleet deploy.
             try:
-                os.makedirs(cfg.conf_dir, exist_ok=True)
-                web_marker = os.path.join(cfg.conf_dir, ".web-setup-complete")
-                if not os.path.isfile(web_marker):
-                    from freq import __version__
-
-                    with open(web_marker, "w") as f:
-                        f.write(f"PVE FREQ {__version__} — web setup {datetime.datetime.now().isoformat()}\n")
+                _write_web_setup_markers(cfg)
             except OSError:
                 pass  # Non-fatal — setup-complete marker is primary
 
