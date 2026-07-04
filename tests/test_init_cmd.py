@@ -921,6 +921,10 @@ class TestIdracParsing(unittest.TestCase):
 
         def fake_ssh(cmd, extra_opts=None, timeout=None, as_root=False, input_text=None):
             calls.append({"cmd": cmd, "input_text": input_text})
+            if "iDRAC.Users.8.Enable" in cmd and " get " in f" {cmd} ":
+                return 0, "[Key=iDRAC.Embedded.1#Users.8]\nEnable=Enabled\n", ""
+            if "sshpkauth -v" in cmd:
+                return 0, "Key 1 : ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ test", ""
             return 0, "Object value modified successfully", ""
 
         mock_query_slots.return_value = (8, None)
@@ -945,6 +949,18 @@ class TestIdracParsing(unittest.TestCase):
         interactive_args = mock_interactive.call_args_list[0][0]
         self.assertEqual(interactive_args[5], f"racadm set iDRAC.Users.8.Password {secret}")
         self.assertEqual(mock_interactive.call_args_list[0][1]["redact"], secret)
+
+    def test_deploy_idrac_verifies_enable_and_current_rsa_key(self):
+        """iDRAC deploy must reject disabled users or stale stored keys."""
+        with open(os.path.join(Path(__file__).parent.parent, "freq/modules/init_cmd.py")) as f:
+            src = f.read()
+        block = src.split("def _deploy_idrac(", 1)[1].split("\ndef _deploy_switch", 1)[0]
+
+        self.assertIn("racadm get iDRAC.Users.{target_slot}.Enable", block)
+        self.assertIn("iDRAC user remains disabled after Enable=1", block)
+        self.assertIn("rsa_key_material = rsa_pubkey.split()[1]", block)
+        self.assertIn("rsa_key_material not in verify_text", block)
+        self.assertIn("RSA key upload did not verify against current FREQ key", block)
 
     @patch("freq.modules.init_cmd._ssh_with_pass")
     def test_idrac_interactive_command_redacts_echoed_secret(self, mock_ssh_with_pass):

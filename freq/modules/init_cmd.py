@@ -7263,6 +7263,38 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
             logger.error(f"deploy_failed: {ip}", host=ip, error="idrac_setup_failed")
             audit.record("deploy_user", ip, "failed", user=svc_name, error="racadm_setup")
             return False
+
+    rc_enable, out_enable, err_enable = _ssh(
+        f"racadm get iDRAC.Users.{target_slot}.Enable",
+        extra_opts=extra_opts,
+        timeout=IDRAC_VERIFY_TIMEOUT,
+    )
+    enable_text = f"{out_enable}\n{err_enable}".lower()
+    if rc_enable != 0 or ("enable=enabled" not in enable_text and "enable=1" not in enable_text):
+        fmt.step_warn("iDRAC user was not enabled after setup — retrying Enable=1")
+        ok_enable, details_enable = _run_idrac_command(
+            _ssh,
+            extra_opts,
+            f"racadm set iDRAC.Users.{target_slot}.Enable 1",
+            timeout=IDRAC_SETUP_TIMEOUT,
+        )
+        if not ok_enable:
+            fmt.step_fail(f"iDRAC enable failed ({details_enable.strip()[:80]})")
+            logger.error(f"deploy_failed: {ip}", host=ip, error="idrac_enable_failed")
+            audit.record("deploy_user", ip, "failed", user=svc_name, error="racadm_enable")
+            return False
+        time.sleep(2)
+        rc_enable, out_enable, err_enable = _ssh(
+            f"racadm get iDRAC.Users.{target_slot}.Enable",
+            extra_opts=extra_opts,
+            timeout=IDRAC_VERIFY_TIMEOUT,
+        )
+        enable_text = f"{out_enable}\n{err_enable}".lower()
+        if rc_enable != 0 or ("enable=enabled" not in enable_text and "enable=1" not in enable_text):
+            fmt.step_fail("iDRAC user remains disabled after Enable=1")
+            logger.error(f"deploy_failed: {ip}", host=ip, error="idrac_enable_verify_failed")
+            audit.record("deploy_user", ip, "failed", user=svc_name, error="racadm_enable_verify")
+            return False
     fmt.step_ok(f"iDRAC user '{svc_name}' configured (slot {target_slot})")
 
     if _check_timeout("key_deploy"):
@@ -7282,16 +7314,42 @@ def _deploy_idrac(ip, ctx, auth_pass, auth_key, auth_user):
         audit.record("deploy_user", ip, "failed", user=svc_name, error="rsa_key_upload")
         return False
 
-    # Verify the key was actually stored
+    # Verify the exact current key was stored. iDRAC can report success while
+    # leaving an older key in place after partial init/uninstall cycles.
+    rsa_key_material = rsa_pubkey.split()[1] if len(rsa_pubkey.split()) >= 2 else rsa_pubkey.strip()
     rc2, out2, err2 = _ssh(
         f"racadm sshpkauth -v -i {target_slot} -k 1",
         extra_opts=extra_opts,
         timeout=IDRAC_VERIFY_TIMEOUT,
     )
-    if rc2 == 0 and out2.strip() and "failed" not in (out2 + err2).lower():
+    verify_text = f"{out2}\n{err2}"
+    if rc2 != 0 or not rsa_key_material or rsa_key_material not in verify_text or "failed" in verify_text.lower():
+        fmt.step_warn("iDRAC RSA key verify did not match current key — retrying upload")
+        ok_cmd, details = _run_idrac_command(
+            _ssh,
+            extra_opts,
+            f'racadm sshpkauth -i {target_slot} -k 1 -t "{rsa_pubkey}"',
+            timeout=30,
+        )
+        if not ok_cmd:
+            fmt.step_fail(f"RSA key retry failed ({details.strip()[:60]})")
+            logger.error(f"deploy_failed: {ip}", host=ip, error="rsa_key_retry_failed")
+            audit.record("deploy_user", ip, "failed", user=svc_name, error="rsa_key_retry")
+            return False
+        time.sleep(2)
+        rc2, out2, err2 = _ssh(
+            f"racadm sshpkauth -v -i {target_slot} -k 1",
+            extra_opts=extra_opts,
+            timeout=IDRAC_VERIFY_TIMEOUT,
+        )
+        verify_text = f"{out2}\n{err2}"
+    if rc2 == 0 and rsa_key_material and rsa_key_material in verify_text and "failed" not in verify_text.lower():
         fmt.step_ok("RSA public key deployed and verified on iDRAC")
     else:
-        fmt.step_warn("RSA key uploaded but verification query failed — check manually")
+        fmt.step_fail("RSA key upload did not verify against current FREQ key")
+        logger.error(f"deploy_failed: {ip}", host=ip, error="rsa_key_verify_mismatch")
+        audit.record("deploy_user", ip, "failed", user=svc_name, error="rsa_key_verify_mismatch")
+        return False
 
     logger.info(f"deploy_success: {ip}", host=ip)
     audit.record("deploy_user", ip, "success", user=svc_name, method="racadm")
