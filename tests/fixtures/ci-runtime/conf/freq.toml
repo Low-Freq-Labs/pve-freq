@@ -1,0 +1,45 @@
+[freq]
+version = "1.0.0"
+brand = "PVE FREQ"
+build = "default"
+ascii = false
+debug = false
+
+[ssh]
+service_account = "freq-admin"
+connect_timeout = 1
+max_parallel = 14
+mode = "sudo"
+
+[pve]
+nodes = ["127.0.0.2", "127.0.0.3", "127.0.0.4"]
+node_names = ["pve-ci-1", "pve-ci-2", "pve-ci-3"]
+
+[vm.defaults]
+cores = 2
+ram = 2048
+disk = 32
+cpu = "x86-64-v2-AES"
+machine = "q35"
+scsihw = "virtio-scsi-single"
+gateway = ""
+nameserver = "1.1.1.1"
+
+[safety]
+protected_vmids = []
+protected_ranges = [[900, 999]]
+max_failure_percent = 50
+
+[infrastructure]
+cluster_name = "CI Fixture"
+timezone = "UTC"
+
+[services]
+dashboard_port = 8888
+watchdog_enabled = false
+watchdog_port = 9900
+agent_port = 9990
+
+[notifications]
+discord_webhook = ""
+slack_webhook = ""

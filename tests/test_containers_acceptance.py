@@ -111,8 +111,9 @@ class TestLabEquipmentAcceptance(unittest.TestCase):
         cfg = load_config()
         lab_hosts = [h for h in cfg.hosts if "lab" in (h.groups or "").split(",")]
         self.assertGreater(len(lab_hosts), 0)
-        self.assertEqual(lab_hosts[0].label, "freq-test")
-        self.assertEqual(lab_hosts[0].ip, "10.25.255.55")
+        fixture = next((host for host in lab_hosts if host.label == "freq-test"), None)
+        self.assertIsNotNone(fixture, "lab registry must include freq-test")
+        self.assertTrue(fixture.ip, "freq-test must have an address")
 
     def test_lab_handler_passes_cfg(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/serve.py")) as f:

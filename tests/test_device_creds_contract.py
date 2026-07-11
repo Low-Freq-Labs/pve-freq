@@ -317,11 +317,16 @@ user = "dc01-admin"
 password_file = "{password_path}"
 """)
         old = device_credentials.DEVICE_CREDENTIAL_CANDIDATES
+        old_access = device_credentials.os.access
         device_credentials.DEVICE_CREDENTIAL_CANDIDATES = (self.creds_path,)
+        device_credentials.os.access = lambda path, mode: (
+            False if path == password_path else old_access(path, mode)
+        )
         try:
             auth = device_credentials.resolve_staged_device_ssh_auth(self._cfg(), "truenas")
         finally:
             device_credentials.DEVICE_CREDENTIAL_CANDIDATES = old
+            device_credentials.os.access = old_access
             os.chmod(password_path, 0o600)
 
         self.assertEqual(auth["user"], "dc01-admin")

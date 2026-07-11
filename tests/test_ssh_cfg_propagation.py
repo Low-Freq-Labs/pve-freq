@@ -82,7 +82,7 @@ class TestSSHCfgPropagation(unittest.TestCase):
         from freq.core.config import load_config, _DEFAULTS
 
         cfg = load_config()
-        with open(os.path.join(REPO_ROOT, "conf", "freq.toml"), "rb") as f:
+        with open(os.path.join(cfg.conf_dir, "freq.toml"), "rb") as f:
             data = tomllib.load(f)
         expected = data.get("ssh", {}).get("service_account", _DEFAULTS["ssh_service_account"])
         self.assertNotEqual(

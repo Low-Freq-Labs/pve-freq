@@ -407,6 +407,12 @@ class TestCertLifecyclePlan(unittest.TestCase):
         self.assertFalse(bmc_target["verify_hostname"])
         self.assertEqual(bmc_target["identity_source"], "unnamed_ip")
 
+    def test_numeric_ptr_response_is_not_a_device_identity(self):
+        from freq.modules.cert_management import _ptr_identity
+
+        with patch("freq.modules.cert_management.socket.gethostbyaddr", return_value=("10.25.255.12", [], [])):
+            self.assertEqual(_ptr_identity("10.25.255.12"), {})
+
     def test_bmc_cert_target_uses_snmp_identity_without_inventing_hostname(self):
         from freq.modules.cert_management import _infer_cert_targets
 

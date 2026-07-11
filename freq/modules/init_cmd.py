@@ -1056,7 +1056,7 @@ def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
          after `timeout` seconds regardless of Python subprocess internals.
          This is the PRIMARY kill mechanism.
 
-      2. Python proc.communicate(timeout=timeout+10) serves as a FALLBACK
+      2. Python proc.communicate(timeout=timeout+2) serves as a FALLBACK
          if GNU timeout itself somehow doesn't fire. Raises TimeoutExpired,
          then killpg SIGKILLs the process group.
 
@@ -1077,7 +1077,10 @@ def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
     py_timeout = timeout
     if cmd and cmd[0] != "timeout":
         cmd = ["timeout", "-k", "5s", str(timeout)] + list(cmd)
-        py_timeout = timeout + 10  # Python fallback fires 10s after GNU timeout
+        # BusyBox timeout can exit on SIGTERM while a grandchild keeps the
+        # captured pipes open. Keep the process-group fallback close enough
+        # to the requested ceiling to terminate that tree promptly.
+        py_timeout = timeout + 2
 
     try:
         proc = subprocess.Popen(
@@ -1100,7 +1103,7 @@ def _run_bounded(cmd, timeout=DEFAULT_CMD_TIMEOUT, input_text=None):
         # SIGKILL, it can return 137; Python reports -9 when the process
         # group kill catches the wrapper itself. Normalize all timeout
         # shapes so callers see one contract.
-        if rc in (124, 137, -9):
+        if rc in (124, 137, 143, -9, -15):
             return 124, out or "", f"command timed out after {timeout}s"
         return rc, out or "", err or ""
     except subprocess.TimeoutExpired:

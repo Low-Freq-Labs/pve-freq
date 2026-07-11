@@ -96,8 +96,12 @@ class TestFreqDoctor(unittest.TestCase):
         self.assertIn("SSH", out)
 
     def test_doctor_reports_fleet_count(self):
+        from freq.core.config import load_config
+
         rc, out, _ = _freq("doctor", timeout=30)
-        self.assertIn("14 hosts", out)
+        expected = len(load_config(force=True).hosts)
+        self.assertGreater(expected, 0, "hermetic runtime must define fleet hosts")
+        self.assertIn(f"{expected} hosts", out)
 
 
 class TestModuleImportable(unittest.TestCase):
@@ -170,7 +174,15 @@ class TestVersionConsistency(unittest.TestCase):
 
     def test_config_version_matches_module(self):
         """The operator config version must match freq.__version__."""
-        self._assert_toml_version_matches_module(os.path.join("conf", "freq.toml"))
+        from freq.core.config import load_config
+        from freq import __version__
+        import tomllib
+
+        cfg = load_config(force=True)
+        path = os.path.join(cfg.conf_dir, "freq.toml")
+        with open(path, "rb") as f:
+            runtime = tomllib.load(f)
+        self.assertEqual(runtime["freq"]["version"], __version__)
 
     def test_example_config_version_matches_module(self):
         """The user-facing example config must match freq.__version__."""

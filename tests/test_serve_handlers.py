@@ -615,6 +615,27 @@ class TestSetupHandlers:
 
     @patch("freq.modules.serve._is_first_run", return_value=True)
     @patch("freq.modules.serve.load_config")
+    @patch("zoneinfo.ZoneInfo", side_effect=RuntimeError("tzdata unavailable"))
+    def test_setup_configure_accepts_utc_without_tzdata(self, mock_zoneinfo, mock_cfg_fn, _mock_first_run):
+        cfg = _mock_cfg(conf_dir="/tmp/freq-test-conf")
+        mock_cfg_fn.return_value = cfg
+
+        h = _make_handler("/api/setup/configure")
+        h.command = "POST"
+        h._request_body = lambda: {
+            "cluster_name": "dc01",
+            "timezone": "UTC",
+            "pve_nodes": ["bad-ip"],
+        }
+
+        h._serve_setup_configure()
+
+        assert h._status_code == 400
+        assert "Invalid PVE node IP" in _get_json(h)["error"]
+        mock_zoneinfo.assert_not_called()
+
+    @patch("freq.modules.serve._is_first_run", return_value=True)
+    @patch("freq.modules.serve.load_config")
     def test_setup_configure_rejects_invalid_pve_nodes(self, mock_cfg_fn, _mock_first_run):
         cfg = _mock_cfg(conf_dir="/tmp/freq-test-conf")
         mock_cfg_fn.return_value = cfg

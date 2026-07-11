@@ -109,6 +109,18 @@ class TestRunBoundedTimeoutKillsTree(unittest.TestCase):
         )
         self.assertNotEqual(rc, 0)
 
+    def test_busybox_sigterm_timeout_is_normalized_and_bounded(self):
+        """BusyBox timeout reports SIGTERM while a child may hold pipes."""
+        proc = mock.Mock(returncode=-15)
+        proc.communicate.return_value = ("", "Terminated")
+        with mock.patch.object(init_cmd.subprocess, "Popen", return_value=proc):
+            rc, out, err = init_cmd._run_bounded(["sleep", "9999"], timeout=2)
+
+        self.assertEqual(rc, 124)
+        self.assertEqual(out, "")
+        self.assertIn("timed out", err)
+        proc.communicate.assert_called_once_with(input=None, timeout=4)
+
 
 class TestRunDelegatesToRunBounded(unittest.TestCase):
     """_run and _run_with_input must inherit the tree-kill fix."""

@@ -18,6 +18,7 @@ Design decisions:
 
 import json
 import hashlib
+import ipaddress
 import os
 import shlex
 import shutil
@@ -514,6 +515,14 @@ def _ptr_identity(ip):
     try:
         hostname = socket.gethostbyaddr(ip)[0].strip().lower()
     except (OSError, socket.herror, socket.gaierror):
+        return {}
+    # musl/Alpine may return the numeric address itself when no PTR exists.
+    # That is not a DNS identity and must never become a certificate label.
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        pass
+    else:
         return {}
     if hostname and not _is_generic_bmc_label(hostname.split(".")[0]):
         return {"label": hostname.split(".")[0], "hostname": hostname, "identity_source": "ptr"}

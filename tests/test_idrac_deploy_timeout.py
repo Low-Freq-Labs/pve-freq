@@ -90,7 +90,7 @@ class TestSwitchDeployHasTimeout(unittest.TestCase):
         src = (FREQ_ROOT / "freq" / "modules" / "init_cmd.py").read_text()
         self.assertIn('"timeout", "-k", "5s"', src)
         self.assertNotIn('"timeout", "-s", "KILL"', src)
-        self.assertIn("if rc in (124, 137, -9):", src)
+        self.assertIn("if rc in (124, 137, 143, -9, -15):", src)
 
 
 if __name__ == "__main__":

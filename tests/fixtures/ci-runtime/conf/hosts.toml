@@ -1,0 +1,85 @@
+# Hermetic CI fleet: loopback-only and intentionally unreachable by SSH.
+
+[[host]]
+ip = "127.0.0.2"
+label = "pve-ci-1"
+type = "pve"
+groups = "prod"
+
+[[host]]
+ip = "127.0.0.3"
+label = "pve-ci-2"
+type = "pve"
+groups = "prod"
+
+[[host]]
+ip = "127.0.0.4"
+label = "pve-ci-3"
+type = "pve"
+groups = "prod"
+
+[[host]]
+ip = "127.0.0.5"
+label = "arr-stack"
+type = "docker"
+groups = "prod,docker"
+
+[[host]]
+ip = "127.0.0.6"
+label = "plex"
+type = "docker"
+groups = "prod,docker"
+
+[[host]]
+ip = "127.0.0.7"
+label = "freq-test"
+type = "linux"
+groups = "lab"
+
+[[host]]
+ip = "127.0.0.8"
+label = "truenas-lab"
+type = "truenas"
+groups = "lab"
+
+[[host]]
+ip = "127.0.0.9"
+label = "pfsense-lab"
+type = "pfsense"
+groups = "lab"
+
+[[host]]
+ip = "127.0.0.10"
+label = "web-ci-1"
+type = "linux"
+groups = "prod,web"
+
+[[host]]
+ip = "127.0.0.11"
+label = "web-ci-2"
+type = "linux"
+groups = "prod,web"
+
+[[host]]
+ip = "127.0.0.12"
+label = "db-ci"
+type = "linux"
+groups = "prod,db"
+
+[[host]]
+ip = "127.0.0.13"
+label = "dev-ci"
+type = "linux"
+groups = "dev"
+
+[[host]]
+ip = "127.0.0.14"
+label = "worker-ci-1"
+type = "linux"
+groups = "prod"
+
+[[host]]
+ip = "127.0.0.15"
+label = "worker-ci-2"
+type = "linux"
+groups = "prod"

@@ -1,0 +1,19 @@
+# Hermetic registry used only by clean-checkout CI tests.
+
+[host.arr-stack]
+ip = "127.0.0.5"
+label = "arr-stack"
+compose_path = "/srv/arr"
+
+[host.arr-stack.containers.sonarr]
+name = "sonarr"
+port = 8989
+
+[host.plex]
+ip = "127.0.0.6"
+label = "plex"
+compose_path = "/srv/plex"
+
+[host.plex.containers.plex]
+name = "plex"
+port = 32400

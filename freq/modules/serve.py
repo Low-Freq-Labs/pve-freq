@@ -4909,13 +4909,16 @@ a:hover{{text-decoration:underline}}
             self._json_response({"error": "At least one PVE node IP is required"}, 400)
             return
 
-        try:
-            import zoneinfo
+        # UTC is built into Python's datetime model and must work on minimal
+        # images that do not install the optional system tzdata database.
+        if timezone not in {"UTC", "Etc/UTC", "GMT"}:
+            try:
+                import zoneinfo
 
-            zoneinfo.ZoneInfo(timezone or "UTC")
-        except Exception:
-            self._json_response({"error": f"Invalid timezone: {timezone}"}, 400)
-            return
+                zoneinfo.ZoneInfo(timezone)
+            except Exception:
+                self._json_response({"error": f"Invalid timezone: {timezone}"}, 400)
+                return
 
         from freq.core import validate as _val
 

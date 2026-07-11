@@ -19,6 +19,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import mock_open, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -93,12 +94,14 @@ class TestFirstRunDetection(unittest.TestCase):
 class TestVaultBootstrap(unittest.TestCase):
     """Vault key derivation must be machine-bound and deterministic."""
 
-    def test_machine_id_exists(self):
-        """Vault key source (/etc/machine-id) must exist on Linux."""
-        self.assertTrue(
-            os.path.isfile("/etc/machine-id") or os.path.isfile("/var/lib/dbus/machine-id"),
-            "No machine-id file found — vault key derivation will fail"
-        )
+    def test_machine_id_derives_nonempty_key(self):
+        """Vault key derivation consumes machine identity, not runner state."""
+        from freq.modules.vault import _vault_key
+
+        with patch("builtins.open", mock_open(read_data="ci-machine-id\n")):
+            key = _vault_key()
+        self.assertEqual(len(key), 64)
+        self.assertNotEqual(key, "")
 
     def test_vault_key_is_deterministic(self):
         """Same machine must produce same vault key."""
