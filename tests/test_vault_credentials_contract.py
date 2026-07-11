@@ -51,9 +51,9 @@ def capture_json(handler, data, status=200):
 def test_vault_is_top_level_between_security_and_system():
     html = read(APP_HTML)
 
-    assert 'data-view="certs">SECURITY' in html
+    assert 'data-view="security">SECURITY' in html
     assert 'data-view="vault">VAULT' in html
-    assert html.index('data-view="certs">SECURITY') < html.index('data-view="vault">VAULT')
+    assert html.index('data-view="security">SECURITY') < html.index('data-view="vault">VAULT')
     assert html.index('data-view="vault">VAULT') < html.index('data-view="tools">SYSTEM')
 
 
