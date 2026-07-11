@@ -1,0 +1,29 @@
+# FREQ VM Network Profiles
+# Managed by Settings. VM Create uses these profiles to derive Proxmox bridge/tag.
+
+[[profile]]
+id = "management"
+name = "Management"
+vlan = 100
+bridge = "vmbr0"
+purpose = "management"
+gateway_role = "none"
+description = "Management or anchor NIC. No default gateway."
+
+[[profile]]
+id = "server"
+name = "Server"
+vlan = 200
+bridge = "vmbr0"
+purpose = "internal"
+gateway_role = "default"
+description = "Default internal VM network."
+
+[[profile]]
+id = "public"
+name = "Public"
+vlan = 300
+bridge = "vmbr0"
+purpose = "public"
+gateway_role = "default"
+description = "Public or DMZ VM network."
