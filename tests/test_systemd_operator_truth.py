@@ -1,10 +1,10 @@
 """Systemd operator truth tests.
 
 Proves:
-1. Service file uses the default service account user (freq-admin)
+1. Canonical renderer uses the selected service account
 2. Installer --with-systemd messaging adapts next-steps
-3. Service file exists in contrib/
-4. Installer references correct service file path
+3. No competing contrib service file exists
+4. Installer and init consume the same renderer
 """
 
 import os
@@ -13,32 +13,29 @@ import unittest
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-class TestServiceFileContract(unittest.TestCase):
-    """freq-serve.service must be production-honest."""
+class TestServiceRendererContract(unittest.TestCase):
+    """Rendered freq-serve.service must be production-honest."""
 
     def _service_src(self):
-        path = os.path.join(REPO_ROOT, "contrib/freq-serve.service")
-        with open(path) as f:
-            return f.read()
+        from freq.core.service_units import dashboard_service_unit
 
-    def test_service_file_exists(self):
-        self.assertTrue(
-            os.path.isfile(os.path.join(REPO_ROOT, "contrib/freq-serve.service"))
-        )
+        return dashboard_service_unit("freq-ops", "/srv/freq")
+
+    def test_competing_service_file_is_absent(self):
+        self.assertFalse(os.path.exists(os.path.join(REPO_ROOT, "contrib/freq-serve.service")))
 
     def test_uses_code_default_user(self):
-        """Static template must match the shipped default service account."""
+        """Renderer must use the caller-selected runtime account."""
         src = self._service_src()
-        self.assertIn("User=freq-admin", src,
-                       "Static template must use code default (freq-admin)")
+        self.assertIn("User=freq-ops", src)
 
     def test_has_restart_policy(self):
         src = self._service_src()
-        self.assertIn("Restart=on-failure", src)
+        self.assertIn("Restart=always", src)
 
     def test_uses_freq_serve(self):
         src = self._service_src()
-        self.assertIn("freq serve", src)
+        self.assertIn('ExecStart="/usr/local/bin/freq" serve', src)
 
     def test_logs_to_journal(self):
         src = self._service_src()
@@ -77,20 +74,22 @@ class TestInstallerSystemdMessaging(unittest.TestCase):
 
 
 class TestInitGeneratedSystemdTruth(unittest.TestCase):
-    """init_cmd-generated service unit must match the shipped systemd contract."""
+    """init_cmd-generated service unit must use the canonical renderer."""
 
     def _init_src(self):
         with open(os.path.join(REPO_ROOT, "freq/modules/init_cmd.py")) as f:
             return f.read()
 
     def test_uses_network_online_target(self):
-        src = self._init_src()
-        self.assertIn("After=network-online.target", src)
-        self.assertIn("Wants=network-online.target", src)
+        from freq.core.service_units import dashboard_service_unit
+
+        unit = dashboard_service_unit("freq-ops", "/srv/freq")
+        self.assertIn("After=network-online.target", unit)
+        self.assertIn("Wants=network-online.target", unit)
 
     def test_sets_group_to_service_account(self):
         src = self._init_src()
-        self.assertIn('f"Group={svc_name}', src)
+        self.assertIn("dashboard_service_unit(", src)
 
 
 if __name__ == "__main__":

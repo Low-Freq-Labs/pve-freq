@@ -409,10 +409,9 @@ class TestProjectFiles(unittest.TestCase):
         assert os.path.isfile(os.path.join(conf_dir, "hosts.toml.example"))
 
     def test_systemd_service_not_root(self):
-        """Systemd service template must not run as root."""
-        svc = os.path.join(PROJECT_ROOT, "contrib", "freq-serve.service")
-        assert os.path.isfile(svc), "contrib/freq-serve.service missing"
-        with open(svc) as f:
-            content = f.read()
+        """Canonical systemd renderer must use the selected non-root user."""
+        from freq.core.service_units import dashboard_service_unit
+
+        content = dashboard_service_unit("freq-admin", "/opt/pve-freq")
         assert "User=root" not in content, "Dashboard service must not run as root"
-        assert "User=freq-admin" in content, "Static template uses code default (install.sh overrides)"
+        assert "User=freq-admin" in content

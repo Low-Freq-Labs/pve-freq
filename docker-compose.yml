@@ -8,6 +8,9 @@
 # Dashboard:  http://localhost:8888
 # CLI:        docker exec pve-freq freq doctor
 # TUI:        docker exec -it pve-freq freq
+#
+# Runtime contract: Docker is intentionally serve-only. Docker owns process
+# restart and log lifecycle; host systemd/watchdog units are not installed.
 # ──────────────────────────────────────────────────────────────────
 
 services:
@@ -21,6 +24,7 @@ services:
 
     environment:
       - TZ=${TZ:-UTC}
+      - FREQ_DIR=/opt/pve-freq
 
     volumes:
       # Named volumes avoid the first-run bind-mount trap where Docker creates

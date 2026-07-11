@@ -8,6 +8,7 @@ FROM python:3.13.5-slim-bookworm
 LABEL maintainer="LOW FREQ Labs"
 LABEL description="PVE FREQ — Datacenter management CLI"
 LABEL org.opencontainers.image.source="https://github.com/Low-Freq-Labs/pve-freq"
+LABEL org.lowfreqlabs.freq.deployment-profile="serve-only"
 
 # System deps — single layer, cleanup included
 RUN apt-get update && \

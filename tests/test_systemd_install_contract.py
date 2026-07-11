@@ -1,18 +1,16 @@
-"""Tests for systemd install path and runtime identity contract.
+"""Tests for the canonical systemd install and runtime identity contract.
 
-Bug: install.sh --with-systemd copied contrib/freq-serve.service verbatim
-with hardcoded FREQ_DIR=/opt/pve-freq. Custom --dir installs got a unit
-file pointing to the wrong path. Service account was hardcoded too.
+Bug: install.sh, init, Docker, and a contrib artifact described overlapping
+dashboard lifecycles with different paths, accounts, and restart behavior.
 
-Fix: install.sh now generates the unit file inline with templated
-INSTALL_DIR and detected service account, matching the actual install.
-contrib/freq-serve.service remains as a reference/example only.
+Fix: install.sh and freq init now call the same Python renderer. The stale
+contrib unit with a hardcoded account was removed.
 
 Contract:
 - Unit Environment=FREQ_DIR must match actual install dir
 - Unit User/Group must match configured service account
 - ExecStart must use /usr/local/bin/freq (the wrapper, not python direct)
-- contrib/freq-serve.service is reference only — never copied verbatim
+- contrib/freq-serve.service does not exist as a competing definition
 """
 import sys
 import unittest
@@ -24,7 +22,7 @@ FREQ_ROOT = Path(__file__).parent.parent
 
 
 class TestSystemdUnitTemplate(unittest.TestCase):
-    """install.sh must template the systemd unit, not copy verbatim."""
+    """install.sh must consume the canonical renderer."""
 
     def test_install_sh_does_not_copy_contrib_unit(self):
         """install.sh must NOT use 'cp' for the service unit."""
@@ -40,12 +38,12 @@ class TestSystemdUnitTemplate(unittest.TestCase):
                           "must generate inline with templated paths")
 
     def test_install_sh_templates_install_dir(self):
-        """Systemd unit must use $INSTALL_DIR, not hardcoded /opt/pve-freq."""
+        """Installer passes its actual install directory to the renderer."""
         with open(FREQ_ROOT / "install.sh") as f:
             content = f.read()
-        # The generated unit must reference ${INSTALL_DIR}
-        self.assertIn("FREQ_DIR=${INSTALL_DIR}", content,
-                       "Unit must template FREQ_DIR from INSTALL_DIR")
+        self.assertIn('dashboard_service_unit(sys.argv[1], sys.argv[2])', content)
+        self.assertIn('PYTHONPATH="${INSTALL_DIR}" python3 -', content)
+        self.assertIn('"${svc_user}" "${INSTALL_DIR}"', content)
 
     def test_install_sh_detects_service_account(self):
         """install.sh must detect service account from config."""
@@ -54,31 +52,33 @@ class TestSystemdUnitTemplate(unittest.TestCase):
         self.assertIn("svc_user", content,
                        "Must detect service account for User= field")
 
-    def test_contrib_unit_is_reference_only(self):
-        """contrib/freq-serve.service must exist as reference."""
-        self.assertTrue((FREQ_ROOT / "contrib" / "freq-serve.service").is_file())
+    def test_contrib_unit_is_retired(self):
+        """A wrong-account static unit must not compete with the renderer."""
+        self.assertFalse((FREQ_ROOT / "contrib" / "freq-serve.service").exists())
 
 
-class TestContribUnitDefaults(unittest.TestCase):
-    """contrib/freq-serve.service must have sane defaults for reference."""
+class TestCanonicalUnitDefaults(unittest.TestCase):
+    """The renderer owns host-systemd behavior."""
 
     def test_uses_default_service_account_user(self):
-        """Reference unit should use the default service account user."""
-        with open(FREQ_ROOT / "contrib" / "freq-serve.service") as f:
-            content = f.read()
+        from freq.core.service_units import dashboard_service_unit
+
+        content = dashboard_service_unit("freq-admin", "/opt/pve-freq")
         self.assertIn("User=freq-admin", content)
 
     def test_uses_opt_pve_freq(self):
-        """Reference unit uses default /opt/pve-freq path."""
-        with open(FREQ_ROOT / "contrib" / "freq-serve.service") as f:
-            content = f.read()
-        self.assertIn("FREQ_DIR=/opt/pve-freq", content)
+        """Canonical unit uses the supplied absolute runtime path."""
+        from freq.core.service_units import dashboard_service_unit
+
+        content = dashboard_service_unit("freq-admin", "/opt/pve-freq")
+        self.assertIn('Environment="FREQ_DIR=/opt/pve-freq"', content)
 
     def test_uses_freq_serve_command(self):
-        """Reference unit starts freq serve via wrapper."""
-        with open(FREQ_ROOT / "contrib" / "freq-serve.service") as f:
-            content = f.read()
-        self.assertIn("freq serve", content)
+        """Canonical unit starts freq serve via the installed wrapper."""
+        from freq.core.service_units import dashboard_service_unit
+
+        content = dashboard_service_unit("freq-admin", "/opt/pve-freq")
+        self.assertIn('ExecStart="/usr/local/bin/freq" serve', content)
 
 
 if __name__ == "__main__":

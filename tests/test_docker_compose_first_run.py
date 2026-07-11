@@ -45,3 +45,16 @@ def test_docker_image_installs_ping_for_discovery():
     dockerfile = Path("Dockerfile").read_text()
 
     assert "iputils-ping" in dockerfile
+
+
+def test_docker_profile_is_explicitly_serve_only():
+    """Docker owns lifecycle and must not imply host-systemd equivalence."""
+    compose = Path("docker-compose.yml").read_text()
+    dockerfile = Path("Dockerfile").read_text()
+    readme = Path("README.md").read_text()
+
+    assert "Runtime contract: Docker is intentionally serve-only" in compose
+    assert "FREQ_DIR=/opt/pve-freq" in compose
+    assert 'org.lowfreqlabs.freq.deployment-profile="serve-only"' in dockerfile
+    assert "intentionally **serve-only**" in readme
+    assert 'CMD ["serve"]' in dockerfile

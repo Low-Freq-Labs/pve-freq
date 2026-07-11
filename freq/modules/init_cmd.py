@@ -52,6 +52,7 @@ from freq.core import log as logger
 from freq.core.config import FreqConfig
 from freq.core.host_scope import managed_probe_hosts
 from freq.core.ssh import PLATFORM_SSH
+from freq.core.service_units import dashboard_service_unit
 from freq.modules.agent_deployment import (
     AGENT_REMOTE_DIR,
     AGENT_REMOTE_PATH,
@@ -6352,29 +6353,13 @@ def _phase_fleet_configure(cfg, ctx):
     if not freq_bin:
         fmt.step_warn("Cannot find 'freq' binary — dashboard service not installed")
     else:
-        work_dir = cfg.install_dir or "/opt/pve-freq"
-        service_unit = (
-            "[Unit]\n"
-            "Description=PVE FREQ Dashboard\n"
-            "After=network-online.target\n"
-            "Wants=network-online.target\n"
-            "\n"
-            "[Service]\n"
-            "Type=simple\n"
-            f"ExecStart={freq_bin} serve --port {dashboard_port}\n"
-            "Restart=always\n"
-            "RestartSec=10\n"
-            "TimeoutStopSec=10\n"
-            "KillMode=mixed\n"
-            f"User={svc_name}\n"
-            f"Group={svc_name}\n"
-            f"WorkingDirectory={work_dir}\n"
-            f"Environment=FREQ_DIR={work_dir}\n"
-            "\n"
-            "[Install]\n"
-            "WantedBy=multi-user.target\n"
-        )
         try:
+            work_dir = cfg.install_dir or "/opt/pve-freq"
+            service_unit = dashboard_service_unit(
+                svc_name,
+                work_dir,
+                freq_bin=freq_bin,
+            )
             service_path = "/etc/systemd/system/freq-serve.service"
             with open(service_path, "w") as f:
                 f.write(service_unit)
@@ -6393,7 +6378,7 @@ def _phase_fleet_configure(cfg, ctx):
                     fmt.step_ok(f"Dashboard service installed (port {dashboard_port})")
                     fmt.line(f"  {fmt.C.DIM}Start with: sudo systemctl start freq-serve{fmt.C.RESET}")
             audit.record("deploy_service", "local", "success", service="freq-serve")
-        except OSError as e:
+        except (OSError, ValueError) as e:
             fmt.step_warn(f"Could not install dashboard service: {e}")
 
     # ── 9k.1: Watchdog Service ───────────────────────────────────

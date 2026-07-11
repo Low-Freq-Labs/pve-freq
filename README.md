@@ -241,6 +241,11 @@ cd pve-freq && docker compose up -d
 
 Dashboard at `http://localhost:8888`.
 
+The container profile is intentionally **serve-only**: Docker owns process
+restart and logs, so it does not install the host `freq-serve.service` or the
+systemd watchdog unit. Use the native installer for the full host-managed
+systemd lifecycle.
+
 ### From source
 
 ```bash

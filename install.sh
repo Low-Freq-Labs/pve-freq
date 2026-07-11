@@ -533,29 +533,16 @@ post_install() {
     # Detect service account (match what init creates)
     local svc_user
     svc_user=$(detect_service_account)
-    cat > /etc/systemd/system/freq-serve.service << UNIT
-[Unit]
-Description=PVE FREQ Dashboard
-After=network-online.target
-Wants=network-online.target
+    if ! PYTHONPATH="${INSTALL_DIR}" python3 - "${svc_user}" "${INSTALL_DIR}" > /etc/systemd/system/freq-serve.service <<'PY'
+import sys
+from freq.core.service_units import dashboard_service_unit
 
-[Service]
-Type=simple
-User=${svc_user}
-Group=${svc_user}
-Environment=FREQ_DIR=${INSTALL_DIR}
-ExecStart=/usr/local/bin/freq serve
-Restart=on-failure
-RestartSec=5
-TimeoutStopSec=10
-KillMode=mixed
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=freq-serve
-
-[Install]
-WantedBy=multi-user.target
-UNIT
+sys.stdout.write(dashboard_service_unit(sys.argv[1], sys.argv[2]))
+PY
+    then
+      fail "Could not render canonical freq-serve.service"
+      exit 1
+    fi
     if getent group "${svc_user}" >/dev/null 2>&1; then
       if ! id -u freq-watch >/dev/null 2>&1; then
         useradd --system --no-create-home --shell /usr/sbin/nologin --gid "${svc_user}" freq-watch
