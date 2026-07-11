@@ -1274,6 +1274,7 @@ h1, h2, h3, h4, .section-header h3, .role-label, .badge, .sub-tab,
   font-family: var(--font-ui);
 }
 .section-header .chev { color: var(--text-dim); font-size: 13px; transition: transform var(--duration-normal) var(--ease-out); }
+.panel-updated { display: block; margin-bottom: 4px; color: var(--text-dim); font-size: 9px; font-weight: 600; letter-spacing: .08em; line-height: 1; text-align: right; white-space: nowrap; }
 .section.collapsed .section-body { display: none; }
 .section.collapsed .chev { transform: rotate(-90deg); }
 .section-body { padding: 0 14px 12px; }

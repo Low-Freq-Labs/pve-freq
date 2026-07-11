@@ -137,6 +137,45 @@ test.describe('hermetic dashboard behavior oracle', () => {
     await expect(page.locator('#fleet-snmp-setup-main')).not.toContainText('network-snmp-proof');
   });
 
+  test('expanding a data panel fetches fresh data and stamps only successful responses', async ({ page }) => {
+    let netmonRequests = 0;
+    await page.route('**/api/netmon/data', route => {
+      netmonRequests += 1;
+      if (netmonRequests > 1) {
+        return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'proof failure' }) });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          snapshots: [{
+            time: '2026-07-11T17:40:00Z',
+            host: 'expand-freshness-proof',
+            interfaces: [{ name: 'eth0', rx: '1', tx: '2', errors: '0' }]
+          }]
+        })
+      });
+    });
+    await loginInBrowser(page);
+    await page.locator('#nav-items [data-view="fleet"]').click();
+    await page.locator('#subtabs-fleet [data-view="network"]').click();
+
+    const panel = page.locator('#network-netmon-out').locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " section ")][1]');
+    const header = panel.locator(':scope > .section-header');
+    await header.click();
+    await expect(panel).toHaveClass(/collapsed/);
+    expect(netmonRequests).toBe(0);
+    await header.click();
+    await expect(panel).not.toHaveClass(/collapsed/);
+    await expect(page.locator('#network-netmon-out')).toContainText('expand-freshness-proof');
+    await expect(panel.locator(':scope > .section-body > .panel-updated')).toHaveText(/^AS OF \d{2}:\d{2}:\d{2}$/);
+    const successfulStamp = await panel.locator(':scope > .section-body > .panel-updated').textContent();
+
+    await panel.locator('[data-action="loadNetmonData"]').click();
+    await expect.poll(() => netmonRequests).toBe(2);
+    await expect(panel.locator(':scope > .section-body > .panel-updated')).toHaveText(successfulStamp);
+  });
+
   test('authenticated fleet overview returns cache truth', async ({ request }) => {
     const session = await bearerSession(request);
     const response = await request.get('/api/fleet/overview', {

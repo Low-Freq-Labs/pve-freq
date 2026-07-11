@@ -268,8 +268,39 @@ function _shouldToastApiError(url,status){
   if(!allow)_uiLog('api_error_toast_suppressed',{message:'suppressed repeated API error',source:'_authFetch',url:String(url||''),status:status,count:s.count});
   return allow;
 }
+var _panelFetchContext=null;
+function _formatPanelFetchTime(at){
+  var d=new Date(at),pad=function(v){return String(v).padStart(2,'0');};
+  return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+}
+function _markPanelFetched(section,at){
+  if(!section||!section.querySelector)return;
+  var body=section.querySelector(':scope > .section-body');
+  if(!body)return;
+  var stamp=body.querySelector(':scope > .panel-updated');
+  if(!stamp){
+    stamp=document.createElement('span');
+    stamp.className='panel-updated';
+    stamp.setAttribute('role','status');
+    body.insertBefore(stamp,body.firstChild);
+  }
+  var when=at||Date.now(),label=_formatPanelFetchTime(when);
+  stamp.textContent='AS OF '+label;
+  stamp.setAttribute('aria-label','Data fetched at '+label);
+  stamp.title='Last successful fetch: '+new Date(when).toISOString();
+}
+function _verifyAndMarkPanelFetch(response,section){
+  if(!section||!response||!response.ok||!response.clone)return;
+  try{
+    var copy=response.clone();
+    var contentType=copy.headers.get('content-type')||'';
+    var verified=contentType.indexOf('json')>=0?copy.json():copy.text();
+    Promise.resolve(verified).then(function(){_markPanelFetched(section,Date.now());}).catch(function(){});
+  }catch(e){}
+}
 function _authFetch(url, opts) {
     opts = opts || {};
+    var panelContext=_panelFetchContext;
     var silent = opts.silent === true;
     if (silent) delete opts.silent;
     if (!opts.headers) opts.headers = {};
@@ -277,6 +308,7 @@ function _authFetch(url, opts) {
     if (_shouldTouchSession()) opts.headers['X-Freq-User-Activity'] = '1';
     if (!opts.credentials) opts.credentials = 'same-origin';
     return fetch(url, opts).then(function(r){
+      _verifyAndMarkPanelFetch(r,panelContext);
       if(r.status===403||r.status===401){
         if(!_authFailing){
           _authFailing=true;
@@ -473,7 +505,18 @@ function confirmDestructive(msg,expected,onConfirm){
   try{inp.focus();}catch(e){}
 }
 /* === Section toggle === */
-function toggleSection(el){el.closest('.section').classList.toggle('collapsed');}
+function _fetchSectionOnExpand(section){
+  if(!section||!section.querySelector)return;
+  var trigger=section.querySelector(':scope > .section-header [data-action^="load"], :scope > .section-header [data-action^="fetch"], :scope > .section-body [data-action^="load"], :scope > .section-body [data-action^="fetch"]');
+  if(trigger&&!trigger.disabled)trigger.click();
+}
+function toggleSection(el){
+  var section=el.closest('.section');
+  if(!section)return;
+  var expanding=section.classList.contains('collapsed');
+  section.classList.toggle('collapsed');
+  if(expanding)_fetchSectionOnExpand(section);
+}
 
 function _splitLegacyOnclick(src){
   var parts=[],cur='',quote='',depth=0,esc=false;
@@ -632,6 +675,9 @@ document.addEventListener('click',function(e){
   var da=e.target.closest('[data-action]');
   if(da){
     var a=da.dataset.action,g=da.dataset.arg||'';
+    var priorPanelFetchContext=_panelFetchContext;
+    _panelFetchContext=da.closest('.section');
+    try{
     if(a==='vmPower'){vmPower(+da.dataset.vmid,g);return;}
     if(a==='vmDestroy'){vmDestroy(+da.dataset.vmid);return;}
     if(a==='vmSnap'){vmSnap(+da.dataset.vmid);return;}
@@ -768,6 +814,9 @@ document.addEventListener('click',function(e){
       sshdPanel:sshdPanel
     };
     if(argFns[a]){argFns[a](g);return;}
+    }finally{
+      _panelFetchContext=priorPanelFetchContext;
+    }
   }
   var legacy=e.target.closest('[data-legacy-onclick],[onclick]');
   if(legacy&&_dispatchLegacyOnclick(legacy.getAttribute('data-legacy-onclick')||legacy.getAttribute('onclick'),e,legacy)){
@@ -4123,6 +4172,7 @@ function runImpactAnalysis(){
   }).catch(function(e){if(out)out.innerHTML='<div class="exec-out" style="color:var(--red)">Failed: '+_esc(e.toString())+'</div>';});
 }
 function _networkSurfaceRoot(){
+  /* These actions exist only in Fleet and Network; Fleet is also the intentional root while loadFleetPage composes Network data. */
   return document.getElementById((_currentView==='network'?'network':'fleet')+'-view');
 }
 function _networkSurfaceElement(role,root){
