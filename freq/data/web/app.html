@@ -25,8 +25,8 @@
     <div id="login-setup-banner" class="login-setup-banner d-none"></div>
     <form id="login-form" class="login-form" method="post" action="#" autocomplete="on">
       <div class="login-fields">
-        <input id="login-user" class="login-input" name="username" placeholder="Username" autocomplete="username">
-        <input id="login-pass" class="login-input" name="password" type="password" placeholder="Password" autocomplete="current-password">
+        <input id="login-user" class="login-input" name="username" aria-label="Username" placeholder="Username" autocomplete="username">
+        <input id="login-pass" class="login-input" name="password" aria-label="Password" type="password" placeholder="Password" autocomplete="current-password">
         <button id="login-submit-btn" class="login-submit-btn" type="submit">LOG IN</button>
       </div>
       <div id="login-error" class="login-error"></div>
@@ -51,7 +51,7 @@
 </div>
 <div id="update-banner" class="update-banner d-none">
   <span id="update-banner-text"></span>
-  <button class="update-banner-dismiss" data-action="dismissUpdateBanner">&times;</button>
+  <button class="update-banner-dismiss" data-action="dismissUpdateBanner" aria-label="Dismiss update notice">&times;</button>
 </div>
 <div id="operator-truth-banner" class="operator-truth-banner d-none">
   <span id="operator-truth-text"></span>
@@ -108,7 +108,7 @@
 </div>
 <!-- Hosts & VMs & LXC group -->
 <div class="section layout-section" id="fleet-sec-infra">
-  <div class="section-header"><h3 class="cursor-ptr">Hosts &amp; VMs &amp; LXC</h3><div class="flex-1"></div><input id="fleet-filter" class="fleet-filter-input" placeholder="&#128269; Filter..."><span class="chev" style="cursor:pointer;margin-left:8px">▾</span></div>
+  <div class="section-header"><h3 class="cursor-ptr">Hosts &amp; VMs &amp; LXC</h3><div class="flex-1"></div><input id="fleet-filter" class="fleet-filter-input" aria-label="Filter hosts and workloads" placeholder="&#128269; Filter..."><span class="chev" style="cursor:pointer;margin-left:8px">▾</span></div>
   <div class="section-body"><div id="metrics-cards"></div></div>
 </div>
 <!-- Quick Terminal -->
@@ -118,7 +118,7 @@
     <div class="fleet-terminal-shell">
       <div class="fleet-terminal-picker">
       <div class="fleet-terminal-field fleet-terminal-type">
-        <label class="c-dim-fs12">Type</label>
+        <label class="c-dim-fs12" for="term-type">Type</label>
         <select id="term-type" class="input w-120">
           <option value="node">PVE Node</option>
           <option value="vm">VM</option>
@@ -131,7 +131,7 @@
         </select>
       </div>
       <div class="fleet-terminal-field fleet-terminal-target">
-        <label class="c-dim-fs12">Target</label>
+        <label class="c-dim-fs12" for="term-target">Target</label>
         <select id="term-target" class="input w-260"><option value="">Select...</option></select>
       </div>
       <button class="fleet-btn c-purple-active" data-action="launchTermFromPicker" style="color:var(--cyan)">&#9002; OPEN TERMINAL</button>
@@ -275,9 +275,9 @@
       <div style="margin-top:12px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
         <h4 class="helptext-mb8">ADD CONTAINER</h4>
         <div class="flex-gap-8-center-wrap">
-          <input class="input w-160" id="reg-name" placeholder="Container name">
-          <select class="input w-160" id="reg-vmid"><option value="">Select VM...</option></select>
-          <input class="input w-100" id="reg-port" placeholder="Port (optional)" type="number">
+          <input class="input w-160" id="reg-name" aria-label="Container name" placeholder="Container name">
+          <select class="input w-160" id="reg-vmid" aria-label="Container virtual machine"><option value="">Select VM...</option></select>
+          <input class="input w-100" id="reg-port" aria-label="Container port" placeholder="Port (optional)" type="number">
           <button class="fleet-btn" data-action="addContainer">ADD</button>
           <span id="reg-msg" class="text-meta"></span>
         </div>
@@ -386,7 +386,7 @@
 <div class="section layout-section" id="sec-users">
   <div class="section-header"><h3>Users</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <div class="exec-bar"><input id="u-name" placeholder="Username"><select id="u-role"><option>viewer</option><option selected>operator</option><option>admin</option></select><button data-action="userCreate">Create User</button></div>
+    <div class="exec-bar"><input id="u-name" aria-label="Username" placeholder="Username"><select id="u-role" aria-label="User role"><option>viewer</option><option selected>operator</option><option>admin</option></select><button data-action="userCreate">Create User</button></div>
     <div id="users-c"></div>
   </div>
 </div>
@@ -445,7 +445,7 @@
   <div class="section-header"><h3>Policy Compliance</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <input class="input w-240" id="policy-name" placeholder="Policy name (optional)">
+      <input class="input w-240" id="policy-name" aria-label="Policy name" placeholder="Policy name (optional)">
       <button class="fleet-btn" data-action="policyAction" data-arg="check">CHECK COMPLIANCE</button>
       <button class="fleet-btn" data-action="policyAction" data-arg="diff">SHOW DRIFT</button>
       <button class="fleet-btn c-red" data-action="policyAction" data-arg="fix">APPLY FIX</button>
@@ -486,7 +486,7 @@
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
       <button class="fleet-btn" data-action="runDoctor">RUN DOCTOR</button>
-      <select id="diag-host" class="input-field w-180"><option value="">Select host...</option></select>
+      <select id="diag-host" class="input-field w-180" aria-label="Diagnostic host"><option value="">Select host...</option></select>
       <button class="fleet-btn" data-action="runDiagnose">DIAGNOSE HOST</button>
     </div>
     <div class="exec-out" id="diag-out">Run self-diagnostic or diagnose a specific host.</div>
@@ -497,9 +497,9 @@
   <div class="section-header"><h3>Logs</h3><span class="chev">▾</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <select id="log-host" class="input-field w-180"><option value="">Select host...</option></select>
-      <input type="text" id="log-unit" placeholder="Unit (optional)..." class="input-field w-180">
-      <input type="number" id="log-lines" placeholder="Lines" value="50" class="input-field w-80">
+      <select id="log-host" class="input-field w-180" aria-label="Log host"><option value="">Select host...</option></select>
+      <input type="text" id="log-unit" aria-label="Systemd unit" placeholder="Unit (optional)..." class="input-field w-180">
+      <input type="number" id="log-lines" aria-label="Log line count" placeholder="Lines" value="50" class="input-field w-80">
       <button class="fleet-btn" data-action="fetchLogs">FETCH LOGS</button>
     </div>
     <div class="exec-out" id="log-out">Enter a host to view its logs.</div>
@@ -530,16 +530,16 @@
   <div class="section-body">
     <div class="helptext-mb12">Discover hosts on your network, add them to the fleet, and onboard with SSH key deployment.</div>
     <div class="flex-wrap-8-mb12">
-      <input type="text" id="discover-subnet" placeholder="Subnet (e.g. 192.168.1)" class="input-field w-200">
+      <input type="text" id="discover-subnet" aria-label="Subnet to discover" placeholder="Subnet (e.g. 192.168.1)" class="input-field w-200">
       <button class="fleet-btn c-purple-active" data-action="runDiscover">SCAN NETWORK</button>
     </div>
     <div class="exec-out" id="discover-out">Enter a subnet to discover hosts.</div>
     <div class="card-block-bg2">
       <h4 class="helptext-mb8">ADD HOST MANUALLY</h4>
       <div class="flex-gap-8-center-wrap">
-        <input class="input w-140" id="add-host-ip" placeholder="IP address">
-        <input class="input w-140" id="add-host-label" placeholder="Label (e.g. web-01)">
-        <select class="input w-120" id="add-host-type">
+        <input class="input w-140" id="add-host-ip" aria-label="Host IP address" placeholder="IP address">
+        <input class="input w-140" id="add-host-label" aria-label="Host label" placeholder="Label (e.g. web-01)">
+        <select class="input w-120" id="add-host-type" aria-label="Host type">
           <option value="vm">VM</option>
           <option value="ct">Container</option>
           <option value="physical">Physical</option>
@@ -548,7 +548,7 @@
           <option value="storage">Storage</option>
           <option value="bmc">BMC</option>
         </select>
-        <input class="input w-160" id="add-host-groups" placeholder="Groups (optional)">
+        <input class="input w-160" id="add-host-groups" aria-label="Host groups" placeholder="Groups (optional)">
         <button class="fleet-btn" data-action="addHostManual">ADD HOST</button>
         <span id="add-host-msg" class="text-meta"></span>
       </div>
@@ -589,9 +589,9 @@
   <div class="section-body">
     <div class="helptext-sm-mb8">Compare two hosts side-by-side (CPU, RAM, disk, packages, services).</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-      <select id="compare-host-a" class="input-field w-180"><option value="">Host A...</option></select>
+      <select id="compare-host-a" class="input-field w-180" aria-label="First host to compare"><option value="">Host A...</option></select>
       <span class="text-dim">vs</span>
-      <select id="compare-host-b" class="input-field w-180"><option value="">Host B...</option></select>
+      <select id="compare-host-b" class="input-field w-180" aria-label="Second host to compare"><option value="">Host B...</option></select>
       <button class="fleet-btn" data-action="runHostCompare">COMPARE</button>
     </div>
     <div id="compare-out"><div class="exec-out">Select two hosts and click COMPARE.</div></div>
@@ -653,9 +653,9 @@
   <div class="card-block-bg2">
     <h4 class="helptext-mb8">CREATE PLAYBOOK</h4>
     <div class="flex-gap-8-center-wrap">
-      <input class="input w-180" id="pb-create-name" placeholder="Playbook name">
-      <input class="input w-240" id="pb-create-desc" placeholder="Description">
-      <input class="input w-160" id="pb-create-trigger" placeholder="Trigger (optional)">
+      <input class="input w-180" id="pb-create-name" aria-label="Playbook name" placeholder="Playbook name">
+      <input class="input w-240" id="pb-create-desc" aria-label="Playbook description" placeholder="Description">
+      <input class="input w-160" id="pb-create-trigger" aria-label="Playbook trigger" placeholder="Trigger (optional)">
       <button class="fleet-btn" data-action="createPlaybook">CREATE</button>
       <span id="pb-create-msg" class="text-meta"></span>
     </div>
@@ -705,8 +705,8 @@
   <div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--input-border)">
     <h4 class="helptext-mb8">NEW EXPERIMENT</h4>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-      <input id="chaos-name" placeholder="Experiment name" class="freq-input flex-min-120">
-      <select id="chaos-type" class="freq-input flex-min-120">
+      <input id="chaos-name" aria-label="Experiment name" placeholder="Experiment name" class="freq-input flex-min-120">
+      <select id="chaos-type" class="freq-input flex-min-120" aria-label="Experiment type">
         <option value="">Select type...</option>
         <option value="service_kill">service_kill — Stop a Docker container</option>
         <option value="service_restart">service_restart — Restart a systemd service</option>
@@ -714,9 +714,9 @@
         <option value="disk_fill">disk_fill — Simulate disk pressure</option>
         <option value="cpu_stress">cpu_stress — Spike CPU load</option>
       </select>
-      <select id="chaos-target" class="freq-input flex-min-100"><option value="">Select host...</option></select>
-      <input id="chaos-service" placeholder="Service/container" class="freq-input flex-min-100">
-      <input id="chaos-duration" placeholder="Duration (s)" type="number" value="60" class="freq-input w-100">
+      <select id="chaos-target" class="freq-input flex-min-100" aria-label="Experiment target"><option value="">Select host...</option></select>
+      <input id="chaos-service" aria-label="Service or container" placeholder="Service/container" class="freq-input flex-min-100">
+      <input id="chaos-duration" aria-label="Experiment duration in seconds" placeholder="Duration (s)" type="number" value="60" class="freq-input w-100">
       <button class="fleet-btn" style="background:var(--red);color:#fff" data-action="chaosRun">INJECT</button>
     </div>
   </div>
@@ -758,9 +758,9 @@
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--input-border)">
         <h4 class="helptext-mb8">REGISTER NEW SITE</h4>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input id="fed-name" placeholder="Site name" class="freq-input flex-min-100">
-          <input id="fed-url" placeholder="https://freq.example.com:8888" class="freq-input">
-          <input id="fed-secret" placeholder="Shared secret (optional)" type="password" class="freq-input flex-min-100">
+          <input id="fed-name" aria-label="Federated site name" placeholder="Site name" class="freq-input flex-min-100">
+          <input id="fed-url" aria-label="Federated site URL" placeholder="https://freq.example.com:8888" class="freq-input">
+          <input id="fed-secret" aria-label="Federated site shared secret" placeholder="Shared secret (optional)" type="password" class="freq-input flex-min-100">
           <button class="fleet-btn" data-action="fedRegister">REGISTER</button>
         </div>
       </div>
@@ -793,7 +793,7 @@
     <div class="section-body">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
         <div>
-          <label class="helptext-mb4-block">Auto-Refresh Interval</label>
+          <label class="helptext-mb4-block" for="pref-refresh">Auto-Refresh Interval</label>
           <select id="pref-refresh" class="input-field w-full">
             <option value="0">Disabled</option>
             <option value="10">10 seconds</option>
@@ -803,7 +803,7 @@
           </select>
         </div>
         <div>
-          <label class="helptext-mb4-block">UI Density</label>
+          <label class="helptext-mb4-block" for="pref-density">UI Density</label>
           <select id="pref-density" class="input-field w-full">
             <option value="compact">Compact</option>
             <option value="normal" selected>Normal</option>
@@ -828,7 +828,7 @@
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
       <button class="fleet-btn" data-action="loadConfigHistory">BACKUP HISTORY</button>
-      <input type="text" id="config-search-input" placeholder="Search configs (regex)..." class="input-field w-200">
+      <input type="text" id="config-search-input" aria-label="Search configuration files" placeholder="Search configs (regex)..." class="input-field w-200">
       <button class="fleet-btn" data-action="searchConfigs">SEARCH</button>
     </div>
     <div class="exec-out" id="config-backup-out">View config backup history or search across saved configs.</div>
@@ -839,7 +839,7 @@
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
       <button class="fleet-btn c-purple-active" data-action="loadDepMap">LOAD MAP</button>
-      <input type="text" id="impact-host-input" placeholder="Host for impact analysis..." class="input-field w-200">
+      <input type="text" id="impact-host-input" aria-label="Host for impact analysis" placeholder="Host for impact analysis..." class="input-field w-200">
       <button class="fleet-btn" data-action="runImpactAnalysis">IMPACT ANALYSIS</button>
     </div>
     <div id="dep-map-out"><div class="exec-out">Load the dependency map to see infrastructure relationships.</div></div>
@@ -960,7 +960,7 @@
   <div class="section-header"><h3>Internal DNS</h3><span class="chev">&#9662;</span></div>
   <div class="section-body">
     <div class="flex-wrap-8-mb12">
-      <input type="text" id="dns-query-input" placeholder="Domain to check..." class="input-field w-240">
+      <input type="text" id="dns-query-input" aria-label="Domain to check" placeholder="Domain to check..." class="input-field w-240">
       <button class="fleet-btn" data-action="runDnsCheck">CHECK</button>
     </div>
     <div class="exec-out" id="dns-check-out">Enter a domain to check DNS resolution.</div>
@@ -1246,7 +1246,7 @@
 <div class="section">
   <div class="section-header"><h3>Knowledge Base</h3><span class="chev">▾</span></div>
   <div class="section-body">
-    <input class="search" id="learn-q" placeholder="Search knowledge base — try: nfs stale, docker gluetun, pfsense reboot">
+    <input class="search" id="learn-q" aria-label="Search knowledge base" placeholder="Search knowledge base — try: nfs stale, docker gluetun, pfsense reboot">
     <div id="learn-r"></div>
   </div>
 </div>
@@ -1265,13 +1265,13 @@
     <div style="margin-top:16px;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
       <h4 style="font-size:13px;margin-bottom:12px;color:var(--purple-light)">Create Rule</h4>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div><label class="label-sub-10">Name</label><input id="rule-name" class="input-sm w-full" placeholder="my-rule"></div>
-        <div><label class="label-sub-10">Condition</label><select id="rule-cond" class="input-sm w-full"><option value="host_unreachable">Host Unreachable</option><option value="cpu_above">CPU Above</option><option value="ram_above">RAM Above %</option><option value="disk_above">Disk Above %</option><option value="docker_down">Docker Down</option></select></div>
-        <div><label class="label-sub-10">Target</label><input id="rule-target" class="input-sm w-full" value="*" placeholder="* or hostname"></div>
-        <div><label class="label-sub-10">Threshold</label><input id="rule-threshold" class="input-sm w-full" value="0" type="number"></div>
-        <div><label class="label-sub-10">Duration (s)</label><input id="rule-duration" class="input-sm w-full" value="0" type="number"></div>
-        <div><label class="label-sub-10">Cooldown (s)</label><input id="rule-cooldown" class="input-sm w-full" value="300" type="number"></div>
-        <div><label class="label-sub-10">Severity</label><select id="rule-severity" class="input-sm w-full"><option value="warning">Warning</option><option value="critical">Critical</option><option value="info">Info</option></select></div>
+        <div><label class="label-sub-10" for="rule-name">Name</label><input id="rule-name" class="input-sm w-full" placeholder="my-rule"></div>
+        <div><label class="label-sub-10" for="rule-cond">Condition</label><select id="rule-cond" class="input-sm w-full"><option value="host_unreachable">Host Unreachable</option><option value="cpu_above">CPU Above</option><option value="ram_above">RAM Above %</option><option value="disk_above">Disk Above %</option><option value="docker_down">Docker Down</option></select></div>
+        <div><label class="label-sub-10" for="rule-target">Target</label><input id="rule-target" class="input-sm w-full" value="*" placeholder="* or hostname"></div>
+        <div><label class="label-sub-10" for="rule-threshold">Threshold</label><input id="rule-threshold" class="input-sm w-full" value="0" type="number"></div>
+        <div><label class="label-sub-10" for="rule-duration">Duration (s)</label><input id="rule-duration" class="input-sm w-full" value="0" type="number"></div>
+        <div><label class="label-sub-10" for="rule-cooldown">Cooldown (s)</label><input id="rule-cooldown" class="input-sm w-full" value="300" type="number"></div>
+        <div><label class="label-sub-10" for="rule-severity">Severity</label><select id="rule-severity" class="input-sm w-full"><option value="warning">Warning</option><option value="critical">Critical</option><option value="info">Info</option></select></div>
       </div>
       <button class="fleet-btn mt-12" data-action="createRule">CREATE RULE</button>
       <div id="rule-create-msg" class="mt-8"></div>
@@ -1318,13 +1318,13 @@
 </div></div><!-- close mn-body and mn -->
 
 <!-- ═══ HOST DETAIL OVERLAY ═══ -->
-<div id="host-overlay" class="host-overlay">
+<div id="host-overlay" class="host-overlay" role="dialog" aria-modal="true" aria-labelledby="hd-title">
   <div class="ho-header"><div class="ho-header-inner">
     <div>
       <h1 id="hd-title"></h1>
       <div id="hd-subtitle"></div>
     </div>
-    <button class="ho-close" data-action="closeCard">&#10005;</button>
+    <button class="ho-close" data-action="closeCard" aria-label="Close host details">&#10005;</button>
   </div></div>
   <div class="ho-body">
     <div id="hd-loading">
@@ -1337,10 +1337,10 @@
 
 <!-- ═══ TOAST + MODAL ═══ -->
 <div id="toast-container" class="toast-container"></div>
-<div id="modal-container" class="modal-overlay d-none"></div>
+<div id="modal-container" class="modal-overlay d-none" role="dialog" aria-modal="true" aria-label="Action dialog"></div>
 
 <!-- Terminal Overlay -->
-<div id="terminal-overlay">
+<div id="terminal-overlay" role="dialog" aria-modal="true" aria-labelledby="terminal-title">
   <div class="term-shell-col">
     <div id="terminal-header">
       <div class="term-shell-title-row">
@@ -1358,10 +1358,10 @@
 </div>
 
 <!-- Global Search Overlay -->
-<div id="search-overlay" data-action="closeSearch">
+<div id="search-overlay" data-action="closeSearch" role="dialog" aria-modal="true" aria-label="Global search">
   <div class="search-overlay-card" data-action="modalNoop">
     <div class="search-overlay-input-row">
-      <input id="search-input" type="text" placeholder="Search or type > for actions..." class="search-overlay-input">
+      <input id="search-input" type="text" aria-label="Search or run an action" placeholder="Search or type > for actions..." class="search-overlay-input">
     </div>
     <div id="search-results"></div>
     <div class="search-overlay-footer">
@@ -1374,9 +1374,9 @@
 </div>
 
 <!-- Keyboard Shortcuts Help -->
-<div id="shortcuts-modal" data-action="hideShortcutsModal">
+<div id="shortcuts-modal" data-action="hideShortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-heading">
   <div class="shortcuts-card" data-action="modalNoop">
-    <h3 class="shortcuts-heading">Keyboard Shortcuts</h3>
+    <h3 class="shortcuts-heading" id="shortcuts-heading">Keyboard Shortcuts</h3>
     <div class="shortcuts-grid">
       <kbd class="kbd-tag">Ctrl+K</kbd><span>Global search</span>
       <kbd class="kbd-tag">1-8</kbd><span>Navigate to view</span>

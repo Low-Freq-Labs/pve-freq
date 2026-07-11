@@ -462,6 +462,7 @@ function confirmDestructive(msg,expected,onConfirm){
 
   var inp=document.createElement('input');
   inp.id='destructive-confirm-input';
+  inp.setAttribute('aria-label','Confirmation text');
   inp.className='input-primary-lg';
   inp.type='text';
   inp.autocomplete='off';
@@ -1344,7 +1345,7 @@ function openUserMenu(){
 
   var hdr=document.createElement('div');hdr.className='flex-between-mb16';
   var h3=document.createElement('h3');h3.className='m-0';h3.textContent='Session';
-  var close=document.createElement('span');close.className='close-x';close.textContent='\u00d7';
+  var close=document.createElement('button');close.type='button';close.className='close-x';close.setAttribute('aria-label','Close session dialog');close.textContent='\u00d7';
   close.addEventListener('click',function(){closeModal();});
   hdr.appendChild(h3);hdr.appendChild(close);
 
@@ -1430,7 +1431,7 @@ function openChangePasswordModal(){
 
   var hdr=document.createElement('div');hdr.className='flex-between-mb16';
   var h3=document.createElement('h3');h3.className='m-0';h3.textContent='Change Password';
-  var close=document.createElement('span');close.className='close-x';close.textContent='\u00d7';
+  var close=document.createElement('button');close.type='button';close.className='close-x';close.setAttribute('aria-label','Close password dialog');close.textContent='\u00d7';
   close.addEventListener('click',function(){closeModal();});
   hdr.appendChild(h3);hdr.appendChild(close);
 
@@ -1441,7 +1442,7 @@ function openChangePasswordModal(){
     lab.className='label-sub';
     lab.textContent=label;
     var inp=document.createElement('input');
-    inp.id=id;inp.type='password';inp.placeholder=ph;
+    inp.id=id;inp.type='password';inp.placeholder=ph;inp.setAttribute('aria-label',label);
     inp.className='input-primary-lg';
     inp.autocomplete='off';
     wrap.appendChild(lab);wrap.appendChild(inp);
@@ -2353,13 +2354,13 @@ function openLayoutConfig(){
     h+='<span style="color:var(--text-dim);font-size:14px;cursor:grab">&#9776;</span>';
     h+='<span style="flex:1;font-size:13px;color:var(--text)">'+label+'</span>';
     h+='<label class="toggle-sw" onclick="event.stopPropagation()">';
-    h+='<input type="checkbox" '+(on?'checked':'')+' onchange="toggleViewSection(\''+view+'\',\''+id+'\',this.checked)" class="d-none">';
+    h+='<input type="checkbox" aria-label="Show '+_esc(label)+' section" '+(on?'checked':'')+' onchange="toggleViewSection(\''+view+'\',\''+id+'\',this.checked)" class="d-none">';
     h+='<span style="position:absolute;inset:0;background:'+(on?'var(--purple)':'var(--input-border)')+';border-radius:11px;transition:background 0.2s"></span>';
     h+='<span style="position:absolute;top:2px;left:'+(on?'20px':'2px')+';width:18px;height:18px;background:var(--text);border-radius:50%;transition:left 0.2s"></span>';
     h+='</label></div>';
   });
   h+='</div>';
-  document.getElementById('modal-container').innerHTML='<div class="modal" style="max-width:400px"><div class="flex-between-mb16"><h3 class="m-0">Layout — '+VIEW_TITLES[view]+'</h3><span class="close-x">&times;</span></div>'+h+'</div>';
+  document.getElementById('modal-container').innerHTML='<div class="modal" style="max-width:400px"><div class="flex-between-mb16"><h3 class="m-0">Layout — '+VIEW_TITLES[view]+'</h3><button type="button" class="close-x" aria-label="Close layout dialog">&times;</button></div>'+h+'</div>';
   document.getElementById('modal-container').style.display='flex';
 }
 function dropLayoutItem(targetId){
@@ -2391,7 +2392,7 @@ function openHomeWidgetConfig(){
       h+='<span style="color:var(--text-dim);font-size:14px">&#9776;</span>';
       h+='<span style="flex:1;font-size:12px;color:var(--text)">'+w.label+'</span>';
       h+='<span class="text-sub">'+w.page+'</span>';
-      h+='<button onclick="removeHomeWidget(\''+wid+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 4px">&times;</button>';
+      h+='<button aria-label="Remove '+_esc(w.label)+' widget" onclick="removeHomeWidget(\''+wid+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 4px">&times;</button>';
       h+='</div>';
     });
     h+='</div>';
@@ -2405,13 +2406,13 @@ function openHomeWidgetConfig(){
       h+='<div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid var(--border)">';
       h+='<span style="flex:1;font-size:12px;color:var(--text)">'+w.label+'</span>';
       h+='<label class="toggle-sw">';
-      h+='<input type="checkbox" '+(active?'checked':'')+' onchange="toggleHomeWidget(\''+w.id+'\',this.checked)" class="d-none">';
+      h+='<input type="checkbox" aria-label="Show '+_esc(w.label)+' widget" '+(active?'checked':'')+' onchange="toggleHomeWidget(\''+w.id+'\',this.checked)" class="d-none">';
       h+='<span style="position:absolute;inset:0;background:'+(active?'var(--purple)':'var(--input-border)')+';border-radius:11px;transition:background 0.2s"></span>';
       h+='<span style="position:absolute;top:2px;left:'+(active?'20px':'2px')+';width:18px;height:18px;background:var(--text);border-radius:50%;transition:left 0.2s"></span>';
       h+='</label></div>';
     });
   });
-  document.getElementById('modal-container').innerHTML='<div class="modal" style="max-width:440px;max-height:80vh;overflow-y:auto"><div class="flex-between-mb16"><h3 class="m-0">Dashboard Layout</h3><span class="close-x">&times;</span></div>'+h+'</div>';
+  document.getElementById('modal-container').innerHTML='<div class="modal" style="max-width:440px;max-height:80vh;overflow-y:auto"><div class="flex-between-mb16"><h3 class="m-0">Dashboard Layout</h3><button type="button" class="close-x" aria-label="Close dashboard layout dialog">&times;</button></div>'+h+'</div>';
   document.getElementById('modal-container').style.display='flex';
 }
 function toggleHomeWidget(wid,on){
@@ -3716,7 +3717,7 @@ function loadContainerRegistry(){
 function editContainerRow(name,vmId,port,apiPath){
   var opts='';_regVMs.forEach(function(v){opts+='<option value="'+v.id+'"'+(v.id===vmId?' selected':'')+'>'+_esc(v.label)+' ('+v.id+')</option>';});
   var pu=_publicUrls[name]||'';
-  var h='<div class="modal" style="max-width:400px"><div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Edit: '+_esc(name)+'</h3><span class="close-x">&times;</span></div>';
+  var h='<div class="modal" style="max-width:400px"><div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Edit: '+_esc(name)+'</h3><button type="button" class="close-x" aria-label="Close container editor">&times;</button></div>';
   h+='<div style="display:flex;flex-direction:column;gap:12px">';
   h+='<div><label class="c-dim-fs12">VM</label><select class="input" id="edit-vm" style="width:100%;margin-top:4px">'+opts+'</select></div>';
   h+='<div><label class="c-dim-fs12">Port</label><input class="input" id="edit-port" type="number" value="'+port+'" style="width:100%;margin-top:4px"></div>';
@@ -6447,13 +6448,13 @@ function _deviceCategoryForAssignment(admin,assignment,current){
   return cats.filter(function(cat){return !_deviceSpecialCategory(cat);})[0]||'';
 }
 function _deviceAssignmentSelect(rowId,current){
-  return '<select id="da-'+rowId+'" class="device-prop-select">'+DEVICE_ASSIGNMENT_OPTIONS.map(function(opt){
+  return '<select id="da-'+rowId+'" class="device-prop-select" aria-label="Device assignment">'+DEVICE_ASSIGNMENT_OPTIONS.map(function(opt){
     return '<option value="'+opt.value+'"'+(opt.value===current?' selected':'')+'>'+opt.label+'</option>';
   }).join('')+'</select>';
 }
 function _deviceTypeSelect(rowId,current){
   var validTypes=['linux','pve','truenas','pfsense','docker','idrac','switch','unknown'];
-  return '<select id="ht-'+rowId+'" class="device-prop-select">'+validTypes.map(function(t){
+  return '<select id="ht-'+rowId+'" class="device-prop-select" aria-label="Device type">'+validTypes.map(function(t){
     return '<option value="'+t+'"'+(t===current?' selected':'')+'>'+t+'</option>';
   }).join('')+'</select>';
 }
@@ -6544,10 +6545,10 @@ function _loadLabAssignments(){
       h+='<td><span style="color:'+statusColor+'">'+it.status.toUpperCase()+'</span></td>';
       h+='<td>'+_deviceAssignmentSelect(rowId,assignment)+'</td>';
       if(manageable){
-        h+='<td><div class="device-props-grid">'+_deviceTypeSelect(rowId,it.type)+'<input id="hg-'+rowId+'" value="'+_esc(it.groups||'')+'" class="device-prop-input" placeholder="prod,media"><input id="hd-'+rowId+'" value="'+_esc(it.detail||'')+'" class="device-prop-input" placeholder="role/detail"></div></td>';
-        h+='<td><select id="hm-'+rowId+'" class="device-prop-select"><option value="true"'+(it.managed?' selected':'')+'>managed</option><option value="false"'+(!it.managed?' selected':'')+'>inventory-only</option></select></td>';
+        h+='<td><div class="device-props-grid">'+_deviceTypeSelect(rowId,it.type)+'<input id="hg-'+rowId+'" value="'+_esc(it.groups||'')+'" class="device-prop-input" aria-label="Device groups" placeholder="prod,media"><input id="hd-'+rowId+'" value="'+_esc(it.detail||'')+'" class="device-prop-input" aria-label="Device role or detail" placeholder="role/detail"></div></td>';
+        h+='<td><select id="hm-'+rowId+'" class="device-prop-select" aria-label="Device management mode"><option value="true"'+(it.managed?' selected':'')+'>managed</option><option value="false"'+(!it.managed?' selected':'')+'>inventory-only</option></select></td>';
       }else if(physical){
-        h+='<td><div class="device-props-grid">'+_deviceTypeSelect(rowId,it.type)+'<input id="hg-'+rowId+'" value="'+_esc(it.groups||'')+'" class="device-prop-input" placeholder="prod,network"><input id="hd-'+rowId+'" value="'+_esc(it.detail||'')+'" class="device-prop-input" placeholder="role/detail"></div></td>';
+        h+='<td><div class="device-props-grid">'+_deviceTypeSelect(rowId,it.type)+'<input id="hg-'+rowId+'" value="'+_esc(it.groups||'')+'" class="device-prop-input" aria-label="Device groups" placeholder="prod,network"><input id="hd-'+rowId+'" value="'+_esc(it.detail||'')+'" class="device-prop-input" aria-label="Device role or detail" placeholder="role/detail"></div></td>';
         h+='<td><span class="text-sub">physical inventory</span></td>';
       }else{
         h+='<td><span class="text-sub">PVE inventory</span></td>';
@@ -7704,7 +7705,7 @@ function openVmCreateForNode(nodeName){
   var ov=document.getElementById('modal-container');
   if(!ov){toast('Create VM modal unavailable','error');return;}
   ov.innerHTML='<div class="modal vm-create-modal">'+
-    '<div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Create VM</h3><span class="close-x" data-action="closeModal">&times;</span></div>'+
+    '<div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Create VM</h3><button type="button" class="close-x" aria-label="Close virtual machine creator" data-action="closeModal">&times;</button></div>'+
     '<div id="vm-subtitle" class="d-none"></div><div id="vm-form"></div>'+
     '</div>';
   ov.style.display='flex';
@@ -8890,7 +8891,7 @@ function selectUserDropdown(prefix,value){
 /* New Tool — shows registered tools dashboard */
 function openNewTool(){
   var ov=document.getElementById('modal-container');
-  var h='<div class="modal" style="max-width:500px"><div class="flex-between-mb16"><h3 class="m-0">Lab Tools</h3><span class="close-x">&times;</span></div>';
+  var h='<div class="modal" style="max-width:500px"><div class="flex-between-mb16"><h3 class="m-0">Lab Tools</h3><button type="button" class="close-x" aria-label="Close lab tools dialog">&times;</button></div>';
   h+='<div class="text-sm text-dim" style="margin-bottom:16px">Registered tools appear in LAB view and are available as HOME widgets.</div>';
   if(typeof LAB_TOOLS!=='undefined'&&LAB_TOOLS.length){
     LAB_TOOLS.forEach(function(t){
@@ -11951,7 +11952,7 @@ function hideLabTool(id){
 }
 function openManageTools(){
   var all=_allLabTools();
-  var h='<div class="modal" style="max-width:460px"><div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Manage Lab Tools</h3><span class="close-x">&times;</span></div>';
+  var h='<div class="modal" style="max-width:460px"><div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Manage Lab Tools</h3><button type="button" class="close-x" aria-label="Close lab tool manager">&times;</button></div>';
   h+='<div style="display:flex;flex-direction:column;gap:8px">';
   if(!all.length){h+='<p class="c-dim-fs12">No tools registered.</p>';}
   all.forEach(function(t){
@@ -11984,7 +11985,7 @@ function removeLabTool(id){
   toast('Tool removed','success');
 }
 function openAddTool(){
-  var h='<div class="modal" style="max-width:480px"><div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Add Lab Tool</h3><span class="close-x">&times;</span></div>';
+  var h='<div class="modal" style="max-width:480px"><div class="flex-between-mb16"><h3 class="m-0" style="color:var(--purple-light)">Add Lab Tool</h3><button type="button" class="close-x" aria-label="Close add tool dialog">&times;</button></div>';
   h+='<div style="display:flex;flex-direction:column;gap:12px">';
   h+='<div><label class="c-dim-fs12">Type</label><div style="display:flex;gap:8px;margin-top:6px">';
   h+='<button class="fleet-btn at-type active-view" id="at-type-freq" onclick="switchAddToolType(\'freq\')" style="flex:1;font-size:11px">FREQ TOOL</button>';
