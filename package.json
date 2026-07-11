@@ -4,6 +4,7 @@
   "description": "Development-only browser verification harness for pve-freq. Production remains zero-dependency client-side.",
   "scripts": {
     "test:e2e": "playwright test",
+    "test:e2e:hermetic": "playwright test --config=playwright.hermetic.config.js",
     "test:e2e:live": "PLAYWRIGHT_BROWSERS_PATH=.playwright playwright test tests/e2e/live-safe.spec.js --project=chromium",
     "test:e2e:headed": "PLAYWRIGHT_BROWSERS_PATH=.playwright playwright test tests/e2e/live-safe.spec.js --project=chromium --headed",
     "test:e2e:install": "PLAYWRIGHT_BROWSERS_PATH=.playwright playwright install chromium"

@@ -1,186 +1,63 @@
-"""End-to-end test for freq fleet status from VM 5005.
+"""End-to-end fleet status behavior against the disposable SSH lab."""
 
-Proves: freq's SSH module can reach and execute commands on every
-registered fleet host using the configured service account and key.
-This is the highest-value E2E operation — it exercises config loading,
-SSH key detection, platform SSH config, parallel execution, and
-result collection in a single call.
+from __future__ import annotations
 
-Run: python3 -m unittest tests.test_fleet_status_e2e -v
-"""
-import os
-import subprocess
-import sys
-import unittest
+import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
-LIVE_INSTALL_DIR = (
-    os.environ.get("FREQ_TEST_INSTALL_DIR")
-    or os.environ.get("FREQ_DIR")
-    or ("/opt/pve-freq" if os.path.isfile("/opt/pve-freq/conf/freq.toml") else "")
-)
+from freq.core.ssh import result_for
 
 
-def _has_fleet_access():
-    if not _has_live_runtime_config():
-        return False
-    try:
-        r = subprocess.run(
-            ["ping", "-c1", "-W2", "10.25.255.26"],
-            capture_output=True, timeout=5,
-        )
-        return r.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
+def _fleet_result(ephemeral_lab, *, htype="linux", command="uptime -p"):
+    host, results = ephemeral_lab.ssh_many(command, htype=htype)
+    return host, result_for(results, host)
 
 
-def _has_live_runtime_config():
-    return bool(
-        LIVE_INSTALL_DIR
-        and os.path.isfile(os.path.join(LIVE_INSTALL_DIR, "conf", "freq.toml"))
-        and os.path.isfile(os.path.join(LIVE_INSTALL_DIR, "conf", "hosts.toml"))
+def test_all_managed_fixture_hosts_are_online(ephemeral_lab):
+    host, result = _fleet_result(ephemeral_lab)
+    assert host.label == "freq-lab"
+    assert result is not None
+    assert result.returncode == 0, result.stderr
+
+
+def test_pve_transport_profile_is_online(ephemeral_lab):
+    _, result = _fleet_result(ephemeral_lab, htype="pve")
+    assert result.returncode == 0, result.stderr
+
+
+def test_docker_transport_and_command_are_online(ephemeral_lab):
+    _, result = _fleet_result(
+        ephemeral_lab,
+        htype="docker",
+        command="docker ps --format '{{.Names}}'",
     )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "freq-lab-container"
 
 
-FLEET_AVAILABLE = _has_fleet_access()
-SKIP_MSG = "Live fleet tests require FREQ_TEST_INSTALL_DIR/FREQ_DIR pointing at an initialized runtime config"
+def test_truenas_transport_profile_is_online(ephemeral_lab):
+    _, result = _fleet_result(ephemeral_lab, htype="truenas")
+    assert result.returncode == 0, result.stderr
 
 
-def _load_cfg():
-    sys.path.insert(0, REPO_ROOT)
-    from freq.core.config import load_config
-    return load_config(install_dir=LIVE_INSTALL_DIR, force=True)
+def test_pfsense_transport_profile_is_online(ephemeral_lab):
+    _, result = _fleet_result(ephemeral_lab, htype="pfsense")
+    assert result.returncode == 0, result.stderr
 
 
-@unittest.skipUnless(FLEET_AVAILABLE, SKIP_MSG)
-class TestFleetStatusE2E(unittest.TestCase):
-    """freq fleet status must work end-to-end from VM 5005."""
-
-    @classmethod
-    def setUpClass(cls):
-        # Clean SSH mux sockets to prevent stale-identity issues
-        mux_dir = os.path.expanduser("~/.ssh/freq-mux")
-        if os.path.isdir(mux_dir):
-            for f in os.listdir(mux_dir):
-                try:
-                    os.unlink(os.path.join(mux_dir, f))
-                except OSError:
-                    pass
-
-        cls.cfg = _load_cfg()
-        from freq.core.ssh import run_many, result_for
-        cls._run_many = staticmethod(run_many)
-        cls._result_for = staticmethod(result_for)
-
-        # Run fleet status once and cache results for all managed targets.
-        from freq.core.host_scope import managed_probe_hosts
-        cls.hosts = managed_probe_hosts(cls.cfg)
-        cls.results = cls._run_many(
-            hosts=cls.hosts,
-            command="uptime -p 2>/dev/null || uptime",
-            key_path=cls.cfg.ssh_key_path,
-            connect_timeout=cls.cfg.ssh_connect_timeout,
-            command_timeout=10,
-            max_parallel=cls.cfg.ssh_max_parallel,
-            use_sudo=False,
-            cfg=cls.cfg,
-        )
-
-    def _online_hosts(self):
-        """Return list of (label, htype) for hosts that responded OK."""
-        online = []
-        for h in self.hosts:
-            r = self._result_for(self.results, h)
-            if r and r.returncode == 0:
-                online.append((h.label, h.htype))
-        return online
-
-    def _offline_hosts(self):
-        """Return list of (label, htype, error) for hosts that failed."""
-        offline = []
-        for h in self.hosts:
-            r = self._result_for(self.results, h)
-            if not r or r.returncode != 0:
-                err = r.stderr.strip()[:80] if r else "no response"
-                offline.append((h.label, h.htype, err))
-        return offline
-
-    def test_all_managed_hosts_online(self):
-        """Every managed host in the runtime config must respond to fleet status."""
-        online = self._online_hosts()
-        self.assertGreater(len(self.hosts), 0, "Runtime config must define managed hosts")
-        self.assertEqual(
-            len(online), len(self.hosts),
-            f"Only {len(online)}/{len(self.hosts)} online. Offline: {self._offline_hosts()}")
-
-    def test_all_pve_nodes_online(self):
-        """All 3 PVE nodes must be online."""
-        online = self._online_hosts()
-        pve_online = [l for l, t in online if t == "pve"]
-        self.assertEqual(len(pve_online), 3,
-                         f"Expected 3 PVE nodes online, got {pve_online}")
-
-    def test_all_docker_hosts_online(self):
-        """All docker hosts must be online."""
-        online = self._online_hosts()
-        docker_online = [l for l, t in online if t == "docker"]
-        docker_total = [h.label for h in self.hosts if h.htype == "docker"]
-        self.assertEqual(len(docker_online), len(docker_total),
-                         f"Docker: {docker_online} vs expected {docker_total}")
-
-    def test_truenas_online(self):
-        """TrueNAS must be online."""
-        online = self._online_hosts()
-        truenas = [l for l, t in online if t == "truenas"]
-        if not [h for h in self.hosts if h.htype == "truenas"]:
-            self.skipTest("No managed TrueNAS host in runtime config")
-        self.assertEqual(len(truenas), 1)
-
-    def test_pfsense_online(self):
-        """pfSense must be online."""
-        online = self._online_hosts()
-        pf = [l for l, t in online if t == "pfsense"]
-        if not [h for h in self.hosts if h.htype == "pfsense"]:
-            self.skipTest("No managed pfSense host in runtime config")
-        self.assertEqual(len(pf), 1)
-
-    def test_uptime_output_is_sane(self):
-        """Online hosts must return plausible uptime output."""
-        for h in self.hosts:
-            r = self._result_for(self.results, h)
-            if r and r.returncode == 0:
-                out = r.stdout.strip()
-                # Must contain "up" or time-like output
-                self.assertTrue(
-                    "up" in out.lower() or ":" in out or "load" in out.lower(),
-                    f"{h.label} returned implausible uptime: {out[:60]}")
-
-    def test_config_matches_runtime(self):
-        """Config ssh_service_account must match what SSH actually uses."""
-        self.assertTrue(self.cfg.ssh_service_account,
-                        "Config must provide a non-empty deployed service account")
-        self.assertTrue(
-            os.path.isfile(self.cfg.ssh_key_path),
-            f"SSH key not found: {self.cfg.ssh_key_path}")
-
-    def test_switch_online(self):
-        """Switch must be online via sshpass + legacy ciphers."""
-        switch_hosts = [h for h in self.hosts if h.htype == "switch"]
-        if not switch_hosts:
-            self.skipTest("No switch in fleet")
-        h = switch_hosts[0]
-        r = self._result_for(self.results, h)
-        self.assertIsNotNone(r, "No result for switch")
-        self.assertEqual(r.returncode, 0,
-                         f"Switch offline: {r.stderr.strip()[:80]}")
-        # Verify the password file is readable (required for sshpass)
-        pw_file = self.cfg.legacy_password_file
-        if pw_file:
-            self.assertTrue(os.access(pw_file, os.R_OK),
-                            "Switch password file must be readable for sshpass")
+def test_uptime_output_is_sane(ephemeral_lab):
+    result = ephemeral_lab.ssh("uptime -p")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "up 1 hour, 2 minutes"
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_runtime_config_matches_ephemeral_contract(ephemeral_lab):
+    cfg = ephemeral_lab.config()
+    assert cfg.ssh_service_account == ephemeral_lab.user
+    assert cfg.ssh_key_path == str(ephemeral_lab.key)
+    assert cfg.ssh_connect_timeout == 3
+
+
+def test_physical_cisco_switch_is_explicitly_outside_hermetic_lab():
+    pytest.skip(
+        "physical Cisco IOS has no disposable emulator; keep in the separate live hardware gate"
+    )

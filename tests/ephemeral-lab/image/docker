@@ -1,0 +1,4 @@
+#!/bin/sh
+# minimal shim: `docker ps --format {{.Names}}` -> fixture
+case "$*" in *"ps"*"--format"*) echo 'freq-lab-container'; exit 0;; esac
+exit 0

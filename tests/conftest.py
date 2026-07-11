@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from freq.core.config import FreqConfig
+from tests.support.ephemeral_lab import EphemeralLab
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +46,15 @@ def isolated_freq_config(tmp_path: Path) -> FreqConfig:
     ):
         Path(path).mkdir(parents=True, exist_ok=True)
     return cfg
+
+
+@pytest.fixture
+def ephemeral_lab() -> EphemeralLab:
+    """Return the live disposable lab, or skip outside its explicit job."""
+    try:
+        return EphemeralLab.from_env()
+    except ValueError as exc:
+        pytest.skip(str(exc))
 
 
 @pytest.fixture(autouse=True)

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Fail-closed lifecycle wrapper for the ephemeral integration slice.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON="${PVE_FREQ_PYTHON:-python3}"
+
+# Do not use direct eval with command substitution: eval would hide a failed
+# `up` and turn the missing environment into skipped tests (a false green).
+lab_env="$($HERE/ephemeral-lab up)"
+eval "$lab_env"
+trap '"$HERE/ephemeral-lab" down' EXIT
+
+"$PYTHON" -m pytest -q -rs \
+  tests/test_ssh_ephemeral_lab_contract.py \
+  tests/test_fleet_auth_drift.py \
+  tests/test_fleet_status_e2e.py \
+  tests/test_fleet_touch_matrix.py

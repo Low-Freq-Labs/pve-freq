@@ -1,178 +1,66 @@
-"""Regression tests for fleet auth configuration drift.
+"""Hermetic integration checks for fleet authentication contracts."""
 
-Proves: the SSH service account and key configured in freq.toml
-actually work for fleet operations. Catches drift between config
-and deployed credentials.
-"""
+from __future__ import annotations
+
+import json
 import os
-import subprocess
-import sys
-import unittest
-from functools import lru_cache
+from types import SimpleNamespace
+from unittest.mock import patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
-LIVE_INSTALL_DIR = (
-    os.environ.get("FREQ_TEST_INSTALL_DIR")
-    or os.environ.get("FREQ_DIR")
-    or ("/opt/pve-freq" if os.path.isfile("/opt/pve-freq/conf/freq.toml") else "")
-)
+from freq.modules.pve import _pve_api_call
 
 
-def _has_live_runtime_config():
-    return bool(
-        LIVE_INSTALL_DIR
-        and os.path.isfile(os.path.join(LIVE_INSTALL_DIR, "conf", "freq.toml"))
-        and os.path.isfile(os.path.join(LIVE_INSTALL_DIR, "conf", "hosts.toml"))
+class _Response:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self):
+        return json.dumps(self.payload).encode()
+
+
+def test_service_account_exists_on_disposable_target(ephemeral_lab):
+    result = ephemeral_lab.ssh(f"id {ephemeral_lab.user}")
+    assert result.returncode == 0, result.stderr
+    assert f"({ephemeral_lab.user})" in result.stdout
+
+
+def test_service_account_has_passwordless_sudo(ephemeral_lab):
+    result = ephemeral_lab.ssh("whoami", use_sudo=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "root"
+
+
+def test_ephemeral_private_key_exists(ephemeral_lab):
+    assert ephemeral_lab.key.is_file()
+    assert ephemeral_lab.key.stat().st_size > 0
+
+
+def test_ephemeral_private_key_permissions_are_600(ephemeral_lab):
+    assert os.stat(ephemeral_lab.key).st_mode & 0o777 == 0o600
+
+
+def test_pve_token_is_sent_to_a_hermetic_api_boundary():
+    cfg = SimpleNamespace(
+        pve_api_token_id="freqtest@pam!fixture",
+        pve_api_token_secret="fixture-secret",
+        pve_api_verify_ssl=False,
+        credentials_dir="/nonexistent",
     )
+    with patch(
+        "freq.modules.pve.urllib.request.urlopen",
+        return_value=_Response({"data": {"version": "8.2"}}),
+    ) as urlopen:
+        data, ok = _pve_api_call(cfg, "127.0.0.1", "/version")
 
-
-def _has_fleet_access():
-    if not _has_live_runtime_config():
-        return False
-    try:
-        r = subprocess.run(
-            ["ping", "-c1", "-W2", "10.25.255.26"],
-            capture_output=True, timeout=5,
-        )
-        return r.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
-
-
-def _load_freq_config():
-    """Load runtime SSH settings."""
-    cfg = _load_runtime_config()
-    return {"service_account": cfg.ssh_service_account}
-
-
-@lru_cache(maxsize=1)
-def _load_runtime_config():
-    from freq.core.config import load_config
-
-    return load_config(install_dir=LIVE_INSTALL_DIR, force=True)
-
-
-def _managed_host_rows():
-    if not _has_live_runtime_config():
-        return []
-    from freq.core.host_scope import managed_probe_hosts
-
-    return [(h.ip, h.label, h.htype) for h in managed_probe_hosts(_load_runtime_config())]
-
-
-FLEET_AVAILABLE = _has_fleet_access()
-SKIP_MSG = "Live fleet tests require FREQ_TEST_INSTALL_DIR/FREQ_DIR pointing at an initialized runtime config"
-
-
-@unittest.skipUnless(FLEET_AVAILABLE, SKIP_MSG)
-class TestSSHServiceAccountExists(unittest.TestCase):
-    """The configured SSH service account must exist on fleet hosts."""
-
-    def test_service_account_exists_on_pve_nodes(self):
-        ssh_cfg = _load_freq_config()
-        account = ssh_cfg.get("service_account", "freq-admin")
-        hosts = _managed_host_rows()
-        pve_hosts = [ip for ip, _, htype in hosts if htype == "pve"]
-        failures = []
-        cfg = _load_runtime_config()
-        from freq.core.ssh import run
-        for ip in pve_hosts:
-            r = run(
-                host=ip,
-                command=f"id {account}",
-                key_path=cfg.ssh_key_path,
-                connect_timeout=5,
-                command_timeout=10,
-                htype="pve",
-                use_sudo=False,
-                cfg=cfg,
-            )
-            if r.returncode != 0:
-                reason = (r.stderr or r.stdout or "").strip()[:80]
-                failures.append(f"{ip}: {reason or 'unable to verify account'}")
-        self.assertEqual(failures, [],
-                         f"Account '{account}' could not be verified:\n" + "\n".join(failures))
-
-    def test_service_account_has_sudo_on_pve_nodes(self):
-        ssh_cfg = _load_freq_config()
-        account = ssh_cfg.get("service_account", "freq-admin")
-        hosts = _managed_host_rows()
-        pve_hosts = [ip for ip, _, htype in hosts if htype == "pve"]
-        failures = []
-        cfg = _load_runtime_config()
-        from freq.core.ssh import run
-        for ip in pve_hosts:
-            r = run(
-                host=ip,
-                command="sudo -n whoami",
-                key_path=cfg.ssh_key_path,
-                connect_timeout=5,
-                command_timeout=10,
-                htype="pve",
-                use_sudo=False,
-                cfg=cfg,
-            )
-            if r.returncode != 0 or "root" not in r.stdout:
-                reason = (r.stderr or r.stdout or "").strip()[:80]
-                failures.append(f"{ip}: {reason or 'sudo check failed'}")
-        self.assertEqual(failures, [],
-                         f"Account '{account}' sudo could not be verified:\n" + "\n".join(failures))
-
-
-@unittest.skipUnless(FLEET_AVAILABLE, SKIP_MSG)
-class TestSSHKeyDeployment(unittest.TestCase):
-    """An SSH key must be available for freq to use."""
-
-    def test_key_exists_in_data_keys_or_ssh(self):
-        """At least one SSH key must be detectable by freq's key resolution."""
-        cfg = _load_runtime_config()
-        candidates = [cfg.ssh_key_path, getattr(cfg, "ssh_rsa_key_path", "")]
-        found = [p for p in candidates if os.path.isfile(p)]
-        self.assertGreater(len(found), 0,
-                           f"No SSH key found in freq key search path: {candidates}")
-
-    def test_key_permissions_are_600(self):
-        """SSH key files must have 600 permissions."""
-        cfg = _load_runtime_config()
-        candidates = [cfg.ssh_key_path, getattr(cfg, "ssh_rsa_key_path", "")]
-        for path in candidates:
-            if os.path.isfile(path):
-                mode = oct(os.stat(path).st_mode)[-3:]
-                self.assertEqual(mode, "600",
-                                 f"Key {path} has permissions {mode}, expected 600")
-
-
-@unittest.skipUnless(FLEET_AVAILABLE, SKIP_MSG)
-class TestPVETokenValidity(unittest.TestCase):
-    """PVE API tokens must authenticate successfully."""
-
-    PVE_IPS = ["10.25.255.26", "10.25.255.27", "10.25.255.28"]
-
-    def _read_credential(self, path):
-        try:
-            r = subprocess.run(
-                ["sudo", "cat", path],
-                capture_output=True, text=True, timeout=5,
-            )
-            return r.stdout.strip() if r.returncode == 0 else ""
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return ""
-
-    def test_rw_token_authenticates(self):
-        secret = self._read_credential("/etc/freq/credentials/pve-token-rw")
-        if not secret:
-            self.skipTest("No RW token file")
-        cfg = _load_runtime_config()
-        token_id = cfg.pve_api_token_id or f"{cfg.ssh_service_account}@pam!freq-rw"
-        for ip in self.PVE_IPS:
-            r = subprocess.run(
-                ["curl", "-sk", "--max-time", "5", "-w", "%{http_code}",
-                 "-o", "/dev/null",
-                 "-H", f"Authorization: PVEAPIToken={token_id}={secret}",
-                 f"https://{ip}:8006/api2/json/version"],
-                capture_output=True, text=True, timeout=10,
-            )
-            self.assertEqual(r.stdout.strip(), "200",
-                             f"RW token failed on {ip}: HTTP {r.stdout.strip()}")
+    assert ok is True
+    assert data == {"version": "8.2"}
+    request = urlopen.call_args.args[0]
+    assert request.get_header("Authorization") == (
+        "PVEAPIToken=freqtest@pam!fixture=fixture-secret"
+    )

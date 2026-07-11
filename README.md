@@ -10,7 +10,7 @@ You built a homelab because you love this stuff. You shouldn't need 12 different
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-8b5cf6.svg)](https://www.python.org/downloads/)
 [![LOC](https://img.shields.io/badge/lines_of_code-93K-8b5cf6.svg)](#)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL_v3-8b5cf6.svg)](LICENSE)
-[![20 Distros](https://img.shields.io/badge/tested_on-20_distros-8b5cf6.svg)](#every-linux-distro)
+[![7 Distros](https://img.shields.io/badge/tested_on-7_distros-8b5cf6.svg)](#every-linux-distro)
 
 </div>
 
@@ -149,9 +149,10 @@ Why? Because the machine running FREQ is your management host. It has SSH keys t
 
 ## Every Linux Distro
 
-Tested on **20 distributions** in CI on `main` pushes and nightly runs:
+Smoke-tested on three distributions for each `main` push and pull request;
+the full **7-distribution** family matrix runs nightly and on manual dispatch:
 
-**Debian** 12 · 13 · sid | **Ubuntu** 24.04 · 25.04 | **Rocky** 8 · 9 | **Alma** 8 · 9 | **CentOS** Stream 9 | **Oracle** 8 · 9 | **Fedora** 40 · 41 · 42 | **Arch** (rolling) | **openSUSE** Tumbleweed | **Alpine** 3.19 · 3.20 · 3.21
+**Debian** 12 | **Ubuntu** 24.04 | **Rocky** 9 | **Fedora** 42 | **Arch** (rolling) | **openSUSE** Tumbleweed | **Alpine** 3.21
 
 If Python 3.11 runs on it, FREQ runs on it. Platform abstraction handles package managers, init systems, and shell differences automatically.
 
@@ -251,7 +252,7 @@ cd /opt/pve-freq && sudo bash install.sh --from-local . --yes
 
 | | |
 |---|---|
-| **OS** | Any Linux with Python 3.11+ (see [20 tested distros](#every-linux-distro)) |
+| **OS** | Any Linux with Python 3.11+ (see [7 tested distro families](#every-linux-distro)) |
 | **Python** | 3.11+ |
 | **SSH** | openssh-client (pre-installed on all Linux) |
 | **Optional** | sshpass (for initial password-based fleet deployment) |

@@ -16,6 +16,23 @@ npm run test:e2e:install
 The browser payload is installed into the ignored repo-local `.playwright/`
 directory so the harness does not depend on a host-global browser cache.
 
+## Hermetic CI Run
+
+The default automated browser gate starts the real `FreqHandler` on loopback
+with a temporary `FreqConfig`, deterministic in-memory probe data, and a
+test-only account. It does not contact DC01, read stored credentials, or start
+background fleet probes.
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH=.playwright \
+PVE_FREQ_PYTHON=.venv/bin/python \
+npm run test:e2e:hermetic
+```
+
+The other files under `tests/e2e/` retain their explicit live/destructive
+environment gates. They are discovered by the hermetic run but skip unless
+their separate opt-in variables are provided.
+
 ## Safe Live Run
 
 These tests use only read-only dashboard actions plus terminal open/close. They

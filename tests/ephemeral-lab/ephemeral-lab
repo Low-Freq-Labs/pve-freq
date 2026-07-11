@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# ephemeral-lab — disposable, hermetic SSH target for pve-freq fleet/PVE integration tests.
+# A CONTAINER (podman on nexus / docker on CI runner), NOT a DC01 lab VM — GH cloud runners
+# cannot route to 10.25.x. Per-run ephemeral keypair + fresh hostkey; no stored/inline secret.
+# Usage (FAIL-CLOSED — do not use direct eval with command substitution):
+#   lab_env="$(ephemeral-lab up)" || exit 1
+#   eval "$lab_env"; ... run tests ...; ephemeral-lab down
+set -euo pipefail
+IMAGE="${EPHEMERAL_LAB_IMAGE:-freq-ephemeral-lab:1}"
+ENGINE="$(command -v podman || command -v docker)"
+STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/pve-freq-ephemeral-lab-${UID}"
+NAME_FILE="$STATE_DIR/name"
+TMP_FILE="$STATE_DIR/tmp"
+case "${1:-}" in
+  up)
+    if [ -e "$NAME_FILE" ] || [ -e "$TMP_FILE" ]; then
+      echo "ephemeral-lab: existing run found; call down first" >&2
+      exit 1
+    fi
+    mkdir -p -m 700 "$STATE_DIR"
+    tmp=""; name=""
+    cleanup_up_failure() {
+      rc=$?
+      [ -n "$name" ] && "$ENGINE" rm -f "$name" >/dev/null 2>&1 || true
+      [ -n "$tmp" ] && rm -rf "$tmp" || true
+      rm -rf "$STATE_DIR"
+      exit "$rc"
+    }
+    trap cleanup_up_failure ERR
+    if ! "$ENGINE" image inspect "$IMAGE" >/dev/null 2>&1; then
+      IMGDIR="${EPHEMERAL_LAB_IMGDIR:-$(dirname "$(readlink -f "$0")")/image}"
+      "$ENGINE" build -q -t "$IMAGE" "$IMGDIR" >/dev/null
+    fi
+    tmp="$(mktemp -d)"; name="freqlab-$$-$RANDOM"
+    ssh-keygen -q -t ed25519 -N '' -f "$tmp/id" -C ephemeral-lab
+    cid="$("$ENGINE" run -d --rm --hostname freq-lab -p 127.0.0.1::22 \
+            -e AUTHORIZED_KEY="$(cat "$tmp/id.pub")" --name "$name" "$IMAGE")"
+    echo "$name" > "$NAME_FILE"; echo "$tmp" > "$TMP_FILE"
+    port="$("$ENGINE" port "$name" 22/tcp | sed 's/.*://')"
+    # Emit no environment until a pinned-host-key SSH round trip succeeds.
+    ready=0
+    for _ in $(seq 1 40); do
+      ssh-keyscan -p "$port" -t ed25519 127.0.0.1 2>/dev/null > "$tmp/known_hosts" || true
+      if [ -s "$tmp/known_hosts" ] && ssh -i "$tmp/id" \
+          -o UserKnownHostsFile="$tmp/known_hosts" \
+          -o StrictHostKeyChecking=yes -o ConnectTimeout=2 -o BatchMode=yes \
+          -p "$port" freqtest@127.0.0.1 true 2>/dev/null; then
+        ready=1
+        break
+      fi
+      sleep 0.3
+    done
+    if [ "$ready" != 1 ]; then
+      "$ENGINE" rm -f "$name" >/dev/null 2>&1 || true
+      rm -rf "$tmp" "$STATE_DIR"
+      echo "ephemeral-lab: target not ready; no environment emitted" >&2
+      exit 1
+    fi
+    trap - ERR
+    printf 'EPHEMERAL_LAB_HOST=127.0.0.1\nEPHEMERAL_LAB_PORT=%s\nEPHEMERAL_LAB_USER=freqtest\nEPHEMERAL_LAB_KEY=%s/id\nEPHEMERAL_LAB_KNOWN_HOSTS=%s/known_hosts\n' "$port" "$tmp" "$tmp"
+    printf 'export EPHEMERAL_LAB_HOST EPHEMERAL_LAB_PORT EPHEMERAL_LAB_USER EPHEMERAL_LAB_KEY EPHEMERAL_LAB_KNOWN_HOSTS\n'
+    ;;
+  down)
+    [ -f "$NAME_FILE" ] && "$ENGINE" rm -f "$(cat "$NAME_FILE")" >/dev/null 2>&1 || true
+    [ -f "$TMP_FILE" ] && rm -rf "$(cat "$TMP_FILE")" || true
+    rm -rf "$STATE_DIR"; echo "ephemeral-lab down" >&2
+    ;;
+  *) echo "usage: ephemeral-lab up|down" >&2; exit 2;;
+esac

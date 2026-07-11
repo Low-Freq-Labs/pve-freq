@@ -165,6 +165,8 @@ def _build_ssh_cmd(
     password_file: Optional[str] = None,
     sudo_password_file: bool = False,
     cfg=None,
+    port: Optional[int] = None,
+    known_hosts_file: Optional[str] = None,
 ) -> list:
     """Build an SSH command list for subprocess execution."""
     connect_timeout = _resolve_connect_timeout(connect_timeout, cfg)
@@ -187,13 +189,31 @@ def _build_ssh_cmd(
 
     # Connection options
     cmd.extend(["-o", f"ConnectTimeout={connect_timeout}"])
-    cmd.extend(["-o", "StrictHostKeyChecking=accept-new"])
+    if port is not None:
+        normalized_port = int(port)
+        if not 1 <= normalized_port <= 65535:
+            raise ValueError(f"SSH port out of range: {port}")
+        cmd.extend(["-p", str(normalized_port)])
+    if known_hosts_file:
+        cmd.extend(["-o", "StrictHostKeyChecking=yes"])
+        cmd.extend(["-o", f"UserKnownHostsFile={known_hosts_file}"])
+    else:
+        cmd.extend(["-o", "StrictHostKeyChecking=accept-new"])
     if not use_password:
         cmd.extend(["-o", "BatchMode=yes"])
 
     # SSH multiplexing — skip for password-auth and legacy devices
     # iDRAC/switch have 2-session SSH limits; mux sockets hold connections and exhaust slots
-    if not use_password and htype not in LEGACY_HTYPES and not local_user:
+    # A caller that pins a per-run known_hosts file is asking for a fresh,
+    # independently verified transport boundary. Reusing a mux socket could
+    # bypass that host-key check and also makes temporary HOME paths exceed
+    # the Unix-domain socket path limit.
+    if (
+        not use_password
+        and htype not in LEGACY_HTYPES
+        and not local_user
+        and not known_hosts_file
+    ):
         control_dir = os.path.expanduser(MUX_CONTROL_DIR)
         os.makedirs(control_dir, mode=0o700, exist_ok=True)
         control_path = os.path.join(control_dir, "%r@%h:%p")
@@ -250,6 +270,8 @@ def run(
     sudo_password_file: bool = False,
     cfg=None,
     failure_log_level: str = "error",
+    port: Optional[int] = None,
+    known_hosts_file: Optional[str] = None,
 ) -> CmdResult:
     """Execute a command on a remote host via SSH (synchronous).
 
@@ -267,6 +289,8 @@ def run(
         password_file=password_file,
         sudo_password_file=sudo_password_file,
         cfg=cfg,
+        port=port,
+        known_hosts_file=known_hosts_file,
     )
 
     logger.debug(f"ssh_start: {host} [{htype}]", command=command[:120])
@@ -361,6 +385,8 @@ async def async_run(
     password_file: Optional[str] = None,
     sudo_password_file: bool = False,
     cfg=None,
+    port: Optional[int] = None,
+    known_hosts_file: Optional[str] = None,
 ) -> CmdResult:
     """Execute a command on a remote host via SSH (async).
 
@@ -378,6 +404,8 @@ async def async_run(
         password_file=password_file,
         sudo_password_file=sudo_password_file,
         cfg=cfg,
+        port=port,
+        known_hosts_file=known_hosts_file,
     )
 
     logger.debug(f"async_ssh_start: {host} [{htype}]", command=command[:120])
@@ -428,6 +456,8 @@ async def async_run_many(
     max_parallel: int = 5,
     use_sudo: bool = True,
     cfg=None,
+    port: Optional[int] = None,
+    known_hosts_file: Optional[str] = None,
 ) -> dict:
     """Execute a command across multiple hosts in parallel.
 
@@ -456,6 +486,8 @@ async def async_run_many(
                 htype=host.htype,
                 use_sudo=use_sudo,
                 cfg=cfg,
+                port=port,
+                known_hosts_file=known_hosts_file,
             )
             if host.label in dup_labels:
                 results[f"{host.label}@{host.ip}"] = result
@@ -487,6 +519,8 @@ def run_many(
     max_parallel: int = 5,
     use_sudo: bool = True,
     cfg=None,
+    port: Optional[int] = None,
+    known_hosts_file: Optional[str] = None,
 ) -> dict:
     """Synchronous wrapper for async_run_many.
 
@@ -502,5 +536,7 @@ def run_many(
             max_parallel=max_parallel,
             use_sudo=use_sudo,
             cfg=cfg,
+            port=port,
+            known_hosts_file=known_hosts_file,
         )
     )

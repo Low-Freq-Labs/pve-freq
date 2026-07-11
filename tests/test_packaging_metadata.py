@@ -84,8 +84,14 @@ class TestCiWorkflowTruth(unittest.TestCase):
         self.assertIsNotNone(badge_match)
         badge_count = int(badge_match.group(1))
 
-        # Count unique distro images in CI matrix
-        unique_images = set(re.findall(r"- '([^']+)'", self.workflow))
+        # Count only container image entries, not unrelated quoted YAML values.
+        unique_images = set(
+            re.findall(
+                r"^\s+- '([^']+:[^']+)'(?:\s+#.*)?$",
+                self.workflow,
+                flags=re.MULTILINE,
+            )
+        )
         ci_count = len(unique_images)
 
         self.assertGreaterEqual(

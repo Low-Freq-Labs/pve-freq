@@ -268,6 +268,31 @@ jobs:
             pip3 install --force-reinstall --no-deps dist/*.whl
           freq --version
 
+  # ── Tier 2: Hermetic browser behavior ────────────────────────────────
+  e2e:
+    name: Browser E2E · Chromium
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install browser harness
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run hermetic dashboard behavior oracle
+        run: npm run test:e2e:hermetic
+
   # ── Test result annotations (shows failures inline on PRs) ────────────
   test-results:
     name: Test Results
@@ -307,7 +332,7 @@ jobs:
   # ── Status aggregator (single check for branch protection) ────────────
   all-tests:
     name: All Tests
-    needs: [lint, test-smoke, test-full]
+    needs: [lint, test-smoke, test-full, e2e]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -316,6 +341,7 @@ jobs:
           echo "Lint: ${{ needs.lint.result }}"
           echo "Smoke: ${{ needs.test-smoke.result }}"
           echo "Full: ${{ needs.test-full.result }}"
+          echo "Browser E2E: ${{ needs.e2e.result }}"
           if [[ "${{ needs.lint.result }}" != "success" ]]; then
             echo "❌ Lint failed"
             exit 1
@@ -327,6 +353,10 @@ jobs:
           # Full tests may be skipped on PRs — that's OK
           if [[ "${{ needs.test-full.result }}" == "failure" ]]; then
             echo "❌ Full matrix failed"
+            exit 1
+          fi
+          if [[ "${{ needs.e2e.result }}" != "success" ]]; then
+            echo "❌ Browser E2E failed"
             exit 1
           fi
           echo "✅ All checks passed"
