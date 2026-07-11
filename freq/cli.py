@@ -206,6 +206,12 @@ def _register_utilities(sub):
     p = sub.add_parser("doctor", help="Self-diagnostic")
     p.add_argument("--json", dest="json_output", action="store_true", help="Output results as JSON")
     p.add_argument("--history", action="store_true", help="Show health check history")
+    p.add_argument(
+        "--local",
+        dest="local_only",
+        action="store_true",
+        help="Check only local system, config, and credentials (no fleet/API probes)",
+    )
     p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("watchdog", help="Local FREQ truth-auditor daemon")
@@ -2388,7 +2394,11 @@ def cmd_doctor(cfg: FreqConfig, pack, args) -> int:
 
     if getattr(args, "history", False):
         return show_history(cfg)
-    return run(cfg, json_output=getattr(args, "json_output", False))
+    return run(
+        cfg,
+        json_output=getattr(args, "json_output", False),
+        local_only=getattr(args, "local_only", False),
+    )
 
 
 def cmd_perf(cfg: FreqConfig, pack, args) -> int:

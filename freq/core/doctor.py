@@ -76,20 +76,49 @@ def _doctor_fleet_lock(cfg: FreqConfig):
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
-def run(cfg: FreqConfig, json_output: bool = False) -> int:
-    """Run all diagnostic checks. Returns 0 if all pass, 1 if any fail."""
+def run(cfg: FreqConfig, json_output: bool = False, local_only: bool = False) -> int:
+    """Run diagnostic checks, optionally excluding every remote probe."""
     start = time.monotonic()
     check_results = []
 
     if not json_output:
         fmt.header("Doctor", "PVE FREQ")
         fmt.blank()
-        fmt.line(f"{fmt.C.BOLD}Self-Diagnostic{fmt.C.RESET}")
+        title = "Local Self-Diagnostic" if local_only else "Self-Diagnostic"
+        fmt.line(f"{fmt.C.BOLD}{title}{fmt.C.RESET}")
+        if local_only:
+            fmt.line(
+                f"{fmt.C.DIM}Remote fleet, PVE, and TrueNAS probes are skipped.{fmt.C.RESET}"
+            )
         fmt.blank()
 
     passed = 0
     failed = 0
     warnings = 0
+
+    ssh_checks = [
+        _check_ssh_binary,
+        _check_ssh_key,
+    ]
+    pve_checks = []
+    if local_only:
+        ssh_checks.extend(
+            [
+                _check_legacy_passwords,
+                _check_truenas_api_credentials_local,
+            ]
+        )
+        pve_checks.append(_check_pve_token_local)
+    else:
+        ssh_checks.extend(
+            [
+                _check_fleet_connectivity,
+                _check_service_account,
+                _check_legacy_passwords,
+                _check_truenas_api_credentials,
+            ]
+        )
+        pve_checks.extend([_check_pve_nodes, _check_pve_token_drift])
 
     sections = [
         (
@@ -113,14 +142,7 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
         ),
         (
             "SSH & Connectivity",
-            [
-                _check_ssh_binary,
-                _check_ssh_key,
-                _check_fleet_connectivity,
-                _check_service_account,
-                _check_legacy_passwords,
-                _check_truenas_api_credentials,
-            ],
+            ssh_checks,
         ),
         (
             "Fleet Data",
@@ -133,10 +155,7 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
         ),
         (
             "PVE Cluster",
-            [
-                _check_pve_nodes,
-                _check_pve_token_drift,
-            ],
+            pve_checks,
         ),
     ]
 
@@ -167,9 +186,11 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
 
     duration = time.monotonic() - start
 
-    # Save health history to SQLite
-    from freq.core.log import save_health
-    save_health(passed, failed, warnings, duration, check_results)
+    # A partial local run must never masquerade as whole-fleet health history.
+    if not local_only:
+        from freq.core.log import save_health
+
+        save_health(passed, failed, warnings, duration, check_results)
 
     if json_output:
         import json as _json
@@ -198,6 +219,7 @@ def run(cfg: FreqConfig, json_output: bool = False) -> int:
             if warn_names:
                 reason += f" (+ {warnings} warnings)"
         result = {
+            "scope": "local" if local_only else "full",
             "passed": passed,
             "failed": failed,
             "warnings": warnings,
@@ -964,8 +986,8 @@ def _check_legacy_passwords(cfg: FreqConfig) -> int:
         return 0
 
 
-def _check_truenas_api_credentials(cfg: FreqConfig) -> int:
-    """Verify core TrueNAS API-key management path when TrueNAS exists."""
+def _truenas_api_targets(cfg: FreqConfig) -> list:
+    """Return configured core TrueNAS targets without contacting them."""
     devices = [
         dev for dev in getattr(cfg.fleet_boundaries, "physical", {}).values()
         if getattr(dev, "device_type", "") == "truenas"
@@ -985,6 +1007,36 @@ def _check_truenas_api_credentials(cfg: FreqConfig) -> int:
                 scope="core",
             )
         ]
+    return devices
+
+
+def _check_truenas_api_credentials_local(cfg: FreqConfig) -> int:
+    """Validate local TrueNAS API-key readiness without a network request."""
+    devices = _truenas_api_targets(cfg)
+    if not devices:
+        return 0
+
+    from freq.core import truenas_api
+
+    missing = []
+    for dev in devices:
+        api_settings = truenas_api.settings(cfg, dev)
+        ns = api_settings.get("secret_ns") or api_settings.get("section") or "truenas"
+        if not api_settings.get("api_key"):
+            missing.append(f"{dev.label}: vault {ns}:api_key")
+
+    if missing:
+        fmt.step_warn("TrueNAS API key missing — " + "; ".join(missing[:3]))
+        return 2
+    fmt.step_ok(f"TrueNAS API key: configured for {len(devices)} core target(s)")
+    return 0
+
+
+def _check_truenas_api_credentials(cfg: FreqConfig) -> int:
+    """Verify core TrueNAS API-key management path when TrueNAS exists."""
+    devices = _truenas_api_targets(cfg)
+    if not devices:
+        return 0
 
     from freq.core import truenas_api
 
@@ -1241,6 +1293,27 @@ def _probe_pve_api_token(node_ip: str, token_id: str, token_secret: str) -> tupl
         return e.code, body[:160]
     except Exception as e:
         return -1, str(e)
+
+
+def _check_pve_token_local(cfg: FreqConfig) -> int:
+    """Validate local runtime-token readiness without probing PVE nodes."""
+    if not cfg.pve_nodes:
+        return 0
+
+    rw_secret = getattr(cfg, "pve_api_token_secret", "")
+    if not rw_secret:
+        rw_secret = _read_credential_text("/etc/freq/credentials/pve-token-rw")
+    svc_name = getattr(cfg, "ssh_service_account", "") or "freq-admin"
+    rw_id = getattr(cfg, "pve_api_token_id", "") or f"{svc_name}@pam!freq-rw"
+
+    if not rw_secret:
+        fmt.step_warn(
+            f"PVE API token: secret unreadable at /etc/freq/credentials/pve-token-rw "
+            f"(expected {rw_id})"
+        )
+        return 2
+    fmt.step_ok(f"PVE API token ({rw_id}): configured locally")
+    return 0
 
 
 def _check_pve_token_drift(cfg: FreqConfig) -> int:

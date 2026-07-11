@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `/api/vm/push-key` is now `POST` (was `GET`); operators hitting this endpoint must send the target IP in the JSON body instead of a query string, so SSH-key pushes no longer leak the target IP into URLs or access logs.
 - Native dashboard services now share one systemd definition. Existing `install.sh --with-systemd` deployments converge from `Restart=on-failure`/5 seconds to `Restart=always`/10 seconds on upgrade.
+- `freq doctor --local` validates local system, configuration, fleet-data, and credential readiness without remote SSH/API probes; warnings remain exit-zero, retained failures exit nonzero, and partial results do not enter global doctor history.
 
 ## [1.0.0] - 2026-04-03
 
