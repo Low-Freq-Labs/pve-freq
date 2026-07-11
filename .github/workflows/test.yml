@@ -305,6 +305,30 @@ jobs:
       - name: Run hermetic dashboard behavior oracle
         run: npm run test:e2e:hermetic
 
+  # ── Ephemeral-lab integration slice (24 fleet/PVE tests vs a hermetic SSH ───
+  #    container on the runner). Nightly + dispatch-full ONLY — off the per-push budget.
+  integration:
+    name: Integration · ephemeral-lab
+    needs: lint
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.test_level == 'full')
+    runs-on: ubuntu-latest
+    env:
+      FREQ_DIR: ${{ github.workspace }}
+      EPHEMERAL_LAB_ENGINE: docker
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install package + pytest
+        run: |
+          pip3 install --break-system-packages pytest 2>/dev/null || pip3 install pytest
+          pip3 install --break-system-packages --no-deps . 2>/dev/null || pip3 install --no-deps .
+      - name: Run ephemeral-lab integration slice (container on runner)
+        run: tests/ephemeral-lab/run-integration
+
   # ── Test result annotations (shows failures inline on PRs) ────────────
   test-results:
     name: Test Results
@@ -345,7 +369,7 @@ jobs:
   # ── Status aggregator (single check for branch protection) ────────────
   all-tests:
     name: All Tests
-    needs: [lint, test-smoke, test-full, e2e]
+    needs: [lint, test-smoke, test-full, e2e, integration]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -370,6 +394,11 @@ jobs:
           fi
           if [[ "${{ needs.e2e.result }}" != "success" ]]; then
             echo "❌ Browser E2E failed"
+            exit 1
+          fi
+          # Integration is nightly/dispatch-only — skipped on push/PR is OK, fail only on failure
+          if [[ "${{ needs.integration.result }}" == "failure" ]]; then
+            echo "❌ Ephemeral-lab integration failed"
             exit 1
           fi
           echo "✅ All checks passed"

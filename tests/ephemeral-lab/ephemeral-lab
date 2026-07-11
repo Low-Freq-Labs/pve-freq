@@ -7,7 +7,7 @@
 #   eval "$lab_env"; ... run tests ...; ephemeral-lab down
 set -euo pipefail
 IMAGE="${EPHEMERAL_LAB_IMAGE:-freq-ephemeral-lab:1}"
-ENGINE="$(command -v podman || command -v docker)"
+ENGINE="${EPHEMERAL_LAB_ENGINE:-$(command -v podman || command -v docker)}"
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/pve-freq-ephemeral-lab-${UID}"
 NAME_FILE="$STATE_DIR/name"
 TMP_FILE="$STATE_DIR/tmp"
@@ -29,7 +29,7 @@ case "${1:-}" in
     trap cleanup_up_failure ERR
     if ! "$ENGINE" image inspect "$IMAGE" >/dev/null 2>&1; then
       IMGDIR="${EPHEMERAL_LAB_IMGDIR:-$(dirname "$(readlink -f "$0")")/image}"
-      "$ENGINE" build -q -t "$IMAGE" "$IMGDIR" >/dev/null
+      "$ENGINE" build -q -t "$IMAGE" -f "$IMGDIR/Containerfile" "$IMGDIR" >/dev/null
     fi
     tmp="$(mktemp -d)"; name="freqlab-$$-$RANDOM"
     ssh-keygen -q -t ed25519 -N '' -f "$tmp/id" -C ephemeral-lab
